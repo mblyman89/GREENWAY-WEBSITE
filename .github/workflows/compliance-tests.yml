@@ -217,13 +217,25 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-      # The same command Vercel runs. NODE_OPTIONS mirrors the headroom a
-      # Vercel build machine has (8 GB); the GitHub runner has 16 GB, so this
-      # is deliberately generous rather than tight - an OOM here would be a
-      # false red that teaches everyone to ignore the job.
+      # The same command Vercel runs - and now, finally, under the same memory
+      # ceiling. The previous version of this comment claimed NODE_OPTIONS here
+      # "mirrors the headroom a Vercel build machine has (8 GB)". It did not:
+      # it granted 6144 MB where Vercel gets Node's default of roughly half of
+      # an 8192 MB container (~4096 MB). That mistaken belief is why this job
+      # stayed green through three slices that Vercel could not deploy.
       - name: next build (the command Vercel runs)
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
+        # NO NODE_OPTIONS override here any more, and that is the point.
+        #
+        # This step used to set --max-old-space-size=6144 while Vercel got
+        # Node's DEFAULT heap, which is roughly half of system RAM and so lands
+        # near 4096 MB on Vercel's documented 8192 MB build container. CI was
+        # therefore building with ~50% more heap than the machine that actually
+        # deploys, and that gap is precisely why this job kept passing on
+        # commits Vercel could not build. A "the command Vercel runs" check that
+        # runs it with different memory is not the check it claims to be.
+        #
+        # The heap is now declared once, in the `build` script in package.json,
+        # so CI and Vercel run the same command with the same ceiling.
         # NO Supabase placeholders here on purpose. It is tempting to add
         # NEXT_PUBLIC_* stand-ins "just in case", but a local `next build` in
         # this repo compiles with none of them set, so adding them would be
