@@ -41,6 +41,21 @@ import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
 import type { PosMenuBundle, PosMenuProduct } from "@/lib/pos/sale-flow-core";
 import { buildBarcodeIndex, type LotBarcodeSource } from "@/lib/pos/scan-to-cart-core";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+// SLICE 16 — reconcile the register's CACHED availability flag against LIVE
+// lot truth. See register-availability-core.ts for the full proof; in short,
+// `inventory_lots.on_hand_qty` (what the back office shows) and
+// `menu_variants.inventory_level` (what the register reads) are two counters
+// that only sales and voids keep in step. Cycle counts, dispositions and
+// intake adjustments move the first and leave the second frozen, so real
+// stock became unsellable with no message anywhere. Reconciling here is
+// self-healing: the next menu download repairs every stale card at once.
+import {
+  reconcileRegisterAvailability,
+  toQty,
+  SELLABLE_LOT_STATUS,
+  type LiveLotFact,
+  type SnapshotCard,
+} from "@/lib/pos/register-availability-core";
 
 /**
  * SLICE 5C — memory ceiling for the barcode-index lot scan. NOT a row cap:
@@ -110,13 +125,145 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     registry,
   };
 
+  // ═══ SLICE 16 — LIVE LOT TRUTH ═══════════════════════════════════════════
+  //
+  // Read `inventory_lots` ONCE, up front, and use it for two jobs that were
+  // previously starved of it:
+  //
+  //   1. AVAILABILITY RECONCILIATION (new). The published snapshot's
+  //      `inventory_status` is a CACHE. Only sales and voids refresh it;
+  //      cycle counts, dispositions, intake adjustments and bulk fills move
+  //      `inventory_lots.on_hand_qty` and leave the cache frozen. Every card
+  //      whose cache went stale silently vanished from the register — the
+  //      exact fault the owner hit at the counter.
+  //
+  //   2. THE BARCODE INDEX (existing, SLICE 5C). Previously this read filtered
+  //      `.eq("status","active").gt("on_hand_qty",0)` in SQL. It now selects
+  //      `status` and `on_hand_qty` and filters in the PURE core instead, so
+  //      one read serves both jobs and the two can never disagree about what
+  //      "sellable stock" means.
+  //
+  // Best-effort, exactly as before: a failed read yields NO live facts, which
+  // makes reconciliation a no-op (the snapshot's own answer stands) and ships
+  // an empty barcode index. It can never break the menu download.
+  let liveLots: LiveLotFact[] = [];
+  let liveLotsComplete = false;
+  if (isSupabaseServiceConfigured) {
+    try {
+      const admin = createSupabaseAdminClient();
+      // SLICE 5C — `.limit(5000)` cannot exceed PostgREST's 1,000-row cap
+      // (chunked-in.ts:13-14). `inventory_lots` is the largest table in the
+      // system (SLICE 3 proved 4,179 rows), so this MUST page.
+      type LotRow = {
+        id: string;
+        lot_code: string | null;
+        pos_product_key: string | null;
+        ccrs_inventory_external_id: string | null;
+        status: string | null;
+        on_hand_qty: number | string | null;
+        product_name: string | null;
+      };
+      const { rows, verdict } = await pagedAllChecked<LotRow>(
+        async (from, to) => {
+          const { data, error } = await admin
+            .from("inventory_lots")
+            .select(
+              "id, lot_code, pos_product_key, ccrs_inventory_external_id, status, on_hand_qty, product_name",
+            )
+            // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+            .order("id", { ascending: true })
+            .range(from, to);
+          if (error) return { rows: [], ok: false };
+          return { rows: (data as LotRow[] | null) ?? [], ok: true };
+        },
+        { maxRows: BARCODE_SCAN_MAX_ROWS },
+      );
+      liveLotsComplete = verdict.complete;
+      if (!verdict.complete) {
+        console.warn(`[pos/menu] inventory lot read may be incomplete — ${verdict.message}`);
+      }
+      liveLots = rows.map((l) => ({
+        id: l.id,
+        posProductKey: l.pos_product_key,
+        status: l.status,
+        onHandQty: l.on_hand_qty,
+        productName: l.product_name,
+        lotCode: l.lot_code,
+        // Carried for the barcode index below (not part of LiveLotFact).
+        ccrsExternalId: deriveInventoryExternalId(l),
+      })) as (LiveLotFact & { ccrsExternalId: string | null })[];
+    } catch {
+      liveLots = [];
+      liveLotsComplete = false;
+    }
+  }
+
+  // Build the reconciliation input: one entry per published card, carrying
+  // EVERY lot key it can sell under (its own key plus each variant's encoded
+  // `${lotKey}-onboarded` key — a mastered card's lots carry the LOT's key,
+  // not the card's, so both must be considered).
+  const snapshotCards: SnapshotCard[] = menu.map((item) => {
+    const lotKeys = [item.id];
+    for (const v of item.variants) {
+      const k = lotKeyFromVariantId(v.id);
+      if (k) lotKeys.push(k);
+    }
+    return {
+      productId: item.id,
+      lotKeys,
+      inventoryStatus: item.inventoryStatus,
+      // `hidden` is optional on GreenwayMenuItem. The gate this replaces was
+      // `if (item.hidden) continue`, so undefined means NOT hidden — keep that
+      // exactly, or every card lacking the field would vanish.
+      hidden: item.hidden === true,
+      // AN-7 — CARD-level recall only, exactly as the gate this replaces did
+      // (`if (recalled.has(item.id)) continue`). A recalled LOT must remove
+      // only ITS OWN SIZE, and that is still enforced per-variant in the loop
+      // below. Widening it to `lotKeys.some(...)` here would pull a whole
+      // mastered card off the register because one of its sizes was recalled
+      // — turning a fix into a new outage. The behavioural test
+      // "keeps a recalled LOT's size off a mastered card" pins this.
+      recalled: recalled.has(item.id),
+    };
+  });
+
+  const availability = reconcileRegisterAvailability({ cards: snapshotCards, lots: liveLots });
+  const availabilityByProduct = new Map(availability.cards.map((c) => [c.productId, c]));
+  if (availability.restoredCount > 0) {
+    console.info(
+      `[pos/menu] restored ${availability.restoredCount} product(s) to the register from live lot stock (stale published inventory_status)`,
+    );
+  }
+  // Honesty about the limits of this repair. A truncated lot read cannot make
+  // the bundle WRONG — reconciliation only ever adds availability, so missing
+  // lots simply mean fewer restorations. But it can leave a product the owner
+  // expects to sell still missing, and he must never have to guess why.
+  if (!liveLotsComplete) {
+    const stillBlocked = availability.cards.filter(
+      (c) => !c.sellable && (c.reason === "no_live_stock" || c.reason === "no_lot_evidence"),
+    ).length;
+    if (stillBlocked > 0) {
+      console.warn(
+        `[pos/menu] the inventory lot read was incomplete, so ${stillBlocked} unavailable product(s) could not be re-checked against live stock — some may be sellable in reality.`,
+      );
+    }
+  }
+
   const products: PosMenuProduct[] = [];
   for (const item of menu) {
-    if (item.hidden) continue;
-    // Item-level availability gates the whole card, same as the website.
-    if (item.inventoryStatus === "unavailable") continue;
-    // AN-7 — recall hold excludes the product from the register entirely.
-    if (recalled.has(item.id)) continue;
+    // SLICE 16 — ONE decision point. The reconciler already applied, in this
+    // order: recall hold, hidden, snapshot-sellable (one-way — never removes
+    // availability), then live-stock restoration. The three separate
+    // `continue`s that used to live here are folded into it so the register
+    // and the back office can never disagree about why a card is missing.
+    const verdict = availabilityByProduct.get(item.id);
+    if (!verdict || !verdict.sellable) continue;
+
+    // A restored card's cached status is stale by definition, so ship the
+    // status LIVE STOCK implies. Without this the card would reach the device
+    // still labelled "unavailable" and be dropped again downstream by
+    // order-to-cart-core.ts:75 and register-polish-core.ts:165.
+    const effectiveStatus = verdict.restored ? verdict.liveStatus : item.inventoryStatus;
     const categories = (item.filterCategories?.length ? item.filterCategories : [item.category]).map(
       (c) => String(c).toLowerCase(),
     );
@@ -178,11 +325,16 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         // the device can enforce the ten-unit limit offline.
         otherwiseTaken: item.otherwiseTaken ?? null,
         unitsPerPackage: item.unitsPerPackage ?? null,
-        inventoryStatus: item.inventoryStatus,
+        inventoryStatus: effectiveStatus,
         // B32 — variant-level count for low-stock badges. Synthetic default
         // variants carry no real count (null = unknown, falls back to the
         // item-level status). Warnings only; never blocks a sale.
-        unitsLeft: hasRealVariants ? variant.inventoryLevel : null,
+        // SLICE 16 — a RESTORED card's cached variant levels are stale (that
+        // staleness is exactly why it was wrongly unavailable), so shipping
+        // them would paint a "0 left" badge on a product with real stock.
+        // null = unknown, which B32 already handles by falling back to the
+        // item-level status. Never invent a per-variant count we cannot prove.
+        unitsLeft: verdict.restored ? null : hasRealVariants ? variant.inventoryLevel : null,
         // B42 — product-info facts for the on-demand detail card (sensory/
         // descriptive only). Descriptions trimmed so the device cache stays
         // small; missing facts ship as absent, and the card omits them.
@@ -195,69 +347,44 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // POS B23 — barcode index for keyboard-wedge scan-to-cart. Built from
-  // ACTIVE lots' codes (lot_code + the same canonical CCRS derivation the
-  // Sale.csv builder and B19 decrement use), restricted to product keys that
-  // are actually sellable in THIS bundle. Best-effort: a lot-read failure
-  // ships an empty index (scanning degrades to product-key matches), never
-  // a failed menu download.
+  // POS B23 — barcode index for keyboard-wedge scan-to-cart, built from the
+  // SAME live lot read the availability reconciliation above used.
+  //
+  // SLICE 16 — WHY THIS NO LONGER FILTERS IN SQL. The read used to narrow with
+  // `.eq("status","active").gt("on_hand_qty",0)`, which meant the barcode
+  // index and the availability decision were answering "does this have
+  // sellable stock?" from two different places. `indexLiveStock` in the pure
+  // core now applies exactly those two rules, so the index and the bundle can
+  // never disagree about which lots count — and the whole thing is testable
+  // without a database.
+  //
+  // The best-effort contract is unchanged: a failed or truncated read leaves
+  // `liveLots` empty and ships an empty index rather than breaking the menu
+  // download. A TRUNCATED read is still never mistaken for a complete one.
   let barcodes: Record<string, string> = {};
-  if (isSupabaseServiceConfigured) {
-    try {
-      const admin = createSupabaseAdminClient();
-      // SLICE 5C — `.limit(5000)` cannot exceed PostgREST's 1,000-row cap
-      // (chunked-in.ts:13-14). `inventory_lots` is the largest table in the
-      // system — SLICE 3 shipped behavioural proof that 4,179 lot rows survive
-      // the cap (SLICE3_WORKPLAN.md:58) — so filtered to active-with-stock this
-      // index was silently missing every lot past row 1,000. The barcode simply
-      // was not there, so scanning that product at the register did nothing,
-      // with no error anywhere to explain why.
-      //
-      // The best-effort contract above is PRESERVED: a failed read still ships
-      // an empty index rather than breaking the menu download. What changes is
-      // that a TRUNCATED read is no longer mistaken for a successful one.
-      type LotRow = {
-        id: string;
-        lot_code: string | null;
-        pos_product_key: string | null;
-        ccrs_inventory_external_id: string | null;
-      };
-      const { rows: lotRows, verdict: lotVerdict } = await pagedAllChecked<LotRow>(
-        async (from, to) => {
-          const { data, error } = await admin
-            .from("inventory_lots")
-            .select("id, lot_code, pos_product_key, ccrs_inventory_external_id")
-            .eq("status", "active")
-            .gt("on_hand_qty", 0)
-            // Stable UNIQUE ordering — REQUIRED for deterministic paging.
-            .order("id", { ascending: true })
-            .range(from, to);
-          if (error) return { rows: [], ok: false };
-          return { rows: (data as LotRow[] | null) ?? [], ok: true };
-        },
-        { maxRows: BARCODE_SCAN_MAX_ROWS },
-      );
-      if (!lotVerdict.complete) {
-        console.warn(`[pos/menu] barcode index may be incomplete — ${lotVerdict.message}`);
-      }
-      // Sellable = every card key PLUS every variant's own encoded lot key
-      // (mastered cards' lots carry the LOT's pos_product_key, not the card
-      // key — without the union their barcodes would be dropped as
-      // "delisted"). Single-lot cards contribute the same key twice.
-      const sellableKeys = new Set(products.map((p) => p.productId));
-      for (const p of products) {
-        const k = lotKeyFromVariantId(p.variantId);
-        if (k) sellableKeys.add(k);
-      }
-      const sources: LotBarcodeSource[] = lotRows.map((l) => ({
-        lotCode: l.lot_code,
-        posProductKey: l.pos_product_key,
-        ccrsExternalId: deriveInventoryExternalId(l),
-      }));
-      barcodes = buildBarcodeIndex(sources, sellableKeys);
-    } catch {
-      barcodes = {};
+  if (liveLots.length > 0) {
+    // Sellable = every card key PLUS every variant's own encoded lot key
+    // (mastered cards' lots carry the LOT's pos_product_key, not the card
+    // key — without the union their barcodes would be dropped as "delisted").
+    // Because `products` now INCLUDES the cards restored from live stock,
+    // their barcodes finally make it into the index too: the scan the owner
+    // was making at the counter starts working.
+    const sellableKeys = new Set(products.map((p) => p.productId));
+    for (const p of products) {
+      const k = lotKeyFromVariantId(p.variantId);
+      if (k) sellableKeys.add(k);
     }
+    const sources: LotBarcodeSource[] = liveLots
+      .filter(
+        (l) =>
+          (l.status ?? "").trim().toLowerCase() === SELLABLE_LOT_STATUS && toQty(l.onHandQty) > 0,
+      )
+      .map((l) => ({
+        lotCode: l.lotCode ?? null,
+        posProductKey: l.posProductKey,
+        ccrsExternalId: (l as LiveLotFact & { ccrsExternalId: string | null }).ccrsExternalId,
+      }));
+    barcodes = buildBarcodeIndex(sources, sellableKeys);
   }
 
   const bundle: PosMenuBundle = {
