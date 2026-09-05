@@ -13,14 +13,24 @@ These rules govern ALL work in this repository. They are owner-mandated and perm
 2. **Deep-research every topic. Ground all decisions in verified fact — never guess.** Cite the authoritative source. If unsure, STOP and ask.
 3. **AI / crawler / machine output is DRAFTS-ONLY.** An employee validates before it becomes truth. Never silently invent a value; surface a precise warning for the human to resolve.
 4. **Walk the file tree repeatedly.** Do not assume something doesn't exist — verify. Reuse existing, verified work instead of rebuilding it.
-5. **Ship 6 slices at a time.** Each slice: ground → PURE `*-core.ts` logic + `__run…Tests()` → verify (tsc 0, eslint 0, next build ok) → branch → PR → **squash-merge** (rule 6) → sync main.
-6. **`main` is branch-protected, and SQUASH MERGE is the only way in.** Owner-authorized, permanent. Every change goes through a branch + PR, merged with `gh pr merge <n> --squash --delete-branch --admin`. Never a merge commit, never a rebase merge, never a direct push to `main`. One slice becomes exactly one commit on `main`, so history stays linear and any slice can be reverted as a unit. Keep Supabase migrations **idempotent** (owner applies them MANUALLY in the SQL editor).
+5. **Ship 6 slices at a time.** Each slice: ground → PURE `*-core.ts` logic + `__run…Tests()` → verify (tsc 0, eslint 0, next build ok) → branch → PR → **rebase-merge** (rule 6) → sync main.
+6. **`main` is branch-protected, and REBASE MERGE is the only way in.** Owner-authorized, permanent. Every change goes through a branch + PR, merged with `gh pr merge <n> --rebase --delete-branch --admin`. Never a merge commit, never a direct push to `main`. History stays linear, so any slice can be reverted as a unit.
+
+   **Never squash-merge in this repository.** This is not a style preference, it is a deployment constraint, and it was established by direct experiment on this repo rather than assumed. A squash merge performed by the automation token rewrites the commit **author** to `superninja-app[bot]`, which belongs to no team member, and Vercel then refuses the deployment with **BLOCKED** and no build logs (rule 7). Measured on throwaway `zz-lab/*` branches:
+
+   | merge method | commits in PR | resulting author | Vercel |
+   | --- | --- | --- | --- |
+   | squash | 2 (PR #1090) | `superninja-app[bot]` | BLOCKED |
+   | squash | 1 (PR #1091) | `superninja-app[bot]` | BLOCKED |
+   | rebase | 3 (PR #1092) | `Greenway Dev <dev@greenwaymarijuana.com>` on all 3 | builds |
+
+   Rebase merge rewrites each commit's **committer** to the bot but leaves the **author** intact, and Vercel reads the author. Note that a rebase merge changes commit SHAs, so after merging, re-sync local `main` with `git fetch origin && git reset --hard origin/main` instead of assuming the branch SHAs survived. Keep Supabase migrations **idempotent** (owner applies them MANUALLY in the SQL editor).
 7. **Every commit MUST be authored `Greenway Dev <dev@greenwaymarijuana.com>`.** This is a DEPLOYMENT PRECONDITION, not a preference. Vercel resolves the git author email to a GitHub account and refuses to build when that account is not a team member — the deployment shows **BLOCKED with no build logs**, which looks nothing like a build failure and cannot be diagnosed from CI. `dev@greenwaymarijuana.com` is verified on the owner's GitHub account `mblyman89`; Slice 13 was authored `superninja@ninjatech.ai`, which belongs to no GitHub account, and was blocked. **Set the identity before the first commit of every session** — git does not error on an unset identity, it silently invents one from the hostname:
    ```
    git config user.name  "Greenway Dev"
    git config user.email "dev@greenwaymarijuana.com"
    ```
-   Enforced by `scripts/compliance/verify-commit-authorship.ts` in CI. Because squash merges of a single-commit PR fast-forward, the branch author is what lands on `main` — so the identity must be right **on the branch**, before the merge.
+   Enforced by `scripts/compliance/verify-commit-authorship.ts` in CI. Because a rebase merge (rule 6) preserves each commit's author verbatim, the branch author is exactly what lands on `main` — so the identity must be right **on the branch**, before the merge. CI cannot catch it after the fact, because a merge that rewrites authorship produces a commit that no CI run ever inspected.
 8. **Money in MINOR UNITS (cents).** Convert only at the boundary.
 9. **Pacific time is the business clock.** Greenway operates in `America/Los_Angeles`. Any calendar-day / reporting-period logic MUST anchor to Pacific, never raw UTC.
 10. **Prefer non-blocking narrative updates;** only use `ask` for essential decisions. Use best judgment even when it's harder.
