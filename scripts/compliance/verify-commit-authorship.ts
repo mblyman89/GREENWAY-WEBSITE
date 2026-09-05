@@ -30,7 +30,11 @@ import {
   type CommitIdentity,
 } from "../../src/lib/git/commit-authorship-core";
 
-const LOG_FORMAT = "%H%x1f%s%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1e";
+// %P (the parent list) is required: it is how a merge commit is recognised.
+// On a pull_request event the checked-out HEAD is a synthetic merge commit that
+// GitHub authors itself and then discards, and judging it would be a false
+// alarm. See src/lib/git/commit-authorship-core.ts.
+const LOG_FORMAT = "%H%x1f%s%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1f%P%x1e";
 
 function git(args: readonly string[]): string {
   return execFileSync("git", [...args], {
@@ -101,13 +105,77 @@ function main(): void {
     scope =
       "HEAD only - the merge base was not available (this is normal in a " +
       "shallow CI checkout; set fetch-depth: 0 to widen the check)";
+
+    // If that lone commit is the synthetic pull_request merge, inspecting it
+    // and then skipping it would check nothing at all while reporting a pass.
+    // Follow its second parent - the branch GitHub merged in - so there is
+    // always something real under examination.
+    if (commits.length === 1 && (commits[0]?.parentCount ?? 0) >= 2) {
+      const second = (commits[0]?.sha ?? "") === "" ? undefined : "HEAD^2";
+      if (second !== undefined) {
+        const reRaw = tryGit(["log", "-1", `--format=${LOG_FORMAT}`, second]);
+        const reCommits = reRaw === null ? [] : parseCommitLog(reRaw);
+        if (reCommits.length > 0) {
+          commits = reCommits;
+          scope =
+            "HEAD^2 only - HEAD was the synthetic pull_request merge commit " +
+            "and no merge base was available, so the branch tip it merged in " +
+            "was inspected instead. Skipping the merge alone would have " +
+            "checked nothing.";
+        }
+      }
+    }
   } else {
+    // `--first-parent` is deliberately NOT used. On a pull_request event HEAD
+    // is the synthetic merge commit, whose FIRST parent is the base branch, so
+    // first-parent traversal would walk away from the branch entirely and see
+    // nothing. Plain `base..HEAD` walks both sides and reaches the real branch
+    // commits, which are the ones that decide whether Vercel will build.
     const raw = git(["log", `--format=${LOG_FORMAT}`, resolved.range]);
     commits = parseCommitLog(raw);
     scope = `${resolved.range} (base resolved from ${resolved.how})`;
+
+    // ── The loophole this closes ──────────────────────────────────────────
+    // When HEAD *is* the synthetic merge commit, `base..HEAD` can resolve to
+    // that merge and nothing else - the branch commits are already reachable
+    // from the base in the eyes of that range. Skipping the merge then leaves
+    // ZERO commits checked and the run reports a cheerful pass, which is
+    // exactly what a locally reproduced pull_request event showed:
+    //
+    //   1 commit(s) in range, 1 of them merge commit(s)
+    //   OK: all 0 commit(s) are authored ...
+    //
+    // A bad branch commit sailed straight through. So when everything in range
+    // is a merge, re-derive the range from the merge's SECOND parent, which is
+    // the branch tip GitHub merged in.
+    const allMerges =
+      commits.length > 0 && commits.every((c) => c.parentCount >= 2);
+    if (allMerges) {
+      const parents = tryGit(["log", "-1", "--format=%P", "HEAD"]);
+      const second = (parents ?? "").trim().split(/\s+/)[1];
+      if (second !== undefined && second !== "") {
+        const first = (parents ?? "").trim().split(/\s+/)[0] ?? "";
+        const base = tryGit(["merge-base", first, second]);
+        const from = base && base.trim() !== "" ? base.trim() : first;
+        const reRaw = git(["log", `--format=${LOG_FORMAT}`, `${from}..${second}`]);
+        const reCommits = parseCommitLog(reRaw);
+        if (reCommits.length > 0) {
+          commits = reCommits;
+          scope =
+            `${from.slice(0, 7)}..${second.slice(0, 7)} - HEAD was a merge ` +
+            "commit with nothing else in range, so the range was re-derived " +
+            "from its second parent (the branch GitHub merged in). Checking " +
+            "only the merge would have checked nothing at all.";
+        }
+      }
+    }
   }
 
-  console.log(`commit-authorship: checking ${commits.length} commit(s)`);
+  const merges = commits.filter((c) => c.parentCount >= 2).length;
+  console.log(
+    `commit-authorship: ${commits.length} commit(s) in range, ` +
+      `${merges} of them merge commit(s)`,
+  );
   console.log(`commit-authorship: scope = ${scope}`);
   console.log(
     `commit-authorship: required = ${REQUIRED_AUTHOR_NAME} <${REQUIRED_AUTHOR_EMAIL}>`,

@@ -109,6 +109,13 @@ describe("the commit authorship check is wired into CI", () => {
     expect(workflowText()).toMatch(/on:\s*\n\s*pull_request:/);
   });
 
+  it("the verifier asks git for the parent list, or it cannot spot a merge", () => {
+    // Without %P every commit parses as single-parent, the synthetic
+    // pull_request merge commit stops being recognised, and the false positive
+    // that this check produced on its first run comes straight back.
+    expect(readFileSync(VERIFIER, "utf8")).toContain("%P");
+  });
+
   it("the pure self-tests are registered with the self-test runner", () => {
     const text = readFileSync(SELFTESTS, "utf8");
     expect(text).toContain("__runCommitAuthorshipTests");
@@ -136,6 +143,7 @@ describe("the check would have caught the real failure", () => {
     authorEmail: "dev@greenwaymarijuana.com",
     committerName: "Greenway Dev",
     committerEmail: "dev@greenwaymarijuana.com",
+    parentCount: 1,
   };
 
   it("passes the commit Vercel deployed (3d25026)", () => {
@@ -198,6 +206,69 @@ describe("the check would have caught the real failure", () => {
     expect(text).toContain(REQUIRED_AUTHOR_EMAIL);
   });
 
+  it("does not fire on the synthetic pull_request merge commit", () => {
+    // This is a regression test for a false positive the check produced on its
+    // own first CI run. On a pull_request event the runner checks out
+    // refs/pull/<n>/merge, a merge commit GitHub creates and authors itself:
+    //
+    //   61ca7cf  parents 10eb1a6 + 5b77837
+    //            author  223766961+superninja-app[bot]@users.noreply.github.com
+    //
+    // The GitHub API reports that commit as the head of ZERO branches. It is
+    // discarded when the PR merges and Vercel never builds it, so failing a PR
+    // over it would be failing on an artefact of CI.
+    const verdict = evaluateCommitAuthorship([
+      {
+        sha: "61ca7cf",
+        subject: "Merge 5b78375 into 10eb1a6d",
+        authorName: "superninja-app[bot]",
+        authorEmail: "223766961+superninja-app[bot]@users.noreply.github.com",
+        committerName: "GitHub",
+        committerEmail: "noreply@github.com",
+        parentCount: 2,
+      },
+    ]);
+    expect(verdict.ok).toBe(true);
+    expect(verdict.skippedMerges).toBe(1);
+    expect(verdict.checked).toBe(0);
+  });
+
+  it("says so when it skips a merge, rather than skipping silently", () => {
+    const text = formatAuthorshipVerdict(
+      evaluateCommitAuthorship([{ ...good, parentCount: 2 }]),
+    );
+    expect(text).toContain("skipped");
+  });
+
+  it("skipping a merge does not excuse a real offender beside it", () => {
+    const verdict = evaluateCommitAuthorship([
+      { ...good, sha: "61ca7cf", parentCount: 2, authorEmail: "bot@example" },
+      { ...good, sha: "10eb1a6", authorEmail: "superninja@ninjatech.ai" },
+      good,
+    ]);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.checked).toBe(2);
+    expect(verdict.skippedMerges).toBe(1);
+  });
+
+  it("still checks a parentless root commit", () => {
+    // Skipping anything that is not a two-parent merge would be a blind spot.
+    const verdict = evaluateCommitAuthorship([
+      { ...good, authorEmail: "superninja@ninjatech.ai", parentCount: 0 },
+    ]);
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("counts parents from the %P field of the git log format", () => {
+    const raw =
+      "61ca7cf\u001fMerge a into b\u001fsuperninja-app[bot]\u001f" +
+      "223766961+superninja-app[bot]@users.noreply.github.com\u001f" +
+      "GitHub\u001fnoreply@github.com\u001f10eb1a6 5b77837\u001e\n";
+    const parsed = parseCommitLog(raw);
+    expect(parsed[0]?.parentCount).toBe(2);
+    expect(evaluateCommitAuthorship(parsed).ok).toBe(true);
+  });
+
   it("parses real git log output including em dashes in subjects", () => {
     // Subjects in this repository contain literal em dashes. A parser that
     // splits on anything punctuation-like would corrupt them, so the format
@@ -205,7 +276,7 @@ describe("the check would have caught the real failure", () => {
     const raw =
       "abc1234\u001fSLICE 18E \u2014 classification provenance\u001f" +
       "Greenway Dev\u001fdev@greenwaymarijuana.com\u001f" +
-      "Greenway Dev\u001fdev@greenwaymarijuana.com\u001e\n";
+      "Greenway Dev\u001fdev@greenwaymarijuana.com\u001f0000001\u001e\n";
     const parsed = parseCommitLog(raw);
     expect(parsed).toHaveLength(1);
     expect(parsed[0]?.subject).toBe(
