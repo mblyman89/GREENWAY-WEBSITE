@@ -76,6 +76,15 @@ jobs:
       # tests/compliance/ci-runs-the-typechecker.test.ts pins it by name so it
       # cannot quietly disappear the way the verbatim verifier once did.
       - name: Type check (tsc --noEmit, includes tests/)
+        # NODE_OPTIONS for the same reason the build job sets it: this repo is
+        # now large enough that a whole-program check exceeds Node's DEFAULT
+        # ~2 GB heap. The first run of this step died with
+        # "FATAL ERROR: Ineffective mark-compacts near heap limit" and exit 134
+        # at ~2044 MB - an OOM, NOT a type error. Left unfixed it would be a
+        # flaky red that teaches everyone to ignore this job, which is exactly
+        # how the hole this step exists to close was opened in the first place.
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npm run typecheck
       # Scoped lint: the harness + the pure statute-encoding modules it tests.
       # (Full-repo `npm run lint` carries pre-existing UI warnings/errors that

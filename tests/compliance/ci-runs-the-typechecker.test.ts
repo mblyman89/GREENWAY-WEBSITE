@@ -131,6 +131,31 @@ describe("CI actually type-checks this repository", () => {
       "the typecheck step exists in the workflow but not inside the `compliance` job, which is " +
         "the only job that runs without a database or a full build",
     ).toBe(true);
+
+    /*
+     * It must be given a raised heap. The very first CI run of this step died
+     * with "Ineffective mark-compacts near heap limit" and exit 134 at roughly
+     * 2044 MB - Node's default old-space cap - which is an OUT OF MEMORY, not a
+     * type error. A gate that reds out for a reason unrelated to the thing it
+     * checks is worse than no gate: people learn to ignore it, and the next
+     * genuine type error scrolls past inside a familiar failure. The build job
+     * already sets this for the same reason on the same repository.
+     */
+    const typecheckStepStart = complianceJob.indexOf("npm run typecheck");
+    const stepBlock = complianceJob.slice(
+      Math.max(0, complianceJob.lastIndexOf("- name:", typecheckStepStart)),
+      typecheckStepStart,
+    );
+    expect(
+      /max-old-space-size=(\d+)/.test(stepBlock),
+      "the typecheck step no longer raises NODE_OPTIONS --max-old-space-size. Whole-program tsc " +
+        "on this repo exceeds Node's default ~2 GB heap and aborts with exit 134, which looks " +
+        "like a failing type check but is an OOM.",
+    ).toBe(true);
+    expect(
+      Number(/max-old-space-size=(\d+)/.exec(stepBlock)?.[1] ?? 0),
+      "the typecheck heap is set below 4096 MB; the observed OOM was at ~2044 MB",
+    ).toBeGreaterThanOrEqual(4096);
   });
 
   /**
