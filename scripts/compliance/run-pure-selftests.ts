@@ -94,6 +94,7 @@ import { __runInventoryFilterCoreTests } from "../../src/lib/inventory/inventory
 import { __runInventorySortCoreTests } from "../../src/lib/inventory/inventory-sort-core";
 import { __runInventoryListCoreTests } from "../../src/lib/inventory/inventory-list-core";
 import { __runInventoryUrlCoreTests } from "../../src/lib/inventory/inventory-url-core";
+import { __runFacetTypeaheadCoreTests } from "../../src/lib/inventory/facet-typeahead-core";
 import { __runInventoryPageCoreTests } from "../../src/lib/inventory/inventory-page-core";
 import { __runStrainMatcherTests } from "../../src/lib/ai/kb/strain-matcher";
 import { __runEsd5208WorksheetTests } from "../../src/lib/payroll/esd-5208-worksheet-core";
@@ -1035,6 +1036,7 @@ async function main() {
   __runInventoryListCoreTests();
   __runInventoryUrlCoreTests();
   __runInventoryPageCoreTests();
+  __runFacetTypeaheadCoreTests();
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
