@@ -360,6 +360,7 @@ import { __runMediaAutosaveCoreTests } from "../../src/lib/purchasing/media-auto
 import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core";
 import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runSocketScanCoreTests } from "../../src/lib/pos/socket-scan-core";
+import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilience-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
 import { __runOrderToCartCoreTests } from "../../src/lib/pos/order-to-cart-core";
 import { __runMemberMatchCoreTests } from "../../src/lib/pos/member-match-core";
@@ -671,6 +672,7 @@ async function main() {
   __runDraftSeedCoreTests();
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
+  __runSocketResilienceCoreTests();
   __runRegisterLoyaltyCoreTests();
   __runOrderToCartCoreTests();
   __runMemberMatchCoreTests();

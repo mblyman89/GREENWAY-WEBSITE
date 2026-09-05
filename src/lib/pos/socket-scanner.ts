@@ -44,12 +44,26 @@
 import {
   acceptSocketScan,
   emptySocketScanState,
-  noteSocketDeviceArrival,
-  noteSocketDeviceRemoval,
-  socketScanOwner,
   type SocketScanRoute,
   type SocketScanState,
 } from "./socket-scan-core";
+import {
+  acquireSocketLease,
+  describeSocketHealth,
+  emptySocketRuntimeState,
+  noteSocketArrival,
+  noteSocketOpenFailed,
+  noteSocketOpenSucceeded,
+  noteSocketRemoval,
+  planSocketForeground,
+  reconcileSocketDevices,
+  releaseSocketLease,
+  shutdownSocketRuntime,
+  socketRetryDelayMs,
+  socketSdkOwnsScanning,
+  type SocketHealth,
+  type SocketRuntimeState,
+} from "./socket-resilience-core";
 
 // ---------------------------------------------------------------------------
 // App identity
@@ -192,10 +206,19 @@ export type SocketSessionCallbacks = {
   onOwnershipChange?: (sdkOwnsScanning: boolean) => void;
   /** Human-readable status for the UI (device connected, error text). */
   onStatus?: (message: string) => void;
+  /** Structured health for the scanner indicator. */
+  onHealth?: (health: SocketHealth) => void;
 };
 
 export type SocketSession = {
-  /** Tear down listeners and close the Capture service. Always safe. */
+  /**
+   * Release THIS subscriber's lease.
+   *
+   * Named `stop` for the callers that already had it, but read the contract
+   * carefully, because it changed in Slice 15 and the change IS the bug fix:
+   * this releases a lease, it does NOT close the Capture service. See
+   * socket-resilience-core.ts Rule 1.
+   */
   stop: () => Promise<void>;
   /**
    * Does the SDK currently own scanning? The wedge listener consults this so
@@ -204,45 +227,173 @@ export type SocketSession = {
   sdkOwnsScanning: () => boolean;
 };
 
+// ---------------------------------------------------------------------------
+// The runtime: ONE Capture session for the whole app
+// ---------------------------------------------------------------------------
+
 /**
- * A session that owns nothing and does nothing, returned when there is no
- * native plugin. Returning this rather than null means the caller has no
- * special case to write and -- crucially -- `sdkOwnsScanning()` answers FALSE,
- * so the wedge keeps working exactly as it does today.
+ * Module-level, deliberately.
+ *
+ * Socket's iOS documentation states it in a comment directly above the open
+ * call, in three separate samples: "open Capture Helper only once in the
+ * application (in the main view controller) and pushDelegate, popDelegate
+ * each time a new view requiring scanning capability is loaded or unloaded."
+ *
+ * The register has TWO scanning surfaces mounted at once (the ID gate and the
+ * cart). Before Slice 15 each one started and stopped its own session, so
+ * whichever unmounted first closed Capture underneath the other -- and since
+ * closing Capture fires no removal events, the survivor went on believing it
+ * owned scanning and kept the keyboard wedge suppressed. SDK shut, wedge
+ * muted, no error anywhere: a register that could not scan by any means.
+ *
+ * Subscribers now take leases against this one runtime instead.
  */
-function inertSession(): SocketSession {
-  return {
-    stop: async () => {},
-    sdkOwnsScanning: () => false,
-  };
+type Subscriber = {
+  id: string;
+  callbacks: SocketSessionCallbacks;
+};
+
+let runtime: SocketRuntimeState = emptySocketRuntimeState();
+let scanState: SocketScanState = emptySocketScanState();
+let subscribers: Subscriber[] = [];
+let listenerRemovers: Array<() => Promise<void>> = [];
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let foregroundBound = false;
+let leaseSeq = 0;
+
+function now(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+}
+
+function emit(fn: (cb: SocketSessionCallbacks) => void): void {
+  // Snapshot: a callback may release its lease while we are iterating.
+  for (const sub of [...subscribers]) {
+    try {
+      fn(sub.callbacks);
+    } catch {
+      // One screen's render bug must never stop another screen being told a
+      // scanner arrived.
+    }
+  }
+}
+
+function broadcast(): void {
+  const owns = socketSdkOwnsScanning(runtime);
+  const health = describeSocketHealth(runtime, { pluginPresent: getSocketPlugin() !== null });
+  emit((cb) => {
+    cb.onOwnershipChange?.(owns);
+    cb.onHealth?.(health);
+  });
+}
+
+function status(message: string): void {
+  emit((cb) => cb.onStatus?.(message));
+}
+
+function clearRetry(): void {
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
 }
 
 /**
- * Start listening for Socket scans.
+ * Schedule another open attempt.
  *
- * Never throws and never rejects. On any failure the returned session is inert
- * and the wedge path continues to serve the register.
+ * There is no attempt at which this gives up. An unattended register whose
+ * scanner was left off its base overnight must be scanning again within
+ * seconds of someone switching it on, without anybody restarting the app.
  */
-export async function startSocketSession(
-  callbacks: SocketSessionCallbacks,
-): Promise<SocketSession> {
+function scheduleRetry(): void {
+  clearRetry();
+  if (subscribers.length === 0) return;
+  const delay = socketRetryDelayMs(runtime.failedOpens);
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void openRuntime();
+  }, delay);
+}
+
+/** Ask the native side how many devices are REALLY attached, and adopt that. */
+async function resyncDevices(plugin: SocketPlugin): Promise<void> {
+  try {
+    const st = await plugin.getStatus();
+    const count = typeof st?.deviceCount === "number" ? st.deviceCount : 0;
+    // REPLACE, never add. Folding this in as extra arrivals inflates the
+    // count, and an inflated count never falls back to zero when the scanner
+    // powers off -- the wedge stays suppressed with nothing listening.
+    runtime = reconcileSocketDevices(runtime, count);
+    broadcast();
+  } catch {
+    // Status is an optimisation. A real arrival event will settle it.
+  }
+}
+
+async function attachListeners(plugin: SocketPlugin): Promise<void> {
+  const arrival = await plugin.addListener("deviceArrival", (evt) => {
+    runtime = noteSocketArrival(runtime);
+    broadcast();
+    status(`Scanner connected${evt?.name ? `: ${evt.name}` : ""}.`);
+  });
+  listenerRemovers.push(arrival.remove);
+
+  const removal = await plugin.addListener("deviceRemoval", (evt) => {
+    runtime = noteSocketRemoval(runtime);
+    broadcast();
+    // Say what the register FELL BACK TO, not just what was lost. A cashier
+    // reading "scanner disconnected" mid-rush needs to know they can keep
+    // selling.
+    status(
+      `Scanner disconnected${evt?.name ? `: ${evt.name}` : ""} - back to keyboard scanning.`,
+    );
+  });
+  listenerRemovers.push(removal.remove);
+
+  const scan = await plugin.addListener("scan", (evt) => {
+    const raw = typeof evt?.data === "string" ? evt.data : "";
+    const decision = acceptSocketScan({ state: scanState, channel: "sdk", raw, nowMs: now() });
+    scanState = decision.state;
+    if (decision.accepted) {
+      const { payload, route } = decision;
+      emit((cb) => cb.onScan(payload, route));
+    }
+  });
+  listenerRemovers.push(scan.remove);
+
+  const scanError = await plugin.addListener("scanError", (evt) => {
+    status(evt?.message ?? "The scanner reported an error.");
+  });
+  listenerRemovers.push(scanError.remove);
+}
+
+async function detachListeners(): Promise<void> {
+  const removers = listenerRemovers;
+  listenerRemovers = [];
+  for (const remove of removers) {
+    try {
+      await remove();
+    } catch {
+      // Teardown must not throw.
+    }
+  }
+}
+
+/**
+ * Open Capture, or re-open it after a failure.
+ *
+ * Never throws. Every exit path leaves the runtime in a state whose ownership
+ * answer is honest, so the wedge is returned the moment the SDK is not
+ * provably listening.
+ */
+async function openRuntime(): Promise<void> {
   const plugin = getSocketPlugin();
-  if (!plugin) return inertSession();
-
-  // The pure state machine. This module holds the reference; every decision
-  // is made by the core.
-  let state: SocketScanState = emptySocketScanState();
-  let stopped = false;
-  const removers: Array<() => Promise<void>> = [];
-
-  const announceOwnership = () => {
-    callbacks.onOwnershipChange?.(socketScanOwner(state) === "sdk");
-  };
-
-  const now = (): number =>
-    typeof performance !== "undefined" && typeof performance.now === "function"
-      ? performance.now()
-      : Date.now();
+  if (!plugin) {
+    runtime = noteSocketOpenFailed(runtime, null);
+    broadcast();
+    return;
+  }
 
   try {
     const opened = await plugin.open({
@@ -250,97 +401,191 @@ export async function startSocketSession(
       developerId: SOCKET_DEVELOPER_ID,
       appKey: SOCKET_APP_KEY,
     });
+
     if (!opened?.ok) {
       // The single most likely real-world cause, named explicitly so the
       // message points at the fix instead of at us: the scanner must be paired
       // in APPLICATION MODE via the Socket Mobile Companion app. A scanner
       // still in keyboard mode will never appear to the SDK.
-      callbacks.onStatus?.(
+      const message =
         opened?.message ??
-          "Socket Capture did not open. Check the scanner is paired in Application Mode " +
-            "using the Socket Mobile Companion app (a scanner left in keyboard mode is " +
-            "invisible to the SDK). The register is still scanning by keyboard wedge.",
-      );
-      return inertSession();
+        "Socket Capture did not open. Check the scanner is paired in Application Mode " +
+          "using the Socket Mobile Companion app (a scanner left in keyboard mode is " +
+          "invisible to the SDK). The register is still scanning by keyboard wedge.";
+      runtime = noteSocketOpenFailed(runtime, message);
+      broadcast();
+      status(message);
+      scheduleRetry();
+      return;
     }
 
-    const arrival = await plugin.addListener("deviceArrival", (evt) => {
-      if (stopped) return;
-      state = noteSocketDeviceArrival(state);
-      announceOwnership();
-      callbacks.onStatus?.(`Scanner connected${evt?.name ? `: ${evt.name}` : ""}.`);
-    });
-    removers.push(arrival.remove);
+    // Re-opening after a failure must not stack a second set of listeners --
+    // that is how one barcode becomes two line items.
+    await detachListeners();
+    await attachListeners(plugin);
 
-    const removal = await plugin.addListener("deviceRemoval", (evt) => {
-      if (stopped) return;
-      state = noteSocketDeviceRemoval(state);
-      announceOwnership();
-      // Say what the register FELL BACK TO, not just what was lost. A cashier
-      // reading "scanner disconnected" mid-rush needs to know they can keep
-      // selling.
-      callbacks.onStatus?.(
-        `Scanner disconnected${evt?.name ? `: ${evt.name}` : ""} - back to keyboard scanning.`,
-      );
-    });
-    removers.push(removal.remove);
-
-    const scan = await plugin.addListener("scan", (evt) => {
-      if (stopped) return;
-      const raw = typeof evt?.data === "string" ? evt.data : "";
-      const decision = acceptSocketScan({ state, channel: "sdk", raw, nowMs: now() });
-      state = decision.state;
-      if (decision.accepted) {
-        callbacks.onScan(decision.payload, decision.route);
-      }
-    });
-    removers.push(scan.remove);
-
-    const scanError = await plugin.addListener("scanError", (evt) => {
-      if (stopped) return;
-      callbacks.onStatus?.(evt?.message ?? "The scanner reported an error.");
-    });
-    removers.push(scanError.remove);
-
-    // A page reload leaves the scanner connected but our state empty. Ask the
-    // native side what is actually attached rather than assuming nothing is --
-    // otherwise the wedge would stay enabled next to a live SDK scanner and
-    // every scan would arrive twice.
-    try {
-      const status = await plugin.getStatus();
-      const count = typeof status?.deviceCount === "number" ? status.deviceCount : 0;
-      for (let i = 0; i < count; i++) state = noteSocketDeviceArrival(state);
-      if (count > 0) announceOwnership();
-    } catch {
-      // Status is an optimisation, not a requirement. If it fails, the first
-      // real arrival event will establish ownership anyway.
-    }
+    runtime = noteSocketOpenSucceeded(runtime);
+    // A web-view reload leaves the scanner connected but our state empty. Ask
+    // rather than assume, or the wedge stays live next to a working SDK
+    // scanner and every scan arrives twice.
+    await resyncDevices(plugin);
+    broadcast();
   } catch (err) {
-    callbacks.onStatus?.(
+    const message =
       err instanceof Error
         ? `Socket scanner unavailable: ${err.message}`
-        : "Socket scanner unavailable.",
-    );
-    return inertSession();
+        : "Socket scanner unavailable.";
+    runtime = noteSocketOpenFailed(runtime, message);
+    broadcast();
+    status(message);
+    scheduleRetry();
+  }
+}
+
+/**
+ * Recover when the app returns to the foreground.
+ *
+ * Socket documents the iOS behaviour: "when the app goes to the background or
+ * is inactive, the scanner will disconnect from the app... When the app
+ * returns to the foreground, the OS will hand over the scanner connection,
+ * and the app will receive the device arrival event again."
+ *
+ * That re-delivery only happens if Capture is still open -- which is why
+ * Rule 1 matters -- and we do not sit and hope for it either way. This is the
+ * single most valuable line of recovery in the file for the reported symptom:
+ * an iPad that has been asleep on a counter since last night comes back to a
+ * working scanner without anyone touching anything.
+ */
+export function handleSocketForeground(): void {
+  if (subscribers.length === 0) return;
+  const plan = planSocketForeground(runtime);
+  if (plan.reopen) {
+    clearRetry();
+    runtime = { ...runtime, phase: "opening" };
+    void openRuntime();
+    return;
+  }
+  if (plan.resync) {
+    const plugin = getSocketPlugin();
+    if (plugin) void resyncDevices(plugin);
+  }
+}
+
+function bindForegroundOnce(): void {
+  if (foregroundBound) return;
+  if (typeof document === "undefined" || typeof document.addEventListener !== "function") return;
+  foregroundBound = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") handleSocketForeground();
+  });
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    // Capacitor emits `resume` on the document/window when iOS foregrounds the
+    // app. Belt and braces with visibilitychange: whichever fires, the plan is
+    // idempotent, because planSocketForeground() refuses to act on a session
+    // that is already opening.
+    window.addEventListener("focus", () => handleSocketForeground());
+  }
+}
+
+/**
+ * Subscribe to Socket scans.
+ *
+ * Takes a LEASE on the shared runtime. The first lease opens Capture; further
+ * leases attach to the session already running. Releasing a lease NEVER closes
+ * Capture -- see socket-resilience-core.ts Rule 1.
+ *
+ * Never throws and never rejects. If there is no native plugin the returned
+ * session reports `sdkOwnsScanning() === false` forever, so the wedge path
+ * continues to serve the register exactly as it does today.
+ */
+export async function startSocketSession(
+  callbacks: SocketSessionCallbacks,
+): Promise<SocketSession> {
+  const id = `lease-${++leaseSeq}`;
+
+  if (!getSocketPlugin()) {
+    // Still report health so the indicator can say "keyboard scanning" rather
+    // than sitting blank and looking broken.
+    try {
+      callbacks.onHealth?.(describeSocketHealth(runtime, { pluginPresent: false }));
+    } catch {
+      // A render error must not break subscription.
+    }
+    return { stop: async () => {}, sdkOwnsScanning: () => false };
+  }
+
+  subscribers.push({ id, callbacks });
+  bindForegroundOnce();
+
+  const decision = acquireSocketLease(runtime, id);
+  runtime = decision.state;
+
+  if (decision.action === "open") {
+    await openRuntime();
+  } else {
+    // Joining a session that is already up: tell the newcomer where things
+    // stand immediately, rather than leaving it dark until the next event.
+    try {
+      callbacks.onOwnershipChange?.(socketSdkOwnsScanning(runtime));
+      callbacks.onHealth?.(describeSocketHealth(runtime, { pluginPresent: true }));
+    } catch {
+      // As above.
+    }
   }
 
   return {
-    sdkOwnsScanning: () => socketScanOwner(state) === "sdk",
+    sdkOwnsScanning: () => socketSdkOwnsScanning(runtime),
     stop: async () => {
-      stopped = true;
-      for (const remove of removers) {
-        try {
-          await remove();
-        } catch {
-          // Teardown must not throw on the way out of a component.
-        }
-      }
-      try {
-        await plugin.close();
-      } catch {
-        // Same.
-      }
-      state = emptySocketScanState();
+      subscribers = subscribers.filter((s) => s.id !== id);
+      const released = releaseSocketLease(runtime, id);
+      runtime = released.state;
+      // released.action is "none" BY DESIGN. Capture stays open across screen
+      // changes; only shutdownSocketScanning() closes it.
+      if (subscribers.length === 0) clearRetry();
     },
   };
+}
+
+/**
+ * Close the Capture service outright.
+ *
+ * The ONLY path that closes it. Not called on unmount, on navigation, or when
+ * leaving scan mode -- only when the app itself is going away, and by tests.
+ */
+export async function shutdownSocketScanning(): Promise<void> {
+  clearRetry();
+  const decision = shutdownSocketRuntime(runtime);
+  runtime = decision.state;
+  scanState = emptySocketScanState();
+  subscribers = [];
+  await detachListeners();
+  if (decision.action === "close") {
+    const plugin = getSocketPlugin();
+    try {
+      await plugin?.close();
+    } catch {
+      // Nothing useful to do at shutdown.
+    }
+  }
+  broadcast();
+}
+
+/** Current scanner health, for a status indicator. */
+export function getSocketHealth(): SocketHealth {
+  return describeSocketHealth(runtime, { pluginPresent: getSocketPlugin() !== null });
+}
+
+/** Test seam: return the shared runtime to rest. Not used at runtime. */
+export function __resetSocketRuntimeForTests(): void {
+  clearRetry();
+  runtime = emptySocketRuntimeState();
+  scanState = emptySocketScanState();
+  subscribers = [];
+  listenerRemovers = [];
+  leaseSeq = 0;
+}
+
+/** Test seam: read the shared runtime. Not used at runtime. */
+export function __getSocketRuntimeForTests(): SocketRuntimeState {
+  return runtime;
 }

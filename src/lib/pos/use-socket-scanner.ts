@@ -32,11 +32,30 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { startSocketSession, type SocketSession } from "./socket-scanner";
+import { getSocketHealth, startSocketSession, type SocketSession } from "./socket-scanner";
 import type { SocketScanRoute } from "./socket-scan-core";
+import type { SocketHealth } from "./socket-resilience-core";
 
 export type UseSocketScannerOptions = {
-  /** Turn the session on. Pass false to keep the hook inert (e.g. wrong screen). */
+  /**
+   * Should THIS subscriber be handed scans right now?
+   *
+   * ── READ THIS BEFORE CHANGING IT (SLICE 15) ──────────────────────────────
+   *
+   * This gates DELIVERY. It does not gate the SESSION, and the difference is
+   * the bug that took the register offline overnight.
+   *
+   * It used to gate the session: `enabled: mode === "scan"` meant that every
+   * time a cashier stepped out of scan mode, the Capture service was closed
+   * and rebuilt. That contradicts Socket's own instruction to "open Capture
+   * Helper only once in the application", and with two scanning surfaces
+   * mounted at once it was worse than churn -- whichever surface unmounted
+   * first closed Capture underneath the other one, which then kept the
+   * keyboard wedge suppressed over a session nobody was listening to.
+   *
+   * So the lease is now held for as long as the component is mounted, and
+   * `enabled` only decides whether scans reach THIS caller.
+   */
   enabled: boolean;
   /** An accepted, routed scan from the SDK. */
   onScan: (payload: string, route: SocketScanRoute) => void;
@@ -52,6 +71,8 @@ export type UseSocketScannerResult = {
   connected: boolean;
   /** Latest human-readable status, or null. */
   status: string | null;
+  /** Structured health for a scanner indicator: level, headline, detail, remedy. */
+  health: SocketHealth;
 };
 
 export function useSocketScanner(options: UseSocketScannerOptions): UseSocketScannerResult {
@@ -60,6 +81,15 @@ export function useSocketScanner(options: UseSocketScannerOptions): UseSocketSca
   const ownsRef = useRef(false);
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [health, setHealth] = useState<SocketHealth>(() => getSocketHealth());
+
+  // `enabled` gates DELIVERY only (see the option's doc comment). Read through
+  // a ref so the long-lived session always sees today's answer instead of the
+  // value captured when the subscription was made.
+  const enabledRef = useRef(enabled);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
 
   // Latest-ref pattern: the session is started ONCE, but must always call the
   // freshest onScan (which closes over cart and medical-card state). Without
@@ -70,14 +100,19 @@ export function useSocketScanner(options: UseSocketScannerOptions): UseSocketSca
     onScanRef.current = onScan;
   });
 
+  // NOTE the empty dependency array. Subscribing is deliberately NOT keyed to
+  // `enabled`: the lease is held for the lifetime of the component so the
+  // shared Capture session is never torn down by a mode change.
   useEffect(() => {
-    if (!enabled) return;
-
     let cancelled = false;
     let session: SocketSession | null = null;
 
     void startSocketSession({
-      onScan: (payload, route) => onScanRef.current(payload, route),
+      onScan: (payload, route) => {
+        if (!enabledRef.current) return;
+        onScanRef.current(payload, route);
+      },
+      onHealth: (next) => setHealth(next),
       onOwnershipChange: (owns) => {
         // The ref FIRST: it is what actually suppresses the wedge, and it must
         // be true before any scan can arrive. The state is only for display.
@@ -87,8 +122,9 @@ export function useSocketScanner(options: UseSocketScannerOptions): UseSocketSca
       onStatus: (message) => setStatus(message),
     }).then((started) => {
       if (cancelled) {
-        // Unmounted while opening. Close what we just opened rather than
-        // leaking a live Capture session into the next screen.
+        // Unmounted while opening. Release the lease we just took. This does
+        // NOT close Capture -- another screen may still be scanning through
+        // it, and closing it under them is precisely the defect Slice 15 fixed.
         void started.stop();
         return;
       }
@@ -101,12 +137,19 @@ export function useSocketScanner(options: UseSocketScannerOptions): UseSocketSca
 
     return () => {
       cancelled = true;
+      // Ownership is released for THIS caller so its wedge listener is never
+      // left muted by a session it can no longer hear.
       ownsRef.current = false;
       void session?.stop();
     };
-  }, [enabled]);
+    // The empty dependency array is intentional -- see the note above.
+    // Keying this effect to `enabled` is the bug, not the fix.
+  }, []);
 
-  const sdkOwnsScanning = useCallback(() => ownsRef.current, []);
+  // The wedge must be free whenever THIS caller is not taking scans. Without
+  // this, leaving scan mode would suppress the wedge on behalf of a subscriber
+  // that is ignoring every scan it is handed.
+  const sdkOwnsScanning = useCallback(() => enabledRef.current && ownsRef.current, []);
 
-  return { sdkOwnsScanning, connected, status };
+  return { sdkOwnsScanning, connected, status, health };
 }

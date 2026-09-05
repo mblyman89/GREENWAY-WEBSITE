@@ -63,6 +63,18 @@
 	<array>
 		<string>arm64</string>
 	</array>
+	<!-- SLICE 15: UIBackgroundModes / external-accessory is DELIBERATELY ABSENT.
+	     It looks like the fix for "the scanner was disconnected this morning"
+	     and it is not. Apple lists external-accessory for an accessory that
+	     "delivers data at regular intervals" and warns to use background modes
+	     sparingly; a barcode scanner delivers data when a human pulls a trigger.
+	     Socket Mobile's own iOS documentation is explicit that "apps do not have
+	     access to Socket Mobile readers while in the background" and that the OS
+	     hands the connection back on foreground, re-firing the device arrival
+	     event. The entitlement would buy nothing and would earn a fair question
+	     at App Store review. Recovering correctly on foreground is the supported
+	     answer. See handleSocketForeground() in src/lib/pos/socket-scanner.ts
+	     and Rule 5 of src/lib/pos/socket-resilience-core.ts. -->
 	<key>UISupportedExternalAccessoryProtocols</key>
 	<array>
 		<string>jp.star-m.starpro</string>
