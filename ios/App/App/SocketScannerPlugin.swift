@@ -133,9 +133,21 @@ public class SocketScannerPlugin: CAPPlugin,
         }
 
         if isOpen {
+            // Already up. Answer with Capture's live list rather than our
+            // tally -- a resumed app calls open() again on foreground, and
+            // that call is exactly when a drifted tally would be adopted as
+            // truth by the JavaScript side.
+            connectedDevices = capture.getDevices().count
             call.resolve(["ok": true, "deviceCount": connectedDevices])
             return
         }
+
+        // A retry after a failed open must not stack a second delegate on the
+        // Capture stack -- two delegates deliver every barcode twice, which at
+        // a register is a double charge. popDelegate is safe when we are not
+        // on the stack, so this is unconditional rather than guarded by a flag
+        // that could itself drift.
+        capture.popDelegate(self)
 
         let appInfo = SKTAppInfo()
         appInfo.appID = appId
@@ -197,8 +209,33 @@ public class SocketScannerPlugin: CAPPlugin,
     /// empty. Without this, the register would believe no scanner was present,
     /// leave the keyboard-wedge listener enabled next to a live SDK scanner,
     /// and receive every scan twice.
+    ///
+    /// SLICE 15 -- ASK CAPTURE, DO NOT TRUST OUR OWN TALLY.
+    ///
+    /// `connectedDevices` is a counter we maintain from arrival and removal
+    /// callbacks, which means it is only ever as correct as the last event we
+    /// did not miss. Events ARE missed: iOS disconnects the accessory when the
+    /// app is backgrounded, and an app suspended overnight can be resumed with
+    /// its tally describing a scanner that powered off hours ago on its
+    /// 2-hour idle timer.
+    ///
+    /// A tally that reads high is the worst outcome available, because the
+    /// JavaScript side suppresses the keyboard wedge whenever it believes a
+    /// scanner is attached. High tally plus no scanner equals a register that
+    /// cannot scan by either path and says nothing about it.
+    ///
+    /// `getDevices()` is Capture's own live list, so it cannot drift. We
+    /// reconcile the tally to it here, and the JavaScript side REPLACES its
+    /// count with this number rather than adding to it.
     @objc func getStatus(_ call: CAPPluginCall) {
-        call.resolve(["ok": true, "deviceCount": connectedDevices, "open": isOpen])
+        guard isOpen else {
+            connectedDevices = 0
+            call.resolve(["ok": true, "deviceCount": 0, "open": false])
+            return
+        }
+        let live = capture.getDevices().count
+        connectedDevices = live
+        call.resolve(["ok": true, "deviceCount": live, "open": true])
     }
 
     // MARK: - CaptureHelperDevicePresenceDelegate
