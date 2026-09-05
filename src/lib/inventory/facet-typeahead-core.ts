@@ -44,6 +44,19 @@ export type TypeaheadOption = {
   readonly value: string;
   readonly label: string;
   readonly count: number;
+  /**
+   * The link that toggles this option, PRECOMPUTED ON THE SERVER.
+   *
+   * This is deliberately data, not a `hrefFor(value)` callback. The panel is a
+   * Server Component and the combobox is a Client Component; React cannot
+   * serialise a function across that boundary and throws during render:
+   * "Functions cannot be passed directly to Client Components." Shipping the
+   * href as a plain string keeps the boundary crossable and keeps every option
+   * a real <a href>, which is what makes the filters work without JS.
+   *
+   * Optional so the pure logic stays usable in tests without inventing URLs.
+   */
+  readonly href?: string;
 };
 
 /**

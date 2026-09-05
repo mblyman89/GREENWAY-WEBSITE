@@ -132,7 +132,11 @@ describe("the filter panel is contained, not merely restyled", () => {
     expect(panel).toContain("<FacetCombobox");
     expect(panel).toContain("INVENTORY_FACETS.map");
     // And it must be wired to the real data + URL helpers, not rendered inert.
-    expect(panel).toMatch(/<FacetCombobox[\s\S]{0,400}hrefFor=/);
+    // Links arrive as PRECOMPUTED DATA, not a callback: a function cannot
+    // cross the server->client boundary (it crashed the page once).
+    expect(panel).toMatch(/<FacetCombobox[\s\S]{0,400}options=\{withHrefs\}/);
+    expect(panel).toMatch(/href: toggleFacetHref\(/);
+    expect(panel).not.toMatch(/<FacetCombobox[\s\S]{0,400}hrefFor=/);
     expect(panel).toMatch(/<FacetCombobox[\s\S]{0,400}selected=/);
   });
 
@@ -213,8 +217,8 @@ describe("the combobox follows the W3C combobox pattern", () => {
   });
 
   it("renders options as real links so it works without JavaScript", () => {
-    expect(combo).toContain("hrefFor");
-    expect(combo).toContain("href={hrefFor(o.value)}");
+    // The href comes from the option itself, precomputed on the server.
+    expect(combo).toMatch(/href=\{\s*o\.href\b/);
   });
 
   it("does NOT submit the search box as a filter field", () => {
