@@ -365,6 +365,7 @@ import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilie
 import { __runRegisterAvailabilityCoreTests } from "../../src/lib/pos/register-availability-core";
 import { __runPickupHandoverCoreTests } from "../../src/lib/pos/pickup-handover-core";
 import { __runRestoreToSaleCoreTests } from "../../src/lib/inventory/restore-to-sale-core";
+import { __runTransactionHistoryCoreTests } from "../../src/lib/pos/transaction-history-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
 import { __runOrderToCartCoreTests } from "../../src/lib/pos/order-to-cart-core";
 import { __runMemberMatchCoreTests } from "../../src/lib/pos/member-match-core";
@@ -680,6 +681,7 @@ async function main() {
   __runRegisterAvailabilityCoreTests();
   __runPickupHandoverCoreTests();
   __runRestoreToSaleCoreTests();
+  __runTransactionHistoryCoreTests();
   __runRegisterLoyaltyCoreTests();
   __runOrderToCartCoreTests();
   __runMemberMatchCoreTests();
