@@ -48,6 +48,7 @@ import { __runSiteBackgroundTests } from "../../src/lib/ui/site-background-core"
 // pure test below, not this server-only-free runner. See
 // tests/compliance/product-lookup-core.test.ts.
 import { __runProductLookupParseTests } from "../../src/lib/inventory/product-lookup-parse";
+import { __runCommitAuthorshipTests } from "../../src/lib/git/commit-authorship-core";
 // books-47, SLICE D: the Form / Why / Check teaching surface. All three are
 // pure and browser-safe by construction -- none may touch node:fs, because the
 // explorer that consumes them is a client component. Registering them here
@@ -852,6 +853,7 @@ async function main() {
   assertNoFailures("glow-card-core", __runGlowCardCoreTests());
   assertNoFailures("site-background-core", __runSiteBackgroundTests());
   assertNoFailures("product-lookup-parse", __runProductLookupParseTests());
+  __runCommitAuthorshipTests();
   assertNoFailures("core-values-core", __runCoreValuesTests());
   assertNoFailures("llamaparse-core", __runLlamaparseCoreTests());
   console.log(__runLlamaParseStatusCoreTests());
