@@ -38,6 +38,13 @@ const INFO_PLIST = path.join(repoRoot, "ios", "App", "App", "Info.plist");
 const PBXPROJ = path.join(repoRoot, "ios", "App", "App.xcodeproj", "project.pbxproj");
 const STORYBOARD = path.join(repoRoot, "ios", "App", "App", "Base.lproj", "Main.storyboard");
 const SCENE_DELEGATE = path.join(repoRoot, "ios", "App", "App", "SceneDelegate.swift");
+const BRIDGE_VC = path.join(
+  repoRoot,
+  "ios",
+  "App",
+  "App",
+  "GreenwayBridgeViewController.swift",
+);
 
 /**
  * Read `UIRequiredDeviceCapabilities` out of Info.plist.
@@ -233,6 +240,51 @@ function main(): void {
           "  OK   plugin registration: GreenwayBridgeViewController registers StarPrinter",
         );
       }
+    }
+    // ── 7. the SAME two checks, for the scanner ────────────────────────────
+    // This check exists because the printer had a guard and the scanner did
+    // not, and the scanner is the one that broke. Michael paired an S720,
+    // confirmed it decodes barcodes in Socket's own Companion app, and got
+    // silence in the register — because SocketScannerPlugin.swift was not in
+    // Compile Sources and nothing ever called registerPluginInstance for it.
+    // Both defects are invisible to `next build`, to vitest, and to `cap sync`.
+    //
+    // The failure is worse than the printer's because it is SILENT BY DESIGN:
+    // src/lib/pos/socket-scanner.ts only treats the plugin as present when
+    // window.Capacitor.PluginHeaders contains a "SocketScanner" entry, and
+    // PluginHeaders is populated only by JSExport.exportJS, which runs only
+    // from registerPlugin/registerPluginInstance. With no registration the
+    // probe is false, isSocketScanningAvailable() is false, and the register
+    // falls back to the keyboard wedge without a word — exactly as the
+    // "never block a sale" rule intends. Good behaviour hiding a real defect.
+    if (!sources || !sources[1].includes("SocketScannerPlugin.swift in Sources")) {
+      console.log("  FAIL scanner plugin");
+      problems.push(
+        "SocketScannerPlugin.swift is NOT a member of the App target, so Xcode " +
+          "will not compile it. The app will install and run and the scanner " +
+          "will still pair in Socket's Companion app, but scanning inside the " +
+          "register will do NOTHING — no error, no message, just silence, " +
+          "because the register is designed to fall back to the keyboard wedge " +
+          "rather than block a sale. Add the file to the App target's Compile " +
+          "Sources (Xcode: select App target ▸ Build Phases ▸ Compile Sources ▸ +).",
+      );
+    } else if (
+      !readFileSync(BRIDGE_VC, "utf8").includes("registerPluginInstance(SocketScannerPlugin())")
+    ) {
+      console.log("  FAIL scanner registration");
+      problems.push(
+        "SocketScannerPlugin.swift is compiled, but GreenwayBridgeViewController " +
+          "never calls registerPluginInstance(SocketScannerPlugin()). Compiling " +
+          "the plugin is necessary but NOT sufficient: Capacitor cannot discover " +
+          "an app-local plugin by itself, so without that explicit call the " +
+          "scanner never appears in window.Capacitor.PluginHeaders and the " +
+          "register silently ignores every scan. This is the exact defect that " +
+          "made the S720 work in Companion and do nothing in the register.",
+      );
+    } else {
+      console.log(
+        "  OK   scanner plugin: SocketScannerPlugin.swift compiled AND registered",
+      );
     }
   } catch {
     console.log("  FAIL printer plugin");

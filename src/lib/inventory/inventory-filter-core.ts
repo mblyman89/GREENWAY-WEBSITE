@@ -333,7 +333,7 @@ function one(params: RawParams, key: string): string | undefined {
  *
  * That is the owner's original complaint ("it only found it when I used the
  * name exactly") reproduced inside the fix for it. Facet values are arbitrary
- * user data \u2014 vendor names, brands, strains, product types \u2014 so NO character
+ * user data — vendor names, brands, strains, product types — so NO character
  * is safe to reserve as a separator. Repeated keys have no such problem: the
  * value survives verbatim, commas and all.
  *
@@ -584,12 +584,12 @@ export function __runInventoryFilterCoreTests(): void {
   ok(parseMultiParam({ f: ["a", "a", "b"] }, "f").length === 2, "duplicates collapsed");
 
   /**
-   * REGRESSION \u2014 a comma inside a real value must survive verbatim.
+   * REGRESSION — a comma inside a real value must survive verbatim.
    *
    * These are this store's actual vendor names (vendors_baseline_seed.sql:25
    * and vendors_batch3_seed.sql). An earlier version of parseMultiParam split
    * on commas and turned "Grow Op Farms, LLC" into two vendors that do not
-   * exist, so filtering to that vendor returned NOTHING \u2014 the owner's own
+   * exist, so filtering to that vendor returned NOTHING — the owner's own
    * "it only finds it if I type it exactly" complaint, recreated inside the
    * fix for it. If anyone reintroduces a delimiter, these fail.
    */
