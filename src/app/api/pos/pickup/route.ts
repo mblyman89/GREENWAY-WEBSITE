@@ -5,14 +5,13 @@
  *
  *   GET                      → the active website pickup queue (counter-sorted).
  *   POST { orderId }         → one order's lines + totals for the counter view.
- *   POST { orderId, complete: { employeeId, tenderedMinor, idConfirmed,
- *          drawerSessionId } }
- *                            → complete the handover: register-side policy
- *                              (evaluatePickupCompletion) → the SAME server
- *                              completion gate every sale runs → completed
- *                              (inventory decrement + loyalty accrual fire
- *                              exactly like every other completion) → day
- *                              ledger row → printable receipt.
+ *   POST { orderId, complete: … }
+ *                            → RETIRED (SLICE 17). Always 410 Gone. This used
+ *                              to complete a handover on a checkbox
+ *                              (`idConfirmed`); it is now impossible. Every
+ *                              pickup goes through the register sale so the
+ *                              REAL ID gate (id-scan-core) runs. See
+ *                              docs/slice-17-one-door-handover.md.
  *   POST { orderId, load: { employeeName } }   (Task AM-D / AM-D2)
  *                            → load the order INTO a register sale: the
  *                              order stays ACTIVE (it is NOT superseded on
@@ -34,9 +33,13 @@ import { authenticateDevice } from "@/lib/pos/sync-store";
 import {
   listRegisterPickupQueue,
   getRegisterPickupOrder,
-  completePickupAtRegister,
   loadOrderIntoRegister,
 } from "@/lib/pos/pickup-store";
+import {
+  isRetiredAttestationCompletion,
+  CHECKBOX_HANDOVER_RETIRED_MESSAGE,
+  SANCTIONED_HANDOVER_ROUTE,
+} from "@/lib/pos/pickup-handover-core";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
@@ -118,36 +121,44 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ order: detail.order });
   }
 
-  // ── Completion mode ───────────────────────────────────────────────────────
-  const c = body.complete;
-  if (!isUuid(c.employeeId)) {
-    return NextResponse.json({ error: "complete.employeeId must be the unlocked employee's id." }, { status: 400 });
-  }
-  if (!isUuid(c.drawerSessionId)) {
-    return NextResponse.json({ error: "complete.drawerSessionId must be the open drawer session." }, { status: 400 });
-  }
-  if (!Number.isInteger(c.tenderedMinor) || (c.tenderedMinor as number) < 0) {
-    return NextResponse.json({ error: "complete.tenderedMinor must be a non-negative integer (cents)." }, { status: 400 });
+  /**
+   * RETIRED: the checkbox completion route (SLICE 17).
+   *
+   * Owner: "The former is just a check box. I don't like that. Please remove
+   * that option."
+   *
+   * This endpoint used to complete a cannabis handover on the strength of
+   * `idConfirmed: true` - a boolean the budtender ticked. The ONLY ID check
+   * on that path was `if (!input.idConfirmed)` inside
+   * evaluatePickupCompletion. Meanwhile the "load into a sale" route put the
+   * same customer through the REAL gate in id-scan-core.ts: AAMVA PDF417
+   * parse, age against MINIMUM_AGE_YEARS (RCW 69.50.357), expiry rejection,
+   * the WAC 314-55-150 acceptable-ID list, and an audit record on every
+   * manual verification. Two doors for one regulated act, and only one of
+   * them actually verified anything.
+   *
+   * Removing the button alone would have left this endpoint live and still
+   * accepting `complete{}` from anything holding device credentials. So the
+   * CAPABILITY is closed here, at the earliest point - before any employee
+   * lookup, drawer validation or money math runs - and it is refused by the
+   * SHAPE of the request, so `idConfirmed: false` cannot smuggle one through
+   * either. No body completes a pickup this way any more.
+   *
+   * 410 Gone is the honest status: the route existed, it was deliberately
+   * retired, and no retry will bring it back.
+   */
+  if (isRetiredAttestationCompletion(body)) {
+    return NextResponse.json(
+      {
+        errors: [CHECKBOX_HANDOVER_RETIRED_MESSAGE],
+        retiredRoute: "complete",
+        useRoute: SANCTIONED_HANDOVER_ROUTE,
+      },
+      { status: 410 },
+    );
   }
 
-  const result = await completePickupAtRegister({
-    orderId: body.orderId,
-    employeeId: c.employeeId,
-    tenderedMinor: c.tenderedMinor as number,
-    idConfirmed: c.idConfirmed === true,
-    deviceId: auth.device.id,
-    deviceName: auth.device.name,
-    registerId: auth.device.register_id,
-    drawerSessionId: c.drawerSessionId,
-  });
-  if (!result.ok) return NextResponse.json({ errors: result.errors }, { status: 422 });
-
-  return NextResponse.json({
-    changeMinor: result.changeMinor,
-    receiptHtml: result.receiptHtml,
-    orderNumber: result.orderNumber,
-    receiptNumber: result.receiptNumber,
-  });
+  return NextResponse.json({ error: "Unsupported pickup request." }, { status: 400 });
 }
 
 /**

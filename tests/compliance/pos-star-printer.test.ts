@@ -145,7 +145,20 @@ describe("cash-drawer rules", () => {
     expect(registerShell).toContain('printSlip(html, true, "no_sale")');
     expect(registerShell).toContain('printSlip(slipHtml, true, "refund")');
     expect(registerShell).toContain('printSlip(receiptHtml, true, "refund")');
-    expect(registerShell).toContain('printSlip(receiptHtml, true, "sale")');
+
+    // The completed SALE pop lives in SaleFlow, not RegisterShell.
+    //
+    // It used to be asserted here as printSlip(receiptHtml, true, "sale"),
+    // which was the pickup modal's own duplicate pop on the checkbox
+    // "complete the sale right here" route. That route was retired (see
+    // docs/slice-17-one-door-handover.md): a pickup is now handed over by
+    // loading the order into a real sale, so it finishes through the SAME
+    // tender path as every other sale and pops the drawer exactly once.
+    //
+    // Asserting the surviving call site is strictly stronger, because that
+    // is the one every cash sale in the building actually goes through.
+    expect(saleFlow).toContain('openDrawer: true');
+    expect(saleFlow).toContain('jobKind: "sale"');
   });
 });
 

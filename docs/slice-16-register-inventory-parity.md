@@ -313,6 +313,13 @@ proper fix is an explicit "restore to sale" control in the admin UI. That is a
 separate slice with its own UI surface, and it is recorded here rather than
 quietly bundled in.
 
+> **CLOSED by Slice 18 — see `docs/slice-18-restore-to-sale.md`.** The explicit
+> "restore to sale" control now exists on the back-office inventory page. It
+> keeps the property this document argued for: it recomputes the status from
+> live ACTIVE lot units via `statusForUnits` rather than asserting `"in-stock"`,
+> so it can never invent inventory, and recall holds and hidden cards outrank
+> stock in both directions.
+
 **Defects A and B are healed at read time, not at write time.** The three
 modules that move `on_hand_qty` without moving `inventory_level` still do so.
 The register no longer trusts that stale column, so the failure is contained,

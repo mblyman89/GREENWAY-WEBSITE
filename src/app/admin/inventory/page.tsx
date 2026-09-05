@@ -24,7 +24,7 @@ import { receivedDateFlagMessage } from "@/lib/inventory/received-date-core";
 import { InventoryIntelPanel } from "@/components/admin/inventory/InventoryIntelPanel";
 // SLICE 16 — the owner found the register/back-office divergence by scanning
 // packages at the counter. This surfaces the same answer here, before a shift.
-import { RegisterSellabilityBanner } from "@/components/admin/inventory/RegisterSellabilityBanner";
+import { RegisterSellabilityBanner, RestoreToSalePanel } from "@/components/admin/inventory/RegisterSellabilityBanner";
 import { getRegisterSellabilityReport } from "@/lib/inventory/register-sellability-store";
 // SLICE 8 — bulk fill of the fields the one-time Cultivera import never carried.
 import BulkFillPanel from "@/components/admin/inventory/BulkFillPanel";
@@ -110,6 +110,9 @@ export default async function InventoryPage({
     bulkDone?: string;
     bulkFailed?: string;
     bulkError?: string;
+    // SLICE 18 - restore-to-sale result messages from the server action.
+    restored?: string;
+    restoreError?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -382,6 +385,24 @@ export default async function InventoryPage({
           summary={sellability.summary}
           blocked={sellability.blocked}
         />
+
+        {/* SLICE 18 — the result of a restore, said plainly. `restored` is a
+            success, `restoreError` is the honest refusal (no stock, recall
+            hold, hidden card). Both come straight from the server action. */}
+        {typeof sp.restored === "string" && sp.restored && (
+          <p className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
+            {sp.restored}
+          </p>
+        )}
+        {typeof sp.restoreError === "string" && sp.restoreError && (
+          <p className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
+            {sp.restoreError}
+          </p>
+        )}
+
+        {/* SLICE 18 — the undo the register's "86" button never had. Silent
+            unless something is flagged unavailable while stock sits behind it. */}
+        <RestoreToSalePanel restorable={sellability.restorable} />
 
         {/* SLICE 77: vendors ⇄ inventory cross-link banner. When the list is
             filtered to one vendor's lots, say so in plain English and offer a

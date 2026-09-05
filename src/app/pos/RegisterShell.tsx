@@ -64,7 +64,6 @@ import {
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
-import { changeBreakdown, formatChangeBreakdown } from "@/lib/pos/change-calc-core";
 import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
 import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
@@ -1744,17 +1743,7 @@ export function RegisterShell({
         <PickupQueueModal
           creds={creds}
           employee={employee}
-          drawerSessionId={drawer.sessionId}
           onClose={() => setPickupOpen(false)}
-          onCompleted={(receiptHtml, message) => {
-            setPickupOpen(false);
-            setBanner(message);
-            setPickupCount((c) => (typeof c === "number" && c > 0 ? c - 1 : c));
-            // Print the pickup receipt; the drawer POPS — cash just came in.
-            void printSlip(receiptHtml, true, "sale").then((msg) => {
-              if (msg) setBanner(msg);
-            });
-          }}
           onLoaded={(loaded) => {
             // AM-D2 — the order is NOT superseded on load; it stays active and
             // is only cancelled when THIS sale completes (sync-store). Rebuild
@@ -3492,26 +3481,25 @@ type PickupDetail = {
 };
 
 /**
- * The register's window into the website order queue. Three panes in one
- * modal: the queue (ready-first, oldest-first), one order's lines, and the
- * handover (explicit ID attestation checkbox → cash tendered → complete).
- * The server re-runs EVERYTHING (evaluatePickupCompletion + the full
- * completion gate), so this UI can never hand over what the law wouldn't.
- * ONLINE-ONLY; requires an open drawer (the cash goes into it).
+ * The register's window into the website order queue. Two panes in one modal:
+ * the queue (ready-first, oldest-first) and one order's lines.
+ *
+ * SLICE 17 — there is now exactly ONE way out of this modal: "Start handover",
+ * which loads the order into a register sale and puts the customer through the
+ * REAL ID gate. The old checkbox-and-cash completion pane is gone, and the
+ * endpoint behind it answers 410 Gone, so a stale bundle cannot use it either.
+ * ONLINE-ONLY; requires an open drawer (the cash still goes into it, at the
+ * register).
  */
 function PickupQueueModal({
   creds,
   employee,
-  drawerSessionId,
   onClose,
-  onCompleted,
   onLoaded,
 }: {
   creds: DeviceCreds;
   employee: UnlockedEmployee;
-  drawerSessionId: string;
   onClose: () => void;
-  onCompleted: (receiptHtml: string, message: string) => void;
   /**
    * AM-D2 — the order stays ACTIVE on load (NOT superseded); its raw lines +
    * source orderId are returned. The shell rebuilds the lines against the
@@ -3529,8 +3517,6 @@ function PickupQueueModal({
 }) {
   const [queue, setQueue] = useState<PickupQueueEntry[] | null>(null);
   const [detail, setDetail] = useState<PickupDetail | null>(null);
-  const [idConfirmed, setIdConfirmed] = useState(false);
-  const [tendered, setTendered] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -3579,8 +3565,6 @@ function PickupQueueModal({
         return;
       }
       setDetail(body.order);
-      setIdConfirmed(false);
-      setTendered("");
     } catch {
       setErrors(["Could not reach the server — try again."]);
     } finally {
@@ -3588,9 +3572,6 @@ function PickupQueueModal({
     }
   };
 
-  const tenderedMinor = dollarsToMinor(tendered);
-  const canComplete =
-    !!detail && idConfirmed && tenderedMinor !== null && tenderedMinor >= detail.totalMinor && !busy;
 
   // AM-D2 — load the order into a register sale: the order stays ACTIVE (NOT
   // superseded on load); the server hands back the raw lines + the source
@@ -3624,38 +3605,6 @@ function PickupQueueModal({
         return;
       }
       onLoaded(body.loaded);
-    } catch {
-      setErrors(["Could not reach the server — try again."]);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const complete = async () => {
-    if (!detail || !canComplete || tenderedMinor === null) return;
-    setBusy(true);
-    setErrors([]);
-    try {
-      const res = await posFetch("/api/pos/pickup", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          orderId: detail.orderId,
-          complete: { employeeId: employee.id, tenderedMinor, idConfirmed, drawerSessionId },
-        }),
-      });
-      const body = (await res.json().catch(() => null)) as
-        | { changeMinor?: number; receiptHtml?: string; orderNumber?: string; errors?: string[]; error?: string }
-        | null;
-      if (!res.ok || !body?.receiptHtml) {
-        setErrors(Array.isArray(body?.errors) ? body.errors : [body?.error ?? "Completion failed."]);
-        return;
-      }
-      const change = Number(body.changeMinor ?? 0);
-      onCompleted(
-        body.receiptHtml,
-        `Order ${body.orderNumber ?? detail.orderNumber} handed over — give ${formatCents(change)} change.`,
-      );
     } catch {
       setErrors(["Could not reach the server — try again."]);
     } finally {
@@ -3777,68 +3726,33 @@ function PickupQueueModal({
               </p>
             ) : null}
 
-            <label className="mt-4 flex items-start gap-3 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-4">
-              <input
-                type="checkbox"
-                checked={idConfirmed}
-                onChange={(e) => setIdConfirmed(e.target.checked)}
-                className="mt-0.5 h-5 w-5"
-              />
-              <span className="text-sm text-[var(--pos-warn)]">
-                I checked <strong>{detail.customerLabel}</strong>&rsquo;s ID at the counter — valid, photo matches,
-                21+ (WAC 314-55-150). Age verification happens at handover, not at checkout.
-              </span>
-            </label>
+            {/* SLICE 17 — ONE DOOR. The ID checkbox, the cash field and the
+                "Complete pickup" button are gone. They allowed a cannabis
+                handover on a tick: `idConfirmed` was a plain boolean and the
+                only ID check anywhere on that path. Everything now goes
+                through the register sale, which lands on the REAL gate
+                (id-scan-core: AAMVA parse, 21+, expiry, WAC 314-55-150
+                acceptable types, audited manual entry). Owner: "The former
+                is just a check box. I don't like that." */}
+            <div className="mt-4 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-4">
+              <p className="text-sm text-[var(--pos-warn)]">
+                <strong>Scan {detail.customerLabel}&rsquo;s ID next.</strong> Starting the handover opens this order
+                as a register sale, and the register will not take payment until the ID is verified — age
+                verification happens at handover, not at checkout (WAC 314-55-150).
+              </p>
+            </div>
 
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-              Cash tendered
-            </label>
-            <input
-              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 font-mono text-lg"
-              inputMode="decimal"
-              autoComplete="off"
-              placeholder={`at least ${formatCents(detail.totalMinor)}`}
-              value={tendered}
-              onChange={(e) => setTendered(e.target.value)}
-            />
-            {tenderedMinor !== null && tenderedMinor >= detail.totalMinor ? (
-              <>
-                <p className="mt-1 text-sm text-[var(--pos-accent)]">
-                  Change due: {formatCents(tenderedMinor - detail.totalMinor)}
-                </p>
-                {/* B31 — count-back plan (fewest bills/coins) for the handover. */}
-                {tenderedMinor > detail.totalMinor ? (
-                  <p className="mt-1 text-sm font-semibold text-[var(--pos-text)]">
-                    {formatChangeBreakdown(changeBreakdown(tenderedMinor - detail.totalMinor) ?? [])}
-                  </p>
-                ) : null}
-              </>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={() => void complete()}
-              disabled={!canComplete}
-              className="mt-5 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
-            >
-              {busy ? "Completing…" : `Complete pickup — ${formatCents(detail.totalMinor)} cash`}
-            </button>
-
-            {/* AM-D — the customer wants to ADD items: pull the order into a
-                register sale instead. The order is superseded server-side
-                (the register sale becomes the sale of record), the items
-                reprice against the LIVE menu, and their profile attaches
-                automatically. */}
             <button
               type="button"
               onClick={() => void loadIntoSale()}
               disabled={busy}
-              className="mt-3 pos-tile w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] py-3 text-base font-semibold disabled:opacity-40"
+              className="mt-5 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
             >
-              🛒 Load into a sale — customer wants to add items
+              {busy ? "Opening…" : `Start handover — scan ID · ${formatCents(detail.totalMinor)}`}
             </button>
             <p className="mt-1 text-center text-xs text-[var(--pos-text-faint)]">
-              Items reprice at today&rsquo;s menu prices; the website order closes so it can&rsquo;t be filled twice
+              Items reprice at today&rsquo;s menu prices. The website order stays open until this sale completes,
+              so nothing is lost if the customer walks away.
             </p>
           </>
         )}

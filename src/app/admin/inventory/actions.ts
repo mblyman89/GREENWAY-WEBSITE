@@ -21,6 +21,8 @@ import {
   type BulkFillField,
 } from "@/lib/inventory/bulk-fill-core";
 import { pacificToday } from "@/lib/reports/timezone";
+// SLICE 18 - the back-office undo for the register's "86" button.
+import { restoreProductToSale } from "@/lib/inventory/restore-to-sale-store";
 import { parseLotEditInput, brandMatchesVendor, buildLotEditSummary } from "@/lib/inventory/lot-edit-core";
 import { parseReceivedDateInput, buildReceivedDateSummary } from "@/lib/inventory/received-date-core";
 import { getVendorById, getBrandById } from "@/lib/vendors/store";
@@ -823,4 +825,43 @@ export async function updateLotComplianceClassificationAction(
   revalidatePath("/admin/inventory");
   revalidatePath("/menu");
   redirect(`/admin/inventory/${lotId}?saved=1`);
+}
+
+/**
+ * SLICE 18 — RESTORE TO SALE: the undo the "86" button never had.
+ *
+ * Owner: "I will test that while you build the proper restore to sale button."
+ *
+ * `/api/pos/stock-flag` lets the register pull a listing off the menu, and its
+ * own header promised that "bringing an item back is a back-office action".
+ * Slice 16 recon proved that action did not exist anywhere under src/app/admin
+ * — every 86 was permanent. This is it.
+ *
+ * SAFETY: this does NOT set "in-stock". It recomputes the status from the live
+ * lot units via the pure `decideRestore`, so the one-way property the flag was
+ * protecting survives: an item with nothing on the shelf cannot be restored,
+ * and the refusal says so plainly. Recall holds and hidden cards outrank stock.
+ */
+export async function restoreProductToSaleAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+
+  const productKey = (formData.get("productKey") as string | null)?.trim() ?? "";
+  // Where to send the manager back to — the banner lives on the list page, but
+  // the same action is usable from a lot detail page.
+  const returnTo = (formData.get("returnTo") as string | null)?.trim() ?? "/admin/inventory";
+  const safeReturn = returnTo.startsWith("/admin/inventory") ? returnTo : "/admin/inventory";
+
+  const result = await restoreProductToSale(productKey, {
+    userId: session.userId,
+    email: session.email,
+  });
+
+  // The published menu is what the register, the website and the back office
+  // all read, so every surface that could show the stale status is revalidated.
+  revalidatePath("/admin/inventory");
+  revalidatePath("/menu");
+
+  const params = new URLSearchParams();
+  params.set(result.ok ? "restored" : "restoreError", result.message);
+  redirect(`${safeReturn}?${params.toString()}`);
 }

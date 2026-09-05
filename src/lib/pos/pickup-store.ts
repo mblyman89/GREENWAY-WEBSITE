@@ -2,31 +2,24 @@
  * src/lib/pos/pickup-store.ts  (POS Slice B28)
  *
  * Server flow for the register's ONLINE-ORDER PICKUP QUEUE: list website
- * pickup orders, show one order's lines at the counter, and complete the
- * handover — ID attestation → cash tender → the SAME server completion gate
- * every sale runs (runCompletionGate: hours, money recompute, loyalty code,
- * medical card, high-THC, sales limits, exempt ledger) → setOrderStatus
- * "completed" (which fires the B19 inventory decrement and loyalty accrual
- * exactly like every other completion path).
+ * pickup orders, show one order's lines at the counter, and LOAD an order
+ * into a register sale.
  *
- * The day ledger — why a processed pos_sale_events row is written
- * ---------------------------------------------------------------
- * The register's X/Z day report (B22) and expected-drawer-cash math read
- * pos_sale_events for the register's business day. A pickup handover takes
- * CASH INTO THAT DRAWER, so it must appear in that ledger or every day
- * report and drawer reconciliation would silently understate. We write one
- * already-`processed` ledger row (order_id set, payload carrying the same
- * totals/tender shape register sales use plus a `pickup` block naming the
- * order). This ALSO makes the whole post-sale machinery uniform: the
- * printed receipt number is the row's client_uuid suffix, so the returns
- * desk (B15/B16) and the same-day void (B27) find pickup sales exactly like
- * register sales. Replay never touches it: ingest only processes `pending`
- * rows. `sequence` is 0 — server-materialized rows sit outside the device's
- * offline ordering (the index is non-unique; nothing joins on it).
+ * SLICE 17 - completion no longer happens here
+ * --------------------------------------------
+ * This module used to complete a handover directly (ID attestation checkbox
+ * -> cash tender -> the shared completion gate). The owner asked for that
+ * option to be removed: it decided a regulated handover on a boolean, while
+ * the load-into-a-sale route put the same customer through the real ID gate
+ * (id-scan-core: AAMVA parse, 21+, expiry, WAC 314-55-150 acceptable types,
+ * audited manual entry).
  *
- * NOT double-counted anywhere: CCRS Sale.csv reads orders (one order row),
- * the day report reads pos_sale_events (one row), inventory decrements via
- * the idempotent order_events marker, loyalty accrues once per order.
+ * So a pickup is now finished by the ORDINARY sale path, which already does
+ * everything the removed code did and does it after a verified ID: the day
+ * ledger row, the inventory decrement, the loyalty accrual, the receipt
+ * number the returns desk (B15/B16) and same-day void (B27) look up, and the
+ * CCRS Sale.csv order row. Nothing is double-counted, because the register
+ * sale supersedes the website order only when it completes (AM-D2).
  *
  * ONLINE-ONLY by design (the queue lives on the server). Money in MINOR
  * UNITS (cents) everywhere.
@@ -35,19 +28,14 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { listOrders, getOrder, setOrderStatus } from "@/lib/orders/orders-store";
-import { runCompletionGate } from "@/lib/orders/completion-gate";
+import { listOrders, getOrder } from "@/lib/orders/orders-store";
 import {
-  evaluatePickupCompletion,
   isPosMaterializedOrder,
   sortPickupQueue,
   toPickupQueueEntry,
   customerPickupLabel,
   type PickupQueueEntry,
 } from "@/lib/pos/pickup-core";
-import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
-import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
-import { buildPosReceiptHtml, receiptNumber } from "@/lib/pos/receipt-core";
 import { recordAudit } from "@/lib/auth/audit";
 import { type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 import { getAccountByCustomer, listTiers } from "@/lib/loyalty/loyalty-store";
@@ -129,187 +117,24 @@ export async function getRegisterPickupOrder(orderId: string): Promise<PickupDet
 }
 
 // ---------------------------------------------------------------------------
-// Handover completion
+// Handover completion - REMOVED (SLICE 17)
 // ---------------------------------------------------------------------------
+//
+// `completePickupAtRegister` used to finish a pickup straight from the queue,
+// gated on `idConfirmed` - a checkbox. The owner asked for that option to be
+// removed, and it was the weaker of two doors onto the same regulated act:
+// the "load into a sale" route runs the real ID gate (id-scan-core: AAMVA
+// parse, 21+, expiry, WAC 314-55-150 acceptable types, audited manual entry).
+//
+// The whole function is deleted rather than left unreferenced. An unused
+// export that completes sales is a bypass waiting for a future caller; the
+// only safe version of this code is the version that does not exist. Pickups
+// now complete through the ordinary sale path, which already decrements
+// inventory, accrues loyalty, writes the day ledger and prints the receipt.
+//
+// The route answers 410 Gone for the retired shape. See
+// src/lib/pos/pickup-handover-core.ts and docs/slice-17-one-door-handover.md.
 
-export type CompletePickupInput = {
-  orderId: string;
-  /** employees.id of the budtender whose PIN unlocked the register. */
-  employeeId: string;
-  /** Cash the customer handed over, minor units. */
-  tenderedMinor: number;
-  /** The budtender's explicit at-the-counter ID attestation. */
-  idConfirmed: boolean;
-  deviceId: string;
-  deviceName: string;
-  registerId: string;
-  /** The open drawer session the cash goes into. */
-  drawerSessionId: string;
-};
-
-export type CompletePickupResult =
-  | { ok: true; changeMinor: number; receiptHtml: string; orderNumber: string; receiptNumber: string }
-  | { ok: false; errors: string[] };
-
-export async function completePickupAtRegister(input: CompletePickupInput): Promise<CompletePickupResult> {
-  if (!isSupabaseServiceConfigured) return { ok: false, errors: ["Database not configured."] };
-  const admin = createSupabaseAdminClient();
-
-  const order = await getOrder(input.orderId);
-  if (!order) return { ok: false, errors: ["Order not found."] };
-
-  // Belt and suspenders on the POS-materialized exclusion: the staff_note
-  // contract AND the sale-event link (a register sale always has one).
-  let isPosSale = isPosMaterializedOrder(order.staff_note);
-  if (!isPosSale) {
-    const { data: linked } = await admin
-      .from("pos_sale_events")
-      .select("id")
-      .eq("order_id", order.id)
-      .limit(1);
-    isPosSale = !!linked && linked.length > 0;
-  }
-
-  const verdict = evaluatePickupCompletion({
-    orderStatus: order.status,
-    isPosSale,
-    idConfirmed: input.idConfirmed,
-    totalMinor: order.total_minor_units,
-    tenderedMinor: input.tenderedMinor,
-  });
-  if (!verdict.ok) return { ok: false, errors: verdict.errors };
-
-  // The employee on the hook for the handover must be a real, active human.
-  const { data: emp } = await admin
-    .from("employees")
-    .select("id, full_name, active")
-    .eq("id", input.employeeId)
-    .maybeSingle<{ id: string; full_name: string; active: boolean }>();
-  if (!emp || !emp.active) return { ok: false, errors: ["Unknown or inactive employee — unlock the register again."] };
-
-  // ── The SAME completion gate every sale runs (no override at handover) ──
-  const refusal = await runCompletionGate({
-    orderId: order.id,
-    actorId: null,
-    overridePermitted: false,
-    overrideReason: null,
-  });
-  if (refusal) return { ok: false, errors: [refusal] };
-
-  const completed = await setOrderStatus(order.id, "completed", {
-    actorLabel: `POS pickup · ${emp.full_name}`,
-    note: `Picked up at the register (${input.deviceName}). ID checked at handover by ${emp.full_name}. Paid cash.`,
-  });
-  if (!completed.ok) {
-    return { ok: false, errors: [completed.refusal ?? "Could not complete the order."] };
-  }
-
-  // ── Day ledger row: the drawer took this cash (see module header) ────────
-  const saleClientUuid = crypto.randomUUID();
-  const changeMinor = verdict.changeMinor;
-  const { error: ledgerError } = await admin.from("pos_sale_events").insert({
-    client_uuid: saleClientUuid,
-    device_id: input.deviceId,
-    register_id: input.registerId,
-    employee_id: emp.id,
-    sequence: 0, // server-materialized; outside the device's offline ordering
-    occurred_at: new Date().toISOString(),
-    event_type: "sale",
-    status: "processed",
-    processed_at: new Date().toISOString(),
-    order_id: order.id,
-    payload: {
-      lines: order.lines.map((l) => ({
-        productId: l.product_id ?? "",
-        productName: l.product_name,
-        category: l.category ?? "unknown",
-        quantity: l.quantity,
-        unitPriceMinor: l.price_minor_units,
-        regularPriceMinor: l.regular_price_minor_units ?? l.price_minor_units,
-        ...(l.variant_id ? { variantId: l.variant_id } : {}),
-      })),
-      totalMinor: order.total_minor_units,
-      subtotalMinor: order.subtotal_minor_units,
-      taxMinor: order.estimated_tax_minor_units,
-      paymentMethod: "cash",
-      tenderedMinor: input.tenderedMinor,
-      changeMinor,
-      drawerSessionId: input.drawerSessionId,
-      // Website pickup, not a register ring — the ID gate ran at HANDOVER.
-      pickup: { orderNumber: order.order_number, idConfirmedByEmployeeId: emp.id },
-    },
-  });
-  if (ledgerError) {
-    // The sale is complete and legal; the day report would just undercount.
-    // Leave a loud trail instead of failing the customer's handover.
-    await admin
-      .from("order_events")
-      .insert({
-        order_id: order.id,
-        event_type: "note",
-        note: `Pickup completed but the register day-ledger row FAILED to write: ${ledgerError.message}. The X/Z report undercounts this cash — reconcile manually.`.slice(0, 2000),
-        actor_label: "system",
-      })
-      .then(() => {}, () => {});
-  }
-
-  await recordAudit({
-    actorId: null,
-    actorEmail: `pos-device:${input.deviceId}`,
-    action: "register.pickup_completed",
-    entityType: "order",
-    entityId: order.id,
-    after: {
-      orderNumber: order.order_number,
-      employeeId: emp.id,
-      employeeName: emp.full_name,
-      totalMinor: order.total_minor_units,
-      tenderedMinor: input.tenderedMinor,
-      changeMinor,
-      idConfirmed: true,
-      ledger: ledgerError ? `FAILED: ${ledgerError.message}` : "written",
-    },
-  });
-
-  // ── Printable receipt (owner's B13 customization applies) ────────────────
-  const config = normalizePosReceiptConfig(await getPosReceiptConfig());
-  const savingsMinor = order.lines.reduce(
-    (s, l) => s + Math.max(0, ((l.regular_price_minor_units ?? l.price_minor_units) - l.price_minor_units) * l.quantity),
-    0,
-  );
-  const receiptHtml = buildPosReceiptHtml({
-    saleClientUuid,
-    soldAtIso: new Date().toISOString(),
-    registerLabel: input.deviceName,
-    headerText: config.headerText,
-    footerText: config.footerText,
-    addressLines: receiptAddressLines(config),
-    servedBy: config.showEmployee ? emp.full_name : null,
-    hideSavings: !config.showSavings,
-    lines: order.lines.map((l) => ({
-      productName: l.variant_label ? `${l.product_name} (${l.variant_label})` : l.product_name,
-      quantity: l.quantity,
-      unitPriceMinor: l.price_minor_units,
-      regularPriceMinor: l.regular_price_minor_units ?? l.price_minor_units,
-    })),
-    subtotalMinor: order.subtotal_minor_units,
-    taxMinor: order.estimated_tax_minor_units,
-    totalMinor: order.total_minor_units,
-    savingsMinor,
-    medicalSavingsMinor: 0,
-    medicalSale: false,
-    tenderedMinor: input.tenderedMinor,
-    changeMinor,
-  });
-
-  return {
-    ok: true,
-    changeMinor,
-    receiptHtml,
-    orderNumber: order.order_number,
-    receiptNumber: receiptNumber(saleClientUuid),
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Load into the register cart (Task AM-D)
