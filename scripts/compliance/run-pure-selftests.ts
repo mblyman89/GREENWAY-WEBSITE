@@ -363,6 +363,8 @@ import { __runSocketScanCoreTests } from "../../src/lib/pos/socket-scan-core";
 import { __runSocketResilienceCoreTests } from "../../src/lib/pos/socket-resilience-core";
 // SLICE 16 — full back-office inventory sellable at the register.
 import { __runRegisterAvailabilityCoreTests } from "../../src/lib/pos/register-availability-core";
+import { __runPickupHandoverCoreTests } from "../../src/lib/pos/pickup-handover-core";
+import { __runRestoreToSaleCoreTests } from "../../src/lib/inventory/restore-to-sale-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
 import { __runOrderToCartCoreTests } from "../../src/lib/pos/order-to-cart-core";
 import { __runMemberMatchCoreTests } from "../../src/lib/pos/member-match-core";
@@ -676,6 +678,8 @@ async function main() {
   __runSocketScanCoreTests();
   __runSocketResilienceCoreTests();
   __runRegisterAvailabilityCoreTests();
+  __runPickupHandoverCoreTests();
+  __runRestoreToSaleCoreTests();
   __runRegisterLoyaltyCoreTests();
   __runOrderToCartCoreTests();
   __runMemberMatchCoreTests();

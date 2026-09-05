@@ -40,6 +40,8 @@ import {
   diagnoseLot,
   summarizeSellability,
   toQty,
+  statusForUnits,
+  normalizeKey,
   SELLABLE_LOT_STATUS,
   type LiveLotFact,
   type LotDiagnosis,
@@ -53,7 +55,33 @@ export type RegisterSellabilityReport = {
   summary: SellabilitySummary | null;
   /** Blocked lots that HOLD STOCK, worst first. Capped for display. */
   blocked: LotDiagnosis[];
+  /**
+   * SLICE 18 - products flagged "unavailable" on the published menu that have
+   * REAL sellable stock behind them right now. These are the 86 presses that
+   * should be undone.
+   *
+   * Slice 16's reader already lets the register sell these again, so the till
+   * is not blocked waiting for anyone. What is still wrong is the STORED
+   * status: the back office, the website and every report still read
+   * "unavailable" and disagree with the register. Restoring writes the truth
+   * back so all four surfaces agree.
+   */
+  restorable: RestorableProduct[];
 };
+
+/** One 86'd product that live stock contradicts. */
+export type RestorableProduct = {
+  /** `menu_items.source_item_id` == `inventory_lots.pos_product_key`. */
+  productKey: string;
+  name: string;
+  /** Sellable units across ACTIVE lots. Always > 0 for a restorable entry. */
+  units: number;
+  /** The status a restore would write, computed from `units`. */
+  nextStatus: InventoryStatusSlug;
+};
+
+/** How many restorable products the banner lists. */
+export const RESTORABLE_DISPLAY_LIMIT = 25;
 
 /** How many blocked lots the banner lists before saying "and N more". */
 export const BLOCKED_LOT_DISPLAY_LIMIT = 25;
@@ -71,11 +99,13 @@ type ItemRow = {
   source_item_id: string;
   inventory_status: string;
   hidden: boolean;
+  /** SLICE 18 - shown on the restore button so the manager knows what it is. */
+  name: string | null;
 };
 
 type VariantRow = { menu_item_id: string; source_variant_id: string };
 
-const EMPTY: RegisterSellabilityReport = { summary: null, blocked: [] };
+const EMPTY: RegisterSellabilityReport = { summary: null, blocked: [], restorable: [] };
 
 /**
  * Build the published-card index the diagnosis needs, keyed by EVERY lot key
@@ -85,12 +115,12 @@ const EMPTY: RegisterSellabilityReport = { summary: null, blocked: [] };
  * only by its own key would wrongly report every mastered lot as "not on the
  * published menu".
  */
-async function loadPublishedCards(): Promise<Map<string, SnapshotCard> | null> {
+async function loadPublishedCards(): Promise<{ byKey: Map<string, SnapshotCard>; names: Map<string, string> } | null> {
   const version = await getPublishedVersion();
   // No published menu is a real, knowable state, not a read failure: nothing
   // is sellable. An empty map lets every stocked lot report "no_menu_card",
   // which is exactly right.
-  if (!version) return new Map();
+  if (!version) return { byKey: new Map(), names: new Map() };
 
   const admin = createSupabaseAdminClient();
 
@@ -98,7 +128,7 @@ async function loadPublishedCards(): Promise<Map<string, SnapshotCard> | null> {
   const items = await pagedAll<ItemRow & { id: string }>(async (from, to) => {
     const { data, error } = await admin
       .from("menu_items")
-      .select("id, source_item_id, inventory_status, hidden")
+      .select("id, source_item_id, inventory_status, hidden, name")
       .eq("menu_version_id", version.id)
       .order("id", { ascending: true })
       .range(from, to);
@@ -155,7 +185,11 @@ async function loadPublishedCards(): Promise<Map<string, SnapshotCard> | null> {
     card.lotKeys.push(lotKey);
     byKey.set(lotKey, card);
   }
-  return byKey;
+  const names = new Map<string, string>();
+  for (const it of items) {
+    names.set(it.source_item_id, (it.name ?? "").trim() || it.source_item_id);
+  }
+  return { byKey, names };
 }
 
 /**
@@ -186,8 +220,9 @@ export async function getRegisterSellabilityReport(): Promise<RegisterSellabilit
     });
     if (lotsFailed) return EMPTY;
 
-    const cards = await loadPublishedCards();
-    if (!cards) return EMPTY;
+    const loaded = await loadPublishedCards();
+    if (!loaded) return EMPTY;
+    const cards = loaded.byKey;
 
     const facts: LiveLotFact[] = rows
       .filter(
@@ -208,7 +243,46 @@ export async function getRegisterSellabilityReport(): Promise<RegisterSellabilit
     const summary = summarizeSellability(diagnoses);
     const blocked = diagnoses.filter((d) => !d.sellable).slice(0, BLOCKED_LOT_DISPLAY_LIMIT);
 
-    return { summary, blocked };
+    /**
+     * SLICE 18 - the 86 presses that live stock contradicts.
+     *
+     * Built from the SAME `facts` the diagnosis used (active lots with units
+     * on hand), so the banner and the register can never disagree about what
+     * has stock. A card qualifies when it is flagged "unavailable" but real
+     * units sit behind it and no compliance gate applies - recalled and
+     * hidden cards are deliberately excluded, because restoring must never
+     * override either. `statusForUnits` decides what the restore WOULD write,
+     * so the button can promise exactly what it will do.
+     */
+    const unitsByCard = new Map<string, number>();
+    for (const f of facts) {
+      const key = normalizeKey(f.posProductKey);
+      if (!key) continue;
+      const card = cards.get(key);
+      if (!card) continue;
+      unitsByCard.set(card.productId, (unitsByCard.get(card.productId) ?? 0) + toQty(f.onHandQty));
+    }
+
+    const restorable: RestorableProduct[] = [];
+    const seen = new Set<string>();
+    for (const card of cards.values()) {
+      if (seen.has(card.productId)) continue;
+      seen.add(card.productId);
+      if (card.inventoryStatus !== "unavailable") continue;
+      if (card.recalled || card.hidden) continue;
+      const units = unitsByCard.get(card.productId) ?? 0;
+      if (units <= 0) continue;
+      restorable.push({
+        productKey: card.productId,
+        name: loaded.names.get(card.productId) ?? card.productId,
+        units,
+        nextStatus: statusForUnits(units),
+      });
+    }
+    // Most stock first - the biggest sellable loss is the most urgent undo.
+    restorable.sort((a, b) => b.units - a.units || a.name.localeCompare(b.name));
+
+    return { summary, blocked, restorable: restorable.slice(0, RESTORABLE_DISPLAY_LIMIT) };
   } catch {
     // Never let a diagnostic read break the inventory page.
     return EMPTY;
