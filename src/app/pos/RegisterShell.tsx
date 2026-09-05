@@ -105,6 +105,12 @@ import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
+import {
+  searchTransactions,
+  statusLabel,
+  HISTORY_WINDOW_DAYS,
+  type TransactionRow,
+} from "@/lib/pos/transaction-history-core";
 import type { PosLoyaltyGrant } from "@/lib/pos/register-loyalty-core";
 import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary, type RefundSummary } from "@/lib/pos/day-report-core";
 import { medalFor } from "@/lib/pos/leaderboard-core";
@@ -3133,6 +3139,13 @@ function ReturnsModal({
 }) {
   const [receipt, setReceipt] = useState("");
   const [sale, setSale] = useState<ReturnableSale | null>(null);
+  // SLICE 19 - the transaction history finder. `history` is null until loaded
+  // so the panel can tell "not fetched yet" from "fetched, and empty".
+  const [history, setHistory] = useState<TransactionRow[] | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
   const [lineId, setLineId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [reason, setReason] = useState<string | null>(null);
@@ -3165,14 +3178,46 @@ function ReturnsModal({
     return { ok: res.ok, json };
   };
 
-  const lookup = async () => {
-    if (busy || receipt.trim().length < 4) return;
+  // SLICE 19 - load recent transactions so a return no longer depends on the
+  // customer still holding the paper receipt. READ-ONLY: this finds a sale,
+  // it never refunds one. Selecting a row fills the receipt box and runs the
+  // SAME policy-gated lookup, so there is still exactly one refund path.
+  const loadHistory = async () => {
+    if (historyBusy) return;
+    setHistoryBusy(true);
+    setHistoryError(null);
+    try {
+      const res = await posFetch("/api/pos/transactions", {
+        headers: {
+          "x-pos-device-id": creds.deviceId,
+          "x-pos-device-key": creds.deviceKey,
+        },
+      });
+      const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!res.ok || !Array.isArray(json?.transactions)) {
+        setHistoryError(String(json?.error ?? "Could not load recent transactions."));
+        return;
+      }
+      setHistory(json.transactions as TransactionRow[]);
+    } catch {
+      setHistoryError("Could not reach the server - the receipt number still works.");
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
+
+  const lookup = async (override?: string) => {
+    // `override` lets a history row run this exact lookup without waiting a
+    // render for `setReceipt` to land. Same call, same policy, same verdict —
+    // the panel is a finder, it does not get its own refund path.
+    const code = (override ?? receipt).trim();
+    if (busy || code.length < 4) return;
     setBusy(true);
     setErrors([]);
     setSale(null);
     setLineId(null);
     try {
-      const { ok, json } = await call({ receipt: receipt.trim() });
+      const { ok, json } = await call({ receipt: code });
       if (!ok || !json?.sale) {
         const errs = Array.isArray(json?.errors) ? (json.errors as string[]) : [String(json?.error ?? "Lookup failed.")];
         setErrors(errs);
@@ -3241,6 +3286,138 @@ function ReturnsModal({
           nothing is typed by hand. Product must be in its original packaging with the lot ID fully legible
           (state law), or the return must be refused.
         </p>
+
+        {/* SLICE 19 - transaction history finder.
+            Industry standard (Oracle Xstore "Available Transactions";
+            Lightspeed "Sales history"): date, receipt, customer, total, item
+            count, status, who rang it - newest first, searchable, tap to act.
+            READ-ONLY. Tapping a row fills the receipt box and runs the SAME
+            policy-gated lookup, so there is still exactly one refund path. */}
+        <div className="mt-4 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+              No receipt? Find the sale
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !showHistory;
+                setShowHistory(next);
+                if (next && history === null) void loadHistory();
+              }}
+              className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-1.5 text-sm font-semibold"
+            >
+              {showHistory ? "Hide" : "Recent sales"}
+            </button>
+          </div>
+
+          {showHistory ? (
+            <div className="mt-3">
+              <input
+                className="w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-sm"
+                value={historyQuery}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="Search name, receipt, item or staff"
+                onChange={(e) => setHistoryQuery(e.target.value)}
+              />
+
+              {historyBusy ? (
+                <p className="mt-3 text-xs text-[var(--pos-text-muted)]">Loading recent sales...</p>
+              ) : null}
+
+              {historyError ? (
+                <div className="mt-3 rounded-lg border border-[var(--pos-danger)] bg-[var(--pos-surface)] p-3">
+                  <p className="text-xs text-[var(--pos-danger)]">{historyError}</p>
+                  <button
+                    type="button"
+                    onClick={() => void loadHistory()}
+                    className="pos-tile mt-2 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : null}
+
+              {!historyBusy && !historyError && history !== null ? (
+                (() => {
+                  const shown = searchTransactions(history, historyQuery);
+                  if (history.length === 0) {
+                    return (
+                      <p className="mt-3 text-xs text-[var(--pos-text-muted)]">
+                        No register sales in the last {HISTORY_WINDOW_DAYS} days.
+                      </p>
+                    );
+                  }
+                  if (shown.length === 0) {
+                    return (
+                      <p className="mt-3 text-xs text-[var(--pos-text-muted)]">
+                        Nothing matches &ldquo;{historyQuery.trim()}&rdquo;.
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+                      {shown.map((t) => {
+                        const actionable = t.status !== "voided" && t.returnableCount > 0;
+                        return (
+                          <button
+                            key={t.receiptNumber + t.orderId}
+                            type="button"
+                            disabled={!actionable}
+                            onClick={() => {
+                              setReceipt(t.receiptNumber);
+                              setSale(null);
+                              setLineId(null);
+                              setErrors([]);
+                              setShowHistory(false);
+                              // Enter return mode straight away, exactly as
+                              // scanning the paper receipt would.
+                              void lookup(t.receiptNumber);
+                            }}
+                            className="w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2.5 text-left text-sm disabled:opacity-40"
+                          >
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="font-semibold">{t.customerLabel}</span>
+                              <span className="font-mono">{formatCents(t.totalMinor)}</span>
+                            </span>
+                            <span className="mt-0.5 flex items-center justify-between gap-2 text-xs text-[var(--pos-text-muted)]">
+                              <span>
+                                {new Date(t.occurredAtIso).toLocaleString([], {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })}
+                                {t.employeeName ? ` · ${t.employeeName}` : ""}
+                              </span>
+                              <span className="font-mono">{t.receiptNumber}</span>
+                            </span>
+                            <span className="mt-0.5 block text-xs text-[var(--pos-text-muted)]">
+                              {t.itemCount} item{t.itemCount === 1 ? "" : "s"}
+                              {t.items.length > 0 ? ` · ${t.items.join(", ")}` : ""}
+                              {t.moreCount > 0 ? ` +${t.moreCount} more` : ""}
+                            </span>
+                            {!actionable ? (
+                              <span className="mt-1 block text-xs font-semibold text-[var(--pos-text-faint)]">
+                                {statusLabel(t.status)} - nothing left to return
+                              </span>
+                            ) : t.status === "partially_returned" ? (
+                              <span className="mt-1 block text-xs font-semibold text-[var(--pos-text-faint)]">
+                                {statusLabel(t.status)} - {t.returnableCount} still returnable
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
           Receipt number
