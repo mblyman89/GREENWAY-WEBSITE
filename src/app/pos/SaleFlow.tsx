@@ -153,6 +153,16 @@ import {
   buildPosReceiptHtml,
   type PosReceiptInput,
 } from "@/lib/pos/receipt-core";
+// SLICE 24 — the rules for WHEN the register draws its fun name, and what it
+// may do with an answer that arrives late. Pure + mutation-tested, so the race
+// that shipped in Slice 23 cannot come back unnoticed.
+import {
+  canFillLateName,
+  normalizePrefetchedName,
+  prefetchStatusNote,
+  shouldRequestName,
+  type PrefetchFailure,
+} from "@/lib/pos/order-name-prefetch-core";
 import { getPairedPrinterIdentifier, printReceipt } from "@/lib/pos/star-printer";
 import {
   normalizePosReceiptConfig,
@@ -596,19 +606,84 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   // and returns to tender. Every draw consumes a name from the rotation, so an
   // abandoned draw is a name burned for nothing and a repeat pulled closer.
   const funNameRequestedRef = useRef(false);
+  // SLICE 24 — the receipt frozen at payment, so a name that arrives LATE can
+  // still be written into it right up until the moment something is printed.
+  const funNameReceiptRef = useRef<PosReceiptInput | null>(null);
+  const funNamePrintedRef = useRef(false);
+  /** Did the ENQUEUED sale payload carry a fun name? The queue is append-only,
+   *  so this decides whether a late name may ever reach the printed receipt. */
+  const funNamePayloadRef = useRef(false);
+  const [funNameFailure, setFunNameFailure] = useState<PrefetchFailure>(null);
+
   const requestFunName = useCallback(() => {
     if (!onOrderName || funNameRequestedRef.current) return;
     funNameRequestedRef.current = true;
     // Fire-and-forget. The .catch is not optional politeness: an unhandled
     // rejection here would surface as a console error over a healthy sale.
     void onOrderName()
-      .then((name) => {
-        funNameRef.current = typeof name === "string" && name.trim() !== "" ? name.trim() : null;
+      .then((raw) => {
+        const name = normalizePrefetchedName(raw);
+        funNameRef.current = name;
+        // A null answer is the owner's stated fallback, not a fault — but it
+        // must stop being INVISIBLE. Slice 23 printed the real number with no
+        // explanation anywhere, which is exactly why this defect survived a
+        // live shift before anyone could say what had gone wrong.
+        setFunNameFailure(name ? null : navigator.onLine ? "unreachable" : "offline");
+
+        // SLICE 24 — the late arrival. If the sale was already rung up while
+        // this request was in flight, the frozen receipt is carrying null and
+        // would print the real number. Fill it in, but ONLY while nothing has
+        // been printed: once ink is on paper that snapshot is closed, because
+        // the slip in the customer's hand and the reprint must never disagree.
+        const frozen = funNameReceiptRef.current;
+        if (
+          frozen &&
+          canFillLateName({
+            current: frozen.displayName ?? null,
+            arrived: name,
+            alreadyPrinted: funNamePrintedRef.current,
+            // The queued payload is append-only and was written BEFORE this
+            // receipt was frozen, so a name it does not carry must never reach
+            // the paper — the reprint rebuilds from that payload and the two
+            // would disagree. See canFillLateName's contract.
+            payloadCarriedName: funNamePayloadRef.current,
+          })
+        ) {
+          const patched: PosReceiptInput = { ...frozen, displayName: name };
+          funNameReceiptRef.current = patched;
+          setReceipt(patched);
+          onReceiptFrozen?.(patched);
+        }
       })
       .catch(() => {
         funNameRef.current = null;
+        setFunNameFailure("unreachable");
       });
-  }, [onOrderName]);
+  }, [onOrderName, onReceiptFrozen]);
+
+  // SLICE 24 — ASK EARLY. Slice 23 drew the name when the TENDER screen opened
+  // and read it at payment moments later. On the counter that is a race the
+  // register loses: a quick-tender chip makes "Pay" the very next tap, and the
+  // packaged iPad app calls a different origin, so the browser must finish a
+  // CORS preflight round-trip before the POST is even sent. The ref was still
+  // null at payment and the receipt fell back to the real number — silently,
+  // because that fallback is correct for the offline case.
+  //
+  // Drawing on the first cart line instead turns a sub-second budget into the
+  // whole time it takes to ring up a sale. shouldRequestName() owns the rule
+  // (and is mutation-tested), so this effect stays a one-liner and the DECISION
+  // lives somewhere a regression test can pin it.
+  useEffect(() => {
+    if (
+      shouldRequestName({
+        cartLineCount: cart.length,
+        alreadyRequested: funNameRequestedRef.current,
+        providerAvailable: !!onOrderName,
+      })
+    ) {
+      requestFunName();
+    }
+  }, [cart.length, onOrderName, requestFunName]);
 
   // Task AM-B — release a loyalty grant the sale no longer uses: a
   // points-issued code is cancelled server-side (points refunded);
@@ -773,9 +848,12 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
           // AO-4 — a quick-tender chip carries the handed-over cash straight
           // into the tender screen; the plain button starts at $0.
           setInitialTendered(presetTenderedMinor ?? null);
-          // SLICE 23 — draw the fun name NOW, while the customer is still
-          // counting out cash, so it is already in hand when the sale is
-          // enqueued a few seconds later and nothing has to wait on it.
+          // SLICE 24 — the fun name is NOT drawn here any more. Slice 23 drew
+          // it at this exact line and lost the race to the budtender's next
+          // tap (see the cart-entry effect above). This call remains as a
+          // belt-and-braces no-op for the one path that could still reach
+          // tender without the effect having fired — it is idempotent, guarded
+          // by funNameRequestedRef, so it can never draw a second name.
           requestFunName();
           setStep("tender");
         }}
@@ -824,6 +902,10 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
           // one way this feature could actually mislead somebody: the slip in
           // the customer's hand would disagree with the reprint.
           const funNameForSale = funNameRef.current;
+          // SLICE 24 — record whether the APPEND-ONLY payload got the name.
+          // A late arrival may only reach the receipt if this is true, so the
+          // printed slip can never name a sale the back office recorded namelessly.
+          funNamePayloadRef.current = funNameForSale !== null;
           const built = buildSalePayload({
             lines: priced.lines,
             totals: priced.totals,
@@ -1019,6 +1101,11 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                 : null,
           };
           setReceipt(frozen);
+          // SLICE 24 — keep a ref to the frozen snapshot so a fun name that is
+          // still in flight can be written into it when it lands (up until the
+          // first print). setReceipt alone is not enough: the async handler
+          // that resolves the name would read a stale closure value.
+          funNameReceiptRef.current = frozen;
           // B17 — hand the frozen snapshot to the shell so "reprint last
           // receipt" survives the post-sale auto-lock.
           onReceiptFrozen?.(frozen);
@@ -1068,8 +1155,36 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         Count the change back to the customer. The sale is queued and will sync to the back office —
         the register locks when you tap below.
       </p>
-      {receipt ? <ReceiptButtons receipt={receipt} /> : null}
-      {receipt && onEmailReceipt ? <EmailReceiptPanel receipt={receipt} onEmailReceipt={onEmailReceipt} /> : null}
+      {/* SLICE 24 — say WHY a receipt will show the real number. The Slice 23
+          defect was invisible: the fallback fired silently and the only signal
+          was a customer holding the wrong-looking slip. Offline stays silent
+          on purpose (it is the documented, expected fallback and the register
+          already shows an offline indicator). */}
+      {prefetchStatusNote(funNameFailure) ? (
+        <p className="mt-3 max-w-md text-center text-xs text-[var(--pos-text-faint)]">
+          {prefetchStatusNote(funNameFailure)}
+        </p>
+      ) : null}
+      {receipt ? (
+        <ReceiptButtons
+          receipt={receipt}
+          onPrinted={() => {
+            // Latch the snapshot the instant anything is sent to a printer.
+            // After this, a late fun name is refused (canFillLateName), so a
+            // reprint can never disagree with the paper already handed over.
+            funNamePrintedRef.current = true;
+          }}
+        />
+      ) : null}
+      {receipt && onEmailReceipt ? (
+        <EmailReceiptPanel
+          receipt={receipt}
+          onEmailReceipt={onEmailReceipt}
+          onCommitted={() => {
+            funNamePrintedRef.current = true;
+          }}
+        />
+      ) : null}
       <button
         type="button"
         onClick={onComplete}
@@ -1095,9 +1210,13 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
 function EmailReceiptPanel({
   receipt,
   onEmailReceipt,
+  onCommitted,
 }: {
   receipt: PosReceiptInput;
   onEmailReceipt: NonNullable<SaleFlowProps["onEmailReceipt"]>;
+  /** SLICE 24 — fired when the receipt is committed to a customer by email,
+   *  which closes the snapshot to a late-arriving fun name. */
+  onCommitted?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -1133,6 +1252,11 @@ function EmailReceiptPanel({
     }
     setBusy(true);
     setNote(null);
+    // SLICE 24 — emailing commits the receipt to a customer just as firmly as
+    // printing does, so it latches the snapshot too. Otherwise a name arriving
+    // seconds later would change what a reprint shows relative to the email
+    // already sitting in the customer's inbox.
+    onCommitted?.();
     const result = await onEmailReceipt(trimmed, receipt);
     setBusy(false);
     if (result.ok) {
@@ -1197,7 +1321,15 @@ function EmailReceiptPanel({
  * Reprint is just tapping again: the snapshot is immutable, and a reprint
  * never opens the drawer.
  */
-function ReceiptButtons({ receipt }: { receipt: PosReceiptInput }) {
+function ReceiptButtons({
+  receipt,
+  onPrinted,
+}: {
+  receipt: PosReceiptInput;
+  /** SLICE 24 — fired the moment a print is attempted, so the fun-name
+   *  snapshot can be latched and a late name can no longer change it. */
+  onPrinted?: () => void;
+}) {
   const [fallbackNote, setFallbackNote] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
 
@@ -1205,6 +1337,9 @@ function ReceiptButtons({ receipt }: { receipt: PosReceiptInput }) {
     if (printing) return;
     setPrinting(true);
     setFallbackNote(null);
+    // Latch BEFORE the HTML is built: from here the receipt is committed to
+    // paper, whatever the transport does next.
+    onPrinted?.();
     try {
       const html = buildPosReceiptHtml(receipt);
       const outcome = await printReceipt(
@@ -1228,6 +1363,7 @@ function ReceiptButtons({ receipt }: { receipt: PosReceiptInput }) {
   };
 
   const printBrowser = () => {
+    onPrinted?.();
     const html = buildPosReceiptHtml(receipt);
     const w = window.open("", "_blank", "width=400,height=640");
     if (!w) {

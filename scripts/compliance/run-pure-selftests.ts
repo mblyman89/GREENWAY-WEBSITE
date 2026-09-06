@@ -438,6 +438,7 @@ import { __runHomeSectionSettingsTests } from "../../src/lib/cms/home-section-se
 import { __runOrderNamePoolCoreTests } from "../../src/lib/orders/order-name-pool-core";
 import { __runOrderNameRotationCoreTests } from "../../src/lib/orders/order-name-rotation-core";
 import { __runQrCoreTests } from "../../src/lib/printing/qr-core";
+import { __runOrderNamePrefetchCoreTests } from "../../src/lib/pos/order-name-prefetch-core";
 import { __runLogoPrintCoreTests } from "../../src/lib/printing/logo-print-core";
 import { __runOrderNameComplianceTests } from "../../src/lib/orders/order-name-compliance-core";
 import { __runNewOrderWatchCoreTests } from "../../src/lib/orders/new-order-watch-core";
@@ -786,6 +787,7 @@ async function main() {
   assertNoFailures("order-name-pool-core", __runOrderNamePoolCoreTests());
   assertNoFailures("order-name-rotation-core", __runOrderNameRotationCoreTests());
   assertNoFailures("qr-core", __runQrCoreTests());
+  assertNoFailures("pos/order-name-prefetch-core", __runOrderNamePrefetchCoreTests());
   assertNoFailures("logo-print-core", __runLogoPrintCoreTests());
   assertNoFailures("order-name-compliance-core", __runOrderNameComplianceTests());
   __runNewOrderWatchCoreTests();
