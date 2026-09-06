@@ -211,6 +211,98 @@ export function prefetchStatusNote(failure: PrefetchFailure): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// 5) INHERITANCE — a loaded website order already HAS a name (SLICE 26)
+// ---------------------------------------------------------------------------
+
+/**
+ * THE DEFECT THIS SECTION EXISTS TO FIX
+ *
+ * A website order is given its fun name SERVER-side, in the same request that
+ * inserts the row (orders-store.ts). The customer sees that name twice before
+ * they ever reach the store: on the confirmation screen and in their email.
+ *
+ * Later they arrive, the budtender opens the pickup queue and loads the order
+ * into a register sale. That load hands the device the order's LINES, its
+ * customer and its id — but never its display_name (PickupOrderDetail and
+ * LoadOrderResult both lack the field). So the register did what it does for
+ * any sale: it drew a BRAND NEW name from the pool. The printed receipt then
+ * disagreed with the confirmation page and the email for one and the same
+ * order.
+ *
+ * Owner: "the fun overlay on the printed receipt is now different from the one
+ * originally attached to the online order. I am all about consistency and I
+ * feel like if I notice this, others will too."
+ *
+ * THE SECOND, QUIETER BUG IN THE SAME PLACE
+ *
+ * That fresh draw also CONSUMED a pool name. Every draw stamps the rotation
+ * sequence and pulls the next repeat closer, so a shop doing mostly pickup
+ * orders was burning two names per customer to print one. Inheriting fixes the
+ * cosmetic complaint and stops the leak in the same move: an inherited name
+ * costs the rotation nothing, and — because loading is not selling — an order
+ * that is loaded and then abandoned now costs it nothing either.
+ */
+
+/** What to do about the name for a sale that may have been loaded from an order. */
+export type NameInheritance =
+  /** Reuse the name the customer has already seen. Consumes NO pool slot. */
+  | { action: "inherit"; name: string }
+  /** No name to inherit — draw one from the pool as usual. */
+  | { action: "draw" };
+
+/**
+ * Decide whether a sale reuses a loaded website order's name or draws a new one.
+ *
+ * `inherit` on exactly one condition: this sale came from a website order AND
+ * that order is carrying a non-blank display_name. Then the receipt prints the
+ * name the customer already has in their inbox, and the pool is not touched.
+ *
+ * Everything else draws. The important "everything else" is a loaded order with
+ * NO stored name, which happens for orders placed before the pool existed,
+ * before migration 0147 was applied, or while the pool was empty. Those
+ * customers were shown the plain GWY- order number, so there is no name to be
+ * consistent WITH, and drawing gives the paper slip a name exactly as a
+ * walk-in would get. A lookup that fails outright lands here too: not knowing
+ * is treated as not having, because a sale must never wait on — or be degraded
+ * by — a decorative read.
+ *
+ * The name is returned UNTOUCHED, deliberately. It is not re-validated against
+ * PREFETCH_NAME_MAX_LEN here, because this function's job is to answer "whose
+ * name is this?", not "is it printable?" — normalizePrefetchedName remains the
+ * single gate for that, and an over-long inherited name simply degrades to the
+ * real receipt number. Re-deciding to DRAW on an over-long name would be the
+ * worst of both worlds: it would burn a pool slot AND print a name that
+ * contradicts the customer's email, which is the exact defect above.
+ */
+export function resolveNameInheritance(input: {
+  sourceOrderId: string | null;
+  storedDisplayName: string | null | undefined;
+}): NameInheritance {
+  if (input.sourceOrderId === null) return { action: "draw" };
+  if (typeof input.storedDisplayName !== "string") return { action: "draw" };
+  const trimmed = input.storedDisplayName.trim();
+  if (trimmed === "") return { action: "draw" };
+  return { action: "inherit", name: trimmed };
+}
+
+/**
+ * Is this a source-order id the name endpoint should even look up?
+ *
+ * The register asks for its name over an authenticated POST, and this value
+ * decides which row that request reads. Anything that is not UUID-shaped is
+ * dropped to null rather than forwarded, so a corrupted resume snapshot or a
+ * stale local value degrades to an ordinary draw instead of becoming an
+ * arbitrary string handed to the data layer.
+ *
+ * Mirrors the UUID guard the pickup route already applies to the same id.
+ */
+export function normalizeSourceOrderIdForName(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed) ? trimmed : null;
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests — run in CI via scripts/compliance/run-pure-selftests.ts
 // ---------------------------------------------------------------------------
 
@@ -335,6 +427,69 @@ export function __runOrderNamePrefetchCoreTests(): { passed: number; failed: num
   ok(
     "the two failure notes differ, so the cause is readable",
     prefetchStatusNote("unreachable") !== prefetchStatusNote("empty-pool"),
+  );
+
+  // --- 5) SLICE 26: inheriting a loaded website order's name ----------------
+  const inh = (sourceOrderId: string | null, storedDisplayName: string | null | undefined) =>
+    resolveNameInheritance({ sourceOrderId, storedDisplayName });
+  const ORD = "4f6d2a1e-8c3b-4d5e-9a7f-1b2c3d4e5f60";
+
+  ok(
+    "SLICE 26: a loaded website order REUSES the name the customer already saw",
+    inh(ORD, "Purple Rain").action === "inherit",
+  );
+  {
+    const got = inh(ORD, "Purple Rain");
+    ok(
+      "SLICE 26: the inherited name is exactly the order's stored name",
+      got.action === "inherit" && got.name === "Purple Rain",
+    );
+  }
+  ok("a walk-in sale draws (no source order)", inh(null, "Purple Rain").action === "draw");
+  ok("a walk-in with no stored name draws", inh(null, null).action === "draw");
+  ok(
+    "a loaded order with NO stored name draws (pre-pool / pre-0147 / empty pool)",
+    inh(ORD, null).action === "draw",
+  );
+  ok("a loaded order with an undefined name draws", inh(ORD, undefined).action === "draw");
+  ok("a loaded order with a blank name draws", inh(ORD, "").action === "draw");
+  ok("a loaded order with a whitespace-only name draws", inh(ORD, "   ").action === "draw");
+  {
+    const got = inh(ORD, "  Purple Rain  ");
+    ok(
+      "an inherited name is trimmed, so it matches the confirmation page byte for byte",
+      got.action === "inherit" && got.name === "Purple Rain",
+    );
+  }
+
+  // THE POOL-LEAK PIN. Inheriting must consume NOTHING: the whole point is that
+  // a pickup no longer burns a second name to print the first one. Expressed as
+  // the only observable the pure layer has — inherit is never "draw".
+  ok(
+    "SLICE 26: inheriting never falls through to a draw (no pool slot is burned)",
+    inh(ORD, "High Life").action !== "draw",
+  );
+  // An over-long inherited name is still INHERITED, not re-drawn. Drawing here
+  // would burn a slot AND print a name contradicting the customer's email;
+  // normalizePrefetchedName is the single gate that decides printability.
+  ok(
+    "an over-long inherited name is still inherited, never re-drawn",
+    inh(ORD, "x".repeat(PREFETCH_NAME_MAX_LEN + 5)).action === "inherit",
+  );
+
+  // --- 5b) the source-order id guard ---------------------------------------
+  ok("a UUID source order id survives", normalizeSourceOrderIdForName(ORD) === ORD);
+  ok("a UUID is trimmed", normalizeSourceOrderIdForName(`  ${ORD}  `) === ORD);
+  ok("an uppercase UUID survives", normalizeSourceOrderIdForName(ORD.toUpperCase()) === ORD.toUpperCase());
+  ok("a non-UUID string is dropped", normalizeSourceOrderIdForName("not-a-uuid") === null);
+  ok("a blank id is dropped", normalizeSourceOrderIdForName("") === null);
+  ok("null is dropped", normalizeSourceOrderIdForName(null) === null);
+  ok("undefined is dropped", normalizeSourceOrderIdForName(undefined) === null);
+  ok("a number is not an id", normalizeSourceOrderIdForName(42) === null);
+  ok("an object is not an id", normalizeSourceOrderIdForName({ id: ORD }) === null);
+  ok(
+    "an id with a trailing character is refused, not truncated",
+    normalizeSourceOrderIdForName(`${ORD}x`) === null,
   );
 
   console.log(`pos/order-name-prefetch-core self-tests: ${passed} passed, ${failed} failed`);
