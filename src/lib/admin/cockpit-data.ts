@@ -33,6 +33,24 @@ import {
   type Delta,
   type DrawerRollup,
 } from "@/lib/admin/cockpit-core";
+import {
+  parseComparisonBasis,
+  DEFAULT_BASIS,
+  type ComparisonBasis,
+} from "@/lib/admin/comparison-basis-core";
+import {
+  buildComparison,
+  emptyComparisonBundle,
+  type ComparisonBundle,
+} from "@/lib/admin/comparison-data";
+import { returnsVoidsForDay, emptyReturnsVoidsRange, type ReturnsVoidsRange } from "@/lib/admin/returns-metrics-store";
+import {
+  computeNetSales,
+  refundSeverity,
+  EMPTY_REFUND_FACTS,
+  type NetSales,
+  type RefundSeverity,
+} from "@/lib/admin/refund-metrics-core";
 
 export type OrderBoardRow = { status: OrderStatus; label: string; count: number };
 
@@ -55,6 +73,23 @@ export type CockpitSnapshot = {
   lastImportISO: string | null;
   /** Signups in the DB queue still awaiting review (status = new). */
   loyaltySignups: number;
+  /**
+   * SLICE 21 — the comparison the owner picked, and what it produced. The
+   * `yesterday` field above is KEPT so nothing that already reads it breaks;
+   * when the basis is "yesterday" the two agree by construction.
+   */
+  basis: ComparisonBasis;
+  comparison: ComparisonBundle;
+  /**
+   * SLICE 21 — returns and voids for TODAY, store-wide. Previously computed
+   * only for the register's X/Z slip and never surfaced in the back office.
+   */
+  refundsToday: ReturnsVoidsRange;
+  /** Gross, refunds, net and the refund rate for today. */
+  netToday: NetSales;
+  refundSeverityToday: RefundSeverity;
+  /** The Pacific business day this snapshot describes. */
+  todayYmd: string;
 };
 
 function emptySnapshot(): CockpitSnapshot {
@@ -78,11 +113,20 @@ function emptySnapshot(): CockpitSnapshot {
     publishedItems: null,
     lastImportISO: null,
     loyaltySignups: 0,
+    basis: DEFAULT_BASIS,
+    comparison: emptyComparisonBundle(DEFAULT_BASIS, pacificToday()),
+    refundsToday: emptyReturnsVoidsRange([]),
+    netToday: computeNetSales(0, EMPTY_REFUND_FACTS),
+    refundSeverityToday: "ok",
+    todayYmd: pacificToday(),
   };
 }
 
-export async function getCockpitSnapshot(): Promise<CockpitSnapshot> {
-  if (!isSupabaseServiceConfigured) return emptySnapshot();
+export async function getCockpitSnapshot(
+  rawBasis?: unknown,
+): Promise<CockpitSnapshot> {
+  const basis = parseComparisonBasis(rawBasis);
+  if (!isSupabaseServiceConfigured) return { ...emptySnapshot(), basis };
 
   const todayYmd = pacificToday();
   const yestYmd = addPacificDays(todayYmd, -1);
@@ -100,6 +144,7 @@ export async function getCockpitSnapshot(): Promise<CockpitSnapshot> {
     published,
     imports,
     loyaltyCounts,
+    refundsToday,
   ] = await Promise.all([
     safeData(() => getSalesReport(todayStart, nowISO), EMPTY_SALES_REPORT).then((r) => r.data),
     safeData(() => getSalesReport(yestStart, yestEnd), EMPTY_SALES_REPORT).then((r) => r.data),
@@ -117,6 +162,12 @@ export async function getCockpitSnapshot(): Promise<CockpitSnapshot> {
     safeData(
       () => getLoyaltyStatusCounts(),
       { new: 0, entered: 0, duplicate: 0, archived: 0 },
+    ).then((r) => r.data),
+    // SLICE 21 — returns + voids for today. Store-wide: neither source
+    // carries register attribution (see returns-metrics-store.ts header).
+    safeData(
+      () => returnsVoidsForDay(todayYmd),
+      emptyReturnsVoidsRange([todayYmd]),
     ).then((r) => r.data),
   ]);
 
@@ -139,6 +190,13 @@ export async function getCockpitSnapshot(): Promise<CockpitSnapshot> {
   // Low stock = suggestions whose result is below the reorder point.
   const lowStockCount = reorder.filter((s) => s.result.belowReorderPoint).length;
 
+  // SLICE 21 — the chosen comparison. When basis is "yesterday" this resolves
+  // to the same day the legacy `deltas` block uses, so the two never disagree.
+  const comparison = await buildComparison(basis, todayYmd, today);
+
+  // Today's gross is what was rung up; net subtracts what went back out.
+  const netToday = computeNetSales(today.totalRevenueMinorUnits, refundsToday.totals);
+
   return {
     configured: true,
     today,
@@ -157,5 +215,11 @@ export async function getCockpitSnapshot(): Promise<CockpitSnapshot> {
     publishedItems: published?.item_count ?? null,
     lastImportISO: imports[0]?.created_at ?? null,
     loyaltySignups: loyaltyCounts.new,
+    basis,
+    comparison,
+    refundsToday,
+    netToday,
+    refundSeverityToday: refundSeverity(netToday),
+    todayYmd,
   };
 }

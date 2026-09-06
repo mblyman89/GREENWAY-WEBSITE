@@ -368,6 +368,8 @@ import { __runRestoreToSaleCoreTests } from "../../src/lib/inventory/restore-to-
 import { __runTransactionHistoryCoreTests } from "../../src/lib/pos/transaction-history-core";
 import { __runBlockedStockFixCoreTests } from "../../src/lib/inventory/blocked-stock-fix-core";
 import { __runReceiptReprintCoreTests } from "../../src/lib/pos/receipt-reprint-core";
+import { __runComparisonBasisCoreTests } from "../../src/lib/admin/comparison-basis-core";
+import { __runRefundMetricsCoreTests } from "../../src/lib/admin/refund-metrics-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
 import { __runOrderToCartCoreTests } from "../../src/lib/pos/order-to-cart-core";
 import { __runMemberMatchCoreTests } from "../../src/lib/pos/member-match-core";
@@ -686,6 +688,8 @@ async function main() {
   __runTransactionHistoryCoreTests();
   __runBlockedStockFixCoreTests();
   __runReceiptReprintCoreTests();
+  { const r = __runComparisonBasisCoreTests(); if (r.passed < 1) throw new Error("comparison-basis-core: no assertions ran"); console.log(`comparison-basis-core: ${r.passed} assertions passed`); }
+  { const r = __runRefundMetricsCoreTests(); if (r.passed < 1) throw new Error("refund-metrics-core: no assertions ran"); console.log(`refund-metrics-core: ${r.passed} assertions passed`); }
   __runRegisterLoyaltyCoreTests();
   __runOrderToCartCoreTests();
   __runMemberMatchCoreTests();
