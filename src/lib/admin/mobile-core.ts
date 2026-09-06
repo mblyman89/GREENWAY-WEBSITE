@@ -22,6 +22,12 @@ import { buildAttentionFlags, type AttentionFlag, type Delta } from "@/lib/admin
 import { can, type Permission } from "@/lib/auth/roles";
 import type { StaffRole } from "@/lib/supabase/types";
 import type { SalesReport } from "@/lib/reports/sales";
+// PURE IMPORTS ONLY. `comparison-data.ts` and `returns-metrics-store.ts` are
+// both `import "server-only"`, and pulling either into this module breaks the
+// pure self-test runner (it has no such module). The two fixture values they
+// would have supplied are constructed inline below instead.
+import { DEFAULT_BASIS, comparisonWindowFor } from "@/lib/admin/comparison-basis-core";
+import { computeNetSales, EMPTY_REFUND_FACTS } from "@/lib/admin/refund-metrics-core";
 
 // ── KPI tiles ────────────────────────────────────────────────────────────────
 
@@ -204,6 +210,13 @@ export function __runMobileCoreTests(): { passed: number } {
     byHour: [],
     byCustomerType: [],
   };
+  const zeroMeasure = {
+    current: 0,
+    baseline: null,
+    delta: zeroDelta,
+    result: { value: null, daysWithData: 0, daysRequested: 0, partial: false },
+    qualifier: "no baseline data",
+  };
   const snap: CockpitSnapshot = {
     configured: true,
     today: {
@@ -224,6 +237,29 @@ export function __runMobileCoreTests(): { passed: number } {
     publishedItems: 0,
     lastImportISO: null,
     loyaltySignups: 7,
+    // SLICE 21 — the snapshot now carries the comparison basis and the
+    // returns/voids block. This fixture uses the defaults; the comparison
+    // engine has its own dedicated tests.
+    basis: DEFAULT_BASIS,
+    comparison: {
+      window: comparisonWindowFor(DEFAULT_BASIS, "2026-09-06"),
+      revenue: zeroMeasure,
+      orders: zeroMeasure,
+      units: zeroMeasure,
+      avgOrder: zeroMeasure,
+    },
+    refundsToday: {
+      ok: false,
+      byDay: [{ day: "2026-09-06", ...EMPTY_REFUND_FACTS }],
+      totals: { ...EMPTY_REFUND_FACTS },
+      byReason: [],
+      byDisposition: [],
+      returnedUnits: 0,
+      restockShare: null,
+    },
+    netToday: computeNetSales(0, EMPTY_REFUND_FACTS),
+    refundSeverityToday: "ok",
+    todayYmd: "2026-09-06",
   };
 
   const kpis = mobileKpis(snap);

@@ -140,6 +140,16 @@ export function buildAttentionFlags(input: {
   lowStockCount: number;
   drawers: DrawerRollup;
   publishedItems: number | null;
+  /**
+   * SLICE 21 — today's refund picture. OPTIONAL so every existing caller
+   * (including the mobile cockpit) keeps compiling and behaving identically;
+   * when it is absent no refund flag is produced.
+   */
+  refunds?: {
+    severity: "ok" | "watch" | "high";
+    refundMinor: number;
+    ratePct: string;
+  };
 }): AttentionFlag[] {
   const flags: AttentionFlag[] = [];
   if (input.drawers.needsAttention > 0) {
@@ -161,6 +171,16 @@ export function buildAttentionFlags(input: {
       severity: input.lowStockCount >= 10 ? "warning" : "info",
       text: `${input.lowStockCount} product${input.lowStockCount === 1 ? "" : "s"} at or below the reorder point.`,
       href: "/admin/purchasing",
+    });
+  }
+  // Refunds only raise a flag when they are actually notable. A store that
+  // takes one small return on a busy day should not be nagged — the tile
+  // shows the number regardless; this is the "go look now" channel.
+  if (input.refunds && input.refunds.severity !== "ok" && input.refunds.refundMinor > 0) {
+    flags.push({
+      severity: input.refunds.severity === "high" ? "warning" : "info",
+      text: `${input.refunds.ratePct} of today's gross has been refunded (voids + returns).`,
+      href: "/admin/reports/returns",
     });
   }
   if (input.publishedItems === null || input.publishedItems === 0) {
@@ -258,6 +278,35 @@ export function __runCockpitTests(): { passed: number } {
     publishedItems: 120,
   });
   assert(noFlags.length === 0, "no flags when all clear");
+
+  // SLICE 21 — refunds are OPTIONAL and silent unless notable.
+  const clear = {
+    activeOrders: 0,
+    lowStockCount: 0,
+    drawers: { openCount: 1, closedUnverifiedCount: 0, verifiedCount: 2, totalVarianceMinor: 0, needsAttention: 0 },
+    publishedItems: 120,
+  };
+  assert(
+    buildAttentionFlags({ ...clear, refunds: { severity: "ok", refundMinor: 500, ratePct: "0.5%" } }).length === 0,
+    "an ordinary refund rate raises no flag",
+  );
+  assert(
+    buildAttentionFlags({ ...clear, refunds: { severity: "high", refundMinor: 0, ratePct: "0.0%" } }).length === 0,
+    "severity without any money refunded raises no flag",
+  );
+  const watchFlags = buildAttentionFlags({
+    ...clear,
+    refunds: { severity: "watch", refundMinor: 3000, ratePct: "3.0%" },
+  });
+  assert(watchFlags.length === 1 && watchFlags[0].severity === "info", "watch refunds are info");
+  assert(watchFlags[0].href === "/admin/reports/returns", "refund flag links to the returns report");
+  const highFlags = buildAttentionFlags({
+    ...clear,
+    refunds: { severity: "high", refundMinor: 9000, ratePct: "9.0%" },
+  });
+  assert(highFlags.length === 1 && highFlags[0].severity === "warning", "high refunds are a warning");
+  assert(highFlags[0].text.includes("9.0%"), "the flag states the actual rate");
+  assert(buildAttentionFlags(clear).length === 0, "omitting refunds entirely keeps old behaviour");
 
   return { passed };
 }

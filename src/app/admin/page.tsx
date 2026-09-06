@@ -11,13 +11,15 @@ import { getSetupStatus } from "@/lib/admin/setup-status";
 import { WorkspaceTour } from "@/components/admin/WorkspaceTour";
 import {
   formatMoneyMinor,
-  deltaLabel,
   peakHour,
   toBars,
   buildAttentionFlags,
   type Delta,
 } from "@/lib/admin/cockpit-core";
 import { formatDateTime } from "@/lib/pos/format";
+import { ComparisonBasisPicker } from "@/components/admin/ComparisonBasisPicker";
+import { formatRate } from "@/lib/admin/refund-metrics-core";
+import type { MeasureComparison } from "@/lib/admin/comparison-data";
 import { can } from "@/lib/auth/roles";
 import { getWorkQueueInputs } from "@/lib/catalog/hub";
 import { emptyWorkQueueInputs, workQueueAttentionFlags } from "@/lib/catalog/work-queue-core";
@@ -28,13 +30,37 @@ import { getOverdueComplianceCount } from "@/lib/compliance/compliance-calendar-
 export const dynamic = "force-dynamic";
 
 /** Accent for a delta pill: green up, orange down, muted flat. */
+/**
+ * SLICE 21 — the hint under a KPI.
+ *
+ * Says WHAT it is comparing against (the basis label), and, when the baseline
+ * turned out thinner than the basis advertises, says so. A "last 12 Sundays"
+ * average built from 3 Sundays is still useful, but it must not be presented
+ * with the same confidence as a full one.
+ */
+function measureHint(m: MeasureComparison, comparisonLabel: string, isMoney: boolean): string {
+  if (m.baseline === null) {
+    return `No baseline data ${comparisonLabel.replace(/^vs /, "for ")}`;
+  }
+  const arrow = m.delta.direction === "up" ? "\u25b2" : m.delta.direction === "down" ? "\u25bc" : "\u25ac";
+  const pct = m.delta.pct === null ? "\u2014" : `${Math.abs(Math.round(m.delta.pct))}%`;
+  const base = isMoney ? formatMoneyMinor(m.baseline) : String(m.baseline);
+  const qual = m.qualifier ? ` (${m.qualifier})` : "";
+  return `${arrow} ${pct} ${comparisonLabel} \u00b7 ${base}${qual}`;
+}
+
 function deltaAccent(d: Delta): "green" | "orange" | "muted" {
   if (d.isNew || d.direction === "up") return "green";
   if (d.direction === "down") return "orange";
   return "muted";
 }
 
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ basis?: string }>;
+}) {
+  const sp = await searchParams;
   const session = await requireStaff();
   // W3: intake work-queue flags only for people who can act on them — every
   // queue target requires inventory.manage, so gate the fetch the same way.
@@ -61,7 +87,7 @@ export default async function AdminDashboardPage() {
    */
   const canSeeCompliance = can(session.profile.role, "compliance.calendar");
   const [snap, setup, overdueCompliance, intakeInputs] = await Promise.all([
-    getCockpitSnapshot(),
+    getCockpitSnapshot(sp.basis),
     getSetupStatus(),
     canSeeCompliance ? getOverdueComplianceCount() : Promise.resolve(0),
     canWorkIntake ? getWorkQueueInputs() : Promise.resolve(emptyWorkQueueInputs()),
@@ -86,6 +112,11 @@ export default async function AdminDashboardPage() {
       lowStockCount: snap.lowStockCount,
       drawers: snap.drawers,
       publishedItems: snap.publishedItems,
+      refunds: {
+        severity: snap.refundSeverityToday,
+        refundMinor: snap.netToday.refundMinor,
+        ratePct: formatRate(snap.netToday.refundRate),
+      },
     }),
     ...workQueueAttentionFlags(intakeInputs),
   ];
@@ -235,38 +266,114 @@ export default async function AdminDashboardPage() {
           </Section>
         )}
 
-        {/* ── Today's sales KPIs (vs yesterday) ────────────────────────── */}
-        <Section title="Today's sales" description="Compared with the same point yesterday.">
+        {/* ── Today's sales KPIs (vs the chosen basis) ────────────────────── */}
+        <Section
+          title="Today's sales"
+          description={`${snap.comparison.window.comparisonLabel.replace(/^vs /, "Compared with ")}. ${snap.comparison.window.paceNote}`}
+        >
+          <div className="mb-4">
+            <ComparisonBasisPicker active={snap.basis} />
+          </div>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard
               label="Revenue"
               value={formatMoneyMinor(snap.today.totalRevenueMinorUnits)}
-              hint={deltaLabel(snap.deltas.revenue)}
-              accent={deltaAccent(snap.deltas.revenue)}
+              hint={measureHint(snap.comparison.revenue, snap.comparison.window.comparisonLabel, true)}
+              accent={deltaAccent(snap.comparison.revenue.delta)}
               icon="💵"
             />
             <StatCard
               label="Orders"
               value={snap.today.totalOrders}
-              hint={deltaLabel(snap.deltas.orders)}
-              accent={deltaAccent(snap.deltas.orders)}
+              hint={measureHint(snap.comparison.orders, snap.comparison.window.comparisonLabel, false)}
+              accent={deltaAccent(snap.comparison.orders.delta)}
               icon="🧾"
             />
             <StatCard
               label="Units sold"
               value={snap.today.totalUnits}
-              hint={deltaLabel(snap.deltas.units)}
-              accent={deltaAccent(snap.deltas.units)}
+              hint={measureHint(snap.comparison.units, snap.comparison.window.comparisonLabel, false)}
+              accent={deltaAccent(snap.comparison.units.delta)}
               icon="📦"
             />
             <StatCard
               label="Avg. order"
               value={formatMoneyMinor(snap.today.avgOrderMinorUnits)}
-              hint={deltaLabel(snap.deltas.avgOrder)}
-              accent={deltaAccent(snap.deltas.avgOrder)}
+              hint={measureHint(snap.comparison.avgOrder, snap.comparison.window.comparisonLabel, true)}
+              accent={deltaAccent(snap.comparison.avgOrder.delta)}
               icon="🛒"
             />
           </div>
+        </Section>
+
+        {/* ── SLICE 21: returns, voids and NET ─────────────────────────────
+            Michael: "nowhere in the back office can I find anything related to
+            returns or voids". The facts were recorded all along (voids in
+            audit_logs, returns in customer_returns) but only the register's
+            X/Z slip ever read them. Revenue above is GROSS — this is what the
+            business actually kept. */}
+        <Section
+          title="Returns, voids & net"
+          description="Today, store-wide. Neither voids nor returns record which register they happened on, so these are not per-register numbers."
+        >
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard
+              label="Net revenue"
+              value={formatMoneyMinor(snap.netToday.netMinor)}
+              hint={`Gross ${formatMoneyMinor(snap.netToday.grossMinor)} − refunds ${formatMoneyMinor(snap.netToday.refundMinor)}`}
+              accent={snap.netToday.netMinor < 0 ? "orange" : "green"}
+              icon="💰"
+            />
+            <StatCard
+              label="Refunded out"
+              value={formatMoneyMinor(snap.netToday.refundMinor)}
+              hint={`${formatRate(snap.netToday.refundRate)} of gross`}
+              accent={
+                snap.refundSeverityToday === "high"
+                  ? "orange"
+                  : snap.refundSeverityToday === "watch"
+                    ? "gold"
+                    : "muted"
+              }
+              icon="↩️"
+            />
+            <StatCard
+              label="Voids"
+              value={snap.refundsToday.totals.voidCount}
+              hint={`${formatMoneyMinor(snap.refundsToday.totals.voidRefundMinor)} reversed`}
+              accent={snap.refundsToday.totals.voidCount > 0 ? "gold" : "muted"}
+              icon="❌"
+            />
+            <StatCard
+              label="Returns"
+              value={snap.refundsToday.totals.returnCount}
+              hint={`${formatMoneyMinor(snap.refundsToday.totals.returnRefundMinor)} refunded`}
+              accent={snap.refundsToday.totals.returnCount > 0 ? "gold" : "muted"}
+              icon="🔁"
+            />
+          </div>
+          {snap.refundsToday.byReason.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {snap.refundsToday.byReason.map((r) => (
+                <span
+                  key={r.key}
+                  className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/65"
+                >
+                  {r.label}: {r.count} · {formatMoneyMinor(r.refundMinor)}
+                </span>
+              ))}
+              {snap.refundsToday.restockShare !== null && (
+                <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/65">
+                  Restocked: {formatRate(snap.refundsToday.restockShare, 0)} of returned value
+                </span>
+              )}
+            </div>
+          )}
+          <p className="mt-3 text-[11px] text-white/40">
+            <Link href="/admin/reports/returns" className="text-[var(--admin-accent)] hover:underline">
+              Full returns &amp; voids report →
+            </Link>
+          </p>
         </Section>
 
         {/* ── Hourly sales + top sellers ───────────────────────────────── */}
