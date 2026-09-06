@@ -435,6 +435,7 @@ import { __runSpecialsPresentationCoreTests } from "../../src/lib/specials/speci
 import { __runHomeSectionSettingsTests } from "../../src/lib/cms/home-section-settings-core";
 import { __runOrderNamePoolCoreTests } from "../../src/lib/orders/order-name-pool-core";
 import { __runOrderNameComplianceTests } from "../../src/lib/orders/order-name-compliance-core";
+import { __runNewOrderWatchCoreTests } from "../../src/lib/orders/new-order-watch-core";
 import { __runMedicalContentCoreTests } from "../../src/lib/medical/medical-content-core";
 import { __runLoyaltyContentCoreTests } from "../../src/lib/loyalty/loyalty-content-core";
 import { __runLoyaltyHeroCoreTests } from "../../src/lib/loyalty/loyalty-hero-core";
@@ -777,6 +778,7 @@ async function main() {
   assertNoFailures("home-section-settings-core", __runHomeSectionSettingsTests());
   assertNoFailures("order-name-pool-core", __runOrderNamePoolCoreTests());
   assertNoFailures("order-name-compliance-core", __runOrderNameComplianceTests());
+  __runNewOrderWatchCoreTests();
   { const r = __runMedicalContentCoreTests(); if (r.passed < 1) throw new Error("medical-content-core: no assertions ran"); console.log(`medical-content-core: ${r.passed} assertions passed`); }
   { const r = __runLoyaltyContentCoreTests(); if (r.passed < 1) throw new Error("loyalty-content-core: no assertions ran"); console.log(`loyalty-content-core: ${r.passed} assertions passed`); }
   { const r = __runLoyaltyHeroCoreTests(); if (r.passed < 1) throw new Error("loyalty-hero-core: no assertions ran"); console.log(`loyalty-hero-core: ${r.passed} assertions passed`); }
