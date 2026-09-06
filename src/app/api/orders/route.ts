@@ -248,8 +248,19 @@ export async function POST(request: Request) {
 
   // Allowlist the guest-facing fields — the internal orders.id stays server
   // side; publicToken is the ONLY guest credential.
+  //
+  // SLICE 23: this returns `displayLabel`, NOT `result.orderNumber`. The
+  // emailed confirmation (notifyOrderPlaced, above) and the printed receipt
+  // (queueOrderReceipt, above) both already used displayLabel, but this one
+  // response handed the raw GWY-XXXXXX back to the browser — so the customer
+  // read a fun name in their inbox and a different, machine-looking number on
+  // the confirmation page for the SAME order. resolveOrderDisplay already
+  // falls back to order_number whenever no pool name was assigned, so this can
+  // never show a blank: it is the same one rule every other surface uses.
+  // GET /api/orders/[token] (:33) already resolved it correctly; only the
+  // POST path disagreed.
   const publicResult = {
-    orderNumber: result.orderNumber,
+    orderNumber: displayLabel,
     publicToken: result.publicToken,
   };
 

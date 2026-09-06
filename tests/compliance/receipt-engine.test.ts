@@ -728,6 +728,10 @@ describe("a reprinted receipt reproduces the original", () => {
         showBarcode: false,
         showSaleSummary: true,
         showSavings: true,
+        // Slice 23 additions to the frozen display config.
+        useQrCode: true,
+        bottomLogoDataUri: "",
+        bottomLogoWidth: 220,
       },
     });
     expect(res.ok).toBe(true);

@@ -342,6 +342,22 @@ export type SaleFlowProps = {
    */
   onWitness?: (pin: string) => Promise<{ ok: true; employee: { id: string; fullName: string } } | { ok: false; error: string }>;
   /**
+   * SLICE 23 — draw ONE fun name from the shared pool for the receipt this
+   * sale is about to print.
+   *
+   * Owner: "as for the fun receipt overlay for printed receipts, I think we
+   * should draw from the same pool. we rarely go without internet, and if we
+   * do, the fall back can be to just use the real receipt number instead of
+   * the overlay."
+   *
+   * ONLINE-ONLY and NEVER load-bearing. It resolves to null for every failure
+   * — offline, empty pool, server error, endpoint absent — and null simply
+   * means the receipt prints the real receipt number, which is precisely the
+   * fallback the owner described. It must never reject, and the sale must
+   * never wait on it.
+   */
+  onOrderName?: () => Promise<string | null>;
+  /**
    * SLICE 28 — the unlocked cashier's employees.id + this device's register
    * id, needed by the employee-program safety rules (the buyer can't be the
    * cashier logged into THIS register). Optional so nothing else breaks;
@@ -447,7 +463,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onWitness, employeeId, registerId, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onWitness, onOrderName, employeeId, registerId, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   // SESSION RESUME — a re-validated parked verdict starts the flow PAST the
   // age gate (at the cart), so the customer's ID is not rescanned.
   const [step, setStep] = useState<Step>(initialVerdict ? "cart" : "idgate");
@@ -548,6 +564,51 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   // POS B10 — snapshot of the finished sale for printing/reprint. Captured at
   // the moment the sale is enqueued so the receipt always matches the payload.
   const [receipt, setReceipt] = useState<PosReceiptInput | null>(null);
+
+  // ── SLICE 23 — the fun receipt name, fetched AHEAD of the moment it is
+  // needed ────────────────────────────────────────────────────────────────
+  //
+  // Owner: "for the receipt that prints out, I want it to have the fun overlay
+  // on it ... the text bellow the barcode should definitely be the fun
+  // overlay."
+  //
+  // WHY A REF AND A PREFETCH INSTEAD OF AN AWAIT
+  //
+  // The name has to be in hand at the instant the sale is enqueued, because
+  // that is when the receipt snapshot is FROZEN and when the payload is
+  // handed to the queue — and that path (onPaid) is synchronous on purpose.
+  // Making it async so it could await a name would put a network round-trip
+  // between "customer handed over cash" and "drawer opens", and would let a
+  // slow or hanging server stall a completed sale. A flourish must never be
+  // able to do that.
+  //
+  // So the name is drawn EARLY (when the tender screen opens — the customer is
+  // still counting out cash) and parked in a ref. A ref, not state, because
+  // re-rendering the tender screen when a decorative name arrives would be
+  // pure noise, and because the enqueue path needs to read the CURRENT value
+  // synchronously rather than whatever value was captured in its closure.
+  //
+  // If it has not arrived by the time the sale completes, the ref still holds
+  // null and the receipt prints the real number. That is not a degraded mode
+  // to be recovered from — it is the owner's stated fallback.
+  const funNameRef = useRef<string | null>(null);
+  // Guards against drawing a SECOND name if the cashier steps back to the cart
+  // and returns to tender. Every draw consumes a name from the rotation, so an
+  // abandoned draw is a name burned for nothing and a repeat pulled closer.
+  const funNameRequestedRef = useRef(false);
+  const requestFunName = useCallback(() => {
+    if (!onOrderName || funNameRequestedRef.current) return;
+    funNameRequestedRef.current = true;
+    // Fire-and-forget. The .catch is not optional politeness: an unhandled
+    // rejection here would surface as a console error over a healthy sale.
+    void onOrderName()
+      .then((name) => {
+        funNameRef.current = typeof name === "string" && name.trim() !== "" ? name.trim() : null;
+      })
+      .catch(() => {
+        funNameRef.current = null;
+      });
+  }, [onOrderName]);
 
   // Task AM-B — release a loyalty grant the sale no longer uses: a
   // points-issued code is cancelled server-side (points refunded);
@@ -712,6 +773,10 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
           // AO-4 — a quick-tender chip carries the handed-over cash straight
           // into the tender screen; the plain button starts at $0.
           setInitialTendered(presetTenderedMinor ?? null);
+          // SLICE 23 — draw the fun name NOW, while the customer is still
+          // counting out cash, so it is already in hand when the sale is
+          // enqueued a few seconds later and nothing has to wait on it.
+          requestFunName();
           setStep("tender");
         }}
       />
@@ -752,11 +817,21 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             lines: loyaltyAdj ? loyaltyAdj.lines : specialAdj ? specialAdj.lines : base.lines,
             totals: loyaltyAdj ? loyaltyAdj.totals : specialAdj ? specialAdj.totals : base.totals,
           };
+          // SLICE 23 — read the prefetched fun name ONCE, synchronously, and
+          // use that single value for BOTH the payload and the frozen
+          // receipt. Reading the ref twice could pick up a late arrival in
+          // between and print one name while recording another, which is the
+          // one way this feature could actually mislead somebody: the slip in
+          // the customer's hand would disagree with the reprint.
+          const funNameForSale = funNameRef.current;
           const built = buildSalePayload({
             lines: priced.lines,
             totals: priced.totals,
             tenderedMinor,
             drawerSessionId,
+            // Omitted entirely when there is no name, so an offline sale's
+            // payload stays byte-identical to its pre-Slice-23 shape.
+            ...(funNameForSale ? { displayName: funNameForSale } : {}),
             idVerification:
               verdict.method === "manual" && manualEventUuid
                 ? { method: "manual", manualEventUuid }
@@ -874,6 +949,17 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             showItemDetail: rc.showItemDetail,
             showBarcode: rc.showBarcode,
             showSaleSummary: rc.showSaleSummary,
+            // SLICE 23 — QR choice and the bottom logo ride inside the same
+            // frozen snapshot, so a reprint months from now reproduces the
+            // receipt as it was actually printed.
+            useQrCode: rc.useQrCode,
+            logoDataUri: rc.bottomLogoDataUri || null,
+            logoWidthPx: rc.bottomLogoWidth,
+            // SLICE 23 — the fun name printed UNDER the code. The QR itself
+            // still encodes the REAL receipt number, because a scan has to
+            // resolve to exactly one sale and fun names recycle by design.
+            // null here means the caption falls back to the real number.
+            displayName: funNameForSale,
             // Slice 22b — the rich fields ride along. priceCart() already
             // computed every one of these; this mapping used to drop them on
             // the floor. Nothing new is collected, and nothing new can fail:

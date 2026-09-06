@@ -657,14 +657,43 @@ describe("the migration list is ordered the way the database will see it", () =>
     // five choice/provenance columns to catalog_product_drafts so the receiving
     // door can ask the question at Product Onboarding, and so the answer
     // records WHO decided: a person, or a machine default.
-    // SLICE 12 re-ran the ritual rather than bumping the number. Fresh results,
-    // from supabase/migrations: `ls [0-9]*.sql | wc -l` returns 220 (was 219,
-    // +1 for 0220_classification_memory_provenance.sql); `ls [0-9]*.sql |
+    // SLICE 23 re-ran the ritual rather than bumping the number. Fresh results,
+    // from supabase/migrations: `ls [0-9]*.sql | wc -l` returns 221 (was 220,
+    // +1 for 0221_order_name_rotation.sql); `ls [0-9]*.sql |
     // grep -cvE '^[0-9]{4}_'` returns 0; `ls [0-9]*.sql | sort -c` exits clean;
     // and `ls [0-9]*.sql | cut -c1-4 | sort | uniq -d | wc -l` returns 0. The
-    // raw directory listing is 221, one more than the migration count, and the
+    // raw directory listing is 222, one more than the migration count, and the
     // extra entry is still the pre-existing `editor-safe` DIRECTORY - which is
     // exactly why every command here globs `[0-9]*.sql`.
+    //
+    // 0221 exists because the fun receipt name had no way to ROTATE. 0147 gave
+    // the store a pool and a nullable, non-unique orders.display_name, but the
+    // picker read the least-recently-used row and then wrote it back - a
+    // read-then-write that two concurrent sales can interleave, handing the
+    // same name to both. It also stamped a wall-clock time, which cannot answer
+    // the question the owner actually asked: "no two of the same overlays ...
+    // within a certain number of uses between each other". Uses are countable;
+    // clock time is not. 0221 adds a monotonic last_assigned_seq plus a global
+    // order_name_assignment_seq, and moves the pick into assign_order_name(),
+    // an atomic function serialised by a transaction-scoped
+    // pg_advisory_xact_lock that returns the chosen name AND its gap.
+    //
+    // PROVEN to execute by applying all 221 migrations IN ORDER to a real
+    // PostgreSQL 15 (initdb + pg_ctl in this sandbox, after stubbing only the
+    // Supabase-managed prerequisites vanilla Postgres lacks: the auth and
+    // storage schemas, auth.uid()/auth.role(), and the authenticated/anon/
+    // service_role roles). 221 files applied, ZERO failures; 0221 re-applied a
+    // second time for idempotency and produced only "already exists, skipping"
+    // notices. Behaviour was then exercised against that live database rather
+    // than assumed: 12 draws from a 5-name pool returned a perfect round robin
+    // (Alpha Bravo Charlie Delta Echo Alpha ...), i.e. the maximum spacing the
+    // arithmetic permits; the reported gap was 5 on a 5-name pool; 4 CONCURRENT
+    // psql clients drawing 25 names each (100 draws) landed exactly 20/20/20/
+    // 20/20 across the five names, which is what the advisory lock is for; a
+    // fully disabled pool returned ZERO rows, which the store reads as "no
+    // name" and the receipt prints the real number - the owner's stated offline
+    // fallback; and a pool narrowed to ONE enabled name kept returning that
+    // name rather than wedging.
     //
     // 0220 exists because 0218 documented a THREE-value vocabulary on
     // catalog_product_drafts.chosen_classification_provenance, and SLICE 18F
@@ -681,7 +710,7 @@ describe("the migration list is ordered the way the database will see it", () =>
     // tests/compliance/classification-memory.test.ts, and PROVEN to execute by
     // applying all 220 migrations in order to a real PostgreSQL 15 and
     // re-applying 0220 a second time for idempotency.
-    expect(listed[listed.length - 1]).toMatch(/^0220_/);
+    expect(listed[listed.length - 1]).toMatch(/^0221_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

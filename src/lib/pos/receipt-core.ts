@@ -26,6 +26,7 @@
  */
 import { formatMoneyMinor, formatReceiptTimestamp } from "@/lib/printing/receipt-core";
 import { code128Svg } from "@/lib/printing/code128-core";
+import { qrSvg } from "@/lib/printing/qr-core";
 import { defaultReturnPolicyText } from "@/lib/pos/returns-core";
 import { receiptLogoImgTag } from "@/lib/pos/receipt-logo-core";
 import {
@@ -143,10 +144,35 @@ export type PosReceiptInput = {
   returnPolicyText?: string | null;
   /** Print the per-item detail line. Undefined = ON. */
   showItemDetail?: boolean;
-  /** Print the scannable receipt-number barcode. Undefined = ON. */
+  /** Print the scannable receipt-number code. Undefined = ON. */
   showBarcode?: boolean;
   /** Print the item-count / savings summary strip. Undefined = ON. */
   showSaleSummary?: boolean;
+  /**
+   * SLICE 23 — the fun pool name for THIS sale, printed under the QR in place
+   * of the raw receipt number. Absent/blank = print the real receipt number
+   * instead, which is exactly the owner's stated offline fallback: "if we do
+   * [go without internet], the fall back can be to just use the real receipt
+   * number instead of the overlay."
+   */
+  displayName?: string | null;
+  /**
+   * SLICE 23 — render the code as a QR instead of Code 128. Undefined = ON.
+   * The escape hatch exists only so a shop with an old 1-D-only scanner can
+   * revert; the QR is the default because it error-corrects and Code 128 does
+   * not. See lib/printing/qr-core.ts for the full reasoning.
+   */
+  useQrCode?: boolean;
+  /**
+   * SLICE 23 — a 1-bit logo printed BELOW the code block and ABOVE the footer,
+   * as a `data:image/png;base64,...` URI. Must already be thresholded to pure
+   * black-on-white by logo-print-core; this function will not silently accept
+   * a photo, because a photo is what produces the black box the owner does not
+   * want to see.
+   */
+  logoDataUri?: string | null;
+  /** SLICE 23 — printed logo width in px (receipt body is 576px). Default 220. */
+  logoWidthPx?: number;
 };
 
 /** Escape text for safe embedding in the receipt HTML. */
@@ -270,6 +296,35 @@ export function receiptTotalGrams(lines: readonly PosReceiptLine[]): number | nu
  */
 export function receiptBarcodeSvg(receiptNo: string): string {
   const res = code128Svg(receiptNo, { moduleWidth: 2, height: 70, quietModules: 10 });
+  if (!res.ok || !res.svg) return "";
+  return res.svg;
+}
+
+/**
+ * SLICE 23 — the scannable QR of the receipt number.
+ *
+ * The owner: "i would much rather have a nice pretty QR code instead of the
+ * ugly lines barcode", and on what it should carry: "the barcode should be the
+ * real receipt number i am guessing … i'll let you make the executive decision
+ * on that one, but the text bellow the barcode should definitely be the fun
+ * overlay."
+ *
+ * DECISION: the QR carries the REAL receipt number. Fun names come from a
+ * recycling pool and are deliberately non-unique — Slice 23 rotates them
+ * precisely so they repeat — so a scan of a fun name could match several
+ * different sales. A scan has to resolve to exactly ONE sale to be worth
+ * anything at a return counter. The fun name goes in the human-readable line
+ * underneath, where being non-unique costs nothing.
+ *
+ * Level M (~15% recoverable) is chosen over L because thermal receipts fade,
+ * crease and live in pockets, and a return may be weeks later. Scale 4 with
+ * the spec's 4-module quiet zone keeps the symbol comfortably inside the
+ * 576px body while staying well above the scanner's resolution floor.
+ *
+ * Returns "" if the encoder refuses, so a code can never break a receipt.
+ */
+export function receiptQrSvg(receiptNo: string): string {
+  const res = qrSvg(receiptNo, { level: "M", scale: 4, quietModules: 4 });
   if (!res.ok || !res.svg) return "";
   return res.svg;
 }
@@ -413,7 +468,37 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     ? (input.returnPolicyText?.trim() || defaultReturnPolicyText())
     : "";
 
-  const barcodeSvg = onByDefault(input.showBarcode) ? receiptBarcodeSvg(receiptNo) : "";
+  // -- SLICE 23: the code block ---------------------------------------------
+  // QR by default (error-corrected, square, phone-readable); Code 128 only if
+  // the owner explicitly turns useQrCode off. Either way the code carries the
+  // REAL receipt number, because a scan must resolve to exactly one sale.
+  const wantQr = onByDefault(input.useQrCode);
+  const showCode = onByDefault(input.showBarcode);
+  let codeSvg = "";
+  if (showCode) {
+    codeSvg = wantQr ? receiptQrSvg(receiptNo) : receiptBarcodeSvg(receiptNo);
+    // If the QR encoder ever refuses, fall back to Code 128 rather than print
+    // a receipt with no scannable code at all.
+    if (!codeSvg && wantQr) codeSvg = receiptBarcodeSvg(receiptNo);
+  }
+  const codeClass = wantQr && codeSvg ? "qr" : "barcode";
+
+  // The line UNDER the code: the fun name when this sale has one, otherwise
+  // the real receipt number. That fallback IS the offline story — no server,
+  // no name, and the receipt reads exactly as it always did.
+  const funName = (input.displayName ?? "").trim();
+  const codeCaption = funName || receiptNo;
+  // A fun name is prose, not a serial: the wide letter-spacing that makes a
+  // receipt number readable makes a name look broken.
+  const captionClass = funName ? "codename" : "barcodeno";
+
+  // -- SLICE 23: the logo ----------------------------------------------------
+  // Accepted ONLY as a data: URI. A remote URL would make a receipt depend on
+  // the network at print time, which is the one thing a register cannot
+  // tolerate mid-sale.
+  const logoUri = (input.logoDataUri ?? "").trim();
+  const logoOk = /^data:image\/(png|gif|bmp);base64,[A-Za-z0-9+/=]+$/.test(logoUri);
+  const logoWidth = Math.max(40, Math.min(560, Math.round(input.logoWidthPx ?? 220)));
 
   return [
     "<!DOCTYPE html>",
@@ -447,6 +532,18 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     ".barcode{text-align:center;margin:8px 0 0;}",
     ".barcode svg{width:100%;height:70px;}",
     ".barcodeno{font-size:22px;text-align:center;letter-spacing:3px;margin:2px 0 0;}",
+    // SLICE 23 — QR block. Fixed width (NOT 100%): a QR must stay square, and
+    // stretching it to the full 576px body is the classic way to make a
+    // perfectly valid symbol unscannable.
+    ".qr{text-align:center;margin:10px 0 0;}",
+    ".qr svg{width:200px;height:200px;display:inline-block;}",
+    // The fun name reads as a name, so no letter-spacing and a heavier weight.
+    ".codename{font-size:26px;font-weight:bold;text-align:center;margin:4px 0 0;}",
+    // SLICE 23 — logo slot. `image-rendering:pixelated` stops the print
+    // pipeline from anti-aliasing a 1-bit image back into grey, which on a
+    // thermal head is what smears a clean logo into a smudge.
+    ".logo{text-align:center;margin:10px 0 0;}",
+    ".logo img{max-width:100%;height:auto;image-rendering:pixelated;}",
     "@media print{body{width:auto;}}",
     "</style></head><body>",
     // Slice 22b — the fancy Greenway script wordmark, embedded as a data URI
@@ -492,8 +589,15 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
           `<p class="policy">${escapeReceiptHtml(policyText)}</p>`,
         ]
       : []),
-    ...(barcodeSvg
-      ? [`<div class="barcode">${barcodeSvg}</div>`, `<p class="barcodeno">${receiptNo}</p>`]
+    // SLICE 23 — code, then its caption (fun name when there is one), then the
+    // logo, then the footer. This is the owner's requested order verbatim:
+    // "a logo to the bottom of the receipt below the QR code and receipt
+    // overlay and above the footer message".
+    ...(codeSvg
+      ? [`<div class="${codeClass}">${codeSvg}</div>`, `<p class="${captionClass}">${escapeReceiptHtml(codeCaption)}</p>`]
+      : []),
+    ...(logoOk
+      ? [`<div class="logo"><img src="${logoUri}" alt="" width="${logoWidth}"></div>`]
       : []),
     "<hr>",
     `<p class="foot">${footer}</p>`,

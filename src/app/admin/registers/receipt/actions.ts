@@ -34,6 +34,10 @@ export async function saveReceiptConfigAction(input: {
   showItemDetail: boolean;
   showBarcode: boolean;
   showSaleSummary: boolean;
+  // -- Slice 23 ----------------------------------------------------------
+  useQrCode: boolean;
+  bottomLogoDataUri: string;
+  bottomLogoWidth: number;
 }): Promise<SaveReceiptConfigResult> {
   const session = await requirePermission("settings.manage");
 

@@ -767,7 +767,7 @@ async function processSale(
   // re-run racing a not-quite-dead original, or a crash that left the ledger
   // row unstamped, hits the unique index instead of double-selling. Pre-0128
   // databases retry without the column (same behavior as before this fix).
-  const orderInsertRow = (withClientUuid: boolean) => ({
+  const orderInsertRow = (withClientUuid: boolean, withOptional: boolean) => ({
     status: "ready", // in-store sale: picked, bagged, paid — gate decides "completed"
     customer_first_name: "Walk-in",
     customer_last_name: null,
@@ -780,24 +780,52 @@ async function processSale(
     total_minor_units: sale.totalMinor,
     item_count: sale.lines.reduce((s, l) => s + l.quantity, 0),
     staff_note: `POS sale — ${device.name} — rung by ${employeeName}. Event ${envelope.clientUuid}.`,
+    // SLICE 23 — snapshot the fun name the receipt actually printed.
+    //
+    // Owner: "as for the fun receipt overlay for printed receipts, I think we
+    // should draw from the same pool."
+    //
+    // Walk-in and website sales converge on THIS table, so orders.display_name
+    // (0147: nullable, NON-unique, names recycle) is the one home for the
+    // name in both channels. Snapshotting it here is what lets a reprint show
+    // the SAME name the customer was handed rather than drawing a fresh one
+    // and contradicting the slip in their hand.
+    //
+    // Spread in ONLY when the sale actually carries one, so an offline sale,
+    // an empty pool, or a pre-Slice-23 queued sale produces a payload row that
+    // is byte-identical to what it was before this slice — and prints the real
+    // receipt number, which is the owner's stated fallback.
+    // `withOptional` gates it for the SAME reason `withClientUuid` gates
+    // pos_client_uuid: the retry below must be able to shed every column a
+    // not-yet-migrated database might not have. Shedding it costs only the
+    // reprint's memory of the name (the printed slip already has it), whereas
+    // failing the insert would cost the SALE.
+    ...(withOptional && typeof sale.displayName === "string" && sale.displayName.trim() !== ""
+      ? { display_name: sale.displayName.trim() }
+      : {}),
     ...(withClientUuid ? { pos_client_uuid: envelope.clientUuid } : {}),
   });
   let { data: order, error: orderError } = await admin
     .from("orders")
-    .insert(orderInsertRow(true))
+    .insert(orderInsertRow(true, true))
     .select("id, order_number")
     .single<{ id: string; order_number: string }>();
   if (
     orderError &&
     (orderError.code === "PGRST204" ||
       orderError.code === "42703" ||
-      /pos_client_uuid/i.test(orderError.message ?? "")) &&
+      /pos_client_uuid/i.test(orderError.message ?? "") ||
+      /display_name/i.test(orderError.message ?? "")) &&
     orderError.code !== "23505"
   ) {
-    // Migration 0128 not applied yet — insert without the guarantee column.
+    // A column this row referenced does not exist on this database: migration
+    // 0128 (pos_client_uuid) or 0147 (display_name) has not been applied. Both
+    // are OPTIONAL enrichments — one is a duplicate guard, the other is a
+    // cosmetic name — so the retry sheds both and materializes the order
+    // anyway. A missing migration must never cost a customer their sale.
     ({ data: order, error: orderError } = await admin
       .from("orders")
-      .insert(orderInsertRow(false))
+      .insert(orderInsertRow(false, false))
       .select("id, order_number")
       .single<{ id: string; order_number: string }>());
   }

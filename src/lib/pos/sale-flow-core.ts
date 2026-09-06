@@ -57,6 +57,7 @@ import { lineGramsFromUnit } from "./variant-grams-core";
 import {
   computeCashChange,
   validateSalePayload,
+  POS_DISPLAY_NAME_MAX_LEN,
   type PosSaleLine,
   type PosSalePayload,
 } from "./sale-event-core";
@@ -562,6 +563,17 @@ export type BuildSaleArgs = {
    * interim guidance (tax on the original price).
    */
   rounding?: PosCashRoundingConfig;
+  /**
+   * SLICE 23 — the fun pool name to print under the QR code on this receipt.
+   *
+   * Owner: "the text bellow the barcode should definitely be the fun overlay."
+   *
+   * Forwarded verbatim into the payload so the sync can snapshot it onto
+   * orders.display_name and a reprint shows the SAME name. Optional and
+   * routinely absent: offline, or an empty pool, means no name and the receipt
+   * prints the real receipt number — the owner's stated fallback.
+   */
+  displayName?: string;
 };
 
 export type BuildSaleResult =
@@ -635,6 +647,27 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
     // payload shapes stay byte-identical.
     ...(mode !== "off" && rounded.adjustmentMinor !== 0
       ? { rounding: { mode, adjustmentMinor: rounded.adjustmentMinor, dueMinor } }
+      : {}),
+    // SLICE 23 — the fun receipt name, carried ONLY when it is genuinely
+    // printable.
+    //
+    // The guard is deliberately the same shape as the payload validator's, and
+    // that is the whole point. validateSalePayload REFUSES a blank or an
+    // over-long name, and a refusal here does not produce a plain receipt — it
+    // produces a FAILED SALE, with a customer at the counter, over a
+    // decoration. So anything the validator would reject is dropped to "no
+    // name" first, which lands on the outcome the owner actually asked for:
+    // "the fall back can be to just use the real receipt number instead of the
+    // overlay."
+    //
+    // In practice neither case should occur (the pool caps names at 40
+    // characters). This is the belt for that suspenders, because the cost of
+    // being wrong is asymmetric: a missing flourish is invisible, a blocked
+    // sale is not.
+    ...(typeof args.displayName === "string" &&
+    args.displayName.trim() !== "" &&
+    args.displayName.trim().length <= POS_DISPLAY_NAME_MAX_LEN
+      ? { displayName: args.displayName.trim() }
       : {}),
   };
   const check = validateSalePayload(payload);
@@ -798,7 +831,71 @@ export function __runSaleFlowCoreTests(): void {
     // POS B33: no rounding config = no rounding block, due = total.
     ok(built.payload.rounding === undefined, "B33: no policy → no rounding block");
     ok(built.dueMinor === 3500 && built.roundingAdjustmentMinor === 0, "B33: due = total when off");
+    // SLICE 23: no name supplied → the key is ABSENT, not present-and-empty.
+    // Asserted with `in` rather than `=== undefined` because those two are not
+    // the same thing: an explicit `displayName: undefined` would still change
+    // the JSON that gets queued and stored.
+    ok(!("displayName" in built.payload), "SLICE 23: no fun name → key omitted entirely");
   }
+
+  // ── SLICE 23 — the fun receipt name rides the payload ────────────────────
+  const namedBuild = buildSalePayload({
+    lines: priced.lines,
+    totals: priced.totals,
+    tenderedMinor: 4000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    displayName: "  Purple Rain  ",
+  });
+  ok(namedBuild.ok, "SLICE 23: a sale carrying a fun name still builds");
+  if (namedBuild.ok) {
+    ok(namedBuild.payload.displayName === "Purple Rain", "SLICE 23: the fun name is trimmed into the payload");
+  }
+  // A blank draw must be treated as NO name. If it were forwarded verbatim,
+  // validateSalePayload would refuse it and the whole SALE would fail over a
+  // decoration — the exact opposite of the owner's "fall back to the real
+  // receipt number" instruction.
+  const blankName = buildSalePayload({
+    lines: priced.lines,
+    totals: priced.totals,
+    tenderedMinor: 4000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    displayName: "   ",
+  });
+  ok(blankName.ok, "SLICE 23: a BLANK fun name never fails the sale");
+  if (blankName.ok) {
+    ok(!("displayName" in blankName.payload), "SLICE 23: a blank fun name is dropped, not forwarded");
+  }
+  // An over-long name must also never cost the sale. The pool caps names at 40
+  // characters, so this can only happen if something upstream is already
+  // wrong — and when something upstream is wrong, the customer still gets
+  // their receipt. It prints the real number instead of the flourish.
+  const longName = buildSalePayload({
+    lines: priced.lines,
+    totals: priced.totals,
+    tenderedMinor: 4000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    displayName: "x".repeat(POS_DISPLAY_NAME_MAX_LEN + 1),
+  });
+  ok(longName.ok, "SLICE 23: an over-long fun name never fails the sale");
+  if (longName.ok) {
+    ok(!("displayName" in longName.payload), "SLICE 23: an over-long fun name is dropped, not forwarded");
+  }
+  // The boundary itself is accepted — the drop rule must not eat a legal name.
+  const maxName = buildSalePayload({
+    lines: priced.lines,
+    totals: priced.totals,
+    tenderedMinor: 4000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    displayName: "y".repeat(POS_DISPLAY_NAME_MAX_LEN),
+  });
+  ok(
+    maxName.ok && maxName.payload.displayName === "y".repeat(POS_DISPLAY_NAME_MAX_LEN),
+    "SLICE 23: a fun name of exactly the max length still rides the payload",
+  );
 
   // POS B33 — rounding policy shapes the payload and the change math.
   const oddTotals = { ...priced.totals, totalMinorUnits: 3502 };

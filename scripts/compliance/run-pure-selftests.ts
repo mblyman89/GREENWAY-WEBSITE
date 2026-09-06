@@ -436,6 +436,9 @@ import { __runPolicyDocCoreTests } from "../../src/lib/cms/policy-doc-core";
 import { __runSpecialsPresentationCoreTests } from "../../src/lib/specials/specials-presentation-core";
 import { __runHomeSectionSettingsTests } from "../../src/lib/cms/home-section-settings-core";
 import { __runOrderNamePoolCoreTests } from "../../src/lib/orders/order-name-pool-core";
+import { __runOrderNameRotationCoreTests } from "../../src/lib/orders/order-name-rotation-core";
+import { __runQrCoreTests } from "../../src/lib/printing/qr-core";
+import { __runLogoPrintCoreTests } from "../../src/lib/printing/logo-print-core";
 import { __runOrderNameComplianceTests } from "../../src/lib/orders/order-name-compliance-core";
 import { __runNewOrderWatchCoreTests } from "../../src/lib/orders/new-order-watch-core";
 import { __runMedicalContentCoreTests } from "../../src/lib/medical/medical-content-core";
@@ -781,6 +784,9 @@ async function main() {
   { const r = __runSpecialsPresentationCoreTests(); if (r.passed < 1) throw new Error("specials-presentation-core: no assertions ran"); console.log(`specials-presentation-core: ${r.passed} assertions passed`); }
   assertNoFailures("home-section-settings-core", __runHomeSectionSettingsTests());
   assertNoFailures("order-name-pool-core", __runOrderNamePoolCoreTests());
+  assertNoFailures("order-name-rotation-core", __runOrderNameRotationCoreTests());
+  assertNoFailures("qr-core", __runQrCoreTests());
+  assertNoFailures("logo-print-core", __runLogoPrintCoreTests());
   assertNoFailures("order-name-compliance-core", __runOrderNameComplianceTests());
   __runNewOrderWatchCoreTests();
   { const r = __runMedicalContentCoreTests(); if (r.passed < 1) throw new Error("medical-content-core: no assertions ran"); console.log(`medical-content-core: ${r.passed} assertions passed`); }
