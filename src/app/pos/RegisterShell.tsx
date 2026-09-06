@@ -1255,7 +1255,7 @@ export function RegisterShell({
             return { ok: false as const, error: "Could not reach the server — try again." };
           }
         }}
-        onOrderName={async () => {
+        onOrderName={async (sourceOrderId) => {
           // SLICE 23 — draw ONE fun name from the shared pool for the receipt
           // this sale is about to print.
           //
@@ -1281,7 +1281,12 @@ export function RegisterShell({
                 "x-pos-device-id": creds.deviceId,
                 "x-pos-device-key": creds.deviceKey,
               },
-              body: "{}",
+              // SLICE 26 — when this sale was started from a website pickup
+              // order, send that order's id so the server hands back the name
+              // the customer ALREADY saw on the confirmation screen and in
+              // their email, instead of drawing a fresh one that contradicts
+              // it. Omitted for walk-ins, which draw as they always have.
+              body: JSON.stringify(sourceOrderId ? { sourceOrderId } : {}),
             });
             if (!res.ok) return null;
             const body = (await res.json().catch(() => null)) as { name?: string | null } | null;

@@ -407,6 +407,38 @@ export async function assignNextPoolName(): Promise<string | null> {
   return detail.name;
 }
 
+/**
+ * SLICE 26 — read an EXISTING order's already-assigned fun name.
+ *
+ * This is the read half of "the pickup receipt prints the name the customer
+ * already has". It deliberately assigns NOTHING: the name was claimed when the
+ * website order was inserted, the customer has already seen it on the
+ * confirmation screen and in their email, and the register only needs to be
+ * told what it was so the paper agrees.
+ *
+ * Never throws and never distinguishes its failures. A missing display_name
+ * column (migration 0147 unapplied), an order that predates the pool, a
+ * transient database error and an unknown id all answer null, and null means
+ * exactly one thing to the caller: there is no name to inherit, so draw one the
+ * ordinary way. A decorative read must never be able to fail a sale.
+ */
+export async function getOrderDisplayName(orderId: string): Promise<string | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("orders")
+      .select("display_name")
+      .eq("id", orderId)
+      .maybeSingle<{ display_name?: string | null }>();
+    if (error) return null;
+    const name = data?.display_name;
+    return typeof name === "string" && name.trim() !== "" ? name.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The assignment plus its gap, for callers that want to warn about a thin pool. */
 export type AssignmentDetail = {
   name: string | null;

@@ -38,7 +38,11 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
-import { assignNextPoolNameDetailed } from "@/lib/orders/order-name-pool-store";
+import { assignNextPoolNameDetailed, getOrderDisplayName } from "@/lib/orders/order-name-pool-store";
+import {
+  normalizeSourceOrderIdForName,
+  resolveNameInheritance,
+} from "@/lib/pos/order-name-prefetch-core";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
 export const runtime = "nodejs";
@@ -51,6 +55,50 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
   );
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  // ── SLICE 26: a loaded website order INHERITS its own name ───────────────
+  //
+  // Owner: "the fun overlay on the printed receipt is now different from the
+  // one originally attached to the online order. I am all about consistency."
+  //
+  // A website order was given its name server-side at insert, and the customer
+  // has already seen it twice — on the confirmation screen and in their email.
+  // When that order is loaded into the register, the sale carries its id, so
+  // the honest answer to "what is this sale's name?" is "the one it already
+  // has", not a fresh draw that contradicts the customer's inbox.
+  //
+  // This is ALSO why inheritance lives on THIS endpoint rather than riding
+  // along with the pickup load response. The register can reach this moment
+  // three ways — loading an order, resuming a snapshot after an idle lock, or
+  // rebuilding the sale — and only the sale's own sourceOrderId is present on
+  // all three. Answering here means every path inherits, and the load response
+  // stays the shape the pickup screen already trusts.
+  //
+  // Reading the id is deliberately forgiving: a body that will not parse, or a
+  // value that is not UUID-shaped, simply means "no order" and falls through to
+  // an ordinary draw. This request must never fail a sale over a decoration.
+  let sourceOrderId: string | null = null;
+  try {
+    const body = (await req.json()) as { sourceOrderId?: unknown } | null;
+    sourceOrderId = normalizeSourceOrderIdForName(body?.sourceOrderId);
+  } catch {
+    sourceOrderId = null;
+  }
+
+  if (sourceOrderId !== null) {
+    // getOrderDisplayName never throws and answers null for every failure —
+    // unknown id, unapplied migration 0147, transient error — and null here
+    // means only "nothing to inherit", which falls through to a normal draw.
+    const stored = await getOrderDisplayName(sourceOrderId);
+    const inheritance = resolveNameInheritance({ sourceOrderId, storedDisplayName: stored });
+    if (inheritance.action === "inherit") {
+      // gap is null and source is "inherited" because NOTHING was assigned:
+      // the rotation is untouched, which is the second half of this fix. The
+      // register used to burn a second pool name to print a receipt for an
+      // order that already had one, pulling every repeat closer for nothing.
+      return NextResponse.json({ name: inheritance.name, gap: null, source: "inherited" });
+    }
   }
 
   // assignNextPoolNameDetailed() already swallows its own failures and answers

@@ -159,6 +159,7 @@ import {
 import {
   canFillLateName,
   normalizePrefetchedName,
+  normalizeSourceOrderIdForName,
   prefetchStatusNote,
   shouldRequestName,
   type PrefetchFailure,
@@ -365,8 +366,15 @@ export type SaleFlowProps = {
    * means the receipt prints the real receipt number, which is precisely the
    * fallback the owner described. It must never reject, and the sale must
    * never wait on it.
+   *
+   * SLICE 26 — receives this sale's source website order id when it was
+   * started from the pickup queue (null for a walk-in). A loaded order was
+   * already given a name at insert and the customer has seen it on the
+   * confirmation screen and in their email, so the server answers with THAT
+   * name rather than drawing a new one — the printed receipt then agrees with
+   * the customer's inbox, and the pool is not charged twice for one order.
    */
-  onOrderName?: () => Promise<string | null>;
+  onOrderName?: (sourceOrderId: string | null) => Promise<string | null>;
   /**
    * SLICE 28 — the unlocked cashier's employees.id + this device's register
    * id, needed by the employee-program safety rules (the buyer can't be the
@@ -620,7 +628,12 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
     funNameRequestedRef.current = true;
     // Fire-and-forget. The .catch is not optional politeness: an unhandled
     // rejection here would surface as a console error over a healthy sale.
-    void onOrderName()
+    // SLICE 26 — hand the sale's source website order id to the provider so a
+    // loaded pickup INHERITS the name the customer already has, rather than
+    // drawing a second one that contradicts their confirmation email.
+    // normalizeSourceOrderIdForName drops anything that is not UUID-shaped, so
+    // a corrupted resume snapshot degrades to an ordinary draw.
+    void onOrderName(normalizeSourceOrderIdForName(initialSourceOrderId))
       .then((raw) => {
         const name = normalizePrefetchedName(raw);
         funNameRef.current = name;
@@ -659,7 +672,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         funNameRef.current = null;
         setFunNameFailure("unreachable");
       });
-  }, [onOrderName, onReceiptFrozen]);
+  }, [onOrderName, onReceiptFrozen, initialSourceOrderId]);
 
   // SLICE 24 — ASK EARLY. Slice 23 drew the name when the TENDER screen opened
   // and read it at payment moments later. On the counter that is a race the
