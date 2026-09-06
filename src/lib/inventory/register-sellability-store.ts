@@ -83,8 +83,21 @@ export type RestorableProduct = {
 /** How many restorable products the banner lists. */
 export const RESTORABLE_DISPLAY_LIMIT = 25;
 
-/** How many blocked lots the banner lists before saying "and N more". */
-export const BLOCKED_LOT_DISPLAY_LIMIT = 25;
+/**
+ * How many blocked lots the banner lists PER CAUSE before saying "and N more".
+ *
+ * SLICE 20 - raised from 25 and made per-cause. The owner has ~973 blocked
+ * products: a flat 25 across all causes meant the two lots needing approval in
+ * Product Onboarding could be pushed off the list entirely by hundreds of
+ * hidden ones, so a whole category of work became invisible. Slicing per cause
+ * guarantees every cause is represented, and the summary always reports the
+ * TRUE total from `byCode` rather than the number displayed.
+ *
+ * Not unlimited on purpose: this renders server-side into the inventory page,
+ * and ~1000 rows of markup would make the page slow to load and painful to
+ * read. Sixty is a working screenful per cause; the bulk links carry the tail.
+ */
+export const BLOCKED_LOT_DISPLAY_LIMIT = 60;
 
 type LotRow = {
   id: string;
@@ -241,7 +254,21 @@ export async function getRegisterSellabilityReport(): Promise<RegisterSellabilit
 
     const diagnoses = facts.map((f) => diagnoseLot(f, cards));
     const summary = summarizeSellability(diagnoses);
-    const blocked = diagnoses.filter((d) => !d.sellable).slice(0, BLOCKED_LOT_DISPLAY_LIMIT);
+    /**
+     * SLICE 20 - cap PER CAUSE, not across the whole list. A flat cap let one
+     * loud cause bury a quiet one; the owner could not see the 2 lots awaiting
+     * approval behind hundreds of hidden ones. Counts shown to the owner come
+     * from `summary.byCode`, which is computed from ALL diagnoses above, so
+     * capping the display can never understate the real total.
+     */
+    const perCause = new Map<string, number>();
+    const blocked = diagnoses.filter((d) => {
+      if (d.sellable) return false;
+      const seen = perCause.get(d.code) ?? 0;
+      if (seen >= BLOCKED_LOT_DISPLAY_LIMIT) return false;
+      perCause.set(d.code, seen + 1);
+      return true;
+    });
 
     /**
      * SLICE 18 - the 86 presses that live stock contradicts.

@@ -366,6 +366,8 @@ import { __runRegisterAvailabilityCoreTests } from "../../src/lib/pos/register-a
 import { __runPickupHandoverCoreTests } from "../../src/lib/pos/pickup-handover-core";
 import { __runRestoreToSaleCoreTests } from "../../src/lib/inventory/restore-to-sale-core";
 import { __runTransactionHistoryCoreTests } from "../../src/lib/pos/transaction-history-core";
+import { __runBlockedStockFixCoreTests } from "../../src/lib/inventory/blocked-stock-fix-core";
+import { __runReceiptReprintCoreTests } from "../../src/lib/pos/receipt-reprint-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
 import { __runOrderToCartCoreTests } from "../../src/lib/pos/order-to-cart-core";
 import { __runMemberMatchCoreTests } from "../../src/lib/pos/member-match-core";
@@ -682,6 +684,8 @@ async function main() {
   __runPickupHandoverCoreTests();
   __runRestoreToSaleCoreTests();
   __runTransactionHistoryCoreTests();
+  __runBlockedStockFixCoreTests();
+  __runReceiptReprintCoreTests();
   __runRegisterLoyaltyCoreTests();
   __runOrderToCartCoreTests();
   __runMemberMatchCoreTests();

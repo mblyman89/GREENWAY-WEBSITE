@@ -3146,6 +3146,11 @@ function ReturnsModal({
   const [historyBusy, setHistoryBusy] = useState(false);
   const [historyQuery, setHistoryQuery] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  // SLICE 20 - which row is currently being reprinted, and the last reprint
+  // note (printer trouble, or "not found"). Keyed by receipt so two rows can
+  // never look busy at once.
+  const [reprintBusy, setReprintBusy] = useState<string | null>(null);
+  const [reprintNote, setReprintNote] = useState<string | null>(null);
   const [lineId, setLineId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [reason, setReason] = useState<string | null>(null);
@@ -3182,6 +3187,42 @@ function ReturnsModal({
   // customer still holding the paper receipt. READ-ONLY: this finds a sale,
   // it never refunds one. Selecting a row fills the receipt box and runs the
   // SAME policy-gated lookup, so there is still exactly one refund path.
+  /**
+   * SLICE 20 - reprint a PAST receipt.
+   *
+   * The server rebuilds the slip from the envelope the register stored at the
+   * time of sale (pos_sale_events.payload), so this reprints what was actually
+   * charged rather than recomputing it. The drawer NEVER opens on a reprint -
+   * star-printer-core refuses that combination outright.
+   */
+  const reprint = async (receiptCode: string) => {
+    if (reprintBusy) return;
+    setReprintBusy(receiptCode);
+    setReprintNote(null);
+    try {
+      const res = await posFetch(`/api/pos/reprint?receipt=${encodeURIComponent(receiptCode)}`, {
+        headers: {
+          "x-pos-device-id": creds.deviceId,
+          "x-pos-device-key": creds.deviceKey,
+        },
+      });
+      const json = (await res.json().catch(() => null)) as
+        | { receipt?: PosReceiptInput; error?: string }
+        | null;
+      if (!res.ok || !json?.receipt) {
+        setReprintNote(String(json?.error ?? "Could not rebuild that receipt."));
+        return;
+      }
+      const html = buildPosReceiptHtml(json.receipt);
+      const note = await printSlip(html, false, "reprint");
+      setReprintNote(note ?? `Receipt ${receiptCode} sent to the printer.`);
+    } catch {
+      setReprintNote("Could not reach the server - try again.");
+    } finally {
+      setReprintBusy(null);
+    }
+  };
+
   const loadHistory = async () => {
     if (historyBusy) return;
     setHistoryBusy(true);
@@ -3340,6 +3381,10 @@ function ReturnsModal({
                 </div>
               ) : null}
 
+              {reprintNote ? (
+                <p className="mt-2 text-xs text-[var(--pos-text-muted)]">{reprintNote}</p>
+              ) : null}
+
               {!historyBusy && !historyError && history !== null ? (
                 (() => {
                   const shown = searchTransactions(history, historyQuery);
@@ -3362,8 +3407,8 @@ function ReturnsModal({
                       {shown.map((t) => {
                         const actionable = t.status !== "voided" && t.returnableCount > 0;
                         return (
+                          <div key={t.receiptNumber + t.orderId}>
                           <button
-                            key={t.receiptNumber + t.orderId}
                             type="button"
                             disabled={!actionable}
                             onClick={() => {
@@ -3409,6 +3454,21 @@ function ReturnsModal({
                               </span>
                             ) : null}
                           </button>
+
+                          {/* SLICE 20 - reprint is available on EVERY row,
+                              including voided and fully-returned sales: a
+                              customer can always ask for a copy of a receipt
+                              whose sale is closed. Outside the row button so a
+                              non-returnable sale can still be reprinted. */}
+                          <button
+                            type="button"
+                            disabled={reprintBusy !== null}
+                            onClick={() => void reprint(t.receiptNumber)}
+                            className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
+                          >
+                            {reprintBusy === t.receiptNumber ? "Printing…" : "🧾 Reprint receipt"}
+                          </button>
+                          </div>
                         );
                       })}
                     </div>
