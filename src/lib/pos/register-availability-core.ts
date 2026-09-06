@@ -447,6 +447,14 @@ export type LotDiagnosis = {
   label: string;
   sellable: boolean;
   code: LotSellableCode;
+  /**
+   * SLICE 20 - the lot's POS product key, normalized, or null when it has
+   * none. The back office needs this to send the owner to the PRODUCT page
+   * (where hiding is controlled) rather than to the lot, which has no
+   * visibility control at all. Null is a real answer here: `no_product_link`
+   * means there is genuinely no key to follow.
+   */
+  productKey: string | null;
   /** What is wrong, in the owner's language. */
   message: string;
   /** The single next action that fixes it, or null when nothing is wrong. */
@@ -476,6 +484,7 @@ export function diagnoseLot(
       label,
       sellable: false,
       code: "no_product_link",
+      productKey: null,
       message:
         "This lot is not linked to a product, so there is nothing for the register to ring up and nothing for a scan to match.",
       fix: "Open the lot and link it to a POS product, or onboard it from Product Onboarding.",
@@ -489,6 +498,7 @@ export function diagnoseLot(
       label,
       sellable: false,
       code: "lot_not_active",
+      productKey: key,
       message: `This lot's status is “${status || "unset"}”, so its stock is not sellable.`,
       fix: "Return the lot to active in the back office once it is cleared for sale.",
     };
@@ -500,6 +510,7 @@ export function diagnoseLot(
       label,
       sellable: false,
       code: "lot_empty",
+      productKey: key,
       message: "This lot is active but has no units on hand, so there is nothing to sell.",
       fix: "Receive stock against it, or run a cycle count if the shelf disagrees.",
     };
@@ -512,6 +523,7 @@ export function diagnoseLot(
       label,
       sellable: false,
       code: "no_menu_card",
+      productKey: key,
       message:
         "This lot has stock, but no product on the published menu uses its product key, so the register has nothing to show.",
       fix: "Approve it in Product Onboarding, then publish the menu.",
@@ -524,6 +536,7 @@ export function diagnoseLot(
       label,
       sellable: false,
       code: "recall_hold",
+      productKey: key,
       message: "A recall hold covers this product, so it cannot be sold.",
       fix: "Clear the recall once the product is cleared for sale.",
     };
@@ -535,6 +548,7 @@ export function diagnoseLot(
       label,
       sellable: false,
       code: "hidden_card",
+      productKey: key,
       message: "The menu product for this lot is hidden, so the register does not list it.",
       fix: "Un-hide the product in the back office.",
     };
@@ -545,6 +559,7 @@ export function diagnoseLot(
     label,
     sellable: true,
     code: "sellable",
+    productKey: key,
     message: "Sellable at the register.",
     fix: null,
   };
@@ -784,6 +799,20 @@ export function __runRegisterAvailabilityCoreTests(): void {
   ok(diagnoseLot(lot({ status: "quarantine" }), cards).code === "lot_not_active", "quarantine diagnosed");
   ok(diagnoseLot(lot({ onHandQty: 0 }), cards).code === "lot_empty", "empty lot diagnosed");
   ok(diagnoseLot(lot({ posProductKey: "GHOST" }), cards).code === "no_menu_card", "unlisted key diagnosed");
+
+  // SLICE 20 - the diagnosis must carry the key the back office links with.
+  ok(
+    diagnoseLot(lot({ posProductKey: "GHOST" }), cards).productKey === "GHOST",
+    "diagnosis carries the product key",
+  );
+  ok(
+    diagnoseLot(lot({ posProductKey: null }), cards).productKey === null,
+    "an unlinked lot reports a null key, never a fake one",
+  );
+  ok(
+    diagnoseLot(lot({ posProductKey: "  SPACED  " }), cards).productKey === "SPACED",
+    "the key is normalized, so links cannot carry stray whitespace",
+  );
   ok(
     diagnoseLot(lot(), new Map([["KEY-A", card({ recalled: true })]])).code === "recall_hold",
     "recall diagnosed",

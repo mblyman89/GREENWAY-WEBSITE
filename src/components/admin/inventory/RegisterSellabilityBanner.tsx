@@ -21,14 +21,12 @@ import Link from "next/link";
 import type { LotDiagnosis, SellabilitySummary } from "@/lib/pos/register-availability-core";
 import type { RestorableProduct } from "@/lib/inventory/register-sellability-store";
 import { restoreProductToSaleAction } from "@/app/admin/inventory/actions";
-
-/** Plain-English heading per blocking cause, worst/most-actionable first. */
-const CAUSE_ORDER: { code: LotDiagnosis["code"]; label: string }[] = [
-  { code: "no_product_link", label: "Not linked to a product" },
-  { code: "no_menu_card", label: "Not on the published menu" },
-  { code: "hidden_card", label: "Hidden on the menu" },
-  { code: "recall_hold", label: "Under a recall hold" },
-];
+import {
+  fixLinkForLot,
+  bulkFixLinkForCause,
+  CAUSE_ORDER,
+  type BlockedCause,
+} from "@/lib/inventory/blocked-stock-fix-core";
 
 export function RegisterSellabilityBanner({
   summary,
@@ -40,7 +38,7 @@ export function RegisterSellabilityBanner({
   // No verdict, or nothing wrong: say nothing.
   if (!summary || summary.headline == null || blocked.length === 0) return null;
 
-  const groups = CAUSE_ORDER.map((c) => ({
+  const groups = CAUSE_ORDER.map((c: { code: BlockedCause; label: string }) => ({
     ...c,
     lots: blocked.filter((b) => b.code === c.code),
   })).filter((g) => g.lots.length > 0);
@@ -56,37 +54,63 @@ export function RegisterSellabilityBanner({
         listed beside it before it can be scanned and rung up at the register.
       </p>
 
-      <div className="mt-4 space-y-4">
-        {groups.map((g) => (
-          <div key={g.code}>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-              {g.label} · {g.lots.length}
-            </h3>
-            <ul className="mt-2 space-y-1.5">
-              {g.lots.map((lot) => (
-                <li key={lot.lotId} className="text-sm">
-                  <Link
-                    href={`/admin/inventory/${lot.lotId}`}
-                    className="font-medium text-[var(--admin-text)] underline-offset-2 hover:text-[var(--admin-accent)] hover:underline"
-                  >
-                    {lot.label}
-                  </Link>
-                  {lot.fix && (
-                    <span className="text-[var(--admin-text-muted)]"> — {lot.fix}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+      <div className="mt-4 space-y-5">
+        {groups.map((g) => {
+          // The count for the WHOLE cause, not just the page being shown —
+          // the bulk button must not understate the work.
+          const totalForCause = summary.byCode[g.code] ?? g.lots.length;
+          const bulk = bulkFixLinkForCause(g.code, totalForCause);
+          const why = fixLinkForLot(g.code, "sample", "sample").why;
 
-      {summary.blocked > blocked.length && (
-        <p className="mt-4 text-xs text-[var(--admin-text-faint)]">
-          Showing {blocked.length} of {summary.blocked}. Fix these first, then reload to see the
-          rest.
-        </p>
-      )}
+          return (
+            <div key={g.code}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+                  {g.label} · {totalForCause}
+                </h3>
+                {bulk && (
+                  <Link
+                    href={bulk.href}
+                    className="rounded-[var(--admin-radius)] bg-[var(--admin-orange)] px-2.5 py-1 text-xs font-semibold text-black hover:opacity-90"
+                  >
+                    {bulk.label} &rarr;
+                  </Link>
+                )}
+              </div>
+
+              {/* Say WHERE the fix lives before the owner clicks anything. */}
+              <p className="mt-1 text-xs text-[var(--admin-text-faint)]">{why}</p>
+
+              <ul className="mt-2 space-y-1.5">
+                {g.lots.map((lot) => {
+                  const fix = fixLinkForLot(g.code, lot.lotId, lot.productKey);
+                  return (
+                    <li
+                      key={lot.lotId}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-3 py-2 text-sm"
+                    >
+                      <span className="font-medium text-[var(--admin-text)]">{lot.label}</span>
+                      <Link
+                        href={fix.href}
+                        className="shrink-0 rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-2.5 py-1 text-xs font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-surface-2)]"
+                      >
+                        {fix.label} &rarr;
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {totalForCause > g.lots.length && (
+                <p className="mt-1.5 text-xs text-[var(--admin-text-faint)]">
+                  Showing {g.lots.length} of {totalForCause}
+                  {bulk ? " — use the button above to work through every one." : "."}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
