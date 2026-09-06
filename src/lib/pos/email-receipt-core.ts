@@ -171,6 +171,15 @@ export function validateEmailReceiptSnapshot(
       saleClientUuid: r.saleClientUuid as string,
       soldAtIso: r.soldAtIso as string,
       registerLabel: (r.registerLabel as string).trim(),
+      // SLICE 25 — carry the fun name through the validator. It was being
+      // dropped here, so an emailed receipt always showed the real number even
+      // when the paper slip beside it showed the fun name. Optional and
+      // defensive: any non-string, blank, or absent value becomes null, which
+      // is exactly the "print the real number" fallback the paper uses.
+      displayName:
+        typeof r.displayName === "string" && r.displayName.trim() !== ""
+          ? r.displayName.trim()
+          : null,
       lines,
       subtotalMinor: r.subtotalMinor as number,
       taxMinor: r.taxMinor as number,
@@ -291,7 +300,13 @@ export function buildEmailReceiptHtml(receipt: PosReceiptInput): string {
     '<div style="max-width:420px;margin:0 auto;background:#fff;border-radius:8px;padding:20px;font-family:\'Helvetica Neue\',Arial,sans-serif;color:#111;font-size:14px;">',
     `<h1 style="margin:0 0 6px;text-align:center;font-size:20px;color:#12351f;">${header}</h1>`,
     addr,
-    `<p style="margin:6px 0 0;text-align:center;font-size:13px;color:#333;">Receipt ${receiptNumber(receipt.saleClientUuid)} &middot; ${escapeReceiptHtml(receipt.registerLabel)}</p>`,
+    // SLICE 25 — identical rule to the paper receipt: the fun name IS this
+    // sale's identifier, labelled with "#" so the customer understands why the
+    // number reads like a phrase. Falls back to the real number by the same
+    // test, so paper and email can never name one sale two different things.
+    `<p style="margin:6px 0 0;text-align:center;font-size:13px;color:#333;">Receipt # ${escapeReceiptHtml(
+      (receipt.displayName ?? "").trim() || receiptNumber(receipt.saleClientUuid),
+    )} &middot; ${escapeReceiptHtml(receipt.registerLabel)}</p>`,
     `<p style="margin:2px 0 0;text-align:center;font-size:13px;color:#333;">${escapeReceiptHtml(formatReceiptTimestamp(receipt.soldAtIso))}</p>`,
     receipt.servedBy?.trim()
       ? `<p style="margin:2px 0 0;text-align:center;font-size:13px;color:#333;">Served by ${escapeReceiptHtml(receipt.servedBy.trim())}</p>`
@@ -383,7 +398,12 @@ export function __runEmailReceiptCoreTests(): void {
   // Email HTML mirrors the paper receipt's content decisions
   if (v.ok) {
     const html = buildEmailReceiptHtml(v.receipt);
-    ok(html.includes("Receipt 14174000"), "receipt number = last 8 of sale uuid");
+    ok(html.includes("Receipt # 14174000"), "SLICE 25: emailed header labels the identifier with #");
+  const emailNamed = buildEmailReceiptHtml({ ...(goodReceipt as PosReceiptInput), displayName: "Purple Rain" });
+  ok(emailNamed.includes("Receipt # Purple Rain"), "SLICE 25: emailed receipt shows the fun name");
+  ok(!emailNamed.includes("Receipt # 14174000"), "SLICE 25: emailed receipt drops the real number when named");
+  const emailBlank = buildEmailReceiptHtml({ ...(goodReceipt as PosReceiptInput), displayName: "   " });
+  ok(emailBlank.includes("Receipt # 14174000"), "SLICE 25: a blank fun name falls back to the real number");
     ok(html.includes("2x Blue Dream 3.5g"), "line rendered with quantity");
     ok(html.includes("$50.00"), "total formatted from cents");
     ok(html.includes("You saved") && html.includes("-$10.00"), "savings row when savings > 0");

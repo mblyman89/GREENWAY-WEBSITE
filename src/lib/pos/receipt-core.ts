@@ -491,6 +491,9 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
   // A fun name is prose, not a serial: the wide letter-spacing that makes a
   // receipt number readable makes a name look broken.
   const captionClass = funName ? "codename" : "barcodeno";
+  // SLICE 25 — the header identifier. Same value, same fallback, one source of
+  // truth: whatever this sale is called under the QR is what the header says.
+  const headerCode = codeCaption;
 
   // -- SLICE 23: the logo ----------------------------------------------------
   // Accepted ONLY as a data: URI. A remote URL would make a receipt depend on
@@ -554,7 +557,23 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
       .map((l) => l.trim())
       .filter(Boolean)
       .map((l) => `<p class="addr">${escapeReceiptHtml(l)}</p>`),
-    `<p class="sub">Receipt ${receiptNo} &middot; ${escapeReceiptHtml(input.registerLabel)}</p>`,
+    // SLICE 25 — the header names the sale the SAME way the caption under the
+    // code does. Owner: "I also want this receipt number to be the fun overlay
+    // ... that way the customer knows exactly why there is a strange but fun
+    // overlay there instead of the old boring number."
+    //
+    // The "#" is deliberate and is the whole point of the request: it labels
+    // the fun name as this sale's identifier, so a customer reading "Receipt #
+    // Purple Rain" understands the odd words ARE the number rather than a
+    // stray bit of marketing.
+    //
+    // headerCode falls back to the real receipt number by exactly the same
+    // rule as the caption (offline, empty pool, or pre-Slice-23 reprint), so
+    // the two lines can never disagree about what this sale is called. The fun
+    // name is operator-supplied text and MUST be escaped here; receiptNo is
+    // generated and has no escapable characters, but it goes through the same
+    // call so nobody has to reason about which branch is safe.
+    `<p class="sub">Receipt # ${escapeReceiptHtml(headerCode)} &middot; ${escapeReceiptHtml(input.registerLabel)}</p>`,
     `<p class="sub">${escapeReceiptHtml(formatReceiptTimestamp(input.soldAtIso))}</p>`,
     input.servedBy?.trim() ? `<p class="sub">Served by ${escapeReceiptHtml(input.servedBy.trim())}</p>` : "",
     input.medicalSale ? '<p class="medbanner">MEDICAL &mdash; TAX EXEMPT SALE</p>' : "",
@@ -832,7 +851,18 @@ export function __runPosReceiptCoreTests(): void {
   ok(html.includes("Change") && html.includes("$0.74"), "change row");
   ok(!html.includes("MEDICAL"), "no medical banner on recreational sale");
   ok(!html.includes("You saved"), "no savings row when zero");
-  ok(html.includes("Receipt 14174000"), "receipt number printed");
+  ok(html.includes("Receipt # 14174000"), "SLICE 25: header labels the identifier with #");
+  // SLICE 25 — the header must name the sale the SAME way the caption does.
+  const namedHtml = buildPosReceiptHtml({ ...base, displayName: "Purple Rain" });
+  ok(namedHtml.includes("Receipt # Purple Rain"), "SLICE 25: header shows the fun name");
+  ok(!namedHtml.includes("Receipt # 14174000"), "SLICE 25: header drops the real number when named");
+  ok(namedHtml.includes("Purple Rain</p>"), "SLICE 25: caption still shows the fun name");
+  const escHtml = buildPosReceiptHtml({ ...base, displayName: "Tom & <b>Jerry</b>" });
+  ok(
+    escHtml.includes("Receipt # Tom &amp; &lt;b&gt;Jerry&lt;/b&gt;"),
+    "SLICE 25: a fun name is HTML-escaped in the header",
+  );
+  ok(!escHtml.includes("<b>Jerry"), "SLICE 25: no raw markup from a fun name");
 
   // Medical sale: banner + savings row, discounted strike, NO card details.
   const med = buildPosReceiptHtml({
