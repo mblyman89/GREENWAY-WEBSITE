@@ -32,6 +32,8 @@ import {
   type RebuiltReceipt,
   type StoredSalePayload,
 } from "@/lib/pos/receipt-reprint-core";
+import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
+import { receiptAddressLines } from "@/lib/pos/receipt-config-core";
 
 /** Same window the history panel and the receipt lookup use. */
 const LOOKUP_WINDOW_DAYS = RETURN_WINDOW_DAYS + 2;
@@ -122,10 +124,25 @@ export async function reprintReceiptByNumber(receiptCode: string): Promise<Repri
     if (name) servedBy = name;
   }
 
+  // Slice 22b — a reprint must LOOK like the receipt it reprints. Before this
+  // the rebuild passed no header, address or display switches, so a reprinted
+  // receipt fell back to the built-in defaults: no logo, no address block, no
+  // return policy. Feeding it the owner's saved configuration makes the paper
+  // the customer gets on Tuesday match the one they lost on Monday.
+  //
+  // This is a READ of a settings row on a path that is already a read; it adds
+  // no write and cannot fail the reprint (getPosReceiptConfig normalizes, and
+  // returns defaults when the row is missing).
+  const cfg = await getPosReceiptConfig();
+
   return rebuildReceiptFromPayload(match.payload, {
     saleClientUuid: match.client_uuid,
     soldAtIso: match.occurred_at,
     registerLabel,
-    servedBy,
+    servedBy: cfg.showEmployee ? servedBy : null,
+    headerText: cfg.headerText,
+    footerText: cfg.footerText,
+    addressLines: receiptAddressLines(cfg),
+    config: cfg,
   });
 }

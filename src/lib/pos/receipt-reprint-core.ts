@@ -55,6 +55,20 @@ export type StoredSaleLine = {
   unitPriceMinor?: unknown;
   regularPriceMinor?: unknown;
   medicalTaxOff?: unknown;
+  // -- Slice 22b: the rich snapshot fields, all optional ------------------
+  // `category` is REQUIRED on every stored sale line by the enqueue
+  // validator (pos/sale-event-core: "category snapshot required"), so a
+  // reprint of any sale that actually reached the queue CAN reproduce the
+  // statutory excise/sales split. It is still read defensively here because
+  // this function's whole contract is to distrust stored JSON.
+  category?: unknown;
+  brand?: unknown;
+  variantLabel?: unknown;
+  unitGrams?: unknown;
+  unitThcMg?: unknown;
+  appliedLabel?: unknown;
+  salesExempt?: unknown;
+  exciseExempt?: unknown;
 };
 
 /** The stored envelope, typed loosely because it comes back as raw JSON. */
@@ -82,6 +96,29 @@ export type ReprintContext = {
   headerText?: string | null;
   footerText?: string | null;
   addressLines?: string[];
+  /**
+   * Slice 22b — the owner's display switches, so a reprint reproduces the
+   * receipt the customer originally got (logo, item detail, return policy,
+   * barcode) instead of the bare built-in defaults. Optional: a caller that
+   * does not supply it gets the default-on behaviour, which is what every
+   * pre-22b caller expects.
+   */
+  config?: ReprintDisplayConfig | null;
+};
+
+/** Just the display switches a reprint needs — a structural subset of
+ *  PosReceiptConfig, declared locally so this pure core keeps its existing
+ *  import surface and stays trivially testable. */
+export type ReprintDisplayConfig = {
+  showTaxBreakdown: boolean;
+  showLogo: boolean;
+  logoWidth: number;
+  showReturnPolicy: boolean;
+  returnPolicyText: string;
+  showItemDetail: boolean;
+  showBarcode: boolean;
+  showSaleSummary: boolean;
+  showSavings: boolean;
 };
 
 /** The rebuilt receipt, shaped for `buildPosReceiptHtml`. */
@@ -95,6 +132,14 @@ export type RebuiltReceipt = {
     unitPriceMinor: number;
     regularPriceMinor: number;
     medicalTaxOff?: boolean;
+    category?: string | null;
+    brand?: string | null;
+    variantLabel?: string | null;
+    unitGrams?: number | null;
+    unitThcMg?: number | null;
+    appliedLabel?: string | null;
+    salesExempt?: boolean;
+    exciseExempt?: boolean;
   }[];
   subtotalMinor: number;
   taxMinor: number;
@@ -110,6 +155,16 @@ export type RebuiltReceipt = {
   footerText?: string | null;
   addressLines?: string[];
   servedBy?: string | null;
+  // -- Slice 22b display switches (all optional, all default-on) ----------
+  hideSavings?: boolean;
+  showTaxBreakdown?: boolean;
+  showLogo?: boolean;
+  logoWidth?: number;
+  showReturnPolicy?: boolean;
+  returnPolicyText?: string | null;
+  showItemDetail?: boolean;
+  showBarcode?: boolean;
+  showSaleSummary?: boolean;
 };
 
 export type RebuildResult =
@@ -124,6 +179,15 @@ function intOrNull(v: unknown): number | null {
 
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
+}
+
+/**
+ * A finite POSITIVE number, or null. Used for weights and potency, where 0 and
+ * negatives are meaningless and must not be printed as though measured.
+ */
+function positiveOrNull(v: unknown): number | null {
+  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /**
@@ -158,6 +222,14 @@ export function rebuildReceiptFromPayload(
       return { ok: false, error: "A line on that sale is incomplete, so the receipt cannot be rebuilt." };
     }
     const regular = intOrNull(l?.regularPriceMinor);
+    // Slice 22b — carry the rich fields through when the stored sale has
+    // them. Each is spread in ONLY when present, so a genuinely old payload
+    // simply prints less detail rather than printing "null" or, worse,
+    // letting the tax split assume a category it never recorded.
+    const category = str(l?.category);
+    const brand = str(l?.brand);
+    const variantLabel = str(l?.variantLabel);
+    const appliedLabel = str(l?.appliedLabel);
     lines.push({
       productName: name,
       quantity: qty,
@@ -165,6 +237,14 @@ export function rebuildReceiptFromPayload(
       // No stored "was" price means there was no discount to strike.
       regularPriceMinor: regular === null ? unit : regular,
       ...(l?.medicalTaxOff === true ? { medicalTaxOff: true } : {}),
+      ...(category ? { category } : {}),
+      ...(brand ? { brand } : {}),
+      ...(variantLabel ? { variantLabel } : {}),
+      ...(positiveOrNull(l?.unitGrams) !== null ? { unitGrams: positiveOrNull(l?.unitGrams) } : {}),
+      ...(positiveOrNull(l?.unitThcMg) !== null ? { unitThcMg: positiveOrNull(l?.unitThcMg) } : {}),
+      ...(appliedLabel ? { appliedLabel } : {}),
+      ...(l?.salesExempt === true ? { salesExempt: true } : {}),
+      ...(l?.exciseExempt === true ? { exciseExempt: true } : {}),
     });
   }
 
@@ -218,6 +298,22 @@ export function rebuildReceiptFromPayload(
       footerText: ctx.footerText ?? null,
       addressLines: ctx.addressLines ?? [],
       servedBy: ctx.servedBy ?? null,
+      // Slice 22b — spread the owner's switches ONLY when a config was
+      // supplied. Omitting them leaves every switch undefined, which the
+      // builder reads as "on", preserving pre-22b behaviour exactly.
+      ...(ctx.config
+        ? {
+            hideSavings: !ctx.config.showSavings,
+            showTaxBreakdown: ctx.config.showTaxBreakdown,
+            showLogo: ctx.config.showLogo,
+            logoWidth: ctx.config.logoWidth,
+            showReturnPolicy: ctx.config.showReturnPolicy,
+            returnPolicyText: ctx.config.returnPolicyText,
+            showItemDetail: ctx.config.showItemDetail,
+            showBarcode: ctx.config.showBarcode,
+            showSaleSummary: ctx.config.showSaleSummary,
+          }
+        : {}),
     },
   };
 }

@@ -17,6 +17,8 @@
  * meter-long receipt, and toggles coerce to booleans.
  */
 
+import { RECEIPT_LOGO_WIDTH, clampLogoWidth } from "./receipt-logo-core";
+
 export type PosReceiptConfig = {
   /** Big centered store name at the top. */
   headerText: string;
@@ -33,6 +35,40 @@ export type PosReceiptConfig = {
   showSavings: boolean;
   /** Print the loyalty points block when the sale has a member attached. */
   showLoyalty: boolean;
+
+  // -- Slice 22b additions ------------------------------------------------
+  /**
+   * Itemize the cannabis excise tax separately from the retail sales tax.
+   *
+   * Defaults ON and is deliberately the FIRST option, because unlike every
+   * other toggle here this one is not a preference. RCW 69.50.535(1)(a):
+   * "The tax must be separately itemized from the state and local retail
+   * sales tax on the sales receipt provided to the buyer." Turning it off
+   * prints a single combined Tax line — the pre-22b behaviour — which the
+   * admin screen warns about rather than silently allowing.
+   */
+  showTaxBreakdown: boolean;
+  /** Print the Greenway script wordmark at the top of the receipt. */
+  showLogo: boolean;
+  /** Printed width of the wordmark in printer dots (192..576). */
+  logoWidth: number;
+  /** Print the store's return policy near the bottom. */
+  showReturnPolicy: boolean;
+  /**
+   * Return-policy wording. Empty string = use the wording generated from the
+   * live constants in pos/returns-core, so the printed policy can never
+   * contradict what the returns screen actually enforces.
+   */
+  returnPolicyText: string;
+  /**
+   * Print the per-item detail line (brand, size, strain, THC, discount name)
+   * under each product. This is the "data rich" switch.
+   */
+  showItemDetail: boolean;
+  /** Print the scannable Code 128 barcode of the receipt number. */
+  showBarcode: boolean;
+  /** Print the item-count / savings-summary strip above the footer. */
+  showSaleSummary: boolean;
 };
 
 export const RECEIPT_HEADER_MAX = 60;
@@ -40,6 +76,8 @@ export const RECEIPT_ADDRESS_MAX = 240;
 export const RECEIPT_FOOTER_MAX = 400;
 /** Max printed lines for the address block (paper is not infinite). */
 export const RECEIPT_ADDRESS_MAX_LINES = 5;
+/** Max characters of custom return-policy wording. */
+export const RECEIPT_RETURN_POLICY_MAX = 400;
 
 export const DEFAULT_POS_RECEIPT_CONFIG: PosReceiptConfig = {
   headerText: "GREENWAY MARIJUANA",
@@ -49,6 +87,16 @@ export const DEFAULT_POS_RECEIPT_CONFIG: PosReceiptConfig = {
   showEmployee: true,
   showSavings: true,
   showLoyalty: true,
+  // Statutory itemization: on by default, everywhere, including on a cached
+  // pre-22b bundle that carries no value for it (coerceBool falls back here).
+  showTaxBreakdown: true,
+  showLogo: true,
+  logoWidth: RECEIPT_LOGO_WIDTH,
+  showReturnPolicy: true,
+  returnPolicyText: "",
+  showItemDetail: true,
+  showBarcode: true,
+  showSaleSummary: true,
 };
 
 function clampText(v: unknown, max: number, fallback: string): string {
@@ -56,6 +104,26 @@ function clampText(v: unknown, max: number, fallback: string): string {
   const trimmed = v.trim();
   if (!trimmed) return fallback;
   return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
+}
+
+/**
+ * Clamp text that is allowed to be empty. Unlike clampText there is no
+ * default sentence: "" is a real, intended value the owner can choose.
+ */
+function clampOptionalText(v: unknown, max: number): string {
+  if (typeof v !== "string") return "";
+  const trimmed = v.trim();
+  return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
+}
+
+/** Accept a number or a numeric string (form payloads post strings). */
+function coerceNumber(v: unknown, fallback: number): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return fallback;
 }
 
 function coerceBool(v: unknown, fallback: boolean): boolean {
@@ -88,6 +156,16 @@ export function normalizePosReceiptConfig(raw: unknown): PosReceiptConfig {
     showEmployee: coerceBool(o.showEmployee, d.showEmployee),
     showSavings: coerceBool(o.showSavings, d.showSavings),
     showLoyalty: coerceBool(o.showLoyalty, d.showLoyalty),
+    showTaxBreakdown: coerceBool(o.showTaxBreakdown, d.showTaxBreakdown),
+    showLogo: coerceBool(o.showLogo, d.showLogo),
+    logoWidth: clampLogoWidth(coerceNumber(o.logoWidth, d.logoWidth)),
+    showReturnPolicy: coerceBool(o.showReturnPolicy, d.showReturnPolicy),
+    // Empty is MEANINGFUL here (= "use the wording from the live constants"),
+    // so this clamps without falling back to a default sentence.
+    returnPolicyText: clampOptionalText(o.returnPolicyText, RECEIPT_RETURN_POLICY_MAX),
+    showItemDetail: coerceBool(o.showItemDetail, d.showItemDetail),
+    showBarcode: coerceBool(o.showBarcode, d.showBarcode),
+    showSaleSummary: coerceBool(o.showSaleSummary, d.showSaleSummary),
   };
 }
 
