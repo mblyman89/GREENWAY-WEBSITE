@@ -222,7 +222,7 @@ export default async function OrdersAdminPage({
 
       <div className="px-5 py-6 sm:px-8">
         {/* New-order watcher (polls + chimes when new orders arrive) */}
-        <NewOrderAlert initialNew={counts.new} />
+        <NewOrderAlert />
 
         {/* Status summary */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

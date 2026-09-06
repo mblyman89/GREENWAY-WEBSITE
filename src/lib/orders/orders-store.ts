@@ -39,6 +39,7 @@ import {
   shouldExpireOrder,
 } from "./reservation-expiry-core";
 import { assignNextPoolName } from "./order-name-pool-store";
+import { resolveOrderDisplay } from "./order-name-pool-core";
 
 // ---------------------------------------------------------------------------
 // Placement (guest, no auth) — input is SERVER-PRICED (see order-pricing.ts)
@@ -429,6 +430,74 @@ export async function getOrder(id: string): Promise<OrderWithLines | null> {
  * cap (default 1000), so once the store passed 1000 lifetime orders the
  * dashboard/cockpit/new-order-poll counts all under-reported.
  */
+/**
+ * SLICE 22 - recent ARRIVALS for the new-order chime.
+ *
+ * The dashboard used to watch getOrderStatusCounts().new, which is the number
+ * of orders CURRENTLY sitting in status "new". That is a level, not an arrival
+ * counter: acknowledging an order lowers it, so an arrival that followed an
+ * acknowledgement produced no chime at all (the owner's exact report).
+ *
+ * `orders.placed_at` is `timestamptz not null default now()`
+ * (0007_slice7_orders.sql:90) - written by the DATABASE at insert and never
+ * touched by a status transition, so it only ever moves forward. Watching the
+ * newest placed_at gives the client a true high-water mark that staff activity
+ * cannot drag back down. See new-order-watch-core.ts for the pure rules.
+ *
+ * Returns the most recent `limit` orders by placed_at, newest first. No PII
+ * beyond the customer-facing label already shown on the dashboard.
+ */
+export type OrderArrivalRow = {
+  id: string;
+  placedAt: string;
+  label: string;
+};
+
+export async function getRecentOrderArrivals(limit = 20): Promise<OrderArrivalRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const capped = Math.max(1, Math.min(100, Math.floor(limit)));
+  const admin = createSupabaseAdminClient();
+
+  type ArrivalPick = {
+    id: string;
+    placed_at: string;
+    order_number: string | null;
+    display_name?: string | null;
+  };
+
+  // Same degrade-don't-fail ladder the insert path uses: prefer display_name,
+  // fall back when migration 0147 has not been applied.
+  let rows: ArrivalPick[] | null = null;
+  const withDisplay = await admin
+    .from("orders")
+    .select("id, placed_at, order_number, display_name")
+    .order("placed_at", { ascending: false })
+    .limit(capped);
+
+  if (withDisplay.error && isMissingColumnError(withDisplay.error)) {
+    const legacy = await admin
+      .from("orders")
+      .select("id, placed_at, order_number")
+      .order("placed_at", { ascending: false })
+      .limit(capped);
+    if (legacy.error) return [];
+    rows = (legacy.data as ArrivalPick[]) ?? [];
+  } else if (withDisplay.error) {
+    return [];
+  } else {
+    rows = (withDisplay.data as ArrivalPick[]) ?? [];
+  }
+
+  return rows
+    .filter((r) => r && typeof r.id === "string" && typeof r.placed_at === "string")
+    .map((r) => ({
+      id: r.id,
+      placedAt: r.placed_at,
+      // ONE identity rule, shared with emails/receipts/confirmation page.
+      label: resolveOrderDisplay(r.display_name ?? null, r.order_number ?? ""),
+    }));
+}
+
 export async function getOrderStatusCounts(): Promise<Record<OrderStatus, number>> {
   const empty: Record<OrderStatus, number> = {
     new: 0,
