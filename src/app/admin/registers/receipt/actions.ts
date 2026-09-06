@@ -25,6 +25,15 @@ export async function saveReceiptConfigAction(input: {
   showEmployee: boolean;
   showSavings: boolean;
   showLoyalty: boolean;
+  // -- Slice 22b ---------------------------------------------------------
+  showTaxBreakdown: boolean;
+  showLogo: boolean;
+  logoWidth: number;
+  showReturnPolicy: boolean;
+  returnPolicyText: string;
+  showItemDetail: boolean;
+  showBarcode: boolean;
+  showSaleSummary: boolean;
 }): Promise<SaveReceiptConfigResult> {
   const session = await requirePermission("settings.manage");
 

@@ -247,6 +247,8 @@ import { __runSaleFlowCoreTests } from "../../src/lib/pos/sale-flow-core";
 import { __runMedicalPosCoreTests } from "../../src/lib/pos/medical-pos-core";
 import { __runPosReceiptCoreTests } from "../../src/lib/pos/receipt-core";
 import { __runReceiptConfigCoreTests } from "../../src/lib/pos/receipt-config-core";
+import { __runReceiptTaxCoreTests } from "../../src/lib/pos/receipt-tax-core";
+import { __runReceiptLogoCoreTests } from "../../src/lib/pos/receipt-logo-core";
 import { __runPosReturnsCoreTests } from "../../src/lib/pos/returns-core";
 import { __runSaleDecrementCoreTests } from "../../src/lib/inventory/sale-decrement-core";
 import { __runTillCoreTests } from "../../src/lib/pos/till-core";
@@ -609,6 +611,8 @@ async function main() {
   __runMedicalPosCoreTests();
   __runPosReceiptCoreTests();
   __runReceiptConfigCoreTests();
+  __runReceiptTaxCoreTests();
+  __runReceiptLogoCoreTests();
   __runPosReturnsCoreTests();
   __runSaleDecrementCoreTests();
   __runTillCoreTests();

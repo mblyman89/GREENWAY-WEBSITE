@@ -48,6 +48,30 @@ import { pacificDayKey } from "@/lib/reports/timezone";
 /** Days a customer has to request a return, counting the purchase day as 0. */
 export const RETURN_WINDOW_DAYS = 15;
 
+/**
+ * The return policy as printed on the customer's receipt (Slice 22b).
+ *
+ * Generated from RETURN_WINDOW_DAYS rather than typed as prose, so the paper
+ * in the customer's hand can never promise a window the returns screen does
+ * not actually honour. If the owner shortens the window to 7 days, every
+ * receipt printed afterwards says 7 — with no second place to remember.
+ *
+ * The three sentences mirror, in order, the three store-policy conditions
+ * documented at the top of this file: loyalty membership, the original
+ * receipt, and the window. The final sentence states the one statutory
+ * limit (WAC 314-55-079(12)): product that has left the store can only come
+ * back in its original packaging with the lot/batch identifier legible.
+ */
+export function defaultReturnPolicyText(): string {
+  const days = RETURN_WINDOW_DAYS;
+  return [
+    `Returns accepted within ${days} days of purchase (purchase day counts as day 0).`,
+    "Bring this receipt and the loyalty account used for the sale.",
+    "Product must be in its original packaging with the lot/batch label legible.",
+    "Refunds are issued to the original form of payment.",
+  ].join(" ");
+}
+
 // ---------------------------------------------------------------------------
 // Receipt-number contract (original receipt in hand)
 // ---------------------------------------------------------------------------

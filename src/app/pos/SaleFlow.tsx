@@ -862,13 +862,47 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             addressLines: receiptAddressLines(rc),
             servedBy: rc.showEmployee ? (employeeName ?? null) : null,
             hideSavings: !rc.showSavings,
-            lines: priced.lines.map((l, i) => ({
-              productName: l.productName,
-              quantity: l.quantity,
-              unitPriceMinor: l.unitPriceMinor,
-              regularPriceMinor: l.regularPriceMinor,
-              medicalTaxOff: (priced.med?.lines[i]?.medicalSavingsMinor ?? 0) > 0,
-            })),
+            // Slice 22b — the owner's receipt switches travel INSIDE the
+            // frozen snapshot, so a reprint months later reproduces the
+            // receipt as it was actually printed rather than as today's
+            // settings would render it.
+            showTaxBreakdown: rc.showTaxBreakdown,
+            showLogo: rc.showLogo,
+            logoWidth: rc.logoWidth,
+            showReturnPolicy: rc.showReturnPolicy,
+            returnPolicyText: rc.returnPolicyText,
+            showItemDetail: rc.showItemDetail,
+            showBarcode: rc.showBarcode,
+            showSaleSummary: rc.showSaleSummary,
+            // Slice 22b — the rich fields ride along. priceCart() already
+            // computed every one of these; this mapping used to drop them on
+            // the floor. Nothing new is collected, and nothing new can fail:
+            // each field is optional on PosReceiptLine.
+            //
+            // `category` is the one that matters most — without it the
+            // receipt cannot itemize the cannabis excise separately from the
+            // retail sales tax, which RCW 69.50.535(1)(a) requires.
+            lines: priced.lines.map((l, i) => {
+              const medLine = priced.med?.lines[i];
+              return {
+                productName: l.productName,
+                quantity: l.quantity,
+                unitPriceMinor: l.unitPriceMinor,
+                regularPriceMinor: l.regularPriceMinor,
+                medicalTaxOff: (medLine?.medicalSavingsMinor ?? 0) > 0,
+                category: l.category,
+                brand: l.brand ?? null,
+                variantLabel: l.variantLabel ?? null,
+                unitGrams: l.unitGrams ?? null,
+                unitThcMg: l.unitThcMg ?? null,
+                appliedLabel: l.appliedLabel ?? null,
+                // Exemptions only exist on a CARDED medical sale; on a
+                // recreational sale medLine is undefined and both stay false,
+                // which is exactly right.
+                salesExempt: medLine?.salesExempt === true,
+                exciseExempt: medLine?.exciseExempt === true,
+              };
+            }),
             subtotalMinor: priced.totals.subtotalMinorUnits,
             taxMinor: priced.totals.estimatedTaxMinorUnits,
             totalMinor: priced.totals.totalMinorUnits,

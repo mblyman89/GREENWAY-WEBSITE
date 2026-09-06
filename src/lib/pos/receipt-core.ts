@@ -25,6 +25,16 @@
  * back-office exempt-sale ledger, not on the customer's paper.
  */
 import { formatMoneyMinor, formatReceiptTimestamp } from "@/lib/printing/receipt-core";
+import { code128Svg } from "@/lib/printing/code128-core";
+import { defaultReturnPolicyText } from "@/lib/pos/returns-core";
+import { receiptLogoImgTag } from "@/lib/pos/receipt-logo-core";
+import {
+  splitReceiptTax,
+  exciseTaxLabel,
+  salesTaxLabel,
+  salesTaxCompositionNote,
+  type ReceiptTaxLine,
+} from "@/lib/pos/receipt-tax-core";
 
 export type PosReceiptLine = {
   productName: string;
@@ -35,6 +45,36 @@ export type PosReceiptLine = {
   regularPriceMinor: number;
   /** True when this line's taxes were passed through to a carded patient. */
   medicalTaxOff?: boolean;
+
+  // -- Slice 22b: the "data rich" fields -----------------------------------
+  //
+  // EVERY field below is OPTIONAL, and that is a hard requirement rather than
+  // politeness. Reprints and emailed copies replay FROZEN historical
+  // snapshots (see receipt-reprint-core and email-receipt-core) captured
+  // before this slice existed. A required field would mean a receipt from
+  // last Tuesday could no longer be reprinted for a customer standing at the
+  // counter. Absent field => that detail is simply not printed.
+  //
+  // None of this is new data collection: priceCart() in pos/sale-flow-core
+  // already computes all of it and SaleFlow was discarding it at the mapping
+  // site. Slice 22b stops throwing it away.
+
+  /** Product category — also what lets the tax split know cannabis vs merch. */
+  category?: string | null;
+  /** Brand / producer, printed on the detail line. */
+  brand?: string | null;
+  /** Variant label, e.g. "3.5g" or "Indica 1g". */
+  variantLabel?: string | null;
+  /** Per-unit weight in grams (null/absent = unknown). */
+  unitGrams?: number | null;
+  /** Per-unit THC in milligrams, for edibles/beverages. */
+  unitThcMg?: number | null;
+  /** Name of the promotion that produced the discount, e.g. "Happy Hour". */
+  appliedLabel?: string | null;
+  /** Retail sales tax was exempted on this line (medical). */
+  salesExempt?: boolean;
+  /** Cannabis excise was exempted on this line (medical). */
+  exciseExempt?: boolean;
 };
 
 export type PosReceiptInput = {
@@ -85,6 +125,28 @@ export type PosReceiptInput = {
     /** Points this sale will earn once synced (device estimate). */
     pointsEarned: number | null;
   } | null;
+
+  // -- Slice 22b presentation switches (all optional, all default-safe) -----
+  /**
+   * Itemize excise vs sales tax (RCW 69.50.535(1)(a)). Undefined = ON: a
+   * cached pre-22b bundle, or an old frozen snapshot being reprinted, still
+   * gets the statutory itemization whenever the line data supports it.
+   */
+  showTaxBreakdown?: boolean;
+  /** Print the Greenway wordmark. Undefined = ON. */
+  showLogo?: boolean;
+  /** Wordmark width in printer dots. Undefined = full 576. */
+  logoWidth?: number;
+  /** Print the return policy block. Undefined = ON. */
+  showReturnPolicy?: boolean;
+  /** Return-policy wording. Empty/absent = generated from returns-core. */
+  returnPolicyText?: string | null;
+  /** Print the per-item detail line. Undefined = ON. */
+  showItemDetail?: boolean;
+  /** Print the scannable receipt-number barcode. Undefined = ON. */
+  showBarcode?: boolean;
+  /** Print the item-count / savings summary strip. Undefined = ON. */
+  showSaleSummary?: boolean;
 };
 
 /** Escape text for safe embedding in the receipt HTML. */
@@ -106,6 +168,112 @@ const DEFAULT_HEADER = "GREENWAY MARIJUANA";
 const DEFAULT_FOOTER =
   "This product has intoxicating effects and may be habit forming. Keep out of reach of children. Thank you!";
 
+// ---------------------------------------------------------------------------
+// Slice 22b helpers — the "data rich" detail line and the summary strip
+// ---------------------------------------------------------------------------
+
+/** Default ON: undefined means "the caller predates this option". */
+function onByDefault(v: boolean | undefined): boolean {
+  return v !== false;
+}
+
+/**
+ * Format grams for the detail line: 3.5g, 1g, 0.5g — never "3.50g" and never
+ * "3.5000000000000004g" from float drift.
+ */
+export function formatGrams(grams: number): string {
+  const rounded = Math.round(grams * 100) / 100;
+  return `${Number(rounded.toFixed(2))}g`;
+}
+
+/** Format milligrams of THC: 10mg, 2.5mg. */
+export function formatThcMg(mg: number): string {
+  const rounded = Math.round(mg * 100) / 100;
+  return `${Number(rounded.toFixed(2))}mg`;
+}
+
+/**
+ * The small grey line printed under a product name.
+ *
+ * Order is deliberate — brand first (what the customer asks for by name),
+ * then size, then potency, then the deal that saved them money. Every part is
+ * omitted when unknown, so a sparse historical line simply prints less rather
+ * than printing "null" or an empty separator run.
+ *
+ * Returns "" when there is nothing worth a second line.
+ */
+export function receiptItemDetailParts(line: PosReceiptLine): string[] {
+  const parts: string[] = [];
+  const brand = line.brand?.trim();
+  if (brand) parts.push(brand);
+
+  // variantLabel is already appended to productName by priceCart when it
+  // exists, so printing it again would read "Blue Dream (3.5g) · 3.5g".
+  // Weight is the more precise fact, so it wins when both are available.
+  if (typeof line.unitGrams === "number" && Number.isFinite(line.unitGrams) && line.unitGrams > 0) {
+    parts.push(formatGrams(line.unitGrams));
+  } else {
+    const variant = line.variantLabel?.trim();
+    if (variant && !line.productName.includes(variant)) parts.push(variant);
+  }
+
+  if (typeof line.unitThcMg === "number" && Number.isFinite(line.unitThcMg) && line.unitThcMg > 0) {
+    parts.push(`THC ${formatThcMg(line.unitThcMg)}`);
+  }
+
+  const applied = line.appliedLabel?.trim();
+  if (applied) parts.push(applied);
+
+  return parts;
+}
+
+/** Per-unit price shown when a line has more than one unit. */
+export function receiptUnitPriceNote(line: PosReceiptLine): string {
+  if (line.quantity <= 1) return "";
+  return `${line.quantity} @ ${formatMoneyMinor(line.unitPriceMinor)} each`;
+}
+
+/** Total physical units on the receipt (not distinct products). */
+export function receiptItemCount(lines: readonly PosReceiptLine[]): number {
+  let n = 0;
+  for (const l of lines) n += Math.max(0, Math.round(l.quantity));
+  return n;
+}
+
+/**
+ * Total cannabis weight on the sale, in grams, or null when no line carries a
+ * known weight. Customers genuinely ask "how much did I buy" — and it is a
+ * useful cross-check against the daily purchase limit.
+ */
+export function receiptTotalGrams(lines: readonly PosReceiptLine[]): number | null {
+  let total = 0;
+  let known = false;
+  for (const l of lines) {
+    if (typeof l.unitGrams === "number" && Number.isFinite(l.unitGrams) && l.unitGrams > 0) {
+      total += l.unitGrams * Math.max(0, Math.round(l.quantity));
+      known = true;
+    }
+  }
+  if (!known) return null;
+  return Math.round(total * 100) / 100;
+}
+
+/**
+ * Build the scannable Code 128 barcode of the receipt number.
+ *
+ * The printed receipt number is what returns-core looks a sale up by, and a
+ * manager currently retypes it from paper. A scan removes that transcription
+ * step (and the transcription error). Rendered as SVG by the dependency-free
+ * encoder in printing/code128-core — no image asset, no network.
+ *
+ * Returns "" if the encoder refuses, so a barcode can never break a receipt.
+ */
+export function receiptBarcodeSvg(receiptNo: string): string {
+  const res = code128Svg(receiptNo, { moduleWidth: 2, height: 70, quietModules: 10 });
+  if (!res.ok || !res.svg) return "";
+  return res.svg;
+}
+
 /**
  * Build the full self-contained receipt HTML. Body width is 576px — the
  * printable width of the TSP100IIIBi at PassPRNT size=3 (Star manual).
@@ -117,6 +285,8 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
   const footer = escapeReceiptHtml((input.footerText ?? DEFAULT_FOOTER).trim());
   const rows: string[] = [];
 
+  const showDetail = onByDefault(input.showItemDetail);
+
   for (const line of input.lines) {
     const lineTotal = line.unitPriceMinor * line.quantity;
     const discounted = line.unitPriceMinor < line.regularPriceMinor;
@@ -125,12 +295,72 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
         line.medicalTaxOff ? ' <span class="med">MED TAX OFF</span>' : ""
       }${discounted ? ` <s>${formatMoneyMinor(line.regularPriceMinor)}</s>` : ""}</td><td class="a">${formatMoneyMinor(lineTotal)}</td></tr>`,
     );
+    if (showDetail) {
+      // Slice 22b — the second, smaller line: brand, size, potency, the deal
+      // that saved them money, and the per-unit price on multi-unit lines.
+      const detail = receiptItemDetailParts(line);
+      const unitNote = receiptUnitPriceNote(line);
+      const bits = [...detail, unitNote].filter(Boolean);
+      if (bits.length > 0) {
+        rows.push(
+          `<tr><td class="d" colspan="2">${bits.map((b) => escapeReceiptHtml(b)).join(" &middot; ")}</td></tr>`,
+        );
+      }
+    }
   }
 
   const totals: string[] = [
     `<tr><td class="n">Subtotal (pre-tax)</td><td class="a">${formatMoneyMinor(input.subtotalMinor)}</td></tr>`,
-    `<tr><td class="n">Tax</td><td class="a">${formatMoneyMinor(input.taxMinor)}</td></tr>`,
   ];
+
+  // -- RCW 69.50.535(1)(a): the cannabis excise MUST be itemized separately
+  // from the state and local retail sales tax. This is the one piece of the
+  // receipt Washington legislates, and before this slice we printed a single
+  // combined "Tax" row.
+  //
+  // The split is DERIVED from the same rate constants the sale was priced
+  // with and is forced to reconcile to the tax actually charged. When it
+  // cannot be trusted — an old frozen snapshot whose lines carry no category,
+  // for instance — splitReceiptTax returns null and we fall back to the
+  // single combined line. A less detailed TRUE receipt beats a confident
+  // wrong number on a tax record.
+  const taxSplit = onByDefault(input.showTaxBreakdown)
+    ? splitReceiptTax(
+        input.lines.map(
+          (l): ReceiptTaxLine => ({
+            quantity: l.quantity,
+            unitPriceMinor: l.unitPriceMinor,
+            category: l.category,
+            salesExempt: l.salesExempt,
+            exciseExempt: l.exciseExempt,
+          }),
+        ),
+        input.taxMinor,
+      )
+    : null;
+
+  if (taxSplit && (taxSplit.anyExcise || taxSplit.anySales)) {
+    if (taxSplit.anyExcise) {
+      totals.push(
+        `<tr><td class="n">${escapeReceiptHtml(exciseTaxLabel())}</td><td class="a">${formatMoneyMinor(taxSplit.exciseMinor)}</td></tr>`,
+      );
+    }
+    if (taxSplit.anySales) {
+      totals.push(
+        `<tr><td class="n">${escapeReceiptHtml(salesTaxLabel())}</td><td class="a">${formatMoneyMinor(taxSplit.salesMinor)}</td></tr>`,
+      );
+      totals.push(
+        `<tr><td class="d" colspan="2">${escapeReceiptHtml(salesTaxCompositionNote())}</td></tr>`,
+      );
+    }
+    totals.push(
+      `<tr><td class="n">Total tax</td><td class="a">${formatMoneyMinor(input.taxMinor)}</td></tr>`,
+    );
+  } else {
+    totals.push(
+      `<tr><td class="n">Tax</td><td class="a">${formatMoneyMinor(input.taxMinor)}</td></tr>`,
+    );
+  }
   if (input.savingsMinor > 0 && !input.hideSavings) {
     totals.push(
       `<tr><td class="n">You saved</td><td class="a">-${formatMoneyMinor(input.savingsMinor)}</td></tr>`,
@@ -160,6 +390,31 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     `<tr><td class="n">Change</td><td class="a">${formatMoneyMinor(input.changeMinor)}</td></tr>`,
   );
 
+  const receiptNo = receiptNumber(input.saleClientUuid);
+
+  // -- Slice 22b: the sale summary strip ------------------------------------
+  // "what did I actually get" at a glance, above the fine print.
+  const summaryBits: string[] = [];
+  if (onByDefault(input.showSaleSummary)) {
+    const count = receiptItemCount(input.lines);
+    summaryBits.push(`${count} item${count === 1 ? "" : "s"}`);
+    const grams = receiptTotalGrams(input.lines);
+    if (grams != null && grams > 0) summaryBits.push(`${formatGrams(grams)} total`);
+    if (input.savingsMinor > 0 && !input.hideSavings) {
+      summaryBits.push(`saved ${formatMoneyMinor(input.savingsMinor)}`);
+    }
+  }
+
+  // -- Slice 22b: the return policy -----------------------------------------
+  // Owner wording when set, otherwise generated from the SAME constant the
+  // returns screen enforces (pos/returns-core RETURN_WINDOW_DAYS), so the
+  // paper can never promise a window we do not honour.
+  const policyText = onByDefault(input.showReturnPolicy)
+    ? (input.returnPolicyText?.trim() || defaultReturnPolicyText())
+    : "";
+
+  const barcodeSvg = onByDefault(input.showBarcode) ? receiptBarcodeSvg(receiptNo) : "";
+
   return [
     "<!DOCTYPE html>",
     '<html><head><meta charset="utf-8">',
@@ -178,14 +433,31 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     ".med{font-size:20px;font-weight:bold;border:2px solid #000;padding:0 4px;}",
     "hr{border:none;border-top:2px dashed #000;margin:10px 0;}",
     ".foot{font-size:22px;text-align:center;margin-top:12px;}",
+    // Slice 22b — the item/tax detail line. Smaller and indented so it reads
+    // as a caption under its product rather than as another product. Thermal
+    // paper has no grey, so hierarchy comes from SIZE, not colour.
+    "td.d{font-size:20px;text-align:left;padding:0 0 6px 24px;}",
+    // The wordmark. display:block + auto margins centre it; explicit
+    // dimensions are emitted inline on the tag itself so the offscreen
+    // WKWebView measures the right height before it snapshots.
+    ".logo{display:block;margin:0 auto 6px;}",
+    ".policy{font-size:20px;text-align:center;margin:6px 0 0;line-height:1.35;}",
+    ".policyhead{font-size:22px;font-weight:bold;text-align:center;margin:0;}",
+    ".summary{font-size:24px;text-align:center;font-weight:bold;margin:0 0 4px;}",
+    ".barcode{text-align:center;margin:8px 0 0;}",
+    ".barcode svg{width:100%;height:70px;}",
+    ".barcodeno{font-size:22px;text-align:center;letter-spacing:3px;margin:2px 0 0;}",
     "@media print{body{width:auto;}}",
     "</style></head><body>",
+    // Slice 22b — the fancy Greenway script wordmark, embedded as a data URI
+    // so it prints with no network (see pos/receipt-logo-core for why).
+    onByDefault(input.showLogo) ? receiptLogoImgTag(input.logoWidth) : "",
     `<h1>${header}</h1>`,
     ...(input.addressLines ?? [])
       .map((l) => l.trim())
       .filter(Boolean)
       .map((l) => `<p class="addr">${escapeReceiptHtml(l)}</p>`),
-    `<p class="sub">Receipt ${receiptNumber(input.saleClientUuid)} &middot; ${escapeReceiptHtml(input.registerLabel)}</p>`,
+    `<p class="sub">Receipt ${receiptNo} &middot; ${escapeReceiptHtml(input.registerLabel)}</p>`,
     `<p class="sub">${escapeReceiptHtml(formatReceiptTimestamp(input.soldAtIso))}</p>`,
     input.servedBy?.trim() ? `<p class="sub">Served by ${escapeReceiptHtml(input.servedBy.trim())}</p>` : "",
     input.medicalSale ? '<p class="medbanner">MEDICAL &mdash; TAX EXEMPT SALE</p>' : "",
@@ -193,6 +465,17 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     `<table>${rows.join("")}</table>`,
     "<hr>",
     `<table>${totals.join("")}</table>`,
+    // Every bit is escaped individually and the &middot; separator is added
+    // afterwards, so the separator survives while the content cannot inject.
+    // Mutation testing showed removing the escape here changes nothing today
+    // (all three producers emit digits, "g", "$", "." and spaces only — a
+    // 1.2M-case probe found zero HTML-significant characters). It is kept
+    // because the moment anyone pushes an owner-authored or product-derived
+    // string into this strip, the escape is the only thing standing between a
+    // product name and the receipt's markup.
+    summaryBits.length > 0
+      ? `<p class="summary">${summaryBits.map((b) => escapeReceiptHtml(b)).join(" &middot; ")}</p>`
+      : "",
     ...(input.loyalty
       ? [
           "<hr>",
@@ -201,6 +484,16 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
             ? `<p class="sub">Points earned this visit: ${Math.floor(input.loyalty.pointsEarned)}</p>`
             : "",
         ]
+      : []),
+    ...(policyText
+      ? [
+          "<hr>",
+          '<p class="policyhead">Return Policy</p>',
+          `<p class="policy">${escapeReceiptHtml(policyText)}</p>`,
+        ]
+      : []),
+    ...(barcodeSvg
+      ? [`<div class="barcode">${barcodeSvg}</div>`, `<p class="barcodeno">${receiptNo}</p>`]
       : []),
     "<hr>",
     `<p class="foot">${footer}</p>`,
