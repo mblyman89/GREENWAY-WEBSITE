@@ -22,6 +22,7 @@ import { recordAudit } from "@/lib/auth/audit";
 import { setOrderStatus, updateStaffNote, getOrder, rerollOrderDisplayName } from "@/lib/orders/orders-store";
 import {
   addPoolName,
+  bulkAddPoolNames,
   updatePoolName,
   setPoolNameEnabled,
   deletePoolName,
@@ -470,6 +471,51 @@ export async function addPoolNameAction(formData: FormData): Promise<void> {
   });
   revalidatePath(ORDERS_BASE);
   poolRedirect(true, `Added “${check.value}” to the pool.`);
+}
+
+/**
+ * SLICE 23 — add a whole pasted list at once. requires orders.manage; audited.
+ *
+ * The owner asked to "upload a list to make it easier". The result message is
+ * deliberately specific: it says how many went in AND names what was skipped
+ * and why. A bulk import that quietly drops duplicates is worse than no bulk
+ * import, because the owner walks away believing names are in the pool that
+ * are not.
+ */
+export async function bulkAddPoolNamesAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const raw = String(formData.get("names") ?? "");
+
+  const res = await bulkAddPoolNames(raw);
+  if (res.error) poolRedirect(false, res.error);
+
+  if (res.added.length > 0) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "order_name_pool.bulk_add",
+      entityType: "order_name_pool",
+      entityId: `bulk:${res.added.length}`,
+      after: { added: res.added, skipped: res.skipped },
+    });
+    revalidatePath(ORDERS_BASE);
+  }
+
+  const addedPart =
+    res.added.length > 0
+      ? `Added ${res.added.length} name${res.added.length === 1 ? "" : "s"}.`
+      : "Nothing added.";
+  // Name the first few skips outright; a bare count would leave the owner
+  // guessing which of his names didn't make it.
+  const skippedPart =
+    res.skipped.length > 0
+      ? ` Skipped ${res.skipped.length}: ${res.skipped
+          .slice(0, 5)
+          .map((s) => `“${s.name}” (${s.reason})`)
+          .join(", ")}${res.skipped.length > 5 ? ", …" : ""}`
+      : "";
+
+  poolRedirect(res.added.length > 0, `${addedPart}${skippedPart}`);
 }
 
 /** Rename an existing pool entry. requires orders.manage; audited. */

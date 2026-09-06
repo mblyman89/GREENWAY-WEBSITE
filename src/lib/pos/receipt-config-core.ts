@@ -65,11 +65,71 @@ export type PosReceiptConfig = {
    * under each product. This is the "data rich" switch.
    */
   showItemDetail: boolean;
-  /** Print the scannable Code 128 barcode of the receipt number. */
+  /** Print the scannable code (QR by default) of the receipt number. */
   showBarcode: boolean;
   /** Print the item-count / savings-summary strip above the footer. */
   showSaleSummary: boolean;
+  /**
+   * SLICE 23 — render the receipt-number code as a QR instead of Code 128.
+   * Default true: QR carries Reed-Solomon error correction (a folded, faded
+   * receipt still scans), is square so it costs less paper width, and every
+   * phone camera reads it. The switch exists only to fall back to Code 128 for
+   * an old 1-D-only scanner.
+   */
+  useQrCode: boolean;
+  /**
+   * SLICE 23 — a custom logo printed BELOW the QR and the fun name, ABOVE the
+   * footer. Stored as a 1-bit BMP data URI already prepared by
+   * printing/logo-print-core (thresholded, cropped, sized). Empty = none.
+   *
+   * This is SEPARATE from showLogo/logoWidth, which control the built-in
+   * wordmark at the TOP of the receipt. Both can be on at once.
+   */
+  bottomLogoDataUri: string;
+  /** SLICE 23 — printed width of the bottom logo, in dots. */
+  bottomLogoWidth: number;
 };
+
+/** SLICE 23 — default printed width of the bottom logo (body is 576 dots). */
+export const RECEIPT_BOTTOM_LOGO_WIDTH = 220;
+/** SLICE 23 — the widest the bottom logo may print (full paper width). */
+export const RECEIPT_BOTTOM_LOGO_MAX = 576;
+/** SLICE 23 — narrower than this and artwork stops being legible on paper. */
+export const RECEIPT_BOTTOM_LOGO_MIN = 80;
+
+/**
+ * SLICE 23 — cap on the stored bottom-logo data URI, in characters.
+ *
+ * This is a hard practical limit, not a stylistic one: receipt-core's
+ * buildPassPrntUrl percent-encodes the ENTIRE receipt HTML into a
+ * starpassprnt:// URL, so anything embedded rides along inside that URL. The
+ * prepared 1-bit BMPs from the owner's real logo files measured 3.7-4.8 KB, so
+ * 64 KB leaves well over an order of magnitude of headroom while still
+ * refusing a full-colour photograph outright.
+ */
+export const RECEIPT_BOTTOM_LOGO_MAX_CHARS = 64_000;
+
+/** Clamp the bottom-logo print width into the legible, printable range. */
+export function clampBottomLogoWidth(value: number): number {
+  if (!Number.isFinite(value)) return RECEIPT_BOTTOM_LOGO_WIDTH;
+  return Math.max(
+    RECEIPT_BOTTOM_LOGO_MIN,
+    Math.min(RECEIPT_BOTTOM_LOGO_MAX, Math.round(value)),
+  );
+}
+
+/**
+ * Accept a bottom-logo data URI only if it is a real, self-contained 1-bit
+ * image. A remote URL is rejected outright: it would make a receipt depend on
+ * the network at print time, and register sales must print offline.
+ */
+export function sanitizeBottomLogo(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const v = value.trim();
+  if (!v) return "";
+  if (v.length > RECEIPT_BOTTOM_LOGO_MAX_CHARS) return "";
+  return /^data:image\/(png|gif|bmp);base64,[A-Za-z0-9+/=]+$/.test(v) ? v : "";
+}
 
 export const RECEIPT_HEADER_MAX = 60;
 export const RECEIPT_ADDRESS_MAX = 240;
@@ -97,6 +157,10 @@ export const DEFAULT_POS_RECEIPT_CONFIG: PosReceiptConfig = {
   showItemDetail: true,
   showBarcode: true,
   showSaleSummary: true,
+  // SLICE 23 — QR on by default; it error-corrects and Code 128 does not.
+  useQrCode: true,
+  bottomLogoDataUri: "",
+  bottomLogoWidth: RECEIPT_BOTTOM_LOGO_WIDTH,
 };
 
 function clampText(v: unknown, max: number, fallback: string): string {
@@ -166,6 +230,12 @@ export function normalizePosReceiptConfig(raw: unknown): PosReceiptConfig {
     showItemDetail: coerceBool(o.showItemDetail, d.showItemDetail),
     showBarcode: coerceBool(o.showBarcode, d.showBarcode),
     showSaleSummary: coerceBool(o.showSaleSummary, d.showSaleSummary),
+    // SLICE 23. A cached pre-23 bundle carries no value for these, so
+    // coerceBool falls back to the default above (QR on) rather than to
+    // `false`, which would silently downgrade every register to Code 128.
+    useQrCode: coerceBool(o.useQrCode, d.useQrCode),
+    bottomLogoDataUri: sanitizeBottomLogo(o.bottomLogoDataUri),
+    bottomLogoWidth: clampBottomLogoWidth(coerceNumber(o.bottomLogoWidth, d.bottomLogoWidth)),
   };
 }
 

@@ -335,7 +335,38 @@ export type PosSalePayload = {
     /** Cash amount due after rounding — always a multiple of 5 cents. */
     dueMinor: number;
   };
+  /**
+   * SLICE 23 — the fun pool name printed under the QR code on THIS receipt.
+   *
+   * Owner: "for the receipt that prints out, I want it to have the fun overlay
+   * on it ... the text bellow the barcode should definitely be the fun
+   * overlay."
+   *
+   * It travels in the payload so the sync can snapshot it onto
+   * orders.display_name — the SAME column website orders use, because walk-in
+   * sales materialize into `orders` too (sync-store.ts:769). That snapshot is
+   * what makes a REPRINT show the same name the customer was handed, instead
+   * of drawing a fresh one and contradicting the slip in their hand.
+   *
+   * OPTIONAL, and its absence is a supported everyday state rather than a
+   * defect: offline, an empty pool, or a sale queued before this slice shipped
+   * all arrive as undefined, and the receipt prints the real receipt number —
+   * the owner's stated fallback. Nothing downstream may treat a missing name
+   * as an error.
+   */
+  displayName?: string;
 };
+
+/**
+ * SLICE 23 — the longest fun name the payload will carry.
+ *
+ * Deliberately the SAME limit the pool itself enforces
+ * (order-name-pool-core.ts ORDER_NAME_MAX_LEN = 40), duplicated as a local
+ * constant rather than imported so this validator keeps its existing import
+ * surface. The two are asserted equal in the self-tests, so they cannot drift
+ * apart silently.
+ */
+export const POS_DISPLAY_NAME_MAX_LEN = 40;
 
 export type SalePayloadCheck = { ok: true } | { ok: false; errors: string[] };
 
@@ -466,6 +497,20 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
   // shapes stay byte-identical).
   if (p.sourceOrderId !== undefined && !isUuid(p.sourceOrderId)) {
     errors.push("sourceOrderId, when present, must be the source website order's UUID.");
+  }
+  // SLICE 23 — the fun receipt name. OPTIONAL: offline sales, an empty pool,
+  // and every sale queued before this slice shipped all omit it, and each of
+  // those simply prints the real receipt number. But when it IS present it
+  // must be a real, printable, bounded string: a blank or whitespace-only
+  // value would print an empty line where the customer expects their name,
+  // and an unbounded one would run off the 80 mm paper. Refusing here keeps
+  // junk out of the queue rather than discovering it at the printer.
+  if (p.displayName !== undefined) {
+    if (typeof p.displayName !== "string" || p.displayName.trim() === "") {
+      errors.push("displayName, when present, must be a non-empty string.");
+    } else if (p.displayName.length > POS_DISPLAY_NAME_MAX_LEN) {
+      errors.push(`displayName is too long (max ${POS_DISPLAY_NAME_MAX_LEN} characters).`);
+    }
   }
   const idv = p.idVerification;
   if (!idv || (idv.method !== "scan" && idv.method !== "manual")) {
@@ -805,6 +850,48 @@ export function __runPosSaleEventTests(): void {
   ok(
     validateSalePayload({ ...goodSale, idVerification: { method: "manual", manualEventUuid: U1 } }).ok,
     "manual ID with audit event uuid ok",
+  );
+
+  // ── SLICE 23 — the fun receipt name ──────────────────────────────────────
+  // The FIRST assertion is the one that matters most: omitting the name must
+  // stay valid forever. That is the offline fallback the owner asked for, and
+  // it is also every sale queued before this slice existed. If this ever
+  // fails, an offline register stops being able to sell.
+  ok(
+    validateSalePayload({ ...goodSale, displayName: undefined }).ok,
+    "SLICE 23: a sale with NO fun name is valid (offline/empty-pool fallback)",
+  );
+  ok(
+    validateSalePayload({ ...goodSale, displayName: "Purple Rain" }).ok,
+    "SLICE 23: a normal fun name is accepted",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, displayName: "" }).ok,
+    "SLICE 23: an EMPTY fun name is refused (it would print a blank line)",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, displayName: "   " }).ok,
+    "SLICE 23: a whitespace-only fun name is refused",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, displayName: 42 as unknown as string }).ok,
+    "SLICE 23: a non-string fun name is refused",
+  );
+  // Boundary, checked from BOTH sides so an off-by-one cannot hide.
+  ok(
+    validateSalePayload({ ...goodSale, displayName: "x".repeat(POS_DISPLAY_NAME_MAX_LEN) }).ok,
+    "SLICE 23: a fun name of exactly the max length is accepted",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, displayName: "x".repeat(POS_DISPLAY_NAME_MAX_LEN + 1) }).ok,
+    "SLICE 23: one character over the max is refused",
+  );
+  // The limit here and the pool's own limit are the same number by intent.
+  // Pinning it means a future edit to either one shows up as a failure rather
+  // than as names that pass the pool editor and then fail at the queue.
+  ok(
+    POS_DISPLAY_NAME_MAX_LEN === 40,
+    "SLICE 23: the payload name limit matches ORDER_NAME_MAX_LEN (40)",
   );
 
   // Override block (POS B24) — optional; complete + markdown-only when present.

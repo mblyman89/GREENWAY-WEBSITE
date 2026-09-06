@@ -84,6 +84,22 @@ export type StoredSalePayload = {
   roundedDueMinor?: unknown;
   medical?: { medicalSavingsMinor?: unknown } | null;
   loyalty?: { memberLabel?: unknown } | null;
+  /**
+   * SLICE 23 — the fun name that was printed under the code on the ORIGINAL
+   * slip.
+   *
+   * Read from the stored payload rather than re-drawn from the pool, and that
+   * distinction is the entire point of storing it. Drawing a fresh name on
+   * reprint would hand the customer a second slip for the same purchase
+   * bearing a different name — two "receipts" that look like two sales. The
+   * payload is the frozen record of what the printer actually produced, so it
+   * is the only honest source for a reprint.
+   *
+   * Absent on every sale rung before this slice, and on any sale rung offline
+   * or against an empty pool. Absent simply means the reprint shows the real
+   * receipt number — the same thing the original slip showed.
+   */
+  displayName?: unknown;
 };
 
 /** What the reprint needs from OUTSIDE the payload. */
@@ -117,6 +133,9 @@ export type ReprintDisplayConfig = {
   returnPolicyText: string;
   showItemDetail: boolean;
   showBarcode: boolean;
+  useQrCode: boolean;
+  bottomLogoDataUri: string;
+  bottomLogoWidth: number;
   showSaleSummary: boolean;
   showSavings: boolean;
 };
@@ -165,6 +184,12 @@ export type RebuiltReceipt = {
   showItemDetail?: boolean;
   showBarcode?: boolean;
   showSaleSummary?: boolean;
+  /**
+   * SLICE 23 — the fun name printed under the code, recovered from the stored
+   * payload so a reprint reproduces the ORIGINAL slip rather than inventing a
+   * new name for the same sale.
+   */
+  displayName?: string | null;
 };
 
 export type RebuildResult =
@@ -298,6 +323,11 @@ export function rebuildReceiptFromPayload(
       footerText: ctx.footerText ?? null,
       addressLines: ctx.addressLines ?? [],
       servedBy: ctx.servedBy ?? null,
+      // SLICE 23 — the fun name from the ORIGINAL sale. `str()` already
+      // returns "" for a missing, null or non-string value, and "" is
+      // normalized to null here so the receipt builder falls back to the real
+      // receipt number exactly as it does for a pre-Slice-23 sale.
+      displayName: str(payload.displayName) || null,
       // Slice 22b — spread the owner's switches ONLY when a config was
       // supplied. Omitting them leaves every switch undefined, which the
       // builder reads as "on", preserving pre-22b behaviour exactly.
@@ -312,6 +342,9 @@ export function rebuildReceiptFromPayload(
             showItemDetail: ctx.config.showItemDetail,
             showBarcode: ctx.config.showBarcode,
             showSaleSummary: ctx.config.showSaleSummary,
+            useQrCode: ctx.config.useQrCode,
+            logoDataUri: ctx.config.bottomLogoDataUri || null,
+            logoWidthPx: ctx.config.bottomLogoWidth,
           }
         : {}),
     },
@@ -368,6 +401,19 @@ export function __runReceiptReprintCoreTests(): void {
   ok(r.receipt.lines.length === 1 && r.receipt.lines[0].quantity === 2, "lines preserved");
   ok(r.receipt.saleClientUuid === ctx.saleClientUuid, "receipt number comes from the event");
   ok(r.receipt.savingsMinor === 0, "no discount means no savings row");
+
+  // ── SLICE 23 — a reprint reproduces the ORIGINAL fun name ────────────────
+  // A sale stored before this slice has no name, and must reprint as a plain
+  // receipt showing the real number — never as a blank caption.
+  ok(r.receipt.displayName === null, "SLICE 23: a pre-slice sale reprints with NO fun name");
+  const named = rebuildReceiptFromPayload({ ...good, displayName: "Purple Rain" }, ctx);
+  ok(named.ok && named.receipt.displayName === "Purple Rain", "SLICE 23: the stored fun name is reprinted verbatim");
+  // Junk in the stored payload must degrade to "no name", never to a printed
+  // "null" or an empty caption line where the customer expects their name.
+  const blankName = rebuildReceiptFromPayload({ ...good, displayName: "   " }, ctx);
+  ok(blankName.ok && blankName.receipt.displayName === null, "SLICE 23: a blank stored name becomes no name");
+  const oddName = rebuildReceiptFromPayload({ ...good, displayName: 42 }, ctx);
+  ok(oddName.ok && oddName.receipt.displayName === null, "SLICE 23: a non-string stored name becomes no name");
 
   // ── Savings derive from stored prices, never invented ───────────────────
   const disc = rebuildReceiptFromPayload(

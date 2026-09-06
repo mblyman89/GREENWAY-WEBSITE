@@ -1255,6 +1255,41 @@ export function RegisterShell({
             return { ok: false as const, error: "Could not reach the server — try again." };
           }
         }}
+        onOrderName={async () => {
+          // SLICE 23 — draw ONE fun name from the shared pool for the receipt
+          // this sale is about to print.
+          //
+          // Owner: "we rarely go without internet, and if we do, the fall back
+          // can be to just use the real receipt number instead of the
+          // overlay."
+          //
+          // EVERY failure path returns null, and null is not an error — it is
+          // that fallback. So there is no error string to build and nothing to
+          // show the cashier: offline, a down server, a 500, a stale endpoint
+          // on an un-deployed build, malformed JSON, all of them mean the
+          // receipt prints the real number and the sale proceeds untouched.
+          //
+          // The offline check is first because it saves a guaranteed-doomed
+          // round trip on the one path where speed actually matters: the
+          // customer is at the counter with cash in hand.
+          if (!navigator.onLine) return null;
+          try {
+            const res = await posFetch("/api/pos/order-name", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-pos-device-id": creds.deviceId,
+                "x-pos-device-key": creds.deviceKey,
+              },
+              body: "{}",
+            });
+            if (!res.ok) return null;
+            const body = (await res.json().catch(() => null)) as { name?: string | null } | null;
+            return typeof body?.name === "string" && body.name.trim() !== "" ? body.name.trim() : null;
+          } catch {
+            return null;
+          }
+        }}
         onWitness={async (pin) => {
           // SLICE 28 — employee-identity PIN check for the EMPLOYEE purchase
           // program: /api/pos/witness (scrypt + shared throttle, NO role

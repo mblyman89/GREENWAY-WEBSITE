@@ -18,8 +18,12 @@ import {
   RECEIPT_FOOTER_MAX,
   RECEIPT_HEADER_MAX,
   RECEIPT_RETURN_POLICY_MAX,
+  RECEIPT_BOTTOM_LOGO_MAX,
+  RECEIPT_BOTTOM_LOGO_MIN,
+  RECEIPT_BOTTOM_LOGO_MAX_CHARS,
   type PosReceiptConfig,
 } from "@/lib/pos/receipt-config-core";
+import { prepareLogoForPrint } from "@/lib/printing/logo-print-core";
 import { RECEIPT_LOGO_MIN_WIDTH, RECEIPT_LOGO_WIDTH } from "@/lib/pos/receipt-logo-core";
 import { defaultReturnPolicyText } from "@/lib/pos/returns-core";
 import { saveReceiptConfigAction } from "@/app/admin/registers/receipt/actions";
@@ -76,6 +80,12 @@ function sampleReceipt(cfg: PosReceiptConfig): PosReceiptInput {
     showItemDetail: cfg.showItemDetail,
     showBarcode: cfg.showBarcode,
     showSaleSummary: cfg.showSaleSummary,
+    // SLICE 23 — the preview shows a fun name under the code, exactly as a
+    // real sale will, so the owner sees the actual result and not a mock-up.
+    useQrCode: cfg.useQrCode,
+    displayName: "Purple Rain",
+    logoDataUri: cfg.bottomLogoDataUri || null,
+    logoWidthPx: cfg.bottomLogoWidth,
   };
 }
 
@@ -123,6 +133,13 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
   const [showItemDetail, setShowItemDetail] = useState(initial.showItemDetail);
   const [showBarcode, setShowBarcode] = useState(initial.showBarcode);
   const [showSaleSummary, setShowSaleSummary] = useState(initial.showSaleSummary);
+  // -- Slice 23 ----------------------------------------------------------
+  const [useQrCode, setUseQrCode] = useState(initial.useQrCode);
+  const [bottomLogoDataUri, setBottomLogoDataUri] = useState(initial.bottomLogoDataUri);
+  const [bottomLogoWidth, setBottomLogoWidth] = useState(initial.bottomLogoWidth);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoNote, setLogoNote] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const draft = useMemo(
@@ -142,6 +159,9 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
         showItemDetail,
         showBarcode,
         showSaleSummary,
+        useQrCode,
+        bottomLogoDataUri,
+        bottomLogoWidth,
       }),
     [
       headerText,
@@ -158,6 +178,9 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
       showItemDetail,
       showBarcode,
       showSaleSummary,
+      useQrCode,
+      bottomLogoDataUri,
+      bottomLogoWidth,
     ],
   );
 
@@ -180,6 +203,9 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
         showItemDetail,
         showBarcode,
         showSaleSummary,
+        useQrCode,
+        bottomLogoDataUri,
+        bottomLogoWidth,
       });
       if (res.ok) {
         toast({ tone: "success", message: "Receipt saved. Registers pick it up on their next menu refresh." });
@@ -262,11 +288,20 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
             onChange={setShowSaleSummary}
           />
           <Toggle
-            label="Scannable barcode"
-            help="Code 128 of the receipt number — scan it to start a return."
+            label="Scannable code"
+            help="Encodes the real receipt number — scan it to start a return."
             checked={showBarcode}
             onChange={setShowBarcode}
           />
+          {/* SLICE 23 — QR vs Code 128. Only meaningful when a code prints. */}
+          {showBarcode ? (
+            <Toggle
+              label="Use a QR code"
+              help="QR survives folding and fading (it self-corrects) and every phone reads it. Turn off only for an old barcode-only scanner."
+              checked={useQrCode}
+              onChange={setUseQrCode}
+            />
+          ) : null}
         </div>
 
         {/* Slice 22b — the statutory one. Separated from the cosmetic toggles
@@ -317,6 +352,124 @@ export function ReceiptConfigEditor({ initial }: { initial: PosReceiptConfig }) 
                 className="w-full accent-[var(--admin-gold)]"
               />
             </Field>
+          ) : null}
+        </div>
+
+        {/* SLICE 23 — the custom bottom logo. */}
+        <div className="space-y-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3">
+          <div>
+            <p className="text-sm font-medium text-[var(--admin-text)]">
+              Your own logo at the bottom
+            </p>
+            <p className="text-xs text-[var(--admin-text-faint)]">
+              Printed under the QR code and the order name, above the footer message.
+              Upload a PNG and it is converted to clean black-and-white print
+              artwork automatically — the background is detected and dropped, so
+              you never get a black box.
+            </p>
+          </div>
+
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            disabled={logoBusy}
+            className="block w-full text-xs text-[var(--admin-text-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--admin-surface-2)] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[var(--admin-text)]"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = ""; // allow re-picking the same file
+              if (!file) return;
+              setLogoBusy(true);
+              setLogoError(null);
+              setLogoNote(null);
+              try {
+                // Decode in the browser, then run the SAME pure core the tests
+                // cover. Nothing is uploaded anywhere: the conversion happens
+                // here and only the finished 1-bit image is saved.
+                const bitmapSrc = await createImageBitmap(file);
+                const canvas = document.createElement("canvas");
+                canvas.width = bitmapSrc.width;
+                canvas.height = bitmapSrc.height;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) throw new Error("Could not read that image.");
+                ctx.drawImage(bitmapSrc, 0, 0);
+                const raw = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                const prepared = prepareLogoForPrint(
+                  { width: raw.width, height: raw.height, data: raw.data },
+                  bottomLogoWidth,
+                );
+                if (!prepared.ok) {
+                  setLogoError(prepared.error ?? "That image could not be used.");
+                } else if (prepared.dataUri.length > RECEIPT_BOTTOM_LOGO_MAX_CHARS) {
+                  setLogoError(
+                    "That logo is too detailed to fit on a receipt. Try a simpler, flatter version.",
+                  );
+                } else {
+                  setBottomLogoDataUri(prepared.dataUri);
+                  const pct = Math.round(prepared.bitmap.coverage * 100);
+                  setLogoNote(
+                    `Converted to ${prepared.bitmap.width}×${prepared.bitmap.height} print artwork ` +
+                      `(${pct}% ink). Check the preview, then Save.`,
+                  );
+                }
+              } catch {
+                setLogoError("That file could not be read as an image.");
+              } finally {
+                setLogoBusy(false);
+              }
+            }}
+          />
+
+          {logoBusy ? (
+            <p className="text-xs text-[var(--admin-text-muted)]">Converting…</p>
+          ) : null}
+          {logoError ? (
+            <p className="text-xs font-medium text-[var(--admin-danger,#b91c1c)]">{logoError}</p>
+          ) : null}
+          {logoNote ? (
+            <p className="text-xs font-medium text-[var(--admin-accent,#166534)]">{logoNote}</p>
+          ) : null}
+
+          {bottomLogoDataUri ? (
+            <>
+              {/* Shown on a white card because that is what paper is. */}
+              <div className="flex items-center gap-3 rounded-md border border-[var(--admin-border)] bg-white p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={bottomLogoDataUri}
+                  alt="Receipt logo preview"
+                  className="max-h-24 w-auto"
+                  style={{ imageRendering: "pixelated" }}
+                />
+              </div>
+              <Field
+                label="Logo width"
+                help={`${RECEIPT_BOTTOM_LOGO_MIN}–${RECEIPT_BOTTOM_LOGO_MAX} dots. Re-upload after changing this for the sharpest result.`}
+                htmlFor="rc-bottom-logo-width"
+              >
+                <input
+                  id="rc-bottom-logo-width"
+                  type="range"
+                  min={RECEIPT_BOTTOM_LOGO_MIN}
+                  max={RECEIPT_BOTTOM_LOGO_MAX}
+                  step={10}
+                  value={bottomLogoWidth}
+                  onChange={(ev) => setBottomLogoWidth(Number(ev.target.value))}
+                  className="w-full accent-[var(--admin-gold)]"
+                />
+              </Field>
+              <Button
+                variant="neutral"
+                size="sm"
+                onClick={() => {
+                  setBottomLogoDataUri("");
+                  setLogoNote(null);
+                  setLogoError(null);
+                }}
+              >
+                Remove logo
+              </Button>
+            </>
           ) : null}
         </div>
 
