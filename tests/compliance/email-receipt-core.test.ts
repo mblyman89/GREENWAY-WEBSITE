@@ -74,7 +74,7 @@ describe("email HTML mirrors the paper receipt", () => {
 
   it("carries the receipt number, lines, totals, savings, loyalty, and warning footer", () => {
     const html = buildEmailReceiptHtml(receipt);
-    expect(html).toContain("Receipt 14174000");
+    expect(html).toContain("Receipt # 14174000");
     expect(html).toContain("2x Blue Dream 3.5g");
     expect(html).toContain("$50.00");
     expect(html).toContain("You saved");
