@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { draftMode } from "next/headers";
 import { Analytics } from "@/components/analytics/Analytics";
+// Slice C — Vercel Speed Insights. Reports real-visitor Core Web Vitals (LCP,
+// CLS, INP, TTFB) to the Vercel dashboard so menu performance can be measured
+// with field data instead of guessed at. Renders `null`, injects one small
+// deferred script, and is inert outside Vercel.
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { PreviewEditOverlay } from "@/components/site/PreviewEditOverlay";
 import { AgeGate } from "@/components/age-gate/AgeGate";
 import { CartProvider } from "@/components/cart/CartProvider";
@@ -114,6 +119,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <ScrollToTopButton />
         <AgeGate />
         <Analytics />
+        <SpeedInsights />
         {isPreview && <PreviewEditOverlay />}
       </body>
     </html>
