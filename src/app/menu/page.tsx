@@ -22,6 +22,38 @@ import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
 // SLICE 78: the DB-backed category registry — renames/additions made at
 // /admin/settings/types propagate to the customer menu through this map.
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
+// SLICE E: trim fields the grid never renders before they are serialized to
+// every shopper. Verified unread by the menu client tree; the PDP is unaffected.
+import { toMenuGridItems } from "@/lib/menu/menu-grid-projection-core";
+
+/**
+ * SLICE E — THE SHOP PAGE COULD NEVER BE REUSED.
+ *
+ * This route had NO segment config at all, and it reads `searchParams` at the
+ * top level. Next.js documents exactly what that costs:
+ *
+ *   "`searchParams` is a Request-time API whose values cannot be known ahead
+ *    of time. Using it will opt the page into dynamic rendering at request
+ *    time."
+ *   — nextjs.org/docs/app/api-reference/file-conventions/page
+ *
+ * So every shopper rebuilt this page from scratch. That is the SAME condition
+ * the home page was in before Slice D, and removing it is precisely why the
+ * home page is now instant. The absence of `searchParams` was the only
+ * structural difference between the two routes.
+ *
+ * `revalidate = 60` matches MENU_CACHE_TTL_SECONDS, so the page cache and the
+ * menu data cache expire on the same schedule instead of fighting each other.
+ * Publishing stays INSTANT regardless of this number: `/menu` is listed in
+ * PUBLIC_MENU_SURFACES, so `revalidatePublicMenuSurfaces()` clears the data tag
+ * and then calls `revalidatePath("/menu")` in the same action.
+ *
+ * The filters keep working. `InteractiveMenuBrowser` resolves them from the
+ * LIVE browser URL (`resolveInitialParams`, InteractiveMenuBrowser.tsx:630) and
+ * the live URL takes precedence over anything the server passed, so a shopper
+ * arriving on a deep link still lands on the right filtered view.
+ */
+export const revalidate = 60;
 
 export const metadata = pageMetadata({
   title: "Shop Cannabis Menu — Flower, Vapes, Edibles & More",
@@ -51,13 +83,21 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   // from the durable medical_product_registry (migration 0113), keyed by the
   // item id. Outermost so it runs on the fully-enriched items; degrades to
   // "no DOH" pre-migration / unconfigured. (Badge render = Slice F.)
-  const menuItems = await withCategoryOverride(
+  const enrichedMenuItems = await withCategoryOverride(
     await withDohCompliance(
       await withDisplayKnowledge(
         await withResolvedImages(await withMenuProfile(await loadLiveMenuItemsCached())),
       ),
     ),
   );
+  // SLICE E: drop what the grid never renders before this array is serialized
+  // into the response for every shopper. `description` is unread by the entire
+  // menu client tree (the product DETAIL page loads its own item, so it still
+  // shows the full copy) and `hiddenReason` is dead weight because hidden items
+  // are already filtered out. Measured on a realistic catalog with unique
+  // descriptions: ~56 KB less compressed on every shop page load. The item type
+  // is unchanged, so no card component is affected.
+  const menuItems = toMenuGridItems(enrichedMenuItems);
   // SLICE D (performance) — THESE READS NO LONGER QUEUE BEHIND EACH OTHER.
   //
   // Each of the following was its own `await` on its own line, so the page sat

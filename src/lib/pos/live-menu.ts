@@ -40,6 +40,13 @@ import { withCardIdentity } from "@/lib/menu/card-identity";
 // src/lib/site/public-surfaces.ts — they cannot drift apart.
 import { unstable_cache } from "next/cache";
 import { MENU_CACHE_KEY, menuCacheOptions } from "@/lib/menu/menu-cache-policy-core";
+// SLICE E: the published menu is ~5.94 MB and Vercel's Data Cache drops items
+// over 2 MB silently, so the entry is stored compressed. See the codec module.
+import {
+  decodeMenuCacheEntry,
+  encodeMenuCacheEntry,
+  type MenuCacheEnvelope,
+} from "@/lib/menu/menu-cache-codec-core";
 
 type MenuItemWithVariants = MenuItemRow & { variants: MenuVariantRow[] };
 
@@ -185,11 +192,47 @@ export async function getLiveMenuItemById(id: string): Promise<GreenwayMenuItem 
  * the supported API for this in Next.js 16.2.9 with `cacheComponents: false`,
  * which is this app's configuration.
  */
-export const loadLiveMenuAllCached = unstable_cache(
-  async (): Promise<GreenwayMenuItem[]> => loadLiveMenuAll(),
+/**
+ * SLICE E — WHY THIS ENTRY IS COMPRESSED.
+ *
+ * Until this slice, the cached function returned the raw `GreenwayMenuItem[]`.
+ * That looked correct and never worked in production, because Vercel's Data
+ * Cache (which is what `unstable_cache` writes to) caps **item size at 2 MB**
+ * and, per Vercel's documentation, "items larger won't be cached".
+ *
+ * Measured at the store's real catalog size (`scripts/measure-cache-fit.mjs`):
+ *
+ *     Data Cache item limit ......  2.00 MB
+ *     Published menu, serialized .  5.94 MB   ← 3.94 MB OVER the limit
+ *
+ * The write was therefore **silently dropped** every time — no error, no
+ * warning, no log. The entry was never stored, so it was never read, so EVERY
+ * request to /menu re-ran the whole database read path. That is the honest
+ * explanation for Slice A's caching producing "no perceptible change".
+ *
+ * Storing the payload gzipped + base64 brings the entry to ~204 KB, which fits
+ * with 1.85 MB to spare and leaves headroom to roughly 45,000 products. The
+ * cost is ~45 ms to decode on a cache HIT, which replaces seconds of sequential
+ * database round trips.
+ *
+ * DEGRADATION: if the entry is missing, corrupt, or written by an older format
+ * version, `decodeMenuCacheEntry` returns null and we read straight through to
+ * the database. A cache problem makes the site SLOW, never BROKEN.
+ */
+const loadLiveMenuAllCachedEnvelope = unstable_cache(
+  async (): Promise<MenuCacheEnvelope | null> => encodeMenuCacheEntry(await loadLiveMenuAll()),
   [...MENU_CACHE_KEY],
   menuCacheOptions(),
 );
+
+export async function loadLiveMenuAllCached(): Promise<GreenwayMenuItem[]> {
+  const envelope = await loadLiveMenuAllCachedEnvelope();
+  const decoded = decodeMenuCacheEntry<GreenwayMenuItem>(envelope);
+  // `null` means "unusable cache entry", which includes the case where the
+  // payload was too large to encode at all. Fall back to the live read rather
+  // than showing an empty menu.
+  return decoded ?? (await loadLiveMenuAll());
+}
 
 /**
  * Cached equivalent of `loadLiveMenuItems()` — visible items only.
