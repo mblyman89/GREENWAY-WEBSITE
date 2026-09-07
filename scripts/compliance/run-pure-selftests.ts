@@ -62,6 +62,7 @@ import { __runAnnouncerProtocolTests } from "../../src/lib/announcer/announcer-p
 import { __runAnnouncerFanoutTests } from "../../src/lib/announcer/announcer-fanout-core";
 // SLICE 30 — what the back office shows about the speakers.
 import { __runAnnouncerAdminTests } from "../../src/lib/announcer/announcer-admin-core";
+import { __runAnnouncerSoundsTests } from "../../src/lib/announcer/announcer-sounds-core";
 // books-47, SLICE D: the Form / Why / Check teaching surface. All three are
 // pure and browser-safe by construction -- none may touch node:fs, because the
 // explorer that consumes them is a client component. Registering them here
@@ -1089,6 +1090,7 @@ async function main() {
   assertNoFailures("announcer-protocol-core", __runAnnouncerProtocolTests());
   assertNoFailures("announcer-fanout-core", __runAnnouncerFanoutTests());
   assertNoFailures("announcer-admin-core", __runAnnouncerAdminTests());
+  assertNoFailures("announcer-sounds-core", __runAnnouncerSoundsTests());
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
