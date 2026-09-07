@@ -320,6 +320,21 @@ begin
   delete from public.deposit_bags where true;              get diagnostics n = row_count; counts := counts || jsonb_build_object('deposit_bags', n);
   delete from public.drawer_sessions where true;           get diagnostics n = row_count; counts := counts || jsonb_build_object('drawer_sessions', n);
 
+  -- SLICE 27: the order announcer. Only the two EVENT tables are emptied.
+  -- announcer_devices, announcer_settings and announcer_sounds are KEEP in
+  -- src/lib/accounting/factory-reset-core.ts for the same reason pos_devices
+  -- and receipt_printer_settings are: a Raspberry Pi bolted to the wall in the
+  -- storage room is hardware you own, not a rehearsal event. Wiping it would
+  -- silently unpair every speaker in the building and present on go-live
+  -- morning as "the announcer just stopped working".
+  --
+  -- Queue before pairings is not arbitrary: both carry a foreign key to
+  -- announcer_devices, and announcer_pairings.device_id is ON DELETE SET NULL,
+  -- so neither blocks the other -- but keeping child-before-parent order here
+  -- means this block stays correct if those constraints are ever tightened.
+  delete from public.announcer_queue where true;           get diagnostics n = row_count; counts := counts || jsonb_build_object('announcer_queue', n);
+  delete from public.announcer_pairings where true;        get diagnostics n = row_count; counts := counts || jsonb_build_object('announcer_pairings', n);
+
   -- ══ 2. Tax and compliance filings ════════════════════════════════════════
   delete from public.excise_return_drafts where true;      get diagnostics n = row_count; counts := counts || jsonb_build_object('excise_return_drafts', n);
   delete from public.excise_return_batches where true;     get diagnostics n = row_count; counts := counts || jsonb_build_object('excise_return_batches', n);

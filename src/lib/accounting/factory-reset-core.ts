@@ -432,6 +432,22 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "pos_devices", disposition: "KEEP", because: "The tablets and terminals you have paired." },
   { table: "receipt_printer_settings", disposition: "KEEP", because: "Printer configuration." },
 
+  // ── Order announcer (SLICE 27) ────────────────────────────────────────────
+  // Same reasoning as pos_devices and receipt_printer_settings directly above:
+  // a Raspberry Pi bolted to the wall in the storage room is HARDWARE YOU OWN,
+  // not an event that happened during the rehearsal. Wiping the device rows
+  // would silently unpair every speaker in the building, and the failure would
+  // present on go-live morning as "the announcer just stopped working" with no
+  // obvious cause — you would have to physically re-run the installer on each
+  // Pi. That is the D-62 mistake in the other direction.
+  { table: "announcer_devices", disposition: "KEEP", because: "The speakers you have paired — office, sales floor, storage. Physical hardware you own. Wiping this unpairs every Pi in the building and you would have to re-run the installer on each one." },
+  { table: "announcer_settings", disposition: "KEEP", because: "Announcer configuration: quiet hours, default sound, default volume, and the master on/off switch. Settings you chose, not activity." },
+  { table: "announcer_sounds", disposition: "KEEP", because: "The catalogue of audio files you uploaded. The bytes stay in the storage bucket either way, so wiping this would orphan them and lose your labels for nothing." },
+  // The other two DO record events, and both are worthless the moment the
+  // rehearsal ends.
+  { table: "announcer_queue", disposition: "WIPE", because: "Every announcement queued during testing. Nothing here outlives fifteen minutes anyway — keeping it would only leave a test log on your first real day." },
+  { table: "announcer_pairings", disposition: "WIPE", because: "Setup codes issued while pairing test speakers. They expire in an hour and are single-use; there is nothing to preserve." },
+
   // ── Inventory ─────────────────────────────────────────────────────────────
   { table: "inventory_lots", disposition: "WIPE", because: "Every test lot, with its cost and quantity. After the wipe your inventory is empty and ready for the real October 31st count." },
   { table: "inventory_adjustments", disposition: "WIPE", because: "Test shrink, waste and correction entries." },
