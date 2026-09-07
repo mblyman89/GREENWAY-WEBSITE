@@ -1,0 +1,53 @@
+[Unit]
+Description=Greenway Online Order Announcer
+Documentation=https://github.com/mblyman89/GREENWAY-WEBSITE/blob/main/docs/announcer/10-field-manual.md
+# Wait for a usable network, but do NOT refuse to start without one: the agent
+# has its own retry loop and must come back on its own when the shop's internet
+# returns. A hard dependency here would leave a dead speaker after an outage.
+Wants=network-online.target
+After=network-online.target sound.target
+
+# The default is 5 starts in 10s, after which systemd gives up FOREVER and
+# will not restart the service even though Restart=always is set. That is
+# exactly the "speaker was dead all weekend" failure this project exists to
+# prevent, so rate limiting is switched off: keep restarting, forever.
+# NOTE: this key belongs in [Unit], NOT [Service]. systemd silently ignores
+# it if it is put in [Service] -- verified with `systemd-analyze verify`.
+StartLimitIntervalSec=0
+StartLimitBurst=0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/greenway-announcer run
+# Always come back, no matter how it died, and never give up trying.
+Restart=always
+RestartSec=5
+
+User=root
+WorkingDirectory=/var/lib/greenway-announcer
+
+# --- Logging -------------------------------------------------------------
+# Everything goes to the journal, which is size-capped in journald.conf.
+# Unbounded logs are the fastest way to kill a Raspberry Pi's SD card.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=greenway-announcer
+
+# --- Robustness ----------------------------------------------------------
+# Give the current sound time to finish before a stop/restart cuts it off.
+TimeoutStopSec=20
+KillSignal=SIGTERM
+
+# Modest hardening. The Pi is on a trusted shop network, so this is about
+# preventing accidents (a bad sound file, a runaway loop), not attackers.
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+# The agent needs these two paths writable.
+ReadWritePaths=/var/lib/greenway-announcer /etc/greenway-announcer
+# A single Pi playing chimes should never eat the whole box.
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
