@@ -32,6 +32,14 @@ export type AnnouncerPanelData = {
   recent: RecentAnnouncement[];
   /** True when the tables are missing entirely (migration not run yet). */
   notInstalled: boolean;
+  /**
+   * SLICE 34 — which sound each speaker is actually assigned, straight from the
+   * row. AdminDeviceView deliberately drops sound_id (it shows a label, not an
+   * id), but the sound library needs the raw value to answer "is this file in
+   * use?" before someone deletes it. Without this the warning would always say
+   * "safe to delete", which is worse than no warning at all.
+   */
+  assignments: { name: string; sound_id: string | null }[];
 };
 
 export type RecentAnnouncement = {
@@ -68,6 +76,7 @@ export async function getAnnouncerPanelData(now: Date = new Date()): Promise<Ann
     }),
     recent: [],
     notInstalled,
+    assignments: [],
   });
 
   if (!isSupabaseServiceConfigured) return empty(false);
@@ -106,7 +115,19 @@ export async function getAnnouncerPanelData(now: Date = new Date()): Promise<Ann
       now,
     });
 
-    return { devices, settings, verdict, recent: await getRecentAnnouncements(devices), notInstalled: false };
+    const assignments = (Array.isArray(deviceRows) ? deviceRows : []).map((row) => {
+      const r = row as AdminDeviceRow;
+      return { name: r.name, sound_id: r.sound_id ?? null };
+    });
+
+    return {
+      devices,
+      settings,
+      verdict,
+      recent: await getRecentAnnouncements(devices),
+      notInstalled: false,
+      assignments,
+    };
   } catch {
     return empty(false);
   }

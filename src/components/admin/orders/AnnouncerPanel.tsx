@@ -20,8 +20,10 @@
  * fix next to it, in plain English, so nobody has to remember anything.
  */
 import { Button } from "@/components/admin/ui/Button";
-import { BUILT_IN_SOUNDS } from "@/lib/announcer/announcer-core";
 import { getAnnouncerPanelData } from "@/lib/announcer/announcer-admin-store";
+import { listSounds } from "@/lib/announcer/announcer-sounds-store";
+import { optionsForSounds } from "@/lib/announcer/announcer-library-core";
+import { AnnouncerSoundLibrary } from "@/components/admin/orders/AnnouncerSoundLibrary";
 import type { AdminDeviceView, ShopVerdict } from "@/lib/announcer/announcer-admin-core";
 import {
   announcerCreatePairingAction,
@@ -68,7 +70,13 @@ const INPUT_CLS =
 
 export async function AnnouncerPanel() {
   const data = await getAnnouncerPanelData();
-  const { devices, settings, verdict, recent, notInstalled } = data;
+  const { devices, settings, verdict, recent, notInstalled, assignments } = data;
+
+  // SLICE 34 — uploaded sounds must appear in the same pickers as the built-in
+  // ones, otherwise a file can be uploaded but never actually used. The values
+  // are storage paths, which is exactly what the Pi agent expects.
+  const library = await listSounds();
+  const soundOptions = optionsForSounds(library.sounds);
 
   // The migration has not been run. This is a setup state, not a fault, so it
   // says exactly what to do rather than showing an error.
@@ -167,9 +175,9 @@ export async function AnnouncerPanel() {
                     <Field label="Sound" hint="Shop default follows the setting below.">
                       <select name="soundId" defaultValue="__default" className={INPUT_CLS}>
                         <option value="__default">Shop default</option>
-                        {BUILT_IN_SOUNDS.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.label}
+                        {soundOptions.map((s) => (
+                          <option key={s.value} value={s.value}>
+                            {s.group === "My uploads" ? `${s.label} (mine)` : s.label}
                           </option>
                         ))}
                       </select>
@@ -245,9 +253,9 @@ export async function AnnouncerPanel() {
             </Field>
             <Field label="Default sound">
               <select name="defaultSoundId" defaultValue={settings.default_sound_id} className={INPUT_CLS}>
-                {BUILT_IN_SOUNDS.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
+                {soundOptions.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.group === "My uploads" ? `${s.label} (mine)` : s.label}
                   </option>
                 ))}
               </select>
@@ -275,6 +283,14 @@ export async function AnnouncerPanel() {
             </div>
           </form>
         </details>
+
+        <AnnouncerSoundLibrary
+          sounds={library.sounds}
+          notInstalled={library.notInstalled}
+          error={library.error}
+          devices={assignments}
+          defaultSoundId={settings.default_sound_id}
+        />
 
         {/* ── 5. DID IT ACTUALLY PLAY? ──────────────────────────────────── */}
         {recent.length > 0 ? (

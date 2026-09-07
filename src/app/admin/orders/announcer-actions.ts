@@ -24,6 +24,12 @@ import {
 } from "@/lib/announcer/announcer-admin-store";
 import { enqueueAnnouncement } from "@/lib/announcer/announcer-enqueue";
 import { createPairing } from "@/lib/announcer/announcer-store";
+import { contentTypeFor, formatBytes, validateUpload } from "@/lib/announcer/announcer-sounds-core";
+import {
+  createSound,
+  deleteSound,
+  renameSound,
+} from "@/lib/announcer/announcer-sounds-store";
 
 const ORDERS_PATH = "/admin/orders";
 
@@ -191,6 +197,124 @@ export async function announcerCreatePairingAction(form: FormData): Promise<void
     entityType: "announcer_pairings",
     entityId: null,
     after: { summary: result.ok ? `Pairing code issued for "${name}".` : result.error },
+  });
+
+  revalidatePath(ORDERS_PATH);
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* SLICE 34 — the sound library                                               */
+/*                                                                            */
+/* Storage landed in Slice 31 but nothing could reach it: there was no upload  */
+/* box and no way to pick an uploaded file. These three actions close that     */
+/* gap. They follow the same shape as everything above — same permission,      */
+/* same audit, same revalidate, always void.                                   */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Upload a custom sound.
+ *
+ * Validation happens twice on purpose. validateUpload() checks the name and
+ * size before a single byte is read, so an oversized file is rejected without
+ * being pulled into memory; createSound() then re-checks the real byte length,
+ * because the size a browser reports is not evidence.
+ */
+export async function announcerUploadSoundAction(form: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const file = form.get("file");
+  const isFile = typeof File !== "undefined" && file instanceof File;
+  const fileName = isFile ? file.name : "";
+  const size = isFile ? file.size : 0;
+
+  const typedLabel = field(form, "label");
+  const verdict = validateUpload({ fileName, bytes: size, label: typedLabel });
+  if (!verdict.ok) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "announcer.sound_rejected",
+      entityType: "announcer_sounds",
+      entityId: null,
+      after: { summary: verdict.error },
+    });
+    revalidatePath(ORDERS_PATH);
+    return;
+  }
+
+  // validateUpload already picked the label: the typed one if given, otherwise
+  // one derived from the filename. The content type is derived from the
+  // extension it verified, never from what the browser claimed the file was.
+  const result = await createSound({
+    label: verdict.label,
+    extension: verdict.extension,
+    bytes: await (file as File).arrayBuffer(),
+    contentType: contentTypeFor(`sound.${verdict.extension}`),
+    uploadedBy: session.profile.id,
+  });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "announcer.sound_uploaded",
+    entityType: "announcer_sounds",
+    entityId: result.ok ? result.id : null,
+    after: {
+      summary: result.ok
+        ? `Uploaded "${result.label}" (${formatBytes(size)}) as ${result.storagePath}.`
+        : result.error,
+    },
+  });
+
+  revalidatePath(ORDERS_PATH);
+}
+
+/** Rename a custom sound. The file itself is untouched, so nothing goes quiet. */
+export async function announcerRenameSoundAction(form: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const id = field(form, "soundId");
+  const label = field(form, "label");
+  if (id === "" || label === "") return;
+
+  const result = await renameSound(id, label);
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "announcer.sound_renamed",
+    entityType: "announcer_sounds",
+    entityId: id,
+    after: { summary: result.ok ? `Renamed to "${label.slice(0, 60)}".` : result.error },
+  });
+
+  revalidatePath(ORDERS_PATH);
+}
+
+/**
+ * Delete a custom sound.
+ *
+ * deleteSound() detaches any speaker and the shop default FIRST, so a delete
+ * can never leave a speaker pointing at a file that no longer exists. The
+ * panel warns about that before the click; this is the safety net behind it.
+ */
+export async function announcerDeleteSoundAction(form: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const id = field(form, "soundId");
+  if (id === "") return;
+
+  const result = await deleteSound(id);
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "announcer.sound_deleted",
+    entityType: "announcer_sounds",
+    entityId: id,
+    after: {
+      summary: result.ok
+        ? "Sound deleted. Anything using it was moved back to the shop default."
+        : result.error,
+    },
   });
 
   revalidatePath(ORDERS_PATH);
