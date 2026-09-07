@@ -22,7 +22,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // SLICE 3: PostgREST truncates at db.max_rows (1,000) without an error.
-import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { publicUrlForKey } from "@/lib/media/store";
 import {
@@ -195,7 +195,11 @@ async function batchExactImages(posKeys: string[]): Promise<Map<string, string>>
         .range(from, to);
       return (data as EnrichRow[] | null) ?? [];
     },
-    { chunkSize: CHUNK },
+    // SLICE D (performance): the image ladder is the single biggest source
+    // of round trips on the menu render \u2014 this call plus the media lookup
+    // below was ~30 serial queries at 4,500 items. Disjoint key chunks,
+    // results folded into Maps, so overlapping them is order-independent.
+    { chunkSize: CHUNK, concurrency: MENU_READ_CONCURRENCY },
   );
   for (const r of enrichRows) {
     const mediaId = r.primary_media_id || (r.image_media_ids ?? [])[0] || null;
@@ -218,7 +222,7 @@ async function batchExactImages(posKeys: string[]): Promise<Map<string, string>>
         .range(from, to);
       return (data as MediaRow[] | null) ?? [];
     },
-    { chunkSize: CHUNK },
+    { chunkSize: CHUNK, concurrency: MENU_READ_CONCURRENCY },
   );
   for (const m of mediaRows) {
     const url = publicUrlForKey(m.storage_key) ?? m.public_url ?? null;

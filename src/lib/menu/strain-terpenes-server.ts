@@ -10,8 +10,13 @@
  * client-safe and unit-testable without server-only imports.
  */
 
+import { unstable_cache } from "next/cache";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { listKbStrains } from "@/lib/ai/kb/store";
+import {
+  MENU_CACHE_TAG,
+  MENU_CACHE_TTL_SECONDS,
+} from "@/lib/menu/menu-cache-policy-core";
 import {
   attachStrainProfile,
   attachTerpenes,
@@ -69,7 +74,7 @@ export async function buildMenuIndexes(): Promise<{
  * terpenes). Retained for callers that only need terpenes.
  */
 export async function buildTerpeneIndex(): Promise<TerpeneIndex> {
-  const { terpeneIndex } = await buildMenuIndexes();
+  const { terpeneIndex } = await buildMenuIndexesCached();
   return terpeneIndex;
 }
 
@@ -79,6 +84,76 @@ export async function withTerpenes(items: GreenwayMenuItem[]): Promise<GreenwayM
   return attachTerpenes(items, index);
 }
 
+// ---------------------------------------------------------------------------
+// SLICE D (performance) — cache the STRAIN LIBRARY, not the product catalog
+// ---------------------------------------------------------------------------
+/**
+ * WHAT THIS FIXES. `buildMenuIndexes()` above calls `listKbStrains(50_000)`,
+ * which pages the strain table 1,000 rows at a time (ai/kb/store.ts). Each page
+ * is its own round trip and each one waits for the last, so building these two
+ * indexes could cost dozens of serial queries — on EVERY request to the menu,
+ * the home page and the specials page, none of it cached.
+ *
+ * WHY THIS IS THE RIGHT THING TO CACHE, AND THE MENU IS NOT. Vercel's Data
+ * Cache and Runtime Cache both cap a single entry at 2 MB and, per their
+ * documentation, an item over the limit is simply "not cached" — no error, no
+ * warning, the write is dropped. The enriched menu is over that line (the raw
+ * catalog alone serialises to ~1.6 MB at 4,500 products), so caching it would
+ * have produced a cache that never stored anything while looking like a fix.
+ * These two indexes are keyed by STRAIN, not by product: their size tracks the
+ * strain library, which is orders of magnitude smaller and does not grow when
+ * the store receives more inventory.
+ *
+ * SERIALISATION. `unstable_cache` stores JSON, and a `Map` does not survive
+ * that round trip. The entry is therefore stored as plain entry arrays and
+ * rebuilt into Maps on the way out — the callers' types are unchanged.
+ *
+ * FRESHNESS, STATED HONESTLY. This shares MENU_CACHE_TAG, so publishing or
+ * resetting the menu clears it instantly along with everything else
+ * (public-surfaces.ts). A KB-only edit — renaming a strain's terpenes in Admin
+ * without republishing — is NOT a publish, so it appears on the website within
+ * MENU_CACHE_TTL_SECONDS instead of on the very next request. That is a
+ * descriptive, sensory field on a product card, it is the same 60-second floor
+ * the rest of the menu already lives under, and it is a deliberate trade for
+ * removing dozens of blocking queries from every page load.
+ */
+type MenuIndexEntries = {
+  terpenes: [string, string[]][];
+  strainTypes: [string, GreenwayMenuItem["strainType"]][];
+};
+
+const loadMenuIndexEntriesCached = unstable_cache(
+  async (): Promise<MenuIndexEntries> => {
+    const { terpeneIndex, strainTypeIndex } = await buildMenuIndexes();
+    return {
+      terpenes: [...terpeneIndex.entries()],
+      strainTypes: [...strainTypeIndex.entries()],
+    };
+  },
+  ["menu-strain-indexes", "v1"],
+  { revalidate: MENU_CACHE_TTL_SECONDS, tags: [MENU_CACHE_TAG] },
+);
+
+/**
+ * The cached form of `buildMenuIndexes()`. Falls back to an uncached build if
+ * the cache layer is unavailable, so a cache problem can never blank a menu's
+ * terpenes — the page just pays the old cost for that request.
+ */
+export async function buildMenuIndexesCached(): Promise<{
+  terpeneIndex: TerpeneIndex;
+  strainTypeIndex: StrainTypeIndex;
+}> {
+  try {
+    const entries = await loadMenuIndexEntriesCached();
+    return {
+      terpeneIndex: new Map(entries.terpenes),
+      strainTypeIndex: new Map(entries.strainTypes),
+    };
+  } catch {
+    return buildMenuIndexes();
+  }
+}
+
 /**
  * Attach the full strain profile (terpenes + corrected strainType) to menu
  * items using the effective (DB-overlaid) indexes. This is what the live menu
@@ -86,6 +161,6 @@ export async function withTerpenes(items: GreenwayMenuItem[]): Promise<GreenwayM
  * populate from the knowledge base.
  */
 export async function withMenuProfile(items: GreenwayMenuItem[]): Promise<GreenwayMenuItem[]> {
-  const { terpeneIndex, strainTypeIndex } = await buildMenuIndexes();
+  const { terpeneIndex, strainTypeIndex } = await buildMenuIndexesCached();
   return attachStrainProfile(items, terpeneIndex, strainTypeIndex);
 }

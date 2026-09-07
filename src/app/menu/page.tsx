@@ -58,26 +58,41 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
       ),
     ),
   );
-  // SLICE 78: owner-managed category labels (value → label). Serializable, so
-  // the client menu can render the owner's names; empty map = old behavior.
-  const categoryLabels = await loadCategoryLabelMap();
-  // Pages-builder banners for /menu: any EXTRA banners staff add render under
-  // the top carousel. (The primary top banner is now the Shop banner carousel,
-  // edited at Admin → Content → Shop Banner — see below.)
-  const banners = await getPageBanners("menu", ["menu.hero"]);
-  // SLICE A (SHOP-1): the Shop top banner is now a staff-managed CAROUSEL (up to
-  // ten "special" slides). Resolve them draft-aware; the store falls back to a
-  // single default slide (matching the old static banner) pre-migration / when
-  // empty, so this never blanks. Seed is idempotent + no-ops pre-migration.
-  await ensureShopCarouselSeeded();
-  const shopSlides = await getShopCarouselForRender();
+  // SLICE D (performance) — THESE READS NO LONGER QUEUE BEHIND EACH OTHER.
+  //
+  // Each of the following was its own `await` on its own line, so the page sat
+  // through category labels, THEN banners, THEN the carousel, THEN the
+  // promotion titles, one after another. None of them depends on any of the
+  // others, so the waiting was pure latency stacked in series. Vercel's Active
+  // CPU guide calls this out directly: "Use the preloading pattern to start
+  // independent I/O together."
+  //
+  // The one real ordering constraint is kept: the carousel seed must finish
+  // before the carousel is read, so those two stay chained inside their own
+  // branch of the Promise.all rather than being flattened alongside it.
+  const [categoryLabels, banners, shopSlides, promotionTitles] = await Promise.all([
+    // SLICE 78: owner-managed category labels (value → label). Serializable, so
+    // the client menu can render the owner's names; empty map = old behavior.
+    loadCategoryLabelMap(),
+    // Pages-builder banners for /menu: any EXTRA banners staff add render under
+    // the top carousel. (The primary top banner is now the Shop banner carousel,
+    // edited at Admin → Content → Shop Banner — see below.)
+    getPageBanners("menu", ["menu.hero"]),
+    // SLICE A (SHOP-1): the Shop top banner is now a staff-managed CAROUSEL (up
+    // to ten "special" slides). Resolve them draft-aware; the store falls back
+    // to a single default slide (matching the old static banner) pre-migration /
+    // when empty, so this never blanks. Seed is idempotent + no-ops
+    // pre-migration, and MUST complete before the read below.
+    ensureShopCarouselSeeded().then(() => getShopCarouselForRender()),
+    getShopPromotionTitleMap(),
+  ]);
   // SLICE C (SHOP-3): the one-off SALE filters a slide links (SLICE B) become
   // dynamic sidebar checkboxes. Collect them here (server) from the SAME slides
   // the carousel renders, using the promotion titles for any unnamed filter, and
   // hand the plain {id,name,promotionId} list to the browser. Degrades to an
   // empty list pre-migration / when nothing is linked (the sidebar then shows
-  // just the two built-in lanes).
-  const saleFilters = collectShopSaleFilters(shopSlides, await getShopPromotionTitleMap());
+  // just the two built-in lanes). Pure — no I/O — so it stays out of the batch.
+  const saleFilters = collectShopSaleFilters(shopSlides, promotionTitles);
   const initialSearchParams = {
     search: firstSearchParamValue(resolvedSearchParams?.search),
     category: firstSearchParamValue(resolvedSearchParams?.category),

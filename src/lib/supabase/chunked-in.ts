@@ -42,6 +42,34 @@ import {
 export const CHUNKED_IN_CHUNK_SIZE = 200;
 export const CHUNKED_IN_PAGE_SIZE = 1000;
 
+/**
+ * SLICE D (performance) — how many chunks may be in flight at once.
+ *
+ * ONE, i.e. the original strictly-serial behaviour, and deliberately so. This
+ * module is used by tax, CCRS, Sage and report paths whose correctness was the
+ * whole point of S-7; none of them asked for concurrency and none of them get
+ * it by accident. Read paths that want it opt in per call site.
+ *
+ * WHY CONCURRENCY MATTERS HERE AT ALL: a 4,500-item menu chunked at 200 is 23
+ * round trips, and the original loop `await`s each one before starting the
+ * next. The requests do not depend on each other — each covers a disjoint set
+ * of ids — so the waiting was pure latency, serialised for no reason. At a
+ * measured 8 ms round trip that is ~184 ms of dead time per call, and the menu
+ * page makes several such calls per request.
+ */
+export const CHUNKED_IN_CONCURRENCY = 1;
+
+/**
+ * The concurrency the PUBLIC MENU READ paths use.
+ *
+ * WHY 6 AND NOT 23 (all of them at once): Supabase pools connections, and a
+ * burst of 23 simultaneous queries from a single render competes with the
+ * register and the back office for that pool. Six keeps the tail short — 23
+ * chunks finish in 4 waves instead of 23 — while leaving most of the pool for
+ * everything else. This is a display path; it must never starve a sale.
+ */
+export const MENU_READ_CONCURRENCY = 6;
+
 export type ChunkedInFetchPage<Id, Row> = (
   chunk: Id[],
   fromIndex: number,
@@ -56,24 +84,70 @@ export type ChunkedInFetchPage<Id, Row> = (
 export async function chunkedIn<Id, Row>(
   ids: readonly Id[],
   fetchPage: ChunkedInFetchPage<Id, Row>,
-  opts: { chunkSize?: number; pageSize?: number } = {},
+  opts: { chunkSize?: number; pageSize?: number; concurrency?: number } = {},
 ): Promise<Row[]> {
   const chunkSize = Math.max(1, opts.chunkSize ?? CHUNKED_IN_CHUNK_SIZE);
   const pageSize = Math.max(1, opts.pageSize ?? CHUNKED_IN_PAGE_SIZE);
+  const concurrency = Math.max(1, opts.concurrency ?? CHUNKED_IN_CONCURRENCY);
   const unique = [...new Set(ids)];
-  const out: Row[] = [];
+
+  // Split first, so the work list is a plain array of independent units. Each
+  // chunk queries a DISJOINT set of ids, which is what makes running several of
+  // them at once safe: no chunk can observe another chunk's rows.
+  const chunks: Id[][] = [];
   for (let i = 0; i < unique.length; i += chunkSize) {
-    const chunk = unique.slice(i, i + chunkSize);
+    chunks.push(unique.slice(i, i + chunkSize));
+  }
+
+  /** Drain one chunk completely (all its pages), in order. */
+  const drainChunk = async (chunk: Id[]): Promise<Row[]> => {
+    const rows: Row[] = [];
     let from = 0;
     for (;;) {
-      const rows = await fetchPage(chunk, from, from + pageSize - 1);
-      if (rows.length > 0) out.push(...rows);
+      const page = await fetchPage(chunk, from, from + pageSize - 1);
+      if (page.length > 0) rows.push(...page);
       // A short page means the chunk is exhausted. (A full page might be the
       // server cap — keep going; the next page returning 0 rows ends the loop.)
-      if (rows.length < pageSize) break;
+      if (page.length < pageSize) break;
       from += pageSize;
     }
+    return rows;
+  };
+
+  // SERIAL PATH (the default, and what every pre-existing caller gets).
+  // Byte-for-byte the original loop. Kept as its own branch rather than as
+  // "concurrency of 1" so the untouched callers cannot be affected by a bug in
+  // the scheduler below.
+  if (concurrency === 1) {
+    const out: Row[] = [];
+    for (const chunk of chunks) out.push(...(await drainChunk(chunk)));
+    return out;
   }
+
+  // CONCURRENT PATH (opt-in). A fixed pool of workers pulls the next unclaimed
+  // chunk index, so at most `concurrency` requests are ever in flight no matter
+  // how many chunks there are — an id list of 4,500 does not open 23 sockets.
+  //
+  // ORDERING IS PRESERVED. Each chunk writes into its OWN slot, and the slots
+  // are flattened in index order at the end, so the returned array is identical
+  // to the serial path regardless of which request finishes first. Callers that
+  // rely on chunk order (and the `.order(...)` contract in this file's header)
+  // keep the guarantee they already had.
+  const slots: Row[][] = new Array(chunks.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const index = next++;
+      if (index >= chunks.length) return;
+      slots[index] = await drainChunk(chunks[index]!);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, chunks.length) }, () => worker()),
+  );
+
+  const out: Row[] = [];
+  for (const slot of slots) out.push(...slot);
   return out;
 }
 
@@ -259,6 +333,120 @@ export async function __runChunkedInTests(): Promise<void> {
     { chunkSize: 10, pageSize: SERVER_CAP },
   );
   ok(big.length === 3000, `single-chunk pagination complete (got ${big.length}, want 3000)`);
+
+  // ── SLICE D: opt-in chunk concurrency ──────────────────────────────────────
+  // The whole claim being defended is "faster, and otherwise identical". These
+  // assertions are the "otherwise identical" half; a wrong answer delivered
+  // quickly is not an improvement.
+
+  // Default is SERIAL. Proven by observation, not by reading the constant:
+  // record how many fetches are in flight and assert the peak never exceeds 1.
+  {
+    const ids = Array.from({ length: 1000 }, (_, i) => `id-${i}`);
+    let inFlight = 0;
+    let peak = 0;
+    await chunkedIn(ids, async (chunk) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await Promise.resolve();
+      inFlight--;
+      return chunk.map((id) => ({ id }));
+    });
+    ok(peak === 1, `default stays serial (peak in-flight ${peak}, want 1)`);
+  }
+
+  // Concurrency actually overlaps requests, and respects its ceiling.
+  {
+    const ids = Array.from({ length: 1000 }, (_, i) => `id-${i}`);
+    let inFlight = 0;
+    let peak = 0;
+    await chunkedIn(
+      ids,
+      async (chunk) => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        // Yield enough times that every worker is started before any resolves.
+        for (let i = 0; i < 5; i++) await Promise.resolve();
+        inFlight--;
+        return chunk.map((id) => ({ id }));
+      },
+      { chunkSize: 100, concurrency: 4 },
+    );
+    ok(peak > 1, `concurrency overlaps requests (peak in-flight ${peak})`);
+    ok(peak <= 4, `concurrency respects its ceiling (peak ${peak}, max 4)`);
+  }
+
+  // ORDERING: the concurrent result must equal the serial result EXACTLY, even
+  // when later chunks resolve before earlier ones. The fetcher below inverts
+  // completion order on purpose — the first chunk waits the longest — so a
+  // naive "push as they arrive" implementation would fail this.
+  {
+    const ids = Array.from({ length: 500 }, (_, i) => `id-${i}`);
+    const fetcher = async (chunk: string[]) => {
+      const delay = 20 - Number(chunk[0]!.split("-")[1]) / 25;
+      await new Promise((r) => setTimeout(r, Math.max(0, delay)));
+      return chunk.map((id) => ({ id }));
+    };
+    const serial = await chunkedIn(ids, fetcher, { chunkSize: 25 });
+    const parallel = await chunkedIn(ids, fetcher, { chunkSize: 25, concurrency: 5 });
+    ok(
+      JSON.stringify(serial) === JSON.stringify(parallel),
+      "concurrent result is byte-identical to serial, despite inverted completion order",
+    );
+    ok(parallel.length === 500, `no rows lost or duplicated (got ${parallel.length}, want 500)`);
+  }
+
+  // Pagination WITHIN a chunk stays ordered while chunks run concurrently.
+  {
+    const ids = ["a", "b", "c", "d"];
+    const rows = await chunkedIn(
+      ids,
+      async (chunk, from, to) => {
+        const all: { id: string; i: number }[] = [];
+        for (const id of chunk) for (let i = 0; i < 250; i++) all.push({ id, i });
+        return all.slice(from, to + 1).slice(0, 100);
+      },
+      { chunkSize: 1, pageSize: 100, concurrency: 4 },
+    );
+    ok(rows.length === 1000, `paged + concurrent returns every row (got ${rows.length})`);
+    ok(
+      rows[0]!.id === "a" && rows[999]!.id === "d",
+      "paged + concurrent preserves chunk order",
+    );
+    const firstChunk = rows.slice(0, 250);
+    ok(
+      firstChunk.every((r, i) => r.i === i),
+      "pages within a chunk stay in order under concurrency",
+    );
+  }
+
+  // A rejection still propagates rather than being swallowed by the pool.
+  {
+    let threw = false;
+    try {
+      await chunkedIn(
+        Array.from({ length: 400 }, (_, i) => `id-${i}`),
+        async (chunk) => {
+          if (chunk[0] === "id-200") throw new Error("boom");
+          return chunk.map((id) => ({ id }));
+        },
+        { chunkSize: 200, concurrency: 2 },
+      );
+    } catch {
+      threw = true;
+    }
+    ok(threw, "a failing chunk still rejects under concurrency");
+  }
+
+  // Guard rails: 0 / negative concurrency must not mean "no workers" (a hang).
+  {
+    const rows = await chunkedIn(
+      ["a", "b", "c"],
+      async (chunk) => chunk.map((id) => ({ id })),
+      { chunkSize: 1, concurrency: 0 },
+    );
+    ok(rows.length === 3, "concurrency 0 is clamped to serial, not to a hang");
+  }
 
   // pagedAll: 2,345 rows behind a 1,000-row server cap must all come back.
   const allRows = Array.from({ length: 2345 }, (_, i) => ({ i }));

@@ -18,7 +18,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import { isDohCategory, type DohCategory } from "@/lib/medical/medical-sale-core";
 import { recordExemptSale, type AuthorizationRow } from "@/lib/medical/store";
@@ -87,6 +87,14 @@ export async function getMedicalRegistryForKeys(keys: (string | null)[]): Promis
         if (error) throw error;
         return (data as { pos_product_key: string; doh_category: string }[] | null) ?? [];
       },
+      // SLICE D (performance). This runs on the public menu for every product
+      // on it, so at 4,500 items the 200-key default was 23 round trips taken
+      // strictly one after another. The chunks cover disjoint keys and the
+      // result is order-independent (it is folded into a Map immediately
+      // below), so they are safe to overlap. Larger chunks mean fewer trips;
+      // MENU_READ_CONCURRENCY bounds how many are in flight so a menu render
+      // cannot monopolise the connection pool the register depends on.
+      { chunkSize: 300, concurrency: MENU_READ_CONCURRENCY },
     );
     for (const r of rows) {
       if (isDohCategory(r.doh_category)) map.set(r.pos_product_key, r.doh_category);

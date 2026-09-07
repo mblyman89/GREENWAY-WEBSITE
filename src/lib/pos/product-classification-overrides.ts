@@ -16,7 +16,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // SLICE 3: PostgREST truncates at db.max_rows (1,000) without an error.
-import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 export type ProductClassificationOverride = {
@@ -76,7 +76,11 @@ export async function getOverridesForKeys(
         }
         return (data as ProductClassificationOverride[] | null) ?? [];
       },
-      { chunkSize: CHUNK },
+      // SLICE D (performance): the public menu calls this with every product
+      // key on the page, so these chunks were 15 strictly-serial round trips at
+      // 4,500 items. Disjoint keys, order-independent result (folded into a Map
+      // below), so overlapping them is safe and bounded.
+      { chunkSize: CHUNK, concurrency: MENU_READ_CONCURRENCY },
     );
     if (readFailed) return out;
     for (const row of rows) {

@@ -52,7 +52,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import type { KbProductMatch } from "@/lib/ai/kb/intake";
 import {
   collectLookupKeys,
@@ -113,7 +113,9 @@ async function loadKbProducts(
         if (error) throw new Error(error.message);
         return (data as unknown as KbProductMatch[] | null) ?? [];
       },
-      { chunkSize: CHUNK_SIZE },
+      // SLICE D (performance): disjoint key chunks, folded into a Map by the
+      // index* helper, so overlapping them cannot change the result.
+      { chunkSize: CHUNK_SIZE, concurrency: MENU_READ_CONCURRENCY },
     );
     return indexKbProducts(rows);
   } catch {
@@ -142,7 +144,9 @@ async function loadEnrichments(
         if (error) throw new Error(error.message);
         return (data as unknown as EnrichmentRow[] | null) ?? [];
       },
-      { chunkSize: CHUNK_SIZE },
+      // SLICE D (performance): disjoint key chunks, folded into a Map by the
+      // index* helper, so overlapping them cannot change the result.
+      { chunkSize: CHUNK_SIZE, concurrency: MENU_READ_CONCURRENCY },
     );
     return indexEnrichments(rows);
   } catch {
@@ -178,7 +182,9 @@ async function loadStrains(admin: AdminClient, slugs: string[]): Promise<Map<str
         if (error) throw new Error(error.message);
         return (data as unknown as StrainRow[] | null) ?? [];
       },
-      { chunkSize: CHUNK_SIZE },
+      // SLICE D (performance): disjoint key chunks, folded into a Map by the
+      // index* helper, so overlapping them cannot change the result.
+      { chunkSize: CHUNK_SIZE, concurrency: MENU_READ_CONCURRENCY },
     );
 
   try {
