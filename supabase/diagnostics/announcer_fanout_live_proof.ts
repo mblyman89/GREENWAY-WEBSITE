@@ -28,7 +28,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { planFanout } from "./src/lib/announcer/announcer-fanout-core";
+import { planFanout } from "../../src/lib/announcer/announcer-fanout-core";
 
 function sql(q: string): string {
   return execFileSync("sudo", ["-u", "postgres", "psql", "-d", "gw", "-tAc", q], {
