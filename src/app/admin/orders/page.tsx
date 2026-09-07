@@ -30,6 +30,7 @@ import { setOrderStatusAction, testPrintFromOrdersAction } from "./actions";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
 import { OrderNamePoolManager } from "@/components/admin/orders/OrderNamePoolManager";
 import { NewOrderAlert } from "@/components/admin/orders/NewOrderAlert";
+import { AnnouncerPanel } from "@/components/admin/orders/AnnouncerPanel";
 import { withBackParam } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
@@ -223,6 +224,12 @@ export default async function OrdersAdminPage({
       <div className="px-5 py-6 sm:px-8">
         {/* New-order watcher (polls + chimes when new orders arrive) */}
         <NewOrderAlert />
+
+        {/* SLICE 30 — the Raspberry Pi speakers in the office, sales floor and
+            storage. Lives here, next to the printer status, because this is the
+            screen someone is already looking at when they wonder why they did
+            not hear an order. */}
+        <AnnouncerPanel />
 
         {/* Status summary */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
