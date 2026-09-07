@@ -53,6 +53,10 @@ import { __runCommitAuthorshipTests } from "../../src/lib/git/commit-authorship-
 // own, no database, no network, no Raspberry Pi. Registered here so CI proves
 // the shop's audio rules even if the vitest mirror is ever renamed or skipped.
 import { __runAnnouncerCoreTests } from "../../src/lib/announcer/announcer-core";
+// SLICE 28 — the wire protocol between a Raspberry Pi and this site. Pure
+// parsing and shaping; the Pi is the one client nobody can open a browser to
+// debug, so every refusal it can receive is proven here.
+import { __runAnnouncerProtocolTests } from "../../src/lib/announcer/announcer-protocol-core";
 // books-47, SLICE D: the Form / Why / Check teaching surface. All three are
 // pure and browser-safe by construction -- none may touch node:fs, because the
 // explorer that consumes them is a client component. Registering them here
@@ -1077,6 +1081,7 @@ async function main() {
 
   // SLICE 27 — online order announcer decision layer.
   assertNoFailures("announcer-core", __runAnnouncerCoreTests());
+  assertNoFailures("announcer-protocol-core", __runAnnouncerProtocolTests());
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
