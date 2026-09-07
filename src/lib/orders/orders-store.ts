@@ -20,6 +20,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { classifyStatusCasMiss } from "@/lib/orders/status-cas-core";
+import { enqueueAnnouncementInBackground } from "@/lib/announcer/announcer-enqueue";
 import type { SortColumn } from "@/lib/admin/list-filter-core";
 import type {
   OrderRow,
@@ -235,6 +236,18 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
     to_status: "new",
     actor_label: "customer",
     note: "Order placed online.",
+  });
+
+  // SLICE 29 — make the speakers ring.
+  //
+  // Deliberately NOT awaited. The order is already committed at this point and
+  // the customer is waiting on this response; a doorbell must never sit between
+  // them and their confirmation, and must never be able to fail the sale.
+  // enqueueAnnouncementInBackground swallows every outcome and cannot throw or
+  // reject, so the worst possible failure here is a speaker that stays quiet.
+  enqueueAnnouncementInBackground({
+    orderId: order.id,
+    orderNumber: order.order_number != null ? String(order.order_number) : null,
   });
 
   return {

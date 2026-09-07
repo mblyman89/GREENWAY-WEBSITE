@@ -3,10 +3,15 @@
  *
  * SLICE 27 — the online order announcer, decision layer.
  *
- * PURE. No imports, no I/O, no clock of its own, no database, no network, no
- * Raspberry Pi. Every function here takes what it needs as an argument and
- * returns a value. That is what makes it possible to prove the shop's audio
- * rules are right without owning a speaker.
+ * PURE. No I/O, no clock of its own, no database, no network, no Raspberry Pi.
+ * Every function here takes what it needs as an argument and returns a value.
+ * That is what makes it possible to prove the shop's audio rules are right
+ * without owning a speaker.
+ *
+ * The one import is `pacificParts` from the reporting timezone helper, which is
+ * itself pure (Intl only). Quiet hours have to be judged on Port Orchard's wall
+ * clock, not the UTC clock of the server that happens to run this — see the
+ * note on clockMinutesOf for the mid-afternoon-silence bug that proves why.
  *
  * WHY THIS FILE EXISTS SEPARATELY FROM THE ROUTES
  * ------------------------------------------------
@@ -25,6 +30,8 @@
  * ambiguous input in here resolves toward announcing, and the sound resolver
  * is structurally incapable of returning silence.
  */
+
+import { pacificParts } from "../reports/timezone";
 
 // ============================================================================
 // 1. DEVICE HEALTH
@@ -174,9 +181,27 @@ export function isWithinQuietHours(input: {
   return input.nowMinutes >= start || input.nowMinutes < end;
 }
 
-/** Minutes-since-midnight for a Date, in whatever zone that Date represents. */
+/**
+ * Minutes-since-midnight for an instant, on the SHOP's wall clock.
+ *
+ * This deliberately does NOT use `d.getHours()`. That reads the wall clock of
+ * whatever machine happens to be running the code, and the machine running this
+ * code is a Vercel server set to UTC — seven or eight hours ahead of Port
+ * Orchard depending on daylight saving.
+ *
+ * The bug that caused this note: with quiet hours set to 22:00 -> 08:00, an
+ * order placed at 3:00 PM Pacific is 22:00 UTC. Read as UTC, that lands exactly
+ * on the start of quiet hours, so a mid-afternoon order was silently muted —
+ * the single worst failure this feature can have, because nothing errors and
+ * nobody finds out until a customer is left waiting at the counter.
+ *
+ * `pacificParts` resolves the correct offset per-instant via the IANA zone, so
+ * this stays right across both DST transitions. It is pure (Intl only, no I/O),
+ * so importing it keeps this module safe to run anywhere.
+ */
 export function clockMinutesOf(d: Date): number {
-  return d.getHours() * 60 + d.getMinutes();
+  const p = pacificParts(d);
+  return p.hour * 60 + p.minute;
 }
 
 // ============================================================================
@@ -644,7 +669,42 @@ export function __runAnnouncerCoreTests(): { passed: number; failed: number } {
   eq("clock: rejects non-string", parseClockMinutes(930), null);
   eq("clock: rejects null", parseClockMinutes(null), null);
   eq("clock: rejects words", parseClockMinutes("noon"), null);
-  eq("clockMinutesOf reads local hours+minutes", clockMinutesOf(new Date(2026, 2, 10, 14, 45)), 885);
+  // clockMinutesOf must report PORT ORCHARD's wall clock, never the server's.
+  // These use absolute UTC instants so they assert the same thing on a UTC
+  // Vercel box, on a Pacific laptop, and in CI.
+  //
+  // Summer (PDT = UTC-7): 22:00Z is 3:00 PM Pacific = 900 minutes.
+  eq("clockMinutesOf: 22:00Z in June is 3PM Pacific", clockMinutesOf(new Date("2025-06-10T22:00:00Z")), 900);
+  // Winter (PST = UTC-8): 22:00Z is 2:00 PM Pacific = 840 minutes.
+  eq("clockMinutesOf: 22:00Z in January is 2PM Pacific", clockMinutesOf(new Date("2025-01-10T22:00:00Z")), 840);
+  // Actual Pacific midnight, both halves of the year.
+  eq("clockMinutesOf: Pacific midnight in June", clockMinutesOf(new Date("2025-06-10T07:00:00Z")), 0);
+  eq("clockMinutesOf: Pacific midnight in January", clockMinutesOf(new Date("2025-01-10T08:00:00Z")), 0);
+  eq("clockMinutesOf: minutes survive the offset", clockMinutesOf(new Date("2025-06-10T22:45:00Z")), 945);
+
+  // THE REGRESSION THIS EXISTS TO PREVENT.
+  // A 3:00 PM Pacific order, with overnight quiet hours armed, must ring. Read
+  // as UTC this instant is 22:00, which is exactly the start of the window, so
+  // a naive getHours() implementation mutes a mid-afternoon order and nobody
+  // finds out until a customer is standing at the counter.
+  check(
+    "3PM Pacific order is NOT silenced by 22:00->08:00 quiet hours",
+    !isWithinQuietHours({
+      nowMinutes: clockMinutesOf(new Date("2025-06-10T22:00:00Z")),
+      startRaw: "22:00",
+      endRaw: "08:00",
+    }),
+  );
+  // ...and the window must still work when it genuinely is late in Port Orchard.
+  // 06:00Z in June = 11:00 PM Pacific, which IS inside 22:00 -> 08:00.
+  check(
+    "11PM Pacific IS silenced by 22:00->08:00 quiet hours",
+    isWithinQuietHours({
+      nowMinutes: clockMinutesOf(new Date("2025-06-11T06:00:00Z")),
+      startRaw: "22:00",
+      endRaw: "08:00",
+    }),
+  );
 
   // ---- 3. quiet hours --------------------------------------------------
   // Same-day window 01:00-05:00.
