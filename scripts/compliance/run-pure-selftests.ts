@@ -60,6 +60,8 @@ import { __runAnnouncerProtocolTests } from "../../src/lib/announcer/announcer-p
 // SLICE 29 — deciding which speakers get told about a new order. Pure: takes the
 // device list and the clock as arguments so it can be tested at 3am in July.
 import { __runAnnouncerFanoutTests } from "../../src/lib/announcer/announcer-fanout-core";
+// SLICE 30 — what the back office shows about the speakers.
+import { __runAnnouncerAdminTests } from "../../src/lib/announcer/announcer-admin-core";
 // books-47, SLICE D: the Form / Why / Check teaching surface. All three are
 // pure and browser-safe by construction -- none may touch node:fs, because the
 // explorer that consumes them is a client component. Registering them here
@@ -1086,6 +1088,7 @@ async function main() {
   assertNoFailures("announcer-core", __runAnnouncerCoreTests());
   assertNoFailures("announcer-protocol-core", __runAnnouncerProtocolTests());
   assertNoFailures("announcer-fanout-core", __runAnnouncerFanoutTests());
+  assertNoFailures("announcer-admin-core", __runAnnouncerAdminTests());
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
