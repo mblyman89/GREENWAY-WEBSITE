@@ -235,3 +235,32 @@ rather that number were higher or lower, it is one constant
 - **Slice D** — product detail pages fetch a single row instead of the full menu.
 - **Slice E** — `next/image` for product photos (currently raw `<img>`).
 - **Slice F** — performance-budget tests so a regression fails CI.
+
+## Addendum — a mistake I made, and the process gap it exposed
+
+The first CI run **failed**, on my own test file:
+
+```
+tests/compliance/menu-render-cap.test.ts(180,25): error TS2353:
+'id' does not exist in type 'PageableGroup<string>'
+```
+
+Nothing in the app was wrong. The cause was a gap in *my* checking: I ran
+`tsc --noEmit` and then wrote the test file afterwards, and never re-ran the
+type check. CI type-checks `tests/` too, so it caught what I had skipped.
+
+The fix was also the right fix on the merits rather than a patch to quiet the
+compiler. Real menu groups carry `id` (the scroll anchor), `eyebrow` and `label`
+(the heading) alongside `key` and `items`. The module must accept those, pass
+them through untouched, and never care what they are — so `PageableGroup` now
+declares an index signature saying exactly that. My test was describing real
+usage correctly; the type had been too narrow.
+
+Because loosening a type can hide bugs, I re-ran the mutation that mattered most
+(applying the budget per group) against the new type: still caught by 8 tests.
+Then re-ran `tsc` (0), `eslint` (0), the pure harness (57/57) and the full suite
+(584 files / 14,812 tests) before pushing again.
+
+Recording it because the standing rule is to build from fact, and the fact is
+that the ordering of my own verification steps was wrong. Type-check now runs
+*after* the tests are written, not before.
