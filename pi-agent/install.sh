@@ -54,7 +54,7 @@ Options:
 
 Where do I get a code?
   Back office -> Orders -> Announcer -> "Add a speaker". The code is good
-  for 15 minutes. If it expires, just make another one.
+  for 60 minutes. If it expires, just make another one.
 USAGE
 }
 
@@ -187,7 +187,7 @@ PAIR_ARGS=()
 if [ -n "$CODE" ]; then
   [ -n "$SITE" ] || die "You gave me a code but not a --site. I need both."
   "$BIN_PATH" pair "$CODE" --site "$SITE" "${PAIR_ARGS[@]}" \
-    || die "Pairing did not work. Codes expire after 15 minutes - make a fresh one in the back office and run this installer again."
+    || die "Pairing did not work. Codes expire after 60 minutes - make a fresh one in the back office and run this installer again."
   ok "This speaker is paired"
 elif [ -f "$CONFIG_PATH" ]; then
   ok "Already paired - keeping the existing setup"
