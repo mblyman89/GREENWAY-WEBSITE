@@ -710,7 +710,22 @@ describe("the migration list is ordered the way the database will see it", () =>
     // tests/compliance/classification-memory.test.ts, and PROVEN to execute by
     // applying all 220 migrations in order to a real PostgreSQL 15 and
     // re-applying 0220 a second time for idempotency.
-    expect(listed[listed.length - 1]).toMatch(/^0221_/);
+    //
+    // 0222 (SLICE 27) adds the online order announcer: five tables, a private
+    // storage bucket for uploaded audio, staff-read RLS on all five, and two
+    // functions -- announcer_claim_work, which hands a Raspberry Pi its jobs
+    // using FOR UPDATE SKIP LOCKED under a short lease, and
+    // announcer_expire_stale. It also edits 0209 in place to empty the two
+    // announcer tables that record events, the same way 0212's deposit_bags
+    // is emptied by 0209 despite being created three migrations later.
+    // PROVEN to execute by applying all 222 migrations in order to a real
+    // PostgreSQL, then re-applying 0222 a second time for idempotency, then
+    // exercising announcer_claim_work against the live database rather than
+    // assuming it: two concurrent claimers over one device's queue split the
+    // rows with zero overlap, a live lease was not re-handed out, a lapsed
+    // lease WAS re-handed out, and a row past its TTL was never handed out at
+    // all.
+    expect(listed[listed.length - 1]).toMatch(/^0222_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

@@ -49,6 +49,10 @@ import { __runSiteBackgroundTests } from "../../src/lib/ui/site-background-core"
 // tests/compliance/product-lookup-core.test.ts.
 import { __runProductLookupParseTests } from "../../src/lib/inventory/product-lookup-parse";
 import { __runCommitAuthorshipTests } from "../../src/lib/git/commit-authorship-core";
+// SLICE 27 — the online order announcer. Pure by construction: no clock of its
+// own, no database, no network, no Raspberry Pi. Registered here so CI proves
+// the shop's audio rules even if the vitest mirror is ever renamed or skipped.
+import { __runAnnouncerCoreTests } from "../../src/lib/announcer/announcer-core";
 // books-47, SLICE D: the Form / Why / Check teaching surface. All three are
 // pure and browser-safe by construction -- none may touch node:fs, because the
 // explorer that consumes them is a client component. Registering them here
@@ -1070,6 +1074,9 @@ async function main() {
   __runInventoryUrlCoreTests();
   __runInventoryPageCoreTests();
   __runFacetTypeaheadCoreTests();
+
+  // SLICE 27 — online order announcer decision layer.
+  assertNoFailures("announcer-core", __runAnnouncerCoreTests());
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
