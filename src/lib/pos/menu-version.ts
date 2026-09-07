@@ -10,7 +10,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // SLICE 3: PostgREST caps every response at `db.max_rows` (1,000) and reports
 // no error when it truncates. These helpers page with `.range()` until a short
 // page proves the end of the data.
-import { pagedAll, pagedAllChecked, chunkedIn } from "@/lib/supabase/chunked-in";
+import { pagedAll, pagedAllChecked, chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import type { ReadCompletenessVerdict } from "@/lib/supabase/read-completeness-core";
 import type {
   MenuItemRow,
@@ -429,7 +429,16 @@ export async function getVersionItems(versionId: string): Promise<MenuItemWithVa
         }
         return (data as MenuVariantRow[] | null) ?? [];
       },
-      { chunkSize: 200 },
+      // SLICE D (performance): 23 serial round trips at 4,500 items, inside
+      // the cached menu load, so every cache miss paid all of them in a row.
+      //
+      // SAFE DESPITE BEING A PRICE PATH. Chunks cover disjoint menu_item_ids
+      // and every row is filed by its own v.menu_item_id below, so no
+      // variant can land on the wrong item regardless of completion order.
+      // chunkedIn additionally guarantees the returned array is identical to
+      // the serial one. The variantsFailed guard is unchanged: any failed
+      // page still fails the whole load rather than half-pricing an item.
+      { chunkSize: 200, concurrency: MENU_READ_CONCURRENCY },
     );
     for (const v of variantRows) {
       const list = variantsByItem.get(v.menu_item_id) ?? [];

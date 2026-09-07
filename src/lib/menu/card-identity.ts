@@ -21,7 +21,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // SLICE 3: PostgREST truncates at db.max_rows (1,000) without an error.
-import { pagedAll, chunkedIn } from "@/lib/supabase/chunked-in";
+import { pagedAll, chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { normalizeVendorKey } from "@/lib/inventory/vendor-resolve-core";
 import {
@@ -73,7 +73,10 @@ async function loadPublishedEnrichmentBrands(posKeys: string[]): Promise<Map<str
         .range(from, to);
       return (data as { pos_product_key: string; brand_id: string | null }[] | null) ?? [];
     },
-    { chunkSize: CHUNK },
+    // SLICE D (performance): 15 serial round trips at 4,500 items, on the
+    // public menu, for a display-only brand label. Disjoint chunks folded
+    // into a Map, so overlapping them cannot change the result.
+    { chunkSize: CHUNK, concurrency: MENU_READ_CONCURRENCY },
   );
   for (const r of enrichmentRows) {
     if (r.brand_id) brandIdByKey.set(r.pos_product_key, r.brand_id);
@@ -94,7 +97,7 @@ async function loadPublishedEnrichmentBrands(posKeys: string[]): Promise<Map<str
         .range(from, to);
       return (data as { id: string; display_name: string | null }[] | null) ?? [];
     },
-    { chunkSize: CHUNK },
+    { chunkSize: CHUNK, concurrency: MENU_READ_CONCURRENCY },
   );
   for (const b of brandRows) {
     const name = (b.display_name ?? "").trim();

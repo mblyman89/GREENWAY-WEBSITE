@@ -33,9 +33,36 @@ export const metadata: Metadata = {
 };
 
 // The home page shows live product cards (daily deals + brand grid) sourced from
-// the published DB menu, so it must render on demand rather than be frozen at
-// build time. Keeps the storefront in lock-step with the back office.
-export const dynamic = "force-dynamic";
+// the published DB menu, so it must not be frozen at build time. It is also the
+// first thing every customer loads, so it must not be rebuilt from scratch for
+// every one of them either.
+//
+// SLICE D (performance) — WHY THIS IS NO LONGER `force-dynamic`.
+//
+// `force-dynamic` does not mean "reads fresh data"; it means "this page may
+// never be reused". Next.js implements it by forcing `cache: 'no-store'` and
+// `revalidate: 0` onto the whole render, so every visitor paid for a complete
+// server render of the deal grid and the vendor directory — the same render,
+// repeated, several seconds each. That is the measured home-page cost.
+//
+// `revalidate = 60` keeps the page live while letting visitors within the same
+// minute share one render. Freshness is unchanged in the way that actually
+// matters, because the TTL is the FLOOR, not the mechanism:
+//
+//   * Publishing from the back office calls revalidatePublicMenuSurfaces()
+//     (src/lib/site/public-surfaces.ts), whose PUBLIC_MENU_SURFACES list starts
+//     with "/" — this page — and which clears the live-menu data tag FIRST and
+//     then the page. A publish is still visible immediately.
+//   * Staff preview is unaffected: Draft Mode bypasses the route cache by
+//     design, so isPreviewActive() below still sees drafts on demand.
+//   * 60 s matches MENU_CACHE_TTL_SECONDS, the TTL the menu data cache has used
+//     since Slice A. One number, one meaning, both layers.
+//
+// The bounded risk is the same one that policy already accepts and documents:
+// for at most a minute a card can advertise something that just sold out. The
+// register is not cached, and order pricing rejects a stale line with the
+// existing 409. We can show a stale card; we can never take stale money.
+export const revalidate = 60;
 
 export default async function Home() {
   // Hero slides come from the staff-managed Home Carousel (draft-aware).
