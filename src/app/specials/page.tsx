@@ -9,7 +9,7 @@ import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 import { getContentValues, getContentForRender, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { resolveSpecialsPresentation } from "@/lib/specials/specials-presentation-core";
-import { loadLiveMenuItems } from "@/lib/pos/live-menu";
+import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 
 // Menu is dynamic (published DB version), so specials render on demand.
@@ -39,7 +39,7 @@ export default async function SpecialsPage() {
       getPageBanners("specials", ["specials.hero"]),
       // SLICE 40: overlay the KB strain profile (same as home + shop) so the
       // specials cards show the strain type instead of the raw POS value.
-      loadLiveMenuItems().then((items) => withMenuProfile(items)),
+      loadLiveMenuItemsCached().then((items) => withMenuProfile(items)),
       // SLICE 106: how the weekly-deal grid is PRESENTED (draft-aware). The
       // SEED_DEFAULTS fallback is the live-look-safe default, so pre-seed and
       // pre-migration this is identical to today.

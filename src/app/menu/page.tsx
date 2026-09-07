@@ -7,7 +7,7 @@ import { InteractiveMenuBrowser } from "@/components/menu/InteractiveMenuBrowser
 import { SectionBanner } from "@/components/home/SectionBanner";
 import { ShopBannerCarousel } from "@/components/menu/ShopBannerCarousel";
 import { pageMetadata } from "@/lib/seo/seo";
-import { loadLiveMenuItems } from "@/lib/pos/live-menu";
+import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { getShopCarouselForRender, ensureShopCarouselSeeded } from "@/lib/cms/shop-carousel-store";
 import { collectShopSaleFilters } from "@/lib/cms/shop-carousel-core";
@@ -54,7 +54,7 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   const menuItems = await withCategoryOverride(
     await withDohCompliance(
       await withDisplayKnowledge(
-        await withResolvedImages(await withMenuProfile(await loadLiveMenuItems())),
+        await withResolvedImages(await withMenuProfile(await loadLiveMenuItemsCached())),
       ),
     ),
   );

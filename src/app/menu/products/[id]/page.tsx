@@ -17,7 +17,7 @@ import { cardCannabinoids, deriveNetWeightLine, showProfilePill } from "@/lib/me
 import { cardDisplay } from "@/lib/menu/card-brand-core";
 // SLICE 95: vendor-pure "More from" selection + honest heading scope.
 import { selectRelatedItems, type RelatedScope } from "@/lib/menu/related-products-core";
-import { getLiveMenuItemById, loadLiveMenuItems } from "@/lib/pos/live-menu";
+import { getLiveMenuItemByIdCached, loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withDohCompliance } from "@/lib/menu/menu-doh-server";
@@ -106,7 +106,7 @@ const categoryAliases: Partial<Record<GreenwayMenuItem["category"], string>> = {
 };
 
 async function getMenuItemById(id: string) {
-  return getMerchMenuItemById(id) ?? (await getLiveMenuItemById(id));
+  return getMerchMenuItemById(id) ?? (await getLiveMenuItemByIdCached(id));
 }
 
 function isMerchItem(item: GreenwayMenuItem) {
@@ -260,7 +260,7 @@ async function relatedItemsFor(
   // the heading shows, never mixes vendors, ranks by purchasability →
   // same-category → price proximity (the add-to-cart enticement order), and
   // reports an honest scope for the heading when it must fall back.
-  const allItems = await withMenuProfile(await loadLiveMenuItems());
+  const allItems = await withMenuProfile(await loadLiveMenuItemsCached());
   const selection = selectRelatedItems(item, allItems, 8);
   return { items: selection.items, scope: selection.scope };
 }

@@ -20,7 +20,13 @@
  * back office must mean an empty public menu AND an empty vendor directory.
  */
 import "server-only";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+// SLICE A (performance): the published menu is now CACHED under a tag
+// (src/lib/pos/live-menu.ts → loadLiveMenuAllCached). Refreshing the pages
+// without clearing that tag would rebuild each page from a stale cache entry
+// and reintroduce the exact frozen-menu bug this file exists to prevent, so
+// the tag is cleared here, in the same canonical helper.
+import { MENU_CACHE_TAG, MENU_REVALIDATE_PROFILE } from "@/lib/menu/menu-cache-policy-core";
 
 /**
  * Every public page whose content is derived from the published menu snapshot:
@@ -42,8 +48,24 @@ export const PUBLIC_MENU_SURFACES = [
  * database instead of serving a cached copy. Never throws: a revalidation
  * hiccup must not abort the publish/reset that already succeeded — the pages
  * would simply refresh on their normal schedule instead.
+ *
+ * SLICE A ORDERING — THE DATA TAG IS CLEARED FIRST, AND IT MATTERS.
+ * The page cache is built FROM the data cache. Clearing the pages while the
+ * `live-menu` tag still holds the old catalog would simply re-render the old
+ * catalog into fresh pages — a stale menu with a new timestamp, which is worse
+ * than an obviously stale one because it looks correct. Data first, then pages.
  */
 export function revalidatePublicMenuSurfaces(): void {
+  // 1. The DATA cache: the published menu itself.
+  try {
+    revalidateTag(MENU_CACHE_TAG, MENU_REVALIDATE_PROFILE);
+  } catch (err) {
+    // Same never-throw policy as the paths below: a publish that already
+    // committed to the database must not be reported as failed because a
+    // cache hint did not land. The TTL bounds the damage either way.
+    console.error(`[public-surfaces] revalidateTag ${MENU_CACHE_TAG} failed:`, err);
+  }
+  // 2. The PAGE cache: every public surface rendered from that data.
   for (const path of PUBLIC_MENU_SURFACES) {
     try {
       revalidatePath(path);

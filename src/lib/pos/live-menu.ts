@@ -35,6 +35,11 @@ import type { MenuItemRow, MenuVariantRow } from "@/lib/pos/db-types";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { withCardIdentity } from "@/lib/menu/card-identity";
+// SLICE A (performance): the cache policy lives in a pure module so the tag
+// used for READING here is provably the same string used for INVALIDATING in
+// src/lib/site/public-surfaces.ts — they cannot drift apart.
+import { unstable_cache } from "next/cache";
+import { MENU_CACHE_KEY, menuCacheOptions } from "@/lib/menu/menu-cache-policy-core";
 
 type MenuItemWithVariants = MenuItemRow & { variants: MenuVariantRow[] };
 
@@ -146,5 +151,69 @@ export async function getLiveMenuItemById(id: string): Promise<GreenwayMenuItem 
   // SLICE 48: unconfigured builds have an empty menu (loadLiveMenuAll returns
   // []), so the lookup naturally resolves to undefined — no stale snapshot.
   const items = await loadLiveMenuItems();
+  return items.find((item) => item.id === id);
+}
+
+// ── Cached read path (SLICE A — performance) ─────────────────────────────────
+/**
+ * THE FAST PATH, FOR PUBLIC BROWSING PAGES ONLY.
+ *
+ * The loaders above are unchanged and still read straight through to the
+ * database on every call. That is deliberate: they are shared with the
+ * REGISTER and with ORDER PRICING (`src/lib/orders/order-pricing.ts:133`,
+ * `src/app/api/pos/menu/route.ts:87`), and a cached price is a wrong price.
+ * The rule this slice enforces is: CACHE THE DISPLAY, NEVER CACHE THE MONEY.
+ *
+ * So the cache is a SEPARATE, OPT-IN entry point. A money path cannot inherit
+ * it by accident; it has to be imported by name. The full reasoning and the
+ * classified list of every caller live in
+ * `src/lib/menu/menu-cache-policy-core.ts`.
+ *
+ * Freshness, precisely:
+ *   - Publish / reset  → INSTANT. `revalidatePublicMenuSurfaces()` clears the
+ *     `live-menu` tag in the same action, so the next visitor rebuilds. This is
+ *     what protects the SLICE 48 guarantee (an empty back office = an empty
+ *     site); it is not a timer and does not depend on one.
+ *   - A sale, or a stock/price edit written directly onto the published rows
+ *     (`sale-decrement.ts:132-167`, `stock-flag/route.ts:78`,
+ *     `price-write-store.ts:239`) → bounded by MENU_CACHE_TTL_SECONDS. Those
+ *     paths do not revalidate today, so the TTL is the floor that makes them
+ *     self-heal instead of going stale forever.
+ *
+ * `unstable_cache` is the documented Next.js mechanism for caching non-`fetch`
+ * data such as an ORM or Supabase query. It is "unstable" in name only — it is
+ * the supported API for this in Next.js 16.2.9 with `cacheComponents: false`,
+ * which is this app's configuration.
+ */
+export const loadLiveMenuAllCached = unstable_cache(
+  async (): Promise<GreenwayMenuItem[]> => loadLiveMenuAll(),
+  [...MENU_CACHE_KEY],
+  menuCacheOptions(),
+);
+
+/**
+ * Cached equivalent of `loadLiveMenuItems()` — visible items only.
+ *
+ * The `hidden` filter is applied OUTSIDE the cached function on purpose, so
+ * both the "all" and "visible" views share ONE cache entry instead of storing
+ * the 4,500-item payload twice.
+ */
+export async function loadLiveMenuItemsCached(): Promise<GreenwayMenuItem[]> {
+  const all = await loadLiveMenuAllCached();
+  return all.filter((item) => !item.hidden);
+}
+
+/**
+ * Cached single-item lookup for the public product page.
+ *
+ * This still loads the catalog and calls `.find()` — the inefficiency noted in
+ * the recon — but it now reads a warm cache instead of running ~49 database
+ * round trips per product view. Replacing it with a direct single-row query is
+ * Slice D; this slice deliberately changes caching only.
+ */
+export async function getLiveMenuItemByIdCached(
+  id: string,
+): Promise<GreenwayMenuItem | undefined> {
+  const items = await loadLiveMenuItemsCached();
   return items.find((item) => item.id === id);
 }

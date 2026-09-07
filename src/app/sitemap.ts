@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { loadLiveMenuItems } from "@/lib/pos/live-menu";
+import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { getPublishedSlugs } from "@/lib/cms/blog-store";
 
 const baseUrl = "https://www.greenwaymarijuana.com";
@@ -43,7 +43,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Product detail pages mirror the live menu (POS preview items),
   // de-duplicated by id.
   const seen = new Set<string>();
-  const liveMenuItems = await loadLiveMenuItems();
+  const liveMenuItems = await loadLiveMenuItemsCached();
   const productEntries = [...liveMenuItems]
     .filter((item) => {
       if (seen.has(item.id)) return false;

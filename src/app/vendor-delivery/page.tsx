@@ -7,7 +7,7 @@ import { pageMetadata } from "@/lib/seo/seo";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { buildVendorDirectory, enrichVendorDirectory } from "@/lib/menu/vendor-directory-core";
-import { loadLiveMenuAll } from "@/lib/pos/live-menu";
+import { loadLiveMenuAllCached } from "@/lib/pos/live-menu";
 import { listPublicVendorProfiles } from "@/lib/vendors/store";
 import {
   resolveVendorChannels,
@@ -35,7 +35,7 @@ export default async function VendorDeliveryPage() {
     ]),
     isPreviewActive(),
     getPageBanners("vendors", ["vendors.grow", "vendors.brands"]),
-    loadLiveMenuAll(),
+    loadLiveMenuAllCached(),
     listPublicVendorProfiles(),
   ]);
 
