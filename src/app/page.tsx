@@ -6,7 +6,7 @@ import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { SiteBackground } from "@/components/site/SiteBackground";
 import { StaffShortcut } from "@/components/site/StaffShortcut";
-import { loadLiveMenuItems } from "@/lib/pos/live-menu";
+import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getCarouselForRender } from "@/lib/cms/carousel-store";
@@ -60,7 +60,7 @@ export default async function Home() {
     // Overlay the KB strain profile so home deal cards match the menu (leaning
     // hybrids + terpenes). No-op when no KB/curated match. Menu now comes from
     // the PUBLISHED DB version (dynamic), not a static snapshot.
-    loadLiveMenuItems().then((items) => withMenuProfile(items)),
+    loadLiveMenuItemsCached().then((items) => withMenuProfile(items)),
     // PR 2: back-office vendor profiles (logo + copy) for the "Shop by Brand"
     // section, which now shows VENDOR cards. Defensive (empty when off).
     listPublicVendorProfiles(),
