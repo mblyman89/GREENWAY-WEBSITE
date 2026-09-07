@@ -57,6 +57,9 @@ import { __runAnnouncerCoreTests } from "../../src/lib/announcer/announcer-core"
 // parsing and shaping; the Pi is the one client nobody can open a browser to
 // debug, so every refusal it can receive is proven here.
 import { __runAnnouncerProtocolTests } from "../../src/lib/announcer/announcer-protocol-core";
+// SLICE 29 — deciding which speakers get told about a new order. Pure: takes the
+// device list and the clock as arguments so it can be tested at 3am in July.
+import { __runAnnouncerFanoutTests } from "../../src/lib/announcer/announcer-fanout-core";
 // books-47, SLICE D: the Form / Why / Check teaching surface. All three are
 // pure and browser-safe by construction -- none may touch node:fs, because the
 // explorer that consumes them is a client component. Registering them here
@@ -1082,6 +1085,7 @@ async function main() {
   // SLICE 27 — online order announcer decision layer.
   assertNoFailures("announcer-core", __runAnnouncerCoreTests());
   assertNoFailures("announcer-protocol-core", __runAnnouncerProtocolTests());
+  assertNoFailures("announcer-fanout-core", __runAnnouncerFanoutTests());
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
