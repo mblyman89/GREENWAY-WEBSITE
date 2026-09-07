@@ -50,10 +50,19 @@
  * Everything here is PURE: no React, no DOM, no I/O.
  */
 
-/** The shape this module needs: a group with a stable key and some items. */
+/**
+ * The shape this module needs: a group with a stable key and some items.
+ *
+ * The index signature is deliberate. Real menu groups carry more than this \u2014
+ * `id` (the scroll anchor), `eyebrow` and `label` (the heading) \u2014 and this
+ * module must accept them, pass them through untouched, and never care what
+ * they are. Without the index signature a caller's richer group is rejected by
+ * excess-property checking even though the behaviour is correct.
+ */
 export type PageableGroup<T> = {
   key: string;
   items: T[];
+  [extra: string]: unknown;
 };
 
 /** How many cards the first paint is allowed to build. */
