@@ -28,6 +28,7 @@
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "@types/web-push": "3.6.4",
+    "@vercel/speed-insights": "^2.0.0",
     "exceljs": "^4.4.0",
     "next": "16.2.9",
     "plaid": "^45.0.0",

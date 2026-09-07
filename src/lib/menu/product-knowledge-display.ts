@@ -34,6 +34,13 @@ import {
 } from "@/lib/ai/kb/product-lookup";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
 import { lintCopy, lintTerms, type ExtraBannedPhrase } from "@/lib/ai/compliance";
+// Slice C — batched replacement for the per-item ladder on the menu grid path.
+// The single-item detail path below still uses `lookupProductKnowledge`.
+import { loadKnowledgeIndexes } from "@/lib/ai/kb/product-knowledge-batch";
+import {
+  resolveKnowledgeFromIndexes,
+  type KnowledgeIndexes,
+} from "@/lib/ai/kb/product-knowledge-batch-core";
 
 /** Compliance-safe, display-ready knowledge for a single product. */
 export type DisplayKnowledge = {
@@ -144,12 +151,31 @@ export async function resolveDisplayKnowledge(item: GreenwayMenuItem): Promise<D
  * banned-phrase list once, then resolves each item. Keyed by item id so the grid
  * can look up per-card without re-querying. Non-cannabis items are skipped.
  *
- * Concurrency is bounded so a large menu doesn't open hundreds of simultaneous
- * DB reads. Never throws; failed lookups simply omit that id from the map.
+ * SLICE C — THE N+1 FIX
+ * ─────────────────────
+ * This function USED to call `lookupProductKnowledge()` once per product, eight
+ * at a time. That helper is a fall-through ladder of up to FOUR single-row
+ * queries, so a 4,500-product menu issued up to 18,000 sequential database
+ * round trips on EVERY menu load — ~18 s at a realistic 8 ms RTT. That was the
+ * cause of the owner-reported "feels like over a minute" menu load, and it is
+ * the textbook N+1 query problem.
+ *
+ * It now issues THREE batched, chunked, fully-paginated queries up front
+ * (`loadKnowledgeIndexes`) and resolves the identical ladder in memory with the
+ * PURE `resolveKnowledgeFromIndexes`. Round trips: ~18,000 → ~15-45.
+ *
+ * Behaviour is deliberately UNCHANGED: same rung precedence, same compliance
+ * pass, same map shape, same "failed lookups are simply omitted" contract.
+ * `tests/compliance/menu-knowledge-batch.test.ts` asserts the two paths return
+ * byte-identical results over shared fixtures.
+ *
+ * `opts.concurrency` is retained for source compatibility but is no longer
+ * meaningful — there is no per-item fan-out left to bound. Never throws.
  */
 export async function resolveDisplayKnowledgeMap(
   items: GreenwayMenuItem[],
-  opts: { concurrency?: number } = {},
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _opts: { concurrency?: number } = {},
 ): Promise<Map<string, DisplayKnowledge>> {
   const out = new Map<string, DisplayKnowledge>();
   const cannabis = items.filter((i) => !isNonCannabis(i));
@@ -162,23 +188,27 @@ export async function resolveDisplayKnowledgeMap(
     banned = [];
   }
 
-  const concurrency = Math.max(1, Math.min(opts.concurrency ?? 8, 16));
-  let cursor = 0;
+  // ONE batched load for the whole menu, replacing up to 4 queries per product.
+  const queries = cannabis.map((item) => queryFor(item));
+  let indexes: KnowledgeIndexes;
+  try {
+    indexes = await loadKnowledgeIndexes(queries);
+  } catch {
+    // Same contract as before: a total lookup failure omits every id and each
+    // card falls back to its own fields. Never throw from here.
+    return out;
+  }
 
-  async function worker() {
-    while (cursor < cannabis.length) {
-      const idx = cursor++;
-      const item = cannabis[idx];
-      try {
-        const knowledge = await lookupProductKnowledge(queryFor(item));
-        out.set(item.id, toDisplay(knowledge, banned));
-      } catch {
-        /* omit this id; the card falls back to its own fields */
-      }
+  for (let i = 0; i < cannabis.length; i += 1) {
+    const item = cannabis[i];
+    try {
+      const knowledge = resolveKnowledgeFromIndexes(queries[i], indexes);
+      out.set(item.id, toDisplay(knowledge, banned));
+    } catch {
+      /* omit this id; the card falls back to its own fields */
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, cannabis.length) }, worker));
   return out;
 }
 
