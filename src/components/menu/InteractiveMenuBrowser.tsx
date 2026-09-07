@@ -33,6 +33,19 @@ import {
   itemMatchesClassificationFilter,
   findClassificationFilterOption,
 } from "@/lib/menu/menu-classification-filter-core";
+// SLICE B: the render cap. The grid used to mount EVERY matching product as a
+// live ProductCard (each running two pricing computations and subscribing to two
+// contexts), so an unfiltered menu asked the browser to build thousands of
+// components before it could paint. This spends a bounded card budget across the
+// category groups in order and extends it as the shopper scrolls. Nothing is
+// filtered out \u2014 `total` stays honest and everything remains reachable.
+import {
+  FIRST_PAGE_SIZE,
+  MAX_RENDERED_CARDS,
+  nextBudget,
+  pageGroups,
+  pagingStatusLabel,
+} from "@/lib/menu/menu-pagination-core";
 import { merchProductDefs } from "@/lib/merch/merch-catalog";
 import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
@@ -1055,6 +1068,100 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       .filter((group) => group.items.length > 0);
   }, [activeSectionCategory, filteredItems, usesFilteredSections]);
 
+  // \u2500\u2500 SLICE B: THE RENDER CAP \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // How many cards may exist right now. Starts at one screenful and grows as the
+  // shopper reaches the bottom. All the arithmetic lives in the pure core.
+  const [cardBudget, setCardBudget] = useState(FIRST_PAGE_SIZE);
+
+  // A signature of everything that changes WHICH items match. When the shopper
+  // changes a filter they are starting a new browse, so the budget must snap
+  // back to one page \u2014 otherwise someone who scrolled deep and then filtered
+  // would silently mount hundreds of cards again on the next paint.
+  const resultSignature = useMemo(
+    () =>
+      JSON.stringify([
+        query,
+        selectedCategories,
+        selectedStrains,
+        selectedTerpenes,
+        selectedBrands,
+        selectedVendors,
+        selectedWeights,
+        maxThc,
+        maxCbd,
+        maxPrice,
+        sortBy,
+        activeSpecialId,
+        activeDohId,
+        activeClassificationId,
+      ]),
+    [
+      query,
+      selectedCategories,
+      selectedStrains,
+      selectedTerpenes,
+      selectedBrands,
+      selectedVendors,
+      selectedWeights,
+      maxThc,
+      maxCbd,
+      maxPrice,
+      sortBy,
+      activeSpecialId,
+      activeDohId,
+      activeClassificationId,
+    ],
+  );
+  // Reset DURING RENDER rather than in an effect. React's documented pattern for
+  // "adjust state when a prop/derived value changes": compare against the stored
+  // previous value and set both in the same pass. An effect would work, but it
+  // would paint the stale budget first and then immediately re-render \u2014 a
+  // cascading render, which is precisely the kind of waste this slice removes.
+  const [budgetSignature, setBudgetSignature] = useState(resultSignature);
+  if (budgetSignature !== resultSignature) {
+    setBudgetSignature(resultSignature);
+    setCardBudget(FIRST_PAGE_SIZE);
+  }
+
+  // Spend the budget across the groups, in order. Groups beyond the budget are
+  // dropped so no heading sits above an empty grid.
+  const pagedGroups = useMemo(() => pageGroups(groupedItems, cardBudget), [groupedItems, cardBudget]);
+  const visibleGroups = pagedGroups.groups as MenuItemGroup[];
+
+  // Development-only tripwire. The whole point of this slice is that the number
+  // of mounted ProductCards is BOUNDED; if a future edit reintroduces an
+  // unbounded render, this says so in the console instead of quietly shipping a
+  // one-minute menu again. Stripped from production builds.
+  if (process.env.NODE_ENV !== "production" && pagedGroups.rendered > MAX_RENDERED_CARDS) {
+    console.error(
+      `[menu] render cap breached: ${pagedGroups.rendered} cards mounted, ceiling is ${MAX_RENDERED_CARDS}`,
+    );
+  }
+
+  // Reveal the next page when the sentinel below the grid scrolls into view.
+  // IntersectionObserver is guarded because it is absent in older browsers and
+  // in SSR; without it the "Show more" button below is still fully functional,
+  // so the menu degrades to a manual pager rather than trapping the shopper.
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const hasMoreCards = pagedGroups.hasMore;
+  useEffect(() => {
+    if (!hasMoreCards) return;
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setCardBudget((current) => nextBudget(current));
+        }
+      },
+      // Start building the next page slightly BEFORE the shopper reaches the
+      // bottom, so the grid feels continuous instead of stuttering.
+      { rootMargin: "600px 0px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreCards, cardBudget]);
+
   // Inline toolbar title: prefers the active special collection name, then the
   // first product section label, falling back to a sensible default.
   const toolbarTitle = showAccessorySections
@@ -1345,7 +1452,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
           </div>
         ) : (
           <div className="space-y-10">
-            {groupedItems.map((group, index) => (
+            {visibleGroups.map((group, index) => (
               <section key={group.key} id={group.id} className="scroll-mt-32">
                 {/* The first section's title is shown inline in the toolbar above, so
                     skip its duplicate heading and let the cards sit flush. */}
@@ -1359,6 +1466,31 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
                 </div>
               </section>
             ))}
+
+            {/* SLICE B: the load-more boundary. Sits BELOW the product groups but
+                ABOVE the accessory/merch collections so those stay pinned to the
+                bottom of the page as before. The sentinel is what the observer
+                watches; the button is the no-JS-observer fallback and also gives
+                shoppers who prefer clicking an explicit control. */}
+            {pagedGroups.total > 0 ? (
+              <div className="flex flex-col items-center gap-4 pt-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  {pagingStatusLabel(pagedGroups)}
+                </p>
+                {pagedGroups.hasMore ? (
+                  <>
+                    <div ref={loadMoreRef} aria-hidden className="h-px w-full" />
+                    <button
+                      type="button"
+                      onClick={() => setCardBudget((current) => nextBudget(current))}
+                      className="rounded-full border border-white/20 bg-zinc-900 px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition hover:border-[var(--orange)] hover:text-[var(--orange)]"
+                    >
+                      Show more products
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
 
             {/* Accessories grouped at the BOTTOM when mixed with other categories
                 or when the list is unfiltered. */}
