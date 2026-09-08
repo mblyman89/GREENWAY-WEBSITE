@@ -14,6 +14,11 @@ import { __runPromotionSelectorAiTests } from "../../src/lib/promotions/promotio
 import { __runGuidedPromotionTests } from "../../src/lib/promotions/guided-promotion-core";
 import { __runThursdayPlannerTests } from "../../src/lib/promotions/thursday-planner-core";
 import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core";
+// SLICE L1 -- the liquid VOLUME basis for WAC 314-55-095(1)(d)(i)(E). Pure: no
+// DOM, no I/O. Registered here so CI proves the 2129.3 ml cap and the ml/L/fl oz
+// parser on every push, even if the vitest mirror is ever renamed or skipped.
+// Getting this wrong is a 72x over-sale (a 1.5 L bottle read as a 28 g unit).
+import { __runLiquidVolumeTests } from "../../src/lib/compliance/liquid-volume-core";
 import { __runSalesLimitGateTests } from "../../src/lib/compliance/sales-limit-gate-core";
 import { __runCartLimitMeterCoreTests } from "../../src/lib/menu/cart-limit-meter-core";
 import { __runChunkedInTests } from "../../src/lib/supabase/chunked-in";
@@ -582,6 +587,7 @@ async function main() {
   assertNoFailures("promotion-selector-ai", __runPromotionSelectorAiTests());
   assertNoFailures("guided-promotion-core", __runGuidedPromotionTests());
   assertNoFailures("thursday-planner-core", __runThursdayPlannerTests());
+  __runLiquidVolumeTests();
   __runSalesLimitTests();
   __runSalesLimitGateTests();
   __runCartLimitMeterCoreTests();
