@@ -27,6 +27,11 @@ import {
   type PotencyUnit,
 } from "@/lib/pos/intake-potency-core";
 import { crossExamineRow, MG_FACT_TYPES } from "@/lib/inventory/fact-extraction-core";
+import {
+  deriveNetVolumeMl,
+  deriveNetWeightGrams,
+  LIQUID_VOLUME_TYPES,
+} from "@/lib/compliance/liquid-volume-derivation-core";
 import { deriveHouseType, HOUSE_TYPE_MIN_AUTO_CONFIDENCE } from "@/lib/inventory/house-type-core";
 
 /** The approved draft columns injection needs (from catalog_product_drafts). */
@@ -130,6 +135,22 @@ export type PlannedInjectedItem = {
   package_thc_mg: number | null;
   package_cbd_mg: number | null;
   ratio_label: string | null;
+  /**
+   * SLICE L3: the physical package measure (migration 0138 columns on
+   * menu_items AND inventory_lots).
+   *
+   * net_volume_ml is the one the SLICE L4 limit engine measures against the
+   * 72 fl oz cap, and before this slice receiving produced NOTHING for it --
+   * intake-menu-staging-core.ts hardcoded `net_volume_ml: null`, so every
+   * received liquid reached the register with an unknown size and fell back
+   * to the 28 g category default. A 1.5 L bottle then counted as one ounce.
+   *
+   * PER PACKAGE, not per unit: a "4 x 50ml" carton is 200, not 50. null means
+   * "nobody knows" and NEVER "zero" -- the SLICE L5 receiving gate asks a
+   * human, and the register stays fail-closed until it is answered.
+   */
+  net_weight_grams: number | null;
+  net_volume_ml: number | null;
   fact_provenance: Record<string, string>;
   /**
    * SLICE 18-0: the compliance-limit flags (migrations 0216 / 0217 columns on
@@ -319,6 +340,8 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
     let packageThcMg: number | null = null;
     let packageCbdMg: number | null = null;
     let ratioLabel: string | null = null;
+    let netWeightGrams: number | null = null;
+    let netVolumeMl: number | null = null;
     const invType = (d.inventory_type ?? "").trim();
     const exam = MG_FACT_TYPES.has(invType)
       ? crossExamineRow({
@@ -397,6 +420,68 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       if (exam.ratioLabel?.value) {
         ratioLabel = exam.ratioLabel.value;
         factProvenance.ratio_label = exam.ratioLabel.source;
+      }
+
+      // SLICE L3: the physical package measure. The name extractor already
+      // found the sizes (SLICE 55, litres added in L2); nothing was reading
+      // them, so `net_volume_ml` was null on every received liquid and the
+      // limit engine fell back to a 28 g guess.
+      //
+      // deriveNetVolumeMl is NOT `sizes[0]`: measured against the live
+      // extractor, "4 x 50ml" reports a single 50 ml size with NO pack count,
+      // so the naive read records a 200 ml carton as 50 ml and the register
+      // allows four times the legal volume. See the module header.
+      //
+      // Ambiguous derivations still record their fail-closed (larger) number
+      // AND a diagnostic, because a bigger recorded volume can only ever
+      // allow FEWER packages -- an unanswered question must never be the
+      // thing that lets an oversell through.
+      const vol = deriveNetVolumeMl({
+        rawName: d.name,
+        sizes: exam.name.sizes,
+        packCount: exam.name.packCount,
+      });
+      netWeightGrams = deriveNetWeightGrams(exam.name.sizes);
+      if (netWeightGrams !== null) factProvenance.net_weight_grams = "name";
+      if (vol.netVolumeMl !== null && vol.source !== null) {
+        netVolumeMl = vol.netVolumeMl;
+        factProvenance.net_volume_ml = vol.source;
+        if (vol.confidence === "ambiguous") {
+          diagnostics.push({
+            severity: "warning",
+            code: "net_volume_needs_confirmation",
+            message:
+              "The package volume was derived from the product name and needs a human to confirm it.",
+            context: {
+              draft_id: d.id,
+              pos_product_key: key,
+              productName: d.name,
+              displayName: d.name,
+              inventoryType: invType,
+              netVolumeMl: vol.netVolumeMl,
+              perUnitMl: vol.perUnitMl,
+              packCount: vol.packCount,
+              reasons: vol.reasons,
+            },
+          });
+        }
+      } else if (LIQUID_VOLUME_TYPES.has(invType)) {
+        // A liquid with NO derivable volume is the case that broke the limit.
+        // Surface it so the dock can measure the bottle instead of letting
+        // the register invent a size.
+        diagnostics.push({
+          severity: "warning",
+          code: "net_volume_missing",
+          message: "This liquid has no package volume, so the 72 fl oz limit cannot be measured.",
+          context: {
+            draft_id: d.id,
+            pos_product_key: key,
+            productName: d.name,
+            displayName: d.name,
+            inventoryType: invType,
+            reasons: vol.reasons,
+          },
+        });
       }
     }
 
@@ -490,6 +575,8 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       package_thc_mg: packageThcMg,
       package_cbd_mg: packageCbdMg,
       ratio_label: ratioLabel,
+      net_weight_grams: netWeightGrams,
+      net_volume_ml: netVolumeMl,
       fact_provenance: factProvenance,
       // SLICE 18-0: the compliance classification, carried verbatim from the
       // approval gate. `?? null` only normalises "absent" (a pre-0218 database)

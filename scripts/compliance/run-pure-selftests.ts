@@ -19,6 +19,7 @@ import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core
 // parser on every push, even if the vitest mirror is ever renamed or skipped.
 // Getting this wrong is a 72x over-sale (a 1.5 L bottle read as a 28 g unit).
 import { __runLiquidVolumeTests } from "../../src/lib/compliance/liquid-volume-core";
+import { __runLiquidVolumeDerivationTests } from "../../src/lib/compliance/liquid-volume-derivation-core";
 import { __runSalesLimitGateTests } from "../../src/lib/compliance/sales-limit-gate-core";
 import { __runCartLimitMeterCoreTests } from "../../src/lib/menu/cart-limit-meter-core";
 import { __runChunkedInTests } from "../../src/lib/supabase/chunked-in";
@@ -588,6 +589,7 @@ async function main() {
   assertNoFailures("guided-promotion-core", __runGuidedPromotionTests());
   assertNoFailures("thursday-planner-core", __runThursdayPlannerTests());
   __runLiquidVolumeTests();
+  __runLiquidVolumeDerivationTests();
   __runSalesLimitTests();
   __runSalesLimitGateTests();
   __runCartLimitMeterCoreTests();

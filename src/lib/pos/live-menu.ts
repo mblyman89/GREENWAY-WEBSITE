@@ -110,6 +110,13 @@ export function menuRowToGreenwayItem(row: MenuItemWithVariants): GreenwayMenuIt
     // `?? null` keeps a pre-0217 database reading as "not classified".
     otherwiseTaken: row.otherwise_taken ?? null,
     unitsPerPackage: row.units_per_package ?? null,
+    // SLICE L3 -- the physical package measure. menu-version.ts selects "*",
+    // so the column was ALREADY arriving here and was simply never mapped;
+    // the register therefore had no volume to measure and fell back to the
+    // 28 g liquid default (a 1.5 L bottle counted as one ounce).
+    // `?? null` keeps a pre-0138 database reading as "unknown", never zero.
+    netWeightGrams: row.net_weight_grams ?? null,
+    netVolumeMl: row.net_volume_ml ?? null,
     totalThc: toCannabinoid(row.total_thc_json),
     totalCbd: toCannabinoid(row.total_cbd_json),
     compounds: toCompounds(row.compounds_json),

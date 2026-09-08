@@ -250,8 +250,14 @@ function masteredToSnapshot(it: MasteredNewCard, sortOrder: number): StagedSnaps
     package_thc_mg: it.package_thc_mg,
     package_cbd_mg: it.package_cbd_mg,
     ratio_label: it.ratio_label,
-    net_weight_grams: null,
-    net_volume_ml: null,
+    // SLICE L3: these two were hardcoded null -- the SAME defect class as the
+    // "SLICE 18G (DEFECT 3)" note below, and with the same silent blast
+    // radius. The carry-forward mapper ~90 lines down maps them correctly, so
+    // a CARRIED card kept its volume while a NEWLY RECEIVED one lost it, and
+    // the register measured the new bottle against a 28 g category default.
+    // Carried straight through; never re-derived here.
+    net_weight_grams: it.net_weight_grams ?? null,
+    net_volume_ml: it.net_volume_ml ?? null,
     fact_provenance: it.fact_provenance,
     // SLICE 18G (DEFECT 3): the SECOND producer, and the one the 18E writeup
     // missed. SLICE 18-0 deliberately plumbed the approver's compliance answers

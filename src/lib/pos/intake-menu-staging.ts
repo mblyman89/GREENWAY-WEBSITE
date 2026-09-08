@@ -273,6 +273,9 @@ export async function stageIntakeMenuVersionForManifest(
             package_thc_mg: facts.package_thc_mg,
             package_cbd_mg: facts.package_cbd_mg,
             ratio_label: facts.ratio_label,
+            // SLICE L3: the package measure on the golden record.
+            net_weight_grams: facts.net_weight_grams,
+            net_volume_ml: facts.net_volume_ml,
             fact_provenance: facts.fact_provenance,
           })
           .eq("id", lotId);
