@@ -22,7 +22,7 @@
 - [x] tsc 0, eslint 0, full suite 597 files / 15,187 tests, 0 failures.
 - [x] PR #1132 rebase-merged; commits 26692ae + 329e9b4, authorship mblyman89 verified.
 
-## L5 — receiving volume gate  [IN PROGRESS]
+## L5 — receiving volume gate  [COMPLETE — MERGED]
 
 ### Recon findings (verified in source, nothing assumed)
 - L3 ALREADY derives volume at receiving (draft-injection-core.ts:439
@@ -61,9 +61,30 @@
 - [x] The receiver's way to answer: gated quantity + unit control on the
       drafts page, forwarded by the server action. (0a3856c)
 - [x] 63 pure self-tests + 28 unit tests in receiving-volume-gate.test.ts.
-- [ ] Mutation harness (23 mutations) — test the tests.
-- [ ] tsc 0, eslint 0, FULL suite.
-- [ ] PR / rebase-merge / authorship.
+- [x] Mutation harness: 23/23 caught, 0 survived. Two survived the first
+      run and BOTH were real holes, now closed:
+      M15 - the server derived the volume then ignored it (tests asserted
+            deriveNetVolumeMl was CALLED, never that its answer was USED).
+      M10 - `||`->`&&`; probed, not assumed: still refuses all three partial
+            answers so nothing over-sells, but loses the only actionable
+            message. A half-answered gate must report as an unanswered one.
+      Two harness defects found BEFORE running it: M12's anchor matched
+      nothing, and missing case M23 let fl oz store as ml (~30x under).
+- [x] Migration 0224 PROVEN, not renumbered: prove-0224-executes.sh applies
+      all 224 to real PostgreSQL 15 (224 applied / 0 failed, idempotent),
+      then inspects: numeric(12,3) nullable NO default; 354.882 (12 fl oz)
+      round-trips exactly; unmeasured stays NULL, 0 zero-rows; pre-0224-style
+      draft lands NULL = nothing backfilled.
+- [x] tsc 0, eslint 0, self-tests 63 + 97, unit 28,
+      FULL suite 598 files / 15,215 tests / 0 failures.
+- [x] PR #1133 rebase-merged. Commits 1be94b9, 66b5845, b1768dc, 1d5ae6a,
+      5d37a0b - authorship mblyman89 verified on all five.
+
+### Next (owner-confirmed, separate round)
+- [ ] Move topicals out of the `liquid_edible` bucket onto weighted ounces.
+      Deliberate marker left in tests/compliance/liquid-limit-ml-engine.test.ts:
+      `expect(categoryToBucket("topical")).toBe("liquid_edible")` - it will
+      fail loudly when that round starts, which is the point.
 
 ### Owner action outstanding
 - Apply `0223_liquid_volume_ml_snapshot.sql` AND `0224_receiving_volume_gate.sql`
