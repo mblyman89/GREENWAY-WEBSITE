@@ -21,6 +21,10 @@
 import crypto from "node:crypto";
 import * as XLSX from "xlsx";
 import { STATUTORY_GRAMS_PER_OUNCE, AVOIRDUPOIS_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
+// SLICE L2: the fl oz -> ml and L -> ml conversions come from the one named
+// source now, instead of a hand-copied 29.5735 literal, so the package-size
+// parser and the sales-limit cap can never drift apart.
+import { ML_PER_FLUID_OUNCE, ML_PER_LITRE } from "@/lib/compliance/liquid-volume-core";
 // SLICE 56: the word-by-word extraction engine (SLICE 55). Pure module — the
 // transformer cross-examines every mg-dosed row's NAME against its potency
 // COLUMNS and only trusts arithmetic-verified facts (docs/data-governance.md
@@ -424,9 +428,17 @@ function parsePackageSize(rawPackage: string, fallbackSize?: string, fallbackUni
   let unit = unitRaw
     .replace(/fluid\s*ounces?|fluidounce|fl\.?\s*oz/, "floz")
     .replace(/milligrams?/, "mg")
-    .replace(/milliliters?/, "ml")
+    // SLICE L2: millilitres before litres, so "milliliters" is not shortened to
+    // "l" by the litre rule below. British spelling included.
+    .replace(/milliliters?|millilitres?/, "ml")
     .replace(/grams?/, "g")
     .replace(/ounces?/, "oz")
+    // SLICE L2: litres were MISSING entirely, so a "1L" bottle fell through to
+    // the `each` branch and arrived at the register with NO size -- the limit
+    // engine then allowed 72 of them (a 72x over-sale). Guarded: `ml` is
+    // already consumed above, and the bare `l` must be the whole unit token
+    // (^...$) so "lb"/"lbs"/"lot" are untouched.
+    .replace(/^(?:liters?|litres?|l)$/, "l")
     .replace(/each|units?/, "ea");
   if (!unit) unit = "ea";
   const gramsEquivalent = unit === "g" ? quantity : unit === "oz" ? quantity * STATUTORY_GRAMS_PER_OUNCE : undefined;
@@ -441,23 +453,41 @@ function parsePackageSize(rawPackage: string, fallbackSize?: string, fallbackUni
   else if (unit === "floz") label = `${formatNumber(quantity)}fl oz`;
   else if (unit === "mg") label = `${formatNumber(quantity)}mg`;
   else if (unit === "ml") label = `${formatNumber(quantity)}ml`;
+  // SLICE L2: an uppercase "L" is how bottles are actually labelled, and it is
+  // what volumeMlFromLabel() in liquid-volume-core expects to parse back.
+  else if (unit === "l") label = `${formatNumber(quantity)}L`;
   else label = quantity === 1 ? "each" : `${formatNumber(quantity)} each`;
-  const sortUnitWeight = unit === "mg" ? 0.001 : unit === "g" ? 1 : unit === "oz" ? 28 : unit === "ml" ? 0.01 : unit === "floz" ? 0.02957 : 10000;
+  const sortUnitWeight = unit === "mg" ? 0.001 : unit === "g" ? 1 : unit === "oz" ? 28 : unit === "ml" ? 0.01 : unit === "l" ? 10 : unit === "floz" ? 0.02957 : 10000;
   return { quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1, unit, gramsEquivalent, label, sortValue: (Number.isFinite(quantity) ? quantity : 1) * sortUnitWeight, raw };
 }
 
 function packageFromParts(quantity: number, unit: string, raw: string): ParsedPackage {
   const normalizedUnit = unit.toLowerCase()
-    .replace(/fluid\s*ounces?|fluidounce|fl\.?\s*oz/, "oz")
+    // SLICE L2 -- THE FL-OZ CONFLATION. This line previously mapped
+    // `fl oz -> "oz"`, so a name-derived "12 fl oz" beverage became TWELVE
+    // WEIGHT OUNCES: gramsEquivalent below turned it into 336 g of net WEIGHT
+    // and no volume was recorded at all. parsePackageSize (the sibling
+    // normaliser 30 lines above) has always mapped it to "floz" correctly;
+    // these two disagreed. Now they agree.
+    .replace(/fluid\s*ounces?|fluidounce|fl\.?\s*oz/, "floz")
     .replace(/milligrams?/, "mg")
-    .replace(/milliliters?/, "ml")
+    // millilitres before litres (see parsePackageSize).
+    .replace(/milliliters?|millilitres?/, "ml")
     .replace(/grams?/, "g")
     .replace(/ounces?/, "oz")
+    // SLICE L2: litres. Anchored so "lb"/"lot" cannot match.
+    .replace(/^(?:liters?|litres?|l)$/, "l")
     .replace(/packs?|pk/, "pk");
   const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
-  const label = normalizedUnit === "pk" ? `${formatNumber(safeQuantity)}pk` : `${formatNumber(safeQuantity)}${normalizedUnit}`;
+  const label = normalizedUnit === "pk"
+    ? `${formatNumber(safeQuantity)}pk`
+    : normalizedUnit === "floz"
+      ? `${formatNumber(safeQuantity)}fl oz`
+      : normalizedUnit === "l"
+        ? `${formatNumber(safeQuantity)}L`
+        : `${formatNumber(safeQuantity)}${normalizedUnit}`;
   const gramsEquivalent = normalizedUnit === "g" ? safeQuantity : normalizedUnit === "oz" ? safeQuantity * STATUTORY_GRAMS_PER_OUNCE : undefined;
-  const sortUnitWeight = normalizedUnit === "mg" ? 0.001 : normalizedUnit === "g" ? 1 : normalizedUnit === "oz" ? 28 : normalizedUnit === "ml" ? 0.01 : normalizedUnit === "pk" ? 100 : 10000;
+  const sortUnitWeight = normalizedUnit === "mg" ? 0.001 : normalizedUnit === "g" ? 1 : normalizedUnit === "oz" ? 28 : normalizedUnit === "ml" ? 0.01 : normalizedUnit === "l" ? 10 : normalizedUnit === "floz" ? 0.02957 : normalizedUnit === "pk" ? 100 : 10000;
   return { quantity: safeQuantity, unit: normalizedUnit, gramsEquivalent, label, sortValue: safeQuantity * sortUnitWeight, raw };
 }
 
@@ -472,7 +502,7 @@ const NAME_PACKAGE_ELIGIBLE_TYPES = new Set(["Solid Edible", "Liquid Edible", "T
 // Units that represent a real physical package measurement (volume or weight). A bare "mg"
 // figure in a product name is almost always a POTENCY/dose, not a package size, so it must
 // never outrank one of these. (Bug 1)
-const REAL_MEASURE_UNITS = new Set(["g", "oz", "floz", "ml"]);
+const REAL_MEASURE_UNITS = new Set(["g", "oz", "floz", "ml", "l"]);
 
 type NamePackageCandidate = { pkg: ParsedPackage; source: "volume" | "pack" | "dosePack" | "parentheticalWeight" | "weight" | "potency" };
 
@@ -487,7 +517,10 @@ function packageCandidateFromProductName(productName: string, category: string, 
 
   // PRIORITY ORDER (Bug 1): real volume/weight first, packs next, and bare mg potency LAST.
   // A volume measurement always wins over a dose, regardless of edible form.
-  const volume = name.match(/\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid\s*ounces?|fluidounce|oz|ml|milliliters?)\b/i);
+  // SLICE L2: `l|liters?|litres?` added. Ordered longest-first so "milliliters"
+  // is matched by the ml alternative and never by the bare `l`; the bare `l` is
+  // last and \b-terminated, so "2 Lb" and "5 Lot" do not match.
+  const volume = name.match(/\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid\s*ounces?|fluidounce|oz|milliliters?|millilitres?|ml|liters?|litres?|l)\b/i);
   if (volume && (rawType !== "Solid Edible" || /\b(?:drink|beverage|lemonade|shot|soda|can|tincture|drops?|sorbet)\b/i.test(name))) {
     return { pkg: packageFromParts(Number(volume[1]), volume[2], volume[0]), source: "volume" };
   }
@@ -1104,7 +1137,8 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
 
   // SLICE 56: net weight / net volume as structured fields, from the package
   // measure (real units only). oz→grams uses the true avoirdupois conversion
-  // (GW-016); fl oz→ml uses 29.5735 (shared with card-cannabinoids.ts).
+  // (GW-016); fl oz→ml and L→ml use the named constants from
+  // liquid-volume-core (SLICE L2) instead of a hand-copied 29.5735 literal.
   let netWeightGrams: number | null = null;
   let netVolumeMl: number | null = null;
   const pkgMeasure = firstAvailable?.package;
@@ -1112,7 +1146,10 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
     if (pkgMeasure.unit === "g") netWeightGrams = pkgMeasure.quantity;
     else if (pkgMeasure.unit === "oz") netWeightGrams = pkgMeasure.quantity * AVOIRDUPOIS_GRAMS_PER_OUNCE;
     else if (pkgMeasure.unit === "ml") netVolumeMl = pkgMeasure.quantity;
-    else if (pkgMeasure.unit === "floz") netVolumeMl = pkgMeasure.quantity * 29.5735;
+    else if (pkgMeasure.unit === "floz") netVolumeMl = pkgMeasure.quantity * ML_PER_FLUID_OUNCE;
+    // SLICE L2: litres. Previously unreachable -- parsePackageSize could not
+    // produce a "l" unit at all, so litre bottles recorded no net volume.
+    else if (pkgMeasure.unit === "l") netVolumeMl = pkgMeasure.quantity * ML_PER_LITRE;
     // (unit === "mg": milligrams are potency, not a physical measure — no net
     // weight is derived. Garbage mg sizes are flagged once in
     // validatedPackageSize via the package_size_mg_garbage diagnostic.)
