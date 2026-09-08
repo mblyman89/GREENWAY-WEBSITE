@@ -77,10 +77,18 @@ describe("the statutory numbers themselves", () => {
     expect(LIMIT_BUCKET_UNITS.low_thc_liquid).toBe("mg_thc");
     expect(isThcBucket("low_thc_liquid")).toBe(true);
     expect(LIMIT_BUCKETS).toContain("low_thc_liquid");
-    for (const b of ["usable", "solid_edible", "concentrate", "liquid_edible"] as const) {
+    // SLICE L4 — liquid_edible left the grams group. It is now "ml", because
+    // the statute caps it at 72 FLUID ounces and a volume cap cannot be
+    // enforced on a weight basis. The other three are unchanged, and the
+    // split is asserted explicitly rather than by loosening the loop: a
+    // formatter that still assumes grams for the liquid bucket renders the
+    // 2129.292 ml cap as "76.046 oz".
+    for (const b of ["usable", "solid_edible", "concentrate"] as const) {
       expect(LIMIT_BUCKET_UNITS[b]).toBe("g");
       expect(isThcBucket(b)).toBe(false);
     }
+    expect(LIMIT_BUCKET_UNITS.liquid_edible).toBe("ml");
+    expect(isThcBucket("liquid_edible")).toBe(false);
   });
 });
 
@@ -158,7 +166,12 @@ describe("qualification \u2014 a serving is not a unit", () => {
       [{ category: "edible-liquid", quantity: 1, unitThcMg: 4, grams: 355 }],
       "recreational",
     );
-    expect(bucketOf(v, "liquid_edible").used).toBe(355);
+    // SLICE L4 — the liquid bucket now accumulates MILLILITRES. This line
+    // states 355 GRAMS and no volume, so the weight is carried across at its
+    // ounce-count (355 / 28 * 29.5735 = 374.95 ml). That carry-across is what
+    // keeps every weight-labelled liquid and topical behaving exactly as
+    // before: the ounce-count is preserved, and NO density is assumed.
+    expect(bucketOf(v, "liquid_edible").used).toBeCloseTo((355 / 28) * 29.5735, 3);
     expect(bucketOf(v, "low_thc_liquid").used).toBe(0);
   });
 
@@ -313,7 +326,10 @@ describe("(E) and (F) are alternatives, never additive", () => {
   it("the two buckets are independent: a full mg bucket plus a small normal liquid passes", () => {
     const v = evaluateCart([can(50), { category: "edible-liquid", quantity: 1 }]);
     expect(bucketOf(v, "low_thc_liquid").usedGrams).toBe(200);
-    expect(bucketOf(v, "liquid_edible").usedGrams).toBe(28);
+    // SLICE L4 — one unmeasured liquid unit: the 28 g category default,
+    // carried across at its ounce-count = 29.574 ml. Same one ounce of the
+    // statute's 72 as before the rebase.
+    expect(bucketOf(v, "liquid_edible").usedGrams).toBeCloseTo(29.574, 3);
     expect(v.blocked).toBe(false);
   });
 
@@ -343,7 +359,10 @@ describe("the customer-visible reason text uses the right unit", () => {
   it("formatLimitAmount speaks each bucket's own language", () => {
     expect(formatLimitAmount("low_thc_liquid", 200)).toBe("200 mg THC");
     expect(formatLimitAmount("concentrate", 7)).toBe("7 g");
-    expect(formatLimitAmount("liquid_edible", 2016)).toBe("72 oz");
+    // SLICE L4 — the bucket speaks MILLILITRES in, FLUID OUNCES out. Passing
+    // the old 2016 figure would now render "68.167 fl oz", which is precisely
+    // the kind of unit mix-up this assertion exists to catch.
+    expect(formatLimitAmount("liquid_edible", 72 * 29.5735)).toBe("72 fl oz");
     expect(formatLimitAmount("usable", 28)).toBe("1 oz");
   });
 
@@ -391,11 +410,14 @@ describe("regression: nothing else moved", () => {
     expect(RECREATIONAL_LIMITS.usable).toBe(28);
     expect(RECREATIONAL_LIMITS.solid_edible).toBe(448);
     expect(RECREATIONAL_LIMITS.concentrate).toBe(7);
-    expect(RECREATIONAL_LIMITS.liquid_edible).toBe(2016);
+    // SLICE L4 — deliberately rebased: 2016 g -> 2129.292 ml (72 fl oz).
+    // The other three buckets below are UNCHANGED, which is the point of this
+    // regression test: only the liquid bucket moved.
+    expect(RECREATIONAL_LIMITS.liquid_edible).toBeCloseTo(72 * 29.5735, 6);
     expect(MEDICAL_LIMITS.usable).toBe(84);
     expect(MEDICAL_LIMITS.solid_edible).toBe(1344);
     expect(MEDICAL_LIMITS.concentrate).toBe(21);
-    expect(MEDICAL_LIMITS.liquid_edible).toBe(6048);
+    expect(MEDICAL_LIMITS.liquid_edible).toBeCloseTo(216 * 29.5735, 6);
   });
 
   it("an empty cart is clean across EVERY bucket, named explicitly", () => {
