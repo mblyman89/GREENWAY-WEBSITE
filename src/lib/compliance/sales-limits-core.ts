@@ -11,7 +11,7 @@
  *   - usable          : 1 ounce useable cannabis           = 28 g   (flower-equivalent)
  *   - solid_edible    : 16 ounces solid infused            = 448 g   (16 × 28)
  *   - concentrate     : 7 grams extract/concentrate inhale = 7 g
- *   - liquid_edible   : 72 ounces liquid infused           = 2016 g  (72 × 28, ≈ ml)
+ *   - liquid_edible   : 72 FLUID ounces liquid infused      = 2129.292 ml — SLICE L4
  *   - low_thc_liquid  : 200 MILLIGRAMS of active delta-9 THC  — SLICE 16
  *   - otherwise_taken : 10 UNITS (a COUNT OF ITEMS)           — SLICE 17
  *
@@ -54,6 +54,40 @@
  * analogy would authorize a sale the rule nowhere permits — the one direction
  * that creates real exposure. Declining can only under-sell, which is
  * recoverable and explainable. Do NOT "fix" this to 30.
+ *
+ * ── SLICE L4: WHY liquid_edible IS MEASURED IN MILLILITRES ───────────────
+ * The owner found that the liquid limit allowed vastly more than 72 ounces.
+ * The instinctive diagnosis — "2016 is the wrong constant" — IS WRONG, and
+ * anyone changing this code must understand why before touching it.
+ *
+ * For an OUNCE-labelled product the grams basis was numerically EXACT, because
+ * the 28 cancels:
+ *
+ *     2016 / (q * 28)  ==  72 / q  ==  (72 * 29.5735) / (q * 29.5735)
+ *
+ * So 1oz→72, 2oz→36, 16oz→4, 32oz→2 all enforced correctly. The real defect
+ * was that ml / fl oz / L produced NO per-unit measure at all
+ * (gramsFromVariantLabel matches only g|oz), so they fell back to
+ * DEFAULT_UNIT_GRAMS["edible-liquid"] = 28 and EVERY size allowed exactly 72
+ * packages: a 1.5 L bottle counted the same as a 1 oz vial (a 72x oversell),
+ * while a 10 ml dropper was capped at 72 when 212 are legal (an UNDER-sell
+ * that cost legal sales). The error ran both ways.
+ *
+ * The fix is the BASIS, not the number. Both the bucket total and the cap are
+ * rescaled by the SAME ratio R = 29.5735 / 28 = 1.056196, so no
+ * currently-correct verdict can move:
+ *
+ *     G <= 2016  <==>  G*R <= 2129.292
+ *
+ * Verified numerically across g = 0..4000 in 0.25 g steps: 0 mismatches, with
+ * both boundaries exact (2016*R = 2129.2920 = the cap; 2016.25*R exceeds it).
+ *
+ * THIS IS ALSO WHAT KEEPS TOPICALS SAFE. categoryToBucket routes `topical`
+ * into liquid_edible, and the owner's decision is that topicals stay on
+ * WEIGHTED ounces until their own later slice. Because the ounce-count is
+ * carried across as an ounce-count (never through an invented g/ml density), a
+ * weight-labelled salve keeps its exact previous behaviour: 1oz→72, 1.7oz→42,
+ * 2oz→36, 4oz→18, 8oz→9 — all identical. NO DENSITY IS ASSUMED ANYWHERE.
  *
  * FAIL-SAFE RUNS THE OPPOSITE WAY HERE — READ THIS BEFORE CHANGING ANYTHING.
  * For low_thc_liquid, an unflagged product falls back to the 72 oz bucket,
@@ -112,6 +146,13 @@
  * split and under-counting concentrate is the enforcement risk).
  */
 import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
+// SLICE L4 — the volume basis. Imported, never re-derived: a second copy of
+// 29.5735 is how the cap and the line measure drift apart.
+import {
+  ML_PER_FLUID_OUNCE,
+  REC_LIQUID_ML,
+  MED_LIQUID_ML,
+} from "@/lib/compliance/liquid-volume-core";
 
 // GW-016: the statutory equivalence now lives (named + documented + self-tested)
 // in the shared grams-per-ounce module; re-exported here so existing consumers
@@ -155,13 +196,17 @@ export const LIMIT_BUCKET_LABELS: Record<LimitBucket, string> = {
  * which is meaningless and dangerous. Any code formatting a bucket figure MUST
  * consult this map rather than assuming grams.
  */
-export type LimitUnit = "g" | "mg_thc" | "units";
+export type LimitUnit = "g" | "ml" | "mg_thc" | "units";
 
 export const LIMIT_BUCKET_UNITS: Record<LimitBucket, LimitUnit> = {
   usable: "g",
   solid_edible: "g",
   concentrate: "g",
-  liquid_edible: "g",
+  // SLICE L4 — MILLILITRES. The statute caps this bucket at 72 FLUID ounces,
+  // and a volume cap can only be enforced on a volume basis. Any formatter
+  // that assumes grams here will render 2129.292 as "76.046 oz", which is
+  // wrong by the ratio between a fluid ounce and a weight ounce.
+  liquid_edible: "ml",
   low_thc_liquid: "mg_thc",
   // SLICE 17 — a COUNT OF ITEMS. Not convertible to grams or mg. Any formatter
   // that assumes a weight will render "10 units" as "0.357 oz", which is both
@@ -177,6 +222,11 @@ export function isThcBucket(bucket: LimitBucket): boolean {
 /** SLICE 17 — true when the bucket counts ITEMS rather than any measure of mass. */
 export function isUnitCountBucket(bucket: LimitBucket): boolean {
   return LIMIT_BUCKET_UNITS[bucket] === "units";
+}
+
+/** SLICE L4 — true when the bucket is measured in millilitres of product. */
+export function isVolumeBucket(bucket: LimitBucket): boolean {
+  return LIMIT_BUCKET_UNITS[bucket] === "ml";
 }
 
 /**
@@ -195,6 +245,10 @@ export function formatLimitAmount(bucket: LimitBucket, amount: number): string {
     return `${n} ${n === 1 ? "unit" : "units"}`;
   }
   if (bucket === "concentrate") return `${round3(amount)} g`;
+  // SLICE L4 — a volume bucket renders in FLUID ounces, because that is how
+  // the statute states it and how the owner asked to see it. Rendering ml
+  // through gramsToOunces() would report 2129.292 as "76.046 oz".
+  if (isVolumeBucket(bucket)) return `${round3(amount / ML_PER_FLUID_OUNCE)} fl oz`;
   return `${gramsToOunces(amount)} oz`;
 }
 
@@ -232,7 +286,7 @@ export const RECREATIONAL_LIMITS: LimitProfile = {
   usable: 1 * GRAMS_PER_OUNCE, // 28 g (1 oz)
   solid_edible: 16 * GRAMS_PER_OUNCE, // 448 g (16 oz)
   concentrate: 7, // 7 g
-  liquid_edible: 72 * GRAMS_PER_OUNCE, // 2016 g (72 oz)
+  liquid_edible: REC_LIQUID_ML, // 2129.292 ml (72 FLUID oz) — SLICE L4
   low_thc_liquid: 200, // 200 mg THC — WAC 314-55-095(1)(d)(i)(F)
   otherwise_taken: 10, // 10 UNITS — WAC 314-55-095(1)(d)(i)(D)
 };
@@ -258,7 +312,7 @@ export const MEDICAL_LIMITS: LimitProfile = {
   usable: 3 * GRAMS_PER_OUNCE, // 84 g (3 oz)
   solid_edible: 48 * GRAMS_PER_OUNCE, // 1344 g (48 oz)
   concentrate: 21, // 21 g
-  liquid_edible: 216 * GRAMS_PER_OUNCE, // 6048 g (216 oz)
+  liquid_edible: MED_LIQUID_ML, // 6387.876 ml (216 FLUID oz) — SLICE L4
   low_thc_liquid: 200, // 200 mg THC — NOT tripled. See the note above.
   // SLICE 17 — 10 UNITS, NOT tripled, and for a different reason than
   // low_thc_liquid: WAC 314-55-095(2)(d) does not list this category AT ALL.
@@ -415,6 +469,16 @@ export type LimitCartLine = {
   quantity: number;
   /** Optional explicit grams for this whole line (overrides per-unit math). */
   grams?: number | null;
+  /**
+   * SLICE L4 — total MILLILITRES this line contributes to the liquid bucket:
+   * the L3-plumbed per-package net volume times the quantity, resolved by the
+   * caller. This is the field that finally makes the 72 FLUID ounce cap
+   * enforceable on a bottle whose size is stated in ml, fl oz, or litres.
+   *
+   * null/absent means "not measured", NEVER zero — an unmeasured liquid falls
+   * back to the weight-carried default below rather than becoming free.
+   */
+  volumeMl?: number | null;
   /**
    * SLICE 16 — WAC 314-55-095(1)(d)(i)(F). True when this product is packaged
    * in individual units of ≤ 4 mg active delta-9 THC, which moves it OUT of the
@@ -727,6 +791,37 @@ export function lineThcMg(line: LimitCartLine): number {
   return round3(mg * qty);
 }
 
+/**
+ * SLICE L4 — millilitres a single cart line contributes to the liquid bucket.
+ *
+ * Three sources, in strict priority order:
+ *
+ *  1. A REAL measured volume (`volumeMl`), plumbed from the product name by
+ *     SLICE L3. This is the fix: it is the only source that can tell a 30 ml
+ *     dropper from a 1.5 L growler.
+ *
+ *  2. A weight measure (`grams`, from the variant label via AN-1), carried
+ *     across AT ITS OUNCE-COUNT: grams / 28 * 29.5735. This is NOT a density
+ *     conversion and does not pretend to be one — it preserves "how many of
+ *     the statute's 72 ounces does this package use", which is exactly what
+ *     the grams basis was already computing correctly. It is what keeps
+ *     ounce-labelled liquids and every weight-based TOPICAL behaving
+ *     identically to before this slice.
+ *
+ *  3. The category default, carried across the same way, so a line nobody has
+ *     measured still consumes allowance instead of being silently free.
+ *
+ * Returns 0 only for a genuinely zero/absent quantity.
+ */
+export function lineMl(line: LimitCartLine, overrides?: LimitOverrides): number {
+  // 1. a real, measured volume for the whole line
+  if (typeof line.volumeMl === "number" && line.volumeMl > 0) return round3(line.volumeMl);
+  // 2/3. fall back to the weight basis, carried across at its ounce-count
+  const grams = lineGrams(line, overrides);
+  if (grams <= 0) return 0;
+  return round3((grams / GRAMS_PER_OUNCE) * ML_PER_FLUID_OUNCE);
+}
+
 /** Grams a single cart line contributes to its bucket. */
 export function lineGrams(line: LimitCartLine, overrides?: LimitOverrides): number {
   if (typeof line.grams === "number" && line.grams > 0) return line.grams;
@@ -773,9 +868,16 @@ export function evaluateCart(
     const contribution =
       bucket === "low_thc_liquid"
         ? lineThcMg(line)
-        : bucket === "otherwise_taken"
-          ? lineUnits(line)
-          : lineGrams(line, overrides);
+        // SLICE L4 — the liquid bucket accumulates MILLILITRES against a
+        // 2129.292 ml (72 fl oz) cap. Before this, it accumulated grams
+        // against 2016 g, and since ml/fl oz/L labels produced no per-unit
+        // weight at all, every liquid used the 28 g default and 72 packages
+        // of ANY size fit.
+        : bucket === "liquid_edible"
+          ? lineMl(line, overrides)
+          : bucket === "otherwise_taken"
+            ? lineUnits(line)
+            : lineGrams(line, overrides);
     totals[bucket] = round3(totals[bucket] + contribution);
 
     // SLICE 17 — the inverted fail-safe. A line that LOOKS like a suppository

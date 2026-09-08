@@ -28,13 +28,21 @@ describe("statutory limit profiles are exact", () => {
     expect(RECREATIONAL_LIMITS.usable).toBe(28); // 1 oz
     expect(RECREATIONAL_LIMITS.solid_edible).toBe(16 * GRAMS_PER_OUNCE); // 16 oz
     expect(RECREATIONAL_LIMITS.concentrate).toBe(7); // 7 g
-    expect(RECREATIONAL_LIMITS.liquid_edible).toBe(72 * GRAMS_PER_OUNCE); // 72 oz
+    // SLICE L4 — REBASED to millilitres. Was `72 * GRAMS_PER_OUNCE` (2016 g).
+    // The statute caps this bucket at 72 FLUID ounces, and a volume cap cannot
+    // be enforced on a weight basis: ml / fl oz / L labels produced no
+    // per-unit weight at all, so every liquid fell back to the 28 g default
+    // and 72 packages of ANY size fit (a 1.5 L bottle counted as 1 oz).
+    // Derived here from the statute, NOT imported, so this test still fails if
+    // the implementation's constant drifts.
+    expect(RECREATIONAL_LIMITS.liquid_edible).toBeCloseTo(72 * 29.5735, 6); // 72 fl oz = 2129.292 ml
   });
   it("medical — WAC 314-55-095(2)(d) (3× rec)", () => {
     expect(MEDICAL_LIMITS.usable).toBe(84); // 3 oz
     expect(MEDICAL_LIMITS.solid_edible).toBe(48 * GRAMS_PER_OUNCE); // 48 oz
     expect(MEDICAL_LIMITS.concentrate).toBe(21); // 21 g
-    expect(MEDICAL_LIMITS.liquid_edible).toBe(216 * GRAMS_PER_OUNCE); // 216 oz
+    // SLICE L4 — REBASED. Was `216 * GRAMS_PER_OUNCE` (6048 g).
+    expect(MEDICAL_LIMITS.liquid_edible).toBeCloseTo(216 * 29.5735, 6); // 216 fl oz = 6387.876 ml
   });
   it("statute treats 1 oz useable as 28 g", () => {
     expect(GRAMS_PER_OUNCE).toBe(28);
