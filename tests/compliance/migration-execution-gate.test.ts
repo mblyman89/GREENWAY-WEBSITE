@@ -725,7 +725,30 @@ describe("the migration list is ordered the way the database will see it", () =>
     // rows with zero overlap, a live lease was not re-handed out, a lapsed
     // lease WAS re-handed out, and a row past its TTL was never handed out at
     // all.
-    expect(listed[listed.length - 1]).toMatch(/^0222_/);
+    //
+    // 0223 (SLICE L4) adds ONE nullable column, order_lines.unit_volume_ml
+    // (numeric(12,3)), plus its comment. No data, no structure, no backfill.
+    //
+    // It exists because an order is judged TWICE and the two evaluations were
+    // about to disagree. Placement re-prices against the live menu; the pickup
+    // completion gate does not re-price, it re-reads order_lines. That is why
+    // the weight (0122), the category (0096) and both classifications (0217)
+    // are already snapshotted there. Volume was not, and a 1.5 L bottle has no
+    // parseable weight at all -- so it would meter as 1500 ml online and on a
+    // 28 g category default at the counter.
+    //
+    // PROVEN to execute by applying all 223 migrations in order to a real
+    // PostgreSQL 15, then re-applying 0223 a second time for idempotency
+    // (223 applied / 0 failed; the re-apply emits the expected
+    // "column already exists, skipping" notice and succeeds), then INSPECTING
+    // the result rather than assuming the DDL did what it reads like:
+    // information_schema reports numeric(12,3) nullable, and a live insert
+    // round-trips 1500.000, 750.000 and 354.882 -- the last one confirming the
+    // scale actually holds a fluid-ounce conversion without rounding it away
+    // -- while a null stays null rather than being coerced to 0, which is the
+    // distinction the whole fallback depends on.
+    // Harness: scripts/compliance/prove-0223-executes.sh
+    expect(listed[listed.length - 1]).toMatch(/^0223_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
