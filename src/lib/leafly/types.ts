@@ -94,6 +94,19 @@ export type GreenwayMenuItem = {
   otherwiseTaken?: boolean | null;
   /** SLICE 17 — individual consumable items per package (RCW 69.50.101). */
   unitsPerPackage?: number | null;
+  /**
+   * SLICE L3 — the PHYSICAL package measure (migration 0138), normalised.
+   *
+   * netVolumeMl is what the liquid sales limit is measured against: the cap is
+   * 72 FLUID ounces (2129.3 ml), so a volume in ml is the only basis that can
+   * enforce it. Before L3 nothing populated it and the engine substituted a
+   * 28 g category default for every liquid regardless of bottle size.
+   *
+   * PER PACKAGE, not per unit. Absent/null = not measured = the register must
+   * fail closed rather than assume a size.
+   */
+  netWeightGrams?: number | null;
+  netVolumeMl?: number | null;
   totalThc: GreenwayCannabinoid | null;
   totalCbd: GreenwayCannabinoid | null;
   compounds: GreenwayCannabinoid[];

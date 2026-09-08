@@ -119,6 +119,13 @@ export type LotFactBundle = {
   package_thc_mg: number | null;
   package_cbd_mg: number | null;
   ratio_label: string | null;
+  /**
+   * SLICE L3: the physical package measure reaches inventory_lots too, so the
+   * golden record and the menu row agree. Grouped cards keep only the base
+   * item's fields, which is exactly why this bundle exists.
+   */
+  net_weight_grams: number | null;
+  net_volume_ml: number | null;
   fact_provenance: Record<string, string>;
 };
 
@@ -381,7 +388,11 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       it.mg_per_serving !== null ||
       it.package_thc_mg !== null ||
       it.package_cbd_mg !== null ||
-      it.ratio_label !== null
+      it.ratio_label !== null ||
+      // SLICE L3: a bottle whose ONLY fact is its size still has a fact worth
+      // keeping -- and it is the fact the sales limit is measured from.
+      it.net_weight_grams !== null ||
+      it.net_volume_ml !== null
     ) {
       lotFactsByKey.set(it.source_item_id, {
         servings_per_pack: it.servings_per_pack,
@@ -389,6 +400,8 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
         package_thc_mg: it.package_thc_mg,
         package_cbd_mg: it.package_cbd_mg,
         ratio_label: it.ratio_label,
+        net_weight_grams: it.net_weight_grams,
+        net_volume_ml: it.net_volume_ml,
         fact_provenance: it.fact_provenance,
       });
     }

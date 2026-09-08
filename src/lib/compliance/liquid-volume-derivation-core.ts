@@ -54,6 +54,23 @@ import {
 export const AVOIRDUPOIS_GRAMS_PER_OUNCE = 28.349523125;
 
 /**
+ * The LCB inventory types whose sales limit is measured in VOLUME, so a
+ * missing net_volume_ml is a compliance hole worth a diagnostic.
+ *
+ * Drawn from the four values of MG_FACT_TYPES (fact-extraction-core.ts:49),
+ * minus the two that are not volume-limited:
+ *   - "Solid Edible" is a weight/dose limit, not a volume.
+ *   - "Topical Ointment" stays on WEIGHTED ounces by owner decision; moving
+ *     topicals out of the liquid bucket to industry-standard practice is its
+ *     own later slice, and pre-empting it here would change limits nobody
+ *     asked to change yet.
+ *
+ * Exported because the SLICE L5 receiving gate needs the same list, and two
+ * copies of a compliance scope is how they drift apart.
+ */
+export const LIQUID_VOLUME_TYPES = new Set(["Liquid Edible", "Tincture"]);
+
+/**
  * A size fact as `extractNameFacts` reports it (fact-extraction-core.ts:80).
  * Declared structurally so this pure module does not depend on the extractor.
  */
