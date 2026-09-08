@@ -72,7 +72,12 @@ export async function injectApprovedDraftsIntoVersion(
     // exactly as before. Read into its own const first so the existing chain
     // below is untouched.
     const COMPLIANCE_COLS =
-      ", chosen_otherwise_taken, chosen_units_per_package, chosen_low_thc_liquid, chosen_unit_thc_mg";
+      ", chosen_otherwise_taken, chosen_units_per_package, chosen_low_thc_liquid, chosen_unit_thc_mg" +
+      // SLICE L5 (migration 0224). Appended to the SAME widest tier so a
+      // database missing 0224 degrades exactly as one missing 0218 does:
+      // it loses the measured volume and keeps injecting, rather than failing
+      // every injection outright.
+      ", chosen_net_volume_ml";
     const withCompliance = await admin
       .from("catalog_product_drafts")
       .select(
@@ -120,6 +125,8 @@ export async function injectApprovedDraftsIntoVersion(
       chosen_otherwise_taken?: boolean | null;
       chosen_units_per_package?: number | string | null;
       chosen_low_thc_liquid?: boolean | null;
+      /** SLICE L5 (0224): the receiver's measured package volume, in ml. */
+      chosen_net_volume_ml?: number | null;
       chosen_unit_thc_mg?: number | string | null;
     };
     const drafts = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
