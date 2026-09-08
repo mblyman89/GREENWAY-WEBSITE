@@ -59,8 +59,72 @@ export const SHOP_GRID_SHELL =
 /** The product card grid: 1-up, 2-up at sm, 4-up at lg. */
 export const SHOP_CARD_GRID = "grid gap-5 sm:grid-cols-2 lg:grid-cols-4";
 
-/** `min-h-[29.25rem]` on the real card root. */
-export const CARD_MIN_HEIGHT = "min-h-[29.25rem]";
+/**
+ * The card's reserved height, used by the REAL card AND the skeleton.
+ *
+ * SLICE G — WHY THIS NUMBER CHANGED, AND WHY IT IS NOW IMPORTED, NOT COPIED
+ * ────────────────────────────────────────────────────────────────────────
+ * Slice F1 set this to `min-h-[29.25rem]` (468px) because that is what
+ * `ProductCardVisual` declared. The self-test asserted the two STRINGS matched
+ * and passed. The strings did match. The page still shifted 0.405.
+ *
+ * The bug: `min-h` is a FLOOR, not a height. The real card's content is taller
+ * than the floor, so it never rendered at 468px. Measured on the live Vercel
+ * deployment with a real browser at four viewports:
+ *
+ *     390px → 586px      768px  → 596px
+ *     412px → 542px      1599px → 596px
+ *
+ * The skeleton reserved 468px and was replaced by a 542–596px card, so every
+ * grid row dropped 74–128px the moment products arrived. Asserting that two
+ * Tailwind class strings are equal proved nothing about rendered height, which
+ * is the only thing CLS measures.
+ *
+ * The floor is therefore raised to the measured ceiling (37.25rem = 596px) and
+ * `ProductCardVisual` now IMPORTS this constant instead of declaring its own
+ * copy. There is exactly one number now, so the skeleton and the card cannot
+ * disagree again — not because a test says so, but because there is nothing
+ * left to disagree with.
+ *
+ * `min-h` is deliberately KEPT rather than switched to a fixed `h`. A fixed
+ * height would clip a card whose content genuinely exceeds 596px (a long
+ * product name wrapping to a third line), and this same component renders on
+ * the home rail, the specials grid and the PDP rail — surfaces this slice did
+ * not measure. A raised floor fixes the measured shift and cannot clip.
+ */
+export const CARD_MIN_HEIGHT = "min-h-[37.25rem]";
+
+/**
+ * Height reserved for the sticky site header while the route loads.
+ *
+ * SLICE G — THE SECOND MEASURED SHIFT
+ * ───────────────────────────────────
+ * `src/app/menu/loading.tsx` rendered no header; `src/app/menu/page.tsx`
+ * renders `<Header />`. When the route handed off, the header appeared and
+ * pushed everything below it down. Captured as a position timeline on the live
+ * deployment (412px, 4x CPU throttle, Slow 4G):
+ *
+ *     t=4558ms  banner top =  37px   ← loading.tsx, no header
+ *     t=4918ms  banner top = 136px   ← page.tsx, header present  (+99px)
+ *
+ * Measured real header heights, live, by viewport:
+ *
+ *     360→93.2  390→93.6  412→95.4  640→105.2  768→115
+ *     1024→121.3  1280→127.8  1536→137.4  1920→137.4
+ *
+ * Rounded UP to the nearest breakpoint step so the reserve is never shorter
+ * than the header that replaces it (a short reserve shifts content down, which
+ * is what CLS punishes; an over-reserve of a pixel or two does not move the
+ * content the shopper is looking at).
+ *
+ * WHY A SPACER AND NOT THE REAL <Header />: `Header` is an async server
+ * component — it awaits `getContentForRender(MEDICAL_HIDE_BLOCK)`. Rendering
+ * it inside `loading.tsx` would make the loading UI itself await I/O, and a
+ * skeleton that awaits is not a skeleton. The spacer reserves the same space
+ * with zero I/O.
+ */
+export const HEADER_RESERVE_HEIGHT =
+  "h-[6rem] sm:h-[6.6rem] md:h-[7.2rem] lg:h-[7.6rem] xl:h-[8rem] 2xl:h-[8.6rem]";
 
 /**
  * The real card's image well is `h-[14.15rem]` with `md:h-[14.65rem]`. In the
@@ -125,7 +189,59 @@ export function __runMenuSkeletonTests(): { passed: number; failed: number } {
   check("card grid gap matches the real grid", SHOP_CARD_GRID.includes("gap-5"));
 
   // ── Card metrics must match ProductCardVisual ────────────────────────────
-  check("card min height matches the real card", CARD_MIN_HEIGHT === "min-h-[29.25rem]");
+  //
+  // SLICE G: this assertion used to read `CARD_MIN_HEIGHT === "min-h-[29.25rem]"`
+  // and it PASSED while the live page shifted 0.405. It only ever proved the
+  // skeleton's string equalled the card's string; it could not see that `min-h`
+  // is a floor and that the real card rendered 542-596px against it. The
+  // replacement asserts the property that actually governs CLS: the reserved
+  // height is at least the tallest height the card was measured at.
+  const remValue = (cls: string): number => {
+    const m = /min-h-\[([0-9.]+)rem\]/.exec(cls);
+    return m ? Number.parseFloat(m[1]) : Number.NaN;
+  };
+  const reservedRem = remValue(CARD_MIN_HEIGHT);
+  // Live measurements, greenwaywebsite1.vercel.app/menu, real Chromium:
+  //   390px->586px  412px->542px  768px->596px  1599px->596px
+  const TALLEST_MEASURED_CARD_PX = 596;
+  check("card reserve parses as a rem value", Number.isFinite(reservedRem));
+  check(
+    "card reserve is at least the tallest measured real card (596px)",
+    reservedRem * 16 >= TALLEST_MEASURED_CARD_PX,
+  );
+  // Guard the other direction too: an absurd over-reserve would leave a band of
+  // dead space under every row, which is its own visual defect.
+  check("card reserve is not wastefully tall", reservedRem * 16 <= TALLEST_MEASURED_CARD_PX + 32);
+  check("card reserve is a floor, not a fixed height", CARD_MIN_HEIGHT.startsWith("min-h-["));
+
+  // -- The header reserve must cover the real sticky header --------------------
+  // Live-measured header heights: 360->93.2 390->93.6 412->95.4 640->105.2
+  // 768->115 1024->121.3 1280->127.8 1536->137.4. Each declared step must be >=
+  // the tallest real header in the range it covers, or `loading.tsx` under-
+  // reserves and the page drops when the real header mounts.
+  const stepRem = (prefix: string): number => {
+    const m = new RegExp(`(?:^|\\s)${prefix}h-\\[([0-9.]+)rem\\]`).exec(HEADER_RESERVE_HEIGHT);
+    return m ? Number.parseFloat(m[1]) : Number.NaN;
+  };
+  const headerSteps: Array<[string, string, number]> = [
+    // [label, tailwind prefix, tallest real header px in the range it covers]
+    ["base", "", 95.4],
+    ["sm", "sm:", 105.2],
+    ["md", "md:", 115],
+    ["lg", "lg:", 121.3],
+    ["xl", "xl:", 127.8],
+    ["2xl", "2xl:", 137.4],
+  ];
+  for (const [label, prefix, tallestPx] of headerSteps) {
+    const rem = stepRem(prefix);
+    check(`header reserve declares a ${label} step`, Number.isFinite(rem));
+    check(`header reserve at ${label} covers the real header (${tallestPx}px)`, rem * 16 >= tallestPx);
+    check(`header reserve at ${label} is not wastefully tall`, rem * 16 <= tallestPx + 24);
+  }
+  check(
+    "header reserve steps increase monotonically",
+    headerSteps.every(([, prefix], i) => i === 0 || stepRem(prefix) >= stepRem(headerSteps[i - 1][1])),
+  );
   check("card image base height matches the real card", CARD_IMAGE_HEIGHT_BASE === "h-[14.15rem]");
   check("card image md height matches the real card", CARD_IMAGE_HEIGHT_MD === "md:h-[14.65rem]");
   check(

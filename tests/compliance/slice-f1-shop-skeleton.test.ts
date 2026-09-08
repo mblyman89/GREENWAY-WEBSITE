@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 import {
   SHOP_GRID_SHELL,
   SHOP_CARD_GRID,
-  CARD_MIN_HEIGHT,
   CARD_IMAGE_HEIGHT_BASE,
   CARD_IMAGE_HEIGHT_MD,
   SKELETON_CARD_COUNT,
@@ -129,9 +128,61 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
     // own. Both must be present for the placeholder to occupy the same height
     // as the card that replaces it.
     const card = read("src/components/menu/ProductCardVisual.tsx");
-    expect(card).toContain(CARD_MIN_HEIGHT);
     expect(card).toContain(CARD_IMAGE_HEIGHT_BASE);
     expect(card).toContain(CARD_IMAGE_HEIGHT_MD);
+  });
+
+  it("SLICE G: the real card IMPORTS the shared height instead of copying it", () => {
+    // WHY THIS TEST EXISTS.
+    //
+    // Slice F1 asserted that the skeleton's height string equalled the card's
+    // height string. It passed. The live page still shifted 0.405, because a
+    // matching string says nothing about a matching RENDERED height -- `min-h`
+    // is a floor and the real card rendered 542-596px against a 468px reserve.
+    //
+    // Two copies of a number can drift; one number cannot. So the assertion is
+    // no longer "the strings are equal" but "there is only one string". The
+    // card must IMPORT `CARD_MIN_HEIGHT` and must NOT declare its own literal.
+    const card = read("src/components/menu/ProductCardVisual.tsx");
+    expect(card).toContain("CARD_MIN_HEIGHT");
+    expect(card).toMatch(/import\s*\{[^}]*CARD_MIN_HEIGHT[^}]*\}\s*from\s*"@\/lib\/menu\/menu-skeleton-core"/);
+    // No hard-coded min-h on the card ROOT any more -- that is the drift path.
+    // Scoped to the root <article> on purpose: inner elements legitimately use
+    // their own min-h (e.g. the product-name line clamp at ~2.45rem), and
+    // banning those would be a false positive that teaches nothing.
+    const body = stripComments(card);
+    const rootTag = /<article\b[\s\S]*?>/.exec(body)?.[0] ?? "";
+    expect(rootTag).toContain("CARD_MIN_HEIGHT");
+    expect(rootTag).not.toMatch(/min-h-\[[0-9.]+rem\]/);
+  });
+
+  it("SLICE G: loading.tsx reserves the sticky header that page.tsx renders", () => {
+    // THE SECOND MEASURED SHIFT. `loading.tsx` rendered no header while
+    // `page.tsx` renders `<Header />`, so the handoff pushed the page down 99px
+    // (measured live at 412px: banner top 37px -> 136px). The loading route
+    // must reserve that space -- and must NOT render the real <Header/>, which
+    // is async and would make the skeleton itself await I/O.
+    const loading = stripComments(read("src/app/menu/loading.tsx"));
+    expect(loading).not.toContain("<Header />");
+    expect(loading).not.toContain("await ");
+
+    const skeleton = read("src/components/menu/MenuSkeleton.tsx");
+    expect(skeleton).toContain("HEADER_RESERVE_HEIGHT");
+
+    // Assert the RENDERED element, not the import. An earlier version of this
+    // test searched the whole file for the name "ShopHeaderSkeleton" -- which
+    // the IMPORT statement satisfies. Deleting the JSX while leaving the import
+    // (exactly the 99px regression this slice fixes) slipped straight through.
+    // Caught by mutation M4. Match the tag itself.
+    expect(loading).toMatch(/<ShopHeaderSkeleton\s*\/>/);
+
+    // The reserve must be rendered BEFORE the breadcrumb, or it holds space in
+    // the wrong place and the shift survives. Both positions are taken from the
+    // JSX tags for the same reason.
+    const headerAt = loading.search(/<ShopHeaderSkeleton\s*\/>/);
+    const crumbAt = loading.search(/<ShopBreadcrumbSkeleton\s*\/>/);
+    expect(headerAt).toBeGreaterThan(-1);
+    expect(crumbAt).toBeGreaterThan(headerAt);
   });
 
   it("paints enough cards to fill the viewport without being heavy itself", () => {
