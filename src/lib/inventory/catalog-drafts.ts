@@ -27,7 +27,10 @@ import { extractNameFacts } from "@/lib/inventory/fact-extraction-core";
 // SLICE L5 — the SAME derivation draft-injection-core.ts runs at injection
 // time. catalog_product_drafts stores no net_volume_ml, so the gate must ask
 // the question injection would otherwise have answered with silence.
-import { deriveNetVolumeMl } from "@/lib/compliance/liquid-volume-derivation-core";
+import {
+  deriveNetVolumeMl,
+  deriveNetWeightGrams,
+} from "@/lib/compliance/liquid-volume-derivation-core";
 import {
   assessReceivingClassification,
   validateReceivingClassificationChoice,
@@ -740,9 +743,15 @@ export async function approveDraftWithPrice(
     sizes: derivedFacts.sizes,
     packCount: derivedFacts.packCount,
   });
+  // SLICE T1 — the weight comes from the SAME sizes array the volume came
+  // from, so a salve labelled "2oz" is already measured and the gate has
+  // nothing to ask. Deriving it from a second source is how the two would
+  // drift apart.
+  const derivedWeightGrams = deriveNetWeightGrams(derivedFacts.sizes);
   const volumeAssessment = assessReceivingVolume({
     resolvedWebsiteCategory: choice.chosenWebsiteCategory ?? resolution.websiteCategory,
     derivedVolumeMl: derivedVolume.netVolumeMl,
+    derivedWeightGrams,
   });
   const volume = validateReceivingVolumeChoice({
     assessment: volumeAssessment,

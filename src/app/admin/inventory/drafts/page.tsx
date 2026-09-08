@@ -35,7 +35,10 @@ import {
 // only classification step a RECEIVED lot can reach - fact review is scoped to
 // an import_id, which a manifest-sourced lot never has.
 import { extractNameFacts } from "@/lib/inventory/fact-extraction-core";
-import { deriveNetVolumeMl } from "@/lib/compliance/liquid-volume-derivation-core";
+import {
+  deriveNetVolumeMl,
+  deriveNetWeightGrams,
+} from "@/lib/compliance/liquid-volume-derivation-core";
 import {
   assessReceivingClassification,
   // SLICE L5 — the volume gate and its placeholder.
@@ -180,6 +183,9 @@ export default async function CatalogDraftsPage({
             sizes: facts.sizes,
             packCount: facts.packCount,
           }).netVolumeMl,
+          // SLICE T1 — a weight-labelled salve is already measured, so the
+          // card must not show a question the server will not ask.
+          derivedWeightGrams: deriveNetWeightGrams(facts.sizes),
         }),
       );
     }
