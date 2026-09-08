@@ -23,9 +23,17 @@ import {
 // SLICE 18-0: the COMPLIANCE classification gate. Product Onboarding is the
 // only classification step a RECEIVED lot can reach - fact review is scoped to
 // an import_id, which a manifest-sourced lot never has.
+import { extractNameFacts } from "@/lib/inventory/fact-extraction-core";
+// SLICE L5 — the SAME derivation draft-injection-core.ts runs at injection
+// time. catalog_product_drafts stores no net_volume_ml, so the gate must ask
+// the question injection would otherwise have answered with silence.
+import { deriveNetVolumeMl } from "@/lib/compliance/liquid-volume-derivation-core";
 import {
   assessReceivingClassification,
   validateReceivingClassificationChoice,
+  // SLICE L5 — the volume gate. Same module, same fail-closed discipline.
+  assessReceivingVolume,
+  validateReceivingVolumeChoice,
   RECEIVING_CLASSIFICATION_PROVENANCE,
 } from "@/lib/inventory/receiving-classification-core";
 // SLICE 18E: mirror the approver's compliance answers back onto the LOT row as
@@ -595,6 +603,15 @@ export async function approveDraftWithPrice(
     unitsPerPackage?: string | null;
     lowThcLiquid?: string | null;
     unitThcMg?: string | null;
+    /**
+     * SLICE L5: the approver's MEASURED package volume, as raw form strings.
+     * Required only when the shelf is metered by volume and SLICE L3 could not
+     * derive a size from the product name. Validated server-side and REFUSED
+     * rather than coerced — including a bare "oz", which is ambiguous on a
+     * liquid and is never guessed at.
+     */
+    volumeQuantity?: string | null;
+    volumeUnit?: string | null;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured." };
@@ -701,6 +718,41 @@ export async function approveDraftWithPrice(
     return { ok: false, error: compliance.error };
   }
 
+  // SLICE L5: the VOLUME gate.
+  //
+  // Assessed against the SAME category the compliance gate used (the human's
+  // pick when they made one, the resolver's verdict otherwise), so a product
+  // cannot be re-shelved onto a liquid shelf in the very submission that skips
+  // the measurement.
+  //
+  // The DERIVED volume is re-read from the draft row we already loaded, never
+  // taken from the form: a client that could assert "L3 already measured this"
+  // could switch the gate off for the products that need it most.
+  //
+  // It is derived HERE with the SAME two calls draft-injection-core.ts makes at
+  // injection time (extractNameFacts -> deriveNetVolumeMl), because
+  // catalog_product_drafts stores no net_volume_ml — verified against the
+  // migrations, not assumed. Using the same pair is what guarantees the gate
+  // asks exactly when injection would otherwise have recorded nothing.
+  const derivedFacts = extractNameFacts(row?.name ?? null);
+  const derivedVolume = deriveNetVolumeMl({
+    rawName: row?.name ?? null,
+    sizes: derivedFacts.sizes,
+    packCount: derivedFacts.packCount,
+  });
+  const volumeAssessment = assessReceivingVolume({
+    resolvedWebsiteCategory: choice.chosenWebsiteCategory ?? resolution.websiteCategory,
+    derivedVolumeMl: derivedVolume.netVolumeMl,
+  });
+  const volume = validateReceivingVolumeChoice({
+    assessment: volumeAssessment,
+    volumeQuantity: classification?.volumeQuantity ?? null,
+    volumeUnit: classification?.volumeUnit ?? null,
+  });
+  if (!volume.ok) {
+    return { ok: false, error: volume.error };
+  }
+
   // Persist the picks ONLY when the human made one - on a pre-0141 database
   // an approval without picks keeps working exactly as before, and an
   // approval WITH picks fails with a friendly pointer at the migration.
@@ -764,6 +816,12 @@ export async function approveDraftWithPrice(
   // would be a claim nobody made.
   if (compliance.lowThcLiquid !== null) update.chosen_low_thc_liquid = compliance.lowThcLiquid;
   if (compliance.unitThcMg !== null) update.chosen_unit_thc_mg = compliance.unitThcMg;
+  // SLICE L5 (migration 0224): the measured package volume, written ONLY when a
+  // human actually measured. Absent stays absent — inventing a number here
+  // would be precisely the failure the gate exists to prevent, because the
+  // register would then enforce a statutory limit against a size nobody read
+  // off the package.
+  if (volume.netVolumeMl !== null) update.chosen_net_volume_ml = volume.netVolumeMl;
 
   const { error } = await admin
     .from("catalog_product_drafts")

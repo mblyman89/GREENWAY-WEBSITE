@@ -84,6 +84,14 @@ export type ApprovedDraftForInjection = {
   chosen_units_per_package?: number | null;
   chosen_low_thc_liquid?: boolean | null;
   chosen_unit_thc_mg?: number | null;
+  /**
+   * SLICE L5 (migration 0224): the package volume a HUMAN measured at receiving
+   * because the product name stated no size. Without carrying it here the gate
+   * would take a real measurement and then discard it at injection, leaving
+   * net_volume_ml null and the 28 g fallback in charge — the gate would look
+   * like it worked and change nothing. Null = nobody was asked to measure.
+   */
+  chosen_net_volume_ml?: number | null;
 };
 
 /** Per-draft enrichment the SERVER gathers (resolver / kb / lot lookups). */
@@ -443,7 +451,15 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       });
       netWeightGrams = deriveNetWeightGrams(exam.name.sizes);
       if (netWeightGrams !== null) factProvenance.net_weight_grams = "name";
-      if (vol.netVolumeMl !== null && vol.source !== null) {
+      // SLICE L5: a HUMAN who measured the bottle outranks a regex that read
+      // the title. In practice they never disagree — the receiving gate only
+      // fires when the derivation found nothing — but when a person has gone to
+      // the package and read it, that is the better fact and it wins.
+      const measured = d.chosen_net_volume_ml;
+      if (typeof measured === "number" && Number.isFinite(measured) && measured > 0) {
+        netVolumeMl = measured;
+        factProvenance.net_volume_ml = "human";
+      } else if (vol.netVolumeMl !== null && vol.source !== null) {
         netVolumeMl = vol.netVolumeMl;
         factProvenance.net_volume_ml = vol.source;
         if (vol.confidence === "ambiguous") {
@@ -465,7 +481,12 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
             },
           });
         }
-      } else if (LIQUID_VOLUME_TYPES.has(invType)) {
+      } else if (
+        LIQUID_VOLUME_TYPES.has(invType) &&
+        // SLICE L5: silent when a human already measured it — the whole point
+        // of the receiving gate is that this case no longer exists.
+        !(typeof measured === "number" && Number.isFinite(measured) && measured > 0)
+      ) {
         // A liquid with NO derivable volume is the case that broke the limit.
         // Surface it so the dock can measure the bottle instead of letting
         // the register invent a size.
