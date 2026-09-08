@@ -83,11 +83,17 @@
  * both boundaries exact (2016*R = 2129.2920 = the cap; 2016.25*R exceeds it).
  *
  * THIS IS ALSO WHAT KEEPS TOPICALS SAFE. categoryToBucket routes `topical`
- * into liquid_edible, and the owner's decision is that topicals stay on
- * WEIGHTED ounces until their own later slice. Because the ounce-count is
- * carried across as an ounce-count (never through an invented g/ml density), a
- * weight-labelled salve keeps its exact previous behaviour: 1oz→72, 1.7oz→42,
- * 2oz→36, 4oz→18, 8oz→9 — all identical. NO DENSITY IS ASSUMED ANYWHERE.
+ * into liquid_edible, and SLICE T1 settled that this is not a preference that
+ * a later slice may revisit: clause (E) below names topicals INSIDE the 72 oz
+ * limit ("or applied topically to the skin"), and no separate topical limit
+ * exists in the WAC. Moving them out would invent a limit that the regulator
+ * did not write, in the permissive direction. THEY STAY.
+ *
+ * Because the ounce-count is carried across as an ounce-count (never through
+ * an invented g/ml density), a weight-labelled salve keeps its exact previous
+ * behaviour: 1oz→72, 1.7oz→42, 2oz→36, 4oz→18, 8oz→9 — all identical, and
+ * pinned in tests/compliance/topical-and-bucket-measurement.test.ts.
+ * NO DENSITY IS ASSUMED ANYWHERE.
  *
  * FAIL-SAFE RUNS THE OPPOSITE WAY HERE — READ THIS BEFORE CHANGING ANYTHING.
  * For low_thc_liquid, an unflagged product falls back to the 72 oz bucket,

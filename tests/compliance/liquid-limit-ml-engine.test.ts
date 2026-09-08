@@ -217,10 +217,34 @@ describe("SLICE L4 — NOTHING CURRENTLY CORRECT MOVED", () => {
     expect(n).toBe(legal);
   });
 
-  it("still routes topicals into the liquid bucket (the later slice moves them)", () => {
-    // If someone moves topicals out, THIS is the assertion that should be
-    // updated deliberately rather than discovered by surprise.
+  it("routes topicals into the liquid bucket, because the STATUTE puts them there", () => {
+    // SLICE T1 - this assertion was written expecting topicals to move OUT to
+    // their own bucket in a later slice. Then the statute was actually read,
+    // and it says the opposite. WAC 314-55-095(1)(d)(i)(E), current text
+    // effective 1/7/2025:
+    //
+    //   "72 ounces of cannabis-infused product in liquid form for oral
+    //    ingestion OR APPLIED TOPICALLY TO THE SKIN, unless the product is
+    //    packaged in individual units containing no more than 4 milligrams of
+    //    active delta-9 THC per unit"
+    //
+    // Salves are named INSIDE the 72 ounce clause and share the bucket with
+    // drinks by law. There is no separate topical transaction limit anywhere
+    // in 314-55-095, and the medical column (2)(d) lists only useable, solid,
+    // concentrate and liquid.
+    //
+    // So moving topicals to their own bucket would INVENT a limit the statute
+    // does not contain, and would stop a salve and a drink from sharing the
+    // bucket the law says they share -- letting a customer take 72 oz of drink
+    // AND a pile of salve in one transaction. That is the permissive
+    // direction, which is the one that creates real exposure.
+    //
+    // Owner decision, recorded: "lets keep topicals in the same liquids
+    // bucket". Do NOT "fix" this to a topical bucket.
     expect(categoryToBucket("topical")).toBe("liquid_edible");
+    // The same clause, same bucket, for the oral side.
+    expect(categoryToBucket("edible-liquid")).toBe("liquid_edible");
+    expect(categoryToBucket("tincture")).toBe("liquid_edible");
   });
 
   it("leaves the other three buckets on grams with their exact values", () => {

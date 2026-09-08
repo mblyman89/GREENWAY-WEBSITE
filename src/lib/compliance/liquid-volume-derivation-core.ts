@@ -60,13 +60,21 @@ export const AVOIRDUPOIS_GRAMS_PER_OUNCE = 28.349523125;
  * Drawn from the four values of MG_FACT_TYPES (fact-extraction-core.ts:49),
  * minus the two that are not volume-limited:
  *   - "Solid Edible" is a weight/dose limit, not a volume.
- *   - "Topical Ointment" stays on WEIGHTED ounces by owner decision; moving
- *     topicals out of the liquid bucket to industry-standard practice is its
- *     own later slice, and pre-empting it here would change limits nobody
- *     asked to change yet.
+ *   - "Topical Ointment" is measured by WEIGHT, which lineMl() carries across
+ *     exactly, so a missing net_volume_ml is not by itself a hole there.
  *
- * Exported because the SLICE L5 receiving gate needs the same list, and two
- * copies of a compliance scope is how they drift apart.
+ * SLICE T3 - DO NOT USE THIS SET TO DECIDE WHO GETS MEASURED.
+ * It was used that way and it was wrong. Measured against the live resolver,
+ * ELEVEN inventory types reach the ml-metered bucket and only these two are in
+ * this set: Beverage, Soda, Shots, Liquid Infused Edible, Other Liquid Edible,
+ * Topical, Bath Salts, Roll On, Suppository and Transdermal Patch were all
+ * absent, so injection derived no size for an ordinary soda and the register
+ * fell back to 28 g/unit -- a 12x oversell on a 12 fl oz can.
+ *
+ * Scope for MEASUREMENT is now taken from categoryToBucket(...) in
+ * draft-injection-core.ts, because the bucket is what the limit actually keys
+ * on. A hand-maintained list of type strings is a second source of truth, and
+ * this one had already drifted from the first.
  */
 export const LIQUID_VOLUME_TYPES = new Set(["Liquid Edible", "Tincture"]);
 
