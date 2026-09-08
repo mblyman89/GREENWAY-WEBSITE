@@ -166,14 +166,9 @@ MUTATIONS = [
         "The card carries the measurement but the line does not, so it never "
         "reaches limitLinesFor and never reaches the sale payload.",
     ),
-    (
-        "M12 register: zero an unknown volume instead of omitting it",
-        SALEFLOW,
-        "    const volumeMl = lineVolumeMl(l.unitVolumeMl, l.quantity);",
-        "    const volumeMl = lineVolumeMl(l.unitVolumeMl, l.quantity) ?? 0; // MUTANT",
-        "volumeMl: 0 reads as 'this line consumes no liquid', taking "
-        "unknown-volume products out of the limit rather than falling back.",
-    ),
+    # M12 was here. Retired as a VERIFIED NO-OP -- see the INVALID MUTATIONS
+    # header above. It is deliberately NOT renumbered, so the labels in the
+    # commit history keep pointing at the same mutations.
     # ── the website surface ─────────────────────────────────────────────────
     (
         "M13 website: drop the label fallback",

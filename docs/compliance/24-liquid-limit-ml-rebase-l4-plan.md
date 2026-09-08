@@ -105,3 +105,99 @@ These pin the old basis and must be re-pointed at the ml figures with the
 For every label in the oversell table, `evaluateCart` must block at the legal
 count and not one package later — and every currently-correct answer
 (`1oz`, `12oz`, and all weight-labelled topicals) must be **unchanged**.
+
+---
+
+## Outcome (recorded after implementation)
+
+### What shipped
+
+The plan above survived contact with the code, with two additions that only
+became visible once the work was underway.
+
+**Addition 1 — the sale-time snapshot (migration 0223).** The plan threaded
+`volumeMl` through the live cart. It did not account for the fact that an order
+is judged *twice*: once at placement, and again at pickup, where the completion
+gate does not re-price anything — it re-reads the stored `order_lines`. That
+table already snapshots the weight (`unit_grams`, 0122), the category (0096)
+and both 0217 classifications for exactly this reason. It had no volume column.
+
+Left alone, the two evaluations would have disagreed about the precise products
+this slice exists for. A 1.5 L bottle carries no parseable weight at all, so it
+would meter as 1500 ml at placement and fall back to a 28 g category default at
+the counter. The disagreement runs both ways: a lawful order refused at pickup,
+or 2.25 litres waved through. `0223_liquid_volume_ml_snapshot.sql` adds
+`order_lines.unit_volume_ml`, nullable with no backfill, and the writer degrades
+through a new rung on the missing-column ladder so placement keeps working on a
+database that has not run the migration.
+
+**Addition 2 — executable coverage of the authoritative gate.** See below.
+
+### The mutation harness, and what it caught in my own work
+
+`scripts/compliance/mutate-l4.py` breaks the implementation 22 ways and
+requires the suite to catch each one. The first run caught 19 of 23.
+
+Three of the four survivors — M15, M16 and M18 — were **real holes, and all
+three were in `src/lib/orders/order-pricing.ts`**, the only layer that legally
+binds. Every client-side equivalent was caught. The asymmetry was entirely a
+defect in my tests: I had asserted those seams by reading the *source text*,
+and a source assert cannot notice a value that is computed correctly and then
+dropped one line later. It can only notice a seam being deleted.
+
+The assumption underneath it was never checked — that a module marked
+`server-only` could not be unit tested. It can: `vitest.config.ts` aliases
+`server-only` to a stub, and the two database loaders mock like any others.
+`tests/compliance/liquid-limit-ml-server-gate.test.ts` now drives the real
+`repriceOrderLines` against a mocked published menu.
+
+The fourth survivor, M12, is a **verified no-op**, established by probing the
+live module rather than by reasoning about it: `lineVolumeMl(...) ?? 0` is only
+ever consumed through the guard `volumeMl !== null && volumeMl > 0`, so `null`
+and `0` are indistinguishable at every call site. It is retired in the
+harness's INVALID MUTATIONS header rather than "fixed", because adding `?? 0`
+to the source would plant a landmine for the first caller that stops using the
+guard. This is the same class as the L1 M9, L2 M4/M14 and L3 M10 false alarms —
+four slices in a row where the harness's own claim needed checking before the
+code was changed to satisfy it.
+
+### The safety proof, restated
+
+No verdict that was already correct moved, and this is provable rather than
+hopeful. For any ounce-labelled product the conversion factor cancels:
+
+```
+grams / 28 * 29.5735   ==   ounces * 29.5735
+2016 g  <-> 2129.292 ml   (72 weight oz <-> 72 fluid oz, same 72)
+```
+
+so `G <= 2016  <=>  G x 1.056196 <= 2129.292`, verified numerically with zero
+mismatches across g = 0 .. 4000 in 0.25 g steps, boundaries exact. Topicals are
+therefore untouched (1 / 1.7 / 2 / 4 / 8 oz still yield 72 / 42 / 36 / 18 / 9
+packages), which is what makes the owner's decision to leave topicals on
+weighted ounces safe to defer to its own slice. **No density is assumed
+anywhere** — a millilitre is never converted to a gram, and a gram is never
+converted to a millilitre except by carrying its own ounce-count across.
+
+### What actually changed for the store
+
+Before: any liquid whose label was `ml`, `fl oz` or `L` produced no per-unit
+weight, fell back to `DEFAULT_UNIT_GRAMS["edible-liquid"] = 28`, and **exactly
+72 packages of any size** were permitted — 108 litres for a 1.5 L bottle.
+
+After, measured against the statutory 2129.292 ml:
+
+| label | permitted | previously |
+|---|---|---|
+| 10 ml | 212 | 72 |
+| 100 ml | 21 | 72 |
+| 500 ml | 4 | 72 |
+| 750 ml | 2 | 72 |
+| 1 L | 2 | 72 |
+| 1.5 L | 1 | 72 |
+| 2 fl oz | 36 | 72 |
+| 12 fl oz | 6 | 72 |
+| 1 oz / 12 oz (weight) | 72 / 6 | 72 / 6 — unchanged |
+
+Note the 10 ml row: the rebase is not uniformly stricter. A small tincture was
+previously *under*-sold, and it is now correctly allowed 212.
