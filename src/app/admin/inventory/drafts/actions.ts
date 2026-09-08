@@ -40,6 +40,11 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   const unitsPerPackage = (formData.get("units_per_package") as string | null) ?? null;
   const lowThcLiquid = (formData.get("low_thc_liquid") as string | null) ?? null;
   const unitThcMg = (formData.get("unit_thc_mg") as string | null) ?? null;
+  // SLICE L5: the approver's MEASURED package volume. Raw strings for the same
+  // reason as above — approveDraftWithPrice re-derives whether a measurement
+  // was required and refuses anything it cannot trust, including a bare "oz".
+  const volumeQuantity = (formData.get("net_volume_quantity") as string | null) ?? null;
+  const volumeUnit = (formData.get("net_volume_unit") as string | null) ?? null;
 
   // SLICE 78: "__new__" = create the category right here, mid-onboarding.
   // Same pure gatekeeper as Settings → Types (label required, slug derivation,
@@ -160,6 +165,8 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
     unitsPerPackage,
     lowThcLiquid,
     unitThcMg,
+    volumeQuantity,
+    volumeUnit,
   });
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
