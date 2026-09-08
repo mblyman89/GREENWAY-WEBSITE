@@ -301,9 +301,10 @@ describe("Slice E — /menu is no longer rebuilt for every visitor", () => {
 
 describe("Slice E — the grid ships less", () => {
   it("the page projects items before handing them to the browser", () => {
-    const code = stripComments(read("src/app/menu/page.tsx"));
+    // SLICE H: the projection moved into the renderer both shop routes share.
+    const code = stripComments(read("src/components/menu/ShopPage.tsx"));
     expect(code).toMatch(/const menuItems = toMenuGridItems\(enrichedMenuItems\)/);
-    expect(code).toMatch(/<InteractiveMenuBrowser[^>]*items=\{menuItems\}/);
+    expect(code).toMatch(/<InteractiveMenuBrowser[\s\S]*?items=\{menuItems\}/);
   });
 
   it("removes the payload of every field it claims to trim", () => {

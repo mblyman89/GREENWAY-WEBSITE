@@ -196,13 +196,18 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
     // whole enrichment chain -- ran ABOVE the return, so <Suspense> had nothing
     // left to stream and the shell did not reach the browser until ~2.8s.
     //
-    // The exported page may still await `searchParams` (cheap, no I/O, and
-    // required for deep links). What it must NOT do is load the catalog before
-    // returning its shell.
-    const code = stripComments(read("src/app/menu/page.tsx"));
-    const pageStart = code.indexOf("export default async function MenuPage");
+    // SLICE H: the shell moved into the renderer that `/menu` and
+    // `/menu/[category]` share, and it no longer awaits even `searchParams` --
+    // dropping that request-time read is what makes the route cacheable at all.
+    // The shell is now SYNCHRONOUS, which is strictly stronger than the
+    // original guarantee, so the assertion follows it rather than being dropped.
+    const code = stripComments(read("src/components/menu/ShopPage.tsx"));
+    const pageStart = code.indexOf("export function ShopPage");
     expect(pageStart).toBeGreaterThan(-1);
     const pageBody = code.slice(pageStart);
+
+    // Stronger than "awaits nothing expensive": the shell awaits NOTHING.
+    expect(pageBody).not.toMatch(/\bawait\b/);
 
     for (const forbidden of [
       "loadLiveMenuItemsCached(",
@@ -220,21 +225,21 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
   });
 
   it("F2: the expensive data work lives in a child below a Suspense boundary", () => {
-    const code = stripComments(read("src/app/menu/page.tsx"));
+    const code = stripComments(read("src/components/menu/ShopPage.tsx"));
     // The child that does the loading must exist...
-    expect(code).toMatch(/async function MenuBrowserSection\s*\(/);
+    expect(code).toMatch(/async function ShopContent\s*\(/);
     // ...it must be the thing wrapped by Suspense...
-    expect(code).toMatch(/<Suspense[\s\S]*?<MenuBrowserSection/);
+    expect(code).toMatch(/<Suspense[\s\S]*?<ShopContent/);
     // ...and it must be what performs the catalog read.
-    const childStart = code.indexOf("async function MenuBrowserSection");
-    const childBody = code.slice(childStart, code.indexOf("export default async function MenuPage"));
+    const childStart = code.indexOf("async function ShopContent");
+    const childBody = code.slice(childStart, code.indexOf("export function ShopPage"));
     expect(childBody).toContain("loadLiveMenuItemsCached()");
   });
 
   it("F2: the Suspense fallback is the real shop skeleton, not a text placeholder", () => {
     // The old fallback was the string "Loading menu filters...". Even had it
     // rendered, it would have been a bare line of text where a shop should be.
-    const code = stripComments(read("src/app/menu/page.tsx"));
+    const code = stripComments(read("src/components/menu/ShopPage.tsx"));
     expect(code).not.toContain("Loading menu filters");
     expect(code).toMatch(/fallback=\{[\s\S]*?ShopBrowserSkeleton/);
   });
@@ -243,12 +248,24 @@ describe("Slice F1 — the shop page owns its loading skeleton", () => {
     // These are what make the first paint look like the real site. If they were
     // inside the Suspense boundary they would be withheld until the catalog
     // resolved -- which is precisely the old behavior.
-    const code = stripComments(read("src/app/menu/page.tsx"));
+    const code = stripComments(read("src/components/menu/ShopPage.tsx"));
     const suspenseStart = code.indexOf("<Suspense");
     expect(suspenseStart).toBeGreaterThan(-1);
     const beforeBoundary = code.slice(0, suspenseStart);
     expect(beforeBoundary).toContain("<Header />");
     expect(beforeBoundary).toContain("<Breadcrumbs");
+  });
+
+  it("SLICE H: neither shop route reintroduces a request-time read above the shell", () => {
+    // The whole point of Slice H: `searchParams` is a request-time API, so a
+    // single read of it anywhere in either route file makes the route
+    // uncacheable again and undoes the slice. This is the regression guard.
+    for (const file of ["src/app/menu/page.tsx", "src/app/menu/[category]/page.tsx"]) {
+      const code = stripComments(read(file));
+      expect(code, `${file} reads searchParams`).not.toMatch(/\bsearchParams\b/);
+      expect(code, `${file} reads cookies()`).not.toMatch(/\bcookies\s*\(/);
+      expect(code, `${file} reads headers()`).not.toMatch(/\bheaders\s*\(/);
+    }
   });
 
   it("the ROOT skeleton is left untouched for every other route", () => {

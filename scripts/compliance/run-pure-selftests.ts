@@ -43,6 +43,12 @@ import { __runBlogContentCoreTests } from "../../src/lib/blog/blog-content-core"
 import { __runCoreValuesTests } from "../../src/lib/about/core-values-core";
 import { __runGlowCardCoreTests } from "../../src/lib/ui/glow-card-core";
 import { __runSiteBackgroundTests } from "../../src/lib/ui/site-background-core";
+// SLICE H — which shop facets are safe to promote to real, prerendered routes.
+// Pure: no database, no network, no request. Registered here so CI proves the
+// routable set stays in sync with the category taxonomy even if the vitest
+// mirror is ever renamed or skipped. Getting this wrong ships either dead nav
+// links (a slug with no prerendered page) or an uncrawlable menu.
+import { __runMenuFacetTests } from "../../src/lib/menu/menu-facet-core";
 // product-lookup-core imports the server-only compliance module, so its
 // self-test is exercised via vitest (server-only aliased) + the parse core's
 // pure test below, not this server-only-free runner. See
@@ -901,6 +907,7 @@ async function main() {
   assertNoFailures("blog-content-core", __runBlogContentCoreTests());
   assertNoFailures("glow-card-core", __runGlowCardCoreTests());
   assertNoFailures("site-background-core", __runSiteBackgroundTests());
+  assertNoFailures("menu-facet-core", __runMenuFacetTests());
   assertNoFailures("product-lookup-parse", __runProductLookupParseTests());
   __runCommitAuthorshipTests();
   assertNoFailures("core-values-core", __runCoreValuesTests());

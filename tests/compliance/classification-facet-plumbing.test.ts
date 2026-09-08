@@ -41,7 +41,6 @@ function stripComments(source: string): string {
 
 const BROWSER = "src/components/menu/InteractiveMenuBrowser.tsx";
 const SIDEBAR = "src/components/menu/FilterMobile.tsx";
-const MENU_PAGE = "src/app/menu/page.tsx";
 const CORE = "src/lib/menu/menu-classification-filter-core.ts";
 const SEARCH_CORE = "src/lib/pos/classification-search-core.ts";
 const SALE_FLOW = "src/lib/pos/sale-flow-core.ts";
@@ -55,23 +54,103 @@ function guardStripped(code: string, original: string, mustContain: string) {
   expect(code.length).toBeGreaterThan(original.length / 3);
 }
 
-describe("18B plumbing — hop 1: the shop page forwards the URL param", () => {
-  it("/menu forwards ?classification= to the browser", () => {
-    const original = read(MENU_PAGE);
-    const code = stripComments(original);
-    guardStripped(code, original, "firstSearchParamValue");
+describe("18B plumbing — hop 1: the shop page resolves the URL param", () => {
+  /**
+   * SLICE H CHANGED THE MECHANISM, NOT THE PROMISE.
+   *
+   * `/menu` used to read `searchParams` on the server and forward all sixteen
+   * facets to the browser. `searchParams` is a request-time API, so that single
+   * read made the busiest page on the site permanently uncacheable
+   * (`x-vercel-cache: MISS` on every hit, ~1.3s of server time per visitor).
+   * Slice H removed it, which is what finally lets `/menu` be prerendered.
+   *
+   * The promise 18B made still stands: land on a shared `?classification=` or
+   * `?doh=` link and the correct lane must already be selected. It is now kept
+   * by `resolveInitialParams`, which reads `window.location.search` in a
+   * `useState` LAZY INITIALIZER -- so the lane is applied during the very first
+   * client render, before paint, not in a post-mount effect that would flash
+   * the unfiltered grid.
+   *
+   * Deleting these tests because the code moved would have thrown away the
+   * guard on a real, previously-shipped bug. So they follow the mechanism.
+   */
+  const original = read(BROWSER);
+  const code = stripComments(original);
+
+  it("/menu resolves ?classification= from the live URL before first paint", () => {
+    guardStripped(code, original, "resolveInitialParams");
+
+    // The resolver must read the address bar...
+    const resolver = code.slice(
+      code.indexOf("function resolveInitialParams"),
+      code.indexOf("type InteractiveMenuBrowserProps"),
+    );
+    expect(resolver).toContain("window.location.search");
+    // ...include the classification facet...
+    expect(resolver).toMatch(/classification:\s*pick\("classification"\)/);
+    // ...and the live URL must WIN over whatever the server rendered, or a
+    // cached page would pin every visitor to the first shopper's filters.
+    expect(resolver).toMatch(/if \(liveValue !== null && liveValue !== ""\) return liveValue;/);
+
+    // It must run in a LAZY INITIALIZER (first render), not an effect. An
+    // effect would paint the unfiltered grid first -- the exact 18B bug.
+    expect(code).toMatch(/useState\(\(\)\s*=>\s*resolveInitialParams\(/);
+    // And the resolved value must actually drive the lane's initial state.
     expect(code).toMatch(
-      /classification:\s*firstSearchParamValue\(resolvedSearchParams\?\.classification\)/,
+      /const persistedClassification = \(initialParams\.classification \?\? ""\)/,
+    );
+    expect(code).toMatch(
+      /useState<string \| null>\(\s*persistedClassification,?\s*\)/,
     );
   });
 
-  it("/menu also forwards ?doh= (the pre-existing facet it mirrors)", () => {
+  it("/menu also resolves ?doh= (the pre-existing facet it mirrors)", () => {
     // 18B fixed a real gap here: `doh` was read on the client from
     // window.location but never forwarded from the server, so a shared DOH link
     // flashed the unfiltered grid on first paint. Pinning it stops a future
     // edit from silently reintroducing that asymmetry.
-    const code = stripComments(read(MENU_PAGE));
-    expect(code).toMatch(/doh:\s*firstSearchParamValue\(resolvedSearchParams\?\.doh\)/);
+    const resolver = code.slice(
+      code.indexOf("function resolveInitialParams"),
+      code.indexOf("type InteractiveMenuBrowserProps"),
+    );
+    expect(resolver).toMatch(/doh:\s*pick\("doh"\)/);
+    expect(code).toMatch(/const persistedDoh = \(initialParams\.doh \?\? ""\)/);
+    expect(code).toMatch(/useState<string \| null>\(persistedDoh\)/);
+  });
+
+  it("SLICE H: the resolver covers every facet the URL-writer can write", () => {
+    // The strongest form of this guard. Rather than pinning two facets by name,
+    // derive the full set the component writes into the URL and require the
+    // resolver to read back every one of them. Add a new filter that writes to
+    // the URL but forget to resolve it, and a shared link silently drops it --
+    // this fails. Now that the server forwards nothing, the resolver IS the
+    // only mechanism, so it must be complete rather than merely present.
+    const between = (start: string, end: string) => {
+      const i = code.indexOf(start);
+      expect(i, `missing anchor: ${start}`).toBeGreaterThan(-1);
+      const j = code.indexOf(end, i);
+      expect(j, `missing anchor: ${end}`).toBeGreaterThan(-1);
+      return code.slice(i, j);
+    };
+
+    const writer = between("const params = new URLSearchParams();", "const queryString");
+    const written = [...writer.matchAll(/params\.set\("([a-zA-Z]+)"/g)].map((m) => m[1]!);
+    expect(written.length).toBeGreaterThanOrEqual(13); // anti-vacuity
+
+    const resolver = between("function resolveInitialParams", "type InteractiveMenuBrowserProps");
+    const resolved = new Set(
+      [...resolver.matchAll(/([a-zA-Z]+):\s*pick\("([a-zA-Z]+)"\)/g)].map((m) => m[2]!),
+    );
+
+    for (const key of written) {
+      expect(resolved.has(key), `resolveInitialParams never reads ?${key}=`).toBe(true);
+    }
+
+    // popstate (browser back/forward) must restore the same complete set.
+    const sync = between("const syncFromUrl = () =>", 'window.addEventListener("popstate"');
+    for (const key of written) {
+      expect(sync.includes(`"${key}"`), `syncFromUrl never restores ?${key}=`).toBe(true);
+    }
   });
 });
 
