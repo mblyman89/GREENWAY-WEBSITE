@@ -411,3 +411,126 @@ describe("no correct answer changed", () => {
     expect(evaluateCart(flower, "recreational").blocked).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 7. The AUTHORITATIVE server gate, executed rather than read
+// ---------------------------------------------------------------------------
+//
+// Groups 1-6 assert the placement and pickup seams by reading the source. That
+// catches a seam being deleted, but it CANNOT catch a value that is computed
+// correctly and then dropped one line later — and the L4 mutation harness
+// proved exactly that, surviving three mutations here while every client-side
+// equivalent was caught.
+//
+// This group executes the real functions instead. Both are importable in
+// vitest: "server-only" is aliased to a stub (vitest.config.ts), and
+// verifyStoredOrderForCompletion only reaches for the live menu when a stored
+// line is MISSING its category snapshot, which none of these are.
+//
+// It matters more here than anywhere else. The register meter and the shop
+// meter are advisory; this module is the gate that actually refuses the sale.
+
+// PLACEMENT (repriceOrderLines) is covered by execution in a sibling file,
+// tests/compliance/liquid-limit-ml-server-gate.test.ts, which mocks the two DB
+// loaders and drives the real function. It lives there rather than here
+// because vi.mock is hoisted per module and this file deliberately imports the
+// UNMOCKED live-menu path used by the register and website surfaces above.
+
+describe("pickup gate — verifyStoredOrderForCompletion, executed", () => {
+  /** A stored order_lines row, priced so the money gate is satisfied. */
+  function storedLine(over: Record<string, unknown>) {
+    return {
+      product_id: "prod-1",
+      variant_id: "var-1",
+      product_name: "Infused Lemonade",
+      brand: "House",
+      variant_label: "750ml",
+      category: "edible-liquid",
+      quantity: 1,
+      price_minor_units: 1000,
+      regular_price_minor_units: 1000,
+      ...over,
+    };
+  }
+
+  async function verify(lines: ReturnType<typeof storedLine>[]) {
+    const { verifyStoredOrderForCompletion } = await import(
+      "../../src/lib/orders/order-pricing"
+    );
+    const { computeOrderTotals } = await import("../../src/lib/orders/order-pricing-core");
+    const totals = computeOrderTotals(
+      lines.map((l) => ({
+        category: l.category,
+        quantity: l.quantity,
+        unitPriceMinorUnits: l.price_minor_units,
+        regularPriceMinorUnits: l.regular_price_minor_units,
+      })),
+    );
+    return verifyStoredOrderForCompletion({
+      subtotal_minor_units: totals.subtotalMinorUnits,
+      estimated_tax_minor_units: totals.estimatedTaxMinorUnits,
+      total_minor_units: totals.totalMinorUnits,
+      lines: lines as never,
+    });
+  }
+
+  it("THE HOLE M17/M18 CLOSED: the snapshot reaches the gate's limit line", async () => {
+    const check = await verify([storedLine({ unit_volume_ml: 750, quantity: 2 })]);
+    expect(check.limitLines).toHaveLength(1);
+    expect(check.limitLines[0].volumeMl).toBe(1500);
+    expect(liquidMl(check.limitLines)).toBe(1500);
+    expect(evaluateCart(check.limitLines, "recreational").blocked).toBe(false);
+  });
+
+  it("THE HOLE M17/M18 CLOSED: three bottles are refused at the counter", async () => {
+    const check = await verify([storedLine({ unit_volume_ml: 750, quantity: 3 })]);
+    expect(check.limitLines[0].volumeMl).toBe(2250);
+    expect(evaluateCart(check.limitLines, "recreational").blocked).toBe(true);
+  });
+
+  it("a PostgREST numeric string survives the gate, it is not silently dropped", async () => {
+    // pg numeric can arrive as a string. If it were dropped, the gate would
+    // fall back to the 28 g default and wave 2.25 litres through.
+    const check = await verify([storedLine({ unit_volume_ml: "750", quantity: 3 })]);
+    expect(check.limitLines[0].volumeMl).toBe(2250);
+    expect(evaluateCart(check.limitLines, "recreational").blocked).toBe(true);
+  });
+
+  it("a legacy row with NO snapshot keeps the weight-carried basis", async () => {
+    // 0223 unapplied, or a row written before this slice.
+    const check = await verify([storedLine({ unit_grams: 336, quantity: 1 })]);
+    expect("volumeMl" in check.limitLines[0]).toBe(false);
+    expect(liquidMl(check.limitLines)).toBeCloseTo(12 * ML_PER_FLUID_OUNCE, 2);
+  });
+
+  it("the gate agrees with the register about one identical basket", async () => {
+    // The disagreement this whole snapshot exists to prevent, asserted by
+    // running BOTH surfaces rather than by reading either one.
+    const p = card({ variantLabel: "750ml", unitVolumeMl: 750 });
+    const register = limitLinesFor(priceCart([{ product: p, quantity: 3 }], []).lines);
+    const pickup = (await verify([storedLine({ unit_volume_ml: 750, quantity: 3 })])).limitLines;
+
+    expect(liquidMl(register)).toBe(liquidMl(pickup));
+    expect(evaluateCart(register, "recreational").blocked).toBe(
+      evaluateCart(pickup, "recreational").blocked,
+    );
+    expect(evaluateCart(pickup, "recreational").blocked).toBe(true);
+  });
+
+  it("a zero or negative stored volume is ignored, never trusted", async () => {
+    // Defence in depth: a corrupt row must not remove a product from the
+    // limit. Both fall back to the weight/category basis instead.
+    for (const bad of [0, -750, "0"]) {
+      const check = await verify([storedLine({ unit_volume_ml: bad, quantity: 3 })]);
+      expect("volumeMl" in check.limitLines[0]).toBe(false);
+    }
+  });
+
+  it("a non-liquid line is unaffected by the volume plumbing", async () => {
+    const check = await verify([
+      storedLine({ category: "flower", variant_label: "3.5g", unit_grams: 3.5, quantity: 1 }),
+    ]);
+    expect("volumeMl" in check.limitLines[0]).toBe(false);
+    expect(evaluateCart(check.limitLines, "recreational").blocked).toBe(false);
+  });
+});
