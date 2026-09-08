@@ -43,7 +43,7 @@
  * mutant #15). Every source assertion below runs against CODE ONLY, and each
  * block carries an anti-vacuity guard so a stripper failing open cannot pass.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -168,6 +168,29 @@ describe("Slice H — the pure facet core", () => {
     }
     expect(titles.size).toBe(ROUTABLE_CATEGORIES.length);
     expect(descriptions.size).toBe(ROUTABLE_CATEGORIES.length);
+  });
+
+  it("no category slug collides with a sibling route segment", () => {
+    // `/menu/[category]` sits alongside `/menu/products/[id]`. Next.js gives a
+    // static segment priority over a dynamic one, so a category literally named
+    // "products" would not hijack the product pages -- but it WOULD be a
+    // prerendered, sitemap-advertised route that can never be reached, and the
+    // ambiguity is the kind of thing that gets "fixed" wrongly later. Cheap to
+    // pin, expensive to debug.
+    const siblingSegments = readdirSync(join(repoRoot, "src/app/menu"), {
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("["))
+      .map((entry) => entry.name);
+
+    expect(siblingSegments).toContain("products"); // anti-vacuity
+
+    for (const slug of ROUTABLE_CATEGORIES) {
+      expect(
+        siblingSegments.includes(slug),
+        `category "${slug}" collides with the /menu/${slug} route segment`,
+      ).toBe(false);
+    }
   });
 
   it("breadcrumbs lead back to the shop root", () => {
