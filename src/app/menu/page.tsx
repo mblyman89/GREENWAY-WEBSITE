@@ -25,6 +25,9 @@ import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 // SLICE E: trim fields the grid never renders before they are serialized to
 // every shopper. Verified unread by the menu client tree; the PDP is unaffected.
 import { toMenuGridItems } from "@/lib/menu/menu-grid-projection-core";
+// SLICE F2: the streaming fallback. Shares its markup with src/app/menu/loading.tsx
+// so the navigation placeholder and the streaming placeholder cannot diverge.
+import { ShopBannerSkeleton, ShopBrowserSkeleton } from "@/components/menu/MenuSkeleton";
 
 /**
  * SLICE E — THE SHOP PAGE COULD NEVER BE REUSED.
@@ -67,12 +70,74 @@ type MenuPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
+/**
+ * The plain, serializable filter bag handed to the client browser. Declared as
+ * a named type (rather than inferred) because Slice F2 passes it across a
+ * component boundary, and an explicit contract is what keeps the parent and the
+ * streamed child in agreement.
+ */
+type MenuInitialSearchParams = {
+  search: string;
+  category: string;
+  brand: string;
+  special: string;
+  categories: string;
+  strains: string;
+  brands: string;
+  vendors: string;
+  weights: string;
+  maxThc: string;
+  maxCbd: string;
+  maxPrice: string;
+  sort: string;
+  doh: string;
+  classification: string;
+};
+
 function firstSearchParamValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
-export default async function MenuPage({ searchParams }: MenuPageProps) {
-  const resolvedSearchParams = await searchParams;
+/**
+ * SLICE F2 — THE PAGE STREAMS NOW.
+ *
+ * THE DEFECT
+ * ──────────
+ * `<Suspense>` was already wrapped around the browser, but it streamed NOTHING,
+ * because every `await` in this component completed BEFORE the `return` was
+ * reached. React can only stream work suspended INSIDE a boundary; by the time
+ * the JSX existed there was nothing left to wait for. The boundary was
+ * decorative.
+ *
+ * The measured consequence — a flat line, a dead pause, then a wall of bytes:
+ *
+ *      750 ms      83,860 bytes
+ *     1000 ms          +377 bytes
+ *     1250 ms          +879 bytes   <- ~700 ms of near-silence
+ *     2000 ms     +2,915,923 bytes  <- everything at once
+ *     2250 ms       +436,788 bytes
+ *
+ * The server was doing all the work with its mouth shut, then shouting the
+ * finished page in one breath. The site header did not arrive until 2808 ms.
+ *
+ * THE FIX
+ * ───────
+ * All product I/O moves BELOW the `return`, into this child component. The
+ * parent now returns immediately, so the shell — background, header,
+ * breadcrumbs, banner — flushes with the first chunk while the catalog is still
+ * being read. React streams the browser in behind it when the data lands.
+ *
+ * Next.js documents exactly this: "push dynamic access down" so the static
+ * shell can be sent first.
+ *
+ * The fallback is the SAME skeleton the navigation state uses, so a shopper
+ * sees one continuous shop-shaped placeholder rather than two different ones.
+ */
+async function MenuBrowserSection({
+  initialSearchParams,
+}: {
+  initialSearchParams: MenuInitialSearchParams;
+}) {
   // DF-3: attach resolved product images (exact → brand/vendor → category →
   // inventory → global). Non-throwing; falls back to the stylized mockup.
   // Attach curated terpenes (from the KB strain) so the menu can filter by
@@ -133,43 +198,9 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   // empty list pre-migration / when nothing is linked (the sidebar then shows
   // just the two built-in lanes). Pure — no I/O — so it stays out of the batch.
   const saleFilters = collectShopSaleFilters(shopSlides, promotionTitles);
-  const initialSearchParams = {
-    search: firstSearchParamValue(resolvedSearchParams?.search),
-    category: firstSearchParamValue(resolvedSearchParams?.category),
-    brand: firstSearchParamValue(resolvedSearchParams?.brand),
-    special: firstSearchParamValue(resolvedSearchParams?.special),
-    // Richer persisted filter params (Task G) so server + client agree and the
-    // menu restores the shopper's exact state when returning from a product page.
-    categories: firstSearchParamValue(resolvedSearchParams?.categories),
-    strains: firstSearchParamValue(resolvedSearchParams?.strains),
-    brands: firstSearchParamValue(resolvedSearchParams?.brands),
-    // PR 3: additive by-vendor filter (Home vendor cards deep-link ?vendors=<vendor>).
-    vendors: firstSearchParamValue(resolvedSearchParams?.vendors),
-    weights: firstSearchParamValue(resolvedSearchParams?.weights),
-    maxThc: firstSearchParamValue(resolvedSearchParams?.maxThc),
-    maxCbd: firstSearchParamValue(resolvedSearchParams?.maxCbd),
-    maxPrice: firstSearchParamValue(resolvedSearchParams?.maxPrice),
-    sort: firstSearchParamValue(resolvedSearchParams?.sort),
-    // SLICE E (SHOP-5): the DOH lane, so a shared /menu?doh=... link renders
-    // already-filtered on the server instead of flashing the full grid.
-    doh: firstSearchParamValue(resolvedSearchParams?.doh),
-    // SLICE 18B: same for the sales-limit classification lane, so
-    // /menu?classification=low-thc is shareable and deep-linkable (the back
-    // office links straight to it).
-    classification: firstSearchParamValue(resolvedSearchParams?.classification),
-  };
+
   return (
-    <main id="top">
-      <SiteBackground />
-      <Header />
-
-      {/* Breadcrumb sits ABOVE the hero, consistent with every other page.
-          (BreadcrumbList JSON-LD is emitted automatically by <Breadcrumbs>.) */}
-      <Breadcrumbs
-        items={[{ label: "Shop", href: "/menu" }]}
-        maxWidthClassName="max-w-[var(--shop-max)]"
-      />
-
+    <>
       {/* SLICE A (SHOP-1): the top banner is now a staff-managed CAROUSEL of up
           to ten "special" slides (Admin → Content → Shop Banner). Falls back to
           a single default slide matching the old static banner, so the page is
@@ -196,10 +227,65 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
       ) : null}
 
       <section id="products">
-        <Suspense fallback={<div className="mx-auto max-w-[var(--shop-max)] px-4 py-10 text-sm font-bold text-zinc-400 md:px-8">Loading menu filters...</div>}>
-          <InteractiveMenuBrowser items={menuItems} initialSearchParams={initialSearchParams} categoryLabels={categoryLabels} saleFilters={saleFilters} />
-        </Suspense>
+        <InteractiveMenuBrowser items={menuItems} initialSearchParams={initialSearchParams} categoryLabels={categoryLabels} saleFilters={saleFilters} />
       </section>
+    </>
+  );
+}
+
+export default async function MenuPage({ searchParams }: MenuPageProps) {
+  // `searchParams` is still read HERE, in the parent, and only to build a plain
+  // serializable object of strings. That is deliberate: it is cheap, it does no
+  // I/O, and it keeps the deep-link behavior every facet test pins. The
+  // EXPENSIVE work — the catalog read and its enrichment chain — is what moved
+  // below the `return`, into <MenuBrowserSection>.
+  const resolvedSearchParams = await searchParams;
+  const initialSearchParams: MenuInitialSearchParams = {
+    search: firstSearchParamValue(resolvedSearchParams?.search),
+    category: firstSearchParamValue(resolvedSearchParams?.category),
+    brand: firstSearchParamValue(resolvedSearchParams?.brand),
+    special: firstSearchParamValue(resolvedSearchParams?.special),
+    // Richer persisted filter params (Task G) so server + client agree and the
+    // menu restores the shopper's exact state when returning from a product page.
+    categories: firstSearchParamValue(resolvedSearchParams?.categories),
+    strains: firstSearchParamValue(resolvedSearchParams?.strains),
+    brands: firstSearchParamValue(resolvedSearchParams?.brands),
+    // PR 3: additive by-vendor filter (Home vendor cards deep-link ?vendors=<vendor>).
+    vendors: firstSearchParamValue(resolvedSearchParams?.vendors),
+    weights: firstSearchParamValue(resolvedSearchParams?.weights),
+    maxThc: firstSearchParamValue(resolvedSearchParams?.maxThc),
+    maxCbd: firstSearchParamValue(resolvedSearchParams?.maxCbd),
+    maxPrice: firstSearchParamValue(resolvedSearchParams?.maxPrice),
+    sort: firstSearchParamValue(resolvedSearchParams?.sort),
+    // SLICE E (SHOP-5): the DOH lane, so a shared /menu?doh=... link renders
+    // already-filtered on the server instead of flashing the full grid.
+    doh: firstSearchParamValue(resolvedSearchParams?.doh),
+    // SLICE 18B: same for the sales-limit classification lane, so
+    // /menu?classification=low-thc is shareable and deep-linkable (the back
+    // office links straight to it).
+    classification: firstSearchParamValue(resolvedSearchParams?.classification),
+  };
+
+  // SLICE F2: this component now awaits NOTHING expensive, so everything below
+  // flushes to the browser in the first chunk instead of waiting ~2.8s for the
+  // catalog. The shopper sees the real header, breadcrumbs and a shop-shaped
+  // skeleton immediately; products stream in behind them.
+  return (
+    <main id="top">
+      <SiteBackground />
+      <Header />
+
+      {/* Breadcrumb sits ABOVE the hero, consistent with every other page.
+          (BreadcrumbList JSON-LD is emitted automatically by <Breadcrumbs>.) */}
+      <Breadcrumbs
+        items={[{ label: "Shop", href: "/menu" }]}
+        maxWidthClassName="max-w-[var(--shop-max)]"
+      />
+
+      <Suspense fallback={<><ShopBannerSkeleton /><ShopBrowserSkeleton /></>}>
+        <MenuBrowserSection initialSearchParams={initialSearchParams} />
+      </Suspense>
+
       <Footer />
     </main>
   );
