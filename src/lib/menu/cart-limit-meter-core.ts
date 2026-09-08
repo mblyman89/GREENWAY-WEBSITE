@@ -38,12 +38,20 @@ import {
   type LimitEvaluation,
 } from "@/lib/compliance/sales-limits-core";
 import { gramsFromVariantLabel, lineGramsFromUnit } from "@/lib/pos/variant-grams-core";
+import { lineVolumeMl, volumeMlFromLabel } from "@/lib/compliance/liquid-volume-core";
 
 /** The cart fields the limit engine needs (a subset of CartItem). */
 export type CartLimitLineInput = {
   category: string | null;
   quantity: number;
   variantLabel: string | null;
+  /**
+   * SLICE L4 — millilitres ONE unit contains, plumbed from intake's measured
+   * net_volume_ml. Optional: absent/null makes the meter parse the variant
+   * label instead, and if that yields nothing the engine uses the
+   * weight-carried basis. No density is ever assumed.
+   */
+  unitVolumeMl?: number | null;
   /**
    * SLICE 16 — the low-THC beverage classification
    * (WAC 314-55-095(1)(d)(i)(E)+(F)). true = packaged in individual units of
@@ -90,10 +98,18 @@ export function cartLimitLines(items: readonly CartLimitLineInput[]): LimitCartL
   return items.map((item) => {
     const perUnit = gramsFromVariantLabel(item.variantLabel);
     const grams = lineGramsFromUnit(perUnit, item.quantity);
+    // SLICE L4 — the volume basis, mirroring the register's limitLinesFor()
+    // so the website meter and the register can never disagree about the same
+    // cart. Prefers the plumbed per-package volume (L3); falls back to parsing
+    // the variant label, which is the only source the website has for a
+    // product whose card predates the L3 intake plumbing.
+    const perUnitMl = item.unitVolumeMl ?? volumeMlFromLabel(item.variantLabel);
+    const volumeMl = lineVolumeMl(perUnitMl, item.quantity);
     return {
       category: item.category,
       quantity: item.quantity,
       ...(grams !== null ? { grams } : {}),
+      ...(volumeMl !== null && volumeMl > 0 ? { volumeMl } : {}),
       // SLICE 16 — mirrors the register's limitLinesFor() exactly, so the
       // website meter and the register meter can never disagree about the same
       // cart. The engine demands `lowThcLiquid === true` AND a valid per-unit
