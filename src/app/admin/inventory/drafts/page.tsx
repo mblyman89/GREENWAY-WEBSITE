@@ -34,8 +34,13 @@ import {
 // SLICE 18-0: the compliance classification gate. Product Onboarding is the
 // only classification step a RECEIVED lot can reach - fact review is scoped to
 // an import_id, which a manifest-sourced lot never has.
+import { extractNameFacts } from "@/lib/inventory/fact-extraction-core";
+import { deriveNetVolumeMl } from "@/lib/compliance/liquid-volume-derivation-core";
 import {
   assessReceivingClassification,
+  // SLICE L5 — the volume gate and its placeholder.
+  assessReceivingVolume,
+  volumePickerPlaceholder,
   otherwiseTakenPickerPlaceholder,
   lowThcPickerPlaceholder,
   type ReceivingClassificationAssessment,
@@ -109,6 +114,8 @@ export default async function CatalogDraftsPage({
   // SLICE 78: [value, label] pairs for the "Pick a category" select — the
   // owner's live registry, sorted by the same order the settings page uses.
   const categoryChoices = Object.entries(categoryLabelMap);
+  // SLICE L5: per-draft "must this be measured before it can be onboarded?".
+  const volumeAssessments = new Map<string, ReturnType<typeof assessReceivingVolume>>();
 
   // SLICE 64 (owner bug B3): resolve OUR website category + run the SLICE 63
   // type labeler for every row, so the table shows OUR labels (never the raw
@@ -158,6 +165,24 @@ export default async function CatalogDraftsPage({
         resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
       }),
     );
+    // SLICE L5: does this draft need a human to MEASURE it? Derived with the
+    // SAME pair the approval gate and draft injection use, so the card cannot
+    // show a question the server will not ask, or hide one it will.
+    // Display only — approveDraftWithPrice re-derives all of it server-side.
+    {
+      const facts = extractNameFacts(d.name);
+      volumeAssessments.set(
+        d.id,
+        assessReceivingVolume({
+          resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
+          derivedVolumeMl: deriveNetVolumeMl({
+            rawName: d.name,
+            sizes: facts.sizes,
+            packCount: facts.packCount,
+          }).netVolumeMl,
+        }),
+      );
+    }
     memories.set(
       d.id,
       recallClassification({
@@ -324,6 +349,7 @@ export default async function CatalogDraftsPage({
                   const a = assessments.get(d.id);
                   // SLICE 18-0: the compliance assessment for this row.
                   const ca = complianceAssessments.get(d.id);
+                  const va = volumeAssessments.get(d.id);
                   // SLICE 18F: the remembered answer for THIS product, if a
                   // human ever gave one. Null when nothing qualifies - a
                   // machine default is deliberately not recalled.
@@ -624,6 +650,56 @@ export default async function CatalogDraftsPage({
                                       className="text-xs"
                                       aria-label="THC milligrams per container"
                                     />
+                                  </div>
+                                ) : null}
+                                {/* SLICE L5: the VOLUME gate. Unlike the
+                                    low-THC prompt above this one BLOCKS, and
+                                    for the same reason otherwise_taken does:
+                                    an unmeasured liquid has no volume for the
+                                    limit engine to measure, falls back to a
+                                    28 g default, and 72 packages of ANY size
+                                    fit the 72 fl oz cap. Silence here does not
+                                    fail closed — it disables a statutory
+                                    limit. Shown only when the name gave us
+                                    nothing, so nobody is asked to re-measure a
+                                    bottle whose size we already read. */}
+                                {view === "draft" && va?.needsVolumePick ? (
+                                  <div className="flex w-48 flex-col gap-1 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2">
+                                    <label
+                                      className="text-[10px] text-[var(--admin-text-faint)]"
+                                      htmlFor={`net-volume-${d.id}`}
+                                    >
+                                      Package volume — required (the name states no size)
+                                    </label>
+                                    <Input
+                                      id={`net-volume-${d.id}`}
+                                      name="net_volume_quantity"
+                                      inputMode="decimal"
+                                      required
+                                      placeholder={volumePickerPlaceholder({ needsVolumePick: true })}
+                                      className="text-xs"
+                                      aria-label="Package volume"
+                                    />
+                                    <Select
+                                      name="net_volume_unit"
+                                      required
+                                      defaultValue=""
+                                      className="text-xs"
+                                      aria-label="Package volume unit"
+                                    >
+                                      <option value="" disabled>
+                                        Pick a unit…
+                                      </option>
+                                      <option value="ml">ml</option>
+                                      <option value="l">L</option>
+                                      <option value="floz">fl oz</option>
+                                    </Select>
+                                    {/* Said plainly, because guessing wrong here
+                                        is a ~4% error on a legal limit. */}
+                                    <span className="text-[10px] text-[var(--admin-text-faint)]">
+                                      A bare &quot;oz&quot; is not accepted — fl oz and weight oz
+                                      are different amounts.
+                                    </span>
                                   </div>
                                 ) : null}
                                 {/* T-314: manual GPT-4o + live web search lookup.
