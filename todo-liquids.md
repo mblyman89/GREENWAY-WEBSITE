@@ -22,9 +22,27 @@
 - [x] tsc 0, eslint 0, full suite 597 files / 15,187 tests, 0 failures.
 - [ ] PR / rebase-merge / authorship.
 
-## L5 — receiving volume gate  [PENDING]
-- [ ] Third gated question in receiving-classification-core.ts, mirroring
-      `needsOtherwiseTakenPick` (isLiquidShelf at line 146).
-- [ ] Consume LIQUID_VOLUME_TYPES / deriveNetVolumeMl from
-      liquid-volume-derivation-core.ts. Fail closed, never guess.
+## L5 — receiving volume gate  [IN PROGRESS]
+
+### Recon findings (verified in source, nothing assumed)
+- L3 ALREADY derives volume at receiving (draft-injection-core.ts:439
+  `deriveNetVolumeMl`) and writes `net_volume_ml` (:579). So L5 must NOT
+  re-derive anything — that work is done.
+- `inventory_lots.net_volume_ml` + `menu_items.net_volume_ml` ALREADY exist
+  (migration 0138). **L5 needs NO new migration.**
+- THE ACTUAL GAP: when derivation yields nothing, draft-injection pushes a
+  `net_volume_missing` diagnostic at severity "warning" (:474). Grepped every
+  caller — NOTHING gates on it. The liquid onboards unmeasured, the register
+  falls back to the 28 g default, and 72 packages of any size sell.
+  A warning nobody is required to read is not a gate.
+- Pattern to mirror: `needsOtherwiseTakenPick` (gated, blocks) vs
+  `promptsLowThcLiquid` (prompted, never blocks). The asymmetry rule is
+  "does silence DISABLE a statutory limit?" — for volume it does, exactly as
+  for otherwise_taken. So volume must GATE, not prompt.
+
+### Plan
+- [ ] `assessReceivingVolume()` in receiving-classification-core.ts:
+      needsVolumePick = isLiquidShelf AND no derived volume.
+- [ ] `validateReceivingVolumeChoice()`: accept a measured volume + unit,
+      REFUSE rather than coerce, bare ounces rejected as ambiguous.
 - [ ] Tests + mutation harness + PR + rebase-merge.
