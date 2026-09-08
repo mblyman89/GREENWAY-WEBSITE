@@ -90,6 +90,23 @@ type CartItemInput = {
   unitsPerPackage?: number | null;
   /** SLICE 16 — mg of active delta-9 THC in one sellable unit (one can). */
   unitThcMg?: number | null;
+  /**
+   * SLICE L5a — the MEASURED millilitres in one package, carried from intake
+   * (net_volume_ml) so the storefront meter can enforce the 72 FLUID ounce
+   * (2129.292 ml) liquid cap on a product whose LABEL states no volume.
+   *
+   * Without this the website's only volume source was the variant label, and
+   * transform.ts maps the package label "each" to the EMPTY STRING while
+   * mg/pack labels ("100mg", "4pk") carry no volume either. Measured before
+   * the fix: 72 unlabelled liquids read as exactly at the cap and were NOT
+   * blocked online, while the register blocked the same product at 3 and the
+   * server refused the order — the shopper was misled, then refused.
+   *
+   * The variant label still WINS when it states a volume (see
+   * resolveUnitVolumeMl); this is the fallback for when it cannot.
+   * null = unknown, never zero.
+   */
+  unitVolumeMl?: number | null;
 };
 
 type CartItem = CartItemInput & {
