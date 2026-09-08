@@ -1,4 +1,5 @@
 import {
+  ShopHeaderSkeleton,
   ShopBreadcrumbSkeleton,
   ShopBannerSkeleton,
   ShopBrowserSkeleton,
@@ -27,6 +28,10 @@ import {
 export default function MenuLoading() {
   return (
     <main className="min-h-screen bg-black text-white">
+      {/* SLICE G: reserve the sticky header. This file rendered no header while
+          `page.tsx` renders one, so the handoff shoved the page down 99px
+          (measured live). The spacer holds the space with zero I/O. */}
+      <ShopHeaderSkeleton />
       <ShopBreadcrumbSkeleton />
       <ShopBannerSkeleton />
       <ShopBrowserSkeleton />

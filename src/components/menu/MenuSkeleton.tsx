@@ -3,6 +3,7 @@ import {
   SHOP_CARD_GRID,
   CARD_MIN_HEIGHT,
   CARD_IMAGE_HEIGHT,
+  HEADER_RESERVE_HEIGHT,
   skeletonCardKeys,
 } from "@/lib/menu/menu-skeleton-core";
 
@@ -33,6 +34,28 @@ import {
  * Nothing here reads data. These must render synchronously — the instant a
  * skeleton awaits something it stops being a skeleton.
  */
+
+/**
+ * SLICE G — reserve the sticky header's height while the route loads.
+ *
+ * `loading.tsx` cannot render the real `<Header />`: it is an async server
+ * component that awaits `getContentForRender(MEDICAL_HIDE_BLOCK)`, and a
+ * skeleton that awaits I/O is not a skeleton. So it rendered nothing at all —
+ * and when `page.tsx` took over WITH a header, everything below jumped down
+ * 99px (measured live at 412px: banner top 37px → 136px).
+ *
+ * This reserves the same vertical space with no I/O, so the handoff moves
+ * nothing. Heights come from `HEADER_RESERVE_HEIGHT`, which is pinned to
+ * live-measured header heights at each breakpoint.
+ */
+export function ShopHeaderSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className={`w-full border-b border-white/10 bg-black/88 ${HEADER_RESERVE_HEIGHT}`}
+    />
+  );
+}
 
 /** Breadcrumb bar placeholder — mirrors <Breadcrumbs> so content starts at the same Y. */
 export function ShopBreadcrumbSkeleton() {

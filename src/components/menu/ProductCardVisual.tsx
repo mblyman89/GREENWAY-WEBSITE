@@ -6,6 +6,12 @@ import { cardTypeLabel, websiteCategoryCardLabel } from "@/lib/menu/card-type-co
 import { cardCannabinoids, deriveNetWeightLine, showProfilePill } from "@/lib/menu/card-cannabinoids";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
 import { dohPillForItem } from "@/lib/menu/menu-doh-badge-core";
+// SLICE G: the card's reserved height is a SHARED constant with the loading
+// skeleton. It used to be a literal here and a copy of that literal in
+// `menu-skeleton-core`; the two agreed as strings but the real card rendered
+// 542-596px against a 468px reserve, which is where the 0.405 CLS came from.
+// Importing means there is one number and nothing left to drift.
+import { CARD_MIN_HEIGHT } from "@/lib/menu/menu-skeleton-core";
 import { classificationPillsForItem } from "@/lib/menu/menu-classification-badge-core";
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
 import { glowCardStyle } from "@/lib/ui/glow-card-core";
@@ -311,7 +317,7 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
   // (shop grid, home rail, specials grid, PDP rail) — verified both ways.
   return (
     <article
-      className={`group relative flex min-h-[29.25rem] min-w-0 flex-col justify-between overflow-hidden border p-4 text-white transition duration-300 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] ${className}`}
+      className={`group relative flex ${CARD_MIN_HEIGHT} min-w-0 flex-col justify-between overflow-hidden border p-4 text-white transition duration-300 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] ${className}`}
       style={cardStyle(tone)}
     >
       <span className="pointer-events-none absolute -left-px top-10 h-[42%] w-px opacity-90 blur-[1px]" style={{ background: tone.glowLeft ?? tone.glow }} aria-hidden="true" />
