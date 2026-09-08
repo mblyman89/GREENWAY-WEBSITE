@@ -143,8 +143,9 @@ Supporting surfaces that carry the same assumption and need review, not
 necessarily change:
 
 - `src/lib/promotions/published-rules-core.ts:139` — DB-empty seed fallback.
-- `src/lib/promotions/promo-guard-core.ts:90` — worst-case percent for the
-  below-cost audit (must be raised to 25 so the cost floor is still enforced).
+- `src/lib/promotions/promo-guard-core.ts:78-84` — worst-case percent for the
+  below-cost audit. **Checked and already correct at 25%** (see Phase 3);
+  listed here only so the next reader does not have to re-check it.
 - `src/lib/promotions/promotions-advisor.ts:27` — tells the AI advisor the deal
   is "whichever saves less"; would become false.
 - `src/app/admin/promotions/page.tsx:218`, `PromotionForm.tsx`,
@@ -224,10 +225,22 @@ this correctly — the nudge returns for free.
 
 ### Phase 3 — keep the guards honest
 
-- `promo-guard-core.ts`: worst-case percent for Tuesday becomes **25**, so the
-  below-cost audit still refuses any preroll whose cost floor is breached at the
-  deeper discount. **This must be updated in the same change** — otherwise the
-  audit under-estimates the discount and a below-cost sale could pass.
+- `promo-guard-core.ts`: **verified already correct — no change needed.** An
+  earlier draft of this document asserted the worst-case percent had to be
+  raised from 20 to 25. That was wrong, and running
+  `scripts/compliance/probe-doobie-guard.ts` disproved it:
+
+  | rule shape | `worstCaseDiscountPercent` |
+  |---|---|
+  | today, `eitherOr` 20 / 4-for-3 | **25%** |
+  | proposed `qtyTiers` 1→20, 4→25 | **25%** |
+  | bare `multi_item_tier` defaults | **25%** |
+
+  Line 83 takes `Math.max(flatPercent, bundlePct)` — the guard deliberately
+  audits against the *deepest* discount a rule could ever produce, which is the
+  opposite convention from the pricing path. So the below-cost audit has been
+  protecting the store at 25% all along, and the tier change does not move it.
+  The audit is the one place in this feature that was already right.
 - `promotions-advisor.ts`: correct the "whichever saves less" description.
 - Admin copy in `promotions/page.tsx` and the promotion form.
 
@@ -304,7 +317,7 @@ mutation-tested is not finished.
 | `src/lib/specials/cart-discount.ts` | `case "tuesday"` → single tier lookup |
 | `src/lib/promotions/discount-engine-core.ts` | either/or comparison direction (§7.3) |
 | `src/lib/checkout/estimator-core.ts` | drop the `eitherOr` nudge suppression |
-| `src/lib/promotions/promo-guard-core.ts` | worst-case percent 20 → 25 |
+| ~~`src/lib/promotions/promo-guard-core.ts`~~ | **no change — verified already audits at 25%** |
 | `src/lib/promotions/promotions-advisor.ts` | corrected description |
 | `src/app/admin/promotions/page.tsx` + form + AI mechanics | corrected copy |
 | `tests/compliance/doobie-tuesday-tiers.test.ts` | new |
