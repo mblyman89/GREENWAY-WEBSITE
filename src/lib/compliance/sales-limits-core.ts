@@ -996,7 +996,11 @@ export function __runSalesLimitTests(): void {
   ok(RECREATIONAL_LIMITS.usable === 28, "rec usable 28g");
   ok(RECREATIONAL_LIMITS.concentrate === 7, "rec concentrate 7g");
   ok(RECREATIONAL_LIMITS.solid_edible === 448, "rec solid 16oz=448g");
-  ok(RECREATIONAL_LIMITS.liquid_edible === 2016, "rec liquid 72oz=2016g");
+  // SLICE L4 — rebased to millilitres: 72 FLUID ounces, not 72 weight ounces.
+  ok(
+    Math.abs(RECREATIONAL_LIMITS.liquid_edible - 72 * 29.5735) < 1e-6,
+    "rec liquid 72 fl oz = 2129.292 ml",
+  );
   ok(MEDICAL_LIMITS.usable === 84, "med usable 84g");
   ok(MEDICAL_LIMITS.concentrate === 21, "med concentrate 21g");
 
@@ -1032,7 +1036,7 @@ export function __runSalesLimitTests(): void {
   );
   ok(
     clampLimitProfile({ usable: 0, solid_edible: -5, concentrate: NaN, liquid_edible: "junk" }, RECREATIONAL_LIMITS)
-      .liquid_edible === 2016,
+      .liquid_edible === REC_LIQUID_ML,
     "clamp: garbage string collapses to statute",
   );
   ok(clampLimitProfile(null, MEDICAL_LIMITS).usable === 84, "clamp: null profile → med statute");

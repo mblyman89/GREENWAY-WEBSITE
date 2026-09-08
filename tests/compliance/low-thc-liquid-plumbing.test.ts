@@ -222,7 +222,14 @@ describe("the three surfaces agree on an identical basket", () => {
       "recreational",
     );
     expect(v.buckets.find((b) => b.bucket === "low_thc_liquid")!.used).toBe(40);
-    expect(v.buckets.find((b) => b.bucket === "liquid_edible")!.used).toBe(1000);
+    // SLICE L4 — the liquid bucket counts MILLILITRES now. This line states
+    // 1000 GRAMS and no volume, so the weight is carried across at its
+    // ounce-count (1000 / 28 * 29.5735 = 1056.196 ml) — the same 35.7 ounces
+    // of the statute's 72 as before the rebase. No density is assumed.
+    expect(v.buckets.find((b) => b.bucket === "liquid_edible")!.used).toBeCloseTo(
+      (1000 / 28) * 29.5735,
+      3,
+    );
     expect(v.blocked).toBe(false);
   });
 });

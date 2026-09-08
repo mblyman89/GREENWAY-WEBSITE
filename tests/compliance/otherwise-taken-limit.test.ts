@@ -248,7 +248,14 @@ describe("SLICE 17 — routing: the flagged line leaves the liquid bucket entire
       "recreational",
     );
     expect(res.buckets.find((b) => b.bucket === "otherwise_taken")!.used).toBe(3);
-    expect(res.buckets.find((b) => b.bucket === "liquid_edible")!.used).toBe(56);
+    // SLICE L4 — millilitres. 56 g carried across at its ounce-count
+    // (2 oz -> 59.147 ml). The POINT of this assertion is unchanged: the
+    // flagged suppository contributes NOTHING here and only the ordinary
+    // liquid line lands in this bucket.
+    expect(res.buckets.find((b) => b.bucket === "liquid_edible")!.used).toBeCloseTo(
+      (56 / 28) * 29.5735,
+      3,
+    );
   });
 });
 
