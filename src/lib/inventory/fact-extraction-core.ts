@@ -77,7 +77,7 @@ export type NameFacts = {
   /** Slash-combined dose ("200mg THC/CBG") — a stated total across the listed members. */
   slashDose: { mg: number; members: Cannabinoid[] } | null;
   /** Package sizes written in the name, e.g. "1.7 oz" → { quantity: 1.7, unit: "oz" }. */
-  sizes: { quantity: number; unit: "g" | "oz" | "floz" | "ml" }[];
+  sizes: { quantity: number; unit: "g" | "oz" | "floz" | "ml" | "l" }[];
   /** "(I)" / "(S)" / "(H)" markers. */
   strainType: "indica" | "sativa" | "hybrid" | null;
   /** Cannabinoids mentioned WITHOUT a dose (e.g. "CBN" in "Const HRG CBN 1:1:1"). */
@@ -102,7 +102,23 @@ const PACK_RE = /\b(\d+)\s*-?\s*(?:pack|pk)\b/gi;
 const FLOZ_RE = /\b(\d+(?:\.\d+)?)\s*(?:fl\.?\s*oz|fluid\s*ounces?|floz)\b/gi;
 const OZ_RE = /\b(\d+(?:\.\d+)?)\s*(?:oz\b|ounces?\b)/gi;
 const G_RE = /\b(\d+(?:\.\d+)?)\s*(?:g\b|grams?\b)/gi;
-const ML_RE = /\b(\d+(?:\.\d+)?)\s*(?:ml\b|milliliters?\b)/gi;
+const ML_RE = /\b(\d+(?:\.\d+)?)\s*(?:ml\b|milliliters?\b|millilitres?\b)/gi;
+/**
+ * SLICE L2 -- litres.
+ *
+ * This pattern was MISSING, so a "1L" or "1.5 L" bottle extracted no size at
+ * all. Downstream, the limit engine fell back to its 28 g/unit default and
+ * allowed 72 of them -- a 72x over-sale on the largest liquid we sell.
+ * Measured during recon, not assumed.
+ *
+ * The bare `l` alternative is the dangerous one, so it is fenced two ways:
+ *   1. ML_RE runs FIRST at stage 8, so "750 mL" is consumed as millilitres and
+ *      can never reach this pattern.
+ *   2. `(?=$|[^a-z])` requires the `l` to end its token, so real product
+ *      wording is not eaten. Probed against "2 Lb", "2 lbs", "5 Lot",
+ *      "3 Large", "1 Lid" and "XL" -- none match.
+ */
+const LITRE_RE = /\b(\d+(?:\.\d+)?)\s*(?:l(?=$|[^a-z])|liters?\b|litres?\b)/gi;
 const MENTION_RE = new RegExp(`\\b(${CANNA})\\b`, "gi");
 
 /** Replace a matched span with spaces so later passes cannot re-read it. */
@@ -203,10 +219,17 @@ export function extractNameFacts(rawText: string | null | undefined): NameFacts 
   });
 
   // 8. package sizes — fl oz before oz before g/ml so "1.7 fl oz" isn't read as oz.
+  //    SLICE L2 -- note on the ml/litre ordering, MEASURED not assumed:
+  //    ML_RE and LITRE_RE are mutually exclusive, so swapping them is a no-op.
+  //    LITRE_RE needs a digit, optional space, then `l`; in "750 mL" it finds
+  //    `m` and fails, and ML_RE cannot match "1L". Probed both directions.
+  //    The real guard is LITRE_RE's `(?=$|[^a-z])` lookahead -- drop that and
+  //    the bare `l` starts eating "2 Lb", "5 Lot", "3 Large".
   text = consumeAll(text, FLOZ_RE, (m) => facts.sizes.push({ quantity: Number(m[1]), unit: "floz" }));
   text = consumeAll(text, OZ_RE, (m) => facts.sizes.push({ quantity: Number(m[1]), unit: "oz" }));
   text = consumeAll(text, G_RE, (m) => facts.sizes.push({ quantity: Number(m[1]), unit: "g" }));
   text = consumeAll(text, ML_RE, (m) => facts.sizes.push({ quantity: Number(m[1]), unit: "ml" }));
+  text = consumeAll(text, LITRE_RE, (m) => facts.sizes.push({ quantity: Number(m[1]), unit: "l" }));
 
   // 9. cannabinoids mentioned without a dose ("CBN" in "Const HRG CBN 1:1:1")
   text = consumeAll(text, MENTION_RE, (m) => {
