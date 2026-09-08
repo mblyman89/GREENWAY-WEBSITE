@@ -14,12 +14,13 @@
       3000 ml -> BLOCKED=false when the true volume is 41% over the cap.
       Affects 3 call sites: api/pos/menu/route.ts:325, order-pricing.ts:265,
       cart-limit-meter-core.ts:106.
-- [ ] Add shared pure `resolveUnitVolumeMl()` to liquid-volume-core.ts
+- [x] Add shared pure `resolveUnitVolumeMl()` to liquid-volume-core.ts
       (variant label first = per-variant truth; card measure only as fallback).
-- [ ] Wire `unitVolumeMl` through CartItemInput + ProductDetailPurchasePanel.
-- [ ] Fix precedence at all 3 call sites via the shared resolver.
-- [ ] Tests + mutation harness (scripts/compliance/mutate-l5a.py).
-- [ ] tsc 0 / eslint 0 / full suite / commit / PR / rebase-merge / authorship.
+- [x] Wire `unitVolumeMl` through CartItemInput + ProductDetailPurchasePanel.
+- [x] Fix precedence at all 3 call sites via the shared resolver.
+- [x] Tests + mutation harness: 21/21 tests pass; mutation 16/16 caught, 0 survived.
+- [x] tsc 0, eslint 0, full suite 597 files / 15,187 tests, 0 failures.
+- [ ] PR / rebase-merge / authorship.
 
 ## L5 — receiving volume gate  [PENDING]
 - [ ] Third gated question in receiving-classification-core.ts, mirroring
