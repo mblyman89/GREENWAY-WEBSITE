@@ -20,6 +20,8 @@ export type DailyDealSeed = {
   weekday: Weekday;
   discountType: DiscountType;
   discountPercent: number;
+  /** Quantity tiers for multi_item_tier deals (SLICE D1). */
+  qtyTiers?: { at: number; percent: number }[];
   multiItemPercent?: number;
   perItemSale: boolean;
   bonusNote?: string;
@@ -59,7 +61,14 @@ export const DAILY_DEAL_SEEDS: DailyDealSeed[] = [
     discountType: "multi_item_tier",
     discountPercent: 20,
     perItemSale: false,
-    bonusNote: "20% off · or 4 for 3",
+    // SLICE D1: 1-3 prerolls 20%, 4+ 25%. "Buy 4 for the price of 3" IS 25%
+    // off on identical items, so the tier DELIVERS the advertised bundle at
+    // every quantity from 4 up, instead of only at exact multiples of four.
+    qtyTiers: [
+      { at: 1, percent: 20 },
+      { at: 4, percent: 25 },
+    ],
+    bonusNote: "20% off · or 4 for 3 (25%)",
     priority: 10,
     targetCategories: [
       "preroll",

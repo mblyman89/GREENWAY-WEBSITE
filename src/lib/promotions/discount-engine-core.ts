@@ -53,6 +53,10 @@ import {
   NON_CANNABIS_TAX_INCLUSIVE_DIVISOR,
 } from "@/lib/orders/order-pricing-core";
 import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
+import {
+  apportionBundleSavings,
+  bundleTargetMinorUnits,
+} from "@/lib/promotions/bundle-apportionment-core";
 
 export type DiscountType =
   | "percent"
@@ -304,25 +308,40 @@ function bundleSpreadDiscounts(
   label: string,
 ): Map<string, LineDiscount> {
   const out = new Map<string, LineDiscount>();
-  const freePerGroup = Math.max(0, Math.floor(n) - Math.floor(m));
-  if (n < 2 || freePerGroup <= 0) return out;
-  const units: number[] = [];
-  let eligibleTotal = 0;
+
+  // SLICE D1: the savings target is apportioned in WHOLE CENTS, not converted
+  // into a floored whole-number percent. Flooring a percent threw away up to
+  // 0.999% of the basket -- on the owner's $60/$40/$20 Sunday cart that was
+  // $19.20 paid against a $20.00 advertised 3-for-2, an 80c shortfall in the
+  // customer's disfavour. See bundle-apportionment-core.ts for the measurements.
+  const apportionLines = eligible.map((l) => ({
+    lineId: l.lineId,
+    regularPriceMinorUnits: l.regularPriceMinorUnits,
+    quantity: l.quantity,
+    // The floor is resolved HERE, by the code that knows the product's cost
+    // and category, and it is absolute: no apportionment may breach it.
+    floorMinorUnits: clampEngineUnit(l, 0),
+  }));
+
+  const target = bundleTargetMinorUnits(apportionLines, n, m);
+  if (target <= 0) return out;
+
+  const result = apportionBundleSavings(apportionLines, target);
+  if (result.placedMinorUnits <= 0) return out;
+
   for (const l of eligible) {
-    eligibleTotal += l.regularPriceMinorUnits * l.quantity;
-    for (let i = 0; i < l.quantity; i += 1) units.push(l.regularPriceMinorUnits);
-  }
-  units.sort((a, b) => a - b);
-  const groups = Math.floor(units.length / Math.floor(n));
-  if (groups <= 0 || eligibleTotal <= 0) return out;
-  let targetSavings = 0;
-  for (let i = 0; i < groups * freePerGroup; i += 1) targetSavings += units[i];
-  // Equivalent basket-wide percent, floored (store-advantaged), capped at 99.
-  const percent = Math.min(99, Math.floor((targetSavings / eligibleTotal) * 100));
-  if (percent <= 0) return out;
-  for (const l of eligible) {
-    const d = flatPercentDiscount(l, percent, label);
-    out.set(l.lineId, { ...d, label: `${label} · ${Math.floor(n)} for ${Math.floor(m)} (${percent}% spread)` });
+    const off = result.perUnitOff.get(l.lineId) ?? 0;
+    if (off <= 0) continue;
+    const unit = clampEngineUnit(l, l.regularPriceMinorUnits - off);
+    const pct =
+      l.regularPriceMinorUnits > 0
+        ? round(((l.regularPriceMinorUnits - unit) / l.regularPriceMinorUnits) * 100)
+        : 0;
+    out.set(l.lineId, {
+      unitPrice: unit,
+      percent: pct,
+      label: `${label} · ${Math.floor(n)} for ${Math.floor(m)}`,
+    });
   }
   return out;
 }
@@ -350,8 +369,28 @@ export function applyOnePromotion(
   const eligible = lines.filter((l) => ruleMatchesLine(rule, l));
   if (eligible.length === 0) return out;
 
-  // Either/or overrides the base mechanic: flat % OR bundle N-for-M, whichever
-  // yields the SMALLER total savings when both qualify (store-advantaged).
+  // SLICE D1 -- READ THIS BEFORE REINSTATING ANY "WHICHEVER SAVES LESS" LOGIC.
+  //
+  // This block used to intercept every eitherOr rule and keep whichever of the
+  // two advertised options saved the customer LESS. It was believed to be the
+  // owner's "store wins" policy. It was not. That policy is about ROUNDING
+  // ("if we need to round, we should always round up or round in our favor"),
+  // and it had been promoted into a deal-SELECTION rule.
+  //
+  // The measured consequence on Doobie Tuesday ("20% off OR 4 for 3"):
+  //   qty  1-3  ->  20%   correct
+  //   qty  4    ->  20%   the 4-for-3 is worth 25%, so it was DISCARDED
+  //   qty  6    ->  16%   the bundle now saves LESS, so it WON
+  //   qty  7    ->  14%   worse still
+  //   qty  8    ->  20%   back again
+  // A customer's discount FELL by adding a sixth preroll, and the store
+  // advertised 20% while charging 16%. The owner's ruling: "if a discount
+  // specifically states 4 or more prerolls is 25% off, then its 25% off,
+  // whether the store wants to win or not."
+  //
+  // An either/or deal now resolves to the option that HONOURS the advertising,
+  // i.e. the better of the two for the customer. Where a deal wants tiers, it
+  // declares qtyTiers and the multi_item_tier branch below runs them.
   if (rule.config.eitherOr) {
     const { flatPercent, bundle } = rule.config.eitherOr;
     const optionA = new Map<string, LineDiscount>();
@@ -362,12 +401,12 @@ export function applyOnePromotion(
     const savingsA = totalSavings(optionA, eligible);
     const savingsB = totalSavings(optionB, eligible);
     if (savingsA <= 0 && savingsB <= 0) return out;
-    // Pick the option with the SMALLER positive savings; a zero-savings option
-    // never beats a positive one (the deal must actually apply).
+    // Honour the advertising: the option that actually delivers what the deal
+    // promises. A zero-savings option never beats a positive one.
     let chosen: Map<string, LineDiscount>;
     if (savingsA <= 0) chosen = optionB;
     else if (savingsB <= 0) chosen = optionA;
-    else chosen = savingsA <= savingsB ? optionA : optionB;
+    else chosen = savingsA >= savingsB ? optionA : optionB;
     for (const [k, v] of chosen.entries()) out.set(k, v);
     return out;
   }
@@ -751,7 +790,10 @@ export function __runDiscountEngineTests(): void {
     expect("qtytier 1 => none", r.lines[0].unitPriceMinorUnits === 500);
   }
 
-  // EITHER/OR (Doobie Tuesday): 20% flat OR 4-for-3, the SMALLER savings wins.
+  // EITHER/OR (SLICE D1): 20% flat OR 4-for-3 — the option BETTER FOR THE
+  // CUSTOMER wins. These assertions previously required the WORSE option and
+  // so encoded the defect as the contract: four $10 prerolls returned $8.00
+  // when the advertised "4 for the price of 3" is worth $10.00.
   {
     const rule = baseRule({
       discountType: "multi_item_tier",
@@ -764,13 +806,17 @@ export function __runDiscountEngineTests(): void {
       [rule],
     );
     expect("eitherOr qty1 flat 20%", one.lines[0].unitPriceMinorUnits === 800);
-    // 4 equal $10 prerolls: flat 20% saves $8; 4-for-3 saves $10 → flat (store wins).
+    // 4 equal $10 prerolls: flat 20% saves $8; 4-for-3 saves $10 → the BUNDLE,
+    // because that is what the sign in the window promises.
     const four = computePromotions(
       [{ lineId: "a", regularPriceMinorUnits: 1000, quantity: 4, categories: ["preroll"] }],
       [rule],
     );
-    expect("eitherOr equal prices picks flat", four.totalSavingsMinorUnits === 800);
-    // 3 × $20 + 1 × $2: flat saves $12.40; bundle saves $2 (cheapest) → bundle.
+    expect("eitherOr picks the better option for the customer", four.totalSavingsMinorUnits === 1000);
+    expect("eitherOr never delivers less than the flat rate", four.totalSavingsMinorUnits >= 800);
+    // 3 × $20 + 1 × $2: flat saves $12.40; the bundle's free unit is the $2 one,
+    // so the bundle is worth only $2 → the FLAT rate wins. The old assertion
+    // demanded strictly less than $12.40, i.e. it required the $2 outcome.
     const mixed = computePromotions(
       [
         { lineId: "a", regularPriceMinorUnits: 2000, quantity: 3, categories: ["preroll"] },
@@ -778,8 +824,8 @@ export function __runDiscountEngineTests(): void {
       ],
       [rule],
     );
-    // Bundle: target $2 of $62 → floor(3.22%) = 3% spread: a→1940 (×3), b→194.
-    expect("eitherOr cheap-unit picks bundle", mixed.totalSavingsMinorUnits < 1240);
+    expect("eitherOr keeps the flat rate when the bundle is worth less", mixed.totalSavingsMinorUnits === 1240);
+    expect("eitherOr never picks the weaker offer", mixed.totalSavingsMinorUnits >= 200);
     expect(
       "eitherOr bundle spreads across all lines",
       mixed.lines.every((l) => l.unitSavingsMinorUnits > 0),
@@ -900,9 +946,15 @@ export function __runDiscountEngineTests(): void {
       { lineId: "a", regularPriceMinorUnits: 1000, quantity: 3, categories: ["edible-solid"] },
     ];
     const r = computePromotions(lines, [rule]);
-    // Target savings 1000 of 3000 → 33% spread → unit 670 → savings 990.
-    expect("basket 3for2 spread percent", r.lines[0].appliedPercent === 33);
-    expect("basket 3for2 savings", r.totalSavingsMinorUnits === 990);
+    // SLICE D1: a true 3-for-2 on three $10 items is $10.00 of savings. The old
+    // assertion PINNED $9.90 (a floored 33% spread) and would have failed this
+    // fix. One line of quantity 3 can only move in 3-cent steps, so $10.00 is
+    // not reachable; the engine rounds to the nearest reachable value ABOVE the
+    // target ($10.02) so the customer is never short-changed, per the owner:
+    // "if it can't be exact, then we need to round in the customers favor".
+    expect("basket 3for2 never under-delivers", r.totalSavingsMinorUnits >= 1000);
+    expect("basket 3for2 overshoot is minimal", r.totalSavingsMinorUnits - 1000 < 3);
+    expect("basket 3for2 savings", r.totalSavingsMinorUnits === 1002);
     expect("basket 3for2 unit never $0", r.lines[0].unitPriceMinorUnits > 0);
   }
   // OWNER'S EXAMPLE (store-favorable pin): Sunday 3-for-2 on a $150 + $20 +
@@ -919,6 +971,10 @@ export function __runDiscountEngineTests(): void {
     const r = computePromotions(lines, [rule]);
     expect("owner Sunday example: savings ≤ $15", r.totalSavingsMinorUnits <= 1500);
     expect("owner Sunday example: some savings applied", r.totalSavingsMinorUnits > 0);
+    // SLICE D1: it is now EXACTLY $15.00, not merely "≤ and > 0". The owner:
+    // "Sunday needs to be exact." Previously the floored percent delivered
+    // less than the advertised cheapest-item value.
+    expect("owner Sunday example: exactly $15", r.totalSavingsMinorUnits === 1500);
     const pcts = r.lines.map((l) => l.appliedPercent);
     expect("owner Sunday example: equal percent every line", pcts.every((p) => p === pcts[0]));
   }
@@ -930,9 +986,11 @@ export function __runDiscountEngineTests(): void {
       { lineId: "b", regularPriceMinorUnits: 900, quantity: 1, categories: ["preroll"] },
     ];
     const r = computePromotions(lines, [rule]);
-    // Target 900 of 6900 → floor(13.04) = 13% on every line.
+    // SLICE D1: the advertised value is the cheapest unit ($9.00) and the
+    // customer now receives all of it. The old assertion locked in
+    // floor(13.04%) = 13%, which quietly delivered less than the advert.
     expect("3for2 spread hits every line", r.lines.every((l) => l.unitSavingsMinorUnits > 0));
-    expect("3for2 store-advantaged floor pct", r.lines[0].appliedPercent === 13);
+    expect("3for2 delivers the advertised cheapest unit", r.totalSavingsMinorUnits === 900);
   }
   // basket N-for-M floor: a cheap cannabis basket can never blend to $0.
   {
@@ -950,8 +1008,13 @@ export function __runDiscountEngineTests(): void {
       { lineId: "a", regularPriceMinorUnits: 1000, quantity: 3, categories: ["flower"], costMinorUnits: 500 },
     ];
     const r = computePromotions(lines, [rule]);
-    // Floor = ceil(500 × 1.463) = 732 > 670 spread price → clamped to 732.
+    // Floor = ceil(500 × 1.463) = 732 → the spread price is clamped up to it.
+    // The cost floor OUTRANKS the advertised target: we may legally deliver
+    // less than the advert rather than sell below acquisition cost
+    // (RCW 69.50.357). Savings are therefore 804, not the 1000 target.
     expect("3for2 cost floor clamps", r.lines[0].unitPriceMinorUnits === 732);
+    expect("3for2 cost floor outranks the target", r.totalSavingsMinorUnits === 804);
+    expect("3for2 cost floor never breached", r.lines[0].unitPriceMinorUnits >= 732);
   }
 
   // storewide skips merch
