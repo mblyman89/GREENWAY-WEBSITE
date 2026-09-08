@@ -38,7 +38,7 @@ import {
   type LimitEvaluation,
 } from "@/lib/compliance/sales-limits-core";
 import { gramsFromVariantLabel, lineGramsFromUnit } from "@/lib/pos/variant-grams-core";
-import { lineVolumeMl, volumeMlFromLabel } from "@/lib/compliance/liquid-volume-core";
+import { lineVolumeMl, resolveUnitVolumeMl } from "@/lib/compliance/liquid-volume-core";
 
 /** The cart fields the limit engine needs (a subset of CartItem). */
 export type CartLimitLineInput = {
@@ -46,9 +46,11 @@ export type CartLimitLineInput = {
   quantity: number;
   variantLabel: string | null;
   /**
-   * SLICE L4 — millilitres ONE unit contains, plumbed from intake's measured
-   * net_volume_ml. Optional: absent/null makes the meter parse the variant
-   * label instead, and if that yields nothing the engine uses the
+   * SLICE L4/L5a — millilitres ONE unit contains, plumbed from intake's
+   * measured net_volume_ml (card level). The VARIANT LABEL takes precedence
+   * over this when it states a volume, because one card groups several package
+   * sizes and this figure describes only the first in-stock lot; see
+   * resolveUnitVolumeMl. When neither knows, the engine falls back to the
    * weight-carried basis. No density is ever assumed.
    */
   unitVolumeMl?: number | null;
@@ -98,12 +100,13 @@ export function cartLimitLines(items: readonly CartLimitLineInput[]): LimitCartL
   return items.map((item) => {
     const perUnit = gramsFromVariantLabel(item.variantLabel);
     const grams = lineGramsFromUnit(perUnit, item.quantity);
-    // SLICE L4 — the volume basis, mirroring the register's limitLinesFor()
+    // SLICE L4/L5a — the volume basis, mirroring the register's limitLinesFor()
     // so the website meter and the register can never disagree about the same
-    // cart. Prefers the plumbed per-package volume (L3); falls back to parsing
-    // the variant label, which is the only source the website has for a
-    // product whose card predates the L3 intake plumbing.
-    const perUnitMl = item.unitVolumeMl ?? volumeMlFromLabel(item.variantLabel);
+    // cart. resolveUnitVolumeMl prefers the VARIANT LABEL (it describes the
+    // thing being sold) and uses the card's measured net_volume_ml only when
+    // the label states no volume -- which is exactly the "each"/mg/pack case
+    // that let 72 unlabelled bottles read as legal here before L5a.
+    const perUnitMl = resolveUnitVolumeMl(item.variantLabel, item.unitVolumeMl);
     const volumeMl = lineVolumeMl(perUnitMl, item.quantity);
     return {
       category: item.category,

@@ -32,7 +32,7 @@ import { trimDescription } from "@/lib/pos/product-info-core";
 import { gramsFromVariantLabel } from "@/lib/pos/variant-grams-core";
 // SLICE L4 — label → millilitres, the fallback when a card predates the L3
 // intake volume plumbing.
-import { volumeMlFromLabel } from "@/lib/compliance/liquid-volume-core";
+import { resolveUnitVolumeMl } from "@/lib/compliance/liquid-volume-core";
 import { cleanCardDisplayName } from "@/lib/pos/menu-name-display-core";
 import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
 // SLICE 28 — the owner's employee/industry/veteran discount settings ride the
@@ -322,7 +322,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         // parsing the variant label so a card staged before L3 still gets a
         // volume when its label states one. null = unknown, and the engine
         // then uses the weight-carried basis rather than assuming a size.
-        unitVolumeMl: item.netVolumeMl ?? volumeMlFromLabel(variant.label),
+        unitVolumeMl: resolveUnitVolumeMl(variant.label, item.netVolumeMl),
         // SLICE 16 — the low-THC beverage classification and the per-UNIT mg
         // figure. Set at intake from the label/invoice; never derived from
         // servings × mg-per-serving (a 16 mg bottle labelled "4 × 4 mg" is one

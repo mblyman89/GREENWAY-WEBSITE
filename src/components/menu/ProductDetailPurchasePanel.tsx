@@ -201,6 +201,12 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
             // SLICE 17 — so the website cart meter counts suppository UNITS.
             otherwiseTaken: item.otherwiseTaken ?? null,
             unitsPerPackage: item.unitsPerPackage ?? null,
+            // SLICE L5a — the measured package volume, so the cart drawer and
+            // checkout blocks apply the 2129.292 ml liquid cap to bottles
+            // whose variant label states no size (transform.ts renders the
+            // "each" package label as ""). The register already had this; the
+            // website did not, so it showed 72 bottles as legal.
+            unitVolumeMl: item.netVolumeMl ?? null,
           });
         }}
         className="mt-3 flex h-14 w-full items-center justify-center rounded-md bg-[#d8e6c4] px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--greenway)] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"

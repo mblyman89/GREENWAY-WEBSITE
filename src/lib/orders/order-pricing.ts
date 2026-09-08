@@ -49,7 +49,7 @@ import {
   normalizeUnitGrams,
 } from "@/lib/pos/variant-grams-core";
 // SLICE L4 — pure per-variant millilitre helpers (label → ml; per-unit → line).
-import { lineVolumeMl, volumeMlFromLabel } from "@/lib/compliance/liquid-volume-core";
+import { lineVolumeMl, resolveUnitVolumeMl } from "@/lib/compliance/liquid-volume-core";
 
 export type PricedOrderLine = {
   productId: string | null;
@@ -262,7 +262,7 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
       // SLICE L4: true per-unit VOLUME. Prefers the L3-plumbed net_volume_ml
       // (a measured package volume carried from intake); falls back to the
       // variant label for a card staged before that plumbing existed.
-      unitVolumeMl: w.resolved.item.netVolumeMl ?? volumeMlFromLabel(w.resolved.variant.label),
+      unitVolumeMl: resolveUnitVolumeMl(w.resolved.variant.label, w.resolved.item.netVolumeMl),
       // SLICE 16: the low-THC beverage classification from the resolved menu
       // item. Unclassified products resolve to null and are counted as normal
       // liquids by the engine.
