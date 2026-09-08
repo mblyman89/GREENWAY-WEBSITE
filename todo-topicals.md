@@ -108,12 +108,50 @@ a hand-maintained list of type strings that silently omits most of the shelf.
 
 ## Plan
 
-- [ ] T1: teach the receiving gate that a WEIGHT-labelled topical is already
+- [x] T1: teach the receiving gate that a WEIGHT-labelled topical is already
       measured. The bucket is metered in ml, but a salve's own ounce-count
       carries across exactly, so a known net weight is a complete answer.
       Gate must fire ONLY when neither a volume NOR a weight is establishable.
-- [ ] T2: make the volume/weight fact actually reach the menu for topicals,
+- [x] T2: make the volume/weight fact actually reach the menu for topicals,
       so the 28 g default stops being the silent fallback.
-- [ ] Keep `topical` in `liquid_edible`. Replace the "will fail loudly when
-      topicals move" marker with the STATUTORY reason it must not move.
-- [ ] Tests + mutation harness + PR.
+- [x] T3: scope measurement by BUCKET, not by inventory-type string. This is
+      the one that mattered: Soda and Beverage were never measured, and 72
+      unmeasured cans passed a 72 fl oz cap - a 12x oversell.
+- [x] T4 (found while testing T3): a sizeless Liquid Edible or Tincture warned
+      TWICE for one fault, because the old L5 block and the new bucket pass
+      both covered those two types. The old block was strictly subsumed - it
+      also warned about weight-measured salves it should have stayed quiet
+      about - so it was removed. One fault, one warning, verified on all six
+      bucket types.
+- [x] Keep `topical` in `liquid_edible`. Replaced the "will fail loudly when
+      topicals move" marker with the STATUTORY reason it must not move, and
+      corrected the same stale claim in sales-limits-core.ts and
+      liquid-volume-derivation-core.ts.
+- [x] Tests: tests/compliance/topical-and-bucket-measurement.test.ts, 80 tests.
+- [x] Mutation harness: scripts/compliance/mutate-t.py - 14/14 caught, no
+      survivors, tree verified byte-identical after every restore.
+- [x] tsc 0, eslint 0, FULL suite 15038 passed / 592 files.
+
+## Measured before and after
+
+| product | before | after |
+|---|---|---|
+| Fairwinds Flow Cream 2oz | REFUSED at receiving | 56.699 g, approves |
+| Ceres Balm 1.7oz | REFUSED at receiving | 48.194 g, approves |
+| Green Revolution Salve 30g | REFUSED at receiving | 30 g, approves |
+| Craft Soda 12 fl oz | no measure -> 28 g guess | 354.882 ml |
+| Hi-Fi Hops 355ml | no measure -> 28 g guess | 355 ml |
+| Relief Balm 2oz | no measure -> 28 g guess | 56.699 g |
+| Lemonade 750ml | 750 ml | 750 ml (unchanged) |
+| Tincture 30ml | 30 ml | 30 ml (unchanged) |
+| sizeless liquid | 2 warnings (LE/Tincture) | exactly 1, every type |
+
+Weight carry-across verified EXACT, no density invented: 1oz->72, 1.7oz->42,
+2oz->36, 4oz->18, 8oz->9 units against the 72 fl oz cap.
+
+## Next
+
+- [ ] Doobie Tuesday: recon COMPLETE, see docs/DOOBIE_TUESDAY_STRATEGY.md.
+      Fix NOT applied - it reverses a documented owner policy
+      ("store-advantaged, whichever saves less"), so it needs confirmation
+      first.

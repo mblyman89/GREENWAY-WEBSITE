@@ -486,29 +486,13 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
             },
           });
         }
-      } else if (
-        LIQUID_VOLUME_TYPES.has(invType) &&
-        // SLICE L5: silent when a human already measured it — the whole point
-        // of the receiving gate is that this case no longer exists.
-        !(typeof measured === "number" && Number.isFinite(measured) && measured > 0)
-      ) {
-        // A liquid with NO derivable volume is the case that broke the limit.
-        // Surface it so the dock can measure the bottle instead of letting
-        // the register invent a size.
-        diagnostics.push({
-          severity: "warning",
-          code: "net_volume_missing",
-          message: "This liquid has no package volume, so the 72 fl oz limit cannot be measured.",
-          context: {
-            draft_id: d.id,
-            pos_product_key: key,
-            productName: d.name,
-            displayName: d.name,
-            inventoryType: invType,
-            reasons: vol.reasons,
-          },
-        });
       }
+      // SLICE T4: the "no derivable volume" warning USED TO LIVE HERE, keyed on
+      // LIQUID_VOLUME_TYPES. It moved to the bucket pass below, which covers
+      // every inventory type the statute meters in fluid ounces instead of the
+      // two that were on the old list, and which stays quiet when a WEIGHT has
+      // already measured the package. Warning in both places reported one
+      // fault twice.
     }
 
     // ── SLICE T2/T3: MEASURE THE WHOLE BUCKET, NOT TWO TYPE STRINGS ────────
@@ -567,7 +551,7 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
           severity: "warning",
           code: "net_volume_missing",
           message:
-            "This product counts against the 72 fluid ounce limit but has no package size, so the limit cannot be measured.",
+            "This product counts against the 72 fl oz limit but has no package size, so the limit cannot be measured.",
           context: {
             draft_id: d.id,
             pos_product_key: key,
