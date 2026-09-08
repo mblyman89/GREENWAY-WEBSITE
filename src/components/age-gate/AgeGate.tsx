@@ -3,26 +3,62 @@
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
-
-const STORAGE_KEY = "greenway-age-confirmed-v1";
-const STORAGE_EVENT = "greenway-age-confirmed-change";
+import {
+  AGE_CONFIRMED_VALUE,
+  AGE_GATE_ELEMENT_ATTRIBUTE,
+  AGE_STORAGE_EVENT,
+  AGE_STORAGE_KEY,
+  isAgeConfirmedValue,
+  isAgeGateExemptPath,
+} from "@/lib/age-gate/age-gate-core";
 
 function subscribeToAgeConfirmation(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
-  window.addEventListener(STORAGE_EVENT, onStoreChange);
+  window.addEventListener(AGE_STORAGE_EVENT, onStoreChange);
 
   return () => {
     window.removeEventListener("storage", onStoreChange);
-    window.removeEventListener(STORAGE_EVENT, onStoreChange);
+    window.removeEventListener(AGE_STORAGE_EVENT, onStoreChange);
   };
 }
 
 function getAgeConfirmationSnapshot() {
-  return window.localStorage.getItem(STORAGE_KEY) === "true";
+  // Reading localStorage THROWS (not returns null) in Safari private browsing
+  // and wherever a site is denied storage. Treat any failure as unconfirmed so
+  // the gate shows: over-prompting an adult is a nuisance, letting an
+  // unverified visitor through is a compliance failure.
+  try {
+    return isAgeConfirmedValue(window.localStorage.getItem(AGE_STORAGE_KEY));
+  } catch {
+    return false;
+  }
 }
 
+/**
+ * SLICE I — the server snapshot now reports UNCONFIRMED.
+ *
+ * It used to return `true`, which meant the modal rendered nothing during SSR
+ * and could only appear after React hydrated. Measurement on the live deploy
+ * (mobile, 4x CPU, 1.6 Mbps) showed the consequence: the final
+ * largest-contentful-paint candidate was this component's own paragraph at
+ * t=4804ms, and the served HTML contained no age-gate markup at all. The
+ * store's LCP was being defined by an element that did not exist until
+ * hydration of a 3.3 MB payload had finished.
+ *
+ * Returning `false` renders the gate into the server HTML, so it paints with
+ * the first paint. Returning customers do not see it, because the inline
+ * bootstrap in `<head>` stamps `data-age-confirmed` on `<html>` before the
+ * first paint and a `display: none` rule in globals.css hides it during the
+ * same style pass — no flash, no JavaScript required.
+ *
+ * There is no hydration mismatch to worry about: the server always renders the
+ * gate, and the client's first render is what `useSyncExternalStore` reports
+ * from `getServerSnapshot` during hydration. React then re-renders with the
+ * real localStorage value and unmounts the modal for confirmed visitors, by
+ * which point CSS has already hidden it.
+ */
 function getServerAgeConfirmationSnapshot() {
-  return true;
+  return false;
 }
 
 export function AgeGate() {
@@ -34,18 +70,32 @@ export function AgeGate() {
   );
 
   function confirmAge() {
-    window.localStorage.setItem(STORAGE_KEY, "true");
-    window.dispatchEvent(new Event(STORAGE_EVENT));
+    try {
+      window.localStorage.setItem(AGE_STORAGE_KEY, AGE_CONFIRMED_VALUE);
+    } catch {
+      // Storage denied. The modal still closes for this page view via the
+      // event below; the visitor will simply be asked again next time.
+    }
+    // The pre-paint bootstrap only runs on a fresh document load, so stamp the
+    // attribute here too. Otherwise the CSS rule would not match until the next
+    // navigation and a confirmed visitor could see the gate flash on a
+    // client-side route change.
+    document.documentElement.setAttribute("data-age-confirmed", "true");
+    window.dispatchEvent(new Event(AGE_STORAGE_EVENT));
   }
 
   // The age gate is for customers only — never block the staff back office
   // or the register (the POS has its own, stronger ID gate per sale).
-  if (pathname?.startsWith("/admin") || pathname?.startsWith("/pos")) return null;
+  if (isAgeGateExemptPath(pathname)) return null;
 
   if (isConfirmed) return null;
 
   return (
     <div
+      // Hook for the pre-paint CSS rule. Keyed off a data attribute rather than
+      // the Tailwind classes below so that restyling the modal cannot silently
+      // break the no-flash behaviour.
+      {...{ [AGE_GATE_ELEMENT_ATTRIBUTE]: "" }}
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/[0.9] p-4 backdrop-blur-md"
       role="dialog"
       aria-modal="true"

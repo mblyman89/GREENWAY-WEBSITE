@@ -5,6 +5,37 @@
    website. Single source of truth — see the header in pos-tokens.css. */
 @import "./pos-tokens.css";
 
+/* ---------------------------------------------------------------------------
+ * SLICE I — AGE GATE, HIDDEN BEFORE THE FIRST PAINT
+ *
+ * The age gate is now rendered in the SERVER HTML. Measurement on the live
+ * deploy (mobile, 4x CPU, 1.6 Mbps) showed the modal's own paragraph was the
+ * final largest-contentful-paint candidate at t=4804ms, while the served HTML
+ * contained no age-gate markup at all — the storefront's LCP was defined by an
+ * element that did not exist until a 3.3 MB payload had hydrated.
+ *
+ * Serving the markup fixes that, but it would show the modal to customers who
+ * already confirmed, because their answer lives in localStorage and the server
+ * cannot read it. The inline bootstrap in <head> (see age-gate-core.ts) runs
+ * synchronously before first paint and stamps data-age-confirmed="true" on
+ * <html>; this rule then removes the gate during the SAME style resolution that
+ * produces that first paint. A confirmed visitor never sees a frame with the
+ * modal in it.
+ *
+ * FAIL-CLOSED BY CONSTRUCTION: the markup ships visible and is hidden only by a
+ * positive signal. If the bootstrap is blocked or localStorage throws (Safari
+ * private browsing), this selector never matches and the gate SHOWS. That is
+ * the correct direction to fail for a regulated storefront, and it is stricter
+ * than the previous behaviour, where the gate was absent until JS ran at all.
+ *
+ * `display: none` (not opacity/visibility) so the gate is out of the layout and
+ * the accessibility tree, and is not an LCP candidate for confirmed visitors.
+ * `!important` so it beats the modal's own utility classes.
+ * ------------------------------------------------------------------------- */
+[data-age-confirmed="true"] [data-age-gate] {
+  display: none !important;
+}
+
 :root {
   --background: #000000;
   --foreground: #ffffff;
