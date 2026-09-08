@@ -40,11 +40,28 @@ describe("SLICE 116 — shop width token", () => {
   });
 
   it("menu page consumes the token for hero, banners, and suspense (3 wrappers)", () => {
-    const count = (MENU_PAGE.match(/max-w-\[var\(--shop-max\)\]/g) || []).length;
-    // 3 page wrappers + the breadcrumb prop value = 4 usages of the token.
-    expect(count).toBeGreaterThanOrEqual(3);
-    // The old fixed 88rem cage must be gone from the menu page.
+    // SLICE F2 moved the Suspense fallback's wrappers out of this file and into
+    // the SHARED skeleton (src/components/menu/MenuSkeleton.tsx), so that the
+    // navigation placeholder (src/app/menu/loading.tsx) and the streaming
+    // placeholder are the same markup and cannot drift apart.
+    //
+    // The token was NOT dropped — it moved. So the invariant is asserted across
+    // both files that now render the shop's width-capped wrappers. Counting only
+    // page.tsx would fail for a refactor that improved the code, which would
+    // make this test an obstacle rather than a guard.
+    const skeleton = read("src/components/menu/MenuSkeleton.tsx");
+    const shell = read("src/lib/menu/menu-skeleton-core.ts");
+    const countIn = (source: string) =>
+      (source.match(/max-w-\[var\(--shop-max\)\]/g) || []).length;
+
+    expect(countIn(MENU_PAGE) + countIn(skeleton) + countIn(shell)).toBeGreaterThanOrEqual(3);
+
+    // The page itself must still cage its own banner block and breadcrumb.
+    expect(countIn(MENU_PAGE)).toBeGreaterThanOrEqual(2);
+
+    // The old fixed 88rem cage must be gone from BOTH the page and the skeleton.
     expect(MENU_PAGE).not.toContain("mx-auto max-w-[88rem]");
+    expect(skeleton).not.toContain("mx-auto max-w-[88rem]");
   });
 
   it("browser cage consumes the token (no fixed 88rem cage)", () => {
