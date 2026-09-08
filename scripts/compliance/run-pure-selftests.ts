@@ -49,6 +49,13 @@ import { __runSiteBackgroundTests } from "../../src/lib/ui/site-background-core"
 // mirror is ever renamed or skipped. Getting this wrong ships either dead nav
 // links (a slug with no prerendered page) or an uncrawlable menu.
 import { __runMenuFacetTests } from "../../src/lib/menu/menu-facet-core";
+// SLICE I — the age gate is a REGULATED gate, and it is also the storefront's
+// LCP element. Pure: no DOM, no browser, no storage. Registered here so CI
+// proves the fail-closed posture and the storage-key contract on every push,
+// even if the vitest mirror is ever renamed or skipped. Getting this wrong
+// either shows a modal to every returning customer forever (key drift) or lets
+// an unverified visitor reach the menu (fail-open bootstrap).
+import { __runAgeGateTests } from "../../src/lib/age-gate/age-gate-core";
 // product-lookup-core imports the server-only compliance module, so its
 // self-test is exercised via vitest (server-only aliased) + the parse core's
 // pure test below, not this server-only-free runner. See
@@ -908,6 +915,7 @@ async function main() {
   assertNoFailures("glow-card-core", __runGlowCardCoreTests());
   assertNoFailures("site-background-core", __runSiteBackgroundTests());
   assertNoFailures("menu-facet-core", __runMenuFacetTests());
+  assertNoFailures("age-gate-core", __runAgeGateTests());
   assertNoFailures("product-lookup-parse", __runProductLookupParseTests());
   __runCommitAuthorshipTests();
   assertNoFailures("core-values-core", __runCoreValuesTests());

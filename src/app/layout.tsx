@@ -8,6 +8,7 @@ import { Analytics } from "@/components/analytics/Analytics";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { PreviewEditOverlay } from "@/components/site/PreviewEditOverlay";
 import { AgeGate } from "@/components/age-gate/AgeGate";
+import { ageGateBootstrapScript } from "@/lib/age-gate/age-gate-core";
 import { CartProvider } from "@/components/cart/CartProvider";
 import { PublishedRulesProvider } from "@/components/promotions/PublishedRulesProvider";
 import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
@@ -111,6 +112,21 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         } as React.CSSProperties
       }
     >
+      <head>
+        {/* SLICE I — pre-paint age-gate bootstrap.
+         *
+         * MUST stay synchronous and MUST stay in <head>. The age gate is now
+         * rendered in the server HTML so it paints at first paint instead of
+         * after hydration (measured: it was the LCP element at t=4804ms and was
+         * absent from the served HTML entirely). This script reads the visitor's
+         * stored confirmation and stamps <html data-age-confirmed="true"> before
+         * the browser computes that first paint, so the CSS rule in globals.css
+         * hides the modal in the same style pass — returning customers see no
+         * flash. Adding `defer`/`async`, or moving this into a component that
+         * renders in <body>, would reintroduce the flash. Fail-closed: any
+         * failure leaves the attribute unset and the gate visible. */}
+        <script dangerouslySetInnerHTML={{ __html: ageGateBootstrapScript() }} />
+      </head>
       <body>
         <JsonLd data={[organizationSchema(), websiteSchema(), storeSchema()]} id="site" />
         <PublishedRulesProvider snapshots={publishedRules}>
