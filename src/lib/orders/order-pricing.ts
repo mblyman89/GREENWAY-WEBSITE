@@ -48,6 +48,8 @@ import {
   lineGramsFromUnit,
   normalizeUnitGrams,
 } from "@/lib/pos/variant-grams-core";
+// SLICE L4 — pure per-variant millilitre helpers (label → ml; per-unit → line).
+import { lineVolumeMl, volumeMlFromLabel } from "@/lib/compliance/liquid-volume-core";
 
 export type PricedOrderLine = {
   productId: string | null;
@@ -80,6 +82,14 @@ export type PricedOrderLine = {
   appliedLabel?: string;
   /** AN-1 — grams one unit weighs (from the variant label; null = unknown). */
   unitGrams?: number | null;
+  /**
+   * SLICE L4 — millilitres ONE unit contains. The liquid bucket is metered in
+   * millilitres against 72 FLUID ounces (RCW/WAC liquid maximum), so a real
+   * measured package volume must reach the server gate the same way unitGrams
+   * does. null = unknown, and the engine falls back to the weight-carried
+   * basis rather than assuming a size.
+   */
+  unitVolumeMl?: number | null;
 };
 
 export type RepriceSuccess = {
@@ -249,6 +259,10 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
       appliedLabel: d?.appliedLabel,
       // AN-1: true per-unit weight from the resolved variant's label.
       unitGrams: gramsFromVariantLabel(w.resolved.variant.label),
+      // SLICE L4: true per-unit VOLUME. Prefers the L3-plumbed net_volume_ml
+      // (a measured package volume carried from intake); falls back to the
+      // variant label for a card staged before that plumbing existed.
+      unitVolumeMl: w.resolved.item.netVolumeMl ?? volumeMlFromLabel(w.resolved.variant.label),
       // SLICE 16: the low-THC beverage classification from the resolved menu
       // item. Unclassified products resolve to null and are counted as normal
       // liquids by the engine.
@@ -285,10 +299,15 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
     // AN-1: hand the engine the true whole-line grams when known; null keeps
     // the conservative category-default math.
     const grams = lineGramsFromUnit(l.unitGrams, l.quantity);
+    // SLICE L4: and the true whole-line millilitres, which is what the liquid
+    // bucket actually meters. Omitted when unknown so the engine keeps its
+    // weight-carried fallback instead of reading a zero as "no volume sold".
+    const volumeMl = lineVolumeMl(l.unitVolumeMl ?? null, l.quantity);
     return {
       category: l.category,
       quantity: l.quantity,
       ...(grams !== null ? { grams } : {}),
+      ...(volumeMl !== null && volumeMl > 0 ? { volumeMl } : {}),
       // SLICE 16 — same routing the register and the website cart use, so all
       // three agree on an identical basket.
       lowThcLiquid: l.lowThcLiquid ?? null,

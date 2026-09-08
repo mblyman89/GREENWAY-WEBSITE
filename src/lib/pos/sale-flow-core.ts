@@ -54,6 +54,8 @@ import type { PosScanRequiredConfig } from "./scan-required-core";
 import type { SpecialDiscountSetting } from "@/lib/discounts/special-discount-core";
 // AN-1 — pure per-variant grams helpers (no cycle: variant-grams-core imports nothing from here).
 import { lineGramsFromUnit } from "./variant-grams-core";
+// SLICE L4 — the volume basis (pure; no cycle).
+import { lineVolumeMl } from "@/lib/compliance/liquid-volume-core";
 import {
   computeCashChange,
   validateSalePayload,
@@ -90,6 +92,15 @@ export type PosMenuProduct = {
    * cached before AN-1 still parse.
    */
   unitGrams?: number | null;
+  /**
+   * SLICE L4 — millilitres ONE unit of this variant contains, from the
+   * L3-plumbed net_volume_ml or (failing that) the variant label. This is the
+   * figure the 72 FLUID ounce cap is enforced against; the unitGrams regex
+   * above matches only g|oz, so before L4 a 1.5 L bottle had no measure at
+   * all and 72 of them fit. Optional so bundles cached before L4 still parse:
+   * absent = unknown, and the engine uses the weight-carried basis.
+   */
+  unitVolumeMl?: number | null;
   /**
    * SLICE 16 — the low-THC beverage classification, carried from the published
    * menu so the register's limit meter can route a qualifying drink out of the
@@ -345,6 +356,14 @@ export type PricedSaleLine = PosSaleLine & {
    */
   unitGrams?: number | null;
   /**
+   * SLICE L4 — per-UNIT millilitres carried from the menu card (null =
+   * unknown). This is what makes the 72 FLUID ounce cap enforceable: the
+   * variant label's weight regex matches only g|oz, so a 1.5 L bottle
+   * produced NO unitGrams and fell back to a 28 g default, letting 72 of them
+   * through. Same shape and same null-means-unknown rule as unitGrams above.
+   */
+  unitVolumeMl?: number | null;
+  /**
    * SLICE 16 — the low-THC beverage classification, carried from the menu card
    * so limitLinesFor() can route this line to the 200 mg THC bucket. Absent =
    * not classified = normal liquid.
@@ -425,6 +444,9 @@ export function priceCart(cart: PosCartEntry[], rules: EngineRule[]): PriceCartR
       appliedLabel: d?.appliedLabel,
       // AN-1: true per-unit weight from the bundle (null/absent = unknown).
       unitGrams: entry.product.unitGrams ?? null,
+      // SLICE L4: per-unit millilitres travel with the line so the register's
+      // limit meter can measure a bottle by VOLUME instead of guessing 28 g.
+      unitVolumeMl: entry.product.unitVolumeMl ?? null,
       // SLICE 16: the low-THC beverage classification travels with the line.
       lowThcLiquid: entry.product.lowThcLiquid ?? null,
       unitThcMg: entry.product.unitThcMg ?? null,
@@ -482,10 +504,16 @@ export function judgeLimits(
 export function limitLinesFor(lines: PricedSaleLine[]): LimitCartLine[] {
   return lines.map((l) => {
     const grams = lineGramsFromUnit(l.unitGrams, l.quantity);
+    // SLICE L4 — the LINE's total millilitres. Only set when a real per-unit
+    // volume is known; otherwise it is omitted entirely so lineMl() falls back
+    // to the weight-carried basis rather than reading an absent volume as 0
+    // (which would make the line free of the limit).
+    const volumeMl = lineVolumeMl(l.unitVolumeMl, l.quantity);
     return {
       category: l.category,
       quantity: l.quantity,
       ...(grams !== null ? { grams } : {}),
+      ...(volumeMl !== null && volumeMl > 0 ? { volumeMl } : {}),
       // SLICE 16 — the low-THC beverage classification. The engine's
       // qualifiesAsLowThcLiquid() demands `lowThcLiquid === true` AND a valid
       // per-unit mg at or under 4, so passing these through unconditionally is

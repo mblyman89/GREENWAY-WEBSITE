@@ -156,6 +156,9 @@ export async function POST(request: Request) {
       // completion gate can meter WAC 314-55-095 limits on actual package
       // sizes instead of category defaults.
       unitGrams: l.unitGrams ?? null,
+      // SLICE L4 — the volume the server's hard gate measures against the
+      // 72 FLUID ounce cap.
+      unitVolumeMl: l.unitVolumeMl ?? null,
       // SLICE 16: low-THC beverage snapshot so the pickup gate reaches the
       // SAME verdict the placement check did. Without it a legal low-THC
       // order is re-read as a normal liquid and blocked at the counter.
