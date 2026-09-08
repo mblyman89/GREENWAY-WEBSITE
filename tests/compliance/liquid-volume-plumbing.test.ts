@@ -132,6 +132,50 @@ describe("SLICE L3 — stage 1: a package volume is derived from the name", () =
     ).toBeNull();
   });
 
+  it("converts 'N x fl oz' by the statute constant, not as millilitres", () => {
+    // GAP FOUND BY MUTATION M8: unitWordToVolumeUnit() is reached ONLY from
+    // the raw-name "N x volume" branch, so mapping floz->ml there survived
+    // every other test. 12 fl oz read as 12 ml is a 177x oversell.
+    const d = deriveNetVolumeMl({ rawName: "Vitalis Shot 2 x 2 fl oz", sizes: [], packCount: null });
+    expect(d.netVolumeMl).toBeCloseTo(4 * STATUTE_FLOZ_TO_ML, 3);
+    expect(d.netVolumeMl).not.toBeCloseTo(4, 1);
+    const c = deriveNetVolumeMl({ rawName: "Carton 6 x 12 fl oz", sizes: [], packCount: null });
+    expect(c.netVolumeMl).toBeCloseTo(REC_ML, 2);
+  });
+
+  it("never counts grams as millilitres", () => {
+    // GAP FOUND BY MUTATION M7: pushing gram sizes into the volume list
+    // survived, because no vitest case fed a gram-only size in.
+    const d = deriveNetVolumeMl({
+      rawName: "Cannasol Rick Simpson Oil 1g",
+      sizes: [{ quantity: 1, unit: "g" }],
+      packCount: null,
+    });
+    expect(d.netVolumeMl).toBeNull();
+    expect(d.reasons).toContain("no_volume_in_name");
+    // A 1 g RSO syringe read as 1 ml would allow 2,129 of them.
+    const big = deriveNetVolumeMl({
+      rawName: "Bulk Oil 500g",
+      sizes: [{ quantity: 500, unit: "g" }],
+      packCount: null,
+    });
+    expect(big.netVolumeMl).toBeNull();
+  });
+
+  it("refuses a zero or negative stated volume", () => {
+    // A 0 ml volume would divide the cap by zero and allow infinite packages.
+    expect(
+      deriveNetVolumeMl({ rawName: "x 0ml", sizes: [{ quantity: 0, unit: "ml" }], packCount: null })
+        .netVolumeMl,
+    ).toBeNull();
+    expect(
+      deriveNetVolumeMl({ rawName: "y", sizes: [{ quantity: -5, unit: "ml" }], packCount: null })
+        .netVolumeMl,
+    ).toBeNull();
+    expect(deriveNetWeightGrams([{ quantity: 0, unit: "g" }])).toBeNull();
+    expect(deriveNetWeightGrams([{ quantity: -3, unit: "oz" }])).toBeNull();
+  });
+
   it("never lets a bare 'l' swallow the L of a word", () => {
     expect(
       deriveNetVolumeMl({ rawName: "4 x 2 Lemonade", sizes: [], packCount: null }).netVolumeMl,
