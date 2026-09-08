@@ -168,7 +168,20 @@ export function categoryBreadcrumbs(
  * more than "flower".
  */
 export function categoryMetaTitle(category: string): string {
-  return `${categoryLabel(category)} — Cannabis Menu | Greenway Marijuana Port Orchard`;
+  // DEFECT FIXED AFTER MEASURING THE LIVE PAGE. This used to end with
+  // "| Greenway Marijuana Port Orchard", which rendered as:
+  //
+  //   "Flower — Cannabis Menu | Greenway Marijuana Port Orchard | Greenway Marijuana"
+  //
+  // ...because the ROOT LAYOUT already applies `template: "%s | Greenway
+  // Marijuana"`. The brand appeared twice and the title ran to 88 characters,
+  // well past the ~60 Google renders, so the useful words were the ones cut.
+  //
+  // The site convention (see /locations: "Location, Hours & Directions — Port
+  // Orchard, WA") is that the TEMPLATE supplies the brand and the page supplies
+  // the distinguishing words. This now follows it. Verified against the live
+  // HTML rather than assumed -- the duplication was invisible in the source.
+  return `${categoryLabel(category)} — Port Orchard, WA`;
 }
 
 /**
@@ -341,8 +354,30 @@ export function __runMenuFacetTests(): { passed: number; failed: number } {
   // ── Metadata is distinct per route ─────────────────────────────────────────
   const titles = ROUTABLE_CATEGORIES.map((category) => categoryMetaTitle(category));
   check("every category title is unique", new Set(titles).size === titles.length);
-  check("titles name the business", titles.every((title) => title.includes("Greenway Marijuana")));
   check("titles name the city", titles.every((title) => title.includes("Port Orchard")));
+
+  // These checks used to assert the RAW title only, which is why they missed a
+  // real defect: the root layout applies `template: "%s | Greenway Marijuana"`,
+  // so the string asserted here is NOT the string the browser shows. Asserting
+  // the raw value while the rendered value was wrong is a test measuring the
+  // wrong thing. Both are now checked against the actual rendered form.
+  const ROOT_TITLE_SUFFIX = " | Greenway Marijuana";
+  const rendered = titles.map((title) => `${title}${ROOT_TITLE_SUFFIX}`);
+  // Scoped to the full brand string, not the bare word: "Greenway Merch" is a
+  // real category label, so banning "Greenway" outright would fail on a
+  // legitimate product name. Found by running the check, not by guessing.
+  check(
+    "the page title must not repeat the brand the root template already adds",
+    titles.every((title) => !title.includes("Greenway Marijuana")),
+  );
+  check(
+    "the rendered title names the business exactly once",
+    rendered.every((title) => title.split("Greenway Marijuana").length - 1 === 1),
+  );
+  check(
+    "the rendered title stays within what a search engine displays",
+    rendered.every((title) => title.length <= 75),
+  );
   const descriptions = ROUTABLE_CATEGORIES.map((category) => categoryMetaDescription(category));
   check("every category description is unique", new Set(descriptions).size === descriptions.length);
   // This check used to read `<= 158`, which quietly ACCOMMODATED a bug instead
