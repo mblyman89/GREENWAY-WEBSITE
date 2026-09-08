@@ -748,7 +748,36 @@ describe("the migration list is ordered the way the database will see it", () =>
     // -- while a null stays null rather than being coerced to 0, which is the
     // distinction the whole fallback depends on.
     // Harness: scripts/compliance/prove-0223-executes.sh
-    expect(listed[listed.length - 1]).toMatch(/^0223_/);
+    //
+    // 0224 (SLICE L5) adds ONE nullable column,
+    // catalog_product_drafts.chosen_net_volume_ml (numeric(12,3)), plus its
+    // comment. No data, no structure, no backfill.
+    //
+    // It exists because L5 makes receiving REFUSE to onboard a liquid whose
+    // package volume nothing can establish, and the receiver answers that
+    // refusal on a DRAFT -- which had nowhere to put the answer. Verified by
+    // grepping every migration before writing it: inventory_lots and
+    // menu_items carry net_volume_ml (0138), catalog_product_drafts did not.
+    // Nullable with no backfill is deliberate: a draft already in flight must
+    // not be retro-blocked by a column that appeared underneath it.
+    //
+    // PROVEN to execute by applying all 224 migrations in order to a real
+    // PostgreSQL 15, then re-applying 0224 a second time for idempotency
+    // (224 applied / 0 failed; the re-apply emits the expected
+    // "column already exists, skipping" notice and succeeds), then INSPECTING
+    // the result rather than assuming the DDL did what it reads like:
+    // information_schema reports numeric(12,3), is_nullable YES, and NO column
+    // default; a live insert round-trips 1500.000, 750.000 and 354.882 -- the
+    // last one being 12 fl oz converted, confirming the scale holds a
+    // fluid-ounce conversion instead of rounding a statutory limit away --
+    // while an unmeasured row stays NULL rather than being coerced to 0
+    // (1 unmeasured, 0 zero-rows over 4 rows). A draft inserted the pre-0224
+    // way, naming no volume at all, also lands NULL, which is the proof that
+    // nothing was backfilled. A 0 here would read downstream as "measured,
+    // holds nothing" and would silently switch the 72 fl oz cap off, so that
+    // distinction is the one the whole slice rests on.
+    // Harness: scripts/compliance/prove-0224-executes.sh
+    expect(listed[listed.length - 1]).toMatch(/^0224_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
