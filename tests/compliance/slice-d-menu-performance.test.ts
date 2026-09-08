@@ -233,7 +233,10 @@ describe("SLICE D: the strain indexes are cached under the publish tag", () => {
 });
 
 describe("SLICE D: the menu page starts independent reads together", () => {
-  const src = repoFile("src/app/menu/page.tsx");
+  // SLICE H: `/menu` and `/menu/[category]` now share one renderer, so the
+  // batching lives there. Reading the shared file keeps this guard covering
+  // BOTH routes at once instead of only the one it used to watch.
+  const src = repoFile("src/components/menu/ShopPage.tsx");
   const code = stripComments(src);
 
   it("batches the page-furniture reads into one Promise.all", () => {

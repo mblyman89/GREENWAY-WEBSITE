@@ -104,7 +104,34 @@ describe("SLICE 110 — the menu high-CBD filter that makes ?strains=cbd meaning
   const page = read(MENU_PAGE);
 
   it("the menu page reads the ?strains param", () => {
-    expect(page).toMatch(/strains:\s*firstSearchParamValue\(resolvedSearchParams\?\.strains\)/);
+    // SLICE H: `/menu` no longer reads `searchParams` on the server -- that one
+    // request-time read was what kept the busiest page on the site from ever
+    // being cached. The Medical page still links `/menu?strains=cbd` twice, so
+    // the promise is unchanged; it is now kept on the client by
+    // `resolveInitialParams`, which runs in a `useState` lazy initializer (first
+    // render, before paint) rather than in an effect that would flash the
+    // unfiltered grid.
+    expect(menu).toMatch(/strains:\s*pick\("strains"\)/);
+    expect(menu).toMatch(/const persistedStrains = parsePersistedList\(initialParams\.strains\)/);
+    expect(menu).toMatch(/useState<string\[\]>\(persistedStrains\)/);
+
+    // The route file must NOT have quietly reintroduced the request-time read.
+    // Comments are stripped first: `page.tsx` EXPLAINS at length why
+    // `searchParams` was removed, and matching that prose would be a false
+    // positive -- the same trap documented in SLICE 18-0 mutant #15.
+    const pageCode = page
+      .replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, " ")
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/^\s*\/\/.*$/gm, " ");
+    expect(pageCode).toContain("ShopPage"); // anti-vacuity
+    expect(pageCode).not.toMatch(/\bsearchParams\b/);
+  });
+
+  it("the ?strains=cbd links the Medical page ships still point at a real route", () => {
+    // Anti-vacuity: if these links were ever renamed, the guard above would be
+    // protecting a facet nothing links to.
+    const medical = read(MEDICAL);
+    expect(medical).toContain("/menu?strains=cbd");
   });
 
   it('HIGH_CBD_VALUE is "cbd" and drives the high-CBD item predicate', () => {

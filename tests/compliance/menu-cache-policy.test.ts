@@ -205,7 +205,12 @@ describe("the cached loaders are additive — the originals still exist", () => 
 
 describe("every public browsing page reads the cached loader", () => {
   const CASES: { file: string; needle: string }[] = [
-    { file: "src/app/menu/page.tsx", needle: "loadLiveMenuItemsCached" },
+    // SLICE H: the shop's catalog read moved out of the route file and into the
+    // renderer BOTH shop routes share (`/menu` and `/menu/[category]`), so the
+    // two can never drift into using different loaders. The cacheable SURFACE
+    // is still "/menu" -- only the file that performs the read changed, so this
+    // list keeps its length and the CACHEABLE_SURFACE_NAMES cross-check holds.
+    { file: "src/components/menu/ShopPage.tsx", needle: "loadLiveMenuItemsCached" },
     { file: "src/app/page.tsx", needle: "loadLiveMenuItemsCached" },
     { file: "src/app/specials/page.tsx", needle: "loadLiveMenuItemsCached" },
     { file: "src/app/vendor-delivery/page.tsx", needle: "loadLiveMenuAllCached" },
@@ -220,9 +225,16 @@ describe("every public browsing page reads the cached loader", () => {
   }
 
   it("the shop menu no longer calls the uncached loader at all", () => {
-    const MENU = read("src/app/menu/page.tsx");
-    // `loadLiveMenuItemsCached` contains `loadLiveMenuItems`, so match the call.
-    expect(MENU).not.toContain("loadLiveMenuItems()");
+    // SLICE H: assert across BOTH shop route files AND the shared renderer, so
+    // reintroducing the uncached loader anywhere in the shop is caught.
+    for (const file of [
+      "src/app/menu/page.tsx",
+      "src/app/menu/[category]/page.tsx",
+      "src/components/menu/ShopPage.tsx",
+    ]) {
+      // `loadLiveMenuItemsCached` contains `loadLiveMenuItems`, so match the call.
+      expect(read(file), `${file} calls the uncached loader`).not.toContain("loadLiveMenuItems()");
+    }
   });
 
   it("the product page's related-items query is cached too (it loaded the catalog twice)", () => {

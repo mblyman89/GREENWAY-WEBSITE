@@ -29,7 +29,12 @@ import { describe, expect, it } from "vitest";
 const read = (p: string) => readFileSync(p, "utf8");
 
 const GLOBALS = read("src/app/globals.css");
-const MENU_PAGE = read("src/app/menu/page.tsx");
+// SLICE H: `/menu` and `/menu/[category]` render through one shared component,
+// so the shop's width-capped wrappers live there now. The route files are thin
+// entry points. Pointing at the renderer keeps this guard covering BOTH routes.
+const MENU_PAGE = read("src/components/menu/ShopPage.tsx");
+const MENU_ROUTE = read("src/app/menu/page.tsx");
+const CATEGORY_ROUTE = read("src/app/menu/[category]/page.tsx");
 const BROWSER = read("src/components/menu/InteractiveMenuBrowser.tsx");
 const CRUMBS = read("src/components/site/Breadcrumbs.tsx");
 const LEGAL = read("src/app/admin/legal-policies/page.tsx");
@@ -95,6 +100,22 @@ describe("SLICE 116 — breadcrumb alignment (non-breaking, opt-in)", () => {
 
   it("only the menu page opts into the wider shop width", () => {
     expect(MENU_PAGE).toContain('maxWidthClassName="max-w-[var(--shop-max)]"');
+  });
+
+  it("SLICE H: both shop routes render through the shared renderer that carries the width", () => {
+    // Without this, a route could stop calling <ShopPage /> and render its own
+    // markup: the assertion above would still pass (the shared file is
+    // unchanged) while the live page silently lost the shop width. Each route
+    // must both IMPORT and RENDER the shared component.
+    for (const [name, source] of [
+      ["/menu", MENU_ROUTE],
+      ["/menu/[category]", CATEGORY_ROUTE],
+    ] as const) {
+      expect(source, `${name} does not import ShopPage`).toMatch(
+        /import\s*\{[^}]*\bShopPage\b[^}]*\}\s*from\s*["']@\/components\/menu\/ShopPage["']/,
+      );
+      expect(source, `${name} does not render <ShopPage>`).toMatch(/<ShopPage[\s>]/);
+    }
   });
 });
 
