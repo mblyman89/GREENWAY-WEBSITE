@@ -21,9 +21,13 @@ CORE = "src/lib/inventory/receiving-classification-core.ts"
 
 def patch(path: str, old: str, new: str, label: str) -> None:
     t = io.open(path, encoding="utf-8").read()
-    if new in t and old not in t:
+    # Counting `new` is the only check that holds when `old` is a substring of
+    # `new` (the append case), where `new in t and old not in t` silently
+    # re-applies the edit.
+    if t.count(new) == 1:
         print(f"  {label}: already applied")
         return
+    assert t.count(new) == 0, f"{label}: found {t.count(new)} copies of the new text"
     n = t.count(old)
     assert n == 1, f"{label}: anchor matched {n}x (expected 1)"
     io.open(path, "w", encoding="utf-8").write(t.replace(old, new, 1))

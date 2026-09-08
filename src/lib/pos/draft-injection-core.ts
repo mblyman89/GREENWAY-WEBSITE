@@ -26,13 +26,18 @@ import {
   formatIntakePotency,
   type PotencyUnit,
 } from "@/lib/pos/intake-potency-core";
-import { crossExamineRow, MG_FACT_TYPES } from "@/lib/inventory/fact-extraction-core";
+import {
+  crossExamineRow,
+  extractNameFacts,
+  MG_FACT_TYPES,
+} from "@/lib/inventory/fact-extraction-core";
 import {
   deriveNetVolumeMl,
   deriveNetWeightGrams,
   LIQUID_VOLUME_TYPES,
 } from "@/lib/compliance/liquid-volume-derivation-core";
 import { deriveHouseType, HOUSE_TYPE_MIN_AUTO_CONFIDENCE } from "@/lib/inventory/house-type-core";
+import { categoryToBucket } from "@/lib/compliance/sales-limits-core";
 
 /** The approved draft columns injection needs (from catalog_product_drafts). */
 export type ApprovedDraftForInjection = {
@@ -501,6 +506,75 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
             displayName: d.name,
             inventoryType: invType,
             reasons: vol.reasons,
+          },
+        });
+      }
+    }
+
+    // ── SLICE T2/T3: MEASURE THE WHOLE BUCKET, NOT TWO TYPE STRINGS ────────
+    //
+    // Everything above runs only when MG_FACT_TYPES.has(invType). That set was
+    // built for POTENCY extraction, and using it to decide who gets MEASURED
+    // silently excluded most of the limited shelf. Measured, every inventory
+    // type that resolves into the ml-metered bucket:
+    //
+    //   in both lists : Liquid Edible, Tincture
+    //   in NEITHER    : Beverage, Soda, Shots, Liquid Infused Edible,
+    //                   Other Liquid Edible, Topical, Bath Salts, Roll On,
+    //                   Suppository, Transdermal Patch
+    //
+    // So an ordinary Soda got no volume even when its name stated one, and the
+    // register fell back to DEFAULT_UNIT_GRAMS = 28 g/unit: 72 units passed at
+    // exactly the cap. A 12 fl oz soda x 72 = 864 fl oz against a 72 fl oz cap
+    // is a 12x oversell -- the very defect the liquids round existed to close,
+    // still open on nine of the eleven types that reach the bucket.
+    //
+    // The scope here is the BUCKET, because the bucket is what the limit keys
+    // on. A hand-maintained list of type strings is a second source of truth
+    // that drifts the moment anyone adds "Seltzer", and it drifted already.
+    //
+    // This pass only FILLS GAPS: it never overwrites a measure the block above
+    // established, so nothing that is already correct can move.
+    if (categoryToBucket(websiteCategory) === "liquid_edible") {
+      const bucketFacts = extractNameFacts(d.name);
+      if (netVolumeMl === null) {
+        const bucketVol = deriveNetVolumeMl({
+          rawName: d.name,
+          sizes: bucketFacts.sizes,
+          packCount: bucketFacts.packCount,
+        });
+        if (bucketVol.netVolumeMl !== null && bucketVol.source !== null) {
+          netVolumeMl = bucketVol.netVolumeMl;
+          factProvenance.net_volume_ml = bucketVol.source;
+        }
+      }
+      if (netWeightGrams === null) {
+        // A weight is an EXACT measure in this bucket, not a fallback guess:
+        // lineMl() carries an ounce-count across as an ounce-count, so a 2 oz
+        // salve meters at exactly 36 units against the 72 oz cap. No density
+        // is invented anywhere.
+        const bucketGrams = deriveNetWeightGrams(bucketFacts.sizes);
+        if (bucketGrams !== null) {
+          netWeightGrams = bucketGrams;
+          factProvenance.net_weight_grams = "name";
+        }
+      }
+      // Silence is what made this bucket dangerous, so an unmeasurable line
+      // says so ONCE, here, for every type in the bucket -- rather than only
+      // for the two that happened to be on the old list.
+      if (netVolumeMl === null && netWeightGrams === null) {
+        diagnostics.push({
+          severity: "warning",
+          code: "net_volume_missing",
+          message:
+            "This product counts against the 72 fluid ounce limit but has no package size, so the limit cannot be measured.",
+          context: {
+            draft_id: d.id,
+            pos_product_key: key,
+            productName: d.name,
+            displayName: d.name,
+            inventoryType: invType,
+            websiteCategory,
           },
         });
       }
