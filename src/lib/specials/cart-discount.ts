@@ -225,60 +225,36 @@ export function computeCartDiscounts(
       break;
     }
     case "tuesday": {
-      // Doobie Tuesday (Task R, owner-specified): 20% off prerolls & blunts OR
-      // buy 4 for the price of 3 mix & match — WHICHEVER SAVES THE CUSTOMER
-      // LESS when both qualify (store-advantaged; deterministic and identical
-      // for every customer, so it stays "available to all who meet the
-      // discount conditions" per the CCRS guide).
+      // Doobie Tuesday (SLICE D1, owner-specified): a QUANTITY TIER, not an
+      // either/or. 1-3 eligible prerolls get 20% off; 4 or more get 25% off.
+      // Applies to any preroll including infused, blunts and packs.
       //
-      // The 4-for-3 option is COMPLIANT like Sunday: the cheapest unit per
-      // full group of 4 sets the savings target, converted to an equivalent
-      // whole-number percent (floor) SPREAD across all eligible lines so no
-      // unit is ever free or below cost.
+      // "Buy 4 for the price of 3" IS 25% off, so the tier does not withdraw
+      // the advertised bundle - it honours it at EVERY quantity from 4 up
+      // rather than only at exact multiples of four. The owner's ruling:
+      // "if a discount specifically states 4 or more prerolls is 25% off,
+      //  then its 25% off, whether the store wants to win or not."
+      //
+      // The store-wins policy is a ROUNDING rule (half-cent to the store), not
+      // a deal-selection rule. It must never be used to pick the cheaper of
+      // two advertised offers.
+      //
+      // Still deterministic and identical for every customer, so it remains
+      // "available to all who meet the discount conditions" per the CCRS
+      // guide, and applyPercentLine still clamps each unit to its cost floor.
       const eligible = cartLines.filter((l) => !isMerchOrAccessory(l) && matchesCategories(l, tuesdayDoobieCategories));
       if (eligible.length === 0) break;
 
-      // Option A — flat 20% (applies from qty 1).
-      const flatPercent = 20;
-      let flatSavings = 0;
-      for (const line of eligible) {
-        const d = applyPercentLine(line, flatPercent, "Doobie Tuesday");
-        flatSavings += d.unitSavingsMinorUnits * line.quantity;
-      }
-
-      // Option B — 4-for-3 mix & match spread (needs 4+ eligible units).
-      const units: number[] = [];
-      let eligibleTotal = 0;
-      for (const line of eligible) {
-        eligibleTotal += line.regularPriceMinorUnits * line.quantity;
-        for (let i = 0; i < line.quantity; i += 1) units.push(line.regularPriceMinorUnits);
-      }
-      units.sort((a, b) => a - b);
-      const groups = Math.floor(units.length / 4);
-      let bundleTarget = 0;
-      for (let i = 0; i < groups; i += 1) bundleTarget += units[i];
-      const bundlePercent =
-        groups > 0 && eligibleTotal > 0
-          ? Math.min(99, Math.floor((bundleTarget / eligibleTotal) * 100))
-          : 0;
-      let bundleSavings = 0;
-      if (bundlePercent > 0) {
-        for (const line of eligible) {
-          const d = applyPercentLine(line, bundlePercent, "Doobie Tuesday");
-          bundleSavings += d.unitSavingsMinorUnits * line.quantity;
-        }
-      }
-
-      // Store-advantaged pick: the SMALLER positive savings wins; a
-      // zero-savings option never beats a positive one.
-      let percent = 0;
-      let bundleChosen = false;
-      if (flatSavings > 0 && (bundleSavings <= 0 || flatSavings <= bundleSavings)) {
-        percent = flatPercent;
-      } else if (bundleSavings > 0) {
-        percent = bundlePercent;
-        bundleChosen = true;
-      }
+      // SLICE D1: a real quantity tier -- 1-3 prerolls 20%, 4+ 25%. The
+      // previous code computed a flat 20% AND a floored 4-for-3 spread and
+      // kept whichever saved the customer LESS, so the advertised bundle was
+      // discarded at every quantity where it helped and chosen only at 6 and
+      // 7, where it dragged the basket down to 16% and 14%. The owner's
+      // ruling: "if a discount specifically states 4 or more prerolls is 25%
+      // off, then its 25% off, whether the store wants to win or not."
+      const totalEligibleUnits = eligible.reduce((sum, line) => sum + line.quantity, 0);
+      const percent = totalEligibleUnits >= 4 ? 25 : 20;
+      const bundleChosen = totalEligibleUnits >= 4;
       if (percent <= 0) break;
       for (const line of eligible) {
         const d = applyPercentLine(line, percent, "Doobie Tuesday");

@@ -315,10 +315,11 @@ function nextTierAbove(value: number, tiers: Tier[], currentPercent: number): Ti
  * items for produce a nudge (no advertising into an empty basket). Sorted by
  * estimated additional savings, best first.
  *
- * Either/or rules (e.g. Doobie Tuesday 20% OR 4-for-3) never nudge: the
- * engine takes the SMALLER savings of the two options (store-advantaged), so
- * completing the bundle cannot increase the customer's savings beyond the
- * flat percent they already get.
+ * SLICE D1: either/or rules used to be skipped entirely here, because the
+ * engine took the SMALLER savings of the two options and so completing a
+ * bundle could never help. The engine now honours whichever option is BETTER
+ * for the customer, which makes "add one more and save more" a real, truthful
+ * unlock -- so the skip is gone and these rules nudge like any other.
  */
 export function tierNudges(
   lines: EngineCartLine[],
@@ -327,7 +328,9 @@ export function tierNudges(
   const out: TierNudge[] = [];
   for (const snapshot of activeRules) {
     const rule = snapshotToEngineRule(snapshot);
-    if (rule.config.eitherOr) continue; // store-advantaged min — no real unlock
+    // SLICE D1: no eitherOr skip. The engine now takes the BETTER option, so
+    // completing a bundle is a genuine unlock worth telling the customer about.
+    // Rules that carry no tiers still produce no nudge further down.
     const eligible = lines.filter((l) => ruleMatchesLine(rule, l));
     if (eligible.length === 0) continue;
     const eligibleRegular = eligible.reduce(

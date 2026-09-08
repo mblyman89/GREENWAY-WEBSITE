@@ -134,9 +134,19 @@ export function parseEngineConfig(config: Record<string, unknown> | null | undef
 /** Engine config for the committed daily-deal seeds (DB-empty fallback). */
 export function seedConfigFor(promoKey: string | null): EngineConfig {
   switch (promoKey) {
-    case "daily.tuesday":
-      // Doobie Tuesday: 20% off OR 4-for-3 mix & match, store-advantaged.
-      return { eitherOr: { flatPercent: 20, bundle: { n: 4, m: 3 } } };
+    case "daily.tuesday": {
+      // Doobie Tuesday (SLICE D1): 1-3 prerolls 20%, 4+ 25%. This replaces an
+      // eitherOr config that resolved to whichever option saved the customer
+      // LESS, which made the advertised 4-for-3 unreachable and dropped a
+      // 6-preroll cart to 16%.
+      //
+      // DERIVED from the seed row rather than restated here: seedRuleSnapshots()
+      // builds config from this function and ignores the seed's own fields, so
+      // hand-writing the tiers in both places would let them silently diverge.
+      // The seed is the single source of truth; this reads it.
+      const tiers = DAILY_DEAL_SEEDS.find((s) => s.promoKey === "daily.tuesday")?.qtyTiers;
+      return tiers?.length ? { qtyTiers: tiers.map((t) => ({ ...t })) } : {};
+    }
     case "daily.saturday":
       return { basketTopItem: { topPercent: 30, restPercent: 15 } };
     case "daily.sunday":
