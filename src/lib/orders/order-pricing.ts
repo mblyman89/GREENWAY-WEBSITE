@@ -398,6 +398,14 @@ export async function verifyStoredOrderForCompletion(order: {
     // numeric may arrive as string — normalized either way). Legacy rows and
     // unknown-weight items stay null → category-default math, as before.
     const grams = lineGramsFromUnit(normalizeUnitGrams(line.unit_grams), line.quantity);
+    // SLICE L4: read back the placement-time VOLUME snapshot (migration 0223)
+    // and meter the whole line in millilitres. normalizeUnitGrams is reused
+    // deliberately — it is a generic "positive numeric or null" coercion that
+    // also handles PostgREST returning numeric columns as strings, and it
+    // applies NO gram semantics (see its use for unit_thc_mg below). Legacy
+    // rows and unknown-volume items stay null, and the engine then uses the
+    // weight-carried basis, exactly as it did before L4.
+    const volumeMl = lineVolumeMl(normalizeUnitGrams(line.unit_volume_ml), line.quantity);
     // SLICE 16: read back the placement-time classification snapshot
     // (migration 0216). WITHOUT THIS the gate would re-evaluate a legal
     // low-THC order as a normal liquid and wrongly block the customer at
@@ -416,6 +424,7 @@ export async function verifyStoredOrderForCompletion(order: {
       category,
       quantity: line.quantity,
       ...(grams !== null ? { grams } : {}),
+      ...(volumeMl !== null && volumeMl > 0 ? { volumeMl } : {}),
       lowThcLiquid: lowThc,
       unitThcMg,
       // SLICE 17 — read back the placement-time classification snapshot

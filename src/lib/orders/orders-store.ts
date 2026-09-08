@@ -153,6 +153,7 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
     withUnitGrams: boolean,
     withLowThc: boolean,
     withOtherwiseTaken: boolean,
+    withUnitVolumeMl: boolean,
   ) =>
     input.lines.map((l) => ({
       order_id: order!.id,
@@ -169,6 +170,13 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
       // unknown so unknown-weight lines keep the category-default gate math.
       ...(withUnitGrams && typeof l.unitGrams === "number" && l.unitGrams > 0
         ? { unit_grams: l.unitGrams }
+        : {}),
+      // SLICE L4 — sale-time VOLUME snapshot (migration 0223); omitted when
+      // unknown so those lines keep the weight-carried gate math. Without this
+      // the pickup gate re-reads a 1.5 L bottle as a 28 g default and reaches
+      // a different verdict than placement did on the same basket.
+      ...(withUnitVolumeMl && typeof l.unitVolumeMl === "number" && l.unitVolumeMl > 0
+        ? { unit_volume_ml: l.unitVolumeMl }
         : {}),
       // SLICE 16 — sale-time low-THC beverage snapshot (migration 0216).
       // Only written when the product is actually classified as qualifying:
@@ -202,27 +210,36 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
   // migrations.
   let { error: linesError } = await admin
     .from("order_lines")
-    .insert(buildLineRows(true, true, true, true));
+    .insert(buildLineRows(true, true, true, true, true));
+  if (linesError && isMissingColumnError(linesError)) {
+    // SLICE L4 rung: drop the unit_volume_ml snapshot (0223 unapplied). Placing
+    // an order must never fail because the owner has not run a migration yet;
+    // the gate simply falls back to the weight-carried basis for that line,
+    // which for every ounce-labelled product is the identical verdict.
+    ({ error: linesError } = await admin
+      .from("order_lines")
+      .insert(buildLineRows(true, true, true, true, false)));
+  }
   if (linesError && isMissingColumnError(linesError)) {
     // SLICE 17 rung: drop the otherwise_taken snapshot (0217 unapplied).
     ({ error: linesError } = await admin
       .from("order_lines")
-      .insert(buildLineRows(true, true, true, false)));
+      .insert(buildLineRows(true, true, true, false, false)));
   }
   if (linesError && isMissingColumnError(linesError)) {
     ({ error: linesError } = await admin
       .from("order_lines")
-      .insert(buildLineRows(true, true, false, false)));
+      .insert(buildLineRows(true, true, false, false, false)));
   }
   if (linesError && isMissingColumnError(linesError)) {
     ({ error: linesError } = await admin
       .from("order_lines")
-      .insert(buildLineRows(true, false, false, false)));
+      .insert(buildLineRows(true, false, false, false, false)));
   }
   if (linesError && isMissingColumnError(linesError)) {
     ({ error: linesError } = await admin
       .from("order_lines")
-      .insert(buildLineRows(false, false, false, false)));
+      .insert(buildLineRows(false, false, false, false, false)));
   }
   if (linesError) {
     // Roll back the orphaned order so we never strand a header with no lines.

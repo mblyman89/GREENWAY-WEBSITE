@@ -110,6 +110,20 @@ export type OrderLineRow = {
    */
   unit_grams?: number | string | null;
   /**
+   * SLICE L4 — sale-time millilitres-per-unit snapshot (migration 0223).
+   * Null/absent on legacy rows and on anything with no known volume, which the
+   * gate then meters on the weight-carried basis. Postgres numeric may
+   * deserialize as string; consumers normalize via
+   * variant-grams-core.normalizeUnitGrams (a generic positive-numeric
+   * coercion that applies no gram semantics).
+   *
+   * WHY SNAPSHOT: the pickup gate re-reads stored lines, and a 1.5 L bottle
+   * has no parseable weight at all. Re-deriving would meter it at placement in
+   * millilitres and at pickup on a 28 g category default — the two evaluations
+   * would reach different verdicts about the same basket.
+   */
+  unit_volume_ml?: number | string | null;
+  /**
    * SLICE 16 — sale-time snapshot of the low-THC beverage classification
    * (migration 0216). Null/absent on legacy rows and on anything that is not a
    * classified low-THC drink, which the gate then counts as a normal liquid.
@@ -177,6 +191,9 @@ export type PricedNewOrderLine = {
   regularPriceMinorUnits: number;
   /** AN-1 — grams one unit weighs (from the variant label; null = unknown). */
   unitGrams?: number | null;
+  /** SLICE L4 — millilitres one unit contains, snapshot (migration 0223).
+   *  null = unknown → the gate keeps the weight-carried basis. */
+  unitVolumeMl?: number | null;
   /** SLICE 16 — low-THC beverage classification snapshot (migration 0216;
    *  the order_lines COLUMN was actually added by 0217 — see that file). */
   lowThcLiquid?: boolean | null;
