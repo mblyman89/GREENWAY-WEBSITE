@@ -164,7 +164,20 @@ describe("Slice H — the pure facet core", () => {
       descriptions.add(description);
       expect(description.length).toBeLessThanOrEqual(155);
       expect(description.length).toBeGreaterThan(0);
-      expect(title).toContain("Greenway");
+
+      // The ROOT LAYOUT applies `template: "%s | Greenway Marijuana"`, so the
+      // string above is not what a browser or a search engine displays. This
+      // test originally asserted the raw title contained "Greenway", which
+      // PASSED while the live page rendered the brand TWICE in an 88-character
+      // title. Caught by reading the deployed HTML, not the source. Assert the
+      // rendered form.
+      const rendered = `${title} | Greenway Marijuana`;
+      expect(title, "page title repeats the brand the root template adds").not.toContain(
+        "Greenway Marijuana",
+      );
+      expect(rendered.split("Greenway Marijuana").length - 1).toBe(1);
+      expect(rendered.length, `title too long to display: ${rendered}`).toBeLessThanOrEqual(75);
+      expect(title).toContain("Port Orchard");
     }
     expect(titles.size).toBe(ROUTABLE_CATEGORIES.length);
     expect(descriptions.size).toBe(ROUTABLE_CATEGORIES.length);
