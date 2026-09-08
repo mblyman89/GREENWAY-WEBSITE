@@ -195,6 +195,11 @@ export function deriveNetVolumeMl(input: {
       continue;
     }
     if (s.unit === "g") continue;
+    // Defence-in-depth: toMl() rejects <= 0 and NaN itself
+    // (liquid-volume-core.ts:125), so mutating THIS line away is a verified
+    // no-op. It stays because a future caller of the loop might not route
+    // through toMl -- deriveNetWeightGrams below is exactly that case, and
+    // there the identical guard is load-bearing.
     if (!Number.isFinite(s.quantity) || s.quantity <= 0) continue;
     const ml = toMl(s.quantity, s.unit);
     if (ml !== null) volumes.push(ml);
