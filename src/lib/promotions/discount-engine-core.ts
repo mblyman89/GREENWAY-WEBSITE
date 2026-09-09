@@ -52,7 +52,15 @@ import {
   TAX_INCLUSIVE_DIVISOR,
   NON_CANNABIS_TAX_INCLUSIVE_DIVISOR,
 } from "@/lib/orders/order-pricing-core";
-import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
+// SLICE W1: the ONE weight-label parse, shared with the WAC limit engine.
+// (STATUTORY_GRAMS_PER_OUNCE is no longer imported here -- the ounce
+// equivalence now lives with the parse, in weight-label-core.)
+import { parseWeightLabelGrams } from "@/lib/compliance/weight-label-core";
+import {
+  pickHeadlineLine,
+  saturdayLineTotal,
+  effectiveLinePercent,
+} from "@/lib/promotions/saturday-headline-core";
 import {
   apportionBundleSavings,
   bundleTargetMinorUnits,
@@ -199,15 +207,22 @@ export function tierPercent(value: number, tiers: Tier[]): number {
   return pct;
 }
 
-/** "1oz" => 28, "3.5g" => 3.5. Cannabis ounce = 28g (matches cart-discount.ts). */
+/**
+ * "1oz" => 28, "3.5g" => 3.5, "1/8 oz" => 3.5, "28 grams" => 28. Returns 0 when
+ * the label states no unambiguous weight, which `tierPercent` reads as "no
+ * tier" -- the store-safe direction.
+ *
+ * SLICE W1: this used to own a SECOND, unanchored copy of the parse
+ * (`/([\d.]+)\s*(oz|ounce)/`), which matched the "8 oz" SUBSTRING of "1/8 oz"
+ * and reported 224 g -- a full-ounce 30% tier awarded to an eighth -- while its
+ * `\bg\b` gram branch reported 0 g for "28 grams". It now delegates to the one
+ * shared parser in weight-label-core, which the WAC 314-55-095 limit parser
+ * also uses, so the discount answer and the compliance answer can no longer
+ * disagree (they differed on 14 of 37 measured label shapes). Verified a
+ * NO-OP across all 666 machine-emittable labels before rewiring.
+ */
 export function gramsForLabel(label?: string | null): number {
-  if (!label) return 0;
-  const s = label.trim().toLowerCase();
-  const oz = s.match(/([\d.]+)\s*(oz|ounce)/);
-  if (oz) return parseFloat(oz[1]) * STATUTORY_GRAMS_PER_OUNCE; // GW-016: shared statutory equivalence
-  const g = s.match(/([\d.]+)\s*g\b/);
-  if (g) return parseFloat(g[1]);
-  return 0;
+  return parseWeightLabelGrams(label) ?? 0;
 }
 
 function isMerch(line: EngineCartLine): boolean {
@@ -385,6 +400,15 @@ function totalSavings(discounts: Map<string, LineDiscount>, lines: EngineCartLin
 export function applyOnePromotion(
   rule: EngineRule,
   lines: EngineCartLine[],
+  /**
+   * SLICE D3: the best per-unit saving each line is ALREADY receiving from a
+   * higher-value promotion (clearance markdown, vendor day). Only the basket
+   * headline branch consults it, to avoid awarding "30% off one item" to a
+   * line whose existing offer would beat it -- best-deal-wins would then
+   * discard the headline and the advertised deal would reach nobody.
+   * Optional and defaulted, so every existing caller is unaffected.
+   */
+  competingUnitSavings?: ReadonlyMap<string, number>,
 ): Map<string, LineDiscount> {
   const out = new Map<string, LineDiscount>();
   const eligible = lines.filter((l) => ruleMatchesLine(rule, l));
@@ -506,32 +530,59 @@ export function applyOnePromotion(
         const { topPercent, restPercent } = rule.config.basketTopItem;
         const headlinePercent = Math.max(topPercent, restPercent);
         const othersPercent = Math.min(topPercent, restPercent);
-        let targetId: string | null = null;
-        let lowest = Number.POSITIVE_INFINITY;
+
+        // SLICE D3: pick the target through the shared pure core. It keeps the
+        // owner's rule (the LOWEST-priced item wins the headline) but skips a
+        // line whose existing offer already beats the headline -- a clearance
+        // or vendor-day item. Measured before this fix: across 2,000 Saturday
+        // baskets each holding one clearance item, the advertised "30% off any
+        // one item" reached NOBODY in 100% of them, because Saturday handed the
+        // 30% to the cheapest line (the clearance item) and best-deal-wins then
+        // discarded it in favour of the 50%. Ties now break on lineId, so the
+        // same basket no longer prices differently by cart order.
+        const targetId = pickHeadlineLine(
+          eligible.map((l) => ({
+            lineId: l.lineId,
+            regularPriceMinorUnits: l.regularPriceMinorUnits,
+            competingUnitSavingsMinorUnits: competingUnitSavings?.get(l.lineId) ?? 0,
+          })),
+          headlinePercent,
+          othersPercent,
+        );
+
         for (const l of eligible) {
-          if (l.regularPriceMinorUnits < lowest) {
-            lowest = l.regularPriceMinorUnits;
-            targetId = l.lineId;
+          const isTarget = l.lineId === targetId;
+          if (isTarget && l.quantity <= 1) {
+            out.set(l.lineId, flatPercentDiscount(l, headlinePercent, rule.title));
+            continue;
           }
-        }
-        for (const l of eligible) {
-          if (l.lineId === targetId) {
-            if (l.quantity <= 1) {
-              out.set(l.lineId, flatPercentDiscount(l, headlinePercent, rule.title));
-            } else {
-              const oneAtHeadline = round(l.regularPriceMinorUnits * (1 - headlinePercent / 100));
-              const restAt = round(l.regularPriceMinorUnits * (1 - othersPercent / 100));
-              const blendedTotal = oneAtHeadline + restAt * (l.quantity - 1);
-              const blendedUnit = clampEngineUnit(l, round(blendedTotal / l.quantity));
-              out.set(l.lineId, {
-                unitPrice: blendedUnit,
-                percent: othersPercent,
-                label: `${rule.title} · ${headlinePercent}% one item + ${othersPercent}%`,
-              });
-            }
-          } else {
+          if (!isTarget) {
             out.set(l.lineId, flatPercentDiscount(l, othersPercent, rule.title));
+            continue;
           }
+          // Target line, quantity > 1: ONE unit at the headline, the rest at
+          // the others rate, with exact integer maths (SLICE D2's lesson --
+          // rounding the PRICE overcharged 1,169 of 1,498 blended lines, worst
+          // case 12 cents on price=507 qty=8).
+          const t = saturdayLineTotal(
+            l.regularPriceMinorUnits,
+            l.quantity,
+            headlinePercent,
+            othersPercent,
+            true,
+          );
+          const blendedUnit = clampEngineUnit(l, t.blendedUnitMinorUnits);
+          out.set(l.lineId, {
+            unitPrice: blendedUnit,
+            // The line really carries one headline unit, so reporting the
+            // others-rate understated what the customer received.
+            percent: effectiveLinePercent(
+              l.regularPriceMinorUnits,
+              l.quantity,
+              (l.regularPriceMinorUnits - blendedUnit) * l.quantity,
+            ),
+            label: `${rule.title} · ${headlinePercent}% one item + ${othersPercent}%`,
+          });
         }
       } else {
         // "buy N for the price of M" — SPREAD as an equivalent percent across
@@ -631,8 +682,29 @@ export function computePromotions(
 
   // Evaluate rules by priority (higher first) so ties favour the higher-priority promo.
   const ordered = [...rules].sort((a, b) => b.priority - a.priority);
+
+  // SLICE D3: a basket headline rule ("30% off one item") must know what the
+  // other promotions are already giving each line, or it hands its headline to
+  // a clearance item and best-deal-wins throws the headline away. Pre-compute
+  // the best per-unit saving every OTHER rule offers, then feed that in. Only
+  // basket rules read it, so no other deal's behaviour changes.
+  const isBasketHeadline = (r: EngineRule) =>
+    r.discountType === "basket" && Boolean(r.config.basketTopItem);
+  const competing = new Map<string, number>();
+  if (ordered.some(isBasketHeadline)) {
+    for (const rule of ordered) {
+      if (isBasketHeadline(rule)) continue;
+      for (const [lineId, d] of applyOnePromotion(rule, lines).entries()) {
+        const line = lines.find((l) => l.lineId === lineId);
+        if (!line) continue;
+        const saving = line.regularPriceMinorUnits - d.unitPrice;
+        if (saving > (competing.get(lineId) ?? 0)) competing.set(lineId, saving);
+      }
+    }
+  }
+
   for (const rule of ordered) {
-    const discounts = applyOnePromotion(rule, lines);
+    const discounts = applyOnePromotion(rule, lines, competing);
     for (const [lineId, d] of discounts.entries()) {
       const line = lines.find((l) => l.lineId === lineId);
       if (!line) continue;

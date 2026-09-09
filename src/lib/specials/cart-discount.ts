@@ -29,7 +29,15 @@
 
 import type { GreenwayCategory } from "@/lib/leafly/types";
 import type { StoreWeekday } from "@/lib/specials/daily-deals";
-import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
+// SLICE W1: the ONE weight-label parse, shared with the WAC limit engine.
+// (STATUTORY_GRAMS_PER_OUNCE is no longer imported here -- the ounce
+// equivalence now lives with the parse, in weight-label-core.)
+import { parseWeightLabelGrams } from "@/lib/compliance/weight-label-core";
+import {
+  pickHeadlineLine,
+  saturdayLineTotal,
+  effectiveLinePercent,
+} from "@/lib/promotions/saturday-headline-core";
 import {
   apportionBundleSavings,
   bundleTargetMinorUnits,
@@ -94,17 +102,17 @@ export type CartDiscountResult = {
 // Weight parsing for flower deals
 // ---------------------------------------------------------------------------
 
-/** Convert a variant label to grams. "1oz" => 28, "3.5g" => 3.5, "1g" => 1. */
+/**
+ * Convert a variant label to grams. "1oz" => 28, "3.5g" => 3.5, "1/8 oz" => 3.5.
+ * 0 means "no parseable weight" => no weight tier.
+ *
+ * SLICE W1: the website copy of this function was byte-for-byte identical to
+ * the register's, which is exactly how the two drifted from the compliance
+ * parser. Both now delegate to weight-label-core so the register, the website
+ * estimator, and the WAC limit engine answer with ONE parse.
+ */
 export function gramsForLabel(label?: string): number {
-  if (!label) return 0;
-  const normalized = label.trim().toLowerCase();
-  // Ounce tokens (oz / ounce). 1oz == 28g (WA statutory equivalence, GW-016).
-  const ozMatch = normalized.match(/([\d.]+)\s*(oz|ounce)/);
-  if (ozMatch) return parseFloat(ozMatch[1]) * STATUTORY_GRAMS_PER_OUNCE;
-  // Gram tokens.
-  const gMatch = normalized.match(/([\d.]+)\s*g\b/);
-  if (gMatch) return parseFloat(gMatch[1]);
-  return 0;
+  return parseWeightLabelGrams(label) ?? 0;
 }
 
 function lineCategories(line: DiscountCartLine): GreenwayCategory[] {
@@ -113,10 +121,6 @@ function lineCategories(line: DiscountCartLine): GreenwayCategory[] {
 
 function matchesCategories(line: DiscountCartLine, categories: GreenwayCategory[]): boolean {
   return lineCategories(line).some((category) => categories.includes(category));
-}
-
-function round(value: number): number {
-  return Math.round(value);
 }
 
 // ---------------------------------------------------------------------------
@@ -315,38 +319,49 @@ export function computeCartDiscounts(
       // (owner directive): the 30% headline lands on the single LOWEST-priced
       // eligible unit — never on the most expensive item in a multi-item cart.
       const eligible = cartLines.filter((l) => !isMerchOrAccessory(l));
-      // Find the LOWEST-priced eligible unit to receive the 30% headline deal.
-      let topLineId: string | null = null;
-      let topUnitPrice = Number.POSITIVE_INFINITY;
+      // SLICE D3: the headline target comes from the SHARED pure core, so the
+      // website and the register cannot drift. Two behaviours changed:
+      //   1. a price TIE now breaks on lineId instead of cart order, so the
+      //      same basket never prices differently depending on the order the
+      //      customer happened to add things;
+      //   2. the multi-quantity blend uses exact integer maths instead of
+      //      round(price * 0.7) -- the old form overcharged 1,169 of 1,498
+      //      blended combinations, worst case 12 cents (price=507, qty=8).
+      const topLineId = pickHeadlineLine(
+        eligible.map((l) => ({
+          lineId: l.lineId,
+          regularPriceMinorUnits: l.regularPriceMinorUnits,
+        })),
+        30,
+        15,
+      );
       for (const line of eligible) {
-        if (line.regularPriceMinorUnits < topUnitPrice) {
-          topUnitPrice = line.regularPriceMinorUnits;
-          topLineId = line.lineId;
+        const isTarget = line.lineId === topLineId;
+        if (isTarget && line.quantity <= 1) {
+          resultMap.set(line.lineId, applyPercentLine(line, 30, "Super Saturday"));
+          continue;
         }
-      }
-      for (const line of eligible) {
-        if (line.lineId === topLineId) {
-          // Split the line: 1 unit at 30%, the rest at 15% (blended per-unit).
-          if (line.quantity <= 1) {
-            resultMap.set(line.lineId, applyPercentLine(line, 30, "Super Saturday"));
-          } else {
-            const oneAt30 = round(line.regularPriceMinorUnits * 0.7);
-            const restAt15 = round(line.regularPriceMinorUnits * 0.85);
-            const blendedTotal = oneAt30 + restAt15 * (line.quantity - 1);
-            const blendedUnit = clampLineUnit(line, round(blendedTotal / line.quantity));
-            resultMap.set(line.lineId, {
-              lineId: line.lineId,
-              unitPriceMinorUnits: blendedUnit,
-              regularPriceMinorUnits: line.regularPriceMinorUnits,
-              quantity: line.quantity,
-              unitSavingsMinorUnits: line.regularPriceMinorUnits - blendedUnit,
-              appliedLabel: "Super Saturday · 30% one item + 15%",
-              appliedPercent: 15,
-            });
-          }
-        } else {
+        if (!isTarget) {
           resultMap.set(line.lineId, applyPercentLine(line, 15, "Super Saturday"));
+          continue;
         }
+        // Split the line: 1 unit at 30%, the rest at 15% (blended per-unit).
+        const t = saturdayLineTotal(line.regularPriceMinorUnits, line.quantity, 30, 15, true);
+        const blendedUnit = clampLineUnit(line, t.blendedUnitMinorUnits);
+        resultMap.set(line.lineId, {
+          lineId: line.lineId,
+          unitPriceMinorUnits: blendedUnit,
+          regularPriceMinorUnits: line.regularPriceMinorUnits,
+          quantity: line.quantity,
+          unitSavingsMinorUnits: line.regularPriceMinorUnits - blendedUnit,
+          appliedLabel: "Super Saturday · 30% one item + 15%",
+          // The line carries one 30% unit; reporting a flat 15% understated it.
+          appliedPercent: effectiveLinePercent(
+            line.regularPriceMinorUnits,
+            line.quantity,
+            (line.regularPriceMinorUnits - blendedUnit) * line.quantity,
+          ),
+        });
       }
       break;
     }
