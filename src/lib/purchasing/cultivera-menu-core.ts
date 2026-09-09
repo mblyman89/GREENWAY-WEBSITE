@@ -3,6 +3,22 @@
  *
  * PURE normalizers for Cultivera vendor-menu snapshots (Slice CV-1).
  *
+ * ============================================================================
+ * ONE-TIME IMPORT ONLY — THIS IS NOT HOW PRODUCTS ENTER GREENWAY.
+ * ----------------------------------------------------------------------------
+ * The Cultivera menu import is a ONE-TIME EVENT and will NEVER be used again
+ * after the changeover. Cultivera is crap vendor data we drag into our own
+ * system once; it is NOT an architecture and we do NOT build around it.
+ *
+ * PRODUCTS ENTER GREENWAY THROUGH RECEIVING INTAKE — a vendor manifest or
+ * invoice arriving with physical inventory (src/lib/inventory/intake-store.ts).
+ * That is the real, permanent, business-critical pipeline.
+ *
+ * Do NOT treat this module as the product pipeline, and do NOT fix a pipeline
+ * bug here first. Fix RECEIVING INTAKE first, always. See
+ * docs/RECEIVING-IS-THE-REAL-PIPELINE.md and standing rule 11 in AGENTS.md.
+ * ============================================================================
+ *
  * The crawler logs into Cultivera's marketplace and fetches a vendor's LIVE menu
  * over the JSON API. Cultivera's exact field names get PINNED from a real
  * authenticated probe in CV-2/CV-3 before anything relies on them — so this core

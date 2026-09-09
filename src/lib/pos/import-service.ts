@@ -1,6 +1,21 @@
 /**
  * src/lib/pos/import-service.ts
  *
+ * ============================================================================
+ * SPREADSHEET/MENU IMPORT — A MIGRATION TOOL, NOT THE PRODUCT PIPELINE.
+ * ----------------------------------------------------------------------------
+ * This path (and the Cultivera menu import that feeds it) is a ONE-TIME event
+ * for bringing legacy vendor data into our system. It will NOT be how products
+ * enter Greenway going forward.
+ *
+ * PRODUCTS ENTER GREENWAY THROUGH RECEIVING INTAKE — a vendor manifest or
+ * invoice arriving with physical inventory (src/lib/inventory/intake-store.ts
+ * -> inventory_lots -> mastering -> staged menu -> published menu). That is the
+ * real, permanent, critical pipeline; fix pipeline bugs THERE first.
+ *
+ * See docs/RECEIVING-IS-THE-REAL-PIPELINE.md and standing rule 11 in AGENTS.md.
+ * ============================================================================
+ *
  * Server-only service that orchestrates a POS import end to end:
  *   1. store raw workbook buffers in the private `pos-raw` bucket
  *   2. create a `pos_imports` row (with file hashes for dedup)

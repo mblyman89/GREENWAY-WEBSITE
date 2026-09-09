@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import { __runOrderPricingTests } from "@/lib/orders/order-pricing-core";
 import { __runDiscountEngineTests } from "@/lib/promotions/discount-engine-core";
 import { __runBrandMatchTests } from "@/lib/promotions/brand-match-core";
+import { __runBrandResolveCoreTests } from "@/lib/inventory/brand-resolve-core";
 import { __runMarkdownLockTests } from "@/lib/promotions/markdown-lock-core";
 import { __runBundleApportionmentTests } from "@/lib/promotions/bundle-apportionment-core";
 import { __runSaturdayHeadlineTests } from "@/lib/promotions/saturday-headline-core";
@@ -67,6 +68,11 @@ describe("embedded pure self-test suites", () => {
   });
   it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {
     const r = __runMarkdownLockTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
+  });
+  it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {
+    const r = __runBrandResolveCoreTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(0);
   });

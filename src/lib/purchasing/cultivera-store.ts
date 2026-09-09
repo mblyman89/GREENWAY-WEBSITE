@@ -2,6 +2,22 @@
  * src/lib/purchasing/cultivera-store.ts
  *
  * Server-side store for Cultivera vendor-menu snapshots (CV-1). Re-exports the
+ *
+ * ============================================================================
+ * ONE-TIME IMPORT ONLY — THIS IS NOT HOW PRODUCTS ENTER GREENWAY.
+ * ----------------------------------------------------------------------------
+ * The Cultivera menu import is a ONE-TIME EVENT and will NEVER be used again
+ * after the changeover. Cultivera is crap vendor data we drag into our own
+ * system once; it is NOT an architecture and we do NOT build around it.
+ *
+ * PRODUCTS ENTER GREENWAY THROUGH RECEIVING INTAKE — a vendor manifest or
+ * invoice arriving with physical inventory (src/lib/inventory/intake-store.ts).
+ * That is the real, permanent, business-critical pipeline.
+ *
+ * Do NOT treat this module as the product pipeline, and do NOT fix a pipeline
+ * bug here first. Fix RECEIVING INTAKE first, always. See
+ * docs/RECEIVING-IS-THE-REAL-PIPELINE.md and standing rule 11 in AGENTS.md.
+ * ============================================================================
  * pure cultivera-menu-core normalizers and adds Supabase-backed persistence for
  * the two tables added in migration 0124:
  *

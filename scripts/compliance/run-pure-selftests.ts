@@ -12,6 +12,7 @@ import { __runExciseReturnTests } from "../../src/lib/compliance/excise-return-c
 // hand-rolled copies, two of which decide MONEY (the engine and the
 // register). Pure: no I/O.
 import { __runBrandMatchTests } from "../../src/lib/promotions/brand-match-core";
+import { __runBrandResolveCoreTests } from "../../src/lib/inventory/brand-resolve-core";
 // SLICE C1 -- clearance / vendor-day markdowns. Registered here because the
 // owner's rule ("those items are excluded from any and all other sales")
 // had no representation in the engine at all: a markdown shallower than the
@@ -603,6 +604,9 @@ async function main() {
   // verdict.
   { const r = __runBrandMatchTests(); if (r.passed < 1) throw new Error("brand-match-core: no assertions ran"); console.log(`brand-match-core: ${r.passed} assertions passed`); }
   { const r = __runMarkdownLockTests(); if (r.passed < 1) throw new Error("markdown-lock-core: no assertions ran"); console.log(`markdown-lock-core: ${r.passed} assertions passed`); }
+  // Rule 11: receiving intake is the REAL pipeline. Its brand resolver shares
+  // brandKey() with promotions, so it runs right beside brand-match-core.
+  { const r = __runBrandResolveCoreTests(); if (r.passed < 1) throw new Error("brand-resolve-core: no assertions ran"); console.log(`brand-resolve-core: ${r.passed} assertions passed`); }
   __runDiscountEngineTests();
   __runPromoGuardTests();
   assertNoFailures("promotion-selector-core", __runPromotionSelectorTests());

@@ -4,6 +4,22 @@
  * POS Slice 4 — persists a parsed vendor manifest as DRAFT rows for review,
  * and accepts/rejects a staged manifest.
  *
+ * ============================================================================
+ * THIS IS THE REAL PIPELINE. PRODUCTS ENTER GREENWAY THROUGH RECEIVING INTAKE.
+ * ----------------------------------------------------------------------------
+ * A vendor manifest / invoice arrives with physical inventory, and THIS module
+ * turns it into `inventory_lots`. That is the ONLY door, and it is permanent,
+ * business-critical infrastructure that runs every time a truck arrives.
+ *
+ * The Cultivera menu import (src/lib/purchasing/cultivera-*) is a ONE-TIME
+ * event that will NEVER be used again after the changeover. It is crap vendor
+ * data we drag into our own system once. It is NOT how products enter the
+ * store, and we do NOT build the system around it.
+ *
+ * Fix pipeline bugs HERE first. See docs/RECEIVING-IS-THE-REAL-PIPELINE.md and
+ * standing rule 11 in AGENTS.md.
+ * ============================================================================
+ *
  * Draft model (standing rule: machine output is never auto-live):
  *   - inbound_manifests.status = 'pending'
  *   - lab_results inserted (one per line that has a COA)
@@ -32,6 +48,15 @@ import {
   type VendorNameCandidate,
 } from "@/lib/inventory/vendor-resolve-core";
 import { chunkedIn, pagedAllChecked } from "@/lib/supabase/chunked-in";
+// RECEIVING INTAKE IS THE REAL PIPELINE (rule 11). Brand identity is decided by
+// the SHARED matcher so receiving and promotions can never drift apart again.
+import {
+  resolveBrandDecision,
+  brandIdFromOutcome,
+  describeBrandOutcome,
+  type BrandCandidate,
+  type BrandResolveOutcome,
+} from "@/lib/inventory/brand-resolve-core";
 import type { ReadCompletenessVerdict } from "@/lib/supabase/read-completeness-core";
 import {
   decideVendorCreate,
@@ -80,6 +105,12 @@ import {
  * auto-creation) rather than silently accepted.
  */
 const VENDOR_SCAN_MAX_ROWS = 50_000;
+/**
+ * Ceiling for the COMPLETE brand scan used on an exact-match miss. The real
+ * table holds ~168 brands (back-office database), so this is generous headroom
+ * that still refuses to spin forever on a runaway read.
+ */
+const BRAND_SCAN_MAX_ROWS = 50_000;
 
 /** Memory ceiling for a full inbound_manifests scan (stage counts). */
 const MANIFEST_SCAN_MAX_ROWS = 100_000;
@@ -367,18 +398,113 @@ export async function resolveOrCreateVendor(
   }
 }
 
-/** Try to match a brand label (optionally within a vendor). */
+/**
+ * Match a manifest brand label to a brand id (optionally within a vendor).
+ *
+ * RECEIVING INTAKE IS THE REAL PIPELINE — this function runs every time a
+ * truck arrives, forever. (The Cultivera menu import is a ONE-TIME event that
+ * will never be used again; it is not how products enter the store.) See
+ * docs/RECEIVING-IS-THE-REAL-PIPELINE.md and standing rule 11.
+ *
+ * This used to be a single `.ilike("display_name", label).limit(1)`. Postgres
+ * ILIKE with no wildcard metacharacters is an EXACT match that ignores case
+ * ONLY — it does not ignore doubled spaces, hyphens, punctuation or a trailing
+ * space. Measured over the 168 real brands in the back-office database across
+ * 771 realistic manifest spellings (scripts/recon/receiving-brand-gap.py):
+ *
+ *     resolved by ILIKE    : 318  (41.2%)
+ *     resolved by brandKey : 771  (100.0%)
+ *     silently missed      : 453
+ *
+ * A miss returned NULL with no error, `inventory_lots.brand_id` went NULL
+ * (there is no brand_name column — migration 0023:92), the menu item came out
+ * UNBRANDED, and the item fell off Top Shelf Thursday at full price.
+ *
+ * Now: fast exact path first (one indexed query, unchanged), then a COMPLETE
+ * paged scan matched with the SHARED brandKey() via resolveBrandDecision, so
+ * receiving and promotions cannot drift apart again. Ambiguous squeezes
+ * ('High Tide' vs 'HighTide', two different vendors) are REFUSED, not guessed.
+ */
 export async function resolveBrandId(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   label: string | null,
   vendorId: string | null,
 ): Promise<string | null> {
-  if (!label) return null;
-  let q = admin.from("brands").select("id, display_name, vendor_id").ilike("display_name", label).limit(1);
-  if (vendorId) q = q.eq("vendor_id", vendorId);
-  const { data } = await q;
-  const row = (data as { id: string }[] | null)?.[0];
-  return row?.id ?? null;
+  return (await resolveBrandIdDetailed(admin, label, vendorId)).brandId;
+}
+
+/**
+ * The same resolution, but returning WHY — so the caller can log an ambiguity
+ * or a miss instead of writing NULL in total silence.
+ */
+export async function resolveBrandIdDetailed(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  label: string | null,
+  vendorId: string | null,
+): Promise<{ brandId: string | null; outcome: BrandResolveOutcome }> {
+  const clean = (label ?? "").trim();
+  if (!clean) return { brandId: null, outcome: { kind: "no-label" } };
+
+  // 1) FAST PATH — the original indexed query, byte-for-byte the old
+  //    behaviour. Most manifests spell the brand exactly, so this is the
+  //    common case and costs exactly what it always cost.
+  {
+    let q = admin.from("brands").select("id, display_name, vendor_id").ilike("display_name", clean).limit(1);
+    if (vendorId) q = q.eq("vendor_id", vendorId);
+    const { data } = await q;
+    const row = (data as BrandCandidate[] | null)?.[0];
+    if (row?.id) {
+      return {
+        brandId: row.id,
+        outcome: { kind: "exact", brandId: row.id, matched: row.display_name ?? clean },
+      };
+    }
+  }
+
+  // 2) SQUEEZED PATH — only reached on a miss. Scan COMPLETELY (PostgREST caps
+  //    a response at 1,000 rows and `.limit(n)` cannot raise that cap; the
+  //    vendor resolver above was already burned by exactly that), then let the
+  //    PURE core decide using the shared brandKey().
+  const { rows, verdict } = await pagedAllChecked<BrandCandidate>(
+    async (from, to) => {
+      let q = admin
+        .from("brands")
+        .select("id, display_name, vendor_id")
+        // Stable UNIQUE ordering — REQUIRED for deterministic paging.
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (vendorId) q = q.eq("vendor_id", vendorId);
+      const { data, error } = await q;
+      if (error) return { rows: [], ok: false };
+      return { rows: (data as BrandCandidate[] | null) ?? [], ok: true };
+    },
+    { maxRows: BRAND_SCAN_MAX_ROWS },
+  );
+
+  // An INCOMPLETE read must never be reported as a confident miss: that is how
+  // a real brand gets dropped. Leave the brand unset and say why.
+  if (!verdict.complete) {
+    const outcome: BrandResolveOutcome = {
+      kind: "read-incomplete",
+      label: clean,
+      // `reason` is a required ReadStopReason enum, never null.
+      reason: verdict.reason,
+    };
+    console.error(`[intake-store] ${describeBrandOutcome(outcome)}`);
+    return { brandId: null, outcome };
+  }
+
+  const outcome = resolveBrandDecision(clean, rows);
+  const brandId = brandIdFromOutcome(outcome);
+
+  if (outcome.kind === "ambiguous") {
+    // Physical inventory ownership is not a coin flip (standing rule 3).
+    console.error(`[intake-store] ${describeBrandOutcome(outcome)}`);
+  } else if (outcome.kind === "squeezed") {
+    console.warn(`[intake-store] ${describeBrandOutcome(outcome)}`);
+  }
+
+  return { brandId, outcome };
 }
 
 /**
