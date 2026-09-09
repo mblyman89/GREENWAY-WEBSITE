@@ -65,6 +65,17 @@ import {
   apportionBundleSavings,
   bundleTargetMinorUnits,
 } from "@/lib/promotions/bundle-apportionment-core";
+// SLICE T1: the ONE brand matcher. This module used to carry its own
+// trim+lowercase copy (hasCi below), one of FIVE in the codebase.
+import { brandInList } from "@/lib/promotions/brand-match-core";
+// SLICE C1: clearance / vendor-day markdowns. The DECISION about which
+// lines are locked out of every other deal lives there; all pricing,
+// clamping and rounding stays here.
+import {
+  computeMarkdownLock,
+  isMarkdownRule,
+  linesVisibleToRule,
+} from "@/lib/promotions/markdown-lock-core";
 
 export type DiscountType =
   | "percent"
@@ -143,6 +154,19 @@ export type EngineConfig = {
    * (store-advantaged; deterministic and uniform for every customer).
    */
   eitherOr?: { flatPercent: number; bundle: { n: number; m: number } };
+  /**
+   * SLICE C1 -- CLEARANCE / VENDOR DAY. When true this rule is a MARKDOWN,
+   * not an ordinary promotion: every line it touches keeps this markdown
+   * and is excluded from all other sales and daily deals, whether the
+   * markdown is deeper than the day's deal or shallower.
+   *
+   * Owner, verbatim: clearance and vendor-day items are "excluded from any
+   * and all other sales/ daily deals".
+   *
+   * This is NOT the never-discount list. never-discount means "no promotion
+   * ever" and charges full price; a markdown charges the marked-down price.
+   */
+  markdownOnly?: boolean;
 };
 
 export type EngineLineResult = {
@@ -270,6 +294,15 @@ function clampEngineUnit(line: EngineCartLine, unitPrice: number): number {
   return Math.max(statutory, lineCostFloor(line));
 }
 
+/**
+ * Case-insensitive membership for CATEGORY and PRODUCT-KEY tokens.
+ *
+ * SLICE T1: BRANDS no longer come through here -- they go to brandInList,
+ * which normalises punctuation and spacing as well as case. Categories and
+ * product keys keep the strict trim+lowercase rule on purpose: a product key
+ * is an opaque identifier where punctuation is MEANINGFUL, and folding it
+ * away could let one SKU collect another SKU's discount.
+ */
 function hasCi(list: string[], value: string | null | undefined): boolean {
   if (!value) return false;
   const v = value.trim().toLowerCase();
@@ -280,7 +313,7 @@ function hasCi(list: string[], value: string | null | undefined): boolean {
 export function ruleMatchesLine(rule: EngineRule, line: EngineCartLine): boolean {
   // Exclusions win.
   if (line.categories.some((c) => hasCi(rule.excludeCategories, c))) return false;
-  if (hasCi(rule.excludeBrands, line.brand)) return false;
+  if (brandInList(rule.excludeBrands, line.brand)) return false;
   if (hasCi(rule.excludeProductKeys, line.productKey)) return false;
 
   if (rule.storewide) {
@@ -298,7 +331,7 @@ export function ruleMatchesLine(rule: EngineRule, line: EngineCartLine): boolean
   // full price -- advertised != charged. Category matching is untouched, so a
   // rule that targets ["merch"] (e.g. the merch BOGO) still matches.
   if (isMerch(line) && !catMatch) return false;
-  const brandMatch = hasCi(rule.targetBrands, line.brand);
+  const brandMatch = brandInList(rule.targetBrands, line.brand);
   const keyMatch = hasCi(rule.targetProductKeys, line.productKey);
   return catMatch || brandMatch || keyMatch;
 }
@@ -399,7 +432,16 @@ function totalSavings(discounts: Map<string, LineDiscount>, lines: EngineCartLin
  */
 export function applyOnePromotion(
   rule: EngineRule,
-  lines: EngineCartLine[],
+  /**
+   * SLICE C1: `readonly` because the caller now passes the LOCK-FILTERED view
+   * of the cart (linesVisibleToRule), which returns `readonly EngineCartLine[]`
+   * -- and returns the ORIGINAL array reference when nothing is filtered, so a
+   * mutable parameter here would be a licence to write into the caller's cart.
+   * This function only ever reads (`lines.filter`), so widening the parameter
+   * is the honest fix; casting the argument at the call site would have hidden
+   * the guarantee instead of stating it.
+   */
+  lines: readonly EngineCartLine[],
   /**
    * SLICE D3: the best per-unit saving each line is ALREADY receiving from a
    * higher-value promotion (clearance markdown, vendor day). Only the basket
@@ -683,6 +725,18 @@ export function computePromotions(
   // Evaluate rules by priority (higher first) so ties favour the higher-priority promo.
   const ordered = [...rules].sort((a, b) => b.priority - a.priority);
 
+  // SLICE C1: decide the markdown lock ONCE, before ANY rule is evaluated --
+  // including the SLICE D3 pre-pass below, which must not treat a clearance
+  // line as competition for the Saturday headline.
+  //
+  // A locked line is removed from every non-markdown rule's INPUT rather than
+  // having its result discarded afterwards, because the basket mechanics
+  // (Saturday's "30% off one item", Sunday's 3-for-2) SPREAD their savings
+  // across the eligible basket: a clearance item left in that basket would
+  // absorb part of a spread it can never receive and quietly shrink every
+  // other line in the cart.
+  const markdownLock = computeMarkdownLock(lines, ordered, ruleMatchesLine);
+
   // SLICE D3: a basket headline rule ("30% off one item") must know what the
   // other promotions are already giving each line, or it hands its headline to
   // a clearance item and best-deal-wins throws the headline away. Pre-compute
@@ -694,7 +748,12 @@ export function computePromotions(
   if (ordered.some(isBasketHeadline)) {
     for (const rule of ordered) {
       if (isBasketHeadline(rule)) continue;
-      for (const [lineId, d] of applyOnePromotion(rule, lines).entries()) {
+      // SLICE C1: measure competition over the lines each rule can ACTUALLY
+      // reach. Without this the pre-pass would record a clearance line as
+      // "already getting 50% from Monday", steering the Saturday headline
+      // away from a line that was never Monday's to give.
+      const rivalLines = linesVisibleToRule(rule, lines, markdownLock);
+      for (const [lineId, d] of applyOnePromotion(rule, rivalLines).entries()) {
         const line = lines.find((l) => l.lineId === lineId);
         if (!line) continue;
         const saving = line.regularPriceMinorUnits - d.unitPrice;
@@ -704,7 +763,9 @@ export function computePromotions(
   }
 
   for (const rule of ordered) {
-    const discounts = applyOnePromotion(rule, lines, competing);
+    const visible = linesVisibleToRule(rule, lines, markdownLock);
+    if (visible.length === 0) continue;
+    const discounts = applyOnePromotion(rule, visible, competing);
     for (const [lineId, d] of discounts.entries()) {
       const line = lines.find((l) => l.lineId === lineId);
       if (!line) continue;
@@ -712,7 +773,24 @@ export function computePromotions(
       const newSavingsPerUnit = line.regularPriceMinorUnits - d.unitPrice;
 
       // Best-deal-wins (strictly exclusive — no stacking, ever).
-      if (newSavingsPerUnit > current.unitSavingsMinorUnits) {
+      //
+      // SLICE C1: a MARKDOWN is exempt from the comparison. Measured before
+      // this change: a 10% clearance markdown on a $40.00 line lost to
+      // Munchie Monday's 25% and the receipt read "Munchie Monday", even
+      // though the owner's rule is that clearance items are out of every
+      // other deal. Best-deal-wins is right BETWEEN two offers competing for
+      // the customer; a markdown is a reprice of stock the store needs to
+      // move, so it applies whether or not it is the deeper number. Because
+      // locked lines are invisible to non-markdown rules, the only way two
+      // candidates reach one line here is if BOTH are markdowns -- and
+      // between two markdowns the deeper one still wins.
+      const ruleIsMarkdown = isMarkdownRule(rule);
+      const currentIsMarkdown = current.appliedRuleId != null
+        && markdownLock.markdownRuleIds.has(current.appliedRuleId);
+      const takeIt = ruleIsMarkdown && !currentIsMarkdown
+        ? true
+        : newSavingsPerUnit > current.unitSavingsMinorUnits;
+      if (takeIt) {
         const floor = current.costFloorMinorUnits;
         best.set(lineId, {
           ...current,

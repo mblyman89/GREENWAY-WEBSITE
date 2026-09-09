@@ -9,6 +9,8 @@
 import { describe, it, expect } from "vitest";
 import { __runOrderPricingTests } from "@/lib/orders/order-pricing-core";
 import { __runDiscountEngineTests } from "@/lib/promotions/discount-engine-core";
+import { __runBrandMatchTests } from "@/lib/promotions/brand-match-core";
+import { __runMarkdownLockTests } from "@/lib/promotions/markdown-lock-core";
 import { __runBundleApportionmentTests } from "@/lib/promotions/bundle-apportionment-core";
 import { __runSaturdayHeadlineTests } from "@/lib/promotions/saturday-headline-core";
 import { __runWeightLabelTests } from "@/lib/compliance/weight-label-core";
@@ -57,6 +59,16 @@ describe("embedded pure self-test suites", () => {
   });
   it("discount-engine-core (promotions engine)", () => {
     expect(() => __runDiscountEngineTests()).not.toThrow();
+  });
+  it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {
+    const r = __runBrandMatchTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
+  });
+  it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {
+    const r = __runMarkdownLockTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
   });
   it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {
     const r = __runBundleApportionmentTests();

@@ -18,6 +18,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, mediaUrlsForIds } from "@/lib/enrichment/store";
+import { brandMatches } from "@/lib/promotions/brand-match-core";
 import type { GreenwayCategory } from "@/lib/leafly/types";
 import { DAILY_DEAL_SEEDS } from "./daily-deal-seed";
 import type {
@@ -639,8 +640,9 @@ function ruleMatches(
   return rules.some((r) => {
     if (r.scope === "all") return true;
     if (r.scope === "category") return r.value ? item.categories.includes(r.value) : false;
-    if (r.scope === "brand")
-      return r.value ? item.brand.trim().toLowerCase() === r.value.trim().toLowerCase() : false;
+    // SLICE T1: same matcher as the engine, so "products affected" in the
+    // admin preview equals what the register will really discount.
+    if (r.scope === "brand") return brandMatches(item.brand, r.value);
     if (r.scope === "product") return r.value ? item.key === r.value : false;
     return false;
   });

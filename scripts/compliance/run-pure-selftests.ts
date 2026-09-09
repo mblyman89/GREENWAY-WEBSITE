@@ -7,6 +7,16 @@
 import { __runOrderPricingTests } from "../../src/lib/orders/order-pricing-core";
 import { __runTaxBaseCoreTests } from "../../src/lib/reports/tax-base-core";
 import { __runExciseReturnTests } from "../../src/lib/compliance/excise-return-core";
+// SLICE T1 -- the ONE brand matcher. Registered here because "is this
+// product on the brand sale?" used to be answered by five separate
+// hand-rolled copies, two of which decide MONEY (the engine and the
+// register). Pure: no I/O.
+import { __runBrandMatchTests } from "../../src/lib/promotions/brand-match-core";
+// SLICE C1 -- clearance / vendor-day markdowns. Registered here because the
+// owner's rule ("those items are excluded from any and all other sales")
+// had no representation in the engine at all: a markdown shallower than the
+// day's deal was silently overridden. Pure: no I/O.
+import { __runMarkdownLockTests } from "../../src/lib/promotions/markdown-lock-core";
 import { __runDiscountEngineTests } from "../../src/lib/promotions/discount-engine-core";
 import { __runPromoGuardTests } from "../../src/lib/promotions/promo-guard-core";
 import { __runPromotionSelectorTests } from "../../src/lib/promotions/promotion-selector-core";
@@ -588,6 +598,11 @@ function assertNoFailures(name: string, result: { passed: number; failed: number
 async function main() {
   __runOrderPricingTests();
   __runTaxBaseCoreTests();
+  // T1 + C1 run BEFORE the engine's own suite: the engine now depends on
+  // both, so if either is broken there is no point reading the engine's
+  // verdict.
+  { const r = __runBrandMatchTests(); if (r.passed < 1) throw new Error("brand-match-core: no assertions ran"); console.log(`brand-match-core: ${r.passed} assertions passed`); }
+  { const r = __runMarkdownLockTests(); if (r.passed < 1) throw new Error("markdown-lock-core: no assertions ran"); console.log(`markdown-lock-core: ${r.passed} assertions passed`); }
   __runDiscountEngineTests();
   __runPromoGuardTests();
   assertNoFailures("promotion-selector-core", __runPromotionSelectorTests());
