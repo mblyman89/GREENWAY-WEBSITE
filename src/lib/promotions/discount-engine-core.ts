@@ -275,6 +275,14 @@ export function ruleMatchesLine(rule: EngineRule, line: EngineCartLine): boolean
   }
   // Otherwise must match at least one target dimension.
   const catMatch = line.categories.some((c) => hasCi(rule.targetCategories, c));
+  // SLICE D2: merch/accessories are only ever swept in by an EXPLICIT merch
+  // category target -- the same "unless explicitly targeted" rule the
+  // storewide branch above already applies. WHY: a branded t-shirt matched
+  // Top Shelf Thursday through the BRAND dimension, so the product card struck
+  // 25% off while the cart (which skips merch in its thursday branch) charged
+  // full price -- advertised != charged. Category matching is untouched, so a
+  // rule that targets ["merch"] (e.g. the merch BOGO) still matches.
+  if (isMerch(line) && !catMatch) return false;
   const brandMatch = hasCi(rule.targetBrands, line.brand);
   const keyMatch = hasCi(rule.targetProductKeys, line.productKey);
   return catMatch || brandMatch || keyMatch;
@@ -290,7 +298,20 @@ function flatPercentDiscount(line: EngineCartLine, percent: number, label: strin
   // Cannabis lines cap at 99% (never free — RCW 69.50.357); merch may hit 100%.
   const cap = isMerch(line) ? 100 : 99;
   const p = Math.max(0, Math.min(cap, percent));
-  const unit = clampEngineUnit(line, round(line.regularPriceMinorUnits * (1 - p / 100)));
+  // SLICE D2: derive the DISCOUNT with exact integer maths, then subtract.
+  //
+  // Math.round() on the PRICE (the original) rounded the DISCOUNT down and
+  // handed the half-cent to the store - measured at 47.1% of all price/percent
+  // combinations under-delivering by up to 0.5c. Owner: "if it can't be exact,
+  // then we need to round in the customers favor somehow."
+  //
+  // Flooring the price is not enough either: 170 * (1 - 30/100) is
+  // 118.99999999999999 in IEEE 754, so the floor drops an extra cent. Here
+  // price * percent is an exact integer product and the single division is the
+  // only rounding step, sent the customer's way by Math.ceil. Exact AND
+  // customer-favoured, never more than one cent above the advertised rate.
+  const off = Math.ceil((line.regularPriceMinorUnits * p) / 100);
+  const unit = clampEngineUnit(line, line.regularPriceMinorUnits - off);
   return { unitPrice: unit, percent: p, label: `${label} · ${p}% off` };
 }
 

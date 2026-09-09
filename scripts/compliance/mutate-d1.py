@@ -29,6 +29,12 @@ SEED = "src/lib/promotions/daily-deal-seed.ts"
 SUITES = [
     "tests/compliance/doobie-tuesday-and-sunday.test.ts",
     "tests/compliance/pure-selftests.test.ts",
+    # SLICE D2: these guard the card/cart advertising parity fixes (the struck
+    # card price and the merch brand-match guard).
+    "tests/compliance/cart-discount-parity.test.ts",
+    "tests/compliance/promotions-harmony-parity.test.ts",
+    "tests/compliance/deal-badge-core.test.ts",
+    "tests/compliance/cart-estimator-core.test.ts",
 ]
 
 # (label, file, old, new) - each reintroduces a real defect this slice removed.
@@ -92,6 +98,92 @@ MUTATIONS = [
         ENGINE,
         "floorMinorUnits: clampEngineUnit(l, 0)",
         "floorMinorUnits: 0",
+    ),
+    # ----------------------------------------------------------------- D2
+    (
+        "D2: flat percent reverts to rounding AGAINST the customer",
+        ENGINE,
+        "Math.ceil((line.regularPriceMinorUnits * p) / 100)",
+        "Math.round((line.regularPriceMinorUnits * p) / 100)",
+    ),
+    (
+        "D2: website cart rounds differently from the register",
+        CART,
+        "Math.ceil((line.regularPriceMinorUnits * cappedPercent) / 100)",
+        "Math.round((line.regularPriceMinorUnits * cappedPercent) / 100)",
+    ),
+    (
+        "D2: Wednesday's 20% base tier disappears (back to nothing under $150)",
+        SEED,
+        "{ at: 0, percent: 20 },",
+        "{ at: 5000, percent: 20 },",
+    ),
+    (
+        "D2: Wednesday's $150 threshold moves",
+        SEED,
+        "{ at: 15000, percent: 30 },",
+        "{ at: 20000, percent: 30 },",
+    ),
+    (
+        "D2: the $50/15% ladder rung comes back to the website cart",
+        CART,
+        "return spendMinorUnits > 0 ? 20 : 0; // every eligible basket gets 20%",
+        "if (spendMinorUnits >= 5000) return 15;\n  return 0;",
+    ),
+    (
+        "D2: admin save silently drops the zero-threshold base tier",
+        "src/app/admin/promotions/actions.ts",
+        "at >= 0 && Number.isFinite(percent)",
+        "at > 0 && Number.isFinite(percent)",
+    ),
+    (
+        "D2: seedConfigFor stops deriving Wednesday from the seed",
+        PUBLISHED,
+        'const tiers = DAILY_DEAL_SEEDS.find((s) => s.promoKey === "daily.wednesday")?.spendTiers;',
+        "const tiers: { at: number; percent: number }[] | undefined = undefined;",
+    ),
+    # ---- SLICE D2: card/cart advertising parity -------------------------
+    (
+        "struck card price reverts to the HEADLINE percent (over-advertises)",
+        PUBLISHED,
+        "  const guaranteed = Math.max(...matching.map((s) => guaranteedPercentFor(s, item)));",
+        "  const guaranteed = Math.max(...matching.map((s) => headlinePercentFor(s)));",
+    ),
+    (
+        "guaranteedPercentFor spend branch returns the TOP tier",
+        PUBLISHED,
+        "    return tierPercent(item.priceMinorUnits, tiers);",
+        "    return Math.max(...tiers.map((t) => t.percent));",
+    ),
+    (
+        "merch brand-match guard removed (branded merch struck on Thursday)",
+        ENGINE,
+        "  if (isMerch(line) && !catMatch) return false;",
+        "  if (false && isMerch(line) && !catMatch) return false;",
+    ),
+    (
+        "Wednesday base spend tier reverts to a $50 threshold",
+        SEED,
+        "      { at: 0, percent: 20 },\n      { at: 15000, percent: 30 },",
+        "      { at: 5000, percent: 20 },\n      { at: 15000, percent: 30 },",
+    ),
+    (
+        "card guarantee joins its rule by TITLE instead of identity",
+        PUBLISHED,
+        "  const matching = activeRules.filter((s) => ruleMatchesLine(snapshotToEngineRule(s), line));",
+        "  const matching = activeRules.filter((s) => s.title === deal.label);",
+    ),
+    (
+        "guaranteedPercentFor checks the authored percent BEFORE basket mechanics",
+        PUBLISHED,
+        'if (s.discountType === "basket" || c.basketTopItem || c.basketNforM) return 0;\n  if (s.discountPercent > 0',
+        'if (s.discountPercent > 0',
+    ),
+    (
+        "Tuesday 4+ tier reverts to 20% (advertised 25% not honoured)",
+        SEED,
+        "      { at: 1, percent: 20 },\n      { at: 4, percent: 25 },",
+        "      { at: 1, percent: 20 },\n      { at: 4, percent: 20 },",
     ),
 ]
 

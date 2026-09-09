@@ -70,7 +70,7 @@ import {
  *
  *  1. Best percent-bearing deal wins (same pick order the struck price uses:
  *     highest percent, then highest priority) — e.g. Tuesday preroll cards say
- *     "Doobie Tuesday · 20% off · or 4 for 3".
+ *     "Doobie Tuesday · 20% off · or 4 for 3 (25%)".
  *  2. Otherwise the highest-priority ACTIVE rule that MATCHES the item badges
  *     with "title · bonusNote" (title alone when there is no note) — this is
  *     the Ice Cream Sunday path.
@@ -152,18 +152,20 @@ export function __runDealBadgeCoreTests(): void {
   // badge he saw on the rail card.
   const tue = rulesFor("tuesday");
   ok(
-    menuCardBadgeForItem(preroll, tue, "tuesday") === "Doobie Tuesday \u00b7 20% off \u00b7 or 4 for 3",
+    menuCardBadgeForItem(preroll, tue, "tuesday") ===
+      "Doobie Tuesday \u00b7 20% off \u00b7 or 4 for 3 (25%)",
     "Tuesday preroll badge matches the one Michael saw",
   );
   ok(
-    menuCardBadgeForItem(infusedBlunt, tue, "tuesday") === "Doobie Tuesday \u00b7 20% off \u00b7 or 4 for 3",
+    menuCardBadgeForItem(infusedBlunt, tue, "tuesday") ===
+      "Doobie Tuesday \u00b7 20% off \u00b7 or 4 for 3 (25%)",
     "Tuesday infused blunt badge",
   );
   ok(menuCardBadgeForItem(edible, tue, "tuesday") === undefined, "Tuesday edible has no badge");
 
   // WEDNESDAY — carts/concentrates (Michael's "etc." — rules-driven).
   ok(
-    menuCardBadgeForItem(cart, rulesFor("wednesday"), "wednesday") === "Wax Wednesday \u00b7 up to 30% off",
+    menuCardBadgeForItem(cart, rulesFor("wednesday"), "wednesday") === "Wax Wednesday \u00b7 20% off \u00b7 30% at $150+",
     "Wednesday cartridge badge",
   );
 

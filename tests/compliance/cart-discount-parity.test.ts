@@ -73,14 +73,21 @@ describe("weekday mechanics", () => {
     expect(merch.unitPriceMinorUnits).toBe(2000); // never discounted
   });
 
-  it("Doobie Tuesday: 20% off OR 4-for-3 — the SMALLER savings wins (store-advantaged)", () => {
-    // qty 1: only the flat 20% option can qualify.
+  it("Doobie Tuesday: 1–3 prerolls = 20%, 4+ = the advertised 25% (SLICE D1)", () => {
+    // OWNER CORRECTION (SLICE D1): "if a discount specifically states 4 or more
+    // prerolls is 25% off, then its 25% off, whether the store wants to win or
+    // not." The store-wins policy is a ROUNDING rule (half-cent to the store),
+    // NOT a deal-selection rule. This test previously pinned the inverted
+    // behaviour ("the SMALLER savings wins"), which produced a SAWTOOTH of
+    // 20,20,20,20,20,16,14,... across quantities 1..12 — measured — and paid a
+    // 4-preroll basket 20% when 25% was advertised.
+    // qty 1: below the 4-unit tier, so the advertised 20% applies.
     const one = computeCartDiscounts([line({ lineId: "p", category: "preroll", regularPriceMinorUnits: 1000 })], "tuesday");
     expect(one.lines[0].appliedPercent).toBe(20);
     expect(one.lines[0].unitPriceMinorUnits).toBe(800);
 
-    // 4 similar-priced units: flat 20% saves LESS than 4-for-3 → flat wins.
-    // Flat: 20% of $44.00 = $8.80. Bundle: cheapest unit $10 → 22% spread ≈ $9.68.
+    // 4 units across two lines: the advertised 25% ("buy 4 for the price of 3")
+    // applies to EVERY unit. $44.00 basket → exactly $11.00 off.
     const four = computeCartDiscounts(
       [
         line({ lineId: "p1", category: "preroll", regularPriceMinorUnits: 1000, quantity: 2 }),
@@ -88,11 +95,12 @@ describe("weekday mechanics", () => {
       ],
       "tuesday",
     );
-    expect(four.lines.every((l) => l.appliedPercent === 20)).toBe(true);
-    expect(four.totalSavingsMinorUnits).toBe(880);
+    expect(four.lines.every((l) => l.appliedPercent === 25)).toBe(true);
+    expect(four.totalSavingsMinorUnits).toBe(1100); // exactly 25% of 4400
+    expect(four.totalSavingsMinorUnits).toBe(Math.round(4400 * 0.25));
 
-    // Skewed basket (3×$20 + 1×$2): bundle target = cheapest unit $2 → 3% spread
-    // (floor) saves far less than flat 20% → the 4-for-3 spread wins.
+    // Skewed basket (3×$20 + 1×$2) still earns the advertised 25% — the old
+    // code paid a 3% "spread" here (under $2.00 of savings on a $62 basket).
     const skew = computeCartDiscounts(
       [
         line({ lineId: "big", category: "preroll", regularPriceMinorUnits: 2000, quantity: 3 }),
@@ -100,10 +108,19 @@ describe("weekday mechanics", () => {
       ],
       "tuesday",
     );
-    expect(skew.lines.every((l) => l.appliedPercent === 3)).toBe(true);
-    expect(skew.lines[0].appliedLabel).toContain("4 for 3");
-    // Store-advantaged: spread savings (≤ $2.00 target) instead of $12.40 flat.
-    expect(skew.totalSavingsMinorUnits).toBeLessThan(200);
+    expect(skew.lines.every((l) => l.appliedPercent === 25)).toBe(true);
+    expect(skew.totalSavingsMinorUnits).toBe(1550); // exactly 25% of 6200
+    // Monotonic in quantity: adding prerolls never LOWERS the percent (no sawtooth).
+    let prev = 0;
+    for (let q = 1; q <= 12; q += 1) {
+      const r = computeCartDiscounts(
+        [line({ lineId: "p", category: "preroll", regularPriceMinorUnits: 1000, quantity: q })],
+        "tuesday",
+      );
+      expect(r.lines[0].appliedPercent).toBeGreaterThanOrEqual(prev);
+      prev = r.lines[0].appliedPercent;
+    }
+    expect(prev).toBe(25);
   });
 
   it("Doobie Tuesday: the CCRS cost floor clamps the 20% option", () => {
@@ -116,16 +133,28 @@ describe("weekday mechanics", () => {
     expect(r.lines[0].unitPriceMinorUnits).toBe(878);
   });
 
-  it("Wax Wednesday: spend tiers ($50=15%, $100=20%, $150=30%)", () => {
+  it("Wax Wednesday: 20% off, or 30% at $150+ (SLICE D2 — exactly as advertised)", () => {
+    // OWNER CORRECTION (verbatim): "the deal is 20% off or 30% off over 150
+    // dollars. Not the ladder nor 20% to 25%." This test previously pinned a
+    // 15/20/30 ladder at $50/$100/$150 — under which a customer buying a single
+    // $40 cartridge was advertised 20% off on /specials and charged FULL PRICE.
     const at = (spendMinor: number) =>
       computeCartDiscounts(
         [line({ lineId: "c", category: "concentrate", regularPriceMinorUnits: spendMinor })],
         "wednesday",
       ).lines[0].appliedPercent;
-    expect(at(4999)).toBe(0);
-    expect(at(5000)).toBe(15);
-    expect(at(10000)).toBe(20);
-    expect(at(15000)).toBe(30);
+    expect(at(1)).toBe(20); // no minimum spend — the base tier is universal
+    expect(at(4000)).toBe(20); // the $40 cartridge that used to get nothing
+    expect(at(4999)).toBe(20);
+    expect(at(5000)).toBe(20); // the old $50 rung is GONE
+    expect(at(10000)).toBe(20); // the old $100 rung is GONE
+    expect(at(14999)).toBe(20);
+    expect(at(15000)).toBe(30); // $150 exactly — the advertised threshold
+    expect(at(20000)).toBe(30);
+    // Only TWO tiers exist, so the percent is always one of 20 or 30.
+    for (const spend of [1, 999, 4000, 7500, 14999, 15000, 15001, 99999]) {
+      expect([20, 30]).toContain(at(spend));
+    }
   });
 
   it("Ounce Friday: weight tiers via gramsForLabel (7g=15%, 14g=20%, 28g=30%)", () => {
@@ -166,17 +195,24 @@ describe("weekday mechanics", () => {
 });
 
 describe("Ice Cream Sunday — COMPLIANT 3-for-2 equivalent (never a free unit)", () => {
-  it("3 identical units: total ≈ price of 2, every unit stays positive", () => {
+  it("3 identical units: total ≤ price of 2, every unit stays positive", () => {
     const r = computeCartDiscounts(
       [line({ lineId: "s", regularPriceMinorUnits: 1000, quantity: 3 })],
       "sunday",
     );
     const l = r.lines[0];
-    // 33% (floor of 1000/3000 × 100) off each unit — same total as paying for 2.
-    expect(l.appliedPercent).toBe(33);
-    expect(l.unitPriceMinorUnits).toBe(670);
+    // SLICE D1: the old floored percent (33% of $10 = $6.70/unit) charged
+    // $20.10 for three $10 units — 10c MORE than the advertised "pay for 2".
+    // Owner: "Sunday needs to be exact", and where a line's single unit price
+    // cannot express the target exactly, round in the CUSTOMER's favour.
     expect(l.unitPriceMinorUnits).toBeGreaterThan(0);
-    expect(r.totalDiscountedMinorUnits).toBe(2010); // ≈ 2000, spread not free
+    expect(r.totalDiscountedMinorUnits).toBeLessThanOrEqual(2000); // never MORE than 2 units
+    expect(r.totalDiscountedMinorUnits).toBe(1998); // 2c to the customer (measured)
+    expect(l.unitPriceMinorUnits).toBe(666);
+    // The advertised savings are the price of one unit; we never pay less than that.
+    expect(r.totalSavingsMinorUnits).toBeGreaterThanOrEqual(1000);
+    // ...and the overshoot is minimal: strictly under one unit's worth of cents.
+    expect(r.totalSavingsMinorUnits - 1000).toBeLessThan(3);
   });
   it("fewer than 3 eligible units ⇒ no discount", () => {
     const r = computeCartDiscounts(

@@ -48,6 +48,8 @@ import {
   type EngineConfig,
   type EngineRule,
   type Tier,
+  tierPercent,
+  gramsForLabel,
 } from "./discount-engine-core";
 
 // ---------------------------------------------------------------------------
@@ -146,6 +148,13 @@ export function seedConfigFor(promoKey: string | null): EngineConfig {
       // The seed is the single source of truth; this reads it.
       const tiers = DAILY_DEAL_SEEDS.find((s) => s.promoKey === "daily.tuesday")?.qtyTiers;
       return tiers?.length ? { qtyTiers: tiers.map((t) => ({ ...t })) } : {};
+    }
+    case "daily.wednesday": {
+      // Wax Wednesday (SLICE D2): 20% off, 30% at $150+. DERIVED from the seed
+      // row for the same reason Tuesday is - two hand-written copies of the
+      // same numbers is how the register and the website drift apart.
+      const tiers = DAILY_DEAL_SEEDS.find((s) => s.promoKey === "daily.wednesday")?.spendTiers;
+      return tiers?.length ? { spendTiers: tiers.map((t) => ({ ...t })) } : {};
     }
     case "daily.saturday":
       return { basketTopItem: { topPercent: 30, restPercent: 15 } };
@@ -391,6 +400,65 @@ export function headlinePercentFor(s: PublishedRuleSnapshot): number {
 }
 
 /**
+ * The percent a SINGLE unit of this item is GUARANTEED to earn with nothing
+ * else in the basket -- the only percent a struck-through card price may
+ * promise (SLICE D2).
+ *
+ * WHY THIS EXISTS (measured defect): headlinePercentFor returns the BEST case
+ * (top tier). On Wax Wednesday the tiers are 20% base / 30% at $150+, so a $40
+ * cartridge card previewed $28.00 (30% off) while the register charged $32.00
+ * (20%). The card advertised a price we would not honour. Advertising
+ * integrity (WAC 314-55-155 family) requires advertised == charged, and the
+ * owner's standing rule is that any inexactness must favour the CUSTOMER --
+ * never a promise we break at the till.
+ *
+ * The best case is still honest as BADGE COPY ("20% off - 30% at $150+"
+ * describes the whole offer), so headlinePercentFor and the badge path are
+ * deliberately unchanged. Only the struck PRICE tightens, because a price is a
+ * promise about THIS item, alone, right now.
+ *
+ * Tier evaluation reuses the engine's own tierPercent() against the item's own
+ * value, so the card cannot drift from the register: spend tiers see the item
+ * price, quantity tiers see quantity 1, weight tiers see the item's grams.
+ */
+export function guaranteedPercentFor(s: PublishedRuleSnapshot, item: GreenwayMenuItem): number {
+  const c = s.config;
+  // BASKET MECHANICS FIRST. A basket deal guarantees a LONE item nothing: Super
+  // Saturday's 30% lands on exactly ONE unit of a multi-item basket (an item by
+  // itself may only earn the 15% rest-rate, or nothing), and Ice Cream Sunday's
+  // 3-for-2 needs three units to exist at all. Saturday AUTHORS
+  // discountPercent: 30 as its headline, so this check must outrank the
+  // authored-percent branch below -- it previously sat underneath it and was
+  // unreachable, which returned a guaranteed 30% for a single item.
+  if (s.discountType === "basket" || c.basketTopItem || c.basketNforM) return 0;
+  if (s.discountPercent > 0 && !c.qtyTiers?.length && !c.spendTiers?.length) {
+    return s.discountPercent;
+  }
+  // Either/or: the flat leg is the floor the customer always gets.
+  if (c.eitherOr) return c.eitherOr.flatPercent;
+  if (s.discountType === "threshold_spend") {
+    const tiers = c.spendTiers?.length ? c.spendTiers : DEFAULT_SPEND_TIERS;
+    return tierPercent(item.priceMinorUnits, tiers);
+  }
+  if (s.discountType === "multi_item_tier") {
+    const tiers = c.qtyTiers?.length ? c.qtyTiers : DEFAULT_QTY_TIERS;
+    return tierPercent(1, tiers); // one unit on the card = quantity 1
+  }
+  if (s.discountType === "weight_tier") {
+    const tiers = c.weightTiers?.length ? c.weightTiers : DEFAULT_WEIGHT_TIERS;
+    // Read the label off the ENGINE LINE, never off the item: itemToEngineLine
+    // is the single definition of what the engine sees, and it carries no
+    // variant label today (null), so a lone carded item is guaranteed 0% by a
+    // weight tier. That is the honest answer -- a card cannot know the basket's
+    // total weight -- and it tracks itemToEngineLine automatically if variant
+    // data is ever attached.
+    return tierPercent(gramsForLabel(itemToEngineLine(item).variantLabel), tiers);
+  }
+  // (Basket mechanics are handled at the top of this function.)
+  return s.discountPercent > 0 ? s.discountPercent : 0;
+}
+
+/**
  * Shape mirror of ActiveMenuDiscount (src/lib/specials/daily-deals.ts) so the
  * existing card components swap engines without visual changes.
  */
@@ -500,7 +568,32 @@ export function menuCardDiscountForItem(
 ): MenuItemDeal | undefined {
   if (!activeRules || !weekday) return undefined;
   if (!weekdayShowsCardDiscounts(weekday)) return undefined;
-  return menuDiscountForItem(item, activeRules);
+  const deal = menuDiscountForItem(item, activeRules);
+  if (!deal) return undefined;
+  // SLICE D2: the struck price may only promise what THIS item, alone, is
+  // guaranteed to earn. See guaranteedPercentFor -- a $40 Wednesday cartridge
+  // previewed 30% off and was charged 20%. When the guaranteed percent is
+  // lower than the headline we re-price the preview down to the guarantee;
+  // when nothing is guaranteed the card shows the regular price and the CART
+  // reveals the real savings (same shape as the Fri/Sat/Sun policy above).
+  // Join by RULE IDENTITY, never by title: nothing stops staff publishing two
+  // promotions with the same title, and a title collision would let the card
+  // read a guarantee from a rule that did not produce this deal. These are the
+  // same three functions menuDiscountForItem uses to pick the deal.
+  const line = itemToEngineLine(item);
+  const matching = activeRules.filter((s) => ruleMatchesLine(snapshotToEngineRule(s), line));
+  if (!matching.length) return deal;
+  const guaranteed = Math.max(...matching.map((s) => guaranteedPercentFor(s, item)));
+  if (guaranteed >= deal.discountPercent) return deal;
+  if (guaranteed <= 0) return undefined;
+  const preview = discountPreviewPrice(item.priceMinorUnits, Math.min(guaranteed, 99));
+  if (preview >= item.priceMinorUnits) return undefined;
+  return {
+    ...deal,
+    discountPercent: guaranteed,
+    cardPreviewSalePriceMinorUnits: preview,
+    salePriceMinorUnits: deal.perItemSalePrice ? preview : item.priceMinorUnits,
+  };
 }
 
 /** Card badge text — mirrors formatActiveDiscountBadge in daily-deals.ts. */

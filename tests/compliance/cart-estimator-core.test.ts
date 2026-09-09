@@ -313,7 +313,10 @@ describe("tier nudges use the same thresholds the engine prices with", () => {
     ).toHaveLength(0);
   });
 
-  it("Wax Wednesday: $40 of eligible concentrate → add $10.00 to unlock 15%", () => {
+  it("Wax Wednesday: $40 of eligible concentrate → add $110.00 to unlock 30% (SLICE D2)", () => {
+    // SLICE D2: the $50 (15%) and $100 (20%) rungs are GONE — the deal is
+    // "20% off, or 30% off over $150". The $40 concentrate ALREADY has its 20%,
+    // so the only thing left to unlock is the 30% tier at $150.
     const rules = activeSnapshotsFor(SEEDS, "wednesday", WHEN);
     const nudges = tierNudges(
       [engineLine({ categories: ["concentrate"], regularPriceMinorUnits: 4000, variantLabel: "1g" })],
@@ -321,20 +324,30 @@ describe("tier nudges use the same thresholds the engine prices with", () => {
     );
     expect(nudges).toHaveLength(1);
     expect(nudges[0].kind).toBe("spend");
-    expect(nudges[0].addLabel).toBe("$10.00");
-    expect(nudges[0].unlockLabel).toBe("15% off");
+    expect(nudges[0].addLabel).toBe("$110.00"); // 15000 - 4000
+    expect(nudges[0].unlockLabel).toBe("30% off");
+    // The nudge never over-promises: 10 extra points on the CURRENT $40 basket.
+    expect(nudges[0].estAdditionalSavingsMinor).toBe(400);
   });
 
   it("spend nudges qualify on REGULAR prices (engine parity)", () => {
     const rules = activeSnapshotsFor(SEEDS, "wednesday", WHEN);
-    // Regular $50 exactly → already at the 15% tier; next nudge is the $100 tier.
+    // Regular $50 → already has the universal 20%; the only tier left is 30%
+    // at $150, so the nudge asks for the remaining $100.00 of REGULAR price.
     const nudges = tierNudges(
       [engineLine({ categories: ["cartridge"], regularPriceMinorUnits: 5000, variantLabel: "1g" })],
       rules,
     );
     expect(nudges).toHaveLength(1);
-    expect(nudges[0].addLabel).toBe("$50.00");
-    expect(nudges[0].unlockLabel).toBe("20% off");
+    expect(nudges[0].addLabel).toBe("$100.00"); // 15000 - 5000
+    expect(nudges[0].unlockLabel).toBe("30% off");
+    // A basket already AT the top tier has nothing left to unlock.
+    expect(
+      tierNudges(
+        [engineLine({ categories: ["cartridge"], regularPriceMinorUnits: 15000, variantLabel: "1g" })],
+        rules,
+      ),
+    ).toHaveLength(0);
   });
 
   it("Ice Cream Sunday: 2 items → add 1 more to complete 3-for-2", () => {
@@ -361,13 +374,32 @@ describe("tier nudges use the same thresholds the engine prices with", () => {
     ).toHaveLength(0);
   });
 
-  it("Doobie Tuesday (either/or) NEVER nudges — the engine takes the smaller savings", () => {
+  it("Doobie Tuesday NOW nudges honestly: 3 prerolls → add 1 → 25% off (SLICE D1)", () => {
+    // WHY THIS FLIPPED: estimator-core used to skip either/or rules outright
+    // (`if (rule.config.eitherOr) continue;`) because that mechanic took the
+    // SMALLER of the two savings — so "add one more preroll" could have
+    // LOWERED the customer's discount, making the nudge a lie. D1 removed the
+    // inverted selection and replaced the either/or with real qty tiers
+    // (1–3 = 20%, 4+ = 25%), so the nudge is now true: the 4th preroll really
+    // does move the whole basket to the advertised 25%.
     const rules = activeSnapshotsFor(SEEDS, "tuesday", WHEN);
     const nudges = tierNudges(
       [engineLine({ categories: ["preroll"], quantity: 3, regularPriceMinorUnits: 1000 })],
       rules,
     );
-    expect(nudges).toHaveLength(0);
+    expect(nudges).toHaveLength(1);
+    expect(nudges[0].kind).toBe("qty");
+    expect(nudges[0].addLabel).toBe("1 more item");
+    expect(nudges[0].unlockLabel).toBe("25% off");
+    // 5 extra points on the current $30 of prerolls — never over-promised.
+    expect(nudges[0].estAdditionalSavingsMinor).toBe(150);
+    // At 4+ units the basket is already at the top tier: nothing to unlock.
+    expect(
+      tierNudges(
+        [engineLine({ categories: ["preroll"], quantity: 4, regularPriceMinorUnits: 1000 })],
+        rules,
+      ),
+    ).toHaveLength(0);
   });
 
   it("no eligible items in the cart → no nudges (no advertising into an empty basket)", () => {
