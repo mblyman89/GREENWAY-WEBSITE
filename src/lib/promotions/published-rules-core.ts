@@ -128,6 +128,10 @@ export function parseEngineConfig(config: Record<string, unknown> | null | undef
       out.eitherOr = { flatPercent, bundle: { n, m } };
     }
   }
+  // SLICE C1: clearance / vendor-day markdown flag. Strictly `=== true` so a
+  // stray truthy value out of the jsonb column (the string "false", a 1)
+  // cannot silently lock a product out of every daily deal.
+  if (c.markdownOnly === true) out.markdownOnly = true;
   // NOTE: legacy `stackable` configs are intentionally IGNORED — discount
   // stacking is hard-blocked (owner directive; see docs/PROMOTIONS_COMPLIANCE.md).
   return out;

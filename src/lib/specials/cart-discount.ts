@@ -29,6 +29,7 @@
 
 import type { GreenwayCategory } from "@/lib/leafly/types";
 import type { StoreWeekday } from "@/lib/specials/daily-deals";
+import { brandInList } from "@/lib/promotions/brand-match-core";
 // SLICE W1: the ONE weight-label parse, shared with the WAC limit engine.
 // (STATUTORY_GRAMS_PER_OUNCE is no longer imported here -- the ounce
 // equivalence now lives with the parse, in weight-label-core.)
@@ -296,10 +297,12 @@ export function computeCartDiscounts(
     }
     case "thursday": {
       // Top Shelf Thursday: flat 25% off featured brands (per-item).
-      const brands = topShelfThursdayBrands.map((b) => b.trim().toLowerCase());
+      // SLICE T1: brand comparison delegated to brand-match-core so the
+      // REGISTER and the product card can never disagree about who is on
+      // sale. This branch previously carried its own trim+lowercase copy.
       for (const line of cartLines) {
         if (isMerchOrAccessory(line)) continue;
-        if (line.brand && brands.includes(line.brand.trim().toLowerCase())) {
+        if (brandInList(topShelfThursdayBrands, line.brand)) {
           resultMap.set(line.lineId, applyPercentLine(line, 25, "Top Shelf Thursday"));
         }
       }

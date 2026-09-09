@@ -1,5 +1,6 @@
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
 import { TOP_SHELF_THURSDAY_BRANDS } from "@/lib/promotions/daily-deal-seed";
+import { brandInList } from "@/lib/promotions/brand-match-core";
 
 export type ActiveMenuDiscount = {
   label: string;
@@ -116,10 +117,11 @@ export const ounceFridayCategories: GreenwayCategory[] = [
 // only applies when the DB is empty). Re-exported here for existing importers.
 export const topShelfThursdayBrands: string[] = TOP_SHELF_THURSDAY_BRANDS;
 
+// SLICE T1: the shop card asks the SAME question the register asks, using
+// the same matcher. When these were two copies, a brand spelled slightly
+// differently could show a "25% off" badge and then ring up at full price.
 function itemMatchesBrands(item: GreenwayMenuItem, brands: string[]) {
-  if (!item.brand) return false;
-  const itemBrand = item.brand.trim().toLowerCase();
-  return brands.some((brand) => brand.trim().toLowerCase() === itemBrand);
+  return brandInList(brands, item.brand);
 }
 
 export function isTopShelfThursdayItem(item: GreenwayMenuItem) {

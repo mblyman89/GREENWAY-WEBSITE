@@ -28,6 +28,11 @@ import {
   type ThursdayPlanResultLike,
 } from "./thursday-planner-types";
 import { schedulePlannedThursdaysAction } from "@/app/admin/promotions/actions";
+// SLICE T1: the brand matcher the ENGINE uses. Imported here so this screen
+// warns about exactly the brands the register would leave at full price --
+// if the planner used its own comparison, the warning could disagree with
+// the till, which is the class of bug T1 exists to remove.
+import { findBrandNearMisses } from "@/lib/promotions/brand-match-core";
 
 type WeekOption = {
   /** Pacific YYYY-MM-DD of the Thursday. */
@@ -106,6 +111,30 @@ export function ThursdayPlanner({ thursdays, brands }: Props) {
   const plannedCount = thursdays.filter(
     (t) => (weeks[t.ymd]?.brands.length ?? 0) > 0,
   ).length;
+
+  /**
+   * SLICE T1 -- NEAR MISSES.
+   *
+   * The matcher is deliberately exact: it will never decide on its own that
+   * "Lifted Cannabis" is the same deal as "Lifted", because that is a fact
+   * about the vendor agreement and not about the spelling. Measured on the
+   * store's live catalogue, four brands sit in that gap and cover 12
+   * products, which today ring up at full price while the shelf sign
+   * advertises their brand.
+   *
+   * So instead of guessing, this tells the owner. Picking the extra brand is
+   * one click away in the very list below.
+   */
+  const nearMisses = useMemo(() => {
+    const picked = Array.from(
+      new Set(Object.values(weeks).flatMap((w) => w.brands)),
+    );
+    if (picked.length === 0) return [];
+    // Only report brands the owner has NOT already selected -- an already
+    // scheduled brand is not a missed one.
+    const chosen = new Set(picked);
+    return findBrandNearMisses(brands, picked).filter((m) => !chosen.has(m.brand));
+  }, [brands, weeks]);
 
   function schedule() {
     const plan: PlannedWeek[] = thursdays
@@ -285,6 +314,40 @@ export function ThursdayPlanner({ thursdays, brands }: Props) {
           );
         })}
       </div>
+
+      {/* SLICE T1: brands on the live menu that LOOK related to the ones
+          picked but do NOT match, and so would ring up at full price. */}
+      {nearMisses.length > 0 && (
+        <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-4">
+          <p className="text-sm font-semibold text-amber-200">
+            {nearMisses.length} similar brand
+            {nearMisses.length === 1 ? "" : "s"} on your menu {nearMisses.length === 1 ? "is" : "are"} NOT included
+          </p>
+          <p className="mt-1 text-xs text-amber-100/80">
+            These are separate brand names in your menu, so the register will
+            charge FULL price for them. If they are the same vendor, tick them
+            in the list above as well.
+          </p>
+          <ul className="mt-3 space-y-1.5">
+            {nearMisses.map((m) => (
+              <li key={`${m.target}|${m.brand}`} className="text-xs text-white/80">
+                <span className="font-medium text-white">{m.brand}</span>
+                <span className="text-white/50"> vs your pick </span>
+                <span className="font-medium text-white">{m.target}</span>
+                {m.kind === "corporate-suffix" ? (
+                  <span className="ml-2 rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-200">
+                    likely the same company
+                  </span>
+                ) : (
+                  <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-white/60">
+                    may be a different line
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Action + result */}
       <div className="flex flex-wrap items-center gap-3">

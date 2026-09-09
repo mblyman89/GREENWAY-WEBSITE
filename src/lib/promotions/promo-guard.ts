@@ -25,6 +25,7 @@
 import "server-only";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { brandMatches } from "@/lib/promotions/brand-match-core";
 import {
   findBelowCost,
   hasPublishBlock,
@@ -78,8 +79,9 @@ function matchesScoped(p: GuardProduct, rules: ScopedRule[]): boolean {
     if (r.scope === "all") return true;
     if (r.scope === "category")
       return r.value ? p.categories.includes(r.value.trim().toLowerCase()) : false;
-    if (r.scope === "brand")
-      return r.value ? p.brand.trim().toLowerCase() === r.value.trim().toLowerCase() : false;
+    // SLICE T1: same matcher as the engine, so the below-cost publish guard
+    // previews exactly the products the engine will actually discount.
+    if (r.scope === "brand") return brandMatches(p.brand, r.value);
     if (r.scope === "product") return r.value ? p.key === r.value : false;
     return false;
   });
