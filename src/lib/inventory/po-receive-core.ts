@@ -12,6 +12,30 @@
  * double-check. Lots that match nothing are NEVER force-received — they are
  * listed for the existing manual receive form on the PO page.
  *
+ * ── AMBIGUOUS NAMES ARE REFUSED, NOT GUESSED (defect A, sweep 2026-09) ──────
+ *
+ * This function WRITES: po-receive-store.ts calls receivePoLine(lineId, qty)
+ * for every planned receipt, with no human in the loop. So a wrong match here
+ * books stock against the wrong PO line and nobody ever sees an error — the
+ * timeline note cheerfully says "Auto-received".
+ *
+ * The name fallback used to end in `candidates.find(...) ?? candidates[0]`.
+ * When two PO lines normalized to the SAME name that picked one and moved on.
+ * Measured over the 1,707 real strain names in the back-office database
+ * (scripts/recon/receiving-sweep-part3.py): 4 raw name collisions and 12
+ * full-SKU collisions, including 'Orange & Cream' vs 'Orange Cream' — two
+ * genuinely different products.
+ *
+ * Receiving already refuses to guess an ambiguous BRAND squeeze (rule 11,
+ * brand-resolve-core.ts). It must hold the same line here. An ambiguous name
+ * now goes to unmatchedLots with reason "ambiguous-name" and the human
+ * receives it on the PO page in thirty seconds. A miss is recoverable and
+ * visible; a wrong receipt is neither.
+ *
+ * The KEY path deliberately keeps its old behaviour: two lines sharing one
+ * pos_product_key is a duplicate-line problem, not an identity ambiguity, and
+ * the "fill the line that still needs product first" rule is correct there.
+ *
  * ALLOCATION: a lot's full quantity goes to ONE line (lots are physical
  * packages; splitting one lot across duplicate lines invents data we don't
  * have). When several lines share the same key/name, the first line with
@@ -64,19 +88,87 @@ export type LineDelta = {
 export type AutoReceivePlan = {
   receipts: PlannedReceipt[];
   deltas: LineDelta[];
-  /** Accepted lots that matched NO PO line — left for manual receiving. */
-  unmatchedLots: { lotId: string; label: string; qty: number }[];
+  /**
+   * Accepted lots this planner REFUSED to auto-receive — left for the manual
+   * receive form on the PO page. Two honest reasons, kept apart because they
+   * read very differently to the person holding the boxes:
+   *   • "no-match"       — nothing on the PO looks like this lot at all.
+   *   • "ambiguous-name" — SEVERAL PO lines normalize to this lot's name and
+   *                        the lot carries no pos_product_key, so picking one
+   *                        would be a guess (defect A). See the header banner.
+   */
+  unmatchedLots: {
+    lotId: string;
+    label: string;
+    qty: number;
+    reason: "no-match" | "ambiguous-name";
+  }[];
   /** Human-readable timeline summary (manifest_events note). */
   note: string;
 };
 
-/** Same normalization discipline as po-match-core's vendor names. */
+/**
+ * Unit tokens that may legitimately follow a bare number in a product name.
+ * Cannabis retail packaging only — deliberately a short, closed list rather
+ * than a general "letters after digits" rule, because a general rule would
+ * also join things like "Batch 5 A".
+ */
+const NAME_UNIT_TOKENS = ["mg", "g", "oz", "ml", "pk", "ct", "pc"] as const;
+
+/**
+ * Join a bare number to a following unit token: "1 g" → "1g", "10 pk" → "10pk".
+ *
+ * Decimals need no special handling. Punctuation stripping runs FIRST, so
+ * "3.5g" is already "3 5g" and "3.5 g" is already "3 5 g"; this rule then
+ * joins the trailing "5 g" and both land on the same key, "3 5g". (An earlier
+ * draft used `(\d+(?: \d+)?)` to grab the whole "3 5" — mutation testing
+ * proved that optional group changes nothing on any of the 2,615 real product
+ * names, so it is gone rather than left as decoration.)
+ *
+ * /g is REQUIRED: a name may carry more than one number+unit pair, e.g.
+ * "Gummies 10 pk 100 mg".
+ */
+const NAME_UNIT_RE = new RegExp(String.raw`\b(\d+) (${NAME_UNIT_TOKENS.join("|")})\b`, "g");
+
+/**
+ * Same normalization discipline as po-match-core's vendor names, PLUS the
+ * number/unit join (defect B, sweep 2026-09).
+ *
+ * ── WHY NOT JUST SQUEEZE OUT ALL THE SPACES? ───────────────────────────────
+ *
+ * Because that is the tempting fix and it is measurably WRONG here. brandKey()
+ * removes all whitespace, which is right for brands, where spacing carries no
+ * meaning. In a product name spacing sits next to SIZE, and size IS identity:
+ * booking a 1g delivery against a 3.5g line is exactly the wrong-line bug this
+ * module now refuses to commit.
+ *
+ * Measured over the 2,615 real product records in the back-office database
+ * (scripts/recon/receiving-name-key-measure.py):
+ *
+ *     normalizer   distinct keys   colliding keys
+ *     current             2,615                0
+ *     squeeze-all         2,614                1   <- REGRESSION on real data
+ *     number+unit join    2,615                0   <- this one
+ *
+ * The squeeze-all collision is real, not hypothetical:
+ *   'Drops 1:1 CBD Daydreamy Cranberry/MAC #4'
+ *   'Drops1:1 CBD Daydreamy Cranberry / MAC #4'
+ *
+ * The narrow join closes 2,026 of 2,026 spacing misses (every real name with a
+ * unit suffix, respelled with a space before the unit) and introduces ZERO new
+ * collisions and ZERO size merges. That is why the rule is this narrow.
+ */
 export function normalizeProductName(s: string | null | undefined): string {
-  return (s ?? "")
+  const base = (s ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9 ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  // No lastIndex reset needed: String.prototype.replace with a /g regex sets
+  // lastIndex to 0 itself (ECMA-262, RegExp.prototype[Symbol.replace]), and
+  // nothing here calls .test()/.exec() on NAME_UNIT_RE. Verified by mutation
+  // testing — deleting a defensive reset must be observable or not exist.
+  return base.replace(NAME_UNIT_RE, "$1$2");
 }
 
 function lotLabel(lot: ReceivableLot): string {
@@ -119,7 +211,20 @@ export function buildAutoReceivePlan(
     }
 
     if (candidates.length === 0) {
-      unmatchedLots.push({ lotId: lot.id, label: lotLabel(lot), qty });
+      unmatchedLots.push({ lotId: lot.id, label: lotLabel(lot), qty, reason: "no-match" });
+      continue;
+    }
+
+    // 2a) REFUSE an ambiguous NAME match. Two PO lines whose names normalize
+    //     the same are two different products as far as we can prove, and
+    //     this function writes. Hand it to a human instead of guessing.
+    //
+    //     Only the NAME path is refused. The KEY path above is allowed to have
+    //     several candidates: a shared pos_product_key means duplicate lines
+    //     for the SAME product, where "fill the line that still needs product"
+    //     is the right answer, not an identity guess.
+    if (matchedBy === "name" && candidates.length > 1) {
+      unmatchedLots.push({ lotId: lot.id, label: lotLabel(lot), qty, reason: "ambiguous-name" });
       continue;
     }
 
@@ -174,10 +279,34 @@ function buildNote(
   unmatchedLots: AutoReceivePlan["unmatchedLots"],
   lots: ReceivableLot[],
 ): string {
+  // Ambiguous refusals are NOT the same story as "not on the PO" — the lot IS
+  // on the PO, twice, and we declined to guess which line. Say so out loud so
+  // the note never implies the product is missing from the order.
+  const ambiguous = unmatchedLots.filter((u) => u.reason === "ambiguous-name");
+  const noMatch = unmatchedLots.filter((u) => u.reason !== "ambiguous-name");
+  const ambiguousSentence =
+    ambiguous.length > 0
+      ? " " +
+        `${ambiguous.length} lot(s) matched SEVERAL PO lines by name and carry no POS key — ` +
+        `NOT auto-received, receive them manually so the right line is credited: ` +
+        ambiguous.map((u) => `“${u.label}” (${u.qty})`).join(", ") +
+        "."
+      : "";
+  // Named in BOTH the zero-receipt and partial-receipt paths: a note that says
+  // "receive them manually" without saying WHICH lots is useless at the dock.
+  const noMatchSentence =
+    noMatch.length > 0
+      ? " Not on the PO (left for manual receive): " +
+        noMatch.map((u) => `“${u.label}” (${u.qty})`).join(", ") +
+        "."
+      : "";
+
   if (receipts.length === 0) {
     return (
-      `Linked PO: none of the ${lots.length} accepted lot(s) matched a PO line — ` +
-      `receive them manually on the PO page.`
+      `Linked PO: none of the ${lots.length} accepted lot(s) were auto-received — ` +
+      `receive them manually on the PO page.` +
+      noMatchSentence +
+      ambiguousSentence
     ).slice(0, 2000);
   }
   const totalQty = receipts.reduce((s, r) => s + r.qty, 0);
@@ -215,14 +344,7 @@ function buildNote(
         ".",
     );
   }
-  if (unmatchedLots.length > 0) {
-    parts.push(
-      "Not on the PO (left for manual receive): " +
-        unmatchedLots.map((u) => `“${u.label}” (${u.qty})`).join(", ") +
-        ".",
-    );
-  }
-  return parts.join(" ").slice(0, 2000);
+  return (parts.join(" ") + noMatchSentence + ambiguousSentence).slice(0, 2000);
 }
 
 // ---------------------------------------------------------------------------
@@ -331,6 +453,131 @@ export function __runPoReceiveCoreTests(): { passed: number } {
     assert(p.receipts.length === 0 && p.unmatchedLots.length === 0, "zero-qty lot skipped");
     const empty = buildAutoReceivePlan([], []);
     assert(empty.receipts.length === 0 && empty.deltas.length === 0, "empty inputs plan nothing");
+  }
+
+  // A plain miss carries reason "no-match".
+  {
+    const p = buildAutoReceivePlan([lot({ pos_product_key: "ZZZ", product_name: "Mystery" })], [line({})]);
+    assert(p.unmatchedLots[0].reason === "no-match", "plain miss reason is no-match");
+  }
+
+  // ── DEFECT A: an ambiguous NAME match is refused, never guessed ───────────
+  // Two PO lines, different products, whose names normalize identically. The
+  // lot has no pos_product_key, so the only evidence is the name — and it
+  // points at both. Auto-receiving would silently credit the wrong line.
+  {
+    const p = buildAutoReceivePlan(
+      [lot({ pos_product_key: null, product_name: "Orange Cream" })],
+      [
+        line({ id: "l1", pos_product_key: "SKU-A", product_name: "Orange & Cream" }),
+        line({ id: "l2", pos_product_key: "SKU-B", product_name: "Orange Cream" }),
+      ],
+    );
+    assert(p.receipts.length === 0, "ambiguous name receives nothing");
+    assert(p.deltas.every((d) => d.outcome === "none"), "ambiguous name books no delta");
+    assert(p.unmatchedLots.length === 1, "ambiguous lot is listed once");
+    assert(p.unmatchedLots[0].reason === "ambiguous-name", "reason is ambiguous-name");
+    assert(p.unmatchedLots[0].qty === 10, "ambiguous lot keeps its full qty");
+    assert(p.note.includes("SEVERAL"), "note explains the refusal");
+    assert(!p.note.includes("Not on the PO"), "ambiguous is not reported as missing from the PO");
+  }
+
+  // A name match that is UNambiguous still auto-receives (the fix must not
+  // break the ordinary single-candidate name fallback).
+  {
+    const p = buildAutoReceivePlan(
+      [lot({ pos_product_key: null, product_name: "Orange Cream" })],
+      [
+        line({ id: "l1", pos_product_key: "SKU-A", product_name: "Orange Cream" }),
+        line({ id: "l2", pos_product_key: "SKU-B", product_name: "Grape Ape" }),
+      ],
+    );
+    assert(p.receipts.length === 1 && p.receipts[0].lineId === "l1", "unambiguous name still receives");
+    assert(p.unmatchedLots.length === 0, "unambiguous name is not refused");
+  }
+
+  // The KEY path is deliberately NOT refused: duplicate lines sharing one
+  // pos_product_key are the same product, so "fill the open line" is correct.
+  {
+    const p = buildAutoReceivePlan(
+      [lot({ received_qty: 5 })],
+      [
+        line({ id: "full", order_qty: 5, received_qty: 5 }),
+        line({ id: "open", order_qty: 5, received_qty: 0 }),
+      ],
+    );
+    assert(p.receipts.length === 1 && p.receipts[0].lineId === "open", "duplicate KEY lines are not refused");
+    assert(p.unmatchedLots.length === 0, "duplicate KEY lines produce no refusal");
+  }
+
+  // Refusal is per-lot, not per-plan: a good lot still receives alongside a
+  // refused one, and the note tells both stories.
+  {
+    const p = buildAutoReceivePlan(
+      [
+        lot({ id: "good", pos_product_key: "SKU-1", received_qty: 4 }),
+        lot({ id: "bad", pos_product_key: null, product_name: "Orange Cream", received_qty: 7 }),
+      ],
+      [
+        line({ id: "l1", pos_product_key: "SKU-1", order_qty: 4, product_name: "Blue Dream 1g" }),
+        line({ id: "l2", pos_product_key: "SKU-A", product_name: "Orange & Cream" }),
+        line({ id: "l3", pos_product_key: "SKU-B", product_name: "Orange Cream" }),
+      ],
+    );
+    assert(p.receipts.length === 1 && p.receipts[0].lineId === "l1", "good lot still receives");
+    assert(p.unmatchedLots.length === 1 && p.unmatchedLots[0].lotId === "bad", "only the bad lot is refused");
+    assert(p.note.includes("Auto-received") && p.note.includes("SEVERAL"), "note covers both outcomes");
+  }
+
+  // An ambiguous lot must never be listed under "Not on the PO" — it IS on the
+  // PO, twice. Both refusal kinds in one delivery, kept in separate sentences.
+  {
+    const p = buildAutoReceivePlan(
+      [
+        lot({ id: "miss", pos_product_key: "ZZZ", product_name: "Mystery" }),
+        lot({ id: "amb", pos_product_key: null, product_name: "Orange Cream" }),
+      ],
+      [
+        line({ id: "l1", pos_product_key: "SKU-A", product_name: "Orange & Cream" }),
+        line({ id: "l2", pos_product_key: "SKU-B", product_name: "Orange Cream" }),
+      ],
+    );
+    const start = p.note.indexOf("Not on the PO");
+    const notOnPo = p.note.slice(start, p.note.indexOf(".", start) + 1);
+    assert(start >= 0, "genuine miss is reported");
+    assert(notOnPo.includes("Mystery"), "the miss is named there");
+    assert(!notOnPo.includes("Orange Cream"), "ambiguous lot is NOT in the missing list");
+  }
+
+  // ── DEFECT B: number/unit spacing no longer splits one product in two ─────
+  {
+    assert(normalizeProductName("Blue Dream 1 g") === "blue dream 1g", "1 g joins to 1g");
+    assert(
+      normalizeProductName("Blue Dream 3.5 g") === normalizeProductName("Blue Dream 3.5g"),
+      "3.5 g and 3.5g share a key",
+    );
+    assert(normalizeProductName("Gummies 100 mg") === "gummies 100mg", "100 mg joins to 100mg");
+    assert(normalizeProductName("Pre-Rolls 10 pk") === "pre rolls 10pk", "10 pk joins to 10pk");
+    // Size is identity: different sizes must NOT collapse together.
+    assert(
+      normalizeProductName("Blue Dream 1 g") !== normalizeProductName("Blue Dream 3.5 g"),
+      "1g and 3.5g stay different products",
+    );
+    // The closed unit list is the point — a general digits+letters rule would
+    // wrongly join a batch or lot number to the word after it.
+    // /g matters: multi-pack names carry more than one number+unit pair.
+    assert(
+      normalizeProductName("Gummies 10 pk 100 mg") === "gummies 10pk 100mg",
+      "every number/unit pair joins, not just the first",
+    );
+    assert(normalizeProductName("Batch 5 A") === "batch 5 a", "non-unit token is not joined");
+    assert(normalizeProductName("Blue Dream 2 for 1") === "blue dream 2 for 1", "plain numbers untouched");
+    // A lot and a line that differ only by that spacing now MATCH end to end.
+    const p = buildAutoReceivePlan(
+      [lot({ pos_product_key: null, product_name: "Blue Dream 3.5 g" })],
+      [line({ pos_product_key: "SKU-9", product_name: "Blue Dream 3.5g" })],
+    );
+    assert(p.receipts.length === 1 && p.receipts[0].matchedBy === "name", "spacing variant now matches");
   }
 
   return { passed };
