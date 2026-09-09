@@ -10,6 +10,8 @@ import { describe, it, expect } from "vitest";
 import { __runOrderPricingTests } from "@/lib/orders/order-pricing-core";
 import { __runDiscountEngineTests } from "@/lib/promotions/discount-engine-core";
 import { __runBundleApportionmentTests } from "@/lib/promotions/bundle-apportionment-core";
+import { __runSaturdayHeadlineTests } from "@/lib/promotions/saturday-headline-core";
+import { __runWeightLabelTests } from "@/lib/compliance/weight-label-core";
 import { __runPromoGuardTests } from "@/lib/promotions/promo-guard-core";
 import { __runSalesLimitTests } from "@/lib/compliance/sales-limits-core";
 import { __runSalesLimitGateTests } from "@/lib/compliance/sales-limit-gate-core";
@@ -59,6 +61,13 @@ describe("embedded pure self-test suites", () => {
   it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {
     const r = __runBundleApportionmentTests();
     expect(r.passed).toBeGreaterThan(0);
+  });
+  it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {
+    const r = __runSaturdayHeadlineTests();
+    expect(r.passed).toBeGreaterThan(0);
+  });
+  it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {
+    expect(() => __runWeightLabelTests()).not.toThrow();
   });
   it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {
     expect(() => __runPromoGuardTests()).not.toThrow();

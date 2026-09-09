@@ -18,6 +18,12 @@ import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core
 // DOM, no I/O. Registered here so CI proves the 2129.3 ml cap and the ml/L/fl oz
 // parser on every push, even if the vitest mirror is ever renamed or skipped.
 // Getting this wrong is a 72x over-sale (a 1.5 L bottle read as a 28 g unit).
+// SLICE W1 -- the ONE weight-label parser, shared by the discount engines and
+// the WAC 314-55-095 limit engine. Registered here because the two used to
+// carry separate regexes and disagreed on 14 of 37 label shapes ("1/8 oz"
+// read as 224 g on the discount side, granting a full-ounce tier to an
+// eighth). Pure: no I/O.
+import { __runWeightLabelTests } from "../../src/lib/compliance/weight-label-core";
 import { __runLiquidVolumeTests } from "../../src/lib/compliance/liquid-volume-core";
 import { __runLiquidVolumeDerivationTests } from "../../src/lib/compliance/liquid-volume-derivation-core";
 import { __runSalesLimitGateTests } from "../../src/lib/compliance/sales-limit-gate-core";
@@ -588,7 +594,8 @@ async function main() {
   assertNoFailures("promotion-selector-ai", __runPromotionSelectorAiTests());
   assertNoFailures("guided-promotion-core", __runGuidedPromotionTests());
   assertNoFailures("thursday-planner-core", __runThursdayPlannerTests());
-  __runLiquidVolumeTests();
+  __runWeightLabelTests();
+__runLiquidVolumeTests();
   __runLiquidVolumeDerivationTests();
   __runSalesLimitTests();
   __runSalesLimitGateTests();

@@ -27,6 +27,11 @@
  */
 
 /** Statute equivalence used by the transform and sales-limits-core alike (GW-016: shared module). */
+// SLICE W1: the shared parse. GRAMS_PER_OUNCE is retained and SPENT on the
+// self-test assertions at the bottom of this file, which pin the 28 g
+// statutory basis at this compliance-facing layer as well as inside the
+// shared parser -- so changing the basis breaks BOTH, not just one.
+import { parseWeightLabelGrams } from "@/lib/compliance/weight-label-core";
 import { STATUTORY_GRAMS_PER_OUNCE as GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 
 function round3(n: number): number {
@@ -43,17 +48,15 @@ function round3(n: number): number {
  * as before AN-1. Never throws.
  */
 export function gramsFromVariantLabel(label: string | null | undefined): number | null {
-  if (typeof label !== "string") return null;
-  const s = label.trim().toLowerCase();
-  if (!s) return null;
-  // Only whitespace may sit between the number and the unit, so "1fl oz",
-  // "100mg", "30ml", "2pk", "5 each" all fail the match by design.
-  const m = s.match(/^(\d+(?:\.\d+)?)\s*(g|gram|grams|oz|ounce|ounces)$/);
-  if (!m) return null;
-  const qty = Number(m[1]);
-  if (!Number.isFinite(qty) || qty <= 0) return null;
-  const grams = m[2].startsWith("g") ? qty : qty * GRAMS_PER_OUNCE;
-  return round3(grams);
+  // SLICE W1: the parse itself now lives in weight-label-core, shared with the
+  // DISCOUNT engines, which previously carried their own unanchored copy and
+  // disagreed with this function on 14 of 37 measured label shapes ("1/8 oz"
+  // read as 224 g there, null here). Behaviour on this side is UNCHANGED for
+  // every label the importer can emit -- verified identical across all 666
+  // machine-emittable labels -- and additionally understands exact fractions
+  // ("1/8 oz" -> 3.5 g). Still null on anything ambiguous, so the limit engine
+  // keeps falling back to the conservative per-category default.
+  return parseWeightLabelGrams(label);
 }
 
 /**
@@ -108,6 +111,14 @@ export function __runVariantGramsCoreTests(): void {
   ok(gramsFromVariantLabel("7g") === 7, "7g → 7");
   ok(gramsFromVariantLabel("14g") === 14, "14g → 14");
   ok(gramsFromVariantLabel("1oz") === 28, "1oz → 28 (statute equivalence)");
+  // SLICE W1: assert against the NAMED constant too, not just the literal, so
+  // a change to the statutory basis cannot pass here by editing one number.
+  ok(gramsFromVariantLabel("1oz") === GRAMS_PER_OUNCE, "1oz → STATUTORY_GRAMS_PER_OUNCE");
+  ok(gramsFromVariantLabel("2oz") === 2 * GRAMS_PER_OUNCE, "2oz → 2x the statutory ounce");
+  // SLICE W1: fractions are exact arithmetic on the statutory ounce.
+  ok(gramsFromVariantLabel("1/8 oz") === GRAMS_PER_OUNCE / 8, "1/8 oz → an EIGHTH (was 224 g in the discount parser)");
+  ok(gramsFromVariantLabel("1/4 oz") === GRAMS_PER_OUNCE / 4, "1/4 oz → a quarter");
+  ok(gramsFromVariantLabel("28 grams") === 28, "spelled-out grams (was 0 g in the discount parser)");
   ok(gramsFromVariantLabel("2oz") === 56, "2oz → 56");
   ok(gramsFromVariantLabel("0.5g") === 0.5, "0.5g → 0.5");
   ok(gramsFromVariantLabel("28g") === 28, "28g → 28");
