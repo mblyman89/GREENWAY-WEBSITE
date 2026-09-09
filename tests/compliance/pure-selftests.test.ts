@@ -11,6 +11,7 @@ import { __runOrderPricingTests } from "@/lib/orders/order-pricing-core";
 import { __runDiscountEngineTests } from "@/lib/promotions/discount-engine-core";
 import { __runBrandMatchTests } from "@/lib/promotions/brand-match-core";
 import { __runBrandResolveCoreTests } from "@/lib/inventory/brand-resolve-core";
+import { __runPoReceiveCoreTests } from "@/lib/inventory/po-receive-core";
 import { __runMarkdownLockTests } from "@/lib/promotions/markdown-lock-core";
 import { __runBundleApportionmentTests } from "@/lib/promotions/bundle-apportionment-core";
 import { __runSaturdayHeadlineTests } from "@/lib/promotions/saturday-headline-core";
@@ -74,6 +75,10 @@ describe("embedded pure self-test suites", () => {
   it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {
     const r = __runBrandResolveCoreTests();
     expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
+  });
+  it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {
+    const r = __runPoReceiveCoreTests();
     expect(r.passed).toBeGreaterThan(0);
   });
   it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {

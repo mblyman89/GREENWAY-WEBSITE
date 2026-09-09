@@ -13,6 +13,7 @@ import { __runExciseReturnTests } from "../../src/lib/compliance/excise-return-c
 // register). Pure: no I/O.
 import { __runBrandMatchTests } from "../../src/lib/promotions/brand-match-core";
 import { __runBrandResolveCoreTests } from "../../src/lib/inventory/brand-resolve-core";
+import { __runPoReceiveCoreTests } from "../../src/lib/inventory/po-receive-core";
 // SLICE C1 -- clearance / vendor-day markdowns. Registered here because the
 // owner's rule ("those items are excluded from any and all other sales")
 // had no representation in the engine at all: a markdown shallower than the
@@ -607,6 +608,8 @@ async function main() {
   // Rule 11: receiving intake is the REAL pipeline. Its brand resolver shares
   // brandKey() with promotions, so it runs right beside brand-match-core.
   { const r = __runBrandResolveCoreTests(); if (r.passed < 1) throw new Error("brand-resolve-core: no assertions ran"); console.log(`brand-resolve-core: ${r.passed} assertions passed`); }
+  // Rule 11 / defects A+B: auto-receive WRITES, so its planner runs here too.
+  { const r = __runPoReceiveCoreTests(); if (r.passed < 1) throw new Error("po-receive-core: no assertions ran"); console.log(`po-receive-core: ${r.passed} assertions passed`); }
   __runDiscountEngineTests();
   __runPromoGuardTests();
   assertNoFailures("promotion-selector-core", __runPromotionSelectorTests());
