@@ -22,6 +22,8 @@ export type DailyDealSeed = {
   discountPercent: number;
   /** Quantity tiers for multi_item_tier deals (SLICE D1). */
   qtyTiers?: { at: number; percent: number }[];
+  /** Spend tiers (minor units -> percent) for threshold_spend deals (SLICE D2). */
+  spendTiers?: { at: number; percent: number }[];
   multiItemPercent?: number;
   perItemSale: boolean;
   bonusNote?: string;
@@ -82,12 +84,19 @@ export const DAILY_DEAL_SEEDS: DailyDealSeed[] = [
   {
     promoKey: "daily.wednesday",
     title: "Wax Wednesday",
-    description: "Spend-tiered savings on concentrates and vapes — up to 30% off at $150+.",
+    description: "20% off concentrates and vapes — or 30% off when you spend $150 or more.",
     weekday: 3,
     discountType: "threshold_spend",
     discountPercent: 30,
     perItemSale: false,
-    bonusNote: "up to 30% off",
+    // SLICE D2: TWO tiers, matching what /specials advertises. The code
+    // previously ran a 15/20/30 ladder at $50/$100/$150, so a customer buying a
+    // single $40 cartridge was promised 20% off and charged full price.
+    spendTiers: [
+      { at: 0, percent: 20 },
+      { at: 15000, percent: 30 },
+    ],
+    bonusNote: "20% off · 30% at $150+",
     priority: 10,
     targetCategories: ["cartridge", "disposable-cartridge", "concentrate", "rso"],
   },

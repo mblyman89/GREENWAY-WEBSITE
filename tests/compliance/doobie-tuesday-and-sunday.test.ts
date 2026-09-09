@@ -19,9 +19,13 @@
  * sold below the cost of acquisition (RCW 69.50.357 / CCRS). Where the cost
  * floor bites, under-delivering the advert is the correct, legal outcome.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   computePromotions,
+  ruleMatchesLine,
+  DEFAULT_SPEND_TIERS,
   type EngineCartLine,
   type EngineRule,
 } from "@/lib/promotions/discount-engine-core";
@@ -29,8 +33,19 @@ import {
   apportionBundleSavings,
   bundleTargetMinorUnits,
 } from "@/lib/promotions/bundle-apportionment-core";
-import { computeCartDiscounts } from "@/lib/specials/cart-discount";
-import { seedConfigFor } from "@/lib/promotions/published-rules-core";
+import {
+  computeCartDiscounts,
+  type DiscountCartLine,
+} from "@/lib/specials/cart-discount";
+import type { StoreWeekday } from "@/lib/specials/daily-deals";
+import {
+  activeSnapshotsFor,
+  guaranteedPercentFor,
+  headlinePercentFor,
+  menuCardDiscountForItem,
+  seedConfigFor,
+  seedRuleSnapshots,
+} from "@/lib/promotions/published-rules-core";
 import { DAILY_DEAL_SEEDS } from "@/lib/promotions/daily-deal-seed";
 
 function rule(over: Partial<EngineRule>): EngineRule {
@@ -301,6 +316,122 @@ describe("Ice Cream Sunday: buy 3, pay for 2 - exact", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Wax Wednesday (SLICE D2)
+// ---------------------------------------------------------------------------
+
+describe("Wax Wednesday: 20% off, 30% at $150+", () => {
+  const wednesdayRule = rule({
+    discountType: "threshold_spend",
+    promoKey: "daily.wednesday",
+    targetCategories: ["cartridge", "disposable-cartridge", "concentrate", "rso"],
+    config: seedConfigFor("daily.wednesday"),
+  } as Partial<EngineRule>);
+
+  it("is exactly two tiers - no $50 or $100 rung", () => {
+    // Owner: "the deal is 20% off or 30% off over 150 dollars. Not the ladder."
+    expect(seedConfigFor("daily.wednesday").spendTiers).toEqual([
+      { at: 0, percent: 20 },
+      { at: 15000, percent: 30 },
+    ]);
+  });
+
+  it("gives 20% off even on a small basket (the advertised base rate)", () => {
+    // Before D2 this paid 0%: the ladder started at $50. A customer buying one
+    // $40 cartridge was promised 20% off and charged full price.
+    for (const spend of [500, 1000, 3999, 4999]) {
+      const r = computePromotions(
+        [{ lineId: "a", regularPriceMinorUnits: spend, quantity: 1, categories: ["concentrate"] }],
+        [wednesdayRule],
+      );
+      // At least 20%, and never more than a cent above it: a price like $39.99
+      // cannot divide evenly, so the spare cent goes to the CUSTOMER (20.005%).
+      expect(r.totalSavingsMinorUnits, `$${spend / 100}`).toBeGreaterThanOrEqual(
+        Math.ceil(spend * 0.2),
+      );
+      expect(r.totalSavingsMinorUnits, `$${spend / 100} overshoot`).toBeLessThanOrEqual(
+        Math.ceil(spend * 0.2),
+      );
+    }
+  });
+
+  it("steps to 30% at exactly $150 and never before", () => {
+    const pct = (spend: number) => {
+      const r = computePromotions(
+        [{ lineId: "a", regularPriceMinorUnits: spend, quantity: 1, categories: ["concentrate"] }],
+        [wednesdayRule],
+      );
+      return (r.totalSavingsMinorUnits / spend) * 100;
+    };
+    // $149.99 at 20% is $29.998 -> the customer gets $30.00, i.e. 20.0013%.
+    expect(pct(14999)).toBeGreaterThanOrEqual(20);
+    expect(pct(14999)).toBeLessThan(20.01);
+    expect(pct(15000)).toBeCloseTo(30, 6);
+    expect(pct(20000)).toBeCloseTo(30, 6);
+  });
+
+  it("never pays less than the rate advertised on /specials", () => {
+    for (let spend = 100; spend <= 30000; spend += 137) {
+      const r = computePromotions(
+        [{ lineId: "a", regularPriceMinorUnits: spend, quantity: 1, categories: ["concentrate"] }],
+        [wednesdayRule],
+      );
+      const advertised = spend >= 15000 ? 30 : 20;
+      const effective = (r.totalSavingsMinorUnits / spend) * 100;
+      expect(effective, `$${(spend / 100).toFixed(2)}`).toBeGreaterThanOrEqual(advertised - 1e-6);
+    }
+  });
+
+  it("the website cart agrees with the engine at every threshold", () => {
+    for (const spend of [500, 4999, 5000, 9999, 10000, 14999, 15000, 25000]) {
+      const cart = computeCartDiscounts(
+        [{ lineId: "a", regularPriceMinorUnits: spend, quantity: 1, category: "concentrate" }],
+        "wednesday",
+      );
+      const engine = computePromotions(
+        [{ lineId: "a", regularPriceMinorUnits: spend, quantity: 1, categories: ["concentrate"] }],
+        [wednesdayRule],
+      );
+      expect(cart.totalSavingsMinorUnits, `$${spend / 100}: website vs engine`).toBe(
+        engine.totalSavingsMinorUnits,
+      );
+    }
+  });
+
+  it("a zero-threshold base tier survives an admin save", () => {
+    // parseTierRows rejected `at > 0`, so simply opening Wax Wednesday in
+    // /admin/promotions and pressing Save silently deleted the 20% base tier,
+    // collapsing the deal back to "nothing below $150".
+    const seed = DAILY_DEAL_SEEDS.find((s) => s.promoKey === "daily.wednesday");
+    expect(seed?.spendTiers?.some((t) => t.at === 0 && t.percent === 20)).toBe(true);
+
+    // parseTierRows lives inside a "use server" module and cannot be imported
+    // here, so assert on the source. A source assertion is a weak test in
+    // general, but this predicate is a one-character change that silently
+    // deletes a live tier, and leaving it unguarded is worse.
+    const src = readFileSync(
+      resolve(__dirname, "../../src/app/admin/promotions/actions.ts"),
+      "utf-8",
+    );
+    expect(src, "parseTierRows must accept a zero threshold").toContain(
+      "at >= 0 && Number.isFinite(percent)",
+    );
+    expect(src, "parseTierRows must not reject at === 0").not.toContain(
+      "at > 0 && Number.isFinite(percent)",
+    );
+  });
+
+  it("leaves the GENERIC spend-tier fallback alone", () => {
+    // DEFAULT_SPEND_TIERS backs staff-created threshold_spend promotions, not
+    // Wednesday. Rewriting it would silently re-price unrelated deals.
+    expect(DEFAULT_SPEND_TIERS).toEqual([
+      { at: 5000, percent: 15 },
+      { at: 10000, percent: 20 },
+      { at: 15000, percent: 30 },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The law outranks the advert
 // ---------------------------------------------------------------------------
 
@@ -323,6 +454,66 @@ describe("cost floor outranks the advertised target", () => {
     );
     const floor = Math.ceil(600 * 1.463);
     expect(r.lines[0].unitPriceMinorUnits).toBeGreaterThanOrEqual(floor);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The rounding policy, across every deal
+// ---------------------------------------------------------------------------
+
+describe("rounding always favours the customer (owner policy)", () => {
+  it("a flat percent NEVER delivers less than advertised, at any price", () => {
+    // Before D2 this failed for 47.1% of price/percent combinations, by up to
+    // half a cent, because Math.round() was applied to the PRICE - rounding the
+    // price up rounds the discount down. Measured over 79,604 combinations.
+    for (let price = 100; price <= 5000; price += 7) {
+      for (const pct of [15, 20, 25, 30]) {
+        const r = computePromotions(
+          [{ lineId: "a", regularPriceMinorUnits: price, quantity: 1, categories: ["concentrate"] }],
+          [rule({ discountType: "percent", discountPercent: pct, targetCategories: ["concentrate"] })],
+        );
+        expect(r.totalSavingsMinorUnits, `$${price / 100} @ ${pct}%`).toBeGreaterThanOrEqual(
+          (price * pct) / 100,
+        );
+      }
+    }
+  });
+
+  it("but is never generous by more than a single cent per unit", () => {
+    for (let price = 100; price <= 5000; price += 7) {
+      for (const pct of [15, 20, 25, 30]) {
+        const r = computePromotions(
+          [{ lineId: "a", regularPriceMinorUnits: price, quantity: 1, categories: ["concentrate"] }],
+          [rule({ discountType: "percent", discountPercent: pct, targetCategories: ["concentrate"] })],
+        );
+        expect(r.totalSavingsMinorUnits, `$${price / 100} @ ${pct}%`).toBeLessThanOrEqual(
+          Math.ceil((price * pct) / 100),
+        );
+      }
+    }
+  });
+
+  it("the website cart rounds identically to the register", () => {
+    // Two independent implementations; a one-cent disagreement between the
+    // website quote and the till is a customer-service problem every time.
+    for (let price = 137; price <= 4000; price += 53) {
+      const cart = computeCartDiscounts(
+        [{ lineId: "a", regularPriceMinorUnits: price, quantity: 1, category: "concentrate" }],
+        "wednesday",
+      );
+      const engine = computePromotions(
+        [{ lineId: "a", regularPriceMinorUnits: price, quantity: 1, categories: ["concentrate"] }],
+        [
+          rule({
+            discountType: "threshold_spend",
+            promoKey: "daily.wednesday",
+            targetCategories: ["concentrate"],
+            config: seedConfigFor("daily.wednesday"),
+          } as Partial<EngineRule>),
+        ],
+      );
+      expect(cart.totalSavingsMinorUnits, `$${price / 100}`).toBe(engine.totalSavingsMinorUnits);
+    }
   });
 });
 
@@ -409,5 +600,213 @@ describe("bundle apportionment: whole cents, customer-favoured", () => {
     ];
     // 3 units, one group of 3, one free unit -> the cheapest ($1.00).
     expect(bundleTargetMinorUnits(lines, 3, 2)).toBe(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SLICE D2 - CARD/CART ADVERTISING PARITY
+//
+// Added because the mutation harness scored 19/22: the three surviving
+// mutations were all "make the product card advertise a discount the register
+// will not honour", and no test noticed. The struck card price is a PROMISE
+// about one item, alone, right now -- so it may never be lower than what the
+// cart charges for exactly that item.
+//
+// MEASURED at the time of writing: 0 over-advertisements across 6,370
+// weekday x category x price x variant combinations (down from 265).
+// ---------------------------------------------------------------------------
+describe("card/cart advertising parity (SLICE D2)", () => {
+  // A minimal menu item for card-preview assertions. Category and price are
+  // always explicit at the call site so an override can never be silently
+  // dropped (an earlier version took an `over` bag it never spread).
+  const baseItem = (category: string, priceMinorUnits: number) =>
+    ({
+      id: "x",
+      slug: "x",
+      name: "X",
+      brand: "Lifted",
+      category,
+      priceMinorUnits,
+    }) as unknown as Parameters<typeof menuCardDiscountForItem>[0];
+
+  const ALL_DAYS: StoreWeekday[] = [
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+  ];
+  const SWEEP_CATEGORIES = [
+    "flower", "preroll", "infused-preroll", "blunt", "preroll-pack", "concentrate",
+    "cartridge", "disposable-cartridge", "edible-solid", "edible-liquid", "rso",
+    "tincture", "topical", "merch",
+  ];
+  const SWEEP_PRICES = [100, 500, 1000, 2500, 3999, 4000, 5000, 9999, 10000, 14999, 15000, 20000, 50000];
+
+  it("a product card NEVER advertises a price lower than the cart charges", () => {
+    const seeds = seedRuleSnapshots();
+    const offenders: string[] = [];
+    let checked = 0;
+    for (const day of ALL_DAYS) {
+      const rules = activeSnapshotsFor(seeds, day);
+      for (const category of SWEEP_CATEGORIES) {
+        for (const price of SWEEP_PRICES) {
+          const item = baseItem(category, price);
+          const card = menuCardDiscountForItem(item, rules, day);
+          const advertised = card?.cardPreviewSalePriceMinorUnits ?? price;
+          const charged = computeCartDiscounts(
+            [
+              {
+                lineId: "x",
+                regularPriceMinorUnits: price,
+                quantity: 1,
+                category: category as DiscountCartLine["category"],
+                brand: "Lifted",
+              },
+            ],
+            day,
+          ).lines[0].unitPriceMinorUnits;
+          checked += 1;
+          if (advertised < charged) {
+            offenders.push(`${day}/${category}/$${price}: card=${advertised} cart=${charged}`);
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(1000);
+    expect(offenders).toEqual([]);
+  });
+
+  it("Wax Wednesday: a $40 cartridge card shows 20% off, exactly what it is charged", () => {
+    // The measured defect: card previewed $28.00 (30%) and the register
+    // charged $32.00 (20%) -- a $4.00 over-advertisement on every sub-$150 card.
+    const seeds = seedRuleSnapshots();
+    const rules = activeSnapshotsFor(seeds, "wednesday");
+    const item = baseItem("cartridge", 4000);
+    const card = menuCardDiscountForItem(item, rules, "wednesday");
+    expect(card).toBeDefined();
+    expect(card!.discountPercent).toBe(20);
+    expect(card!.cardPreviewSalePriceMinorUnits).toBe(3200);
+
+    // At $150 the top tier is genuinely guaranteed, so the card may show 30%.
+    const big = baseItem("cartridge", 15000);
+    const cardBig = menuCardDiscountForItem(big, rules, "wednesday");
+    expect(cardBig!.discountPercent).toBe(30);
+    expect(cardBig!.cardPreviewSalePriceMinorUnits).toBe(10500);
+  });
+
+  it("guaranteedPercentFor never exceeds the headline, and is the CHARGED percent for tiers", () => {
+    const seeds = seedRuleSnapshots();
+    const byDay = new Map(seeds.map((s) => [s.promoKey, s]));
+    const wed = byDay.get("daily.wednesday")!;
+    const cheap = baseItem("cartridge", 4000);
+    const rich = baseItem("cartridge", 15000);
+    // Base tier for a small basket, top tier once the threshold is truly met.
+    expect(guaranteedPercentFor(wed, cheap)).toBe(20);
+    expect(guaranteedPercentFor(wed, rich)).toBe(30);
+    expect(guaranteedPercentFor(wed, cheap)).toBeLessThanOrEqual(headlinePercentFor(wed));
+
+    // Quantity tiers: a card is ONE unit, so it can only promise the 1-unit tier.
+    const tue = byDay.get("daily.tuesday")!;
+    const preroll = baseItem("preroll", 1000);
+    expect(guaranteedPercentFor(tue, preroll)).toBe(20);
+
+    // Basket mechanics guarantee a lone item nothing at all.
+    const sun = byDay.get("daily.sunday")!;
+    const sat = byDay.get("daily.saturday")!;
+    expect(guaranteedPercentFor(sun, preroll)).toBe(0);
+    expect(guaranteedPercentFor(sat, preroll)).toBe(0);
+  });
+
+  it("Top Shelf Thursday never strikes a price on BRANDED MERCH (cart skips merch)", () => {
+    // ruleMatchesLine matched merch through the BRAND dimension, so a
+    // Lifted-branded t-shirt was struck 25% off while the cart charged full
+    // price. Merch is only ever discounted by an EXPLICIT merch category target.
+    const seeds = seedRuleSnapshots();
+    const rules = activeSnapshotsFor(seeds, "thursday");
+    const merch = baseItem("merch", 2000);
+    expect(menuCardDiscountForItem(merch, rules, "thursday")).toBeUndefined();
+
+    // The cannabis item from the same featured brand still gets its 25%.
+    const flower = baseItem("flower", 4000);
+    const card = menuCardDiscountForItem(flower, rules, "thursday");
+    expect(card!.discountPercent).toBe(25);
+    expect(card!.cardPreviewSalePriceMinorUnits).toBe(3000);
+  });
+
+  it("a TITLE COLLISION between two published rules cannot inflate the card", () => {
+    // SELF-REVIEW FIX (part 6d): the guarantee used to be joined to its rule by
+    // TITLE. Nothing enforces title uniqueness -- staff publish promotions from
+    // /admin/promotions -- and a collision would let the card read a guarantee
+    // from a rule that did not produce the deal. The join is now by rule
+    // IDENTITY (ruleMatchesLine), so this basket of two same-titled rules is
+    // resolved correctly.
+    const seeds = seedRuleSnapshots();
+    const wed = seeds.find((s) => s.promoKey === "daily.wednesday")!;
+    // A second ACTIVE rule sharing Wax Wednesday's title, targeting a category
+    // the cartridge does NOT belong to, and offering a fat flat percent.
+    const impostor = {
+      ...wed,
+      id: "db-impostor",
+      promoKey: "custom.impostor",
+      discountType: "percent",
+      discountPercent: 60,
+      config: {},
+      targetCategories: ["edible-solid"],
+      storewide: false,
+    } as unknown as typeof wed;
+
+    const item = baseItem("cartridge", 4000);
+    const card = menuCardDiscountForItem(item, [wed, impostor], "wednesday");
+    // The cartridge is only ever eligible for the 20% base tier of Wax
+    // Wednesday; the impostor cannot lend it a 60% guarantee.
+    expect(card).toBeDefined();
+    expect(card!.discountPercent).toBe(20);
+    expect(card!.cardPreviewSalePriceMinorUnits).toBe(3200);
+
+    // And the invariant itself: the card still never beats the register.
+    const charged = computeCartDiscounts(
+      [
+        {
+          lineId: "x",
+          regularPriceMinorUnits: 4000,
+          quantity: 1,
+          category: "cartridge",
+          brand: "Lifted",
+        },
+      ],
+      "wednesday",
+    ).lines[0].unitPriceMinorUnits;
+    expect(card!.cardPreviewSalePriceMinorUnits).toBeGreaterThanOrEqual(charged);
+  });
+
+  it("an EXPLICIT merch category target still discounts merch (guard is not a blanket ban)", () => {
+    // The merch BOGO depends on this: targetCategories includes "merch", so
+    // catMatch is true and the guard lets it through.
+    const rule = {
+      id: "r1",
+      storewide: false,
+      targetCategories: ["merch"],
+      targetBrands: [],
+      targetProductKeys: [],
+      excludeCategories: [],
+      excludeBrands: [],
+      excludeProductKeys: [],
+    } as unknown as Parameters<typeof ruleMatchesLine>[0];
+    const merchLine = {
+      lineId: "m",
+      regularPriceMinorUnits: 2000,
+      quantity: 1,
+      categories: ["merch"],
+      brand: "Lifted",
+      productKey: "m",
+      variantLabel: null,
+      costMinorUnits: null,
+    } as unknown as Parameters<typeof ruleMatchesLine>[1];
+    expect(ruleMatchesLine(rule, merchLine)).toBe(true);
+
+    // ...but a BRAND-only cannabis rule does NOT sweep the same merch in.
+    const brandRule = {
+      ...(rule as object),
+      targetCategories: ["flower"],
+      targetBrands: ["Lifted"],
+    } as unknown as Parameters<typeof ruleMatchesLine>[0];
+    expect(ruleMatchesLine(brandRule, merchLine)).toBe(false);
   });
 });

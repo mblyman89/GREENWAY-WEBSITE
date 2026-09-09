@@ -54,13 +54,15 @@ describe("deal-badge-core (SLICE 96)", () => {
     expect(menuCardBadgeForItem(mk("d", { category: "edible-liquid" }), rulesFor("monday"), "monday")).toBe(
       "Munchie Monday · 25% off",
     );
-    // The EXACT badge Michael saw on the rail card — now on every Tuesday preroll/blunt.
+    // The badge Michael saw on the rail card — now on every Tuesday
+    // preroll/blunt, and SLICE D1 spells out that "4 for 3" IS 25% so the copy
+    // states the percent the register actually charges at 4+ units.
     expect(menuCardBadgeForItem(mk("p", { category: "preroll" }), rulesFor("tuesday"), "tuesday")).toBe(
-      "Doobie Tuesday · 20% off · or 4 for 3",
+      "Doobie Tuesday · 20% off · or 4 for 3 (25%)",
     );
     expect(
       menuCardBadgeForItem(mk("ib", { category: "infused-blunt" }), rulesFor("tuesday"), "tuesday"),
-    ).toBe("Doobie Tuesday · 20% off · or 4 for 3");
+    ).toBe("Doobie Tuesday · 20% off · or 4 for 3 (25%)");
     expect(menuCardBadgeForItem(mk("f"), rulesFor("friday"), "friday")).toBe(
       "Ounce Friday · up to 30% by the ounce",
     );

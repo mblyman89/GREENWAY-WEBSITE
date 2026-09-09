@@ -202,7 +202,9 @@ export function getActiveMenuDiscount(
       return buildDiscount(item, {
         label: "Wax Wednesday",
         discountPercent: 30,
-        bonusNote: "up to 30% off",
+        // SLICE D2: 20% off everything eligible, 30% once the basket passes
+        // $150. The card cannot know the basket total, so it states both.
+        bonusNote: "20% off \u00b7 30% at $150+",
         perItemSalePrice: false,
       });
     }

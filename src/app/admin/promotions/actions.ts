@@ -259,7 +259,11 @@ function parseTierRows(formData: FormData, prefix: string): { at: number; percen
   for (let i = 0; i < Math.min(ats.length, pcts.length); i++) {
     const at = ats[i];
     const percent = pcts[i];
-    if (Number.isFinite(at) && at > 0 && Number.isFinite(percent) && percent > 0) {
+    // SLICE D2: `at >= 0`, not `at > 0`. A threshold of ZERO means "no minimum"
+    // and is a real tier - Wax Wednesday's base rate is { at: 0, percent: 20 }.
+    // With `at > 0` the base tier was silently dropped whenever staff saved the
+    // promotion, collapsing the deal to "nothing below $150".
+    if (Number.isFinite(at) && at >= 0 && Number.isFinite(percent) && percent > 0) {
       tiers.push({ at, percent: Math.min(99, Math.round(percent)) });
     }
   }

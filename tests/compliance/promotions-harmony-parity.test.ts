@@ -275,7 +275,20 @@ describe("snapshot mechanics", () => {
     for (let d = 0 as 0 | 1 | 2 | 3 | 4 | 5 | 6; d <= 6; d++) {
       expect(byDay.get(d as 0)).toBeDefined();
     }
-    expect(byDay.get(2)?.config.eitherOr).toEqual({ flatPercent: 20, bundle: { n: 4, m: 3 } });
+    // SLICE D1/D2: Tuesday and Wednesday are now TIERED, not either/or. The
+    // either/or mechanic picked the option with the SMALLER savings, so a
+    // 4-preroll basket got 20% when 25% was advertised; the tiers deliver the
+    // advertised percent at every quantity. The seed is the single source of
+    // truth (seedConfigFor derives these from DAILY_DEAL_SEEDS).
+    expect(byDay.get(2)?.config.eitherOr).toBeUndefined();
+    expect(byDay.get(2)?.config.qtyTiers).toEqual([
+      { at: 1, percent: 20 },
+      { at: 4, percent: 25 },
+    ]);
+    expect(byDay.get(3)?.config.spendTiers).toEqual([
+      { at: 0, percent: 20 },
+      { at: 15000, percent: 30 },
+    ]);
     expect(byDay.get(6)?.config.basketTopItem).toEqual({ topPercent: 30, restPercent: 15 });
     expect(byDay.get(0)?.config.basketNforM).toEqual({ n: 3, m: 2 });
   });
@@ -410,9 +423,12 @@ describe("presentation derivation", () => {
   it("headlinePercentFor + offerLabelFor derive honest copy from configs", () => {
     const byDay = new Map(seeds.map((s) => [s.weekday, s]));
     expect(headlinePercentFor(byDay.get(1)!)).toBe(25); // Munchie Monday
-    expect(headlinePercentFor(byDay.get(2)!)).toBe(20); // Doobie (either/or flat)
+    expect(headlinePercentFor(byDay.get(2)!)).toBe(20); // Doobie: authored headline
+    expect(headlinePercentFor(byDay.get(3)!)).toBe(30); // Wax Wednesday best case
     expect(headlinePercentFor(byDay.get(6)!)).toBe(30); // Saturday top item
-    expect(offerLabelFor(byDay.get(2)!)).toBe("20% off · or 4 for 3");
+    // SLICE D1/D2: the tier ranges now render the honest span of each offer.
+    expect(offerLabelFor(byDay.get(2)!)).toBe("20–25% off");
+    expect(offerLabelFor(byDay.get(3)!)).toBe("20–30% off");
     expect(offerLabelFor(byDay.get(6)!)).toBe("15–30% off");
     expect(offerLabelFor(byDay.get(0)!)).toBe("3 for 2");
   });

@@ -31,6 +31,10 @@ import type { GreenwayCategory } from "@/lib/leafly/types";
 import type { StoreWeekday } from "@/lib/specials/daily-deals";
 import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 import {
+  apportionBundleSavings,
+  bundleTargetMinorUnits,
+} from "@/lib/promotions/bundle-apportionment-core";
+import {
   munchieMondayCategories,
   ounceFridayCategories,
   topShelfThursdayBrands,
@@ -155,12 +159,18 @@ function clampLineUnit(line: DiscountCartLine, unitPrice: number): number {
   return Math.max(statutory, costFloorForLine(line));
 }
 
-/** Wax Wednesday spend tier (eligible regular spend, minor units) -> percent. */
-function waxWednesdayPercentForSpend(spendMinorUnits: number): number {
+/**
+ * Wax Wednesday spend tier (eligible regular spend, minor units) -> percent.
+ *
+ * SLICE D2: TWO tiers, matching the sign in the window. /specials advertises
+ * "All concentrates and vapes are 20% off" and "Get 30% off when you buy $150
+ * or more before tax", but this function ran a 15/20/30 ladder at $50/$100/$150
+ * and returned ZERO below $50 - so a single $40 cartridge was advertised at 20%
+ * off and rang up at full price.
+ */
+export function waxWednesdayPercentForSpend(spendMinorUnits: number): number {
   if (spendMinorUnits >= 15000) return 30; // $150+
-  if (spendMinorUnits >= 10000) return 20; // $100+
-  if (spendMinorUnits >= 5000) return 15; // $50+
-  return 0;
+  return spendMinorUnits > 0 ? 20 : 0; // every eligible basket gets 20%
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +194,12 @@ function applyPercentLine(line: DiscountCartLine, percent: number, label: string
   // discounted to $0. Percent is also capped below 100 for cannabis lines.
   // CCRS COST FLOOR: never below the acquisition cost when the cost is known.
   const cappedPercent = Math.min(percent, 99);
-  const raw = round(line.regularPriceMinorUnits * (1 - cappedPercent / 100));
+  // SLICE D2: exact integer maths, matching discount-engine-core.ts exactly -
+  // the website cart holds its own copy of this arithmetic and a one-cent
+  // disagreement with the till is a customer-service problem every time.
+  // price * percent is an exact integer product; the single division is the
+  // only rounding step and Math.ceil sends it the customer's way.
+  const raw = line.regularPriceMinorUnits - Math.ceil((line.regularPriceMinorUnits * cappedPercent) / 100);
   const discounted = clampLineUnit(line, raw);
   return {
     lineId: line.lineId,
@@ -352,22 +367,40 @@ export function computeCartDiscounts(
       units.sort((a, b) => a.price - b.price);
       const groupCount = Math.floor(units.length / 3);
       if (groupCount <= 0 || eligibleRegularTotal <= 0) break;
-      let targetSavings = 0;
-      for (let i = 0; i < groupCount; i += 1) targetSavings += units[i].price;
-      // Equivalent basket-wide percent (capped so no unit ever reaches $0).
-      const percent = Math.min(99, Math.floor((targetSavings / eligibleRegularTotal) * 100));
-      if (percent <= 0) break;
+
+      // SLICE D2: exact-cent apportionment via the SHARED core, not a floored
+      // basket percent. The old code converted the savings target into
+      // floor(target / total * 100), which on a $30 + $22 + $10 basket paid
+      // $9.92 against an advertised $10.00 3-for-2 - and disagreed with the
+      // register, which had already been corrected in D1. Calling the same
+      // module the engine calls is what stops the two drifting apart again.
+      const apportionLines = eligible.map((line) => ({
+        lineId: line.lineId,
+        regularPriceMinorUnits: line.regularPriceMinorUnits,
+        quantity: line.quantity,
+        floorMinorUnits: clampLineUnit(line, 0),
+      }));
+      const targetSavings = bundleTargetMinorUnits(apportionLines, 3, 2);
+      if (targetSavings <= 0) break;
+      const spread = apportionBundleSavings(apportionLines, targetSavings);
+      if (spread.placedMinorUnits <= 0) break;
+
       for (const line of eligible) {
-        const raw = round(line.regularPriceMinorUnits * (1 - percent / 100));
-        const discounted = clampLineUnit(line, raw);
+        const off = spread.perUnitOff.get(line.lineId) ?? 0;
+        if (off <= 0) continue;
+        const discounted = clampLineUnit(line, line.regularPriceMinorUnits - off);
+        const appliedPercent =
+          line.regularPriceMinorUnits > 0
+            ? Math.round(((line.regularPriceMinorUnits - discounted) / line.regularPriceMinorUnits) * 100)
+            : 0;
         resultMap.set(line.lineId, {
           lineId: line.lineId,
           unitPriceMinorUnits: discounted,
           regularPriceMinorUnits: line.regularPriceMinorUnits,
           quantity: line.quantity,
           unitSavingsMinorUnits: line.regularPriceMinorUnits - discounted,
-          appliedLabel: `Ice Cream Sunday · 3-for-2 equivalent (${percent}% off basket)`,
-          appliedPercent: percent,
+          appliedLabel: "Ice Cream Sunday · buy 3, pay for 2",
+          appliedPercent,
         });
       }
       break;
