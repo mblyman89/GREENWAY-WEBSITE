@@ -183,7 +183,9 @@ export async function savePricingSettingsAction(fd: FormData): Promise<ActionRes
  * D-64: this action used to call `resetOperationalData()`, which called the
  * superseded `reset_operational_data()` DB function (0069/0097/0140). That
  * function deletes 66 tables; the decision layer in
- * `src/lib/accounting/factory-reset-core.ts` classifies 138 as WIPE. The gap
+ * `src/lib/accounting/factory-reset-core.ts` classified 138 as WIPE at the time
+ * of that measurement (134 after D-65 carved out the connection tables, which
+ * does not change the D-64 finding). The gap
  * was 72 tables including the ENTIRE general ledger and the year-to-date
  * payroll figures a W-2 is computed from — the exact records D-62 was raised
  * about. The SQL fix (migration 0209) had been merged for 15 migrations

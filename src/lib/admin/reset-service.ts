@@ -20,6 +20,12 @@
  *     tables reset_operational_data() deletes .....  66
  *     tables it would have left behind ............  72
  *
+ * Those three figures are the D-64 measurement and are left as measured. The
+ * WIPE count later moved to 134 when D-65 carved four connection tables out
+ * (plaid_items, plaid_accounts, atm_connection, manual_loans) so that a
+ * rehearsal no longer costs a re-link. The live counts are computed from the
+ * schema at render time; no screen quotes a number from this comment.
+ *
  * Among the 72: gl_journals, gl_journal_lines, gl_periods, gl_audit_events,
  * gl_opening_balances, gl_bank_matches, gl_bank_reconciliations,
  * gl_override_log, gl_payroll_allocations, gl_template_changes,
