@@ -47,14 +47,26 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const result = await listRecentTransactions();
+  // SEARCH IS SERVER-SIDE. The panel used to fetch the newest 50 rows and
+  // filter them in the browser, so a search could only ever find a sale from
+  // the last half-day — anything older answered "Nothing matches" even though
+  // it was inside the return window. The query now reaches the database, which
+  // scans the whole window and returns the newest 50 MATCHES.
+  const query = req.nextUrl.searchParams.get("q") ?? "";
+
+  const result = await listRecentTransactions(query);
   if (!result.ok) {
     // A failed read is reported as a failure, never as an empty history —
     // "no sales" and "could not look" are different answers.
     return NextResponse.json({ error: result.error }, { status: 503 });
   }
 
-  return NextResponse.json({ transactions: result.transactions });
+  return NextResponse.json({
+    transactions: result.transactions,
+    // Told to the user verbatim when true: "no results" and "we stopped
+    // looking" must never look the same at the counter.
+    scanTruncated: result.scanTruncated,
+  });
 }
 
 /**

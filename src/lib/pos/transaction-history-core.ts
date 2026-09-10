@@ -71,6 +71,15 @@ export const HISTORY_ITEMS_PREVIEW = 3;
 export const SEARCH_MIN_CHARS = 2;
 
 /**
+ * How long to wait after the last keystroke before asking the server.
+ *
+ * Search is server-side now, so every keystroke is a database read. 250ms is
+ * the usual POS figure: below human "did that do anything?" perception, but
+ * long enough that typing a customer name is one query rather than nine.
+ */
+export const HISTORY_SEARCH_DEBOUNCE_MS = 250;
+
+/**
  * Days of history the panel covers.
  *
  * This is deliberately the SAME window `lookupSaleByReceipt` scans
@@ -150,6 +159,18 @@ export type TransactionRow = {
   items: string[];
   /** Lines beyond the preview cap. 0 = none. */
   moreCount: number;
+  /**
+   * EVERY product name on the sale, lowercased, for searching only — never
+   * rendered.
+   *
+   * `items` is deliberately truncated to HISTORY_ITEMS_PREVIEW so the row
+   * stays readable on a counter-facing screen. Search used to read that same
+   * truncated array, so on a 7-item basket items 4-7 were unfindable and the
+   * box answered "Nothing matches" for a product that was genuinely on the
+   * receipt. Display and search are different jobs; they now have different
+   * fields.
+   */
+  searchTerms: string[];
 };
 
 // ── Derivations ──────────────────────────────────────────────────────────────
@@ -241,6 +262,9 @@ export function shapeTransaction(input: TransactionInput): TransactionRow {
     status,
     items: names.slice(0, HISTORY_ITEMS_PREVIEW),
     moreCount: Math.max(0, names.length - HISTORY_ITEMS_PREVIEW),
+    // Search sees the WHOLE basket, display shows the first few. Lowercased
+    // once here so the filter does not re-lower every name on every keystroke.
+    searchTerms: names.map((n) => n.toLowerCase()),
   };
 }
 
@@ -265,8 +289,55 @@ export function searchTransactions(
     if (r.orderNumber.toLowerCase().includes(q)) return true;
     if (r.customerLabel.toLowerCase().includes(q)) return true;
     if (r.employeeName.toLowerCase().includes(q)) return true;
-    return r.items.some((i) => i.toLowerCase().includes(q));
+    // searchTerms carries EVERY product name (already lowercased); r.items is
+    // the truncated display preview and must never be the search source.
+    // Fall back to items only for rows shaped before searchTerms existed.
+    const terms = r.searchTerms ?? r.items.map((i) => i.toLowerCase());
+    return terms.some((i) => i.includes(q));
   });
+}
+
+// ── Client wiring (pure) ────────────────────────────────────────────────────
+//
+// The register's search plumbing lives here rather than inline in the modal
+// for one reason: inline JSX cannot be tested, only grepped. A grep proves a
+// string is present, not that the behaviour is right. These two functions are
+// the whole contract between the panel and the API, and they are ordinary
+// functions with ordinary tests.
+
+/**
+ * The URL the register should fetch for a given search box value.
+ *
+ * Encoding is not optional. A product called "Tom & Jerry #4" concatenated
+ * straight into a query string truncates at the "#" and the server sees a
+ * different search than the one that was typed — which looks exactly like
+ * "search is broken" while every log line says it worked.
+ *
+ * A blank or whitespace-only box is browsing, so it asks for the plain list.
+ */
+export function historyRequestPath(query: string): string {
+  const q = (query ?? "").trim();
+  if (q.length === 0) return "/api/pos/transactions";
+  return `/api/pos/transactions?q=${encodeURIComponent(q)}`;
+}
+
+/**
+ * Read the API's answer into the two facts the panel renders.
+ *
+ * `scanTruncated` defaults to FALSE only when the server did not say. It is
+ * never invented as true, and a true is never downgraded: "we stopped
+ * looking" and "there is nothing there" are different answers at the counter,
+ * and quietly merging them is how a returnable sale gets refused.
+ */
+export function readHistoryResponse(json: unknown): {
+  transactions: TransactionRow[];
+  scanTruncated: boolean;
+} {
+  const o = (json ?? {}) as Record<string, unknown>;
+  return {
+    transactions: Array.isArray(o.transactions) ? (o.transactions as TransactionRow[]) : [],
+    scanTruncated: o.scanTruncated === true,
+  };
 }
 
 /**
@@ -449,6 +520,44 @@ export function __runTransactionHistoryCoreTests(): void {
   });
   ok(many.items.length === HISTORY_ITEMS_PREVIEW, "item preview is capped");
   ok(many.moreCount === 2, "overflow is counted, not dropped");
+
+  // The DISPLAY preview is capped, but SEARCH must still see the whole basket.
+  // Before this was split, "P5" was unfindable on a 5-item sale and the box
+  // said "Nothing matches" for a product that was on the receipt.
+  ok(many.searchTerms.length === 5, "searchTerms carries every item, not the preview");
+  ok(!many.items.includes("P5"), "P5 is beyond the display preview");
+  ok(searchTransactions([many], "P5").length === 1, "an item past the preview is findable");
+  ok(searchTransactions([many], "p5").length === 1, "past-preview search is case-insensitive");
+  ok(searchTransactions([many], "P1").length === 1, "an item inside the preview still matches");
+
+  // ── client wiring ──
+  ok(historyRequestPath("") === "/api/pos/transactions", "a blank box browses");
+  ok(historyRequestPath("   ") === "/api/pos/transactions", "whitespace is still browsing");
+  ok(historyRequestPath("kush").includes("q=kush"), "a query reaches the URL");
+  // "&" and "#" would otherwise end the query string early and the server
+  // would search for something the customer never typed.
+  ok(!historyRequestPath("A & B").includes("& "), "the query is encoded");
+  ok(!historyRequestPath("A#4").includes("#"), "a hash cannot truncate the URL");
+  ok(
+    new URL(historyRequestPath("Tom & Jerry #4"), "http://x").searchParams.get("q") ===
+      "Tom & Jerry #4",
+    "the encoded query round-trips exactly",
+  );
+
+  ok(readHistoryResponse(null).transactions.length === 0, "a null body is an empty list");
+  ok(readHistoryResponse(null).scanTruncated === false, "a null body raises no warning");
+  ok(
+    readHistoryResponse({ transactions: [], scanTruncated: true }).scanTruncated === true,
+    "a real truncation is passed through, never swallowed",
+  );
+  ok(
+    readHistoryResponse({ transactions: [], scanTruncated: "yes" }).scanTruncated === false,
+    "only a boolean true warns — no crying wolf on a truthy value",
+  );
+  ok(
+    readHistoryResponse({ transactions: "nope" }).transactions.length === 0,
+    "a non-array payload never reaches the renderer",
+  );
 
   // ── search ──
   const rows = [row, walkIn, voided];
