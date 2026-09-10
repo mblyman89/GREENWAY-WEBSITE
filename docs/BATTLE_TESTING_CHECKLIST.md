@@ -17,10 +17,11 @@ Companion to **`docs/BATTLE_TESTING_GUIDE.md`**, which explains *how to think* a
 
 Everything in this checklist is safe to run hard because the factory reset can clear it. That makes the reset the safety net under the whole exercise, and an untested safety net is a decoration. Test it once, before the rest.
 
-- [ ] Open **Settings → Factory reset**. Read the two lists — the screen now counts the real tables (138 emptied / 120 kept) rather than describing them from memory
+- [ ] Open **Settings → Factory reset**. Read the two lists — the screen counts the real tables live (134 emptied / 124 kept as of D-65) rather than describing them from memory
+- [ ] Confirm the briefing says your **connections are kept**: Plaid bank/card links, the ATM portal login, crypto wallets, and hand-entered loan terms. After the reset, check the ATM and Banking screens still show "connected" — you should not have to re-link anything
 - [ ] Check the four "before you press it" figures: completed sales, CCRS files, excise returns filed, posted journal entries
 - [ ] Tick the retention attestation, type `ERASE ALL TEST DATA` exactly, and run it
-- [ ] Confirm the success line reports rows removed across ~138 tables **and mentions the general ledger**
+- [ ] Confirm the success line reports rows removed across ~134 tables **and mentions the general ledger**
 - [ ] Confirm no `WARNING` follows it — the post-reset check runs automatically and reports only problems
 - [ ] Spot-check that it truly emptied: Reports show zero, register history is empty, the books show a blank trial balance
 - [ ] Spot-check that it truly kept: your login still works, the chart of accounts is intact, the knowledge base is intact, vendors and brands are intact

@@ -423,19 +423,26 @@ begin
   delete from public.customers where true;                 get diagnostics n = row_count; counts := counts || jsonb_build_object('customers', n);
 
   -- ══ 8. Banking, ATM, crypto and loans ════════════════════════════════════
+  -- The ACTIVITY clears; the CONNECTIONS stay (D-65). Kept on purpose in this
+  -- section: plaid_items, plaid_accounts, atm_connection and manual_loans, plus
+  -- the crypto wallets/assets/rules carved out earlier. Their sync cursors are
+  -- rewound at the end of the section so kept logins cannot hide lost history.
   delete from public.plaid_webhook_events where true;      get diagnostics n = row_count; counts := counts || jsonb_build_object('plaid_webhook_events', n);
   delete from public.plaid_holdings where true;            get diagnostics n = row_count; counts := counts || jsonb_build_object('plaid_holdings', n);
   delete from public.plaid_mortgages where true;           get diagnostics n = row_count; counts := counts || jsonb_build_object('plaid_mortgages', n);
   delete from public.plaid_transactions where true;        get diagnostics n = row_count; counts := counts || jsonb_build_object('plaid_transactions', n);
-  delete from public.plaid_accounts where true;            get diagnostics n = row_count; counts := counts || jsonb_build_object('plaid_accounts', n);
-  delete from public.plaid_items where true;               get diagnostics n = row_count; counts := counts || jsonb_build_object('plaid_items', n);
+  -- plaid_accounts and plaid_items are KEPT (D-65). They are the LINK, not the
+  -- activity: the encrypted access token, the institution, and the owner's own
+  -- main/atm/credit role assignment. Deleting them would force a fresh Plaid
+  -- Link with bank credentials and MFA per institution after every rehearsal.
 
   delete from public.atm_reconciliation where true;        get diagnostics n = row_count; counts := counts || jsonb_build_object('atm_reconciliation', n);
   delete from public.atm_settlements where true;           get diagnostics n = row_count; counts := counts || jsonb_build_object('atm_settlements', n);
   delete from public.atm_cash_loads where true;            get diagnostics n = row_count; counts := counts || jsonb_build_object('atm_cash_loads', n);
   delete from public.atm_transactions where true;          get diagnostics n = row_count; counts := counts || jsonb_build_object('atm_transactions', n);
   delete from public.atm_terminal_status where true;       get diagnostics n = row_count; counts := counts || jsonb_build_object('atm_terminal_status', n);
-  delete from public.atm_connection where true;            get diagnostics n = row_count; counts := counts || jsonb_build_object('atm_connection', n);
+  -- atm_connection is KEPT (D-65): the encrypted PAI login, terminal HG26499
+  -- and the discovered report endpoints. Re-discovering those is a manual job.
 
   delete from public.crypto_tx_classifications where true; get diagnostics n = row_count; counts := counts || jsonb_build_object('crypto_tx_classifications', n);
   delete from public.crypto_transfer_matches where true;   get diagnostics n = row_count; counts := counts || jsonb_build_object('crypto_transfer_matches', n);
@@ -445,7 +452,31 @@ begin
   delete from public.crypto_sync_state where true;         get diagnostics n = row_count; counts := counts || jsonb_build_object('crypto_sync_state', n);
 
   delete from public.manual_loan_payments where true;      get diagnostics n = row_count; counts := counts || jsonb_build_object('manual_loan_payments', n);
-  delete from public.manual_loans where true;              get diagnostics n = row_count; counts := counts || jsonb_build_object('manual_loans', n);
+  -- manual_loans is KEPT (D-65): terms typed off the owner's paperwork
+  -- (principal, rate in milli-percent, term, dates). Nothing re-derives them.
+
+  -- ── Rewind the readers on the connections we kept ────────────────────────
+  -- D-65. Plaid's /transactions/sync only ever returns what changed SINCE the
+  -- saved cursor. Keeping plaid_items while emptying plaid_transactions would
+  -- therefore leave the bank connected, healthy, and permanently missing its
+  -- history: Plaid resumes past the deleted rows and never re-sends them, and
+  -- nothing raises an error. Clearing the cursor restores "full backfill" (see
+  -- initSyncState in src/lib/plaid/sync-core.ts, where null means from-scratch).
+  -- These are UPDATEs, not deletes, so they change no row count above.
+  update public.plaid_items
+     set transactions_cursor   = null,
+         last_successful_sync  = null
+   where transactions_cursor is not null
+      or last_successful_sync is not null;
+
+  -- The PAI pull is date-ranged rather than cursor-based, so this one is
+  -- honesty rather than correctness: do not advertise a successful sync for
+  -- data that no longer exists.
+  update public.atm_connection
+     set last_sync_at = null,
+         last_error   = null
+   where last_sync_at is not null
+      or last_error is not null;
 
   -- ══ 9. THE BOOKS — what the old reset never touched ══════════════════════
   -- gl_bank_matches and gl_opening_balances reference gl_journals ON DELETE
@@ -534,7 +565,7 @@ begin
 end $$;
 
 comment on function public.gl_factory_reset(text, boolean) is
-  '0209 (books-80): THE factory reset. Owner-only, requires the typed phrase ERASE ALL TEST DATA, and empties every table classified WIPE by src/lib/accounting/factory-reset-core.ts — INCLUDING the general ledger, which reset_operational_data() (0069/0097/0140) never touched because the ledger was born 32 migrations later (D-62). Keeps the chart of accounts, entities, shareholders, settings, integration credentials, the knowledge base, curated catalogue, people, logins and the audit log. Retention guard cites WAC 314-55-087(1) FIVE years per WSR 24-19-040 eff. 10/12/2024 (the old guard said three — D-63). Immutability is not weakened: it gains one transaction-local exception via gl_factory_reset_active().';
+  '0209 (books-80): THE factory reset. Owner-only, requires the typed phrase ERASE ALL TEST DATA, and empties every table classified WIPE by src/lib/accounting/factory-reset-core.ts — INCLUDING the general ledger, which reset_operational_data() (0069/0097/0140) never touched because the ledger was born 32 migrations later (D-62). Keeps the chart of accounts, entities, shareholders, settings, integration credentials, the knowledge base, curated catalogue, people, logins and the audit log. Also keeps the CONNECTIONS themselves (D-65) — plaid_items, plaid_accounts, atm_connection, manual_loans and the crypto wallets/assets/rules — so a rehearsal never costs a re-link through Plaid MFA or a re-entry of the PAI password; their activity still clears, and their sync cursors are rewound so the wiped history genuinely re-downloads. Retention guard cites WAC 314-55-087(1) FIVE years per WSR 24-19-040 eff. 10/12/2024 (the old guard said three — D-63). Immutability is not weakened: it gains one transaction-local exception via gl_factory_reset_active().';
 
 revoke all on function public.gl_factory_reset(text, boolean) from public;
 grant execute on function public.gl_factory_reset(text, boolean) to authenticated, service_role;

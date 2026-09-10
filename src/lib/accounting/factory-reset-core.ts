@@ -558,8 +558,48 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "push_subscriptions", disposition: "KEEP", because: "Devices registered for compliance alerts." },
 
   // ── Money in and out ──────────────────────────────────────────────────────
-  { table: "manual_loans", disposition: "WIPE", because: "Test loans entered by hand." },
-  { table: "manual_loan_payments", disposition: "WIPE", because: "Test payments against those loans." },
+  // ── Connections: the logins, not the activity ────────────────────────────
+  // D-65. The `atm_` and `plaid_` FAMILIES are WIPE, and that was right for the
+  // rows those feeds PRODUCE. It was wrong for the rows that ARE the feed. A
+  // reset that empties atm_connection and plaid_items does not just clear test
+  // data, it logs you out of PAI and unlinks the bank — meaning a fresh Plaid
+  // Link flow with bank credentials and MFA per institution, and re-entering
+  // the PAI portal password, before any of it can be used again.
+  //
+  // The line drawn here is CONNECTION vs ACTIVITY:
+  //   KEEP  — credentials, institution links, account identity, owner-typed
+  //           terms. Things only you can supply.
+  //   WIPE  — settlements, transactions, balances, snapshots, webhooks. Things
+  //           the connection re-fetches on its own.
+  //
+  // Every one of these is a specific TABLE rule, which classifyTable() checks
+  // BEFORE the family prefix. That is deliberate: it makes each carve-out a
+  // decision on the record, not an accident of naming.
+  {
+    table: "atm_connection",
+    disposition: "KEEP",
+    because:
+      "Your PAI Reports login (encrypted), the terminal id HG26499 and the discovered report endpoints. Wiping it logs you out of the ATM portal and throws away the endpoint discovery, so the ATM feed would have to be set up from scratch.",
+  },
+  {
+    table: "plaid_items",
+    disposition: "KEEP",
+    because:
+      "The linked bank and card logins themselves — the encrypted Plaid access token and institution. Wiping it unlinks Timberland and Citi, and re-linking means running Plaid Link again with bank credentials and multi-factor codes for every institution.",
+  },
+  {
+    table: "plaid_accounts",
+    disposition: "KEEP",
+    because:
+      "Which accounts exist under each link and, critically, the role YOU assigned to each one (main, atm, credit). That mapping is a judgement of yours, not data Plaid returns; losing it would silently mis-file the next sync until you re-picked every account.",
+  },
+  {
+    table: "manual_loans",
+    disposition: "KEEP",
+    because:
+      "Loan terms you typed in by hand — principal, rate to the thousandth of a percent, term, first payment and maturity. Nothing re-derives these; they came off your paperwork and would have to be entered again from it.",
+  },
+  { table: "manual_loan_payments", disposition: "WIPE", because: "Test payments recorded against those loans. The loan itself survives; only the payment activity clears." },
   // NOTE: there is deliberately NO rule for `secret_ledger`. An early draft of
   // this file had one, because my first table extraction used a grep that did
   // not strip SQL comments, and 0175_gl_trial_balance.sql:425 mentions
@@ -869,6 +909,7 @@ export function describeResetPlan(plan: ResetPlan): ResetBriefing {
       "Emptied: everything that records something that happened — your test sales, test inventory, test deliveries, test payroll, test bank and ATM activity, and every journal entry on the books. When it finishes, your trial balance is blank and every report reads zero.",
       "Left alone: everything that describes your business rather than recording an event — your chart of accounts, the four entities, the shareholder register, tax rates, licence details, settings, saved integration keys, the cannabis knowledge base, your curated catalogue, vendors, brands, website content, your staff and your own login.",
       "Two things are kept on purpose that you might expect to be wiped. The audit log stays, because it is the record that the reset happened at all, and erasing it would erase the evidence. Your saved integration credentials stay, because wiping them would send you hunting through hidden Vercel keys — the exact job you said you did not want to do.",
+      "Your connections are also kept, so a rehearsal never costs you a re-link: the bank and card links from Plaid including which account you marked main, ATM and credit; the ATM portal login, terminal and discovered reports; your crypto wallets and the rules and confirmations you set; and the loan terms you typed in by hand. What those connections FETCHED is still erased — every bank transaction, ATM settlement, cash load, wallet balance and loan payment goes. Because the history is erased, the reset also rewinds each connection's sync position back to the beginning, so the next sync downloads the full history again instead of resuming past it and leaving a permanent hole.",
       `One limit: once you have made a real sale, filed a real return, or posted a real journal entry, ${RETENTION_CITE} requires those records for a ${RETENTION_YEARS}-year period. The reset will then refuse until you export everything and confirm in writing that you accept the destruction.`,
       `Three things this cannot reach, because it works table by table. ${RESET_BLIND_SPOTS.map((b) => b.limit).join(" ")} None of the three can put a wrong number on a report or a tax form.`,
     ],
@@ -1035,6 +1076,41 @@ export const WIPE_TABLES_WITH_STORAGE_POINTERS = [
   "sage_import_uploads",
 ] as const;
 
+/**
+ * D-65, the second half. Keeping a connection while wiping the rows it fetched
+ * creates a trap that is INVISIBLE until you go looking for missing history.
+ *
+ * Plaid's /transactions/sync is a cursor protocol: you send the cursor you
+ * saved last time and Plaid replies with everything that changed SINCE it. It
+ * never re-sends what it already gave you. `initSyncState` in
+ * src/lib/plaid/sync-core.ts makes that explicit — a null or empty cursor means
+ * "full history backfill", a saved cursor means "resume".
+ *
+ * So if plaid_items survives a reset with its `transactions_cursor` intact
+ * while plaid_transactions is emptied, the next sync resumes from the end and
+ * returns almost nothing. The transactions are gone from our database and Plaid
+ * will not send them again. The screen shows a healthy, connected bank with no
+ * transactions in it, and nothing anywhere reports an error.
+ *
+ * The reset therefore REWINDS the cursors on the connections it keeps. The
+ * login survives; the reading position goes back to the beginning. crypto_wallets
+ * has the same shape (crypto_sync_state.backfill_cursor), but that table is
+ * WIPE, so deleting the row already rewinds it — no extra work, and this
+ * constant records the difference rather than leaving it to be rediscovered.
+ */
+export const KEPT_CONNECTION_CURSOR_RESETS = [
+  {
+    table: "plaid_items",
+    columns: ["transactions_cursor", "last_successful_sync"],
+    why: "A kept cursor makes Plaid resume after the deleted transactions, so the wiped history would never come back and no error would say so.",
+  },
+  {
+    table: "atm_connection",
+    columns: ["last_sync_at", "last_error"],
+    why: "The PAI sync re-pulls by date rather than by cursor, so this is bookkeeping rather than a correctness fix: it stops the screen claiming a successful sync that fetched data no longer present.",
+  },
+] as const;
+
 export const RESET_BLIND_SPOTS: readonly ResetBlindSpot[] = [
   {
     id: "STORAGE_OBJECTS",
@@ -1149,4 +1225,30 @@ export function __runFactoryResetCoreTests(): void {
   const briefing = describeResetPlan(bad);
   assert(briefing.wipeCount === 0, "a refusing plan must not report a wipe count");
   assert(/NOT ready/.test(briefing.headline), "a refusing plan must say so");
+
+  // ── D-65: the connections must outlive a rehearsal ────────────────────────
+  // Each of these lives in a WIPE family, so KEEP can only come from a specific
+  // rule. Checking `source` proves the decision was made, not inherited.
+  for (const t of ["atm_connection", "plaid_items", "plaid_accounts"]) {
+    const c = classifyTable(t);
+    assert(c?.disposition === "KEEP", `${t} must survive the reset`);
+    assert(c?.source === "table", `${t} must be KEEP by an explicit rule, not a family default`);
+  }
+  assert(classifyTable("manual_loans")?.disposition === "KEEP", "hand-entered loan terms must survive");
+
+  // ...but the activity those connections produced must still be destroyed,
+  // or "keep the connection" would quietly become "keep the test data".
+  for (const t of ["plaid_transactions", "atm_settlements", "crypto_balances", "manual_loan_payments"]) {
+    assert(classifyTable(t)?.disposition === "WIPE", `${t} is activity and must be wiped`);
+  }
+
+  // Every cursor entry must name a KEPT table and carry a real reason.
+  for (const entry of KEPT_CONNECTION_CURSOR_RESETS) {
+    assert(
+      classifyTable(entry.table)?.disposition === "KEEP",
+      `${entry.table} has a cursor rewind but is not kept — the rewind would be pointless`,
+    );
+    assert(entry.columns.length > 0, `${entry.table} must name the columns to rewind`);
+    assert(entry.why.trim().length >= 40, `${entry.table} cursor rewind needs a real reason`);
+  }
 }

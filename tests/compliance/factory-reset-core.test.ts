@@ -22,6 +22,7 @@ import { join } from "node:path";
 import {
   CURRENT_RESET_RPC,
   FAMILY_RULES,
+  KEPT_CONNECTION_CURSOR_RESETS,
   RESET_BLIND_SPOTS,
   RESET_CONFIRM_PHRASE,
   RETENTION_CITE,
@@ -1067,5 +1068,213 @@ describe("summariseResetOutcome — the verification, executed", () => {
     });
     expect(clean).not.toEqual(dirty);
     expect(dirty.startsWith(clean)).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// D-65 — A REHEARSAL MUST NOT COST YOU YOUR CONNECTIONS
+//
+// The owner's requirement, in his words: "I don't want to have to re-establish
+// connections with all of them, it's a pain in the butt."
+//
+// The `atm_` and `plaid_` families are WIPE, which was right for the rows those
+// feeds PRODUCE and wrong for the rows that ARE the feed. These tests pin the
+// carve-outs, and — more importantly — pin the SECOND half of the problem: a
+// kept connection whose sync cursor was also kept would leave the bank looking
+// connected and healthy while its history was permanently gone.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("D-65 — the connections survive the reset", () => {
+  const door = sqlText("0209_factory_reset.sql");
+
+  /** Connection/identity tables that must never be emptied by a rehearsal. */
+  const CONNECTIONS = [
+    "atm_connection",
+    "plaid_items",
+    "plaid_accounts",
+    "manual_loans",
+    "crypto_wallets",
+    "crypto_assets",
+    "crypto_owner_wallet_confirmations",
+    "integration_credentials",
+  ] as const;
+
+  it("every connection the owner named is KEEP", () => {
+    for (const t of CONNECTIONS) {
+      const c = classifyTable(t);
+      expect(c, `${t} must classify`).not.toBeNull();
+      expect(c?.disposition, `${t} must be KEEP — re-linking it is manual work`).toBe("KEEP");
+    }
+  });
+
+  it("each one is KEEP by a DELIBERATE table rule, not by a family default", () => {
+    // This is the part that matters. atm_/plaid_ are WIPE families, so a KEEP
+    // here can only come from a specific rule someone wrote on purpose. If a
+    // future edit deletes the rule, the family takes over and the table starts
+    // being wiped again SILENTLY. Asserting the source catches exactly that.
+    for (const t of ["atm_connection", "plaid_items", "plaid_accounts"] as const) {
+      expect(classifyTable(t)?.source, `${t} must be decided by an explicit table rule`).toBe(
+        "table",
+      );
+    }
+  });
+
+  it("the families they live in really are WIPE — so the carve-out is doing the work", () => {
+    // Rule 73: prove the premise instead of assuming it. If atm_/plaid_ were
+    // KEEP families the test above would pass for the wrong reason.
+    for (const p of ["atm_", "plaid_"]) {
+      const fam = FAMILY_RULES.find((f) => f.prefix === p);
+      expect(fam, `${p} family rule must exist`).toBeDefined();
+      expect(fam?.disposition, `${p} must still be a WIPE family`).toBe("WIPE");
+    }
+    // And a sibling in each family is still wiped, so this is a scalpel and not
+    // a blanket amnesty for anything named atm_* or plaid_*.
+    expect(classifyTable("atm_settlements")?.disposition).toBe("WIPE");
+    expect(classifyTable("plaid_transactions")?.disposition).toBe("WIPE");
+  });
+
+  it("0209 does not delete a single one of them", () => {
+    for (const t of CONNECTIONS) {
+      expect(door, `0209 must NOT delete ${t} — that is the connection itself`).not.toMatch(
+        new RegExp(`delete\\s+from\\s+public\\.${t}\\b`, "i"),
+      );
+    }
+  });
+
+  it("but the ACTIVITY those connections produced is still wiped", () => {
+    // Keeping the login must not turn into keeping the test data. Every one of
+    // these is the feed's output and must still clear.
+    for (const t of [
+      "plaid_transactions",
+      "plaid_holdings",
+      "plaid_mortgages",
+      "plaid_webhook_events",
+      "atm_settlements",
+      "atm_transactions",
+      "atm_cash_loads",
+      "atm_reconciliation",
+      "atm_terminal_status",
+      "crypto_transactions",
+      "crypto_balances",
+      "crypto_price_snapshots",
+      "crypto_sync_state",
+      "manual_loan_payments",
+    ]) {
+      expect(classifyTable(t)?.disposition, `${t} is activity and must be WIPE`).toBe("WIPE");
+      expect(door, `0209 must delete ${t}`).toMatch(
+        new RegExp(`delete\\s+from\\s+public\\.${t}\\b`, "i"),
+      );
+    }
+  });
+
+  it("keeping a parent while wiping its child cannot orphan anything", () => {
+    // plaid_transactions -> plaid_accounts -> plaid_items, and
+    // manual_loan_payments -> manual_loans. In every case the KEPT table is the
+    // PARENT and the WIPED table is the CHILD, which is the safe direction: the
+    // child's FK simply has no rows left. The reverse would have left dangling
+    // references. Verified from the DDL, not assumed.
+    // NOTE: plaid_accounts is deliberately absent as a child here. It is KEPT,
+    // so the plaid_items -> plaid_accounts pair is KEEP -> KEEP, which orphans
+    // nothing. An earlier draft of this test listed it as a wiped child and
+    // failed, which is the test catching me rather than me catching the test.
+    const pairs: ReadonlyArray<readonly [string, string]> = [
+      ["plaid_transactions", "plaid_accounts"],
+      ["plaid_holdings", "plaid_accounts"],
+      ["plaid_mortgages", "plaid_accounts"],
+      ["manual_loan_payments", "manual_loans"],
+      ["crypto_balances", "crypto_wallets"],
+      ["crypto_transactions", "crypto_wallets"],
+      ["crypto_sync_state", "crypto_wallets"],
+    ];
+    for (const [child, parent] of pairs) {
+      expect(classifyTable(child)?.disposition, `${child} (child) should wipe`).toBe("WIPE");
+      expect(classifyTable(parent)?.disposition, `${parent} (parent) should be kept`).toBe("KEEP");
+    }
+  });
+
+  // ── The trap ─────────────────────────────────────────────────────────────
+  it("REWINDS the sync cursor on every connection it keeps", () => {
+    // Plaid's /transactions/sync returns only what changed since the saved
+    // cursor. Keep the item, wipe the transactions, and the next sync resumes
+    // PAST the deleted rows: the history is gone from our database, Plaid will
+    // not re-send it, and nothing reports an error. The reset must therefore
+    // null the cursor. This test is the whole reason the UPDATE exists.
+    expect(door).toMatch(
+      /update\s+public\.plaid_items\s+set\s+transactions_cursor\s*=\s*null/i,
+    );
+    expect(door).toMatch(/last_successful_sync\s*=\s*null/i);
+    expect(door).toMatch(/update\s+public\.atm_connection\s+set\s+last_sync_at\s*=\s*null/i);
+  });
+
+  it("the cursor rewind is an UPDATE, never a DELETE in disguise", () => {
+    // A 'fix' that deleted plaid_items to clear the cursor would pass a naive
+    // 'cursor is reset' check while destroying the very thing we are keeping.
+    for (const t of ["plaid_items", "atm_connection"]) {
+      expect(door).not.toMatch(new RegExp(`delete\\s+from\\s+public\\.${t}\\b`, "i"));
+    }
+  });
+
+  it("the documented cursor list matches what the SQL actually does", () => {
+    // The constant is not decoration: every column it names must really be
+    // nulled by 0209, or the note is a lie that outlives the code.
+    expect(KEPT_CONNECTION_CURSOR_RESETS.length).toBeGreaterThan(0);
+    for (const entry of KEPT_CONNECTION_CURSOR_RESETS) {
+      expect(classifyTable(entry.table)?.disposition, `${entry.table} must be KEEP`).toBe("KEEP");
+      expect(door, `0209 must update ${entry.table}`).toMatch(
+        new RegExp(`update\\s+public\\.${entry.table}\\b`, "i"),
+      );
+      for (const col of entry.columns) {
+        expect(door, `0209 must null ${entry.table}.${col}`).toMatch(
+          new RegExp(`${col}\\s*=\\s*null`, "i"),
+        );
+      }
+      expect(entry.why.length, `${entry.table} needs a real reason`).toBeGreaterThan(40);
+    }
+  });
+
+  it("the cursor columns it nulls are REAL columns in the migrations", () => {
+    // Rule 73 again: nulling a column that does not exist would make 0209 fail
+    // at runtime, and a grep-only test would never notice.
+    const all = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith(".sql"))
+      .map((f) => readFileSync(join(MIGRATIONS_DIR, f), "utf8"))
+      .join("\n");
+    for (const entry of KEPT_CONNECTION_CURSOR_RESETS) {
+      const block = all.slice(
+        all.indexOf(`create table if not exists public.${entry.table}`),
+      );
+      for (const col of entry.columns) {
+        expect(
+          block.slice(0, 2500),
+          `${entry.table}.${col} must exist in the DDL`,
+        ).toMatch(new RegExp(`\\b${col}\\b`));
+      }
+    }
+  });
+
+  it("the on-screen briefing TELLS him his connections are safe, and what still goes", () => {
+    // He should not have to take my word for it in a chat message. The screen
+    // he is standing in front of has to say it.
+    const plan = buildResetPlan(tablesFromMigrations());
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const text = describeResetPlan(plan).paragraphs.join(" ").toLowerCase();
+    for (const phrase of ["plaid", "atm", "crypto", "loan"]) {
+      expect(text, `the briefing must mention ${phrase}`).toContain(phrase);
+    }
+    // And it must not overclaim: the activity is still destroyed, and the
+    // rewind must be disclosed rather than being a silent surprise.
+    expect(text).toMatch(/erased|erases|still/);
+    expect(text).toMatch(/rewind|sync position|full history/);
+  });
+
+  it("the reset still empties the great majority of the schema", () => {
+    // Carve-outs are a slippery slope: each one is defensible and the sum can
+    // quietly turn the reset into a no-op. This holds the line.
+    const plan = buildResetPlan(tablesFromMigrations());
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.wipe.length).toBeGreaterThan(120);
+    expect(plan.wipe.length).toBeGreaterThan(plan.keep.length);
   });
 });
