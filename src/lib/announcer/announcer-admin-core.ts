@@ -25,6 +25,10 @@ import {
   isWithinQuietHours,
   normalizeVolume,
   clockMinutesOf,
+  formatPairingCode,
+  normalizePairingCode,
+  pairingCodeValidity,
+  PAIRING_TTL_MINUTES,
   type DeviceHealth,
 } from "./announcer-core";
 
@@ -261,6 +265,87 @@ export const ADMIN_REFRESH_SECONDS = 15;
 // SELF-TESTS
 // ============================================================================
 
+/**
+ * D-66 — a pairing code you cannot see is not a pairing code.
+ *
+ * `createPairing()` generated a code, wrote it to the database and returned it.
+ * The server action then threw the return value away and revalidated the page,
+ * and no query anywhere read `announcer_pairings` back. So the button worked
+ * perfectly and produced nothing a human could ever read: the owner pressed
+ * "Get pairing code" and watched a spinner until the page gave up.
+ *
+ * This turns a stored pairing row into something the panel can show, including
+ * how long is left on it. Pure so it can be tested by execution rather than by
+ * reading the JSX and hoping.
+ */
+export type PendingPairingRow = {
+  readonly code: string;
+  readonly device_name: string;
+  readonly created_at: string;
+  readonly consumed_at: string | null;
+};
+
+export type PendingPairingView = {
+  /** The code as it should be READ ALOUD and typed: XXXX-XXXX. */
+  readonly display: string;
+  /** The canonical code for the install command: no dash. */
+  readonly raw: string;
+  readonly deviceName: string;
+  readonly minutesLeft: number;
+  /** Plain sentence for the panel, e.g. "expires in 58 minutes". */
+  readonly expiresLabel: string;
+};
+
+/**
+ * The codes still worth showing: not used, not expired, newest first.
+ *
+ * Consumed and expired codes are dropped rather than shown greyed out. A dead
+ * code on screen is worse than no code at all — somebody will type it, get a
+ * refusal, and go looking for a fault that does not exist.
+ */
+export function pendingPairings(
+  rows: readonly PendingPairingRow[],
+  nowIso: string,
+): PendingPairingView[] {
+  const now = Date.parse(nowIso);
+  if (!Number.isFinite(now)) return [];
+
+  const live: { view: PendingPairingView; createdAt: number }[] = [];
+
+  for (const row of rows ?? []) {
+    const validity = pairingCodeValidity({
+      code: row.code,
+      createdAtIso: row.created_at,
+      consumedAtIso: row.consumed_at,
+      nowIso,
+    });
+    if (!validity.valid) continue;
+
+    const created = Date.parse(row.created_at);
+    if (!Number.isFinite(created)) continue;
+
+    const ageMinutes = (now - created) / 60000;
+    // Round UP so a code with 30 seconds left says "1 minute" rather than "0
+    // minutes", which would read as already dead while it still works.
+    const minutesLeft = Math.max(1, Math.ceil(PAIRING_TTL_MINUTES - ageMinutes));
+
+    live.push({
+      createdAt: created,
+      view: {
+        display: formatPairingCode(row.code),
+        raw: normalizePairingCode(row.code),
+        deviceName: row.device_name,
+        minutesLeft,
+        expiresLabel:
+          minutesLeft === 1 ? "expires in about a minute" : `expires in ${minutesLeft} minutes`,
+      },
+    });
+  }
+
+  live.sort((a, b) => b.createdAt - a.createdAt);
+  return live.map((entry) => entry.view);
+}
+
 export function __runAnnouncerAdminTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -464,6 +549,81 @@ export function __runAnnouncerAdminTests(): { passed: number; failed: number } {
   check("shop: headline reports the true count", oneOffOneOn.headline.includes("1 speaker"));
 
   check("refresh interval is sane", ADMIN_REFRESH_SECONDS > 0 && ADMIN_REFRESH_SECONDS <= DEVICE_ONLINE_GRACE_SECONDS);
+
+  // ── D-66: the pairing code must be visible ────────────────────────────────
+  const T0 = "2026-01-05T12:00:00.000Z";
+  const fresh = pendingPairings(
+    [{ code: "ABCD2345", device_name: "Sales Floor", created_at: T0, consumed_at: null }],
+    "2026-01-05T12:02:00.000Z",
+  );
+  eq("pairing: a fresh code is shown", fresh.length, 1);
+  eq("pairing: shown grouped for reading aloud", fresh[0]?.display, "ABCD-2345");
+  eq("pairing: raw form has no dash for the install command", fresh[0]?.raw, "ABCD2345");
+  eq("pairing: carries the room name", fresh[0]?.deviceName, "Sales Floor");
+  eq("pairing: 58 minutes left after 2", fresh[0]?.minutesLeft, 58);
+
+  // A used code must never appear. Somebody would type it and be told no.
+  eq(
+    "pairing: a consumed code is hidden",
+    pendingPairings(
+      [{ code: "ABCD2345", device_name: "Sales Floor", created_at: T0, consumed_at: T0 }],
+      "2026-01-05T12:02:00.000Z",
+    ).length,
+    0,
+  );
+
+  // Nor an expired one.
+  eq(
+    "pairing: an expired code is hidden",
+    pendingPairings(
+      [{ code: "ABCD2345", device_name: "Sales Floor", created_at: T0, consumed_at: null }],
+      "2026-01-05T13:30:00.000Z",
+    ).length,
+    0,
+  );
+
+  // Newest first: after generating a second code, the one on screen at the top
+  // must be the one just produced.
+  const two = pendingPairings(
+    [
+      { code: "AAAA2222", device_name: "Old", created_at: T0, consumed_at: null },
+      { code: "BBBB3333", device_name: "New", created_at: "2026-01-05T12:10:00.000Z", consumed_at: null },
+    ],
+    "2026-01-05T12:11:00.000Z",
+  );
+  eq("pairing: newest code is listed first", two[0]?.raw, "BBBB3333");
+
+  // Never round down to a scary "0 minutes" while the code still works.
+  const nearlyGone = pendingPairings(
+    [{ code: "ABCD2345", device_name: "Sales Floor", created_at: T0, consumed_at: null }],
+    "2026-01-05T12:59:40.000Z",
+  );
+  eq("pairing: a nearly-expired code still reads as usable", nearlyGone[0]?.minutesLeft, 1);
+  check(
+    "pairing: singular minute reads naturally",
+    nearlyGone[0]?.expiresLabel === "expires in about a minute",
+  );
+
+  // THE EXACT BOUNDARY. pairingCodeValidity expires a code when the age is
+  // GREATER than the TTL, so at exactly 60 minutes the code is still valid and
+  // still works. Without the Math.max(1, ...) clamp this row renders as
+  // "expires in 0 minutes" — a working code that reads as dead, which sends you
+  // off generating a replacement you did not need. A mutation run caught this:
+  // the "nearly expired" case above lands on 59.67 minutes and rounds to 1 on
+  // its own, so it never exercised the clamp at all.
+  const onTheBoundary = pendingPairings(
+    [{ code: "ABCD2345", device_name: "Sales Floor", created_at: T0, consumed_at: null }],
+    "2026-01-05T13:00:00.000Z",
+  );
+  eq("pairing: a code at exactly the TTL is still listed", onTheBoundary.length, 1);
+  eq("pairing: the boundary never reads as 0 minutes", onTheBoundary[0]?.minutesLeft, 1);
+  check(
+    "pairing: the boundary label never says zero",
+    !(onTheBoundary[0]?.expiresLabel ?? "").includes("0 minutes"),
+  );
+
+  check("pairing: garbage now-time yields nothing rather than throwing", pendingPairings([], "not-a-date").length === 0);
+  eq("pairing: TTL is the documented hour", PAIRING_TTL_MINUTES, 60);
 
   return { passed, failed };
 }

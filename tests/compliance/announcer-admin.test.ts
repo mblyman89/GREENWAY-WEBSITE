@@ -10,15 +10,20 @@
  *   3. Reporting a busy mid-afternoon as quiet hours (the Slice 29 bug class).
  *   4. Showing a problem without showing the fix.
  */
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   healthTone,
+  pendingPairings,
   relativeTimeLabel,
   soundLabel,
   summarizeShop,
   toDeviceView,
   type AdminDeviceView,
+  type PendingPairingRow,
 } from "@/lib/announcer/announcer-admin-core";
 
 const NOW_ISO = "2026-03-10T12:00:00.000Z";
@@ -220,5 +225,184 @@ describe("announcer panel — sound names a person recognises", () => {
   it("falls back to the shop default rather than showing a blank", () => {
     expect(soundLabel(null, null, BUILT, "chime")).toBe("Chime");
     expect(soundLabel("unknown-id", null, BUILT, "also-unknown")).toBe("Shop default");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// D-66 — "Get pairing code" spun forever and produced nothing
+//
+// Reported from the field: pressing the button showed a spinner until the
+// request gave up, and no code ever appeared.
+//
+// The cause was not a hang. `createPairing()` worked perfectly: it generated a
+// code, inserted the row, and RETURNED it. The server action then discarded
+// the return value and revalidated the page — and no query anywhere read
+// `announcer_pairings` back. The code existed in the database and could never
+// be seen by a human, so the setup was impossible to complete.
+//
+// These tests execute the logic that now surfaces it.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("D-66 — the pairing code has to be readable", () => {
+  const T0 = "2026-01-05T12:00:00.000Z";
+  const row = (over: Partial<PendingPairingRow> = {}): PendingPairingRow => ({
+    code: "ABCD2345",
+    device_name: "Sales Floor",
+    created_at: T0,
+    consumed_at: null,
+    ...over,
+  });
+
+  it("shows a freshly generated code", () => {
+    const out = pendingPairings([row()], "2026-01-05T12:02:00.000Z");
+    expect(out).toHaveLength(1);
+    expect(out[0].display).toBe("ABCD-2345");
+    expect(out[0].deviceName).toBe("Sales Floor");
+  });
+
+  it("groups it for reading across a room, but keeps a raw form for the command", () => {
+    // The owner reads the dashed version aloud; the installer needs it without
+    // the dash. Getting these backwards is a support call.
+    const out = pendingPairings([row()], "2026-01-05T12:02:00.000Z");
+    expect(out[0].display).toBe("ABCD-2345");
+    expect(out[0].raw).toBe("ABCD2345");
+    expect(out[0].raw).not.toContain("-");
+  });
+
+  it("never shows a code that has already been used", () => {
+    // Showing a dead code is worse than showing none: it gets typed, refused,
+    // and sends somebody hunting for a fault that does not exist.
+    expect(pendingPairings([row({ consumed_at: T0 })], "2026-01-05T12:02:00.000Z")).toEqual([]);
+  });
+
+  it("never shows an expired code", () => {
+    expect(pendingPairings([row()], "2026-01-05T13:30:00.000Z")).toEqual([]);
+  });
+
+  it("counts the remaining time down honestly", () => {
+    expect(pendingPairings([row()], "2026-01-05T12:02:00.000Z")[0].minutesLeft).toBe(58);
+    expect(pendingPairings([row()], "2026-01-05T12:30:00.000Z")[0].minutesLeft).toBe(30);
+  });
+
+  it("does not round a live code down to zero minutes", () => {
+    // A code with 20 seconds left still works. Saying "0 minutes" would make
+    // the owner discard a perfectly good code.
+    const out = pendingPairings([row()], "2026-01-05T12:59:40.000Z");
+    expect(out).toHaveLength(1);
+    expect(out[0].minutesLeft).toBe(1);
+    expect(out[0].expiresLabel).toBe("expires in about a minute");
+  });
+
+  it("puts the newest code first", () => {
+    // After pressing the button twice, the code on screen must be the one just
+    // generated — otherwise the owner types the older one.
+    const out = pendingPairings(
+      [
+        row({ code: "AAAA2222", device_name: "Old" }),
+        row({ code: "BBBB3333", device_name: "New", created_at: "2026-01-05T12:10:00.000Z" }),
+      ],
+      "2026-01-05T12:11:00.000Z",
+    );
+    expect(out[0].raw).toBe("BBBB3333");
+  });
+
+  it("survives rubbish input instead of taking the Orders page down", () => {
+    // The announcer sits on the Orders screen. It must degrade, never throw.
+    expect(pendingPairings([], "not-a-date")).toEqual([]);
+    expect(pendingPairings([row({ created_at: "nonsense" })], "2026-01-05T12:00:00.000Z")).toEqual([]);
+    expect(pendingPairings([row({ code: "SHORT" })], "2026-01-05T12:00:00.000Z")).toEqual([]);
+  });
+
+  it("REGRESSION: the action must not throw the code away again", () => {
+    // The original defect in one assertion. The panel data type has to carry
+    // the codes; if someone removes the field, this fails loudly rather than
+    // the button silently going back to doing nothing visible.
+    const source = readFileSync(
+      join(process.cwd(), "src/lib/announcer/announcer-admin-store.ts"),
+      "utf8",
+    );
+    expect(source).toContain("announcer_pairings");
+
+    // A mutation run killed the first version of this test: it only checked
+    // that the word "pendingPairings" appeared somewhere, which stayed true
+    // when the field was stubbed back to a hardcoded empty list — the exact
+    // original defect. So assert the WIRING: the success path must call the
+    // reader, and must not hand back a constant.
+    expect(source).toMatch(/pendingPairings:\s*await\s+getPendingPairings\(/);
+    expect(source).toMatch(/computePendingPairings\(/);
+
+    // The one legitimate `pendingPairings: []` is the empty()/not-installed
+    // fallback. More than one means the live path was stubbed out.
+    const stubbed = source.match(/pendingPairings:\s*\[\]/g) ?? [];
+    expect(
+      stubbed.length,
+      "the success path must read real rows, not return a constant empty list",
+    ).toBe(1);
+  });
+
+  it("REGRESSION: the panel actually renders the code", () => {
+    // Reading it back from the database is only half the fix. If the JSX does
+    // not print it, the owner is still staring at nothing.
+    const panel = readFileSync(
+      join(process.cwd(), "src/components/admin/orders/AnnouncerPanel.tsx"),
+      "utf8",
+    );
+    expect(panel).toMatch(/pendingPairings/);
+    expect(panel).toMatch(/\{p\.display\}/);
+  });
+
+  it("REGRESSION: the copy-paste install command is a real address, not a placeholder", () => {
+    // Found while verifying D-66: the panel printed
+    //   sudo ./install.sh --site https://YOUR-SITE.com --code XXXXXXXX
+    // That is a command written to be copied onto a Pi. A placeholder host
+    // there does not fail loudly at the keyboard, it fails as a DNS error
+    // several minutes into an install, which reads like the Pi is broken.
+    const panel = readFileSync(
+      join(process.cwd(), "src/components/admin/orders/AnnouncerPanel.tsx"),
+      "utf8",
+    );
+    expect(panel).not.toMatch(/YOUR-SITE\.com/);
+    expect(panel).toMatch(/announcerSiteUrl\(\)/);
+    // And it must resolve from the environment rather than being hardcoded to
+    // one deployment, matching the pattern already used for the Plaid webhook.
+    expect(panel).toMatch(/NEXT_PUBLIC_SITE_URL/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// D-67 — the documented install command downloaded from a URL that did not exist
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("D-67 — the installer the field manual tells you to run must exist", () => {
+  it("the agent and installer are served from public/announcer", () => {
+    // install.sh fetches "${SITE}/announcer/greenway_announcer.py". In Next.js
+    // that resolves to public/announcer/greenway_announcer.py. The directory did
+    // not exist, so the documented one-line install 404'd on a real Pi.
+    for (const f of ["greenway_announcer.py", "install.sh"]) {
+      const p = join(process.cwd(), "public", "announcer", f);
+      expect(existsSync(p), `public/announcer/${f} must be served`).toBe(true);
+    }
+  });
+
+  it("the served copies are byte-identical to the source in pi-agent/", () => {
+    // Two copies of a file is a defect waiting to happen: the Pi would install
+    // a stale agent while the repo looked correct. This makes drift a failure.
+    for (const f of ["greenway_announcer.py", "install.sh"]) {
+      const src = readFileSync(join(process.cwd(), "pi-agent", f), "utf8");
+      const served = readFileSync(join(process.cwd(), "public", "announcer", f), "utf8");
+      expect(
+        served,
+        `public/announcer/${f} has drifted from pi-agent/${f}. Re-copy it.`,
+      ).toBe(src);
+    }
+  });
+
+  it("the served agent is valid Python, not a truncated copy", () => {
+    const agent = readFileSync(
+      join(process.cwd(), "public", "announcer", "greenway_announcer.py"),
+      "utf8",
+    );
+    expect(agent.length).toBeGreaterThan(10000);
+    expect(agent.startsWith("#!")).toBe(true);
   });
 });
