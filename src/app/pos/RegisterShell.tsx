@@ -106,9 +106,11 @@ import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
 import {
-  searchTransactions,
   statusLabel,
+  historyRequestPath,
+  readHistoryResponse,
   HISTORY_WINDOW_DAYS,
+  HISTORY_SEARCH_DEBOUNCE_MS,
   type TransactionRow,
 } from "@/lib/pos/transaction-history-core";
 import type { PosLoyaltyGrant } from "@/lib/pos/register-loyalty-core";
@@ -3186,6 +3188,12 @@ function ReturnsModal({
   const [historyBusy, setHistoryBusy] = useState(false);
   const [historyQuery, setHistoryQuery] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  // True when the server stopped scanning before the end of the window, so
+  // "nothing found" might mean "we stopped looking". Never hidden from staff.
+  const [historyTruncated, setHistoryTruncated] = useState(false);
+  // Monotonic request id — the newest search always wins, so a slow earlier
+  // response cannot overwrite it (classic out-of-order autocomplete bug).
+  const historySeqRef = useRef(0);
   // SLICE 20 - which row is currently being reprinted, and the last reprint
   // note (printer trouble, or "not found"). Keyed by receipt so two rows can
   // never look busy at once.
@@ -3263,29 +3271,64 @@ function ReturnsModal({
     }
   };
 
-  const loadHistory = async () => {
-    if (historyBusy) return;
+  /**
+   * Load history, optionally filtered SERVER-SIDE.
+   *
+   * The query goes to the database rather than being applied to whatever 50
+   * rows the browser happens to be holding. Filtering in the browser meant a
+   * search only covered the newest ~50 sales (about half a day here), so a
+   * customer from yesterday got "Nothing matches" for a sale that was still
+   * returnable.
+   */
+  const loadHistory = async (query = "") => {
     setHistoryBusy(true);
     setHistoryError(null);
+    // Stamp this request so a slow earlier response cannot overwrite a newer
+    // one (type "kush", the "ku" response landing late would otherwise win).
+    const seq = ++historySeqRef.current;
     try {
-      const res = await posFetch("/api/pos/transactions", {
+      // URL building and response reading are PURE and tested — see
+      // historyRequestPath / readHistoryResponse in transaction-history-core.
+      const res = await posFetch(historyRequestPath(query), {
         headers: {
           "x-pos-device-id": creds.deviceId,
           "x-pos-device-key": creds.deviceKey,
         },
       });
       const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+      if (seq !== historySeqRef.current) return; // a newer search already won
       if (!res.ok || !Array.isArray(json?.transactions)) {
         setHistoryError(String(json?.error ?? "Could not load recent transactions."));
         return;
       }
-      setHistory(json.transactions as TransactionRow[]);
+      const parsed = readHistoryResponse(json);
+      setHistory(parsed.transactions);
+      setHistoryTruncated(parsed.scanTruncated);
     } catch {
+      if (seq !== historySeqRef.current) return;
       setHistoryError("Could not reach the server - the receipt number still works.");
     } finally {
-      setHistoryBusy(false);
+      if (seq === historySeqRef.current) setHistoryBusy(false);
     }
   };
+
+  /**
+   * Re-query the server as the user types, debounced.
+   *
+   * Only runs while the panel is open. A query below SEARCH_MIN_CHARS is not a
+   * search — it re-fetches the plain newest-first list, matching the pure
+   * core's rule that one keystroke must not blank the list out mid-type.
+   */
+  useEffect(() => {
+    if (!showHistory) return;
+    const handle = setTimeout(() => {
+      void loadHistory(historyQuery);
+    }, HISTORY_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+    // loadHistory is stable enough for this panel's lifetime; including it
+    // would re-arm the timer on every render and defeat the debounce.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyQuery, showHistory]);
 
   const lookup = async (override?: string) => {
     // `override` lets a history row run this exact lookup without waiting a
@@ -3384,7 +3427,8 @@ function ReturnsModal({
               onClick={() => {
                 const next = !showHistory;
                 setShowHistory(next);
-                if (next && history === null) void loadHistory();
+                // Opening the panel arms the debounced effect, which performs
+                // the initial load. Fetching here too would double-request.
               }}
               className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-1.5 text-sm font-semibold"
             >
@@ -3402,6 +3446,13 @@ function ReturnsModal({
                 spellCheck={false}
                 placeholder="Search name, receipt, item or staff"
                 onChange={(e) => setHistoryQuery(e.target.value)}
+                // Enter searches NOW instead of waiting out the debounce, and
+                // is also what a scanner sends after typing a receipt code.
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  void loadHistory(historyQuery);
+                }}
               />
 
               {historyBusy ? (
@@ -3425,20 +3476,29 @@ function ReturnsModal({
                 <p className="mt-2 text-xs text-[var(--pos-text-muted)]">{reprintNote}</p>
               ) : null}
 
+              {/* "We stopped looking" must never be shown as "nothing exists".
+                  If the scan hit its ceiling, say so and offer the receipt
+                  number, which searches the window directly. */}
+              {historyTruncated && !historyBusy && !historyError ? (
+                <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
+                  Showing the newest matches only &mdash; there are more sales in this window than
+                  can be scanned at once. If the sale you want is missing, use its receipt number.
+                </p>
+              ) : null}
+
               {!historyBusy && !historyError && history !== null ? (
                 (() => {
-                  const shown = searchTransactions(history, historyQuery);
-                  if (history.length === 0) {
-                    return (
-                      <p className="mt-3 text-xs text-[var(--pos-text-muted)]">
-                        No register sales in the last {HISTORY_WINDOW_DAYS} days.
-                      </p>
-                    );
-                  }
+                  // The SERVER already applied the query across the whole
+                  // window. Filtering again here would re-introduce the exact
+                  // bug we just fixed (searching only what the browser holds).
+                  const shown = history;
+                  const q = historyQuery.trim();
                   if (shown.length === 0) {
                     return (
                       <p className="mt-3 text-xs text-[var(--pos-text-muted)]">
-                        Nothing matches &ldquo;{historyQuery.trim()}&rdquo;.
+                        {q
+                          ? `Nothing matches “${q}” in the last ${HISTORY_WINDOW_DAYS} days.`
+                          : `No register sales in the last ${HISTORY_WINDOW_DAYS} days.`}
                       </p>
                     );
                   }
@@ -3536,6 +3596,20 @@ function ReturnsModal({
               setReceipt(e.target.value.toUpperCase());
               setSale(null);
               setLineId(null);
+            }}
+            // A hardware receipt scanner is a KEYBOARD WEDGE: it types the
+            // code and then sends Enter. That trailing Enter is the entire
+            // "I am done" signal. There was no key handler here at all and no
+            // wrapping <form>, so the characters landed in the box and then
+            // nothing happened — which reads at the counter as "scanning is
+            // broken" when in fact the scan worked perfectly and no one was
+            // listening. The document-level wedge listeners in SaleFlow
+            // deliberately stand down over INPUT elements (correctly, so
+            // manual typing still works), so nothing else can rescue it.
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              void lookup();
             }}
           />
           <button

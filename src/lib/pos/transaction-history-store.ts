@@ -37,6 +37,8 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { RETURN_WINDOW_DAYS } from "@/lib/pos/returns-core";
 import {
   shapeTransaction,
+  searchTransactions,
+  SEARCH_MIN_CHARS,
   sortNewestFirst,
   TRANSACTION_HISTORY_LIMIT,
   type TransactionRow,
@@ -61,8 +63,33 @@ const LOOKUP_WINDOW_DAYS = RETURN_WINDOW_DAYS + 2;
  */
 const EVENT_SCAN_LIMIT = 400;
 
+/**
+ * How many events to scan when the user is SEARCHING rather than browsing.
+ *
+ * Browsing shows the newest 50 rows, so scanning 400 events is plenty. Search
+ * is a different question — "find the sale for the customer who came in on
+ * Tuesday" — and answering it from the newest 400 events silently reports
+ * "Nothing matches" for a sale that is well inside the return window and
+ * perfectly returnable. That is the worst kind of bug: a confident wrong
+ * answer at the counter.
+ *
+ * The whole window is bounded anyway (LOOKUP_WINDOW_DAYS = 17), so this is a
+ * safety ceiling rather than a page size. When it is hit we say so instead of
+ * pretending the result is complete — see `scanTruncated`.
+ */
+const SEARCH_EVENT_SCAN_LIMIT = 5000;
+
 export type TransactionHistoryResult =
-  | { ok: true; transactions: TransactionRow[] }
+  | {
+      ok: true;
+      transactions: TransactionRow[];
+      /**
+       * True when the event scan hit its ceiling, so older sales in the window
+       * were never examined. The UI must say so rather than let "no results"
+       * read as "this sale does not exist".
+       */
+      scanTruncated: boolean;
+    }
   | { ok: false; error: string };
 
 type EventRow = {
@@ -94,10 +121,19 @@ type LineRow = {
  * window"; it never means "the read failed" — those are different answers and
  * a budtender deserves to know which one they are looking at.
  */
-export async function listRecentTransactions(): Promise<TransactionHistoryResult> {
+export async function listRecentTransactions(
+  query?: string | null,
+): Promise<TransactionHistoryResult> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Database not configured — cannot load history." };
   }
+
+  // A real search widens the scan across the whole return window; plain
+  // browsing keeps the cheap newest-400 read. Short queries are not searches
+  // (SEARCH_MIN_CHARS) — they must not trigger the expensive path.
+  const q = (query ?? "").trim();
+  const searching = q.length >= SEARCH_MIN_CHARS;
+  const scanLimit = searching ? SEARCH_EVENT_SCAN_LIMIT : EVENT_SCAN_LIMIT;
 
   const admin = createSupabaseAdminClient();
   const cutoff = new Date(Date.now() - LOOKUP_WINDOW_DAYS * 86_400_000).toISOString();
@@ -111,14 +147,16 @@ export async function listRecentTransactions(): Promise<TransactionHistoryResult
     .not("order_id", "is", null)
     .gte("occurred_at", cutoff)
     .order("occurred_at", { ascending: false })
-    .limit(EVENT_SCAN_LIMIT);
+    .limit(scanLimit);
 
   if (eventError) {
     return { ok: false, error: "Could not read the sales ledger — try again in a moment." };
   }
   const events = (eventData as EventRow[] | null) ?? [];
+  // Hitting the ceiling exactly means there may be more we never looked at.
+  const scanTruncated = events.length >= scanLimit;
   if (events.length === 0) {
-    return { ok: true, transactions: [] };
+    return { ok: true, transactions: [], scanTruncated: false };
   }
 
   const orderIds = Array.from(
@@ -230,5 +268,18 @@ export async function listRecentTransactions(): Promise<TransactionHistoryResult
     rows.push(shapeTransaction(input));
   }
 
-  return { ok: true, transactions: sortNewestFirst(rows).slice(0, TRANSACTION_HISTORY_LIMIT) };
+  // ORDER MATTERS. Filter FIRST, then cap.
+  //
+  // The old code capped at 50 and let the client filter what survived, so a
+  // search only ever saw the newest 50 sales — roughly half a day at this
+  // shop's volume. A customer from yesterday came back "Nothing matches" even
+  // though the sale was returnable. Matching before the cap means the 50 rows
+  // are the 50 newest MATCHES, which is what a person means by "search".
+  const sorted = sortNewestFirst(rows);
+  const matched = searching ? searchTransactions(sorted, q) : sorted;
+  return {
+    ok: true,
+    transactions: matched.slice(0, TRANSACTION_HISTORY_LIMIT),
+    scanTruncated,
+  };
 }
