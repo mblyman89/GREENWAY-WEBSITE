@@ -870,6 +870,7 @@ export function describeResetPlan(plan: ResetPlan): ResetBriefing {
       "Left alone: everything that describes your business rather than recording an event — your chart of accounts, the four entities, the shareholder register, tax rates, licence details, settings, saved integration keys, the cannabis knowledge base, your curated catalogue, vendors, brands, website content, your staff and your own login.",
       "Two things are kept on purpose that you might expect to be wiped. The audit log stays, because it is the record that the reset happened at all, and erasing it would erase the evidence. Your saved integration credentials stay, because wiping them would send you hunting through hidden Vercel keys — the exact job you said you did not want to do.",
       `One limit: once you have made a real sale, filed a real return, or posted a real journal entry, ${RETENTION_CITE} requires those records for a ${RETENTION_YEARS}-year period. The reset will then refuse until you export everything and confirm in writing that you accept the destruction.`,
+      `Three things this cannot reach, because it works table by table. ${RESET_BLIND_SPOTS.map((b) => b.limit).join(" ")} None of the three can put a wrong number on a report or a tax form.`,
     ],
   };
 }
@@ -877,6 +878,189 @@ export function describeResetPlan(plan: ResetPlan): ResetBriefing {
 // ───────────────────────────────────────────────────────────────────────────────
 // §7  SELF-TESTS
 // ───────────────────────────────────────────────────────────────────────────────
+
+/** The RPC the reset button MUST call. Anything else is D-64. */
+export const CURRENT_RESET_RPC = "gl_factory_reset";
+
+/** The read-only evidence probe shown before anything is destroyed. */
+export const RESET_PREVIEW_RPC = "gl_factory_reset_preview";
+
+/** The post-reset verification that returns ONLY problems. */
+export const RESET_AUDIT_RPC = "gl_audit_factory_reset";
+
+/**
+ * The superseded function. Retained as a NAME so tests can assert it is gone
+ * from the call path. Migrations 0069/0097/0140 still define it, and dropping
+ * a function the owner may already have applied is not this slice's business —
+ * but nothing in the application may route to it.
+ *
+ * D-64, measured from disk on 2026-09-10 BEFORE any change was made:
+ *
+ *   src/app/admin/settings/reset/page.tsx
+ *     -> resetOperationalDataAction()            settings/actions.ts:194
+ *     -> resetOperationalData()                  lib/admin/reset-service.ts:49
+ *     -> supabase.rpc("reset_operational_data")  <- the 0069/0097/0140 one
+ *
+ *   and `gl_factory_reset` appeared in ZERO lines of application code.
+ *
+ * So the D-62 fix was written, tested, merged — and never connected. The
+ * button ran the stale function, which deletes 66 tables; the core says 138.
+ * SEVENTY-TWO tables would have survived a "factory reset", including the
+ * whole general ledger (gl_journals, gl_journal_lines, gl_periods,
+ * gl_audit_events, gl_opening_balances, gl_bank_matches,
+ * gl_bank_reconciliations, gl_override_log, gl_payroll_allocations,
+ * gl_template_changes, gl_account_proposals, gl_classification_suggestions)
+ * and the year-to-date payroll figures a W-2 is computed from (pay_periods,
+ * payroll_ytd_accumulators, sick_leave_ledger, sick_leave_requests).
+ *
+ * The owner asked "will you confirm that we don't need to update the reset?"
+ * The rules were current. The wiring was not.
+ */
+export const SUPERSEDED_RESET_RPC = "reset_operational_data";
+
+/** The exact phrase migration 0209 compares against. Case and spacing matter. */
+export const RESET_CONFIRM_PHRASE = "ERASE ALL TEST DATA";
+
+/**
+ * Does a typed phrase satisfy the door?
+ *
+ * The SQL compares `btrim(confirm_phrase) <> 'ERASE ALL TEST DATA'`: it trims
+ * surrounding whitespace and is otherwise EXACT — it does not upper-case. The
+ * superseded action upper-cased before comparing, so mirroring that here would
+ * accept "erase all test data" in the browser and then be refused by the
+ * database. The UI must reject exactly what the database rejects, or the owner
+ * gets an opaque server error instead of a hint.
+ */
+export function confirmPhraseAccepted(typed: string): boolean {
+  return (typed ?? "").trim() === RESET_CONFIRM_PHRASE;
+}
+
+export type ResetRequestDecision =
+  | { readonly proceed: false; readonly error: string }
+  | { readonly proceed: true; readonly confirmPhrase: string; readonly acknowledgeRetention: boolean };
+
+/**
+ * Everything the reset server action decides, as one pure function.
+ *
+ * WHY THIS EXISTS. The mutation campaign for D-64 found two survivors: with
+ * the phrase gate rewritten to `if (false)`, and with the post-reset audit
+ * call deleted, the suite stayed green. Both tests could only inspect the
+ * action's SOURCE TEXT, because a server action redirects and talks to the
+ * database and cannot be executed in a unit test — and a test that greps for
+ * an identifier cannot tell a live guard from a dead one. That is the same
+ * lesson migration 0209's tests already record.
+ *
+ * Weakening the mutants was not an option. So the decision moved here, where
+ * it can be RUN. The action keeps only the parts that genuinely need a server:
+ * calling the RPC, writing the audit row, redirecting.
+ *
+ * `confirmPhrase` is returned rather than a boolean so the caller forwards the
+ * ORIGINAL text to the database. Normalising it here would mean the app and
+ * the database disagree about what was typed.
+ */
+export function evaluateResetRequest(input: {
+  readonly typed: string;
+  readonly attested: boolean;
+}): ResetRequestDecision {
+  if (!confirmPhraseAccepted(input.typed)) {
+    return {
+      proceed: false,
+      error: `Nothing was deleted. To confirm, type exactly: ${RESET_CONFIRM_PHRASE}`,
+    };
+  }
+  return {
+    proceed: true,
+    confirmPhrase: input.typed,
+    acknowledgeRetention: input.attested === true,
+  };
+}
+
+/**
+ * The line the owner reads after a reset — including any problem the post-reset
+ * audit found.
+ *
+ * Pure so the "did it actually verify the result?" question is answered by
+ * executing a function rather than by grepping for a function name.
+ */
+export function summariseResetOutcome(input: {
+  readonly totalRowsDeleted: number;
+  readonly tablesEmptied: number;
+  readonly problems: readonly { readonly problem: string; readonly detail: string }[];
+}): string {
+  let msg =
+    `${input.totalRowsDeleted} row(s) removed across ${input.tablesEmptied} table(s), ` +
+    `including the general ledger. Settings, chart of accounts, knowledge base, ` +
+    `people and the audit log are untouched.`;
+  if (input.problems.length > 0) {
+    msg +=
+      ` WARNING — the post-reset check found: ` +
+      input.problems.map((p) => `${p.problem}: ${p.detail}`).join("; ");
+  }
+  return msg;
+}
+
+// ─── §6c  WHAT A TABLE-BY-TABLE RESET STRUCTURALLY CANNOT REACH ──────────────
+//
+// Every rule in this file names a table. That shape has three blind spots, and
+// none of them is a defect in the rules — they are things a DELETE statement
+// can never touch. They are declared here, and shown in the briefing, because
+// an undisclosed limit is how someone concludes "the reset handles it" and is
+// wrong on go-live morning.
+//
+// Each verified against migration 0209 on 2026-09-10:
+//     grep -ci 'storage\.|bucket'            -> 0
+//     grep -ci 'auth\.users'                 -> 0
+//     grep -ci 'setval|restart identity'     -> 0
+
+export type ResetBlindSpot = {
+  readonly id: "STORAGE_OBJECTS" | "AUTH_USERS" | "SEQUENCES";
+  /** What the reset does not do. */
+  readonly limit: string;
+  /** Whether it can put a wrong number on a report or a tax form. */
+  readonly affectsBooks: boolean;
+  /** What the owner should do about it, or why nothing is needed. */
+  readonly action: string;
+};
+
+/**
+ * WIPE tables holding a pointer INTO a storage bucket. When these rows are
+ * deleted the bytes stay in the bucket with nothing referencing them. Found by
+ * grepping the migrations for `storage_path` columns and classifying the owner
+ * of each. `announcer_sounds` and `media_assets` also hold paths but are KEEP,
+ * so they are not orphaned and are not listed.
+ */
+export const WIPE_TABLES_WITH_STORAGE_POINTERS = [
+  "manifest_documents",
+  "payroll_source_documents",
+  "sage_import_uploads",
+] as const;
+
+export const RESET_BLIND_SPOTS: readonly ResetBlindSpot[] = [
+  {
+    id: "STORAGE_OBJECTS",
+    limit:
+      "Files already uploaded into the storage buckets are not deleted. Emptying manifest_documents, payroll_source_documents and sage_import_uploads removes the rows that point at them, so those files become unreferenced but still occupy the bucket.",
+    affectsBooks: false,
+    action:
+      "Nothing is required for correctness: no report or tax form reads a bucket directly, and the rows that gave those files meaning are gone. Tidy the intake-docs, sage-imports and pos-raw buckets by hand in the Supabase dashboard if you want the space back.",
+  },
+  {
+    id: "AUTH_USERS",
+    limit:
+      "Login accounts in Supabase's auth.users are not deleted. That is deliberate and consistent: employees and staff_profiles are both KEEP, so wiping the logins underneath them would leave staff rows pointing at people who can no longer sign in, and would lock you out of your own system.",
+    affectsBooks: false,
+    action:
+      "Delete any throwaway test logins yourself under Authentication then Users. Keep your own, and keep anyone who will really work here.",
+  },
+  {
+    id: "SEQUENCES",
+    limit:
+      "Auto-numbering counters are not restarted, so the next audit_logs id carries on from where the rehearsal left it rather than starting at 1.",
+    affectsBooks: false,
+    action:
+      "Nothing to do. Every table with such a counter is either KEEP (audit_logs, media_usages, equipment_assets, where continuing is correct) or transient (discovery_*, announcer_queue, pos_sale_events, where the number is never shown to anyone). Order numbers are text and use no sequence, and gl_journal_sequences is KEPT ON PURPOSE so a real entry can never reuse a rehearsal entry's number.",
+  },
+];
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`factory-reset-core self-test: ${msg}`);

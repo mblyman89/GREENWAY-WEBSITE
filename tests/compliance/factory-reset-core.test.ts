@@ -20,17 +20,26 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  CURRENT_RESET_RPC,
   FAMILY_RULES,
+  RESET_BLIND_SPOTS,
+  RESET_CONFIRM_PHRASE,
   RETENTION_CITE,
   RETENTION_YEARS,
+  SUPERSEDED_RESET_RPC,
   TABLE_RULES,
+  WIPE_TABLES_WITH_STORAGE_POINTERS,
   __runFactoryResetCoreTests,
   buildResetPlan,
   classifyTable,
+  confirmPhraseAccepted,
   describeResetPlan,
+  evaluateResetRequest,
+  summariseResetOutcome,
   mayReset,
   type TradeEvidence,
 } from "../../src/lib/accounting/factory-reset-core";
+import { listSchemaTables } from "../../src/lib/admin/schema-tables";
 
 const MIGRATIONS_DIR = join(process.cwd(), "supabase", "migrations");
 
@@ -568,5 +577,495 @@ describe("migration 0209 — the SQL door", () => {
         `EXACT failure that produced D-62 — a hand-written SQL list drifting from the decision. ` +
         `Add them to 0209 in child->parent order:\n${missed.join("\n")}`,
     ).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// D-64 — THE BUTTON WAS WIRED TO THE OLD RESET
+//
+// Everything above proves the RULES are current and the SQL matches them.
+// None of it proved the third link: that the button the owner presses calls
+// the function those tests are about. It did not. `gl_factory_reset` appeared
+// in zero lines of application code while the reset screen ran the superseded
+// `reset_operational_data()`, which deletes 66 tables against the core's 138.
+//
+// These read the real source files, so the chain UI -> action -> service ->
+// RPC cannot silently come apart again.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function src(...parts: string[]): string {
+  return readFileSync(join(process.cwd(), ...parts), "utf8");
+}
+
+/** Source with `//` line comments and block comments removed. */
+function code(text: string): string {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .map((l) => l.split("//")[0])
+    .join("\n");
+}
+
+describe("D-64 — the reset button calls the CURRENT reset", () => {
+  const service = src("src", "lib", "admin", "reset-service.ts");
+  const actions = src("src", "app", "admin", "settings", "actions.ts");
+  const page = src("src", "app", "admin", "settings", "reset", "page.tsx");
+
+  it("the service calls gl_factory_reset and not the superseded function", () => {
+    const live = code(service);
+    // It reaches the RPC through the shared constant rather than a re-typed
+    // string, which is stronger than a literal: the name cannot drift from the
+    // core, and `the phrase in the core is the phrase in the SQL` below ties
+    // the core to migration 0209.
+    expect(live).toMatch(/rpc\(\s*CURRENT_RESET_RPC/);
+    expect(live).toMatch(/CURRENT_RESET_RPC[\s\S]*from "@\/lib\/accounting\/factory-reset-core"/);
+    expect(CURRENT_RESET_RPC).toBe("gl_factory_reset");
+    // The superseded name may appear in the explanatory comment, but must not
+    // survive in executable code. This is the assertion that would have caught
+    // the defect on the day it was introduced.
+    expect(
+      live.includes(`"${SUPERSEDED_RESET_RPC}"`) || live.includes(`'${SUPERSEDED_RESET_RPC}'`),
+      "reset-service still calls the superseded reset_operational_data()",
+    ).toBe(false);
+  });
+
+  it("no application code anywhere still routes to the superseded RPC", () => {
+    // Walk the whole app rather than the two files I happen to be editing —
+    // the point of the defect was that nobody looked at the third file.
+    const roots = [join(process.cwd(), "src")];
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.tsx?$/.test(e.name)) {
+          const live = code(readFileSync(p, "utf8"));
+          if (
+            live.includes(`rpc("${SUPERSEDED_RESET_RPC}"`) ||
+            live.includes(`rpc('${SUPERSEDED_RESET_RPC}'`)
+          ) {
+            offenders.push(p);
+          }
+        }
+      }
+    };
+    for (const r of roots) walk(r);
+    expect(
+      offenders,
+      `These still call ${SUPERSEDED_RESET_RPC}, which leaves the general ledger behind:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("the action forwards the typed phrase verbatim, never upper-cased", () => {
+    const live = code(actions);
+    expect(live).toContain("evaluateResetRequest");
+    expect(live).toContain("runFactoryReset");
+    // The old action did `.trim().toUpperCase()` before comparing. The SQL does
+    // not upper-case, so doing it here would accept a phrase the database then
+    // refuses — and would let a casual "erase all test data" count as
+    // deliberate intent for the most destructive operation in the system.
+    expect(live).not.toMatch(/fd\.get\("confirm"\)[\s\S]{0,80}toUpperCase\(\)/);
+  });
+
+  it("the action still requires the retention attestation to reach the database", () => {
+    const live = code(actions);
+    // It must be READ from the form and PASSED, not defaulted to true.
+    expect(live).toMatch(/retention_attestation/);
+    expect(live).toMatch(/runFactoryReset\(\s*decision\.confirmPhrase,\s*decision\.acknowledgeRetention\s*\)/);
+    expect(live).not.toMatch(/runFactoryReset\([^)]*,\s*true\s*\)/);
+  });
+
+  it("the action verifies the result instead of trusting it", () => {
+    const live = code(actions);
+    expect(live).toContain("auditFactoryReset");
+    // The problems must reach the owner's screen, via the pure summariser
+    // whose behaviour is asserted by EXECUTION below.
+    expect(live).toContain("summariseResetOutcome");
+    // The problems the audit found must be the ones handed to the summariser.
+    // `problems: []` would silence a real warning while every identifier in
+    // this file still looked correct — a mutant that survived until this
+    // assertion was written.
+    expect(live).toMatch(/summariseResetOutcome\(\{[\s\S]{0,200}\bproblems,/);
+    expect(live).not.toMatch(/problems:\s*\[\]\s*,?\s*\}\)/);
+  });
+
+  it("the screen shows the phrase the database actually compares against", () => {
+    const live = code(page);
+    expect(live).toContain("RESET_CONFIRM_PHRASE");
+    // The superseded phrase must be gone from the UI entirely, or the owner
+    // types what the screen says and is refused.
+    expect(page).not.toContain("RESET OPERATIONAL DATA (WAC 314-55-087)");
+  });
+
+  it("the screen's counts come from the core, not from a hand-typed list", () => {
+    const live = code(page);
+    expect(live).toContain("buildResetPlan");
+    expect(live).toContain("listSchemaTables");
+    // The two hand-maintained category arrays are what drifted; they must not
+    // come back.
+    expect(live).not.toMatch(/const\s+CLEARED\s*:/);
+    expect(live).not.toMatch(/const\s+KEPT\s*:/);
+  });
+
+  it("the service uses the owner's session, not the service-role key", () => {
+    const live = code(service);
+    // gl_factory_reset gates on is_owner(), which reads auth.uid(). The
+    // service-role key has no `sub` claim, so auth.uid() is NULL and the call
+    // would fail RESET_NOT_OWNER every single time regardless of who is signed
+    // in. This is the same defect books-client.ts was created to fix.
+    expect(live).toContain("createBooksClient");
+    expect(live).not.toContain("createSupabaseAdminClient");
+  });
+
+  it("the phrase in the core is the phrase in the SQL", () => {
+    const door = sqlText("0209_factory_reset.sql");
+    expect(door).toContain(`'${RESET_CONFIRM_PHRASE}'`);
+  });
+});
+
+describe("the runtime schema snapshot cannot drift from the migrations", () => {
+  it("lists exactly the tables the migrations create", () => {
+    const onDisk = tablesFromMigrations();
+    const snapshot = [...listSchemaTables()];
+    const missing = onDisk.filter((t) => !snapshot.includes(t));
+    const extra = snapshot.filter((t) => !onDisk.includes(t));
+    expect(
+      { missing, extra },
+      `src/lib/admin/schema-tables.ts is stale. Run: npx tsx scripts/generate-schema-tables.ts`,
+    ).toEqual({ missing: [], extra: [] });
+  });
+
+  it("the reset screen therefore plans against the real schema", () => {
+    // If the snapshot were wrong the screen could show a clean plan while the
+    // database contained an unclassified table.
+    const plan = buildResetPlan(listSchemaTables());
+    expect(plan.ok).toBe(true);
+  });
+});
+
+describe("what a table-by-table reset structurally cannot reach", () => {
+  const door = sqlText("0209_factory_reset.sql");
+
+  it("the three blind spots are REAL — 0209 genuinely does not handle them", () => {
+    // Asserted from the SQL, not from the note. If a future migration teaches
+    // the reset to clear storage or restart sequences, this fails and the
+    // documentation must be corrected rather than left overstating the limit.
+    expect(door).not.toMatch(/storage\.objects/i);
+    expect(door).not.toMatch(/delete\s+from\s+auth\.users/i);
+    expect(door).not.toMatch(/\bsetval\s*\(/i);
+    expect(door).not.toMatch(/restart\s+identity/i);
+  });
+
+  it("each blind spot is disclosed with a remedy, and none of them touches the books", () => {
+    expect(RESET_BLIND_SPOTS.map((b) => b.id).sort()).toEqual([
+      "AUTH_USERS",
+      "SEQUENCES",
+      "STORAGE_OBJECTS",
+    ]);
+    for (const b of RESET_BLIND_SPOTS) {
+      expect(b.limit.length, b.id).toBeGreaterThanOrEqual(40);
+      expect(b.action.length, b.id).toBeGreaterThanOrEqual(40);
+      expect(b.affectsBooks, `${b.id} would put wrong numbers on a report`).toBe(false);
+    }
+  });
+
+  it("the storage-pointer tables named are really WIPE, and really hold paths", () => {
+    for (const t of WIPE_TABLES_WITH_STORAGE_POINTERS) {
+      expect(classifyTable(t)?.disposition, t).toBe("WIPE");
+    }
+    // And the claim that they hold storage paths is checked against the DDL.
+    const all = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith(".sql"))
+      .map((f) => sqlText(f))
+      .join("\n");
+    for (const t of WIPE_TABLES_WITH_STORAGE_POINTERS) {
+      const block = all.slice(all.indexOf(`create table if not exists public.${t}`));
+      expect(block.slice(0, 1200), `${t} should declare a storage path column`).toMatch(
+        /storage_path/,
+      );
+    }
+  });
+
+  it("keeping the journal sequence is deliberate, so numbers are never reused", () => {
+    // The SEQUENCES note leans on this being KEEP. If someone flipped it to
+    // WIPE the note would become false and a real entry could reuse a
+    // rehearsal entry's number.
+    expect(classifyTable("gl_journal_sequences")?.disposition).toBe("KEEP");
+  });
+
+  it("the owner is told about the limits before he presses the button", () => {
+    const plan = buildResetPlan(tablesFromMigrations());
+    const text = describeResetPlan(plan).paragraphs.join(" ");
+    expect(text).toContain("auth.users");
+    expect(text).toMatch(/bucket/i);
+    expect(text).toMatch(/counters|numbering/i);
+  });
+});
+
+describe("the reset cannot orphan a row it leaves behind", () => {
+  /**
+   * Foreign keys, read from the migrations with BALANCED-PAREN block
+   * extraction.
+   *
+   * A naive `create table ...([\s\S]*?)\)` regex leaks past the end of the
+   * block and attributes one table's `references` clauses to another. That
+   * produced a false finding during this audit — a reported FK from
+   * gl_payroll_labor_roles to inbound_manifests, which does not exist in the
+   * DDL at all. Walking the parentheses is the only way to know where the
+   * block ends.
+   */
+  function foreignKeys(): { child: string; parent: string; action: string }[] {
+    const edges: { child: string; parent: string; action: string }[] = [];
+    for (const f of readdirSync(MIGRATIONS_DIR).filter((x) => x.endsWith(".sql"))) {
+      const sql = sqlText(f)
+        .split("\n")
+        .map((l) => l.split("--")[0])
+        .join("\n");
+      const re = /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z0-9_]+)\s*\(/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(sql)) !== null) {
+        const child = m[1].toLowerCase();
+        let depth = 1;
+        let i = re.lastIndex;
+        while (i < sql.length && depth > 0) {
+          const ch = sql[i];
+          if (ch === "(") depth++;
+          else if (ch === ")") depth--;
+          i++;
+        }
+        if (depth !== 0) continue;
+        const body = sql.slice(re.lastIndex, i - 1);
+        const rre = /references\s+(?:public\.)?([a-z0-9_]+)\s*(?:\([^)]*\))?([^,\n]*)/gi;
+        let r: RegExpExecArray | null;
+        while ((r = rre.exec(body)) !== null) {
+          const tail = (r[2] || "").toLowerCase();
+          const action = /on\s+delete\s+cascade/.test(tail)
+            ? "CASCADE"
+            : /on\s+delete\s+set\s+null/.test(tail)
+              ? "SET NULL"
+              : /on\s+delete\s+set\s+default/.test(tail)
+                ? "SET DEFAULT"
+                : /on\s+delete\s+restrict/.test(tail)
+                  ? "RESTRICT"
+                  : "NO ACTION";
+          edges.push({ child, parent: r[1].toLowerCase(), action });
+        }
+      }
+    }
+    return edges;
+  }
+
+  it("extracts a plausible number of foreign keys", () => {
+    // A floor, so adding a table does not fail here. Measured: 440.
+    expect(foreignKeys().length).toBeGreaterThanOrEqual(400);
+  });
+
+  it("the parser does not invent edges by leaking across table boundaries", () => {
+    // The specific false positive this parser was written to eliminate.
+    const bogus = foreignKeys().filter(
+      (e) => e.child === "gl_payroll_labor_roles" && e.parent === "inbound_manifests",
+    );
+    expect(bogus, "the balanced-paren scan is leaking again").toEqual([]);
+  });
+
+  it("no KEPT table points at a table that gets emptied", () => {
+    // This is the failure mode a table-by-table reset can actually have: a row
+    // that survives holding a foreign key to a row that does not. It would
+    // either block the delete or leave a dangling reference.
+    const bad = foreignKeys().filter(
+      (e) =>
+        classifyTable(e.child)?.disposition === "KEEP" &&
+        classifyTable(e.parent)?.disposition === "WIPE",
+    );
+    expect(
+      bad.map((e) => `${e.child} -> ${e.parent} (${e.action})`),
+      `A KEPT table references a WIPED one. After the reset these rows point at nothing.`,
+    ).toEqual([]);
+  });
+
+  it("0209 deletes every child before its parent on the blocking edges", () => {
+    // CASCADE and SET NULL edges look after themselves. NO ACTION and RESTRICT
+    // do not: if the parent is deleted first, the whole reset aborts.
+    const blocking = [
+      ...new Map(
+        foreignKeys()
+          .filter(
+            (e) =>
+              classifyTable(e.child)?.disposition === "WIPE" &&
+              classifyTable(e.parent)?.disposition === "WIPE" &&
+              (e.action === "NO ACTION" || e.action === "RESTRICT") &&
+              e.child !== e.parent,
+          )
+          .map((e) => [`${e.child}|${e.parent}`, e]),
+      ).values(),
+    ];
+    expect(blocking.length).toBeGreaterThan(0);
+
+    const door = sqlText("0209_factory_reset.sql");
+    const order = [...door.matchAll(/delete\s+from\s+public\.([a-z0-9_]+)/gi)].map((m) =>
+      m[1].toLowerCase(),
+    );
+    const at = new Map<string, number>();
+    order.forEach((t, i) => {
+      if (!at.has(t)) at.set(t, i);
+    });
+
+    const wrong = blocking
+      .filter((e) => {
+        const c = at.get(e.child);
+        const p = at.get(e.parent);
+        return c === undefined || p === undefined || c > p;
+      })
+      .map((e) => `${e.child} must be deleted before ${e.parent} (${e.action})`);
+
+    expect(wrong, `0209 deletes a parent before its child; the reset would abort.`).toEqual([]);
+  });
+});
+
+describe("the RPC names are tied to the SQL that defines them", () => {
+  const door = sqlText("0209_factory_reset.sql");
+
+  it("every RPC the app calls is actually created by migration 0209", () => {
+    // Without this, CURRENT_RESET_RPC could be renamed to anything and the
+    // wiring tests above would still pass while the button called a function
+    // that does not exist.
+    for (const fn of [CURRENT_RESET_RPC, "gl_factory_reset_preview", "gl_audit_factory_reset"]) {
+      expect(door, `0209 must define ${fn}`).toMatch(
+        new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${fn}\\s*\\(`, "i"),
+      );
+    }
+  });
+
+  it("0209 does not define the superseded function", () => {
+    expect(door).not.toMatch(
+      new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${SUPERSEDED_RESET_RPC}\\s*\\(`, "i"),
+    );
+  });
+
+  it("the confirmation helper agrees with the SQL comparison exactly", () => {
+    // The SQL is: coalesce(btrim(confirm_phrase), '') <> 'ERASE ALL TEST DATA'
+    // i.e. trim, then compare case-SENSITIVELY.
+    expect(door).toMatch(/btrim\(confirm_phrase\)/);
+    expect(door).not.toMatch(/upper\(confirm_phrase\)/i);
+    expect(confirmPhraseAccepted(RESET_CONFIRM_PHRASE)).toBe(true);
+    expect(confirmPhraseAccepted(`  ${RESET_CONFIRM_PHRASE}\n`)).toBe(true);
+    expect(confirmPhraseAccepted(RESET_CONFIRM_PHRASE.toLowerCase())).toBe(false);
+    expect(confirmPhraseAccepted("")).toBe(false);
+    expect(confirmPhraseAccepted("RESET OPERATIONAL DATA (WAC 314-55-087)")).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The action's decisions, EXECUTED
+//
+// The first mutation campaign on this slice left two survivors: rewriting the
+// action's phrase gate to `if (false)` and deleting its post-reset audit call
+// both left the suite green, because the only available assertions were greps
+// against the action's source text and the identifiers were still sitting
+// there. A test that cannot distinguish a live guard from a dead one is
+// decoration (rule 43).
+//
+// The logic was therefore extracted into the pure core rather than the mutants
+// being weakened, and these run it.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("evaluateResetRequest — the gate, executed", () => {
+  it("refuses a wrong phrase and names the right one", () => {
+    const d = evaluateResetRequest({ typed: "reset please", attested: true });
+    expect(d.proceed).toBe(false);
+    if (d.proceed) return;
+    expect(d.error).toContain(RESET_CONFIRM_PHRASE);
+    expect(d.error).toMatch(/Nothing was deleted/);
+  });
+
+  it("refuses an empty phrase even when the box is ticked", () => {
+    expect(evaluateResetRequest({ typed: "", attested: true }).proceed).toBe(false);
+    expect(evaluateResetRequest({ typed: "   ", attested: true }).proceed).toBe(false);
+  });
+
+  it("refuses the SUPERSEDED phrase — the one the old screen asked for", () => {
+    const d = evaluateResetRequest({
+      typed: "RESET OPERATIONAL DATA (WAC 314-55-087)",
+      attested: true,
+    });
+    expect(d.proceed).toBe(false);
+  });
+
+  it("refuses a case-folded phrase, exactly as the database would", () => {
+    expect(evaluateResetRequest({ typed: "erase all test data", attested: true }).proceed).toBe(
+      false,
+    );
+  });
+
+  it("accepts the exact phrase and forwards it UNCHANGED", () => {
+    const d = evaluateResetRequest({ typed: `  ${RESET_CONFIRM_PHRASE}  `, attested: false });
+    expect(d.proceed).toBe(true);
+    if (!d.proceed) return;
+    // Whitespace is tolerated (btrim), but the text handed to the database is
+    // what the owner actually typed — this layer must not normalise it.
+    expect(d.confirmPhrase).toBe(`  ${RESET_CONFIRM_PHRASE}  `);
+  });
+
+  it("never invents the retention acknowledgement", () => {
+    const no = evaluateResetRequest({ typed: RESET_CONFIRM_PHRASE, attested: false });
+    expect(no.proceed).toBe(true);
+    if (!no.proceed) return;
+    expect(no.acknowledgeRetention).toBe(false);
+
+    const yes = evaluateResetRequest({ typed: RESET_CONFIRM_PHRASE, attested: true });
+    expect(yes.proceed).toBe(true);
+    if (!yes.proceed) return;
+    expect(yes.acknowledgeRetention).toBe(true);
+  });
+});
+
+describe("summariseResetOutcome — the verification, executed", () => {
+  it("reports the real counts and says the ledger went with them", () => {
+    const msg = summariseResetOutcome({
+      totalRowsDeleted: 4211,
+      tablesEmptied: 138,
+      problems: [],
+    });
+    expect(msg).toContain("4211");
+    expect(msg).toContain("138");
+    expect(msg).toMatch(/general ledger/i);
+    expect(msg).not.toMatch(/WARNING/);
+  });
+
+  it("SHOUTS when the post-reset check found something still on the books", () => {
+    const msg = summariseResetOutcome({
+      totalRowsDeleted: 10,
+      tablesEmptied: 138,
+      problems: [{ problem: "JOURNALS_REMAIN", detail: "3 journal(s) still on the books" }],
+    });
+    expect(msg).toContain("WARNING");
+    expect(msg).toContain("JOURNALS_REMAIN");
+    expect(msg).toContain("3 journal(s) still on the books");
+  });
+
+  it("reports EVERY problem, not just the first", () => {
+    const msg = summariseResetOutcome({
+      totalRowsDeleted: 0,
+      tablesEmptied: 0,
+      problems: [
+        { problem: "JOURNALS_REMAIN", detail: "a" },
+        { problem: "PAYROLL_YTD_REMAINS", detail: "b" },
+        { problem: "CHART_OF_ACCOUNTS_LOST", detail: "c" },
+      ],
+    });
+    for (const p of ["JOURNALS_REMAIN", "PAYROLL_YTD_REMAINS", "CHART_OF_ACCOUNTS_LOST"]) {
+      expect(msg).toContain(p);
+    }
+  });
+
+  it("a success line can never be mistaken for a warning line", () => {
+    const clean = summariseResetOutcome({ totalRowsDeleted: 1, tablesEmptied: 1, problems: [] });
+    const dirty = summariseResetOutcome({
+      totalRowsDeleted: 1,
+      tablesEmptied: 1,
+      problems: [{ problem: "X", detail: "y" }],
+    });
+    expect(clean).not.toEqual(dirty);
+    expect(dirty.startsWith(clean)).toBe(true);
   });
 });

@@ -12,23 +12,40 @@ That is the correct starting position, and it is not a weakness. You do not need
 
 You asked: *"Can I give you access to my supabase database and you stress test the system by driving the tables and such?"*
 
-**My answer is: please do not, and here is why that answer is in your interest rather than a refusal.**
+**Yes. Give me the access, and I will drive it as hard as it will go.**
 
-Your Supabase database is your **production** database. It holds the real inventory that WSLCB expects to reconcile against CCRS, the real sale events that back your excise return, and the real customer records covered by your privacy obligations. Stress testing means deliberately generating garbage — thousands of fake sales, impossible quantities, corrupted rows — and then seeing what survives. Doing that against production is not testing, it is self-inflicted damage. Three specific hazards make it worse than it first sounds:
+An earlier draft of this document said the opposite, at length, and recommended you stand up a second Supabase project first. That recommendation was **wrong and has been withdrawn**. It rested on a premise I never checked with you: that the Supabase database was production. You corrected me:
 
-**It is not cleanly reversible.** A test sale is not a row you can simply delete. Selling something decrements a lot, writes a sale event, may award loyalty points, may consume a customer's daily purchase limit, and lands in the pool that CCRS reporting reads. Deleting the order afterwards leaves the decrement, the loyalty grant and the CCRS row behind. You end up with inventory that does not match the shelf and a state regulator's file that does not match your books — the exact outcome you are migrating *away* from Cultivera to avoid.
+> *"We are not in production yet, still developing. Everything on our system is test data. All sales, all refunds, all customers, all employees, all test data. The inventory and vendors are my real products and vendors, but production lives in Cultivera currently. There is no contaminating the database at this point."*
 
-**It contaminates the numbers you are trying to trust.** You told me the reporting "seems to be accurate from what I can tell." The moment fake sales enter production, you lose the ability to say that. Every report becomes "accurate except for the parts I made up," and you will not remember which parts those were in three weeks.
+That changes the answer completely. My standing instruction from you is *"do not guess, do not assume"*, and I had done both. The reasoning is preserved below only so the distinction stays clear for anyone reading later.
 
-**It creates a compliance record you cannot retract.** Sale events are designed to be durable and append-only, because that is what a traceability system requires. That design is protecting you. It also means that a stress test writes an audit trail of thousands of transactions that never happened, at a licensed premises, in a system of record. There is no good way to explain that later.
+### Why the objection no longer applies
 
-### What to do instead — a staging database
+The three hazards in the withdrawn draft were: test data is not cleanly reversible, it contaminates numbers you are trying to trust, and it creates a compliance record you cannot retract. Every one of those depends on there being real trade in the database. There is none. Production is Cultivera. Nothing here has been reported to the WSLCB, nothing backs a filed excise return, and no customer record in Supabase belongs to a real patient.
 
-The professional answer, and the one I recommend, is a **second Supabase project** that is a structural copy of production with no real data in it. Same tables, same rules, same migrations, zero real customers and zero real inventory. Then I can drive it as hard as you like: hundreds of thousands of rows, absurd quantities, simultaneous conflicting writes, deliberately corrupted imports. If something catches fire, we learn about it for free and nothing real is touched.
+There is also a purpose-built way back: the factory reset. It empties every table that records an event — including the general ledger — and keeps every table that describes the business. So the plan is deliberately disposable: fill the system with rehearsal data, break it on purpose, learn everything, then wipe the slate before you migrate for real.
 
-Setting that up is a task I can do end to end. It is roughly: create a new Supabase project, apply the same migration set that production already has, point a separate environment at it, and seed it with synthetic products and customers that are obviously fake. **Say the word and I will build it as its own slice.** It is the single highest-value thing you could authorise before cutover, and it makes every item in Part 3 of this document something we can test aggressively rather than gingerly.
+You also declined a second Supabase project, and I agree with the decision rather than merely accepting it:
 
-Until that exists, everything below is designed to be safe to do on production **by hand, at ordinary volume**, because it uses the same actions a real shift would — just deliberately awkward ones. Where an item is *not* safe on production, it is marked **[STAGING ONLY]** and you should skip it for now.
+> *"I don't want to setup another supabase database, there are too many env variables to re setup in vercel for it to be worth the time and effort."*
+
+That is correct on cost/benefit. A staging project buys isolation you do not need when the live database contains nothing worth isolating, and it costs a full re-plumbing of the Vercel environment — which is itself a rich source of new bugs that would have nothing to do with your POS.
+
+### The two things that genuinely are real
+
+Two things in Supabase are not test data, and I treat them as read-mostly:
+
+1. **Inventory and vendors** — your real products and real suppliers. I will not delete or rename these. Where I need product rows to abuse, I create clearly-labelled rehearsal products alongside them.
+2. **The knowledge base** (`kb_*`) — hand-validated reference material. You asked me not to touch it, and the factory reset keeps it too, so it survives the wipe.
+
+### The one thing to do before I start
+
+**Run the factory reset yourself, once, and confirm it does what it says.** Not because the data is precious, but because the reset is the safety net under everything else in this document, and a safety net nobody has tested is a decoration. You test it, you see the numbers go to zero, and from that point on we both know the slate can be cleaned on demand.
+
+A defect was found in exactly that function during this audit: the rules were current, but the **button was still wired to the superseded reset**, which would have left the entire general ledger behind. That is fixed. Details are in the slice report — but it is the reason "test the reset first" is the first instruction here rather than an afterthought.
+
+Everything below is now safe to run at whatever volume we like, because the worst case is a reset.
 
 ---
 
@@ -105,7 +122,7 @@ This is where imports and integrations break. You are importing from Cultivera, 
 
 Names are the classic trap. Try a product whose name contains an ampersand, a hash, an apostrophe, a slash, an emoji, or a very long run of characters. The bug I just fixed in the register search had a cousin exactly here: a product called `Tom & Jerry #4` sent through a URL without proper encoding gets silently cut off at the `#`, and the system searches for something the customer never typed. Everything looks like it worked, and the answer is wrong.
 
-Also worth trying: quantities with more decimal places than expected (0.333g), a zero-price product, a product with no category, a product with no image, a customer with only one name, a customer with an apostrophe in their surname, and a CSV file exported with the wrong line endings or an extra blank row at the bottom. **[Some of these are STAGING ONLY if they would create real inventory.]**
+Also worth trying: quantities with more decimal places than expected (0.333g), a zero-price product, a product with no category, a product with no image, a customer with only one name, a customer with an apostrophe in their surname, and a CSV file exported with the wrong line endings or an extra blank row at the bottom. All of these are fair game. Create rehearsal products rather than editing your real ones, and the reset clears the lot afterwards.
 
 ### Lens 7 — The Honest Failure
 
