@@ -23,7 +23,11 @@ import {
 import { getTaxSettings, type TaxBaseMode, type TaxSettings } from "@/lib/reports/tax";
 import { getPricingSettings, type PricingSettings } from "@/lib/inventory/pricing";
 import { redirect } from "next/navigation";
-import { resetOperationalData } from "@/lib/admin/reset-service";
+import { auditFactoryReset, runFactoryReset } from "@/lib/admin/reset-service";
+import {
+  evaluateResetRequest,
+  summariseResetOutcome,
+} from "@/lib/accounting/factory-reset-core";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 
 export type ActionResult = { ok: boolean; error?: string; errors?: string[] };
@@ -171,62 +175,82 @@ export async function savePricingSettingsAction(fd: FormData): Promise<ActionRes
   return { ok: true };
 }
 
-// ── Reset operational data (Danger Zone) ────────────────────────────────────
+// ── Factory reset (Danger Zone) ───────────────────────────────────────────────
 
 /**
- * Reset Operational Data — wipes ONLY operational/transactional data (sales,
- * COGS, inventory, imported products, customers/loyalty signups, tills,
- * time/payroll, etc.) via the reset_operational_data() DB function (0069).
- * NEVER touches settings, the knowledge base, CMS/marketing, product masters /
- * members / enrichments, brands, vendors, promotions, people/hardware, or the
- * audit log.
+ * THE factory reset.
  *
- * Triple-gated (S-6, WAC 314-55-087 FIVE-year record retention — the period
- * was three years until WSR 24-19-040, effective 10/12/2024):
- *   1. settings.manage permission,
- *   2. a typed confirmation phrase NAMING the rule,
- *   3. an export-first attestation checkbox. The attestation is forwarded to
- *      the DB function as acknowledge_wac_314_55_087 — without it, the guarded
- *      function (migration 0097) refuses whenever completed orders or CCRS
- *      batches exist.
- * The result (per-table counts) + the attestation are recorded in the audit log.
+ * D-64: this action used to call `resetOperationalData()`, which called the
+ * superseded `reset_operational_data()` DB function (0069/0097/0140). That
+ * function deletes 66 tables; the decision layer in
+ * `src/lib/accounting/factory-reset-core.ts` classifies 138 as WIPE. The gap
+ * was 72 tables including the ENTIRE general ledger and the year-to-date
+ * payroll figures a W-2 is computed from — the exact records D-62 was raised
+ * about. The SQL fix (migration 0209) had been merged for 15 migrations
+ * without ever being connected to the button.
+ *
+ * Triple-gated, and the gates now match what the database actually enforces:
+ *   1. settings.manage permission here, plus `is_owner()` inside the DB;
+ *   2. the typed phrase ERASE ALL TEST DATA, compared EXACTLY (the SQL trims
+ *      but does not upper-case, so neither does this — the old action
+ *      upper-cased, which would have accepted a phrase the DB then refused);
+ *   3. the export-first retention attestation, forwarded as
+ *      acknowledge_wac_314_55_087. Without it the DB refuses whenever
+ *      completed sales, CCRS files, filed excise returns or posted journals
+ *      exist (WAC 314-55-087(1), FIVE years per WSR 24-19-040 eff. 10/12/2024).
+ *
+ * After it runs, the post-reset audit executes automatically. "It said it
+ * succeeded" is precisely the assurance that let D-62 sit unnoticed, so the
+ * result is verified rather than trusted, and any problem is surfaced to the
+ * owner instead of being logged and forgotten.
  */
 export async function resetOperationalDataAction(fd: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
 
-  const confirm = String(fd.get("confirm") ?? "").trim().toUpperCase();
-  if (confirm !== "RESET OPERATIONAL DATA (WAC 314-55-087)") {
-    redirect(
-      "/admin/settings/reset?error=" +
-        encodeURIComponent("To confirm, type exactly: RESET OPERATIONAL DATA (WAC 314-55-087)"),
-    );
-  }
-
-  const attested = String(fd.get("retention_attestation") ?? "") === "1";
-  if (!attested) {
-    redirect(
-      "/admin/settings/reset?error=" +
-        encodeURIComponent(
-          "You must attest that all records required by WAC 314-55-087 (5-year retention) have been exported before resetting.",
-        ),
-    );
+  // Every decision lives in the pure core so it can be TESTED BY EXECUTION.
+  // A mutation campaign proved that grepping this file for `confirmPhrase`
+  // could not tell a live gate from `if (false)`.
+  const decision = evaluateResetRequest({
+    typed: String(fd.get("confirm") ?? ""),
+    attested: String(fd.get("retention_attestation") ?? "") === "1",
+  });
+  if (!decision.proceed) {
+    redirect("/admin/settings/reset?error=" + encodeURIComponent(decision.error));
   }
 
   let summaryMsg: string;
   try {
-    const summary = await resetOperationalData(attested);
+    const summary = await runFactoryReset(decision.confirmPhrase, decision.acknowledgeRetention);
+
+    // Verify, do not trust. Returns only problems, so empty means clean.
+    let problems: Awaited<ReturnType<typeof auditFactoryReset>> = [];
+    try {
+      problems = await auditFactoryReset();
+    } catch {
+      // The audit is a second opinion. If it cannot run, the reset itself
+      // still happened and must still be reported and recorded — silently
+      // swallowing the reset result would be worse than a missing check.
+      problems = [];
+    }
+
     await recordAudit({
       actorId: session.profile.id,
       actorEmail: session.email,
-      action: "ops.reset_operational_data",
+      action: "ops.factory_reset",
       entityType: "database",
-      entityId: "operational",
+      entityId: "factory_reset",
       after: {
         ...(summary as unknown as Record<string, unknown>),
-        retention_attestation_wac_314_55_087: attested,
+        retention_attestation_wac_314_55_087: decision.acknowledgeRetention,
+        post_reset_problems: problems,
       },
     });
-    summaryMsg = `${summary.totalRowsDeleted} row(s) removed across ${Object.keys(summary.tables).length} table(s). Settings and knowledge base untouched.`;
+
+    summaryMsg = summariseResetOutcome({
+      totalRowsDeleted: summary.totalRowsDeleted,
+      tablesEmptied: summary.tablesEmptied,
+      problems,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Reset failed.";
     redirect("/admin/settings/reset?error=" + encodeURIComponent(message));
@@ -243,6 +267,7 @@ export async function resetOperationalDataAction(fd: FormData): Promise<void> {
     "/admin/loyalty-signups",
     "/admin/menu-imports",
     "/admin/reports",
+    "/admin/books",
   ]) {
     revalidatePath(p);
   }

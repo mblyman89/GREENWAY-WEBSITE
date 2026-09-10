@@ -8,8 +8,25 @@ Companion to **`docs/BATTLE_TESTING_GUIDE.md`**, which explains *how to think* a
 - `[ ]` not yet tested
 - `[x]` tested, behaved correctly
 - `[!]` tested, PROBLEM FOUND — note it underneath
-- `[STAGING]` do not run on production; needs the staging database first
+- `[HEAVY]` high-volume; run it, then use the factory reset to clear the debris
 - `[2-DEVICE]` needs two registers, or two browser tabs
+
+---
+
+## 0a. Do this FIRST — prove the factory reset works
+
+Everything in this checklist is safe to run hard because the factory reset can clear it. That makes the reset the safety net under the whole exercise, and an untested safety net is a decoration. Test it once, before the rest.
+
+- [ ] Open **Settings → Factory reset**. Read the two lists — the screen now counts the real tables (138 emptied / 120 kept) rather than describing them from memory
+- [ ] Check the four "before you press it" figures: completed sales, CCRS files, excise returns filed, posted journal entries
+- [ ] Tick the retention attestation, type `ERASE ALL TEST DATA` exactly, and run it
+- [ ] Confirm the success line reports rows removed across ~138 tables **and mentions the general ledger**
+- [ ] Confirm no `WARNING` follows it — the post-reset check runs automatically and reports only problems
+- [ ] Spot-check that it truly emptied: Reports show zero, register history is empty, the books show a blank trial balance
+- [ ] Spot-check that it truly kept: your login still works, the chart of accounts is intact, the knowledge base is intact, vendors and brands are intact
+- [ ] Try it once with the phrase typed **wrongly** (e.g. lower case) and confirm it refuses and deletes nothing
+
+Three things the reset deliberately cannot reach, so do not be surprised: uploaded **files** stay in storage buckets, **login accounts** in Supabase Auth are not deleted, and auto-numbering **counters** do not restart. None of the three can put a wrong number on a report or a tax form. The screen states all three.
 
 ---
 
@@ -185,15 +202,15 @@ Rare per shift, certain over a year.
 
 Where the Cultivera migration will bite hardest.
 
-### 4.1 Too much (Lens 2) — mostly [STAGING]
+### 4.1 Too much (Lens 2) — all [HEAVY]
 
 - [ ] A cart with **40+ line items** — screen, receipt, printer
-- [ ] **[STAGING]** A purchase order with 300+ lines through receiving
-- [ ] **[STAGING]** 10,000+ products in the catalogue — menu, search, filters still usable
-- [ ] **[STAGING]** A single day with 1,000+ sales — reports, history, CCRS export
+- [ ] **[HEAVY]** A purchase order with 300+ lines through receiving
+- [ ] **[HEAVY]** 10,000+ products in the catalogue — menu, search, filters still usable
+- [ ] **[HEAVY]** A single day with 1,000+ sales — reports, history, CCRS export
 - [ ] A customer with a very long purchase history
 - [ ] A report over a **12-month** range
-- [ ] **[STAGING]** Cultivera import file with 5,000+ rows
+- [ ] **[HEAVY]** Cultivera import file with 5,000+ rows
 
 ### 4.2 Wrong shape (Lens 6)
 
@@ -299,7 +316,6 @@ For each: is the message clear enough for a brand-new budtender to know what to 
 
 ## 7. Known gaps and next steps
 
-- [ ] **Stand up a staging Supabase database** — unblocks every `[STAGING]` item above. *Say the word and I will build it as its own slice.*
 - [ ] Supply the make and model of the old USB printers (deferred from the previous session)
 - [ ] Purchase or decide against the Star Cloud printer
 
