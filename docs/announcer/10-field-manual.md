@@ -7,6 +7,11 @@ This manual is referenced by the installer and by the service file itself, so
 it is the one document that must always exist. Every command in it is real and
 copy-pasteable. Nothing here is theory.
 
+> **Setting up a brand new Pi for the first time, and never used a terminal?**
+> Read `05-first-pi-walkthrough.md` instead. It assumes no knowledge at all and
+> covers getting the files onto the Pi. This manual is for fixing a speaker that
+> is already installed.
+
 ---
 
 ## THE 30-SECOND VERSION
@@ -199,12 +204,27 @@ You need this for anything in Q4 or Q5. Two ways.
 From any computer on the same network:
 
 ```bash
-ssh pi@greenway-office.local
+ssh greenway-office@greenway-office.local
 ```
 
-Replace `greenway-office` with whatever you named that Pi. If `.local` names
-don't work on your network, use the Pi's IP address instead — your router's
-admin page lists connected devices.
+The form is `ssh USERNAME@HOSTNAME.local`, and **both halves are things you
+chose in Raspberry Pi Imager.** They are usually different from each other, so
+read this carefully:
+
+- The part **before** the `@` is the **username** you set in Imager.
+- The part **after** the `@` is the **hostname** you set in Imager.
+
+If you set both to `greenway-office`, the command above is exactly right and
+the repetition is expected — it is not a typo.
+
+> **Older guides say `ssh pi@...` — ignore them.** Raspberry Pi OS has not
+> shipped a default `pi` user since 2022. Imager now forces you to create a
+> username, so `pi@` will simply be rejected as a wrong password unless you
+> deliberately typed `pi` yourself.
+
+If `.local` names don't work on your network, use the Pi's IP address instead
+(`ssh greenway-office@192.168.1.42`) — your router's admin page lists connected
+devices.
 
 > **Hint:** set this up *before* you need it. Diagnosing a dead Pi is much
 > easier when you already know SSH works. Test it on day one.

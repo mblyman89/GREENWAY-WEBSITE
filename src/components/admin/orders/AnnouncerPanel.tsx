@@ -68,9 +68,19 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 const INPUT_CLS =
   "admin-focus rounded-[var(--admin-radius-sm,8px)] border border-[var(--admin-border)] bg-[var(--admin-surface-1)] px-2.5 py-1.5 text-sm text-[var(--admin-text)]";
 
+/**
+ * D-66: the install command is meant to be COPIED ONTO A PI, so it has to be
+ * the real address. It used to print a dummy example hostname, which fails
+ * with a DNS error the moment somebody trusts it. Mirrors the fallback used by
+ * src/app/admin/plaid/actions.ts so the two never disagree.
+ */
+function announcerSiteUrl(): string {
+  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://greenwaymarijuana.com").replace(/\/$/, "");
+}
+
 export async function AnnouncerPanel() {
   const data = await getAnnouncerPanelData();
-  const { devices, settings, verdict, recent, notInstalled, assignments } = data;
+  const { devices, settings, verdict, recent, notInstalled, assignments, pendingPairings } = data;
 
   // SLICE 34 — uploaded sounds must appear in the same pickers as the built-in
   // ones, otherwise a file can be uploaded but never actually used. The values
@@ -227,6 +237,36 @@ export async function AnnouncerPanel() {
               Get pairing code
             </Button>
           </form>
+
+          {/* D-66: the code used to be created and then thrown away, so this
+              panel showed nothing and the button looked broken. */}
+          {pendingPairings.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {pendingPairings.map((p) => (
+                <div
+                  key={p.raw}
+                  className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/10 px-3.5 py-3"
+                >
+                  <p className="text-[0.68rem] font-bold uppercase tracking-[0.08em] text-[var(--admin-text-muted)]">
+                    Pairing code for {p.deviceName}
+                  </p>
+                  <p className="mt-1 font-mono text-2xl font-bold tracking-[0.2em] text-[var(--admin-text)]">
+                    {p.display}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                    Type this on the Raspberry Pi &mdash; {p.expiresLabel}. If it runs out, just make
+                    another one; they are free.
+                  </p>
+                  <p className="mt-2 text-[0.68rem] text-[var(--admin-text-muted)]">
+                    On the Pi, run:{" "}
+                    <code className="rounded bg-black/30 px-1 font-mono">
+                      sudo ./install.sh --site {announcerSiteUrl()} --code {p.raw}
+                    </code>
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </details>
 
         {/* ── 4. SHOP-WIDE SETTINGS ─────────────────────────────────────── */}

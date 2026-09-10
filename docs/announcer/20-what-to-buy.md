@@ -123,10 +123,12 @@ end to end first, so you learn the process on the easy one.
 
 - [ ] Write Raspberry Pi OS (64-bit) with **Raspberry Pi Imager**
 - [ ] In Imager's settings gear, **before writing**: set the hostname
-      (`greenway-office`), enable **SSH**, and enter the Wi-Fi details
+      (`greenway-office`), set a **username and password**, enable **SSH**, and
+      enter the Wi-Fi details. Write the username down — you need it to log in.
 - [ ] Card into Pi, speaker cable into the **3.5 mm jack**, speaker to mains
 - [ ] Power up, wait 2 minutes
-- [ ] Confirm you can reach it: `ssh pi@greenway-office.local`
+- [ ] Confirm you can reach it: `ssh USERNAME@greenway-office.local` (there is
+      no default `pi` user any more; use the username you just set)
 - [ ] Back office → Orders → Announcer → **Add a speaker** → name it after the
       **room**, not the hardware
 - [ ] Run the installer with the code (see the field manual, PART 5)

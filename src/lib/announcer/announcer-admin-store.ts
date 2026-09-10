@@ -16,10 +16,13 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 import { BUILT_IN_SOUNDS } from "./announcer-core";
 import {
+  pendingPairings as computePendingPairings,
   summarizeShop,
   toDeviceView,
   type AdminDeviceRow,
   type AdminDeviceView,
+  type PendingPairingRow,
+  type PendingPairingView,
   type ShopVerdict,
 } from "./announcer-admin-core";
 import { getAnnouncerSettings, type AnnouncerSettings } from "./announcer-store";
@@ -40,6 +43,14 @@ export type AnnouncerPanelData = {
    * "safe to delete", which is worse than no warning at all.
    */
   assignments: { name: string; sound_id: string | null }[];
+  /**
+   * D-66 — pairing codes that are still live, newest first.
+   *
+   * Before this existed, `createPairing()` wrote a code to the database and the
+   * action discarded it, so the code was real but unreadable: the owner pressed
+   * the button and watched a spinner forever. The panel now reads them back.
+   */
+  pendingPairings: PendingPairingView[];
 };
 
 export type RecentAnnouncement = {
@@ -77,6 +88,7 @@ export async function getAnnouncerPanelData(now: Date = new Date()): Promise<Ann
     recent: [],
     notInstalled,
     assignments: [],
+    pendingPairings: [],
   });
 
   if (!isSupabaseServiceConfigured) return empty(false);
@@ -127,9 +139,37 @@ export async function getAnnouncerPanelData(now: Date = new Date()): Promise<Ann
       recent: await getRecentAnnouncements(devices),
       notInstalled: false,
       assignments,
+      pendingPairings: await getPendingPairings(admin, nowIso),
     };
   } catch {
     return empty(false);
+  }
+}
+
+/**
+ * D-66 — read back the codes that were being written and never shown.
+ *
+ * Degrades to an empty list like every other reader here: a broken pairings
+ * table must not take the Orders page down with it.
+ */
+async function getPendingPairings(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  nowIso: string,
+): Promise<PendingPairingView[]> {
+  try {
+    const { data, error } = await admin
+      .from("announcer_pairings")
+      .select("code, device_name, created_at, consumed_at")
+      .is("consumed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (error || !Array.isArray(data)) return [];
+    // Expiry is decided by the pure function, not by the query, so the rule
+    // lives in one place and is covered by tests that execute it.
+    return computePendingPairings(data as PendingPairingRow[], nowIso);
+  } catch {
+    return [];
   }
 }
 
