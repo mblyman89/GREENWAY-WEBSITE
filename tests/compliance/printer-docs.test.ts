@@ -20,6 +20,7 @@
  * These are deliberately cheap string checks. They do not judge the writing —
  * only that the FACTS still match the code.
  */
+import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -330,6 +331,98 @@ describe("the manual is substantial enough to actually follow", () => {
 
   it("explains why the Pi is needed at all", () => {
     expect(doc).toContain("Why there is a Raspberry Pi in the middle");
+  });
+
+  it("every script the manual tells the owner to run is executable", () => {
+    // THE FIELD BUG THIS PINS
+    // -----------------------
+    // install.sh shipped as mode 100644. Running `sudo ./install.sh ...` then
+    // fails with "sudo: ./install.sh: command not found" -- which reads like a
+    // MISSING FILE, sending the reader off hunting for a bad clone or a wrong
+    // directory. Reproduced deliberately: a non-executable script invoked via
+    // sudo gives exactly that message, while bash gives "Permission denied".
+    //
+    // Anything the manual says to invoke as ./script must carry the exec bit
+    // in git, or the first thing the owner types fails and misdirects them.
+    const mustBeExecutable = [
+      "pi-agent/install-printer.sh",
+      "pi-agent/install.sh",
+      "pi-agent/greenway_printer.py",
+    ];
+    for (const rel of mustBeExecutable) {
+      // Read the mode git records, not the working tree: a fresh clone gets
+      // git's mode, and the working tree can drift locally.
+      const mode = execFileSync("git", ["ls-files", "-s", "--", rel], {
+        cwd: ROOT,
+        encoding: "utf8",
+      })
+        .trim()
+        .split(/\s+/)[0];
+      expect(mode, `${rel} must be executable in git (is ${mode})`).toBe(
+        "100755",
+      );
+    }
+  });
+
+  it("the two installers refuse each other's options", () => {
+    // Both scripts live in the same folder and take a --site, so it is very
+    // easy to pick up the wrong one. Each must name the other by filename
+    // rather than just saying "I don't understand".
+    const announcer = read("pi-agent/install.sh");
+    // The printer's flags must be trapped by the announcer, and vice versa.
+    for (const flag of ["--token", "--device", "--columns"]) {
+      expect(announcer).toContain(flag);
+    }
+    expect(announcer).toContain("install-printer.sh");
+    for (const flag of ["--code", "--audio-device"]) {
+      expect(installer).toContain(flag);
+    }
+    expect(installer).toContain("./install.sh");
+    // The manual has to explain the split, or the guard is the only teacher.
+    expect(doc).toContain("install-printer.sh");
+    expect(doc).toContain("install.sh");
+    expect(doc).toContain("command not found");
+  });
+
+  it("the installer verifies the download is not a gateway/CAPTCHA page", () => {
+    // VERIFIED, NOT ASSUMED: the live domain answered HTTP 202 with an HTML
+    // body containing a /.well-known/sgcaptcha/ redirect, and `curl -fsSL`
+    // exited 0 on it -- because -f only fails on 4xx/5xx. Piping that into
+    // an interpreter yields a syntax error that looks like a corrupt release.
+    //
+    // So the installer must check the STATUS CODE explicitly and sniff the
+    // body for HTML, rather than trusting curl's exit status.
+    expect(installer).toContain("%{http_code}");
+    expect(installer).toMatch(/DL_CODE/);
+    expect(installer).toMatch(/!= *"200"/);
+    expect(installer).toMatch(/<html|doctype html/i);
+    // And the agent must explain a 202 as a gateway, not as a token fault.
+    expect(agent).toContain("security gateway");
+    // The manual must warn which address to use.
+    expect(doc).toMatch(/security gateway/i);
+    expect(doc).toContain("202");
+  });
+
+  it("the manual names the right site and how to re-point later", () => {
+    // The live domain is not the deployment target yet. If the manual does
+    // not say so, the owner points the Pi at the WAF-protected domain and it
+    // polls forever without ever printing.
+    expect(doc).toContain("vercel.app");
+    expect(doc).toContain("greenwaymarijuana.com");
+    // The re-point command must be real: `pair` with a --site flag.
+    expect(doc).toMatch(/greenway-printer pair .*--site/);
+    expect(agent).toContain('"pair"');
+  });
+
+  it("the site-address typo hint is real and quotes the mistake back", () => {
+    // The exact field typo: "https//host" (missing colon). A bare "I need the
+    // website address" does not help, because the eye reads "https" and moves
+    // on. The agent must echo what was typed and show the corrected form.
+    expect(agent).toContain("The ':' is missing after 'https'");
+    expect(agent).toContain("You typed:");
+    // And the rejection itself must still happen (never silently accepted).
+    expect(agent).toContain("normalize_site_url");
+    expect(doc).toContain("https//");
   });
 
   it("the test commands the manual lists actually exist and behave", () => {

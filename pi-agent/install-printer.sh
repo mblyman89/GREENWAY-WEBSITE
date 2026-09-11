@@ -73,6 +73,17 @@ while [ $# -gt 0 ]; do
     --skip-test) SKIP_TEST="yes"; shift ;;
     --uninstall) DO_UNINSTALL="yes"; shift ;;
     --help|-h) usage; exit 0 ;;
+    # The mirror image of the guard in install.sh: --code belongs to the
+    # announcer. Without this, '--code ABCD1234' just says "I don't understand"
+    # and the reader has no idea they picked up the wrong script.
+    --code|--audio-device|--mixer-control)
+      die "'$1' is an ANNOUNCER option, but this is the RECEIPT PRINTER installer.
+
+  For the speaker that reads orders aloud, run the other script here:
+    sudo ./install.sh --site https://your-site.com --code YOUR-CODE
+
+  The printer needs --token instead (from Admin -> Equipment -> Receipt
+  printer), because a printer token does not expire like a pairing code." ;;
     *) die "I don't understand the option '$1'. Run with --help to see the list." ;;
   esac
 done
@@ -195,9 +206,45 @@ else
   Re-run with:  --site https://your-site.com"
     DL_URL="${SITE%/}/printer/greenway_printer.py"
     step "Downloading the printer program from $DL_URL"
-    curl -fsSL "$DL_URL" -o "$TMP_AGENT" || die \
-      "Could not download $DL_URL
+    # Capture the HTTP status separately instead of trusting `curl -f`.
+    #
+    # WHY: `curl -fsSL` only fails on 4xx/5xx. A security gateway / WAF sitting
+    # in front of a domain can answer 202 (or 200) with a CAPTCHA redirect
+    # page, and curl reports SUCCESS. Verified against the real live domain:
+    # it returned 202 + text/html containing a /.well-known/sgcaptcha/
+    # redirect, and `curl -fsSL` exited 0. Piping that into python (or bash)
+    # produces a syntax error that looks like a corrupt release rather than
+    # "you pointed me at a protected domain".
+    DL_CODE="$(curl -sSL -w '%{http_code}' --max-time 60 \
+      -o "$TMP_AGENT" "$DL_URL" 2>/dev/null || echo "000")"
+
+    if [ "$DL_CODE" = "000" ]; then
+      die "Could not reach $DL_URL
   Check this Pi's internet connection and that the website address is correct."
+    fi
+
+    # Anything that is not a plain 200 is not our file.
+    if [ "$DL_CODE" != "200" ]; then
+      if [ "$DL_CODE" = "404" ]; then
+        die "The website answered 404 for $DL_URL
+  That address does not host the printer program. If you have more than one
+  site (a live one and a test one), make sure --site points at the site this
+  printer software was deployed to."
+      fi
+      die "The website answered HTTP $DL_CODE for $DL_URL instead of 200, so
+  the download is not the printer program and was NOT installed.
+  A status like 202 or 403 with an HTML body usually means the domain sits
+  behind a security gateway / CAPTCHA that blocks automated downloads.
+  Point --site at the address that serves this software directly."
+    fi
+
+    # Belt and braces: even a 200 can be an HTML error or login page.
+    if head -c 400 "$TMP_AGENT" | grep -qiE '<html|<!doctype html|sgcaptcha|<meta'; then
+      die "The download from $DL_URL is a web page, not the printer program.
+  The domain is almost certainly behind a security gateway or CAPTCHA that
+  intercepts automated requests. Nothing was installed.
+  Point --site at the address that serves this software directly."
+    fi
     ok "Downloaded."
   fi
 fi

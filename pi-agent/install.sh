@@ -67,6 +67,18 @@ while [ $# -gt 0 ]; do
     --agent-file) AGENT_SRC="${2:-}"; shift 2 ;;
     --uninstall) DO_UNINSTALL="yes"; shift ;;
     --help|-h) usage; exit 0 ;;
+    # There are TWO installers in this folder and their flags differ. Sending
+    # somebody to --help when they used a real flag from the OTHER one wastes
+    # their time, so name the script they actually wanted.
+    --token|--device|--columns|--no-cut|--skip-test)
+      die "'$1' is a RECEIPT PRINTER option, but this is the ANNOUNCER installer
+  (install.sh sets up the speaker that reads orders aloud).
+
+  For the receipt printer, run the other script in this folder:
+    sudo ./install-printer.sh --site https://your-site.com --token YOUR-TOKEN
+
+  The printer uses --token (from Admin -> Equipment -> Receipt printer).
+  The announcer uses --code (an 8-character pairing code)." ;;
     *) die "I don't understand the option '$1'. Run with --help to see the options." ;;
   esac
 done

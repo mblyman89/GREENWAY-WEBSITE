@@ -82,9 +82,40 @@ Copy it. You will paste it in the next step.
 
 ## Step 3 — Install the printer agent on the Pi
 
+### Which address to use — read this first
+
+There are currently **two** Greenway addresses, and only one of them works for
+the printer:
+
+| Address | Use it for the printer? |
+|---|---|
+| The Vercel address (`…vercel.app`) — the site being built | **Yes.** This is where the printer software is deployed. |
+| `greenwaymarijuana.com` — the current live shop site | **No, not yet.** |
+
+The live domain sits behind a security gateway. Verified, not guessed: a
+request to `greenwaymarijuana.com/api/cloudprnt` comes back as HTTP 202 with a
+CAPTCHA redirect page instead of reaching the printer code at all. The printer
+would poll forever and never receive a receipt.
+
+When the new site is eventually pointed at `greenwaymarijuana.com`, re-point
+the Pi with one command and nothing else changes:
+
+```bash
+sudo greenway-printer pair YOUR-TOKEN --site https://greenwaymarijuana.com
+```
+
+The installer now refuses to continue if it detects a gateway rather than
+failing in a confusing way later, and the agent says so plainly in the log.
+
+### The command
+
 Open a terminal on the Pi (or connect with SSH), and run this as one command.
 Replace `YOUR-SITE.com` with your website address and `YOUR-TOKEN` with the
 token you just copied:
+
+**Watch the `https://` carefully** — `https//` with no colon, or `https:/`
+with one slash, are both rejected. The agent quotes your typo back with the
+corrected version, so you do not have to hunt for it.
 
 ```bash
 curl -fsSL https://YOUR-SITE.com/printer/install-printer.sh | sudo bash -s -- \
@@ -106,6 +137,41 @@ That one line does all of this:
 
 **A test page should come out of the printer.** If it does, you are done with
 the hard part.
+
+### If you already cloned the repository instead
+
+If you did `git clone` and you are sitting in the `pi-agent` folder, use the
+local script — there are **two** installers in that folder and they are not
+interchangeable:
+
+```bash
+cd ~/GREENWAY-WEBSITE/pi-agent
+git pull                     # make sure you have the printer files at all
+sudo ./install-printer.sh --site https://YOUR-SITE.com --token YOUR-TOKEN
+```
+
+| Script | What it sets up | Needs |
+|---|---|---|
+| `install-printer.sh` | the **receipt printer** | `--token` |
+| `install.sh` | the **announcer** (speaker that reads orders aloud) | `--code` |
+
+Each one now stops with a clear message if you hand it the other one's
+options, instead of just saying it does not understand.
+
+If `sudo ./install-printer.sh` reports **`command not found`**, that is `sudo`'s
+confusing wording for "this file is not marked executable" — it does not mean
+the file is missing. Fix it with:
+
+```bash
+chmod +x install-printer.sh
+```
+
+...or sidestep it entirely by naming the interpreter, which ignores the
+executable bit:
+
+```bash
+sudo bash install-printer.sh --site https://YOUR-SITE.com --token YOUR-TOKEN
+```
 
 ---
 

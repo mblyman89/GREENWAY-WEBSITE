@@ -348,6 +348,26 @@ def describe_http_error(status: int) -> str:
         return "The website asked us to slow down (429). Backing off."
     if 500 <= status <= 599:
         return f"The website had an internal error ({status}). Not this Pi's fault. Will retry."
+    if status in (202, 302, 303, 307, 308):
+        # Observed for real: a security gateway in front of a domain answers
+        # 202 with an HTML CAPTCHA redirect instead of passing the request
+        # through. The request never reached our code, so no amount of token
+        # fiddling will help -- but "unexpected status 202" sends the reader
+        # hunting for a token problem that does not exist.
+        return (
+            f"The website answered {status} instead of handling the printer request. "
+            "This usually means the address points at a domain behind a security "
+            "gateway or CAPTCHA, which blocks automated requests before they reach "
+            "the printer code. Point this Pi at the address that serves the printer "
+            "software directly (run: greenway-printer status to see the current one)."
+        )
+    if 200 <= status <= 299:
+        return (
+            f"The website answered {status} with something the printer could not use. "
+            "If this address sits behind a security gateway or CAPTCHA, it is "
+            "intercepting the request. Check the site address with: "
+            "greenway-printer status"
+        )
     return f"The website answered with an unexpected status {status}."
 
 
@@ -880,11 +900,34 @@ def cmd_pair(args: argparse.Namespace) -> int:
     config_path = Path(args.config)
     existing = load_config(config_path)
 
-    site = normalize_site_url(args.site or existing.get("siteUrl"))
+    raw_site = args.site or existing.get("siteUrl")
+    site = normalize_site_url(raw_site)
     if not site:
+        # Say WHAT was wrong with what they typed, not just what is wanted.
+        # A missing colon ("https//site.com") is an easy typo to make and an
+        # easy one to stare straight past: the eye reads the word "https" and
+        # moves on. Quoting it back with the fix spelled out ends that hunt.
+        hint = ""
+        if isinstance(raw_site, str) and raw_site.strip():
+            shown = raw_site.strip()
+            if re.match(r"^https?//", shown, re.IGNORECASE):
+                fixed = re.sub(r"^(https?)//", r"\1://", shown, flags=re.IGNORECASE)
+                hint = (
+                    f"\nYou typed:  {shown}\n"
+                    f"The ':' is missing after 'https'. You want:\n  {fixed}"
+                )
+            elif re.match(r"^https?:/[^/]", shown, re.IGNORECASE):
+                fixed = re.sub(r"^(https?):/", r"\1://", shown, flags=re.IGNORECASE)
+                hint = (
+                    f"\nYou typed:  {shown}\n"
+                    f"There is only one '/' after 'https:'. You want:\n  {fixed}"
+                )
+            else:
+                hint = f"\nI could not make sense of:  {shown}"
         print(
             "I need the website address. Example:\n"
-            "  sudo greenway-printer pair YOUR-TOKEN --site https://your-site.com",
+            "  sudo greenway-printer pair YOUR-TOKEN --site https://your-site.com"
+            + hint,
             file=sys.stderr,
         )
         return 2
@@ -1207,6 +1250,44 @@ def selftest() -> int:
     ok("http: every status yields a non-empty message", all(
         len(describe_http_error(s)) > 20 for s in [400, 401, 403, 404, 418, 429, 500, 502, 503, 599]
     ))
+
+    # --- WAF / security-gateway interception --------------------------------
+    # Observed against a real domain: a security gateway answered POST
+    # /api/cloudprnt with 202 + an HTML CAPTCHA redirect. The old message,
+    # "unexpected status 202", sent the reader hunting for a token fault that
+    # did not exist. These pin the diagnosis to the actual cause.
+    for gateway_status in (202, 302, 303, 307, 308):
+        msg = describe_http_error(gateway_status).lower()
+        ok(
+            f"http {gateway_status}: blames a security gateway, not the token",
+            ("security gateway" in msg or "captcha" in msg),
+        )
+        ok(
+            f"http {gateway_status}: tells the reader how to see the current address",
+            "greenway-printer status" in msg,
+        )
+        ok(
+            f"http {gateway_status}: does not accuse the printer token",
+            "token" not in msg.split("printer code")[0].replace("printer software", ""),
+        )
+    ok(
+        "http 2xx: a non-200 success is still reported as unusable",
+        "could not use" in describe_http_error(204).lower(),
+    )
+    # Regression guard: 401/503 must NOT be swallowed by the new 2xx branch.
+    ok("http 401 still names the admin page", "Equipment" in describe_http_error(401))
+    ok("http 503 still explains the token", "poll token" in describe_http_error(503))
+
+    # --- site address typos -------------------------------------------------
+    # The exact typo made in the field: the colon after https was missing.
+    ok("site: 'https//host' is refused, not silently accepted",
+       normalize_site_url("https//example.com") is None)
+    ok("site: 'https:/host' (one slash) is refused",
+       normalize_site_url("https:/example.com") is None)
+    ok("site: a bare host is accepted and gets https",
+       normalize_site_url("example.com") == "https://example.com")
+    ok("site: a trailing slash is trimmed",
+       normalize_site_url("https://example.com/") == "https://example.com")
 
     ok("device missing: mentions the USB cable", "USB cable" in describe_device_problem("/dev/usb/lp0", False, False))
     ok("device missing: mentions the power switch", "switched on" in describe_device_problem("/dev/usb/lp0", False, False))
