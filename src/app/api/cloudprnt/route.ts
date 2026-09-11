@@ -17,11 +17,20 @@
  * NOT behind the admin middleware (matcher is /admin/:path*), so the printer can
  * reach it without a Supabase session.
  *
+ * D-68: the GET/DELETE steps reuse the SAME `?token=` parameter to carry the
+ * per-receipt JOB token, so the poll token and the job token would collide.
+ * Token precedence is therefore resolved by cloudprnt-auth-core: "auth" prefers
+ * the Basic-auth password, "job" prefers the query parameter.
+ *
  * Protocol reference: Star CloudPRNT Protocol Guide 2.5.2.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { timingSafeEqualStr } from "@/lib/security/constant-time";
+import {
+  extractCloudPrntToken,
+  type CloudPrntTokenUse,
+} from "@/lib/printing/cloudprnt-auth-core";
 import {
   getPrinterSettings,
   claimNextJob,
@@ -33,22 +42,20 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Pull the poll token from Basic auth or ?token=. */
-function extractToken(req: NextRequest): string | null {
+/**
+ * Pull the requested secret out of the request.
+ *
+ * D-68: this endpoint carries TWO different secrets on the SAME `?token=`
+ * parameter -- the shared poll token (authentication) and the per-receipt job
+ * token (addressing). Callers MUST say which one they want; the precedence
+ * rules live in cloudprnt-auth-core so no call site can re-guess them.
+ */
+function extractToken(req: NextRequest, use: CloudPrntTokenUse): string | null {
   const url = new URL(req.url);
-  const q = url.searchParams.get("token");
-  if (q) return q;
-  const auth = req.headers.get("authorization") ?? "";
-  if (auth.toLowerCase().startsWith("basic ")) {
-    try {
-      const decoded = Buffer.from(auth.slice(6), "base64").toString("utf8");
-      const idx = decoded.indexOf(":");
-      return idx >= 0 ? decoded.slice(idx + 1) : decoded;
-    } catch {
-      return null;
-    }
-  }
-  return null;
+  return extractCloudPrntToken(use, {
+    authorizationHeader: req.headers.get("authorization"),
+    queryToken: url.searchParams.get("token"),
+  });
 }
 
 /**
@@ -72,7 +79,7 @@ async function authFail(req: NextRequest): Promise<NextResponse | null> {
     }
     return null; // dev only: no token configured yet — allow (initial setup)
   }
-  const provided = extractToken(req);
+  const provided = extractToken(req, "auth");
   // GW-022: constant-time compare so response timing can't leak token prefixes.
   if (timingSafeEqualStr(provided, expected)) return null;
   return NextResponse.json(
@@ -123,8 +130,7 @@ export async function GET(req: NextRequest) {
   const denied = await authFail(req);
   if (denied) return denied;
 
-  const url = new URL(req.url);
-  const token = url.searchParams.get("token") || extractToken(req);
+  const token = extractToken(req, "job");
   if (!token) {
     return new NextResponse("", { status: 404 });
   }
@@ -139,18 +145,16 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * DELETE — printer confirms it printed the job for this token. We mark it
- * printed. Some firmware sends a GET-style confirmation; that is handled by the
- * GET branch returning 404 once the job is gone, but we also accept GET with
- * ?delete=... below via the same confirmJob path is unnecessary because the
- * printer defaults to DELETE (deleteMethod: "DELETE").
+ * DELETE — printer confirms it printed the job for this token, and we mark it
+ * printed. Our POST reply sets `deleteMethod: "DELETE"`, so this is the path
+ * Star firmware uses. Firmware that instead re-GETs the job simply receives a
+ * 404 once the job is no longer claimable, which it skips gracefully.
  */
 export async function DELETE(req: NextRequest) {
   const denied = await authFail(req);
   if (denied) return denied;
 
-  const url = new URL(req.url);
-  const token = url.searchParams.get("token") || extractToken(req);
+  const token = extractToken(req, "job");
   if (token) {
     await confirmJob(token);
   }
