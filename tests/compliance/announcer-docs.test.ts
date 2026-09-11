@@ -206,3 +206,522 @@ describe("the tone rules that make these usable under pressure", () => {
     expect(card).toMatch(/does NOT affect/i);
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// THE COPY-PASTE QUICKSTART
+//
+// This document exists because the owner asked to be walked through setting up
+// the speaker one step at a time. It quotes the installer's and the agent's
+// on-screen output verbatim, and it quotes the admin panel's button labels, so
+// that the reader can compare what they see against the page.
+//
+// Quoted output is a liability unless it is pinned. Three of the lines quoted
+// in the equivalent PRINTER quickstart were wrong when first drafted -- written
+// from memory rather than read from the source -- and only grepping the source
+// caught them. Every assertion below reads the real string out of the real file
+// and demands the document still contains it. Change the software and this
+// fails, instead of the owner following a manual that lies.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const QUICKSTART_PATH = "docs/announcer/06-copy-paste-quickstart.md";
+const quickstart = read(QUICKSTART_PATH);
+/**
+ * The same prose, with Markdown's line wrapping and blockquote markers taken
+ * out, so a sentence quoted from the UI can be compared as one sentence. A
+ * quoted string is still a quoted string when the editor has wrapped it across
+ * two lines with a "> " in front.
+ */
+const quickstartFlat = quickstart
+  .split("\n")
+  .map((line) => line.replace(/^\s*>\s?/, ""))
+  .join(" ")
+  .replace(/\s+/g, " ");
+const panel = read("src/components/admin/orders/AnnouncerPanel.tsx");
+const adminCore = read("src/lib/announcer/announcer-admin-core.ts");
+const core = read("src/lib/announcer/announcer-core.ts");
+
+describe("quickstart: the installer's seven steps are quoted exactly", () => {
+  it("quotes every step banner the installer actually prints", () => {
+    // Pull the step banners straight out of install.sh. If a step is renamed,
+    // added or removed, the document must follow.
+    const steps = [...installer.matchAll(/step "(Step \d of \d: [^"]+)"/g)].map((m) => m[1]);
+    expect(steps.length).toBe(7);
+    for (const step of steps) {
+      expect(quickstart, `quickstart must quote the banner "${step}"`).toContain(step);
+    }
+  });
+
+  it("quotes the installer's opening two lines", () => {
+    expect(installer).toContain("Greenway Order Announcer - installer");
+    expect(installer).toContain("This takes about two minutes. You can leave it running.");
+    expect(quickstart).toContain("Greenway Order Announcer - installer");
+    expect(quickstart).toContain("This takes about two minutes. You can leave it running.");
+  });
+
+  it("quotes the finish line the reader is told to look for", () => {
+    expect(installer).toContain("================ DONE ================");
+    expect(installer).toContain("Your speaker is installed and running.");
+    expect(quickstart).toContain("================ DONE ================");
+    expect(quickstart).toContain("Your speaker is installed and running.");
+  });
+
+  it("quotes OK lines that really are printed by the installer", () => {
+    for (const line of [
+      "Sound tools and Python libraries are ready",
+      "Built-in self-test passed",
+      "This speaker is paired",
+      "Service installed, enabled at boot, and started",
+      "Log size capped at 50MB to protect the SD card",
+      "The announcer is running right now",
+    ]) {
+      expect(installer, `install.sh must print "${line}"`).toContain(line);
+      expect(quickstart, `quickstart must quote "${line}"`).toContain(line);
+    }
+  });
+
+  it("quotes the 'already paired' line used in the update section", () => {
+    expect(installer).toContain("Already paired - keeping the existing setup");
+    expect(quickstart).toContain("Already paired - keeping the existing setup");
+  });
+
+  it("quotes the uninstall confirmation", () => {
+    expect(installer).toContain("Removed the service, the program and the cached sounds.");
+    expect(quickstart).toContain("Removed the service, the program and the cached sounds.");
+    expect(installer).toContain("--uninstall");
+    expect(quickstart).toContain("sudo ./install.sh --uninstall");
+  });
+});
+
+describe("quickstart: the agent's output is quoted exactly", () => {
+  it("quotes the 'greenway-announcer test' header and its promise of six tones", () => {
+    expect(agent).toContain("Playing each built-in sound. You should hear six different tones.");
+    expect(quickstart).toContain("Playing each built-in sound. You should hear six different tones.");
+  });
+
+  it("lists exactly the six sound names the test command plays, in order", () => {
+    // The six-sound tuple appears twice in the agent (cmd_test and selftest).
+    // Asserting "it matches somewhere" let a mutant delete a sound from
+    // cmd_test while selftest kept the assertion green. Check EVERY list.
+    const tuples = [...agent.matchAll(/for kind in \(([^)]*)\):/g)].map((m) => m[1]);
+    expect(tuples.length).toBeGreaterThanOrEqual(2);
+    for (const tuple of tuples) {
+      const names = [...tuple.matchAll(/"([a-z]+)"/g)].map((m) => m[1]);
+      expect(names, `every built-in sound list must be the same six`).toEqual([
+        "chime",
+        "bell",
+        "ding",
+        "alert",
+        "cash",
+        "voice",
+      ]);
+    }
+    // The document shows them as a column of results, one per line.
+    const shown = ["chime", "bell", "ding", "alert", "cash", "voice"].map((k) =>
+      quickstart.indexOf(`  ${k}`),
+    );
+    for (const [i, at] of shown.entries()) {
+      expect(at, `quickstart must show the ${i + 1}th sound`).toBeGreaterThan(-1);
+    }
+    // ...and in the same order the agent plays them.
+    expect([...shown].sort((a, b) => a - b)).toEqual(shown);
+  });
+
+  it("quotes the test command's success line", () => {
+    expect(agent).toContain("All six sounds played. The audio hardware on this Pi is working.");
+    expect(quickstart).toContain("All six sounds played. The audio hardware on this Pi is working.");
+  });
+
+  it("quotes the status command's success lines", () => {
+    for (const line of [
+      "OK. The website answered and this speaker is checked in.",
+      "It should show a green dot on the Orders page right now.",
+    ]) {
+      expect(agent, `agent must print "${line}"`).toContain(line);
+      expect(quickstart, `quickstart must quote "${line}"`).toContain(line);
+    }
+  });
+
+  it("quotes the NOT PAIRED failure with the real config path", () => {
+    expect(agent).toContain("NOT PAIRED. No config at");
+    expect(agent).toContain('Path("/etc/greenway-announcer/config.json")');
+    expect(quickstart).toContain("NOT PAIRED. No config at /etc/greenway-announcer/config.json");
+  });
+
+  it("quotes the 401 message that tells you to re-pair", () => {
+    expect(agent).toContain("The website rejected this speaker's key (401).");
+    expect(quickstart).toContain("The website rejected this speaker's key (401).");
+  });
+
+  it("names the mute-check tools the agent's own advice names", () => {
+    expect(agent).toContain("aplay -l");
+    expect(agent).toContain("alsamixer");
+    expect(agent).toContain("MM means muted");
+    expect(quickstart).toContain("aplay -l");
+    expect(quickstart).toContain("alsamixer");
+    expect(quickstart).toMatch(/MM.{0,40}mute/i);
+  });
+});
+
+describe("quickstart: every command it tells you to run is real", () => {
+  it("only uses subcommands the agent's parser actually defines", () => {
+    const subcommands = [...quickstart.matchAll(/greenway-announcer (\w[\w-]*)/g)]
+      .map((m) => m[1])
+      .filter((w) => !["pair"].includes(w));
+    expect(subcommands.length).toBeGreaterThan(0);
+    for (const sub of new Set(subcommands)) {
+      expect(
+        agent,
+        `greenway-announcer ${sub} is in the quickstart but not in the agent's parser`,
+      ).toContain(`add_parser("${sub}"`);
+    }
+  });
+
+  it("uses the flags the installer really accepts, and no invented ones", () => {
+    const flags = new Set(
+      [...quickstart.matchAll(/sudo \.\/install\.sh([^\n`]*)/g)]
+        .flatMap((m) => [...m[1].matchAll(/--[a-z-]+/g)])
+        .map((m) => m[0]),
+    );
+    expect(flags.size).toBeGreaterThan(0);
+    for (const flag of flags) {
+      expect(installer, `install.sh must accept ${flag}`).toContain(`${flag})`);
+    }
+  });
+
+  it("uses the audio flags with the exact example value the code documents", () => {
+    expect(installer).toContain('--audio-device DEV  ALSA device, e.g. "plughw:1,0"');
+    expect(quickstart).toContain("--audio-device plughw:1,0");
+    expect(installer).toContain('--mixer-control C   ALSA mixer name, e.g. "PCM"');
+    expect(quickstart).toContain("--mixer-control PCM");
+  });
+
+  it("only passes flags to 'greenway-announcer' that its subcommands define", () => {
+    // The installer and the agent take different flags. A mutant renamed
+    // --audio-device to --sound-device on an AGENT line and survived, because
+    // the installer line still carried the right spelling. Check both callers.
+    const calls = [...quickstart.matchAll(/greenway-announcer (\w[\w-]*)([^\n`#]*)/g)];
+    const checked: string[] = [];
+    for (const call of calls) {
+      const flags = [...call[2].matchAll(/--[a-z-]+/g)].map((m) => m[0]);
+      for (const flag of flags) {
+        checked.push(flag);
+        expect(
+          agent,
+          `'greenway-announcer ${call[1]} ${flag}' is in the quickstart but the agent has no ${flag}`,
+        ).toContain(`add_argument("${flag}"`);
+      }
+    }
+    expect(checked.length, "expected the quickstart to demonstrate an agent flag").toBeGreaterThan(0);
+  });
+
+  it("names the systemd unit exactly as the installer registers it", () => {
+    expect(installer).toContain("greenway-announcer.service");
+    expect(quickstart).toContain("systemctl restart greenway-announcer");
+    expect(quickstart).toContain("journalctl -u greenway-announcer -f");
+    expect(installer).toContain("journalctl -u greenway-announcer -f");
+  });
+
+  it("uses the SSH user and host the walkthrough established", () => {
+    expect(quickstart).toContain("ssh greenway-office@greenway-office.local");
+    expect(manual + read("docs/announcer/05-first-pi-walkthrough.md")).toContain(
+      "greenway-office@greenway-office.local",
+    );
+  });
+});
+
+describe("quickstart: the back-office wording matches the panel", () => {
+  it("quotes the panel's heading and its buttons", () => {
+    for (const label of ["🔊 Order Announcer", "➕ Add a speaker", "Get pairing code", "▶ Test all speakers"]) {
+      expect(panel, `panel must render "${label}"`).toContain(label);
+      expect(quickstart, `quickstart must quote "${label}"`).toContain(label);
+    }
+  });
+
+  it("quotes the 'Add a speaker' explanation verbatim", () => {
+    // The panel wraps this across lines in JSX, so compare on collapsed space.
+    const collapse = (s: string) => s.replace(/\s+/g, " ");
+    const sentence =
+      "Name the room first, then press the button. You will get an eight-character code to type into the Raspberry Pi during setup. The code lasts one hour.";
+    expect(collapse(panel)).toContain(sentence);
+    expect(quickstartFlat).toContain(sentence);
+  });
+
+  it("names the Room name field and its real example", () => {
+    expect(panel).toContain('label="Room name"');
+    expect(panel).toContain('hint="For example: Sales Floor"');
+    expect(panel).toContain('placeholder="Sales Floor"');
+    expect(quickstart).toContain("Room name");
+    expect(quickstart).toContain("Sales Floor");
+  });
+
+  it("states the Room name length limit that the input really enforces", () => {
+    const max = /maxLength=\{(\d+)\}/.exec(panel);
+    expect(max).not.toBeNull();
+    expect(quickstart, "quickstart must state the real character limit").toContain(
+      `${max![1]} characters`,
+    );
+  });
+
+  it("quotes the master switch and quiet-hours hints from the panel", () => {
+    for (const hint of [
+      "The master switch for every speaker.",
+      "Test still works during quiet hours.",
+    ]) {
+      expect(panel, `panel must show "${hint}"`).toContain(hint);
+      expect(quickstart, `quickstart must quote "${hint}"`).toContain(hint);
+    }
+    expect(panel).toContain('label="Announce new orders"');
+    expect(quickstart).toContain("Announce new orders");
+  });
+
+  it("quotes the shop verdict headlines it tells the reader to expect", () => {
+    for (const headline of [
+      "No speakers are set up yet.",
+      "Announcements are turned OFF for the whole shop.",
+      "Quiet hours are active right now, so orders will not make a sound.",
+    ]) {
+      expect(adminCore, `verdict "${headline}" must exist`).toContain(headline);
+      expect(quickstartFlat, `quickstart must quote "${headline}"`).toContain(headline);
+    }
+  });
+
+  it("quotes the all-online headline exactly as it is built", () => {
+    expect(adminCore).toContain(
+      "headline: `All ${online} speaker${online === 1 ? \"\" : \"s\"} online. You will hear the next order.`",
+    );
+    expect(quickstart).toContain("All 1 speaker online. You will hear the next order.");
+    expect(quickstart).toContain("1 of 1 speaker online");
+  });
+
+  it("uses the four device health labels exactly as the code spells them", () => {
+    const labels = ["Online", "Not responding", "Offline", "Never connected"];
+    for (const label of labels) {
+      expect(core, `deviceHealthLabel must return "${label}"`).toContain(`return "${label}"`);
+      expect(quickstart, `quickstart must use the label "${label}"`).toContain(label);
+    }
+    expect(panel).toContain('"Switched off"');
+    expect(quickstart).toContain("Switched off");
+  });
+
+  it("gives the same next action for a bad device as the code does", () => {
+    expect(core).toContain(
+      "Unplug the Pi's power for 10 seconds, plug it back in, and wait 2 minutes.",
+    );
+    expect(quickstart).toMatch(/Unplug the Pi's power for 10 seconds/);
+    expect(core).toContain("Setup did not finish. Re-run the installer on the Pi and pair it again.");
+    expect(quickstart).toMatch(/Re-run the installer/i);
+  });
+
+  it("quotes the 'Last heard from' line and a real relative label", () => {
+    expect(panel).toContain("Last heard from {d.lastSeenLabel}");
+    // relativeTimeLabel lives in announcer-admin-core, not announcer-core.
+    expect(adminCore).toContain('return "just now"');
+    expect(quickstart).toContain("Last heard from just now");
+  });
+});
+
+describe("quickstart: the numbers it states are the real constants", () => {
+  it("states the pairing code lifetime from PAIRING_TTL_MINUTES", () => {
+    expect(PAIRING_TTL_MINUTES).toBe(60);
+    // Every stated lifetime must be right, not just the first one. A single
+    // toContain() check let a wrong second occurrence survive in the printer
+    // docs, so assert against all of them.
+    // Catch EVERY way a duration can be phrased, not just "expires after N".
+    // A mutant changed "It lasts 60 minutes." to 30 and stayed green because
+    // another sentence still said 60.
+    const stated = [
+      ...quickstart.matchAll(/(?:lasts|last|expires? after|good for)\s+(\d+)\s+minutes/gi),
+    ].map((m) => Number(m[1]));
+    expect(stated.length, "the quickstart must state the code lifetime").toBeGreaterThan(0);
+    for (const value of stated) {
+      expect(value, `stated lifetime ${value} does not match PAIRING_TTL_MINUTES`).toBe(
+        PAIRING_TTL_MINUTES,
+      );
+    }
+    // An hour stated in words must also be an hour in the code.
+    if (/lasts? (?:one|an) hour/i.test(quickstart)) {
+      expect(PAIRING_TTL_MINUTES).toBe(60);
+    }
+    // And no stray other number of minutes may be attached to a code.
+    const wrong = [...quickstart.matchAll(/code[^.\n]{0,40}?(\d+)\s+minutes/gi)].map((m) =>
+      Number(m[1]),
+    );
+    for (const value of wrong) {
+      expect(value).toBe(PAIRING_TTL_MINUTES);
+    }
+  });
+
+  it("states the online window from DEVICE_ONLINE_GRACE_SECONDS", () => {
+    const grace = /DEVICE_ONLINE_GRACE_SECONDS = (\d+)/.exec(core);
+    expect(grace).not.toBeNull();
+    expect(quickstart, "quickstart must state the real online grace window").toContain(
+      `${grace![1]} seconds`,
+    );
+  });
+
+  it("states the code length the panel promises", () => {
+    expect(panel).toContain("eight-character code");
+    expect(quickstart).toMatch(/eight-character/);
+    // The example code must be exactly that long, dash removed.
+    const example = /`([A-Z]{4}-\d{4})`/.exec(quickstart);
+    expect(example).not.toBeNull();
+    expect(example![1].replace("-", "").length).toBe(8);
+  });
+
+  it("states the journal cap the installer really configures", () => {
+    const cap = /SystemMaxUse=(\d+)M/.exec(installer);
+    expect(cap).not.toBeNull();
+    expect(quickstart).toContain(`${cap![1]}MB`);
+  });
+
+  it("tells the reader to drop the dash, which is how the agent parses it", () => {
+    // cmd_pair strips non-alphanumerics, so ABCD-2345 would in fact work --
+    // but the instruction must still match what we tell people to type.
+    expect(agent).toContain('"".join(ch for ch in args.code.upper() if ch.isalnum())');
+    expect(quickstart).toMatch(/without the dash/i);
+  });
+});
+
+describe("quickstart: it steers around the security gateway on the live domain", () => {
+  it("tells the reader to use the development site for the install", () => {
+    expect(quickstart).toContain("https://greenwaywebsite1.vercel.app");
+  });
+
+  it("never hands over an install command pointing at the blocked live domain", () => {
+    // PROVED against the real domain: greenwaymarijuana.com answers
+    // /api/announcer/pair with 202 and a CAPTCHA page, so an install command
+    // using it cannot work. The admin panel falls back to that address when
+    // NEXT_PUBLIC_SITE_URL is unset, which is exactly the trap this document
+    // is written to defuse -- so it must not repeat it.
+    const commands = [...quickstart.matchAll(/sudo \.\/install\.sh[^\n`]*/g)].map((m) => m[0]);
+    expect(commands.length).toBeGreaterThan(0);
+    for (const command of commands) {
+      expect(command, `this command points at the blocked domain: ${command}`).not.toContain(
+        "greenwaymarijuana.com",
+      );
+    }
+  });
+
+  it("no announcer document hands over an install command for the blocked domain", () => {
+    // Applies to every manual, not just the quickstart. The walkthrough used
+    // to print the live domain in three places, which is a guaranteed dead end
+    // on a real Pi until the domain is cut over.
+    const docs: [string, string][] = [
+      [QUICKSTART_PATH, quickstart],
+      ["docs/announcer/05-first-pi-walkthrough.md", read("docs/announcer/05-first-pi-walkthrough.md")],
+      [MANUAL_PATH, manual],
+      [CARD_PATH, card],
+      [BUY_PATH, buy],
+    ];
+    for (const [path, text] of docs) {
+      const commands = [...text.matchAll(/(?:sudo )?(?:\.\/install\.sh|greenway-announcer pair)[^\n`]*/g)]
+        .map((m) => m[0])
+        .filter((c) => c.includes("--site"));
+      for (const command of commands) {
+        expect(
+          command,
+          `${path} tells the reader to run a command against the blocked live domain: ${command}`,
+        ).not.toContain("greenwaymarijuana.com");
+      }
+    }
+  });
+
+  it("warns that the panel's own copy-paste command uses the wrong address", () => {
+    // Pin the fallback that causes it, so that setting NEXT_PUBLIC_SITE_URL
+    // (or changing the fallback) forces this warning to be revisited.
+    expect(panel).toContain('process.env.NEXT_PUBLIC_SITE_URL ?? "https://greenwaymarijuana.com"');
+    expect(quickstart).toContain("greenwaymarijuana.com");
+    expect(quickstart).toMatch(/security gateway/i);
+  });
+
+  it("quotes the gateway diagnosis the agent now prints", () => {
+    expect(agent).toContain("instead of handling the speaker request");
+    expect(agent).toMatch(/security\s+"\s*\n\s*"gateway or CAPTCHA|security gateway or CAPTCHA/);
+    expect(quickstart).toContain("The website answered 202 instead of handling the speaker request.");
+  });
+
+  it("quotes the installer's download refusal", () => {
+    expect(installer).toContain("returned HTTP $DL_CODE, not 200");
+    expect(quickstart).toContain("returned HTTP 202, not 200");
+  });
+});
+
+describe("quickstart: it is usable by somebody who is stuck", () => {
+  it("explains the exec-bit failure that actually happened in the field", () => {
+    // "command not found" is sudo's wording for "not executable", which sends
+    // people hunting for a missing file. Reproduced empirically.
+    // Pin it as a table row, so deleting the row fails even though the same
+    // string appears elsewhere in the document. A mutant edited one of the two
+    // occurrences and survived.
+    const occurrences = quickstart.split("sudo: ./install.sh: command not found").length - 1;
+    expect(
+      occurrences,
+      "the exec-bit failure must be explained where it happens AND in the error table",
+    ).toBeGreaterThanOrEqual(2);
+    expect(quickstart).toMatch(
+      /\|\s*`sudo: \.\/install\.sh: command not found`\s*\|.*not marked runnable/i,
+    );
+    expect(quickstart).toMatch(/git pull/);
+  });
+
+  it("quotes the cross-installer guard so the wrong flag is self-explaining", () => {
+    expect(installer).toContain(
+      "is a RECEIPT PRINTER option, but this is the ANNOUNCER installer",
+    );
+    expect(quickstart).toContain("is a RECEIPT PRINTER option, but this is the ANNOUNCER installer");
+  });
+
+  it("warns that a typed password shows nothing, which looks broken", () => {
+    expect(quickstart).toMatch(/Nothing appears as you type/i);
+  });
+
+  it("leads the silent-speaker advice with the volume knob, not the clever fix", () => {
+    const knobAt = quickstart.search(/volume knob/i);
+    const alsaAt = quickstart.indexOf("alsamixer");
+    expect(knobAt).toBeGreaterThan(-1);
+    expect(knobAt).toBeLessThan(alsaAt);
+  });
+
+  it("tells the reader a failed install changed nothing", () => {
+    expect(quickstart).toMatch(/left your Pi exactly as it was|has left your Pi/i);
+  });
+
+  it("numbers every step exactly once, in order, with no gaps", () => {
+    // Steps 1..12 are the spine. A lettered step (8b) is a branch the reader
+    // only takes when something is wrong, so it must NOT renumber the spine --
+    // otherwise "go to step 9" in the text points at the wrong place.
+    const headings = [...quickstart.matchAll(/^## Step (\d+)([a-z]?)/gm)];
+    const spine = headings.filter((m) => m[2] === "").map((m) => Number(m[1]));
+    expect(spine).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+
+    // Every lettered branch must hang off a step that exists.
+    const branches = headings.filter((m) => m[2] !== "");
+    expect(branches.length).toBeGreaterThan(0);
+    for (const branch of branches) {
+      expect(spine, `Step ${branch[1]}${branch[2]} has no Step ${branch[1]}`).toContain(
+        Number(branch[1]),
+      );
+    }
+
+    // Every "go to step N" must point at a step that exists.
+    const pointers = [...quickstart.matchAll(/go to step (\d+)/gi)].map((m) => Number(m[1]));
+    expect(pointers.length).toBeGreaterThan(0);
+    for (const target of pointers) {
+      expect(spine, `the text says "go to step ${target}" but there is no such step`).toContain(
+        target,
+      );
+    }
+  });
+
+  it("points onward to manuals that exist", () => {
+    for (const path of [
+      "docs/announcer/10-field-manual.md",
+      "docs/announcer/05-first-pi-walkthrough.md",
+      "docs/announcer/20-what-to-buy.md",
+      "docs/announcer/30-wall-card.md",
+    ]) {
+      expect(quickstart).toContain(path);
+      expect(() => read(path)).not.toThrow();
+    }
+  });
+});
