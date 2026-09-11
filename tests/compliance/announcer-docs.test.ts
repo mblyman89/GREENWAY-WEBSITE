@@ -713,6 +713,128 @@ describe("quickstart: it is usable by somebody who is stuck", () => {
     }
   });
 
+  /**
+   * Two real field failures drove this section, and the guidance that fixes
+   * them must not quietly rot:
+   *
+   *   1. `greenway-announcer test` crashed with PermissionError because the
+   *      config directory is mode 700. The fix a human needs is the word
+   *      "sudo", printed where they will see it.
+   *   2. The first speaker buzzed. The cause was the Pi's PWM headphone jack
+   *      driven at full volume -- not a broken speaker. Telling somebody that
+   *      is the difference between a 30-second fix and a wasted purchase.
+   */
+  it("tells you to use sudo for the commands that read the root-only config", () => {
+    // The config lives in a mode-700 directory, set by the installer itself.
+    expect(installer).toContain('chmod 700 "$CONFIG_DIR"');
+
+    // So the commands that read it must be shown WITH sudo -- and it is not
+    // enough for ONE mention to carry the sudo. Every single occurrence of
+    // these subcommands as a runnable command must have it, or the one line
+    // somebody happens to copy is the one that crashes.
+    for (const sub of ["status", "test", "audio"]) {
+      // Ignore Markdown's inline-code backticks when reading the word before
+      // the command, so `sudo greenway-announcer status` counts as sudo.
+      const all = [
+        ...quickstart
+          .replace(/`/g, "")
+          .matchAll(new RegExp(`(\\S+ )?greenway-announcer ${sub}\\b`, "g")),
+      ];
+      expect(
+        all.length,
+        `the quickstart never mentions "greenway-announcer ${sub}"`,
+      ).toBeGreaterThan(0);
+      const bare = all.filter((m) => (m[1] ?? "").trim() !== "sudo");
+      expect(
+        bare.map((m) => m[0]),
+        `every "greenway-announcer ${sub}" in the quickstart must be run with sudo, because the config directory is mode 700`,
+      ).toEqual([]);
+    }
+
+    // And the agent must actually offer that advice itself, naming the fix.
+    expect(agent).toContain("Run the same command with 'sudo' in front:");
+    expect(agent).toContain("sudo greenway-announcer {command}");
+  });
+
+  it("promises the test command degrades instead of crashing without sudo", () => {
+    // The crash was the defect. The documented behaviour is "say so and carry
+    // on", so the agent must have both halves: the note and the fallback.
+    expect(quickstartFlat).toContain("It will not stop and it will not crash");
+    expect(agent).toContain("cannot read the saved audio output from");
+    expect(agent).toContain("def usable_cache_dir");
+    expect(agent).toContain("usable_cache_dir(Path(args.cache_dir))");
+  });
+
+  it("has a branch for buzzing that names the cause and the counter-intuitive fix", () => {
+    expect(quickstart).toMatch(/##\s+Step 8c\b/);
+    expect(quickstartFlat).toMatch(/hiss, buzz or static/i);
+
+    // The reassurance: it is the socket, not the speaker.
+    expect(quickstartFlat).toContain("normal for that socket");
+    expect(quickstartFlat).toContain("It is not a broken speaker");
+    expect(quickstartFlat).toContain("Do not go and buy a new speaker");
+
+    // The fix is backwards from what people expect, so both halves must be
+    // present: Pi DOWN, speaker UP. Half of this advice is useless.
+    expect(quickstartFlat).toMatch(/Turn the \*\*Pi's\*\* volume \*\*down\*\*/i);
+    expect(quickstartFlat).toMatch(/the \*\*speaker's\*\* knob \*\*up\*\*/i);
+    expect(quickstartFlat).toContain("80%");
+
+    // Both kinds of buzz are distinguished, because the fixes differ.
+    expect(quickstartFlat).toContain("even when nothing is playing");
+    expect(quickstartFlat).toContain("only happens while a sound plays");
+
+    // And the permanent cure.
+    expect(quickstartFlat).toMatch(/USB audio adapter/i);
+
+    // Step 8 must actually route the reader to 8c, or the branch is orphaned.
+    expect(quickstartFlat).toMatch(/go to step 8c/i);
+  });
+
+  it("the buzz advice in the docs matches the advice the agent prints", () => {
+    // If these drift apart, the Pi and the manual contradict each other in
+    // front of a customer.
+    expect(agent).toContain("PWM-driven and is genuinely noisy");
+    expect(agent).toContain("not a broken speaker");
+    expect(agent).toContain("down to about 80%");
+    expect(agent).toContain("even when nothing is playing");
+    expect(agent).toContain("ONLY while a sound plays");
+    expect(agent).toContain("USB audio adapter");
+  });
+
+  it("the audio command it documents is a real subcommand", () => {
+    expect(agent).toContain('add_parser("audio"');
+    expect(agent).toContain("def cmd_audio");
+    expect(agent).toContain("p_audio.set_defaults(func=cmd_audio)");
+    // It is listed in the commands worth keeping, not buried in one branch.
+    expect(quickstartFlat).toContain("what is it plugged into? why is it buzzing?");
+  });
+
+  it("the keep-these-commands list counts itself correctly", () => {
+    // A heading that says FIVE above a list of six is the kind of small lie
+    // that makes somebody distrust the rest of the page.
+    const heading = quickstart.match(/## THE (\w+) COMMANDS WORTH KEEPING/);
+    expect(heading, "the commands-worth-keeping section must exist").toBeTruthy();
+    const block = quickstart.split("COMMANDS WORTH KEEPING")[1].split("```")[1];
+    const lines = block
+      .split("\n")
+      .map((l) => l.trim())
+      // Drop the fence's language tag ("bash"), which is not a command.
+      .filter((l) => l.length > 0 && l !== "bash" && l.includes(" "));
+    const words: Record<string, number> = {
+      THREE: 3,
+      FOUR: 4,
+      FIVE: 5,
+      SIX: 6,
+      SEVEN: 7,
+      EIGHT: 8,
+    };
+    expect(
+      words[heading![1]],
+      `the heading says ${heading![1]} but the block lists ${lines.length} commands`,
+    ).toBe(lines.length);
+  });
+
   it("points onward to manuals that exist", () => {
     for (const path of [
       "docs/announcer/10-field-manual.md",

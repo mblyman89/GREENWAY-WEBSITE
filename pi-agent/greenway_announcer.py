@@ -47,6 +47,7 @@ import logging.handlers
 import math
 import os
 import platform
+import re
 import shutil
 import signal
 import struct
@@ -331,12 +332,140 @@ def generate_tone_wav(path: Path, kind: str) -> None:
         wav.writeframes(bytes(frames))
 
 
+def usable_cache_dir(preferred: Path) -> Path:
+    """
+    Return a directory we can actually write tones into.
+
+    The real cache lives in /var/lib/greenway-announcer, which is root-owned.
+    `test` is the command somebody is most likely to run without sudo, and its
+    entire purpose is to make a noise and prove the hardware. Refusing to play
+    anything because a cache directory is not writable would be absurd, so fall
+    back to a temp directory and carry on.
+    """
+    try:
+        preferred.mkdir(parents=True, exist_ok=True)
+        probe = preferred / ".write-probe"
+        probe.write_bytes(b"")
+        probe.unlink()
+        return preferred
+    except OSError:
+        fallback = Path(tempfile.gettempdir()) / "greenway-announcer-sounds"
+        try:
+            fallback.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return Path(tempfile.mkdtemp(prefix="greenway-sounds-"))
+        return fallback
+
+
 def ensure_builtin(cache_dir: Path, kind: str) -> Path:
     """Return a playable path for a built-in sound, generating it once."""
     path = cache_dir / f"builtin-{kind}.wav"
-    if not path.exists() or path.stat().st_size == 0:
+    try:
+        fresh = path.exists() and path.stat().st_size > 0
+    except OSError:
+        # A locked-down parent makes exists() raise rather than return False.
+        fresh = False
+    if not fresh:
         generate_tone_wav(path, kind)
     return path
+
+
+def parse_aplay_devices(text: str) -> List[Dict[str, Any]]:
+    """
+    Turn `aplay -l` output into a list of {card, device, id, name, is_headphone}.
+
+    Written as a pure function so it can be asserted against real captured
+    output instead of needing a sound card in CI.
+    """
+    devices: List[Dict[str, Any]] = []
+    for line in (text or "").split("\n"):
+        match = re.match(
+            r"^card (\d+): (\S+) \[([^\]]*)\], device (\d+): (.*?)(?: \[|$)", line.strip()
+        )
+        if not match:
+            continue
+        card_id = match.group(2)
+        card_name = match.group(3)
+        device_name = match.group(5)
+        blob = f"{card_id} {card_name} {device_name}".lower()
+        # HDMI is checked FIRST and wins. On the common Raspbian layout the
+        # analog jack and the HDMI output are BOTH exposed by the same
+        # "bcm2835" card, so a naive "bcm2835 means headphone" test labels the
+        # HDMI output as the analog jack and hands out the wrong buzz advice.
+        is_hdmi = "hdmi" in blob or "iec958" in blob
+        devices.append(
+            {
+                "card": int(match.group(1)),
+                "device": int(match.group(4)),
+                "id": card_id,
+                # Prefer the per-device name when it adds something: one card
+                # can expose several outputs, and "bcm2835 ALSA" twice tells
+                # the reader nothing about which line is which.
+                "name": device_name if device_name and device_name != card_name else card_name,
+                "alsa": f"plughw:{match.group(1)},{match.group(4)}",
+                # The Pi's built-in analog jack is driven by PWM and is the
+                # known source of hiss/buzz complaints. A USB dongle or HAT is
+                # a real DAC and does not have that problem.
+                "is_headphone": (not is_hdmi) and ("headphone" in blob or "bcm2835" in blob),
+                "is_hdmi": is_hdmi,
+            }
+        )
+    return devices
+
+
+def diagnose_buzz(devices: List[Dict[str, Any]], chosen: Optional[str]) -> List[str]:
+    """
+    Explain a buzzing / static speaker, in the order the fixes are worth trying.
+
+    The Pi's own 3.5 mm jack is PWM-driven and genuinely noisy: a constant hiss
+    or buzz through it is normal behaviour for the hardware, not a fault in the
+    speaker or this software. Saying so saves somebody replacing a perfectly
+    good speaker.
+    """
+    notes: List[str] = []
+    analog = [d for d in devices if d["is_headphone"]]
+    usb = [d for d in devices if not d["is_headphone"] and not d["is_hdmi"]]
+
+    using_analog = False
+    if chosen:
+        for d in analog:
+            if chosen in (d["alsa"], f"hw:{d['card']},{d['device']}"):
+                using_analog = True
+    elif analog and not usb:
+        using_analog = True
+
+    if using_analog or (analog and not chosen):
+        notes.append(
+            "This Pi is playing through its own 3.5 mm headphone jack. That output is "
+            "PWM-driven and is genuinely noisy: a steady hiss or buzz through it is "
+            "normal for the hardware, not a broken speaker."
+        )
+        notes.append(
+            "Most effective fix: turn the Pi's own volume DOWN to about 80% and turn "
+            "the speaker's knob UP. Driving the Pi's jack at 100% is the single most "
+            "common cause of buzzing and distortion."
+        )
+        if usb:
+            notes.append(
+                "Better fix: this Pi already has another audio output. Use it: "
+                f"sudo ./install.sh --site <your-site> --audio-device {usb[0]['alsa']}"
+            )
+        else:
+            notes.append(
+                "Permanent fix: a $10 USB audio adapter is a real DAC and removes the "
+                "noise completely. Plug it in, then re-run the installer with "
+                "--audio-device pointing at it."
+            )
+    notes.append(
+        "A buzz that is present even when nothing is playing is electrical, not audio: "
+        "try a different USB power supply for the speaker, plug the speaker into a "
+        "different mains socket from the Pi, or use a shorter/shielded audio cable."
+    )
+    notes.append(
+        "A buzz ONLY while a sound plays usually means the level is too high. Lower the "
+        "Pi's volume first, then the speaker's."
+    )
+    return notes
 
 
 def set_alsa_volume(volume: int, control: Optional[str]) -> None:
@@ -412,8 +541,49 @@ def play_file(path: Path, device: Optional[str]) -> Tuple[bool, str]:
 # CONFIG
 # ============================================================================
 
+def config_state(path: Path) -> str:
+    """
+    Can we read the config? Returns "readable", "denied" or "missing".
+
+    Path.exists() RAISES PermissionError -- it does not return False -- when a
+    parent directory is not searchable. The config lives in /etc/greenway-
+    announcer, which the installer deliberately locks to mode 700 because the
+    file holds this speaker's device key. So every `path.exists()` in this
+    program was a crash waiting for the first person to run a command without
+    sudo, which is exactly what happened in the field:
+
+        greenway-announcer test
+        PermissionError: [Errno 13] Permission denied:
+          '/etc/greenway-announcer/config.json'
+
+    Reproduced deliberately before fixing. "Denied" is a different state from
+    "missing" and needs a different fix ("use sudo" vs "pair this speaker"), so
+    it is reported separately rather than collapsed into a boolean.
+    """
+    try:
+        return "readable" if path.exists() else "missing"
+    except PermissionError:
+        return "denied"
+    except OSError:
+        return "missing"
+
+
+def needs_sudo_message(path: Path, command: str) -> str:
+    """The fix, named, for somebody who forgot sudo."""
+    return (
+        f"Cannot read this speaker's settings at {path} (permission denied).\n"
+        "That file is readable only by the administrator because it holds this\n"
+        "speaker's key.\n\n"
+        f"Run the same command with 'sudo' in front:\n"
+        f"  sudo greenway-announcer {command}"
+    )
+
+
 def load_config(path: Path) -> Dict[str, Any]:
-    if not path.exists():
+    state = config_state(path)
+    if state == "denied":
+        raise SystemExit(needs_sudo_message(path, "status"))
+    if state == "missing":
         raise SystemExit(
             f"This speaker is not paired yet (no config at {path}).\n"
             "Pair it by running:  sudo greenway-announcer pair <CODE>\n"
@@ -690,7 +860,7 @@ def cmd_pair(args: argparse.Namespace) -> int:
     site = args.site.rstrip("/") if args.site else None
     config_path = Path(args.config)
 
-    if site is None and config_path.exists():
+    if site is None and config_state(config_path) == "readable":
         try:
             site = str(json.loads(config_path.read_text(encoding="utf-8")).get("siteUrl", "")).rstrip("/")
         except Exception:
@@ -754,13 +924,26 @@ def cmd_pair(args: argparse.Namespace) -> int:
 
 def cmd_test(args: argparse.Namespace) -> int:
     """Play every built-in sound locally. Proves the hardware without the network."""
-    cache_dir = Path(args.cache_dir)
+    cache_dir = usable_cache_dir(Path(args.cache_dir))
     device = args.audio_device or None
-    if not device and Path(args.config).exists():
-        try:
-            device = json.loads(Path(args.config).read_text(encoding="utf-8")).get("audioDevice") or None
-        except Exception:
-            device = None
+    # The config is root-only on purpose, and `test` is the command somebody is
+    # most likely to run without sudo. Not being able to read the saved audio
+    # device is not a reason to refuse to make a noise: say so and carry on
+    # with the system default, because the whole point of this command is to
+    # prove the hardware works.
+    if not device:
+        state = config_state(Path(args.config))
+        if state == "readable":
+            try:
+                device = json.loads(Path(args.config).read_text(encoding="utf-8")).get("audioDevice") or None
+            except Exception:
+                device = None
+        elif state == "denied":
+            print(
+                f"Note: cannot read the saved audio output from {args.config} without sudo,\n"
+                "      so this test uses the system default. For the exact setup this\n"
+                "      speaker uses, run:  sudo greenway-announcer test\n"
+            )
 
     print("Playing each built-in sound. You should hear six different tones.\n")
     failures = 0
@@ -787,13 +970,122 @@ def cmd_test(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audio(args: argparse.Namespace) -> int:
+    """
+    Diagnose the sound hardware: what outputs exist, which one is in use, what
+    is muted, and what to do about a buzz.
+
+    Added because the first speaker in the field came up "connected, green dot,
+    but buzzing", and there was no single command that answered "what is this
+    Pi actually plugged into?".
+    """
+    print("Sound hardware on this Pi")
+    print("=" * 40)
+
+    if shutil.which("aplay") is None:
+        print("\naplay is missing. Install it:  sudo apt install -y alsa-utils")
+        return 1
+
+    try:
+        listing = subprocess.run(["aplay", "-l"], capture_output=True, timeout=10)
+        text = (listing.stdout or b"").decode("utf-8", "replace")
+    except (subprocess.SubprocessError, OSError) as exc:
+        print(f"\nCould not list the audio outputs: {exc}")
+        return 1
+
+    devices = parse_aplay_devices(text)
+    if not devices:
+        print("\nNo audio outputs found at all.")
+        print("  1. If you are using the Pi's own headphone jack, make sure audio is")
+        print("     enabled: check /boot/firmware/config.txt has 'dtparam=audio=on'.")
+        print("  2. If you are using a USB adapter, unplug it and plug it back in,")
+        print("     then run this again.")
+        return 1
+
+    print(f"\nFound {len(devices)} output{'' if len(devices) == 1 else 's'}:")
+    for d in devices:
+        kind = "Pi headphone jack (noisy PWM)" if d["is_headphone"] else (
+            "HDMI" if d["is_hdmi"] else "USB / add-on card (recommended)"
+        )
+        print(f"  {d['alsa']:<16} {d['name']}  -- {kind}")
+
+    # What is this speaker actually configured to use?
+    chosen: Optional[str] = args.audio_device or None
+    source = "the --audio-device you just passed"
+    if not chosen:
+        state = config_state(Path(args.config))
+        if state == "readable":
+            try:
+                chosen = json.loads(Path(args.config).read_text(encoding="utf-8")).get("audioDevice") or None
+                source = "this speaker's saved setting"
+            except Exception:
+                chosen = None
+        elif state == "denied":
+            print(
+                f"\nNote: cannot read the saved output from {args.config} without sudo."
+                "\n      Run 'sudo greenway-announcer audio' to see the real setting."
+            )
+
+    print("")
+    if chosen:
+        print(f"In use: {chosen}  (from {source})")
+        if not any(chosen in (d["alsa"], f"hw:{d['card']},{d['device']}") for d in devices):
+            print("  WARNING: that output is not in the list above. It may have been")
+            print("           unplugged, or the name may be wrong.")
+    else:
+        print("In use: the system default (no specific output was chosen)")
+
+    # Mixer levels: a too-high level on the Pi's jack is the usual buzz cause.
+    if shutil.which("amixer") is not None:
+        print("\nVolume controls:")
+        try:
+            controls = subprocess.run(["amixer", "scontrols"], capture_output=True, timeout=10)
+            names = re.findall(
+                r"Simple mixer control '([^']+)'", (controls.stdout or b"").decode("utf-8", "replace")
+            )
+        except (subprocess.SubprocessError, OSError):
+            names = []
+        if not names:
+            print("  (none reported)")
+        for name in names[:6]:
+            try:
+                got = subprocess.run(["amixer", "-M", "sget", name], capture_output=True, timeout=10)
+                body = (got.stdout or b"").decode("utf-8", "replace")
+            except (subprocess.SubprocessError, OSError):
+                continue
+            level = re.search(r"\[(\d+)%\]", body)
+            muted = "[off]" in body
+            shown = f"{level.group(1)}%" if level else "?"
+            flag = "  MUTED - press M in alsamixer to unmute" if muted else ""
+            print(f"  {name:<12} {shown}{flag}")
+            if level and int(level.group(1)) >= 95:
+                print("               ^ this is very high; try about 80% to stop buzzing")
+
+    print("\nAbout that buzzing / static:")
+    for note in diagnose_buzz(devices, chosen):
+        print(f"  - {note}")
+
+    print("\nNext step: play the tones and listen.")
+    print("  greenway-announcer test")
+    for d in devices:
+        print(f"  greenway-announcer test --audio-device {d['alsa']}")
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     config_path = Path(args.config)
     print(f"Greenway announcer v{AGENT_VERSION}")
     for key, value in agent_info().items():
         print(f"  {key}: {value}")
 
-    if not config_path.exists():
+    state = config_state(config_path)
+    if state == "denied":
+        # Distinct from NOT PAIRED: the speaker may be perfectly fine and this
+        # is just a missing sudo. Telling somebody their speaker is unpaired
+        # when it is not sends them off to re-pair for no reason.
+        print(f"\n{needs_sudo_message(config_path, 'status')}")
+        return 1
+    if state == "missing":
         print(f"\nNOT PAIRED. No config at {config_path}.")
         print("Fix: sudo greenway-announcer pair <CODE> --site https://your-site.com")
         return 1
@@ -1017,6 +1309,166 @@ def selftest() -> int:
         eq("config: round-trips", loaded["deviceId"], "d")
         ok("config: no temp files left behind", list(Path(tmp, "sub").glob(".config-*")) == [])
 
+    # -- cache dir falls back instead of crashing -----------------------------
+    # Second crash of the same family: /var/lib/greenway-announcer is
+    # root-owned, so `test` without sudo died writing its tone cache. The whole
+    # point of `test` is to make a noise, so it must degrade, never refuse.
+    with tempfile.TemporaryDirectory() as tmp:
+        wanted = Path(tmp) / "cache"
+        eq("cache: uses the real directory when writable", usable_cache_dir(wanted), wanted)
+        ok("cache: creates it if absent", wanted.is_dir())
+        ok("cache: leaves no probe file behind", list(wanted.glob(".write-probe")) == [])
+
+        # Use a path *underneath a regular file*: mkdir then fails with
+        # ENOTDIR. A mode-500 directory would not do, because these tests must
+        # also hold when run as root, and root ignores permission bits.
+        wall = Path(tmp) / "not-a-directory"
+        wall.write_text("", encoding="utf-8")
+        got = usable_cache_dir(wall / "sounds")
+        ok("cache: falls back when the directory cannot be created", got != (wall / "sounds"))
+        ok("cache: the fallback is usable", got.is_dir() and os.access(got, os.W_OK))
+        # And a tone must actually be produced there.
+        tone = ensure_builtin(got, "chime")
+        ok("cache: a tone is still generated after falling back", tone.exists() and tone.stat().st_size > 0)
+
+    # ensure_builtin must survive a cache whose exists() raises, which is what
+    # a root-owned parent directory actually does to a non-root process.
+    class _RaisingPath(type(Path("/tmp"))):  # type: ignore[misc]
+        def exists(self, *a: Any, **k: Any) -> bool:
+            raise PermissionError(13, "Permission denied")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        real = Path(tmp) / "regen"
+        real.mkdir()
+        raising = _RaisingPath(str(real))
+        # Sanity-check the double: if the subclass does not actually raise, the
+        # assertion below would pass for the wrong reason.
+        _raised = False
+        try:
+            (raising / "probe.wav").exists()
+        except PermissionError:
+            _raised = True
+        ok("cache: the test double really does raise", _raised)
+
+        tone = ensure_builtin(raising, "bell")
+        ok(
+            "cache: a tone regenerates when exists() raises",
+            Path(str(tone)).is_file() and Path(str(tone)).stat().st_size > 0,
+        )
+
+    # -- config_state: the bug that crashed the first speaker in the field ---
+    # `greenway-announcer test` died with PermissionError because Path.exists()
+    # RAISES when a parent directory is not searchable -- it does not return
+    # False. /etc/greenway-announcer is mode 700, so every non-sudo run of the
+    # command crashed with a traceback instead of saying "use sudo".
+    with tempfile.TemporaryDirectory() as tmp:
+        readable = Path(tmp) / "readable.json"
+        readable.write_text('{"deviceId":"d"}', encoding="utf-8")
+        eq("config_state: an existing file is readable", config_state(readable), "readable")
+        eq("config_state: an absent file is missing", config_state(Path(tmp) / "nope.json"), "missing")
+
+        class _Denied(type(Path(tmp))):  # type: ignore[misc]
+            def exists(self, *a: Any, **k: Any) -> bool:
+                raise PermissionError(13, "Permission denied")
+
+        class _Errored(type(Path(tmp))):  # type: ignore[misc]
+            def exists(self, *a: Any, **k: Any) -> bool:
+                raise OSError(5, "I/O error")
+
+        eq(
+            "config_state: PermissionError means denied, it must not crash",
+            config_state(_Denied(tmp, "config.json")),
+            "denied",
+        )
+        eq(
+            "config_state: any other OS error is treated as missing",
+            config_state(_Errored(tmp, "config.json")),
+            "missing",
+        )
+
+    # The message has to name the fix, not just the problem.
+    _sudo_msg = needs_sudo_message(Path("/etc/greenway-announcer/config.json"), "status")
+    ok("needs_sudo_message: names the file", "/etc/greenway-announcer/config.json" in _sudo_msg)
+    ok("needs_sudo_message: says permission denied", "permission denied" in _sudo_msg.lower())
+    ok("needs_sudo_message: gives the exact command", "sudo greenway-announcer status" in _sudo_msg)
+    ok(
+        "needs_sudo_message: uses the command it was asked about",
+        "sudo greenway-announcer test" in needs_sudo_message(Path("/x"), "test"),
+    )
+
+    # -- parse_aplay_devices, against real `aplay -l` output -----------------
+    _APLAY_OLD = (
+        "**** List of PLAYBACK Hardware Devices ****\n"
+        "card 0: ALSA [bcm2835 ALSA], device 0: bcm2835 ALSA [bcm2835 ALSA]\n"
+        "  Subdevices: 7/7\n"
+        "card 0: ALSA [bcm2835 ALSA], device 1: bcm2835 IEC958/HDMI [bcm2835 IEC958/HDMI]\n"
+        "  Subdevices: 1/1\n"
+    )
+    _APLAY_BOOKWORM = (
+        "**** List of PLAYBACK Hardware Devices ****\n"
+        "card 0: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+        "  Subdevices: 8/8\n"
+        "card 1: vc4hdmi [vc4-hdmi], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]\n"
+        "  Subdevices: 1/1\n"
+    )
+    _APLAY_USB = (
+        "**** List of PLAYBACK Hardware Devices ****\n"
+        "card 0: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+        "  Subdevices: 8/8\n"
+        "card 1: Device [USB Audio Device], device 0: USB Audio [USB Audio]\n"
+        "  Subdevices: 1/1\n"
+    )
+
+    _old = parse_aplay_devices(_APLAY_OLD)
+    eq("aplay: two outputs on the old layout", len(_old), 2)
+    eq("aplay: builds a usable ALSA name", _old[0]["alsa"], "plughw:0,0")
+    eq("aplay: second output on the same card", _old[1]["alsa"], "plughw:0,1")
+    ok("aplay: the analog jack is flagged", _old[0]["is_headphone"])
+    # Regression: both outputs live on the "bcm2835" card, so a naive check
+    # labels HDMI as the headphone jack and gives the wrong buzz advice.
+    ok("aplay: HDMI is NOT mistaken for the headphone jack", not _old[1]["is_headphone"])
+    ok("aplay: HDMI is flagged as HDMI", _old[1]["is_hdmi"])
+
+    _bw = parse_aplay_devices(_APLAY_BOOKWORM)
+    eq("aplay: two outputs on Bookworm", len(_bw), 2)
+    ok("aplay: Bookworm analog jack is flagged", _bw[0]["is_headphone"])
+    ok("aplay: vc4hdmi is HDMI", _bw[1]["is_hdmi"])
+    ok("aplay: vc4hdmi is not the headphone jack", not _bw[1]["is_headphone"])
+    eq("aplay: HDMI sits on its own card", _bw[1]["alsa"], "plughw:1,0")
+
+    _usb = parse_aplay_devices(_APLAY_USB)
+    ok("aplay: a USB dongle is not the headphone jack", not _usb[1]["is_headphone"])
+    ok("aplay: a USB dongle is not HDMI", not _usb[1]["is_hdmi"])
+    eq("aplay: the USB output is addressable", _usb[1]["alsa"], "plughw:1,0")
+
+    eq("aplay: no sound card yields no outputs", parse_aplay_devices(""), [])
+    eq("aplay: junk yields no outputs", parse_aplay_devices("no soundcards found..."), [])
+    ok("aplay: never raises on rubbish", isinstance(parse_aplay_devices("card x: y"), list))
+
+    # -- diagnose_buzz -------------------------------------------------------
+    _analog_advice = diagnose_buzz(_old, "plughw:0,0")
+    _joined = " ".join(_analog_advice).lower()
+    ok("buzz: reassures that the PWM jack is normally noisy", "pwm" in _joined)
+    ok("buzz: says it is not a broken speaker", "not a broken speaker" in _joined)
+    ok("buzz: tells him to turn the Pi DOWN", "down to about 80%" in _joined)
+    ok("buzz: tells him to turn the speaker UP", "speaker's knob up" in _joined)
+    ok("buzz: recommends a USB adapter when there is none", "usb audio adapter" in _joined)
+    ok("buzz: covers the idle/electrical case", "even when nothing is playing" in _joined)
+    ok("buzz: covers the too-loud case", "only while a sound plays" in _joined)
+
+    # When a real USB output already exists, point at it instead of shopping.
+    _usb_advice = " ".join(diagnose_buzz(_usb, "plughw:0,0")).lower()
+    ok("buzz: prefers an output this Pi already has", "already has another audio output" in _usb_advice)
+    ok("buzz: names that output", "plughw:1,0" in _usb_advice)
+    ok("buzz: does not tell him to buy one he does not need", "usb audio adapter is a real dac" not in _usb_advice)
+
+    # Playing through the USB dongle: the PWM explanation must NOT appear.
+    _clean = " ".join(diagnose_buzz(_usb, "plughw:1,0")).lower()
+    ok("buzz: no PWM excuse when not using the analog jack", "pwm" not in _clean)
+    ok("buzz: still covers electrical noise on any output", "even when nothing is playing" in _clean)
+
+    ok("buzz: always returns advice, even with no devices", len(diagnose_buzz([], None)) >= 1)
+
     print(f"\n{passed} checks passed, {failed} failed.")
     if failed == 0:
         print("ALL CHECKS PASSED — the announcer software on this Pi is healthy.")
@@ -1054,6 +1506,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_test.add_argument("--mixer-control", help="ALSA mixer control, e.g. PCM")
     p_test.add_argument("--volume", type=int, default=70)
     p_test.set_defaults(func=cmd_test)
+
+    p_audio = sub.add_parser("audio", help="Show the sound hardware and diagnose buzzing.")
+    p_audio.add_argument("--audio-device", help="ALSA device to check, e.g. plughw:1,0")
+    p_audio.set_defaults(func=cmd_audio)
 
     p_status = sub.add_parser("status", help="Show config and check the website connection.")
     p_status.set_defaults(func=cmd_status)
