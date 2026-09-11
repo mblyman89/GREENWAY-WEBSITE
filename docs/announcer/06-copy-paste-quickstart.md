@@ -254,11 +254,16 @@ know.
 
 ## Step 8 — Make the Pi play all six sounds
 
-This tests the **speaker, the cable and the volume** with no website involved:
+This tests the **speaker, the cable and the volume** with no website involved.
+Use `sudo`, because this speaker's settings are readable only by the
+administrator:
 
 ```bash
-greenway-announcer test
+sudo greenway-announcer test
 ```
+
+If you leave `sudo` off, the Pi will tell you so and then play the sounds
+through the system default anyway. It will not stop and it will not crash.
 
 **You should see, and hear:**
 
@@ -282,6 +287,7 @@ All six sounds played. The audio hardware on this Pi is working.
   output. Go to step 8b.
 - **It says `FAILED`** → read the four numbered suggestions it prints, then go
   to step 8b.
+- **I hear the tones, but also a hiss, buzz or static** → go to step 8c.
 
 ## Step 8b — Only if you heard nothing: pick the right audio output
 
@@ -302,7 +308,7 @@ which is written `plughw:1,0`.
 Test that output directly:
 
 ```bash
-greenway-announcer test --audio-device plughw:1,0
+sudo greenway-announcer test --audio-device plughw:1,0
 ```
 
 Heard it? Then make it permanent by re-running the installer with that output
@@ -323,10 +329,67 @@ alsamixer
 If the volume slider has an unusual name on your dongle, tell the installer
 which one to use by adding `--mixer-control PCM`.
 
+## Step 8c — Only if you hear a hiss, buzz or static
+
+Start by asking the Pi what it is plugged into and what its volume levels are:
+
+```bash
+sudo greenway-announcer audio
+```
+
+That prints every audio output it can see, marks which one this speaker is
+using, shows every volume control (flagging anything muted or set dangerously
+high), and then explains what to do about the noise.
+
+**The most important thing to know first:** if the speaker is in the Pi's own
+round 3.5 mm headphone socket, a steady hiss or buzz is **normal for that
+socket**. It is not a broken speaker and it is not a fault in this software.
+The Pi generates that output with a crude method that is electrically noisy.
+Do not go and buy a new speaker.
+
+**The fix that works most often** is counter-intuitive. Turn the **Pi's** volume
+**down** and the **speaker's** knob **up**:
+
+```bash
+alsamixer
+```
+
+Use the down arrow to bring the slider to about **80%**, then press `Esc`. Now
+turn the knob on the speaker itself up until it is loud enough. Running the
+Pi's output at 100% is the single most common cause of buzzing and distortion,
+because the last stretch of its range is where the noise lives.
+
+Then listen again:
+
+```bash
+sudo greenway-announcer test
+```
+
+**Still buzzing? Work out which kind of buzz it is:**
+
+- **The buzz is there even when nothing is playing** → this is electrical, not
+  audio. Try a different USB power supply for the speaker, plug the speaker
+  into a different mains socket from the Pi, or use a shorter audio cable.
+- **The buzz only happens while a sound plays** → the level is still too high.
+  Lower the Pi's volume further, to about 60%, and raise the speaker's knob to
+  compensate.
+
+**The permanent cure** is a **USB audio adapter** — a small dongle, about $10,
+with a USB plug on one end and a headphone socket on the other. It bypasses the
+Pi's noisy socket completely and the hiss disappears. Plug it in, run
+`sudo greenway-announcer audio` to find its name (something like `plughw:1,0`),
+then make it permanent:
+
+```bash
+sudo ./install.sh --site https://greenwaywebsite1.vercel.app --audio-device plughw:1,0
+```
+
+When the noise is acceptable, go to step 9.
+
 ## Step 9 — Ask the Pi whether the website can hear it
 
 ```bash
-greenway-announcer status
+sudo greenway-announcer status
 ```
 
 **You should see** the version, then details, then:
@@ -346,6 +409,7 @@ Checking the connection to the website ...
 
 | Instead it says | What to do |
 |---|---|
+| `Cannot read this speaker's settings ... (permission denied).` | You left off `sudo`. Run `sudo greenway-announcer status`. Nothing is broken. |
 | `NOT PAIRED. No config at /etc/greenway-announcer/config.json.` | Pairing never completed. Make a new code (step 5) and repeat step 6. |
 | `The website rejected this speaker's key (401).` | Re-pair with a fresh code (steps 5 and 6). |
 | `security gateway or CAPTCHA` | The Pi is pointed at the live site. Repeat step 6 with the Vercel address. |
@@ -414,13 +478,16 @@ You never need to run any of this again.
 
 ---
 
-## THE FIVE COMMANDS WORTH KEEPING
+## THE SIX COMMANDS WORTH KEEPING
 
-Run these on the Pi over SSH, any time:
+Run these on the Pi over SSH, any time. Keep the `sudo` on the first three:
+this speaker's settings are readable only by the administrator, and without it
+they will tell you so rather than show you the real answer.
 
 ```bash
-greenway-announcer status                    # is it working? (checks the website too)
-greenway-announcer test                      # play every sound through this speaker
+sudo greenway-announcer status               # is it working? (checks the website too)
+sudo greenway-announcer test                 # play every sound through this speaker
+sudo greenway-announcer audio                # what is it plugged into? why is it buzzing?
 greenway-announcer selftest                  # check the program itself
 sudo systemctl restart greenway-announcer    # turn it off and on again
 journalctl -u greenway-announcer -f          # watch it live (Ctrl+C to stop)
