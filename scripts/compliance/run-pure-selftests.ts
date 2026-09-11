@@ -435,6 +435,12 @@ import { __runBackLinkTests } from "../../src/lib/admin/back-link-core";
 import { __runPostgrestEscapeTests } from "../../src/lib/supabase/postgrest-escape";
 import { __runPgBigintTests } from "../../src/lib/supabase/pg-bigint";
 import { __runPrintRetryCoreTests } from "../../src/lib/printing/print-retry-core";
+// D-68 -- the ONE place that decides which secret a CloudPRNT request carries.
+// Registered here because /api/cloudprnt passes BOTH the shared poll token and
+// the per-receipt job token on the same `?token=` parameter: reading the query
+// first for both meant Star's own GET/DELETE steps 401'd themselves and no
+// receipt could ever be fetched. Pure: no I/O.
+import { __runCloudPrntAuthCoreTests } from "../../src/lib/printing/cloudprnt-auth-core";
 import { __runRevenueBasisTests } from "../../src/lib/reports/revenue-basis";
 import { __runRejectedReportTests } from "../../src/lib/pos/rejected-report-core";
 import { __runReservationExpiryTests } from "../../src/lib/orders/reservation-expiry-core";
@@ -807,6 +813,7 @@ __runLiquidVolumeTests();
   __runConstantTimeTests();
   __runGramsPerOunceTests();
   __runPrintRetryCoreTests();
+  __runCloudPrntAuthCoreTests();
   __runRevenueBasisTests();
   __runRejectedReportTests();
   __runReservationExpiryTests();
