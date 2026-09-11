@@ -216,6 +216,28 @@ Pi's SD card.
 
 ---
 
+## Proving it still works (for whoever maintains this)
+
+None of this is needed to use the printer. It is here so that a year from now,
+somebody changing this code can prove they did not break it.
+
+| What it checks | Command |
+|---|---|
+| Everything that can run without root | `bash pi-agent/tests/run-all-printer.sh` |
+| Everything, including a real install/uninstall | `sudo bash pi-agent/tests/run-all-printer.sh --full` |
+
+That runner covers five stages: the 128 checks the agent carries with it, an
+end-to-end run against a real HTTP server and a real device file, two mutation
+rounds that deliberately break the code and the manual and demand the tests
+notice, and — with `--full` — a genuine systemd install that kills the service
+seven times to prove it comes back.
+
+The `--full` stage refuses to run if a real printer install already exists on
+the machine, so it cannot clobber a working shop Pi. It talks only to a
+throwaway fake website on localhost and needs no printer attached.
+
+---
+
 ## If you later buy a printer that does this by itself
 
 Nothing here is wasted. The Pi speaks the same protocol (Star CloudPRNT) that

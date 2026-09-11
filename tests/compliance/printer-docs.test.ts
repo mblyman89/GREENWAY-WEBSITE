@@ -332,6 +332,45 @@ describe("the manual is substantial enough to actually follow", () => {
     expect(doc).toContain("Why there is a Raspberry Pi in the middle");
   });
 
+  it("the test commands the manual lists actually exist and behave", () => {
+    // The manual now tells a future maintainer to run a specific runner with
+    // a specific flag. If either drifts, the first thing they try fails and
+    // they conclude the whole document is stale.
+    const runner = "pi-agent/tests/run-all-printer.sh";
+    expect(existsSync(join(ROOT, runner))).toBe(true);
+    expect(doc).toContain("bash pi-agent/tests/run-all-printer.sh");
+    expect(doc).toContain("sudo bash pi-agent/tests/run-all-printer.sh --full");
+
+    const runnerText = read(runner);
+    // --full must be a real flag, not something the manual invented.
+    expect(runnerText).toContain('--full');
+    // Every stage the manual promises must really be invoked by the runner.
+    for (const stage of [
+      "greenway_printer.py",
+      "test_printer_e2e.py",
+      "mutation-printer.sh",
+      "mutation-printer-docs.sh",
+      "test_install_printer_systemd.sh",
+    ]) {
+      expect(runnerText).toContain(stage);
+    }
+    // Each referenced test file must exist.
+    for (const f of [
+      "pi-agent/tests/test_printer_e2e.py",
+      "pi-agent/tests/mutation-printer.sh",
+      "pi-agent/tests/test_install_printer_systemd.sh",
+      "scripts/recon/mutation-printer-docs.sh",
+    ]) {
+      expect(existsSync(join(ROOT, f))).toBe(true);
+    }
+    // The manual claims --full refuses to run over a real install. That
+    // safeguard has to be in the installer test, or the claim is a lie that
+    // could cost somebody a working shop Pi.
+    const instTest = read("pi-agent/tests/test_install_printer_systemd.sh");
+    expect(instTest).toContain("/etc/greenway-printer");
+    expect(doc).toContain("refuses to run if a real printer install already");
+  });
+
   it("tells the owner what to do if they later buy a CloudPRNT printer", () => {
     expect(doc).toContain("/api/cloudprnt");
   });
