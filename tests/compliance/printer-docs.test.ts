@@ -36,7 +36,10 @@ const UNIT_PATH = "pi-agent/systemd/greenway-printer.service";
 const PUBLIC_AGENT = "public/printer/greenway_printer.py";
 const PUBLIC_INSTALLER = "public/printer/install-printer.sh";
 
+const QUICKSTART_PATH = "docs/printer/06-copy-paste-quickstart.md";
+
 const doc = read(WALKTHROUGH_PATH);
+const quickstart = read(QUICKSTART_PATH);
 const installer = read(INSTALLER_PATH);
 const agent = read(AGENT_PATH);
 const unit = read(UNIT_PATH);
@@ -423,6 +426,174 @@ describe("the manual is substantial enough to actually follow", () => {
     // And the rejection itself must still happen (never silently accepted).
     expect(agent).toContain("normalize_site_url");
     expect(doc).toContain("https//");
+  });
+
+  it("the copy-paste quickstart quotes the program's REAL output", () => {
+    // WHY THIS IS THE STRICTEST TEST IN THE FILE
+    // ------------------------------------------
+    // The quickstart tells a non-technical reader "you should see exactly
+    // this". That is a promise. If the quoted output does not match the real
+    // program, the reader concludes something is broken when it is not, or
+    // worse, that it worked when it did not.
+    //
+    // Writing it, I got three lines wrong from memory and caught them only by
+    // grepping the source: the status line is "OK - the website accepted this
+    // Pi's token." (hyphen, not colon, and no word "printer"), the installer
+    // says "Saving the settings" not "Saving your settings", and the boot
+    // message says "The printer agent will now start automatically on boot."
+    // These assertions make that class of mistake impossible to ship.
+
+    // -- lines quoted from the agent -------------------------------------
+    for (const line of [
+      "OK - the website accepted this Pi's token.",
+      "No receipts waiting (this is normal).",
+    ]) {
+      expect(agent, `agent must really print: ${line}`).toContain(line);
+      expect(quickstart, `quickstart must quote: ${line}`).toContain(line);
+    }
+
+    // -- lines quoted from the installer ---------------------------------
+    for (const line of [
+      "Checking this Pi",
+      "Installing the printer program",
+      "The program passed its own self-check.",
+      "Saving the settings",
+      "Paired with the website.",
+      "Setting up automatic start",
+      "The printer agent will now start automatically on boot.",
+      "The printer agent is running.",
+      "Printing a test page",
+      "Test page sent.",
+    ]) {
+      expect(installer, `installer must really print: ${line}`).toContain(line);
+      expect(quickstart, `quickstart must quote: ${line}`).toContain(line);
+    }
+
+    // -- the error table must quote real messages ------------------------
+    expect(agent).toContain("No printer found at");
+    expect(quickstart).toContain("No printer found at /dev/usb/lp0");
+    expect(installer).toContain("is an ANNOUNCER option");
+    expect(quickstart).toContain("is an ANNOUNCER option");
+    expect(agent).toContain("The ':' is missing after 'https'");
+    expect(quickstart).toContain("The ':' is missing after 'https'");
+  });
+
+  it("the quickstart's commands, flags and paths are all real", () => {
+    // Every command the reader is told to paste must exist. A single wrong
+    // flag stops a non-technical reader dead.
+    for (const sub of ["status", "test", "pair"]) {
+      expect(quickstart).toContain(`greenway-printer ${sub}`);
+      expect(agent).toContain(`"${sub}"`);
+    }
+    // The install command must use the printer script and the printer's flag.
+    expect(quickstart).toContain(
+      "sudo ./install-printer.sh --site https://greenwaywebsite1.vercel.app --token",
+    );
+    // --columns and --uninstall are quoted as real options.
+    expect(installer).toContain("--columns");
+    expect(installer).toContain("--uninstall");
+    expect(quickstart).toContain("--columns 32");
+    expect(quickstart).toContain("--uninstall");
+    // The service name used in systemctl/journalctl must match the unit.
+    expect(quickstart).toContain("systemctl status greenway-printer");
+    expect(quickstart).toContain("journalctl -u greenway-printer");
+    expect(existsSync(join(ROOT, UNIT_PATH))).toBe(true);
+    // Paths quoted to the reader must be the ones the code uses.
+    expect(agent).toContain("/etc/greenway-printer/config.json");
+    expect(quickstart).toContain("/etc/greenway-printer/config.json");
+    expect(installer).toContain("/usr/local/bin/greenway-printer");
+    expect(quickstart).toContain("/usr/local/bin/greenway-printer");
+    // The admin URL must be the tab the panel actually lives on.
+    expect(quickstart).toContain("/admin/equipment?tab=printer");
+  });
+
+  it("the quickstart's button labels match the admin UI", () => {
+    // The reader is told to click a button by name. If the label changes and
+    // the doc does not, they hunt for a button that is not there.
+    const panel = read(
+      "src/components/admin/equipment/ReceiptPrinterPanel.tsx",
+    );
+    for (const label of ["Generate token", "Rotate token", "Send test print"]) {
+      expect(panel, `UI must have the button: ${label}`).toContain(label);
+      expect(quickstart, `quickstart must name: ${label}`).toContain(label);
+    }
+    // The "not set" placeholder the reader is told to look for.
+    expect(panel).toContain("not set");
+    expect(quickstart).toContain("— not set —");
+    // Auto-print is named as a checkbox on that page.
+    expect(panel).toContain("Auto-print online orders");
+    expect(quickstart).toContain("Auto-print online orders");
+  });
+
+  it("the quickstart states the token length the server really generates", () => {
+    // It tells the reader to expect 36 characters, so they can sanity-check
+    // their copy/paste. randomBytes(18).toString("hex") => 36 chars.
+    const actions = read("src/app/admin/equipment/printer-actions.ts");
+    const match = /randomBytes\((\d+)\)\.toString\("hex"\)/.exec(actions);
+    expect(match, "token generation must be randomBytes(N).toString('hex')")
+      .not.toBeNull();
+    const hexChars = Number(match![1]) * 2;
+    expect(hexChars).toBe(36);
+
+    // The length is stated TWICE (prose, and the sample status output), so a
+    // toContain() check passes even when one of them is wrong -- proven by
+    // mutating one occurrence and watching this test stay green. Assert on
+    // EVERY "N characters" claim about the token instead.
+    //
+    // Excluded: "48 characters per line", which is paper width, not the token.
+    const claims = [...quickstart.matchAll(/\((\d+) characters\)/g)].map((m) =>
+      Number(m[1]),
+    );
+    const proseClaims = [
+      ...quickstart.matchAll(/It is (\d+) characters of letters and numbers/g),
+    ].map((m) => Number(m[1]));
+
+    const allClaims = [...claims, ...proseClaims];
+    expect(
+      allClaims.length,
+      "the quickstart must state the token length at least twice",
+    ).toBeGreaterThanOrEqual(2);
+    for (const claimed of allClaims) {
+      expect(claimed, `every stated token length must be ${hexChars}`).toBe(
+        hexChars,
+      );
+    }
+  });
+
+  it("the quickstart warns about the live domain and the gateway", () => {
+    // The single most expensive mistake available to the reader: pointing the
+    // Pi at the WAF-protected live domain, where it polls forever in silence.
+    expect(quickstart).toContain("greenwaywebsite1.vercel.app");
+    expect(quickstart).toContain("greenwaymarijuana.com");
+    expect(quickstart).toMatch(/security gateway/i);
+    expect(quickstart).toContain("202");
+    // And it must give the one-line fix for after the cutover.
+    expect(quickstart).toMatch(
+      /greenway-printer pair .*--site https:\/\/greenwaymarijuana\.com/,
+    );
+    // The 503 it quotes must be the server's real wording.
+    const route = read("src/app/api/cloudprnt/route.ts");
+    expect(route).toContain("printer poll token not configured");
+    expect(quickstart).toContain("printer poll token not configured");
+  });
+
+  it("the quickstart covers the traps that cost the most time", () => {
+    // Each of these was either hit for real or is a known thermal-printer
+    // trap. They must stay documented.
+    expect(quickstart).toContain("command not found"); // sudo's misleading msg
+    expect(quickstart).toContain("shiny side"); // paper upside down
+    expect(quickstart).toContain("git pull"); // stale clone
+    expect(quickstart).toContain("ssh greenway-office@greenway-office.local");
+    // Nothing appears when typing a password -- the classic panic moment.
+    expect(quickstart).toMatch(/Nothing appears as you type/i);
+    // The two-installer confusion that actually happened.
+    expect(quickstart).toContain("install-printer.sh");
+    expect(quickstart).toContain("install.sh");
+    // Numbered steps, so "step 7" means something over the phone.
+    expect(quickstart).toMatch(/### Step 1 /);
+    expect(quickstart).toMatch(/### Step 12 /);
+    // Substantial enough to actually hold a hand.
+    expect(quickstart.length).toBeGreaterThan(6000);
   });
 
   it("the test commands the manual lists actually exist and behave", () => {

@@ -7,6 +7,12 @@ in, automatically, forever, including after a power cut.
 
 Set aside about twenty minutes. Most of it is waiting.
 
+> **Want it as numbered copy-and-paste steps instead?**
+> See [06-copy-paste-quickstart.md](06-copy-paste-quickstart.md) — the same job
+> as 12 numbered steps, each with the exact command to paste and the exact
+> output you should see back. Use that one if you would rather not read prose
+> while holding a screwdriver.
+
 ---
 
 ## What you should have in front of you
