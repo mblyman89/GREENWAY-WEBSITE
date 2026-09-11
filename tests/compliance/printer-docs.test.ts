@@ -40,6 +40,63 @@ const installer = read(INSTALLER_PATH);
 const agent = read(AGENT_PATH);
 const unit = read(UNIT_PATH);
 
+/**
+ * Parse a systemd unit into { Section: { Key: [values] } }.
+ *
+ * WHY A PARSER INSTEAD OF indexOf()
+ * ---------------------------------
+ * The first draft of this file asked two questions with raw substring
+ * matching, and got BOTH answers wrong on a unit file that was correct:
+ *
+ *   1. "is StartLimitIntervalSec=0 inside [Unit]?" was answered by slicing
+ *      from indexOf("[Unit]") to indexOf("[Service]"). The comment directly
+ *      above the directive explains that the key "belongs in [Unit], NOT
+ *      [Service]" -- so indexOf("[Service]") matched inside that COMMENT and
+ *      the slice ended before the directive it was looking for. False alarm.
+ *
+ *   2. "is PrivateDevices=yes absent?" was answered by unit.includes(...).
+ *      The unit contains a five-line comment explaining exactly why
+ *      PrivateDevices=yes must never be set (it hides /dev/usb/lp0). The
+ *      words the test feared were the words documenting the safeguard.
+ *      False alarm again.
+ *
+ * A test that fails because the code is well commented is a broken test: the
+ * cure is to read the file the way systemd reads it, not to delete the
+ * comments. So: comments stripped, sections tracked, values collected.
+ * Directive names are case-insensitive to systemd, so they are folded here.
+ */
+function parseUnit(text: string): Record<string, Record<string, string[]>> {
+  const sections: Record<string, Record<string, string[]>> = {};
+  let current = "";
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    // systemd treats both '#' and ';' as comment introducers, and ignores
+    // blank lines. Neither can carry a directive.
+    if (line === "" || line.startsWith("#") || line.startsWith(";")) continue;
+    const header = /^\[(.+)\]$/.exec(line);
+    if (header) {
+      current = header[1];
+      sections[current] ??= {};
+      continue;
+    }
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim().toLowerCase();
+    const value = line.slice(eq + 1).trim();
+    sections[current] ??= {};
+    (sections[current][key] ??= []).push(value);
+  }
+  return sections;
+}
+
+const unitSections = parseUnit(unit);
+
+/** Effective value of a directive in a section, or undefined if unset. */
+const directive = (section: string, key: string): string | undefined => {
+  const values = unitSections[section]?.[key.toLowerCase()];
+  return values === undefined ? undefined : values[values.length - 1];
+};
+
 describe("the download URLs the manual promises actually resolve (D-67)", () => {
   // The manual tells the owner to curl https://SITE/printer/install-printer.sh.
   // Next.js serves that from public/printer/. If the file is not there, the
@@ -146,12 +203,17 @@ describe("the promises the manual makes are actually implemented", () => {
   });
 
   it("'the service never gives up' — the start limit is disabled in [Unit]", () => {
-    const unitSection = unit.slice(
-      unit.indexOf("[Unit]"),
-      unit.indexOf("[Service]"),
-    );
-    expect(unitSection).toContain("StartLimitIntervalSec=0");
-    expect(unitSection).toContain("StartLimitBurst=0");
+    // These two keys are parsed by systemd ONLY in [Unit]. Put them in
+    // [Service] and systemd ignores them without a word, the default of
+    // 5-starts-in-10s applies, and after five crashes the printer is dead
+    // until somebody notices. So assert the section, not just the string.
+    expect(directive("Unit", "StartLimitIntervalSec")).toBe("0");
+    expect(directive("Unit", "StartLimitBurst")).toBe("0");
+    // ...and prove they are NOT hiding in [Service], where they do nothing.
+    expect(directive("Service", "StartLimitIntervalSec")).toBeUndefined();
+    expect(directive("Service", "StartLimitBurst")).toBeUndefined();
+    // The restart itself has to be requested, or there is nothing to unlimit.
+    expect(directive("Service", "Restart")).toBe("always");
     expect(doc).toContain("restarts forever");
   });
 
@@ -176,7 +238,56 @@ describe("the promises the manual makes are actually implemented", () => {
   });
 
   it("PrivateDevices stays off or /dev/usb/lp0 would vanish", () => {
-    expect(unit).not.toContain("PrivateDevices=yes");
+    // Verified empirically, not assumed: a unit with PrivateDevices=yes was
+    // run and /dev listed. The private /dev has no usb/ directory and no lp*
+    // node, so the printer device simply does not exist inside the sandbox
+    // and every single receipt fails with "No printer found".
+    //
+    // Any truthy value is fatal, not just "yes" -- systemd accepts yes/true/
+    // on/1 for booleans, so check the parsed directive, not a fixed string.
+    const priv = directive("Service", "PrivateDevices");
+    if (priv !== undefined) {
+      expect(["no", "false", "off", "0"]).toContain(priv.toLowerCase());
+    }
+    // Same trap, same reason: this one also masks device nodes.
+    const devPolicy = directive("Service", "DevicePolicy");
+    if (devPolicy !== undefined) {
+      expect(devPolicy.toLowerCase()).toBe("auto");
+    }
+    // The reason must stay written down, or a future hardening pass will
+    // "helpfully" add PrivateDevices=yes and silently break every receipt.
+    expect(unit).toContain("PrivateDevices is deliberately NOT set");
+  });
+
+  it("the unit parser used by these tests actually works", () => {
+    // A parser-based test is only as trustworthy as the parser. This pins the
+    // exact two behaviours the old substring checks got wrong: comments must
+    // not be able to open a section, and comments must not be able to define
+    // a directive.
+    const parsed = parseUnit(
+      [
+        "[Unit]",
+        "# this key belongs in [Unit], NOT [Service]",
+        "StartLimitIntervalSec=0",
+        "",
+        "[Service]",
+        "; PrivateDevices=yes would hide the printer",
+        "Restart=always",
+        "Restart=on-failure",
+      ].join("\n"),
+    );
+    // The comment mentioning [Service] must NOT have ended the [Unit] section.
+    expect(parsed.Unit?.startlimitintervalsec).toEqual(["0"]);
+    // The commented-out directive must NOT have been recorded.
+    expect(parsed.Service?.privatedevices).toBeUndefined();
+    // Repeated single-value directives: systemd honours the last one.
+    expect(parsed.Service?.restart).toEqual(["always", "on-failure"]);
+    // And the real unit must have parsed into the sections we expect.
+    expect(Object.keys(unitSections).sort()).toEqual([
+      "Install",
+      "Service",
+      "Unit",
+    ]);
   });
 });
 
