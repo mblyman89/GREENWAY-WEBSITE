@@ -213,8 +213,15 @@ Back in the terminal (still in `GREENWAY-WEBSITE/pi-agent`), run this, but
 **replace `ABCD2345` with your real code**:
 
 ```bash
-sudo ./install.sh --site https://greenwaymarijuana.com --code ABCD2345
+sudo ./install.sh --site https://greenwaywebsite1.vercel.app --code ABCD2345
 ```
+
+> **Which address?** Use `https://greenwaywebsite1.vercel.app` — the
+> development site — until the live domain is cut over. The back office prints
+> `https://greenwaymarijuana.com` in its ready-made command, but that domain
+> sits behind a security gateway that blocks the Pi: pairing against it answers
+> `202` with a CAPTCHA page instead of connecting. If you use it by mistake,
+> the Pi says so plainly and you just re-run this with the address above.
 
 Type the code **without the dash**. `ABCD-2345` on screen is typed `ABCD2345`.
 
@@ -224,8 +231,8 @@ Breaking that line down, because every part matters:
   it. The Pi may ask for your password again.
 - `./install.sh` — run the installer in this folder. The `./` means "the one
   right here", and it is required.
-- `--site https://greenwaymarijuana.com` — which website this speaker reports
-  to. The back office prints the correct address for you in step 4; use that.
+- `--site https://greenwaywebsite1.vercel.app` — which website this speaker
+  reports to. This is the development site, on purpose; see the note above.
 - `--code ABCD2345` — your pairing code.
 
 ### What you should see
@@ -327,7 +334,7 @@ ssh greenway-office@greenway-office.local
 cd GREENWAY-WEBSITE
 git pull
 cd pi-agent
-sudo ./install.sh --site https://greenwaymarijuana.com
+sudo ./install.sh --site https://greenwaywebsite1.vercel.app
 ```
 
 `git pull` is the "update my files" command you were asking about — you just

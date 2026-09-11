@@ -222,7 +222,69 @@ def describe_http_error(status: int) -> str:
         )
     if 500 <= status:
         return f"The website returned an error ({status}). The speaker will keep retrying."
+    if status in (202, 302, 303, 307, 308):
+        # Observed for real on a live domain: a security gateway answers 202
+        # with an HTML CAPTCHA page instead of passing the request through, so
+        # the request never reaches the announcer code at all. "Unexpected
+        # response (202)" would send the reader hunting for a pairing problem
+        # that does not exist, so name the real cause.
+        return (
+            f"The website answered {status} instead of handling the speaker request. "
+            "This usually means the address points at a domain behind a security "
+            "gateway or CAPTCHA, which blocks automated requests before they reach "
+            "the announcer code. Point this Pi at the address that serves the "
+            "announcer software directly (run: greenway-announcer status to see "
+            "the current one)."
+        )
+    if 200 <= status <= 299:
+        return (
+            f"The website answered {status}, which the speaker could not use. "
+            "If the address sits behind a security gateway or CAPTCHA, point this "
+            "Pi at the address that serves the announcer software directly."
+        )
     return f"Unexpected response from the website ({status})."
+
+
+def looks_like_html(text: str) -> bool:
+    """
+    Is this response body a web page rather than an answer from our API?
+
+    A security gateway returns a CAPTCHA page, and printing that raw HTML at
+    somebody standing at a Pi is useless noise. Detecting it lets us say what
+    actually went wrong instead.
+    """
+    head = (text or "")[:400].lower()
+    return any(marker in head for marker in ("<html", "<!doctype html", "sgcaptcha", "<meta"))
+
+
+def site_typo_hint(raw: Any) -> str:
+    """
+    Name what is wrong with a mistyped website address, quoting it back.
+
+    A missing colon ("https//site.com") is easy to make and easy to stare
+    straight past: the eye reads the word "https" and moves on. Returns "" when
+    nothing obvious is wrong, so the caller can print it unconditionally.
+    """
+    if not isinstance(raw, str):
+        return ""
+    shown = raw.strip()
+    if not shown:
+        return ""
+    lower = shown.lower()
+    for scheme in ("https", "http"):
+        if lower.startswith(scheme + "//"):
+            fixed = scheme + "://" + shown[len(scheme) + 2 :]
+            return (
+                f"\nYou typed:  {shown}\n"
+                f"The ':' is missing after '{scheme}'. You want:\n  {fixed}"
+            )
+        if lower.startswith(scheme + ":/") and not lower.startswith(scheme + "://"):
+            fixed = scheme + "://" + shown[len(scheme) + 2 :]
+            return (
+                f"\nYou typed:  {shown}\n"
+                f"There is only one '/' after '{scheme}:'. You want:\n  {fixed}"
+            )
+    return ""
 
 
 # ============================================================================
@@ -648,6 +710,9 @@ def cmd_pair(args: argparse.Namespace) -> int:
         )
     except requests.exceptions.RequestException as exc:
         print(f"\nCould not reach {site}.\n  {exc}\n\nCheck this Pi's network and the site address, then try again.")
+        typo = site_typo_hint(args.site)
+        if typo:
+            print(typo)
         return 1
 
     if response.status_code != 200:
@@ -656,7 +721,9 @@ def cmd_pair(args: argparse.Namespace) -> int:
             message = detail.get("error") or detail.get("hint") or response.text
             hint = detail.get("hint")
         except ValueError:
-            message = response.text
+            # A gateway/CAPTCHA page is not an error message. Printing the raw
+            # HTML tells the reader nothing, so translate it instead.
+            message = describe_http_error(response.status_code) if looks_like_html(response.text) else response.text
             hint = None
         print(f"\nPairing failed ({response.status_code}): {message}")
         if hint and hint != message:
@@ -871,6 +938,56 @@ def selftest() -> int:
     ok("http 404 mentions the URL", "url" in describe_http_error(404).lower())
     ok("http 503 says it retries", "retry" in describe_http_error(503).lower())
     ok("every message is non-empty", all(len(describe_http_error(s)) > 0 for s in (200, 401, 403, 404, 500, 503, 599)))
+
+    # A security gateway in front of the site answers 202 with a CAPTCHA page.
+    # Proved against a real domain. "Unexpected response (202)" would send the
+    # reader hunting for a pairing fault that does not exist.
+    for gateway_status in (202, 302, 303, 307, 308):
+        message = describe_http_error(gateway_status)
+        ok(f"http {gateway_status} blames the security gateway", "gateway" in message.lower())
+        ok(f"http {gateway_status} names CAPTCHA", "captcha" in message.lower())
+        ok(f"http {gateway_status} does NOT say 'unexpected'", "unexpected" not in message.lower())
+        ok(f"http {gateway_status} quotes the status", str(gateway_status) in message)
+        # These two pin the *dedicated* gateway branch. Without them, deleting
+        # 202 from the branch list left the generic 2xx fallback answering --
+        # and that text also mentions a gateway, so the checks above stayed
+        # green while the specific diagnosis was gone. Caught by mutation.
+        ok(f"http {gateway_status} says the request was not handled",
+           "instead of handling" in message.lower())
+        ok(f"http {gateway_status} names the command that shows the address",
+           "greenway-announcer status" in message.lower())
+    generic_2xx = describe_http_error(299)
+    ok("http 2xx explains it could not be used", "could not use" in generic_2xx.lower())
+    ok("http 2xx is not the gateway branch", "instead of handling" not in generic_2xx.lower())
+    # Regression guard: the new 2xx/3xx branches must not swallow the old ones.
+    ok("http 401 still says re-pair", "pair" in describe_http_error(401).lower())
+    ok("http 503 still says it retries", "retry" in describe_http_error(503).lower())
+    ok("http 500 is still an error, not a gateway", "gateway" not in describe_http_error(500).lower())
+
+    # -- a CAPTCHA page is not an error message ---------------------------
+    ok("html: a gateway CAPTCHA page is detected",
+       looks_like_html('<html><head><meta http-equiv="refresh" content="0;/.well-known/sgcaptcha/"></meta></head></html>'))
+    # Each marker needs a case that ONLY it can catch. The real CAPTCHA page
+    # above trips three markers at once, so dropping one of them left the
+    # sniffer still passing. Caught by mutation.
+    ok("html: '<html' alone is enough", looks_like_html("<html><body>blocked</body>"))
+    ok("html: '<meta' alone is enough", looks_like_html('<meta http-equiv="refresh" content="0;/elsewhere">'))
+    ok("html: a doctype page is detected", looks_like_html("<!DOCTYPE html><body>hi</body>"))
+    ok("html: the sgcaptcha marker alone is enough", looks_like_html("blocked by sgcaptcha"))
+    ok("html: real JSON is not mistaken for a web page", not looks_like_html('{"error":"We do not recognize this code."}'))
+    ok("html: plain text is not a web page", not looks_like_html("We do not recognize this code."))
+    ok("html: empty body is not a web page", not looks_like_html(""))
+
+    # -- mistyped website addresses are named, not just rejected ----------
+    ok("site typo: 'https//host' is diagnosed", "missing" in site_typo_hint("https//example.com").lower())
+    ok("site typo: 'https//host' shows the fix", "https://example.com" in site_typo_hint("https//example.com"))
+    ok("site typo: 'http//host' is diagnosed", "missing" in site_typo_hint("http//example.com").lower())
+    ok("site typo: 'https:/host' (one slash) is diagnosed", site_typo_hint("https:/example.com") != "")
+    ok("site typo: 'https:/host' shows the fix", "https://example.com" in site_typo_hint("https:/example.com"))
+    ok("site typo: a correct address is not nagged about", site_typo_hint("https://example.com") == "")
+    ok("site typo: a bare host is not nagged about", site_typo_hint("example.com") == "")
+    ok("site typo: empty input is silent", site_typo_hint("") == "" and site_typo_hint(None) == "")
+    ok("site typo: quotes the input back", "https//example.com" in site_typo_hint("  https//example.com  "))
 
     # -- tone generation actually produces playable audio -----------------
     with tempfile.TemporaryDirectory() as tmp:

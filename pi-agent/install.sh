@@ -167,8 +167,29 @@ if [ -n "$AGENT_SRC" ]; then
 elif [ -f "$(dirname "$0")/greenway_announcer.py" ]; then
   cp "$(dirname "$0")/greenway_announcer.py" "$TMP_AGENT"
 elif [ -n "$SITE" ]; then
-  curl -fsSL "${SITE%/}/announcer/greenway_announcer.py" -o "$TMP_AGENT" \
-    || die "Could not download the announcer program from ${SITE%/}. Check the website address."
+  # 'curl -fsSL' is not enough on its own: a security gateway in front of a
+  # domain answers 202 with an HTML CAPTCHA page, curl calls that a success,
+  # and we would then install a web page as the program. Capture the real
+  # status and check what actually arrived.
+  DL_URL="${SITE%/}/announcer/greenway_announcer.py"
+  DL_CODE="$(curl -sSL -w '%{http_code}' --max-time 60 -o "$TMP_AGENT" "$DL_URL" 2>/dev/null || echo "000")"
+  if [ "$DL_CODE" = "000" ]; then
+    die "Could not reach ${SITE%/} to download the announcer program.
+  Check this Pi's network and that the website address is spelled correctly."
+  fi
+  if [ "$DL_CODE" != "200" ]; then
+    die "Downloading the announcer program from ${SITE%/} returned HTTP $DL_CODE, not 200.
+  A status like 202 or 403 with an HTML body usually means the domain sits
+  behind a security gateway / CAPTCHA that blocks automated downloads.
+  Use the address that serves the announcer software directly, or run this
+  installer from a git clone (it then uses the local copy and downloads nothing)."
+  fi
+  if head -c 400 "$TMP_AGENT" | grep -qiE '<html|<!doctype html|sgcaptcha|<meta'; then
+    die "The address ${DL_URL} returned a web page instead of the announcer program.
+  That is what a security gateway / CAPTCHA looks like. Use the address that
+  serves the announcer software directly, or run this installer from a git
+  clone so it uses the local copy."
+  fi
 else
   die "I need either --site (to download the program) or --agent-file (to install a local copy)."
 fi
