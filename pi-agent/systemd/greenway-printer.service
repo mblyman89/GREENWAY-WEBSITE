@@ -1,0 +1,61 @@
+[Unit]
+Description=Greenway Receipt Printer Agent
+Documentation=https://github.com/mblyman89/GREENWAY-WEBSITE/blob/main/docs/printer/05-first-printer-walkthrough.md
+# Wait for a usable network, but do NOT refuse to start without one: the agent
+# has its own retry loop and must come back on its own when the shop's internet
+# returns. A hard dependency here would leave a dead printer after an outage.
+Wants=network-online.target
+After=network-online.target
+
+# The default is 5 starts in 10s, after which systemd gives up FOREVER and will
+# not restart the service even though Restart=always is set. That is exactly
+# the "no receipts printed all weekend and nobody knew" failure this project
+# exists to prevent, so rate limiting is switched off: keep restarting, forever.
+# NOTE: this key belongs in [Unit], NOT [Service]. systemd silently ignores it
+# if it is put in [Service] -- verified with `systemd-analyze verify`.
+StartLimitIntervalSec=0
+StartLimitBurst=0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/greenway-printer run
+# Always come back, no matter how it died, and never give up trying.
+Restart=always
+RestartSec=5
+
+# Root, because the printer character device (/dev/usb/lp0) is owned by
+# root:lp and this sidesteps every "permission denied on the printer" support
+# call. The agent writes to exactly two paths, enforced by ReadWritePaths below.
+User=root
+WorkingDirectory=/var/lib/greenway-printer
+
+# --- Logging -------------------------------------------------------------
+# Everything goes to the journal, which is size-capped in journald.conf.
+# Unbounded logs are the fastest way to kill a Raspberry Pi's SD card.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=greenway-printer
+
+# --- Robustness ----------------------------------------------------------
+# Give an in-progress receipt time to finish before a stop/restart cuts it off
+# mid-paper, which would leave a half receipt and an unconfirmed job.
+TimeoutStopSec=20
+KillSignal=SIGTERM
+
+# Modest hardening. The Pi is on a trusted shop network, so this is about
+# preventing accidents (a runaway loop, a stray write), not attackers.
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+# PrivateDevices is deliberately NOT set. It replaces /dev with a minimal
+# allowlist (char, null, zero, random, tty, pts ...) that contains no usb/
+# directory and no lp* node, so /dev/usb/lp0 would simply not exist and every
+# receipt would fail. Verified by running a unit with PrivateDevices=yes and
+# listing /dev. The whole job of this service is writing to that device.
+ReadWritePaths=/var/lib/greenway-printer /etc/greenway-printer
+# A single Pi printing receipts should never eat the whole box.
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
