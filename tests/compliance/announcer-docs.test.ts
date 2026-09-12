@@ -299,21 +299,35 @@ describe("quickstart: the agent's output is quoted exactly", () => {
   });
 
   it("lists exactly the six sound names the test command plays, in order", () => {
-    // The six-sound tuple appears twice in the agent (cmd_test and selftest).
-    // Asserting "it matches somewhere" let a mutant delete a sound from
-    // cmd_test while selftest kept the assertion green. Check EVERY list.
+    const expected = ["chime", "bell", "ding", "alert", "cash", "voice"];
+
+    // The set is defined exactly once, so the command and its selftest cannot
+    // drift apart. (They previously did: a refactor split the list in two and
+    // dropped "chime" from one half.)
+    const constant = agent.match(/BUILTIN_SOUND_ORDER = \(([^)]*)\)/);
+    expect(constant, "the built-in sounds must be defined in one named constant").toBeTruthy();
+    expect(
+      [...constant![1].matchAll(/"([a-z]+)"/g)].map((m) => m[1]),
+      "BUILTIN_SOUND_ORDER must be exactly the six sounds, in order",
+    ).toEqual(expected);
+
+    // And nothing may re-declare its own list of sounds behind its back.
     const tuples = [...agent.matchAll(/for kind in \(([^)]*)\):/g)].map((m) => m[1]);
-    expect(tuples.length).toBeGreaterThanOrEqual(2);
     for (const tuple of tuples) {
       const names = [...tuple.matchAll(/"([a-z]+)"/g)].map((m) => m[1]);
-      expect(names, `every built-in sound list must be the same six`).toEqual([
-        "chime",
-        "bell",
-        "ding",
-        "alert",
-        "cash",
-        "voice",
-      ]);
+      expect(
+        names,
+        "a hard-coded sound list has reappeared; use BUILTIN_SOUND_ORDER instead",
+      ).toEqual([]);
+    }
+
+    // Every loop over the sounds must come from the constant.
+    const loops = [...agent.matchAll(/for kind in ([^\n:]+):/g)].map((m) => m[1].trim());
+    expect(loops.length).toBeGreaterThanOrEqual(2);
+    for (const loop of loops) {
+      expect(loop, `"for kind in ${loop}" must iterate BUILTIN_SOUND_ORDER`).toContain(
+        "BUILTIN_SOUND_ORDER",
+      );
     }
     // The document shows them as a column of results, one per line.
     const shown = ["chime", "bell", "ding", "alert", "cash", "voice"].map((k) =>
