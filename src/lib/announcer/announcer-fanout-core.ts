@@ -172,6 +172,52 @@ export function summarizeFanout(plan: FanoutPlan): string {
   return parts.join(", ");
 }
 
+/**
+ * The same outcome, written for the person who just pressed the button.
+ *
+ * THE REAL FAILURE THIS COMES FROM
+ * --------------------------------
+ * A shop owner pressed "Test all speakers" and reported that it "does nothing,
+ * it hangs". Nothing was broken in the action itself: it queued the sound and
+ * returned. But the button returns void, has no pending state, and the panel
+ * said nothing afterwards -- so pressing it produced NO visible change at all.
+ *
+ * On top of that, the Pi sits on a long-poll of up to POLL_HOLD_SECONDS, so
+ * even when everything works the chime can be ~25 seconds behind the click.
+ *
+ * Silence for 25 seconds after pressing a button is indistinguishable from a
+ * hang. So the panel must say what happened AND set the expectation about the
+ * wait. summarizeFanout() stays as it is -- it is written for a server log.
+ */
+export function describeTestOutcome(input: {
+  queued: number;
+  skipped: number;
+  ok: boolean;
+  holdSeconds: number;
+}): string {
+  const { queued, skipped, ok, holdSeconds } = input;
+
+  if (!ok) {
+    return "Could not send the test. Nothing was queued - check the speaker list below.";
+  }
+  if (queued === 0 && skipped === 0) {
+    return "There are no speakers paired yet, so there was nothing to test.";
+  }
+  if (queued === 0) {
+    const what = skipped === 1 ? "The one speaker" : `All ${skipped} speakers`;
+    return `${what} were skipped, so nothing will play. The reason is on the speaker cards below.`;
+  }
+
+  const noun = queued === 1 ? "speaker" : "speakers";
+  const lead = `Test sent to ${queued} ${noun}.`;
+  // The wait is the whole reason this felt broken, so it is always stated.
+  const wait = `Listen for up to ${holdSeconds} seconds - speakers check in on a ${holdSeconds}-second cycle.`;
+  if (skipped > 0) {
+    return `${lead} ${skipped} skipped. ${wait}`;
+  }
+  return `${lead} ${wait}`;
+}
+
 // ============================================================================
 // SELF-TESTS
 // ============================================================================
@@ -366,6 +412,41 @@ export function __runAnnouncerFanoutTests(): { passed: number; failed: number } 
     threw = true;
   }
   check("hostile: planFanout NEVER throws — it sits on the checkout path", !threw);
+
+  // ---- what the person who pressed the button is told -------------------
+  // The bug these exist for: pressing Test produced NO visible change, and the
+  // chime can be ~25s behind the click, so it read as a hang. Every branch must
+  // therefore say something, and the happy path must state the wait.
+  const outcome = (queued: number, skipped: number, ok = true, holdSeconds = 25) =>
+    describeTestOutcome({ queued, skipped, ok, holdSeconds });
+
+  check("test message: is never blank, whatever happened", [
+    outcome(3, 0),
+    outcome(1, 0),
+    outcome(0, 2),
+    outcome(0, 1),
+    outcome(0, 0),
+    outcome(0, 0, false),
+  ].every((m) => m.trim().length > 0));
+
+  // The wait is the whole point. If a test ever queued something without
+  // warning about the delay, the original complaint comes straight back.
+  check("test message: a queued test ALWAYS warns about the wait", outcome(3, 0).includes("25 seconds"));
+  check("test message: a queued test says how many speakers", outcome(3, 0).includes("3 speakers"));
+  check("test message: one speaker is not called '1 speakers'", outcome(1, 0).includes("1 speaker.") && !outcome(1, 0).includes("1 speakers"));
+  check("test message: the hold seconds are real, not hardcoded", outcome(1, 0, true, 9).includes("9 seconds") && !outcome(1, 0, true, 9).includes("25"));
+  check("test message: partial success reports BOTH numbers", outcome(2, 1).includes("2 speakers") && outcome(2, 1).includes("1 skipped"));
+
+  // Queueing nothing is the case most likely to be misread as success. None of
+  // these may claim a sound is coming.
+  const nothingComing = [outcome(0, 2), outcome(0, 1), outcome(0, 0), outcome(0, 0, false)];
+  check("test message: when nothing was queued it never promises a sound", nothingComing.every((m) => !m.includes("Test sent")));
+  check("test message: all-skipped says nothing will play", outcome(0, 3).includes("nothing will play"));
+  check("test message: all-skipped points at where the reason is", outcome(0, 3).includes("speaker cards below"));
+  check("test message: a single skipped speaker is not called 'All 1 speakers'", !outcome(0, 1).includes("All 1"));
+  check("test message: no speakers paired says exactly that", outcome(0, 0).includes("no speakers paired"));
+  check("test message: an outright failure is never dressed up as success", outcome(0, 0, false).startsWith("Could not send"));
+  check("test message: failure outranks the counts it was given", describeTestOutcome({ queued: 5, skipped: 0, ok: false, holdSeconds: 25 }).startsWith("Could not send"));
 
   return { passed, failed };
 }

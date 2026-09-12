@@ -24,11 +24,11 @@ import { getAnnouncerPanelData } from "@/lib/announcer/announcer-admin-store";
 import { listSounds } from "@/lib/announcer/announcer-sounds-store";
 import { optionsForSounds } from "@/lib/announcer/announcer-library-core";
 import { AnnouncerSoundLibrary } from "@/components/admin/orders/AnnouncerSoundLibrary";
+import { AnnouncerTestButton } from "@/components/admin/orders/AnnouncerTestButton";
 import type { AdminDeviceView, ShopVerdict } from "@/lib/announcer/announcer-admin-core";
 import {
   announcerCreatePairingAction,
   announcerRemoveDeviceAction,
-  announcerTestAllAction,
   announcerToggleDeviceAction,
   announcerUpdateDeviceAction,
   announcerUpdateSettingsAction,
@@ -116,12 +116,15 @@ export async function AnnouncerPanel() {
           {verdict.onlineCount} of {verdict.totalCount} speaker
           {verdict.totalCount === 1 ? "" : "s"} online
         </span>
+        {/*
+          The Test button is a CLIENT component on purpose. As a plain server
+          form it had no pending state and its action returned void, so pressing
+          it changed nothing on screen — and with the Pi's long-poll the chime
+          can be ~25 seconds behind the click. The owner reasonably read that as
+          "the button does nothing, it hangs". See AnnouncerTestButton.tsx.
+        */}
         <div className="ml-auto flex items-center gap-2">
-          <form action={announcerTestAllAction}>
-            <Button type="submit" variant="primary" size="sm">
-              ▶ Test all speakers
-            </Button>
-          </form>
+          <AnnouncerTestButton />
         </div>
       </div>
 

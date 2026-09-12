@@ -79,26 +79,54 @@ describe("pairing code lifetime is stated consistently", () => {
 });
 
 describe("every command the manual tells you to run really exists", () => {
-  const documented = ["status", "test", "selftest", "pair", "run"];
+  // "audio" and "use-output" are taught by the quickstart's troubleshooting
+  // steps. use-output is how a shop applies a working sound output without
+  // re-installing anything — the step that used to read "re-run the installer".
+  const documented = ["status", "test", "selftest", "pair", "run", "audio", "use-output"];
 
   it.each(documented)("greenway-announcer %s is a real subcommand", (cmd) => {
     expect(agent).toContain(`add_parser("${cmd}"`);
   });
 
+  /**
+   * Subcommand names can contain a hyphen ("use-output"). The pattern here was
+   * `([a-z]+)`, which stops dead at the hyphen and captured "use" — a command
+   * that does not exist. It then checked "use" against the documented list and
+   * happily passed, proving nothing. A test that cannot see the command it is
+   * auditing is worse than no test, because it reads like coverage.
+   */
+  const MENTIONED = /greenway-announcer ([a-z][a-z-]*)/g;
+
   it("the manual only teaches subcommands that exist", () => {
-    const used = new Set(
-      [...manual.matchAll(/greenway-announcer ([a-z]+)/g)].map((m) => m[1]),
-    );
+    const used = new Set([...manual.matchAll(MENTIONED)].map((m) => m[1]));
     for (const cmd of used) {
       expect(documented, `the manual mentions "greenway-announcer ${cmd}"`).toContain(cmd);
     }
   });
 
   it("the wall card only teaches subcommands that exist", () => {
-    const used = new Set([...card.matchAll(/greenway-announcer ([a-z]+)/g)].map((m) => m[1]));
+    const used = new Set([...card.matchAll(MENTIONED)].map((m) => m[1]));
     for (const cmd of used) {
       expect(documented, `the wall card mentions "greenway-announcer ${cmd}"`).toContain(cmd);
     }
+  });
+
+  it("the quickstart only teaches subcommands that exist", () => {
+    // The quickstart is the document the owner actually follows at the Pi, and
+    // it was the one not being checked at all. It is also where the hyphenated
+    // commands live, so it is exactly where a typo would have gone unnoticed.
+    const used = new Set([...quickstart.matchAll(MENTIONED)].map((m) => m[1]));
+    expect(used.size, "the quickstart should be teaching commands").toBeGreaterThan(0);
+    for (const cmd of used) {
+      expect(documented, `the quickstart mentions "greenway-announcer ${cmd}"`).toContain(cmd);
+    }
+  });
+
+  it("a hyphenated subcommand is really seen, not silently truncated", () => {
+    // Pins the bug above so the pattern cannot quietly regress to [a-z]+.
+    expect([..."greenway-announcer use-output plughw:1,0".matchAll(MENTIONED)][0][1]).toBe(
+      "use-output",
+    );
   });
 });
 
@@ -443,10 +471,56 @@ describe("quickstart: every command it tells you to run is real", () => {
   });
 });
 
+describe("quickstart: the saved-audio-output advice matches the agent", () => {
+  /**
+   * A shop ran `test`, watched it find a working output, and stayed silent on
+   * every real order — because the discovery was printed and then discarded,
+   * while the background service kept using the broken default. The quickstart
+   * used to tell the reader to re-run the whole installer to apply it.
+   *
+   * Now the agent saves it. These pin the document to the strings the agent
+   * really prints, because troubleshooting advice that quotes output the
+   * software does not produce is how someone concludes their Pi is broken.
+   */
+  it("quotes the agent's real 'saved' and 'restarted' lines", () => {
+    for (const line of [
+      "Saved. This speaker will use",
+      "The announcer has been restarted, so it is using it already.",
+    ]) {
+      expect(agent, `the agent must print "${line}"`).toContain(line);
+      expect(quickstart, `the quickstart must quote "${line}"`).toContain(line);
+    }
+  });
+
+  it("teaches use-output instead of re-running the installer for audio", () => {
+    expect(agent).toContain('add_parser("use-output"');
+    expect(quickstart).toContain("sudo greenway-announcer use-output");
+    // The obsolete instruction must not survive anywhere in the document.
+    expect(
+      /install\.sh[^\n]*--audio-device/.test(quickstart),
+      "the quickstart still tells the owner to re-run install.sh to set the audio output",
+    ).toBe(false);
+  });
+
+  it("tells the owner how to CONFIRM it stuck", () => {
+    // "audio out: (system default)" on a Pi that had to hunt for an output is
+    // the exact signature of the fault, so the document names the check.
+    expect(agent).toContain("audio out:");
+    expect(quickstart).toContain("audio out:");
+    expect(quickstart).toContain("(system default)");
+  });
+});
+
 describe("quickstart: the back-office wording matches the panel", () => {
   it("quotes the panel's heading and its buttons", () => {
+    // The Test button moved into its own client component when it was given a
+    // pending state (the owner reported it "does nothing, it hangs"), so the
+    // labels the quickstart quotes now live across two files. Both are part of
+    // the announcer panel, so both count -- but the guarantee is unchanged:
+    // every label the document tells the owner to look for must really render.
+    const panelUi = panel + read("src/components/admin/orders/AnnouncerTestButton.tsx");
     for (const label of ["🔊 Order Announcer", "➕ Add a speaker", "Get pairing code", "▶ Test all speakers"]) {
-      expect(panel, `panel must render "${label}"`).toContain(label);
+      expect(panelUi, `panel must render "${label}"`).toContain(label);
       expect(quickstart, `quickstart must quote "${label}"`).toContain(label);
     }
   });

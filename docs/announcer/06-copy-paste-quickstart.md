@@ -346,10 +346,31 @@ knob at zero reports a perfect success and makes no sound.
 knowing: the Pi was trying to send sound out of the **HDMI socket**, and HDMI
 audio cannot start unless a monitor or TV is plugged in. Your speaker is in the
 round headphone socket, so the sound was going to the wrong place entirely.
-Nothing is broken. `sudo greenway-announcer test` now tries every output and
-tells you which one works — use that name below.
+Nothing is broken.
 
-Then list the outputs the Pi can see:
+**You do not have to do anything about this.** `sudo greenway-announcer test`
+tries every output, finds the one that works, and **saves it for you**, then
+restarts the speaker service so real orders use it too. You will see:
+
+```
+Found a working output: plughw:1,0
+
+Saved. This speaker will use plughw:1,0 from now on.
+The announcer has been restarted, so it is using it already.
+```
+
+Confirm it stuck by running `sudo greenway-announcer status` — the `audio out:`
+line should now name that output instead of saying `(system default)`.
+
+> **Why this matters more than it looks.** Before this was fixed, `test` found
+> the working output and then threw the answer away. The test made noise, every
+> screen said green, and the shop stayed silent on every real order, because
+> the background service was still using the broken default. If you ever see
+> `audio out: (system default)` on a Pi whose `test` had to hunt for an output,
+> that is the fault, and the fix is the command below.
+
+If you ever need to set the output yourself — a second speaker, a USB dongle
+swapped in, or you simply want a different socket — list what the Pi can see:
 
 ```bash
 aplay -l
@@ -357,19 +378,18 @@ aplay -l
 
 You will get a list like `card 1: Device [USB Audio Device], device 0:`. Read
 off the **card number** and the **device number** — here, card `1`, device `0`,
-which is written `plughw:1,0`.
+which is written `plughw:1,0`. Then set it in one command:
 
-Test that output directly:
+```bash
+sudo greenway-announcer use-output plughw:1,0
+```
+
+That saves it and restarts the service. It keeps your existing pairing, so no
+new code is needed and nothing has to be re-installed. To hear an output
+without saving it, add the flag to `test` instead:
 
 ```bash
 sudo greenway-announcer test --audio-device plughw:1,0
-```
-
-Heard it? Then make it permanent by re-running the installer with that output
-(no new code needed — it keeps the existing pairing):
-
-```bash
-sudo ./install.sh --site https://greenwaywebsite1.vercel.app --audio-device plughw:1,0
 ```
 
 Still silent? Check nothing is muted:
@@ -432,11 +452,14 @@ sudo greenway-announcer test
 with a USB plug on one end and a headphone socket on the other. It bypasses the
 Pi's noisy socket completely and the hiss disappears. Plug it in, run
 `sudo greenway-announcer audio` to find its name (something like `plughw:1,0`),
-then make it permanent:
+then make it permanent in one command:
 
 ```bash
-sudo ./install.sh --site https://greenwaywebsite1.vercel.app --audio-device plughw:1,0
+sudo greenway-announcer use-output plughw:1,0
 ```
+
+That saves the choice and restarts the speaker service. Your pairing is
+untouched, so there is no new code to generate and nothing to re-install.
 
 When the noise is acceptable, go to step 9.
 
