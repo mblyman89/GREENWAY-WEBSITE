@@ -230,6 +230,39 @@ Along the way you will see lines beginning `OK`, including
 
 If you got that, the hard part is over. Go to step 8.
 
+### If it seems stuck on Step 2
+
+Step 2 is the only step that depends on something outside the Pi: the Raspberry
+Pi's package system. The Pi also updates itself in the background, and while it
+is doing that it holds a lock that Step 2 needs. Step 2 now tells you what it is
+doing and gives up on its own rather than waiting forever, so you should see
+lines like `Refreshing the software list (up to 2 minutes)...` underneath it.
+
+If you are staring at `==> Step 2 of 7: installing the pieces it needs` with
+nothing under it and nothing changing:
+
+1. Press `Ctrl` and `C` together to stop the installer. Nothing permanent has
+   been changed yet, so this is safe.
+2. Ask the Pi what is holding things up:
+
+   ```bash
+   ps aux | grep -E 'apt|unattended'
+   ```
+
+   If you see `unattended-upgrade` or `apt.systemd.daily` in that list, the Pi is
+   busy updating itself. Give it five minutes.
+3. Make sure you have the newest installer, which no longer waits forever:
+
+   ```bash
+   cd ~/GREENWAY-WEBSITE && git pull
+   ```
+
+4. Run the step 6 command again. **The installer is safe to run as many times as
+   you like, and it keeps your pairing** — so re-running costs you nothing.
+
+On a Pi that already has the sound tools installed, Step 2 now finishes almost
+instantly and says `Sound tools and Python libraries are already installed`.
+
 ### If it stopped instead
 
 Everything the installer does happens **before** it changes anything permanent,
@@ -244,6 +277,7 @@ so a failure here has left your Pi exactly as it was. Find your message:
 | `Pairing did not work.` / `We do not recognize this code.` | Code expired, mistyped, or has the dash in it | Make a new code (step 5) and retype it without the dash. **Codes expire after 60 minutes.** |
 | `returned HTTP 202, not 200` or anything about a **security gateway / CAPTCHA** | You used the live address | Use `https://greenwaywebsite1.vercel.app` exactly as in step 6. |
 | `Python 3.9 or newer is required.` | Pi OS is too old | `sudo apt update && sudo apt full-upgrade`, reboot, repeat step 6. |
+| `Could not install:` ... at step 2 | The package system refused or was busy | Run the command it prints to see the real reason, wait a few minutes, then repeat step 6. It is safe to re-run. |
 
 ---
 
