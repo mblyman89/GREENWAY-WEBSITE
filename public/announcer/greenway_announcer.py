@@ -337,6 +337,77 @@ def generate_tone_wav(path: Path, kind: str) -> None:
         wav.writeframes(bytes(frames))
 
 
+SERVICE_NAME = "greenway-announcer"
+
+
+def should_save_audio_device(
+    found: Optional[str],
+    configured: Optional[str],
+    explicit: Optional[str],
+) -> bool:
+    """
+    Should a working output discovered by `test` be written to the config?
+
+    THE REAL FAILURE THIS COMES FROM
+    --------------------------------
+    A shop owner's Pi reported everything green. `status` said:
+
+        audio out: (system default)
+
+    and `test` said:
+
+        default output  FAILED - aplay: audio open error: Unknown error 524
+        plughw:1,0     bcm2835 Headphones           WORKS
+
+    So the program KNEW which output worked, printed it, and then threw it
+    away -- telling the human to re-run the whole installer to apply it.
+    Meanwhile the background service kept using the broken HDMI default, so
+    every real order was silent while every screen said "green".
+
+    A tool that discovers the fix and refuses to apply it is not diagnosing,
+    it is nagging. Saving is therefore the default.
+
+    Pure so the rule can be asserted without touching a disk:
+      - nothing found            -> nothing to save
+      - the user named a device  -> respect it, do not overwrite the config
+                                    from a one-off experiment
+      - already configured       -> no write, no needless service restart
+    """
+    if not found:
+        return False
+    if explicit:
+        return False
+    return found != (configured or None)
+
+
+def restart_service_command() -> List[str]:
+    """The one place the restart command is spelled, so tests can assert it."""
+    return ["systemctl", "restart", SERVICE_NAME]
+
+
+def restart_service() -> Tuple[bool, str]:
+    """
+    Restart the background service so a saved setting takes effect now.
+
+    Returns (restarted, detail). Never raises: failing to restart is worth
+    reporting, but it must not turn a successful `test` into a crash. The
+    config is already saved at this point, so the worst case is that the new
+    output applies at the next reboot.
+    """
+    if shutil.which("systemctl") is None:
+        return False, "systemctl is not available on this system"
+    try:
+        result = subprocess.run(restart_service_command(), capture_output=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        return False, "the restart took too long"
+    except OSError as exc:
+        return False, f"could not run systemctl ({exc})"
+    if result.returncode != 0:
+        detail = (result.stderr or b"").decode("utf-8", "replace").strip()
+        return False, detail or f"systemctl exited {result.returncode}"
+    return True, "restarted"
+
+
 def usable_cache_dir(preferred: Path) -> Path:
     """
     Return a directory we can actually write tones into.
@@ -1004,6 +1075,115 @@ def cmd_pair(args: argparse.Namespace) -> int:
     return 0
 
 
+def _persist_working_output(args: argparse.Namespace, device: str) -> None:
+    """
+    Save the output `test` just proved works, and restart the service.
+
+    Everything here is best-effort and reported in plain English. `test` is a
+    diagnostic: it must never fail because it could not write a file. But it
+    must also never again find the answer and discard it.
+    """
+    config_path = Path(args.config)
+    state = config_state(config_path)
+
+    if state == "denied":
+        print(
+            "This output could not be saved because the config needs sudo.\n"
+            "Run this to save it for good:\n"
+            f"  sudo greenway-announcer use-output {device}\n"
+        )
+        return
+    if state == "missing":
+        print(
+            "This speaker is not paired yet, so there is no config to save it in.\n"
+            "Pair it first, then this output will be saved automatically.\n"
+        )
+        return
+
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"Could not read the config to save this output ({exc}).\n")
+        return
+
+    if not should_save_audio_device(device, config.get("audioDevice") or None, args.audio_device):
+        return
+
+    config["audioDevice"] = device
+    try:
+        save_config(config_path, config)
+    except OSError as exc:
+        print(
+            f"Could not save this output ({exc}).\n"
+            f"Set it by hand with:  sudo greenway-announcer use-output {device}\n"
+        )
+        return
+
+    print(f"Saved. This speaker will use {device} from now on.")
+    restarted, detail = restart_service()
+    if restarted:
+        print("The announcer has been restarted, so it is using it already.\n")
+    else:
+        print(
+            f"Could not restart the announcer automatically ({detail}).\n"
+            f"Run this to apply it now:  sudo systemctl restart {SERVICE_NAME}\n"
+        )
+
+
+def cmd_use_output(args: argparse.Namespace) -> int:
+    """
+    Set the audio output directly, without re-running the installer.
+
+    Exists because the only documented way to change the output was to re-run
+    the whole installer with --audio-device, which is a heavy, frightening
+    thing to ask somebody to do just to change one setting.
+    """
+    config_path = Path(args.config)
+    state = config_state(config_path)
+    if state == "denied":
+        print(needs_sudo_message(config_path, f"use-output {args.device}"))
+        return 1
+    if state == "missing":
+        print(
+            "This speaker is not paired yet, so there is nothing to configure.\n"
+            "Pair it first:  sudo greenway-announcer pair <CODE>"
+        )
+        return 1
+
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"The config could not be read ({exc}).")
+        return 1
+
+    device = args.device.strip()
+    known = detected_outputs()
+    if known and not any(d["alsa"] == device for d in known):
+        print(f"This Pi does not have an output called '{device}'. It has:\n")
+        for d in known:
+            print(f"  {d['alsa']:<14} {d['name']}")
+        print("\nRun 'sudo greenway-announcer test' to find which one works.")
+        return 1
+
+    config["audioDevice"] = device
+    try:
+        save_config(config_path, config)
+    except OSError as exc:
+        print(f"Could not save the setting ({exc}).")
+        return 1
+
+    print(f"Saved. This speaker will use {device} from now on.")
+    restarted, detail = restart_service()
+    if restarted:
+        print("The announcer has been restarted, so it is using it already.")
+    else:
+        print(
+            f"Could not restart the announcer automatically ({detail}).\n"
+            f"Run this to apply it now:  sudo systemctl restart {SERVICE_NAME}"
+        )
+    return 0
+
+
 def cmd_test(args: argparse.Namespace) -> int:
     """Play every built-in sound locally. Proves the hardware without the network."""
     cache_dir = usable_cache_dir(Path(args.cache_dir))
@@ -1059,12 +1239,10 @@ def cmd_test(args: argparse.Namespace) -> int:
                 print(f"{label} WORKS")
                 device = candidate["alsa"]
                 first_ok = True
-                print(
-                    f"\nFound a working output: {device}\n"
-                    "\nMake it permanent so the speaker uses it from now on. Run this\n"
-                    "from the pi-agent folder:\n"
-                    f"  sudo ./install.sh --site <your-site> --audio-device {device}\n"
-                )
+                print(f"\nFound a working output: {device}\n")
+                # Knowing the answer and not applying it is what left a shop
+                # silent while every screen said "green". Save it.
+                _persist_working_output(args, device)
                 break
             print(f"{label} no ({detail_try.splitlines()[0][:40]})")
 
@@ -1530,6 +1708,37 @@ def selftest() -> int:
     eq("alsa: an empty error explains nothing", explain_alsa_error("", _hdmi_pi), None)
     eq("alsa: an unknown error is not guessed at", explain_alsa_error("weird thing", _hdmi_pi), None)
 
+    # -- saving the output `test` discovered ---------------------------------
+    # The defect this encodes: a Pi reported "audio out: (system default)",
+    # the default failed with error 524, `test` found plughw:1,0 WORKS -- and
+    # then threw that away, so every real order stayed silent while every
+    # screen said green. Finding the fix and not applying it is the bug.
+    ok(
+        "save output: a working output found on a default-configured Pi is saved",
+        should_save_audio_device("plughw:1,0", None, None),
+    )
+    ok(
+        "save output: nothing found means nothing to save",
+        not should_save_audio_device(None, None, None),
+    )
+    ok(
+        "save output: an explicitly requested device never overwrites the config",
+        not should_save_audio_device("plughw:1,0", None, "plughw:1,0"),
+    )
+    ok(
+        "save output: no pointless write when it is already configured",
+        not should_save_audio_device("plughw:1,0", "plughw:1,0", None),
+    )
+    ok(
+        "save output: a different working output does replace a stale one",
+        should_save_audio_device("plughw:1,0", "plughw:0,0", None),
+    )
+    eq(
+        "save output: the restart command is the service, not a guess",
+        restart_service_command(),
+        ["systemctl", "restart", "greenway-announcer"],
+    )
+
     # -- stale install: 'git pull' does not update the installed program ------
     with tempfile.TemporaryDirectory() as tmp:
         installed = Path(tmp) / "installed.py"
@@ -1751,6 +1960,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_test.add_argument("--mixer-control", help="ALSA mixer control, e.g. PCM")
     p_test.add_argument("--volume", type=int, default=70)
     p_test.set_defaults(func=cmd_test)
+
+    p_use = sub.add_parser("use-output", help="Set which sound output this speaker uses.")
+    p_use.add_argument("device", help="ALSA device, e.g. plughw:1,0")
+    p_use.set_defaults(func=cmd_use_output)
 
     p_audio = sub.add_parser("audio", help="Show the sound hardware and diagnose buzzing.")
     p_audio.add_argument("--audio-device", help="ALSA device to check, e.g. plughw:1,0")

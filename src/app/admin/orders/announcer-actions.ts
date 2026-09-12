@@ -9,14 +9,20 @@
  * controls use (`settings.manage`) and audited the same way, so the announcer
  * is not a side door into shop configuration.
  *
- * All of them return void and revalidate the Orders page rather than returning
- * data, matching the existing form-action pattern on this screen.
+ * They revalidate the Orders page rather than returning data, matching the
+ * existing form-action pattern on this screen. announcerTestAllAction() is the
+ * one deliberate exception -- see the note above it.
  */
 import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { normalizeDeviceName, normalizeVolume } from "@/lib/announcer/announcer-core";
+import {
+  normalizeDeviceName,
+  normalizeVolume,
+  POLL_HOLD_SECONDS,
+} from "@/lib/announcer/announcer-core";
+import { describeTestOutcome } from "@/lib/announcer/announcer-fanout-core";
 import {
   removeDevice,
   updateAnnouncerSettings,
@@ -40,13 +46,53 @@ function field(form: FormData, key: string): string {
 }
 
 /**
+ * What the Test button reports back to the screen.
+ *
+ * A type, not a value, so this stays legal to export from a "use server" file.
+ */
+export type AnnouncerTestResult = {
+  /** Plain-English sentence for the person who just pressed the button. */
+  message: string;
+  /** True when the test was actually queued to at least one speaker. */
+  sent: boolean;
+  /** Lets the panel tell two identical messages apart and re-announce them. */
+  at: number;
+};
+
+/**
  * Play a sound on every speaker right now.
  *
  * This is the single most important button on the panel: it turns "I think it
  * works" into "I just heard it". It bypasses quiet hours on purpose — you press
  * Test precisely to check the speaker works at this moment.
+ *
+ * WHY THIS ONE RETURNS A VALUE WHEN EVERY OTHER ACTION HERE RETURNS VOID
+ * ---------------------------------------------------------------------
+ * The owner reported this button "does nothing, it hangs". It was not hanging.
+ * It queued the sound and returned — but it returned `void`, the button had no
+ * pending state, and the panel said nothing afterwards, so pressing it produced
+ * no visible change at all. The Pi then sits on a long-poll of up to
+ * POLL_HOLD_SECONDS before it collects the sound, so even a perfectly healthy
+ * shop can wait ~25 seconds for the chime.
+ *
+ * Silence for 25 seconds after pressing a button is indistinguishable from a
+ * crash. Every other action on this panel changes something you can see (a name
+ * changes, a card disappears); Test is the only one whose entire result is a
+ * noise that happens somewhere else, later. So it is the only one that has to
+ * say so in words.
+ *
+ * The shape is `(prevState, formData)` because it is consumed by
+ * useActionState() in AnnouncerTestButton.
  */
-export async function announcerTestAllAction(): Promise<void> {
+// useActionState calls this as (previousState, formData). Neither is read: the
+// test takes no input, and the previous result must never influence the next
+// one. They exist to match the hook's call signature.
+export async function announcerTestAllAction(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prev: AnnouncerTestResult | null,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _form: FormData,
+): Promise<AnnouncerTestResult> {
   const session = await requirePermission("settings.manage");
 
   const result = await enqueueAnnouncement({
@@ -65,6 +111,17 @@ export async function announcerTestAllAction(): Promise<void> {
   });
 
   revalidatePath(ORDERS_PATH);
+
+  return {
+    message: describeTestOutcome({
+      queued: result.queued,
+      skipped: result.skipped,
+      ok: result.ok,
+      holdSeconds: POLL_HOLD_SECONDS,
+    }),
+    sent: result.ok && result.queued > 0,
+    at: Date.now(),
+  };
 }
 
 /** Turn one speaker on or off without unpairing it. */
