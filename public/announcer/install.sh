@@ -139,19 +139,68 @@ ok "Internet connection is working"
 # ---------------------------------------------------------------------------
 step "Step 2 of 7: installing the pieces it needs"
 export DEBIAN_FRONTEND=noninteractive
-if ! apt-get update -qq >/dev/null 2>&1; then
-  warn "Could not refresh the software list. Carrying on with what is already here."
-fi
+
+# Work out what is actually missing FIRST. On a re-run everything is normally
+# already installed, in which case there is no reason to touch apt at all --
+# and every reason not to, because apt is the one step here that can sit and
+# wait on something outside our control.
 MISSING=""
 for pkg in python3-requests alsa-utils mpg123; do
   dpkg -s "$pkg" >/dev/null 2>&1 || MISSING="$MISSING $pkg"
 done
-if [ -n "$MISSING" ]; then
-  echo "  Installing:$MISSING"
-  apt-get install -y -qq $MISSING >/dev/null 2>&1 \
-    || die "Could not install:$MISSING . Run 'sudo apt update' and try again."
+
+if [ -z "$MISSING" ]; then
+  ok "Sound tools and Python libraries are already installed"
+else
+  echo "  Need to install:$MISSING"
+
+  # Raspberry Pi OS runs apt-daily in the background, and it takes the same
+  # lock this needs. When it is mid-run, apt waits. Silently. Forever.
+  # A real shop owner sat watching "Step 2 of 7" with no output and no way to
+  # tell whether it had died, so: say what is happening, cap how long we are
+  # willing to wait, and never hide the reason.
+  APT_LOCK_OPTS="-o DPkg::Lock::Timeout=120"
+  if apt-get $APT_LOCK_OPTS --version >/dev/null 2>&1; then :; else APT_LOCK_OPTS=""; fi
+
+  if pgrep -x 'apt|apt-get|unattended-upgr' >/dev/null 2>&1; then
+    warn "The Pi is already installing its own updates in the background."
+    echo "      Waiting for that to finish (up to 3 minutes)..."
+  fi
+
+  # Overridable so the test suite can exercise the timeout path in seconds
+  # instead of minutes. Defaults are what a real Pi gets.
+  APT_UPDATE_TIMEOUT="${GREENWAY_APT_UPDATE_TIMEOUT:-120}"
+  APT_INSTALL_TIMEOUT="${GREENWAY_APT_INSTALL_TIMEOUT:-300}"
+
+  echo "  Refreshing the software list (up to 2 minutes)..."
+  if timeout "$APT_UPDATE_TIMEOUT" apt-get $APT_LOCK_OPTS update -qq >/dev/null 2>&1; then
+    ok "Software list refreshed"
+  else
+    warn "Could not refresh the software list in time. Carrying on with what is already here."
+  fi
+
+  echo "  Installing:$MISSING (up to 5 minutes)..."
+  APT_LOG="$(mktemp)"
+  if timeout "$APT_INSTALL_TIMEOUT" apt-get $APT_LOCK_OPTS install -y -qq $MISSING >"$APT_LOG" 2>&1; then
+    ok "Sound tools and Python libraries are ready"
+  else
+    APT_STATUS=$?
+    echo "" >&2
+    if [ "$APT_STATUS" -eq 124 ]; then
+      echo "  The install did not finish in time. This is almost always the Pi's own" >&2
+      echo "  background updater holding the lock. Wait a few minutes, then run this" >&2
+      echo "  installer again -- it is safe to re-run and keeps your pairing." >&2
+      echo "" >&2
+      echo "  To see what is holding it:  ps aux | grep -E 'apt|unattended'" >&2
+    else
+      echo "  The last few lines from apt:" >&2
+      tail -5 "$APT_LOG" >&2
+    fi
+    rm -f "$APT_LOG"
+    die "Could not install:$MISSING . Try 'sudo apt-get install -y$MISSING' to see the full error."
+  fi
+  rm -f "$APT_LOG"
 fi
-ok "Sound tools and Python libraries are ready"
 
 # ---------------------------------------------------------------------------
 # 3. Install the agent
