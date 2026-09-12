@@ -112,6 +112,84 @@ mutate "message no longer says permission denied" \
   '(unavailable).'
 
 echo ""
+echo "Mutating the ALSA error diagnosis (the 'Unknown error 524' from the shop):"
+# A. Stop recognising 524 at all -> back to printing raw driver noise.
+mutate "error 524 no longer recognised" \
+  'if "524" in text or "not supported" in text or "no such device" in text:' \
+  'if "nothing-matches-this" in text:'
+# B. Drop the HDMI explanation, which is the actual cause on a headless Pi.
+mutate "HDMI no longer named as the cause" \
+  '"This Pi has an HDMI audio output, and HDMI is usually the default. "' \
+  '"Something went wrong. "'
+# C. Blame HDMI even when the Pi has none.
+mutate "HDMI blamed even when there is no HDMI output" \
+  '        if hdmi:' \
+  '        if True:'
+# D. Stop suggesting a working output -> diagnosis with no fix.
+mutate "no working output suggested after 524" \
+  '        if target:' \
+  '        if False:'
+# D2. Drop the "no monitor" explanation, which is the reason it fails.
+mutate "no longer explains that HDMI needs a monitor attached" \
+  '"With no monitor plugged in, HDMI audio cannot open -- which is "' \
+  '"HDMI audio cannot open -- which is "'
+# E. Recommend the HDMI output that just failed.
+mutate "suggests the HDMI output that just failed" \
+  '        target = (other or analog or [None])[0]' \
+  '        target = (hdmi or other or analog or [None])[0]'
+# F. Drop the reassurance.
+mutate "no longer says nothing is broken" \
+  '"exactly this error. Nothing is broken."' \
+  '"exactly this error."'
+# G. Lose the busy-device branch (the service holding the sound card).
+mutate "busy device no longer recognised" \
+  'if "busy" in text or "resource busy" in text:' \
+  'if "nothing-matches-busy" in text:'
+# H. Busy advice without the commands that fix it.
+mutate "busy advice no longer gives the stop command" \
+  'sudo systemctl stop greenway-announcer' \
+  'stop the service'
+# I. Lose the permission branch.
+mutate "permission error no longer recognised" \
+  'if "permission denied" in text:' \
+  'if "nothing-matches-perm" in text:'
+# J. Lose the missing-device branch.
+mutate "missing device no longer recognised" \
+  'if "no such file or directory" in text:' \
+  'if "nothing-matches-missing" in text:'
+# K. Guess at errors it does not understand. Confident wrong advice is worse
+#    than none: it sends somebody chasing a fault that is not there.
+mutate "unknown errors are guessed at instead of admitted" \
+  '    return None
+
+
+def diagnose_buzz' \
+  '    return "Try a different output."
+
+
+def diagnose_buzz'
+
+echo ""
+echo "Mutating the stale-install warning (why 'audio' said invalid choice):"
+# L. Stop noticing that the installed program is older than the source.
+mutate "stale install no longer detected" \
+  '        if repo_copy.read_bytes() == running.read_bytes():
+            return None' \
+  '        return None'
+# M. Claim everything is stale, including an up-to-date install.
+mutate "up-to-date install wrongly reported as stale" \
+  '        if repo_copy.read_bytes() == running.read_bytes():' \
+  '        if False:'
+# N. Drop the key sentence: git pull is not enough.
+mutate "no longer explains that git pull is not enough" \
+  "  'git pull' updates the folder; it does NOT update the installed program.\\n" \
+  "  The program is out of date.\\n"
+# O. Drop the command that fixes it.
+mutate "stale warning no longer gives the install command" \
+  '    sudo ./install.sh --site https://greenwaywebsite1.vercel.app' \
+  '    (reinstall it)'
+
+echo ""
 echo "Mutating the tone-cache fallback (the second crash of the same family):"
 # 30. Let the unwritable-cache crash escape again.
 mutate "cache failure no longer caught -> test crashes without sudo" \

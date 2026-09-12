@@ -69,7 +69,7 @@ except ImportError:  # pragma: no cover - guidance path, not logic
     )
     raise SystemExit(2)
 
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.1.0"
 
 # Where the pairing result lives. Root-owned, mode 600: it holds the device key.
 DEFAULT_CONFIG_PATH = Path("/etc/greenway-announcer/config.json")
@@ -292,6 +292,11 @@ def site_typo_hint(raw: Any) -> str:
 # AUDIO
 # ============================================================================
 
+# The built-in sounds, in the order `test` plays them. Defined once so the
+# command and its selftest can never disagree about what the set is.
+BUILTIN_SOUND_ORDER = ("chime", "bell", "ding", "alert", "cash", "voice")
+
+
 def generate_tone_wav(path: Path, kind: str) -> None:
     """
     Write a built-in tone to disk as a WAV.
@@ -411,6 +416,83 @@ def parse_aplay_devices(text: str) -> List[Dict[str, Any]]:
             }
         )
     return devices
+
+
+def detected_outputs() -> List[Dict[str, Any]]:
+    """Ask ALSA what outputs exist. Returns [] rather than raising."""
+    if shutil.which("aplay") is None:
+        return []
+    try:
+        listing = subprocess.run(["aplay", "-l"], capture_output=True, timeout=10)
+    except (subprocess.SubprocessError, OSError):
+        return []
+    return parse_aplay_devices((listing.stdout or b"").decode("utf-8", "replace"))
+
+
+def explain_alsa_error(detail: str, devices: List[Dict[str, Any]]) -> Optional[str]:
+    """
+    Turn a raw aplay error into something a shop owner can act on.
+
+    The message that started this: on a headless Pi,
+
+        aplay: main:850: audio open error: Unknown error 524
+
+    524 is not a userspace errno at all -- the highest real one is 132. It is
+    the kernel's internal ENOTSUPP leaking out of an ALSA driver, and it means
+    "the device exists but the driver will not open it". On a Raspberry Pi with
+    no monitor plugged in, that is almost always the HDMI output being the
+    default: the sound card is listed, so nothing looks wrong, but it cannot be
+    opened because there is no display attached to carry the audio.
+
+    Printing the raw text at somebody is useless. Naming the cause is not.
+    """
+    text = (detail or "").lower()
+    if not text:
+        return None
+
+    hdmi = [d for d in devices if d["is_hdmi"]]
+    analog = [d for d in devices if d["is_headphone"]]
+    other = [d for d in devices if not d["is_hdmi"] and not d["is_headphone"]]
+
+    if "524" in text or "not supported" in text or "no such device" in text:
+        target = (other or analog or [None])[0]
+        lines = [
+            "The sound output exists but the driver refused to open it.",
+        ]
+        if hdmi:
+            lines.append(
+                "This Pi has an HDMI audio output, and HDMI is usually the default. "
+                "With no monitor plugged in, HDMI audio cannot open -- which is "
+                "exactly this error. Nothing is broken."
+            )
+        if target:
+            lines.append(
+                f"Send the sound to a real output instead: --audio-device {target['alsa']}"
+            )
+        return " ".join(lines)
+
+    if "busy" in text or "resource busy" in text:
+        return (
+            "Something else is already using the sound output. Usually that is the "
+            "announcer service itself. Stop it, test, then start it again:\n"
+            "  sudo systemctl stop greenway-announcer\n"
+            "  sudo greenway-announcer test\n"
+            "  sudo systemctl start greenway-announcer"
+        )
+
+    if "no such file or directory" in text:
+        return (
+            "That audio output does not exist on this Pi. Run "
+            "'sudo greenway-announcer audio' to see the real list."
+        )
+
+    if "permission denied" in text:
+        return (
+            "Not allowed to open the sound output. Run the command with sudo, or add "
+            "the user to the 'audio' group:  sudo usermod -aG audio $USER"
+        )
+
+    return None
 
 
 def diagnose_buzz(devices: List[Dict[str, Any]], chosen: Optional[str]) -> List[str]:
@@ -945,9 +1027,66 @@ def cmd_test(args: argparse.Namespace) -> int:
                 "      speaker uses, run:  sudo greenway-announcer test\n"
             )
 
-    print("Playing each built-in sound. You should hear six different tones.\n")
+    # Prove one sound can play before running all six. Six identical failures
+    # in a row tell somebody nothing they did not know after the first.
+    probe = ensure_builtin(cache_dir, BUILTIN_SOUND_ORDER[0])
+    set_alsa_volume(args.volume, args.mixer_control)
+    first_ok, first_detail = play_file(probe, device)
+
+    devices = detected_outputs()
+
+    if not first_ok and not args.audio_device:
+        # The default output refused. Rather than reporting failure six times
+        # and sending somebody to read `aplay -l` themselves, try every output
+        # this Pi actually has and find the one that works. This is the whole
+        # difference between "it is broken" and "use this one".
+        explain = explain_alsa_error(first_detail, devices)
+        print(f"  default output  FAILED — {first_detail}")
+        if explain:
+            print(f"\n{explain}\n")
+
+        candidates = [d for d in devices if d["alsa"] != device]
+        # Try real outputs before HDMI: on a headless Pi, HDMI is the one that
+        # cannot work, and it is usually what the default already tried.
+        candidates.sort(key=lambda d: (d["is_hdmi"], d["is_headphone"]))
+        if candidates:
+            print("Trying every output this Pi has, to find one that works:\n")
+        for candidate in candidates:
+            set_alsa_volume(args.volume, args.mixer_control)
+            ok_try, detail_try = play_file(probe, candidate["alsa"])
+            label = f"  {candidate['alsa']:<14} {candidate['name'][:28]:<28}"
+            if ok_try:
+                print(f"{label} WORKS")
+                device = candidate["alsa"]
+                first_ok = True
+                print(
+                    f"\nFound a working output: {device}\n"
+                    "\nMake it permanent so the speaker uses it from now on. Run this\n"
+                    "from the pi-agent folder:\n"
+                    f"  sudo ./install.sh --site <your-site> --audio-device {device}\n"
+                )
+                break
+            print(f"{label} no ({detail_try.splitlines()[0][:40]})")
+
+    if not first_ok:
+        print("\nNo sound could be played through any output on this Pi.")
+        explain = explain_alsa_error(first_detail, devices)
+        if explain:
+            print(f"\n{explain}")
+        print(
+            "\nCheck these, in order:\n"
+            "  1. Is the speaker plugged in and switched on?\n"
+            "  2. Is its volume knob turned up?\n"
+            "  3. Run 'sudo greenway-announcer audio' to see every output and its volume.\n"
+            "  4. Run 'alsamixer' and check nothing is muted (MM means muted; press M to unmute)."
+        )
+        return 1
+
+    # A working output is confirmed: now play the rest of the set.
+    print("\nPlaying each built-in sound. You should hear six different tones.\n")
+    print(f"  {BUILTIN_SOUND_ORDER[0]:<6} OK")
     failures = 0
-    for kind in ("chime", "bell", "ding", "alert", "cash", "voice"):
+    for kind in BUILTIN_SOUND_ORDER[1:]:
         path = ensure_builtin(cache_dir, kind)
         set_alsa_volume(args.volume, args.mixer_control)
         ok, detail = play_file(path, device)
@@ -957,16 +1096,12 @@ def cmd_test(args: argparse.Namespace) -> int:
         time.sleep(0.4)
 
     if failures:
-        print(
-            "\nSome sounds did not play.\n"
-            "  1. Is the speaker plugged in and switched on?\n"
-            "  2. Is its volume knob turned up?\n"
-            "  3. Run 'aplay -l' to list audio outputs, then set 'audioDevice' in\n"
-            f"     {args.config} to the right one (for example: plughw:1,0).\n"
-            "  4. Run 'alsamixer' and check nothing is muted (MM means muted; press M to unmute)."
-        )
+        print("\nSome sounds did not play, but others did, so the output itself works.")
+        print("Try again; if it keeps happening run 'sudo greenway-announcer audio'.")
         return 1
     print("\nAll six sounds played. The audio hardware on this Pi is working.")
+    if device:
+        print(f"Output used: {device}")
     return 0
 
 
@@ -1072,11 +1207,46 @@ def cmd_audio(args: argparse.Namespace) -> int:
     return 0
 
 
+def stale_install_warning(running: Path, repo_copy: Path) -> Optional[str]:
+    """
+    Warn when the installed program is older than the checked-out source.
+
+    `git pull` updates the repository. It does NOT update the program, which
+    lives at /usr/local/bin/greenway-announcer. Somebody who pulls and then
+    runs a brand-new command gets "invalid choice", which reads like the fix
+    was never shipped. It was: it just was not installed.
+    """
+    try:
+        if not repo_copy.is_file() or not running.is_file():
+            return None
+        if repo_copy.read_bytes() == running.read_bytes():
+            return None
+    except OSError:
+        return None
+    return (
+        "The installed program is not the same as the code in this folder.\n"
+        "  'git pull' updates the folder; it does NOT update the installed program.\n"
+        "  Install the new version (this keeps the existing pairing):\n"
+        f"    cd {repo_copy.parent}\n"
+        "    sudo ./install.sh --site https://greenwaywebsite1.vercel.app"
+    )
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     config_path = Path(args.config)
     print(f"Greenway announcer v{AGENT_VERSION}")
     for key, value in agent_info().items():
         print(f"  {key}: {value}")
+
+    # If a repo checkout sits next to this, say so when it has moved ahead.
+    for candidate in (
+        Path.home() / "GREENWAY-WEBSITE" / "pi-agent" / "greenway_announcer.py",
+        Path("/home/greenway-office/GREENWAY-WEBSITE/pi-agent/greenway_announcer.py"),
+    ):
+        warning = stale_install_warning(Path(sys.argv[0]).resolve(), candidate)
+        if warning:
+            print(f"\n{warning}")
+            break
 
     state = config_state(config_path)
     if state == "denied":
@@ -1284,7 +1454,7 @@ def selftest() -> int:
     # -- tone generation actually produces playable audio -----------------
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
-        for kind in ("chime", "bell", "ding", "alert", "cash", "voice"):
+        for kind in BUILTIN_SOUND_ORDER:
             path = ensure_builtin(tmp_dir, kind)
             ok(f"tone {kind}: file created", path.exists())
             ok(f"tone {kind}: not empty", path.stat().st_size > 1000)
@@ -1308,6 +1478,81 @@ def selftest() -> int:
         loaded = load_config(cfg)
         eq("config: round-trips", loaded["deviceId"], "d")
         ok("config: no temp files left behind", list(Path(tmp, "sub").glob(".config-*")) == [])
+
+    # -- explain_alsa_error: the "Unknown error 524" that stopped a real shop --
+    # 524 is not a userspace errno (the highest is 132). It is the kernel's
+    # internal ENOTSUPP leaking out of an ALSA driver, and on a headless Pi it
+    # means HDMI audio cannot open because no monitor is attached.
+    _hdmi_pi = parse_aplay_devices(
+        "card 0: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+        "card 1: vc4hdmi [vc4-hdmi], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]\n"
+    )
+    _524 = explain_alsa_error(
+        "aplay: main:850: audio open error: Unknown error 524", _hdmi_pi
+    )
+    ok("alsa 524: is explained at all", bool(_524))
+    ok("alsa 524: blames the driver refusing to open", "refused to open" in (_524 or ""))
+    ok(
+        "alsa 524: names HDMI as the likely cause",
+        "HDMI audio output" in (_524 or "") and "usually the default" in (_524 or ""),
+    )
+    ok(
+        "alsa 524: explains WHY HDMI fails (no monitor attached)",
+        "no monitor plugged in" in (_524 or ""),
+    )
+    ok("alsa 524: reassures that nothing is broken", "Nothing is broken" in (_524 or ""))
+    ok("alsa 524: names a real output to use instead", "plughw:0,0" in (_524 or ""))
+    ok(
+        "alsa 524: does not send you to the HDMI output that just failed",
+        "--audio-device plughw:1,0" not in (_524 or ""),
+    )
+
+    # Same error, but this Pi has no HDMI at all: do not invent an HDMI story.
+    _no_hdmi = parse_aplay_devices(
+        "card 0: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+    )
+    _plain = explain_alsa_error("audio open error: Unknown error 524", _no_hdmi)
+    ok("alsa 524: still explained without HDMI", bool(_plain))
+    ok("alsa 524: no HDMI blame when there is no HDMI", "HDMI" not in (_plain or ""))
+
+    _busy = explain_alsa_error("aplay: device is busy", _hdmi_pi)
+    ok("alsa busy: recognised", bool(_busy))
+    ok("alsa busy: blames the running service", "already using the sound output" in (_busy or ""))
+    ok("alsa busy: gives the stop/start commands", "systemctl stop greenway-announcer" in (_busy or ""))
+
+    _missing = explain_alsa_error("aplay: No such file or directory", _hdmi_pi)
+    ok("alsa missing device: recognised", "does not exist on this Pi" in (_missing or ""))
+
+    _denied = explain_alsa_error("aplay: Permission denied", _hdmi_pi)
+    ok("alsa permission: recognised", bool(_denied))
+    ok("alsa permission: suggests the audio group", "usermod -aG audio" in (_denied or ""))
+
+    eq("alsa: an empty error explains nothing", explain_alsa_error("", _hdmi_pi), None)
+    eq("alsa: an unknown error is not guessed at", explain_alsa_error("weird thing", _hdmi_pi), None)
+
+    # -- stale install: 'git pull' does not update the installed program ------
+    with tempfile.TemporaryDirectory() as tmp:
+        installed = Path(tmp) / "installed.py"
+        source = Path(tmp) / "repo.py"
+        installed.write_text("OLD", encoding="utf-8")
+        source.write_text("NEW", encoding="utf-8")
+        warn = stale_install_warning(installed, source)
+        ok("stale: a newer source is noticed", bool(warn))
+        ok("stale: says git pull is not enough", "does NOT update" in (warn or ""))
+        ok("stale: gives the install command", "sudo ./install.sh" in (warn or ""))
+
+        installed.write_text("NEW", encoding="utf-8")
+        eq("stale: identical copies are not flagged", stale_install_warning(installed, source), None)
+        eq(
+            "stale: a missing repo copy is not flagged",
+            stale_install_warning(installed, Path(tmp) / "absent.py"),
+            None,
+        )
+        eq(
+            "stale: a missing installed copy is not flagged",
+            stale_install_warning(Path(tmp) / "absent.py", source),
+            None,
+        )
 
     # -- cache dir falls back instead of crashing -----------------------------
     # Second crash of the same family: /var/lib/greenway-announcer is

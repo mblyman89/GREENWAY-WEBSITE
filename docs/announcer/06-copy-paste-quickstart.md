@@ -287,6 +287,10 @@ All six sounds played. The audio hardware on this Pi is working.
   output. Go to step 8b.
 - **It says `FAILED`** → read the four numbered suggestions it prints, then go
   to step 8b.
+- **It says `audio open error: Unknown error 524`** → the Pi is trying to play
+  through **HDMI** with no monitor attached. The command now finds a working
+  output by itself and tells you the one to keep — follow what it prints, then
+  go to step 8b to make it permanent.
 - **I hear the tones, but also a hiss, buzz or static** → go to step 8c.
 
 ## Step 8b — Only if you heard nothing: pick the right audio output
@@ -294,6 +298,13 @@ All six sounds played. The audio hardware on this Pi is working.
 First the obvious two, because they are the usual answer: **is the speaker
 switched on, and is its volume knob turned up?** A powered speaker with the
 knob at zero reports a perfect success and makes no sound.
+
+**If you saw `Unknown error 524`,** the cause is different and it is worth
+knowing: the Pi was trying to send sound out of the **HDMI socket**, and HDMI
+audio cannot start unless a monitor or TV is plugged in. Your speaker is in the
+round headphone socket, so the sound was going to the wrong place entirely.
+Nothing is broken. `sudo greenway-announcer test` now tries every output and
+tells you which one works — use that name below.
 
 Then list the outputs the Pi can see:
 
@@ -498,7 +509,8 @@ want to see what it is doing at that moment. Press **Ctrl+C** to stop watching.
 
 ## UPDATING THE PI LATER
 
-The Pi does not update itself. When the software improves:
+The Pi does not update itself. When the software improves, run **all three
+lines**:
 
 ```bash
 ssh greenway-office@greenway-office.local
@@ -506,9 +518,30 @@ cd ~/GREENWAY-WEBSITE && git pull && cd pi-agent
 sudo ./install.sh --site https://greenwaywebsite1.vercel.app
 ```
 
-**No `--code` this time.** Without one the installer keeps the existing pairing
-and prints `Already paired - keeping the existing setup`. You do not need a new
-code to update.
+> **`git pull` on its own does nothing.** This trips everybody up once. The
+> program that actually runs lives at `/usr/local/bin/greenway-announcer`.
+> `git pull` only updates the folder you downloaded; **`sudo ./install.sh` is
+> what copies the new version into place.** If you pull and then try a brand
+> new command, you will get `invalid choice` and it will look like the update
+> failed. It did not — it just was not installed yet.
+
+Two details worth knowing, because both have caused confusion:
+
+- **`cd pi-agent` matters.** `install.sh` lives inside the `pi-agent` folder,
+  not at the top of the project. From the wrong folder you get
+  `sudo: ./install.sh: command not found`.
+- **No `--code` this time.** Without one the installer keeps the existing
+  pairing and prints `Already paired - keeping the existing setup`. You do not
+  need a new code to update.
+
+To confirm the update actually landed, ask it its version:
+
+```bash
+sudo greenway-announcer status
+```
+
+The first line shows the version. It will also warn you, in plain words, if the
+installed program is older than the folder you just pulled.
 
 ## ADDING A SECOND SPEAKER
 
