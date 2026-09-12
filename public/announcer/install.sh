@@ -83,6 +83,47 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# ---------------------------------------------------------------------------
+# Check the website address IMMEDIATELY, before anything else happens.
+#
+# "https//site.com" -- with the colon missing -- is easy to type and easy to
+# stare straight past, because the eye reads the word "https" and moves on.
+# When the installer runs from a git clone it uses the local copy of the agent
+# and never downloads anything, so a bad address survives all the way to step 5
+# (pairing). That means the package step, the install and the self-test all run
+# before anything complains. The address is knowably wrong the moment it is
+# typed, so it is checked here, first, and quoted back with the correction.
+# ---------------------------------------------------------------------------
+if [ -n "$SITE" ]; then
+  case "$SITE" in
+    https://?*|http://?*)
+      : ;;
+    https//*|http//*)
+      SCHEME="${SITE%%//*}"
+      die "The website address is missing the ':' after '$SCHEME'.
+
+  You typed:  $SITE
+  You want:   ${SCHEME}://${SITE#*//}
+
+  Nothing has been changed. Fix the address and run the same command again." ;;
+    https:/*|http:/*)
+      SCHEME="${SITE%%:*}"
+      die "The website address has only one '/' after '${SCHEME}:'.
+
+  You typed:  $SITE
+  You want:   ${SCHEME}://${SITE#*:/}
+
+  Nothing has been changed. Fix the address and run the same command again." ;;
+    *)
+      die "'$SITE' does not look like a web address.
+
+  It needs to start with https:// (or http:// for a local test), like:
+    https://greenwaywebsite1.vercel.app
+
+  Nothing has been changed. Fix the address and run the same command again." ;;
+  esac
+fi
+
 [ "$(id -u)" -eq 0 ] || die "This needs to run as root. Put 'sudo' in front of the command and try again."
 
 # ---------------------------------------------------------------------------

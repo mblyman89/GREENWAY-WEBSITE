@@ -25,6 +25,10 @@ INSTALLER="$HERE/../install.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# Snapshot the installed state, so the end of this file can prove the suite did
+# not change the machine it is running on.
+BEFORE_INSTALL="$(ls -l --time-style=+%s /usr/local/bin/greenway-announcer /etc/systemd/system/greenway-announcer.service 2>/dev/null | md5sum)"
+
 PASS=0
 FAIL=0
 pass () { echo "  PASS  $1"; PASS=$((PASS + 1)); }
@@ -62,18 +66,30 @@ EOF
   chmod 755 "$WORK/bin/dpkg"
 }
 
-# Run only step 2 by stopping the installer right after it: we point --site at
-# nothing and let it fail later; we only read the step-2 output.
+# Run a COPY of the installer from the scratch directory, not the one in the
+# repo. Step 2 needs root (the root check comes before it), and a root installer
+# that reaches step 3 would find pi-agent/greenway_announcer.py sitting next to
+# itself and perform a REAL install on whatever machine the suite is running on.
+#
+# Running the copy removes that: step 3 looks for the agent beside the script,
+# finds nothing, falls back to downloading from --site (deliberately an
+# unreachable address) and stops there -- after step 2 has been fully exercised
+# but before anything is installed. A test must not change the machine it runs
+# on.
+INSTALLER_COPY="$WORK/install.sh"
+cp "$INSTALLER" "$INSTALLER_COPY"
+
 run_step2 () {
   local timeout_s="$1"
   # Optional 2nd/3rd args shrink the installer's own apt timeouts so the
   # timeout path can be exercised in seconds rather than minutes.
   local upd="${2:-}" ins="${3:-}"
   cd "$WORK"
+  cp "$INSTALLER" "$INSTALLER_COPY"
   timeout "$timeout_s" env PATH="$WORK/bin:$PATH" \
     ${upd:+GREENWAY_APT_UPDATE_TIMEOUT="$upd"} \
     ${ins:+GREENWAY_APT_INSTALL_TIMEOUT="$ins"} \
-    bash "$INSTALLER" --site https://example.invalid >"$WORK/out.txt" 2>&1
+    bash "$INSTALLER_COPY" --site https://example.invalid >"$WORK/out.txt" 2>&1
   echo $?
 }
 
@@ -200,6 +216,15 @@ if grep -q "to see the full error" "$WORK/out.txt"; then
   pass "it gives a command to reproduce the error by hand"
 else
   fail "no way for the user to dig further"
+fi
+
+echo ""
+echo "7. the test itself must not have installed anything"
+AFTER_INSTALL="$(ls -l --time-style=+%s /usr/local/bin/greenway-announcer /etc/systemd/system/greenway-announcer.service 2>/dev/null | md5sum)"
+if [ "$AFTER_INSTALL" = "$BEFORE_INSTALL" ]; then
+  pass "no real install happened while testing"
+else
+  fail "the test installed the announcer on this machine - tests must not do that"
 fi
 
 echo ""

@@ -193,6 +193,13 @@ What each part is doing, because every piece matters:
   reports to. **This is the development site, on purpose.**
 - `--code ABCD2345` — your pairing code, no dash.
 
+> **Watch the `https://` carefully.** `https//` — with the colon missing — is the
+> easiest typo in this whole guide to make and the hardest to see, because your
+> eye reads the word "https" and moves on. The installer now checks the address
+> first and stops immediately if it is wrong, showing you what you typed next to
+> the corrected version. Nothing gets changed and your code is not used up, so
+> just fix the address and run the same line again.
+
 ## Step 7 — Watch it work
 
 It takes about two minutes and prints seven steps. It starts with:
@@ -278,6 +285,8 @@ so a failure here has left your Pi exactly as it was. Find your message:
 | `returned HTTP 202, not 200` or anything about a **security gateway / CAPTCHA** | You used the live address | Use `https://greenwaywebsite1.vercel.app` exactly as in step 6. |
 | `Python 3.9 or newer is required.` | Pi OS is too old | `sudo apt update && sudo apt full-upgrade`, reboot, repeat step 6. |
 | `Could not install:` ... at step 2 | The package system refused or was busy | Run the command it prints to see the real reason, wait a few minutes, then repeat step 6. It is safe to re-run. |
+| `The website address is missing the ':'` | `https//` instead of `https://` | It prints the corrected address. Nothing was changed and your code was not used. Retype the line and run it again. |
+| `does not look like a web address` | The address has no `https://` in front | Put `https://` at the front, as in step 6. |
 
 ---
 
