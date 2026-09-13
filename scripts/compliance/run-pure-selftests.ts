@@ -46,6 +46,8 @@ import { __runVendorSearchSafetyCoreTests } from "../../src/lib/inventory/vendor
 import { __runExemptSaleRecordTests } from "../../src/lib/medical/exempt-sale-record-core";
 import { __runSalesHoursCoreTests } from "../../src/lib/compliance/sales-hours-core";
 import { __runReceiptCoreTests } from "../../src/lib/printing/receipt-core";
+import { __runReceiptEscposTests } from "../../src/lib/printing/receipt-escpos-core";
+import { __runVrettiSetupTests } from "../../src/lib/printing/vretti-setup-core";
 import { __runPinHashTests } from "../../src/lib/security/pin-hash";
 import { __runAtRestCryptoTests } from "../../src/lib/security/at-rest-crypto";
 import { __runRlsCoverageTests } from "../../src/lib/security/rls-coverage-core";
@@ -636,6 +638,8 @@ __runLiquidVolumeTests();
   if (exempt.failed > 0) throw new Error(`exempt-sale-record-core: ${exempt.failed} failure(s)`);
   __runSalesHoursCoreTests();
   __runReceiptCoreTests();
+  __runReceiptEscposTests();
+  __runVrettiSetupTests();
   __runPinHashTests();
   __runAtRestCryptoTests();
   __runRlsCoverageTests();

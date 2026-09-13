@@ -19,6 +19,9 @@ import { getPrinterDiagnostics } from "@/lib/printing/printer-assistant";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { PrinterDiagnosticChat } from "@/components/admin/settings/PrinterDiagnosticChat";
 import type { DiagnosticSeverity } from "@/lib/printing/printer-diagnostics-core";
+import { VrettiSetupGuide } from "./VrettiSetupGuide";
+import { buildTestPrintBody } from "@/lib/printing/receipt-escpos-core";
+import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 
 /** Severity → dark-token alert styling (no light red-50/orange-50 surfaces). */
 function severityStyles(sev: DiagnosticSeverity): { box: string; dot: string; label: string } {
@@ -72,10 +75,13 @@ export type PrinterPanelBanners = {
  * hardware management lives in one location.
  */
 export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBanners }) {
-  const [settings, jobs, diag] = await Promise.all([
+  const [settings, jobs, diag, receiptConfig] = await Promise.all([
     getPrinterSettings(),
     listRecentJobs(25),
     getPrinterDiagnostics(),
+    // Never let a settings read cost us the whole page: the preview degrades
+    // to built-in defaults rather than throwing.
+    getPosReceiptConfig().catch(() => null),
   ]);
   const online = isPrinterOnline(settings?.last_poll_at ?? null);
 
@@ -91,13 +97,25 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
       new Date(j.printed_at).toDateString() === new Date().toDateString(),
   ).length;
 
+  // The preview is built by the SAME renderer the printer receives, using the
+  // owner's real settings, so what is shown here is what comes out of the
+  // machine. A fixed timestamp is used so the preview does not change on every
+  // page load for no reason.
+  const receiptPreview = buildTestPrintBody({
+    columns: settings?.paper_columns,
+    headerText: settings?.header_text ?? receiptConfig?.headerText ?? null,
+    footerText: settings?.footer_text ?? receiptConfig?.footerText ?? null,
+    addressText: receiptConfig?.addressText ?? null,
+    placedAt: "2024-01-15T21:05:00.000Z",
+    note: "Sample preview \u2014 a real order shows the customer's note here.",
+  });
+
   const codeCls =
     "mt-1 block break-all rounded-[var(--admin-radius-sm)] bg-[var(--admin-surface-2)] px-2 py-1 text-[var(--admin-text)]";
   const inlineCode = "rounded bg-[var(--admin-surface-2)] px-1 text-[var(--admin-text)]";
   const detailsCls =
     "rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-3";
   const summaryCls = "cursor-pointer font-semibold text-[var(--admin-text)]";
-  const listCls = "mt-2 list-disc space-y-1 pl-5 text-[13px] text-[var(--admin-text-muted)]";
   const olCls = "mt-2 list-decimal space-y-1 pl-5 text-[13px] text-[var(--admin-text-muted)]";
 
   return (
@@ -127,10 +145,10 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
         id="receipt-printer-help"
         title="How the receipt printer works"
         steps={[
-          "Buy the recommended printer: Star Micronics TSP143IV (Ethernet + USB-C, CloudPRNT). Part # 39473010 (gray) or 39473110 (white).",
-          "Plug it into the store router with the included Ethernet cable and power it on.",
-          "In the printer\u2019s Star Quick Setup Utility, set the CloudPRNT Server URL to the Poll URL shown below, and set the password to the Poll Token below (rotate one if empty).",
-          "Click \u2018Send test print\u2019. It prints at the next poll. After that, every online pickup order prints automatically (if auto-print is on).",
+          "Your printer is a vretti 80mm USB thermal printer. It plugs into the Raspberry Pi by USB \u2014 it has no network port, no web page and no setup app of its own.",
+          "The Pi runs a small service that checks this website every few seconds and prints whatever is waiting. The printer only ever hears from the Pi.",
+          "Generate a Poll token below, then run the one installer command on the Pi (full step-by-step guide is on this page).",
+          "Press \u2018Send test print\u2019. After that every online pickup order prints automatically, laid out exactly like a receipt from the register.",
         ]}
       />
 
@@ -179,7 +197,7 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
         <h2 className="mb-3 text-sm font-semibold text-[var(--admin-text)]">Connection</h2>
         <div className="space-y-3 text-sm">
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-[var(--admin-text-faint)]">Poll URL (set in printer)</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-[var(--admin-text-faint)]">Poll URL (the Pi checks this address)</div>
             <code className={codeCls}>{pollUrl}</code>
             {!siteUrl && (
               <p className="mt-1 text-xs text-[var(--admin-orange)]">
@@ -188,16 +206,28 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
             )}
           </div>
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-[var(--admin-text-faint)]">Poll token (printer password)</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-[var(--admin-text-faint)]">Poll token (the Pi&rsquo;s password)</div>
             <code className={codeCls}>{settings?.poll_token ?? "\u2014 not set \u2014"}</code>
+            {!settings?.poll_token && (
+              <p className="mt-1 text-xs text-[var(--admin-orange)]">
+                No token yet &mdash; nothing can print until you generate one. Press the button below,
+                then follow the setup guide on this page.
+              </p>
+            )}
             <form action={rotatePollTokenAction} className="mt-2">
               <Button type="submit" variant="neutral" size="sm">
                 {settings?.poll_token ? "Rotate token" : "Generate token"}
               </Button>
             </form>
+            {settings?.poll_token && (
+              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                Rotating takes effect immediately, so the Pi stops printing until you re-pair it with
+                the new token.
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium uppercase tracking-wide text-[var(--admin-text-faint)]">Registered MAC</span>
+            <span className="text-xs font-medium uppercase tracking-wide text-[var(--admin-text-faint)]">Pi last seen as</span>
             <Badge tone="neutral">{settings?.printer_mac ?? "not seen yet"}</Badge>
           </div>
           <form action={testPrintAction}>
@@ -224,75 +254,81 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
               Print a receipt on every new online order
             </label>
           </Field>
-          <Field label="Paper width" help="TSP143IV ships with 80mm paper (48 columns).">
+          <Field label="Paper width" help="The vretti is an 80mm printer, so leave this on 48 columns unless you have deliberately loaded narrower paper.">
             <Select name="paper_columns" defaultValue={String(settings?.paper_columns ?? 48)}>
-              <option value="48">80mm (48 columns)</option>
+              <option value="48">80mm (48 columns) &mdash; the vretti</option>
               <option value="32">58mm (32 columns)</option>
             </Select>
           </Field>
-          <Field label="Receipt header" help="Printed centered at the top. Leave blank for the default store name.">
+          <Field label="Receipt header" help="Printed centered at the top. Leave blank to use the header from your register receipt settings.">
             <Textarea name="header_text" rows={2} defaultValue={settings?.header_text ?? ""} />
           </Field>
-          <Field label="Receipt footer" help="Printed centered at the bottom (e.g. hours, thank-you).">
+          <Field label="Receipt footer" help="Printed centered at the bottom. Leave blank to use the footer from your register receipt settings.">
             <Textarea name="footer_text" rows={2} defaultValue={settings?.footer_text ?? ""} />
           </Field>
           <Button type="submit" variant="save" size="sm">Save settings</Button>
         </form>
       </Card>
 
-      {/* Detailed end-to-end setup guide */}
+      {/* What a receipt will actually look like */}
       <Card className="p-5">
-        <h2 className="mb-3 text-sm font-semibold text-[var(--admin-text)]">Full setup guide (end to end)</h2>
+        <h2 className="mb-1 text-sm font-semibold text-[var(--admin-text)]">
+          What a receipt looks like
+        </h2>
+        <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+          This is the exact text that gets sent to the printer &mdash; character for character, at
+          your current paper width. Online pickup orders now print in the{" "}
+          <strong>same style as a sale at the register</strong>: the same item detail line, the same
+          separate excise and sales-tax rows, the same savings and return policy. Change the wording
+          or the toggles under{" "}
+          <strong>Point of Sale &rarr; Receipt settings</strong> and this preview follows.
+        </p>
+        <pre className="overflow-x-auto rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-black/40 px-3 py-3 font-mono text-[11px] leading-[1.45] text-[var(--admin-text)]">
+{receiptPreview}
+        </pre>
+        <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+          A real order also shows the customer&apos;s name, phone and any note they left for staff.
+        </p>
+      </Card>
+
+      {/*
+        The full vretti walkthrough. Content comes entirely from the pure,
+        self-tested vretti-setup-core; this is only where it is mounted.
+      */}
+      <VrettiSetupGuide
+        siteUrl={siteUrl}
+        pollToken={settings?.poll_token ?? null}
+        hasPolled={Boolean(settings?.last_poll_at)}
+      />
+
+      {/* How it works & security */}
+      <Card className="p-5">
+        <h2 className="mb-3 text-sm font-semibold text-[var(--admin-text)]">How it works &amp; security</h2>
         <div className="space-y-3 text-sm text-[var(--admin-text-muted)]">
           <details className={detailsCls} open>
-            <summary className={summaryCls}>1. Hardware &amp; paper</summary>
-            <ul className={listCls}>
-              <li>Printer: Star Micronics <strong>TSP143IV</strong> (native CloudPRNT). Part 39473010 gray / 39473110 white.</li>
-              <li>Connect by <strong>Ethernet</strong> for online-order auto-print (USB-C also exists). No PC driver and no Star cloud subscription needed.</li>
-              <li>Paper: 80mm thermal (48 columns, default) or 58mm (32 columns).</li>
-            </ul>
-          </details>
-          <details className={detailsCls}>
-            <summary className={summaryCls}>2. Physical setup</summary>
+            <summary className={summaryCls}>What actually talks to what</summary>
             <ol className={olCls}>
-              <li>Place near the pickup counter within reach of the router.</li>
-              <li>Plug the Ethernet cable into the router, connect power, turn it on.</li>
-              <li>Load the paper roll (paper feeds off the bottom) and close the lid firmly.</li>
-              <li>Wait ~30s for the printer to get an IP address.</li>
-              <li>Print the self-test slip (hold <strong>FEED</strong> while powering on) to find the printer&apos;s IP address.</li>
+              <li>An online order is placed, and a receipt is queued here on the website.</li>
+              <li>The <strong>Raspberry Pi</strong> checks <code className={inlineCode}>/api/cloudprnt</code> every few seconds. That check is the &ldquo;Last poll&rdquo; heartbeat on the status card above.</li>
+              <li>When a receipt is waiting, the Pi downloads it as plain text, converts it to ESC/POS (the language this printer speaks) and writes it to <code className={inlineCode}>/dev/usb/lp0</code> &mdash; the printer on the end of the USB cable.</li>
+              <li>The Pi then confirms the job, which is what moves it to &ldquo;printed&rdquo; in the queue below.</li>
             </ol>
+            <p className="mt-2 text-[13px]">
+              The printer itself is never on the network. If the internet drops, jobs simply wait in
+              the queue and print when the Pi reconnects.
+            </p>
           </details>
           <details className={detailsCls}>
-            <summary className={summaryCls}>3. Point the printer at our website</summary>
-            <div className="mt-2 space-y-2 text-[13px] text-[var(--admin-text-muted)]">
-              <p>Copy the <strong>Poll URL</strong> and <strong>Poll token</strong> from the Connection card above (Generate a token if it&apos;s blank), then enter them into the printer <strong>either way</strong>:</p>
-              <p className="font-medium text-[var(--admin-text)]">Option A &mdash; the printer&apos;s built-in web page:</p>
-              <ol className="list-decimal space-y-1 pl-5">
-                <li>On a device on the same network, browse to the printer&apos;s IP (e.g. <code className={inlineCode}>http://192.168.1.50</code>).</li>
-                <li>Log in (often user <code className={inlineCode}>root</code> / password <code className={inlineCode}>public</code> &mdash; change it after).</li>
-                <li>Open <strong>CloudPRNT</strong>, turn it <strong>ON</strong>.</li>
-                <li><strong>Server URL</strong> = the Poll URL (include <code className={inlineCode}>https://</code> and <code className={inlineCode}>/api/cloudprnt</code>).</li>
-                <li><strong>Poll interval</strong> &asymp; 5 seconds. <strong>Password</strong> = the Poll token. Save.</li>
-              </ol>
-              <p className="font-medium text-[var(--admin-text)]">Option B &mdash; Star Quick Setup Utility:</p>
-              <p>Install Star&apos;s free app, let it discover the printer, open CloudPRNT settings, and enter the same Server URL, poll interval, and password (Poll token). Save.</p>
-            </div>
-          </details>
-          <details className={detailsCls}>
-            <summary className={summaryCls}>4. Confirm &amp; go live</summary>
-            <ol className={olCls}>
-              <li>Watch the <strong>Printer status</strong> card flip to <strong>Online</strong> (shows Last poll + MAC).</li>
-              <li>Click <strong>Send test print</strong> &mdash; a receipt prints within a few seconds.</li>
-              <li>Make sure <strong>Auto-print online orders</strong> is checked. Done &mdash; receipts now print automatically.</li>
-            </ol>
-          </details>
-          <details className={detailsCls}>
-            <summary className={summaryCls}>How it works &amp; security</summary>
+            <summary className={summaryCls}>About the poll token</summary>
             <p className="mt-2 text-[13px] text-[var(--admin-text-muted)]">
-              The printer polls our single <code className={inlineCode}>/api/cloudprnt</code> endpoint every few seconds
-              (that&apos;s the &ldquo;Last poll&rdquo; heartbeat). When a receipt is waiting it fetches and prints it, then confirms.
-              The <strong>Poll token</strong> is sent on every request as the CloudPRNT password; a wrong token returns
-              401 and nothing prints. If you ever rotate the token, immediately re-enter the new one in the printer.
+              The <strong>Poll token</strong> is the password the Pi sends on every request. A wrong
+              token gets a 401 and nothing prints. Treat it like any other password &mdash; anyone
+              holding it could send print jobs to your shop.
+            </p>
+            <p className="mt-2 text-[13px] text-[var(--admin-text-muted)]">
+              Rotating the token takes effect <strong>immediately</strong>, so the Pi will stop
+              printing until you re-run the pairing command with the new token (Step 6 in the guide
+              above). That is deliberate: it is how you cut off a token you think has leaked.
             </p>
           </details>
         </div>

@@ -17,10 +17,14 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
-  formatReceipt,
   receiptTitle,
   type ReceiptInput,
 } from "@/lib/printing/receipt-core";
+import {
+  formatEscposReceipt,
+  type EscposReceiptLine,
+} from "@/lib/printing/receipt-escpos-core";
+import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import {
   MAX_FAILS_PER_CLAIM,
   hasExhaustedPrintAttempts,
@@ -151,24 +155,100 @@ export async function queueJob(params: {
 }
 
 /**
+ * Enrichment the ORDER already knows but the legacy pickup receipt discarded.
+ *
+ * Every field is optional: a caller that cannot supply it simply prints less
+ * (see receipt-escpos-core). Nothing here is new data collection — the orders
+ * API already computes all of it (src/app/api/orders/route.ts) and was
+ * throwing it away at this boundary.
+ */
+export type OrderReceiptLineExtras = {
+  regularPriceMinorUnits?: number | null;
+  category?: string | null;
+  unitGrams?: number | null;
+  unitThcMg?: number | null;
+  appliedLabel?: string | null;
+};
+
+/**
  * Build a receipt from an order and queue it — but only if auto-print is on.
  * Best-effort: never throws, returns the job id or null. Called from the
  * orders API after a successful order insert.
+ *
+ * VRETTI SLICE: the body is now rendered by formatEscposReceipt, which lays
+ * the order out in the SAME style as a register sale (the owner's request:
+ * "I want to use the same receipt style format and such used for a sale at the
+ * register"). It reuses the register's own detail-line, tax-split and
+ * return-policy helpers, and it honours the owner's existing register-receipt
+ * settings (header, address, footer, savings/detail/summary/policy toggles and
+ * the statutory excise itemization) so BOTH receipts are configured from ONE
+ * screen instead of two that can disagree.
+ *
+ * The printer's paper_columns still wins for width, because that is a property
+ * of the paper loaded in the machine, not a style preference.
  */
 export async function queueOrderReceipt(input: ReceiptInput & {
   orderId?: string | null;
   itemCount: number;
+  /** Per-line enrichment, positionally aligned with `lines`. */
+  lineExtras?: (OrderReceiptLineExtras | null)[];
 }): Promise<string | null> {
   const settings = await getPrinterSettings();
   if (!settings || !settings.auto_print_orders) return null;
-  const body = formatReceipt(
+
+  // The owner's register-receipt customization drives the pickup receipt too.
+  // A failure here must never cost us the print job, so fall back to the
+  // built-in defaults rather than throwing.
+  let config: Awaited<ReturnType<typeof getPosReceiptConfig>> | null = null;
+  try {
+    config = await getPosReceiptConfig();
+  } catch {
+    config = null;
+  }
+
+  const lines: EscposReceiptLine[] = input.lines.map((l, i) => {
+    const extra = input.lineExtras?.[i] ?? null;
+    return {
+      productName: l.productName,
+      quantity: l.quantity,
+      priceMinorUnits: l.priceMinorUnits,
+      brand: l.brand ?? null,
+      variantLabel: l.variantLabel ?? null,
+      regularPriceMinorUnits: extra?.regularPriceMinorUnits ?? null,
+      category: extra?.category ?? null,
+      unitGrams: extra?.unitGrams ?? null,
+      unitThcMg: extra?.unitThcMg ?? null,
+      appliedLabel: extra?.appliedLabel ?? null,
+    };
+  });
+
+  const body = formatEscposReceipt(
     {
-      ...input,
-      headerText: input.headerText ?? settings.header_text,
-      footerText: input.footerText ?? settings.footer_text,
+      orderNumber: input.orderNumber,
+      placedAt: input.placedAt,
+      customerName: input.customerName,
+      customerPhone: input.customerPhone ?? null,
+      customerNote: input.customerNote ?? null,
+      lines,
+      subtotalMinorUnits: input.subtotalMinorUnits,
+      savingsMinorUnits: input.savingsMinorUnits,
+      estimatedTaxMinorUnits: input.estimatedTaxMinorUnits,
+      totalMinorUnits: input.totalMinorUnits,
+      // Printer-level overrides win when set (they are the printer's own
+      // fields); otherwise the register-receipt settings apply.
+      headerText: input.headerText ?? settings.header_text ?? config?.headerText ?? null,
+      footerText: input.footerText ?? settings.footer_text ?? config?.footerText ?? null,
+      addressText: config?.addressText ?? null,
+      showSavings: config?.showSavings,
+      showTaxBreakdown: config?.showTaxBreakdown,
+      showItemDetail: config?.showItemDetail,
+      showSaleSummary: config?.showSaleSummary,
+      showReturnPolicy: config?.showReturnPolicy,
+      returnPolicyText: config?.returnPolicyText ?? null,
     },
     { columns: settings.paper_columns },
   );
+
   return queueJob({
     bodyText: body,
     title: receiptTitle(input.orderNumber, input.itemCount),

@@ -643,20 +643,24 @@ export async function rerollOrderNameAction(orderId: string): Promise<void> {
 export async function testPrintFromOrdersAction(): Promise<void> {
   const session = await requirePermission("settings.manage");
 
-  const { queueJob, formatReceipt } = await import("@/lib/printing/printer-store");
-  const body = formatReceipt({
-    orderNumber: "TEST-PRINT",
-    placedAt: new Date().toISOString(),
-    customerName: "Test Receipt",
-    lines: [
-      { productName: "Sample item A", brand: "Greenway", variantLabel: "1g", quantity: 1, priceMinorUnits: 1000 },
-      { productName: "Sample item B", brand: "Greenway", variantLabel: "10pk", quantity: 2, priceMinorUnits: 1500 },
-    ],
-    subtotalMinorUnits: 4000,
-    savingsMinorUnits: 0,
-    estimatedTaxMinorUnits: 1480,
-    totalMinorUnits: 5480,
-    customerNote: "This is a CloudPRNT test print (from the Orders page).",
+  // Same shared renderer as the Equipment-page test print, so the two buttons
+  // can never produce different-looking paper.
+  const { queueJob, getPrinterSettings } = await import("@/lib/printing/printer-store");
+  const { buildTestPrintBody } = await import("@/lib/printing/receipt-escpos-core");
+  const { getPosReceiptConfig } = await import("@/lib/pos/receipt-config-store");
+  const printerSettings = await getPrinterSettings();
+  let receiptConfig: Awaited<ReturnType<typeof getPosReceiptConfig>> | null = null;
+  try {
+    receiptConfig = await getPosReceiptConfig();
+  } catch {
+    receiptConfig = null;
+  }
+  const body = buildTestPrintBody({
+    columns: printerSettings?.paper_columns,
+    headerText: printerSettings?.header_text ?? receiptConfig?.headerText ?? null,
+    footerText: printerSettings?.footer_text ?? receiptConfig?.footerText ?? null,
+    addressText: receiptConfig?.addressText ?? null,
+    note: "This is a test print from the Orders page.",
   });
 
   const id = await queueJob({ bodyText: body, title: "Test print" });
