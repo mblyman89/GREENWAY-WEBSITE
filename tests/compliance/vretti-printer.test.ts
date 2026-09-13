@@ -121,10 +121,12 @@ describe("the guide's commands match the real installer and agent", () => {
   });
   const commands = guide.flatMap((s) => s.steps).flatMap((s) => s.commands.map((c) => c.command));
   const installer = read(INSTALLER);
+  const installer_announcer = read("pi-agent/install.sh");
   const agent = read(AGENT);
 
   it("uses the flags install-printer.sh actually accepts", () => {
-    const install = commands.find((c) => c.includes("install-printer.sh"));
+    // Anchored: "chmod +x install-printer.sh" also contains that filename.
+    const install = commands.find((c) => c.startsWith("sudo ./install-printer.sh"));
     expect(install).toBeTruthy();
     // Parsed straight out of the installer's own argument loop.
     expect(installer).toMatch(/--site\)\s*SITE=/);
@@ -135,11 +137,53 @@ describe("the guide's commands match the real installer and agent", () => {
     expect(install).not.toContain("--code");
   });
 
-  it("downloads from the path the installer itself documents", () => {
-    const install = commands.find((c) => c.includes("install-printer.sh")) ?? "";
-    expect(install).toContain("/printer/install-printer.sh");
-    // The installer fetches its agent from the same /printer/ prefix.
-    expect(installer).toContain("/printer/greenway_printer.py");
+  it("runs the installer from the clone already on the Pi, not through curl", () => {
+    const install = commands.find((c) => c.startsWith("sudo ./install-printer.sh")) ?? "";
+    expect(install).toBeTruthy();
+    // install-printer.sh looks next to itself FIRST and uses that copy, which
+    // is why running it from pi-agent/ downloads nothing at all.
+    expect(installer).toMatch(/SCRIPT_DIR\/greenway_printer\.py/);
+    // Piping a download into a root shell is the path that breaks when a
+    // gateway answers with an HTML CAPTCHA page instead of the file.
+    expect(install).not.toContain("curl");
+    // "./" only resolves from the folder holding the script, so the guide has
+    // to have sent you there -- with an absolute path, because `~` under sudo
+    // is root's home, not the Pi user's.
+    const cd = commands.find((c) => c.startsWith("cd /"));
+    expect(cd).toBeTruthy();
+    expect(cd).toContain("/pi-agent");
+    for (const c of commands) {
+      expect(c).not.toMatch(/cd ~|\s~\//);
+    }
+  });
+
+  it("addresses the Pi by its real login, not the factory default", () => {
+    const ssh = commands.find((c) => c.startsWith("ssh "));
+    expect(ssh).toBeTruthy();
+    // The shop Pi's own prompt reads greenway-office@greenway-office.
+    expect(ssh).toContain("greenway-office");
+    for (const c of commands) {
+      expect(c).not.toMatch(/\bpi@raspberrypi\b/);
+    }
+  });
+
+  it("explains that a git pull alone does not apply the always-on settings", () => {
+    const update = guide.find((s) => s.id === "update");
+    expect(update).toBeTruthy();
+    const cmds = (update?.steps ?? []).flatMap((s) => s.commands.map((c) => c.command));
+    // Keep-awake is written BY install.sh -- pulling the file changes nothing
+    // under /usr/local/bin, /etc/systemd or /etc/NetworkManager until it runs.
+    expect(installer_announcer).toMatch(/greenway-keep-awake/);
+    expect(cmds.some((c) => c.startsWith("sudo ./install.sh"))).toBe(true);
+    // Re-running WITHOUT --code keeps the existing pairing (install.sh:
+    // `elif [ -f "$CONFIG_PATH" ]` -> "Already paired").
+    expect(installer_announcer).toMatch(/Already paired/);
+    expect(cmds.every((c) => !c.includes("--code"))).toBe(true);
+    // Without `iw` the keep-awake service is skipped with a warning.
+    expect(installer_announcer).toMatch(/apt install -y iw|'iw' tool is missing/);
+    expect(cmds.some((c) => c.includes("apt install -y iw"))).toBe(true);
+    // And it must be PROVEN, not assumed.
+    expect(cmds.some((c) => c.includes("systemctl is-enabled greenway-keep-awake"))).toBe(true);
   });
 
   it("only uses subcommands the agent really has", () => {
@@ -187,12 +231,28 @@ describe("the guide's commands match the real installer and agent", () => {
 
   it("is complete: every step explains itself and its failure mode", () => {
     const steps = guide.flatMap((s) => s.steps);
-    expect(steps).toHaveLength(10);
+    expect(steps).toHaveLength(14);
     for (const s of steps) {
       expect(s.title.trim()).not.toBe("");
       expect(s.body.trim()).not.toBe("");
-      expect(s.expect).toBeTruthy();
-      expect(s.ifItGoesWrong).toBeTruthy();
+    }
+    // Exactly one step is pure explanation, and it must genuinely ask you to
+    // do nothing -- otherwise this is a licence to drop troubleshooting.
+    const explainOnly = steps.filter((s) => s.ifItGoesWrong == null);
+    expect(explainOnly).toHaveLength(1);
+    expect(explainOnly[0].commands).toHaveLength(0);
+    expect(explainOnly[0].expect).toBeNull();
+
+    // Every OTHER step must say what success looks like and how it fails.
+    //
+    // Scope this by "is not the explanation step", NOT by "has commands". A
+    // commands.length > 0 filter silently exempts step 1, "load the paper the
+    // right way round" -- which has no commands and is exactly where the
+    // upside-down roll (prints nothing at all) has to be described. A mutation
+    // probe caught that: stripping step 1's `expect` left the suite green.
+    for (const s of steps.filter((x) => x !== explainOnly[0])) {
+      expect(s.expect, `step ${s.number} has no expected result`).toBeTruthy();
+      expect(s.ifItGoesWrong, `step ${s.number} has no recovery`).toBeTruthy();
     }
   });
 
@@ -202,6 +262,33 @@ describe("the guide's commands match the real installer and agent", () => {
     expect(blob).toContain("lp0");
     expect(blob).toContain("power");
     expect(PRINTER_HARDWARE.filter((h) => h.critical)).toHaveLength(2);
+  });
+
+  it("the printer installer rejects a mistyped web address up front", () => {
+    // The owner typed "https//greenwaywebsite1.vercel.app" -- no colon. The
+    // ANNOUNCER installer has always caught that; the PRINTER one did not,
+    // and without the guard the bad value reaches:
+    //     DL_URL="https//site/printer/greenway_printer.py"
+    // which has no scheme, so curl treats it as a relative PATH and the
+    // failure arrives minutes later saying nothing about a missing colon.
+    expect(installer).toMatch(/https\/\/\*\|http\/\/\*/);
+    expect(installer).toContain("is missing the ':' after");
+    expect(installer).toContain("has only one '/' after");
+    expect(installer).toContain("does not look like a web address");
+    // It must refuse BEFORE doing anything, so nothing is half-installed.
+    //
+    // Anchor on the REAL assignment, not on any line that merely mentions it:
+    // the comment above the guard quotes "DL_URL=..." to explain the bug, and a
+    // plain indexOf("DL_URL=") finds that prose first and silently compares the
+    // wrong two positions. Require a line that STARTS with the assignment.
+    const assignment = /^[ \t]*DL_URL=/m.exec(installer);
+    expect(assignment, "no real DL_URL assignment found").not.toBeNull();
+    const guardAt = installer.indexOf("is missing the ':' after");
+    const downloadAt = assignment!.index;
+    expect(guardAt).toBeGreaterThan(-1);
+    expect(downloadAt).toBeGreaterThan(guardAt);
+    // The same guard the announcer has, so the two cannot drift apart.
+    expect(installer_announcer).toContain("is missing the ':' after");
   });
 
   it("normalizes site URLs without inventing one", () => {
