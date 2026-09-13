@@ -97,6 +97,7 @@ import { __runAnnouncerProtocolTests } from "../../src/lib/announcer/announcer-p
 // SLICE 29 — deciding which speakers get told about a new order. Pure: takes the
 // device list and the clock as arguments so it can be tested at 3am in July.
 import { __runAnnouncerFanoutTests } from "../../src/lib/announcer/announcer-fanout-core";
+import { __runAnnouncerSetupTests } from "../../src/lib/announcer/announcer-setup-core";
 // SLICE 30 — what the back office shows about the speakers.
 import { __runAnnouncerAdminTests } from "../../src/lib/announcer/announcer-admin-core";
 import { __runAnnouncerSoundsTests } from "../../src/lib/announcer/announcer-sounds-core";
@@ -1152,6 +1153,7 @@ __runLiquidVolumeTests();
   assertNoFailures("announcer-admin-core", __runAnnouncerAdminTests());
   assertNoFailures("announcer-sounds-core", __runAnnouncerSoundsTests());
   assertNoFailures("announcer-library-core", __runAnnouncerLibraryTests());
+  assertNoFailures("announcer-setup-core", __runAnnouncerSetupTests());
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

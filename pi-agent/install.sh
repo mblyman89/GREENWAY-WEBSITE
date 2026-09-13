@@ -133,11 +133,25 @@ if [ "$DO_UNINSTALL" = "yes" ]; then
   step "Removing the Greenway announcer"
   systemctl stop greenway-announcer 2>/dev/null || true
   systemctl disable greenway-announcer 2>/dev/null || true
-  rm -f "$UNIT_PATH"; systemctl daemon-reload 2>/dev/null || true
+  rm -f "$UNIT_PATH"
+  # Everything step 7 installed to keep the Pi awake comes back out too.
+  # "Reversible with --uninstall" has to stay true, or the next person finds
+  # services they cannot account for and does not know what is safe to remove.
+  systemctl stop greenway-keep-awake 2>/dev/null || true
+  systemctl disable greenway-keep-awake 2>/dev/null || true
+  rm -f /etc/systemd/system/greenway-keep-awake.service
+  rm -f /usr/local/bin/greenway-keep-awake
+  rm -f /etc/NetworkManager/conf.d/99-greenway-no-wifi-powersave.conf
+  systemctl daemon-reload 2>/dev/null || true
   rm -f "$BIN_PATH"
   rm -rf /var/lib/greenway-announcer
   echo ""
   ok "Removed the service, the program and the cached sounds."
+  # Sleep stays masked on purpose and is called out rather than silently left:
+  # a shop that uninstalls to troubleshoot should not have a Pi start dozing
+  # again mid-investigation. Unmasking is one documented command.
+  warn "Sleep/suspend were left switched off. To restore them:"
+  warn "  sudo systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target"
   warn "Your pairing was left at $CONFIG_PATH in case you reinstall."
   warn "To erase it too:  sudo rm -rf $CONFIG_DIR"
   echo ""
@@ -152,7 +166,7 @@ echo ""
 # ---------------------------------------------------------------------------
 # 1. Sanity checks BEFORE changing anything
 # ---------------------------------------------------------------------------
-step "Step 1 of 7: checking this Raspberry Pi"
+step "Step 1 of 8: checking this Raspberry Pi"
 
 if [ -r /proc/device-tree/model ]; then
   MODEL="$(tr -d '\0' < /proc/device-tree/model)"
@@ -178,7 +192,7 @@ ok "Internet connection is working"
 # ---------------------------------------------------------------------------
 # 2. Dependencies
 # ---------------------------------------------------------------------------
-step "Step 2 of 7: installing the pieces it needs"
+step "Step 2 of 8: installing the pieces it needs"
 export DEBIAN_FRONTEND=noninteractive
 
 # Work out what is actually missing FIRST. On a re-run everything is normally
@@ -197,7 +211,7 @@ else
 
   # Raspberry Pi OS runs apt-daily in the background, and it takes the same
   # lock this needs. When it is mid-run, apt waits. Silently. Forever.
-  # A real shop owner sat watching "Step 2 of 7" with no output and no way to
+  # A real shop owner sat watching "Step 2 of 8" with no output and no way to
   # tell whether it had died, so: say what is happening, cap how long we are
   # willing to wait, and never hide the reason.
   APT_LOCK_OPTS="-o DPkg::Lock::Timeout=120"
@@ -246,7 +260,7 @@ fi
 # ---------------------------------------------------------------------------
 # 3. Install the agent
 # ---------------------------------------------------------------------------
-step "Step 3 of 7: installing the announcer program"
+step "Step 3 of 8: installing the announcer program"
 mkdir -p "$CONFIG_DIR" "$CACHE_DIR"
 chmod 700 "$CONFIG_DIR"
 
@@ -291,7 +305,7 @@ install -m 755 "$TMP_AGENT" "$BIN_PATH"
 rm -f "$TMP_AGENT"
 ok "Installed to $BIN_PATH"
 
-step "Step 4 of 7: checking the program is healthy"
+step "Step 4 of 8: checking the program is healthy"
 if "$BIN_PATH" selftest >/tmp/greenway-selftest.log 2>&1; then
   ok "Built-in self-test passed ($(grep -oE '[0-9]+ checks passed' /tmp/greenway-selftest.log | head -1))"
 else
@@ -302,7 +316,7 @@ fi
 # ---------------------------------------------------------------------------
 # 5. Pair
 # ---------------------------------------------------------------------------
-step "Step 5 of 7: connecting this speaker to your website"
+step "Step 5 of 8: connecting this speaker to your website"
 PAIR_ARGS=()
 [ -n "$AUDIO_DEVICE" ] && PAIR_ARGS+=(--audio-device "$AUDIO_DEVICE")
 [ -n "$MIXER_CONTROL" ] && PAIR_ARGS+=(--mixer-control "$MIXER_CONTROL")
@@ -323,7 +337,7 @@ fi
 # ---------------------------------------------------------------------------
 # 6. Service + log limits
 # ---------------------------------------------------------------------------
-step "Step 6 of 7: setting it to start automatically, forever"
+step "Step 6 of 8: setting it to start automatically, forever"
 
 cat > "$UNIT_PATH" <<'UNIT'
 [Unit]
@@ -377,9 +391,122 @@ ok "Service installed, enabled at boot, and started"
 ok "Log size capped at 50MB to protect the SD card"
 
 # ---------------------------------------------------------------------------
-# 7. Prove it is actually running
+# 7. Keep the Pi awake
+#
+# A real shop reported "the pi keeps turning itself off after a little bit of
+# time". A Raspberry Pi running the announcer must behave like an appliance:
+# always on, always reachable, no exceptions.
+#
+# There are three different things that all LOOK like "it turned itself off",
+# and they have nothing to do with each other. All three are handled here,
+# because guessing which one a shop is hitting is how you fix the wrong one and
+# declare victory:
+#
+#   1. Wi-Fi power saving. THE most likely cause by far. The radio dozes
+#      between packets, so the Pi stops answering, the website marks the
+#      speaker offline, and it "comes back" the moment something wakes it.
+#      The Pi never turned off at all. This is the one that matters.
+#   2. Suspend / sleep targets. Rare on Pi OS, but a desktop image or a
+#      stray package can pull them in, and then the box really does sleep.
+#   3. Console blanking. The screen goes black after ~10 minutes. Nothing is
+#      off -- but if you are looking at a monitor, "the screen went black" and
+#      "it turned itself off" are the same sentence.
+#
+# Everything below is idempotent and safe to re-run.
 # ---------------------------------------------------------------------------
-step "Step 7 of 7: making sure it really is running"
+step "Step 7 of 8: keeping this Pi awake and online"
+
+# --- 1. Wi-Fi power saving ------------------------------------------------
+# Two belts and braces, because Raspberry Pi OS has changed how it manages
+# networking between releases and the shop should not have to care which it is.
+
+# (a) NetworkManager (Bookworm and newer). A drop-in is used rather than
+#     editing the shipped file, so an OS update cannot quietly revert it.
+if [ -d /etc/NetworkManager ]; then
+  mkdir -p /etc/NetworkManager/conf.d
+  cat > /etc/NetworkManager/conf.d/99-greenway-no-wifi-powersave.conf <<'NMCONF'
+# Installed by the Greenway announcer.
+# 2 = disable Wi-Fi power saving. The radio dozing between packets makes the
+# speaker look "offline" in the back office while the Pi is perfectly fine.
+[connection]
+wifi.powersave = 2
+NMCONF
+  ok "Wi-Fi power saving disabled for NetworkManager"
+fi
+
+# (b) A tiny boot service that turns it off directly on every wireless
+#     interface. This covers non-NetworkManager setups and any interface
+#     NetworkManager is not managing. It is deliberately best-effort: a Pi on
+#     ethernet has no wireless interface and must not fail the install.
+if command -v iw >/dev/null 2>&1; then
+  cat > /usr/local/bin/greenway-keep-awake <<'KEEPAWAKE'
+#!/bin/sh
+# Installed by the Greenway announcer. Turns Wi-Fi power saving off on every
+# wireless interface. Safe to run on a Pi with no Wi-Fi at all.
+for dir in /sys/class/net/*/wireless; do
+  [ -e "$dir" ] || continue
+  iface="$(basename "$(dirname "$dir")")"
+  iw dev "$iface" set power_save off 2>/dev/null || true
+done
+exit 0
+KEEPAWAKE
+  chmod 755 /usr/local/bin/greenway-keep-awake
+
+  cat > /etc/systemd/system/greenway-keep-awake.service <<'KAUNIT'
+[Unit]
+Description=Greenway: keep the Wi-Fi radio awake so the speaker stays reachable
+After=network.target
+# Re-applies after the network comes back, because bringing an interface down
+# and up again restores the driver default.
+Wants=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/greenway-keep-awake
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+KAUNIT
+  systemctl daemon-reload
+  systemctl enable greenway-keep-awake >/dev/null 2>&1 || true
+  systemctl start greenway-keep-awake >/dev/null 2>&1 || true
+  ok "Wi-Fi radio set to stay awake, now and on every boot"
+else
+  warn "The 'iw' tool is missing, so Wi-Fi power saving could not be turned off directly."
+  warn "If this Pi is on Wi-Fi, install it with:  sudo apt install -y iw"
+fi
+
+# --- 2. Never sleep, suspend or hibernate ---------------------------------
+# Masking is stronger than disabling: a mask cannot be started by anything,
+# including another program deciding the box looks idle.
+if systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target >/dev/null 2>&1; then
+  ok "Sleep, suspend and hibernate are switched off for good"
+else
+  warn "Could not switch off sleep/suspend. The Pi may still doze."
+fi
+
+# --- 3. Stop the screen going black ---------------------------------------
+# Cosmetic, and included precisely because it is the thing people SEE. A black
+# screen on a Pi that is running perfectly is indistinguishable from a Pi that
+# has turned itself off, and that confusion costs a shop an afternoon.
+if [ -w /sys/module/kernel/parameters/consoleblank ] 2>/dev/null; then
+  echo 0 > /sys/module/kernel/parameters/consoleblank 2>/dev/null || true
+fi
+setterm --blank 0 --powerdown 0 >/dev/null 2>&1 || true
+ok "Screen blanking turned off (a black screen is not a Pi that is off)"
+
+echo ""
+echo "  If this Pi has ever seemed to 'turn itself off', run this afterwards:"
+echo "    sudo greenway-announcer status"
+echo "  It reports how long the Pi has been up. If that number keeps resetting,"
+echo "  the Pi is losing POWER - that is the power supply or the cable, not"
+echo "  software. If it keeps climbing, the Pi never went off at all."
+
+# ---------------------------------------------------------------------------
+# 8. Prove it is actually running
+# ---------------------------------------------------------------------------
+step "Step 8 of 8: making sure it really is running"
 sleep 4
 if systemctl is-active --quiet greenway-announcer; then
   ok "The announcer is running right now"

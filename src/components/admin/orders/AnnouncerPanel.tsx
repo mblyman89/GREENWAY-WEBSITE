@@ -25,6 +25,7 @@ import { listSounds } from "@/lib/announcer/announcer-sounds-store";
 import { optionsForSounds } from "@/lib/announcer/announcer-library-core";
 import { AnnouncerSoundLibrary } from "@/components/admin/orders/AnnouncerSoundLibrary";
 import { AnnouncerTestButton } from "@/components/admin/orders/AnnouncerTestButton";
+import { AnnouncerSetupGuide } from "@/components/admin/orders/AnnouncerSetupGuide";
 import type { AdminDeviceView, ShopVerdict } from "@/lib/announcer/announcer-admin-core";
 import {
   announcerCreatePairingAction,
@@ -141,6 +142,26 @@ export async function AnnouncerPanel() {
             </p>
           ) : null}
         </div>
+
+        {/*
+          ── 1b. THE WALKTHROUGH ──────────────────────────────────
+          Placed directly under the verdict, above the speaker cards, because
+          the owner asked for exactly this and asked for it to be findable:
+          "I dont need to search everywhere to find the steps. I want them laid
+          out for me in the back office." Collapsed by default so it never gets
+          in the way once the speakers are running, but it is the first thing
+          you meet when something is wrong.
+
+          It is fed real values, never placeholders: the live site address, the
+          newest unused pairing code if one exists, and whether a speaker is
+          already paired — which changes the advice from "pair it" to "do NOT
+          delete it, just re-run the installer without a code".
+        */}
+        <AnnouncerSetupGuide
+          siteUrl={announcerSiteUrl()}
+          pairingCode={pendingPairings[0]?.raw ?? null}
+          hasPairedSpeaker={devices.length > 0}
+        />
 
         {/* ── 2. ONE CARD PER ROOM ──────────────────────────────────────── */}
         {devices.length > 0 ? (

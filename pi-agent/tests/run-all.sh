@@ -17,25 +17,25 @@ FAILED=0
 
 banner () { echo ""; echo "############################################################"; echo "# $1"; echo "############################################################"; }
 
-banner "1/9  Agent self-test (the checks that ship on the Pi)"
+banner "1/10 Agent self-test (the checks that ship on the Pi)"
 python3 "$HERE/../greenway_announcer.py" selftest || FAILED=1
 
-banner "2/9  End-to-end against a real HTTP server"
+banner "2/10 End-to-end against a real HTTP server"
 python3 "$HERE/test_e2e.py" || FAILED=1
 
-banner "3/9  Testing the tests: mutating the pure logic"
+banner "3/10 Testing the tests: mutating the pure logic"
 bash "$HERE/mutation-selftest.sh" | tail -4
 bash "$HERE/mutation-selftest.sh" | grep -q "MUTATION ROUND CLEAN" || FAILED=1
 
-banner "4/9  Testing the tests: mutating end-to-end behaviour"
+banner "4/10 Testing the tests: mutating end-to-end behaviour"
 bash "$HERE/mutation-e2e.sh" | tail -4
 bash "$HERE/mutation-e2e.sh" | grep -q "MUTATION ROUND 2 CLEAN" || FAILED=1
 
-banner "5/9  Testing the tests: mutating the gateway/CAPTCHA diagnosis"
+banner "5/10 Testing the tests: mutating the gateway/CAPTCHA diagnosis"
 bash "$HERE/mutation-announcer-gateway.sh" | tail -5
 bash "$HERE/mutation-announcer-gateway.sh" | grep -q "MUTATION TESTING PASSED" || FAILED=1
 
-banner "6/9  Testing the tests: mutating the audio diagnosis and sudo handling"
+banner "6/10 Testing the tests: mutating the audio diagnosis and sudo handling"
 bash "$HERE/mutation-announcer-audio.sh" | tail -5
 bash "$HERE/mutation-announcer-audio.sh" | grep -q "MUTATION TESTING PASSED" || FAILED=1
 
@@ -43,13 +43,13 @@ bash "$HERE/mutation-announcer-audio.sh" | grep -q "MUTATION TESTING PASSED" || 
 # at all. FAST=1 shrinks the installer's own apt timeouts so the same guarantees
 # are proven in seconds; the slow, fully-realistic run is:
 #   bash pi-agent/tests/test_install_apt_hang.sh
-banner "7/9  Installer step 2 never hangs and never goes silent"
+banner "7/10 Installer step 2 never hangs and never goes silent"
 FAST=1 bash "$HERE/test_install_apt_hang.sh" | tail -4
 FAST=1 bash "$HERE/test_install_apt_hang.sh" | grep -q "STEP 2 IS SAFE" || FAILED=1
 
 # A mistyped --site (the colon after https is easy to miss) must be refused
 # instantly, not four steps later after the packages and self-test have run.
-banner "8/9  A mistyped website address is caught before anything is done"
+banner "8/10 A mistyped website address is caught before anything is done"
 bash "$HERE/test_install_site_typo.sh" | tail -4
 bash "$HERE/test_install_site_typo.sh" | grep -q "SITE TYPOS ARE CAUGHT EARLY" || FAILED=1
 
@@ -58,9 +58,18 @@ bash "$HERE/test_install_site_typo.sh" | grep -q "SITE TYPOS ARE CAUGHT EARLY" |
 # kept using the broken default. Green screens, no sound. This proves the answer
 # is SAVED and the service restarted, using a fake aplay that reproduces that
 # exact Pi (HDMI default fails with error 524, plughw:1,0 works).
-banner "9/9  A working sound output is saved, not just discovered"
+banner "9/10 A working sound output is saved, not just discovered"
 bash "$HERE/test_audio_output_saved.sh" | tail -4
 bash "$HERE/test_audio_output_saved.sh" | grep -q "THE WORKING OUTPUT IS SAVED" || FAILED=1
+
+# The owner reported the Pi "keeps turning itself off". Nothing in the installer
+# or the agent had ever switched off Wi-Fi power saving, suspend, or screen
+# blanking -- so a Pi that was working perfectly could still drop off the back
+# office and look dead. This proves the installer now switches off all three,
+# permanently and on every boot, and tidies up after itself on uninstall.
+banner "10/10 The Pi is told to stay awake and never power-save"
+bash "$HERE/test_install_keep_awake.sh" | tail -4
+bash "$HERE/test_install_keep_awake.sh" | grep -q "THE PI IS TOLD TO STAY AWAKE" || FAILED=1
 
 if [ "$FULL" = "yes" ]; then
   banner "EXTRA  Real installer + real systemd + crash recovery"

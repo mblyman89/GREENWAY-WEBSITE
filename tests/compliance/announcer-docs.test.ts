@@ -268,12 +268,16 @@ const panel = read("src/components/admin/orders/AnnouncerPanel.tsx");
 const adminCore = read("src/lib/announcer/announcer-admin-core.ts");
 const core = read("src/lib/announcer/announcer-core.ts");
 
-describe("quickstart: the installer's seven steps are quoted exactly", () => {
+describe("quickstart: the installer's eight steps are quoted exactly", () => {
   it("quotes every step banner the installer actually prints", () => {
     // Pull the step banners straight out of install.sh. If a step is renamed,
     // added or removed, the document must follow.
     const steps = [...installer.matchAll(/step "(Step \d of \d: [^"]+)"/g)].map((m) => m[1]);
-    expect(steps.length).toBe(7);
+    // Eight since the keep-awake step was added. This number is deliberately
+    // hardcoded: if a step is added or removed, someone must come here and
+    // consciously confirm the quickstart was updated too, rather than the
+    // check silently resizing itself to whatever the installer now does.
+    expect(steps.length).toBe(8);
     for (const step of steps) {
       expect(quickstart, `quickstart must quote the banner "${step}"`).toContain(step);
     }
