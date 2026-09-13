@@ -43,6 +43,32 @@
  * so plainly instead of printing a fake one.
  */
 
+/**
+ * WHO AND WHERE THIS PI ACTUALLY IS.
+ *
+ * These are not guesses and they are not the Raspberry Pi OS defaults. They
+ * are read off the shop Pi's own prompt and working directory:
+ *
+ *     greenway-office@greenway-office:~/GREENWAY-WEBSITE $ git pull
+ *     greenway-office@greenway-office:~/GREENWAY-WEBSITE $ ls -l /dev/usb/lp0
+ *     crw-rw---- 1 root lp 180, 0 Sep 12 20:10 /dev/usb/lp0
+ *
+ * The first version of this guide said `ssh pi@raspberrypi.local`, which is
+ * the factory default for a fresh Raspberry Pi OS image and is NOT this
+ * machine. Following it produces "Permission denied" or "Could not resolve
+ * hostname" at the very first step, which reads like a broken Pi rather than
+ * a wrong instruction. An instruction that cannot work is worse than no
+ * instruction, because it sends you looking for a fault that does not exist.
+ */
+export const DEFAULT_PI_USER = "greenway-office";
+export const DEFAULT_PI_HOST = "greenway-office.local";
+/**
+ * The website checkout on the Pi. `~` is deliberately NOT used in commands:
+ * `sudo` changes whose home `~` means, so a tilde inside a sudo command can
+ * resolve to /root instead of the Pi user's home. Absolute paths cannot.
+ */
+export const DEFAULT_REPO_DIR = "/home/greenway-office/GREENWAY-WEBSITE";
+
 /** One copyable command, with the reason it is being run. */
 export type PrinterSetupCommand = {
   /** Exactly what to type. Never contains a placeholder once built. */
@@ -226,6 +252,12 @@ export function buildPrinterSetupGuide(opts: {
   pollToken: string | null | undefined;
   /** True once the printer has polled us at least once. */
   hasPolled: boolean;
+  /** Login name on the Pi. Defaults to the shop's real one. */
+  piUser?: string | null;
+  /** Hostname of the Pi on the local network. */
+  piHost?: string | null;
+  /** Absolute path to the website checkout on the Pi. */
+  repoDir?: string | null;
 }): PrinterSetupSection[] {
   const site = normalizeSiteUrl(opts.siteUrl);
   const token = String(opts.pollToken ?? "").trim();
@@ -235,6 +267,17 @@ export function buildPrinterSetupGuide(opts: {
   // which is still true, and let the step text explain.
   const siteForCommands = site || "https://your-site.com";
   const tokenForCommands = hasToken ? token : "YOUR-TOKEN";
+
+  // The shop's Pi signs in as `greenway-office` and keeps the website checkout
+  // at ~/GREENWAY-WEBSITE. The guide used to say `ssh pi@raspberrypi.local`,
+  // which is the Raspberry Pi OS FACTORY default and simply is not this Pi:
+  // running it gets "Permission denied" or "host not found", on step one, to
+  // someone who has no way to know the instruction itself was wrong.
+  // These are overridable so a second Pi never forces a code change.
+  const piUser = String(opts.piUser ?? "").trim() || DEFAULT_PI_USER;
+  const piHost = String(opts.piHost ?? "").trim() || DEFAULT_PI_HOST;
+  const repoDir = String(opts.repoDir ?? "").trim() || DEFAULT_REPO_DIR;
+  const agentDir = `${repoDir}/pi-agent`;
 
   const sections: PrinterSetupSection[] = [];
 
@@ -270,7 +313,7 @@ export function buildPrinterSetupGuide(opts: {
         number: 3,
         title: "Check the Pi can see the printer",
         body:
-          "Before installing anything, confirm the Pi has actually detected the printer. Connect to the Pi and run this. If the Pi cannot see the printer now, no amount of software will help — it is a cable or power problem.",
+          "Before installing anything, confirm the Pi has actually detected the printer. Get to a terminal on the Pi (Step 5 explains both ways if you are not already there) and run this. It works from any folder.\n\nThis is the most valuable thirty seconds in the whole setup: if the Pi cannot see the printer now, no amount of software will fix it, because the problem is the cable, the power or the switch. Finding that out here saves you from blaming the install.",
         commands: [
           {
             command: "ls -l /dev/usb/lp0",
@@ -278,9 +321,9 @@ export function buildPrinterSetupGuide(opts: {
           },
         ],
         expect:
-          "A single line starting with 'crw-rw----' that ends in /dev/usb/lp0. That is the printer.",
+          "One line that looks almost exactly like this:\n\n  crw-rw---- 1 root lp 180, 0 Sep 12 20:10 /dev/usb/lp0\n\nOnly the date and time will differ. 'crw' means a character device, and 'root lp' means it belongs to the printer group — both are correct and nothing needs changing. The printer service runs with full privileges, so you do NOT need to adjust these permissions.",
         ifItGoesWrong:
-          "'No such file or directory' means the Pi cannot see it. Check the printer is switched ON, then unplug and re-plug the USB cable and try again.",
+          "'No such file or directory' means the Pi cannot see the printer. In order: check the printer's power light is on, check the switch, then unplug the USB cable and plug it back in, wait five seconds and run the command again. If it is still missing, run  lsusb  — if the printer is not in that list either, it is the cable or the power, not the Pi.",
       },
     ],
   });
@@ -317,52 +360,80 @@ export function buildPrinterSetupGuide(opts: {
     steps: [
       {
         number: 5,
-        title: "Connect to the Pi",
+        title: "Get to a terminal on the Pi",
         body:
-          "Everything from here happens on the Raspberry Pi, not on your computer. If the Pi has a screen and keyboard, just use those. Otherwise connect from your computer's terminal with SSH, replacing the name if yours differs.",
+          `Everything from here happens ON THE RASPBERRY PI, not on your laptop. There are two ways in and they are equally good.\n\nA) SITTING AT THE PI: if the Pi has its own screen and keyboard, open the Terminal app (the black screen icon in the top bar). You are already signed in as ${piUser} — there is no command to run for this, and you can skip straight to Step 6.\n\nB) FROM YOUR LAPTOP: open Terminal (Mac) or PowerShell (Windows) and run the command below. It will ask for the ${piUser} password — the one you use on the Pi itself. Nothing appears on screen while you type a password, not even dots. That is normal. Type it and press Enter.`,
         commands: [
           {
-            command: "ssh pi@raspberrypi.local",
-            purpose: "Opens a remote terminal on the Pi. It will ask for the Pi's password.",
+            command: `ssh ${piUser}@${piHost}`,
+            purpose: `Opens a terminal on the Pi from another computer. ${piUser} is this Pi's login name.`,
           },
         ],
-        expect: "A prompt that ends in something like 'pi@raspberrypi:~ $'.",
+        expect: `A prompt that reads exactly: ${piUser}@${piUser.split(".")[0]}:~ $`,
         ifItGoesWrong:
-          "If the name is not found, use the Pi's IP address instead (ssh pi@192.168.1.50). Your router's device list will show it.",
+          `"Could not resolve hostname" means the .local name is not being found on your network. Use the Pi's IP address instead — for example ssh ${piUser}@192.168.1.50. Find the address by running  hostname -I  on the Pi itself, or look in your router's device list. "Permission denied" means the password was wrong, not that anything is broken.`,
       },
       {
         number: 6,
-        title: "Run the installer",
-        body: hasToken
-          ? "This one command downloads the printer software, installs it as a background service, pairs it with this website using your real token, and starts it. It is already filled in with your live values — copy it exactly and do not edit it."
-          : "This command installs and pairs the printer software. IMPORTANT: you have not generated a token yet, so the command below still contains YOUR-TOKEN. Do Step 4 first; this guide will then fill in the real value for you.",
+        title: "Go to the folder that holds the installer",
+        body:
+          `This Pi already has a copy of the website's files at ${repoDir}. That copy includes the printer installer, so you do not have to download anything.\n\nWHY THIS MATTERS: running the installer from this folder makes it use the copy sitting right next to it. That is faster, works even if the Pi's internet is flaky, and avoids the one failure that is genuinely hard to diagnose — some web hosts answer an automated download with a security-check web page instead of the file, and the installer would otherwise be handed a web page where it expected a program.\n\nThe first command moves you into the folder. The second pulls down the newest version of everything. The third makes sure the two installer scripts are marked as runnable.`,
         commands: [
           {
-            command: `curl -fsSL ${siteForCommands}/printer/install-printer.sh | sudo bash -s -- --site ${siteForCommands} --token ${tokenForCommands}`,
-            purpose:
-              "Downloads and runs the installer, pairing this Pi with your website in one go.",
+            command: `cd ${agentDir}`,
+            purpose: `Moves you into the folder holding install-printer.sh. The prompt will change to end in "pi-agent $".`,
+          },
+          {
+            command: "git pull",
+            purpose: "Fetches the newest printer software before installing it.",
+          },
+          {
+            command: "chmod +x install-printer.sh install.sh",
+            purpose: "Marks both installers as runnable. Harmless if they already are.",
           },
         ],
         expect:
-          "A run of checks, each on its own line, ending with a success message and a test page printing by itself.",
+          `The prompt ends in "pi-agent $", and git pull says either "Already up to date." or lists files it updated. chmod prints nothing at all — that means it worked.`,
         ifItGoesWrong:
-          "If it says it cannot reach the website, check the Pi's internet. If it says the token was rejected, the token was mistyped or has since been rotated — copy it again from the Connection card.",
+          `"No such file or directory" means the website files are somewhere else on this Pi. Find them with:  ls ~  — then use that folder name instead. If the folder is missing entirely, create it with:  git clone https://github.com/mblyman89/GREENWAY-WEBSITE.git ~/GREENWAY-WEBSITE`,
       },
       {
         number: 7,
+        title: "Run the printer installer",
+        body: hasToken
+          ? `Now install it. This command is already filled in with your real website address and your real token — copy it exactly as it appears and do not retype it by hand.\n\nYou must be in the ${agentDir} folder from Step 6 for this command, because the "./" at the front means "the installer in the folder I am standing in".\n\nWHERE DOES IT INSTALL? Not into this folder, and not wherever you happen to be standing. It always installs to the same fixed places on the Pi: the program goes to /usr/local/bin/greenway-printer, its settings to /etc/greenway-printer/, and it registers a background service called greenway-printer that starts on every boot. You never need to visit those folders.\n\nIt is safe to run twice. Re-running upgrades the software in place and keeps your settings.`
+          : `IMPORTANT: you have not generated a token yet, so the command below still says YOUR-TOKEN and will not work. Go back and do Step 4 first — once the token exists this guide fills the real value in for you automatically.`,
+        commands: [
+          {
+            command: `sudo ./install-printer.sh --site ${siteForCommands} --token ${tokenForCommands}`,
+            purpose:
+              "Installs the printer service, connects it to your website, and starts it. Uses the copy in this folder, so it downloads nothing.",
+          },
+        ],
+        expect:
+          `A list of checks, each on its own line, ending with a success message — and a test receipt printing by itself.`,
+        ifItGoesWrong:
+          `"sudo: ./install-printer.sh: command not found" means you are not in the right folder — run the Step 6 commands again. "Permission denied" means chmod was skipped — run  chmod +x install-printer.sh  and try again. If it stops and says the address is missing a ':', it is telling you the website address was mistyped, and it shows you the corrected version to use.`,
+      },
+      {
+        number: 8,
         title: "Confirm it is all talking",
         body:
-          "This is the single most useful command for this printer. It reports three separate things: whether the Pi can see the printer, whether it can reach this website, and whether the token was accepted.",
+          "This is the single most useful command for this printer, and the one to run first any time something seems wrong. It reports three separate things: whether the Pi can see the printer, whether it can reach this website, and whether the token was accepted. The second command confirms the background service is running and will come back on its own after a power cut.\n\nThese two work from ANY folder — the installer put the program somewhere the Pi can always find it, so you do not need to be in pi-agent any more.",
         commands: [
           {
             command: "sudo greenway-printer status",
             purpose: "Full health check of the printer, the website link and the token.",
           },
+          {
+            command: "systemctl is-enabled greenway-printer",
+            purpose: "Confirms it will restart by itself after a reboot or power cut.",
+          },
         ],
         expect:
-          "The printer shown as found, the website reachable, and the token accepted. Back on this page, the 'Printer status' card at the top turns to Online.",
+          "The printer shown as found, the website reachable, and the token accepted. The second command prints exactly one word: enabled. Back on this page, the 'Printer status' card at the top turns to Online.",
         ifItGoesWrong:
-          "If the printer is found but the website is not reachable, it is the Pi's internet connection. If the website is reachable but the token is rejected, re-run Step 6 with the current token.",
+          "If the printer is found but the website is not reachable, it is the Pi's internet connection. If the website is reachable but the token is rejected, re-run Step 7 with the current token. If the second command says 'disabled', switch it on with:  sudo systemctl enable --now greenway-printer",
       },
     ],
   });
@@ -375,7 +446,7 @@ export function buildPrinterSetupGuide(opts: {
       "Two separate tests. Doing them in this order tells you exactly which half is broken if one fails.",
     steps: [
       {
-        number: 8,
+        number: 9,
         title: "Test the printer on its own",
         body:
           "Run this on the Pi. It prints directly and does not involve the website at all, so if this works the printer, paper, cable and power are all proven good.",
@@ -390,7 +461,7 @@ export function buildPrinterSetupGuide(opts: {
           "Paper moves but is blank: the roll is upside down. Nothing at all: check mains power and that /dev/usb/lp0 exists (Step 3).",
       },
       {
-        number: 9,
+        number: 10,
         title: "Test the whole path from this website",
         body:
           "Now prove the other half. Scroll up on this page and press 'Send test print'. That queues a receipt here, which the Pi collects on its next check. This proves website → Pi → printer end to end, and it prints a full sample receipt in exactly the same style a real order will.",
@@ -398,10 +469,10 @@ export function buildPrinterSetupGuide(opts: {
         expect:
           "A sample receipt prints within a few seconds, showing items, the tax breakdown and the totals — the same layout as a register sale.",
         ifItGoesWrong:
-          "If Step 8 printed but this does not, the printer is fine and the link is not: run 'sudo greenway-printer status' and check the queue at the bottom of this page for a failed job.",
+          "If Step 9 printed but this does not, the printer is fine and the link is not: run 'sudo greenway-printer status' and check the queue at the bottom of this page for a failed job.",
       },
       {
-        number: 10,
+        number: 11,
         title: "Turn on automatic printing",
         body:
           "Last step. In Settings on this page, make sure 'Auto-print online orders' is ticked and Paper width is set to 80mm (48 columns), then save. From then on every online pickup order prints by itself as it is placed.",
@@ -410,6 +481,89 @@ export function buildPrinterSetupGuide(opts: {
           "New online orders print automatically, and each one appears in Recent print jobs at the bottom of this page marked 'printed'.",
         ifItGoesWrong:
           "If orders appear in the queue as 'queued' and never print, the Pi is not collecting them: check 'sudo systemctl status greenway-printer' on the Pi.",
+      },
+    ],
+  });
+
+  // ── Part 5: updating a Pi that is already working ────────────────────────
+  //
+  // WHY THIS SECTION EXISTS. The always-on / keep-awake work is implemented
+  // INSIDE pi-agent/install.sh (the Wi-Fi power-save drop-in, the
+  // greenway-keep-awake service, masking sleep/suspend/hibernate, and screen
+  // blanking). `git pull` copies that script onto the Pi but does not execute
+  // a single line of it, so nothing under /usr/local/bin, /etc/systemd or
+  // /etc/NetworkManager changes until the installer is RE-RUN.
+  //
+  // That gap is invisible from the outside: the files are visibly newer, so
+  // it looks done. It is not done, and the Pi keeps dozing exactly as before.
+  sections.push({
+    id: "update",
+    title: "Part 5 — Updating a Pi that is already set up",
+    summary:
+      "Do this after a 'git pull' to actually switch on new features like keep-awake. Pulling the files is not the same as installing them.",
+    steps: [
+      {
+        number: 12,
+        title: "Understand why a git pull is not enough",
+        body:
+          "This is the step people skip, so it is spelled out rather than assumed.\n\n'git pull' downloads the newest files into the website folder on the Pi. That is all it does. The always-on features — stopping the Wi-Fi radio from dozing, blocking sleep and suspend, and stopping the screen going black — are not files sitting in that folder waiting to work. They are settings that have to be WRITTEN into the Pi's system: a service in /usr/local/bin, a unit in /etc/systemd/system, and a network setting in /etc/NetworkManager.\n\nOnly the installer writes those. Until you run it, the Pi behaves exactly as it did before the pull, while looking fully updated. There is nothing to run for this step — it is the reason for the next two.",
+        commands: [],
+        expect: null,
+        ifItGoesWrong: null,
+      },
+      {
+        number: 13,
+        title: "Re-run the announcer installer to apply always-on",
+        body:
+          `The keep-awake work lives in the ANNOUNCER installer (install.sh), not the printer one, because it was built to stop the order-announcing speaker from going quiet. It keeps the whole Pi awake, so it benefits the printer just as much.\n\nRun these in order. The first makes sure you have the newest files. The second installs a small tool the keep-awake service needs — if it is missing, the installer skips keep-awake with a warning that is easy to miss. The third applies everything.\n\nNOTICE THERE IS NO --code ON THE LAST COMMAND, AND THAT IS DELIBERATE. Re-running without a pairing code keeps your existing pairing exactly as it is; it says "Already paired - keeping the existing setup" and moves on. You do not need a new code and you will not lose anything.`,
+        commands: [
+          {
+            command: `cd ${agentDir} && git pull`,
+            purpose: "Moves to the installer folder and fetches the newest version.",
+          },
+          {
+            command: "sudo apt install -y iw",
+            purpose:
+              "Installs the wireless tool the keep-awake service uses. Quick, and harmless if already present.",
+          },
+          {
+            command: `sudo ./install.sh --site ${siteForCommands}`,
+            purpose:
+              "Re-runs the announcer installer, which applies all the always-on settings. Keeps your existing pairing.",
+          },
+        ],
+        expect:
+          `Lines confirming each piece as it is applied, including "Wi-Fi power saving disabled", "Wi-Fi radio set to stay awake, now and on every boot", "Sleep, suspend and hibernate are switched off for good", "Screen blanking turned off" and "Already paired - keeping the existing setup".`,
+        ifItGoesWrong:
+          `If you see "The 'iw' tool is missing", the second command did not work — run it on its own, watch for errors, then run the installer again. If it stops saying the address is missing a ':', it is telling you the website address was mistyped and showing you the corrected version.`,
+      },
+      {
+        number: 14,
+        title: "Prove the always-on settings actually took",
+        body:
+          "Do not take the installer's word for it — check the Pi itself. These four commands read the real system settings, so they tell you what is true right now rather than what was intended. They work from any folder.\n\nIf all four answer correctly, this Pi will not doze, will not sleep, will not blank its screen, and will bring it all back automatically after a power cut.",
+        commands: [
+          {
+            command: "systemctl is-enabled greenway-keep-awake",
+            purpose: "Confirms the keep-awake service runs on every boot.",
+          },
+          {
+            command: "systemctl is-enabled sleep.target",
+            purpose: "Confirms sleep has been blocked outright.",
+          },
+          {
+            command: "iw dev wlan0 get power_save",
+            purpose: "Asks the Wi-Fi radio directly whether it is allowed to doze.",
+          },
+          {
+            command: "systemctl status greenway-printer --no-pager",
+            purpose: "Confirms the printer service survived the update and is running.",
+          },
+        ],
+        expect:
+          "In order: the word 'enabled'; the word 'masked'; 'Power save: off'; and a block of text containing 'active (running)' in green.",
+        ifItGoesWrong:
+          "If the first says 'disabled' or 'No such file', the keep-awake service was skipped — almost always because 'iw' was missing. Install it and re-run Step 13. If the third says 'Power save: on', run  sudo /usr/local/bin/greenway-keep-awake  then check again. If wlan0 does not exist, this Pi is on a network cable and the Wi-Fi check does not apply — that is fine.",
       },
     ],
   });
@@ -447,12 +601,12 @@ export function __runVrettiSetupTests(): void {
     pollToken: "TOKEN123",
     hasPolled: true,
   });
-  ok(guide.length === 4, "guide: four parts");
+  ok(guide.length === 5, "guide: five parts");
   const allSteps = guide.flatMap((s) => s.steps);
-  ok(allSteps.length === 10, "guide: ten steps");
+  ok(allSteps.length === 14, "guide: fourteen steps");
   ok(
     allSteps.every((s, i) => s.number === i + 1),
-    "guide: step numbers run 1..10 with no gaps",
+    "guide: step numbers run 1..14 with no gaps",
   );
   ok(
     allSteps.every((s) => s.title.trim().length > 0 && s.body.trim().length > 0),
@@ -489,15 +643,38 @@ export function __runVrettiSetupTests(): void {
   );
 
   // -- The installer command matches the real installer's flags -------------
-  const installCmd = commands.find((c) => c.includes("install-printer.sh"));
+  //
+  // The guide runs the installer from the git clone that is already on the Pi
+  // (`sudo ./install-printer.sh`) rather than piping curl into bash. That is
+  // not cosmetic. install-printer.sh looks for greenway_printer.py next to
+  // itself first, so running it from pi-agent/ downloads nothing at all --
+  // which removes the failure both installers explicitly guard against, where
+  // a security gateway answers an automated download with an HTML CAPTCHA
+  // page and the installer is handed a web page instead of a program.
+  // Anchored: "chmod +x install-printer.sh" also contains that filename, and
+  // matching it instead would test the wrong line entirely.
+  const installCmd = commands.find((c) => c.startsWith("sudo ./install-printer.sh"));
   ok(installCmd != null, "guide: the installer command is present");
   if (installCmd) {
     ok(installCmd.includes("--site "), "installer: passes --site");
     ok(installCmd.includes("--token "), "installer: passes --token");
     ok(!installCmd.includes("--code"), "installer: does NOT pass --code (that is the announcer)");
-    ok(installCmd.includes("/printer/install-printer.sh"), "installer: correct download path");
-    ok(installCmd.includes("sudo bash -s --"), "installer: runs with sudo via bash -s");
+    ok(installCmd.startsWith("sudo ./install-printer.sh"), "installer: run from the local clone");
+    ok(!installCmd.includes("curl"), "installer: does not pipe a download into a shell");
   }
+  // Running "./install-printer.sh" only works from the folder that holds it,
+  // so the guide MUST have told you to go there first, and with an absolute
+  // path -- `~` expands to /root under sudo, not to the Pi user's home.
+  const cdCmd = commands.find((c) => c.startsWith("cd /"));
+  ok(cdCmd != null, "guide: says which folder to be in before ./install-printer.sh");
+  ok(
+    cdCmd != null && cdCmd.includes("/pi-agent"),
+    "guide: that folder is the one holding the installer",
+  );
+  ok(
+    commands.every((c) => !c.includes("cd ~") && !c.includes(" ~/")),
+    "guide: no tilde paths (sudo would resolve ~ to /root)",
+  );
 
   // -- Missing token: say so, never fake it ---------------------------------
   const noToken = buildPrinterSetupGuide({
@@ -517,10 +694,14 @@ export function __runVrettiSetupTests(): void {
     noTokenCmds.some((c) => c.includes("YOUR-TOKEN")),
     "no token: the placeholder is visible rather than a fabricated token",
   );
-  const installStepNoToken = noTokenSteps.find((s) => s.number === 6);
+  // Found by the command it carries, not by a hardcoded number: renumbering
+  // the guide must not be able to silently point this check at another step.
+  const installStepNoToken = noTokenSteps.find((s) =>
+    s.commands.some((c) => c.command.startsWith("sudo ./install-printer.sh")),
+  );
   ok(
     installStepNoToken != null && /have not generated a token/i.test(installStepNoToken.body),
-    "no token: step 6 warns the command is not yet runnable",
+    "no token: the install step warns the command is not yet runnable",
   );
   ok(
     !noTokenCmds.some((c) => /--token\s+(null|undefined|""|'')/.test(c)),
@@ -639,7 +820,14 @@ export function __runVrettiSetupTests(): void {
       .flatMap((s) => s.steps)
       .flatMap((s) => s.commands),
   ]) {
-    if (/\bsystemctl\b/.test(entry.command) || /\bjournalctl\b/.test(entry.command)) {
+    // Scoped to commands that are ABOUT the printer service. The guide also
+    // drives greenway-keep-awake and reads sleep.target, and demanding the
+    // printer's name in those would be demanding a wrong command.
+    const isServiceCmd =
+      /\bsystemctl\b/.test(entry.command) || /\bjournalctl\b/.test(entry.command);
+    const namesAnotherUnit =
+      /greenway-keep-awake|sleep\.target|suspend\.target|hibernate\.target/.test(entry.command);
+    if (isServiceCmd && !namesAnotherUnit) {
       ok(
         /\bgreenway-printer\b/.test(entry.command),
         `service command names the greenway-printer unit exactly: ${entry.command}`,
@@ -662,14 +850,98 @@ export function __runVrettiSetupTests(): void {
     "troubleshooting: covers the device-missing case",
   );
 
-  // -- Every step that can be verified tells you what to expect -------------
+  // -- The Pi is THIS Pi, not a factory-default one -------------------------
+  //
+  // The first version of this guide said `ssh pi@raspberrypi.local`. That is
+  // the Raspberry Pi OS default and is not the shop's machine, whose own
+  // prompt reads `greenway-office@greenway-office:~/GREENWAY-WEBSITE $`.
+  // Following it fails at the first step in a way that looks like broken
+  // hardware rather than a wrong instruction.
+  const sshCmd = commands.find((c) => c.startsWith("ssh "));
+  ok(sshCmd != null, "guide: tells you how to reach the Pi");
   ok(
-    allSteps.filter((s) => s.expect != null).length === allSteps.length,
-    "guide: every step says what you should see",
+    sshCmd != null && sshCmd.includes(DEFAULT_PI_USER),
+    "guide: SSH uses the real login name on this Pi",
   );
   ok(
-    allSteps.filter((s) => s.ifItGoesWrong != null).length === allSteps.length,
-    "guide: every step says what to do when it fails",
+    commands.every((c) => !/\bpi@raspberrypi\b/.test(c)),
+    "guide: never uses the factory-default pi@raspberrypi",
+  );
+
+  // -- Directory guidance is explicit and absolute --------------------------
+  ok(
+    commands.some((c) => c === `cd ${DEFAULT_REPO_DIR}/pi-agent`),
+    "guide: names the exact folder to stand in",
+  );
+  const guideBlob = JSON.stringify(guide);
+  ok(
+    guideBlob.includes("/usr/local/bin/greenway-printer"),
+    "guide: says where the software actually installs to",
+  );
+  ok(
+    guideBlob.includes("/etc/greenway-printer"),
+    "guide: says where the settings actually live",
+  );
+
+  // -- Updating an existing Pi ----------------------------------------------
+  //
+  // The keep-awake work lives INSIDE install.sh, so `git pull` copies it
+  // without applying any of it. A guide that does not say so leaves a Pi that
+  // looks updated and behaves exactly as it did before.
+  const updateSection = guide.find((s) => s.id === "update");
+  ok(updateSection != null, "guide: has a section for updating an existing Pi");
+  ok(
+    updateSection != null && /git pull/i.test(JSON.stringify(updateSection)),
+    "guide: the update section explains the git pull gap",
+  );
+  const updateCmds = (updateSection?.steps ?? []).flatMap((s) =>
+    s.commands.map((c) => c.command),
+  );
+  ok(
+    updateCmds.some((c) => c.startsWith("sudo ./install.sh")),
+    "update: re-runs the announcer installer, which is what applies keep-awake",
+  );
+  ok(
+    updateCmds.every((c) => !c.includes("--code")),
+    "update: never asks for a pairing code (re-running keeps the existing pairing)",
+  );
+  ok(
+    updateCmds.some((c) => c.includes("apt install -y iw")),
+    "update: installs the tool keep-awake needs, or it is silently skipped",
+  );
+  ok(
+    updateCmds.some((c) => c.includes("systemctl is-enabled greenway-keep-awake")),
+    "update: proves keep-awake took, rather than trusting the installer",
+  );
+
+  // -- Every step that DOES something tells you what to expect --------------
+  // Scoped to steps with commands on purpose. One step is pure explanation
+  // (why a git pull does not apply the always-on settings); demanding an
+  // "expect" from a step that asks you to do nothing would only invite a
+  // fabricated one, and a made-up expectation is worse than none.
+  const doingSteps = allSteps.filter((s) => s.commands.length > 0);
+  ok(doingSteps.length >= 8, "guide: most steps are things you actually run");
+  ok(
+    doingSteps.filter((s) => s.expect != null).length === doingSteps.length,
+    "guide: every step with a command says what you should see",
+  );
+  ok(
+    doingSteps.filter((s) => s.ifItGoesWrong != null).length === doingSteps.length,
+    "guide: every step with a command says what to do when it fails",
+  );
+  // A step can have no command and still be a step you can get WRONG -- "load
+  // the paper" is the clearest example, and "paper in upside down" is the most
+  // common fault on a thermal printer there is. Exactly ONE step in this guide
+  // is pure explanation with nothing to do and nothing to get wrong; every
+  // other step, command or not, must carry its own troubleshooting.
+  const explainOnly = allSteps.filter((s) => s.ifItGoesWrong == null);
+  ok(
+    explainOnly.length === 1,
+    `guide: exactly one step is pure explanation (found ${explainOnly.length})`,
+  );
+  ok(
+    explainOnly.every((s) => s.commands.length === 0 && s.expect == null),
+    "guide: the explanation-only step genuinely asks you to do nothing",
   );
 
   console.log(`vretti-setup-core: ${pass} passed, ${fail} failed`);

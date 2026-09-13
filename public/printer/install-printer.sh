@@ -88,6 +88,54 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# ---------------------------------------------------------------------------
+# Check the website address IMMEDIATELY, before anything else happens.
+#
+# "https//site.com" -- with the colon missing -- is easy to type and easy to
+# stare straight past, because the eye reads the word "https" and moves on.
+# The announcer installer has caught this since it shipped; this one did not,
+# and the difference is not academic. Without this check the bad address is
+# carried all the way to:
+#
+#     DL_URL="https//site.com/printer/greenway_printer.py"
+#
+# which curl does not treat as a URL at all -- there is no scheme, so it is a
+# RELATIVE PATH. The failure surfaces minutes later as a download error that
+# says nothing about the missing colon, on a Pi, to someone who has no reason
+# to suspect their own typing. Catch it here, quote it back, and correct it.
+# ---------------------------------------------------------------------------
+if [ -n "$SITE" ]; then
+  case "$SITE" in
+    https://?*|http://?*)
+      : ;;
+    https//*|http//*)
+      SCHEME="${SITE%%//*}"
+      die "The website address is missing the ':' after '$SCHEME'.
+
+  You typed:  $SITE
+  You want:   ${SCHEME}://${SITE#*//}
+
+  Nothing has been changed. Fix the address and run the same command again." ;;
+    https:/*|http:/*)
+      SCHEME="${SITE%%:*}"
+      die "The website address has only one '/' after '${SCHEME}:'.
+
+  You typed:  $SITE
+  You want:   ${SCHEME}://${SITE#*:/}
+
+  Nothing has been changed. Fix the address and run the same command again." ;;
+    *)
+      die "'$SITE' does not look like a web address.
+
+  It needs to start with https:// (or http:// for a local test), like:
+    --site https://your-site.com
+
+  You typed:  $SITE
+
+  Nothing has been changed. Fix the address and run the same command again." ;;
+  esac
+fi
+
 [ "$(id -u)" -eq 0 ] || die "This needs to run with sudo. Try again with: sudo $0 ..."
 
 # ---------------------------------------------------------------------------

@@ -133,8 +133,34 @@ apply_mutant "the word null is carried into the install command" \
 apply_mutant "the announcer flag --code is used on the printer installer" \
   "$(subject_only '$a =~ s{--token \$\{tokenForCommands\}}{--code \$\{tokenForCommands\}};')"
 
-apply_mutant "the installer is fetched from the announcer path" \
-  "$(subject_only '$a =~ s{/printer/install-printer\.sh}{/announcer/install.sh};')"
+apply_mutant "the printer step runs the announcer installer instead" \
+  "$(subject_only '$a =~ s{sudo \./install-printer\.sh --site}{sudo ./install.sh --site};')"
+
+# The guide deliberately runs the installer from the clone already on the Pi,
+# because install-printer.sh then uses the copy sitting next to it and
+# downloads nothing -- sidestepping the CAPTCHA/HTML-gateway failure both
+# installers guard against. Reverting to curl-pipe-bash must not go unnoticed.
+apply_mutant "the install reverts to piping a download straight into a shell" \
+  "$(subject_only '$a =~ s{sudo \./install-printer\.sh --site \$\{siteForCommands\}}{curl -fsSL \$\{siteForCommands\}/printer/install-printer.sh | sudo bash -s -- --site \$\{siteForCommands\}};')"
+
+# `./install-printer.sh` only resolves from the folder that holds it.
+apply_mutant "the guide stops saying which folder to stand in" \
+  "$(subject_only '$a =~ s{command: \`cd \$\{agentDir\}\`,}{command: \"pwd\",};')"
+
+# `~` belongs to root under sudo, not to the Pi user.
+apply_mutant "a tilde path is used where sudo would resolve it to /root" \
+  "$(subject_only '$a =~ s{const agentDir = \`\$\{repoDir\}/pi-agent\`;}{const agentDir = \"~/GREENWAY-WEBSITE/pi-agent\";};')"
+
+# The shop Pi is not a factory-default Pi.
+apply_mutant "the SSH step goes back to the factory-default pi@raspberrypi" \
+  "$(subject_only '$a =~ s{export const DEFAULT_PI_USER = \"greenway-office\";}{export const DEFAULT_PI_USER = \"pi\";}; $a =~ s{export const DEFAULT_PI_HOST = \"greenway-office\.local\";}{export const DEFAULT_PI_HOST = \"raspberrypi.local\";};')"
+
+# Keep-awake lives inside install.sh, so a git pull alone applies nothing.
+apply_mutant "the update section stops re-running the installer that applies keep-awake" \
+  "$(subject_only '$a =~ s{command: \`sudo \./install\.sh --site \$\{siteForCommands\}\`,}{command: \"git pull\",};')"
+
+apply_mutant "the update section stops verifying that keep-awake took" \
+  "$(subject_only '$a =~ s{command: \"systemctl is-enabled greenway-keep-awake\",}{command: \"systemctl is-enabled greenway-printer\",};')"
 
 apply_mutant "a subcommand the agent does not implement is handed out" \
   "$(subject_only '$a =~ s{sudo greenway-printer status}{sudo greenway-printer diagnose};')"
