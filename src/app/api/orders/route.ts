@@ -236,6 +236,19 @@ export async function POST(request: Request) {
           quantity: l.quantity,
           priceMinorUnits: l.priceMinorUnits,
         })),
+        // VRETTI SLICE: the pickup receipt is now rendered in the register's
+        // style, which prints a per-item detail line (brand, size, potency,
+        // the deal that saved them money) and itemizes the cannabis excise
+        // separately from retail sales tax as RCW 69.50.535(1)(a) requires.
+        // All of this is data the server ALREADY computed and persisted above
+        // — it was simply being dropped at this boundary. Positionally
+        // aligned with `lines`.
+        lineExtras: input.lines.map((l) => ({
+          category: l.category ?? null,
+          regularPriceMinorUnits: l.regularPriceMinorUnits ?? null,
+          unitGrams: l.unitGrams ?? null,
+          unitThcMg: l.unitThcMg ?? null,
+        })),
         subtotalMinorUnits: input.subtotalMinorUnits,
         savingsMinorUnits: input.savingsMinorUnits,
         estimatedTaxMinorUnits: input.estimatedTaxMinorUnits,

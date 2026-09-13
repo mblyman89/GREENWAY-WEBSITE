@@ -16,11 +16,13 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import {
   updatePrinterSettings,
+  getPrinterSettings,
   queueJob,
   cancelJob,
   requeueJob,
-  formatReceipt,
 } from "@/lib/printing/printer-store";
+import { buildTestPrintBody } from "@/lib/printing/receipt-escpos-core";
+import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 
 // Revalidate the equipment route; redirect back to the printer tab.
 const REVALIDATE = "/admin/equipment";
@@ -90,19 +92,21 @@ export async function rotatePollTokenAction(): Promise<void> {
 export async function testPrintAction(): Promise<void> {
   const session = await requirePermission("settings.manage");
 
-  const body = formatReceipt({
-    orderNumber: "TEST-PRINT",
-    placedAt: new Date().toISOString(),
-    customerName: "Test Receipt",
-    lines: [
-      { productName: "Sample item A", brand: "Greenway", variantLabel: "1g", quantity: 1, priceMinorUnits: 1000 },
-      { productName: "Sample item B", brand: "Greenway", variantLabel: "10pk", quantity: 2, priceMinorUnits: 1500 },
-    ],
-    subtotalMinorUnits: 4000,
-    savingsMinorUnits: 0,
-    estimatedTaxMinorUnits: 1480,
-    totalMinorUnits: 5480,
-    customerNote: "This is a CloudPRNT test print.",
+  // The test print goes through the SAME renderer a real order does, using the
+  // owner's real header/footer/address and the real paper width, so "the test
+  // print looked right" is genuine evidence that receipts will look right.
+  const settings = await getPrinterSettings();
+  let config: Awaited<ReturnType<typeof getPosReceiptConfig>> | null = null;
+  try {
+    config = await getPosReceiptConfig();
+  } catch {
+    config = null;
+  }
+  const body = buildTestPrintBody({
+    columns: settings?.paper_columns,
+    headerText: settings?.header_text ?? config?.headerText ?? null,
+    footerText: settings?.footer_text ?? config?.footerText ?? null,
+    addressText: config?.addressText ?? null,
   });
 
   const id = await queueJob({ bodyText: body, title: "Test print" });
