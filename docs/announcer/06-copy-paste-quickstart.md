@@ -202,7 +202,7 @@ What each part is doing, because every piece matters:
 
 ## Step 7 — Watch it work
 
-It takes about two minutes and prints seven steps. It starts with:
+It takes about two minutes and prints eight steps. It starts with:
 
 ```
 Greenway Order Announcer - installer
@@ -212,13 +212,14 @@ This takes about two minutes. You can leave it running.
 Then, in order:
 
 ```
-==> Step 1 of 7: checking this Raspberry Pi
-==> Step 2 of 7: installing the pieces it needs
-==> Step 3 of 7: installing the announcer program
-==> Step 4 of 7: checking the program is healthy
-==> Step 5 of 7: connecting this speaker to your website
-==> Step 6 of 7: setting it to start automatically, forever
-==> Step 7 of 7: making sure it really is running
+==> Step 1 of 8: checking this Raspberry Pi
+==> Step 2 of 8: installing the pieces it needs
+==> Step 3 of 8: installing the announcer program
+==> Step 4 of 8: checking the program is healthy
+==> Step 5 of 8: connecting this speaker to your website
+==> Step 6 of 8: setting it to start automatically, forever
+==> Step 7 of 8: keeping this Pi awake and online
+==> Step 8 of 8: making sure it really is running
 ```
 
 Along the way you will see lines beginning `OK`, including
@@ -226,6 +227,24 @@ Along the way you will see lines beginning `OK`, including
 `This speaker is paired`, `Service installed, enabled at boot, and started`,
 `Log size capped at 50MB to protect the SD card`, and finally
 `The announcer is running right now`.
+
+Step 7 is the one that stops the Pi going quiet on you. It exists because "the
+Pi keeps turning itself off" is almost never the Pi switching off. It is either
+the Wi-Fi radio dozing to save power -- the Pi is fine, but the website stops
+hearing from it and marks it offline -- or the screen blanking, which looks
+dead and is not. Step 7 switches off all three causes permanently, so they stay
+off after every reboot. It prints:
+
+```
+OK  Wi-Fi power saving disabled for NetworkManager
+OK  Wi-Fi radio set to stay awake, now and on every boot
+OK  Sleep, suspend and hibernate are switched off for good
+OK  Screen blanking turned off (a black screen is not a Pi that is off)
+```
+
+If this Pi is on Wi-Fi and you see a warning that `The 'iw' tool is missing`,
+run `sudo apt install -y iw` and then re-run the installer. Everything else
+will already be done, so it only takes a moment.
 
 **When it finishes you will see:**
 
@@ -245,7 +264,7 @@ is doing that it holds a lock that Step 2 needs. Step 2 now tells you what it is
 doing and gives up on its own rather than waiting forever, so you should see
 lines like `Refreshing the software list (up to 2 minutes)...` underneath it.
 
-If you are staring at `==> Step 2 of 7: installing the pieces it needs` with
+If you are staring at `==> Step 2 of 8: installing the pieces it needs` with
 nothing under it and nothing changing:
 
 1. Press `Ctrl` and `C` together to stop the installer. Nothing permanent has

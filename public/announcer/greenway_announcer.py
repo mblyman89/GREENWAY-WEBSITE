@@ -385,6 +385,132 @@ def restart_service_command() -> List[str]:
     return ["systemctl", "restart", SERVICE_NAME]
 
 
+def describe_uptime(seconds: Optional[float]) -> str:
+    """
+    Turn /proc/uptime into a sentence a shop owner can act on.
+
+    WHY THIS EXISTS
+    ---------------
+    A shop reported "the pi keeps turning itself off after a little bit of
+    time". That one sentence covers two completely different faults with
+    opposite fixes:
+
+      * The Pi really is REBOOTING (bad power supply, loose cable). Uptime
+        resets to near zero every time.
+      * The Pi is fine and only its Wi-Fi radio is dozing, so the website
+        marks it offline. Uptime keeps climbing right through the "outage".
+
+    Guessing between those wastes a week. Uptime tells you which, for free,
+    and it is the first thing status prints about staying awake.
+    """
+    if seconds is None or seconds < 0:
+        return "unknown"
+    total = int(seconds)
+    days, rem = divmod(total, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes = rem // 60
+    if days > 0:
+        return f"{days}d {hours}h {minutes}m"
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
+def read_uptime_seconds(proc_uptime: Path = Path("/proc/uptime")) -> Optional[float]:
+    """Seconds since boot, or None if it cannot be read. Never raises."""
+    try:
+        first = proc_uptime.read_text(encoding="utf-8").split()[0]
+        return float(first)
+    except Exception:
+        return None
+
+
+def judge_uptime(seconds: Optional[float]) -> Tuple[bool, str]:
+    """
+    (looks_healthy, sentence). A Pi that has been up for minutes when the shop
+    has been open for hours has been restarting itself, and that is hardware.
+    """
+    if seconds is None:
+        return True, "Up for: unknown (could not read /proc/uptime)"
+    line = f"Up for: {describe_uptime(seconds)}"
+    if seconds < 900:
+        return False, (
+            f"{line}\n"
+            "    This Pi started less than 15 minutes ago. If you did not just\n"
+            "    restart it, it is LOSING POWER - that is the power supply or\n"
+            "    the cable, not software. Swap the supply before anything else."
+        )
+    return True, line
+
+
+def wireless_interfaces(net_dir: Path = Path("/sys/class/net")) -> List[str]:
+    """Every wireless interface on this box. Empty list on a wired-only Pi."""
+    found: List[str] = []
+    try:
+        for entry in sorted(net_dir.iterdir()):
+            if (entry / "wireless").exists():
+                found.append(entry.name)
+    except Exception:
+        return []
+    return found
+
+
+def power_save_state(iface: str) -> str:
+    """
+    "off", "on", or "unknown" for one interface. Never raises.
+
+    Parsed from `iw dev <iface> get power_save`, which prints a line like
+    "Power save: off". Anything unexpected is reported as unknown rather than
+    guessed at, because claiming power saving is off when it is not is exactly
+    how a speaker looks healthy and stays unreachable.
+    """
+    if not shutil.which("iw"):
+        return "unknown"
+    try:
+        result = subprocess.run(
+            ["iw", "dev", iface, "get", "power_save"],
+            capture_output=True,
+            timeout=10,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return "unknown"
+    text = (result.stdout or b"").decode("utf-8", "replace").lower()
+    if "power save: off" in text:
+        return "off"
+    if "power save: on" in text:
+        return "on"
+    return "unknown"
+
+
+def keep_awake_report(interfaces: List[str], states: Dict[str, str]) -> Tuple[bool, List[str]]:
+    """
+    PURE. (all_good, lines) describing whether this Pi will stay reachable.
+
+    Separated from the commands that read the hardware so it can be tested
+    without a radio: the judgement is the part that must not be wrong.
+    """
+    if not interfaces:
+        return True, ["Wi-Fi: none found (wired network - nothing to keep awake)"]
+
+    lines: List[str] = []
+    all_good = True
+    for iface in interfaces:
+        state = states.get(iface, "unknown")
+        if state == "off":
+            lines.append(f"Wi-Fi {iface}: power saving OFF - good, it will stay reachable")
+        elif state == "on":
+            all_good = False
+            lines.append(
+                f"Wi-Fi {iface}: power saving is ON - the radio dozes, so the website\n"
+                f"    will show this speaker offline even though the Pi is fine.\n"
+                f"    Fix it now:  sudo /usr/local/bin/greenway-keep-awake\n"
+                f"    Or re-run the installer, which sets it permanently."
+            )
+        else:
+            lines.append(f"Wi-Fi {iface}: power saving unknown (the 'iw' tool is missing)")
+    return all_good, lines
+
+
 def restart_service() -> Tuple[bool, str]:
     """
     Restart the background service so a saved setting takes effect now.
@@ -1449,6 +1575,18 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"  device id: {config['deviceId']}")
     print(f"  audio out: {config.get('audioDevice') or '(system default)'}")
 
+    # "The Pi keeps turning itself off" is one of the most common reports and
+    # one of the least precise. These two lines separate the two causes before
+    # anybody starts replacing things: uptime says whether it really restarted,
+    # and the radio's power-save state says whether it only LOOKED offline.
+    print("\nStaying awake:")
+    _, uptime_line = judge_uptime(read_uptime_seconds())
+    print(f"  {uptime_line}")
+    ifaces = wireless_interfaces()
+    _, awake_lines = keep_awake_report(ifaces, {i: power_save_state(i) for i in ifaces})
+    for line in awake_lines:
+        print(f"  {line}")
+
     print("\nChecking the connection to the website ...")
     session = requests.Session()
     session.headers.update(
@@ -1738,6 +1876,60 @@ def selftest() -> int:
         restart_service_command(),
         ["systemctl", "restart", "greenway-announcer"],
     )
+
+    # -- "the pi keeps turning itself off" -----------------------------------
+    # Two different faults hide behind that one sentence, with opposite fixes:
+    # a Pi that really reboots (power supply) versus a Pi whose Wi-Fi radio
+    # dozes so the website calls it offline (power saving). Telling them apart
+    # is the whole job; getting it wrong sends a shop to buy the wrong part.
+    eq("uptime: minutes are readable", describe_uptime(600), "10m")
+    eq("uptime: hours are readable", describe_uptime(7200), "2h 0m")
+    eq("uptime: days are readable", describe_uptime(90000), "1d 1h 0m")
+    eq("uptime: unreadable is said, never invented", describe_uptime(None), "unknown")
+    eq("uptime: nonsense is not dressed up as a number", describe_uptime(-5), "unknown")
+    ok("uptime: a long-running Pi is reported healthy", judge_uptime(86400)[0])
+    ok("uptime: a Pi up 2 minutes is NOT called healthy", not judge_uptime(120)[0])
+    ok(
+        "uptime: a short uptime blames the power supply, not the software",
+        "power supply" in judge_uptime(120)[1].lower(),
+    )
+    ok(
+        "uptime: an unreadable uptime is not reported as a fault",
+        judge_uptime(None)[0],
+    )
+
+    # A wired Pi has no radio and must not be told it has a Wi-Fi problem.
+    wired_ok, wired_lines = keep_awake_report([], {})
+    ok("keep awake: a wired Pi is fine and says so", wired_ok)
+    ok("keep awake: a wired Pi is never given a Wi-Fi fix", "wired" in wired_lines[0].lower())
+
+    good_ok, good_lines = keep_awake_report(["wlan0"], {"wlan0": "off"})
+    ok("keep awake: power saving off is reported as good", good_ok)
+    ok("keep awake: it says which interface", "wlan0" in good_lines[0])
+
+    bad_ok, bad_lines = keep_awake_report(["wlan0"], {"wlan0": "on"})
+    ok("keep awake: power saving ON is a fault, not a note", not bad_ok)
+    ok(
+        "keep awake: the fault explains the speaker looks offline while the Pi is fine",
+        "offline" in bad_lines[0].lower(),
+    )
+    ok(
+        "keep awake: the fault carries the command that fixes it",
+        "greenway-keep-awake" in bad_lines[0],
+    )
+
+    unknown_ok, unknown_lines = keep_awake_report(["wlan0"], {"wlan0": "unknown"})
+    ok(
+        "keep awake: unknown is never claimed to be off",
+        "off - good" not in unknown_lines[0],
+    )
+    ok("keep awake: unknown is not reported as a fault either", unknown_ok)
+
+    multi_ok, multi_lines = keep_awake_report(
+        ["wlan0", "wlan1"], {"wlan0": "off", "wlan1": "on"}
+    )
+    eq("keep awake: every interface is reported", len(multi_lines), 2)
+    ok("keep awake: one bad radio makes the whole verdict bad", not multi_ok)
 
     # -- stale install: 'git pull' does not update the installed program ------
     with tempfile.TemporaryDirectory() as tmp:
