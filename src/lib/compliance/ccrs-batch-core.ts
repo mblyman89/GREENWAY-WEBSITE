@@ -16,7 +16,7 @@
  * The generators that read the database live in ccrs-batch.ts (server-only);
  * they call into the assemblers here so the spec stays in one factual place.
  */
-import { pacificDayKey } from "@/lib/reports/timezone";
+import { pacificDayKey, pacificParts } from "@/lib/reports/timezone";
 import {
   validateLicenseNumber,
   checkSaleIdentifierIntegrity,
@@ -598,12 +598,27 @@ export function ccrsDate(iso: string | Date): string {
   return `${mm}/${dd}/${yyyy}`;
 }
 
-/** YYYYMMDDHHMMSS timestamp for the file name (UTC). */
+/**
+ * YYYYMMDDHHMMSS timestamp for the file name, in the **Pacific** wall clock.
+ *
+ * CCRS bible slice S-01 / gap N-05. The LCB FAQ is explicit:
+ *   "the file name should be referenced in PST"   [FAQ L0075]
+ * and the naming convention itself is
+ *   UploadType_LicenseNumber_YYYYMMDDHHMMSS       [G L0046]
+ *
+ * This used `getUTC*`. A batch generated after ~5 PM Pacific was therefore named
+ * with TOMORROW's date while the file's own `SubmittedDate` row (ccrsDate, which
+ * has always been Pacific) said today — two different days inside one upload,
+ * and a file name that disagrees with the week it belongs to.
+ *
+ * DST is handled by the shared Intl-based helper (`pacificParts`), so PST/PDT
+ * resolve correctly for any instant; no fixed offset is used anywhere.
+ */
 export function ccrsFileStamp(now: Date = new Date()): string {
+  const t = pacificParts(now); // America/Los_Angeles wall clock
   const p = (n: number, w = 2) => String(n).padStart(w, "0");
   return (
-    `${now.getUTCFullYear()}${p(now.getUTCMonth() + 1)}${p(now.getUTCDate())}` +
-    `${p(now.getUTCHours())}${p(now.getUTCMinutes())}${p(now.getUTCSeconds())}`
+    `${t.year}${p(t.month)}${p(t.day)}` + `${p(t.hour)}${p(t.minute)}${p(t.second)}`
   );
 }
 
@@ -649,6 +664,43 @@ export function assembleCcrsFile(opts: {
     lines.push(padded.join(","));
   }
   return lines.join("\r\n") + "\r\n";
+}
+
+/**
+ * Pad the three header rows out to the file's column count with commas, exactly
+ * as the LCB's own downloadable templates do:
+ *
+ *   SubmittedBy,<value>,,,,,      [TPL <File> R1]
+ *   SubmittedDate,<value>,,,,,    [TPL <File> R2]
+ *   NumberRecords,<value>,,,,,    [TPL <File> R3]
+ *
+ * CCRS bible slice S-01 / gap N-04, UNVERIFIED item **U-03**.
+ *
+ * The Upload User Guide describes the three header rows [G L0209-L0253] but does
+ * NOT say whether the trailing commas are required, and CCRS reports failures
+ * only by email [G L0051] — so we cannot learn the answer from production
+ * without risking a rejected week. Until PREproduction settles it (Part 06
+ * T-10 vs T-11), the batch keeps emitting the UNPADDED shape it has always
+ * emitted and this helper stays opt-in. Do NOT wire it into the default path,
+ * and do NOT regenerate the golden files, until U-03 is closed with evidence.
+ *
+ * PURE. Idempotent. Never touches the column row, the data rows, the values, or
+ * the CRLF endings.
+ */
+export function padHeaderRowsForTemplates(
+  type: CcrsRetailerFileType,
+  csv: string,
+): string {
+  const width = CCRS_COLUMNS[type].length;
+  const hadTrailingCrLf = csv.endsWith("\r\n");
+  const lines = (hadTrailingCrLf ? csv.slice(0, -2) : csv).split("\r\n");
+  if (lines.length < 3) return csv; // malformed; verifyCcrsFile will say so
+  for (let i = 0; i < 3; i += 1) {
+    const cells = lines[i].split(",");
+    if (cells.length >= width) continue; // already padded (idempotent)
+    lines[i] = lines[i] + ",".repeat(width - cells.length);
+  }
+  return lines.join("\r\n") + (hadTrailingCrLf ? "\r\n" : "");
 }
 
 /* ------------------------------------------------------------------ *
@@ -971,8 +1023,13 @@ export function __runCcrsBatchCoreTests(): void {
   assert(CCRS_UPLOAD_ORDER.length === 7, "7 retailer files");
 
   // File name shape.
+  // The stamp is PACIFIC wall-clock, not UTC [FAQ L0075: "file name should be
+  // referenced in PST"]. 2025-01-02 03:04:05 UTC is 2025-01-01 19:04:05 in
+  // America/Los_Angeles (PST, UTC-8), so the stamp is 20250101190405 — it
+  // intentionally lands on the PREVIOUS calendar day. Do not "correct" this
+  // back to the UTC value; see tests/compliance/ccrs-file-stamp.test.ts.
   const name = ccrsFileName("Inventory", "123456", new Date(Date.UTC(2025, 0, 2, 3, 4, 5)));
-  assert(name === "Inventory_123456_20250102030405.csv", "file name shape: " + name);
+  assert(name === "Inventory_123456_20250101190405.csv", "file name shape: " + name);
   const blank = ccrsFileName("Sale", "");
   assert(blank.startsWith("Sale_LICENSE_"), "blank license file name: " + blank);
 

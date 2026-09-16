@@ -1,10 +1,10 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-09-15 23:59Z at commit `c1ca753f369e8e694c682705b3872858c48ec236` by `build_atlas_part.py`.
+Generated 2026-09-16 00:16Z at commit `b90851dc69ccb1191a1a5de68b20c27f3771b37d` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff c1ca753 -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff b90851d -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
@@ -17,7 +17,7 @@ Generated 2026-09-15 23:59Z at commit `c1ca753f369e8e694c682705b3872858c48ec236`
 - L64: `export type CcrsBatch = {`
 - L424: `export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {`
 
-### `src/lib/compliance/ccrs-batch-core.ts` (1247 L)
+### `src/lib/compliance/ccrs-batch-core.ts` (1304 L)
 
 - L27: `export type CcrsRetailerFileType =`
 - L37: `export const CCRS_COLUMNS: Record<CcrsRetailerFileType, readonly string[]> = {`
@@ -44,16 +44,17 @@ Generated 2026-09-15 23:59Z at commit `c1ca753f369e8e694c682705b3872858c48ec236`
 - L570: `export function uploadGroupOf(type: CcrsRetailerFileType): number {`
 - L582: `export function ccrsCell(v: unknown): string {`
 - L595: `export function ccrsDate(iso: string | Date): string {`
-- L602: `export function ccrsFileStamp(now: Date = new Date()): string {`
-- L615: `export function ccrsFileName(`
-- L632: `export function assembleCcrsFile(opts: {`
-- L676: `export function verifySaleNumericColumns(rows: ReadonlyArray<readonly string[]>): CcrsBatchProblem[] {`
-- L713: `export type CcrsBatchProblem = {`
-- L719: `export type CcrsBatchVerification = {`
-- L730: `export function splitCsvLine(line: string): string[] {`
-- L776: `export function verifyCcrsFile(`
-- L913: `export function verifyCcrsBatch(`
-- L930: `export function __runCcrsBatchCoreTests(): void {`
+- L617: `export function ccrsFileStamp(now: Date = new Date()): string {`
+- L630: `export function ccrsFileName(`
+- L647: `export function assembleCcrsFile(opts: {`
+- L690: `export function padHeaderRowsForTemplates(`
+- L728: `export function verifySaleNumericColumns(rows: ReadonlyArray<readonly string[]>): CcrsBatchProblem[] {`
+- L765: `export type CcrsBatchProblem = {`
+- L771: `export type CcrsBatchVerification = {`
+- L782: `export function splitCsvLine(line: string): string[] {`
+- L828: `export function verifyCcrsFile(`
+- L965: `export function verifyCcrsBatch(`
+- L982: `export function __runCcrsBatchCoreTests(): void {`
 
 ### `src/lib/compliance/ccrs-sales.ts` (515 L)
 
@@ -1123,126 +1124,126 @@ Generated 2026-09-15 23:59Z at commit `c1ca753f369e8e694c682705b3872858c48ec236`
  598|   return `${mm}/${dd}/${yyyy}`;
  599| }
  600| 
- 601| /** YYYYMMDDHHMMSS timestamp for the file name (UTC). */
- 602| export function ccrsFileStamp(now: Date = new Date()): string {
- 603|   const p = (n: number, w = 2) => String(n).padStart(w, "0");
- 604|   return (
- 605|     `${now.getUTCFullYear()}${p(now.getUTCMonth() + 1)}${p(now.getUTCDate())}` +
- 606|     `${p(now.getUTCHours())}${p(now.getUTCMinutes())}${p(now.getUTCSeconds())}`
- 607|   );
- 608| }
- 609| 
- 610| /**
- 611|  * Build the CCRS file name.
- 612|  *   Licensees:   UploadType_LicenseNumber_YYYYMMDDHHMMSS.csv
- 613|  * When the license number is blank we substitute LICENSE so the shape is clear.
- 614|  */
- 615| export function ccrsFileName(
- 616|   type: CcrsRetailerFileType,
- 617|   licenseNumber: string,
- 618|   now: Date = new Date(),
- 619| ): string {
- 620|   const lic = (licenseNumber ?? "").trim() || "LICENSE";
- 621|   return `${type}_${lic}_${ccrsFileStamp(now)}.csv`;
- 622| }
- 623| 
- 624| /**
- 625|  * Assemble a full CCRS file from data rows.
- 626|  * Row 1: SubmittedBy,<value>
- 627|  * Row 2: SubmittedDate,<MM/DD/YYYY>
- 628|  * Row 3: NumberRecords,<count>   (MUST equal data-row count exactly)
- 629|  * Row 4: the column header row
- 630|  * Rows 5+: data rows
- 631|  */
- 632| export function assembleCcrsFile(opts: {
- 633|   type: CcrsRetailerFileType;
- 634|   submittedBy: string;
- 635|   submittedDate?: Date;
- 636|   rows: string[][];
- 637| }): string {
- 638|   const { type, submittedBy, rows } = opts;
- 639|   const columns = CCRS_COLUMNS[type];
- 640|   const lines: string[] = [];
- 641|   lines.push(["SubmittedBy", ccrsCell(submittedBy)].join(","));
- 642|   lines.push(["SubmittedDate", ccrsDate(opts.submittedDate ?? new Date())].join(","));
- 643|   lines.push(["NumberRecords", String(rows.length)].join(","));
- 644|   lines.push(columns.map(ccrsCell).join(","));
- 645|   for (const r of rows) {
- 646|     // Guard: pad/truncate to the exact column count so a mis-shaped row can't
- 647|     // silently corrupt the file.
- 648|     const padded = columns.map((_, i) => ccrsCell(r[i] ?? ""));
- 649|     lines.push(padded.join(","));
- 650|   }
- 651|   return lines.join("\r\n") + "\r\n";
- 652| }
- 653| 
- 654| /* ------------------------------------------------------------------ *
- 655|  * Sale numeric-column safety (Slice 96 — defense in depth)
- 656|  *
- 657|  * The Sale builder already skips zero-qty / no-price lines, but a numeric
- 658|  * anomaly (NaN, negative, non-numeric, or a mis-formatted money value) that
- 659|  * slips through would silently corrupt the Sale.csv the LCB validates. This
- 660|  * PURE check inspects the EMITTED Sale rows (strings) and flags anomalies as
+ 601| /**
+ 602|  * YYYYMMDDHHMMSS timestamp for the file name, in the **Pacific** wall clock.
+ 603|  *
+ 604|  * CCRS bible slice S-01 / gap N-05. The LCB FAQ is explicit:
+ 605|  *   "the file name should be referenced in PST"   [FAQ L0075]
+ 606|  * and the naming convention itself is
+ 607|  *   UploadType_LicenseNumber_YYYYMMDDHHMMSS       [G L0046]
+ 608|  *
+ 609|  * This used `getUTC*`. A batch generated after ~5 PM Pacific was therefore named
+ 610|  * with TOMORROW's date while the file's own `SubmittedDate` row (ccrsDate, which
+ 611|  * has always been Pacific) said today — two different days inside one upload,
+ 612|  * and a file name that disagrees with the week it belongs to.
+ 613|  *
+ 614|  * DST is handled by the shared Intl-based helper (`pacificParts`), so PST/PDT
+ 615|  * resolve correctly for any instant; no fixed offset is used anywhere.
+ 616|  */
+ 617| export function ccrsFileStamp(now: Date = new Date()): string {
+ 618|   const t = pacificParts(now); // America/Los_Angeles wall clock
+ 619|   const p = (n: number, w = 2) => String(n).padStart(w, "0");
+ 620|   return (
+ 621|     `${t.year}${p(t.month)}${p(t.day)}` + `${p(t.hour)}${p(t.minute)}${p(t.second)}`
+ 622|   );
+ 623| }
+ 624| 
+ 625| /**
+ 626|  * Build the CCRS file name.
+ 627|  *   Licensees:   UploadType_LicenseNumber_YYYYMMDDHHMMSS.csv
+ 628|  * When the license number is blank we substitute LICENSE so the shape is clear.
+ 629|  */
+ 630| export function ccrsFileName(
+ 631|   type: CcrsRetailerFileType,
+ 632|   licenseNumber: string,
+ 633|   now: Date = new Date(),
+ 634| ): string {
+ 635|   const lic = (licenseNumber ?? "").trim() || "LICENSE";
+ 636|   return `${type}_${lic}_${ccrsFileStamp(now)}.csv`;
+ 637| }
+ 638| 
+ 639| /**
+ 640|  * Assemble a full CCRS file from data rows.
+ 641|  * Row 1: SubmittedBy,<value>
+ 642|  * Row 2: SubmittedDate,<MM/DD/YYYY>
+ 643|  * Row 3: NumberRecords,<count>   (MUST equal data-row count exactly)
+ 644|  * Row 4: the column header row
+ 645|  * Rows 5+: data rows
+ 646|  */
+ 647| export function assembleCcrsFile(opts: {
+ 648|   type: CcrsRetailerFileType;
+ 649|   submittedBy: string;
+ 650|   submittedDate?: Date;
+ 651|   rows: string[][];
+ 652| }): string {
+ 653|   const { type, submittedBy, rows } = opts;
+ 654|   const columns = CCRS_COLUMNS[type];
+ 655|   const lines: string[] = [];
+ 656|   lines.push(["SubmittedBy", ccrsCell(submittedBy)].join(","));
+ 657|   lines.push(["SubmittedDate", ccrsDate(opts.submittedDate ?? new Date())].join(","));
+ 658|   lines.push(["NumberRecords", String(rows.length)].join(","));
+ 659|   lines.push(columns.map(ccrsCell).join(","));
+ 660|   for (const r of rows) {
 ```
 
 `src/lib/compliance/ccrs-batch-core.ts` L776-L830 — verifyCcrsFile header checks
 
 ```ts
- 776| export function verifyCcrsFile(
- 777|   type: CcrsRetailerFileType,
- 778|   csv: string,
- 779| ): CcrsBatchProblem[] {
- 780|   const problems: CcrsBatchProblem[] = [];
- 781|   const err = (message: string) => problems.push({ file: type, severity: "error", message });
- 782|   const warn = (message: string) => problems.push({ file: type, severity: "warning", message });
- 783| 
- 784|   if (typeof csv !== "string" || csv.length === 0) {
- 785|     err("File is empty (no header rows).");
- 786|     return problems;
- 787|   }
- 788|   // Line endings MUST be CRLF. Reject a bare-LF file (a common corruption).
- 789|   if (/(^|[^\r])\n/.test(csv)) {
- 790|     err("File does not use CRLF (\\r\\n) line endings.");
- 791|   }
- 792|   const lines = csv.replace(/\r\n$/, "").split("\r\n");
- 793|   if (lines.length < 4) {
- 794|     err(`File has ${lines.length} line(s); expected at least 4 (3-row header + column row).`);
- 795|     return problems;
- 796|   }
- 797| 
- 798|   // Row 1-3: the 3-row header.
- 799|   const r1 = splitCsvLine(lines[0]);
- 800|   const r2 = splitCsvLine(lines[1]);
- 801|   const r3 = splitCsvLine(lines[2]);
- 802|   if (r1[0] !== "SubmittedBy") err(`Row 1 must start with "SubmittedBy" (got "${r1[0]}").`);
- 803|   if (r2[0] !== "SubmittedDate") err(`Row 2 must start with "SubmittedDate" (got "${r2[0]}").`);
- 804|   else if (!MMDDYYYY_RE.test((r2[1] ?? "").trim())) err(`SubmittedDate "${r2[1]}" is not MM/DD/YYYY.`);
- 805|   if (r3[0] !== "NumberRecords") err(`Row 3 must start with "NumberRecords" (got "${r3[0]}").`);
- 806| 
- 807|   // Row 4: exact template column header.
- 808|   const expected = CCRS_COLUMNS[type];
- 809|   const header = splitCsvLine(lines[3]);
- 810|   if (header.length !== expected.length || header.some((h, i) => h !== expected[i])) {
- 811|     err(`Column header row does not match the ${type} template. Expected: ${expected.join(",")}`);
- 812|   }
- 813| 
- 814|   // Data rows.
- 815|   const dataRows = lines.slice(4);
- 816|   const declared = Number((r3[1] ?? "").trim());
- 817|   if (!Number.isInteger(declared) || declared < 0) {
- 818|     err(`NumberRecords "${r3[1]}" is not a valid count.`);
- 819|   } else if (declared !== dataRows.length) {
- 820|     err(`NumberRecords (${declared}) does not equal the ${dataRows.length} data row(s).`);
- 821|   }
- 822| 
- 823|   const dateCols = dateColumnIndexes(type);
- 824|   const catIdx = expected.indexOf("InventoryCategory");
- 825|   const typeIdx = expected.indexOf("InventoryType");
- 826|   // Slice 108: identifier-integrity column positions (‑1 when the file lacks it).
- 827|   const licIdx = expected.indexOf("LicenseNumber");
- 828|   const saleIdIdx = expected.indexOf("SaleExternalIdentifier");
- 829|   const saleDetailIdx = expected.indexOf("SaleDetailExternalIdentifier");
- 830|   const saleTypeIdx = expected.indexOf("SaleType");
+ 776| 
+ 777| /**
+ 778|  * Split one CSV line into cells, honoring double-quote wrapping (RFC-4180-ish).
+ 779|  * ccrsCell only wraps a cell in quotes when it contains a comma/newline/quote and
+ 780|  * strips inner quotes, so a simple state machine is sufficient and lossless here.
+ 781|  */
+ 782| export function splitCsvLine(line: string): string[] {
+ 783|   const cells: string[] = [];
+ 784|   let cur = "";
+ 785|   let inQuotes = false;
+ 786|   for (let i = 0; i < line.length; i++) {
+ 787|     const ch = line[i];
+ 788|     if (inQuotes) {
+ 789|       if (ch === '"') {
+ 790|         // doubled quote -> literal quote; else end of quoted region
+ 791|         if (line[i + 1] === '"') {
+ 792|           cur += '"';
+ 793|           i++;
+ 794|         } else {
+ 795|           inQuotes = false;
+ 796|         }
+ 797|       } else {
+ 798|         cur += ch;
+ 799|       }
+ 800|     } else if (ch === '"') {
+ 801|       inQuotes = true;
+ 802|     } else if (ch === ",") {
+ 803|       cells.push(cur);
+ 804|       cur = "";
+ 805|     } else {
+ 806|       cur += ch;
+ 807|     }
+ 808|   }
+ 809|   cells.push(cur);
+ 810|   return cells;
+ 811| }
+ 812| 
+ 813| const MMDDYYYY_RE = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/;
+ 814| 
+ 815| /**
+ 816|  * Which column indices in each file carry a CCRS date (MM/DD/YYYY). Grounded in
+ 817|  * the template column names — any column whose header ends in "Date".
+ 818|  */
+ 819| function dateColumnIndexes(type: CcrsRetailerFileType): number[] {
+ 820|   return CCRS_COLUMNS[type]
+ 821|     .map((name, i) => (/date$/i.test(name) ? i : -1))
+ 822|     .filter((i) => i >= 0);
+ 823| }
+ 824| 
+ 825| /**
+ 826|  * Verify one assembled CCRS file string. PURE. Returns problems (may be empty).
+ 827|  */
+ 828| export function verifyCcrsFile(
+ 829|   type: CcrsRetailerFileType,
+ 830|   csv: string,
 ```
 
 ## C. Identifiers — `src/lib/compliance/ccrs-identifiers.ts`
@@ -3509,7 +3510,7 @@ Generated 2026-09-15 23:59Z at commit `c1ca753f369e8e694c682705b3872858c48ec236`
 
 ## K. Tests and fixtures
 
-### `tests/compliance/ccrs-batch.test.ts` (277 L) — `describe`/`it` titles
+### `tests/compliance/ccrs-batch.test.ts` (283 L) — `describe`/`it` titles
 
 - L46: `describe("CCRS golden files — all 7 retailer file types", () => {`
 - L48: `it(`${type}.csv is byte-identical to the hand-verified golden`, () => {`
@@ -3528,75 +3529,76 @@ Generated 2026-09-15 23:59Z at commit `c1ca753f369e8e694c682705b3872858c48ec236`
 - L133: `it("quotes cells containing commas and strips embedded quotes", () => {`
 - L140: `describe("file naming convention", () => {`
 - L141: `it("UploadType_LicenseNumber_YYYYMMDDHHMMSS.csv", () => {`
-- L148: `describe("upload order of operations (Group 1 → 2 → 3)", () => {`
-- L149: `it("upload order covers all 7 types with Sale last", () => {`
-- L154: `it("Strain/Area/Product precede Inventory, which precedes Sale", () => {`
-- L160: `describe("SaleType / StrainType enums", () => {`
-- L161: `it("medical orders → RecreationalMedical, others → RecreationalRetail", () => {`
-- L165: `it("strain-type normalization collapses to the 3 CCRS values", () => {`
-- L173: `describe("product classification (Table 2)", () => {`
-- L174: `it("valid category/type pairs pass, invalid ones fail", () => {`
-- L186: `it("canonicalizes legacy 2021 LCB vocabulary to the modern enum", () => {`
-- L204: `describe("Sale numeric-column safety (defense in depth)", () => {`
-- L206: `it("a clean Sale row passes", () => {`
-- L209: `it("zero/negative/non-numeric quantity is flagged", () => {`
-- L216: `it("negative or 3-decimal money is flagged", () => {`
-- L226: `describe("CCRS Product.Name two-layer composition (SLICE 53)", () => {`
-- L227: `it("composes the owner-approved example and guards duplication/collisions", async () => {`
-- L263: `it("__runCcrsProductNameCoreTests", async () => {`
-- L271: `describe("embedded self-tests still pass under vitest", () => {`
-- L272: `it("__runCcrsBatchCoreTests", async () => {`
+- L154: `describe("upload order of operations (Group 1 → 2 → 3)", () => {`
+- L155: `it("upload order covers all 7 types with Sale last", () => {`
+- L160: `it("Strain/Area/Product precede Inventory, which precedes Sale", () => {`
+- L166: `describe("SaleType / StrainType enums", () => {`
+- L167: `it("medical orders → RecreationalMedical, others → RecreationalRetail", () => {`
+- L171: `it("strain-type normalization collapses to the 3 CCRS values", () => {`
+- L179: `describe("product classification (Table 2)", () => {`
+- L180: `it("valid category/type pairs pass, invalid ones fail", () => {`
+- L192: `it("canonicalizes legacy 2021 LCB vocabulary to the modern enum", () => {`
+- L210: `describe("Sale numeric-column safety (defense in depth)", () => {`
+- L212: `it("a clean Sale row passes", () => {`
+- L215: `it("zero/negative/non-numeric quantity is flagged", () => {`
+- L222: `it("negative or 3-decimal money is flagged", () => {`
+- L232: `describe("CCRS Product.Name two-layer composition (SLICE 53)", () => {`
+- L233: `it("composes the owner-approved example and guards duplication/collisions", async () => {`
+- L269: `it("__runCcrsProductNameCoreTests", async () => {`
+- L277: `describe("embedded self-tests still pass under vitest", () => {`
+- L278: `it("__runCcrsBatchCoreTests", async () => {`
 
-### `tests/compliance/pure-selftests.test.ts` (226 L) — `describe`/`it` titles
+### `tests/compliance/pure-selftests.test.ts` (235 L) — `describe`/`it` titles
 
-- L58: `describe("embedded pure self-test suites", () => {`
-- L59: `it("order-pricing-core (S-2/S-3 money math + floor)", () => {`
-- L62: `it("discount-engine-core (promotions engine)", () => {`
-- L65: `it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {`
-- L70: `it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {`
-- L75: `it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {`
-- L80: `it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {`
-- L84: `it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {`
-- L88: `it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {`
-- L92: `it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {`
-- L95: `it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {`
-- L98: `it("sales-limits-core (WAC 314-55-095 buckets)", () => {`
-- L101: `it("sales-limit-gate-core (S-1 completion gate)", () => {`
-- L104: `it("chunked-in (S-7 pagination)", async () => {`
-- L107: `it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {`
-- L112: `it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {`
-- L115: `it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {`
-- L120: `it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {`
-- L123: `it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {`
-- L128: `it("sales-hours-core (WAC 314-55-147 window)", () => {`
-- L131: `it("receipt-core (Pacific timestamps, receipt shape)", () => {`
-- L134: `it("pin-hash (S-10 scrypt + throttle)", () => {`
-- L137: `it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {`
-- L140: `it("loyalty engine (points math, tiers, code gen)", () => {`
-- L143: `it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {`
-- L146: `it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {`
-- L149: `it("signup-customer-core (Task V: signup → customer create-or-link)", () => {`
-- L152: `it("schedule-core (week math, Pacific)", () => {`
-- L155: `it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {`
-- L159: `it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {`
-- L163: `it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {`
-- L167: `it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {`
-- L171: `it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {`
-- L174: `it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {`
-- L177: `it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {`
-- L180: `it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {`
-- L185: `it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {`
-- L190: `it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {`
-- L195: `it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {`
-- L198: `it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {`
-- L201: `it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {`
-- L204: `it("integration-credentials-core (DB-over-env overrides + masking)", () => {`
-- L207: `it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {`
-- L210: `it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {`
-- L213: `it("richness-core (Task X: menu richness scoring + connection health)", () => {`
-- L216: `it("sync-settings-core (Task X: owner-tunable transmission parameters)", () => {`
-- L219: `it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {`
-- L222: `it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {`
+- L59: `describe("embedded pure self-test suites", () => {`
+- L60: `it("order-pricing-core (S-2/S-3 money math + floor)", () => {`
+- L63: `it("discount-engine-core (promotions engine)", () => {`
+- L66: `it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {`
+- L71: `it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {`
+- L76: `it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {`
+- L81: `it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {`
+- L85: `it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {`
+- L89: `it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {`
+- L93: `it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {`
+- L96: `it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {`
+- L99: `it("sales-limits-core (WAC 314-55-095 buckets)", () => {`
+- L102: `it("sales-limit-gate-core (S-1 completion gate)", () => {`
+- L105: `it("chunked-in (S-7 pagination)", async () => {`
+- L108: `it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {`
+- L113: `it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {`
+- L116: `it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {`
+- L121: `it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {`
+- L124: `it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {`
+- L129: `it("sales-hours-core (WAC 314-55-147 window)", () => {`
+- L132: `it("receipt-core (Pacific timestamps, receipt shape)", () => {`
+- L135: `it("pin-hash (S-10 scrypt + throttle)", () => {`
+- L138: `it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {`
+- L141: `it("loyalty engine (points math, tiers, code gen)", () => {`
+- L144: `it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {`
+- L147: `it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {`
+- L150: `it("signup-customer-core (Task V: signup → customer create-or-link)", () => {`
+- L153: `it("schedule-core (week math, Pacific)", () => {`
+- L156: `it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {`
+- L160: `it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {`
+- L164: `it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {`
+- L168: `it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {`
+- L172: `it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {`
+- L175: `it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {`
+- L178: `it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {`
+- L181: `it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {`
+- L186: `it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {`
+- L191: `it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {`
+- L199: `it("ccrs-submit-gate-core (S-01/N-06: the upload gate — errors block, warnings do not)", () => {`
+- L204: `it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {`
+- L207: `it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {`
+- L210: `it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {`
+- L213: `it("integration-credentials-core (DB-over-env overrides + masking)", () => {`
+- L216: `it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {`
+- L219: `it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {`
+- L222: `it("richness-core (Task X: menu richness scoring + connection health)", () => {`
+- L225: `it("sync-settings-core (Task X: owner-tunable transmission parameters)", () => {`
+- L228: `it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {`
+- L231: `it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {`
 
 ### Golden fixtures (`tests/compliance/golden/ccrs/`)
 
