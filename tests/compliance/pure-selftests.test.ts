@@ -45,6 +45,7 @@ import { __runCcrsWeekTests } from "@/lib/compliance/ccrs-week-core";
 import { __runCcrsDeadlineTests } from "@/lib/compliance/ccrs-deadline-core";
 import { __runCcrsErrorTriageTests } from "@/lib/compliance/ccrs-error-triage-core";
 import { __runCcrsSubmitGateTests } from "@/lib/compliance/ccrs-submit-gate-core";
+import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-core";
 import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
 import { __runLeaflyPayloadTests } from "@/lib/leafly/payload-core";
 import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
@@ -200,6 +201,13 @@ describe("embedded pure self-test suites", () => {
     const r = __runCcrsSubmitGateTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(0);
+  });
+  // CCRS bible slice S-02 / gaps E7-E13: the pre-flight checks that stop a
+  // file CCRS would reject outright. Registered here so the embedded
+  // assertions actually execute under Vitest (the N-06 lesson).
+  it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {
+    const out = __runCcrsPreflightCoreTests();
+    expect(out).toContain("0 failed");
   });
   it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {
     expect(() => __runMenuFeedTests()).not.toThrow();

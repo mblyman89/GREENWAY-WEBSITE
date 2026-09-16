@@ -42,6 +42,26 @@ The target file is restored from an in-memory copy in a `finally` block and the
 restore is verified byte-for-byte, so an interrupted run cannot leave a mutated
 file on disk. Still, confirm `git status` is clean afterwards.
 
+As of S-02 the harness runs **24 mutations**, and its scope is not limited to `src/`. It also mutates `scripts/compliance/generate-preprod-test-files.ts`, because that script writes the files the owner uploads to a government system: `M23` turns CRLF into LF (the most likely real-world rejection, and invisible on screen) and `M24` makes an intentionally-invalid probe file valid — which would be worse than a crash, since CCRS would accept it and we would record the wrong lesson.
+
+## Related: the PREproduction file generator
+
+`scripts/compliance/generate-preprod-test-files.ts` is not a bible generator, but it is
+governed by the same rules and is guarded by the harness above.
+
+```bash
+npx tsx scripts/compliance/generate-preprod-test-files.ts <LICENSE> <OUTDIR>
+```
+
+It emits 23 CSVs and a `MANIFEST.md` for Part 06. It builds them with the *production*
+`assembleCcrsFile` / `ccrsFileName` / `verifyCcrsFile` / `CCRS_COLUMNS`, checks every
+header row against `CCRS_COLUMNS` verbatim, and refuses to write anything if a file that
+is supposed to be valid is not. Its own regression test is
+`tests/compliance/ccrs-preprod-generator.test.ts`.
+
+The stamp is pinned to `20250615213000` on purpose — 9:30 PM Pacific on 2025-06-15 is
+already 2025-06-16 UTC, so a `0616` stamp means the Pacific rule `[FAQ L0075]` regressed.
+
 ## Re-fetching the LCB sources
 
 If `lcb/` is missing, re-download per `docs/ccrs-bible/13-sources.md` §A/§B, then:

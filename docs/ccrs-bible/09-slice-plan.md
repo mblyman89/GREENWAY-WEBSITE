@@ -14,6 +14,8 @@ Self-test runner: `tests/compliance/pure-selftests.test.ts` — CCRS entries tod
 
 ## S-01 — Hygiene: Pacific file stamp, header padding decision, gate self-test
 
+**STATUS: LANDED** — commit `acb6d32`. `ccrsFileStamp` is Pacific, `padHeaderRowsForTemplates` exists behind an opt-in (default off, pending U-03), the submit-gate self-test is registered, and `scripts/ccrs-bible/mutate_check.py` was introduced.
+
 **Closes:** N-05, N-06; prepares N-04/U-03.
 **Files:** `src/lib/compliance/ccrs-batch-core.ts` (L602-L608 `ccrsFileStamp`, L615 `ccrsFileName`, L632-L643 `assembleCcrsFile`), `src/lib/compliance/ccrs-submit-gate-core.ts` (L149 `__runCcrsSubmitGateTests`), `tests/compliance/pure-selftests.test.ts`, `tests/compliance/ccrs-batch.test.ts`.
 
@@ -47,6 +49,14 @@ Part 04 N-05 → DONE, N-06 → DONE, N-04 → "flag present, default off, await
 ---
 
 ## S-02 — Pre-flight blocking errors E7–E13
+
+**STATUS: LANDED.** All seven checks live in `src/lib/compliance/ccrs-preflight-core.ts` (pure, no I/O), are called by the real builders via `inventoryRowVerdict` / `productRowIssues`, and are covered by `tests/compliance/ccrs-preflight.test.ts` (59 tests).
+
+Three deviations from the plan below, each deliberate:
+
+1. **A new pure module rather than edits inside `ccrs-batch.ts`.** That file is `server-only` and its per-file builders are module-private — only `buildCcrsBatch` is exported — so a test could not reach them without either weakening encapsulation or mocking Supabase. Extracting the row-level decisions into a pure core lets the tests exercise the *real* code path instead of a copy. This is also why `code` **and** `rows` both landed here (the plan allowed it): withholding a row is useless if the hub cannot say which rows.
+2. **E10's pin was located, as the plan demanded.** `[G L0482-L0483]`. See Part 05 D-13 — it is a Note with no matching error string, which materially changes how much we should trust it. T-19 decides.
+3. **A PREproduction generator was added** (`scripts/compliance/generate-preprod-test-files.ts`, Part 06 §A2). Not in the plan, but the owner asked to begin real upload testing, and no correct application can emit the deliberately-invalid files the test plan requires.
 
 **Closes:** E7, E8, E9, E10, E11, E12, E13.
 **Files:** `ccrs-batch.ts` (`buildStrainFile` L160-L193, `buildProductFile` L215-L349, `buildInventoryFile` L351-L417, `buildCcrsBatch` L424-L652), `ccrs-sales.ts` (L366-L390 pricing, L416-L417 ids), `ccrs-inventory-adjustment-core.ts` (`adjustmentDetail` L127, `mapAdjustmentRow` L173-L200), `ccrs-batch-core.ts` (new codes union next to L521).
