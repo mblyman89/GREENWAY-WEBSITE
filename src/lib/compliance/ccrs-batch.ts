@@ -35,6 +35,14 @@ import {
   type CcrsRetailerFileType,
 } from "@/lib/compliance/ccrs-batch-core";
 import { deriveInventoryExternalId, validateExternalId, sanitizeExternalId } from "@/lib/compliance/ccrs-identifiers";
+import {
+  inventoryRowVerdict,
+  productRowIssues,
+  isReservedStrainName,
+  specPinFor,
+  type CcrsIssueCode,
+  type CcrsIssueRow,
+} from "@/lib/compliance/ccrs-preflight-core";
 import { ccrsInventoryCreatedDate } from "@/lib/inventory/received-date-core";
 import { pagedAll } from "@/lib/supabase/chunked-in";
 import { validateName, suggestName, type Cannabinoid } from "@/lib/naming/convention-core";
@@ -59,6 +67,16 @@ export type CcrsSyncIssue = {
   file: CcrsRetailerFileType | "General";
   message: string;
   count?: number;
+  /**
+   * S-02: stable machine id for the check that fired, e.g. "E7_TOTALCOST_ZERO".
+   * Optional so the many legacy warnings keep compiling; every issue raised by
+   * a bible-grounded check MUST set it (Part 08 §C).
+   */
+  code?: CcrsIssueCode;
+  /** The verbatim LCB pin behind the check, e.g. "[G L0614]". */
+  specPin?: string;
+  /** Every offending row — NEVER capped; a capped list hides the blocker. */
+  rows?: CcrsIssueRow[];
 };
 
 export type CcrsBatch = {
@@ -142,6 +160,14 @@ type LotRow = {
    * handled when filling Inventory.CreatedDate.
    */
   received_on: string | null;
+  /**
+   * S-02 / E7: a vendor TRADE SAMPLE (migration 0024 L32,
+   * `is_sample boolean not null default false`). It has no purchase value, but
+   * CCRS still requires a positive TotalCost and the FAQ dictates exactly
+   * $0.01 [FAQ L0035]. Selected explicitly so the E7 check can tell a sample
+   * apart from a lot whose cost was never entered.
+   */
+  is_sample: boolean | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -163,17 +189,28 @@ function buildStrainFile(
   submittedBy: string,
   createdBy: string,
   createdDate: string,
-): { rows: string[][]; warnings: string[] } {
+): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
   const warnings: string[] = [];
   const seen = new Set<string>();
   const rows: string[][] = [];
   const defaulted: string[] = [];
+  const reserved: CcrsIssueRow[] = [];
   for (const it of items) {
     const strain = (it.strain_name ?? "").trim();
     if (!strain) continue;
     const key = strain.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
+    // E11 [G L0358] "Strain name is invalid, cannot be Unknown, THC, or Other."
+    // Exact match only — "Other Kush" is a real strain and must still ship.
+    if (isReservedStrainName(strain)) {
+      reserved.push({
+        id: (it.source_item_id ?? strain).trim(),
+        label: strain,
+        detail: `"${strain}" is a reserved CCRS strain name`,
+      });
+      continue;
+    }
     // B2: StrainType MUST be one of Indica/Sativa/Hybrid. Normalize the POS
     // label; when it can't be resolved we default to Hybrid (safe superset) and
     // flag the strain so an employee can correct it (drafts-only).
@@ -189,7 +226,19 @@ function buildStrainFile(
     );
   }
   if (rows.length === 0) warnings.push("No named strains found in the published menu.");
-  return { rows, warnings };
+  const issues: CcrsSyncIssue[] = [];
+  if (reserved.length > 0) {
+    issues.push({
+      severity: "error",
+      file: "Strain",
+      code: "E11_STRAIN_NAME_RESERVED",
+      specPin: specPinFor("E11_STRAIN_NAME_RESERVED"),
+      count: reserved.length,
+      rows: reserved,
+      message: `${reserved.length} product(s) use a strain name CCRS reserves — "Strain name is invalid, cannot be Unknown, THC, or Other." [G L0358]. Set the real strain name (or leave it blank for a non-strain product) and rebuild.`,
+    });
+  }
+  return { rows, warnings, issues };
 }
 
 /**
@@ -218,8 +267,15 @@ function buildProductFile(
   license: string,
   createdBy: string,
   createdDate: string,
-): { rows: string[][]; warnings: string[]; nameByProductKey: Map<string, string> } {
+): {
+  rows: string[][];
+  warnings: string[];
+  nameByProductKey: Map<string, string>;
+  issues: CcrsSyncIssue[];
+} {
   const warnings: string[] = [];
+  const e9Rows: CcrsIssueRow[] = [];
+  const e10Rows: CcrsIssueRow[] = [];
   // CCRS joins Inventory.Product -> Product.Name by the EXACT name string. We
   // record the final (clamped) Name we wrote for each raw product key so the
   // Inventory file can reference the IDENTICAL string. See
@@ -322,6 +378,26 @@ function buildProductFile(
       warnings.push(`Product "${productName || ext}": Description exceeds ${CCRS_PRODUCT_DESCRIPTION_MAX} chars and was truncated — shorten it in the source.`);
     }
 
+    // E9 / E10 — for Usable Cannabis and Cannabis Mix Packaged ONLY, the guide
+    // makes UnitWeightGrams and Description mandatory:
+    //   [G L0489-L0490] "required when InventoryType = Useable cannabis, or
+    //                    Cannabis Mix Packaged All other product types weight
+    //                    can be reported as 0"
+    //   [G L0482-L0483] the same note for Description
+    //   [G L0434] "If Useable Cannabis is selected, Unit Weight Gram cannot be 0"
+    // `type` is the CANONICAL Table 2 value resolved above, so we compare that
+    // rather than the raw vendor string.
+    for (const found of productRowIssues({
+      id: ext,
+      label: nameClamp.value || ext,
+      inventoryType: type,
+      unitWeightGrams: grams,
+      description: descClamp.value,
+    })) {
+      if (found.code === "E9_UNITWEIGHT_ZERO_USABLE") e9Rows.push(found.row);
+      else e10Rows.push(found.row);
+    }
+
     rows.push([
       license,
       category,
@@ -345,7 +421,30 @@ function buildProductFile(
     ...unique.filter((w) => !w.startsWith("ERROR")),
   ];
   const dedupWarnings = errorsFirst.slice(0, 30);
-  return { rows, warnings: dedupWarnings, nameByProductKey };
+  const issues: CcrsSyncIssue[] = [];
+  if (e9Rows.length > 0) {
+    issues.push({
+      severity: "error",
+      file: "Product",
+      code: "E9_UNITWEIGHT_ZERO_USABLE",
+      specPin: specPinFor("E9_UNITWEIGHT_ZERO_USABLE"),
+      count: e9Rows.length,
+      rows: e9Rows,
+      message: `${e9Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no unit weight. CCRS rejects the Product file — "If Useable Cannabis is selected, Unit Weight Gram cannot be 0" [G L0434]. Set the gram weight on each product and rebuild.`,
+    });
+  }
+  if (e10Rows.length > 0) {
+    issues.push({
+      severity: "error",
+      file: "Product",
+      code: "E10_DESCRIPTION_REQUIRED",
+      specPin: specPinFor("E10_DESCRIPTION_REQUIRED"),
+      count: e10Rows.length,
+      rows: e10Rows,
+      message: `${e10Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no Description, which CCRS requires for those two types [G L0482-L0483]. Add a short product description (250 characters max) and rebuild.`,
+    });
+  }
+  return { rows, warnings: dedupWarnings, nameByProductKey, issues };
 }
 
 function buildInventoryFile(
@@ -354,9 +453,12 @@ function buildInventoryFile(
   license: string,
   createdBy: string,
   nameByProductKey: Map<string, string>,
-): { rows: string[][]; warnings: string[] } {
+): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
   const warnings: string[] = [];
   const rows: string[][] = [];
+  // S-02 coded pre-flight errors. Rows are collected, never capped.
+  const e7Rows: CcrsIssueRow[] = [];
+  const e8Rows: CcrsIssueRow[] = [];
   for (const l of lots) {
     const ext = deriveInventoryExternalId({
       ccrs_inventory_external_id: l.ccrs_inventory_external_id,
@@ -382,6 +484,26 @@ function buildInventoryFile(
     }
     const area = l.status === "quarantine" || l.status === "recalled" ? "Quarantine" : "Sales Floor";
     const totalCostMinor = (l.unit_cost_minor_units ?? 0) * (l.received_qty ?? 0);
+
+    // E7 [G L0614] / E8 [G L0597]. The decision lives in the pure core so it is
+    // unit-tested directly; a failing row is WITHHELD because CCRS rejects the
+    // whole file on one bad row and tells us only by email [FAQ L0102].
+    const initialQty = l.received_qty ?? 0;
+    const onHandQty = l.on_hand_qty ?? 0;
+    const verdict = inventoryRowVerdict({
+      id: l.id,
+      label: l.lot_code ?? ext,
+      initialQty,
+      onHandQty,
+      totalCostMinorUnits: totalCostMinor,
+      isSample: l.is_sample === true,
+    });
+    if (!verdict.emit) {
+      if (verdict.code === "E8_ONHAND_GT_INITIAL") e8Rows.push(verdict.row);
+      else e7Rows.push(verdict.row);
+      continue;
+    }
+
     rows.push([
       license,
       strain,
@@ -389,7 +511,7 @@ function buildInventoryFile(
       productName,
       String(l.received_qty ?? 0),
       String(l.on_hand_qty ?? 0),
-      (Math.max(0, totalCostMinor) / 100).toFixed(2),
+      verdict.totalCost,
       "FALSE", // IsMedical — medical exemptions are tracked per-sale, not per-lot
       ext,
       createdBy,
@@ -414,7 +536,30 @@ function buildInventoryFile(
     if (idErrs.length) warnings.push(`Inventory id "${ext}" ${idErrs.join(", ")}.`);
   }
   if (rows.length === 0) warnings.push("No inventory lots found to report.");
-  return { rows, warnings: [...new Set(warnings)].slice(0, 25) };
+  const issues: CcrsSyncIssue[] = [];
+  if (e8Rows.length > 0) {
+    issues.push({
+      severity: "error",
+      file: "Inventory",
+      code: "E8_ONHAND_GT_INITIAL",
+      specPin: specPinFor("E8_ONHAND_GT_INITIAL"),
+      count: e8Rows.length,
+      rows: e8Rows,
+      message: `${e8Rows.length} lot(s) report more on hand than were ever received. CCRS rejects the Inventory file with "QuanityOnHand is greater than InitialQuantity" [G L0597]. Recount the lot or correct the received quantity, then rebuild.`,
+    });
+  }
+  if (e7Rows.length > 0) {
+    issues.push({
+      severity: "error",
+      file: "Inventory",
+      code: "E7_TOTALCOST_ZERO",
+      specPin: specPinFor("E7_TOTALCOST_ZERO"),
+      count: e7Rows.length,
+      rows: e7Rows,
+      message: `${e7Rows.length} lot(s) have no cost, so TotalCost would be 0 and CCRS rejects the Inventory file ("TotalCost cannot equal 0" [G L0614]). Enter the unit cost on each lot. A vendor TRADE SAMPLE should be marked as a sample instead — it reports $0.01 [FAQ L0035].`,
+    });
+  }
+  return { rows, warnings: [...new Set(warnings)].slice(0, 25), issues };
 }
 
 // ---------------------------------------------------------------------------
@@ -485,7 +630,7 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
     const { data } = await admin
       .from("inventory_lots")
       .select(
-        "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at, received_on",
+        "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, created_at, received_on, is_sample",
       )
       .neq("status", "destroyed")
       .order("id", { ascending: true })
@@ -505,6 +650,12 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
     createdBy,
     product.nameByProductKey,
   );
+
+  // S-02: coded, pinned pre-flight errors from the master-data builders. These
+  // are BLOCKING — the submit gate refuses to build the zip while any remain,
+  // because CCRS rejects the whole file on one bad row and tells us only by
+  // email [FAQ L0102].
+  syncIssues.push(...strain.issues, ...product.issues, ...inventory.issues);
 
   // --- Reuse mature builders for Adjustment + Sale --------------------------
   const [adj, sale] = await Promise.all([

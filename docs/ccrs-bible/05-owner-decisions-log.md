@@ -126,6 +126,46 @@ Two further process findings, both of which would have produced a FALSE GREEN:
 Standing rule for every future slice: a slice is not done until its mutations
 are all killed, and the harness's own failure modes are ruled out first.
 
+## D-12 — S-02 withholds bad rows instead of shipping them (2026-09-15, S-02)
+
+The owner's instruction for this slice was to "continue on to the next slice"
+and to advise on how to start testing real uploads. Two judgement calls inside
+S-02 were made on his behalf and are recorded here so he can overrule either.
+
+**First: a row that fails pre-flight is WITHHELD from the file, not emitted with
+a warning.** CCRS emails errors only to the person who uploaded, and only after
+processing `[G L0051]` `[FAQ L0102]`. A knowingly-bad row therefore costs a full
+upload cycle to discover. The builders now `continue` past a failing row and
+return a `CcrsSyncIssue` carrying the error code, the spec pin, and the affected
+rows, so the hub can show "3 lots have no cost — fix these" *before* the file is
+produced. Nothing is silently dropped: every withheld row is reported.
+
+**Second: E8 is evaluated before E7.** A lot with both "on hand exceeds
+received" and "cost is zero" reports the quantity problem first, because a
+quantity that exceeds what was received usually means the receiving record
+itself is wrong, and fixing that often changes the cost. The order is asserted
+by a test and by mutation `M20-verdict-order-e7-first`.
+
+Also settled here: **"Other" is a reserved strain name only as an exact match**
+`[G L0358]` `[FAQ L0014]`. A strain genuinely called "Other Kush" is legal and
+must not be blocked. Mutation `M9` proves a substring match would be caught.
+
+## D-13 — E10's authority is a Note, not an error string (2026-09-15, S-02)
+
+Part 04 previously cited E10 as "`[G]` p.14", a page reference the roadmap
+forbids shipping. The exact line was located: `[G L0482-L0483]` — *"Note:
+required when inventorytype = Useable cannabis, or Cannabis Mix Packaged"*.
+
+Worth flagging to the owner: a grep of the entire guide and FAQ found **no
+error-message text** for a missing Description. Every other rule in S-02 has a
+quotable error string; E10 has only a Note. So we cannot predict what CCRS
+actually does when Description is blank — it may reject, or may accept. That is
+exactly why test **T-19** exists in the PREproduction plan, and why its result
+should be recorded verbatim before we trust our own enforcement.
+
+Until T-19 is run, our behaviour is the conservative one: we block the row
+locally rather than risk a rejected file.
+
 ## Decisions that are still the owner's to make (do NOT decide these for him)
 
 | Ref | Decision | Why it is his |

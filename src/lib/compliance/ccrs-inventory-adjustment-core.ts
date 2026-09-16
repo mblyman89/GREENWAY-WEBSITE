@@ -16,6 +16,10 @@
  * Plus universal columns: CreatedBy / CreatedDate / UpdatedBy / UpdatedDate / Operation.
  */
 import { deriveInventoryExternalId, sanitizeExternalId } from "@/lib/compliance/ccrs-identifiers";
+import {
+  adjustmentDetailRequired,
+  E13_SKIP_PREFIX,
+} from "@/lib/compliance/ccrs-preflight-core";
 import { assembleCcrsFile, ccrsFileName, ccrsDate } from "@/lib/compliance/ccrs-batch-core";
 
 /** Minimal license identity needed to build a row (matches CcrsLicenseSettings). */
@@ -187,6 +191,20 @@ export function mapAdjustmentRow(
     return { row: null, skipReason: `adjustment ${src.id} has no resolvable inventory identifier` };
   }
 
+  // E13 [G L1111] "Inventory AdjustmentDetail missing". CCRS requires a
+  // free-text detail for reasons that carry no self-evident explanation
+  // (Other, Theft). Emitting the row without one gets the InventoryAdjustment
+  // file rejected, so withhold it behind the stable E13: prefix and let the
+  // I/O wrapper raise it as a CODED error instead of a generic skip (W16).
+  const ccrsReason = mapAdjustmentReason(src.reason);
+  const detail = adjustmentDetail(src.note);
+  if (adjustmentDetailRequired(ccrsReason) && !detail) {
+    return {
+      row: null,
+      skipReason: `${E13_SKIP_PREFIX} adjustment ${src.id} is reported as "${ccrsReason}" but has no detail note — CCRS requires one [G L1111]`,
+    };
+  }
+
   const date = mmddyyyy(src.created_at);
   // A5: the per-adjustment ExternalIdentifier — unique + deterministic so
   // re-generating the same range yields the same id (idempotent upload).
@@ -194,8 +212,8 @@ export function mapAdjustmentRow(
   const row = [
     license.licenseNumber,
     externalId,
-    mapAdjustmentReason(src.reason),
-    adjustmentDetail(src.note),
+    ccrsReason,
+    detail,
     adjustmentQuantity(Number(src.qty_delta)),
     date,
     adjustmentExternalId, // ExternalIdentifier (per-adjustment, unique)

@@ -16,6 +16,50 @@ Every test row below is executed by a human at the PREprod portal with files gen
 
 Do not summarize error emails. Paste them whole.
 
+## A2. How to produce the files today (S-02)
+
+The hub's PREPRODUCTION switch is Part 08 §F and has not shipped yet, and the
+app cannot generate a file for a rule it is designed to prevent — T-14, T-18,
+T-31 and friends are *supposed* to be invalid, so no correct app will emit them.
+Waiting for the hub would have blocked all PREprod testing behind S-08.
+
+A standalone generator therefore exists:
+
+    npx tsx scripts/compliance/generate-preprod-test-files.ts <LICENSE> <OUTDIR>
+    # example:
+    npx tsx scripts/compliance/generate-preprod-test-files.ts 413541 ~/ccrs-preprod
+
+It writes 23 CSVs plus `MANIFEST.md` — the manifest is the table to fill in as
+each upload is run, already in Group order. Thirteen files are expected to pass;
+ten are named `...EXPECT-ERROR...` and are invalid on purpose, one rule each, so
+that the LCB's exact error wording can be captured for the Part 02 triage rules.
+
+Three properties make these files trustworthy:
+
+**They are built by the production code.** The generator imports
+`assembleCcrsFile`, `ccrsFileName`, `verifyCcrsFile`, `CCRS_COLUMNS` and
+`padHeaderRowsForTemplates` from `ccrs-batch-core.ts` — the same functions the
+real weekly batch uses. It is not a hand-written fixture that can drift.
+
+**They self-check before they are written.** Every file's 4th row is compared
+against `CCRS_COLUMNS[type]` verbatim, and every "expect pass" file must satisfy
+`verifyCcrsFile` or the generator throws and writes nothing. An EXPECT-ERROR
+file must still be well-formed in every respect except the one rule it probes —
+otherwise CCRS rejects it for the wrong reason and the test teaches us nothing.
+
+**The generator itself is tested.** `tests/compliance/ccrs-preprod-generator.test.ts`
+runs it into a temp directory and checks CRLF endings, the 14-digit Pacific
+stamp, header shape, `NumberRecords` accuracy, and that the EXPECT-ERROR probes
+really are invalid. Mutations `M23` and `M24` prove those checks can fail.
+
+Note the timestamp: every file is stamped `20250615213000`, fixed deliberately at
+9:30 PM Pacific on 2025-06-15 — which is already 2025-06-16 in UTC. If a file
+ever appears with a `0616` stamp, the Pacific naming rule `[FAQ L0075]` has
+regressed. The stamp is identical across runs so re-running the generator is
+safe and reproducible.
+
+**Do not upload these to production.** `[FAQ L0096]`
+
 ## B. Access tests
 
 | ID | Test | Pass criterion | Closes |
@@ -28,7 +72,7 @@ Do not summarize error emails. Paste them whole.
 
 | ID | Test | Files | Pass criterion | Closes |
 |---|---|---|---|---|
-| T-10 | Baseline Strain file exactly as the app emits today (unpadded header rows, CRLF, UTC stamp) | `strain_<lic>_<stamp>.csv` with 2 rows | no error email in 30 min | U-03 (partially), baseline |
+| T-10 | Baseline Strain file exactly as the app emits today (unpadded header rows, CRLF, **Pacific** stamp — corrected in S-01, `[FAQ L0075]`) | `strain_<lic>_<stamp>.csv` with 2 rows | no error email in 30 min | U-03 (partially), baseline |
 | T-11 | Same Strain content with header rows padded like the template (`SubmittedBy,<v>,,,,,` etc.) | one file | no error email | U-03 — if T-10 errors and T-11 passes → pad; if both pass → no padding needed (prefer template shape anyway) |
 | T-12 | Filename prefix case: upload `Strain_<lic>_<stamp>.csv` (capital S) | one file | error or not | U-02 |
 | T-13 | Filename stamp in PST vs UTC: two Strain files stamped 1 s apart, one UTC one Pacific, at a time where dates differ (after 17:00 Pacific) | two files | note which (if either) is refused | N-05 / U-02 |
@@ -37,7 +81,7 @@ Do not summarize error emails. Paste them whole.
 | T-16 | Area file with `Sales Floor`/FALSE only | one file | pass | baseline |
 | T-17 | Area file with `Quarantine`/TRUE (today's emitter) | one file | pass/fail; regardless, **ask the examiner** whether a retailer hold area should be TRUE given `[G L0258-L0259]` ("Examples of areas with a 'quarantine' designation: waste/ destruction inventory") vs `[G L0298-L0299]` ("There are no quarantine requirements for cannabis products and must have an entry as False") | U-04 / N-01 |
 | T-18 | Product file: one Usable Cannabis row with `UnitWeightGrams=0` | one file | expect error `[G L0434]` — capture text | E9 rule text |
-| T-19 | Product file: one Usable Cannabis row with empty Description | one file | expect error — capture text | E10 rule text |
+| T-19 | Product file: one Usable Cannabis row with empty Description | one file | **outcome genuinely unknown — capture verbatim either way.** The only authority is a Note, `[G L0482-L0483]` "required when inventorytype = Useable cannabis, or Cannabis Mix Packaged"; a grep of the guide and FAQ finds **no** matching error string, so CCRS may accept it. If it passes, E10 should be downgraded to a warning (see Part 05 D-13) | E10 rule text |
 | T-20 | Product file: full weekly product set as emitted | one file | no error | baseline |
 | T-21 | Hyphenated ExternalIdentifier (e.g. `GW-TEST-1`) in Product | one file | pass/fail | U-06 |
 

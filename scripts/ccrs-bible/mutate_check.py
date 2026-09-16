@@ -27,10 +27,19 @@ REPO = os.environ.get(
 
 CORE = "src/lib/compliance/ccrs-batch-core.ts"
 GATE = "src/lib/compliance/ccrs-submit-gate-core.ts"
+PREFLIGHT = "src/lib/compliance/ccrs-preflight-core.ts"
+ADJCORE = "src/lib/compliance/ccrs-inventory-adjustment-core.ts"
 
 STAMP_TESTS = "tests/compliance/ccrs-file-stamp.test.ts"
 SELF_TESTS = "tests/compliance/pure-selftests.test.ts"
 BATCH_TESTS = "tests/compliance/ccrs-batch.test.ts"
+PREFLIGHT_TESTS = "tests/compliance/ccrs-preflight.test.ts"
+
+# The PREproduction generator writes the files the owner actually uploads to
+# the LCB. It is not application code, but a silent defect here costs a real
+# ten-minute upload cycle and teaches us a false lesson, so it is mutated too.
+GENERATOR = "scripts/compliance/generate-preprod-test-files.ts"
+GENERATOR_TESTS = "tests/compliance/ccrs-preprod-generator.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -92,6 +101,138 @@ MUTATIONS = [
         SELF_TESTS,
         "The registered gate self-test must actually fail when the gate breaks.",
     ),
+    # ---- S-02: pre-flight blocking errors E7-E13 ----
+    (
+        "M9-strain-substring-match",
+        PREFLIGHT,
+        "  return (RESERVED_STRAIN_NAMES as readonly string[]).includes(n);",
+        "  return (RESERVED_STRAIN_NAMES as readonly string[]).some((r) => n.includes(r));",
+        PREFLIGHT_TESTS,
+        "E11 must be EXACT match — a substring test would reject 'Other Kush'.",
+    ),
+    (
+        "M10-totalcost-allows-zero",
+        PREFLIGHT,
+        "  if (minor == null || !Number.isFinite(minor) || minor <= 0) return { value: null, ok: false };",
+        "  if (minor == null || !Number.isFinite(minor) || minor < 0) return { value: null, ok: false };",
+        PREFLIGHT_TESTS,
+        "E7: TotalCost of exactly 0 must still be an error [G L0614].",
+    ),
+    (
+        "M11-sample-wrong-cost",
+        PREFLIGHT,
+        'export const TRADE_SAMPLE_TOTAL_COST = "0.01";',
+        'export const TRADE_SAMPLE_TOTAL_COST = "0.00";',
+        PREFLIGHT_TESTS,
+        "E7: a trade sample must report exactly $0.01 [FAQ L0035].",
+    ),
+    (
+        "M12-excise-wrong-rate",
+        PREFLIGHT,
+        "export const CCRS_EXCISE_BPS = 3700;",
+        "export const CCRS_EXCISE_BPS = 3500;",
+        PREFLIGHT_TESTS,
+        "E12: the rate is 37%, and must reproduce the FAQ's $4.44 exactly.",
+    ),
+    (
+        "M13-excise-ignores-discount",
+        PREFLIGHT,
+        "  return Math.max(0, quantity * unitPriceMinorUnits - discountMinorUnits);",
+        "  return Math.max(0, quantity * unitPriceMinorUnits);",
+        PREFLIGHT_TESTS,
+        "E12: the taxable base is POST-discount [FAQ L0155-L0160].",
+    ),
+    (
+        "M14-excise-tolerance-too-wide",
+        PREFLIGHT,
+        "export const EXCISE_TOLERANCE_MINOR_UNITS = 1;",
+        "export const EXCISE_TOLERANCE_MINOR_UNITS = 100;",
+        PREFLIGHT_TESTS,
+        "E12: a dollar of slack would let a real mismatch through.",
+    ),
+    (
+        "M15-medical-exempt-always",
+        PREFLIGHT,
+        "  if (input.isMedicalExempt) return null; // [G L1378] \"Only Medical … 0\"",
+        "  return null; // mutated: everything exempt",
+        PREFLIGHT_TESTS,
+        "E12 must still fire for NON-exempt rows (today IsMedical is always FALSE).",
+    ),
+    (
+        "M16-type-gate-misses-guide-spelling",
+        PREFLIGHT,
+        '    .replace(/^useable /, "usable ");',
+        "    ;",
+        PREFLIGHT_TESTS,
+        "E9/E10: the guide spells it 'Useable cannabis'; missing it skips real rows.",
+    ),
+    (
+        "M17-adjustment-detail-not-required",
+        PREFLIGHT,
+        'export const DETAIL_REQUIRED_REASONS = ["Other", "Theft"] as const;',
+        'export const DETAIL_REQUIRED_REASONS = ["Other"] as const;',
+        PREFLIGHT_TESTS,
+        "E13: Theft also requires a detail [G L1111].",
+    ),
+    (
+        "M18-issue-rows-capped",
+        PREFLIGHT,
+        "  return { code, severity, specPin: specPinFor(code), message, rows };",
+        "  return { code, severity, specPin: specPinFor(code), message, rows: rows.slice(0, 25) };",
+        PREFLIGHT_TESTS,
+        "Part 08: row lists are NEVER capped — a cap hides the blocking row.",
+    ),
+    (
+        "M19-verdict-emits-bad-row",
+        PREFLIGHT,
+        "  if (f.onHandQty > f.initialQty) {",
+        "  if (false) {",
+        PREFLIGHT_TESTS,
+        "E8 rows must be WITHHELD; emitting one gets the whole file rejected.",
+    ),
+    (
+        "M20-verdict-order-e7-first",
+        PREFLIGHT,
+        "  if (f.onHandQty > f.initialQty) {\n    return {\n      emit: false,\n      code: \"E8_ONHAND_GT_INITIAL\",",
+        "  if (f.onHandQty > f.initialQty) {\n    return {\n      emit: false,\n      code: \"E7_TOTALCOST_ZERO\",",
+        PREFLIGHT_TESTS,
+        "A count problem must be reported as E8, not mislabelled E7.",
+    ),
+    (
+        "M21-product-returns-first-only",
+        PREFLIGHT,
+        "  if (!f.description.trim()) {",
+        "  if (out.length === 0 && !f.description.trim()) {",
+        PREFLIGHT_TESTS,
+        "Both E9 and E10 must surface together; hiding one causes a second rejection.",
+    ),
+    (
+        "M22-e13-not-enforced",
+        ADJCORE,
+        "  if (adjustmentDetailRequired(ccrsReason) && !detail) {",
+        "  if (false) {",
+        PREFLIGHT_TESTS,
+        "E13: an Other/Theft row with no detail must be withheld [G L1111].",
+    ),
+    (
+        "M23-generator-emits-lf",
+        GENERATOR,
+        '    writeFileSync(join(OUT, outName), csv, "utf8");',
+        "    writeFileSync(join(OUT, outName), "
+        'csv.replace(/\\r\\n/g, "\\n"), "utf8");',
+        GENERATOR_TESTS,
+        "The owner uploads these files to CCRS. LF instead of CRLF is the most "
+        "likely real-world rejection [G L0196], and it is invisible on screen.",
+    ),
+    (
+        "M24-generator-probe-accidentally-valid",
+        GENERATOR,
+        "  if (t.breakNumberRecords) {",
+        "  if (false && t.breakNumberRecords) {",
+        GENERATOR_TESTS,
+        "An EXPECT-ERROR file that is secretly VALID is worse than a broken "
+        "one: CCRS accepts it and we record the wrong lesson for T-54.",
+    ),
     (
         "M8-filename-stamp-literal",
         CORE,
@@ -129,7 +270,14 @@ def main() -> int:
     print("=" * 66)
     print("BASELINE (all targets must be green before mutating)")
     print("=" * 66)
-    for target in (STAMP_TESTS, SELF_TESTS, BATCH_TESTS):
+    baseline_targets = (
+        STAMP_TESTS,
+        SELF_TESTS,
+        BATCH_TESTS,
+        PREFLIGHT_TESTS,
+        GENERATOR_TESTS,
+    )
+    for target in baseline_targets:
         res = vitest(target)
         state = "PASS" if res.returncode == 0 else "FAIL"
         print(f"  [{state}] {target}")
@@ -202,7 +350,7 @@ def main() -> int:
         return 1
 
     # Final proof: working tree is byte-identical to how we found it.
-    res = run(["git", "diff", "--stat", CORE, GATE])
+    res = run(["git", "diff", "--stat", CORE, GATE, PREFLIGHT, ADJCORE, GENERATOR])
     print("\nPost-run git diff vs index (S-01 edits only, no mutations):")
     print(res.stdout or "  (clean)")
     print("\nAll mutations killed. The tests can fail. ✅")
