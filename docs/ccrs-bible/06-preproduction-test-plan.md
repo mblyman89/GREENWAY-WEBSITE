@@ -131,19 +131,71 @@ Wait ≥10 minutes.
 | T-61 | Repeat T-60 the next week with Inventory as `Update` where N-03 says so | zero errors |
 | T-62 | Paste any error email into the hub (S-06), confirm triage maps every line to a rule and a fix-link | 100 % of lines classified; none "unknown" |
 
-## G. Questions for the examiner (send as one email; log answers in Part 12)
+## G. Questions for the examiner
 
-1. Is Greenway (license number from `license_settings`) provisioned in PREproduction, and which login does it use today? (U-01)
-2. Must the three header rows be comma-padded to the column count as in the templates, or is `SubmittedBy,<value>` acceptable? (U-03)
-3. Is the file-name prefix case-sensitive (`sale_` vs `Sale_`)? (U-02)
-4. For a retailer with no imported CBD, should any Area ever have `IsQuarantine=TRUE`? Page 9 lists "waste/destruction inventory" as a quarantine example, page 9 also says cannabis "must have an entry as False". (U-04)
-5. For inventory already reported weekly by our integrator (Cultivera) under our license using the product barcode as InventoryExternalIdentifier: when we begin uploading ourselves, should we (a) continue `Update` on those same identifiers, or (b) `Insert` new identifiers and file InventoryTransfer rows old→new? (U-08 / Part 07)
-6. Does re-`Insert`ing an unchanged Inventory row weekly produce an error or a silent no-op? (U-05)
-7. For a partial customer return, is `Update` of the Sale row acceptable, or must it be `Delete` + re-`Insert`? (U-09)
-8. Will the Upload page or file formats change with the October 2026 WA.gov transition? (U-10)
-9. Is there any success/receipt notification for the seven weekly files, or is silence the only confirmation? (U-11)
-10. May an Inventory `Update` change the Product a lot references (our Product names differ from the integrator's)? `[G L0579-L0583]` (U-12)
-11. How long must a licensee retain its uploaded CSV files and the CCRS error emails? (U-13)
-12. For an intake lot with no purchase cost on file that is a trade sample, is `TotalCost = 0.01` acceptable in Inventory, in line with the $0.01 sample guidance `[FAQ L0035]` and "TotalCost cannot equal 0" `[G L0614]`? (U-16)
+**Read this first (updated 2026-09-16).** The owner created a PREproduction account
+and logged in without examiner involvement, so **U-01 is CLOSED** and T-00 is moot.
+That changes the shape of this list: most of what was here can now be *observed*
+instead of *asked*, and observation beats an opinion in an email because it is what
+the system actually does.
 
-Send with the CSV attached when asking about a specific error, as the FAQ instructs `[FAQ L0030]`.
+Do not send all twelve. Run the files first, then send only what is left.
+
+### G1. Do NOT ask these — the test files answer them
+
+| Was | Question | Answered by |
+|---|---|---|
+| Q1 | Is Greenway provisioned in PREprod? | **CLOSED** — logged in 2026-09-16 |
+| Q2 | Must the three header rows be comma-padded? (U-03) | T-10 vs T-11 |
+| Q3 | Is the file-name prefix case-sensitive? (U-02) | T-12 |
+| Q6 | Does re-`Insert`ing an unchanged Inventory row error? (U-05) | T-30 → T-31B, T-33/T-34 |
+| Q9 | Is there any success notification, or is silence the only signal? (U-11) | Every passing file — watch the inbox 24 h |
+| Q12 | Is `TotalCost = 0.01` acceptable for a trade sample? (U-16) | T-31 |
+
+Asking these anyway costs credibility: the examiner may reasonably answer "upload it
+to PREproduction and see."
+
+### G2. Ask ONLY after the run, and only if the result is ambiguous
+
+These are testable, but the *interpretation* may need a human — for example if CCRS
+silently accepts something the guide appears to forbid, a silent accept is not the
+same as an endorsement.
+
+- **U-04** — For a retailer with no imported CBD, should any Area ever have
+  `IsQuarantine=TRUE`? `[G L0258-L0259]` lists waste/destruction as a quarantine
+  example, while `[G L0298-L0299]` and `[FAQ L0051]` say cannabis should be FALSE.
+  T-16/T-17 will show whether TRUE is *accepted*, which is not the same as whether it
+  is *correct*. **This one is a compliance judgement — worth asking regardless.**
+- **U-12** — May an Inventory `Update` change the Product a lot references?
+  `[G L0579-L0583]`. T-37 shows the join behaviour; ask only if T-37 is ambiguous.
+- **U-09** — Partial customer return: Sale `Update`, or `Delete` + re-`Insert`?
+  `[FAQ L0039]` gives the Delete procedure but is silent on partial.
+
+### G3. MUST ask a human — PREproduction cannot answer these
+
+These are the real reason to email the examiner. Nothing in PREprod can settle them,
+because *"These environments are autonomous and do not share administration or
+reporting data."* `[FAQ L0096]` — none of Greenway's real, Cultivera-filed history
+exists there.
+
+1. **(U-08, the important one — Part 07 cutover.)** Cultivera has been reporting
+   weekly under our license using the product barcode as `InventoryExternalIdentifier`.
+   When we begin uploading ourselves, should we (a) continue `Update` against those
+   same identifiers, or (b) `Insert` new identifiers and file InventoryTransfer rows
+   old→new? `[FAQ L0149]` recommends keeping existing ID structures but does not
+   address a change of filer. **Getting this wrong duplicates or orphans our entire
+   live inventory, and PREprod cannot reveal it because our real data is not there.**
+2. **(U-10.)** Will the October 2026 WA.gov transition change the Upload page, the
+   file formats, or the integrator model — or only the login? `[FAQ L0008-L0012]`
+   covers only the login.
+3. **(U-13.)** How long must we retain the uploaded CSVs and the CCRS error emails?
+   No retention period appears anywhere in the CCRS sources.
+4. **(U-15.)** Which address receives error emails — the SAW/WA.gov login email, or a
+   separate CCRS profile email? `[FAQ L0102]` says only "the uploader."
+   *(A PREprod error email will likely reveal this — check that first.)*
+5. **De-provisioning / cutover notice.** When we stop using Cultivera as our
+   integrator, is there anything we must do besides unassigning them in CCRS
+   `[FAQ L0090]`, and should the LCB be notified of the date?
+
+Send with the CSV attached when asking about a specific error, as the FAQ instructs
+`[FAQ L0030]`. Log every answer verbatim in Part 12 against its U-xx.
