@@ -1,0 +1,32 @@
+# 12 — UNVERIFIED Register
+
+Rule (Part 01 §C): a statement with no pin is an opinion. Opinions that matter are listed here with an ID, the exact claim, why it is unproven, how it will be proven, and who owns it. When proven, the row is updated with the date, the evidence (Part 06 ledger line or the examiner's quoted reply), and the Part 04 / Part 09 items it unblocks. **Never delete a row; mark it CLOSED.**
+
+Owners: **O** = owner (only he can log in / email LCB); **A** = agent (code/test). Proof kinds: **PRE** = PREprod test in Part 06; **EX** = examiner written reply (Part 06 §G question number); **REC** = Public Records / Cultivera export.
+
+| ID | Claim in question | Why unproven | Proof | Owner | Blocks | Status |
+|---|---|---|---|---|---|---|
+| U-01 | Greenway's license is provisioned in PREproduction and reachable with the owner's current SAW login | FAQ says all licensees have PREprod `[FAQ L0088]` but says nothing about how a specific license is enabled; no login has been attempted | EX Q1; PRE T-00/T-01 | O | every T-xx | OPEN |
+| U-02 | File-name prefix is case-insensitive (`strain_` vs `Strain_`) | Guide shows lowerCamel per file `[G L0267]` `[G L0337]` `[G L0397]` `[G L0538]` `[G L1066]` `[G L1173]` `[G L1276]`; template file names are capitalised (`Strain.csv`); no rule text | PRE T-12; EX Q3 | O | none (repo emits lowerCamel = guide) | OPEN |
+| U-03 | The three header rows need not be comma-padded to the column count | Templates pad `[TPL * R1-R3]`; guide header text `[G L0209-L0253]` silent; repo `assembleCcrsFile` L641-L643 does not pad | PRE T-10 vs T-11; EX Q2 | O | S-01 flag default (N-04) | OPEN |
+| U-04 | A retailer hold/quarantine Area must be `IsQuarantine=FALSE` | `[G L0298-L0299]` "only applies to imported CBD"; `[FAQ L0051]` "NOT set by default to 'TRUE'"; but `[G L0258-L0259]` lists waste/destruction inventory as a quarantine example | EX Q4; PRE T-17 | O | S-04 severity (warning→error), Area golden | OPEN |
+| U-05 | Re-`Insert`ing an unchanged Inventory row weekly is accepted silently (vs duplicate error vs must be `Update`) | `[FAQ L0052-L0053]` covers Update-before-Insert only; Inventory error table (Part 02 §1 p.16-18) has no "Duplicate Inventory" line in the recon — confirm by reading L522-L647 | PRE T-30/T-33; EX Q6 | O/A | S-05 `inventory_resend_mode` default | OPEN |
+| U-06 | Hyphens in ExternalIdentifiers are accepted | Only source is a repo comment `ccrs-identifiers.ts` L37-L39 "widely accepted and used by integrators" — not LCB text; `[G L0224]` says Text(100) only | PRE T-21 | O | W3 severity; `sanitizeExternalId` L41-L47 policy | OPEN |
+| U-07 | A Sale row re-uploaded unchanged errors as "Duplicate Sale" | `[G L1390-L1399]` describes duplicate detection but the exact behaviour for identical re-upload (error vs ignore) needs observation | PRE T-45 | O | sale-correction strategy (`ccrs-sale-correction-core.ts`) | OPEN |
+| U-08 | Greenway may continue `Update`-ing the InventoryExternalIdentifiers Cultivera filed (barcode) under its own uploads, and CCRS validates `FromInventoryExternalIdentifier` against the vendor's filed inventory | `[FAQ L0149]` "keep existing IDs" is about a licensee's own IDs; integrator-to-licensee continuity is not addressed; `[G L1191]` names the error but not the validation scope | EX Q5; PRE T-50; REC (Cultivera export / Public Records `[FAQ L0142]`) | O | Part 07 R-1/R-2, S-03 W2 setting, S-05 | OPEN |
+| U-09 | Partial customer return may be reported as Sale `Update` (vs `Delete` + adjustment per `[FAQ L0039]`) | FAQ gives the Delete + InventoryAdjustment procedure for a return; says nothing about Update for partial | PRE T-46/T-47; EX Q7 | O | `mapSaleCorrectionRow` path; `disposition.ts` L466 flow | OPEN |
+| U-10 | The October 2026 WA.gov change alters only the login, not the Upload page, templates, admin/integrator model | `[FAQ L0008-L0012]` is the entire text; nothing about upload | EX Q8; PRE T-02b when WA.gov login is live in PREprod | O | S-09 scope; Part 11 | OPEN |
+| U-11 | There is no success/receipt notification; silence = accepted | `[G L0051]` and `[FAQ L0102]` describe error emails only; absence of a success email is not stated | EX Q9; PRE T-10 (observe inbox 24 h) | O | Part 08 wording of "clean" state | OPEN |
+| U-12 | An Inventory `Update` that changes the referenced Product (name) is accepted | `[G L0579-L0583]` "same format and spelling as previously submitted" concerns matching, not changing | PRE T-34 variant; EX (add as Q10) | O | Part 07 R-5, first prod week with Cultivera-era lots | OPEN |
+| U-13 | Required retention period for CCRS upload files and error emails | No retention text in the fetched CCRS sources; `[FAQ L0142]` mentions "archive requirements" for original records without a number here | EX (add as Q11); WAC 314-55 lookup by owner/agent with pin | O/A | Part 08 §E.4 retention wording | OPEN |
+| U-14 | Exact wording/format of the LCB error email (file name echoed? one email per file?) | No sample in sources | PRE first error email (T-11/T-12 designed to trigger one) → paste verbatim into Part 06 ledger and here | O | S-06 email-guess parser | OPEN |
+| U-15 | Email address that receives errors is the SAW/WA.gov login email vs the "CCRS profile" email | `[LOGIN L0058]` "It does not have to be the email that is used for your SAW account" (about the admin association); `[FAQ L0102]` "only the uploader" | PRE (observe which inbox gets T-11's error) | O | hub copy in Step 4 | OPEN |
+| U-16 | `[FAQ L0035]` trade-sample $0.01 also satisfies Inventory `TotalCost ≠ 0` `[G L0614]` for sample lots with no cost | FAQ line is about samples' price; applying it to TotalCost is our inference | EX (add as Q12); PRE T-31 (sample lot with TotalCost 0.01) | O | S-02 E7 sample branch | OPEN |
+
+## Adding a row
+
+A new `U-nn` is added the moment an agent writes a sentence about CCRS behaviour that it cannot pin to Part 02. The same PR that adds code depending on that sentence must add the row and a Part 06 test that would close it. Examiner questions beyond Q9 are appended to Part 06 §G in the same PR (Q10 = U-12, Q11 = U-13, Q12 = U-16 as of this writing).
+
+## Closing a row
+
+Replace `OPEN` with `CLOSED YYYY-MM-DD — <proof kind> — <one-line evidence with quote or Part 06 ledger ref>`; then update Part 04 (status) and Part 09 (default/flag) in the same commit.

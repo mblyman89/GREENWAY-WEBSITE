@@ -42,6 +42,46 @@ These rules govern ALL work in this repository. They are owner-mandated and perm
 
 ## 🔴 CCRS COMPLIANCE — ALWAYS CHECK AND SATISFY (BINDING)
 
+### ⛔ MANDATORY FIRST STEP — READ THE BIBLE BEFORE YOU EDIT ANY CCRS CODE
+
+**`docs/ccrs-bible/` is REQUIRED reading and it OUTRANKS memory, habit, and every other
+doc in this repo.** Before you touch ANY file that produces, validates, schedules,
+displays, or records a CCRS file — or any schema/route/component those files depend on —
+you MUST, in this order:
+
+1. Read `docs/ccrs-bible/00-INDEX.md`, then `01-standing-rules-and-handoff.md` (the
+   owner's binding rules + the 8-step slice protocol), then `05-owner-decisions-log.md`
+   (what the owner has already decided — do not re-litigate or "improve" on it), then
+   `04-current-state-and-gap-matrix.md`, then `09-slice-plan.md` (the slice order is
+   BINDING; find the slice your work belongs to and follow it).
+2. Ground every CCRS rule you rely on with a pin into `02-authoritative-spec.md`
+   (`[G L####]`, `[FAQ L####]`, `[API L####]`, `[LOGIN/ADMIN/SAW/MANI L####]`,
+   `[TPL <File> R#]`). **A CCRS statement with no pin is an opinion; it goes in
+   `12-unverified-register.md` as a `U-xx`, NOT into the code.**
+3. Ground every code anchor against `03-code-anchor-atlas.md` and confirm it has not
+   moved: `git diff <atlas commit> -- <file>`. If it moved, REGENERATE the atlas
+   (`python3 scripts/ccrs-bible/build_atlas_part.py`) and re-pin BEFORE writing code.
+4. Tests first, with the spec pin written as a comment in the test. Then implement.
+   Then update Part 04 (status), Part 12 (if a `U-xx` closed), and regenerate Part 03
+   **in the same PR**.
+5. Run the pin checker before opening the PR:
+   `python3 scripts/ccrs-bible/check_pins.py` — it must report `range_errors=0`.
+
+**Never guess, never assume. Never "fix" a CCRS format from memory of another state's
+system. Never treat a `warning` as safe — several guide-listed hard errors are still
+warnings in this codebase (Part 04 W1/W2/W4/W12/W15).** Do not test against production
+CCRS; all unknowns are settled in PREproduction (`https://precannabisreporting.lcb.wa.gov`)
+per Part 06. If the bible does not cover what you are about to do, STOP and add it to the
+bible first — that is the whole point of the document.
+
+Regenerate the reference volumes (never hand-edit Parts 02 or 03):
+
+```bash
+python3 scripts/ccrs-bible/build_spec_part.py    # needs the LCB sources (Part 13 §E)
+python3 scripts/ccrs-bible/build_atlas_part.py   # reads this working tree
+python3 scripts/ccrs-bible/check_pins.py         # every pin must resolve
+```
+
 The POS / back office MUST strictly adhere to the WA LCB **Cannabis Central Reporting
 System (CCRS)** at all times. Compliance protects the owner's license. For ANY change
 that touches inventory, sales, products, strains, areas, adjustments, transfers, tax,
@@ -78,8 +118,13 @@ manifests, or any file/data the LCB ingests, you MUST:
   layers that flag non-conformant data BEFORE it can be uploaded (CCRS only notifies
   failures by email, so catch them here).
 - **Keep the spec docs current.** When the LCB updates a template/manual, update
-  `docs/ccrs-data-model.md` + `docs/ccrs-templates/` and re-verify generators.
+  `docs/ccrs-data-model.md` + `docs/ccrs-templates/` and re-verify generators. Also
+  re-download per `docs/ccrs-bible/13-sources.md` §E, compare md5s, regenerate Part 02,
+  and re-verify EVERY pin whose line moved.
 - The living audit + findings ledger is `docs/CCRS_COMPLIANCE_AUDIT.md`.
+- The authoritative roadmap, gap matrix, PREprod test plan, and UNVERIFIED register are
+  `docs/ccrs-bible/` (see the MANDATORY FIRST STEP above). The old
+  `docs/CCRS_WEEKLY_UPLOAD_BIBLE.md` was superseded and deleted.
 
 ## 🔴 DOH MEDICAL CANNABIS COMPLIANCE — ALWAYS RESPECT (BINDING)
 
