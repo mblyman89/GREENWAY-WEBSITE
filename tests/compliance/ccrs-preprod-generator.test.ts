@@ -209,4 +209,34 @@ describe("expected-PASS files really are valid; expected-ERROR files really are 
     // The owner must be told not to rename the files [G L0046].
     expect(m).toContain("Do not rename");
   });
+
+  it("the manifest says the 10-minute wait is BETWEEN GROUPS, and why these probes still go one at a time", () => {
+    const m = readFileSync(join(OUT, "MANIFEST.md"), "utf8");
+
+    // The guide's only timing rule is a dependency gap before Inventory
+    // [G L0530] -- it is NOT a per-file cooldown. Saying otherwise turns a
+    // ~25 minute exercise into a multi-hour one for no reason.
+    expect(m).toMatch(/BETWEEN GROUPS, not between files/i);
+
+    // But these particular files must still go one at a time: nine of them
+    // share a single file name, and T-10/T-11/T-12 carry identical data rows
+    // on purpose, so a batch upload would make an error email ambiguous and
+    // would answer neither U-02 nor U-03.
+    expect(m).toMatch(/one file, one upload/i);
+    expect(m).toContain("same file name");
+  });
+
+  it("the probes really do collide by file name, which is why the manifest warns about it", () => {
+    // Guards the reasoning above with the actual data rather than a comment:
+    // if a future change made every name unique, the warning would be stale.
+    const counts = new Map<string, number>();
+    for (const f of FILES) counts.set(f.name, (counts.get(f.name) ?? 0) + 1);
+    const collisions = [...counts.values()].filter((n) => n > 1);
+    expect(collisions.length).toBeGreaterThan(0);
+
+    // T-10/T-11/T-12 are the U-03 / U-02 probes and share their data rows.
+    const dataRows = (id: string) =>
+      read(byId(id)!).split("\r\n").slice(4).join("\r\n");
+    expect(dataRows("T-10")).toBe(dataRows("T-11"));
+  });
 });
