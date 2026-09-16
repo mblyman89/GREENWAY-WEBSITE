@@ -199,3 +199,16 @@ exists there.
 
 Send with the CSV attached when asking about a specific error, as the FAQ instructs
 `[FAQ L0030]`. Log every answer verbatim in Part 12 against its U-xx.
+
+**The email itself is drafted and ready to send: see Part 14.** It asks G3 items 1, 3,
+4 and 5 only. Two refinements were made while drafting it, both from source:
+
+- **U-08 is now a records request, not an opinion request.** *"A license can request
+  their data from the examiner unit for CCRS."* `[FAQ L0136]` If the examiner unit
+  returns Greenway's filed `InventoryExternalIdentifier` / `Strain` / `Area` /
+  `Product` values, that single reply closes U-08 **and** U-14 and Part 07 R-4/R-5 with
+  a document instead of an opinion. `[FAQ L0142]` points licensee-specific requests at
+  Public Records, so the email asks the examiner unit first and offers to re-file with
+  Public Records — a "no" still returns the route.
+- **U-10 was cut from the send list.** It is a roadmap question, not a blocker, and it
+  would dilute four sharp questions. Tracked in Part 11; ask it separately later.

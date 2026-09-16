@@ -23,6 +23,7 @@ This bible exists so that no future agent drifts. If a thing is not in here, it 
 | 11 | `11-wa-gov-transition.md` | October 2026 login change: what is known, what to ask LCB, what to change in the UI | hand |
 | 12 | `12-unverified-register.md` | Every fact not yet proven, its ID (U-xx), how it will be proven, and who owns it | hand |
 | 13 | `13-sources.md` | Every source with URL, fetch date, on-disk path, checksum | hand+generated |
+| 14 | `14-examiner-email-draft.md` | The ready-to-send examiner email for the Part 06 §G3 questions, with the question→U-xx map and what to do with the answers | hand |
 
 ## Reading order for a fresh agent
 
