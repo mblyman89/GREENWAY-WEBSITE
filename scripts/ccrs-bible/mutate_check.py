@@ -217,8 +217,8 @@ MUTATIONS = [
     (
         "M23-generator-emits-lf",
         GENERATOR,
-        '    writeFileSync(join(OUT, outName), csv, "utf8");',
-        "    writeFileSync(join(OUT, outName), "
+        '    writeFileSync(join(outDir, fileName), csv, "utf8");',
+        "    writeFileSync(join(outDir, fileName), "
         'csv.replace(/\\r\\n/g, "\\n"), "utf8");',
         GENERATOR_TESTS,
         "The owner uploads these files to CCRS. LF instead of CRLF is the most "

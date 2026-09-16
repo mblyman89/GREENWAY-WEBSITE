@@ -616,7 +616,11 @@ function main(): void {
   );
   lines.push("## How to run\n");
   lines.push(
-    "1. Upload every **Group 1** file, then **wait at least 10 minutes** before Group 2. `[G L0530]`\n2. Upload **Group 2**, wait ten minutes again.\n3. Upload **Group 3**.\n4. There is **no success email** for these seven files — only errors are emailed, and only to the person who uploaded. `[G L0051]` `[FAQ L0102]` So *absence of an error email after the wait* is the pass signal. Record the wait you actually used.\n5. For every file, fill in the row below. **Paste error emails whole — never summarise them.**\n",
+    "**Upload each CSV exactly as named. Do not rename it.** CCRS reads the file name " +
+      "(`<type>_<license>_<stamp>.csv` `[G L0046]`), so a renamed file can be rejected for the " +
+      "wrong reason and the test teaches us nothing. Each test therefore sits in its own folder " +
+      "and the CSV inside already has the correct name.\n\n" +
+      "1. Upload every **Group 1** file, then **wait at least 10 minutes** before Group 2. `[G L0530]`\n2. Upload **Group 2**, wait ten minutes again.\n3. Upload **Group 3**.\n4. There is **no success email** for these seven files — only errors are emailed, and only to the person who uploaded. `[G L0051]` `[FAQ L0102]` So *absence of an error email after the wait* is the pass signal. Record the wait you actually used.\n5. For every file, fill in the row below. **Paste error emails whole — never summarise them.**\n6. Files marked **EXPECT-ERROR** are invalid on purpose. An error email for one of those is a **success** — paste the wording in, it becomes a triage rule.\n",
   );
   lines.push("## Files, in upload order\n");
   lines.push(
@@ -628,8 +632,21 @@ function main(): void {
   let n = 0;
   for (const t of ordered) {
     const { fileName, csv } = build(t);
-    const outName = `${t.id}__${fileName}`;
-    writeFileSync(join(OUT, outName), csv, "utf8");
+
+    // Each test gets its OWN FOLDER, and the CSV inside keeps the exact name
+    // CCRS requires: <type>_<license>_<stamp>.csv [G L0046].
+    //
+    // Do not be tempted to flatten this by prefixing the test id onto the file
+    // name ("T-10__Strain_413541_....csv"). CCRS parses the file name, so a
+    // prefixed file can be rejected for having the wrong name -- which is the
+    // worst possible outcome for a test run: every probe fails for a reason we
+    // invented, and we learn nothing about the rule we were actually testing.
+    // Folders also let T-10 and T-11 (deliberately the same file name, one
+    // padded and one not) coexist without a collision.
+    const outDir = join(OUT, t.id);
+    mkdirSync(outDir, { recursive: true });
+    const outName = join(t.id, fileName);
+    writeFileSync(join(outDir, fileName), csv, "utf8");
 
     // Self-check: a file we expect to PASS must at least satisfy our own
     // verifier. A file we expect to fail may legitimately not.
