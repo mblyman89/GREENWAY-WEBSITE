@@ -620,7 +620,27 @@ function main(): void {
       "(`<type>_<license>_<stamp>.csv` `[G L0046]`), so a renamed file can be rejected for the " +
       "wrong reason and the test teaches us nothing. Each test therefore sits in its own folder " +
       "and the CSV inside already has the correct name.\n\n" +
-      "1. Upload every **Group 1** file, then **wait at least 10 minutes** before Group 2. `[G L0530]`\n2. Upload **Group 2**, wait ten minutes again.\n3. Upload **Group 3**.\n4. There is **no success email** for these seven files — only errors are emailed, and only to the person who uploaded. `[G L0051]` `[FAQ L0102]` So *absence of an error email after the wait* is the pass signal. Record the wait you actually used.\n5. For every file, fill in the row below. **Paste error emails whole — never summarise them.**\n6. Files marked **EXPECT-ERROR** are invalid on purpose. An error email for one of those is a **success** — paste the wording in, it becomes a triage rule.\n",
+      "### The 10-minute wait is BETWEEN GROUPS, not between files\n\n" +
+      "The only timing rule in the whole guide is that Inventory's prerequisites (Strain, Area, " +
+      "Product) must be \"submitted prior to this submission by at least 10 minutes\" `[G L0530]`. " +
+      "Nothing requires a gap between two files in the same group. CCRS's Browse dialog even " +
+      "lets you \"select one or multiple files to be uploaded\" `[G L0166]`.\n\n" +
+      "### But for THIS test set, upload one file at a time anyway\n\n" +
+      "These are diagnostic probes, not a normal weekly filing, and that changes the advice:\n\n" +
+      "- **Many of them share the same file name.** Nine Inventory probes are all called " +
+      "`Inventory_413541_20250615213000.csv`. You cannot multi-select two files with the same " +
+      "name, and uploading them back to back means an error email is ambiguous about which " +
+      "one it came from.\n" +
+      "- **Several deliberately overlap.** T-10, T-11 and T-12 contain the *same strains* on " +
+      "purpose \u2014 they differ only in header padding and filename case. Sent together, the " +
+      "second and third would be duplicates of the first and the padding/case question " +
+      "(U-03 / U-02) would go unanswered.\n" +
+      "- **Ten files are invalid on purpose.** If a batch throws an error, you will not know " +
+      "which file caused it.\n\n" +
+      "So: **one file, one upload, note the time.** The ten-minute wait still applies only " +
+      "when moving from one group to the next \u2014 not between files inside a group.\n\n" +
+      "1. Upload the **Group 1** files, one at a time, in the order listed. When the last one " +
+      "is done, **wait at least 10 minutes.** `[G L0530]`\n2. Upload **Group 2** the same way, one at a time. Wait at least ten minutes again.\n3. Upload **Group 3** the same way.\n4. There is **no success email** for these seven files — only errors are emailed, and only to the person who uploaded. `[G L0051]` `[FAQ L0102]` So *absence of an error email after the wait* is the pass signal. Record the wait you actually used.\n5. For every file, fill in the row below. **Paste error emails whole — never summarise them.**\n6. Files marked **EXPECT-ERROR** are invalid on purpose. An error email for one of those is a **success** — paste the wording in, it becomes a triage rule.\n",
   );
   lines.push("## Files, in upload order\n");
   lines.push(
