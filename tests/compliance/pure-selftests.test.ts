@@ -44,6 +44,7 @@ import { __runCreativePlacementsTests } from "@/lib/marketing/creative-placement
 import { __runCcrsWeekTests } from "@/lib/compliance/ccrs-week-core";
 import { __runCcrsDeadlineTests } from "@/lib/compliance/ccrs-deadline-core";
 import { __runCcrsErrorTriageTests } from "@/lib/compliance/ccrs-error-triage-core";
+import { __runCcrsSubmitGateTests } from "@/lib/compliance/ccrs-submit-gate-core";
 import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
 import { __runLeaflyPayloadTests } from "@/lib/leafly/payload-core";
 import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
@@ -189,6 +190,14 @@ describe("embedded pure self-test suites", () => {
   });
   it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {
     const r = __runCcrsErrorTriageTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
+  });
+  // CCRS bible slice S-01 / gap N-06: this suite existed but was never imported,
+  // so the gate that decides whether a batch may be uploaded had NO enforced
+  // coverage. Errors reach the owner only by email after the fact [G L0051].
+  it("ccrs-submit-gate-core (S-01/N-06: the upload gate — errors block, warnings do not)", () => {
+    const r = __runCcrsSubmitGateTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(0);
   });

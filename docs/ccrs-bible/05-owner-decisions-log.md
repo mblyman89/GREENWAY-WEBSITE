@@ -82,6 +82,50 @@ Owner: "Then please proceed with the first slice of the roadmap." Part 09's orde
 
 Owner: "Test it, test the tests." Operationally, for every slice: the new test must be observed FAILING for the right reason before the implementation lands, the pure self-test must be registered in `tests/compliance/pure-selftests.test.ts` (so the embedded assertions themselves run under Vitest), and golden fixtures are re-verified after the change. A test that cannot fail is not a test.
 
+## D-11 — Mutation testing is now the definition of "test the tests" (2026-09-15, S-01)
+
+"Test it, test the tests" was executed literally in S-01 by way of a mutation
+harness, `scripts/ccrs-bible/mutate_check.py`. It deliberately breaks the
+implementation one edit at a time and asserts the suite goes RED. A mutation
+that SURVIVES is a hole in the tests, not a pass.
+
+S-01 ran 8 mutations; the first pass was **6 killed, 2 survived**. Both
+survivors were real holes in tests that *looked* thorough:
+
+- **M4 (`padHeaderRowsForTemplates` idempotence guard removed) survived.** The
+  existing idempotence test could not fail, because after one pad a header row
+  has EXACTLY the column count, so the guard computes `",".repeat(0)` — a
+  no-op either way. The guard's real job is an **over-wide** row, where
+  `width - cells` is NEGATIVE and `String.prototype.repeat` throws
+  `RangeError`. A new test feeds an over-wide header row and asserts no throw
+  plus no truncation.
+- **M5 (padding loop widened past the 3 header rows) survived.** The fixture's
+  data rows already carried exactly the column count, so touching them changed
+  nothing. A new test uses a deliberately SHORT data row and asserts it stays
+  short while rows 0-2 are padded.
+
+After adding those two tests: **8 killed, 0 survived.**
+
+Two further process findings, both of which would have produced a FALSE GREEN:
+
+1. **The harness itself was wrong first.** It invoked Vitest with
+   `--reporter=basic`; Vitest 4 removed that reporter, so vitest exited
+   non-zero *before running a single test*. Every mutation would have been
+   scored "killed" for the wrong reason. The harness now uses `--reporter=dot`
+   and refuses to count a kill unless the output contains an actual test
+   tally — an infrastructure error is reported INCONCLUSIVE and aborts.
+2. **A pre-existing embedded self-test hard-coded the old UTC behaviour.**
+   `__runCcrsBatchCoreTests` asserted
+   `Inventory_123456_20250102030405.csv`. Under the corrected Pacific rule
+   `Date.UTC(2025,0,2,3,4,5)` is 2025-01-01 19:04:05 PST, so the stamp is
+   `20250101190405` — deliberately the PREVIOUS calendar day. It was updated
+   with a comment warning future agents not to "fix" it back. This was caught
+   only because the harness re-runs a green baseline across ALL affected test
+   files before mutating; running just the new test file would have missed it.
+
+Standing rule for every future slice: a slice is not done until its mutations
+are all killed, and the harness's own failure modes are ruled out first.
+
 ## Decisions that are still the owner's to make (do NOT decide these for him)
 
 | Ref | Decision | Why it is his |

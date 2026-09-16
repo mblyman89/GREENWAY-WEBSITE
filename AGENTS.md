@@ -66,6 +66,12 @@ you MUST, in this order:
    **in the same PR**.
 5. Run the pin checker before opening the PR:
    `python3 scripts/ccrs-bible/check_pins.py` — it must report `range_errors=0`.
+6. **Test the tests.** Before opening the PR, prove your new tests can actually fail:
+   `python3 scripts/ccrs-bible/mutate_check.py` — it must report `0 survived`. Add a
+   mutation for each behaviour your slice introduces. A test that cannot fail is not a
+   test (Part 05 D-10, D-11). Beware two false greens: a broken harness/flag that exits
+   before any test runs, and an *equivalent mutant* whose arithmetic self-limits — in
+   S-01 two "thorough" assertions could not fail until the fixture shape changed.
 
 **Never guess, never assume. Never "fix" a CCRS format from memory of another state's
 system. Never treat a `warning` as safe — several guide-listed hard errors are still
@@ -80,6 +86,7 @@ Regenerate the reference volumes (never hand-edit Parts 02 or 03):
 python3 scripts/ccrs-bible/build_spec_part.py    # needs the LCB sources (Part 13 §E)
 python3 scripts/ccrs-bible/build_atlas_part.py   # reads this working tree
 python3 scripts/ccrs-bible/check_pins.py         # every pin must resolve
+python3 scripts/ccrs-bible/mutate_check.py      # your tests must be able to FAIL
 ```
 
 The POS / back office MUST strictly adhere to the WA LCB **Cannabis Central Reporting

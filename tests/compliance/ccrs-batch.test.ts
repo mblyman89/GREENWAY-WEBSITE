@@ -140,7 +140,13 @@ describe("ccrsCell quoting", () => {
 describe("file naming convention", () => {
   it("UploadType_LicenseNumber_YYYYMMDDHHMMSS.csv", () => {
     const name = ccrsFileName("Sale", FIXTURE_LICENSE, FIXTURE_SUBMITTED_AT);
-    expect(name).toBe(`Sale_413541_${ccrsFileStamp(FIXTURE_SUBMITTED_AT)}.csv`);
+    // S-01: this assertion used to be `${ccrsFileStamp(FIXTURE_SUBMITTED_AT)}`,
+    // i.e. the implementation compared against itself — it could not fail, and
+    // it did not notice that the stamp was UTC while SubmittedDate was Pacific
+    // (bible gap N-05). The stamp is now written out literally: 2025-06-15
+    // 20:00 UTC is 1:00 PM Pacific  [FAQ L0075].
+    expect(name).toBe("Sale_413541_20250615130000.csv");
+    expect(ccrsFileStamp(FIXTURE_SUBMITTED_AT)).toBe("20250615130000");
     expect(name).toMatch(/^Sale_413541_\d{14}\.csv$/);
   });
 });
