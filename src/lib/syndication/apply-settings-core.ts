@@ -8,10 +8,18 @@
  * never touches required fields (ids, names, prices, variants, categories,
  * published, inventory).
  *
- * Verified nullability rules honored:
- *  - Leafly: strain/cannabinoid absent => null, NEVER "NA"/0 — so disabling
- *    strains sets strainName to null and disabling cannabinoids empties
- *    compounds + nulls totalThc/totalCbd.
+ * Verified nullability rules honored (Leafly rules re-derived in slice L-2
+ * directly from docs/leafly-specs/schemas/v2-items.json, because the previous
+ * set was written against field names Leafly does not define):
+ *  - Leafly `strain` and `imageUrl` are ["string","null"] => suppression is an
+ *    explicit null. For `strain`, null is the documented "no strain" signal and
+ *    is NEVER the string "NA". For `imageUrl`, the schema states that null or
+ *    omission "will remove any existing image", so null is the correct way to
+ *    honour the owner's images-off toggle.
+ *  - Leafly `description` is a NON-nullable string, and `total_thc`/`total_cbd`
+ *    are NON-nullable objects => suppression must OMIT the key. Nulling them is
+ *    a schema violation, not a softer form of removal.
+ *  - Leafly `compounds` is an array => suppression empties it.
  *  - Weedmaps: optional keys are OMITTED entirely (the builder already omits
  *    absent ones), so disabling a toggle deletes the key.
  */
@@ -25,18 +33,64 @@ type FieldToggles = Pick<
   "sendDescriptions" | "sendCannabinoids" | "sendImages" | "sendStrains"
 >;
 
-/** Apply the owner's field toggles to Leafly v2 items (returns new objects). */
+/**
+ * Apply the owner's field toggles to Leafly v2 items (returns new objects).
+ *
+ * SLICE L-2 REPAIR. Every line of the previous version was wrong, in four
+ * distinct ways, all verified against `docs/leafly-specs/schemas/v2-items.json`:
+ *
+ *  1. WRONG FIELD NAMES. It wrote `strainName` and `totalThc`/`totalCbd`. The
+ *     schema's properties are `strain`, `total_thc` and `total_cbd`. Toggling
+ *     a field off therefore nulled a property Leafly has never heard of and
+ *     left the real one transmitting at full strength -- the toggle did the
+ *     exact opposite of nothing: it added junk AND failed to suppress.
+ *
+ *  2. NULL WHERE NULL IS ILLEGAL. `description` is declared `type: "string"`,
+ *     with no `"null"` in the union, so `description: null` is a schema
+ *     violation. The suppression has to OMIT the key, not null it. Same for
+ *     `total_thc`/`total_cbd`, which are `type: "object"` with
+ *     `required: ["content","unit"]` -- there is no legal null form of those
+ *     either.
+ *
+ *  3. NULL WHERE NULL IS CORRECT. `strain` really is `["string","null"]`, and
+ *     L-1 established that absent means null and never the string "NA". So
+ *     `strain` is the one field the old code nulled for the right reason.
+ *
+ *  4. THE `sendImages` NO-OP. The old comment read "Leafly v2 items have no
+ *     image field -- sendImages is a no-op here by design." That is false.
+ *     `imageUrl` exists, and the schema is explicit about what suppression
+ *     means: "If this field is omitted or null, any existing image will be
+ *     removed." So the owner's image toggle was silently dead: turning images
+ *     OFF kept publishing them. It is now honoured, and honoured as an
+ *     explicit `null` rather than a bare omission, because null and omission
+ *     mean the same thing to Leafly here and the explicit form makes the
+ *     intent auditable in the payload we log.
+ *
+ * This layer still only ever REMOVES enrichment. It never invents a value and
+ * never touches a required field (id, type, name, variants).
+ */
 export function applyLeaflySettings(items: LeaflyItem[], toggles: FieldToggles): LeaflyItem[] {
   return items.map((item) => {
     const out: LeaflyItem = { ...item };
-    if (!toggles.sendDescriptions) out.description = null;
-    if (!toggles.sendStrains) out.strainName = null;
+
+    // `description` is a non-nullable string in the schema -> omit the key.
+    if (!toggles.sendDescriptions) delete out.description;
+
+    // `strain` IS nullable, and null is the documented "no strain" signal.
+    if (!toggles.sendStrains) out.strain = null;
+
     if (!toggles.sendCannabinoids) {
+      // An empty array is legal for `compounds` (it is `type: "array"`).
       out.compounds = [];
-      out.totalThc = null;
-      out.totalCbd = null;
+      // The totals are non-nullable objects -> omit, never null.
+      delete out.total_thc;
+      delete out.total_cbd;
     }
-    // Leafly v2 items have no image field — sendImages is a no-op here by design.
+
+    // `imageUrl` is nullable and null means "remove the existing image",
+    // which is precisely what the owner turning images off should mean.
+    if (!toggles.sendImages) out.imageUrl = null;
+
     return out;
   });
 }
@@ -83,17 +137,25 @@ export function __runApplySettingsTests(): void {
     sendStrains: false,
   };
 
+  // SLICE L-2: this fixture is schema-shaped. The previous one used field
+  // names (`brandName`, `strainName`, `totalThc`, variant `label`) and a
+  // compound shape (`value` instead of `content`, unit "%") that Leafly does
+  // not define, so the suite proved the toggles worked on an item that could
+  // never have existed on the wire.
   const leaflyItem: LeaflyItem = {
     id: "p1",
     name: "Blue Dream 3.5g",
-    brandName: "Acme",
-    type: "flower",
-    strainName: "Blue Dream",
+    type: "Flower",
+    brand: "Acme",
+    strain: "Blue Dream",
     description: "Nice.",
-    compounds: [{ type: "thc", unit: "%", value: 21.4 }],
-    totalThc: { type: "thc", unit: "%", value: 21.4 },
-    totalCbd: null,
-    variants: [{ id: "v1", price: 3500, inventoryLevel: 4, medical: false, label: "3.5g" }],
+    compounds: [{ type: "thc", content: 21.4, unit: "percent" }],
+    total_thc: { content: 21.4, unit: "percent" },
+    total_cbd: { content: null, unit: "percent" },
+    imageUrl: "https://cdn.example.com/p1.jpg",
+    variants: [
+      { id: "v1", medical: false, price: 3500, amount: 3.5, unit: "g", inventoryLevel: 4 },
+    ],
   };
 
   // All-on: unchanged content, new object.
@@ -101,18 +163,61 @@ export function __runApplySettingsTests(): void {
   ok("leafly all-on unchanged", JSON.stringify(lOn[0]) === JSON.stringify(leaflyItem));
   ok("leafly returns new objects", lOn[0] !== leaflyItem);
 
-  // All-off: enrichment nulled per verified nullability, required fields intact.
+  // All-off: enrichment suppressed per VERIFIED nullability -- omit where the
+  // schema forbids null, null where the schema defines null as the signal.
   const lOff = applyLeaflySettings([leaflyItem], allOff)[0];
-  ok("leafly desc nulled", lOff.description === null);
-  ok("leafly strain nulled (never 'NA')", lOff.strainName === null);
-  ok("leafly compounds emptied", lOff.compounds.length === 0);
-  ok("leafly totals nulled", lOff.totalThc === null && lOff.totalCbd === null);
-  ok("leafly brand untouched", lOff.brandName === "Acme");
+  ok("leafly desc OMITTED (non-nullable string)", !("description" in lOff));
+  ok("leafly strain nulled (nullable; never 'NA')", lOff.strain === null);
+  ok("leafly compounds emptied", (lOff.compounds ?? []).length === 0);
+  ok(
+    "leafly totals OMITTED (non-nullable objects)",
+    !("total_thc" in lOff) && !("total_cbd" in lOff),
+  );
+  ok("leafly imageUrl nulled (removes existing image)", lOff.imageUrl === null);
+  ok("leafly brand untouched", lOff.brand === "Acme");
   ok(
     "leafly required fields intact",
-    lOff.id === "p1" && lOff.name === "Blue Dream 3.5g" && lOff.variants.length === 1,
+    lOff.id === "p1" &&
+      lOff.name === "Blue Dream 3.5g" &&
+      lOff.type === "Flower" &&
+      lOff.variants.length === 1,
   );
-  ok("leafly source not mutated", leaflyItem.description === "Nice." && leaflyItem.compounds.length === 1);
+  ok(
+    "leafly source not mutated",
+    leaflyItem.description === "Nice." && (leaflyItem.compounds ?? []).length === 1,
+  );
+
+  // The toggles must be INDEPENDENT. The old images toggle was dead code, so
+  // this asserts specifically that turning images off touches images ONLY.
+  const lImgOff = applyLeaflySettings([leaflyItem], { ...allOn, sendImages: false })[0];
+  ok(
+    "leafly only image removed",
+    lImgOff.imageUrl === null &&
+      lImgOff.strain === "Blue Dream" &&
+      lImgOff.description === "Nice." &&
+      lImgOff.total_thc?.content === 21.4,
+  );
+  const lStrainOff = applyLeaflySettings([leaflyItem], { ...allOn, sendStrains: false })[0];
+  ok(
+    "leafly only strain removed",
+    lStrainOff.strain === null && lStrainOff.imageUrl === "https://cdn.example.com/p1.jpg",
+  );
+  const lCannOff = applyLeaflySettings([leaflyItem], { ...allOn, sendCannabinoids: false })[0];
+  ok(
+    "leafly only cannabinoids removed",
+    (lCannOff.compounds ?? []).length === 0 &&
+      !("total_thc" in lCannOff) &&
+      lCannOff.description === "Nice.",
+  );
+
+  // Fields Leafly does not define must NEVER appear, whatever the toggles.
+  // This is the assertion that would have caught the original defect.
+  for (const toggles of [allOn, allOff]) {
+    const json = JSON.stringify(applyLeaflySettings([leaflyItem], toggles));
+    for (const dead of ["strainName", "brandName", "totalThc", "totalCbd", "label", "value"]) {
+      ok(`leafly output never contains "${dead}"`, !json.includes(`"${dead}"`));
+    }
+  }
 
   const wmItem: WmMenuItem = {
     external_id: "p1",
