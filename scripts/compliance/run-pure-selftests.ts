@@ -162,6 +162,19 @@ import { __runCcrsDeadlineTests } from "../../src/lib/compliance/ccrs-deadline-c
 import { __runCcrsErrorTriageTests } from "../../src/lib/compliance/ccrs-error-triage-core";
 import { __runMenuFeedTests } from "../../src/lib/syndication/menu-feed-core";
 import { __runLeaflyPayloadTests } from "../../src/lib/leafly/payload-core";
+// SLICE L-2 -- the ONE order-origin vocabulary. Registered here because three
+// separate subsystems (the register pickup queue, the Raspberry Pi announcer,
+// and the Pi receipt printer) all have to agree on what "where did this order
+// come from" means, and the owner asked for them to behave DIFFERENTLY per
+// origin (a distinct chime per source). Without one shared vocabulary that is
+// three hand-rolled copies of the same enum -- the exact shape of the bug the
+// brand matcher already taught this codebase. Pure: no I/O.
+import { __runOrderOriginTests } from "../../src/lib/orders/order-origin-core";
+// SLICE L-2 -- the LAST GATE before a menu payload goes on the wire. Registered
+// here because every defect this slice repaired would have been caught by
+// reading the payload and comparing it to the published contract, and nothing
+// in the codebase was responsible for doing that. Pure: no I/O.
+import { __runLeaflyPayloadValidateTests } from "../../src/lib/leafly/payload-validate-core";
 import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
@@ -606,6 +619,32 @@ function assertNoFailures(name: string, result: { passed: number; failed: number
   }
 }
 
+/**
+ * assertNoFailures, plus a FLOOR on how many assertions actually ran.
+ *
+ * `assertNoFailures` alone cannot tell "everything passed" apart from
+ * "nothing ran". An early `return` at the top of a suite, a body lost to a
+ * bad merge, or a suite commented out during debugging all report
+ * `failed: 0` and sail straight through CI. The floor turns that silent
+ * hole into a hard failure.
+ *
+ * The floor is set deliberately BELOW the current assertion count: deleting
+ * a test or two is legitimate maintenance, gutting a suite is not.
+ */
+function assertRan(
+  name: string,
+  result: { passed: number; failed: number },
+  minAssertions: number,
+): void {
+  assertNoFailures(name, result);
+  if (result.passed < minAssertions) {
+    throw new Error(
+      `${name} self-tests ran only ${result.passed} assertion(s); expected at least ` +
+        `${minAssertions}. A suite that runs no assertions is not a passing suite.`,
+    );
+  }
+}
+
 async function main() {
   __runOrderPricingTests();
   __runTaxBaseCoreTests();
@@ -667,7 +706,13 @@ __runLiquidVolumeTests();
   const ccrsTriage = __runCcrsErrorTriageTests();
   if (ccrsTriage.failed > 0) throw new Error(`ccrs-error-triage-core: ${ccrsTriage.failed} failure(s)`);
   __runMenuFeedTests();
-  __runLeaflyPayloadTests();
+  // SLICE L-2 -- the Leafly menu payload. Registered with a checked result AND
+  // an assertion floor because the previous registration called the suite and
+  // THREW THE RESULT AWAY: a suite reporting failures would have been read as
+  // a pass. Getting this wrong ships an invalid menu to Leafly, Leafly rejects
+  // the batch, and the store's Leafly menu goes dark with nobody told.
+  assertRan("leafly-payload-core", __runLeaflyPayloadTests(), 100);
+  assertRan("leafly-payload-validate-core", __runLeaflyPayloadValidateTests(), 100);
   __runWmPayloadTests();
   __runIntegrationCredentialsTests();
   __runSyncPlanTests();
@@ -1158,6 +1203,11 @@ __runLiquidVolumeTests();
   assertNoFailures("announcer-sounds-core", __runAnnouncerSoundsTests());
   assertNoFailures("announcer-library-core", __runAnnouncerLibraryTests());
   assertNoFailures("announcer-setup-core", __runAnnouncerSetupTests());
+
+  // SLICE L-2 -- order origin (website vs Leafly marketplace vs in-store
+  // register). Decides the announcer chime, the receipt banner and whether a
+  // customer-facing email may be sent at all.
+  assertRan("order-origin-core", __runOrderOriginTests(), 40);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

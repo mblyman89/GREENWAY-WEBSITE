@@ -48,6 +48,8 @@ import { __runCcrsSubmitGateTests } from "@/lib/compliance/ccrs-submit-gate-core
 import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-core";
 import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
 import { __runLeaflyPayloadTests } from "@/lib/leafly/payload-core";
+import { __runLeaflyPayloadValidateTests } from "@/lib/leafly/payload-validate-core";
+import { __runOrderOriginTests } from "@/lib/orders/order-origin-core";
 import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "@/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "@/lib/syndication/sync-plan-core";
@@ -214,6 +216,16 @@ describe("embedded pure self-test suites", () => {
   });
   it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {
     expect(() => __runLeaflyPayloadTests()).not.toThrow();
+  });
+  it("leafly-payload-validate-core (SLICE L-2: fail-closed last gate before the wire)", () => {
+    const r = __runLeaflyPayloadValidateTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(100);
+  });
+  it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {
+    const r = __runOrderOriginTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(40);
   });
   it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {
     expect(() => __runWmPayloadTests()).not.toThrow();
