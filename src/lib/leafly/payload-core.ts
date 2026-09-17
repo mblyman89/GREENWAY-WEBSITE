@@ -49,6 +49,11 @@
 import type { SyndicationItem, SyndicationVariant } from "../syndication/menu-feed-core";
 import { parseWeightFromLabel } from "../weedmaps/payload-core";
 import {
+  decideOrderability,
+  resolveVariantMedical,
+  type VariantMedicalInput,
+} from "./orderability-core";
+import {
   LEAFLY_TYPE_UNIT_MATRIX,
   compoundUnitForType,
   isLeaflyFunnelType,
@@ -363,20 +368,27 @@ export function variantAmountAndUnit(
 }
 
 /**
- * `variant.medical`.
+ * `variant.medical` -- SLICE L-3 completes finding L-11.
  *
- * Kept FALSE, which is correct for Greenway today -- the owner has confirmed the shop is
- * not yet DOH medically endorsed and will open recreational-only. The defect recorded as
- * L-11 was never the value; it was that `false` was a hardcoded literal with no way to
- * become true. So this is now a function with an input, which is a mechanism.
+ * L-2 turned a hardcoded `false` into a function, which made it a mechanism instead of a
+ * literal. L-3 supplies the part that was still missing: the GATE. The value is no longer
+ * read off the variant at all, because a variant flag could be flipped by any future edit
+ * and would then advertise medical product at a shop with no endorsement to sell it.
  *
- * L-3 wires the real source and gates it on the endorsement: a medical flag on a product
- * is meaningless -- and, with an unendorsed licence, misleading -- until the endorsement
- * exists. Flipping this before then would advertise medical product the shop cannot
- * legally sell as such.
+ * It is now derived, fail-closed, from two facts that live outside this mapper:
+ *   - does the STORE hold an LCB medical endorsement, and
+ *   - does the PRODUCT carry a verified WAC 246-70 DOH category.
+ *
+ * Both must hold. Today the first is false (owner, Q5, verbatim: "we carry doh products,
+ * but we have not been certified yet. So we will only have regular non medical sales at
+ * the start until we get the endorsement."), so every variant correctly emits `false` --
+ * the same posture the CCRS bible takes for `IsMedical`.
+ *
+ * The decision itself lives in `orderability-core.ts` so the menu and the register share
+ * one vocabulary; this is only the adapter from a Leafly variant to that decision.
  */
-export function variantMedicalFlag(input?: { medical?: boolean | null | undefined }): boolean {
-  return input?.medical === true;
+export function variantMedicalFlag(input?: VariantMedicalInput): boolean {
+  return resolveVariantMedical(input);
 }
 
 /**
@@ -400,13 +412,17 @@ export function variantInventoryLevel(v: { inStock: boolean; inventoryLevel: num
 export function toLeaflyVariant(
   v: SyndicationVariant,
   itemType: LeaflyFunnelType,
+  medical?: VariantMedicalInput,
 ): LeaflyVariant | null {
   const au = variantAmountAndUnit(itemType, v.label);
   if (au === null) return null;
 
   return {
     id: String(v.id),
-    medical: variantMedicalFlag(v as { medical?: boolean }),
+    // SLICE L-3: derived from the store's endorsement + the product's verified DOH
+    // category, NOT from anything on the variant. Omitting the argument yields `false`,
+    // which is the lawful answer for an unendorsed licence.
+    medical: variantMedicalFlag(medical),
     price: Math.round(v.priceMinorUnits),
     amount: au.amount,
     unit: au.unit,
@@ -422,7 +438,10 @@ export function toLeaflyVariant(
  * inventing anything. A Flower item with no variants and no weight anywhere is not
  * publishable, and pretending otherwise would put a made-up weight on cannabis.
  */
-export function variantsFor(item: SyndicationItem): {
+export function variantsFor(
+  item: SyndicationItem,
+  opts?: LeaflyBuildOptions,
+): {
   variants: LeaflyVariant[];
   rejected: LeaflyVariantRejection[];
 } {
@@ -430,9 +449,18 @@ export function variantsFor(item: SyndicationItem): {
   const variants: LeaflyVariant[] = [];
   const rejected: LeaflyVariantRejection[] = [];
 
+  // SLICE L-3. The medical answer is a property of the STORE (endorsement) and the
+  // PRODUCT (verified DOH category), so it is computed once per item and shared by
+  // every variant of it -- variants of one product cannot disagree about whether the
+  // product is medical.
+  const medical: VariantMedicalInput = {
+    endorsed: opts?.medicallyEndorsed === true,
+    dohCategory: item.dohCategory ?? null,
+  };
+
   if (item.variants.length > 0) {
     for (const v of item.variants) {
-      const mapped = toLeaflyVariant(v, itemType);
+      const mapped = toLeaflyVariant(v, itemType, medical);
       if (mapped === null) {
         rejected.push({
           itemId: item.id,
@@ -466,7 +494,7 @@ export function variantsFor(item: SyndicationItem): {
 
   variants.push({
     id: `${item.id}-default`,
-    medical: variantMedicalFlag(),
+    medical: variantMedicalFlag(medical),
     price: Math.round(item.priceMinorUnits),
     amount: au.amount,
     unit: au.unit,
@@ -485,17 +513,51 @@ export type LeaflyItemResult = {
 };
 
 /**
+ * Options that describe the STORE and the owner's choices, as opposed to the product.
+ *
+ * SLICE L-3. These are deliberately parameters rather than module state or a DB read:
+ * this file is pure, and the two facts below are exactly the ones a test must be able to
+ * vary in order to prove the gates work.
+ */
+export type LeaflyBuildOptions = {
+  /**
+   * The owner's "offer pickup ordering on Leafly" toggle. DEFAULTS OFF when absent, so a
+   * caller that has not thought about ordering cannot accidentally turn it on.
+   */
+  pickupEnabled?: boolean;
+  /**
+   * Does the store currently hold an LCB medical endorsement (RCW 69.50.375)? DEFAULTS
+   * FALSE. Today this is false (owner, Q5), and false is also the safe answer.
+   */
+  medicallyEndorsed?: boolean;
+};
+
+/**
  * Map one Greenway item to one Leafly item.
  *
- * `availableForPickup` is NOT set here. It is finding L-09 and it belongs to slice L-3,
- * where it is turned on deliberately with the owner's confirmation -- because the moment it
- * is true, real customers can place real orders that the shop has 15 minutes to
- * acknowledge. Turning that on as a side effect of a field-rename slice would be reckless.
- * The schema allows omission ("may be omitted to maintain the current item setting").
+ * SLICE L-3 CLOSES FINDING L-09: `availableForPickup` is now emitted.
+ *
+ * L-2 deliberately left it absent, because the moment it is `true` real customers can
+ * place real orders the shop has fifteen minutes to acknowledge, and turning that on as a
+ * side effect of a field-rename slice would have been reckless. It is now emitted, but
+ * behind the owner's own toggle, which defaults OFF -- merging this slice changes nothing
+ * about what shoppers can do until he decides otherwise.
+ *
+ * WHY IT IS ALWAYS EMITTED RATHER THAN OMITTED WHEN FALSE. The schema offers three
+ * states, not two: `true`, `false`, and omitted ("may be omitted to maintain the current
+ * item setting"). Omission is the dangerous one during a sync. Consider an item that was
+ * orderable yesterday and sold out overnight: omitting the field leaves Leafly's existing
+ * `true` in place and keeps taking orders for a product that is gone. Saying `false`
+ * explicitly is the only way to withdraw an offer we can no longer honour. So we always
+ * state the current truth, and the payload we log is a complete record of what we told
+ * Leafly rather than a diff a reader has to reconstruct.
  */
-export function toLeaflyItemResult(item: SyndicationItem): LeaflyItemResult {
+export function toLeaflyItemResult(
+  item: SyndicationItem,
+  opts?: LeaflyBuildOptions,
+): LeaflyItemResult {
   const type = toLeaflyType(item.category);
-  const { variants, rejected } = variantsFor(item);
+  const { variants, rejected } = variantsFor(item, opts);
 
   if (variants.length === 0) return { item: null, rejected };
 
@@ -559,17 +621,27 @@ export function toLeaflyItemResult(item: SyndicationItem): LeaflyItemResult {
   if (totalCbd) out.total_cbd = totalCbd;
 
   // imageUrl: nullable, and null/omitted REMOVES the cached image. Only send a real one.
-  // Wiring the owner's sendImages toggle is L-3 (finding L-10).
+  // The owner's sendImages toggle is honoured in `apply-settings-core.ts` (finding L-10).
   if (typeof item.imageUrl === "string" && item.imageUrl.trim() !== "") {
     out.imageUrl = item.imageUrl.trim();
   }
+
+  // availableForPickup (L-09). Fail-closed: `true` requires the owner's toggle AND real
+  // stock AND a product that is not DOH card-only. See orderability-core.ts for why each
+  // condition exists. The value is always a real boolean -- `null` is illegal here, the
+  // schema declares a plain `"type": "boolean"`.
+  out.availableForPickup = decideOrderability({
+    inStock: item.inStock,
+    dohCategory: item.dohCategory ?? null,
+    pickupEnabled: opts?.pickupEnabled === true,
+  }).availableForPickup;
 
   return { item: out, rejected };
 }
 
 /** Back-compat single-item mapper. Returns null when the item is not publishable. */
-export function toLeaflyItem(item: SyndicationItem): LeaflyItem | null {
-  return toLeaflyItemResult(item).item;
+export function toLeaflyItem(item: SyndicationItem, opts?: LeaflyBuildOptions): LeaflyItem | null {
+  return toLeaflyItemResult(item, opts).item;
 }
 
 export type LeaflyBuildResult = {
@@ -586,13 +658,16 @@ export type LeaflyBuildResult = {
  * because "we published 412 of your 415 items and here is exactly why" is the honest
  * report, and a silent 412 is not.
  */
-export function buildLeaflyItemsResult(items: SyndicationItem[]): LeaflyBuildResult {
+export function buildLeaflyItemsResult(
+  items: SyndicationItem[],
+  opts?: LeaflyBuildOptions,
+): LeaflyBuildResult {
   const out: LeaflyItem[] = [];
   const rejected: LeaflyVariantRejection[] = [];
   const droppedItemIds: string[] = [];
 
   for (const item of items) {
-    const result = toLeaflyItemResult(item);
+    const result = toLeaflyItemResult(item, opts);
     rejected.push(...result.rejected);
     if (result.item === null) droppedItemIds.push(item.id);
     else out.push(result.item);
@@ -601,8 +676,11 @@ export function buildLeaflyItemsResult(items: SyndicationItem[]): LeaflyBuildRes
   return { payload: { items: out }, rejected, droppedItemIds };
 }
 
-export function buildLeaflyItemsPayload(items: SyndicationItem[]): LeaflyItemsPayload {
-  return buildLeaflyItemsResult(items).payload;
+export function buildLeaflyItemsPayload(
+  items: SyndicationItem[],
+  opts?: LeaflyBuildOptions,
+): LeaflyItemsPayload {
+  return buildLeaflyItemsResult(items, opts).payload;
 }
 
 export function buildLeaflyDeletePayload(ids: string[]): LeaflyDeletePayload {
@@ -784,11 +862,30 @@ export function __runLeaflyPayloadTests(): { passed: number; failed: number } {
     allTypes.every((t) => (variantAmountAndUnit(t, "no weight here") === null) === (t === "Flower")),
   );
 
-  // -- medical flag is a mechanism, not a literal (L-11) ---------------------
-  ok("medical defaults false", variantMedicalFlag() === false);
-  ok("medical false when absent", variantMedicalFlag({}) === false);
-  ok("medical false when null", variantMedicalFlag({ medical: null }) === false);
-  ok("medical CAN be true", variantMedicalFlag({ medical: true }) === true);
+  // -- medical flag is a GATED mechanism, not a literal (L-11) ---------------
+  //
+  // SLICE L-3 note. L-2 asserted here that `variantMedicalFlag({ medical: true })`
+  // returns true -- i.e. that a flag on the variant could switch medical on. L-3
+  // deliberately removes that capability, so that assertion is gone rather than
+  // adjusted. The reason is the point of the whole finding: a per-variant boolean could
+  // be set by any future import or edit, and it would then advertise medical product at
+  // a store with no endorsement to sell it. Medical is now a conclusion drawn from the
+  // STORE's endorsement and the PRODUCT's verified DOH category, and nothing else can
+  // assert it.
+  ok("medical defaults false with no input", variantMedicalFlag() === false);
+  ok("medical false for an empty input", variantMedicalFlag({ endorsed: false }) === false);
+  ok(
+    "medical false when unendorsed, whatever the product is",
+    variantMedicalFlag({ endorsed: false, dohCategory: "general_use" }) === false,
+  );
+  ok(
+    "medical false when endorsed but the product is not DOH-verified",
+    variantMedicalFlag({ endorsed: true, dohCategory: null }) === false,
+  );
+  ok(
+    "medical true ONLY when endorsed AND DOH-verified",
+    variantMedicalFlag({ endorsed: true, dohCategory: "general_use" }) === true,
+  );
 
   // -- inventory -------------------------------------------------------------
   ok("out of stock -> 0", variantInventoryLevel({ inStock: false, inventoryLevel: 9 }) === 0);
@@ -834,7 +931,16 @@ export function __runLeaflyPayloadTests(): { passed: number; failed: number } {
   ok("variant unit emitted (L-02)", fi?.variants[0].unit === "g");
   ok("variant label GONE (L-03)", fi !== null && !("label" in fi.variants[0]));
   ok("variant medical present", fi?.variants[0].medical === false);
-  ok("availableForPickup NOT set in L-2", fi !== null && fi.availableForPickup === undefined);
+  // SLICE L-3 replaces the L-2 assertion "availableForPickup NOT set". It is now always
+  // set, and with no options it is FALSE -- the fail-closed default.
+  ok(
+    "availableForPickup IS now emitted (L-09)",
+    fi !== null && typeof fi.availableForPickup === "boolean",
+  );
+  ok(
+    "availableForPickup defaults FALSE with no options",
+    fi !== null && fi.availableForPickup === false,
+  );
   ok("no rejections for a good flower item", fr.rejected.length === 0);
 
   // absent brand/description must be OMITTED, not null (the three new defects)
@@ -978,6 +1084,191 @@ export function __runLeaflyPayloadTests(): { passed: number; failed: number } {
   ok('payload never contains a "%" unit', !json.includes('"%"'));
   ok('payload never contains a "label" key', !json.includes('"label"'));
   ok('payload never contains "value":', !json.includes('"value":'));
+
+  // =========================================================================
+  // SLICE L-3 -- orderability (L-09) and the medical gate (L-11)
+  // =========================================================================
+
+  /** An ordinary, in-stock recreational flower item. */
+  const orderableSrc: SyndicationItem = {
+    id: "l3-1",
+    name: "Blue Dream",
+    brand: "Greenway",
+    category: "flower",
+    strainType: "hybrid",
+    strainName: "Blue Dream",
+    thc: "24.1%",
+    cbd: null,
+    description: "Smooth",
+    priceMinorUnits: 1500,
+    inStock: true,
+    variants: [{ id: "l3-1-v", label: "3.5g", priceMinorUnits: 1500, inStock: true, inventoryLevel: 7 }],
+  };
+
+  // --- the field is always present, and always a real boolean --------------
+  const pickOff = toLeaflyItem(orderableSrc);
+  ok("availableForPickup present even when ordering is off", pickOff !== null && "availableForPickup" in pickOff);
+  ok("availableForPickup false when ordering is off", pickOff?.availableForPickup === false);
+  ok(
+    "availableForPickup is never null (schema says plain boolean)",
+    pickOff !== null && pickOff.availableForPickup !== null,
+  );
+
+  const pickOn = toLeaflyItem(orderableSrc, { pickupEnabled: true });
+  ok("availableForPickup true when enabled + in stock", pickOn?.availableForPickup === true);
+
+  // Explicitly passing the toggle as false must behave like omitting it.
+  const pickExplicitOff = toLeaflyItem(orderableSrc, { pickupEnabled: false });
+  ok("explicit pickupEnabled:false => not orderable", pickExplicitOff?.availableForPickup === false);
+
+  // --- out of stock withdraws the offer, explicitly ------------------------
+  const oosSrc: SyndicationItem = {
+    ...orderableSrc,
+    id: "l3-2",
+    inStock: false,
+    variants: [{ id: "l3-2-v", label: "3.5g", priceMinorUnits: 1500, inStock: false, inventoryLevel: 0 }],
+  };
+  const oosItem = toLeaflyItem(oosSrc, { pickupEnabled: true });
+  ok("out-of-stock item is NOT orderable", oosItem?.availableForPickup === false);
+  // This is the assertion that protects against the "just omit it" shortcut: an omitted
+  // field would leave Leafly's existing `true` in place on a sold-out product.
+  ok(
+    "out-of-stock item SAYS false rather than staying silent",
+    oosItem !== null && oosItem.availableForPickup === false && "availableForPickup" in oosItem,
+  );
+  ok("out-of-stock variant still reports inventoryLevel 0", oosItem?.variants[0].inventoryLevel === 0);
+
+  // --- the DOH statutory gate ---------------------------------------------
+  const highThcSrc: SyndicationItem = {
+    ...orderableSrc,
+    id: "l3-3",
+    name: "High-THC Tincture",
+    category: "tincture",
+    dohCategory: "high_thc",
+    variants: [{ id: "l3-3-v", label: "30ml", priceMinorUnits: 4000, inStock: true, inventoryLevel: 5 }],
+  };
+  const highThcItem = toLeaflyItem(highThcSrc, { pickupEnabled: true });
+  ok(
+    "WAC 246-70 high_thc is NEVER orderable, even in stock with ordering on",
+    highThcItem?.availableForPickup === false,
+  );
+  ok(
+    "high_thc is still PUBLISHED (it is legal to show, just not to order)",
+    highThcItem !== null,
+  );
+  // Endorsement must not unlock ordering: the card cannot be checked at order time.
+  const highThcEndorsed = toLeaflyItem(highThcSrc, { pickupEnabled: true, medicallyEndorsed: true });
+  ok(
+    "high_thc stays un-orderable even WITH an endorsement",
+    highThcEndorsed?.availableForPickup === false,
+  );
+
+  // The other two DOH lanes carry no such restriction.
+  const generalUse = toLeaflyItem(
+    { ...orderableSrc, id: "l3-4", dohCategory: "general_use" },
+    { pickupEnabled: true },
+  );
+  ok("DOH general_use remains orderable", generalUse?.availableForPickup === true);
+  const highCbd = toLeaflyItem(
+    { ...orderableSrc, id: "l3-5", dohCategory: "high_cbd" },
+    { pickupEnabled: true },
+  );
+  ok("DOH high_cbd remains orderable", highCbd?.availableForPickup === true);
+  // A product with no registry entry is ordinary recreational stock, not "suspicious".
+  const noCategory = toLeaflyItem({ ...orderableSrc, id: "l3-6", dohCategory: null }, { pickupEnabled: true });
+  ok("a product with no DOH category is orderable", noCategory?.availableForPickup === true);
+
+  // --- variant.medical: the endorsement gate (L-11) ------------------------
+  ok("medical false today: unendorsed, no category", pickOn?.variants[0].medical === false);
+  ok(
+    "medical false: unendorsed even for a DOH-verified product",
+    toLeaflyItem({ ...orderableSrc, id: "l3-7", dohCategory: "general_use" })?.variants[0].medical === false,
+  );
+  ok(
+    "medical false: endorsed but the product has no DOH category",
+    toLeaflyItem({ ...orderableSrc, id: "l3-8" }, { medicallyEndorsed: true })?.variants[0].medical === false,
+  );
+  ok(
+    "medical TRUE only when endorsed AND DOH-verified",
+    toLeaflyItem({ ...orderableSrc, id: "l3-9", dohCategory: "general_use" }, { medicallyEndorsed: true })
+      ?.variants[0].medical === true,
+  );
+  // The synthesized default variant must obey the same gate as a real one --
+  // this is the path that previously called variantMedicalFlag() with no argument.
+  const noVariantSrc: SyndicationItem = {
+    ...orderableSrc,
+    id: "l3-10",
+    category: "edible",
+    dohCategory: "general_use",
+    variants: [],
+  };
+  const synth = toLeaflyItem(noVariantSrc, { medicallyEndorsed: true });
+  ok("synthesized default variant exists", synth !== null && synth.variants.length === 1);
+  ok(
+    "synthesized default variant honours the medical gate too",
+    synth?.variants[0].medical === true,
+  );
+  ok(
+    "synthesized default variant is medical:false when unendorsed",
+    toLeaflyItem(noVariantSrc)?.variants[0].medical === false,
+  );
+  // Every variant of one item must agree about medical -- a product is or is not medical.
+  const multiVariant = toLeaflyItem(
+    {
+      ...orderableSrc,
+      id: "l3-11",
+      dohCategory: "high_cbd",
+      variants: [
+        { id: "a", label: "1g", priceMinorUnits: 1000, inStock: true, inventoryLevel: 3 },
+        { id: "b", label: "3.5g", priceMinorUnits: 3000, inStock: true, inventoryLevel: 2 },
+      ],
+    },
+    { medicallyEndorsed: true },
+  );
+  ok(
+    "all variants of an item agree about medical",
+    multiVariant !== null &&
+      multiVariant.variants.length === 2 &&
+      multiVariant.variants.every((v) => v.medical === true),
+  );
+
+  // --- the whole-payload builders thread the options through ---------------
+  const builtL3 = buildLeaflyItemsResult([orderableSrc, highThcSrc, oosSrc], { pickupEnabled: true });
+  ok("L-3 build produced all three items", builtL3.payload.items.length === 3);
+  ok(
+    "builder threads pickupEnabled to the ordinary item",
+    builtL3.payload.items.find((i) => i.id === "l3-1")?.availableForPickup === true,
+  );
+  ok(
+    "builder threads the DOH block",
+    builtL3.payload.items.find((i) => i.id === "l3-3")?.availableForPickup === false,
+  );
+  ok(
+    "builder threads the stock rule",
+    builtL3.payload.items.find((i) => i.id === "l3-2")?.availableForPickup === false,
+  );
+  ok(
+    "buildLeaflyItemsPayload also accepts options",
+    buildLeaflyItemsPayload([orderableSrc], { pickupEnabled: true }).items[0].availableForPickup === true,
+  );
+  // Back-compat: the no-options call still works and fails closed.
+  ok(
+    "buildLeaflyItemsPayload with no options fails closed",
+    buildLeaflyItemsPayload([orderableSrc]).items[0].availableForPickup === false,
+  );
+
+  // --- the wire form -------------------------------------------------------
+  const l3Json = JSON.stringify(builtL3.payload);
+  ok("wire form uses camelCase availableForPickup", l3Json.includes('"availableForPickup"'));
+  ok("wire form never uses the v1 snake_case name", !l3Json.includes('"available_for_pickup"'));
+  ok("availableForPickup is never serialized as null", !l3Json.includes('"availableForPickup":null'));
+  ok(
+    'availableForPickup is never serialized as a string',
+    !l3Json.includes('"availableForPickup":"'),
+  );
+  // dohCategory is OUR internal field. Leafly has no such property, so leaking it would
+  // be sending an undeclared field on every DOH-verified product.
+  ok("internal dohCategory never leaks onto the wire", !l3Json.includes('"dohCategory"'));
 
   console.log(`leafly-payload: ${passed} passed, ${failed} failed`);
   if (failed > 0) throw new Error(`${failed} leafly-payload test(s) failed`);
