@@ -40,6 +40,21 @@ export type ChannelSyncSettings = {
 export type LeaflySyncSettings = ChannelSyncSettings & {
   /** post = full sync (deletes omitted items) · put = upsert only. */
   syncMode: LeaflySyncMode;
+  /**
+   * SLICE L-3 (finding L-09). Offer Greenway's in-stock items for ORDERING on Leafly by
+   * sending `availableForPickup: true`.
+   *
+   * This is the only toggle in this file that changes what a member of the public can DO
+   * rather than what they can SEE. With it on, a stranger can place a real order that the
+   * shop has fifteen minutes to acknowledge before Leafly auto-cancels it
+   * (`cancelReason: order_api_unacknowledged`). It therefore defaults **off**, and it
+   * stays off until the owner turns it on with staff ready for that clock.
+   *
+   * Off does NOT mean "send nothing": it means send an explicit `false`, which actively
+   * withdraws orderability from any item Leafly already has. Silence would leave a stale
+   * `true` in place. See `orderability-core.ts`.
+   */
+  sendPickupAvailability: boolean;
 };
 
 export type WeedmapsSyncSettings = ChannelSyncSettings & {
@@ -57,10 +72,20 @@ export const DEFAULT_LEAFLY_SETTINGS: LeaflySyncSettings = {
   maxRetries: 3,
   sendDescriptions: true,
   sendCannabinoids: true,
-  sendImages: false, // Leafly v2 items payload has no image field (verified) — kept off.
+  // SLICE L-3 (the tail of finding L-10). This used to read `false` with the comment
+  // "Leafly v2 items payload has no image field (verified) — kept off." That claim was
+  // simply untrue: `imageUrl` is a documented property of the v2 item schema
+  // (`docs/leafly-specs/schemas/v2-items.json`), and L-2 proved it by wiring real
+  // emission plus suppression. The default is now `true`, matching Weedmaps, because
+  // product photos are a Leafly certification data-quality item and the owner's toggle
+  // should start in the state that serves him. He can still turn it off, and turning it
+  // off now genuinely removes the image instead of doing nothing.
+  sendImages: true,
   sendStrains: true,
   forceResend: false,
   syncMode: "post",
+  // Ordering starts OFF. See the field's doc comment: this one is a promise to fulfil.
+  sendPickupAvailability: false,
 };
 
 export const DEFAULT_WEEDMAPS_SETTINGS: WeedmapsSyncSettings = {
@@ -101,6 +126,7 @@ export function resolveLeaflySettings(raw: Record<string, unknown> | null | unde
     sendStrains: asBool(r["sendStrains"], d.sendStrains),
     forceResend: asBool(r["forceResend"], d.forceResend),
     syncMode: mode === "put" ? "put" : "post",
+    sendPickupAvailability: asBool(r["sendPickupAvailability"], d.sendPickupAvailability),
   };
 }
 
@@ -138,7 +164,14 @@ export function __runSyncSettingsTests(): void {
   const l = resolveLeaflySettings(null);
   ok("leafly defaults", JSON.stringify(l) === JSON.stringify(DEFAULT_LEAFLY_SETTINGS));
   ok("leafly default mode post", l.syncMode === "post");
-  ok("leafly images default off (no v2 image field)", l.sendImages === false);
+  // SLICE L-3. The previous assertion here read "leafly images default off (no v2 image
+  // field)" and locked a FALSE premise into the test suite: it made the disproven claim
+  // load-bearing, so correcting the default would have looked like a regression. The v2
+  // schema does define `imageUrl`. Images now default ON.
+  ok("leafly images default ON (v2 imageUrl exists and is wired)", l.sendImages === true);
+  // Ordering is the one toggle that must NOT default on: `true` lets the public place
+  // real orders against a fifteen-minute acknowledgement deadline.
+  ok("leafly pickup availability defaults OFF", l.sendPickupAvailability === false);
   const w = resolveWeedmapsSettings(undefined);
   ok("wm defaults", JSON.stringify(w) === JSON.stringify(DEFAULT_WEEDMAPS_SETTINGS));
   ok("wm default pacing 150ms", w.pacingMs === 150);
@@ -168,6 +201,46 @@ export function __runSyncSettingsTests(): void {
   // Round-trip: resolved settings resolve to themselves
   const round = resolveWeedmapsSettings(resolveWeedmapsSettings({ pacingMs: 300 }) as unknown as Record<string, unknown>);
   ok("round trip stable", round.pacingMs === 300 && round.unpublishWhenOutOfStock === true);
+
+  // --- SLICE L-3: the ordering toggle ------------------------------------
+  // It must be settable BOTH ways from form-ish input, because "off" has to be
+  // expressible: an owner turning ordering off is withdrawing a public offer, and a
+  // parser that silently fell back to the default would ignore him.
+  ok(
+    "pickup availability can be turned on",
+    resolveLeaflySettings({ sendPickupAvailability: "on" }).sendPickupAvailability === true,
+  );
+  ok(
+    "pickup availability can be turned back off",
+    resolveLeaflySettings({ sendPickupAvailability: "false" }).sendPickupAvailability === false,
+  );
+  ok(
+    "pickup availability accepts a real boolean true",
+    resolveLeaflySettings({ sendPickupAvailability: true }).sendPickupAvailability === true,
+  );
+  // Unrecognised junk must fall back to the SAFE default, not to "on".
+  ok(
+    "pickup availability junk -> defaults OFF (fail closed)",
+    resolveLeaflySettings({ sendPickupAvailability: "maybe" }).sendPickupAvailability === false,
+  );
+  // A stored settings row written before L-3 has no such key at all. It must read as
+  // off rather than undefined, or an old row would make `availableForPickup` undefined.
+  ok(
+    "settings saved before L-3 (key absent) read as OFF",
+    resolveLeaflySettings({ pacingMs: 0, syncMode: "post" }).sendPickupAvailability === false,
+  );
+  ok(
+    "pickup availability is always a real boolean",
+    typeof resolveLeaflySettings(null).sendPickupAvailability === "boolean",
+  );
+  // Leafly round-trip, including the new key.
+  const lfRound = resolveLeaflySettings(
+    resolveLeaflySettings({ sendPickupAvailability: true, sendImages: false }) as unknown as Record<string, unknown>,
+  );
+  ok(
+    "leafly round trip preserves both new-field states",
+    lfRound.sendPickupAvailability === true && lfRound.sendImages === false,
+  );
 
   console.log(`sync-settings: ${passed} passed, ${failed} failed`);
   if (failed > 0) throw new Error(`${failed} sync-settings test(s) failed`);

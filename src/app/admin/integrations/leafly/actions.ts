@@ -123,6 +123,9 @@ export async function saveLeaflySettingsAction(
     "sendStrains",
     "forceResend",
     "syncMode",
+    // SLICE L-3 (L-09). Without this key the owner's ordering toggle would post to a
+    // server action that ignores it, and the form would silently revert every save.
+    "sendPickupAvailability",
   ]) {
     const v = formData.get(key);
     if (v !== null) raw[key] = v;
