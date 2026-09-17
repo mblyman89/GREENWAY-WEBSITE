@@ -39,6 +39,8 @@ import {
   validateLeaflyPayload,
   type LeaflyValidationResult,
 } from "./payload-validate-core";
+import { summarizeOrderability, type OrderabilitySummary } from "./orderability-core";
+import { getMedTaxSettings } from "@/lib/medical/store";
 import { loadSyndicationFeed } from "@/lib/syndication/feed-source";
 import type { SyndicationItem } from "@/lib/syndication/menu-feed-core";
 import { runPreflight, PreflightBlockedError } from "@/lib/syndication/preflight-core";
@@ -114,6 +116,19 @@ export type LeaflyPreview = {
    */
   rejected: LeaflyVariantRejection[];
   droppedItemIds: string[];
+  /**
+   * SLICE L-3 — why each item is or is not orderable, grouped by cause.
+   *
+   * `availableForPickup` is otherwise invisible to the owner. Without this he
+   * could switch ordering on, push successfully, watch Leafly accept every
+   * item, and still take no orders — with the only explanation buried in the
+   * JSON. This turns that into "391 orderable; 6 out of stock; 3 are DOH
+   * High-THC and can never be offered online, here are their names".
+   *
+   * Computed by the SAME function the payload uses, so it cannot disagree with
+   * what was actually sent.
+   */
+  orderability: OrderabilitySummary;
 };
 
 /**
@@ -124,8 +139,21 @@ export async function previewLeaflyPush(): Promise<LeaflyPreview> {
   await refreshLeaflyConfig();
   const { versionId, items } = await loadSyndicationFeed();
 
+  // SLICE L-3. The preview must be built with the SAME store facts the live push uses,
+  // or it stops being a preview. If this defaulted `pickupEnabled` to false while the
+  // owner had ordering switched on, the dry run would show `availableForPickup: false`
+  // for every item and the live push would then send `true` — the one payload a preview
+  // exists to let him inspect would be the one payload he never sees.
+  const [settingsForPreview, medSettingsForPreview] = await Promise.all([
+    getLeaflySyncSettings(),
+    getMedTaxSettings(),
+  ]);
+
   // Use the RESULT form so refusals are reported instead of swallowed.
-  const built = buildLeaflyItemsResult(items);
+  const built = buildLeaflyItemsResult(items, {
+    pickupEnabled: settingsForPreview.sendPickupAvailability,
+    medicallyEndorsed: medSettingsForPreview.medicallyEndorsed,
+  });
 
   return {
     mode: "preview",
@@ -137,6 +165,11 @@ export async function previewLeaflyPush(): Promise<LeaflyPreview> {
     validation: validateLeaflyPayload(built.payload),
     rejected: built.rejected,
     droppedItemIds: built.droppedItemIds,
+    // Summarise the SAME feed items the payload was built from, with the SAME
+    // toggle value, so the explanation and the wire cannot diverge.
+    orderability: summarizeOrderability(items, {
+      pickupEnabled: settingsForPreview.sendPickupAvailability,
+    }),
   };
 }
 
@@ -318,8 +351,22 @@ export async function pushLeaflyMenu(opts: {
   }
 
   // 2. Verified payload + owner toggles.
+  //
+  // SLICE L-3: the builder now needs two facts about the STORE, not just the products.
+  //
+  //   pickupEnabled     -- the owner's ordering toggle, which decides whether
+  //                        `availableForPickup` can ever be true.
+  //   medicallyEndorsed -- read from the live endorsement config rather than assumed.
+  //                        It is FALSE today (owner, Q5: "we have not been certified
+  //                        yet ... only regular non medical sales at the start"), but
+  //                        reading it means the day the endorsement lands, nobody has to
+  //                        remember to come back and edit a constant in a mapper.
+  const medSettings = await getMedTaxSettings();
   const leaflyItems: LeaflyItem[] = applyLeaflySettings(
-    buildLeaflyItemsPayload(items).items,
+    buildLeaflyItemsPayload(items, {
+      pickupEnabled: settings.sendPickupAvailability,
+      medicallyEndorsed: medSettings.medicallyEndorsed,
+    }).items,
     settings,
   );
 
