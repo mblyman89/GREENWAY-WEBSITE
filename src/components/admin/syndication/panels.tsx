@@ -108,7 +108,19 @@ export function DataQualityPanel({
   richness: RichnessReport;
   preflight: PreflightReport;
   channelLabel: string;
-  /** false for Leafly (v2 has no image field) — the image row is de-emphasized. */
+  /**
+   * Whether product photos reach this channel, and therefore whether the
+   * "Exact photo" richness row is worth showing.
+   *
+   * SLICE L-3 correction: this used to be documented as "false for Leafly (v2
+   * has no image field)". That was wrong. Leafly Menu API v2.0 declares
+   * `imageUrl` on every item — verified in the vendored live schema at
+   * `docs/leafly-specs/schemas/v2-items.json`, where it is typed
+   * `["string","null"]`, `format: uri`, and described as "Source url for the
+   * product image… cached shortly after this payload is received." So it is now
+   * `true` for Leafly too, and a missing photo is a real, reportable gap on the
+   * Leafly menu rather than a row we were hiding.
+   */
   imageRelevant: boolean;
 }) {
   const fields = (Object.keys(FIELD_LABEL) as RichnessField[]).filter(

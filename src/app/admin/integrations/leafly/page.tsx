@@ -131,7 +131,12 @@ export default async function LeaflyIntegrationPage() {
         richness={richness}
         preflight={preflight}
         channelLabel="Leafly"
-        imageRelevant={false}
+        // SLICE L-3: was `false`, on the disproven premise that Leafly v2 has
+        // no image field. The vendored live schema declares `imageUrl` on every
+        // item, we emit it (payload-core.ts), and the owner's sendImages toggle
+        // now controls it -- so a missing photo is a genuine Leafly menu gap and
+        // must be reported, not hidden.
+        imageRelevant
       />
 
       <LeaflyPushClient
@@ -145,6 +150,70 @@ export default async function LeaflyIntegrationPage() {
         saveAction={saveLeaflySettingsAction}
         resetStateAction={resetLeaflySyncStateAction}
       />
+
+      {/*
+        SLICE L-3 -- Leafly ordering, made visible.
+
+        `availableForPickup` decides whether Leafly will take an order for an
+        item at all, and before this panel existed its value was invisible: the
+        owner could enable ordering, push successfully, see Leafly accept every
+        item, and still receive nothing -- with the only explanation buried in
+        the payload JSON. This reports the same decision the wire carries,
+        grouped by cause, naming the actual products.
+      */}
+      <Card>
+        <div className="mb-2 flex items-center gap-2">
+          <h2 className="text-sm font-bold text-[var(--admin-text)]">Leafly ordering</h2>
+          <Badge tone={preview.orderability.orderable > 0 ? "green" : "neutral"}>
+            {preview.orderability.orderable} of {preview.orderability.total} orderable
+          </Badge>
+        </div>
+        {settings.sendPickupAvailability ? (
+          <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+            Ordering is <strong>on</strong>. Leafly may take pickup orders for the items
+            counted above. Remember the <strong>15-minute</strong> acknowledgement window
+            &mdash; an order not accepted in time is cancelled by Leafly automatically.
+          </p>
+        ) : (
+          <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+            Ordering is <strong>off</strong>, so every item is sent as not orderable and
+            Leafly will not take orders. Turn it on in <strong>Sync settings</strong> below
+            when you are ready to receive them.
+          </p>
+        )}
+
+        {preview.orderability.blocked.length === 0 ? (
+          <p className="text-xs text-[var(--admin-text-muted)]">
+            {preview.orderability.total === 0
+              ? "No items in the published feed yet."
+              : "Every item in the feed is offered for ordering."}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {preview.orderability.blocked.map((group) => (
+              <div
+                key={group.reason}
+                className="rounded-md border border-[var(--admin-border)] px-3 py-2 text-xs"
+              >
+                <div className="mb-1 flex items-center gap-2">
+                  <Badge tone={group.reason === "doh_restricted" ? "danger" : "orange"}>
+                    {group.count} item{group.count === 1 ? "" : "s"}
+                  </Badge>
+                  <span className="text-[var(--admin-text-muted)]">{group.label}</span>
+                </div>
+                {group.examples.length > 0 ? (
+                  <p className="text-[11px] text-[var(--admin-text-faint)]">
+                    For example: {group.examples.join(", ")}
+                    {group.count > group.examples.length
+                      ? ` (and ${group.count - group.examples.length} more)`
+                      : ""}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card>
         <h2 className="mb-2 text-sm font-bold text-[var(--admin-text)]">

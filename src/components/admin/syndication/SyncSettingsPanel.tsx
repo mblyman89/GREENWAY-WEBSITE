@@ -89,6 +89,10 @@ export function SyncSettingsPanel({
       "sendStrains",
       "forceResend",
       "unpublishWhenOutOfStock",
+      // SLICE L-3. Must be listed here or an owner UNCHECKING "offer ordering" would
+      // submit nothing for the key, the resolver would fall back to the stored value,
+      // and turning ordering OFF would silently fail — the worst direction to fail in.
+      "sendPickupAvailability",
     ]) {
       if (fd.get(`${key}__present`) === "1" && fd.get(key) === null) {
         fd.set(key, "false");
@@ -211,19 +215,33 @@ export function SyncSettingsPanel({
             help={isLeafly ? "Strain name (absent = null, never 'NA')." : "Strain name + genetics (indica/sativa/hybrid)."}
             defaultChecked={settings.sendStrains}
           />
+          {/*
+            SLICE L-3 (finding L-10). This used to be a paragraph claiming "the Leafly
+            Menu API v2 items payload has no image field (verified)", which is why Leafly
+            had no image toggle at all. The claim was wrong — `imageUrl` is a documented
+            property of the v2 item schema — so the owner was told he could not send
+            photos to the one channel where photos most affect certification. Leafly now
+            gets the same real toggle Weedmaps has.
+          */}
+          <Toggle
+            name="sendImages"
+            label="Send exact product photos"
+            help="Only the product's own approved photo (https JPG/PNG) — never a representative substitute."
+            defaultChecked={settings.sendImages}
+          />
           {isLeafly ? (
-            <p className="text-[11px] text-[var(--admin-text-muted)]">
-              Images: the Leafly Menu API v2 items payload has no image field (verified), so
-              there is no image toggle here — Leafly manages product imagery on its side.
-            </p>
-          ) : (
             <Toggle
-              name="sendImages"
-              label="Send exact product photos"
-              help="Only the product's own approved photo (https JPG/PNG) — never a representative substitute."
-              defaultChecked={settings.sendImages}
+              name="sendPickupAvailability"
+              label="Offer these items for ordering on Leafly"
+              help={
+                "Lets Leafly shoppers place real pickup orders. You have 15 minutes to " +
+                "acknowledge each order before Leafly cancels it automatically, so only " +
+                "turn this on when staff are ready. Only in-stock items are offered, and " +
+                "DOH High-THC products are never offered (they are card-only by law)."
+              }
+              defaultChecked={lf.sendPickupAvailability}
             />
-          )}
+          ) : null}
           {!isLeafly ? (
             <Toggle
               name="unpublishWhenOutOfStock"
