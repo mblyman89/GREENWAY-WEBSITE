@@ -10,7 +10,17 @@
  *
  * Grounded in the real menu_items schema (MenuItemRow) and our GreenwayMenuItem
  * field names — no invented fields.
+ *
+ * SLICE L-3 note on the single import below. This module carries a standing
+ * comment that it is "intentionally standalone (no imports) so it remains
+ * unit-testable in isolation". That invariant is about RUNTIME coupling — it
+ * must not drag a DB client or a React tree into a unit test. `import type` is
+ * erased entirely by TypeScript and emits no `require`/`import` at all, so the
+ * invariant holds exactly as before. The alternative — re-declaring the three
+ * DOH category strings here — would have created a second, drift-prone copy of
+ * a compliance vocabulary, which AGENTS rule 11 forbids outright.
  */
+import type { DohCategory } from "@/lib/medical/medical-sale-core";
 
 export type SyndicationVariant = {
   /** Stable source variant id. */
@@ -49,6 +59,27 @@ export type SyndicationItem = {
    * exact photo exists.
    */
   imageUrl?: string;
+  /**
+   * SLICE L-3: the product's VERIFIED WAC 246-70 DOH category, read from the
+   * durable `medical_product_registry` (migration 0113) and keyed by this
+   * item's stable `id` (= `menu_items.source_item_id` = the POS product key).
+   *
+   * WHY A SYNDICATION FIELD CARRIES A MEDICAL FACT. The registry already feeds
+   * the public menu (`menu-doh-core.ts`) and the register (`medical-sale-core.ts`),
+   * but it stopped dead at this boundary — the channel builders had no idea a
+   * product was DOH-restricted. That matters because WAC 246-70 `high_thc`
+   * product may be sold ONLY to a recognition-card holder ("HARD GATE … no
+   * manager override exists", `docs/MEDICAL_CANNABIS_COMPLIANCE.md`), and a
+   * card cannot be checked when a stranger places a pickup order on Leafly.
+   * Without this field the shop could publish, as orderable, a product it is
+   * legally forbidden to hand over.
+   *
+   * `null`/absent is the honest and overwhelmingly common case: the product
+   * has no DOH verification, i.e. it is ordinary recreational stock. Absent is
+   * NEVER read as "restricted" — that would block the whole menu — it is read
+   * as "unrestricted", which is what an unverified product actually is.
+   */
+  dohCategory?: DohCategory | null;
 };
 
 /** Minimal shape of a published menu item the mapper needs (subset of MenuItemRow + variants). */
@@ -68,6 +99,12 @@ export type FeedSourceItem = {
   variants: { source_variant_id: string; label: string; price_minor_units: number; inventory_level: number }[];
   /** Exact (non-fallback) product photo URL when one exists; null/absent otherwise. */
   image_url?: string | null;
+  /**
+   * SLICE L-3: verified WAC 246-70 DOH category from `medical_product_registry`,
+   * looked up by `source_item_id`. Absent/null when the product has no DOH
+   * verification, which is the normal case for recreational stock.
+   */
+  doh_category?: DohCategory | null;
 };
 
 // Our own (granular) strain vocabulary for the website + menu filters. The two
@@ -138,6 +175,11 @@ export function toSyndicationItem(item: FeedSourceItem): SyndicationItem {
       inventoryLevel: Math.max(0, Math.round(v.inventory_level)),
     })),
     ...(item.image_url && item.image_url.trim() ? { imageUrl: item.image_url.trim() } : {}),
+    // SLICE L-3. Carried through EXACTLY as verified — never normalized,
+    // never defaulted to a category. A DOH category is a human's reading of a
+    // logo on a physical package; inventing or coercing one here would be
+    // fabricating a compliance fact (AGENTS rule 3). Absent stays absent.
+    ...(item.doh_category ? { dohCategory: item.doh_category } : {}),
   };
 }
 
