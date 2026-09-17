@@ -1,0 +1,189 @@
+{
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "name",
+          "variants"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique to all items in the menu. Should remain consistent between updates to the menu"
+          },
+          "type": {
+            "type": "string",
+            "description": "Item category, will get assigned down the funnel to one of: Accessory, Seeds, Clone, Flower, Edible, PreRoll, Concentrate, Cartridge, Topical, Other",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "The menu item name",
+            "minLength": 1
+          },
+          "strain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The strain name. If the strain is listed on Leafly.com, it will be automatically linked on the dispensary's Leafly menu."
+          },
+          "brand": {
+            "type": "string",
+            "description": "The brand name. If the brand is listed on Leafly.com, it will be automatically linked on the dispensary's Leafly menu."
+          },
+          "batchId": {
+            "type": "string",
+            "description": "Batch ID for laboratory testing data."
+          },
+          "parentBatchId": {
+            "type": "string",
+            "description": "Parent Batch ID for laboratory testing data"
+          },
+          "sku": {
+            "type": "string",
+            "description": "Stock Keeping Unit - Inventory Tracking ID for this product."
+          },
+          "compounds": {
+            "type": "array",
+            "description": "Each object in the compounds array represents a single compound in the item and its lab-tested value. Currently this includes only THC and CBD, but will be expanded to include terpenes and other cannabinoids in the future.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "thc",
+                    "cbd"
+                  ]
+                },
+                "content": {
+                  "type": "number",
+                  "description": "The value, e.g. 22.06 for 22.06% or 100 for 100mg"
+                },
+                "unit": {
+                  "type": "string",
+                  "description": "Valid values for the unit property of each Compound object depend on the menu item type. For example, it doesn't make sense for an ounce of Sour Diesel flower to have a THC measurement in milligrams, or a medicated brownie with a CBD content measured in percent. Compounds in items with type Other will be ignored.See the table below for accepted values.\n\n| Item Type   | Valid `compound.unit` values |\n| ----------- | ---------------------------- |\n| Flower      | `percent`                    |\n| Edible      | `mg`                         |\n| PreRoll     | `percent`                    |\n| Concentrate | `percent`                    |\n| Other       | N/A                          |",
+                  "enum": [
+                    "percent",
+                    "mg"
+                  ]
+                }
+              },
+              "required": [
+                "type",
+                "content",
+                "unit"
+              ]
+            }
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": [
+                    "number",
+                    "string",
+                    "null"
+                  ],
+                  "description": "Unique to all items in the menu. Should remain consistent between updates to the menu. Takes precedence over top-level id for order integration purposes"
+                },
+                "price": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "The item's price in its major currency unit."
+                },
+                "price_includes_tax": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "`true` if the `price` is inclusive of applicable tax. `false` otherwise."
+                },
+                "tax_rate": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "The tax rate applicable to this item, in decimal form (ex. a `12%` tax rate is provided as `0.12`)"
+                },
+                "amount": {
+                  "type": "number",
+                  "description": "The count of `unit` for this item."
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "oz",
+                    "g",
+                    "each"
+                  ],
+                  "description": "Valid values for the `unit` property of each object in the `variants` array depend on the menu item `type`. For example: \n\n| Type        | Valid `variant.unit` |\n|-------------|----------------------|\n| Accessory   | `each`                 |\n| Seeds       | `each`                 |\n| Clone       | `each`                 |\n| Flower      | `g`, `oz`                |\n| Edible      | `each`                 |\n| PreRoll     | `each`                 |\n| Concentrate | `each`, `g`             |\n| Cartridge   | `each`, `g`             |\n| Topical     | `each`                 |\n| Other       | `each`                 |\n"
+                },
+                "inventory_level": {
+                  "type": "number",
+                  "description": "The number of saleable packages in stock. The value received is internally capped at `10`"
+                },
+                "batch_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The product variant's grower/processor batch id."
+                },
+                "parent_batch_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The product variant's grower/processor parent batch id."
+                },
+                "sku": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The product variant's SKU (Stock Keeping Unit) identifier. Could be a UPC"
+                }
+              },
+              "required": [
+                "price",
+                "amount",
+                "unit",
+                "inventory_level"
+              ]
+            }
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the menu item"
+          },
+          "available_for_pickup": {
+            "type": "boolean",
+            "description": "Whether or not the item should be made available for Leafly pickup.\nThis field may be omitted to maintain the current item setting for updates. New items will default to false."
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Source url for the product image. Must be a valid URL. This image will be cached shortly after this payload is receieved. If this field is omitted or null, any existing image will be removed.",
+            "format": "uri"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "items"
+  ]
+}

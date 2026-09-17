@@ -1,0 +1,255 @@
+{
+  "openapi": "3.0.0",
+  "schemes": [
+    "https"
+  ],
+  "servers": [
+    {
+      "url": "https://api-sandbox.leafly.io/v2/menu_integration",
+      "description": "Sandbox"
+    },
+    {
+      "url": "https://api.leafly.com/v2/menu_integration",
+      "description": "Production"
+    }
+  ],
+  "info": {
+    "description": "Documentation for other versions:\n- <a href=\"v1.1.html\">V1.1</a>\n- <a href=\"v1.html\">V1.0</a>\n\n### Key Changes in V2\n#### Authentication\n- Authentication is performed via an <a href=\"https://oauth.net/2/\">OAuth2 Client Credentials Grant</a>\n  - Retailers are still identified by their `menu_integration_key`\n- Updated compound fields\n  - `items[].compounds[].type` contains additional supported types e.g., `thca`, `cbdv`, `cbn`\n  - `items[] contains `.total_thc` and `total_cbd` fields for summary cannabinoid\n\n#### Inbound Request Bodies\n- The `variant.id` field is now required\n- The `variant.price` field is now expected to be submitted as an integer of minor currency units\n- There must be at least one member of the `variants[]` array on items\n- Fields that have fallen into disuse have been removed from inbound request bodies:\n  - `items[].batchId`\n  - `items[].parentBatchId`\n  - `items[].sku`\n  - `items[].variants[].price_includes_tax`\n  - `items[].variants[].tax_rate`\n  - `items[].variants[].batchId`\n  - `items[].variants[].parentBatchId`\n  - `items[].variants[].sku`\n- A camel case convention has been adopted for all fields\n- Updated Compound fields\n  - `items[].compounds[].type` enum now contains detailed cannabinoid types\n    - e.g., `thca`, `cbdv`, `cbn`, etc. See schema for full list of supported types\n  - `items[] contains `.total_thc` and `total_cbd` fields for summary cannabinoid\n    information in the same structure as ``items[].compounds[]`\n\n#### Outbound Response Bodies\n- `items[].external_key` and `items[].variants[].external_key` are now serialized as `id`,\ncarrying the same `id` value that was originally submitted to the API.\n- `items[].category` is now serialized as `type`\n- `items[].variants[].stock_quantity` is now serialized as `inventoryLevel`\n- Fields not considered relevant have been removed from outbound response bodies:\n  - `items[].brand_id`\n  - `items[].category`\n  - `items[].dispensary_id`\n  - `items[].pickup_override`\n  - `items[].product_id`\n  - `items[].sort_order`\n  - `items[].staff_pick_order`\n  - `items[].strain_id`\n  - `items[].strain_key`\n- A camel case convention has been adopted for all fields\n\n#### Inventory Management\n- `items[].variants[]` must contain at least one entry in `POST` and `PUT requests`. Thus it\nis no longer possible to delete menu items by submitting an empty array of `variants[]`. Use\nthe `DELETE` method instead.\n\n### Overview\nThis document describes how the system of record for a dispensary menu can be\nintegrated for near-real-time menu updates on leafly.com. To make an update to\nthe menu, the system of record should make an HTTP request to the menu integration\nURL using one of the specified methods below. The request should have a payload\ncontaining the menu items formatted in JSON.\n\nIt is expected that when menu items are edited in the system of record\nor when inventory levels for a menu item change, that system will make these\ncalls to update the menu on Leafly in near-real-time.\n\n### Leafly Order API Integration\nIntegrating with the <a href=\"https://docs.leafly.io/reservations-api/order-api/\">Leafly Order API</a>\nto manage Leafly orders in your point-of-sale system requires you to integrate to\n<a href=\"v2.html\">V2.0</a> of this Menu API.\n\n### Latency\nBe aware that the effects of menu updates submitted through the API are not\ninstantaneously visible, either on the consumer-facing site or through subsequent\n`GET` requests (when applicable). Background processing must occur that takes an\nindeterminate amount of time varying with system load. In the sandbox environment\nthis is likely not more than about two and half minutes, while in the production\nenvironment this is likely not more than about five minutes. These intervals between\nsubmission and impact can be faster or slower depending on external factors.\n\n### Tips and Best Practices\n#### Sync Frequency\n- **Initial Syncs or Reactivations**: Best achieved with a `POST` of a full menu\nwith all items.\n- **Daily Syncs**: A full menu sync should be received by `POST` once per day, with\n`PUT` or `DELETE` updates accounting for individual item changes throughout the day.\n\n#### Inventory Management\n- **Item Publishing**: Items are published to the consumer site automatically if they're\nreceived via the API with inventory associated. If no inventory is provided, they'll\nbe imported but unpublished (i.e., visible in the Leafly Menu Manager backend but not\nvisible to shoppers on leafly.com)\n- **Availability Thresholds**: These are not currently supported via API, however\nthere are toggles within each reatiler's Integreation Settings UI that can be used\nto set global or category-specific low inventory thresholds for hiding items.\n\n#### Data Standardization\n- **Strains**: If strain information is absent the value `null` should be submitted\nrather than `\"NA\"`. Transmitting `\"NA\"` will match items to the\n<a href=\"https://www.leafly.com/strains/el-na\">'El-na' strain</a> strain in the Leafly\nStrain Database. A post-ingestion job will attempt to match items to strains based on\nproduct name and descriptive content.\n- **Cannabinoids**: If cannabinoid information is absent the value `null` should be\nsubmitted rather than `0`. Transmitting `0` results in a display of `\"0mg\"` to shoppers\nrather than the preferable `\"unknown\"`\n- **Product Descriptions**: Do not submit product descriptions containing markup, all\nproduct descriptions should be submitted as plain text.\n\n### Treatment of Medically Flagged Items\nConfusion at times arises about how the distinction of medical and non-medical\nvariants influences the resulting menu on Leafly.com\n\nGenerally, in the case of dual-licensed retailers (that is, retailers dealing in\n_both_ medical and recreational cannabis), sending a menu where all variants are\nhomogeneously marked as `medical: true` or `medical: false` will result in separate\nbut identical medical and recreational menus for the retailer on the consumer-facing\nsite.\n\nFurther for dual-licensed retailers, transmitting a menu containing a heterogenous\nmix of `medical: true` and `medical: false` variants is understood to mean the\nmedically flagged items are restricted to medically privileged consumers, and that\nthe non-medically flagged items are available to anyone who should want to buy them.\nThus when such a menu is received, the `medical: true` items will be isolated to the\nretailer's medical menu, and the `medical: false` items will appear on both menus.\n\nIn the case of recreational-only or medical-only retailers, the `medical` designation\nis generally considered to be a non-sequitur, and is ignored.\n\n### Preparing for Production\nSeparate production OAuth2 credentials must be obtained to utilize the production\nendpoints. Please coordinate production deployments with our Parnter Ops Team at\npartners@leafly.com.\n\n#### Certification Checklist\nGraudating from sandbox to production requires verifying the logged activity of\nyour integration meets certain behavioral criteria:\n\n- **Correct Requests**\n  - Integration client successfully authenticates to the API\n  - Successful (200-level) responses are being solicted from the Menu API. If\n    errors are present they're corrected on subsequent requests.\n  - Request signatures indicate the presence of an automated application and not\n    the use of manual tools (e.g., postman or curl)\n- **Menu Sync Frequency Profile**\n  - **Option 1 (Recommended)**:\n    - `POST` - Full menu updates across items at a cadence of once per day\n    - `PUT` - Submission of item updates individually or in batches\n    - `DELETE` - Removal of items from Leafly menus\n  - **Option 2**:\n    - `POST` - Submission of full menu syncs multiple times per hour\n- **Item Field Validation**:\n  - Consistent use of items' `id` fields\n  - Variants contain inventory that reflect most items are in stock\n  - Strain values are set to `null` when absent\n  - Cannabinoid values are set to `null` when absent\n  - Values for fields generally sensible\n\n### Getting Help\nFor technical issues with the API or questions regarding this documentation,\nplease contact API Support at api-support@leafly.com\n\nFor access requests, production ramp-up, or other operational questions, please\ncontact our Partner Ops Team at partners@leafly.com.\n",
+    "version": "2.0",
+    "title": "Leafly Menu Integration",
+    "contact": {
+      "email": "api-support@leafly.com"
+    },
+    "x-logo": {
+      "url": "assets/logo.png"
+    }
+  },
+  "produces": [
+    "application/json"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "components": {
+    "securitySchemes": {
+      "OAuth2ClientCredentials": {
+        "type": "oauth2",
+        "description": "The Leafly Menu API V2 uses OAuth 2 with the client credentials flow for inbound requests.\n  The token url for the sandbox environment is `https://sso-sandbox.leafly.io/token`\n",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://sso.leafly.com/token",
+            "scopes": {}
+          }
+        }
+      }
+    },
+    "parameters": {
+      "menu_integration_key": {
+        "type": "string",
+        "in": "path",
+        "name": "menu_integration_key",
+        "description": "Each Leafly storefront will have a unique, Leafly generated key. You will use this key in\nyour request parameters to indicate which storefront you are pushing data in for.\n"
+      }
+    }
+  },
+  "paths": {
+    "/{menu_integration_key}/menu": {
+      "get": {
+        "tags": [
+          "Menu"
+        ],
+        "summary": "Get Menu",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/menu_integration_key"
+          }
+        ],
+        "description": "When you make an HTTP GET to the integration URL in the sandbox, the full\nmenu is returned. This method is only permitted in the sandbox environment;\nan HTTP 405 Method Not Allowed response will be returned in other environments.\nThe schema is subject to change and this endpoint is provided only to aid in\ndevelopment. Solutions should not rely on the availability of nor presented\nschema of this endpoint.\n",
+        "operationId": "menus#show",
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "schemas/v2/show.json"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid API Key in Header"
+          },
+          "404": {
+            "description": "Menu Integration Key not found"
+          }
+        }
+      }
+    },
+    "/{menu_integration_key}/menu/items": {
+      "post": {
+        "tags": [
+          "Menu"
+        ],
+        "summary": "Synchronize Menu by id",
+        "description": "Permits bulk update of a menu, using id to determine if changes are inserts or updates. Updates existing items that have a matching `id`. Inserts items if no matching `id` exists. Items not present in the post body are deleted from the Leafly menu. All items in the posted payload must have a unique value for `id`.",
+        "operationId": "menu#sync",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/menu_integration_key"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "schemas/v2/items.json"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Bad Request. Malformed or invalid data. Confirm that all items have a unique `id`"
+          },
+          "403": {
+            "description": "Invalid API Key in Header"
+          },
+          "404": {
+            "description": "Menu Integration Key not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Menu"
+        ],
+        "summary": "Upsert Menu Items",
+        "description": "Permits bulk updates of a menu, using `id` to determine if items are inserts or updates. Updates existing items that have a matching `id`. Inserts items if no matching `id` exists. Does not delete items. All items in the posted payload must have a unique value for `id`.",
+        "operationId": "menu#upsert",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/menu_integration_key"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "schemas/v2/items.json"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Bad Request. Malformed or invalid data. Confirm that all items have a unique `id`"
+          },
+          "403": {
+            "description": "Invalid API Key in Header"
+          },
+          "404": {
+            "description": "Menu Integration Key not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Menu"
+        ],
+        "summary": "Delete Menu Items",
+        "description": "Deletes elements matching the `id`s provided in the body.",
+        "operationId": "menu#delete",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/menu_integration_key"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "schemas/v1/ids.json"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "403": {
+            "description": "Invalid API Key in Header"
+          },
+          "404": {
+            "description": "Menu Integration Key not found"
+          }
+        }
+      }
+    },
+    "/{menu_integration_key}/status": {
+      "get": {
+        "tags": [
+          "Menu"
+        ],
+        "summary": "Get menu integration status",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/menu_integration_key"
+          }
+        ],
+        "description": "Provides the status of a dispensary's menu integration, including summary\nstatistics for the dispensary menu.\n",
+        "operationId": "menus#status",
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "schemas/v1/status.json"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid API Key in Header"
+          },
+          "404": {
+            "description": "Menu Integration Key not found"
+          }
+        }
+      }
+    }
+  }
+}
