@@ -1,0 +1,1972 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "description": "## Overview\nThis document describes how to integrate with the Leafly Order API to receive and manipulate users' orders from leafly.com.\n\nLeafly's Order API allows you to retrieve and update orders on behalf of retailers using your integration.\n\nNotifications of order events occurring on leafly.com will be communicated to your system by webhooks.\n\n### Getting Started\nIntegrating with the Leafly Order API requires you to have an existing integration with **Version 2.0** of the **[Leafly Menu API](https://docs.leafly.io/menu-integration-docs/v2.html)**.\n\nWhen your menu integration is complete, contact us at **api-support@leafly.com** for order API sandbox access and credentials.\n\nYou will need to provide us with destination urls for each webhook event. They can be the same or different.\n\n### Credentials\nCredentials for interacting with the Leafly Order API include:\n- One set of **[OAuth2 Client Credentials](https://oauth.net/2/)**, that is, a `Client ID` and `Client Secret`\n- One `HMAC Key` for webhook authentication\n- An `orderIntegrationKey` for each retailer using your integration\n\nThe OAuth2 credentials and HMAC key are unique to each integrator, while there is a unique `orderIntegrationKey` for each retailer managed through your integration.\n\n#### API Roots Urls\n- Sandbox: `https://reservations-api-sandbox.leafly.io/v1/order_integration`\n- Production: `https://reservations-api.leafly.com/v1/order_integration`\n\n#### Postman Collection\n[View json in browser](https://docs.leafly.io/reservations-api/order-api/order_api.postman_collection.json)\n\n[![Run in Postman](https://run.pstmn.io/button.svg)](https://god.gw.postman.com/run-collection/16702746-406b7fa7-e3d2-4883-b028-5191e1ff3fc7?action=collection%2Ffork&collection-url=entityId%3D16702746-406b7fa7-e3d2-4883-b028-5191e1ff3fc7%26entityType%3Dcollection%26workspaceId%3D87514285-801e-4833-8de6-2ea91a1e8d3a)\n\n### Limitations\n* Orders are only available for retrieval while live, or within twenty four hours of reaching a terminal state.\n* Media associated with an order (e.g., government and medical id images) are only accessible before order acknowledgement and when the order is in pending status.\n* Order update operations can only proceed after order acknowledgement.\n* Pending and expired are valid statuses but are not valid values for the status update endpoint.\n* API requests are rate limited, though sufficient headroom should exist for normal order volumes.\n\n#### Payments\nAt present Leafly does not process payments for orders placed on its platform, and so provides no payment details through the Order API other than a possible indication of the customer's `paymentPreference`.\n\n### Expectations\nIt is expected that\n* Orders are acknowledged as having been retrieved in whole by your system within fifteen minutes of receiving an order submission webhook.\n  Any orders not acknowledged by this deadline will be auto canceled.\n* Order status updates correspond to an intuitive, smoothly progressing lifecycle. Not all statuses are required (as our systems might not have a clear 1:1 status mapping),\n  but for example, supporting only direct movement to `picked_up` would not be allowed. Unless Leafly's outbound HMAC keys fails your validation,\n  webhook requests should only be responded to with status codes 200 or 201. These webhook events are not the place to apply business rules or validations on the order lifecycle.\n* Addition or substitution of new cart items into a user's order requires that referenced variants exist (that is, were submitted by your integration to the Leafly Menu API), and are in stock in the Leafly catalog.\n* Order preview requests are interacted with in a synchronous fashion where the response body contains all validated fields.\n* Leafly will be the sole originator of automated consumer facing communications related to orders placed on the Leafly platform. That is, Leafly shoppers should receive _no_ automated emails or text messages from a partner system with regard to order confirmation, status updates, etc.\n\n### UberEats\nIt may be possible to qualify your order integration for use in the Leafly UberEats program in applicable markets.\n  Be aware that any participating retailers will be beholden to additional operational expectations to maintain the desired customer experience.\n\nThe UberEats integration operates upstream of the Leafly Order API, and can be treated as black box from the perspective of Order API integrators.\n  That is, your integration needn't be concerned about what happens between Leafly's and UberEat's systems.\n  There are however, some behavioral changes to accommodate when interacting with Leafly's Order API in the UberEats context.\n\nAdditional integration requirements for UberEats:\n* Must be able to communicate updates about the delivery portion of the order lifecycle (i.e., `out_for_delivery` and `arrived_at_customer`)\n* Must be able to reliably accept cancelation notifications from UberEats that are forwarded to your system by Leafly.\n\nOther behaviors:\n* UberEats orders will show `\"marketplace\": \"uberEats\"` in the order details\n* UberEats orders will show `\"phoneNumber\": null`. UberEats does not share the customer's phone number. Instead, a masking proxy phone number\n  is provided to keep the customer's phone number confidential. When a retailer dials this number, they're required to enter an access code\n  for their call to be put through to the end customer. On UberEats orders, this proxy phone number and access code are accessible at the\n  `thirdPartyFacilitatorData.uberEats.proxyPhoneNumber` and `thirdPartyFacilitatorData.uberEats.customerPhoneCode` fields.\n* UberEats orders share a very restricted set of customer details, which can complicate customer recording concerns. Some differences include:\n  * Customer name as first name and last initial only\n  * No email address\n  * Phone numbers do not belong to customers and are not unique across UberEats orders\n\n### Other Call Outs\n* **Leafly Order UI set to read only**: The Leafly Order Dashboard will become read-only, as your software system will become the source of truth for order statuses and cart totals.\n* **Third Party Delivery**: The behavior of the API will change if a retailer activates a third-party delivery integration (e.g., Onfleet).\n  This shifts the source of truth for the delivery lifecycle to the delivery integration. If a retailer is using both an order integration with your point-of-sale and a delivery integration at the same time, the order API will no longer accept updates to delivery statuses, and will instead receive updates from the delivery integration, then send them to you in the form of a webhook.\n* **Shared URL domain for all retailers associated with your system**: URLs associated with your retailer partners should all share the same URL domain. Unique per-retailer URL domains are not supported. The `orderIntegrationKey` uniquely identifies each retailer.\n* **Dynamic request metadata is not supported**: Leafly does not support custom or dynamic IDs, params, or HTTP headers.\n\n### Preparing for Production\nGraduating your integration from the sandbox development environment to production requires demonstrating the\n  quality and completeness of your integration. At a minimum your integration should be able to smoothly and\n  reliably move orders from inception to completion for both terminal states ([`picked_up`, `canceled`]) and both\n  fulfillment mechanisms ([`pickup`, `delivery`]).\n\nIt's not required to build against all elements of the API, though it is encouraged to provide the most value to our mutual\n  retailers and shoppers. The table below summarizes which components of the Order API are mandatory, which are strongly encouraged, and which are considered optional.\n\n| API Element                  | Type     | Expectation - validated by review of logged activity                | Requirement    | Value Add of Recommended Features                                           |\n|------------------------------|----------|---------------------------------------------------------------------|----------------|-----------------------------------------------------------------------------|\n| Retailer Activation         | Webhook  | 200 Ok, empty response bodies                                        | _Optional_     | Opportunity to gate retailer activation                                     |\n| Retailer Deactivation        | Webhook  | 200 Ok, empty response bodies                                       | _Optional_     | Notifies your integration of retailer deactivation                          |\n| Order Preview                | Webhook  | 200 Ok, response bodies matching the specification of this document | _Recommended_  | Pricing/stocking surprise-free shopping experience for our mutual customers |\n| Order Submission             | Webhook  | 200 Ok, empty response bodies                                       | **_Required_** |                                                                             |\n| Order Cancelation            | Webhook  | 200 Ok, empty response bodies                                       | **_Required_** |                                                                             |\n| Order Status                 | Webhook  | 200 Ok, empty response bodies                                       | _Recommended_  | Keeps your integration synchronized with 3rd party delivery lifecycle       |\n| Fetch Order by ID            | Endpoint | Successful retrievals                                               | **_Required_** |                                                                             |\n| Retrieve Government ID Image | Endpoint | Successful retrievals                                               | _Recommended_  | Safety enhancement for retailers without needing to view LeaflyBiz          |\n| Retrieve Medical ID Image    | Endpoint | Successful retrievals                                               | _Recommended_  | Compliance enhancement for retailers without needing to view LeaflyBiz      |\n| Acknowledge Order            | Endpoint | Successful requests                                                 | **_Required_** |                                                                             |\n| Update Order Status          | Endpoint | Successful motion through order lifecycles                          | **_Required_** |                                                                             |\n| Update Order's Cart          | Endpoint | Successful updates of cart contents, taxes, delivery fees           | _Optional_     | Synchronization of final order state between systems                        |\n\nWhen you're confident your integration is ready to advance to production please contact API Support at **api-support@leafly.com**,\n  or feel free to reach out through other channels we may have configured with your team.\n\n### Getting Help\nFor technical issues with the API or questions regarding this documentation, please contact API Support at\n**api-support@leafly.com**.\n\nFor access requests, production ramp-up, or other operational questions, please contact our Partner Ops Team at\n**partners@leafly.com**.\n\n### Sharing Feedback\nIf you have suggestions for how the Leafly Order API or this documentation can be improved, please share your ideas with us by submitting **[this form](https://puqwdu2b3oa.typeform.com/to/RW35JZgD)**\n\n## Order Flow Sequence Diagram\n\n![Order Flow Diagram](https://docs.leafly.io/reservations-api/order-api/images/order-flow-diagram.svg)\n",
+    "title": "Leafly Order API",
+    "version": "1.0",
+    "contact": {
+      "email": "api-support@leafly.com"
+    },
+    "license": {
+      "name": "Leafly",
+      "url": "https://www.leafly.com"
+    },
+    "x-logo": {
+      "url": "https://docs.leafly.io/reservations-api/order-api/images/logo.png"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://reservations-api-sandbox.leafly.io/v1/order_integration",
+      "description": "Sandbox"
+    },
+    {
+      "url": "https://reservations-api.leafly.com/v1/order_integration",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/{order_integration_key}/orders/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrderIntegrationKey"
+        },
+        {
+          "$ref": "#/components/parameters/OrderId"
+        }
+      ],
+      "get": {
+        "summary": "Fetch Order Details",
+        "description": "Fetch details describing the order.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OrderResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "operationId": "getOrder",
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ]
+      }
+    },
+    "/{order_integration_key}/government_id/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrderIntegrationKey"
+        },
+        {
+          "$ref": "#/components/parameters/OrderId"
+        }
+      ],
+      "get": {
+        "summary": "Fetch Government ID",
+        "description": "Fetch the binary representing the government id image the customer submitted with their order. This endpoint is only usable prior to order acknowledgement and only when the order is in pending status.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OrderMediaResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "operationId": "getGovernmentId",
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ]
+      }
+    },
+    "/{order_integration_key}/medical_id/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrderIntegrationKey"
+        },
+        {
+          "$ref": "#/components/parameters/OrderId"
+        }
+      ],
+      "get": {
+        "summary": "Fetch Medical ID",
+        "description": "Fetch the binary representing the medical id image the customer submitted with their order. This endpoint is only usable prior to order acknowledgement and only when the order is in pending status.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OrderMediaResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "operationId": "getMedicalId",
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ]
+      }
+    },
+    "/{order_integration_key}/orders/{id}/acknowledge": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrderIntegrationKey"
+        },
+        {
+          "$ref": "#/components/parameters/OrderId"
+        }
+      ],
+      "post": {
+        "summary": "Acknowledge Order",
+        "description": "This endpoint confirms that your system has retrieved all necessary details regarding an order,\nincluding any associated media (e.g., government and medical id images).\n- Acknowledgement of order receipt is required before any changes can be made to that order\nthrough other API operations\n- Once an order has been acknowledged, access to an order's associated media is revoked.\n",
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/NoContentResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "operationId": "acknowledgeOrder",
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ]
+      }
+    },
+    "/{order_integration_key}/orders/{id}/status": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrderIntegrationKey"
+        },
+        {
+          "$ref": "#/components/parameters/OrderId"
+        }
+      ],
+      "post": {
+        "summary": "Update Order Status",
+        "description": "Move an order along its lifecycle by advancing its status.\n- Updates to order status are only available after an order has been acknowledged\n- Order statuses can only be moved forward\n- Orders cannot be moved from their current status to the same status\n- Orders cannot be moved out of a terminal status (`picked_up`, `canceled`, `expired`)\n- Orders cannot be moved to 'pending' or 'expired' status with this endpoint\n\nThere may not be a one-to-one mapping of your system's statuses with those of Leafly's, so issuing updates using every status is not required.\nHowever it is expected that the status updates issued are a best-approximation as can be allowed by the status mapping between the two systems,\nand that they result in a reasonably smooth and intuitive order lifecycle for the end shopper.\n\nUpdating an order's status to `canceled` allows for the optional inclusion of a `cancelationReasonCode`. This endpoint will accept all\ncancelation reason codes described in this document with the exception of `order_api_unacknowledged`. If no reason is provided the value of\n`cancelationReasonCode` will default to `dispensary`.\n\n![Statuses Flow Chart](https://docs.leafly.io/reservations-api/order-api/images/order-status-diagram.png)\n",
+        "requestBody": {
+          "description": "New order status",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChangeIncoming"
+              },
+              "examples": {
+                "confirmed": {
+                  "$ref": "#/components/examples/OrderStatusUpdateConfirmed"
+                },
+                "ready": {
+                  "$ref": "#/components/examples/OrderStatusUpdateReady"
+                },
+                "out for delivery": {
+                  "$ref": "#/components/examples/OrderStatusUpdateOutForDelivery"
+                },
+                "arrived at customer": {
+                  "$ref": "#/components/examples/OrderStatusUpdateArrivedAtCustomer"
+                },
+                "picked up": {
+                  "$ref": "#/components/examples/OrderStatusUpdatePickedUp"
+                },
+                "canceled": {
+                  "$ref": "#/components/examples/OrderStatusUpdateCanceled"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OrderResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "operationId": "updateOrder",
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ]
+      }
+    },
+    "/{order_integration_key}/orders/{id}/cart": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/OrderIntegrationKey"
+        },
+        {
+          "$ref": "#/components/parameters/OrderId"
+        }
+      ],
+      "post": {
+        "summary": "Update Order Cart",
+        "description": "Declaratively change an order by supplying a new state for its cart items and taxes.\n\nSupported cart item operations are item additions, removals, substitutions, and a specific set of edits (which manifest as substitutions).\n  Changes are applied as an all-succeed or all-fail transaction. Changes made to cart items will trigger a recalculation of order\n  discounts and totals.\n\nCustom values supplied for the `quantity` and `packagePrice` properties will be respected during additions and substitutions.\n  All other values are sourced from Leafly's catalog using the `integratorVariantId` to lookup item information supplied\n  by your integration to the [Leafly Menu API](https://docs.leafly.io/menu-integration-docs/v1.1.html). If the `integratorVariantId`\n  references a non-existent or out-of-stock item the request will be rejected.\n\nAdditions are applied by including a new entry in the `cartItems` array with a `null` value for the `id` property.\n  The `integratorVariantId` will be used to populate the details of the added item(s), the value supplied for `quantity`\n  will be applied and the value supplied for `packagePrice` will override the price found in the Leafly catalog.\n\nRemovals are applied by leaving an item absent from the new `cartItems[]` array.\n\nSubstitutions are applied by changing the value of `integratorVariantId` while leaving the `id` value the same. As with additions,\n  the `quantity` and `packagePrice` properties will be respected, with other properties referenced according to the new\n  `integratorVariantId` value. After checkout, cart items are immutable, so the operation results in the insertion of a new entry\n  into `cartItems[]` which will have a new `id` value, with the affected cart item being removed. The principal difference\n  between this operation as compared to a combined addition and removal is the order log will record a substitution instead of\n  a separate addition and removal.\n\nEdits can be applied by changing the value of `quantity` or `packagePrice` on existing entries in `cartItems`. These changes will\n  manifest as a substitution, where the affected item will be removed from `cartItems[]` and a new item will be introduced in its\n  place.\n\nAny specific variant id can only appear on one cart item. Updates where multiple cart items refer to the same variant will be\n  rejected.\n\nChanges made to `packagePrice` should reflect only the top-line, before-discount price of affected items. Introducing pricing\n  reflecting discounts not known by Leafly's deal editor is likely to produce reconciliation headaches for our mutual customers.\n\nThe supplied array of taxes will replace the existing taxes on the order.\n",
+        "requestBody": {
+          "description": "New state of cart",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderCartUpdate"
+              },
+              "examples": {
+                "cartUpdate": {
+                  "$ref": "#/components/examples/OrderCartUpdate"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OrderResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "operationId": "updateCartItems",
+        "security": [
+          {
+            "OAuth2ClientCredentials": []
+          }
+        ]
+      }
+    }
+  },
+  "webhooks": {
+    "integrationActivationWebhook": {
+      "post": {
+        "summary": "Integration Activation",
+        "description": "This webhook is called when a retailer attempts to activate the ordering integration with your platform from LeaflyBiz. Returning an error to the webhook\nrequest will prevent the integration from being turned on, so you may use it to gate retailer activation as might be necessary.\n",
+        "requestBody": {
+          "description": "Metadata identifying the retailer enabling the integration.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntegrationActivationWebhook"
+              },
+              "examples": {
+                "activate": {
+                  "$ref": "#/components/examples/OrderActivateWebhook"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Your server returns this code if it accepts the activation callback."
+          }
+        },
+        "operationId": "integrationActivationWebhook",
+        "security": [
+          {
+            "WebhookHMACAuthentication": []
+          }
+        ]
+      }
+    },
+    "integrationDectivationWebhook": {
+      "post": {
+        "summary": "Integration Deactivation",
+        "description": "This webhook is called when a retailer deactivates the ordering integration with your platform from LeaflyBiz. Deactivation will proceed regardless of the\nresponse to the webhook request.\n",
+        "requestBody": {
+          "description": "Metadata identifying the retailer disabling the integration.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntegrationDeactivationWebhook"
+              },
+              "examples": {
+                "deactivate": {
+                  "$ref": "#/components/examples/OrderDeactivateWebhook"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Your server returns this code if it accepts the deactivation callback."
+          }
+        },
+        "operationId": "integrationDectivationWebhook",
+        "security": [
+          {
+            "WebhookHMACAuthentication": []
+          }
+        ]
+      }
+    },
+    "previewOrderWebhook": {
+      "post": {
+        "summary": "Order Preview",
+        "description": "This webhook is dispatched at key checkpoints during the Leafly shopping funnel where validation of\nitem availability, pricing, and taxation on a shopper's cart are a large value add to the experience\nof the shopper. At these junctures our platform will call out to your integration with a\nsummarized representation of the user's cart contents and fulfillment intentions. The preview webhook\nexpects a synchronous response with a further distilled representation of the cart where your integration\nhas an opportunity to adjust items quantities (downward only), remove items entirely, correct\ntop-of-line pricing, and supply a list of applicable taxes.\n",
+        "requestBody": {
+          "description": "The cart is included in the webhook callback.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderPreview"
+              },
+              "examples": {
+                "preview": {
+                  "$ref": "#/components/examples/OrderPreviewWebhook"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OrderPreviewResponse"
+          }
+        },
+        "operationId": "previewOrderWebhook",
+        "security": [
+          {
+            "WebhookHMACAuthentication": []
+          }
+        ]
+      }
+    },
+    "orderSubmissionWebhook": {
+      "post": {
+        "summary": "Order Submission",
+        "description": "This webhook is dispatched when an order is created on Leafly.",
+        "requestBody": {
+          "description": "Contains metadata about the newly submitted order.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderSubmissionWebhook"
+              },
+              "examples": {
+                "submit": {
+                  "$ref": "#/components/examples/OrderSubmissionWebhook"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Your server returns this code if it accepts the order submit callback."
+          }
+        },
+        "operationId": "orderSubmissionWebhook",
+        "security": [
+          {
+            "WebhookHMACAuthentication": []
+          }
+        ]
+      }
+    },
+    "orderCancelationWebhook": {
+      "post": {
+        "summary": "Order Cancelation",
+        "description": "This webhook is dispatched when an order is canceled.",
+        "requestBody": {
+          "description": "Contains metadata about the canceled order.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderCancelWebhook"
+              },
+              "examples": {
+                "cancel": {
+                  "$ref": "#/components/examples/OrderCancelWebhook"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Your server returns this code if it accepts the order cancel callback."
+          }
+        },
+        "operationId": "orderCancelationWebhook",
+        "security": [
+          {
+            "WebhookHMACAuthentication": []
+          }
+        ]
+      }
+    },
+    "orderStatusWebhook": {
+      "post": {
+        "summary": "Order Status",
+        "description": "This webhook is dispatched when an order status changes. This is typically only\n  relevant if part of the order lifecycle needs to be managed outside of your\n  platform. For example, if a retailer is using a separate integration to manage\n  deliveries through a third party.\n",
+        "requestBody": {
+          "description": "Contains metadata about the order with the status change.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderStatusWebhook"
+              },
+              "examples": {
+                "status": {
+                  "$ref": "#/components/examples/OrderStatusWebhook"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Your server returns this code if it accepts the order status change callback."
+          }
+        },
+        "operationId": "orderStatusWebhook",
+        "security": [
+          {
+            "WebhookHMACAuthentication": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "OAuth2ClientCredentials": {
+        "type": "oauth2",
+        "description": "The Leafly Order API uses OAuth 2 with the client credentials flow for inbound requests.\n  The token url for the sandbox environment is `https://sso-sandbox.leafly.io/token`\n",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://sso.leafly.com/token",
+            "scopes": {}
+          }
+        }
+      },
+      "WebhookHMACAuthentication": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Leafly-Signature",
+        "description": "Webhooks outbound from Leafly will include an `X-Leafly-Signature` header representing\n  an `HMAC-SHA-256` digest of the request body using an HMAC key issued to you alongside\n  your client credentials for this purpose. Authenticate webhooks received from Leafly by\n  independently computing the HMAC signature from the request body and your HMAC key, then\n  comparing the result with the value present in the header.\n"
+      }
+    },
+    "parameters": {
+      "OrderId": {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "The order uuid."
+      },
+      "OrderIntegrationKey": {
+        "in": "path",
+        "name": "order_integration_key",
+        "schema": {
+          "type": "string"
+        },
+        "required": true,
+        "description": "The dispensary's integration key. Provided by Leafly."
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid client request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SchemaError"
+                }
+              ]
+            },
+            "examples": {
+              "BadRequest": {
+                "$ref": "#/components/examples/BadRequestSchemaValidationError"
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Order(s) not found or not accepted",
+        "content": {
+          "application/json": {
+            "examples": {
+              "NotFound": {
+                "$ref": "#/components/examples/NotFoundError"
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "Unauthenticated": {
+                "$ref": "#/components/examples/UnauthenticatedError"
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "Forbidden": {
+                "$ref": "#/components/examples/ForbiddenError"
+              }
+            }
+          }
+        }
+      },
+      "NoContentResponse": {
+        "description": "No Content",
+        "content": {
+          "application/json": {
+            "examples": {
+              "NoContent": {
+                "$ref": "#/components/examples/NoContent"
+              }
+            }
+          }
+        }
+      },
+      "OrderMediaResponse": {
+        "description": "The government or medical id for an order",
+        "content": {
+          "image/*": {
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        }
+      },
+      "OrderPreviewResponse": {
+        "description": "Representation of a potential order while in the checkout funnel, after inventory and pricing validation by the integrator.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OrderPreviewResponse"
+            },
+            "examples": {
+              "previewResponse": {
+                "$ref": "#/components/examples/OrderPreviewResponse"
+              }
+            }
+          }
+        }
+      },
+      "OrderResponse": {
+        "description": "A user order",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Order"
+            },
+            "examples": {
+              "Order": {
+                "$ref": "#/components/examples/Order"
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "CancelReason": {
+        "type": "string",
+        "enum": [
+          "not_picked_up",
+          "customer",
+          "dispensary",
+          "pos",
+          "delivery_partner",
+          "ecommerce_partner",
+          "order_api_unacknowledged"
+        ]
+      },
+      "CartItemIncoming": {
+        "type": "object",
+        "required": [
+          "id",
+          "integratorVariantId",
+          "quantity",
+          "packagePrice"
+        ],
+        "properties": {
+          "id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "string identifier of this cart item"
+          },
+          "integratorVariantId": {
+            "type": "string",
+            "description": "id assigned by your system to the variant when submitted through Leafly Menu API. It is very important that this id was given, otherwise it will resolve to the identifier of the parent menu item - introducing ambiguity likely to cause reconciliation problems for our mutual customers."
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "number of instances of this item that have been ordered"
+          },
+          "packagePrice": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "top line price per quantity of cart item in minor units"
+          }
+        }
+      },
+      "CartItemOutgoing": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "category",
+          "brandName",
+          "integratorVariantId",
+          "quantity",
+          "packageUnit",
+          "packageSize",
+          "packagePrice",
+          "discountedPackagePrice",
+          "discountedPriceCents",
+          "dealTitle",
+          "priceCents",
+          "savingsCents"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "uuid of this cart item"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "creation timestamp"
+          },
+          "name": {
+            "type": "string",
+            "description": "name of menu item associated with this cart item"
+          },
+          "category": {
+            "type": "string",
+            "description": "Leafly menu category"
+          },
+          "brandName": {
+            "type": "string",
+            "description": "name of the brand associated with the menu item"
+          },
+          "integratorVariantId": {
+            "type": "string",
+            "description": "id assigned to variant when submitted through Leafly Menu API, if no variant id was given, this will resolve to the id of the parent menu item"
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "number of instances of this item that have been ordered"
+          },
+          "packageUnit": {
+            "type": "string",
+            "description": "unit of measurement applied to the menu item, e.g., \"g\", \"mg\", \"pc\", \"each\", etc"
+          },
+          "packageSize": {
+            "type": "string",
+            "description": "instances of `packageUnit` making up a package, e.g., \"1.0\" paired with `packageUnit` \"g\", etc"
+          },
+          "packagePrice": {
+            "type": "number",
+            "description": "original price per quantity of cart item in minor units"
+          },
+          "discountedPackagePrice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "description": "price per quantity of cart item in minor units after discount application"
+          },
+          "discountedPriceCents": {
+            "type": "number",
+            "description": "price of entire cart item (all quantity) in minor units after discount application"
+          },
+          "dealTitle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "the name of the retailer-defined deal when applicable"
+          },
+          "priceCents": {
+            "type": "number",
+            "description": "original price of entire cart item (all quantity) in minor units"
+          },
+          "savingsCents": {
+            "type": "number",
+            "description": "difference between original and discounted price of entire cart item (all quantity) in minor units"
+          }
+        }
+      },
+      "DeliveryAddress": {
+        "type": "object",
+        "description": "Required if fulfillmentMechanism is set to `delivery`.",
+        "properties": {
+          "address1": {
+            "type": "string"
+          },
+          "address2": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "city": {
+            "type": "string"
+          },
+          "county": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "postalCode": {
+            "type": "string"
+          },
+          "countryCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "addressType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "residential",
+                  "business"
+                ]
+              }
+            ]
+          },
+          "coordinates": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "lat",
+                  "lng"
+                ],
+                "properties": {
+                  "lat": {
+                    "type": "number"
+                  },
+                  "lng": {
+                    "type": "number"
+                  }
+                }
+              }
+            ]
+          },
+          "deliveryInstructions": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "errors"
+        ],
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "title",
+                "detail"
+              ],
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SchemaError": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "validation_result": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EventType": {
+        "type": "string",
+        "enum": [
+          "order_activate",
+          "order_deactivate",
+          "order_submit",
+          "order_preview",
+          "order_cancel",
+          "order_status"
+        ]
+      },
+      "FulfillmentMechanism": {
+        "type": "string",
+        "enum": [
+          "pickup",
+          "delivery"
+        ],
+        "description": "how the customer intends to receive their order"
+      },
+      "IntegrationActivationWebhook": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/IntegrationWebhook"
+          },
+          {
+            "type": "object"
+          }
+        ]
+      },
+      "IntegrationDeactivationWebhook": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/IntegrationWebhook"
+          },
+          {
+            "type": "object"
+          }
+        ]
+      },
+      "IntegrationWebhook": {
+        "type": "object",
+        "required": [
+          "eventTime",
+          "eventType",
+          "orderIntegrationKey"
+        ],
+        "properties": {
+          "eventTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "timestamp of when the event occurred"
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/EventType"
+          },
+          "orderIntegrationKey": {
+            "type": "string",
+            "description": "identifier of the retailer associated with the event"
+          }
+        }
+      },
+      "Marketplace": {
+        "type": "string",
+        "enum": [
+          "leafly",
+          "uberEats"
+        ],
+        "description": "Originating platform of the order"
+      },
+      "MedicalStatus": {
+        "type": "string",
+        "enum": [
+          "medical",
+          "recreational"
+        ],
+        "description": "whether the order is medical or recreational, generally only applies to orders placed in the United States"
+      },
+      "Order": {
+        "type": "object",
+        "required": [
+          "id",
+          "emailAddress",
+          "phoneNumber",
+          "firstName",
+          "lastName",
+          "marketplace",
+          "fulfillmentMechanism",
+          "deliveryAddress",
+          "status",
+          "createdAt",
+          "cartItems",
+          "statusChanges",
+          "taxes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "uuid identifying the order"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "IANA timezone applicable to the order"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "confirmedAt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "date-time"
+          },
+          "readyAt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "date-time"
+          },
+          "pickedUpAt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "date-time"
+          },
+          "canceledAt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "date-time"
+          },
+          "cancelationReasonCode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CancelReason"
+              }
+            ]
+          },
+          "cancelationReason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "human friendly reason for order cancelation"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "customer first name"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "customer last name"
+          },
+          "emailAddress": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "customer email address"
+          },
+          "phoneNumber": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "customer phone number"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fulfillmentMechanism": {
+            "$ref": "#/components/schemas/FulfillmentMechanism"
+          },
+          "marketplace": {
+            "$ref": "#/components/schemas/Marketplace"
+          },
+          "medicalStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MedicalStatus"
+              }
+            ]
+          },
+          "medicalCardState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "medicalCardNumber": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "medicalCardExpiration": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "paymentPreference": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PaymentPreference"
+              }
+            ]
+          },
+          "subtotal": {
+            "type": "number",
+            "description": "order total before taxes and fees in minor units"
+          },
+          "deliveryFee": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "order delivery fee in minor units. Must be zero for pickup orders."
+          },
+          "tip": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "total tip applied to the order in minor units. Returns 0 when no tip was provided."
+          },
+          "thirdPartyFacilitatorData": {
+            "$ref": "#/components/schemas/ThirdPartyFacilitatorData"
+          },
+          "totalDiscounts": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "description": "total of discounts applied to the order in minor units"
+          },
+          "total": {
+            "type": "number",
+            "description": "order grand total in minor units, after aggregating all items, taxes, fees, and discounts. Tip is not included. For example, a `subtotal` of `2000`, `deliveryFee` of `1000`, `taxes` totaling `1000`, and totalDiscounts of `1500` will have a `total` of `2500`."
+          },
+          "totalWithTip": {
+            "type": "number",
+            "minimum": 0,
+            "description": "order grand total including tip in minor units, after aggregating all items, taxes, fees, discounts, and tip. Returns the same value as `total` when no tip was provided."
+          },
+          "deliveryAddress": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeliveryAddress"
+              }
+            ],
+            "description": "the order's delivery destination if applicable"
+          },
+          "scheduled": {
+            "type": "boolean",
+            "description": "whether this order is scheduled for fulfillment during a specific window. At present can only apply to delivery orders."
+          },
+          "startOfScheduledWindow": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "format": "date-time"
+              }
+            ]
+          },
+          "endOfScheduledWindow": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "format": "date-time"
+              }
+            ]
+          },
+          "cartItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CartItemOutgoing"
+            },
+            "description": "line items composing the order"
+          },
+          "statusChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatusChangeSnapshot"
+            },
+            "description": "history of the order's status changes"
+          },
+          "taxes": {
+            "$ref": "#/components/schemas/Taxes",
+            "description": "Summary of tax line items applied to the order"
+          }
+        }
+      },
+      "OrderCartUpdate": {
+        "type": "object",
+        "required": [
+          "cartItems",
+          "taxes",
+          "deliveryFee"
+        ],
+        "properties": {
+          "cartItems": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/CartItemIncoming"
+            }
+          },
+          "deliveryFee": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "order delivery fee in minor units. Must be zero for pickup orders."
+          },
+          "taxes": {
+            "$ref": "#/components/schemas/Taxes",
+            "description": "Summary of tax line items applied to the order"
+          }
+        }
+      },
+      "OrderPreview": {
+        "type": "object",
+        "required": [
+          "eventTime",
+          "eventType",
+          "orderIntegrationKey",
+          "cartItems",
+          "medicalStatus",
+          "fulfillmentMechanism",
+          "deliveryAddress"
+        ],
+        "properties": {
+          "eventTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "timestamp of when the event occurred"
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/EventType"
+          },
+          "orderIntegrationKey": {
+            "type": "string",
+            "description": "identifier of the retailer associated with the event"
+          },
+          "cartItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PreviewCartItem"
+            }
+          },
+          "medicalStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MedicalStatus"
+              }
+            ]
+          },
+          "fulfillmentMechanism": {
+            "$ref": "#/components/schemas/FulfillmentMechanism"
+          },
+          "deliveryAddress": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeliveryAddress"
+              }
+            ]
+          }
+        }
+      },
+      "OrderPreviewResponse": {
+        "type": "object",
+        "required": [
+          "cartItems",
+          "taxes"
+        ],
+        "properties": {
+          "cartItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PreviewResponseCartItem"
+            }
+          },
+          "taxes": {
+            "$ref": "#/components/schemas/Taxes"
+          }
+        }
+      },
+      "OrderStatus": {
+        "type": "string",
+        "description": "The current status of the order in its lifecycle.\n![Statuses Flow Chart](https://docs.leafly.io/reservations-api/order-api/images/order-status-diagram.png)\n",
+        "enum": [
+          "pending",
+          "confirmed",
+          "ready",
+          "out_for_delivery",
+          "arrived_at_customer",
+          "picked_up",
+          "canceled",
+          "expired"
+        ]
+      },
+      "OrderSubmissionWebhook": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/OrderWebhook"
+          },
+          {
+            "type": "object",
+            "required": [
+              "acknowledgeBy"
+            ],
+            "properties": {
+              "acknowledgeBy": {
+                "type": "string",
+                "format": "date-time",
+                "description": "deadline at which an order will be canceled because it was not recognized by the integrator"
+              }
+            }
+          }
+        ]
+      },
+      "OrderCancelWebhook": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/OrderWebhook"
+          },
+          {
+            "type": "object",
+            "required": [
+              "cancelReason"
+            ],
+            "properties": {
+              "cancelReason": {
+                "$ref": "#/components/schemas/CancelReason"
+              }
+            }
+          }
+        ]
+      },
+      "OrderStatusWebhook": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/OrderWebhook"
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "$ref": "#/components/schemas/OrderStatus"
+              }
+            }
+          }
+        ]
+      },
+      "OrderWebhook": {
+        "type": "object",
+        "required": [
+          "eventTime",
+          "eventType",
+          "orderId",
+          "orderIntegrationKey"
+        ],
+        "properties": {
+          "eventTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "timestamp of when the event occurred"
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/EventType"
+          },
+          "orderId": {
+            "type": "string",
+            "description": "uuid of the order to which the event applies"
+          },
+          "orderIntegrationKey": {
+            "type": "string",
+            "description": "identifier of the retailer associated with the event"
+          }
+        }
+      },
+      "PaymentPreference": {
+        "type": "string",
+        "enum": [
+          "cash",
+          "debit",
+          "credit"
+        ]
+      },
+      "PreviewCartItem": {
+        "type": "object",
+        "required": [
+          "name",
+          "integratorVariantId",
+          "quantity",
+          "packagePrice",
+          "discountedPackagePrice",
+          "discountedPrice"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "name of menu item associated with this cart item"
+          },
+          "integratorVariantId": {
+            "type": "string",
+            "description": "id assigned to variant when submitted through Leafly Menu API"
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "number of instances of this item that have been ordered"
+          },
+          "packagePrice": {
+            "type": "integer",
+            "description": "original price per quantity of cart item in minor units"
+          },
+          "discountedPackagePrice": {
+            "type": "integer",
+            "description": "price per quantity of cart item in minor units after discount application"
+          },
+          "discountedPrice": {
+            "type": "integer",
+            "description": "price of entire cart item (all quantity) in minor units after discount application"
+          }
+        }
+      },
+      "PreviewResponseCartItem": {
+        "type": "object",
+        "required": [
+          "integratorVariantId",
+          "quantity",
+          "packagePrice"
+        ],
+        "properties": {
+          "integratorVariantId": {
+            "type": "string",
+            "description": "id assigned to variant when submitted through Leafly Menu API"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "verified or reduced instances of item that can be ordered"
+          },
+          "packagePrice": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "verified or corrected price per quantity of cart item in minor units"
+          }
+        }
+      },
+      "StatusChangeIncoming": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "cancelationReasonCode": {
+            "$ref": "#/components/schemas/CancelReason"
+          }
+        }
+      },
+      "StatusChangeOutgoing": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/StatusChangeIncoming"
+          },
+          {
+            "type": "object",
+            "required": [
+              "createdAt"
+            ],
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        ]
+      },
+      "StatusChangeSnapshot": {
+        "type": "object",
+        "required": [
+          "to",
+          "createdAt"
+        ],
+        "properties": {
+          "to": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TaxComponent": {
+        "type": "object",
+        "required": [
+          "label",
+          "amountCents"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "description of the tax line item"
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "tax amount in minor units"
+          }
+        }
+      },
+      "Taxes": {
+        "type": "array",
+        "description": "Summary of applied taxes broken out by tax type.",
+        "items": {
+          "$ref": "#/components/schemas/TaxComponent"
+        }
+      },
+      "ThirdPartyFacilitatorData": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "required": [
+              "uberEats"
+            ],
+            "properties": {
+              "uberEats": {
+                "type": "object",
+                "required": [
+                  "customerPhoneCode",
+                  "proxyPhoneNumber"
+                ],
+                "properties": {
+                  "customerPhoneCode": {
+                    "type": "string",
+                    "description": "Access code to contact an UberEats customer by phone"
+                  },
+                  "proxyPhoneNumber": {
+                    "type": "string",
+                    "description": "A non-unique proxy phone number provided by UberEats that masks the customer's\nreal phone number. This number can be used in conjunction with the `customerPhoneCode`\nto place a call that will be connected to the end customer. This phone number\ndoes not belong to and is not unique to the customer.\n"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "examples": {
+      "Order": {
+        "value": {
+          "id": "c58a7fe6-368c-4102-a1ba-285e50208a6e",
+          "status": "confirmed",
+          "timeZone": "America/Denver",
+          "createdAt": "2023-08-11T20:14:36.214Z",
+          "confirmedAt": "2023-08-11T20:17:21.293Z",
+          "readyAt": null,
+          "pickedUpAt": null,
+          "canceledAt": null,
+          "cancelationReason": null,
+          "cancelationReasonCode": null,
+          "firstName": "Genevive",
+          "lastName": "Klein",
+          "emailAddress": "dorsey.ernser@lesch.example",
+          "phoneNumber": "+14438712760",
+          "dateOfBirth": "1987-05-26T00:00:00.000Z",
+          "fulfillmentMechanism": "delivery",
+          "marketplace": "uberEats",
+          "medicalStatus": "medical",
+          "medicalCardState": "WA",
+          "medicalCardNumber": "UJED#92403",
+          "medicalCardExpiration": "2025-09-14T00:00:00.000Z",
+          "paymentPreference": "cash",
+          "subtotal": 107276,
+          "deliveryFee": 199,
+          "tip": 500,
+          "totalDiscounts": 0,
+          "total": 107629,
+          "totalWithTip": 108129,
+          "deliveryAddress": {
+            "address1": "42 Wallaby Way",
+            "address2": "",
+            "city": "Seatlle",
+            "county": "King County",
+            "state": "WA",
+            "postalCode": "52950",
+            "addressType": "residential",
+            "coordinates": {
+              "lat": 47.6205,
+              "lng": 122.3493
+            },
+            "deliveryInstructions": "beware neighbor's ostrich"
+          },
+          "cartItems": [
+            {
+              "brandName": "Heavy Duty Aluminum Clock",
+              "category": "tinctures",
+              "createdAt": "2023-08-11T21:53:54.264Z",
+              "dealTitle": null,
+              "discountedPackagePrice": null,
+              "discountedPriceCents": 6710,
+              "id": "de5c4bf6-ca62-44c8-9862-d3003f0f4ea8",
+              "integratorVariantId": "3cf37035-68e7-4b2c-97af-570f10e0bd03",
+              "name": "bubbler",
+              "packagePrice": 3355,
+              "packageSize": "1.0",
+              "packageUnit": "gram",
+              "priceCents": 6710,
+              "quantity": 2,
+              "savingsCents": 0
+            },
+            {
+              "brandName": "Durable Bronze Computer",
+              "category": "live resin",
+              "createdAt": "2023-08-11T21:53:54.439Z",
+              "dealTitle": null,
+              "discountedPackagePrice": null,
+              "discountedPriceCents": 75336,
+              "id": "d088dfee-bc12-4d64-bead-883ae9209724",
+              "integratorVariantId": "fd069f5b-96d2-406c-9e36-1e0a7f46c0cd",
+              "name": "mary jane",
+              "packagePrice": 9417,
+              "packageSize": "1.0",
+              "packageUnit": "milligram",
+              "priceCents": 75336,
+              "quantity": 8,
+              "savingsCents": 0
+            },
+            {
+              "brandName": "Mediocre Wooden Watch",
+              "category": "live resin",
+              "createdAt": "2023-08-11T21:53:54.472Z",
+              "dealTitle": null,
+              "discountedPackagePrice": null,
+              "discountedPriceCents": 25230,
+              "id": "322d81d9-a0f2-41d1-ade8-0b18b9675eb8",
+              "integratorVariantId": "3ebcae50-86d4-408c-b8a4-df71473f0beb",
+              "name": "ripped",
+              "packagePrice": 4205,
+              "packageSize": "1.0",
+              "packageUnit": "gram",
+              "priceCents": 25230,
+              "quantity": 6,
+              "savingsCents": 0
+            }
+          ],
+          "statusChanges": [
+            {
+              "createdAt": "2023-08-11T21:52:33.517Z",
+              "to": "confirmed"
+            }
+          ],
+          "taxes": [
+            {
+              "amountCents": 8582,
+              "label": "Provincial Sales Tax"
+            },
+            {
+              "amountCents": 5364,
+              "label": "Goods and Services Tax"
+            }
+          ],
+          "thirdPartyFacilitatorData": {
+            "uberEats": {
+              "customerPhoneCode": "382 390",
+              "proxyPhoneNumber": "555 555 5555"
+            }
+          }
+        }
+      },
+      "OrderCartUpdate": {
+        "value": {
+          "cartItems": [
+            {
+              "id": "d088dfee-bc12-4d64-bead-883ae9209724",
+              "integratorVariantId": "fd069f5b-96d2-406c-9e36-1e0a7f46c0cd",
+              "quantity": 8,
+              "packagePrice": 9417
+            },
+            {
+              "id": "322d81d9-a0f2-41d1-ade8-0b18b9675eb8",
+              "integratorVariantId": "3ebcae50-86d4-408c-b8a4-df71473f0beb",
+              "quantity": 1,
+              "packagePrice": 4205
+            },
+            {
+              "id": null,
+              "integratorVariantId": "0d387017-ff81-416c-a619-08cc18722873",
+              "quantity": 2,
+              "packagePrice": 3948
+            }
+          ],
+          "deliveryFee": 499,
+          "taxes": [
+            {
+              "amountCents": 8139,
+              "label": "Goods and Services Tax"
+            },
+            {
+              "amountCents": 25412,
+              "label": "Provincial Sales Tax"
+            }
+          ]
+        }
+      },
+      "OrderActivateWebhook": {
+        "value": {
+          "eventTime": "2023-08-11T21:52:33.517Z",
+          "eventType": "order_activate",
+          "orderIntegrationKey": "iAYK0fC0rjQIGJQKIJvzRnObjElOC40PhLEK9PEUgFFm"
+        }
+      },
+      "OrderDeactivateWebhook": {
+        "value": {
+          "eventTime": "2023-08-11T21:52:33.517Z",
+          "eventType": "order_deactivate",
+          "orderIntegrationKey": "iAYK0fC0rjQIGJQKIJvzRnObjElOC40PhLEK9PEUgFFm"
+        }
+      },
+      "OrderSubmissionWebhook": {
+        "value": {
+          "eventTime": "2023-08-11T21:32:33.517Z",
+          "eventType": "order_submit",
+          "orderId": "e4dcae37-32d0-4498-ab3d-0c9a93c5f8ea",
+          "orderIntegrationKey": "iAYK0fC0rjQIGJQKIJvzRnObjElOC40PhLEK9PEUgFFm",
+          "acknowledgeBy": "2023-08-11T21:47:33.517Z"
+        }
+      },
+      "OrderCancelWebhook": {
+        "value": {
+          "eventTime": "2023-08-11T21:47:34.492Z",
+          "eventType": "order_cancel",
+          "orderId": "e4dcae37-32d0-4498-ab3d-0c9a93c5f8ea",
+          "orderIntegrationKey": "iAYK0fC0rjQIGJQKIJvzRnObjElOC40PhLEK9PEUgFFm",
+          "cancelReason": "order_api_unacknowledged"
+        }
+      },
+      "OrderStatusWebhook": {
+        "value": {
+          "eventTime": "2023-08-11T21:47:34.492Z",
+          "eventType": "order_status",
+          "orderId": "e4dcae37-32d0-4498-ab3d-0c9a93c5f8ea",
+          "orderIntegrationKey": "iAYK0fC0rjQIGJQKIJvzRnObjElOC40PhLEK9PEUgFFm",
+          "status": "arrived_at_customer"
+        }
+      },
+      "OrderPreviewWebhook": {
+        "value": {
+          "eventTime": "2023-08-11T21:28:21.583Z",
+          "eventType": "order_preview",
+          "orderIntegrationKey": "iAYK0fC0rjQIGJQKIJvzRnObjElOC40PhLEK9PEUgFFm",
+          "cartItems": [
+            {
+              "name": "ripped",
+              "integratorVariantId": "3ebcae50-86d4-408c-b8a4-df71473f0beb",
+              "quantity": 6,
+              "packagePrice": 4205,
+              "discountedPackagePrice": 4205,
+              "discountedPrice": 25230
+            },
+            {
+              "name": "mary jane",
+              "integratorVariantId": "fd069f5b-96d2-406c-9e36-1e0a7f46c0cd",
+              "quantity": 8,
+              "packagePrice": 9417,
+              "discountedPackagePrice": 9417,
+              "discountedPrice": 75336
+            }
+          ],
+          "medicalStatus": null,
+          "fulfillmentMechanism": "delivery",
+          "deliveryAddress": {
+            "address1": "42 Wallaby Way",
+            "address2": "",
+            "city": "Vancouver",
+            "county": "Vancouver",
+            "state": "BC",
+            "postalCode": "V5Z 2H7",
+            "countryCode": "CA"
+          }
+        }
+      },
+      "OrderPreviewResponse": {
+        "value": {
+          "cartItems": [
+            {
+              "integratorVariantId": "3ebcae50-86d4-408c-b8a4-df71473f0beb",
+              "quantity": 5,
+              "packagePrice": 21025
+            }
+          ],
+          "taxes": [
+            {
+              "label": "Provincial Sales Tax",
+              "amountCents": 1682
+            },
+            {
+              "label": "Goods and Services Tax",
+              "amountCents": 1051
+            }
+          ]
+        }
+      },
+      "OrderStatusUpdateConfirmed": {
+        "value": {
+          "status": "confirmed"
+        }
+      },
+      "OrderStatusUpdateReady": {
+        "value": {
+          "status": "ready"
+        }
+      },
+      "OrderStatusUpdateOutForDelivery": {
+        "value": {
+          "status": "out_for_delivery"
+        }
+      },
+      "OrderStatusUpdateArrivedAtCustomer": {
+        "value": {
+          "status": "arrived_at_customer"
+        }
+      },
+      "OrderStatusUpdatePickedUp": {
+        "value": {
+          "status": "picked_up"
+        }
+      },
+      "OrderStatusUpdateCanceled": {
+        "value": {
+          "status": "canceled",
+          "cancelationReasonCode": "customer"
+        }
+      },
+      "NoContent": {
+        "value": {}
+      },
+      "BadRequestSchemaValidationError": {
+        "value": {
+          "message": "An error occurred during schema validation."
+        }
+      },
+      "UnauthenticatedError": {
+        "value": {
+          "errors": [
+            {
+              "title": "UnauthenticatedError",
+              "detail": "You must be logged-in to see this."
+            }
+          ]
+        }
+      },
+      "ForbiddenError": {
+        "value": {
+          "errors": [
+            {
+              "title": "UnauthenticatedError",
+              "detail": "Order API Not Configured"
+            }
+          ]
+        }
+      },
+      "NotFoundError": {
+        "value": {}
+      }
+    }
+  }
+}

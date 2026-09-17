@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "object",
+  "description": "Describes the status of a dispensary's menu_integration",
+  "properties": {
+    "menuIntegrationPartner": {
+      "type": "object",
+      "description": "If a menu_integration is enabled, this will contain details on the provider. Will be null if no integration exists or if it has been disabled for this dispensary.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of this menu_integration partner.",
+          "example": "Menu Integration Partner #1"
+        },
+        "settingsUrl": {
+          "type": "string",
+          "description": "The URL for the settings page for this menu_integration partner.",
+          "example": "https://example.com/settings"
+        },
+        "signupUrl": {
+          "type": "string",
+          "description": "The URL where users can sign-up for this menu_integration partner.",
+          "example": "https://example.com/signup"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Indicates that this menu partner is active. Does not mean this particular dispensary is correctly configured.",
+          "example": true
+        }
+      }
+    },
+    "dispensary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The dispensary name",
+          "example": "Test Dispensary #1"
+        },
+        "menuIntegrationKey": {
+          "type": "string",
+          "description": "The menu_integration_key associated with this dispensary. Should match the URL parameter.",
+          "example": "kaJbF9rSiUxMVwoKHTtLqaxGeioYNV6nNsS1jp4p"
+        },
+        "menuIntegrationEnabled": {
+          "type": "boolean",
+          "description": "Indicates if the menu_integration for this dispensary is currently enabled.",
+          "example": true
+        },
+        "menuSummary": {
+          "type": "object",
+          "properties": {
+            "totalItemCount": {
+              "type": "integer",
+              "description": "The total number of non-deleted items. Hidden items are included in this count.",
+              "minimum": 0,
+              "example": 150
+            },
+            "integratedItemCount": {
+              "type": "integer",
+              "description": "The number of items with an external_key. Presense of that key indicates the menu item is sourced from an external system.",
+              "minimum": 0,
+              "example": 150
+            },
+            "manualItemCount": {
+              "type": "integer",
+              "description": "The number of items without an external_key. Absense of that key indicates the menu item is sourced from the Leafly Menu Manager.",
+              "minimum": 0,
+              "example": 0
+            },
+            "lastSyncedAt": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "An RFC3339 Datetime indicating when this menu was last synchronized.",
+              "example": "2018-06-27T09:00:00"
+            },
+            "lastModifiedAt": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "An RFC3339 Datetime indicating when this menu was last changed. If this doesn't match lastSyncedAt, the last menu sync led to no changes.",
+              "example": "2018-06-27T09:00:00"
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "menuIntegrationPartner",
+    "dispensary"
+  ]
+}

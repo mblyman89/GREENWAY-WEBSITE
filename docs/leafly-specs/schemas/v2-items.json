@@ -1,0 +1,196 @@
+{
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "name",
+          "variants"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique to all items in the menu. Should remain consistent between updates to the menu"
+          },
+          "type": {
+            "type": "string",
+            "description": "Item category, will get assigned down the funnel to one of: Accessory, Seeds, Clone, Flower, Edible, PreRoll, Concentrate, Cartridge, Topical, Other",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "description": "The menu item name",
+            "minLength": 1
+          },
+          "strain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The strain name. If the strain is listed on Leafly.com, it will be automatically linked on the dispensary's Leafly menu."
+          },
+          "brand": {
+            "type": "string",
+            "description": "The brand name. If the brand is listed on Leafly.com, it will be automatically linked on the dispensary's Leafly menu."
+          },
+          "compounds": {
+            "type": "array",
+            "description": "Each object in the compounds array represents a single compound in the item and its lab-tested value. Currently this includes only THC and CBD, but will be expanded to include terpenes and other cannabinoids in the future.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "thc",
+                    "cbd",
+                    "cbc",
+                    "cbca",
+                    "cbcv",
+                    "cbda",
+                    "cbdml",
+                    "cbdv",
+                    "cbdva",
+                    "cbg",
+                    "cbga",
+                    "cbl",
+                    "cbla",
+                    "cbn",
+                    "cbna",
+                    "cbt",
+                    "tac",
+                    "thca",
+                    "thcha",
+                    "thc_d8",
+                    "thc_d9",
+                    "thc_d10",
+                    "thcml",
+                    "thcv",
+                    "thcva"
+                  ]
+                },
+                "content": {
+                  "type": ["number", "null"],
+                  "description": "The value, e.g. 22.06 for 22.06% or 100 for 100mg. Use `null` for unknown or not tested values instead of `0`."
+                },
+                "unit": {
+                  "type": "string",
+                  "description": "Valid values for the unit property of each Compound object depend on the menu item type. For example, it doesn't make sense for an ounce of Sour Diesel flower to have a THC measurement in milligrams, or a medicated brownie with a CBD content measured in percent. Compounds in items with type Other will be ignored.See the table below for accepted values.\n\n| Item Type   | Valid `compound.unit` values |\n| ----------- | ---------------------------- |\n| Flower      | `percent`                    |\n| Edible      | `mg`                         |\n| PreRoll     | `percent`                    |\n| Concentrate | `percent`                    |\n| Other       | N/A                          |",
+                  "enum": ["percent", "mg"]
+                }
+              },
+              "required": ["type", "content", "unit"]
+            }
+          },
+          "total_thc": {
+            "type": "object",
+            "description": "The total THC content of the item, represented as an object with `content` and `unit` properties.",
+            "properties": {
+              "content": {
+                "type": ["number", "null"],
+                "description": "The value, e.g. 22.06 for 22.06% or 100 for 100mg. Use `null` for unknown or not tested values instead of `0`."
+              },
+              "unit": {
+                "type": "string",
+                "description": "Valid values for the unit property depend on the menu item type.",
+                "enum": ["percent", "mg"]
+              }
+            },
+            "required": ["content", "unit"]
+          },
+          "total_cbd": {
+            "type": "object",
+            "description": "The total CBD content of the item, represented as an object with `content` and `unit` properties.",
+            "properties": {
+              "content": {
+                "type": ["number", "null"],
+                "description": "The value, e.g. 22.06 for 22.06% or 100 for 100mg. Use `null` for unknown or not tested values instead of `0`."
+              },
+              "unit": {
+                "type": "string",
+                "description": "Valid values for the unit property depend on the menu item type.",
+                "enum": ["percent", "mg"]
+              }
+            },
+            "required": ["content", "unit"]
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Unique to all items in the menu. Should remain consistent between updates to the menu. Takes precedence over top-level id for order integration purposes"
+                },
+                "medical": {
+                  "type": "boolean",
+                  "description": "`true` if the `variant` is categorized as a medical product. `false` otherwise."
+                },
+                "price": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "The item's price in minor currency units."
+                },
+                "amount": {
+                  "type": "number",
+                  "description": "The count of `unit` for this item."
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "oz",
+                    "g",
+                    "each"
+                  ],
+                  "description": "Valid values for the `unit` property of each object in the `variants` array depend on the menu item `type`. For example: \n\n| Type        | Valid `variant.unit` |\n|-------------|----------------------|\n| Accessory   | `each`                 |\n| Seeds       | `each`                 |\n| Clone       | `each`                 |\n| Flower      | `g`, `oz`                |\n| Edible      | `each`                 |\n| PreRoll     | `each`                 |\n| Concentrate | `each`, `g`             |\n| Cartridge   | `each`, `g`             |\n| Topical     | `each`                 |\n| Other       | `each`                 |\n"
+                },
+                "inventoryLevel": {
+                  "type": "number",
+                  "description": "The number of saleable packages in stock. The value received is internally capped at `10`",
+                  "minimum": 0,
+                  "maximum": 2147483647
+                }
+              },
+              "required": [
+                "id",
+                "medical",
+                "price",
+                "amount",
+                "unit",
+                "inventoryLevel"
+              ]
+            },
+            "minItems": 1
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the menu item"
+          },
+          "availableForPickup": {
+            "type": "boolean",
+            "description": "Whether or not the item should be made available for Leafly pickup.\nThis field may be omitted to maintain the current item setting for updates. New items will default to false."
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Source url for the product image. Must be a valid URL. This image will be cached shortly after this payload is receieved. If this field is omitted or null, any existing image will be removed.",
+            "format": "uri"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "items"
+  ]
+}
