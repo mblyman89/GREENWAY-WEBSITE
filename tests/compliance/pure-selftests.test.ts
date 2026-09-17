@@ -50,6 +50,8 @@ import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
 import { __runLeaflyPayloadTests } from "@/lib/leafly/payload-core";
 import { __runLeaflyPayloadValidateTests } from "@/lib/leafly/payload-validate-core";
 import { __runLeaflyOrderabilityTests } from "@/lib/leafly/orderability-core";
+import { __runLeaflyReadbackTests } from "@/lib/leafly/readback-core";
+import { __runLeaflyCertificationTests } from "@/lib/leafly/certification-core";
 import { __runOrderOriginTests } from "@/lib/orders/order-origin-core";
 import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "@/lib/integrations/integration-credentials-core";
@@ -227,6 +229,16 @@ describe("embedded pure self-test suites", () => {
     const r = __runLeaflyOrderabilityTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(50);
+  });
+  it("leafly-readback-core (SLICE L-4: GET /menu parse + reconcile, fails soft)", () => {
+    const r = __runLeaflyReadbackTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(82);
+  });
+  it("leafly-certification-core (SLICE L-4: Leafly's five criteria, fails closed)", () => {
+    const r = __runLeaflyCertificationTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(60);
   });
   it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {
     const r = __runOrderOriginTests();

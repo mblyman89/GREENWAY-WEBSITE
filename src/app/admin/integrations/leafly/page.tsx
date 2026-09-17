@@ -4,6 +4,7 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Badge, Card } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import { previewLeaflyPush } from "@/lib/leafly/push";
+import { assessMenuCertificationReadiness } from "@/lib/leafly/certification-core";
 import { listSyndicationLogs } from "@/lib/syndication/store";
 import { getLeaflySyncSettings, getSyncState } from "@/lib/syndication/engine-store";
 import { classifyHealth, scoreRichness } from "@/lib/syndication/richness-core";
@@ -24,6 +25,20 @@ import { saveLeaflySettingsAction, resetLeaflySyncStateAction } from "./actions"
 import { LeaflyPushClient } from "./leafly-client";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * SLICE L-4. Is there an automatic, scheduled Leafly menu sync?
+ *
+ * No. Verified against `vercel.json`, which declares three crons
+ * (compliance-reminders, regulatory-watch, atm-sync) and no Leafly sync. Leafly's menu
+ * certification checklist grades sync cadence, so this is a real blocker and it is stated
+ * as a named constant instead of being buried in a boolean expression.
+ *
+ * Flip this to `true` in the same commit that adds the cron -- not before.
+ * `tests/compliance/leafly-certification.test.ts` reads `vercel.json` and fails if this
+ * constant and reality disagree in either direction.
+ */
+const LEAFLY_SCHEDULED_SYNC_EXISTS = false;
 
 function fmtDate(iso: string) {
   try {
@@ -56,6 +71,75 @@ export default async function LeaflyIntegrationPage() {
 
   const preflight = runPreflight(preview.items);
   const richness = scoreRichness(preview.items);
+
+  // SLICE L-4 -- grade Leafly's five published menu-certification criteria.
+  //
+  // Every input below is DERIVED FROM RECORDED FACTS. Nothing is defaulted
+  // optimistically, and the two questions this page cannot answer are passed as
+  // `null` so the gate reports them as untested/needs-confirmation rather than
+  // inventing a pass (rule 3).
+  const livePushes = logs
+    .filter((log) => log.mode === "live" && log.status !== "skipped")
+    .slice()
+    // listSyndicationLogs returns newest-first; the criterion about errors being
+    // "corrected on subsequent requests" depends on chronological order, so this
+    // reversal is load-bearing rather than cosmetic.
+    .reverse();
+
+  // The HTTP status is not a column on syndication_logs, so it is read from the
+  // recorded status field rather than guessed: "ok" means Leafly returned a
+  // 200-level response (that is what pushLeaflyMenu sets it from), anything else
+  // was a failure. Using 200/0 as stand-ins keeps the gate honest about success
+  // and failure without pretending to know an exact code we did not store.
+  const recentPushStatuses = livePushes.map((log) => (log.status === "ok" ? 200 : 0));
+
+  // A successful live push proves the token exchange worked. No live push at all
+  // means untested -- NOT failed.
+  const authSucceeded =
+    livePushes.length === 0 ? null : livePushes.some((log) => log.status === "ok");
+
+  const variantCount = preview.payload.items.reduce((n, item) => n + item.variants.length, 0);
+  const inStockVariantCount = preview.payload.items.reduce(
+    (n, item) => n + item.variants.filter((v) => v.inventoryLevel > 0).length,
+    0,
+  );
+  // FINDING L-20 -- Leafly grades "most ITEMS are in stock", not most variants, and one
+  // in-stock size is enough to publish an item. Counting variants here would have failed
+  // a shop that has every product available in at least one size. See
+  // certification-core's header for the spec quote.
+  const inStockItemCount = preview.payload.items.filter((item) =>
+    item.variants.some((v) => v.inventoryLevel > 0),
+  ).length;
+
+  const certification = assessMenuCertificationReadiness({
+    credentialsConfigured: preview.readiness.configured,
+    environment: preview.readiness.environment,
+    authSucceeded,
+    recentPushStatuses,
+    // The reconcile result lives in the read-back button's client state, not on the
+    // server. Passing null is the truthful value for a page render: nobody has
+    // reconciled *as of this page load*, and the gate correctly refuses to call data
+    // quality proven until they do.
+    reconcile: null,
+    itemCount: preview.itemCount,
+    variantCount,
+    inStockVariantCount,
+    inStockItemCount,
+    // Only the owner can answer the manual-tools question, and it is retroactive.
+    ownerAttestsNoManualTools: null,
+    // FALSE, and verified rather than assumed. `vercel.json` declares exactly three
+    // crons -- compliance-reminders, regulatory-watch and atm-sync -- and NONE of them
+    // syncs Leafly. `settings.syncMode` only chooses POST vs PUT for a push someone
+    // triggers by hand; it does not schedule anything, so deriving this from syncMode
+    // would have produced a permanent, meaningless "pass".
+    //
+    // This is a genuine certification gap that the roadmap did not call out: Leafly
+    // grades sync CADENCE, and a handful of hand-pressed buttons is the request pattern
+    // that criterion 3 disqualifies. `tests/compliance/leafly-certification.test.ts`
+    // asserts vercel.json still has no Leafly cron, so the day somebody adds one that
+    // test fails and points here.
+    scheduledSyncEnabled: LEAFLY_SCHEDULED_SYNC_EXISTS,
+  });
 
   const recentLogs = logs.slice(0, 15);
   const sample = preview.payload.items.slice(0, 3);
@@ -142,7 +226,82 @@ export default async function LeaflyIntegrationPage() {
       <LeaflyPushClient
         configured={preview.readiness.configured}
         itemCount={preview.itemCount}
+        sandbox={preview.readiness.environment === "sandbox"}
       />
+
+      {/*
+        SLICE L-4 -- certification readiness.
+
+        The roadmap step for this slice ends "request menu certification", which sounds
+        like a button and is not. Leafly requires two business days' notice and a HUMAN
+        reviews the retailer's logged request activity, so a premature request costs the
+        better part of a week. Until now the only way to decide was to guess. This card
+        grades Leafly's five published criteria (readiness report section 7) and, for
+        each one, either shows the evidence or says what to do about it.
+
+        The third criterion cannot be answered by software -- the app cannot see which
+        tool made a past request, and the rule is retroactive -- so it is presented as an
+        attestation the owner makes, never as an automatic pass.
+      */}
+      <Card>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-bold text-[var(--admin-text)]">
+            Leafly menu certification
+          </h2>
+          <Badge tone={certification.readyToRequest ? "green" : "orange"}>
+            {
+              certification.criteria.filter((c) => c.status === "pass").length
+            }{" "}
+            of {certification.criteria.length} criteria met
+          </Badge>
+        </div>
+        <p className="mb-3 text-xs text-[var(--admin-text-muted)]">{certification.headline}</p>
+
+        <ul className="space-y-3">
+          {certification.criteria.map((c) => (
+            <li key={c.id} className="border-t border-[var(--admin-border)] pt-2">
+              <div className="mb-1 flex items-center gap-2">
+                <Badge
+                  tone={
+                    c.status === "pass"
+                      ? "green"
+                      : c.status === "attest"
+                        ? // gold, not danger: an unanswered question is not a failure.
+                          // It still blocks the request, which the copy says plainly.
+                          "gold"
+                        : c.status === "unknown"
+                          ? "neutral"
+                          : "danger"
+                  }
+                >
+                  {c.status === "pass"
+                    ? "Met"
+                    : c.status === "attest"
+                      ? "Needs your confirmation"
+                      : c.status === "unknown"
+                        ? "Untested"
+                        : "Not met"}
+                </Badge>
+              </div>
+              <p className="text-xs italic text-[var(--admin-text-muted)]">
+                Leafly requires: &ldquo;{c.leaflyRequirement}&rdquo;
+              </p>
+              <p className="mt-1 text-xs text-[var(--admin-text)]">{c.finding}</p>
+              {c.remedy ? (
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  <strong>To fix:</strong> {c.remedy}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+
+        <p className="mt-3 border-t border-[var(--admin-border)] pt-2 text-xs text-[var(--admin-text-muted)]">
+          Leafly requires <strong>{certification.noticeBusinessDays} business days&rsquo;</strong>{" "}
+          notice for a certification request, and menu and order certification are two
+          separate submissions.
+        </p>
+      </Card>
 
       <SyncSettingsPanel
         channel="leafly"
