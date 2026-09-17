@@ -15,6 +15,31 @@
 
 import type { SyndicationItem } from "./menu-feed-core";
 import { parseWeightFromLabel } from "../weedmaps/payload-core";
+import { LEAFLY_TYPE_UNIT_MATRIX } from "../leafly/contract-core";
+import { toLeaflyType } from "../leafly/payload-core";
+
+/**
+ * Does Leafly require a real WEIGHT for this Greenway category?
+ *
+ * True only when the item's funnel type cannot legally be sold by `each`. For
+ * Flower that is the case: Leafly documents `g` or `oz` and nothing else, so
+ * there is no fallback and no weight means no variant. Concentrates and
+ * cartridges accept `each` as well as `g`, so an unreadable weight there
+ * degrades gracefully rather than dropping the product.
+ *
+ * Derived from LEAFLY_TYPE_UNIT_MATRIX rather than hardcoded, so if Leafly ever
+ * changes which types accept `each`, this follows automatically instead of
+ * quietly disagreeing with the mapper that uses the same table.
+ */
+function leaflyWeightIsMandatory(category: string): boolean {
+  const units = LEAFLY_TYPE_UNIT_MATRIX[toLeaflyType(category)].variantUnits;
+  return !(units as readonly string[]).includes("each");
+}
+
+/** The legal variant units for this category, for the error message. */
+function leaflyWeightUnitsFor(category: string): string {
+  return LEAFLY_TYPE_UNIT_MATRIX[toLeaflyType(category)].variantUnits.join(" or ");
+}
 
 export type PreflightSeverity = "error" | "warning";
 
@@ -28,6 +53,7 @@ export type PreflightIssue = {
     | "nonpositive_price"
     | "no_variants"
     | "unparseable_weight"
+    | "leafly_missing_weight"
     | "long_name"
     | "markup_in_description";
   /** Channels the issue matters for. */
@@ -157,7 +183,8 @@ export function runPreflight(items: SyndicationItem[]): PreflightReport {
         });
       }
       // Weedmaps: weight is REQUIRED per variant; we never invent one.
-      if (parseWeightFromLabel(v.label) === null) {
+      const parsedWeight = parseWeightFromLabel(v.label);
+      if (parsedWeight === null) {
         issues.push({
           severity: "warning",
           code: "unparseable_weight",
@@ -165,6 +192,44 @@ export function runPreflight(items: SyndicationItem[]): PreflightReport {
           itemId: item.id,
           variantId: v.id,
           message: `Variant label "${v.label || "(blank)"}" of "${item.name || item.id}" has no parseable weight (e.g. "3.5g", "1 oz") — Weedmaps requires a weight per variant.`,
+        });
+      }
+
+      // SLICE L-2 -- Leafly, and this one is an ERROR, not a warning.
+      //
+      // Leafly's `variant.unit` table makes weight MANDATORY for some item
+      // types and forbids it for others: a Flower variant may only be `g` or
+      // `oz`, while an Edible or PreRoll may only be `each`. So an unreadable
+      // weight is harmless for most of the menu and fatal for flower.
+      //
+      // Fatal is meant literally. `payload-core.variantsFor()` refuses to
+      // invent a weight (house rule 3), so a Flower variant with an unreadable
+      // label produces NO variant; an item whose variants all fail produces NO
+      // item; and Leafly's schema requires `minItems: 1`. The product simply
+      // vanishes from the Leafly menu. Nothing errors, nothing 400s, the push
+      // reports success, and a product the shop is selling is invisible to
+      // every shopper on Leafly.
+      //
+      // That is precisely the failure mode preflight exists to prevent, which
+      // is why it blocks the push and names the fix.
+      if (
+        parsedWeight === null &&
+        leaflyWeightIsMandatory(item.category) &&
+        v.priceMinorUnits > 0
+      ) {
+        issues.push({
+          severity: "error",
+          code: "leafly_missing_weight",
+          channels: ["leafly"],
+          itemId: item.id,
+          variantId: v.id,
+          message:
+            `Variant "${v.label || v.id}" of "${item.name || item.id}" is a ` +
+            `${toLeaflyType(item.category)} product, which Leafly sells by ` +
+            `${leaflyWeightUnitsFor(item.category)} — but no weight could be read from the ` +
+            `label "${v.label || "(blank)"}". A weight is NEVER guessed, so this variant ` +
+            `would be dropped and the product would silently disappear from the Leafly menu. ` +
+            `Fix the variant label (e.g. "3.5g", "1 oz").`,
         });
       }
     }
@@ -258,6 +323,124 @@ export function __runPreflightTests(): void {
   const weightIssue = badWeight.issues.find((i) => i.code === "unparseable_weight");
   ok("unparseable weight warning", weightIssue !== undefined && weightIssue.severity === "warning");
   ok("weight issue is weedmaps-only", weightIssue !== undefined && weightIssue.channels.length === 1 && weightIssue.channels[0] === "weedmaps");
+
+  // -------------------------------------------------------------------------
+  // SLICE L-2 -- leafly_missing_weight.
+  //
+  // The same unreadable label that is a WARNING for Weedmaps is an ERROR for
+  // Leafly on a weight-sold type, because Leafly's schema leaves no legal way
+  // to express the variant at all: the product would silently vanish from the
+  // menu with the push still reporting success.
+  // -------------------------------------------------------------------------
+  const leaflyWeight = badWeight.issues.find((i) => i.code === "leafly_missing_weight");
+  ok("flower with unreadable weight is a leafly ERROR", leaflyWeight?.severity === "error");
+  ok(
+    "leafly weight issue is leafly-only",
+    leaflyWeight !== undefined &&
+      leaflyWeight.channels.length === 1 &&
+      leaflyWeight.channels[0] === "leafly",
+  );
+  ok("leafly weight issue blocks the push", badWeight.ok === false);
+  ok("leafly weight issue names the variant", leaflyWeight?.variantId === "v7");
+  ok("leafly weight issue names the item", leaflyWeight?.itemId === "p7");
+  ok(
+    "leafly weight message names the legal units",
+    (leaflyWeight?.message ?? "").includes("g or oz"),
+  );
+  ok(
+    "leafly weight message shows the offending label",
+    (leaflyWeight?.message ?? "").includes("10pk"),
+  );
+  ok(
+    "leafly weight message explains the silent disappearance",
+    (leaflyWeight?.message ?? "").includes("disappear"),
+  );
+
+  // A readable weight on flower raises NEITHER issue.
+  ok(
+    "flower with a readable weight raises no weight issue",
+    !runPreflight([good]).issues.some(
+      (i) => i.code === "leafly_missing_weight" || i.code === "unparseable_weight",
+    ),
+  );
+
+  // Every oz/g spelling the label parser accepts must satisfy Leafly too.
+  for (const label of ["3.5g", "1 oz", "28 g", "1/8 oz", "7g", "1g"]) {
+    ok(
+      `flower label "${label}" raises no leafly weight error`,
+      !runPreflight([
+        {
+          ...good,
+          id: `w-${label}`,
+          variants: [{ id: `wv-${label}`, label, priceMinorUnits: 3500, inStock: true, inventoryLevel: 1 }],
+        },
+      ]).issues.some((i) => i.code === "leafly_missing_weight"),
+    );
+  }
+
+  // COUNTED types accept `each`, so an unreadable label is NOT fatal for them.
+  // This is the assertion that keeps the rule type-aware instead of blanket:
+  // firing it on every edible and pre-roll would make preflight unusable.
+  for (const category of [
+    "edible-solid",
+    "edible-liquid",
+    "tincture",
+    "preroll",
+    "preroll-pack",
+    "topical",
+    "paraphernalia",
+    "accessories",
+    "merch",
+    "concentrate",
+    "cartridge",
+    "disposable-cartridge",
+  ]) {
+    const counted = runPreflight([
+      {
+        ...good,
+        id: `c-${category}`,
+        category,
+        variants: [
+          { id: `cv-${category}`, label: "10pk", priceMinorUnits: 1500, inStock: true, inventoryLevel: 3 },
+        ],
+      },
+    ]);
+    ok(
+      `"${category}" sells by each -> no leafly weight error`,
+      !counted.issues.some((i) => i.code === "leafly_missing_weight"),
+    );
+  }
+
+  // ...but every FLOWER-family category IS fatal.
+  for (const category of ["flower", "popcorn-bud", "infused-flower", "trim"]) {
+    const weighed = runPreflight([
+      {
+        ...good,
+        id: `f-${category}`,
+        category,
+        variants: [
+          { id: `fv-${category}`, label: "big jar", priceMinorUnits: 3500, inStock: true, inventoryLevel: 3 },
+        ],
+      },
+    ]);
+    ok(
+      `"${category}" is weight-sold -> leafly weight error`,
+      weighed.issues.some((i) => i.code === "leafly_missing_weight" && i.severity === "error"),
+    );
+  }
+
+  // A zero-price variant already errors on price; do not pile a second,
+  // confusing error on top of a variant that is being rejected anyway.
+  ok(
+    "no duplicate weight error on an already-invalid price",
+    !runPreflight([
+      {
+        ...good,
+        id: "p7b",
+        variants: [{ id: "v7b", label: "10pk", priceMinorUnits: 0, inStock: true, inventoryLevel: 3 }],
+      },
+    ]).issues.some((i) => i.code === "leafly_missing_weight"),
+  );
 
   // Markup in description
   const markup = runPreflight([{ ...good, id: "p8", description: "<b>Loud</b>" }]);

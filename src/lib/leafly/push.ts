@@ -29,9 +29,16 @@ import { refreshLeaflyConfig } from "./runtime";
 import {
   buildLeaflyDeletePayload,
   buildLeaflyItemsPayload,
+  buildLeaflyItemsResult,
   type LeaflyItem,
   type LeaflyItemsPayload,
+  type LeaflyVariantRejection,
 } from "./payload-core";
+import {
+  assertLeaflyPayloadValid,
+  validateLeaflyPayload,
+  type LeaflyValidationResult,
+} from "./payload-validate-core";
 import { loadSyndicationFeed } from "@/lib/syndication/feed-source";
 import type { SyndicationItem } from "@/lib/syndication/menu-feed-core";
 import { runPreflight, PreflightBlockedError } from "@/lib/syndication/preflight-core";
@@ -88,6 +95,25 @@ export type LeaflyPreview = {
   readiness: LeaflyReadiness;
   /** Raw channel-agnostic feed items — used by the page for preflight/richness scoring. */
   items: SyndicationItem[];
+  /**
+   * SLICE L-2 — contract validation of the previewed payload.
+   *
+   * The preview deliberately REPORTS rather than throws. The whole purpose of a
+   * dry run is to see what is wrong, and a preview that refuses to render the
+   * broken payload is a preview that cannot be used to diagnose it.
+   */
+  validation: LeaflyValidationResult;
+  /**
+   * Variants and items the builder refused to represent, with the reason.
+   *
+   * These never used to surface anywhere: `buildLeaflyItemsPayload` silently
+   * dropped anything it could not map, so a product could vanish from the
+   * Leafly menu with the preview cheerfully reporting success. "412 of your 415
+   * items, and here is exactly why the other three are missing" is the honest
+   * report.
+   */
+  rejected: LeaflyVariantRejection[];
+  droppedItemIds: string[];
 };
 
 /**
@@ -97,13 +123,20 @@ export type LeaflyPreview = {
 export async function previewLeaflyPush(): Promise<LeaflyPreview> {
   await refreshLeaflyConfig();
   const { versionId, items } = await loadSyndicationFeed();
+
+  // Use the RESULT form so refusals are reported instead of swallowed.
+  const built = buildLeaflyItemsResult(items);
+
   return {
     mode: "preview",
     itemCount: items.length,
     versionId,
-    payload: buildLeaflyItemsPayload(items),
+    payload: built.payload,
     readiness: describeLeaflyReadiness(),
     items,
+    validation: validateLeaflyPayload(built.payload),
+    rejected: built.rejected,
+    droppedItemIds: built.droppedItemIds,
   };
 }
 
@@ -289,6 +322,23 @@ export async function pushLeaflyMenu(opts: {
     buildLeaflyItemsPayload(items).items,
     settings,
   );
+
+  // 2b. SLICE L-2 -- validate the payload that is ACTUALLY about to be sent.
+  //
+  // This runs AFTER applyLeaflySettings, not before, and the ordering is the
+  // entire point. Preflight (step 1) checks the SOURCE data; this checks the
+  // WIRE data. Between them sits the toggle layer, which rewrites fields --
+  // and the toggle layer is precisely where two of this slice's defects lived
+  // (it nulled `description` and the totals, which the schema forbids, and it
+  // wrote field names Leafly does not define). Validating before the toggles
+  // would have inspected a payload that no longer existed by transmission
+  // time and pronounced it healthy.
+  //
+  // It throws rather than filtering: a payload that violates the contract
+  // means the BUILDER is wrong, and a wrong builder fails systematically
+  // across many items at once. Sending "the valid ones" would publish a
+  // partial menu and hide the cause.
+  assertLeaflyPayloadValid({ items: leaflyItems });
 
   // 3. Delta plan (payload-hash idempotency).
   const state = await getSyncState("leafly");

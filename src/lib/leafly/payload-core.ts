@@ -1,91 +1,228 @@
-// Pure mapper: Greenway SyndicationItem[] -> Leafly Menu Integration API v2.0 wire format.
-//
-// Grounded entirely in the owner-supplied OpenAPI spec (leafly_menu_api_v2.json) and
-// research report. See docs/leafly-menu-api-v2.md. Key v2 rules encoded here:
-//   - camelCase fields
-//   - variant.id REQUIRED; variant.price = integer minor units (cents)
-//   - every item must have >=1 variant
-//   - strain absent => null (never "NA")
-//   - cannabinoid absent => null (never 0)
-//   - descriptions plain text (no markup)
-//   - removed fields (batchId/parentBatchId/sku/tax_rate/...) are simply never emitted
-//
-// This module is PURE (no DB, no network, no "server-only") so it can be unit-tested
-// directly with tsx.
+/**
+ * src/lib/leafly/payload-core.ts
+ *
+ * Pure mapper: Greenway `SyndicationItem[]` -> Leafly Menu Integration API v2.0 wire format.
+ *
+ * SLICE L-2 REWRITE. Every field name, type, enum and required-flag in this file is taken
+ * from the VENDORED LIVE SCHEMA at `docs/leafly-specs/schemas/v2-items.json`, by way of the
+ * vocabulary in `contract-core.ts`. Nothing here is grounded in prose.
+ *
+ * WHY THAT SENTENCE MATTERS
+ * -------------------------
+ * The previous version of this file opened by saying it was "grounded entirely in the
+ * owner-supplied OpenAPI spec ... Key v2 rules encoded here: camelCase fields". That claim
+ * was false, and it was load-bearing: EIGHT of the eleven menu defects in the readiness
+ * report descend from it. v2 is camelCase *except* `total_thc` and `total_cbd`, which are
+ * literally snake_case in the published schema, and the v1->v2 diff proves the rename was
+ * partial rather than universal. A prose claim cannot fail CI. That is why this module is
+ * now written against `contract-core.ts`, and why `tests/compliance/leafly-payload.test.ts`
+ * validates real generated payloads against the real JSON Schema.
+ *
+ * WHAT CHANGED, AND WHICH FINDING IT CLOSES
+ *   L-01  variant.amount is now emitted (required; was absent entirely)
+ *   L-02  variant.unit is now emitted, from the oz|g|each enum (was absent)
+ *   L-03  variant.label is GONE -- it is not a v2 field. The weight it carried is now
+ *         parsed into amount+unit, which is where Leafly actually looks for it.
+ *   L-04  compound value field renamed  value    -> content
+ *   L-05  compound percent unit renamed "%"      -> "percent"
+ *   L-06  item brand field renamed      brandName -> brand
+ *   L-07  item strain field renamed     strainName -> strain
+ *   L-08  totals renamed                totalThc/totalCbd -> total_thc/total_cbd
+ *   L-12  item.type now emits Leafly's ten funnel targets exactly, including the
+ *         Cartridge target that was previously folded into Concentrate
+ *
+ * THREE MORE DEFECTS FOUND DURING THIS SLICE, none of which were in the report. All three
+ * are the same shape: a field the old code sent as `null` that the schema does not allow
+ * to be null. They are documented at their emit sites below.
+ *
+ * THE RULE THIS FILE WILL NOT BREAK
+ * ---------------------------------
+ * Standing rule 3: never silently invent a value. Where the source data cannot answer a
+ * question Leafly requires an answer to -- above all, "how much is in this package?" --
+ * this module does NOT guess a plausible number. It refuses to emit the variant and says
+ * why, and `payload-validate-core.ts` turns that into an error a human resolves. A wrong
+ * weight on a cannabis menu is a compliance problem, not a cosmetic one.
+ *
+ * PURE: no DB, no network, no `server-only`. Unit-testable directly.
+ */
 
 import type { SyndicationItem, SyndicationVariant } from "../syndication/menu-feed-core";
+import { parseWeightFromLabel } from "../weedmaps/payload-core";
+import {
+  LEAFLY_TYPE_UNIT_MATRIX,
+  compoundUnitForType,
+  isLeaflyFunnelType,
+  type LeaflyCompoundType,
+  type LeaflyCompoundUnit,
+  type LeaflyFunnelType,
+  type LeaflyVariantUnit,
+} from "./contract-core";
 
+// ---------------------------------------------------------------------------
+// Wire types -- these mirror v2-items.json exactly.
+// ---------------------------------------------------------------------------
+
+/**
+ * An entry in `item.compounds`. All three properties are required by the schema.
+ * `content` is nullable ("Use `null` for unknown or not tested values instead of `0`").
+ */
 export type LeaflyCompound = {
-  type: string;
-  unit: string;
-  value: number | null;
+  type: LeaflyCompoundType;
+  content: number | null;
+  unit: LeaflyCompoundUnit;
 };
 
+/**
+ * `item.total_thc` / `item.total_cbd`.
+ *
+ * NOTE THE SHAPE: the schema gives these `content` and `unit` ONLY -- `required: ["content",
+ * "unit"]` with no `type` property. The old code reused its compound object here, so it
+ * also sent a `type` field that the totals contract does not define. Emitting exactly what
+ * is specified is free; relying on Leafly to ignore a surplus field is not.
+ */
+export type LeaflyTotalCompound = {
+  content: number | null;
+  unit: LeaflyCompoundUnit;
+};
+
+/**
+ * An entry in `item.variants`. The schema marks ALL SIX of these required, which is why
+ * the old variant shape (which carried `label` and no `amount`/`unit`) could never have
+ * validated.
+ *
+ * `id` is `["number","string"]` in the schema; we always send a string, which is the
+ * stricter and stabler of the two, and the schema's own note says the variant id "takes
+ * precedence over top-level id for order integration purposes" -- so these ids become the
+ * join key when Leafly starts sending us orders in L-5.
+ */
 export type LeaflyVariant = {
   id: string;
-  price: number; // integer minor units (cents)
-  inventoryLevel: number;
   medical: boolean;
-  label?: string;
+  price: number;
+  amount: number;
+  unit: LeaflyVariantUnit;
+  inventoryLevel: number;
 };
 
+/**
+ * A menu item.
+ *
+ * Optionality here is not a style choice -- it is copied from the schema, and it is the
+ * source of the three new defects. `brand` and `description` are declared `type: "string"`
+ * with NO null in the type union, so they are optional-or-string and NEVER null. `strain`
+ * and `imageUrl` are declared `["string","null"]`, so null is meaningful for those two.
+ * The old code sent `null` for all of them uniformly.
+ */
 export type LeaflyItem = {
   id: string;
+  type: LeaflyFunnelType;
   name: string;
-  brandName: string | null;
-  type: string;
-  strainName: string | null;
-  description: string | null;
-  compounds: LeaflyCompound[];
-  totalThc: LeaflyCompound | null;
-  totalCbd: LeaflyCompound | null;
   variants: LeaflyVariant[];
+  /** Nullable per schema. Leafly links known strains on the storefront. Never "NA". */
+  strain?: string | null;
+  /** NOT nullable per schema -- omitted when absent. */
+  brand?: string;
+  compounds?: LeaflyCompound[];
+  total_thc?: LeaflyTotalCompound;
+  total_cbd?: LeaflyTotalCompound;
+  /** NOT nullable per schema -- omitted when absent. */
+  description?: string;
+  /** Omit to leave the current setting untouched. New items default to FALSE. */
+  availableForPickup?: boolean;
+  /** Nullable per schema; null or omitted REMOVES any existing image. */
+  imageUrl?: string | null;
 };
 
-export type LeaflyItemsPayload = {
-  items: LeaflyItem[];
+export type LeaflyItemsPayload = { items: LeaflyItem[] };
+export type LeaflyDeletePayload = { ids: string[] };
+
+/**
+ * Why a variant could not be represented on the wire. Returned instead of a guess.
+ * `payload-validate-core.ts` renders these for a human; nothing auto-resolves them.
+ */
+export type LeaflyVariantRejection = {
+  itemId: string;
+  variantId: string;
+  label: string;
+  reason: string;
 };
 
-export type LeaflyDeletePayload = {
-  ids: string[];
+// ---------------------------------------------------------------------------
+// item.type -- Greenway category -> Leafly funnel target
+// ---------------------------------------------------------------------------
+
+/**
+ * `item.type` is FREE TEXT in the schema (`minLength: 1`), not an enum. That is precisely
+ * what makes getting it wrong dangerous: a bad value does not 400, it silently lands the
+ * product in the wrong place on the storefront, or in no place a shopper filters by.
+ * Leafly documents that it funnels the value to one of ten targets, so we emit those ten
+ * targets verbatim and never send a value that has to be guessed at.
+ *
+ * Two corrections to the old table, both defect L-12:
+ *   - `cartridge` / `disposable-cartridge` now funnel to **Cartridge**, not Concentrate.
+ *     This is not cosmetic: the type decides which `variant.unit` values are legal, and
+ *     it decides which Leafly filter a shopper finds the product under.
+ *   - `tincture` no longer emits the invented value "tincture". There is no such funnel
+ *     target. Tinctures are ingested liquids, so they funnel to **Edible**, which also
+ *     carries the correct `mg` compound unit.
+ *
+ * Every one of the Greenway categories in `category-taxonomy.ts` is mapped explicitly.
+ * An unmapped category falls to `Other`, which is a real funnel target and is honest --
+ * but the validator flags it, because `Other` means "Leafly ignores this item's compounds".
+ */
+const CATEGORY_TO_LEAFLY_TYPE: Readonly<Record<string, LeaflyFunnelType>> = {
+  // Flower family -- measured by weight
+  flower: "Flower",
+  "popcorn-bud": "Flower",
+  "infused-flower": "Flower",
+  trim: "Flower",
+
+  // Pre-rolls -- sold as pieces
+  preroll: "PreRoll",
+  "preroll-pack": "PreRoll",
+  "infused-preroll": "PreRoll",
+  "infused-preroll-pack": "PreRoll",
+  blunt: "PreRoll",
+  "infused-blunt": "PreRoll",
+
+  // Concentrates vs cartridges -- Leafly separates these, so we do too (L-12)
+  concentrate: "Concentrate",
+  rso: "Concentrate",
+  cartridge: "Cartridge",
+  "disposable-cartridge": "Cartridge",
+
+  // Ingested
+  "edible-solid": "Edible",
+  "edible-liquid": "Edible",
+  tincture: "Edible",
+
+  // Applied
+  topical: "Topical",
+
+  // Non-cannabis
+  paraphernalia: "Accessory",
+  accessories: "Accessory",
+  merch: "Accessory",
 };
 
-// Map our internal Greenway categories to the broad Leafly product `type` values
-// documented in the spec/report: flower, concentrate, edible, pre-roll, tincture,
-// topicals, other. We never invent a type Leafly does not document.
-const CATEGORY_TO_LEAFLY_TYPE: Record<string, string> = {
-  flower: "flower",
-  "popcorn-bud": "flower",
-  "infused-flower": "flower",
-  trim: "flower",
-  preroll: "pre-roll",
-  "preroll-pack": "pre-roll",
-  "infused-preroll": "pre-roll",
-  "infused-preroll-pack": "pre-roll",
-  blunt: "pre-roll",
-  "infused-blunt": "pre-roll",
-  concentrate: "concentrate",
-  cartridge: "concentrate",
-  "disposable-cartridge": "concentrate",
-  rso: "concentrate",
-  "edible-solid": "edible",
-  "edible-liquid": "edible",
-  tincture: "tincture",
-  topical: "topicals",
-  paraphernalia: "other",
-  accessories: "other",
-  merch: "other",
-};
-
-export function toLeaflyType(category: string): string {
-  return CATEGORY_TO_LEAFLY_TYPE[category] ?? "other";
+export function toLeaflyType(category: string): LeaflyFunnelType {
+  return CATEGORY_TO_LEAFLY_TYPE[category] ?? "Other";
 }
 
-// Strip any HTML/markup -> plain text. The API requires plain-text descriptions.
+/** Categories this mapper knows about. Exposed so tests can prove none was forgotten. */
+export function mappedLeaflyCategories(): string[] {
+  return Object.keys(CATEGORY_TO_LEAFLY_TYPE);
+}
+
+// ---------------------------------------------------------------------------
+// Text
+// ---------------------------------------------------------------------------
+
+/** Strip markup -> plain text. Leafly requires plain-text descriptions. */
 export function toPlainText(value: string | null | undefined): string | null {
   if (value == null) return null;
   const text = String(value)
-    .replace(/<[^>]*>/g, " ") // drop tags
+    .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
@@ -96,84 +233,376 @@ export function toPlainText(value: string | null | undefined): string | null {
   return text.length > 0 ? text : null;
 }
 
-// Parse a stored cannabinoid string (e.g. "21.4", "21.4%", "5 mg", "") into a numeric
-// value + unit. Absent/unparseable -> null value (never 0 per spec).
+// ---------------------------------------------------------------------------
+// Compounds
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a stored cannabinoid reading into Leafly's compound shape.
+ *
+ * TWO DEFECTS CLOSED HERE.
+ *
+ * L-04: the value field is `content`, not `value`.
+ *
+ * L-05: the percent unit is spelled `percent`. The old code emitted `"%"`, which is not in
+ * the enum `["percent","mg"]`. Note what that means in practice -- `unit` is a REQUIRED
+ * property, so `"%"` is a hard schema violation on every single item carrying a THC
+ * reading. That is essentially the whole menu.
+ *
+ * The unit is decided by the ITEM TYPE, not by sniffing the string, because Leafly's own
+ * table ties them together: Flower/PreRoll/Concentrate/Cartridge report `percent`, Edible
+ * reports `mg`. Sniffing "mg" out of the text is how an edible's milligrams end up on a
+ * flower item. When Leafly ignores compounds for a type (Accessory, Topical, Other,
+ * Seeds, Clone) this returns null and the field is simply not sent.
+ *
+ * A present-but-unreadable reading yields `content: null` -- explicitly "unknown", which
+ * the schema asks for -- rather than 0, which would assert the product tested at zero.
+ */
 export function toCompound(
-  type: string,
+  type: LeaflyCompoundType,
   raw: string | number | null | undefined,
+  itemType: LeaflyFunnelType,
 ): LeaflyCompound | null {
+  const unit = compoundUnitForType(itemType);
+  if (unit === null) return null; // Leafly ignores compounds for this type
+
   if (raw == null) return null;
   const asString = String(raw).trim();
   if (asString.length === 0) return null;
-  const unit = /mg/i.test(asString) ? "mg" : "%";
+
   const numeric = Number.parseFloat(asString.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(numeric)) {
-    // Present but non-numeric -> still report unit with null value (unknown, not 0).
-    return { type, unit, value: null };
-  }
-  return { type, unit, value: numeric };
+  if (!Number.isFinite(numeric)) return { type, content: null, unit };
+  return { type, content: numeric, unit };
 }
 
-export function toLeaflyVariant(v: SyndicationVariant): LeaflyVariant {
-  const variant: LeaflyVariant = {
-    id: v.id,
-    price: Math.round(v.priceMinorUnits),
-    // v2 `inventoryLevel` is a STOCK QUANTITY (integer count), not a 0/1 flag.
-    // Send the real on-hand number; guarantee >=1 when in stock so Leafly's
-    // auto-publish ("items received WITH inventory are published") holds even
-    // if the quantity field lags, and 0 when out of stock.
-    inventoryLevel: v.inStock ? Math.max(1, Math.round(v.inventoryLevel)) : 0,
-    medical: false,
-  };
-  if (v.label && v.label.trim().length > 0) {
-    variant.label = v.label.trim();
-  }
-  return variant;
+/** The totals carry no `type` -- see LeaflyTotalCompound. */
+export function toTotalCompound(compound: LeaflyCompound | null): LeaflyTotalCompound | null {
+  if (compound === null) return null;
+  return { content: compound.content, unit: compound.unit };
 }
 
-// Ensure an item always has at least one variant. If the source had none, synthesize a
-// single default variant from the item's own price + stock so the payload stays valid.
-export function variantsFor(item: SyndicationItem): LeaflyVariant[] {
-  if (item.variants.length > 0) {
-    return item.variants.map(toLeaflyVariant);
+// ---------------------------------------------------------------------------
+// Variants -- amount + unit (L-01, L-02, L-03)
+// ---------------------------------------------------------------------------
+
+/**
+ * Turn a parsed label weight into a legal Leafly `variant.unit` + `amount`.
+ *
+ * Leafly's enum is `oz | g | each`. Our label parser also recognises mg, kg and lb, so
+ * this decides what to do with each:
+ *
+ *   g, oz  -> used directly.
+ *   kg     -> converted to g (x1000). An exact conversion inside the same measurement
+ *             system. No information is created.
+ *   lb     -> converted to oz (x16). Same reasoning.
+ *   mg     -> REFUSED for weight-measured types, deliberately.
+ *
+ * The mg refusal is the interesting one, and it is a rule-3 decision. Converting mg to g is
+ * arithmetically exact, so it is tempting. But a flower or concentrate variant labelled in
+ * milligrams is almost always mis-entered data, not a genuinely 0.1g package -- milligrams
+ * are how EDIBLES are dosed. Converting would launder a data-entry error into a
+ * plausible-looking wrong weight that nobody would ever catch. Refusing surfaces it to a
+ * human. We would rather hold one item off the menu than publish a confident wrong number.
+ */
+export function weightToLeaflyAmount(
+  weight: { unit: string; value: number } | null,
+): { amount: number; unit: LeaflyVariantUnit } | null {
+  if (weight === null || !Number.isFinite(weight.value) || weight.value <= 0) return null;
+  switch (weight.unit) {
+    case "g":
+      return { amount: weight.value, unit: "g" };
+    case "oz":
+      return { amount: weight.value, unit: "oz" };
+    case "kg":
+      return { amount: weight.value * 1000, unit: "g" };
+    case "lb":
+      return { amount: weight.value * 16, unit: "oz" };
+    default:
+      return null; // mg, and anything else we do not trust
   }
-  return [
-    {
-      id: `${item.id}-default`,
-      price: Math.round(item.priceMinorUnits),
-      inventoryLevel: item.inStock ? 1 : 0,
-      medical: false,
-    },
-  ];
 }
 
-export function toLeaflyItem(item: SyndicationItem): LeaflyItem {
-  const compounds: LeaflyCompound[] = [];
-  const totalThc = toCompound("thc", item.thc);
-  const totalCbd = toCompound("cbd", item.cbd);
-  if (totalThc) compounds.push(totalThc);
-  if (totalCbd) compounds.push(totalCbd);
+/**
+ * Decide `amount` + `unit` for one variant of an item of this type.
+ *
+ * The two families behave differently, and the difference comes straight from Leafly's
+ * `variant.unit` table in the schema:
+ *
+ * COUNTED TYPES (Accessory, Seeds, Clone, Edible, PreRoll, Topical, Other) accept only
+ * `each`. A variant IS one saleable package, so the count of "each" is 1. We do NOT try to
+ * read "10pk" and send amount: 10 -- `inventoryLevel` is already documented as "the number
+ * of saleable packages in stock", so sending the pack size in `amount` would describe the
+ * same package twice in two different units and make the menu arithmetic incoherent.
+ * Choosing 1 asserts only what is certainly true: this is one package.
+ *
+ * WEIGHED TYPES (Flower: g|oz) MUST carry a real weight, and there is nowhere to get one
+ * except the label. No weight -> no variant, and a rejection a human can act on. This is
+ * the single most important line in the file: an invented weight on a cannabis menu is a
+ * compliance exposure, and "3.5g" appearing on a product that is not 3.5g is exactly the
+ * kind of thing an inspector reads back to you.
+ *
+ * MIXED TYPES (Concentrate, Cartridge: each|g) prefer a real gram weight when the label
+ * gives one and fall back to `each` when it does not -- both are legal for these types, so
+ * the fallback is a documented choice rather than a guess.
+ */
+export function variantAmountAndUnit(
+  itemType: LeaflyFunnelType,
+  label: string | null | undefined,
+): { amount: number; unit: LeaflyVariantUnit } | null {
+  const legal = LEAFLY_TYPE_UNIT_MATRIX[itemType].variantUnits;
+  const parsed = weightToLeaflyAmount(parseWeightFromLabel(label));
 
-  const strain = item.strainName && item.strainName.trim().length > 0 ? item.strainName.trim() : null;
-  const brand = item.brand && item.brand.trim().length > 0 ? item.brand.trim() : null;
+  if (parsed !== null && (legal as readonly string[]).includes(parsed.unit)) {
+    return parsed;
+  }
+  if ((legal as readonly string[]).includes("each")) {
+    return { amount: 1, unit: "each" };
+  }
+  // Weight-only type (Flower) with no usable weight in the label.
+  return null;
+}
+
+/**
+ * `variant.medical`.
+ *
+ * Kept FALSE, which is correct for Greenway today -- the owner has confirmed the shop is
+ * not yet DOH medically endorsed and will open recreational-only. The defect recorded as
+ * L-11 was never the value; it was that `false` was a hardcoded literal with no way to
+ * become true. So this is now a function with an input, which is a mechanism.
+ *
+ * L-3 wires the real source and gates it on the endorsement: a medical flag on a product
+ * is meaningless -- and, with an unendorsed licence, misleading -- until the endorsement
+ * exists. Flipping this before then would advertise medical product the shop cannot
+ * legally sell as such.
+ */
+export function variantMedicalFlag(input?: { medical?: boolean | null | undefined }): boolean {
+  return input?.medical === true;
+}
+
+/**
+ * `inventoryLevel` -- the real on-hand count.
+ *
+ * Leafly documents an internal cap of 10, and we deliberately do NOT pre-clamp to it.
+ * Sending the true number costs nothing (they cap on receipt), and data quality is graded
+ * at certification. In stock is floored to 1 so Leafly's auto-publish rule -- items
+ * received WITH inventory are published -- still holds when the quantity field lags.
+ */
+export function variantInventoryLevel(v: { inStock: boolean; inventoryLevel: number }): number {
+  if (!v.inStock) return 0;
+  const n = Math.round(v.inventoryLevel);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+/**
+ * Map one variant. Returns null when the variant cannot be honestly represented, which the
+ * caller turns into a rejection rather than a silently dropped product.
+ */
+export function toLeaflyVariant(
+  v: SyndicationVariant,
+  itemType: LeaflyFunnelType,
+): LeaflyVariant | null {
+  const au = variantAmountAndUnit(itemType, v.label);
+  if (au === null) return null;
 
   return {
-    id: item.id,
-    name: item.name,
-    brandName: brand,
-    type: toLeaflyType(item.category),
-    // Strain absent => null, never "NA".
-    strainName: strain,
-    description: toPlainText(item.description),
-    compounds,
-    totalThc,
-    totalCbd,
-    variants: variantsFor(item),
+    id: String(v.id),
+    medical: variantMedicalFlag(v as { medical?: boolean }),
+    price: Math.round(v.priceMinorUnits),
+    amount: au.amount,
+    unit: au.unit,
+    inventoryLevel: variantInventoryLevel(v),
   };
+}
+
+/**
+ * Every variant for an item, plus the ones we refused.
+ *
+ * An item with no source variants still gets a synthesized default so the `minItems: 1`
+ * rule holds -- but only when the item's own type can produce a legal amount/unit without
+ * inventing anything. A Flower item with no variants and no weight anywhere is not
+ * publishable, and pretending otherwise would put a made-up weight on cannabis.
+ */
+export function variantsFor(item: SyndicationItem): {
+  variants: LeaflyVariant[];
+  rejected: LeaflyVariantRejection[];
+} {
+  const itemType = toLeaflyType(item.category);
+  const variants: LeaflyVariant[] = [];
+  const rejected: LeaflyVariantRejection[] = [];
+
+  if (item.variants.length > 0) {
+    for (const v of item.variants) {
+      const mapped = toLeaflyVariant(v, itemType);
+      if (mapped === null) {
+        rejected.push({
+          itemId: item.id,
+          variantId: String(v.id),
+          label: v.label ?? "",
+          reason:
+            `Leafly type "${itemType}" must be sold by weight ` +
+            `(${LEAFLY_TYPE_UNIT_MATRIX[itemType].variantUnits.join(" or ")}), and no weight ` +
+            `could be read from the variant label "${v.label ?? "(blank)"}". ` +
+            `Fix the label (e.g. "3.5g", "1 oz") — a weight will never be guessed.`,
+        });
+        continue;
+      }
+      variants.push(mapped);
+    }
+    return { variants, rejected };
+  }
+
+  const au = variantAmountAndUnit(itemType, null);
+  if (au === null) {
+    rejected.push({
+      itemId: item.id,
+      variantId: `${item.id}-default`,
+      label: "",
+      reason:
+        `Item has no variants and Leafly type "${itemType}" is sold by weight, so a default ` +
+        `variant cannot be synthesized without inventing a weight.`,
+    });
+    return { variants, rejected };
+  }
+
+  variants.push({
+    id: `${item.id}-default`,
+    medical: variantMedicalFlag(),
+    price: Math.round(item.priceMinorUnits),
+    amount: au.amount,
+    unit: au.unit,
+    inventoryLevel: variantInventoryLevel({ inStock: item.inStock, inventoryLevel: 1 }),
+  });
+  return { variants, rejected };
+}
+
+// ---------------------------------------------------------------------------
+// Items
+// ---------------------------------------------------------------------------
+
+export type LeaflyItemResult = {
+  item: LeaflyItem | null;
+  rejected: LeaflyVariantRejection[];
+};
+
+/**
+ * Map one Greenway item to one Leafly item.
+ *
+ * `availableForPickup` is NOT set here. It is finding L-09 and it belongs to slice L-3,
+ * where it is turned on deliberately with the owner's confirmation -- because the moment it
+ * is true, real customers can place real orders that the shop has 15 minutes to
+ * acknowledge. Turning that on as a side effect of a field-rename slice would be reckless.
+ * The schema allows omission ("may be omitted to maintain the current item setting").
+ */
+export function toLeaflyItemResult(item: SyndicationItem): LeaflyItemResult {
+  const type = toLeaflyType(item.category);
+  const { variants, rejected } = variantsFor(item);
+
+  if (variants.length === 0) return { item: null, rejected };
+
+  // `name` is `minLength: 1`, so an all-whitespace name is a schema violation --
+  // and a padded name is a storefront defect (" Blue Dream" sorts under space
+  // and reads as a typo on a public menu).
+  //
+  // Trimming is NOT inventing a value: surrounding whitespace carries no
+  // information, so removing it cannot change what the name MEANS. Supplying a
+  // name for a product that has none WOULD be inventing, so that case is
+  // refused instead -- the item is dropped with a reason a human can act on.
+  const name = item.name.trim();
+  if (name.length === 0) {
+    rejected.push({
+      itemId: item.id,
+      variantId: "",
+      label: "",
+      reason:
+        `Item has a blank name, and Leafly requires a non-empty name (minLength 1). ` +
+        `A name is never invented — set a real product name on this item.`,
+    });
+    return { item: null, rejected };
+  }
+
+  const out: LeaflyItem = {
+    id: item.id,
+    type,
+    name,
+    variants,
+  };
+
+  // strain: nullable in the schema, and Leafly's certification checklist explicitly wants
+  // null when absent rather than a placeholder. "NA" would become a strain page.
+  const strain = item.strainName?.trim();
+  out.strain = strain && strain.length > 0 ? strain : null;
+
+  // brand: NOT nullable -- `type: "string"` with no null. NEW DEFECT (1 of 3): the old code
+  // emitted `brandName: null`, which is both the wrong key AND an illegal value. Omit it.
+  const brand = item.brand?.trim();
+  if (brand && brand.length > 0) out.brand = brand;
+
+  // description: NOT nullable either. NEW DEFECT (2 of 3): the old code emitted
+  // `description: null` for every item without one. Omit it.
+  const description = toPlainText(item.description);
+  if (description !== null) out.description = description;
+
+  // compounds + totals. NEW DEFECT (3 of 3): the old code pushed compounds into the array
+  // unconditionally, which meant an Edible carrying a percent-shaped reading, or an
+  // Accessory carrying any reading at all, both of which the type/unit table forbids.
+  // toCompound() now returns null whenever Leafly ignores compounds for the type.
+  const thc = toCompound("thc", item.thc, type);
+  const cbd = toCompound("cbd", item.cbd, type);
+  const compounds: LeaflyCompound[] = [];
+  if (thc) compounds.push(thc);
+  if (cbd) compounds.push(cbd);
+  if (compounds.length > 0) out.compounds = compounds;
+
+  const totalThc = toTotalCompound(thc);
+  const totalCbd = toTotalCompound(cbd);
+  if (totalThc) out.total_thc = totalThc;
+  if (totalCbd) out.total_cbd = totalCbd;
+
+  // imageUrl: nullable, and null/omitted REMOVES the cached image. Only send a real one.
+  // Wiring the owner's sendImages toggle is L-3 (finding L-10).
+  if (typeof item.imageUrl === "string" && item.imageUrl.trim() !== "") {
+    out.imageUrl = item.imageUrl.trim();
+  }
+
+  return { item: out, rejected };
+}
+
+/** Back-compat single-item mapper. Returns null when the item is not publishable. */
+export function toLeaflyItem(item: SyndicationItem): LeaflyItem | null {
+  return toLeaflyItemResult(item).item;
+}
+
+export type LeaflyBuildResult = {
+  payload: LeaflyItemsPayload;
+  rejected: LeaflyVariantRejection[];
+  droppedItemIds: string[];
+};
+
+/**
+ * Build the full payload, keeping the refusals rather than swallowing them.
+ *
+ * `buildLeaflyItemsPayload` stays as the plain entry point so existing callers keep
+ * working; `buildLeaflyItemsResult` is what the validator and the admin preflight use,
+ * because "we published 412 of your 415 items and here is exactly why" is the honest
+ * report, and a silent 412 is not.
+ */
+export function buildLeaflyItemsResult(items: SyndicationItem[]): LeaflyBuildResult {
+  const out: LeaflyItem[] = [];
+  const rejected: LeaflyVariantRejection[] = [];
+  const droppedItemIds: string[] = [];
+
+  for (const item of items) {
+    const result = toLeaflyItemResult(item);
+    rejected.push(...result.rejected);
+    if (result.item === null) droppedItemIds.push(item.id);
+    else out.push(result.item);
+  }
+
+  return { payload: { items: out }, rejected, droppedItemIds };
 }
 
 export function buildLeaflyItemsPayload(items: SyndicationItem[]): LeaflyItemsPayload {
-  return { items: items.map(toLeaflyItem) };
+  return buildLeaflyItemsResult(items).payload;
 }
 
 export function buildLeaflyDeletePayload(ids: string[]): LeaflyDeletePayload {
@@ -181,9 +610,10 @@ export function buildLeaflyDeletePayload(ids: string[]): LeaflyDeletePayload {
 }
 
 // ---------------------------------------------------------------------------
-// Tests (run via tsx; this module is pure).
+// Self-tests
 // ---------------------------------------------------------------------------
-export function __runLeaflyPayloadTests() {
+
+export function __runLeaflyPayloadTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
   const ok = (label: string, cond: boolean) => {
@@ -195,53 +625,183 @@ export function __runLeaflyPayloadTests() {
     }
   };
 
-  // toLeaflyType
-  ok("flower->flower", toLeaflyType("flower") === "flower");
-  ok("popcorn-bud->flower", toLeaflyType("popcorn-bud") === "flower");
-  ok("cartridge->concentrate", toLeaflyType("cartridge") === "concentrate");
-  ok("preroll-pack->pre-roll", toLeaflyType("preroll-pack") === "pre-roll");
-  ok("topical->topicals", toLeaflyType("topical") === "topicals");
-  ok("merch->other", toLeaflyType("merch") === "other");
-  ok("unknown->other", toLeaflyType("nonsense") === "other");
+  // -- item.type funnel targets (L-12) ---------------------------------------
+  ok("flower->Flower", toLeaflyType("flower") === "Flower");
+  ok("popcorn-bud->Flower", toLeaflyType("popcorn-bud") === "Flower");
+  ok("trim->Flower", toLeaflyType("trim") === "Flower");
+  ok("preroll-pack->PreRoll", toLeaflyType("preroll-pack") === "PreRoll");
+  ok("blunt->PreRoll", toLeaflyType("blunt") === "PreRoll");
+  ok("cartridge->Cartridge NOT Concentrate", toLeaflyType("cartridge") === "Cartridge");
+  ok("disposable-cartridge->Cartridge", toLeaflyType("disposable-cartridge") === "Cartridge");
+  ok("concentrate->Concentrate", toLeaflyType("concentrate") === "Concentrate");
+  ok("rso->Concentrate", toLeaflyType("rso") === "Concentrate");
+  ok("edible-solid->Edible", toLeaflyType("edible-solid") === "Edible");
+  ok("tincture->Edible (never the invented 'tincture')", toLeaflyType("tincture") === "Edible");
+  ok("topical->Topical", toLeaflyType("topical") === "Topical");
+  ok("merch->Accessory", toLeaflyType("merch") === "Accessory");
+  ok("unknown->Other", toLeaflyType("nonsense") === "Other");
+  ok(
+    "every mapped category yields a real funnel type",
+    mappedLeaflyCategories().every((c) => isLeaflyFunnelType(toLeaflyType(c))),
+  );
 
-  // toPlainText
+  // -- plain text ------------------------------------------------------------
   ok("plaintext strips tags", toPlainText("<p>Hello <b>world</b></p>") === "Hello world");
   ok("plaintext entities", toPlainText("A &amp; B") === "A & B");
   ok("plaintext empty->null", toPlainText("   ") === null);
   ok("plaintext null->null", toPlainText(null) === null);
 
-  // toCompound
-  ok("compound percent", JSON.stringify(toCompound("thc", "21.4%")) === JSON.stringify({ type: "thc", unit: "%", value: 21.4 }));
-  ok("compound mg", JSON.stringify(toCompound("cbd", "5 mg")) === JSON.stringify({ type: "cbd", unit: "mg", value: 5 }));
-  ok("compound absent->null", toCompound("thc", "") === null);
-  ok("compound null->null", toCompound("thc", null) === null);
-  ok("compound nonnumeric->null value", (() => {
-    const c = toCompound("thc", "trace");
-    return c !== null && c.value === null && c.unit === "%";
-  })());
+  // -- compounds (L-04, L-05) ------------------------------------------------
+  const flowerThc = toCompound("thc", "21.4%", "Flower");
+  ok("compound uses content not value", flowerThc !== null && flowerThc.content === 21.4);
+  ok("compound percent spelled out, never '%'", flowerThc !== null && flowerThc.unit === "percent");
+  ok("compound keeps its type", flowerThc !== null && flowerThc.type === "thc");
 
-  // variant mapping: price rounded, inventoryLevel = real stock quantity
-  const v: SyndicationVariant = { id: "v1", label: "1g", priceMinorUnits: 1500.4, inStock: true, inventoryLevel: 7 };
-  const lv = toLeaflyVariant(v);
-  ok("variant id kept", lv.id === "v1");
-  ok("variant price rounded int", lv.price === 1500);
-  ok("variant inventoryLevel real quantity", lv.inventoryLevel === 7);
-  ok("variant medical false", lv.medical === false);
-  ok("variant label kept", lv.label === "1g");
+  const edibleThc = toCompound("thc", "100", "Edible");
+  ok("edible compound unit is mg", edibleThc !== null && edibleThc.unit === "mg");
+  ok(
+    "edible unit comes from the TYPE not the string",
+    toCompound("thc", "10mg", "Flower")?.unit === "percent",
+  );
 
-  const vOut: SyndicationVariant = { id: "v2", label: "", priceMinorUnits: 1000, inStock: false, inventoryLevel: 0 };
-  const lvOut = toLeaflyVariant(vOut);
-  ok("variant out of stock 0", lvOut.inventoryLevel === 0);
-  ok("variant empty label dropped", lvOut.label === undefined);
+  ok("accessory compounds ignored", toCompound("thc", "21.4", "Accessory") === null);
+  ok("topical compounds ignored", toCompound("thc", "21.4", "Topical") === null);
+  ok("other compounds ignored", toCompound("thc", "21.4", "Other") === null);
+  ok("absent reading -> null", toCompound("thc", "", "Flower") === null);
+  ok("null reading -> null", toCompound("thc", null, "Flower") === null);
+  const trace = toCompound("thc", "trace", "Flower");
+  ok(
+    "unreadable reading -> content null, never 0",
+    trace !== null && trace.content === null && trace.unit === "percent",
+  );
 
-  // in stock but quantity missing/0 -> floor of 1 so Leafly still publishes
-  const vFloor: SyndicationVariant = { id: "v3", label: "1g", priceMinorUnits: 1000, inStock: true, inventoryLevel: 0 };
-  ok("in-stock quantity floored to 1", toLeaflyVariant(vFloor).inventoryLevel === 1);
-  const vFrac: SyndicationVariant = { id: "v4", label: "1g", priceMinorUnits: 1000, inStock: true, inventoryLevel: 3.4 };
-  ok("fractional quantity rounded", toLeaflyVariant(vFrac).inventoryLevel === 3);
+  // -- totals carry no type (L-08) -------------------------------------------
+  const total = toTotalCompound(flowerThc);
+  ok("total has content", total !== null && total.content === 21.4);
+  ok("total has unit", total !== null && total.unit === "percent");
+  ok(
+    "total carries NO type field",
+    total !== null && !Object.prototype.hasOwnProperty.call(total, "type"),
+  );
+  ok("total of null is null", toTotalCompound(null) === null);
 
-  // item with no variants -> synthesized default variant (>=1 required)
-  const noVar: SyndicationItem = {
+  // -- weight conversion -----------------------------------------------------
+  ok(
+    "g passes through",
+    JSON.stringify(weightToLeaflyAmount({ unit: "g", value: 3.5 })) ===
+      JSON.stringify({ amount: 3.5, unit: "g" }),
+  );
+  ok(
+    "oz passes through",
+    JSON.stringify(weightToLeaflyAmount({ unit: "oz", value: 1 })) ===
+      JSON.stringify({ amount: 1, unit: "oz" }),
+  );
+  ok(
+    "kg -> g",
+    JSON.stringify(weightToLeaflyAmount({ unit: "kg", value: 1 })) ===
+      JSON.stringify({ amount: 1000, unit: "g" }),
+  );
+  ok(
+    "lb -> oz",
+    JSON.stringify(weightToLeaflyAmount({ unit: "lb", value: 1 })) ===
+      JSON.stringify({ amount: 16, unit: "oz" }),
+  );
+  ok(
+    "mg REFUSED, never laundered into grams",
+    weightToLeaflyAmount({ unit: "mg", value: 100 }) === null,
+  );
+  ok("null weight -> null", weightToLeaflyAmount(null) === null);
+  ok("zero weight -> null", weightToLeaflyAmount({ unit: "g", value: 0 }) === null);
+  ok("negative weight -> null", weightToLeaflyAmount({ unit: "g", value: -1 }) === null);
+
+  // -- amount + unit per type (L-01, L-02, L-03) -----------------------------
+  ok(
+    "flower 3.5g -> 3.5 g",
+    JSON.stringify(variantAmountAndUnit("Flower", "3.5g")) ===
+      JSON.stringify({ amount: 3.5, unit: "g" }),
+  );
+  ok(
+    "flower 1/8 oz -> 0.125 oz",
+    JSON.stringify(variantAmountAndUnit("Flower", "1/8 oz")) ===
+      JSON.stringify({ amount: 0.125, unit: "oz" }),
+  );
+  ok("flower with no weight -> REFUSED", variantAmountAndUnit("Flower", "each") === null);
+  ok("flower with blank label -> REFUSED", variantAmountAndUnit("Flower", "") === null);
+  ok("flower with 10pk -> REFUSED", variantAmountAndUnit("Flower", "10pk") === null);
+  ok(
+    "edible 10pk -> 1 each (pack size is NOT the amount)",
+    JSON.stringify(variantAmountAndUnit("Edible", "10pk")) ===
+      JSON.stringify({ amount: 1, unit: "each" }),
+  );
+  ok(
+    "preroll -> each",
+    JSON.stringify(variantAmountAndUnit("PreRoll", "1g")) ===
+      JSON.stringify({ amount: 1, unit: "each" }),
+  );
+  ok(
+    "concentrate 1g -> 1 g (gram is legal for this type)",
+    JSON.stringify(variantAmountAndUnit("Concentrate", "1g")) ===
+      JSON.stringify({ amount: 1, unit: "g" }),
+  );
+  ok(
+    "cartridge with no weight -> 1 each",
+    JSON.stringify(variantAmountAndUnit("Cartridge", "disposable")) ===
+      JSON.stringify({ amount: 1, unit: "each" }),
+  );
+  ok(
+    "accessory -> each",
+    JSON.stringify(variantAmountAndUnit("Accessory", "grinder")) ===
+      JSON.stringify({ amount: 1, unit: "each" }),
+  );
+  // An edible labelled in grams must still be `each` -- g is not legal for Edible.
+  ok("edible labelled 5g still each", variantAmountAndUnit("Edible", "5g")?.unit === "each");
+
+  // Cross-check every funnel type against the contract matrix: the unit we choose must
+  // always be one the schema permits for that type. This is the assertion that would
+  // catch a future table edit that looks harmless.
+  const allTypes: LeaflyFunnelType[] = [
+    "Accessory",
+    "Seeds",
+    "Clone",
+    "Flower",
+    "Edible",
+    "PreRoll",
+    "Concentrate",
+    "Cartridge",
+    "Topical",
+    "Other",
+  ];
+  ok(
+    "chosen unit is always legal for the type",
+    allTypes.every((t) => {
+      const r = variantAmountAndUnit(t, "3.5g");
+      if (r === null) return false;
+      return (LEAFLY_TYPE_UNIT_MATRIX[t].variantUnits as readonly string[]).includes(r.unit);
+    }),
+  );
+  ok(
+    "only the weighed type can refuse",
+    allTypes.every((t) => (variantAmountAndUnit(t, "no weight here") === null) === (t === "Flower")),
+  );
+
+  // -- medical flag is a mechanism, not a literal (L-11) ---------------------
+  ok("medical defaults false", variantMedicalFlag() === false);
+  ok("medical false when absent", variantMedicalFlag({}) === false);
+  ok("medical false when null", variantMedicalFlag({ medical: null }) === false);
+  ok("medical CAN be true", variantMedicalFlag({ medical: true }) === true);
+
+  // -- inventory -------------------------------------------------------------
+  ok("out of stock -> 0", variantInventoryLevel({ inStock: false, inventoryLevel: 9 }) === 0);
+  ok("in stock real qty", variantInventoryLevel({ inStock: true, inventoryLevel: 7 }) === 7);
+  ok("in stock floors to 1", variantInventoryLevel({ inStock: true, inventoryLevel: 0 }) === 1);
+  ok("fractional rounds", variantInventoryLevel({ inStock: true, inventoryLevel: 3.4 }) === 3);
+  ok(
+    "above Leafly's cap is sent truthfully, not pre-clamped",
+    variantInventoryLevel({ inStock: true, inventoryLevel: 47 }) === 47,
+  );
+
+  // -- whole item ------------------------------------------------------------
+  const flower: SyndicationItem = {
     id: "item-1",
     name: "House Flower",
     brand: "  Greenway  ",
@@ -253,48 +813,178 @@ export function __runLeaflyPayloadTests() {
     description: "<p>Smooth &amp; balanced</p>",
     priceMinorUnits: 2000,
     inStock: true,
-    variants: [],
+    variants: [
+      { id: "v1", label: "3.5g", priceMinorUnits: 1500.4, inStock: true, inventoryLevel: 7 },
+    ],
   };
-  const li = toLeaflyItem(noVar);
-  ok("item type mapped", li.type === "flower");
-  ok("item brand trimmed", li.brandName === "Greenway");
-  ok("item strain trimmed", li.strainName === "Blue Dream");
-  ok("item desc plaintext", li.description === "Smooth & balanced");
-  ok("item totalThc set", li.totalThc !== null && li.totalThc.value === 24.1);
-  ok("item totalCbd null", li.totalCbd === null);
-  ok("item compounds only thc", li.compounds.length === 1 && li.compounds[0].type === "thc");
-  ok("item synth variant count 1", li.variants.length === 1);
-  ok("item synth variant id", li.variants[0].id === "item-1-default");
-  ok("item synth variant price", li.variants[0].price === 2000);
+  const fr = toLeaflyItemResult(flower);
+  const fi = fr.item;
+  ok("item built", fi !== null);
+  ok("item type Flower", fi?.type === "Flower");
+  ok("brand key is 'brand' (L-06)", fi?.brand === "Greenway");
+  ok("no brandName key survives", fi !== null && !("brandName" in fi));
+  ok("strain key is 'strain' (L-07)", fi?.strain === "Blue Dream");
+  ok("no strainName key survives", fi !== null && !("strainName" in fi));
+  ok("total_thc snake_case (L-08)", fi !== null && fi.total_thc?.content === 24.1);
+  ok("no totalThc key survives", fi !== null && !("totalThc" in fi));
+  ok("total_cbd omitted when absent", fi !== null && fi.total_cbd === undefined);
+  ok("description plain text", fi?.description === "Smooth & balanced");
+  ok("variant price rounded", fi?.variants[0].price === 1500);
+  ok("variant amount emitted (L-01)", fi?.variants[0].amount === 3.5);
+  ok("variant unit emitted (L-02)", fi?.variants[0].unit === "g");
+  ok("variant label GONE (L-03)", fi !== null && !("label" in fi.variants[0]));
+  ok("variant medical present", fi?.variants[0].medical === false);
+  ok("availableForPickup NOT set in L-2", fi !== null && fi.availableForPickup === undefined);
+  ok("no rejections for a good flower item", fr.rejected.length === 0);
 
-  // item with absent strain -> null (never "NA")
-  const noStrain: SyndicationItem = {
+  // absent brand/description must be OMITTED, not null (the three new defects)
+  const bare: SyndicationItem = {
     id: "item-2",
     name: "Gummies",
     brand: null,
     category: "edible-solid",
     strainType: "unknown",
     strainName: null,
-    thc: null,
+    thc: "100",
     cbd: null,
     description: "",
     priceMinorUnits: 1500,
     inStock: true,
     variants: [{ id: "x", label: "10pk", priceMinorUnits: 1500, inStock: true, inventoryLevel: 12 }],
   };
-  const li2 = toLeaflyItem(noStrain);
-  ok("absent strain null", li2.strainName === null);
-  ok("absent brand null", li2.brandName === null);
-  ok("absent desc null", li2.description === null);
-  ok("edible type", li2.type === "edible");
-  ok("real variant kept", li2.variants.length === 1 && li2.variants[0].id === "x");
+  const bi = toLeaflyItem(bare);
+  ok("absent brand omitted, not null", bi !== null && !("brand" in bi));
+  ok("absent description omitted, not null", bi !== null && !("description" in bi));
+  ok("absent strain IS null (nullable in schema)", bi !== null && bi.strain === null);
+  ok("edible gets mg unit", bi?.total_thc?.unit === "mg");
+  ok("edible variant is each", bi?.variants[0].unit === "each");
+  ok("no imageUrl when absent", bi !== null && !("imageUrl" in bi));
 
-  // payload + delete
-  const payload = buildLeaflyItemsPayload([noVar, noStrain]);
-  ok("payload items count", payload.items.length === 2);
+  // a flower item whose label has no weight is refused, not invented
+  const badFlower: SyndicationItem = {
+    ...flower,
+    id: "item-3",
+    variants: [
+      { id: "bad", label: "each", priceMinorUnits: 1000, inStock: true, inventoryLevel: 2 },
+    ],
+  };
+  const bad = toLeaflyItemResult(badFlower);
+  ok("weightless flower variant refused", bad.item === null);
+  ok("refusal is reported", bad.rejected.length === 1);
+  ok("refusal names the variant", bad.rejected[0].variantId === "bad");
+  ok("refusal explains itself", /weight/i.test(bad.rejected[0].reason));
+  ok("refusal promises not to guess", /never be guessed/i.test(bad.rejected[0].reason));
+
+  // synthesized default variant
+  const noVariants: SyndicationItem = { ...bare, id: "item-4", variants: [] };
+  const nv = toLeaflyItemResult(noVariants);
+  ok("default variant synthesized for counted type", nv.item?.variants.length === 1);
+  ok("default variant id", nv.item?.variants[0].id === "item-4-default");
+  ok("default variant is each", nv.item?.variants[0].unit === "each");
+  const noVariantsFlower: SyndicationItem = { ...flower, id: "item-5", variants: [] };
+  const nvf = toLeaflyItemResult(noVariantsFlower);
+  ok("no default variant invented for weighed type", nvf.item === null);
+  ok("and it says why", nvf.rejected.length === 1 && /weight/i.test(nvf.rejected[0].reason));
+
+  // image
+  const withImage: SyndicationItem = { ...bare, id: "item-6", imageUrl: " https://x/y.jpg " };
+  ok("imageUrl trimmed and sent", toLeaflyItem(withImage)?.imageUrl === "https://x/y.jpg");
+
+  // A present-but-blank imageUrl must be treated as ABSENT, never emitted.
+  // The schema declares imageUrl `format: "uri"`, so "" and "   " are not
+  // legal values; and because "omitted or null" both mean "remove the image",
+  // omitting is the correct, lossless way to say "we have no image".
+  const blankImage = toLeaflyItem({ ...bare, id: "item-6a", imageUrl: "" });
+  ok("empty-string imageUrl omitted entirely", blankImage !== null && !("imageUrl" in blankImage));
+  const wsImage = toLeaflyItem({ ...bare, id: "item-6b", imageUrl: "   " });
+  ok("whitespace-only imageUrl omitted entirely", wsImage !== null && !("imageUrl" in wsImage));
+  ok(
+    "whitespace-only imageUrl is not emitted as an empty string either",
+    wsImage !== null && wsImage.imageUrl === undefined,
+  );
+  const tabImage = toLeaflyItem({ ...bare, id: "item-6c", imageUrl: "\t\n " });
+  ok("tab/newline-only imageUrl omitted entirely", tabImage !== null && !("imageUrl" in tabImage));
+  // `SyndicationItem.imageUrl` is declared `string | undefined`, so a null
+  // cannot arrive through the type system. It can still arrive through the
+  // DOOR the type system does not guard: these rows are built from Supabase,
+  // where `image_url` is a nullable column. menu-feed-core.ts:140 filters that
+  // null out today, but this mapper must not depend on a caller staying
+  // careful, so the cast asserts the runtime shape on purpose.
+  const nullImage = toLeaflyItem({
+    ...bare,
+    id: "item-6d",
+    imageUrl: null as unknown as string | undefined,
+  });
+  ok(
+    "explicit null imageUrl omitted (omission == null to Leafly)",
+    nullImage !== null && !("imageUrl" in nullImage),
+  );
+  ok(
+    "a blank image never blanks out a sibling field",
+    blankImage !== null && blankImage.name === bare.name && blankImage.variants.length === 1,
+  );
+
+  // -- name: minLength 1, so trim; but never invent one ----------------------
+  const padded: SyndicationItem = { ...bare, id: "item-7", name: "  Padded Name  " };
+  ok("name is trimmed", toLeaflyItem(padded)?.name === "Padded Name");
+  ok(
+    "inner spacing is preserved",
+    toLeaflyItem({ ...bare, id: "item-7b", name: " Blue  Dream " })?.name === "Blue  Dream",
+  );
+
+  const blankName: SyndicationItem = { ...bare, id: "item-8", name: "   " };
+  ok("blank name yields no item", toLeaflyItem(blankName) === null);
+  const blankNameResult = toLeaflyItemResult(blankName);
+  ok("blank name is reported, not swallowed", blankNameResult.rejected.length === 1);
+  ok(
+    "blank name refusal says a name is never invented",
+    blankNameResult.rejected[0].reason.includes("never invented"),
+  );
+  ok(
+    "blank name refusal names the item",
+    blankNameResult.rejected[0].itemId === "item-8",
+  );
+  ok("empty-string name yields no item", toLeaflyItem({ ...bare, id: "item-9", name: "" }) === null);
+
+  // -- payload ---------------------------------------------------------------
+  const built = buildLeaflyItemsResult([flower, bare, badFlower]);
+  ok("payload keeps the good items", built.payload.items.length === 2);
+  ok("payload records the dropped item", built.droppedItemIds.length === 1);
+  ok("dropped item is the weightless one", built.droppedItemIds[0] === "item-3");
+  ok("payload surfaces rejections", built.rejected.length === 1);
+  ok("plain builder still works", buildLeaflyItemsPayload([flower]).items.length === 1);
+
   const del = buildLeaflyDeletePayload(["a", "a", "b"]);
   ok("delete dedupes", del.ids.length === 2 && del.ids.includes("a") && del.ids.includes("b"));
 
+  // -- no forbidden key may appear ANYWHERE in a generated payload -----------
+  const json = JSON.stringify(buildLeaflyItemsResult([flower, bare, withImage]).payload);
+  for (const forbidden of [
+    "brandName",
+    "strainName",
+    "totalThc",
+    "totalCbd",
+    "inventory_level",
+    "image_url",
+    "available_for_pickup",
+    "batchId",
+    "parentBatchId",
+    "sku",
+    "tax_rate",
+    "price_includes_tax",
+  ]) {
+    ok(`payload never contains "${forbidden}"`, !json.includes(`"${forbidden}"`));
+  }
+  ok('payload never contains a "%" unit', !json.includes('"%"'));
+  ok('payload never contains a "label" key', !json.includes('"label"'));
+  ok('payload never contains "value":', !json.includes('"value":'));
+
   console.log(`leafly-payload: ${passed} passed, ${failed} failed`);
   if (failed > 0) throw new Error(`${failed} leafly-payload test(s) failed`);
+  // Returned as well as thrown: throwing protects a caller that ignores the
+  // value, and returning lets the CI registry assert that assertions actually
+  // RAN. A suite that returns { passed: 0, failed: 0 } is not a passing suite,
+  // it is a suite that never executed -- and that is exactly what an early
+  // `return` mutation produces.
+  return { passed, failed };
 }
