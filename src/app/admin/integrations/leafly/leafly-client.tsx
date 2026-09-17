@@ -5,7 +5,9 @@ import { Badge, Button, Card, Field, Input, Select, Textarea } from "@/component
 import {
   pushLeaflyAction,
   fetchLeaflyStatusAction,
+  fetchLeaflyMenuReadbackAction,
   draftLeaflyDescriptionAction,
+  type MenuReadbackActionResult,
 } from "./actions";
 
 const CATEGORIES = [
@@ -24,9 +26,12 @@ const CATEGORIES = [
 export function LeaflyPushClient({
   configured,
   itemCount,
+  sandbox,
 }: {
   configured: boolean;
   itemCount: number;
+  /** Slice L-4: the read-back endpoint is sandbox-only (Leafly returns 405 elsewhere). */
+  sandbox: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [confirmArmed, setConfirmArmed] = useState(false);
@@ -35,6 +40,14 @@ export function LeaflyPushClient({
   const [pushOk, setPushOk] = useState<boolean | null>(null);
 
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [readback, setReadback] = useState<MenuReadbackActionResult | null>(null);
+
+  function doReadback() {
+    setReadback(null);
+    startTransition(async () => {
+      setReadback(await fetchLeaflyMenuReadbackAction());
+    });
+  }
 
   function doPush() {
     setPushMsg(null);
@@ -134,9 +147,146 @@ export function LeaflyPushClient({
             <p className="mt-2 break-words text-xs text-[var(--admin-text-muted)]">{statusMsg}</p>
           ) : null}
         </div>
+
+        {/*
+          SLICE L-4 (finding L-14) -- read the menu back and CHECK it.
+
+          A successful push only proves our JSON parsed. Slice L-2 found eight field
+          defects that a 200 response would never have revealed, and a field we believe
+          we send but do not produces a cheerful 200 and a wrong storefront. This button
+          fetches Leafly's own copy of the menu and compares it, item by item, against
+          what we would send right now.
+
+          Sandbox only -- Leafly answers 405 anywhere else, and the server action refuses
+          to dial rather than spend a logged request earning one.
+        */}
+        <div className="mt-4 border-t border-[var(--admin-border)] pt-3">
+          <Button
+            variant="neutral"
+            size="sm"
+            onClick={doReadback}
+            disabled={pending || !configured || !sandbox}
+          >
+            Read the menu back from Leafly and check it
+          </Button>
+          <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+            {sandbox
+              ? "Read-only. Fetches Leafly's copy of your menu and lists anything that does not match what we send."
+              : "Available in the sandbox only \u2014 Leafly returns 405 Method Not Allowed in production."}
+          </p>
+          {readback ? <ReadbackReport report={readback} /> : null}
+        </div>
       </Card>
 
       <DescriptionDrafter />
+    </div>
+  );
+}
+
+/**
+ * The read-back result, in the owner's language.
+ *
+ * Ordered errors-first because that is the order in which things need fixing, and the
+ * `unverifiable` list is shown at the bottom precisely BECAUSE it is easy to forget: two
+ * fields cannot be checked yet, and a report that silently omitted them would read as a
+ * clean bill of health it has not earned.
+ */
+function ReadbackReport({ report }: { report: MenuReadbackActionResult }) {
+  if (!report.ok) {
+    return <p className="mt-2 text-xs text-[var(--admin-danger)]">{report.error}</p>;
+  }
+
+  const errors = report.reconcile?.issues.filter((i) => i.severity === "error") ?? [];
+  const warnings = report.reconcile?.issues.filter((i) => i.severity === "warning") ?? [];
+  const infos = report.reconcile?.issues.filter((i) => i.severity === "info") ?? [];
+  const clean = report.reconcile?.ok === true && warnings.length === 0;
+
+  return (
+    <div className="mt-3">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge tone={clean ? "green" : errors.length > 0 ? "danger" : "orange"}>
+          {clean ? "Matches" : errors.length > 0 ? `${errors.length} problem(s)` : "Check these"}
+        </Badge>
+        <span className="text-xs text-[var(--admin-text-muted)]">
+          HTTP {report.httpStatus} &middot; {report.itemsAtLeafly} item(s) on Leafly
+        </span>
+      </div>
+
+      {/*
+        Finding L-19. Leafly needs up to ~2.5 minutes in sandbox to ingest a push, so a
+        comparison run sooner can show the OLD menu. This banner sits ABOVE the issue
+        lists on purpose: the wrong reaction to phantom differences is to re-push, which
+        manufactures the erratic request pattern Leafly's certification grades against.
+      */}
+      {report.timing.tooSoon ? (
+        <p className="mb-2 rounded border border-[var(--admin-warning,orange)] px-2 py-1.5 text-xs text-[var(--admin-warning,orange)]">
+          <strong>Wait before acting on this.</strong> {report.timing.message}
+        </p>
+      ) : null}
+
+      <p className="mb-2 text-xs text-[var(--admin-text)]">{report.summary}</p>
+
+      {errors.length > 0 ? (
+        <ul className="mb-2 space-y-1">
+          {errors.map((issue, i) => (
+            <li key={`e${i}`} className="text-xs text-[var(--admin-danger)]">
+              &bull; {issue.message}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {warnings.length > 0 ? (
+        <ul className="mb-2 space-y-1">
+          {warnings.map((issue, i) => (
+            <li key={`w${i}`} className="text-xs text-[var(--admin-warning,orange)]">
+              &bull; {issue.message}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {infos.length > 0 ? (
+        <ul className="mb-2 space-y-1">
+          {infos.map((issue, i) => (
+            <li key={`i${i}`} className="text-xs text-[var(--admin-text-muted)]">
+              &bull; {issue.message}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {report.parseWarnings.length > 0 ? (
+        <ul className="mb-2 space-y-1">
+          {report.parseWarnings.map((w, i) => (
+            <li key={`p${i}`} className="text-xs text-[var(--admin-text-muted)]">
+              &bull; {w}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {report.reconcile && report.reconcile.unverifiable.length > 0 ? (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs font-medium text-[var(--admin-text-muted)]">
+            {report.reconcile.unverifiable.length} thing(s) this check deliberately does
+            not verify
+          </summary>
+          <div className="mt-2 space-y-2">
+            {report.reconcile.unverifiable.map((u) => (
+              <div key={u.readbackField} className="text-xs text-[var(--admin-text-muted)]">
+                <strong className="text-[var(--admin-text)]">
+                  {u.readbackField} vs {u.suspectedWriteField}
+                </strong>
+                <br />
+                {u.missingFact}
+                <br />
+                <em>Ask Leafly: {u.askLeafly}</em>
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }

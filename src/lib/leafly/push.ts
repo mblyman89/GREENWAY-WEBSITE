@@ -3,14 +3,25 @@
  *
  * Server-side Leafly Menu Integration API v2.0 push.
  *
- * Grounded in the owner-supplied OpenAPI spec (leafly_menu_api_v2.json) and research
- * report. See docs/leafly-menu-api-v2.md. Verified facts encoded here:
+ * Grounded in the VENDORED LIVE specs under docs/leafly-specs/ (see SOURCES.md for URLs
+ * and md5s). See docs/leafly-menu-api-v2.md for the prose reference.
+ *
+ * This header used to say "Grounded in the owner-supplied OpenAPI spec
+ * (leafly_menu_api_v2.json)". That provenance IS finding L-17 -- the owner-supplied copy
+ * was wrong, and eight field-level defects descended from trusting it. Slice L-1 replaced
+ * it with Leafly's live published specs; this comment is corrected in L-4 so nothing here
+ * still points at the bad source.
+ *
+ * Verified facts encoded here:
  *   - OAuth2 client-credentials grant against sso(-sandbox).leafly token URL
  *   - POST  /{key}/menu/items  -> full sync (deletes items missing from payload)
  *   - PUT   /{key}/menu/items  -> upsert (no delete)
  *   - DELETE /{key}/menu/items -> { ids: [...] }
  *   - GET   /{key}/status      -> integration status
- *   - body root { items: [...] }, camelCase, prices minor units, >=1 variant/item
+ *   - GET   /{key}/menu        -> SANDBOX-ONLY readback; 405 elsewhere (L-14, slice L-4)
+ *   - body root { items: [...] }, prices minor units, >=1 variant/item
+ *   - field names are camelCase EXCEPT total_thc / total_cbd, which are snake_case.
+ *     "camelCase for all fields" was the other half of L-17. Do not tidy them.
  *
  * Safety: live pushes are gated behind explicit `confirm: true` AND full credentials.
  * The default action is a non-network PREVIEW (dry-run) that returns exactly what would
@@ -40,6 +51,15 @@ import {
   type LeaflyValidationResult,
 } from "./payload-validate-core";
 import { summarizeOrderability, type OrderabilitySummary } from "./orderability-core";
+import {
+  assessReadbackTiming,
+  describeReconcileResult,
+  parseLeaflyMenuReadback,
+  reconcileLeaflyMenu,
+  type LeaflyReadbackParse,
+  type LeaflyReconcileResult,
+  type ReadbackTimingVerdict,
+} from "./readback-core";
 import { getMedTaxSettings } from "@/lib/medical/store";
 import { loadSyndicationFeed } from "@/lib/syndication/feed-source";
 import type { SyndicationItem } from "@/lib/syndication/menu-feed-core";
@@ -230,6 +250,22 @@ function statusUrl(): string {
   return `${base}/${encodeURIComponent(config.menuIntegrationKey ?? "")}/status`;
 }
 
+/**
+ * `GET /{menu_integration_key}/menu` — the readback URL.
+ *
+ * Note there is no `/items` suffix. The three WRITE operations live on `/menu/items`; the
+ * readback lives on `/menu` itself. Verified against
+ * `docs/leafly-specs/menu-integration-v2.openapi.json`, whose `paths` are exactly:
+ *   /{menu_integration_key}/menu        -> get
+ *   /{menu_integration_key}/menu/items  -> post, put, delete
+ *   /{menu_integration_key}/status      -> get
+ */
+function menuReadbackUrl(): string {
+  const config = getLeaflyConfig();
+  const base = getLeaflyBaseUrl(config.environment);
+  return `${base}/${encodeURIComponent(config.menuIntegrationKey ?? "")}/menu`;
+}
+
 const RETRYABLE = (status: number) => status === 429 || (status >= 500 && status <= 599);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -315,8 +351,17 @@ function leaflyMessageForStatus(status: number): string {
  *
  *   1. Preflight-validate the feed (ERRORS block the push; warnings surface).
  *   2. Build the verified v2 payload and apply the owner's transmission
- *      toggles (descriptions / cannabinoids / strains; Leafly v2 has no image
- *      field so that toggle is a no-op here).
+ *      toggles (descriptions / cannabinoids / strains / photos).
+ *
+ *      NOTE, corrected in slice L-4: this line used to end "Leafly v2 has no
+ *      image field so that toggle is a no-op here". That was FALSE. `imageUrl`
+ *      is a documented property of the v2 item schema
+ *      (docs/leafly-specs/schemas/v2-items.json), L-2 wired real emission and
+ *      L-3 made the toggle real. This was the FOURTH surviving copy of that
+ *      one disproven sentence -- the others were the dead toggle (fixed L-2),
+ *      the `false` default (fixed L-3) and the hidden data-quality row (fixed
+ *      L-3). A false claim in a comment propagates by being copied, so it has
+ *      to be hunted rather than patched where first noticed.
  *   3. Delta plan against the last successful sync's payload hashes:
  *        - POST (full sync): Leafly deletes omitted items, so the FULL payload
  *          is always sent — but when NOTHING changed the entire request is
@@ -547,6 +592,128 @@ export async function getLeaflyStatus(): Promise<{
   }
   const result = await authedFetch(statusUrl(), "GET");
   return { ok: result.ok, httpStatus: result.status, body: result.body };
+}
+
+// ---------------------------------------------------------------------------
+// getLeaflyMenu — the readback (finding L-14)
+// ---------------------------------------------------------------------------
+
+export type LeaflyMenuReadbackResult = {
+  ok: boolean;
+  httpStatus: number;
+  /** Raw body, kept so the owner-facing UI can show exactly what Leafly said. */
+  body: unknown;
+  /** Parsed readback. `ok: false` when the shape was unusable. */
+  parse: LeaflyReadbackParse;
+  /**
+   * Comparison against the payload we would send right now. Null when we could not
+   * build a payload to compare with (e.g. the preview itself failed).
+   */
+  reconcile: LeaflyReconcileResult | null;
+  /**
+   * Whether this comparison was run inside Leafly's documented ingest window
+   * (finding L-19). When `tooSoon` is true the differences may be the previous menu
+   * rather than defects, so the UI must say so before anyone acts on them.
+   */
+  timing: ReadbackTimingVerdict;
+  /** One sentence for a human. Always present. */
+  summary: string;
+};
+
+/**
+ * Read the menu back from Leafly and compare it with what we would send (finding L-14).
+ *
+ * WHY THIS IS NOT JUST A FETCH
+ * ----------------------------
+ * Leafly's sandbox email offers this endpoint for validating menu data, and the obvious
+ * implementation hands back raw JSON. That would be a wasted opportunity. A `200` from
+ * `POST /menu/items` only proves our JSON parsed — slice L-2 found eight field defects
+ * that a 200 would not have revealed, and a field we *think* we send but do not produces a
+ * cheerful 200 and a wrong storefront. So this function reads the menu back and diffs it,
+ * which is the only check in the codebase capable of catching that.
+ *
+ * SANDBOX ONLY — and the guard is deliberate. Leafly's OpenAPI description states: "This
+ * method is only permitted in the sandbox environment; an HTTP 405 Method Not Allowed
+ * response will be returned in other environments." We refuse before dialling rather than
+ * spending a real request to be told 405, because certification grades our logged request
+ * activity (readiness report §7) and a self-inflicted 405 is a blemish for no benefit.
+ *
+ * Every call runs server-side through `authedFetch`, the same client the pushes use. That
+ * is required, not incidental: Leafly disqualifies retailers whose "request signatures"
+ * look like manual tools such as Postman or curl (§7, Risk 3).
+ */
+export async function getLeaflyMenu(): Promise<LeaflyMenuReadbackResult> {
+  await refreshLeaflyConfig();
+  if (!isLeaflyConfigured()) {
+    throw new Error("Leafly is not configured.");
+  }
+
+  const config = getLeaflyConfig();
+  if (config.environment !== "sandbox") {
+    throw new Error(
+      "Reading the menu back is a sandbox-only endpoint. Leafly returns 405 Method Not " +
+        "Allowed in production, so the request was not sent.",
+    );
+  }
+
+  const settings = await getLeaflySyncSettings();
+  const result = await authedFetch(menuReadbackUrl(), "GET", undefined, {
+    maxRetries: settings.maxRetries,
+  });
+
+  const parse = parseLeaflyMenuReadback(result.body);
+
+  // Leafly takes up to ~2.5 minutes in sandbox to ingest a push (finding L-19, quoted in
+  // readback-core). Compare anyway -- suppressing the comparison would hide real defects --
+  // but establish up front whether the answer can be trusted yet. `lastSyncedAt` is the
+  // recorded time of the last SUCCESSFUL push, which is exactly the clock that matters.
+  //
+  // Read defensively: a sync-state read failure must not turn a successful readback into
+  // an exception, and "unknown timing" is a verdict assessReadbackTiming handles safely.
+  let lastSyncedAt: string | null = null;
+  try {
+    lastSyncedAt = (await getSyncState("leafly")).lastSyncedAt;
+  } catch {
+    lastSyncedAt = null;
+  }
+  const timing = assessReadbackTiming(lastSyncedAt, new Date(), config.environment);
+
+  // Compare against the payload we WOULD send right now. This is an honest comparison
+  // only if the menu has not changed since the last push; the UI says so, and
+  // `lastSyncedAt`/`lastModifiedAt` from GET /status is the cross-check.
+  let reconcile: LeaflyReconcileResult | null = null;
+  try {
+    const preview = await previewLeaflyPush();
+    const payload = preview.payload as LeaflyItemsPayload | undefined;
+    reconcile = reconcileLeaflyMenu(payload ?? null, parse);
+  } catch {
+    // A preview failure must not turn a successful readback into an exception. The
+    // readback body is still useful on its own.
+    reconcile = null;
+  }
+
+  const baseSummary = !result.ok
+    ? leaflyMessageForStatus(result.status)
+    : reconcile
+      ? describeReconcileResult(reconcile)
+      : parse.ok
+        ? `Leafly returned ${parse.items.length} item(s). Could not build a local payload to compare against.`
+        : parse.reason;
+
+  // Prefix the caveat rather than append it: if the comparison is premature, that is the
+  // first thing the reader needs to know, before any count of "problems".
+  const summary =
+    result.ok && timing.tooSoon ? `Possibly premature \u2014 ${baseSummary}` : baseSummary;
+
+  return {
+    ok: result.ok,
+    httpStatus: result.status,
+    body: result.body,
+    parse,
+    reconcile,
+    timing,
+    summary,
+  };
 }
 
 export type { SyndicationItem };

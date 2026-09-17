@@ -1,0 +1,157 @@
+{
+  "type": "object",
+  "required": [
+    "result",
+    "metadata"
+  ],
+  "properties": {
+    "result": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "brandName",
+          "cbdContent",
+          "cbdUnit",
+          "created",
+          "description",
+          "hidden",
+          "imageUrl",
+          "isReservable",
+          "isStaffPick",
+          "lastModified",
+          "name",
+          "strainName",
+          "thcContent",
+          "thcUnit",
+          "type",
+          "variants"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "brandName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cbdContent": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "cbdUnit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isReservable": {
+            "type": "boolean"
+          },
+          "isStaffPick": {
+            "type": "boolean"
+          },
+          "lastModified": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "strainName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thcContent": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "thcUnit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "inventoryLevel",
+                "medical",
+                "packagePrice",
+                "packageSize",
+                "packageUnit",
+                "packageWeightGrams"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "inventoryLevel": {
+                  "type": "number"
+                },
+                "medical": {
+                  "type": "boolean"
+                },
+                "packagePrice": {
+                  "type": "integer"
+                },
+                "packageSize": {
+                  "type": "number"
+                },
+                "packageUnit": {
+                  "type": "string"
+                },
+                "packageWeightGrams": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "totalCount"
+      ],
+      "properties": {
+        "totalCount": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

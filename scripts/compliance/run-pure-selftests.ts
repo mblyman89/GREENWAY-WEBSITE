@@ -177,6 +177,10 @@ import { __runOrderOriginTests } from "../../src/lib/orders/order-origin-core";
 import { __runLeaflyPayloadValidateTests } from "../../src/lib/leafly/payload-validate-core";
 // SLICE L-3 — orderability (L-09) + the medical endorsement gate (L-11).
 import { __runLeaflyOrderabilityTests } from "../../src/lib/leafly/orderability-core";
+// SLICE L-4 — the GET /menu readback contract (L-14) and its reconciler.
+import { __runLeaflyReadbackTests } from "../../src/lib/leafly/readback-core";
+// SLICE L-4 — Leafly's five published menu-certification criteria.
+import { __runLeaflyCertificationTests } from "../../src/lib/leafly/certification-core";
 import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
@@ -716,6 +720,8 @@ __runLiquidVolumeTests();
   assertRan("leafly-payload-core", __runLeaflyPayloadTests(), 100);
   assertRan("leafly-payload-validate-core", __runLeaflyPayloadValidateTests(), 100);
   assertRan("leafly-orderability-core", __runLeaflyOrderabilityTests(), 50);
+  assertRan("leafly-readback-core", __runLeaflyReadbackTests(), 82);
+  assertRan("leafly-certification-core", __runLeaflyCertificationTests(), 60);
   __runWmPayloadTests();
   __runIntegrationCredentialsTests();
   __runSyncPlanTests();

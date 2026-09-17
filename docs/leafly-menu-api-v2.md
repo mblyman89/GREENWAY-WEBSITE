@@ -227,7 +227,10 @@ the endorsement lands. See `docs/medical-doh-requirements.md`.
 - Variant prices are integer minor units (cents).
 - `id` values are reused consistently across syncs.
 - Descriptions are plain text.
-- Most variants should reflect genuine in-stock inventory.
+- Variant inventory should reflect that **most items** are in stock. Leafly's wording is
+  *"Variants contain inventory that reflect most items are in stock"* — the graded unit is
+  the item, not the variant, and one in-stock size is enough to publish an item (finding
+  L-20).
 
 ## Inventory / publishing semantics
 
@@ -252,8 +255,8 @@ a push can legitimately show the old menu.
 
 A five-stage process. The checklist Leafly grades against: successful OAuth2
 authentication, 200-level responses, automated request signatures (not Postman/curl),
-a sensible sync cadence, consistent ids, genuine in-stock inventory, correct `null`
-handling for strain and cannabinoids, and sensible field values.
+a sensible sync cadence, consistent ids, inventory reflecting that **most items** are in
+stock, correct `null` handling for strain and cannabinoids, and sensible field values.
 
 Two consequences worth planning around. **The Order API requires a certified Menu API
 first**, so menu defects block the order work. And `push.ts`'s 401-retry-once plus

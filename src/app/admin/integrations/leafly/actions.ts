@@ -6,9 +6,14 @@ import { recordAudit } from "@/lib/auth/audit";
 import {
   pushLeaflyMenu,
   getLeaflyStatus,
+  getLeaflyMenu,
   isLeaflyConfigured,
   type LeaflyPushResult,
 } from "@/lib/leafly/push";
+import type {
+  LeaflyReconcileResult,
+  ReadbackTimingVerdict,
+} from "@/lib/leafly/readback-core";
 import { draftLeaflyDescription } from "@/lib/leafly/ai";
 import { recordSyndicationLog } from "@/lib/syndication/store";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
@@ -196,6 +201,97 @@ export async function fetchLeaflyStatusAction(): Promise<StatusActionResult> {
     return { ok: true, httpStatus: status.httpStatus, body: status.body };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Status request failed." };
+  }
+}
+
+export type MenuReadbackActionResult =
+  | {
+      ok: true;
+      httpStatus: number;
+      summary: string;
+      reconcile: LeaflyReconcileResult | null;
+      parseWarnings: string[];
+      itemsAtLeafly: number;
+      /**
+       * Whether the comparison ran inside Leafly's documented ingest window
+       * (finding L-19). Carried to the client so a premature comparison is labelled
+       * as such instead of being read as a list of defects.
+       */
+      timing: ReadbackTimingVerdict;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Read the menu back from Leafly's sandbox and compare it against what we would send
+ * (finding L-14).
+ *
+ * This runs SERVER-SIDE inside the deployed app on purpose. Leafly's menu certification
+ * checklist disqualifies retailers whose "request signatures indicate ... the use of
+ * manual tools (e.g., postman or curl)" (readiness report §7, Risk 3). Every Leafly
+ * request this business makes must therefore originate here, from the application, and
+ * never from anybody's laptop. Driving it from a button in the back office is what makes
+ * the resulting request log certifiable.
+ *
+ * Read-only: it cannot change the Leafly menu, so unlike a push it needs no confirm flag.
+ * It is still audited, because "who looked, and when" is exactly what you want when
+ * reconstructing a certification review.
+ */
+export async function fetchLeaflyMenuReadbackAction(): Promise<MenuReadbackActionResult> {
+  const session = await requirePermission("settings.manage");
+  if (!isLeaflyConfigured()) {
+    return {
+      ok: false,
+      error:
+        "Leafly is not configured. Enter the menu integration key and OAuth credentials first.",
+    };
+  }
+  try {
+    const result = await getLeaflyMenu();
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "leafly.menu.readback",
+      entityType: "syndication",
+      entityId: "leafly",
+      after: {
+        httpStatus: result.httpStatus,
+        itemsAtLeafly: result.parse.ok ? result.parse.items.length : 0,
+        reconcileOk: result.reconcile?.ok ?? null,
+        errorCount:
+          result.reconcile?.issues.filter((i) => i.severity === "error").length ?? null,
+        // Audited too: a reviewer reconstructing "why did we think the menu was wrong"
+        // needs to know whether the comparison was even run late enough to be valid.
+        comparisonWasPremature: result.timing.tooSoon,
+        secondsSinceLastPush: result.timing.secondsSincePush,
+      },
+    });
+    // Recorded to syndication_logs as a "preview" mode entry: it contacted Leafly, but it
+    // transmitted no menu data, so counting it as a live push would corrupt the channel
+    // health figure that the dashboard computes from live attempts.
+    await recordSyndicationLog({
+      channel: "leafly",
+      mode: "preview",
+      status: result.ok ? "ok" : "error",
+      itemCount: result.parse.ok ? result.parse.items.length : 0,
+      payload: null,
+      response: result.body,
+      message: result.summary,
+      createdBy: session.userId,
+    });
+    return {
+      ok: true,
+      httpStatus: result.httpStatus,
+      summary: result.summary,
+      reconcile: result.reconcile,
+      parseWarnings: result.parse.ok ? result.parse.warnings : [result.parse.reason],
+      itemsAtLeafly: result.parse.ok ? result.parse.items.length : 0,
+      timing: result.timing,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Menu read-back failed.",
+    };
   }
 }
 
