@@ -101,6 +101,63 @@ Full compliance suite. Goldens: the fixture must remain **valid** under the new 
 
 ---
 
+## S-02b — Align pre-flight with what CCRS actually did (small, high value, do first)
+
+**Why now:** the 2026-09-17 run (Part 15) proved one of our gates blocks a file CCRS would
+accept, and revealed two cheap gates we are missing. Small, self-contained, no schema work.
+
+**Closes:** U-21 (behaviourally), E19, E20; corrects E10.
+
+1. **Demote `E10_DESCRIPTION_REQUIRED` from error to warning** and **stop withholding the
+   row** (`ccrs-preflight-core.ts` L342). T-19 was accepted with an empty Description
+   `[OBS 2026-09-17 T-19]`. Withholding a valid product is worse than filing a thin one:
+   the product never lands, and every Inventory row referencing it then fails
+   `Invalid Product`.
+2. **Add E19 — `NumberRecords` must equal the emitted data-row count**, asserted as the
+   **last** step before write. File-fatal `[OBS 2026-09-17 T-54]`. **Interaction to test
+   explicitly:** S-02 withholds failing rows; if the count is computed before withholding,
+   a withheld row silently invalidates the entire file. This is a real, reachable bug.
+3. **Add E20 — Inventory `Product` must match a filed Product name byte-for-byte**
+   `[OBS 2026-09-17 T-37]`.
+4. **Replace every predicted error string with the 11 verbatim ones** (Part 04 §H) and add
+   one regression test per string so wording drift is caught.
+5. **Add a test asserting a zero-excise Sale line is only ever emitted with
+   `SaleType = RecreationalMedical`**, naming `Only Medical Sales Excise tax can be 0`.
+   (Today this holds because one `medicalOrderIds` set drives both — lock it down.)
+
+**Acceptance:** the 14 returned error CSVs are committed as fixtures (already at
+`docs/ccrs-bible/evidence/2026-09-17-preprod-run/errors/`) and a test asserts the measured
+coverage — **6/14 with today's gates, 8/14 after E19+E20** — so the number cannot drift
+silently. `python3 …/coverage.py` reproduces it.
+
+---
+
+## S-05b — The filed-identifier ledger (the single most valuable change this run implies)
+
+**Why:** the examiner instructed *"continue to use the IDs already submitted and use the
+update path to update them vs creating new ones."* We cannot obey that without knowing
+which ids were already submitted. The run proved **both** blanket strategies fail:
+
+- blanket `Insert` → `Duplicate External Identifier` (T-33)
+- blanket `Update` → `ExternalIdentifier not found` (T-35)
+
+There is no third option that avoids tracking state. It is also the largest single coverage
+win available: **4 of the 14 observed failures** are invisible to us without it.
+
+**Scope:** a table of every external identifier we have filed, per file type, with the
+filed date, the operation, and the receipt token (U-19). `Insert` vs `Update` is then
+decided **per row** from that ledger rather than assumed per file.
+
+**Seed data is inbound and free:** the Cannabis Examiner Unit is preparing Greenway's
+Cultivera-filed records (Part 12 U-08). **That delivery is the ledger's initial load** —
+sequence this slice so the ledger exists in time to receive it, and log the file in Part 13
+with its checksum when it arrives.
+
+**Ordering note:** this supersedes the identifier guesswork in S-05/W2 and should land
+before the first production upload, not after.
+
+---
+
 ## S-03 — Warnings that are really errors; row lists; no caps
 
 **Closes:** W1, W2, W4, W12, W15, N-09; upgrades W5, W7, W10/11, W13, W16 with rows.
@@ -210,6 +267,30 @@ Goldens: `InventoryTransfer.golden.csv` today has a header + 0 rows presumably �
 ## S-06 — Upload events, LCB email paste, triage to every guide error
 
 **Closes:** E15, E16, E17.
+
+> **REVISED by the 2026-09-17 run — read before building this.**
+>
+> The premise "paste the LCB email" is weaker than reality. **CCRS returns a machine-readable
+> CSV**: the submitted file echoed back with an `ErrorMessage` column. Ingest the file; do
+> not parse email prose.
+>
+> - **Parse by column name, never by position.** Inventory returns `ErrorMessage` **third**
+>   and appends an `InventoryIdentifier` we never sent; Product moves `UnitWeightGrams` last.
+> - **`ErrorMessage` is per-FILE, not per-row.** The identical string is stamped on every
+>   returned row, including provably innocent ones (T-17's `AREA-2`). **Never build UI that
+>   says "row N is the problem" from this column** — it would be confidently wrong. Show
+>   CCRS's text as the file's verdict and use our own pre-flight to point at the row.
+> - **Success is now a positive signal.** `PRE: CCRS Processing Successful` from
+>   `info@lcb.wa.gov`, 30–90 s (U-11 disproven). Batch states become
+>   `submitted → confirmed | rejected`, with timeout only as the *unknown* branch.
+> - **Capture the receipt token** CCRS appends to the echoed filename
+>   (`…_20250615213000_2026917T1252497.csv`, U-19) as the correlation id between our
+>   `ccrs_upload_events` row and LCB's record. It is the only shared key.
+> - **Rejection is all-or-nothing** (U-17): nothing in a rejected file is filed, so the hub
+>   can safely say "fix it and re-send the whole file."
+>
+> Fixtures for all of this are committed at
+> `docs/ccrs-bible/evidence/2026-09-17-preprod-run/errors/`.
 **Files:** migration `ccrs_upload_events` (Part 08 §E.1 DDL), new `src/lib/compliance/ccrs-upload-events-core.ts` (+ `-store.ts`), `src/app/admin/compliance/ccrs/actions.ts` (new actions `recordLcbEmailAction`, `markFileUploadedAction`, `resolveEventAction`), `src/components/admin/compliance/UploadWalkthrough.tsx` (L54-L64 localStorage → props+actions), `src/lib/compliance/ccrs-error-triage-core.ts` (RULES L54-L159), `src/lib/compliance/ccrs-week-store.ts` (derive `error_status`).
 
 ### Ground

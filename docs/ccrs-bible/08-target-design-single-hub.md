@@ -110,6 +110,27 @@ See §E.4.
 - LIQ-1295 (L587) — monthly; link to `excise-export/route.ts` moves here from the Reports tab.
 - Advisor panel (L378) — drafts only; stays below the queue so it never appears above real errors.
 
+## B1. Design corrections forced by the 2026-09-17 run (Part 15)
+
+Four things in this design were written against the documentation. The run showed the
+documentation was incomplete. Apply these before building §C–§E.
+
+1. **"Clean" is an observed positive, not a timeout.** A success email arrives in 30–90 s
+   (`PRE: CCRS Processing Successful`). States are `submitted → confirmed | rejected`, with
+   a timeout only as the genuinely *unknown* branch. Store the confirmation and its receipt
+   token. This removes the old "wait and hope" UX entirely.
+2. **Never point at a row using CCRS's `ErrorMessage`.** It is stamped per **file**, on
+   every returned row, including innocent ones (T-17's `AREA-2` had never been submitted
+   and still read "Duplicate External Identifier"). Render it as the **file's** verdict;
+   use our own pre-flight to identify the row. A UI that says "row 7 is wrong" on this
+   basis would be confidently and traceably wrong.
+3. **Rejected means nothing was filed** (U-17, 14/14 files returned every row). The hub can
+   therefore say plainly: *"No rows were filed. Fix and re-send the whole file."* No
+   double-post warning is needed — and the opposite warning would be wrong.
+4. **Surface the filed-identifier ledger** (S-05b). Insert-vs-Update correctness now depends
+   on it, so the operator needs to see which ids are filed, which are new, and which the
+   examiner's export seeded.
+
 ## C. Error summary (GOV.UK pattern, adapted)
 
 Pattern: one box at the top of Step 2 listing every blocking error as a link that jumps to the row in the queue (§D) or to the fixing screen. This is the well-known "error summary" component pattern; we use the pattern, not the library.

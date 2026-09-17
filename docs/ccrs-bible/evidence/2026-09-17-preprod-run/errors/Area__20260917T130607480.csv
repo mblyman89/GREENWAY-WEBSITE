@@ -1,0 +1,3 @@
+LicenseNumber,Area,IsQuarantine,ExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation,ErrorMessage
+413541,Sales Floor,F,AREA-1,Greenway Marijuana,06/15/2025,,,Insert,Duplicate External Identifier
+413541,Quarantine,T,AREA-2,Greenway Marijuana,06/15/2025,,,Insert,Duplicate External Identifier

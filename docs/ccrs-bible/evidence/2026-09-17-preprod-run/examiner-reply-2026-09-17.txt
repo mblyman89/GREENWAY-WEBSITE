@@ -1,0 +1,108 @@
+9/17/26, 1:24 PM        Greenway Mail - CCRS reporting cutover — Greenway Marijuana, license 413541 — four questions before we begin self-reporting
+
+
+
+                                                                                 Michael Lyman <michael@greenwaymarijuana.com>
+
+
+
+  CCRS reporting cutover — Greenway Marijuana, license 413541 — four questions
+  before we begin self-reporting
+  2 messages
+
+  Michael Lyman <michael@greenwaymarijuana.com>                                                              Thu, Sep 17, 2026 at 12:27 PM
+  To: examiner@lcb.wa.gov, marcos.ocampo@lcb.wa.gov
+
+     Hello,
+     I own Greenway Marijuana, an I-502 retailer in Port Orchard, license 413541.
+     We currently report to CCRS through our integrator, Cultivera. We are preparing to take reporting in-house and
+     upload our own .CSV files. I have a PREproduction account and am working through our file formats there now,
+     so I have kept this to the four questions that PREproduction cannot answer for us.
+     1. Our previously reported data, so our identifiers line up. Cultivera has been filing our inventory using our
+     product barcode as the InventoryExternalIdentifier. Before our first upload I want to be certain we continue using
+     the same identifiers rather than creating duplicates.
+     The FAQ says a license can request their data from the examiner unit for CCRS. May we request Greenway's
+     reported CCRS data for license 413541 — specifically the InventoryExternalIdentifier, Strain, Area,
+     Product names currently on file? If that request belongs with Public Records instead, please tell me and I will file
+     it there.
+     2. If that data is not available to us, which approach do you want? When we begin uploading ourselves,
+     should we: (a) continue to Update the existing identifiers Cultivera filed, or (b) Insert new identifiers of our own
+     and report InventoryTransfer rows from the old identifiers to the new ones?
+     I have read the FAQ guidance to keep existing ID structures where possible; my question is whether that still
+     holds when the party doing the filing changes from the integrator to the licensee. I want to avoid duplicating or
+     orphaning our live inventory on day one.
+     3. Retention. How long are we required to keep the .CSV files we upload and the error emails CCRS returns? I
+     could not find a retention period in the Upload User Guide or the FAQ, and I would rather set our retention to your
+     number than pick one ourselves.
+     4. Un-assigning our integrator. When we stop using Cultivera, is there anything required beyond un-assigning
+     them from our license in CCRS — and would you like to be notified of the date we switch over?
+     One smaller item if it is easy to answer: when a licensee uploads their own files, which email address receives
+     the error notifications — the account used to log in, or a separate address on the CCRS profile? I ask because
+     today those errors go to our integrator and we never see them, and I want them landing in our inbox before we
+     cut over, not after.
+     Thank you very much for your time. I am happy to be told "upload it to PREproduction and see" on anything I
+     should be testing myself.
+     Michael Lyman Owner, Greenway Marijuana — license 413541 Port Orchard, WA
+
+
+  Examiner (LCB) <Examiner@lcb.wa.gov>                                                Thu, Sep 17, 2026 at 1:23 PM
+  To: Michael Lyman <michael@greenwaymarijuana.com>, "Examiner (LCB)" <Examiner@lcb.wa.gov>, "Ocampo, Marcos
+  (LCB)" <marcos.ocampo@lcb.wa.gov>
+
+
+     Hi Michael,
+
+
+
+          1. Yes, I can get your data over to you that has been submitted by your integrator for your license, please give me a
+             few days to get this together and prepared (if the size of all the files , exceeds what we can share via email, I will
+https://mail.google.com/mail/u/0/?ik=f04542d2e9&view=pt&search=all&permthid=thread-a:r116218426013418808&simpl=msg-a:r-2538721564712403…         1/2
+9/17/26, 1:24 PM            Greenway Mail - CCRS reporting cutover — Greenway Marijuana, license 413541 — four questions before we begin self-reporting
+             have a Box account set up with the files,)
+          2. For your other questions, please continue to use the IDs already submitted and use the update path to update
+             them vs creating new ones, this will simplify your workflow getting started doing your own uploads.
+          3. For retention, it is the same for all records as dictated in WAC 314-55-083, which is the standard 5 years for
+             records.
+          4. Correct, after you unassign Cultivera, there is nothing else to complete, they will no longer have access to upload
+             for your license once you unassign. And it is the email that submits the file will get confirmation and error
+             messages.
+
+     Please reach out with any other questions, as you make these changes.
+
+
+
+     Brian McQuay
+
+     Data Consultant Supervisor
+
+     Cannabis Examiner Unit
+
+     Pronouns: He/Him/His
+
+
+
+     1025 Union Avenue S.E. | PO Box 43100 | Olympia, Washington 98504
+
+     Ph: 360.664.1600 | Fax: 360.664.2588
+
+
+
+
+     From: Michael Lyman <michael@greenwaymarijuana.com>
+     Sent: Thursday, September 17, 2026 12:28 PM
+     To: Examiner (LCB) <Examiner@lcb.wa.gov>; Ocampo, Marcos (LCB) <marcos.ocampo@lcb.wa.gov>
+     Subject: CCRS reporting cutover — Greenway Marijuana, license 413541 — four questions before we begin self-
+     reporting
+
+
+
+
+                                                                     External Email
+
+     [Quoted text hidden]
+
+
+
+
+https://mail.google.com/mail/u/0/?ik=f04542d2e9&view=pt&search=all&permthid=thread-a:r116218426013418808&simpl=msg-a:r-2538721564712403…             2/2
+

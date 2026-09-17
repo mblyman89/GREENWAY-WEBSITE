@@ -1,0 +1,7 @@
+SubmittedBy,Greenway Marijuana
+SubmittedDate,06/15/2025
+NumberRecords,3
+LicenseNumber,InventoryCategory,InventoryType,Name,Description,UnitWeightGrams,ExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation
+413541,EndProduct,Usable Cannabis,Blue Dream Flower 3.5g,Test product for PREproduction validation.,3.5,GWTEST01,Greenway Marijuana,06/15/2025,,,Insert
+413541,EndProduct,Usable Cannabis,Granddaddy Purple Flower 3.5g,Test product for PREproduction validation.,3.5,GWTEST02,Greenway Marijuana,06/15/2025,,,Insert
+413541,EndProduct,Concentrate for Inhalation,PREprod Test Concentrate 1g,Test product for PREproduction validation.,0,GWTEST03,Greenway Marijuana,06/15/2025,,,Insert

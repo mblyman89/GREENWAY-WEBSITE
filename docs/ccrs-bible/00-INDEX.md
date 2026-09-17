@@ -24,6 +24,8 @@ This bible exists so that no future agent drifts. If a thing is not in here, it 
 | 12 | `12-unverified-register.md` | Every fact not yet proven, its ID (U-xx), how it will be proven, and who owns it | hand |
 | 13 | `13-sources.md` | Every source with URL, fetch date, on-disk path, checksum | hand+generated |
 | 14 | `14-examiner-email-draft.md` | The ready-to-send examiner email for the Part 06 §G3 questions, with the question→U-xx map and what to do with the answers | hand |
+| 15 | `15-preprod-run-results-2026-09-17.md` | **What CCRS actually did.** The 2026-09-17 PREprod run + the examiner's answers: 11 verbatim error strings, the success email that no LCB document mentions, and the rules they imply | hand |
+| — | `evidence/2026-09-17-preprod-run/` | Primary artifacts: 14 returned error CSVs, 10 success emails, examiner reply, the 23 probe files, 4 reproduction scripts | raw |
 
 ## Reading order for a fresh agent
 
@@ -31,6 +33,8 @@ This bible exists so that no future agent drifts. If a thing is not in here, it 
 2. Open `02` and `03` **only by pin** — they are reference volumes, not reading material. Search for `L0124` etc.
 3. Before touching a file: `git diff <atlas commit> -- <file>`. If it moved, regenerate `03` and re-pin.
 4. Before claiming a CCRS rule: find the `[G L####]` or `[FAQ L####]` in `02`. If you cannot find it, it goes in `12` as UNVERIFIED, not in the code.
+5. **Then check `15`.** It records what CCRS *did* on 2026-09-17, which in four places is not what the documents say. **A documented rule that the system does not enforce is still a documented rule — but do not let our software block a file CCRS would have accepted.** Observations cite as `[OBS 2026-09-17 T-xx]`.
+   > *Silence in the documentation is not silence in the system.* Part 06 once said "there is no success email" — correctly sourced from every LCB text, and wrong. When the register says "no LCB text says X," that is a fact about the documents, never about the software.
 
 ## Relationship to older docs
 

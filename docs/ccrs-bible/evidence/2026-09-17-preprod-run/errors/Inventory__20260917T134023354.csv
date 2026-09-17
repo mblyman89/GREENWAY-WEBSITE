@@ -1,0 +1,3 @@
+CreatedBy,CreatedDate,ErrorMessage,LicenseNumber,ExternalIdentifier,UpdatedBy,UpdatedDate,Operation,Area,Strain,Product,InitialQuantity,QuantityOnHand,TotalCost,IsMedical,InventoryIdentifier
+Greenway Marijuana,06/15/2025,CheckSum and number of records don't match,413541,GWINV54A,,,Insert,Sales Floor,Blue Dream,Blue Dream Flower 3.5g,10,10,50.00,False,
+Greenway Marijuana,06/15/2025,CheckSum and number of records don't match,413541,GWINV54B,,,Insert,Sales Floor,Blue Dream,Blue Dream Flower 3.5g,10,10,50.00,False,

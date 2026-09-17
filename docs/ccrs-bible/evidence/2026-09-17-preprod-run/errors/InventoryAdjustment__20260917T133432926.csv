@@ -1,0 +1,2 @@
+LicenseNumber,InventoryExternalIdentifier,AdjustmentReason,AdjustmentDetail,Quantity,AdjustmentDate,ExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation,ErrorMessage
+413541,GWINV30A,Other,,1,2025-06-15,GWADJ48,Greenway Marijuana,2025-06-15,Greenway Marijuana,2025-06-15,Insert,Inventory Adjustment Details missing
