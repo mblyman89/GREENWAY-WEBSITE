@@ -175,6 +175,8 @@ import { __runOrderOriginTests } from "../../src/lib/orders/order-origin-core";
 // reading the payload and comparing it to the published contract, and nothing
 // in the codebase was responsible for doing that. Pure: no I/O.
 import { __runLeaflyPayloadValidateTests } from "../../src/lib/leafly/payload-validate-core";
+// SLICE L-3 — orderability (L-09) + the medical endorsement gate (L-11).
+import { __runLeaflyOrderabilityTests } from "../../src/lib/leafly/orderability-core";
 import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
@@ -713,6 +715,7 @@ __runLiquidVolumeTests();
   // the batch, and the store's Leafly menu goes dark with nobody told.
   assertRan("leafly-payload-core", __runLeaflyPayloadTests(), 100);
   assertRan("leafly-payload-validate-core", __runLeaflyPayloadValidateTests(), 100);
+  assertRan("leafly-orderability-core", __runLeaflyOrderabilityTests(), 50);
   __runWmPayloadTests();
   __runIntegrationCredentialsTests();
   __runSyncPlanTests();

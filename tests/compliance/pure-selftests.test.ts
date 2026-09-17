@@ -49,6 +49,7 @@ import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-cor
 import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
 import { __runLeaflyPayloadTests } from "@/lib/leafly/payload-core";
 import { __runLeaflyPayloadValidateTests } from "@/lib/leafly/payload-validate-core";
+import { __runLeaflyOrderabilityTests } from "@/lib/leafly/orderability-core";
 import { __runOrderOriginTests } from "@/lib/orders/order-origin-core";
 import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "@/lib/integrations/integration-credentials-core";
@@ -221,6 +222,11 @@ describe("embedded pure self-test suites", () => {
     const r = __runLeaflyPayloadValidateTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(100);
+  });
+  it("leafly-orderability-core (SLICE L-3: fail-closed pickup + DOH/endorsement gates)", () => {
+    const r = __runLeaflyOrderabilityTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(50);
   });
   it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {
     const r = __runOrderOriginTests();
