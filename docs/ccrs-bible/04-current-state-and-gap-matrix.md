@@ -56,7 +56,7 @@ Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = wha
 | E7 | DONE (S-02) | "TotalCost cannot equal 0" `[G L0614]`; trade samples $0.01 `[FAQ L0035]` | L384 emits `0.00` when `unit_cost_minor_units` null | Pre-flight error per lot: TotalCost ≤ 0 → blocking, with link to the lot cost editor; samples (`is_sample`, 0024 L32) → emit `0.01` and require name/description "Trade Sample" `[FAQ L0035]` | landed `ccrs-preflight-core.ts` |
 | E8 | DONE (S-02) | "QuanityOnHand is greater than InitialQuantity" `[G L0597]` (sic) | no comparison | Pre-flight error when `on_hand_qty > received_qty`; link to lot | landed `ccrs-preflight-core.ts` |
 | E9 | DONE (S-02) | UnitWeightGrams required; "If Useable Cannabis is selected, Unit Weight Gram cannot be 0" `[G L0434]`; other types "can be reported as 0" `[G L0490]`; FAQ unit examples `[FAQ L0061-L0066]` | L249 `?? ""` | Blank → `0` for non-Usable types; Usable Cannabis / Cannabis Mix Packaged with 0/blank → blocking error with link | landed `ccrs-preflight-core.ts` |
-| E10 | DONE (S-02) | Description required when Usable Cannabis or Cannabis Mix Packaged `[G]` p.14 | none | blocking error for those types when empty | landed `ccrs-preflight-core.ts` |
+| E10 | **DONE (S-02) — MUST BE DEMOTED (S-02b)** | Description required when Usable Cannabis or Cannabis Mix Packaged `[G]` p.14 — **stated only as a Note `[G L0482-L0483]`, and CCRS does NOT enforce it**: T-19 uploaded an empty Description for Usable Cannabis and was **accepted** `[OBS 2026-09-17 T-19]` | none | **warning, not a blocking error; stop withholding the row.** Today `productRowIssues()` (`ccrs-preflight-core.ts` L342) emits `E10_DESCRIPTION_REQUIRED` and the builder withholds the row, so we would refuse to file a product CCRS would accept — and every Inventory row referencing it then fails `Invalid Product` (E20). **Withholding is the more dangerous failure.** Keep surfacing it: the Note is real and LCB may begin enforcing (U-21) | landed `ccrs-preflight-core.ts`; demote in S-02b |
 | E11 | DONE (S-02) | "Strain name is invalid, cannot be Unknown, THC, or Other" `[G L0358]`, `[FAQ L0014-L0015]` | none | blocking error; link to `knowledge-base/StrainEditor.tsx` | landed `ccrs-preflight-core.ts` |
 | E12 | DONE (S-02) | "CannabisExciseTax does not equal 37% of UnitPrice" `[G L1377]`; worked example `[FAQ L0155-L0160]` | computed once, never re-checked | Per-row identity check `round(37% × (Qty×UnitPrice − Discount)) == CannabisExciseTax` (±1¢) unless SaleType RecreationalMedical with exemption; blocking | landed `ccrs-preflight-core.ts` |
 | E13 | DONE (S-02) | "Inventory AdjustmentDetail missing" for Other/Theft `[G L1111]` | `adjustmentDetail()` L127 returns `""` | `mapAdjustmentRow` → blocking when reason ∈ {Other, Theft} and detail empty; the customer-return path already writes a note (`disposition.ts` L676-L684) so this mainly guards manual adjustments | landed `ccrs-preflight-core.ts` |
@@ -65,6 +65,8 @@ Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = wha
 | E16 | PARTIAL | ~60 error strings in Part 02 §1 | 10 triage rules | Extend RULES to every error string in the guide with a pin per rule; every rule maps to a fix-link target | S-06 |
 | E17 | OPEN | — | Walkthrough progress in localStorage L54-L64 | Persist step state in `ccrs_upload_events` (same as E15) so phone/desktop agree and the ledger sees "Group 1 uploaded at 14:02" | S-06 |
 | E18 | OPEN | — (owner Q6) | two pages | `/admin/reports/compliance` → one card linking to hub; all blocks moved | S-08 |
+| E19 | OPEN — **new, proven file-fatal** | `NumberRecords` must equal the data-row count `[G L0203]`; observed `CheckSum and number of records don't match` `[OBS 2026-09-17 T-54]` | `assembleCcrsFile` writes the count but nothing re-verifies it after row withholding | Assert `NumberRecords == rows.length` as the **last** step before write. **Critical interaction:** S-02 withholds failing rows *after* the count may already be computed — a withheld row could silently invalidate the whole file | S-02b |
+| E20 | OPEN — **new, cheap** | Inventory→Product join is **exact-match**; `Invalid Product` `[OBS 2026-09-17 T-37]`, `[G L0579-L0583]` | Product names composed independently per file; never cross-checked | Before emitting Inventory, assert every `Product` value exists byte-for-byte in the Product file/ledger | S-02b |
 | W1 | OPEN→error | Sale InventoryExternalIdentifier required `[G]` Table 6 p.41 | `ccrs-sales.ts` L447 warning | severity error + row list | S-03 |
 | W2 | OPEN→error | same | L452 fell back to POS key | error unless the key is proven filed (Part 07) | S-03 |
 | W3 | keep | — | L457 sanitized ids | warning | — |
@@ -109,3 +111,54 @@ Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = wha
 - `tests/compliance/pure-selftests.test.ts` — 48 green; runs the `__run…Tests()` of the pure cores **including** the submit gate (N-06 closed in S-01).
 - No test exercises: E14 conditions, N-01 area semantics, ledger↔email linkage, walkthrough persistence.
 - **S-02 closed the E7–E13 hole.** `tests/compliance/ccrs-preflight.test.ts` (59 tests) covers every one of them, `tests/compliance/ccrs-preprod-generator.test.ts` (12 tests) guards the files we upload, and `scripts/ccrs-bible/mutate_check.py` proves those tests can fail (24 mutations, 0 survived). Filename PST and header padding were closed earlier in S-01.
+
+---
+
+## H. CCRS's real error vocabulary (observed 2026-09-17)
+
+These 11 strings are **ground truth**, captured from the files CCRS returned. They replace
+every predicted wording in this document. Raw files:
+`docs/ccrs-bible/evidence/2026-09-17-preprod-run/errors/`.
+
+Four differ from what we predicted, and one word — **CheckSum** — appears in **no** LCB
+document at all (verified: 0 hits for `check ?sum` across all seven source texts). **CCRS's
+error vocabulary is not a subset of its own guide**, which is why these must be stored as
+fixtures rather than inferred.
+
+| # | Verbatim `ErrorMessage` | File | Gate | Note |
+|---|---|---|---|---|
+| 1 | `Duplicate Strain. The Strain must be unique for the LicenseNumber` | Strain | — | Harmless `[G L0325]`; do **not** block |
+| 2 | `Strain name is invalid cannot be Unknown THC or Other` | Strain | E11 | confirmed (no commas, unlike the guide's prose) |
+| 3 | `Duplicate External Identifier` | Area, Inventory | ledger | needs filed-id state |
+| 4 | `If Useable Cannabis is selected Unit Weight Gram cannot be Zero` | Product | E9 | confirmed; LCB's own spelling *Useable* |
+| 5 | `Total Cost cannot equal zero` | Inventory | E7 | confirmed |
+| 6 | `QuantityOnHand is greater than InitialQuantity` | Inventory | E8 | confirmed; spelled correctly here, unlike `[G L0597]`'s *QuanityOnHand* |
+| 7 | `ExternalIdentifier not found` | Inventory | ledger | the Update-before-Insert failure |
+| 8 | `Invalid Product` | Inventory | **E20** | exact-match join |
+| 9 | `CheckSum and number of records don't match` | Inventory | **E19** | undocumented vocabulary; file-fatal |
+| 10 | `Inventory Adjustment Details missing` | InventoryAdjustment | E13 | confirmed |
+| 11 | `Only Medical Sales Excise tax can be 0` | Sale | E12 | **differs from prediction**; names *Excise* explicitly → `OtherTax` **is** the 37% excise and 0.00 is legal only when medical |
+
+### Coverage against the 14 real rejections
+
+| | caught | |
+|---|---|---|
+| existing gates today | **6 / 14** | E7, E8, E9, E11, E12, E13 — every S-02 gate fired on real CCRS output |
+| + E19 + E20 | **8 / 14** | both purely local, no server state |
+| + identifier ledger | **12 / 14** | the 3× `Duplicate External Identifier` + `ExternalIdentifier not found` |
+| remainder | 2 | benign `Duplicate Strain` — never block |
+
+Reproduce: `python3 docs/ccrs-bible/evidence/2026-09-17-preprod-run/coverage.py`.
+
+**S-02 is validated.** Every gate it shipped fired correctly against the live system. The
+remaining gap is not in the rules, it is in the **state** we do not yet track.
+
+### The two structural facts about error files
+
+1. **`ErrorMessage` is per-FILE, not per-row.** The same string is copied onto every
+   returned row — including provably innocent ones (`AREA-2` in T-17 had never been
+   submitted). **Never render "row N is the problem" from this column.** Re-derive the
+   offending row with our own pre-flight; CCRS's text is the *file's* verdict.
+2. **Column order is not stable.** Inventory returns `ErrorMessage` **third** plus a
+   trailing `InventoryIdentifier` we never sent; Product moves `UnitWeightGrams` last.
+   **Parse by column name, never position.**

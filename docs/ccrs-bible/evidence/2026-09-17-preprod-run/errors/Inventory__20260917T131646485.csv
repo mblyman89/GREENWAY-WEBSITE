@@ -1,0 +1,2 @@
+CreatedBy,CreatedDate,ErrorMessage,LicenseNumber,ExternalIdentifier,UpdatedBy,UpdatedDate,Operation,Area,Strain,Product,InitialQuantity,QuantityOnHand,TotalCost,IsMedical,InventoryIdentifier
+Greenway Marijuana,06/15/2025,QuantityOnHand is greater than InitialQuantity,413541,GWINV32,,,Insert,Sales Floor,Blue Dream,Blue Dream Flower 3.5g,10,12,50.00,False,

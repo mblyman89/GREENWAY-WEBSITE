@@ -11,6 +11,37 @@
 7. Only the license administrator can remove an integrator: Account → Licensee → Edit → "Manage Integrators" → uncheck → "Update" `[ADMIN]` Part 02 §5 ("Manage Approved Integrators" steps 1–5). "only the active administrator of the license can assign or remove an integrator." `[FAQ L0081]`
 8. Duplicate rules differ per file: Strain duplicate = ignored `[G L0325]`; InventoryTransfer duplicate = error `[G L1190]`; Sale duplicate = error `[G L1390]`; Inventory re-Insert behaviour unknown (U-05).
 
+## A1. CONFIRMED by the Cannabis Examiner Unit, 2026-09-17
+
+The central question of this chapter is answered. Brian McQuay, Data Consultant Supervisor,
+Cannabis Examiner Unit, verbatim:
+
+> "For your other questions, please continue to use the IDs already submitted and use the
+> update path to update them vs creating new ones, this will simplify your workflow getting
+> started doing your own uploads."
+
+**R-1 and R-2 below are confirmed.** The alternative cutover — Insert new identifiers and
+file InventoryTransfer rows old→new — is **CANCELLED**; do not build it.
+
+Two operational consequences, both proven in PREprod the same day:
+
+1. **`Insert` vs `Update` must be decided per ROW, from a ledger of what we have filed.**
+   A blanket `Insert` fails (`Duplicate External Identifier`, T-33) and a blanket `Update`
+   fails for new lots (`ExternalIdentifier not found`, T-35). This is why **S-05b (the
+   filed-identifier ledger)** exists and why it should land before the first production
+   upload.
+2. **R-5 is validated and unforgiving.** The Inventory→Product join is exact-match: T-37
+   sent `blue  dream flower 3.5g` against a filed `Blue Dream Flower 3.5g` and got
+   `Invalid Product` `[OBS 2026-09-17 T-37]`. Byte-for-byte, including case and double
+   spaces.
+
+**Inbound:** the examiner is preparing Greenway's Cultivera-filed records — *"Yes, I can get
+your data over to you that has been submitted by your integrator for your license"* —
+possibly via Box. **When it arrives it is a first-class source document:** log it in Part 13
+with fetch date and checksum, re-pin R-1…R-5 against it, and use it as the ledger's initial
+load. It settles R-4 (Areas/Strains as filed) and R-5 (Product names) with data instead of
+inference.
+
 ## B. Identifier continuity rules (binding for code)
 
 R-1. **Cultivera-imported lots** (`inventory_lots.received_on_source = 'pos_import'`, migration 0214 L72/L136) keep `ccrs_inventory_external_id = sanitized Barcode` exactly as `import-lot-core.ts` L420 produced. If `sanitizeExternalId` changed the barcode (it only alters non-alphanumerics; the example barcode `GF42802505795142` is untouched, test L569), the lot is flagged for review — do not silently upload a different id than Cultivera filed. Add a pure check `barcode === sanitizeExternalId(barcode)` and count the mismatches in the pre-flight (slice S-05).

@@ -6,8 +6,54 @@ Facts the plan rests on:
 - "The LCB provides all cannabis licensees, labs and integrators access to the PREproduction CCRS environment for training and testing." `[FAQ L0088]`
 - "These environments are autonomous and do not share administration or reporting data." `[FAQ L0096]` — nothing done here touches the real record.
 - PREprod host `precannabisreporting.lcb.wa.gov` `[API L0070]`; production `cannabisreporting.lcb.wa.gov` `[G L0048]`.
-- Errors arrive by email to the uploader `[G L0051]`, `[FAQ L0102]`. There is no success email for the seven weekly files in any LCB text (only Manifest gets a PDF `[MANI L0015]`) → **absence of an error email within the wait window is the only "pass" signal**. Record the wait used.
+- Errors arrive by email to the uploader `[G L0051]`, `[FAQ L0102]`. **No LCB document mentions a success email — but one exists.** Observed 2026-09-17 on 10/10 accepted files: subject `PRE: CCRS Processing Successful`, from `info@lcb.wa.gov`, within 30–90 s. The examiner confirmed it: *"it is the email that submits the file will get confirmation and error messages."* **The pass signal is positive and fast**, not "wait and see nothing" (Part 15; U-11 DISPROVEN).
+  > **Lesson worth keeping.** That old sentence was correctly sourced and still wrong about the system. *Silence in the documentation is not silence in the system.* When the register records "no LCB text says X," that is a statement about the documents, never about the software — only an observation can settle behaviour.
 - Groups: Strain/Area/Product → ≥10 min → Inventory → ≥10 min → Adjustment/Transfer/Sale `[G L0530]`, `[G]` p.4.
+
+## A0. RESULTS — the 2026-09-17 run (23 probes executed)
+
+**This plan has been run.** Full analysis: **Part 15**. Raw artifacts (14 returned error
+CSVs, 10 success emails, the examiner reply, the 23 probe files, and four reproduction
+scripts): `docs/ccrs-bible/evidence/2026-09-17-preprod-run/`.
+
+| Test | Outcome | CCRS's own words / note |
+|---|---|---|
+| T-10 | **PASS** 12:52:20 | — |
+| T-11 | **PASS — padding OK** 12:54 | `Duplicate Strain. The Strain must be unique for the LicenseNumber` (expected; T-10 had just filed both). **U-03: padding optional.** |
+| T-12 | **PASS — case OK** 12:57 | Lower-case `strain_` was parsed and routed. **U-02: prefix not case-sensitive.** |
+| T-14 | **ERROR as designed** 12:58:58 | `Strain name is invalid cannot be Unknown THC or Other` — E11 confirmed |
+| T-16 | **PASS** 12:58:04 | — |
+| T-17 | **accepted in principle** 13:06 | `Duplicate External Identifier` on **both** rows — yet AREA-2 had never been submitted. Proves the message is **file-level** (U-17). Quarantine=True drew no objection → **U-04 partial.** |
+| T-18 | **ERROR as designed** 13:06:07 | `If Useable Cannabis is selected Unit Weight Gram cannot be Zero` — E9 confirmed (LCB's own spelling *Useable*) |
+| T-19 | **ACCEPTED — unexpected** 13:07:18 | **No error.** Empty Description accepted. The guide states it only as a Note `[G L0482-L0483]` and no error string exists **because it is not enforced** → **E10 must become a warning** (S-02b); new U-21. |
+| T-20 | **PASS** 13:06:12 | — |
+| T-21 | **PASS** 13:08:47 | Hyphens accepted → **U-06 answered** |
+| T-30 | **PASS** 13:12:22 | Group-1→2 gap was only **3.6 min** and it still resolved → U-18 |
+| T-31 | **ERROR as designed** 13:14:24 | `Total Cost cannot equal zero` — E7 confirmed |
+| T-31B | **PASS** 13:14:36 | `TotalCost = 0.01` trade sample accepted → **U-16 answered** |
+| T-32 | **ERROR as designed** 13:16:46 | `QuantityOnHand is greater than InitialQuantity` — E8 confirmed (spelled correctly here, unlike the FAQ's *QuanityOnHand*) |
+| T-33 | **ERROR — answers U-05** 13:17:58 | `Duplicate External Identifier` — a byte-identical re-`Insert` **errors**; not an idempotent no-op |
+| T-34 | **PASS** 13:18:15 | The weekly `Update` path works |
+| T-35 | **ERROR as designed** 13:21:31 | `ExternalIdentifier not found` — confirms `[FAQ L0053]` |
+| T-37 | **ERROR as designed** 13:27:28 | `Invalid Product` — the Product join **is** exact-match → **U-12 answered**, Part 07 R-5 validated |
+| T-40 | **PASS** 13:30:06 | The FAQ's own worked example accepted verbatim |
+| T-42 | **ERROR as designed** 13:32:44 | `Only Medical Sales Excise tax can be 0` — **differs from the predicted wording**; names *Excise* explicitly |
+| T-48 | **ERROR as designed** 13:34:32 | `Inventory Adjustment Details missing` — E13 confirmed |
+| T-49 | **PASS** 13:35:44 | — |
+| T-54 | **ERROR as designed** 13:40:23 | `CheckSum and number of records don't match` → **new gate E14**. The word *CheckSum* appears in **no** LCB document. |
+
+**Tally: 10 accepted, 14 rejected (13 of them deliberately), 23/23 probes conclusive.**
+Register effect: U-02, U-03, U-05, U-06, U-12, U-14, U-16 **answered**; U-04 partial;
+U-11 **disproven**; U-08, U-13, U-15 and de-provisioning answered by the examiner;
+U-17…U-21 opened.
+
+### Follow-up probes this run created
+
+| New test | Purpose |
+|---|---|
+| **T-70** | **Highest priority.** One Inventory file with one certainly-valid row (new id) and one certainly-invalid row (`TotalCost = 0`). Then, separately, `Insert` the valid row's id again. Duplicate error ⇒ the valid row **was** filed (partial commit); acceptance ⇒ the file was rejected whole. **Closes U-17, which governs the entire error-recovery design.** |
+| **T-71** | New Strain, then an Inventory row referencing it ~60 s later. Closes U-18. |
+| **T-72** | Re-run T-19 monthly. Monitors U-21 (has LCB begun enforcing Description?). |
 
 ## A. Recording rule (binding)
 

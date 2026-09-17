@@ -1,0 +1,2 @@
+LicenseNumber,InventoryCategory,InventoryType,Name,Description,ExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation,ErrorMessage,UnitWeightGrams
+413541,EndProduct,Usable Cannabis,PREprod Weight Zero 1g,Test product for PREproduction validation.,GWTEST18,Greenway Marijuana,2025-06-15,,,Insert,If Useable Cannabis is selected Unit Weight Gram cannot be Zero,.00

@@ -1,0 +1,6 @@
+SubmittedBy,Greenway Marijuana
+SubmittedDate,06/15/2025
+NumberRecords,2
+LicenseNumber,Area,IsQuarantine,ExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation
+413541,Sales Floor,False,AREA-1,Greenway Marijuana,06/15/2025,,,Insert
+413541,Quarantine,True,AREA-2,Greenway Marijuana,06/15/2025,,,Insert
