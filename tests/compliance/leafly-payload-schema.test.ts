@@ -354,11 +354,30 @@ describe("the repaired defects cannot come back", () => {
     }
   });
 
-  it("availableForPickup is NOT set by this slice (L-09 belongs to L-3)", () => {
-    // Turning this on makes real customers able to place real orders the shop
-    // has 15 minutes to acknowledge. It is not a side effect of a rename slice.
+  it("availableForPickup is now emitted (L-09, closed in slice L-3)", () => {
+    // SLICE L-3 replaces the L-2 assertion that this field must be ABSENT.
+    //
+    // L-2 deliberately withheld it: turning it on makes real customers able to
+    // place real orders the shop has fifteen minutes to acknowledge, which is
+    // not a side effect a field-rename slice should have. L-3 emits it, but
+    // behind an owner toggle that defaults OFF — so the safety property L-2
+    // was protecting is still intact, it is just enforced by the toggle now
+    // instead of by the field's absence.
+    //
+    // `payload` here is built WITHOUT options, so every item must fail closed.
     for (const it of payload.items) {
-      expect("availableForPickup" in it).toBe(false);
+      expect("availableForPickup" in it).toBe(true);
+      expect(it.availableForPickup).toBe(false);
+    }
+  });
+
+  it("availableForPickup is a real boolean and never null on the wire", () => {
+    // The schema declares a plain `"type": "boolean"` — unlike `strain` and
+    // `imageUrl`, there is no null form of this field.
+    const json = JSON.stringify(payload);
+    expect(json).not.toContain('"availableForPickup":null');
+    for (const it of payload.items) {
+      expect(typeof it.availableForPickup).toBe("boolean");
     }
   });
 });
