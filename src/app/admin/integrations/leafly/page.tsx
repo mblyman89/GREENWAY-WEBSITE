@@ -22,7 +22,9 @@ import {
 } from "@/components/admin/syndication/panels";
 import { SyncSettingsPanel } from "@/components/admin/syndication/SyncSettingsPanel";
 import { LeaflySchedulePanel } from "@/components/admin/syndication/LeaflySchedulePanel";
+import { LeaflyEvidencePanel } from "@/components/admin/syndication/LeaflyEvidencePanel";
 import { loadLeaflySyncHealth } from "@/lib/leafly/schedule-server";
+import { loadLeaflyEvidence } from "@/lib/leafly/evidence-server";
 import { MIN_RUN_GAP_MINUTES } from "@/lib/leafly/schedule-core";
 import {
   saveLeaflySettingsAction,
@@ -68,7 +70,7 @@ function fmtDate(iso: string) {
 export default async function LeaflyIntegrationPage() {
   await requirePermission("settings.manage");
 
-  const [preview, logs, settings, syncState, scheduleHealth] = await Promise.all([
+  const [preview, logs, settings, syncState, scheduleHealth, evidence] = await Promise.all([
     previewLeaflyPush(),
     listSyndicationLogs("leafly", 40),
     getLeaflySyncSettings(),
@@ -78,6 +80,12 @@ export default async function LeaflyIntegrationPage() {
     // the panel reports, rather than as a rejection that would 500 a settings
     // page the owner may be visiting BECAUSE something is broken.
     loadLeaflySyncHealth(),
+    // SLICE L-8. Same contract, and for the same reason: `loadLeaflyEvidence`
+    // returns a `problem` string instead of throwing. This one matters even
+    // more than the others, because the single most likely time to open this
+    // page is when Leafly orders have STOPPED arriving -- so the diagnostics
+    // must not be the second thing that fails.
+    loadLeaflyEvidence(),
   ]);
 
   // The SERVER's clock, passed to the panel so its relative times ("4 minutes
@@ -298,6 +306,26 @@ export default async function LeaflyIntegrationPage() {
         saveAction={saveLeaflyScheduleAction}
         checkNowAction={checkLeaflyScheduleNowAction}
       />
+
+      {/*
+        SLICE L-8 -- the inbound evidence log.
+
+        PLACEMENT. Deliberately here: after the two OUTBOUND cards (manual push,
+        automatic schedule) and before the certification card. The page now
+        reads in the direction the data actually flows -- what we send Leafly,
+        then what Leafly sends us, then how both are graded. Putting it after
+        certification would mean the card that GRADES our webhook handling
+        appears before the only evidence of that handling, which is the same
+        verdict-before-evidence mistake the L-7 comment above guards against.
+
+        WHY IT IS ON THIS PAGE AND NOT THE ORDERS BOARD. The orders board
+        (slices L-6/L-7) is where staff WORK orders, and it must stay about the
+        order in front of them. This is an integration-health question -- "is
+        Leafly reaching us, is our key right" -- which belongs beside the
+        credentials and the schedule, in the screen the owner opens when
+        something is wrong rather than when something needs bagging.
+      */}
+      <LeaflyEvidencePanel view={evidence} nowIso={nowIso} />
 
       {/*
         SLICE L-4 -- certification readiness.
