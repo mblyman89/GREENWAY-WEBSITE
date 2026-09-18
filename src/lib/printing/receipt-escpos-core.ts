@@ -86,6 +86,11 @@ import {
   type ReceiptTaxLine,
 } from "@/lib/pos/receipt-tax-core";
 import { defaultReturnPolicyText } from "@/lib/pos/returns-core";
+import {
+  DEFAULT_ORDER_ORIGIN,
+  orderOriginReceiptLine,
+  type OrderOrigin,
+} from "@/lib/orders/order-origin-core";
 
 /** 80mm paper at Font A = 48 columns. The vretti's documented default. */
 export const ESCPOS_DEFAULT_COLUMNS = 48;
@@ -134,6 +139,21 @@ export type EscposReceiptInput = {
   headerText?: string | null;
   /** Newline-separated address/phone/license block, one centered line each. */
   addressText?: string | null;
+  /**
+   * SLICE L-10. Which marketplace this order came from. Optional, defaulting
+   * to the website, because every call site that predates Leafly means the
+   * website.
+   *
+   * This is the owner's "a way to distinguish the two" in its most literal
+   * form: this is the line the person picking the bag off the shelf reads.
+   */
+  origin?: OrderOrigin;
+  /**
+   * SLICE L-10. A single urgent line printed under the origin, used to carry
+   * the Leafly acknowledgement deadline onto the paper. Absent for everything
+   * else. Built by `bridgeReceiptHeaderLines` in the Leafly bridge core.
+   */
+  urgencyLine?: string | null;
   /** Footer message. Blank/absent = the register default. */
   footerText?: string | null;
   /** Print the "You saved" line. Undefined = ON. */
@@ -381,6 +401,9 @@ export function formatEscposReceipt(
     customerNote: asciiFold(rawInput.customerNote ?? ""),
     headerText: asciiFold(rawInput.headerText ?? ""),
     addressText: asciiFold(rawInput.addressText ?? ""),
+    // Folded with the rest. The origin line contains an em dash, which is
+    // exactly the kind of character that prints as garbage on a thermal head.
+    urgencyLine: asciiFold(rawInput.urgencyLine ?? ""),
     footerText: asciiFold(rawInput.footerText ?? ""),
     returnPolicyText: asciiFold(rawInput.returnPolicyText ?? ""),
     lines: rawInput.lines.map((l) => ({
@@ -404,7 +427,19 @@ export function formatEscposReceipt(
   // -- Identity block. The register prints "Receipt # X · <register>"; the
   // pickup equivalent names the ORDER and says plainly what this paper is.
   out.push(centerLine(`Receipt # ${input.orderNumber}`, cols));
-  out.push(centerLine("ONLINE PICKUP ORDER", cols));
+  // SLICE L-10. This line used to be the constant "ONLINE PICKUP ORDER",
+  // which was accurate while the website was the only source of online
+  // orders and became a lie the moment Leafly was added. The wording for
+  // each origin lives in order-origin-core (rule 11); note that it is folded
+  // here because it is not part of the rawInput fold above.
+  out.push(
+    centerLine(asciiFold(orderOriginReceiptLine(input.origin ?? DEFAULT_ORDER_ORIGIN)), cols),
+  );
+  // The acknowledgement deadline, when there is one. Printed immediately
+  // under the origin because on a Leafly arrival ticket it is the single
+  // most time-critical thing on the paper.
+  const urgency = (input.urgencyLine ?? "").trim();
+  if (urgency) out.push(centerLine(urgency, cols));
   out.push(centerLine(formatReceiptTimestamp(input.placedAt), cols));
 
   const name = (input.customerName ?? "").trim();
@@ -757,7 +792,11 @@ export function __runReceiptEscposTests(): void {
   ok(rich.includes("1234 Bay St"), "rich: address line 1");
   ok(rich.includes("Port Orchard, WA"), "rich: address line 2");
   ok(rich.includes("Receipt # Purple Rain"), "rich: order label as receipt number");
-  ok(rich.includes("ONLINE PICKUP ORDER"), "rich: pickup label");
+  // SLICE L-10. This fixture passes no `origin`, so it exercises the
+  // back-compatible default: an order with no stated origin is a website
+  // order and must still say so on the paper.
+  ok(rich.includes("ONLINE ORDER"), "rich: pickup label (website default)");
+  ok(!rich.includes("LEAFLY"), "rich: a website order is not labelled Leafly");
   ok(rich.includes("Jan 15, 2024"), "rich: Pacific date");
   ok(rich.includes("For Jamie R."), "rich: customer name");
   ok(rich.includes("360-555-0100"), "rich: phone");
@@ -975,6 +1014,161 @@ export function __runReceiptEscposTests(): void {
   ok(
     testNarrow.split("\n").every((l) => l.length <= 32),
     "test print: honours a 58mm paper setting",
+  );
+
+  // =========================================================================
+  // SLICE L-10 -- THE ORIGIN ON THE PAPER
+  // =========================================================================
+  // The owner's requirement is that staff can tell the two apart. The receipt
+  // is the copy that physically travels with the bag, so this is the most
+  // important place of all for the distinction to survive.
+  const originReceipt = (
+    origin: "greenway" | "leafly" | "register",
+    urgencyLine?: string | null,
+  ): string =>
+    formatEscposReceipt(
+      {
+        orderNumber: "GWY-000123",
+        placedAt: "2024-01-15T20:30:00.000Z",
+        customerName: "Jamie R.",
+        lines: [{ productName: "Blue Dream 3.5g", quantity: 1, priceMinorUnits: 1500 }],
+        subtotalMinorUnits: 1500,
+        savingsMinorUnits: 0,
+        estimatedTaxMinorUnits: 555,
+        totalMinorUnits: 2055,
+        origin,
+        urgencyLine: urgencyLine ?? null,
+      },
+      { columns: 48 },
+    );
+
+  const leaflyPaper = originReceipt("leafly");
+  const sitePaper = originReceipt("greenway");
+
+  ok(leaflyPaper.includes("LEAFLY ORDER"), "L-10: a Leafly receipt says LEAFLY ORDER");
+  ok(!leaflyPaper.includes("greenwaymarijuana.com"), "L-10: a Leafly receipt is not labelled as the website");
+  ok(sitePaper.includes("greenwaymarijuana.com"), "L-10: a website receipt names the website");
+  ok(!sitePaper.includes("LEAFLY"), "L-10: a website receipt never says Leafly");
+  // THE ASSERTION THE WHOLE FEATURE RESTS ON. If the origin line were ever
+  // collapsed back to a constant, every other assertion here could still
+  // pass; this one could not.
+  ok(
+    leaflyPaper !== sitePaper,
+    "L-10: the two receipts are not byte-identical",
+  );
+
+  // The acknowledgement deadline. This is what tells the person holding the
+  // paper that Leafly will cancel the order if nobody accepts it in time.
+  const urgent = originReceipt("leafly", "** ACCEPT BY 2:45 PM OR LEAFLY CANCELS IT **");
+  ok(urgent.includes("ACCEPT BY 2:45 PM"), "L-10: the deadline reaches the paper");
+  ok(
+    !leaflyPaper.includes("ACCEPT BY"),
+    "L-10: a receipt with no deadline does not invent one",
+  );
+  // NON-VACUITY: prove the urgency line is genuinely optional rather than
+  // always-absent because the parameter is ignored.
+  ok(
+    urgent !== leaflyPaper,
+    "L-10: passing an urgency line actually changes the output",
+  );
+
+  // PAPER WIDTH. A line that overflows wraps into the money column and
+  // corrupts the totals, so every new line must be measured, not assumed.
+  for (const [label, body] of [
+    ["leafly", leaflyPaper],
+    ["website", sitePaper],
+    ["urgent", urgent],
+  ] as const) {
+    ok(
+      body.split("\n").every((l) => l.length <= 48),
+      `L-10: ${label} receipt fits 48 columns`,
+    );
+    ok(
+      formatEscposReceipt(
+        {
+          orderNumber: "GWY-000123",
+          placedAt: "2024-01-15T20:30:00.000Z",
+          customerName: "Jamie R.",
+          lines: [{ productName: "Blue Dream 3.5g", quantity: 1, priceMinorUnits: 1500 }],
+          subtotalMinorUnits: 1500,
+          savingsMinorUnits: 0,
+          estimatedTaxMinorUnits: 555,
+          totalMinorUnits: 2055,
+          origin: label === "website" ? "greenway" : "leafly",
+          urgencyLine: label === "urgent" ? "** ACCEPT BY 2:45 PM OR LEAFLY CANCELS IT **" : null,
+        },
+        { columns: 32 },
+      )
+        .split("\n")
+        .every((l) => l.length <= 32),
+      `L-10: ${label} receipt also fits 58mm paper`,
+    );
+  }
+
+  // ASCII FOLDING. The origin line contains an em dash and the thermal head
+  // cannot print one; an unfolded character reaches the paper as garbage.
+  ok(
+    !leaflyPaper.includes("\u2014"),
+    "L-10: the em dash in the origin line is folded to ASCII",
+  );
+  ok(
+    // eslint-disable-next-line no-control-regex
+    !/[^\x00-\x7F]/.test(leaflyPaper),
+    "L-10: nothing non-ASCII reaches the printer",
+  );
+  // A hostile urgency line must not be able to break the layout either.
+  // A hostile urgency line must be folded and must not break the layout.
+  //
+  // MUTATION-TESTING NOTE: an earlier version of this block asserted only the
+  // line width, and removing `asciiFold` from the urgency field did not fail
+  // a single test -- the em dashes went straight to the paper and the widths
+  // still fitted. The width check alone was therefore proving nothing about
+  // folding. The non-ASCII assertion below is the one that closes that hole.
+  const hostileUrgency = originReceipt(
+    "leafly",
+    "\u2014\u2014\u2014 ACCEPT \u00ae \u201cNOW\u201d \u2014\u2014\u2014",
+  );
+  ok(
+    hostileUrgency.split("\n").every((l) => l.length <= 48),
+    "L-10: a hostile urgency line still fits the paper",
+  );
+  ok(
+    // eslint-disable-next-line no-control-regex
+    !/[^\x00-\x7F]/.test(hostileUrgency),
+    "L-10: a hostile urgency line is folded to ASCII before printing",
+  );
+  ok(
+    hostileUrgency.includes("ACCEPT"),
+    "L-10: folding the urgency line does not destroy its words",
+  );
+  ok(
+    hostileUrgency.includes("(R)"),
+    "L-10: the registered mark is folded rather than dropped",
+  );
+
+  // FOLD-BEFORE-MEASURE, asserted properly.
+  //
+  // The whole output is folded again on the way out (see the end of
+  // formatEscposReceipt), so removing the per-field fold above does NOT let
+  // non-ASCII reach the paper -- which is why the two assertions above did
+  // not catch it when it was mutated away. What the per-field fold actually
+  // buys is WIDTH CORRECTNESS: centerLine() lays out by string length, so a
+  // fold that lengthens the text ("(R)" is three characters where "\u00ae"
+  // was one) must happen BEFORE centring, or the finished line ends up wider
+  // than the paper.
+  //
+  // This string is 42 characters as written and 46 once folded; centred in
+  // 48 columns it survives only if the fold happened first. Measured: with
+  // the per-field fold removed this produces a 49-character line.
+  const widthTrap = "ACCEPT BY 2:45 PM \u00ae OR LEAFLY CANCELS \u00ae IT";
+  const widthTrapBody = originReceipt("leafly", widthTrap);
+  ok(
+    widthTrapBody.split("\n").every((l) => l.length <= 48),
+    "L-10: a fold-lengthening urgency line is folded BEFORE it is centred",
+  );
+  ok(
+    widthTrapBody.includes("(R)"),
+    "L-10: the width-trap line really did travel through the fold",
   );
 
   console.log(`receipt-escpos-core: ${pass} passed, ${fail} failed`);
