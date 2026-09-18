@@ -77,6 +77,17 @@ export type OrderRow = {
   /** Placement-time per-bucket overage reasons (migration 0096). */
   limit_reasons?: string[] | null;
   item_count: number;
+  /**
+   * SLICE L-10 — where this order came from (migration 0226): a website
+   * checkout, a Leafly marketplace order, or a walk-in rung at the register.
+   *
+   * Optional because a row read before 0226 is applied simply has no such
+   * key, and because `toOrderOrigin()` already treats null/unknown as the
+   * website default. Screens must resolve it through that function rather
+   * than testing the raw string, so an unrecognised value can never render
+   * as a blank badge.
+   */
+  origin?: string | null;
   customer_note: string | null;
   staff_note: string | null;
   reservation_expires_at: string | null;

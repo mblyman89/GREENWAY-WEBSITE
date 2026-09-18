@@ -25,6 +25,12 @@
 import type { OrderStatus } from "@/lib/orders/types";
 import { ORDER_STATUS_LABELS } from "@/lib/orders/types";
 import { computeCashChange } from "@/lib/pos/sale-event-core";
+import {
+  toOrderOrigin,
+  orderOriginLabel,
+  isMarketplaceOrigin,
+  type OrderOrigin,
+} from "@/lib/orders/order-origin-core";
 
 // ---------------------------------------------------------------------------
 // POS-materialized order detection
@@ -73,6 +79,51 @@ export type PickupQueueEntry = {
   minutesWaiting: number;
   /** True when the customer left a note (staff should read it before handover). */
   hasCustomerNote: boolean;
+  /**
+   * SLICE L-12 - WHERE THIS ORDER CAME FROM.
+   *
+   * The owner's instruction was literal: "The two types need to be
+   * distinguishable from each other." Until this field existed, they were
+   * not - not here. `orders.origin` has been populated since migration 0226
+   * and it reached the back office, but this queue entry simply never copied
+   * it across, so the LAST screen before a regulated handover showed a Leafly
+   * order and a website order as the same tile with the same colour.
+   *
+   * That is the screen where it matters most. Three facts about a Leafly
+   * order are only true of a Leafly order, and all three bite at the counter:
+   *
+   *   1. Leafly told the customer what is happening, not us (L-1b). A
+   *      budtender who assumes our own confirmation email went out will say
+   *      something the customer never received.
+   *   2. Leafly can cancel it from outside the building, at any moment,
+   *      including while it sits in an open register sale (see
+   *      decideCancelPlan in leafly/bridge-core.ts).
+   *   3. Its status has to travel back to Leafly, so "handled it verbally" is
+   *      not handling it.
+   *
+   * Always present and always a valid origin: `toOrderOrigin` resolves an
+   * absent column (a row older than 0226) to `greenway`, which is the safe
+   * direction - it costs a badge, never an order.
+   */
+  origin: OrderOrigin;
+  /**
+   * The badge word, resolved HERE rather than in the register component.
+   *
+   * House rule 11. `orderOriginLabel` is the single home for this word; the
+   * register is a separate bundle that cannot import back-office components,
+   * so without this field the iPad would grow its own copy of the mapping and
+   * "Leafly" would eventually read differently in two places.
+   */
+  originLabel: string;
+  /**
+   * True when the order came through somebody else's marketplace.
+   *
+   * Exposed as its own boolean, rather than leaving the register to test
+   * `origin === "leafly"`, so that adding a second marketplace lights it up
+   * at the counter by joining MARKETPLACE_ORDER_ORIGINS - with nobody having
+   * to remember this file exists.
+   */
+  isMarketplace: boolean;
 };
 
 /**
@@ -108,9 +159,19 @@ export function toPickupQueueEntry(
     total_minor_units: number;
     placed_at: string;
     customer_note: string | null;
+    /**
+     * `orders.origin` (migration 0226). OPTIONAL on purpose: this function is
+     * called with rows that may predate the column, and a required field here
+     * would force every caller to invent a value - which is precisely how a
+     * Leafly order gets labelled "Website" by a `?? "greenway"` written in a
+     * hurry at a call site. Undefined means "not tracked", and `toOrderOrigin`
+     * owns that decision in one place.
+     */
+    origin?: string | null;
   },
   nowIso: string,
 ): PickupQueueEntry {
+  const origin = toOrderOrigin(order.origin);
   return {
     orderId: order.id,
     orderNumber: order.order_number,
@@ -122,6 +183,9 @@ export function toPickupQueueEntry(
     placedAtIso: order.placed_at,
     minutesWaiting: minutesBetween(order.placed_at, nowIso),
     hasCustomerNote: !!(order.customer_note ?? "").trim(),
+    origin,
+    originLabel: orderOriginLabel(origin),
+    isMarketplace: isMarketplaceOrigin(origin),
   };
 }
 
@@ -238,6 +302,95 @@ export function __runPickupCoreTests(): void {
       "2026-02-10T10:00:00Z",
     ).hasCustomerNote,
     "whitespace-only note is no note",
+  );
+
+  // -- SLICE L-12: origin reaches the counter --------------------------------
+  //
+  // The owner's instruction was "the two types need to be distinguishable
+  // from each other", and the register was the screen where they were not.
+  // These assertions are the proof that the column survives the trip from
+  // `orders.origin` to the tile the budtender taps.
+  const leaflyRow = {
+    id: "o3",
+    order_number: "GW-2001",
+    customer_first_name: "Sam",
+    customer_last_name: "Reed",
+    status: "ready" as OrderStatus,
+    item_count: 2,
+    total_minor_units: 3000,
+    placed_at: "2026-02-10T10:00:00Z",
+    customer_note: null,
+    origin: "leafly",
+  };
+  const leaflyEntry = toPickupQueueEntry(leaflyRow, "2026-02-10T10:05:00Z");
+  ok(leaflyEntry.origin === "leafly", "a Leafly order arrives at the counter as leafly");
+  ok(leaflyEntry.originLabel === "Leafly", "the tile gets the shared label, not a local string");
+  ok(leaflyEntry.isMarketplace, "a Leafly order is flagged as a marketplace order");
+
+  const siteEntry = toPickupQueueEntry({ ...leaflyRow, origin: "greenway" }, "2026-02-10T10:05:00Z");
+  ok(siteEntry.origin === "greenway", "a website order stays a website order");
+  ok(siteEntry.originLabel === "Website", "website label");
+  ok(!siteEntry.isMarketplace, "a website order is NOT a marketplace order");
+
+  // The two must actually DIFFER - that is the entire request. Asserting each
+  // label separately would still pass if someone made both of them "Online".
+  ok(
+    leaflyEntry.originLabel !== siteEntry.originLabel,
+    "THE OWNER'S REQUIREMENT: the two order types render different words",
+  );
+  ok(
+    leaflyEntry.isMarketplace !== siteEntry.isMarketplace,
+    "and they differ structurally, not only in wording",
+  );
+
+  // Three-state discipline. A row read before migration 0226 has NO origin
+  // column at all, which is not the same as a row whose origin is null. Both
+  // must resolve to the website default, because the alternative is a blank
+  // or a crash on the screen that precedes a regulated handover.
+  const noColumn = toPickupQueueEntry(
+    {
+      id: "o4",
+      order_number: "GW-9",
+      customer_first_name: "A",
+      customer_last_name: null,
+      status: "new",
+      item_count: 1,
+      total_minor_units: 100,
+      placed_at: "2026-02-10T10:00:00Z",
+      customer_note: null,
+    },
+    "2026-02-10T10:00:00Z",
+  );
+  ok(noColumn.origin === "greenway", "a pre-0226 row (no origin column) reads as greenway");
+  ok(noColumn.originLabel === "Website", "and still gets a label, never an empty badge");
+  const nullOrigin = toPickupQueueEntry({ ...leaflyRow, origin: null }, "2026-02-10T10:00:00Z");
+  ok(nullOrigin.origin === "greenway", "an explicitly null origin also reads as greenway");
+  const junkOrigin = toPickupQueueEntry({ ...leaflyRow, origin: "weedmaps" }, "2026-02-10T10:00:00Z");
+  ok(junkOrigin.origin === "greenway", "an unknown marketplace never blocks a handover");
+  ok(!junkOrigin.isMarketplace, "an unrecognised origin is not silently treated as a marketplace");
+
+  // Case/whitespace robustness: the value crosses a database, PostgREST and
+  // JSON before it gets here.
+  ok(
+    toPickupQueueEntry({ ...leaflyRow, origin: "  LEAFLY " }, "2026-02-10T10:00:00Z").origin === "leafly",
+    "origin is normalised for case and whitespace",
+  );
+
+  // A register-materialized sale is excluded from this queue by staff_note,
+  // but if one ever reached here it must not masquerade as a marketplace.
+  ok(
+    !toPickupQueueEntry({ ...leaflyRow, origin: "register" }, "2026-02-10T10:00:00Z").isMarketplace,
+    "a register sale is not a marketplace order",
+  );
+
+  // Every entry, whatever the input, carries a non-empty label. An empty
+  // badge is worse than no badge: it looks like a rendering bug and staff
+  // stop trusting the column.
+  ok(
+    [leaflyEntry, siteEntry, noColumn, nullOrigin, junkOrigin].every(
+      (e) => e.originLabel.trim() !== "",
+    ),
+    "no entry can ever carry an empty label",
   );
 
   // Completion policy: happy path.
