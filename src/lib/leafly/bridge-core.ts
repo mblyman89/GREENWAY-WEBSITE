@@ -199,6 +199,209 @@ export function decideBridgeActions(input: {
 }
 
 // ============================================================================
+// 1b. THE CANCEL COLLISION  (the owner's question Q-B, answered in code)
+// ============================================================================
+
+/**
+ * The owner asked, verbatim:
+ *
+ *   > "I am not sure what to do about what happens when leafly cancels an
+ *   >  order already loaded into a register sale. what is the enterprise
+ *   >  industry standard practice on this one?"
+ *
+ * ── WHY THIS IS NOW URGENT RATHER THAN THEORETICAL ──────────────────────────
+ * Before this slice the question was hypothetical, because no Leafly order had
+ * ever reached the register. This slice creates that row. The moment a Leafly
+ * order can be on the floor, a Leafly cancellation that does NOT follow it is
+ * a defect this slice introduced: staff would bag an order that no longer
+ * exists, and the first anyone would know is the customer never arriving.
+ *
+ * ── WHAT THE SPEC FIXES FOR US (not a choice) ───────────────────────────────
+ * Leafly's Order API spec, verbatim:
+ *
+ *   "Unless Leafly's outbound HMAC keys fails your validation, webhook
+ *    requests should only be responded to with status codes 200 or 201. These
+ *    webhook events are not the place to apply business rules or validations
+ *    on the order lifecycle."
+ *
+ * So we MUST accept the cancellation. We may not refuse it because a till has
+ * the order open. The only open question is what happens at the counter.
+ *
+ * ── THE ENTERPRISE STANDARD ─────────────────────────────────────────────────
+ * This is a known problem class: a distributed state change invalidating a
+ * transaction already in progress at a terminal. The convergent resolution
+ * across retail POS and payment-terminal design is five points:
+ *
+ *   1. Accept the upstream event immediately; never block on the terminal.
+ *   2. NEVER mutate a till mid-transaction from a background event.
+ *   3. Interrupt with a blocking, explicit acknowledgement.
+ *   4. Require an explicit human disposition. Never auto-decide.
+ *   5. Record the collision.
+ *
+ * The principle underneath all five is the one this codebase already follows
+ * ("a doorbell must never be able to fail a sale"): AN EXTERNAL EVENT MAY
+ * INFORM THE COUNTER, IT MAY NOT ACT ON THE COUNTER.
+ *
+ * Point 2 is the one that decides this function's shape. `cancelLocalOrder` is
+ * TRUE only when the order is not yet in somebody's hands. Once it is, we
+ * raise an alert and leave the sale alone.
+ */
+export type LeaflyCancelPlan = {
+  /** Mark the local order cancelled outright. Safe only when nobody holds it. */
+  cancelLocalOrder: boolean;
+  /** Put a blocking notice in front of the person working the counter. */
+  alertFloor: boolean;
+  /** Severity, so the UI can pick between a banner and a modal. */
+  severity: "none" | "notice" | "urgent";
+  /** What a human must decide, when a human must decide something. */
+  dispositionRequired: boolean;
+  /** Plain language for the staff member reading it, mid-shift, under pressure. */
+  staffMessage: string;
+  /** One line for the audit trail. */
+  summary: string;
+};
+
+/**
+ * Local order statuses that mean "somebody is physically working on this".
+ *
+ * Derived from the `order_status` enum in migration 0007, not invented here:
+ * new | acknowledged | preparing | ready | completed | cancelled | no_show.
+ *
+ * `preparing` and `ready` are the collision cases. `preparing` means product
+ * is being pulled off a shelf right now; `ready` means a sealed bag with this
+ * customer's name is sitting behind the counter. In both, inventory has
+ * already moved, and a background cancel that silently flipped the status
+ * would leave that product unaccounted for.
+ *
+ * `acknowledged` is deliberately NOT in this list. It means staff have seen
+ * the order, not that they have started it -- the same distinction
+ * order-map-core draws when it maps Leafly's `confirmed` to `acknowledged`
+ * rather than `preparing`.
+ */
+const IN_HAND_STATUSES = new Set(["preparing", "ready"]);
+
+/** Statuses where the order is already over; a cancel changes nothing. */
+const FINISHED_STATUSES = new Set(["completed", "cancelled", "no_show"]);
+
+/**
+ * The ONLY statuses we will auto-cancel without asking a human.
+ *
+ * An ALLOWLIST, not a fallthrough, and that distinction is the whole point.
+ * The first version of this function ended with an unconditional
+ * "cancel it automatically" branch, which meant any status it did not
+ * recognise -- a new value from a future migration, a typo, a status added
+ * when delivery launches -- would be auto-cancelled by default. That is the
+ * dangerous direction to fail in: it silently discards an order nobody has
+ * looked at.
+ *
+ * Phrasing it as "is this one of the two states I can PROVE is safe?" makes
+ * the unknown case land in the human-decides branch, which is recoverable.
+ * Same posture as mayEmailCustomerForOrigin() in order-origin-core.ts, which
+ * asks "is this origin explicitly PERMITTED?" so an unrecognised origin fails
+ * towards silence rather than towards an email we were forbidden to send.
+ */
+const SAFE_TO_AUTO_CANCEL_STATUSES = new Set(["new", "acknowledged"]);
+
+/**
+ * Decide what a Leafly cancellation should do to the local order.
+ *
+ * Pure, so every branch is provable in CI without a register, a database or a
+ * Leafly account -- which matters because the expensive branches here are
+ * exactly the ones that are hardest to stage for real.
+ */
+export function decideCancelPlan(input: {
+  /** The local order's status, or null when no local order was ever created. */
+  localStatus?: string | null;
+  /** True when a register sale is open against this order right now. */
+  registerSaleOpen?: boolean;
+  /** Leafly's cancellation reason code, verbatim, when they sent one. */
+  reasonCode?: string | null;
+}): LeaflyCancelPlan {
+  const status = typeof input.localStatus === "string" ? input.localStatus.trim() : "";
+  const reason = typeof input.reasonCode === "string" ? input.reasonCode.trim() : "";
+  const because = reason !== "" ? ` (Leafly reason: ${reason})` : "";
+
+  // No local order: the cancel arrived before we accepted, which is the
+  // common and harmless case -- including Leafly's own auto-cancel when
+  // nobody acknowledged in time. Nothing on the floor to undo.
+  if (status === "") {
+    return {
+      cancelLocalOrder: false,
+      alertFloor: false,
+      severity: "none",
+      dispositionRequired: false,
+      staffMessage: "",
+      summary: `leafly cancel: no local order existed -- nothing to undo${because}`,
+    };
+  }
+
+  if (FINISHED_STATUSES.has(status)) {
+    return {
+      cancelLocalOrder: false,
+      alertFloor: false,
+      severity: "none",
+      dispositionRequired: false,
+      summary: `leafly cancel: local order is already ${status} -- left untouched${because}`,
+      staffMessage: "",
+    };
+  }
+
+  // THE COLLISION. Somebody is holding this order, or a till has it open.
+  // Point 2 of the standard: do not touch it. Point 3 and 4: tell them, and
+  // make them decide.
+  if (input.registerSaleOpen === true || IN_HAND_STATUSES.has(status)) {
+    const where =
+      input.registerSaleOpen === true
+        ? "It is open in a register sale right now."
+        : `It is marked ${status}.`;
+    return {
+      cancelLocalOrder: false,
+      alertFloor: true,
+      severity: "urgent",
+      dispositionRequired: true,
+      staffMessage:
+        `Leafly has CANCELLED this order${because}, but it is already being worked on. ${where} ` +
+        "Nothing has been changed automatically. Do not complete this sale. " +
+        "Void it, or -- if the customer is standing in front of you and still wants the " +
+        "products -- ring it up as a normal walk-in sale. Then restock anything already bagged.",
+      summary: `leafly cancel: COLLISION -- local order is ${status}${
+        input.registerSaleOpen === true ? " with a register sale open" : ""
+      }; left for a human to dispose of${because}`,
+    };
+  }
+
+  // new / acknowledged: seen but not started. Safe to cancel outright. Still
+  // announced to the floor, because somebody may have been about to pick it.
+  if (SAFE_TO_AUTO_CANCEL_STATUSES.has(status)) {
+    return {
+      cancelLocalOrder: true,
+      alertFloor: true,
+      severity: "notice",
+      dispositionRequired: false,
+      staffMessage:
+        `Leafly cancelled this order${because}. Nobody had started it, so it has been ` +
+        "cancelled here too. No action needed.",
+      summary: `leafly cancel: local order was ${status} -- cancelled automatically${because}`,
+    };
+  }
+
+  // A status this build has never heard of. We cannot reason about whether
+  // product has moved, so we do not touch it and we do not stay quiet.
+  return {
+    cancelLocalOrder: false,
+    alertFloor: true,
+    severity: "urgent",
+    dispositionRequired: true,
+    staffMessage:
+      `Leafly has CANCELLED this order${because}, but this order is in a state this system ` +
+      `does not recognise ("${status}"), so nothing has been changed automatically. ` +
+      "Check whether anything has been pulled or bagged for it, then void it or ring it " +
+      "up as a normal walk-in sale. Tell the owner this status was not recognised.",
+    summary: `leafly cancel: UNRECOGNISED local status "${status}" -- left for a human${because}`,
+  };
+}
+
+// ============================================================================
 // 2. THE SOUND
 // ============================================================================
 
@@ -740,6 +943,171 @@ export function __runLeaflyBridgeTests(): { passed: number; failed: number } {
     "bridge defaults to ON when unspecified",
     decideBridgeActions({ stage: "arrival", alreadyDone: false }).announce,
   );
+
+  // ---- THE CANCEL COLLISION (Q-B) ----------------------------------------
+  //
+  // The rule being defended: an external event may INFORM the counter, it may
+  // not ACT on the counter. Everything below is a consequence of that.
+
+  // No local order -- the ordinary case, including Leafly's own auto-cancel
+  // when nobody acknowledged in time.
+  const cancelNoOrder = decideCancelPlan({ localStatus: null });
+  ok("cancel with no local order changes nothing", !cancelNoOrder.cancelLocalOrder);
+  ok("...and does not alarm anybody", !cancelNoOrder.alertFloor);
+  eq("...severity none", cancelNoOrder.severity, "none");
+  ok("...needs no human decision", !cancelNoOrder.dispositionRequired);
+
+  // Not started yet -- safe to cancel automatically.
+  for (const st of ["new", "acknowledged"]) {
+    const plan = decideCancelPlan({ localStatus: st });
+    ok(`${st} is cancelled automatically (nobody had started it)`, plan.cancelLocalOrder);
+    ok(`${st} still tells the floor`, plan.alertFloor);
+    eq(`${st} is a notice, not an emergency`, plan.severity, "notice");
+    ok(`${st} needs no human decision`, !plan.dispositionRequired);
+    ok(`${st} message says no action needed`, /no action needed/i.test(plan.staffMessage));
+  }
+
+  // THE COLLISION. This is the whole point of the function.
+  for (const st of ["preparing", "ready"]) {
+    const plan = decideCancelPlan({ localStatus: st });
+    ok(
+      `${st} is NEVER auto-cancelled -- product has already moved`,
+      !plan.cancelLocalOrder,
+    );
+    ok(`${st} raises the alarm`, plan.alertFloor);
+    eq(`${st} is urgent`, plan.severity, "urgent");
+    ok(`${st} demands an explicit human disposition`, plan.dispositionRequired);
+    ok(
+      `${st} offers BOTH dispositions (void or sell walk-in)`,
+      /void/i.test(plan.staffMessage) && /walk-in/i.test(plan.staffMessage),
+    );
+    ok(
+      `${st} forbids completing the sale`,
+      /do not complete/i.test(plan.staffMessage),
+    );
+    ok(
+      `${st} states plainly that nothing was changed automatically`,
+      /nothing has been changed automatically/i.test(plan.staffMessage),
+    );
+    ok(`${st} summary records it as a collision`, /COLLISION/.test(plan.summary));
+  }
+
+  // An open register sale escalates even a status that would otherwise be safe.
+  // This is the case the owner actually asked about.
+  const tillOpen = decideCancelPlan({ localStatus: "new", registerSaleOpen: true });
+  ok("an OPEN REGISTER SALE is never auto-cancelled, even from 'new'", !tillOpen.cancelLocalOrder);
+  eq("...and it is urgent", tillOpen.severity, "urgent");
+  ok("...and a human must dispose of it", tillOpen.dispositionRequired);
+  ok("...and the message says so explicitly", /register sale right now/i.test(tillOpen.staffMessage));
+  // The contrast that proves the register flag is what did it, not the status.
+  ok(
+    "...whereas the same status with no till open IS auto-cancelled",
+    decideCancelPlan({ localStatus: "new" }).cancelLocalOrder,
+  );
+
+  // Already over -- a cancel must not resurrect or re-touch it.
+  for (const st of ["completed", "cancelled", "no_show"]) {
+    const plan = decideCancelPlan({ localStatus: st });
+    ok(`${st} is left untouched`, !plan.cancelLocalOrder);
+    ok(`${st} does not alarm anybody`, !plan.alertFloor);
+    eq(`${st} severity is none`, plan.severity, "none");
+  }
+  // The one that would be a real-money bug: cancelling a COMPLETED order would
+  // reverse a sale the customer already paid for and walked out with.
+  ok(
+    "a completed order is never reopened by a late cancel",
+    !decideCancelPlan({ localStatus: "completed", registerSaleOpen: true }).cancelLocalOrder,
+  );
+
+  // The reason code is carried through so the floor and the audit log both
+  // know WHY -- "the customer changed their mind" and "Leafly auto-cancelled
+  // because we were too slow" call for very different follow-ups.
+  const withReason = decideCancelPlan({
+    localStatus: "preparing",
+    reasonCode: "order_api_unacknowledged",
+  });
+  ok(
+    "the Leafly reason reaches the staff message",
+    withReason.staffMessage.includes("order_api_unacknowledged"),
+  );
+  ok(
+    "...and the audit summary",
+    withReason.summary.includes("order_api_unacknowledged"),
+  );
+  ok(
+    "a missing reason leaves no empty parentheses",
+    !decideCancelPlan({ localStatus: "preparing" }).summary.includes("()"),
+  );
+
+  // Whitespace and casing are hostile inputs from a network payload.
+  ok(
+    "a padded status is still recognised as in-hand",
+    !decideCancelPlan({ localStatus: "  preparing  " }).cancelLocalOrder &&
+      decideCancelPlan({ localStatus: "  preparing  " }).dispositionRequired,
+  );
+  ok(
+    "a blank-but-present status is treated as no local order",
+    decideCancelPlan({ localStatus: "   " }).severity === "none",
+  );
+  // An unknown status must fail SAFE. If Leafly or a future migration
+  // introduces a status this build has never heard of, the dangerous answer is
+  // to auto-cancel it. The safe answer is to ask a human.
+  const unknown = decideCancelPlan({ localStatus: "being_delivered_by_drone" });
+  ok("an UNRECOGNISED status is NOT auto-cancelled", !unknown.cancelLocalOrder);
+  ok("...and it is not silent", unknown.alertFloor);
+  ok("...and it is urgent", unknown.severity === "urgent");
+  ok("...and a human must decide", unknown.dispositionRequired);
+  ok(
+    "...and the message names the status nobody recognised",
+    unknown.staffMessage.includes("being_delivered_by_drone"),
+  );
+  ok(
+    "...and tells the owner about it, because this is a bug report",
+    /tell the owner/i.test(unknown.staffMessage),
+  );
+  // The allowlist must be exactly the two not-started states. If somebody
+  // later adds a status to it, this assertion makes them justify it.
+  for (const st of ["preparing", "ready", "completed", "cancelled", "no_show", "refunded", ""]) {
+    ok(
+      `"${st}" is NOT on the auto-cancel allowlist`,
+      !decideCancelPlan({ localStatus: st }).cancelLocalOrder,
+    );
+  }
+
+  // Every branch must give the floor something to read when it alerts.
+  for (const plan of [
+    decideCancelPlan({ localStatus: "new" }),
+    decideCancelPlan({ localStatus: "preparing" }),
+    decideCancelPlan({ localStatus: "ready", registerSaleOpen: true }),
+  ]) {
+    ok("an alerting plan always carries a staff message", plan.staffMessage.trim().length > 20);
+  }
+  for (const plan of [
+    decideCancelPlan({ localStatus: null }),
+    decideCancelPlan({ localStatus: "completed" }),
+  ]) {
+    ok("a silent plan carries no message to show", plan.staffMessage === "");
+  }
+  // Structural invariant: we never both cancel it AND demand a disposition.
+  // Those two together would mean "we already decided, now you decide" -- the
+  // exact ambiguity that gets product handed over after a void.
+  for (const st of ["new", "acknowledged", "preparing", "ready", "completed", "cancelled", "no_show"]) {
+    for (const till of [true, false]) {
+      const plan = decideCancelPlan({ localStatus: st, registerSaleOpen: till });
+      ok(
+        `${st}/till=${till}: never both auto-cancelled and left to a human`,
+        !(plan.cancelLocalOrder && plan.dispositionRequired),
+      );
+      ok(
+        `${st}/till=${till}: a required disposition is always urgent`,
+        !plan.dispositionRequired || plan.severity === "urgent",
+      );
+      ok(
+        `${st}/till=${till}: severity none implies silence`,
+        plan.severity !== "none" || !plan.alertFloor,
+      );
+    }
+  }
 
   // ---- SOUND: the library wins when the file exists ----------------------
   const upload = resolveOriginSoundWithLibrary({

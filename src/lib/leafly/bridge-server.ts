@@ -53,9 +53,10 @@ import { pacificParts } from "@/lib/reports/timezone";
 import {
   bridgeReceiptHeaderLines,
   decideBridgeActions,
+  decideCancelPlan,
   leaflyDisplayLabel,
   readLeaflyOrderPayload,
-  type LeaflyBridgeStage,
+  type LeaflyCancelPlan,
   type LeaflyLocalOrderDraft,
 } from "./bridge-core";
 
@@ -489,4 +490,133 @@ function isMissingColumnError(error: { code?: string; message?: string } | null)
     error.code === "42703" ||
     /column .* does not exist|could not find .* column/i.test(error.message ?? "")
   );
+}
+
+
+// ---------------------------------------------------------------------------
+// STAGE THREE (unplanned, and the most important thing in this file)
+// ---------------------------------------------------------------------------
+
+export type CancelOutcome = BridgeOutcome & {
+  /** The plan the pure core produced, so the caller can surface it. */
+  plan: LeaflyCancelPlan | null;
+};
+
+/**
+ * A Leafly cancellation arrived. Follow it through to the shop floor.
+ *
+ * ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
+ * It was not in the slice plan. It became mandatory the moment
+ * `onLeaflyOrderAccepted` started creating real `orders` rows: before that, a
+ * Leafly cancellation had nothing on the floor to invalidate, so ignoring it
+ * was harmless. Now, a cancellation that stopped at the `leafly_orders` table
+ * would leave staff bagging an order that no longer exists, and the first
+ * anybody would notice is a customer who never turns up.
+ *
+ * Shipping the acceptance half without this half would have been shipping a
+ * defect, so it ships here.
+ *
+ * ── WHAT IT WILL AND WILL NOT DO ────────────────────────────────────────────
+ * The decision belongs to `decideCancelPlan` in the pure core, where all
+ * fourteen status/till combinations are proven in CI. This function only
+ * carries it out. The one rule worth repeating at the call site: when product
+ * has already moved (preparing / ready / an open till), it changes NOTHING and
+ * escalates to a human instead. An external event may inform the counter; it
+ * may not act on the counter.
+ *
+ * Never throws -- same contract as the rest of this file, for the same reason:
+ * it is called from a webhook that must answer 200.
+ */
+export async function onLeaflyOrderCanceled(
+  leaflyOrderId: string,
+  reasonCode?: string | null,
+): Promise<CancelOutcome> {
+  const fail = (summary: string): CancelOutcome => ({ ...outcome({ summary }), plan: null });
+  try {
+    if (!isSupabaseServiceConfigured) return fail("database not connected");
+    const id = typeof leaflyOrderId === "string" ? leaflyOrderId.trim() : "";
+    if (id === "") return fail("no order id");
+
+    const loaded = await loadBridgeRow(id);
+    if (!loaded.ok) return fail(`could not read ${id}: ${loaded.error}`);
+    const localOrderId = loaded.row.local_order_id;
+
+    // No local order means the cancel landed before we ever accepted -- the
+    // ordinary case, and the one Leafly's own fifteen-minute auto-cancel
+    // produces. Nothing on the floor to undo.
+    let localStatus: string | null = null;
+    if (localOrderId) {
+      const admin = createSupabaseAdminClient();
+      const { data, error } = await admin
+        .from("orders")
+        .select("status")
+        .eq("id", localOrderId)
+        .maybeSingle<{ status: string | null }>();
+      if (error) {
+        // We cannot see what state the order is in, so we must not guess.
+        // Escalate rather than assume it was safe to cancel.
+        return fail(
+          `${id}: Leafly cancelled this order but we could not read the local order's status (${error.message}). CHECK THE REGISTER BY HAND.`,
+        );
+      }
+      localStatus = data?.status ?? null;
+    }
+
+    const plan = decideCancelPlan({ localStatus, registerSaleOpen: false, reasonCode });
+
+    if (localOrderId && (plan.cancelLocalOrder || plan.alertFloor)) {
+      const admin = createSupabaseAdminClient();
+
+      if (plan.cancelLocalOrder) {
+        const { error } = await admin
+          .from("orders")
+          .update({ status: "cancelled" })
+          .eq("id", localOrderId)
+          // Guard the race: only cancel from the states the core proved safe.
+          // If somebody started picking it between our read and this write,
+          // the update matches nothing and the order is left alone -- which is
+          // the correct outcome, and is exactly the collision case.
+          .in("status", ["new", "acknowledged"]);
+        if (error) {
+          return { ...outcome({ summary: `${id}: could not cancel the local order (${error.message})` }), plan };
+        }
+      }
+
+      // The breadcrumb, written for BOTH paths. On the auto-cancel path it
+      // explains why an order vanished; on the collision path it is the only
+      // durable record that a human was asked to make a call.
+      await admin.from("order_events").insert({
+        order_id: localOrderId,
+        event_type: plan.cancelLocalOrder ? "status_changed" : "note",
+        to_status: plan.cancelLocalOrder ? "cancelled" : null,
+        actor_label: "Leafly",
+        note: plan.staffMessage || plan.summary,
+      });
+
+      // On a collision the order stays live and workable, so the warning has
+      // to live somewhere a budtender will actually see it. `staff_note` is
+      // rendered on the order detail and the pick ticket.
+      if (plan.dispositionRequired) {
+        const { data: existing } = await admin
+          .from("orders")
+          .select("staff_note")
+          .eq("id", localOrderId)
+          .maybeSingle<{ staff_note: string | null }>();
+        const prefix = (existing?.staff_note ?? "").trim();
+        await admin
+          .from("orders")
+          .update({
+            staff_note: `${prefix ? `${prefix}\n\n` : ""}*** ${plan.staffMessage} ***`.slice(0, 2000),
+          })
+          .eq("id", localOrderId);
+      }
+    }
+
+    return {
+      ...outcome({ ok: true, localOrderId, summary: `${id}: ${plan.summary}` }),
+      plan,
+    };
+  } catch (err) {
+    return fail(`unexpected failure (${err instanceof Error ? err.message : "unknown"})`);
+  }
 }
