@@ -370,6 +370,17 @@ begin
   -- evidence a later certification review would read as real activity. Leafly
   -- grades "by review of logged activity", so leaving practice rows in the
   -- outbound log does not merely clutter -- it misrepresents.
+  -- leafly_sync_runs (migration 0227, slice L-7) is the SCHEDULER's log: every
+  -- automatic tick and every manual button press, including the ticks that
+  -- correctly decided to do nothing. Emptied first among the Leafly tables
+  -- because it is pure operational telemetry with no foreign keys into the
+  -- others, and emptied AT ALL for a reason of its own: the consecutive-failure
+  -- count that drives the backoff is derived from this log, so rehearsal
+  -- failures left behind would have the scheduler start go-live day already
+  -- backed off, syncing every few hours instead of on schedule, for failures
+  -- that happened during practice. That is the rare case where NOT wiping a log
+  -- changes future behaviour rather than merely leaving clutter.
+  delete from public.leafly_sync_runs where true;          get diagnostics n = row_count; counts := counts || jsonb_build_object('leafly_sync_runs', n);
   delete from public.leafly_outbound_attempts where true;  get diagnostics n = row_count; counts := counts || jsonb_build_object('leafly_outbound_attempts', n);
   delete from public.leafly_webhook_events where true;     get diagnostics n = row_count; counts := counts || jsonb_build_object('leafly_webhook_events', n);
   delete from public.leafly_orders where true;             get diagnostics n = row_count; counts := counts || jsonb_build_object('leafly_orders', n);

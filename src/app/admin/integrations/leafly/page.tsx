@@ -21,24 +21,41 @@ import {
   DataQualityPanel,
 } from "@/components/admin/syndication/panels";
 import { SyncSettingsPanel } from "@/components/admin/syndication/SyncSettingsPanel";
-import { saveLeaflySettingsAction, resetLeaflySyncStateAction } from "./actions";
+import { LeaflySchedulePanel } from "@/components/admin/syndication/LeaflySchedulePanel";
+import { loadLeaflySyncHealth } from "@/lib/leafly/schedule-server";
+import { MIN_RUN_GAP_MINUTES } from "@/lib/leafly/schedule-core";
+import {
+  saveLeaflySettingsAction,
+  resetLeaflySyncStateAction,
+  saveLeaflyScheduleAction,
+  checkLeaflyScheduleNowAction,
+} from "./actions";
 import { LeaflyPushClient } from "./leafly-client";
 
 export const dynamic = "force-dynamic";
 
 /**
- * SLICE L-4. Is there an automatic, scheduled Leafly menu sync?
+ * SLICE L-4 / SLICE L-7. Is there an automatic, scheduled Leafly menu sync?
  *
- * No. Verified against `vercel.json`, which declares three crons
- * (compliance-reminders, regulatory-watch, atm-sync) and no Leafly sync. Leafly's menu
- * certification checklist grades sync cadence, so this is a real blocker and it is stated
- * as a named constant instead of being buried in a boolean expression.
+ * YES, as of L-7. `vercel.json` declares `/api/cron/leafly-menu-sync` on
+ * `0 12 * * *`, which is 5am PDT / 4am PST -- the authoritative daily full POST that
+ * Leafly's cadence criterion asks for. The route defers every timing decision to
+ * `src/lib/leafly/schedule-core.ts`, and the owner can switch it off, re-time it, or
+ * add intraday updates from the Automatic syncing card below.
  *
- * Flip this to `true` in the same commit that adds the cron -- not before.
+ * L-4 left this `false` with the note "flip this to `true` in the same commit that
+ * adds the cron -- not before". This is that commit.
+ *
  * `tests/compliance/leafly-certification.test.ts` reads `vercel.json` and fails if this
- * constant and reality disagree in either direction.
+ * constant and reality disagree in EITHER direction, so removing the cron without
+ * coming back here will fail the suite rather than quietly overstate our readiness.
+ *
+ * Note what this constant does and does not claim. It says the CADENCE MECHANISM
+ * exists, which is what Leafly grades about our integration. It does not claim the
+ * owner has switched automation on -- that is a stored setting, shown live on the card
+ * below, and deliberately defaults to off.
  */
-const LEAFLY_SCHEDULED_SYNC_EXISTS = false;
+const LEAFLY_SCHEDULED_SYNC_EXISTS = true;
 
 function fmtDate(iso: string) {
   try {
@@ -51,12 +68,23 @@ function fmtDate(iso: string) {
 export default async function LeaflyIntegrationPage() {
   await requirePermission("settings.manage");
 
-  const [preview, logs, settings, syncState] = await Promise.all([
+  const [preview, logs, settings, syncState, scheduleHealth] = await Promise.all([
     previewLeaflyPush(),
     listSyndicationLogs("leafly", 40),
     getLeaflySyncSettings(),
     getSyncState("leafly"),
+    // SLICE L-7. Safe to sit in this Promise.all: `loadLeaflySyncHealth` never
+    // throws -- an unreadable run log comes back as a `problem` string, which
+    // the panel reports, rather than as a rejection that would 500 a settings
+    // page the owner may be visiting BECAUSE something is broken.
+    loadLeaflySyncHealth(),
   ]);
+
+  // The SERVER's clock, passed to the panel so its relative times ("4 minutes
+  // ago") are computed once. Rendering those from the browser clock produces a
+  // different string than the server produced microseconds earlier, which React
+  // reports as a hydration mismatch.
+  const nowIso = new Date().toISOString();
 
   // Health is classified from LIVE attempts that actually contacted Leafly.
   // "skipped" logs (no changes to send / preflight-blocked) transmit nothing,
@@ -127,17 +155,21 @@ export default async function LeaflyIntegrationPage() {
     inStockItemCount,
     // Only the owner can answer the manual-tools question, and it is retroactive.
     ownerAttestsNoManualTools: null,
-    // FALSE, and verified rather than assumed. `vercel.json` declares exactly three
-    // crons -- compliance-reminders, regulatory-watch and atm-sync -- and NONE of them
-    // syncs Leafly. `settings.syncMode` only chooses POST vs PUT for a push someone
-    // triggers by hand; it does not schedule anything, so deriving this from syncMode
-    // would have produced a permanent, meaningless "pass".
+    // SLICE L-7 -- this was FALSE until this commit, and the comment that used to
+    // sit here read "verified: `vercel.json` declares exactly three crons and NONE
+    // of them syncs Leafly". That was true when it was written and is now the
+    // opposite of the truth, so it is replaced rather than left to mislead.
     //
-    // This is a genuine certification gap that the roadmap did not call out: Leafly
-    // grades sync CADENCE, and a handful of hand-pressed buttons is the request pattern
-    // that criterion 3 disqualifies. `tests/compliance/leafly-certification.test.ts`
-    // asserts vercel.json still has no Leafly cron, so the day somebody adds one that
-    // test fails and points here.
+    // `vercel.json` now declares a fourth cron, `/api/cron/leafly-menu-sync`, and
+    // `tests/compliance/leafly-certification.test.ts` fails if the constant and
+    // `vercel.json` ever disagree in EITHER direction.
+    //
+    // WHAT THIS PASS DOES AND DOES NOT CLAIM. It claims the cadence MECHANISM
+    // exists, which is what Leafly's criterion 3 grades about the integration. It
+    // does not claim the owner has switched automation on -- that is a stored
+    // setting which defaults to off and is reported live on the Automatic syncing
+    // card above, where an owner who has left it off is told plainly that
+    // hand-pressed pushes are the request pattern the checklist marks down.
     scheduledSyncEnabled: LEAFLY_SCHEDULED_SYNC_EXISTS,
   });
 
@@ -166,6 +198,22 @@ export default async function LeaflyIntegrationPage() {
               never contacts Leafly. <strong>Live push</strong> (POST) is a full sync that
               replaces the Leafly menu and requires credentials plus explicit confirmation.
               Preflight errors block live pushes; the engine skips syncs when nothing changed.
+            </p>
+            {/* SLICE L-7. The help panel predates automation and described a
+                button-only integration, so the one place on this page whose job
+                is to answer "how does this work" was silent about the schedule. */}
+            <p>
+              <strong>Automatic syncing</strong> and the <strong>push button</strong> are both
+              yours and they do not compete. The schedule sends a full sync once a day plus
+              the changes in between; the button sends everything the moment you press it.
+              While you are pushing by hand the schedule stands aside, and two syncs never
+              run within {MIN_RUN_GAP_MINUTES} minutes of each other.
+            </p>
+            <p>
+              Leafly&rsquo;s menu-certification checklist grades sync <em>cadence</em> and marks
+              down integrations whose requests look hand-driven, so leaving automation off
+              costs certification even if you press the button diligently. The Automatic
+              syncing card shows how your settings compare with what Leafly recommends.
             </p>
             <p>
               AI description drafts are <strong>drafts only</strong> &mdash; review and approve before
@@ -227,6 +275,28 @@ export default async function LeaflyIntegrationPage() {
         configured={preview.readiness.configured}
         itemCount={preview.itemCount}
         sandbox={preview.readiness.environment === "sandbox"}
+      />
+
+      {/*
+        SLICE L-7 -- automatic syncing.
+
+        PLACEMENT. Directly under the manual push card and directly above the
+        certification card, and both halves of that are deliberate.
+
+        Under the push card because the owner's request was "both automation and
+        a manual push button" -- the button is what he uses today, and a slice
+        whose point is "you keep both" must not begin by demoting one of them.
+
+        Above the certification card because that card GRADES the cadence this
+        card CONFIGURES. An owner who reads "sync cadence: met" before he has
+        seen what his cadence actually is has been shown the verdict before the
+        evidence.
+      */}
+      <LeaflySchedulePanel
+        health={scheduleHealth}
+        nowIso={nowIso}
+        saveAction={saveLeaflyScheduleAction}
+        checkNowAction={checkLeaflyScheduleNowAction}
       />
 
       {/*

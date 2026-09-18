@@ -57,6 +57,7 @@ import { __runLeaflyOrderMapTests } from "@/lib/leafly/order-map-core";
 import { __runLeaflyWebhookParseTests } from "@/lib/leafly/webhook-parse-core";
 import { __runLeaflyPreviewTests } from "@/lib/leafly/preview-core";
 import { __runLeaflyOrderAckTests } from "@/lib/leafly/order-ack-core";
+import { __runLeaflyScheduleTests } from "@/lib/leafly/schedule-core";
 import { __runOrderOriginTests } from "@/lib/orders/order-origin-core";
 import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "@/lib/integrations/integration-credentials-core";
@@ -322,6 +323,37 @@ describe("embedded pure self-test suites", () => {
     // the matrix pass by iterating zero times.
     expect(r.passed).toBeGreaterThan(370);
   });
+  it("leafly-schedule-core (SLICE L-7: both automation and the manual button)", () => {
+    const r = __runLeaflyScheduleTests();
+    expect(r.failed).toBe(0);
+    // Floor 230, from a measured 242 at registration.
+    //
+    // This core answers two questions that both fail SILENTLY. First, whether
+    // to contact Leafly at all: too often is the erratic request pattern their
+    // certification checklist marks down, and too rarely freezes the published
+    // menu without raising an error anywhere. Second, every word the owner
+    // reads about automation -- so a wrong string here is nearly as damaging as
+    // a wrong decision, because he acts on what he reads.
+    //
+    // The assertion this suite exists for is the frozen-menu case: an enabled,
+    // configured, never-failed schedule whose next tick is calmly "not due"
+    // while the authoritative full sync has not landed for two days. A summary
+    // built from the next decision alone reports "Not due" in green over a dead
+    // menu, and the suite asserts both that this is caught AND that an
+    // identical calm decision over a fresh sync still reads healthy -- without
+    // that second half, a function returning "Overdue" unconditionally would
+    // pass.
+    //
+    // It also pins a measured PLATFORM limit rather than a preference. Vercel's
+    // cron documentation (read 2026-09-18) states Hobby accounts are limited to
+    // once-per-day crons and that more frequent expressions fail at deploy
+    // time, so the daily full sync fires on an OR of "the configured Pacific
+    // hour has arrived" and "20 hours have elapsed". The 24-hour sweep proving
+    // the second trigger fires at every hour of the clock carries its own
+    // non-vacuity guards, because a sweep is the easiest kind of test to
+    // accidentally empty.
+    expect(r.passed).toBeGreaterThanOrEqual(255);
+  });
   it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {
     const r = __runOrderOriginTests();
     expect(r.failed).toBe(0);
@@ -347,8 +379,16 @@ describe("embedded pure self-test suites", () => {
   it("richness-core (Task X: menu richness scoring + connection health)", () => {
     expect(() => __runRichnessTests()).not.toThrow();
   });
-  it("sync-settings-core (Task X: owner-tunable transmission parameters)", () => {
-    expect(() => __runSyncSettingsTests()).not.toThrow();
+  it("sync-settings-core (Task X + L-7: transmission parameters AND the schedule)", () => {
+    // Was `expect(() => ...).not.toThrow()`, which a suite running zero
+    // assertions would also have satisfied. L-7 moved the automatic sync
+    // schedule into this same core and the same stored jsonb row, so the blind
+    // spot covered the round trip that stops an unrelated save from silently
+    // switching the owner's automation off. Counted and floored now, at 45 from
+    // a measured 52.
+    const r = __runSyncSettingsTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(45);
   });
   it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {
     expect(() => __runApplySettingsTests()).not.toThrow();

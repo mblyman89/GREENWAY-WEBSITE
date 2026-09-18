@@ -16,7 +16,36 @@
  *  - forceResend: overrides payload-hash idempotency for a full resync.
  *  - Leafly syncMode default "post" (full sync, Leafly's recommended daily op)
  *    with "put" (upsert) for incremental updates.
+ *
+ * SLICE L-7 -- the automatic sync SCHEDULE lives here too, as a nested
+ * `schedule` block, and this is a deliberate choice worth explaining.
+ *
+ * It would have been easier to give the scheduler its own settings table. That
+ * would have been a second place to store "how Greenway talks to Leafly", a
+ * second migration, a second resolver, and a second thing to keep in step --
+ * and house rule 11 exists precisely to stop that. `syndication_sync_settings`
+ * (migration 0119) is already a per-channel jsonb blob with a working save
+ * path, an audit trail, and a factory-reset classification. The schedule is
+ * one more thing the owner tunes about Leafly, so it belongs in the same row.
+ *
+ * It is NESTED under `schedule` rather than flattened alongside `pacingMs`
+ * because the schedule's natural field names are generic -- `enabled`,
+ * `intradayMinutes` -- and a top-level `enabled` in a blob that also configures
+ * transmission would be genuinely ambiguous to the next person reading a stored
+ * row: enabled what? Nesting makes the stored JSON self-describing and means
+ * the schedule can never collide with a future transmission knob.
+ *
+ * The decisions about that schedule are NOT here. They live in
+ * `src/lib/leafly/schedule-core.ts`, which owns the clamping, the defaults and
+ * the due-ness logic; this file delegates to its resolver rather than
+ * re-deriving any of it.
  */
+
+import {
+  DEFAULT_SCHEDULE_SETTINGS,
+  resolveScheduleSettings,
+  type LeaflyScheduleSettings,
+} from "@/lib/leafly/schedule-core";
 
 export type LeaflySyncMode = "post" | "put";
 
@@ -55,6 +84,16 @@ export type LeaflySyncSettings = ChannelSyncSettings & {
    * `true` in place. See `orderability-core.ts`.
    */
   sendPickupAvailability: boolean;
+  /**
+   * SLICE L-7. When the menu is sent automatically, without anyone pressing a button.
+   *
+   * Always a complete, clamped object -- never partial and never absent -- because
+   * `resolveLeaflySettings` fills it from `resolveScheduleSettings`. A settings row
+   * written before L-7 has no `schedule` key at all and resolves to the defaults, which
+   * have automation OFF. That is the correct reading of an old row: nobody who saved
+   * settings last month consented to automatic syncing.
+   */
+  schedule: LeaflyScheduleSettings;
 };
 
 export type WeedmapsSyncSettings = ChannelSyncSettings & {
@@ -86,6 +125,10 @@ export const DEFAULT_LEAFLY_SETTINGS: LeaflySyncSettings = {
   syncMode: "post",
   // Ordering starts OFF. See the field's doc comment: this one is a promise to fulfil.
   sendPickupAvailability: false,
+  // Automation also starts OFF, for the same reason and by the same rule: the default
+  // is owned by `schedule-core.ts`, not restated here, so there is exactly one place
+  // that decides what an unconfigured schedule means.
+  schedule: DEFAULT_SCHEDULE_SETTINGS,
 };
 
 export const DEFAULT_WEEDMAPS_SETTINGS: WeedmapsSyncSettings = {
@@ -103,6 +146,15 @@ export function clampInt(value: unknown, min: number, max: number, fallback: num
   const n = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+/**
+ * Is this a jsonb object we can read keys off? Arrays are excluded on purpose:
+ * `typeof [] === "object"` in JavaScript, and an array reaching the schedule
+ * resolver would read every field as undefined and look like a deliberate reset.
+ */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function asBool(value: unknown, fallback: boolean): boolean {
@@ -127,6 +179,13 @@ export function resolveLeaflySettings(raw: Record<string, unknown> | null | unde
     forceResend: asBool(r["forceResend"], d.forceResend),
     syncMode: mode === "put" ? "put" : "post",
     sendPickupAvailability: asBool(r["sendPickupAvailability"], d.sendPickupAvailability),
+    // Delegated, not duplicated (rule 11). Anything that is not a usable object --
+    // absent, null, a string, an array -- resolves to the safe defaults rather than
+    // being coerced, because a malformed schedule must fail towards "off", not towards
+    // "guess an hour and start calling a third party".
+    schedule: resolveScheduleSettings(
+      isPlainObject(r["schedule"]) ? (r["schedule"] as Record<string, unknown>) : null,
+    ),
   };
 }
 
@@ -149,7 +208,15 @@ export function resolveWeedmapsSettings(raw: Record<string, unknown> | null | un
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-export function __runSyncSettingsTests(): void {
+/**
+ * SLICE L-7: this returned `void` and its two harness registrations therefore
+ * could only assert "it did not throw" -- which a suite that ran zero
+ * assertions would also satisfy. Now that this core resolves the automatic sync
+ * schedule as well as the transmission toggles, that blind spot covered the
+ * round trip that keeps an owner's automation setting from being silently
+ * reset. Returning the counts lets both harnesses apply a floor.
+ */
+export function __runSyncSettingsTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
   const ok = (label: string, cond: boolean) => {
@@ -242,6 +309,78 @@ export function __runSyncSettingsTests(): void {
     lfRound.sendPickupAvailability === true && lfRound.sendImages === false,
   );
 
+  // --- SLICE L-7: the nested schedule block -------------------------------
+  // The point of these assertions is that the schedule survives a round trip
+  // through this resolver. If it did not, saving a checkbox on the transmission
+  // form would silently reset the owner's automatic syncing, because
+  // `saveSyncSettings` upserts the WHOLE blob.
+  {
+    const withSched = resolveLeaflySettings({
+      schedule: { enabled: true, dailyFullHour: 5, intradayMinutes: 30 },
+    });
+    ok("schedule block is read, not ignored", withSched.schedule.enabled === true);
+    ok("schedule hour is read", withSched.schedule.dailyFullHour === 5);
+    ok("schedule interval is read", withSched.schedule.intradayMinutes === 30);
+  }
+  {
+    // A row saved before L-7 has no `schedule` key whatsoever.
+    const legacy = resolveLeaflySettings({ pacingMs: 0, syncMode: "post" });
+    ok("a pre-L-7 row still yields a complete schedule", typeof legacy.schedule === "object");
+    ok("a pre-L-7 row reads as automation OFF", legacy.schedule.enabled === false);
+    ok(
+      "a pre-L-7 row gets the default daily hour, not zero",
+      legacy.schedule.dailyFullHour === DEFAULT_SCHEDULE_SETTINGS.dailyFullHour,
+    );
+  }
+  {
+    // Malformed schedule values must fail towards OFF rather than being coerced.
+    for (const junk of ["", "enabled", 0, 1, true, false, [], [1, 2], NaN] as unknown[]) {
+      const r = resolveLeaflySettings({ schedule: junk });
+      ok(
+        `malformed schedule (${JSON.stringify(junk) ?? String(junk)}) resolves to OFF`,
+        r.schedule.enabled === false && r.schedule.dailyFullHour === DEFAULT_SCHEDULE_SETTINGS.dailyFullHour,
+      );
+    }
+  }
+  {
+    // An ARRAY is the interesting case: `typeof [] === "object"`, so a naive
+    // check would pass it through and every field would read as undefined.
+    const r = resolveLeaflySettings({ schedule: [{ enabled: true }] });
+    ok("an array schedule does not smuggle values through", r.schedule.enabled === false);
+  }
+  {
+    // Out-of-range values are clamped by the schedule core, not accepted here.
+    const r = resolveLeaflySettings({ schedule: { enabled: true, dailyFullHour: 99, intradayMinutes: 1 } });
+    ok("schedule hour is clamped through the delegate", r.schedule.dailyFullHour === 23);
+    ok("schedule interval is clamped through the delegate", r.schedule.intradayMinutes === 15);
+  }
+  {
+    // THE ROUND TRIP THAT MATTERS. Resolve -> store -> resolve must preserve the
+    // schedule exactly, because that is literally the save path: the action
+    // resolves the form, `saveSyncSettings` writes the whole object, and the
+    // next read resolves it again.
+    const first = resolveLeaflySettings({
+      schedule: { enabled: true, dailyFullHour: 3, intradayEnabled: false, intradayMinutes: 45 },
+      sendImages: false,
+    });
+    const second = resolveLeaflySettings(first as unknown as Record<string, unknown>);
+    ok(
+      "schedule survives a full resolve -> store -> resolve round trip",
+      JSON.stringify(second.schedule) === JSON.stringify(first.schedule),
+    );
+    ok("round trip keeps automation ON when it was on", second.schedule.enabled === true);
+    ok("round trip keeps the chosen hour", second.schedule.dailyFullHour === 3);
+    ok("round trip keeps intraday OFF when it was off", second.schedule.intradayEnabled === false);
+    ok("round trip does not disturb the transmission toggles", second.sendImages === false);
+  }
+  {
+    // The defaults object itself must contain a real schedule, or
+    // `DEFAULT_LEAFLY_SETTINGS` could be written to the database incomplete.
+    ok("the defaults carry a schedule object", typeof DEFAULT_LEAFLY_SETTINGS.schedule === "object");
+    ok("the default schedule has automation off", DEFAULT_LEAFLY_SETTINGS.schedule.enabled === false);
+  }
+
   console.log(`sync-settings: ${passed} passed, ${failed} failed`);
   if (failed > 0) throw new Error(`${failed} sync-settings test(s) failed`);
+  return { passed, failed };
 }
