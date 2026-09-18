@@ -56,6 +56,7 @@ import { __runLeaflyHmacTests } from "@/lib/leafly/hmac-core";
 import { __runLeaflyOrderMapTests } from "@/lib/leafly/order-map-core";
 import { __runLeaflyWebhookParseTests } from "@/lib/leafly/webhook-parse-core";
 import { __runLeaflyPreviewTests } from "@/lib/leafly/preview-core";
+import { __runLeaflyOrderAckTests } from "@/lib/leafly/order-ack-core";
 import { __runOrderOriginTests } from "@/lib/orders/order-origin-core";
 import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "@/lib/integrations/integration-credentials-core";
@@ -285,6 +286,41 @@ describe("embedded pure self-test suites", () => {
     // versus "not found in the Greenway catalogue" -- which is also the more
     // useful of the two, so that is what is asserted.
     expect(r.passed).toBeGreaterThan(71);
+  });
+  it("leafly-order-ack-core (SLICE L-6: talking back to Leafly, one-way doors)", () => {
+    const r = __runLeaflyOrderAckTests();
+    expect(r.failed).toBe(0);
+    // Floor set at registration from a measured 169. Unlike the L-5 receivers,
+    // every decision in this core produces an OUTBOUND side effect on Leafly's
+    // side that we cannot take back: acknowledging permanently revokes our
+    // access to the customer's ID images, and a status change is visible to the
+    // shopper immediately. The suite therefore asserts the refusals, not just
+    // the happy paths -- including that acknowledging twice is refused, that a
+    // terminal order cannot be acknowledged, that `order_api_unacknowledged` is
+    // rejected as an OUTBOUND cancel reason even though it is a legal INBOUND
+    // one, and that HTTP 200 on acknowledge is NOT success because the spec
+    // documents 204.
+    //
+    // Floor raised 165 -> 195 when the acknowledgement clock landed (measured
+    // 200). The clock section is where this suite paid for itself: both
+    // urgency thresholds were written with `<`, so an order with EXACTLY five
+    // minutes left before Leafly auto-cancels it was classified "soon" instead
+    // of "urgent". Both readings look right in review; only an assertion
+    // sitting precisely on the boundary distinguishes them.
+    //
+    // Raised again 195 -> 370 (measured 382) when the ACTION PLANNER landed.
+    // The planner decides which buttons the online orders dashboard shows, and
+    // it exists so the screen can never offer an action Leafly would refuse.
+    // Leafly's dashboard goes read-only once we are live -- "your software
+    // system will become the source of truth for order statuses" -- so this
+    // screen is the ONLY place a real customer's order can be moved, and a
+    // button that looks live but is refused on click teaches staff that the
+    // screen lies to them. The invariant is asserted in both directions
+    // (nothing offered is refused; nothing accepted is withheld) across every
+    // acknowledgement state x status x fulfillment mechanism, with a
+    // non-vacuity guard so a planner that returns nothing at all cannot make
+    // the matrix pass by iterating zero times.
+    expect(r.passed).toBeGreaterThan(370);
   });
   it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {
     const r = __runOrderOriginTests();

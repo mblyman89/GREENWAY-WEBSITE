@@ -196,6 +196,25 @@ import { __runLeaflyHmacTests } from "../../src/lib/leafly/hmac-core";
 import { __runLeaflyOrderMapTests } from "../../src/lib/leafly/order-map-core";
 import { __runLeaflyWebhookParseTests } from "../../src/lib/leafly/webhook-parse-core";
 import { __runLeaflyPreviewTests } from "../../src/lib/leafly/preview-core";
+// SLICE L-6 — talking BACK to Leafly. This core is the mirror image of the L-5
+// receivers and its failure mode is the opposite one, which is why it needs its
+// own registration rather than riding along with order-map-core:
+//   order-ack-core     — decides whether we may acknowledge an order at all,
+//                        which host to send it to, and which status changes
+//                        Leafly will accept. Three things make a bug here
+//                        expensive rather than merely wrong. (1) Acknowledging
+//                        is a ONE-WAY DOOR: the spec says it permanently
+//                        revokes our access to the customer's ID images, so an
+//                        acknowledgement sent too early destroys evidence we
+//                        are required to check. (2) The Order API lives on a
+//                        DIFFERENT host from the Menu API while sharing the
+//                        same token URL, so reusing the menu base URL produces
+//                        a plausible-looking 404 instead of an obvious crash.
+//                        (3) Unlike the inbound webhooks, these endpoints have
+//                        DOCUMENTED error responses, so silence is not an
+//                        acceptable answer — every rejection must be classified
+//                        as retry, fix-config, fix-request or gone.
+import { __runLeaflyOrderAckTests } from "../../src/lib/leafly/order-ack-core";
 import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
@@ -772,6 +791,31 @@ __runLiquidVolumeTests();
   assertRan("leafly-order-map-core", __runLeaflyOrderMapTests(), 145);
   assertRan("leafly-webhook-parse-core", __runLeaflyWebhookParseTests(), 90);
   assertRan("leafly-preview-core", __runLeaflyPreviewTests(), 71);
+  // SLICE L-6 -- talking BACK to Leafly. Floored for a reason the L-5 cores do
+  // not share: the acknowledge call is IRREVERSIBLE by Leafly's own
+  // documentation ("you will no longer have access to the customer's ID
+  // images"), so there is no environment in which a mistake here can be undone
+  // by retrying. The suite also pins the ORDER API host, which differs from the
+  // Menu API host while the OAuth token URL is shared -- the single most
+  // plausible copy-paste error in this slice, and one that fails as a 404 that
+  // reads like a missing order rather than as a misconfiguration. Measured
+  // at registration: 169, then 200 once the acknowledgement clock was added.
+  // Floor raised to 195 at that point rather than left at 165, because the
+  // clock section is where the suite EARNED its keep: written with `<` on both
+  // urgency thresholds, it reported "soon" for an order with exactly five
+  // minutes left before Leafly auto-cancels it. Both versions read correctly;
+  // only the boundary assertions could tell them apart.
+  //
+  // Raised again to 370 (measured 382) when the ACTION PLANNER and the human
+  // wording landed. The planner is what guarantees the orders dashboard cannot
+  // offer a button Leafly would refuse, and that guarantee is only worth
+  // stating because it is asserted as an invariant in BOTH directions over
+  // every combination of acknowledgement state, current status and fulfillment
+  // mechanism: nothing offered may be refused, and nothing accepted may be
+  // withheld. The second direction is the one that catches an over-eager
+  // filter quietly removing a legal action -- verified by sabotage, which the
+  // matrix caught in six places at once.
+  assertRan("leafly-order-ack-core", __runLeaflyOrderAckTests(), 370);
   __runWmPayloadTests();
   // Floored, not just called. This core gained the Leafly HMAC + order
   // integration key this slice, so it is now the thing that decides whether the

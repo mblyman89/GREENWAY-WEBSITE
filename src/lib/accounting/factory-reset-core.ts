@@ -620,9 +620,14 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "syndication_logs", disposition: "WIPE", because: "Test pushes of your menu to third-party sites." },
   { table: "syndication_sync_state", disposition: "WIPE", because: "Where each syndication feed left off during testing." },
   { table: "syndication_sync_settings", disposition: "KEEP", because: "Which sites you syndicate to — settings." },
-  // Leafly ORDER API (migration 0225, slice L-5). Both are WIPE, and the
-  // reasoning is recorded rather than left to the prefix, because one of them
-  // is append-only and the other holds a customer's order.
+  // Leafly ORDER API (migrations 0225 and 0226, slices L-5 and L-6). All
+  // three are WIPE, and the reasoning is recorded on each one rather than
+  // left to a name prefix, because they are not the same kind of data: one
+  // is an append-only receipt log that doubles as the duplicate guard, one
+  // holds a real customer's order, and one is the record of what we sent
+  // back to Leafly. A prefix rule would have classified all three off the
+  // shared "leafly_" stem without anyone deciding, which is the same
+  // unexamined sweep that produced D-62.
   //
   // leafly_webhook_events is append-only and doubles as the idempotency guard
   // (its unique index on body_sha256 is what makes a repeated delivery a
@@ -644,6 +649,27 @@ export const TABLE_RULES: readonly TableRule[] = [
   // orders taken after go-live are never touched by this, because the reset
   // is a pre-go-live tool.
   { table: "leafly_orders", disposition: "WIPE", because: "Practice orders received from Leafly's sandbox, including the saved copy of each one. Rehearsal orders, not sales — leaving them behind would show phantom Leafly orders on your dashboard on day one." },
+  //
+  // leafly_outbound_attempts (0226) is the other direction: one row for
+  // every acknowledge/status call we sent Leafly, AND one for every call
+  // the pure core refused to send (those rows have response_status NULL,
+  // which is why the column is nullable). WIPE, for a reason that is
+  // specific to this table rather than inherited from the other two:
+  // Leafly grades an integration by reviewing logged activity, so a
+  // rehearsal row reading "acknowledged" against a Leafly order id does
+  // not merely clutter a screen — it misrepresents what this store has
+  // actually done. Two further checks were made before writing WIPE here
+  // rather than assuming it from the neighbouring rules. First, WAC
+  // 314-55-087's retention duty attaches to actual transactions, and a
+  // sandbox attempt is not one; the reset is in any case a pre-go-live
+  // tool and cannot reach real post-launch activity. Second, unlike
+  // leafly_webhook_events, nothing in this table feeds an idempotency
+  // guard — its unique index is on (leafly_order_id, attempted_at desc),
+  // which is an ordering index, not a uniqueness one — so emptying it
+  // changes no future behaviour, it only stops the log lying about us.
+  // created_by is ON DELETE SET NULL, so these rows do not pin staff
+  // records in place and impose no delete ordering of their own.
+  { table: "leafly_outbound_attempts", disposition: "WIPE", because: "Every message we sent Leafly about a practice order — each acknowledgement and status update, plus the ones the system declined to send and why. Rehearsal paperwork: left behind, it would read as if this store had really been working orders on Leafly." },
   { table: "license_settings", disposition: "KEEP", because: "Your I-502 licence number and CCRS identifiers." },
   { table: "tax_settings", disposition: "KEEP", because: "Your excise and sales tax rates." },
   { table: "tax_category_rules", disposition: "KEEP", because: "Which categories are taxed which way." },

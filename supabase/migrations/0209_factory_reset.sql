@@ -362,6 +362,15 @@ begin
   -- their fingerprints, so a real webhook repeating a test body would be
   -- silently dropped -- the one case where failing to wipe a log changes
   -- future behaviour instead of merely leaving clutter.
+  -- leafly_outbound_attempts (migration 0226, slice L-6) is the OUTBOUND half:
+  -- every acknowledge/status call we made to Leafly, plus every one the pure
+  -- core refused to make. Emptied first because it is the most order-dependent
+  -- of the three, and emptied AT ALL for a reason specific to it: a rehearsal
+  -- row saying "acknowledged" against a Leafly order id is exactly the kind of
+  -- evidence a later certification review would read as real activity. Leafly
+  -- grades "by review of logged activity", so leaving practice rows in the
+  -- outbound log does not merely clutter -- it misrepresents.
+  delete from public.leafly_outbound_attempts where true;  get diagnostics n = row_count; counts := counts || jsonb_build_object('leafly_outbound_attempts', n);
   delete from public.leafly_webhook_events where true;     get diagnostics n = row_count; counts := counts || jsonb_build_object('leafly_webhook_events', n);
   delete from public.leafly_orders where true;             get diagnostics n = row_count; counts := counts || jsonb_build_object('leafly_orders', n);
 
