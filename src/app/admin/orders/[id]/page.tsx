@@ -20,6 +20,7 @@ import {
 } from "@/lib/orders/types";
 import { ORDER_REVERSAL_TARGETS } from "@/lib/orders/order-lifecycle-core";
 import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
+import { OrderOriginBadge } from "@/components/admin/orders/OrderOriginBadge";
 import { formatDateTime } from "@/lib/pos/format";
 import {
   setOrderStatusAction,
@@ -143,11 +144,22 @@ export default async function OrderDetailPage({
           <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/70">Items</h2>
-              <span
-                className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${STATUS_STYLES[order.status]}`}
-              >
-                {ORDER_STATUS_LABELS[order.status]}
-              </span>
+              <div className="flex items-center gap-2">
+                {/* SLICE L-12. No `hideWebsite` here, unlike the list: on a
+                    single order the question "where did this come from?" is
+                    a real question, and an absent badge would leave it
+                    unanswered rather than merely unremarkable.
+
+                    It matters most on THIS page, because this is where
+                    somebody decides to phone the customer. A Leafly customer
+                    was told about their order by Leafly, not by us. */}
+                <OrderOriginBadge origin={order.origin} />
+                <span
+                  className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${STATUS_STYLES[order.status]}`}
+                >
+                  {ORDER_STATUS_LABELS[order.status]}
+                </span>
+              </div>
             </div>
             <div className="mt-4 grid gap-2.5">
               {order.lines.map((line) => (

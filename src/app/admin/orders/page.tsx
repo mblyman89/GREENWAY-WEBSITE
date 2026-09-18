@@ -24,6 +24,7 @@ import {
   type OrderStatus,
 } from "@/lib/orders/types";
 import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
+import { OrderOriginBadge } from "@/components/admin/orders/OrderOriginBadge";
 import { listPoolNamesStatus } from "@/lib/orders/order-name-pool-store";
 import { getPrinterSettings, isPrinterOnline } from "@/lib/printing/printer-store";
 import { setOrderStatusAction, testPrintFromOrdersAction } from "./actions";
@@ -483,6 +484,12 @@ export default async function OrdersAdminPage({
                         >
                           {ORDER_STATUS_LABELS[order.status]}
                         </span>
+                        {/* SLICE L-12. `hideWebsite` because almost every row
+                            here is a website order: badging all forty trains
+                            the eye to skip the column, which would take the
+                            Leafly badge with it. Only the exception is
+                            marked, which is the whole point of marking it. */}
+                        <OrderOriginBadge origin={order.origin} hideWebsite />
                       </div>
                       {order.display_name && order.display_name.trim() ? (
                         <p className="mt-0.5 font-mono text-xs text-[var(--admin-text-faint)]">

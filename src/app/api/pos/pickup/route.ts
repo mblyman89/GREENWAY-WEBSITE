@@ -110,6 +110,18 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         customerNote: loaded.customerNote,
         lines: loaded.lines,
         member: loaded.member,
+        // SLICE L-12 - origin travels into the sale.
+        //
+        // NOTE FOR ANYONE ADDING A FIELD HERE: this object is hand-copied
+        // rather than spread, so a field added to LoadOrderResult does NOT
+        // appear at the register until it is named on this line too. That is
+        // deliberate (the register is an external client and the payload is a
+        // contract), but it means this is exactly the seam where a new field
+        // gets silently lost. tests/compliance/leafly-bridge-wiring.test.ts
+        // asserts that these three are present.
+        origin: loaded.origin,
+        originLabel: loaded.originLabel,
+        isMarketplace: loaded.isMarketplace,
       },
     });
   }

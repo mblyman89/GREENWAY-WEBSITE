@@ -36,6 +36,12 @@ import {
   customerPickupLabel,
   type PickupQueueEntry,
 } from "@/lib/pos/pickup-core";
+import {
+  toOrderOrigin,
+  orderOriginLabel,
+  isMarketplaceOrigin,
+  type OrderOrigin,
+} from "@/lib/orders/order-origin-core";
 import { recordAudit } from "@/lib/auth/audit";
 import { type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 import { getAccountByCustomer, listTiers } from "@/lib/loyalty/loyalty-store";
@@ -82,6 +88,15 @@ export type PickupOrderDetail = {
   customerNote: string | null;
   placedAtIso: string;
   lines: { productName: string; variantLabel: string | null; quantity: number; priceMinor: number }[];
+  /**
+   * SLICE L-12 - carried onto the counter view for the same reason it is
+   * carried onto the queue tile: the budtender reading this pane is about to
+   * hand cannabis to a human being, and whether Leafly or Greenway told that
+   * human what to expect changes what the budtender should say.
+   */
+  origin: OrderOrigin;
+  originLabel: string;
+  isMarketplace: boolean;
 };
 
 export type PickupDetailResult = { ok: true; order: PickupOrderDetail } | { ok: false; error: string };
@@ -93,6 +108,7 @@ export async function getRegisterPickupOrder(orderId: string): Promise<PickupDet
   if (isPosMaterializedOrder(order.staff_note)) {
     return { ok: false, error: "That order is a register sale, not a website pickup." };
   }
+  const origin = toOrderOrigin(order.origin);
   return {
     ok: true,
     order: {
@@ -112,6 +128,9 @@ export async function getRegisterPickupOrder(orderId: string): Promise<PickupDet
         quantity: l.quantity,
         priceMinor: l.price_minor_units,
       })),
+      origin,
+      originLabel: orderOriginLabel(origin),
+      isMarketplace: isMarketplaceOrigin(origin),
     },
   };
 }
@@ -157,6 +176,28 @@ export type LoadOrderResult =
        * sale in one step. Null when the order has no linked profile.
        */
       member: { customerId: string; label: string; points: number; tierName: string | null } | null;
+      /**
+       * SLICE L-12 - origin follows the order INTO the sale.
+       *
+       * This is the field that matters most of the three, and it is the one
+       * that is easiest to leave out, because by this point the order has
+       * "become" a register sale and origin feels like history.
+       *
+       * It is not history. The owner asked what happens when "leafly cancels
+       * an order already loaded into a register sale" - which is a question
+       * that only has an answer if the sale still knows it came from Leafly.
+       * `decideCancelPlan` (leafly/bridge-core.ts) encodes the enterprise
+       * practice: never mutate a till mid-transaction, interrupt the cashier
+       * with a blocking acknowledgement instead. An interruption cannot be
+       * targeted at the right register if the register forgot which
+       * marketplace it is serving.
+       *
+       * So the origin travels with the load, and the sale screen shows it for
+       * as long as the sale is open.
+       */
+      origin: OrderOrigin;
+      originLabel: string;
+      isMarketplace: boolean;
     }
   | { ok: false; error: string };
 
@@ -242,6 +283,11 @@ export async function loadOrderIntoRegister(input: {
     }
   }
 
+  // The order's origin travels into the sale (L-12). Resolved from the SAME
+  // row that was just validated above, not re-fetched, so the sale cannot
+  // disagree with the queue tile the budtender tapped a second earlier.
+  const loadedOrigin = toOrderOrigin(order.origin);
+
   return {
     ok: true,
     orderId: order.id,
@@ -255,5 +301,8 @@ export async function loadOrderIntoRegister(input: {
       quantity: l.quantity,
     })),
     member,
+    origin: loadedOrigin,
+    originLabel: orderOriginLabel(loadedOrigin),
+    isMarketplace: isMarketplaceOrigin(loadedOrigin),
   };
 }

@@ -1805,7 +1805,21 @@ export function RegisterShell({
               return;
             }
             const rebuilt = rebuildOrderCart(loaded.lines, effectiveBundle.products);
-            const parts: string[] = [`Order ${loaded.orderNumber} (${loaded.customerLabel}) loaded into this sale.`];
+            const parts: string[] = [
+              // SLICE L-12 - name the marketplace IN the banner.
+              //
+              // The badge is on the queue tile and on the detail pane, but
+              // both of those disappear the instant the modal closes, and
+              // what remains on screen is this banner over an open sale. If
+              // the origin is not in this sentence, it is nowhere - and this
+              // sale is exactly the one the owner asked about: "what happens
+              // when leafly cancels an order already loaded into a register
+              // sale". A cashier who never knew it was a Leafly order cannot
+              // make sense of the cancellation notice when it arrives.
+              loaded.isMarketplace && (loaded.originLabel ?? "").trim() !== ""
+                ? `${loaded.originLabel} order ${loaded.orderNumber} (${loaded.customerLabel}) loaded into this sale.`
+                : `Order ${loaded.orderNumber} (${loaded.customerLabel}) loaded into this sale.`,
+            ];
             if (rebuilt.dropped.length > 0) parts.push(`Dropped: ${rebuilt.dropped.join(", ")}.`);
             if (loaded.customerNote) parts.push(`Customer note: ${loaded.customerNote}`);
             setBanner(parts.join(" "));
@@ -3829,7 +3843,81 @@ type PickupDetail = {
   customerNote: string | null;
   placedAtIso: string;
   lines: { productName: string; variantLabel: string | null; quantity: number; priceMinor: number }[];
+  /**
+   * SLICE L-12 - where the order came from. Optional in the TYPE because this
+   * shape is parsed from a network response and an older server build (or a
+   * register that has not reloaded) will not send it. The renderer treats
+   * absent as "website", which is the same safe direction `toOrderOrigin`
+   * takes: a missing badge, never a wrong one.
+   */
+  origin?: string;
+  originLabel?: string;
+  isMarketplace?: boolean;
 };
+
+/**
+ * ===========================================================================
+ * SLICE L-12 - TELLING A LEAFLY ORDER FROM A WEBSITE ORDER, AT THE COUNTER
+ * ===========================================================================
+ *
+ * The owner's words: "The two types need to be distinguishable from each
+ * other." He said it about the REGISTER specifically, and the register was
+ * the one screen where they were not.
+ *
+ * `orders.origin` has existed since migration 0226 and the back office shows
+ * it, but `PickupQueueEntry` never copied the column across, so the last
+ * screen a budtender looks at before handing over cannabis drew both kinds of
+ * order as the same tile. That is the worst possible place for the ambiguity,
+ * because three obligations attach to a Leafly order and all three land at
+ * the counter: Leafly (not us) told the customer what to expect; Leafly can
+ * cancel the order from outside the building even while it sits in an open
+ * sale; and its status has to be pushed back to Leafly.
+ *
+ * WHY A SEPARATE BADGE FROM THE BACK OFFICE ONE
+ * ---------------------------------------------
+ * `OrderOriginBadge` (components/admin/orders) is a back-office component
+ * styled with --admin-* tokens. The register is its own bundle with its own
+ * token set (--pos-*), sized for a thumb on an iPad at arm's length, and it
+ * must never import back-office code. So the PRESENTATION is separate by
+ * necessity.
+ *
+ * The RULE is not duplicated, and that is the part house rule 11 cares
+ * about. The word ("Leafly") and the classification (is this a marketplace?)
+ * are both computed on the SERVER by `orderOriginLabel` / `isMarketplaceOrigin`
+ * in the one pure core, and arrive here as plain strings. This component
+ * chooses a colour and nothing else. Add a marketplace to
+ * MARKETPLACE_ORDER_ORIGINS and this badge lights up for it without being
+ * edited.
+ */
+function PickupOriginBadge({
+  originLabel,
+  isMarketplace,
+}: {
+  originLabel?: string;
+  isMarketplace?: boolean;
+}) {
+  // Absent (older server build, or a pre-0226 row) means "ordinary website
+  // order" - the normal case, which gets no badge. Silence is correct here:
+  // a badge reading "Website" on every tile would train the eye to skip the
+  // corner of the tile where the Leafly badge lives.
+  const label = (originLabel ?? "").trim();
+  if (label === "" || label === "Website") return null;
+
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-[0.7rem] font-black uppercase tracking-wide ${
+        isMarketplace
+          ? // A marketplace order carries obligations the budtender must know
+            // about, so it gets the warning family - the same colour this
+            // register already uses for "read this before you continue".
+            "border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] text-[var(--pos-warn)]"
+          : "border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
 
 /**
  * The register's window into the website order queue. Two panes in one modal:
@@ -3864,6 +3952,10 @@ function PickupQueueModal({
     customerNote: string | null;
     lines: LoadedOrderLine[];
     member: PosMemberHit | null;
+    /** SLICE L-12 - origin follows the order into the sale it becomes. */
+    origin?: string;
+    originLabel?: string;
+    isMarketplace?: boolean;
   }) => void;
 }) {
   const [queue, setQueue] = useState<PickupQueueEntry[] | null>(null);
@@ -3947,6 +4039,13 @@ function PickupQueueModal({
               customerNote: string | null;
               lines: LoadedOrderLine[];
               member: PosMemberHit | null;
+              // L-12. Optional: a register running an older bundle against a
+              // newer server (or the reverse) must still be able to load an
+              // order. A missing badge is a cosmetic loss; a parse failure
+              // here would block a handover.
+              origin?: string;
+              originLabel?: string;
+              isMarketplace?: boolean;
             };
             error?: string;
           }
@@ -3967,8 +4066,16 @@ function PickupQueueModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">
-            {detail ? `Order ${detail.orderNumber} — ${detail.customerLabel}` : "Pickup orders"}
+          <h2 className="flex min-w-0 items-center gap-2 text-lg font-semibold">
+            <span className="truncate">
+              {detail ? `Order ${detail.orderNumber} — ${detail.customerLabel}` : "Pickup orders"}
+            </span>
+            {/* L-12 — the detail pane is the last screen before "Start
+                handover", so the origin is repeated here rather than assumed
+                remembered from the tile. */}
+            {detail ? (
+              <PickupOriginBadge originLabel={detail.originLabel} isMarketplace={detail.isMarketplace} />
+            ) : null}
           </h2>
           <div className="flex gap-2">
             {detail ? (
@@ -3993,14 +4100,16 @@ function PickupQueueModal({
         {!detail ? (
           <>
             <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
-              Website orders, ready first. Tap one to hand it over — the ID check happens HERE, at the counter,
-              and the sale runs the same compliance gate as every register sale.
+              Online orders, ready first — from our website and from Leafly. Tap one to hand it over — the ID
+              check happens HERE, at the counter, and the sale runs the same compliance gate as every register
+              sale. Orders that came from a marketplace are badged; that customer was told what to expect by
+              the marketplace, not by us.
             </p>
             {queue === null ? (
               <p className="mt-6 text-center text-sm text-[var(--pos-text-faint)]">Loading…</p>
             ) : queue.length === 0 ? (
               <p className="mt-6 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-6 text-center text-sm text-[var(--pos-text-faint)]">
-                No website orders waiting. New orders appear here the moment they&rsquo;re placed.
+                No online orders waiting. New orders appear here the moment they&rsquo;re placed.
               </p>
             ) : (
               <ul className="mt-4 space-y-2">
@@ -4016,9 +4125,16 @@ function PickupQueueModal({
                           : "border-[var(--pos-border)] bg-[var(--pos-surface-2)]"
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold">
-                          {q.orderNumber} · {q.customerLabel}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+                          <span className="truncate">
+                            {q.orderNumber} · {q.customerLabel}
+                          </span>
+                          {/* L-12 — beside the order number, not at the end of
+                              the line: this is the first thing read on the
+                              tile, and a badge after the waiting time would
+                              be read last or not at all. */}
+                          <PickupOriginBadge originLabel={q.originLabel} isMarketplace={q.isMarketplace} />
                         </span>
                         <span
                           className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
