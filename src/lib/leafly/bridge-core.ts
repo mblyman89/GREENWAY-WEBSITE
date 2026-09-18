@@ -475,6 +475,159 @@ export function buildLeaflyLocalOrderDraft(input: {
 }
 
 // ============================================================================
+// 4b. READING LEAFLY'S STORED ORDER PAYLOAD
+// ============================================================================
+
+/**
+ * Pull the fields we need out of a stored `raw_order` payload.
+ *
+ * EVERY FIELD NAME BELOW IS TAKEN FROM THE VENDORED SPEC
+ * (`docs/leafly-specs/order-api-v1.openapi.json`), schema `Order`, and none
+ * of them is guessed:
+ *
+ *   subtotal   "order total before taxes and fees in minor units"
+ *   total      "order grand total in minor units, after aggregating all
+ *               items, taxes, fees, and discounts. Tip is not included."
+ *   taxes      array of TaxComponent, each "amountCents" -- "tax amount in
+ *               minor units"
+ *   cartItems  array of CartItemOutgoing; per item `name`, `quantity`, and
+ *               "discountedPriceCents": "price of entire cart item (all
+ *               quantity) in minor units after discount application"
+ *
+ * TWO THINGS WORTH BEING EXPLICIT ABOUT.
+ *
+ * First, `discountedPriceCents` is the price of the WHOLE line, not the unit
+ * price, and our own receipt lines are per-unit. Dividing is the only way to
+ * reconcile them, and it does not always divide evenly -- so the remainder is
+ * carried rather than dropped (see below), because silently losing a cent per
+ * line is exactly the sort of thing that shows up as an unexplained till
+ * variance weeks later.
+ *
+ * Second, `total` EXCLUDES tip. That is Leafly's definition, quoted above,
+ * and it is the right one for us: the tip is not ours and must not appear in
+ * the order total the register collects against.
+ *
+ * Money is never recomputed from the parts. Leafly has already shown the
+ * shopper a number; the register must agree with what the customer agreed to,
+ * so their totals are taken as given (house rule 8: minor units throughout).
+ */
+export function readLeaflyOrderPayload(raw: unknown): LeaflyDraftResult {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, reason: "the stored Leafly payload is not an object" };
+  }
+  const o = raw as Record<string, unknown>;
+
+  // The payload may be the order itself, or an envelope with the order nested
+  // under `order` -- the submission webhook wraps it. Try the envelope first
+  // and fall back, rather than assuming one shape.
+  const inner =
+    o.order !== null && typeof o.order === "object" && !Array.isArray(o.order)
+      ? (o.order as Record<string, unknown>)
+      : o;
+
+  const id = typeof inner.id === "string" ? inner.id.trim() : "";
+  if (id === "") return { ok: false, reason: "the stored Leafly payload has no order id" };
+
+  const intOrNull = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) && Number.isInteger(v) && v >= 0 ? v : null;
+
+  const subtotal = intOrNull(inner.subtotal);
+  const total = intOrNull(inner.total);
+  if (subtotal === null || total === null) {
+    return { ok: false, reason: "the stored Leafly payload has no usable subtotal or total" };
+  }
+
+  // Taxes are an ARRAY of components, and the register wants one number.
+  // Summing the components is not recomputing the tax -- it is reading the
+  // figure Leafly itself broke out.
+  let tax = 0;
+  if (Array.isArray(inner.taxes)) {
+    for (const t of inner.taxes) {
+      if (t === null || typeof t !== "object") continue;
+      const amount = intOrNull((t as Record<string, unknown>).amountCents);
+      if (amount !== null) tax += amount;
+    }
+  }
+
+  const rawItems = Array.isArray(inner.cartItems) ? inner.cartItems : [];
+  const lines: {
+    productName: string;
+    variantLabel: string | null;
+    quantity: number;
+    priceMinorUnits: number;
+  }[] = [];
+
+  for (const item of rawItems) {
+    if (item === null || typeof item !== "object") continue;
+    const ci = item as Record<string, unknown>;
+    const quantity =
+      typeof ci.quantity === "number" && Number.isInteger(ci.quantity) && ci.quantity > 0
+        ? ci.quantity
+        : 1;
+
+    // Prefer the discounted line price, because that is what the shopper was
+    // actually charged. Fall back to the undiscounted one only if it is
+    // absent.
+    const lineTotal = intOrNull(ci.discountedPriceCents) ?? intOrNull(ci.priceCents);
+    if (lineTotal === null) continue;
+
+    // Whole-line price to unit price. An uneven division would lose money, so
+    // the remainder is pushed onto the first unit rather than discarded --
+    // quantity 3 at 1000 becomes 334 + 333 + 333, never 333 + 333 + 333.
+    // Because our line model carries ONE unit price, a line that does not
+    // divide evenly is split into two lines rather than being rounded.
+    const base = Math.floor(lineTotal / quantity);
+    const remainder = lineTotal - base * quantity;
+
+    const name =
+      typeof ci.name === "string" && ci.name.trim() !== "" ? ci.name.trim() : "Unnamed item";
+    const size =
+      typeof ci.packageSize === "string" && ci.packageSize.trim() !== ""
+        ? ci.packageSize.trim()
+        : "";
+    const unit =
+      typeof ci.packageUnit === "string" && ci.packageUnit.trim() !== ""
+        ? ci.packageUnit.trim()
+        : "";
+    const variantLabel = `${size}${unit}`.trim() === "" ? null : `${size}${unit}`.trim();
+
+    if (remainder === 0) {
+      lines.push({ productName: name, variantLabel, quantity, priceMinorUnits: base });
+    } else {
+      // The odd cents ride on a single unit so the line total still adds up
+      // exactly to what Leafly charged.
+      lines.push({ productName: name, variantLabel, quantity: 1, priceMinorUnits: base + remainder });
+      if (quantity - 1 > 0) {
+        lines.push({
+          productName: name,
+          variantLabel,
+          quantity: quantity - 1,
+          priceMinorUnits: base,
+        });
+      }
+    }
+  }
+
+  const first = typeof inner.firstName === "string" ? inner.firstName.trim() : "";
+  const last = typeof inner.lastName === "string" ? inner.lastName.trim() : "";
+  // Surname initial only. This lands on a receipt that sits on a shelf in a
+  // room customers walk through.
+  const customerLabel =
+    first === "" && last === ""
+      ? null
+      : `${first}${last === "" ? "" : ` ${last.slice(0, 1).toUpperCase()}.`}`.trim();
+
+  return buildLeaflyLocalOrderDraft({
+    leaflyOrderId: id,
+    customerLabel,
+    subtotalMinorUnits: subtotal,
+    taxMinorUnits: tax,
+    totalMinorUnits: total,
+    lines,
+  });
+}
+
+// ============================================================================
 // 5. SELF-TESTS
 // ============================================================================
 
@@ -828,6 +981,195 @@ export function __runLeaflyBridgeTests(): { passed: number; failed: number } {
   eq("the default origin is greenway", DEFAULT_ORDER_ORIGIN, "greenway");
   eq("the leafly badge reads Leafly", orderOriginLabel("leafly"), "Leafly");
   ok("the leafly receipt line names Leafly", orderOriginReceiptLine("leafly").includes("LEAFLY"));
+
+  // ---- reading Leafly's stored payload -----------------------------------
+  // Field names here are the spec's, not ours. A fixture shaped like the real
+  // `Order` schema is the only way these assertions mean anything.
+  const payload = {
+    id: "8f14e45f-ceea-467a-9ba8-1b2c3d4e5f60",
+    firstName: "Jamie",
+    lastName: "Rodriguez",
+    subtotal: 3000,
+    total: 4110,
+    taxes: [
+      { label: "Cannabis excise", amountCents: 1110 },
+      { label: "Sales tax", amountCents: 0 },
+    ],
+    cartItems: [
+      {
+        name: "Blue Dream",
+        quantity: 2,
+        packageSize: "3.5",
+        packageUnit: "g",
+        priceCents: 3000,
+        discountedPriceCents: 3000,
+      },
+    ],
+  };
+
+  const read = readLeaflyOrderPayload(payload);
+  ok("a spec-shaped payload is readable", read.ok);
+  if (read.ok) {
+    eq("the subtotal is taken as given", read.draft.subtotalMinorUnits, 3000);
+    eq("the total is taken as given", read.draft.totalMinorUnits, 4110);
+    // The tax COMPONENTS are summed; this is reading Leafly's own breakdown,
+    // not recomputing tax.
+    eq("the tax components are summed", read.draft.taxMinorUnits, 1110);
+    eq("the line survives", read.draft.lines.length, 1);
+    // discountedPriceCents is the WHOLE line; our lines are per unit.
+    eq("a whole-line price becomes a unit price", read.draft.lines[0].priceMinorUnits, 1500);
+    eq("the quantity survives", read.draft.lines[0].quantity, 2);
+    eq("size and unit become the variant label", read.draft.lines[0].variantLabel, "3.5g");
+    // PRIVACY: this label is printed on paper that sits on a shelf.
+    eq("the customer is a first name and an initial", read.draft.customerLabel, "Jamie R.");
+    ok("the surname is not printed in full", !String(read.draft.customerLabel).includes("Rodriguez"));
+  }
+
+  // MONEY CONSERVATION -- the assertion that matters most in this whole file.
+  // A line of 1000 across 3 units does not divide evenly. Dropping the
+  // remainder would under-charge by a cent, which is how a till ends up
+  // unexplainably short.
+  const uneven = readLeaflyOrderPayload({
+    ...payload,
+    subtotal: 1000,
+    total: 1000,
+    taxes: [],
+    cartItems: [{ name: "Pre-roll", quantity: 3, priceCents: 1000, discountedPriceCents: 1000 }],
+  });
+  ok("an unevenly divisible line is still readable", uneven.ok);
+  if (uneven.ok) {
+    const summed = uneven.draft.lines.reduce(
+      (acc, l) => acc + l.priceMinorUnits * l.quantity,
+      0,
+    );
+    eq("NOT ONE CENT IS LOST when a line does not divide evenly", summed, 1000);
+    eq(
+      "the quantities still add up to what was ordered",
+      uneven.draft.lines.reduce((acc, l) => acc + l.quantity, 0),
+      3,
+    );
+  }
+  // The same property, checked across a range rather than one lucky number.
+  for (const [lineTotal, qty] of [
+    [1000, 3],
+    [1, 2],
+    [999, 7],
+    [10000, 3],
+    [5, 4],
+  ] as const) {
+    const r = readLeaflyOrderPayload({
+      ...payload,
+      subtotal: lineTotal,
+      total: lineTotal,
+      taxes: [],
+      cartItems: [{ name: "X", quantity: qty, priceCents: lineTotal, discountedPriceCents: lineTotal }],
+    });
+    ok(`money is conserved for ${lineTotal} over ${qty}`, r.ok);
+    if (r.ok) {
+      eq(
+        `the ${lineTotal}/${qty} split still totals ${lineTotal}`,
+        r.draft.lines.reduce((a, l) => a + l.priceMinorUnits * l.quantity, 0),
+        lineTotal,
+      );
+      eq(
+        `the ${lineTotal}/${qty} split still has ${qty} units`,
+        r.draft.lines.reduce((a, l) => a + l.quantity, 0),
+        qty,
+      );
+    }
+  }
+
+  // The discounted price is what the shopper actually paid, so it wins.
+  const discounted = readLeaflyOrderPayload({
+    ...payload,
+    cartItems: [{ name: "Y", quantity: 1, priceCents: 5000, discountedPriceCents: 4000 }],
+  });
+  ok("a discounted line is readable", discounted.ok);
+  if (discounted.ok) {
+    eq("the DISCOUNTED price is used, not the list price", discounted.draft.lines[0].priceMinorUnits, 4000);
+  }
+
+  // The submission webhook nests the order; a bare order must work too.
+  const nested = readLeaflyOrderPayload({ eventType: "order_submit", order: payload });
+  ok("an enveloped payload is unwrapped", nested.ok);
+  if (nested.ok && read.ok) {
+    eq("enveloped and bare payloads agree", nested.draft.totalMinorUnits, read.draft.totalMinorUnits);
+  }
+
+  // REFUSALS. Every one of these would otherwise put a wrong number in front
+  // of a customer, which is worse than putting nothing there.
+  ok("a null payload is refused", !readLeaflyOrderPayload(null).ok);
+  ok("a string payload is refused", !readLeaflyOrderPayload("nope").ok);
+  ok("an array payload is refused", !readLeaflyOrderPayload([]).ok);
+  ok("a payload with no id is refused", !readLeaflyOrderPayload({ ...payload, id: "" }).ok);
+  ok("a payload with no total is refused", !readLeaflyOrderPayload({ ...payload, total: null }).ok);
+  ok(
+    "a payload with a fractional total is refused",
+    !readLeaflyOrderPayload({ ...payload, total: 41.1 }).ok,
+  );
+  ok(
+    "a payload with a negative total is refused",
+    !readLeaflyOrderPayload({ ...payload, total: -1 }).ok,
+  );
+  ok(
+    "a payload with no cart items is refused",
+    !readLeaflyOrderPayload({ ...payload, cartItems: [] }).ok,
+  );
+  // NON-VACUITY: the refusals above must not be passing because the reader
+  // refuses everything. The happy path above already proves it accepts, and
+  // this states it as a paired assertion so the two cannot drift apart.
+  ok("the reader is not simply refusing everything", readLeaflyOrderPayload(payload).ok);
+
+  // NO LINE MAY EVER CARRY A NEGATIVE PRICE.
+  //
+  // MUTATION-TESTING NOTE: replacing Math.floor with Math.round in the unit
+  // price split survived every assertion above, because rounding UP makes the
+  // remainder negative and the negative remainder cancels out again in the
+  // total -- money was still conserved, so the conservation checks passed.
+  // What it actually produced was a line priced at MINUS 48 cents (50 cents
+  // over 99 units). A negative price on a register line is a refund the shop
+  // never agreed to, so it is asserted directly rather than inferred from
+  // the totals.
+  for (const [lineTotal, qty] of [
+    [50, 99],
+    [1, 2],
+    [999, 7],
+    [1, 100],
+    [7, 3],
+  ] as const) {
+    const r = readLeaflyOrderPayload({
+      ...payload,
+      subtotal: lineTotal,
+      total: lineTotal,
+      taxes: [],
+      cartItems: [{ name: "Z", quantity: qty, priceCents: lineTotal, discountedPriceCents: lineTotal }],
+    });
+    ok(`${lineTotal} over ${qty} is readable`, r.ok);
+    if (r.ok) {
+      ok(
+        `no line is negatively priced for ${lineTotal} over ${qty}`,
+        r.draft.lines.every((l) => l.priceMinorUnits >= 0),
+      );
+      ok(
+        `no line has a non-positive quantity for ${lineTotal} over ${qty}`,
+        r.draft.lines.every((l) => l.quantity > 0),
+      );
+      eq(
+        `${lineTotal} over ${qty} still conserves money`,
+        r.draft.lines.reduce((a, l) => a + l.priceMinorUnits * l.quantity, 0),
+        lineTotal,
+      );
+    }
+  }
+  // Junk taxes must not poison a readable order -- they are summed defensively.
+  const junkTax = readLeaflyOrderPayload({
+    ...payload,
+    taxes: [null, "x", { label: "ok", amountCents: 100 }, { label: "bad", amountCents: -5 }],
+  });
+  ok("junk tax components do not make the order unreadable", junkTax.ok);
+  if (junkTax.ok) {
+    eq("only the valid tax component is counted", junkTax.draft.taxMinorUnits, 100);
+  }
 
   // ---- determinism -------------------------------------------------------
   const twice = [0, 1].map(() =>
