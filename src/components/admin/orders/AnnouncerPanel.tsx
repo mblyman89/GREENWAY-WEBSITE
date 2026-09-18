@@ -79,6 +79,13 @@ function announcerSiteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://greenwaymarijuana.com").replace(/\/$/, "");
 }
 
+/**
+ * The DOM id of this panel, exported so that callers linking to it cannot
+ * drift from it. A hardcoded "#order-announcer" in another file is a broken
+ * link waiting for a rename; an imported constant is a compile error instead.
+ */
+export const ANNOUNCER_PANEL_ANCHOR = "order-announcer";
+
 export async function AnnouncerPanel() {
   const data = await getAnnouncerPanelData();
   const { devices, settings, verdict, recent, notInstalled, assignments, pendingPairings } = data;
@@ -93,7 +100,7 @@ export async function AnnouncerPanel() {
   // says exactly what to do rather than showing an error.
   if (notInstalled) {
     return (
-      <section className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-4">
+      <section id={ANNOUNCER_PANEL_ANCHOR} className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-4">
         <h2 className="text-sm font-black uppercase tracking-[0.08em] text-[var(--admin-text)]">
           🔊 Order Announcer
         </h2>
@@ -107,7 +114,14 @@ export async function AnnouncerPanel() {
   }
 
   return (
-    <section className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)]">
+    // The id is a link target, not styling. The Leafly board links here when
+    // an order arrived but never announced, and that link has to land on this
+    // panel rather than on a settings page that does not exist. Renaming it
+    // silently breaks that jump, so it is spelled out here.
+    <section
+      id={ANNOUNCER_PANEL_ANCHOR}
+      className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)]"
+    >
       {/* ── 1. THE ONLY QUESTION THAT MATTERS ───────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3 border-b border-[var(--admin-border)] px-4 py-3">
         <h2 className="text-sm font-black uppercase tracking-[0.08em] text-[var(--admin-text)]">

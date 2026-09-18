@@ -33,6 +33,37 @@
  * this file as an `if`, it is in the wrong place.
  *
  * ===========================================================================
+ * SLICE L-10 — WHY THIS IS NOW A WORKFLOW BOARD AND NOT A LIST
+ * ===========================================================================
+ * The owner asked, verbatim:
+ *
+ *   "is it possible to have a leafly dashboard that allows us to see the
+ *    online orders and interact with them in our own back office platform
+ *    rather than needing to go to leafly to manage the orders? ... if possible
+ *    to do this, I think it would be worth adding that to the online orders
+ *    dashboard in an organized and easy to work with well managed page that
+ *    flows nicely for easy work flow."
+ *
+ * It is possible, and Leafly's own Order API spec says so outright: once a
+ * software system is integrated, "The Leafly Order Dashboard will become
+ * read-only, as your software system will become the source of truth." This
+ * screen IS the source of truth. Nobody should need to open Leafly Biz.
+ *
+ * That raises the bar for this component. A flat list sorted by deadline was
+ * adequate when it was a read-only mirror; it is not adequate as the primary
+ * console. On a busy Friday a flat list interleaves an order that Leafly will
+ * auto-cancel in four minutes with eleven that were picked up yesterday, and
+ * asks a budtender to do the triage that the software should have done.
+ *
+ * So the orders are grouped into BUCKETS, one per physical activity, in the
+ * sequence a budtender performs them — accept, rescue, build, hand over — and
+ * each bucket states the single next action in the imperative. The grouping
+ * and the wording are computed by `groupLeaflyWorkflow` in bridge-core.ts and
+ * asserted in CI without a database or a Leafly account; this file only
+ * decides what they look like. Empty buckets are omitted entirely, so a quiet
+ * shop still sees a short page.
+ *
+ * ===========================================================================
  * WHY IT RENDERS NOTHING WHEN THERE IS NOTHING
  * ===========================================================================
  * Greenway is not live on Leafly orders yet. Until an order arrives, this panel
@@ -59,7 +90,14 @@ import {
   type AckUrgency,
   type LeaflyStatusTone,
 } from "@/lib/leafly/order-ack-core";
+import {
+  groupLeaflyWorkflow,
+  type LeaflyWorkflowInput,
+  type LeaflyWorkflowPlacement,
+  type LeaflyWorkflowBucket,
+} from "@/lib/leafly/bridge-core";
 import type { LeaflyBoardState } from "@/lib/leafly/order-board-server";
+import { ANNOUNCER_PANEL_ANCHOR } from "./AnnouncerPanel";
 import { LeaflyOrderActions } from "./LeaflyOrderActions";
 import {
   acknowledgeLeaflyOrderAction,
@@ -108,6 +146,76 @@ const TONE_BADGE: Record<LeaflyStatusTone, BadgeTone> = {
   bad: "danger",
   unknown: "gold",
 };
+
+/**
+ * How each workflow bucket looks.
+ *
+ * Two buckets are styled as alarms and three are not, and that ratio is the
+ * point: if everything shouts, nothing does. `accept_now` shouts because a
+ * countdown is running against a real customer's order. `needs_attention`
+ * shouts because something already failed silently. The rest are ordinary
+ * work and are styled as ordinary work.
+ */
+const BUCKET_STYLES: Record<
+  LeaflyWorkflowBucket,
+  { icon: string; badge: BadgeTone; blurb: string }
+> = {
+  accept_now: {
+    icon: "🚨",
+    badge: "danger",
+    blurb:
+      "Leafly cancels these automatically if nobody accepts them in time. Work this list first.",
+  },
+  needs_attention: {
+    icon: "⚠️",
+    badge: "danger",
+    blurb:
+      "Something went wrong quietly on these. They will not fix themselves — read each one.",
+  },
+  to_build: {
+    icon: "📦",
+    badge: "orange",
+    blurb: "Accepted and waiting to be picked and bagged.",
+  },
+  awaiting_pickup: {
+    icon: "🛍️",
+    badge: "green",
+    blurb: "Bagged and ready. Hand these over when the customer walks in.",
+  },
+  closed: {
+    icon: "✅",
+    badge: "neutral",
+    blurb: "Picked up, cancelled or expired. Kept for reference only.",
+  },
+};
+
+/** One board row, plus the flat camelCase shape the pure core reads. */
+type BoardRow = LeaflyBoardState["orders"][number];
+type WorkflowRow = BoardRow & LeaflyWorkflowInput;
+
+/**
+ * Translate a database row into the core's input shape.
+ *
+ * `announced_at` and `printed_at` are passed THROUGH, including when they are
+ * `undefined` — which is what a pre-0228 database produces, because the board
+ * falls back to a column list that omits them. That `undefined` must survive
+ * this function intact: the core treats it as "not tracked" and stays quiet,
+ * whereas a `?? null` here would make the board accuse every order in the shop
+ * of having never rung the bell. The temptation to "tidy" this line is exactly
+ * the bug, so it is called out here and pinned by tests in bridge-core.
+ */
+function toWorkflowRow(order: BoardRow): WorkflowRow {
+  return {
+    ...order,
+    leaflyOrderId: order.leafly_order_id,
+    leaflyStatus: order.leafly_status,
+    acknowledgedAt: order.acknowledged_at,
+    canceledAt: order.canceled_at,
+    localOrderId: order.local_order_id,
+    announcedAt: order.announced_at,
+    printedAt: order.printed_at,
+  };
+}
 
 export function LeaflyOrdersPanel({
   board,
@@ -232,144 +340,252 @@ export function LeaflyOrdersPanel({
             </p>
           ) : null
         ) : (
-          <div className="mt-4 grid gap-3">
-            {board.orders.map((order) => {
-              // ── Everything below is READ from the pure core, never decided here.
-              const clock = assessAckClock({
-                acknowledgedAt: order.acknowledged_at,
-                acknowledgeBy: order.acknowledge_by,
-                now,
-              });
-              const plan = planLeaflyOrderActions({
-                leaflyOrderId: order.leafly_order_id,
-                orderIntegrationKeyPresent: board.orderIntegrationKeyPresent,
-                acknowledgedAt: order.acknowledged_at,
-                leaflyStatus: order.leafly_status,
-                fulfillmentMechanism: order.fulfillment_mechanism,
-              });
-              const statusLabel = leaflyStatusLabel(order.leafly_status);
-              const tone = leaflyStatusTone(order.leafly_status);
-              const cancelLabel = leaflyCancelReasonLabel(
-                order.cancelation_reason_code,
-              );
-              // Leafly's order id is a uuid. The last six characters are shown
-              // as a handle so two orders are distinguishable at a glance
-              // without printing a 36-character identifier across a phone
-              // screen. The full value is in the title attribute for copying.
-              const fullId = (order.leafly_order_id ?? "").trim();
-              const handle = fullId ? fullId.slice(-6).toUpperCase() : "unknown";
+          <div className="mt-4 space-y-5">
+            {/* ── The workflow buckets ──────────────────────────────────
+                Grouped by the pure core and rendered in the order a budtender
+                actually works: accept the ones on a countdown, rescue the ones
+                that broke silently, build, then hand over.
 
-              return (
-                <Card key={order.id} padding="sm" raised>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className="font-mono text-sm font-black text-[var(--admin-text)]"
-                          title={fullId || undefined}
-                        >
-                          Leafly ·{handle}
-                        </span>
-                        {/* An unrecognised status shows the raw value with a
-                            plain warning rather than an invented friendly name.
-                            The core returns null for unknown values precisely
-                            so this case is visible instead of smoothed over. */}
-                        <Badge tone={TONE_BADGE[tone]}>
-                          {statusLabel ??
-                            `Unrecognised status: ${order.leafly_status ?? "none"}`}
-                        </Badge>
-                        {order.marketplace === "uberEats" ? (
-                          <Badge tone="gold">Uber Eats</Badge>
-                        ) : null}
-                        {order.medical_status === "medical" ? (
-                          <Badge tone="green">Medical</Badge>
-                        ) : null}
-                        {order.fulfillment_mechanism &&
-                        order.fulfillment_mechanism !== "pickup" ? (
-                          <Badge tone="orange">{order.fulfillment_mechanism}</Badge>
-                        ) : null}
-                        {order.local_order_id ? (
-                          <Badge tone="neutral">Linked to a Greenway order</Badge>
-                        ) : null}
-                      </div>
-
-                      {cancelLabel ? (
-                        <p className="mt-1.5 text-xs font-bold text-[var(--admin-danger)]">
-                          {cancelLabel}
-                        </p>
-                      ) : null}
-
-                      {order.payment_preference ? (
-                        <p className="mt-1 text-xs text-[var(--admin-text-faint)]">
-                          Customer expects to pay by {order.payment_preference}. Leafly
-                          doesn’t process payments — collect at the counter.
-                        </p>
-                      ) : null}
+                Empty buckets are dropped rather than rendered as empty
+                headings. Five "0 orders" headings on a quiet Tuesday is noise,
+                and noise is what stops people reading the one heading that
+                matters. */}
+            {groupLeaflyWorkflow(board.orders.map(toWorkflowRow))
+              .filter((group) => group.orders.length > 0)
+              .map((group) => {
+                const style = BUCKET_STYLES[group.bucket];
+                return (
+                  <section key={group.bucket} aria-label={group.heading}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span aria-hidden>{style.icon}</span>
+                      <h3 className="text-sm font-black uppercase tracking-wide text-[var(--admin-text)]">
+                        {group.heading}
+                      </h3>
+                      {/* A badge rather than prose, so the eye can find "how
+                          many" without reading a sentence. */}
+                      <Badge tone={style.badge}>{group.orders.length}</Badge>
                     </div>
-
-                    {/* The buttons. Generated from the plan, so the screen can
-                        never offer an action Leafly would refuse. */}
-                    {fullId ? (
-                      <LeaflyOrderActions
-                        actions={plan.actions}
-                        leaflyOrderId={fullId}
-                        acknowledgeAction={acknowledgeLeaflyOrderAction}
-                        statusAction={setLeaflyOrderStatusAction}
-                        irreversibleWarning={LEAFLY_ACK_IRREVERSIBLE_WARNING}
-                        defaultCancelReasonLabel={
-                          leaflyCancelReasonLabel(
-                            LEAFLY_DEFAULT_OUTBOUND_CANCEL_REASON,
-                          ) ?? LEAFLY_DEFAULT_OUTBOUND_CANCEL_REASON
-                        }
-                      />
-                    ) : null}
-                  </div>
-
-                  {/* ── The acknowledgement clock ─────────────────────────────
-                      Rendered for every unacknowledged order and suppressed
-                      once acknowledged (the core returns urgency "none" and a
-                      null countdown in that case, so there is no ticking
-                      deadline on an order that no longer has one). */}
-                  {clock.urgency !== "none" ? (
-                    <div
-                      className={`mt-3 flex items-start gap-2 rounded-[var(--admin-radius-lg)] border px-3 py-2 text-xs font-bold ${URGENCY_STYLES[clock.urgency]}`}
-                    >
-                      <span aria-hidden>{URGENCY_ICONS[clock.urgency]}</span>
-                      <span>{clock.label}</span>
-                    </div>
-                  ) : null}
-
-                  {/* Why there is nothing to do, when there is nothing to do.
-                      An order with no buttons and no explanation reads as a
-                      broken screen. */}
-                  {plan.actions.length === 0 && plan.blockedReason ? (
-                    <p className="mt-3 text-xs text-[var(--admin-text-faint)]">
-                      {plan.blockedReason}
+                    <p className="mt-1 text-xs text-[var(--admin-text-faint)]">
+                      {style.blurb}
                     </p>
-                  ) : null}
 
-                  {/* The hint for each offered action, listed under the buttons
-                      rather than as tooltips: a tooltip is invisible on the
-                      tablet at the counter, which is the device this screen is
-                      actually used on. */}
-                  {plan.actions.length > 0 ? (
-                    <ul className="mt-2 space-y-0.5">
-                      {plan.actions.map((a) => (
-                        <li
-                          key={`${a.kind}:${a.status ?? "ack"}`}
-                          className="text-[0.7rem] leading-relaxed text-[var(--admin-text-faint)]"
-                        >
-                          <span className="font-bold">{a.label}:</span> {a.hint}
-                        </li>
+                    <div className="mt-3 grid gap-3">
+                      {group.orders.map(({ order, placement }) => (
+                        <LeaflyOrderCard
+                          key={order.id}
+                          order={order}
+                          placement={placement}
+                          board={board}
+                          now={now}
+                        />
                       ))}
-                    </ul>
-                  ) : null}
-                </Card>
-              );
-            })}
+                    </div>
+                  </section>
+                );
+              })}
           </div>
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * One Leafly order, as a card.
+ *
+ * Extracted from the panel in slice L-10 when the flat list became a set of
+ * workflow buckets: the same markup now renders inside five different
+ * sections, and a card duplicated per section is a card that drifts per
+ * section. The CONTENTS are unchanged from L-6 apart from the pipeline
+ * warning, which is new.
+ *
+ * Still decides nothing. `placement` arrives already computed by
+ * `placeLeaflyOrder` in the pure core.
+ */
+function LeaflyOrderCard({
+  order,
+  placement,
+  board,
+  now,
+}: {
+  order: WorkflowRow;
+  placement: LeaflyWorkflowPlacement;
+  board: LeaflyBoardState;
+  now: Date;
+}) {
+  // ── Everything below is READ from the pure core, never decided here.
+  const clock = assessAckClock({
+    acknowledgedAt: order.acknowledged_at,
+    acknowledgeBy: order.acknowledge_by,
+    now,
+  });
+  const plan = planLeaflyOrderActions({
+    leaflyOrderId: order.leafly_order_id,
+    orderIntegrationKeyPresent: board.orderIntegrationKeyPresent,
+    acknowledgedAt: order.acknowledged_at,
+    leaflyStatus: order.leafly_status,
+    fulfillmentMechanism: order.fulfillment_mechanism,
+  });
+  const statusLabel = leaflyStatusLabel(order.leafly_status);
+  const tone = leaflyStatusTone(order.leafly_status);
+  const cancelLabel = leaflyCancelReasonLabel(
+    order.cancelation_reason_code,
+  );
+  // Leafly's order id is a uuid. The last six characters are shown
+  // as a handle so two orders are distinguishable at a glance
+  // without printing a 36-character identifier across a phone
+  // screen. The full value is in the title attribute for copying.
+  const fullId = (order.leafly_order_id ?? "").trim();
+  const handle = fullId ? fullId.slice(-6).toUpperCase() : "unknown";
+
+  return (
+    <Card key={order.id} padding="sm" raised>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className="font-mono text-sm font-black text-[var(--admin-text)]"
+              title={fullId || undefined}
+            >
+              Leafly ·{handle}
+            </span>
+            {/* An unrecognised status shows the raw value with a
+                plain warning rather than an invented friendly name.
+                The core returns null for unknown values precisely
+                so this case is visible instead of smoothed over. */}
+            <Badge tone={TONE_BADGE[tone]}>
+              {statusLabel ??
+                `Unrecognised status: ${order.leafly_status ?? "none"}`}
+            </Badge>
+            {order.marketplace === "uberEats" ? (
+              <Badge tone="gold">Uber Eats</Badge>
+            ) : null}
+            {order.medical_status === "medical" ? (
+              <Badge tone="green">Medical</Badge>
+            ) : null}
+            {order.fulfillment_mechanism &&
+            order.fulfillment_mechanism !== "pickup" ? (
+              <Badge tone="orange">{order.fulfillment_mechanism}</Badge>
+            ) : null}
+            {order.local_order_id ? (
+              <Badge tone="neutral">Linked to a Greenway order</Badge>
+            ) : null}
+          </div>
+
+          {cancelLabel ? (
+            <p className="mt-1.5 text-xs font-bold text-[var(--admin-danger)]">
+              {cancelLabel}
+            </p>
+          ) : null}
+
+          {order.payment_preference ? (
+            <p className="mt-1 text-xs text-[var(--admin-text-faint)]">
+              Customer expects to pay by {order.payment_preference}. Leafly
+              doesn’t process payments — collect at the counter.
+            </p>
+          ) : null}
+        </div>
+
+        {/* The buttons. Generated from the plan, so the screen can
+            never offer an action Leafly would refuse. */}
+        {fullId ? (
+          <LeaflyOrderActions
+            actions={plan.actions}
+            leaflyOrderId={fullId}
+            acknowledgeAction={acknowledgeLeaflyOrderAction}
+            statusAction={setLeaflyOrderStatusAction}
+            irreversibleWarning={LEAFLY_ACK_IRREVERSIBLE_WARNING}
+            defaultCancelReasonLabel={
+              leaflyCancelReasonLabel(
+                LEAFLY_DEFAULT_OUTBOUND_CANCEL_REASON,
+              ) ?? LEAFLY_DEFAULT_OUTBOUND_CANCEL_REASON
+            }
+          />
+        ) : null}
+      </div>
+
+      {/* ── The acknowledgement clock ─────────────────────────────
+          Rendered for every unacknowledged order and suppressed
+          once acknowledged (the core returns urgency "none" and a
+          null countdown in that case, so there is no ticking
+          deadline on an order that no longer has one). */}
+      {clock.urgency !== "none" ? (
+        <div
+          className={`mt-3 flex items-start gap-2 rounded-[var(--admin-radius-lg)] border px-3 py-2 text-xs font-bold ${URGENCY_STYLES[clock.urgency]}`}
+        >
+          <span aria-hidden>{URGENCY_ICONS[clock.urgency]}</span>
+          <span>{clock.label}</span>
+        </div>
+      ) : null}
+
+      {/* ── The pipeline warning ────────────────────────────────────
+          The most important few lines on this screen, and the reason slice
+          L-10 exists. Every other warning here describes something a human
+          can already see: a countdown, a cancellation, a status. This one
+          describes a failure that is INVISIBLE — the order arrived, the row
+          looks perfectly healthy, and the only symptom is that the speaker
+          never rang and the ticket never printed, so nobody in the building
+          knows the order exists. Left alone it auto-cancels and the shop
+          never learns why.
+
+          It renders only when the core says so. A pre-0228 database reports
+          `undefined` rather than null for these columns, and the core stays
+          silent in that case rather than accusing every order at once. */}
+      {placement.pipelineWarning ? (
+        <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] px-3 py-2 text-xs font-bold text-[var(--admin-danger)]">
+          <p>⚠️ {placement.pipelineWarning}</p>
+          <p className="mt-1 font-normal">
+            The order itself is fine — this is about the alert not reaching you.{" "}
+            {/* An in-page jump, not a route. The announcer panel is rendered
+                ABOVE this one on the same page (/admin/orders, line ~263 vs
+                ~286), which is why the arrow points up -- verified, because a
+                screen whose arrows point the wrong way is a screen staff stop
+                trusting. The anchor name is imported rather than typed, so a
+                rename breaks the build instead of breaking the link. */}
+            <a
+              href={`#${ANNOUNCER_PANEL_ANCHOR}`}
+              className="font-bold underline underline-offset-2"
+            >
+              Jump to the order announcer ↑
+            </a>
+          </p>
+        </div>
+      ) : null}
+
+      {/* ── The single next action ─────────────────────────────────
+          Imperative and singular, from the core. The buttons above say what
+          the software CAN do; this says what the person should do next. On a
+          tablet held by somebody four orders behind, that distinction is the
+          difference between a screen that helps and a screen to interpret. */}
+      <p className="mt-2 text-xs font-bold text-[var(--admin-text-muted)]">
+        {placement.action}
+      </p>
+
+      {/* Why there is nothing to do, when there is nothing to do.
+          An order with no buttons and no explanation reads as a
+          broken screen. */}
+      {plan.actions.length === 0 && plan.blockedReason ? (
+        <p className="mt-3 text-xs text-[var(--admin-text-faint)]">
+          {plan.blockedReason}
+        </p>
+      ) : null}
+
+      {/* The hint for each offered action, listed under the buttons
+          rather than as tooltips: a tooltip is invisible on the
+          tablet at the counter, which is the device this screen is
+          actually used on. */}
+      {plan.actions.length > 0 ? (
+        <ul className="mt-2 space-y-0.5">
+          {plan.actions.map((a) => (
+            <li
+              key={`${a.kind}:${a.status ?? "ack"}`}
+              className="text-[0.7rem] leading-relaxed text-[var(--admin-text-faint)]"
+            >
+              <span className="font-bold">{a.label}:</span> {a.hint}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </Card>
   );
 }
