@@ -76,6 +76,13 @@ export type LeaflyBoardOrder = {
   local_order_id: string | null;
   first_seen_at: string;
   updated_at: string;
+  /**
+   * SLICE L-10. When the PA announced the arrival, and when the arrival ticket
+   * was queued. Optional because they only exist once migration 0228 is
+   * applied, and the board degrades rather than failing without them.
+   */
+  announced_at?: string | null;
+  printed_at?: string | null;
 };
 
 /**
@@ -89,7 +96,51 @@ export type LeaflyBoardOrder = {
 const BOARD_COLUMNS =
   "id, leafly_order_id, leafly_status, fulfillment_mechanism, marketplace, " +
   "medical_status, payment_preference, acknowledge_by, acknowledged_at, " +
+  "canceled_at, cancelation_reason_code, local_order_id, first_seen_at, updated_at, " +
+  // SLICE L-10. These two are what let the board say "this order arrived and
+  // NOBODY WAS TOLD". Without them a silent arrival is indistinguishable from
+  // a healthy one: the row exists, the status looks right, and the only
+  // symptom is an order quietly auto-cancelling fifteen minutes later.
+  "announced_at, printed_at";
+
+/**
+ * The same list WITHOUT the two columns migration 0228 adds.
+ *
+ * The owner applies migrations by hand (AGENTS rule 6), so there is a real
+ * window where the code is deployed and 0228 is not yet applied. In that
+ * window an unguarded select fails, `problem` gets set, and the orders page
+ * shows "Leafly orders could not be read" -- hiding every live order behind a
+ * cosmetic missing column. Losing the pipeline warnings is survivable; losing
+ * the board is not.
+ */
+const BOARD_COLUMNS_LEGACY =
+  "id, leafly_order_id, leafly_status, fulfillment_mechanism, marketplace, " +
+  "medical_status, payment_preference, acknowledge_by, acknowledged_at, " +
   "canceled_at, cancelation_reason_code, local_order_id, first_seen_at, updated_at";
+
+/**
+ * True when Postgres is telling us a COLUMN is missing, as opposed to any
+ * other failure.
+ *
+ * The distinction is the whole point. "Column does not exist" means the code
+ * is ahead of the hand-applied migration and a narrower query will work.
+ * Anything else -- a dead connection, a permissions error, a missing TABLE --
+ * must NOT be retried, because retrying hides it and the board would report
+ * "no orders" while orders piled up.
+ *
+ * Same test as `isMissingColumnError` in bridge-server.ts and orders-store.ts.
+ * Duplicated rather than shared for the same reason recorded there: it is a
+ * two-line predicate about a Postgres error code, not a business rule, and
+ * house rule 11 governs rules. Sharing it would mean this reader importing a
+ * module it otherwise has no business touching.
+ */
+function isMissingColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    /column .* does not exist|could not find .* column/i.test(error.message ?? "")
+  );
+}
 
 export type LeaflyBoardState = {
   /** Orders to show, most urgent first. Empty when there are none OR on failure. */
@@ -170,12 +221,27 @@ export async function loadLeaflyOrderBoard(
   try {
     const admin = createSupabaseAdminClient();
 
-    const pending = await admin
-      .from("leafly_orders")
-      .select(BOARD_COLUMNS)
-      .is("acknowledged_at", null)
-      .order("acknowledge_by", { ascending: true, nullsFirst: true })
-      .limit(limit);
+    // The query is expressed as a thunk so it can be run twice against two
+    // different column lists without duplicating the filters. Duplicating the
+    // filters is how the retry ends up quietly returning a DIFFERENT set of
+    // orders from the one it was meant to replace.
+    const runPending = (columns: string) =>
+      admin
+        .from("leafly_orders")
+        .select(columns)
+        .is("acknowledged_at", null)
+        .order("acknowledge_by", { ascending: true, nullsFirst: true })
+        .limit(limit);
+
+    let pending = await runPending(BOARD_COLUMNS);
+    if (isMissingColumnError(pending.error)) {
+      // Migration 0228 is not applied yet. Drop the two pipeline columns and
+      // ask again. The board loses its "nobody was told" warnings -- which is
+      // why `placeLeaflyOrder` treats an ABSENT column as "not tracked" and
+      // stays silent rather than accusing every order of being silent -- but
+      // the shop keeps its orders, which is the part that cannot be lost.
+      pending = await runPending(BOARD_COLUMNS_LEGACY);
+    }
 
     if (pending.error) {
       return {
@@ -190,12 +256,18 @@ export async function loadLeaflyOrderBoard(
 
     let ackedRows: LeaflyBoardOrder[] = [];
     if (remaining > 0) {
-      const acked = await admin
-        .from("leafly_orders")
-        .select(BOARD_COLUMNS)
-        .not("acknowledged_at", "is", null)
-        .order("updated_at", { ascending: false })
-        .limit(remaining);
+      const runAcked = (columns: string) =>
+        admin
+          .from("leafly_orders")
+          .select(columns)
+          .not("acknowledged_at", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(remaining);
+
+      let acked = await runAcked(BOARD_COLUMNS);
+      if (isMissingColumnError(acked.error)) {
+        acked = await runAcked(BOARD_COLUMNS_LEGACY);
+      }
       // A failure on the SECOND query is reported as a problem but the pending
       // rows are still returned. The unacknowledged orders are the ones with a
       // deadline attached; withholding them because the history query failed
@@ -279,11 +351,21 @@ export async function getLeaflyBoardOrder(
   if (!isSupabaseServiceConfigured) return null;
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
-      .from("leafly_orders")
-      .select(BOARD_COLUMNS)
-      .eq("leafly_order_id", id)
-      .maybeSingle();
+    const runOne = (columns: string) =>
+      admin
+        .from("leafly_orders")
+        .select(columns)
+        .eq("leafly_order_id", id)
+        .maybeSingle();
+
+    let { data, error } = await runOne(BOARD_COLUMNS);
+    if (isMissingColumnError(error)) {
+      // This retry matters more than the other two, not less. A null from
+      // here makes the server action refuse to acknowledge, and an order that
+      // cannot be acknowledged is an order Leafly auto-cancels. A cosmetic
+      // missing column must never be allowed to cost the shop a sale.
+      ({ data, error } = await runOne(BOARD_COLUMNS_LEGACY));
+    }
     if (error) {
       console.error("[leafly/board] single order read failed:", error.message);
       return null;

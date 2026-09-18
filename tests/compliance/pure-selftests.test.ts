@@ -395,7 +395,15 @@ describe("embedded pure self-test suites", () => {
     // Raised 171 -> 281 when decideCancelPlan landed: a Leafly cancellation
     // must follow the order all the way to the floor, and all fourteen
     // status/till combinations are proven here.
-    expect(r.passed).toBeGreaterThanOrEqual(281);
+    //
+    // Raised 281 -> 354 when the workflow board landed (the owner's question
+    // Q-C: run Leafly from our own back office instead of Leafly Biz). The
+    // added assertions cover bucket placement, bucket ORDER -- needs_attention
+    // is second, not buried -- and the three-state pipeline tracking where an
+    // ABSENT announced_at/printed_at column means "not tracked" and must stay
+    // silent, rather than accusing every order in the shop of never having
+    // rung the bell while migration 0228 is still unapplied.
+    expect(r.passed).toBeGreaterThanOrEqual(354);
   });
   it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {
     expect(() => __runWmPayloadTests()).not.toThrow();

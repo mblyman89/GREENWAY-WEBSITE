@@ -402,6 +402,216 @@ export function decideCancelPlan(input: {
 }
 
 // ============================================================================
+// 1c. THE WORKFLOW BOARD  (the owner's question Q-C, answered in code)
+// ============================================================================
+
+/**
+ * The owner asked, verbatim:
+ *
+ *   > "is it possible to have a leafly dashboard that allows us to see the
+ *   >  online orders and interact with them in our own back office platform
+ *   >  rather than needing to go to leafly to manage the orders? ... if
+ *   >  possible to do this, I think it would be worth adding that to the
+ *   >  online orders dashboard in an organized and easy to work with well
+ *   >  managed page that flows nicely for easy work flow."
+ *
+ * The answer is YES, and the Order API spec says so in its own words:
+ *
+ *   "The Leafly Order Dashboard will become read-only, as your software
+ *    system will become the source of truth for order statuses and cart
+ *    totals."
+ *
+ * That is not permission to mirror Leafly's dashboard -- it is a statement
+ * that OURS becomes the real one. So this function does not sort orders the
+ * way Leafly's list does. It sorts them the way the shop actually works.
+ *
+ * ── WHY BUCKETS AND NOT A SORTED LIST ───────────────────────────────────────
+ * A single list ordered by time makes the most urgent order's position depend
+ * on when it happened to arrive. The thing that actually matters on a Tuesday
+ * afternoon is "which of these will Leafly auto-cancel if I do not touch it in
+ * the next four minutes", and that order might be third from the bottom.
+ *
+ * Each bucket is one physical activity, in the sequence a budtender performs
+ * them. Empty buckets are omitted by the UI, so a quiet shop sees a short page
+ * and a busy one sees exactly where the pressure is.
+ */
+export const LEAFLY_WORKFLOW_BUCKETS = [
+  "accept_now",
+  "to_build",
+  "awaiting_pickup",
+  "needs_attention",
+  "closed",
+] as const;
+
+export type LeaflyWorkflowBucket = (typeof LEAFLY_WORKFLOW_BUCKETS)[number];
+
+/** The minimum an order must tell us for the board to place it. */
+export type LeaflyWorkflowInput = {
+  leaflyOrderId: string | null;
+  leaflyStatus: string | null;
+  acknowledgedAt: string | null;
+  canceledAt: string | null;
+  localOrderId: string | null;
+  /**
+   * When the arrival announced / printed, or null when it demonstrably did
+   * not, or UNDEFINED when we cannot know.
+   *
+   * The third state is not decoration. The owner applies migrations by hand
+   * (AGENTS rule 6), so there is a real window in which this code is deployed
+   * and migration 0228 -- which adds `announced_at` and `printed_at` -- is
+   * not yet applied. In that window the board reads a column list that omits
+   * them and every row comes back WITHOUT the key.
+   *
+   * If `undefined` were folded into `null`, the board would accuse every
+   * single order of having never announced and never printed. A board that
+   * cries wolf on all twelve orders is worse than a board with no warnings at
+   * all, because the one genuine silent arrival is now hidden inside eleven
+   * false ones. So: `undefined` means "not tracked here", and we say nothing.
+   */
+  announcedAt?: string | null;
+  printedAt?: string | null;
+};
+
+export type LeaflyWorkflowPlacement = {
+  bucket: LeaflyWorkflowBucket;
+  /** What the person reading it should DO. Imperative, not descriptive. */
+  action: string;
+  /**
+   * True when this order is not where it should be in the pipeline -- the
+   * speaker never rang, the ticket never printed, or it was accepted but never
+   * reached the register. These are invisible failures otherwise: everything
+   * looks fine because the order row exists.
+   */
+  pipelineWarning: string | null;
+};
+
+/**
+ * Decide which bucket one Leafly order belongs in, and what to do about it.
+ *
+ * Pure, and deliberately takes flat values rather than a database row, so the
+ * whole board is provable in CI without a Leafly account or a Postgres.
+ */
+export function placeLeaflyOrder(input: LeaflyWorkflowInput): LeaflyWorkflowPlacement {
+  const status = (input.leaflyStatus ?? "").trim();
+  const acknowledged = input.acknowledgedAt !== null;
+  const canceled = input.canceledAt !== null || status === "canceled";
+
+  // ── Closed. Nothing to do, and it must not compete for attention with the
+  //    orders that do need something.
+  if (canceled || status === "picked_up" || status === "expired") {
+    return {
+      bucket: "closed",
+      action: "No action needed.",
+      pipelineWarning: null,
+    };
+  }
+
+  // ── Not accepted yet. THE ONLY BUCKET WITH A DEADLINE ATTACHED. Leafly
+  //    auto-cancels an unacknowledged order, so this outranks everything.
+  if (!acknowledged) {
+    // The pipeline warning matters most here. If the bell never rang and the
+    // ticket never printed, nobody in the building knows this order exists,
+    // and it will quietly auto-cancel. That is the failure this whole slice
+    // was built to prevent, so the board says it out loud.
+    //
+    // Note the `=== null` tests. `undefined` (column not tracked) deliberately
+    // falls through all of them and produces NO warning: see the doc comment
+    // on LeaflyWorkflowInput. A truthiness test here would silently re-merge
+    // the two states and break exactly that guarantee, so it is spelled out.
+    const silentBell = input.announcedAt === null;
+    const silentPrinter = input.printedAt === null;
+    let warn: string | null = null;
+    if (silentBell && silentPrinter) {
+      warn =
+        "This order never announced and never printed. Nobody was told it arrived. " +
+        "Check the announcer and printer settings.";
+    } else if (silentPrinter) {
+      warn = "The arrival ticket never printed. Check the printer.";
+    } else if (silentBell) {
+      warn = "The arrival never announced on the speakers. Check the announcer.";
+    }
+    return {
+      bucket: "accept_now",
+      action: "Accept this order now, before Leafly cancels it.",
+      pipelineWarning: warn,
+    };
+  }
+
+  // ── Accepted. From here on, the local order is what the floor works from,
+  //    so its ABSENCE is the thing worth shouting about.
+  if (input.localOrderId === null) {
+    return {
+      bucket: "needs_attention",
+      action:
+        "Accepted at Leafly but it never reached the register. Build it from the " +
+        "printed ticket and tell the owner.",
+      pipelineWarning:
+        "No register order was created for this. It will not appear in the pickup queue.",
+    };
+  }
+
+  if (status === "ready") {
+    return {
+      bucket: "awaiting_pickup",
+      action: "Bagged and waiting. Hand it over when the customer arrives.",
+      pipelineWarning: null,
+    };
+  }
+
+  return {
+    bucket: "to_build",
+    action: "Pick and bag this order, then mark it ready.",
+    pipelineWarning: null,
+  };
+}
+
+/** How the buckets are labelled and ordered on the page. */
+export function leaflyBucketHeading(bucket: LeaflyWorkflowBucket): string {
+  switch (bucket) {
+    case "accept_now":
+      return "Accept now — Leafly is counting down";
+    case "to_build":
+      return "To build";
+    case "awaiting_pickup":
+      return "Waiting for the customer";
+    case "needs_attention":
+      return "Needs attention";
+    case "closed":
+      return "Finished";
+  }
+}
+
+/**
+ * Group a whole board into its buckets, in workflow order.
+ *
+ * `needs_attention` is deliberately placed SECOND, not last. It is the bucket
+ * for orders that have gone wrong silently, and a bucket nobody scrolls to is
+ * a bucket nobody reads. Only the countdown outranks it.
+ */
+export function groupLeaflyWorkflow<T extends LeaflyWorkflowInput>(
+  orders: readonly T[],
+): { bucket: LeaflyWorkflowBucket; heading: string; orders: { order: T; placement: LeaflyWorkflowPlacement }[] }[] {
+  const order: LeaflyWorkflowBucket[] = [
+    "accept_now",
+    "needs_attention",
+    "to_build",
+    "awaiting_pickup",
+    "closed",
+  ];
+  const byBucket = new Map<LeaflyWorkflowBucket, { order: T; placement: LeaflyWorkflowPlacement }[]>();
+  for (const b of order) byBucket.set(b, []);
+  for (const o of orders) {
+    const placement = placeLeaflyOrder(o);
+    byBucket.get(placement.bucket)?.push({ order: o, placement });
+  }
+  return order.map((bucket) => ({
+    bucket,
+    heading: leaflyBucketHeading(bucket),
+    orders: byBucket.get(bucket) ?? [],
+  }));
+}
+
+// ============================================================================
 // 2. THE SOUND
 // ============================================================================
 
@@ -943,6 +1153,189 @@ export function __runLeaflyBridgeTests(): { passed: number; failed: number } {
     "bridge defaults to ON when unspecified",
     decideBridgeActions({ stage: "arrival", alreadyDone: false }).announce,
   );
+
+  // ---- THE WORKFLOW BOARD (Q-C) ------------------------------------------
+  const wf = (o: Partial<LeaflyWorkflowInput>): LeaflyWorkflowInput => ({
+    leaflyOrderId: "abc",
+    leaflyStatus: null,
+    acknowledgedAt: null,
+    canceledAt: null,
+    localOrderId: null,
+    announcedAt: "2026-09-18T10:00:00Z",
+    printedAt: "2026-09-18T10:00:00Z",
+    ...o,
+  });
+
+  // An unacknowledged order is the ONLY one with a deadline attached, so it
+  // must outrank everything regardless of when it arrived.
+  const fresh = placeLeaflyOrder(wf({ leaflyStatus: "pending" }));
+  eq("an unacknowledged order lands in accept_now", fresh.bucket, "accept_now");
+  ok("...and the action is imperative, not descriptive", /^Accept this order now/.test(fresh.action));
+  ok("...and it names the consequence of waiting", /before Leafly cancels/i.test(fresh.action));
+  ok("...and a healthy pipeline raises no warning", fresh.pipelineWarning === null);
+
+  // THE INVISIBLE FAILURE this whole slice exists to prevent: the order is
+  // sitting there, the row looks fine, and nobody in the building knows.
+  const silent = placeLeaflyOrder(wf({ leaflyStatus: "pending", announcedAt: null, printedAt: null }));
+  eq("a silent arrival is still accept_now", silent.bucket, "accept_now");
+  ok("...but it carries a pipeline warning", silent.pipelineWarning !== null);
+  ok(
+    "...that says nobody was told",
+    /nobody was told/i.test(silent.pipelineWarning ?? ""),
+  );
+  // The two halves are diagnosed separately, because they have different
+  // fixes: a jammed printer and a muted speaker are different errands.
+  const noPrint = placeLeaflyOrder(wf({ leaflyStatus: "pending", printedAt: null }));
+  ok("a missing ticket blames the printer", /printer/i.test(noPrint.pipelineWarning ?? ""));
+  ok("...and not the announcer", !/announcer/i.test(noPrint.pipelineWarning ?? ""));
+  const noSound = placeLeaflyOrder(wf({ leaflyStatus: "pending", announcedAt: null }));
+  ok("a missing announcement blames the announcer", /announcer/i.test(noSound.pipelineWarning ?? ""));
+  ok("...and not the printer", !/printer/i.test(noSound.pipelineWarning ?? ""));
+
+  // ---- "not tracked" is NOT "did not happen" -----------------------------
+  // The owner applies migrations by hand, so between deploy and `psql` the
+  // board reads a column list without announced_at/printed_at and every row
+  // arrives with those keys ABSENT. If absent collapsed into null, the board
+  // would accuse all twelve orders on a busy Friday of having never rung the
+  // bell -- and the one order that genuinely went silent would be invisible
+  // inside eleven false alarms. This is the single most likely way this
+  // feature could make the shop LESS safe, so it is pinned hard.
+  const untracked = placeLeaflyOrder({
+    leaflyOrderId: "abc",
+    leaflyStatus: "pending",
+    acknowledgedAt: null,
+    canceledAt: null,
+    localOrderId: null,
+    // announcedAt and printedAt deliberately omitted -- this is exactly the
+    // shape a pre-0228 database produces, not a contrived one.
+  });
+  eq("an untracked order still lands in accept_now", untracked.bucket, "accept_now");
+  ok(
+    "an order from a pre-0228 database raises NO false pipeline alarm",
+    untracked.pipelineWarning === null,
+  );
+  ok(
+    "...and it still tells the budtender what to do",
+    /^Accept this order now/.test(untracked.action),
+  );
+  // Explicit undefined must behave identically to an omitted key. These are
+  // the same thing in TypeScript but not in every serialisation that reaches
+  // this function, so both spellings are proven rather than assumed.
+  ok(
+    "an explicit undefined is treated as untracked, not as silence",
+    placeLeaflyOrder(wf({ leaflyStatus: "pending", announcedAt: undefined, printedAt: undefined }))
+      .pipelineWarning === null,
+  );
+  // And the half-tracked case: one column present, one absent. A real
+  // possibility if a migration is partially applied. The present column is
+  // still trusted; the absent one still stays quiet.
+  const halfTracked = placeLeaflyOrder(
+    wf({ leaflyStatus: "pending", announcedAt: null, printedAt: undefined }),
+  );
+  ok(
+    "a tracked-but-silent announcer still warns even when the printer is untracked",
+    /announcer/i.test(halfTracked.pipelineWarning ?? ""),
+  );
+  ok(
+    "...and it does not blame the printer it cannot see",
+    !/printer/i.test(halfTracked.pipelineWarning ?? ""),
+  );
+  // The reverse half, so neither branch can rot unnoticed.
+  const halfTracked2 = placeLeaflyOrder(
+    wf({ leaflyStatus: "pending", announcedAt: undefined, printedAt: null }),
+  );
+  ok(
+    "a tracked-but-silent printer still warns even when the announcer is untracked",
+    /printer/i.test(halfTracked2.pipelineWarning ?? ""),
+  );
+  ok(
+    "...and it does not blame the announcer it cannot see",
+    !/announcer/i.test(halfTracked2.pipelineWarning ?? ""),
+  );
+  // Finally: the empty string is NOT a timestamp, but it is also not null.
+  // Proven so that a future "?? ''" normalisation in a caller cannot quietly
+  // switch the warnings off.
+  ok(
+    "an empty-string timestamp is not mistaken for a null one",
+    placeLeaflyOrder(wf({ leaflyStatus: "pending", announcedAt: "", printedAt: "" }))
+      .pipelineWarning === null,
+  );
+
+  // Accepted but never reached the register -- the exact failure the
+  // acceptance hook logs, surfaced where somebody will see it.
+  const orphan = placeLeaflyOrder(
+    wf({ leaflyStatus: "confirmed", acknowledgedAt: "2026-09-18T10:05:00Z", localOrderId: null }),
+  );
+  eq("accepted with no local order is needs_attention", orphan.bucket, "needs_attention");
+  ok("...and it says it will not appear in the pickup queue", /pickup queue/i.test(orphan.pipelineWarning ?? ""));
+  ok("...and it tells them to build from the ticket", /printed ticket/i.test(orphan.action));
+
+  const building = placeLeaflyOrder(
+    wf({ leaflyStatus: "confirmed", acknowledgedAt: "x", localOrderId: "local-1" }),
+  );
+  eq("accepted with a local order is to_build", building.bucket, "to_build");
+  const bagged = placeLeaflyOrder(
+    wf({ leaflyStatus: "ready", acknowledgedAt: "x", localOrderId: "local-1" }),
+  );
+  eq("ready is awaiting_pickup", bagged.bucket, "awaiting_pickup");
+
+  // Closed orders must never compete for attention with live work.
+  for (const st of ["picked_up", "expired", "canceled"]) {
+    eq(`${st} is closed`, placeLeaflyOrder(wf({ leaflyStatus: st })).bucket, "closed");
+  }
+  eq(
+    "a canceled_at timestamp closes it even with a live-looking status",
+    placeLeaflyOrder(wf({ leaflyStatus: "confirmed", canceledAt: "2026-09-18T11:00:00Z" })).bucket,
+    "closed",
+  );
+  ok(
+    "a closed order raises no warning and asks for nothing",
+    placeLeaflyOrder(wf({ leaflyStatus: "picked_up" })).pipelineWarning === null,
+  );
+  // A cancelled order must NOT be dragged back into accept_now just because it
+  // was never acknowledged -- that would put dead orders under a countdown.
+  eq(
+    "a cancelled-but-never-acknowledged order is closed, NOT accept_now",
+    placeLeaflyOrder(wf({ leaflyStatus: "canceled", acknowledgedAt: null })).bucket,
+    "closed",
+  );
+
+  // ---- the grouping ------------------------------------------------------
+  const grouped = groupLeaflyWorkflow([
+    wf({ leaflyStatus: "picked_up" }),
+    wf({ leaflyStatus: "pending" }),
+    wf({ leaflyStatus: "confirmed", acknowledgedAt: "x", localOrderId: null }),
+    wf({ leaflyStatus: "ready", acknowledgedAt: "x", localOrderId: "l" }),
+  ]);
+  eq("every bucket is represented, in a fixed order", grouped.length, 5);
+  eq("the countdown bucket is FIRST", grouped[0].bucket, "accept_now");
+  // needs_attention is second on purpose: it holds the orders that went wrong
+  // SILENTLY, and a bucket nobody scrolls to is a bucket nobody reads.
+  eq("needs_attention is SECOND, not buried at the bottom", grouped[1].bucket, "needs_attention");
+  eq("finished work sorts last", grouped[grouped.length - 1].bucket, "closed");
+  ok("no order is lost in grouping", grouped.reduce((a, g) => a + g.orders.length, 0) === 4);
+  ok("no order is duplicated across buckets", grouped.every((g) => g.orders.length <= 1));
+  ok("every bucket carries a human heading", grouped.every((g) => g.heading.trim().length > 3));
+  ok(
+    "the countdown heading conveys urgency",
+    /counting down/i.test(grouped[0].heading),
+  );
+  ok("grouping an empty board yields empty buckets, not a crash", groupLeaflyWorkflow([]).length === 5);
+  // Every placement must give the reader something to DO. A board that shows
+  // state without an action is the Cultivera problem the owner described.
+  for (const b of LEAFLY_WORKFLOW_BUCKETS) {
+    ok(`bucket "${b}" has a heading`, leaflyBucketHeading(b).trim().length > 3);
+  }
+  for (const st of ["pending", "confirmed", "ready", "picked_up", "canceled", "expired", ""]) {
+    for (const ack of [null, "x"]) {
+      const pl = placeLeaflyOrder(wf({ leaflyStatus: st, acknowledgedAt: ack, localOrderId: "l" }));
+      ok(`${st || "<blank>"}/ack=${ack}: always yields an action`, pl.action.trim().length > 5);
+      ok(
+        `${st || "<blank>"}/ack=${ack}: bucket is one of the five`,
+        (LEAFLY_WORKFLOW_BUCKETS as readonly string[]).includes(pl.bucket),
+      );
+    }
+  }
 
   // ---- THE CANCEL COLLISION (Q-B) ----------------------------------------
   //
