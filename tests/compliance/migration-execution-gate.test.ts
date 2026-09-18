@@ -956,7 +956,89 @@ describe("the migration list is ordered the way the database will see it", () =>
     // alarms train readers to skim the real ones, so it is now anchored and
     // case-sensitive.
     // Harness: scripts/compliance/prove-0226-executes.sh
-    expect(listed[listed.length - 1]).toMatch(/^0226_/);
+    //
+    // 0227 (SLICE L7) adds public.leafly_sync_runs -- the log of every menu
+    // sync ATTEMPT, from both the schedule and the manual button, including
+    // the attempts the pure core refused to make.
+    //
+    // WHY A TABLE AND NOT AN ADVISORY LOCK. The owner asked for "both
+    // automation and a manual push button". Either one alone is easy; the hard
+    // part is making them coexist, because a Leafly menu POST is a FULL sync
+    // that DELETES anything its payload omits. Two of those racing is not a
+    // slow page -- it is a menu that loses items depending on which request
+    // Leafly finishes reading last. The obvious fix is pg_try_advisory_lock,
+    // and it does not work here: Supabase's pooled HTTP interface gives no
+    // session affinity, so a session-scoped lock would be taken and released
+    // on whichever pooled connection happened to answer, i.e. it would not be
+    // a lock at all. So the lock is a real row with `finished_at is null`, and
+    // that NULL is load-bearing rather than missing data.
+    //
+    // WHY THE NULLABLE COLUMNS ARE THE POINT. `disposition` is nullable
+    // because NULL means in flight. `method` and `http_status` are nullable
+    // because a REFUSED run has neither -- and refusals are the overwhelming
+    // majority of ticks. Without a storable refusal, "the cron fired and
+    // correctly decided not to push" and "the cron never fired at all" are
+    // indistinguishable, and those two need opposite fixes. A NOT NULL on any
+    // of the three would have forced the log to drop exactly the rows that
+    // make it worth keeping.
+    //
+    // PROVEN to execute by applying all 227 migrations in order to a real
+    // PostgreSQL 15.19 (applied 227 / failed 0), re-applying 0227 for
+    // idempotency (4 "already exists, skipping" notices), and then measuring:
+    //   * a refused run stores with disposition='refused', method NULL and
+    //     http_status NULL;
+    //   * an in-flight run stores with disposition NULL, the lock query finds
+    //     exactly 1, and the partial index's predicate is read back from
+    //     pg_indexes and matched as text against `finished_at IS NULL` -- the
+    //     index is not merely present, it indexes the right thing;
+    //   * decision_code's CHECK accepts all ten codes PARSED OUT OF
+    //     ALL_SCHEDULED_RUN_CODES in src/lib/leafly/schedule-core.ts (the
+    //     harness asserts it parsed exactly 10, so a regex that silently
+    //     matched nothing cannot read as a pass) plus 'manual_requested', and
+    //     rejects 'teleport' with 23514. Measured against the code's own
+    //     exported list rather than retyped, because a constraint that
+    //     disagrees with the code rejects a legitimate write from inside the
+    //     scheduler and destroys the evidence of why a sync did not happen;
+    //   * disposition's CHECK accepts exactly four values and REJECTS
+    //     'blocked' with 23514. That asymmetry is deliberate and is asserted
+    //     rather than left as a comment: 'blocked' is returned in memory when
+    //     no row could be opened at all, so there is nothing to write it to.
+    //     Widening the CHECK would invite a writer to store a state that means
+    //     "I could not store anything"; widening the writer's type would push
+    //     a constraint violation into a catch block. See CloseRunArgs in
+    //     schedule-server.ts;
+    //   * 'skipped' is distinguishable from 'failed', which is what makes the
+    //     backoff query correct -- a no-op sync must never count as a failure,
+    //     or a healthy shop with an unchanged menu would back itself off;
+    //   * leafly_sync_runs_trigger_actor_coherent rejects a 'schedule' run
+    //     that names a staff member (nobody presses anything at 4am) while
+    //     ACCEPTING a 'manual' run with a NULL actor -- both directions,
+    //     because the button must never be blocked by its own logging;
+    //   * leafly_sync_runs_pushed_has_method rejects pushed=true with no
+    //     method AND pushed=false claiming a POST, rejects 'PATCH' (not a
+    //     Leafly menu write), and accepts POST/PUT/DELETE;
+    //   * created_by's FK is confdeltype 'n', proven by deleting the staff row
+    //     and watching created_by become NULL while the run row survives;
+    //   * RLS enabled with 0 policies and 0 anon/authenticated grants;
+    //   * 0209's factory reset empties the log (25 -> 0, reported as
+    //     "leafly_sync_runs": 25) while integration_credentials and
+    //     syndication_sync_settings survive -- and is_owner() is asserted to
+    //     be true FIRST, so the reset assertions cannot pass vacuously by the
+    //     reset having been refused.
+    //
+    // No harness defects were found this time, because the three that cost the
+    // most on 0225/0226 were carried across as fixtures rather than rewritten:
+    // the `\set VERBOSITY verbose` heredoc that keeps VERBOSITY and the
+    // statement in ONE psql session (a separate -c captures the word "SET"
+    // instead of the SQLSTATE, which presents as a missing constraint), the
+    // knowledge that 0127's trigger already creates the staff_profiles row
+    // readonly/inactive so the fixture must UPDATE rather than insert (an
+    // `on conflict do nothing` does nothing and is_owner() returns f, which
+    // presents as "the reset is broken"), and the anchored case-sensitive
+    // reset grep (an unanchored /ERROR|RESET_/i matches `reset_at` inside the
+    // SUCCESS json and prints a failure banner over a perfect run).
+    // Harness: scripts/compliance/prove-0227-executes.sh
+    expect(listed[listed.length - 1]).toMatch(/^0227_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

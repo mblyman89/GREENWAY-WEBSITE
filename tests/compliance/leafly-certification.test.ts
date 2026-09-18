@@ -20,7 +20,7 @@
  * This file also holds the promise made in `page.tsx`: it reads `vercel.json` and fails if
  * `LEAFLY_SCHEDULED_SYNC_EXISTS` and reality disagree in EITHER direction.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -32,6 +32,7 @@ import {
   assessMenuCertificationReadiness,
   type MenuCertificationInputs,
 } from "@/lib/leafly/certification-core";
+import { DAILY_HOUR_DEFAULT } from "@/lib/leafly/schedule-core";
 import type { LeaflyReconcileResult } from "@/lib/leafly/readback-core";
 
 const ROOT = process.cwd();
@@ -435,9 +436,70 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
     }
   });
 
-  it("no declared cron syncs Leafly", () => {
+  // SLICE L-7. This block previously read:
+  //
+  //     it("no declared cron syncs Leafly", ...)  expect(leaflyCrons).toEqual([])
+  //
+  // That was correct when written and is now false: L-7 added the cron, which is
+  // exactly the event the L-4 comment predicted ("the day somebody adds one that
+  // test fails and points here"). It failed, it pointed here, and this is the
+  // update. The gate is not weakened -- it is inverted and tightened, because a
+  // cron that exists can be wrong in more ways than a cron that does not.
+  it("exactly one declared cron syncs Leafly", () => {
     const leaflyCrons = crons.filter((c) => (c.path ?? "").toLowerCase().includes("leafly"));
-    expect(leaflyCrons).toEqual([]);
+    expect(leaflyCrons).toHaveLength(1);
+    expect(leaflyCrons[0]?.path).toBe("/api/cron/leafly-menu-sync");
+  });
+
+  it("the Leafly cron route actually exists on disk", () => {
+    // A cron pointing at a path with no route handler deploys happily and 404s
+    // once a day forever, which looks like a working schedule in vercel.json and
+    // is not one.
+    const routePath = path.join("src", "app", "api", "cron", "leafly-menu-sync", "route.ts");
+    expect(existsSync(path.join(ROOT, routePath))).toBe(true);
+    const routeSource = readText(routePath);
+    // It must delegate, not re-decide. The whole value of the pure core is lost
+    // if timing logic gets reimplemented in the route.
+    expect(routeSource).toContain("runScheduledLeaflySync");
+    // And it must be fail-closed like every other cron on this project.
+    expect(routeSource).toContain("shouldRefuseWhenSecretMissing");
+    expect(routeSource).toContain("CRON_SECRET");
+  });
+
+  it("every cron schedule runs at most once per day (Vercel Hobby limit)", () => {
+    // MEASURED CONSTRAINT, not a style rule. Vercel's cron documentation (read
+    // 2026-09-18, page last updated 2026-07-15) states Hobby accounts are
+    // "limited to cron jobs that run once per day" and that a more frequent
+    // expression "will fail during deployment". This project is recorded as
+    // Vercel Hobby in docs/CRYPTO_PORTFOLIO_BIBLE.md.
+    //
+    // So a sub-daily expression here does not degrade the Leafly sync -- it
+    // BREAKS EVERY DEPLOYMENT of the whole site, including the point of sale.
+    // This test is the guard rail that stops a well-meant "let's sync hourly"
+    // from taking the shop offline.
+    for (const c of crons) {
+      const schedule = c.schedule ?? "";
+      const [minute, hour] = schedule.split(/\s+/);
+      // A step or wildcard in the minute or hour field means more than one run
+      // per day. A list (1,2) or range (1-5) does too.
+      expect(minute, `cron "${c.path}" minute field "${minute}"`).toMatch(/^\d+$/);
+      expect(hour, `cron "${c.path}" hour field "${hour}"`).toMatch(/^\d+$/);
+    }
+  });
+
+  it("the Leafly cron hour lands at or after the default sync hour year-round", () => {
+    // The single daily tick must not land BELOW the schedule's configured hour,
+    // or the hour gate would refuse it and -- with no second tick on this plan --
+    // the daily full sync would depend entirely on the catch-up rule.
+    //
+    // Pacific is UTC-7 (PDT) or UTC-8 (PST). DAILY_HOUR_DEFAULT is 4.
+    const leafly = crons.find((c) => (c.path ?? "").includes("leafly-menu-sync"));
+    const utcHour = Number.parseInt((leafly?.schedule ?? "").split(/\s+/)[1] ?? "", 10);
+    expect(Number.isFinite(utcHour)).toBe(true);
+    const pdtHour = (utcHour - 7 + 24) % 24;
+    const pstHour = (utcHour - 8 + 24) % 24;
+    expect(pdtHour).toBeGreaterThanOrEqual(DAILY_HOUR_DEFAULT);
+    expect(pstHour).toBeGreaterThanOrEqual(DAILY_HOUR_DEFAULT);
   });
 
   it("the page's constant matches reality in BOTH directions", () => {

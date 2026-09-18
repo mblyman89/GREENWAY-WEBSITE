@@ -670,6 +670,23 @@ export const TABLE_RULES: readonly TableRule[] = [
   // created_by is ON DELETE SET NULL, so these rows do not pin staff
   // records in place and impose no delete ordering of their own.
   { table: "leafly_outbound_attempts", disposition: "WIPE", because: "Every message we sent Leafly about a practice order — each acknowledgement and status update, plus the ones the system declined to send and why. Rehearsal paperwork: left behind, it would read as if this store had really been working orders on Leafly." },
+  //
+  // leafly_sync_runs (0227) is the scheduler's own log — every automatic tick
+  // and every manual push, including the ticks that correctly did nothing.
+  // WIPE, and this one has a behavioural reason rather than a tidiness one,
+  // which is why it is not left to the shared "leafly_" stem: the
+  // consecutive-failure count that drives the sync backoff is derived from
+  // this table. Rehearsal failures left in place would have the scheduler
+  // begin go-live day already backed off — syncing every few hours instead of
+  // on schedule — because of failures that happened during practice. So
+  // KEEPing it would silently degrade real behaviour, the same trap as
+  // leafly_webhook_events' idempotency fingerprints.
+  //
+  // Checked against WAC 314-55-087 before writing WIPE: the retention duty
+  // attaches to actual transactions, and a menu sync is not a transaction at
+  // all — no sale, no product movement, no customer. It is telemetry about a
+  // third-party API call.
+  { table: "leafly_sync_runs", disposition: "WIPE", because: "The record of every automatic menu sync and every manual push during testing. Practice telemetry — and leaving the practice failures behind would have automatic syncing start out already slowed down, as if Leafly were still refusing us." },
   { table: "license_settings", disposition: "KEEP", because: "Your I-502 licence number and CCRS identifiers." },
   { table: "tax_settings", disposition: "KEEP", because: "Your excise and sales tax rates." },
   { table: "tax_category_rules", disposition: "KEEP", because: "Which categories are taxed which way." },

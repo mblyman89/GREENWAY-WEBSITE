@@ -215,6 +215,14 @@ import { __runLeaflyPreviewTests } from "../../src/lib/leafly/preview-core";
 //                        acceptable answer — every rejection must be classified
 //                        as retry, fix-config, fix-request or gone.
 import { __runLeaflyOrderAckTests } from "../../src/lib/leafly/order-ack-core";
+// SLICE L-7 -- the automatic sync schedule. Registered with a floor because the
+// two things this core decides are both silent when wrong: it decides WHETHER
+// to talk to Leafly (getting that wrong too often is a certification failure,
+// getting it wrong too rarely freezes the published menu with no error
+// anywhere), and it produces every WORD the owner reads about automation on the
+// integrations page. A frozen menu under a green panel is the specific outcome
+// its `summarizeAutomation` assertions exist to make impossible.
+import { __runLeaflyScheduleTests } from "../../src/lib/leafly/schedule-core";
 import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
@@ -816,6 +824,14 @@ __runLiquidVolumeTests();
   // filter quietly removing a legal action -- verified by sabotage, which the
   // matrix caught in six places at once.
   assertRan("leafly-order-ack-core", __runLeaflyOrderAckTests(), 370);
+  // Floor 230, set from a measured 242 at registration. Deliberately close to
+  // the measured figure: this core is where a platform limit is encoded (Vercel
+  // Hobby permits one cron tick per day, so the daily full sync is driven by an
+  // OR of "the configured hour has arrived" and "20 hours have passed"), and
+  // the 24-hour sweep that proves the second trigger fires at every hour of the
+  // clock is exactly the kind of loop that can be made vacuous by a one-line
+  // edit. It carries its own non-vacuity guards; this floor is the outer net.
+  assertRan("leafly-schedule-core", __runLeaflyScheduleTests(), 255);
   __runWmPayloadTests();
   // Floored, not just called. This core gained the Leafly HMAC + order
   // integration key this slice, so it is now the thing that decides whether the
@@ -837,7 +853,11 @@ __runLiquidVolumeTests();
   __runSyncPlanTests();
   __runPreflightTests();
   __runRichnessTests();
-  __runSyncSettingsTests();
+  // Floored as of L-7 -- see the note on `__runSyncSettingsTests`. This core now
+  // also resolves the automatic sync schedule, and the round trip it asserts
+  // (resolve -> store -> resolve) is what stops an owner's automation setting
+  // from being silently reset by an unrelated save on the same jsonb row.
+  assertRan("sync-settings-core", __runSyncSettingsTests(), 45);
   __runApplySettingsTests();
   __runSyndicationPlaybookTests();
   __runPosSaleEventTests();
