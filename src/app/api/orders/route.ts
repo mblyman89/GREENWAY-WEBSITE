@@ -286,6 +286,12 @@ export async function POST(request: Request) {
         totalMinorUnits: input.totalMinorUnits,
         customerNote: input.customerNote ?? null,
         itemCount,
+        // SLICE L-10. Stated, not inherited. The receipt now prints its origin
+        // line from this value, and the two origins must be tellable apart on
+        // paper -- the owner asked for exactly that in the L-9 recon. The
+        // default would be correct here, but a silent default is also how the
+        // NEXT path to print a receipt ends up claiming to be the website.
+        origin: "greenway",
       });
       if (jobId) console.log(`[orders/receipt] ${result.orderNumber}: print job ${jobId} queued`);
     } catch (err) {

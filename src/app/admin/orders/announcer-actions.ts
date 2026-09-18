@@ -99,6 +99,11 @@ export async function announcerTestAllAction(
     orderId: null,
     orderNumber: null,
     isTest: true,
+    // SLICE L-10. The test button proves the WEBSITE order sound, which is the
+    // one the shop hears all day. Leafly's sound gets its own test on the
+    // per-origin sound settings screen; a single test that only ever played one
+    // of the two would leave the other permanently unverified.
+    origin: "greenway",
   });
 
   await recordAudit({

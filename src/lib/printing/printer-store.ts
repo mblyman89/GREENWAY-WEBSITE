@@ -24,6 +24,7 @@ import {
   formatEscposReceipt,
   type EscposReceiptLine,
 } from "@/lib/printing/receipt-escpos-core";
+import { type OrderOrigin } from "@/lib/orders/order-origin-core";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import {
   MAX_FAILS_PER_CLAIM,
@@ -192,6 +193,17 @@ export async function queueOrderReceipt(input: ReceiptInput & {
   itemCount: number;
   /** Per-line enrichment, positionally aligned with `lines`. */
   lineExtras?: (OrderReceiptLineExtras | null)[];
+  /**
+   * SLICE L-10. Which marketplace the order came from, so the paper that
+   * travels with the bag says which one. Optional and defaulting to the
+   * website, because every call site that predates Leafly means the website.
+   */
+  origin?: OrderOrigin;
+  /**
+   * SLICE L-10. The Leafly acknowledgement deadline, already formatted for
+   * the shop's wall clock. Printed under the origin line on arrival tickets.
+   */
+  urgencyLine?: string | null;
 }): Promise<string | null> {
   const settings = await getPrinterSettings();
   if (!settings || !settings.auto_print_orders) return null;
@@ -239,6 +251,8 @@ export async function queueOrderReceipt(input: ReceiptInput & {
       headerText: input.headerText ?? settings.header_text ?? config?.headerText ?? null,
       footerText: input.footerText ?? settings.footer_text ?? config?.footerText ?? null,
       addressText: config?.addressText ?? null,
+      origin: input.origin,
+      urgencyLine: input.urgencyLine ?? null,
       showSavings: config?.showSavings,
       showTaxBreakdown: config?.showTaxBreakdown,
       showItemDetail: config?.showItemDetail,

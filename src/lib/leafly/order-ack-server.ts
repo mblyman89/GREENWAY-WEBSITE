@@ -376,6 +376,12 @@ export async function acknowledgeLeaflyOrder(input: {
   const assessment = assessOutboundResponse(raw.status, LEAFLY_ACK_SUCCESS_STATUS);
   const ok = assessment.disposition === "success";
 
+  // Set when the acknowledgement succeeded at Leafly but the order did not make
+  // it onto the shop floor. Appended to the success warning rather than turning
+  // the result into a failure, because the acknowledgement genuinely DID
+  // succeed and is irreversible -- see the block below.
+  let bridgeWarning: string | null = null;
+
   if (ok) {
     const { markLeaflyOrderAcknowledged } = await import("./webhook-server");
     const stamped = await markLeaflyOrderAcknowledged(orderId);
@@ -387,6 +393,64 @@ export async function acknowledgeLeaflyOrder(input: {
       console.error(
         `[leafly/outbound] acknowledged ${orderId} at Leafly but could not stamp acknowledged_at: ${stamped.error}`,
       );
+    }
+
+    // ── SLICE L-10, STAGE TWO: the order reaches the shop floor ──────────────
+    //
+    //   > "I think the leafly order should become floor visible once the order
+    //   >  has been accepted by us."
+    //
+    // This is that moment, and it is the line that closes the gap the L-9
+    // recon found: before this slice, nothing in the codebase ever wrote an
+    // `orders` row for a Leafly order, so a Leafly order was structurally
+    // incapable of appearing at the register no matter how it was configured.
+    //
+    // WHY HERE AND NOT EARLIER: `ok` is true only when Leafly returned the
+    // documented 204. We create the local order only once Leafly has agreed
+    // the order is ours; an order we put on the floor's work list before that
+    // could still auto-cancel underneath them, and they would have built a bag
+    // for nobody.
+    //
+    // WHY AFTER markLeaflyOrderAcknowledged: the bridge reads `acknowledged_at`
+    // and `leafly_status` off the row to decide what to do, so the stamp has to
+    // land first.
+    //
+    // NEVER ALLOWED TO FAIL THE ACKNOWLEDGEMENT. Leafly has already accepted
+    // it by this point, and the ID images are already gone -- the acceptance is
+    // irreversible. Reporting failure here would invite staff to press accept
+    // again against a door that is already closed. So the outcome is logged and
+    // the acknowledgement is still reported as the success it was; a missing
+    // register row is recoverable by hand, an order nobody believes was
+    // accepted is not.
+    try {
+      const { onLeaflyOrderAccepted } = await import("./bridge-server");
+      const bridged = await onLeaflyOrderAccepted(orderId);
+      if (!bridged.ok) {
+        console.error(`[leafly/outbound] ${bridged.summary}`);
+        // Surfaced to the person who just pressed the button, via the
+        // `warning` field that already renders as `leaflyWarn` on the orders
+        // page. NOT written as a second `leafly_outbound_attempts` row: that
+        // table is the audit log of what we sent to LEAFLY, one row per HTTP
+        // attempt, and a second row for one acknowledgement would make the
+        // history claim we called Leafly twice. (It would also violate the
+        // table's own CHECK constraint -- `disposition` is restricted to
+        // success | retry | fix_config | fix_request | gone, verified in
+        // migration 0226 -- so the insert would have been rejected anyway and
+        // the operator would have been told nothing at all.)
+        bridgeWarning = `Leafly has accepted this order, but it did not reach the register: ${bridged.summary}. DO NOT acknowledge it again -- that door is closed. Build the order from the printed ticket and tell the owner.`;
+      } else {
+        console.log(`[leafly/outbound] ${bridged.summary}`);
+      }
+    } catch (err) {
+      // onLeaflyOrderAccepted is written not to throw, but this is the one
+      // call site where a throw would corrupt a decision that has already been
+      // made at Leafly. Belt and braces.
+      console.error(
+        `[leafly/outbound] acknowledged ${orderId} but the floor bridge threw:`,
+        err,
+      );
+      bridgeWarning =
+        "Leafly has accepted this order, but we could not confirm it reached the register. DO NOT acknowledge it again. Check the register's pickup queue, and build from the printed ticket if it is not there.";
     }
   }
 
@@ -408,7 +472,12 @@ export async function acknowledgeLeaflyOrder(input: {
     message: assessment.message,
     httpStatus: raw.status,
     assessment,
-    warning: ok ? decision.warning : null,
+    // Both warnings, when both apply. The irreversibility notice from the pure
+    // core tells the operator what just became permanent; the bridge warning
+    // tells them the order is not where they are about to look for it. Dropping
+    // either one would leave somebody either pressing accept twice or hunting a
+    // register row that was never created.
+    warning: ok ? [decision.warning, bridgeWarning].filter(Boolean).join(" ") || null : null,
   };
 }
 
