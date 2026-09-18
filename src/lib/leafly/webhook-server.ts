@@ -366,6 +366,46 @@ export async function handleLeaflyWebhook(input: {
   if (parsed.orderId) {
     const saved = await upsertLeaflyOrderFromWebhook(parsed);
     if (!saved.ok) notes.push(`order upsert failed: ${saved.error}`);
+
+    // ── SLICE L-10, STAGE ONE: ring the bell and print the paper ─────────────
+    //
+    // The owner's instruction was specific about the ordering:
+    //
+    //   > "I think the leafly order should become floor visible once the order
+    //   >  has been accepted by us. it should however, make noise on the
+    //   >  speaker, and print out the receipt immediately so we know to accept
+    //   >  the order as soon as possible."
+    //
+    // So this is the "immediately" half. It announces and prints; it creates
+    // no local order, so nothing appears on the register's pickup queue yet.
+    // That happens in stage two, when we acknowledge (see order-ack-server).
+    //
+    // ORDER MATTERS: this runs AFTER the upsert, because onLeaflyOrderArrived
+    // reads the row the upsert just wrote -- including `raw_order`, which is
+    // where the cart it prints comes from.
+    //
+    // GATED TO order_submit. An order_cancel delivery must never ring the
+    // new-order bell; that is the one sound that would send somebody to build
+    // a bag for an order that no longer exists.
+    //
+    // ONLY on a successful upsert. If the row was not written, the bridge
+    // would read a missing or stale row, and a receipt printed from stale data
+    // is worse than no receipt.
+    //
+    // AWAITED, unlike the website's fire-and-forget announcer. The website can
+    // afford to answer the customer first and ring later; here the whole point
+    // is that the bell beats Leafly's fifteen-minute acknowledgement clock, and
+    // a serverless function that has already returned may be frozen before its
+    // background work runs. onLeaflyOrderArrived is contractually incapable of
+    // throwing -- every failure comes back as a value -- so awaiting it cannot
+    // turn a valid delivery into a non-200, which would make Leafly retry and
+    // could end with a real customer's order auto-cancelled.
+    if (saved.ok && expectedEvent === "order_submit") {
+      const { onLeaflyOrderArrived } = await import("./bridge-server");
+      const bridged = await onLeaflyOrderArrived(parsed.orderId);
+      if (!bridged.ok) notes.push(bridged.summary);
+      else if (!bridged.announced || !bridged.printed) notes.push(bridged.summary);
+    }
   }
 
   await markLeaflyWebhookProcessed(bodySha256);

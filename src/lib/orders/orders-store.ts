@@ -265,6 +265,12 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
   enqueueAnnouncementInBackground({
     orderId: order.id,
     orderNumber: order.order_number != null ? String(order.order_number) : null,
+    // SLICE L-10. This is what picks the website's sound and the website's
+    // spoken line, now that Leafly orders ring the same speakers with a
+    // deliberately DIFFERENT sound. Stated explicitly for the same reason the
+    // notifier's origin is: the shop can tell the two apart by ear, and that
+    // only stays true if each path names itself.
+    origin: "greenway",
   });
 
   return {
