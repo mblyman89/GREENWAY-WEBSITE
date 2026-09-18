@@ -1038,7 +1038,53 @@ describe("the migration list is ordered the way the database will see it", () =>
     // reset grep (an unanchored /ERROR|RESET_/i matches `reset_at` inside the
     // SUCCESS json and prints a failure banner over a perfect run).
     // Harness: scripts/compliance/prove-0227-executes.sh
-    expect(listed[listed.length - 1]).toMatch(/^0227_/);
+    //
+    // SLICE L-10 adds 0228_leafly_bridge_to_the_floor.sql — the migration that
+    // lets a Leafly order reach the shop floor. Proven the only way the claim
+    // can honestly be made: all 228 migrations applied in order to a real
+    // PostgreSQL 15.19, 0228 re-applied cleanly (idempotent), and 26 live
+    // property checks passed. The ones worth naming:
+    //
+    //   * announced_at is NULLABLE WITH NO DEFAULT. This is the whole
+    //     idempotency guarantee, not a style choice: the bridge claims arrival
+    //     work with `.is("announced_at", null)`, so a default of now() would
+    //     mean every row is born already "announced", the claim would match
+    //     zero rows forever, and NO Leafly order would EVER ring the bell or
+    //     print a ticket. Every text-reading test in this repo would still be
+    //     green. Only executing it can catch that;
+    //   * the retry race proven with TWO REAL CONCURRENT TRANSACTIONS rather
+    //     than by reasoning: the second delivery claims 0 rows while the first
+    //     holds the lock, so a Leafly webhook retry cannot print a second
+    //     ticket for the same customer;
+    //   * the partial index exists AND its predicate really is
+    //     `(announced_at IS NULL)` — a partial index with the wrong predicate
+    //     still exists, still shows in \d, and still silently fails to serve
+    //     the query it was built for;
+    //   * first_seen_at, the column the index sorts by, actually exists;
+    //   * all four announcer_settings per-origin sound columns are nullable
+    //     and default NULL, because NULL is the SIGNAL meaning "use the origin
+    //     default" — that is what lets an existing shop's settings survive;
+    //   * NO foreign key from the custom sound paths to announcer_sounds,
+    //     asserted rather than commented, because "we chose not to" and "we
+    //     forgot to" look identical six months later. A deleted upload must
+    //     degrade to a built-in, never block the delete;
+    //   * 0226's orders.origin CHECK still rejects an unknown value with 23514
+    //     AND still accepts 'leafly' — a constraint that rejected everything
+    //     would pass the negative test while breaking the feature;
+    //   * 0209's factory reset still runs, with is_owner() asserted TRUE first
+    //     so the reset assertions cannot pass vacuously.
+    //
+    // THREE HARNESS DEFECTS FOUND AND FIXED, all one psql behaviour: `-tAc` on
+    // an `INSERT ... RETURNING` prints the returned value AND the "INSERT 0 1"
+    // command tag. Capturing both made $OWNER into "<uuid> INSERT 0 1", every
+    // later query died with "invalid input syntax for type uuid", and the
+    // harness reported the FACTORY RESET as broken when nothing was broken.
+    // A fourth: staff_profiles' column is `active`, not `is_active` — the
+    // wrong name does not error, the UPDATE simply matches nothing and
+    // is_owner() returns f. Recorded because every one of these presents as a
+    // migration defect and none of them is one.
+    // Harness: scripts/compliance/prove-0228-executes.sh
+    expect(listed[listed.length - 1]).toMatch(/^0228_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

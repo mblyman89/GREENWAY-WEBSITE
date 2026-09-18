@@ -1375,7 +1375,7 @@ __runLiquidVolumeTests();
   // order's life, whether the PA sounds, whether paper comes out of the
   // printer, and whether a row appears in `orders` (which is what makes the
   // register able to see it at all).
-  assertRan("leafly-bridge-core", __runLeaflyBridgeTests(), 171);
+  assertRan("leafly-bridge-core", __runLeaflyBridgeTests(), 281);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

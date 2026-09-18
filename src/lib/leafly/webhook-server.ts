@@ -406,6 +406,39 @@ export async function handleLeaflyWebhook(input: {
       if (!bridged.ok) notes.push(bridged.summary);
       else if (!bridged.announced || !bridged.printed) notes.push(bridged.summary);
     }
+
+    // ── SLICE L-10, THE OTHER DIRECTION: a cancellation must follow the order
+    //    all the way to the floor ───────────────────────────────────────────
+    //
+    // This is the consequence of the acceptance hook above. Until this slice,
+    // no Leafly order had ever reached the register, so a cancellation had
+    // nothing on the floor to invalidate and stopping at `leafly_orders` was
+    // harmless. That is no longer true. A cancellation that did not propagate
+    // would leave somebody bagging an order that no longer exists, and the
+    // first anybody would know is a customer who never turns up.
+    //
+    // WHAT IT WILL NOT DO: silently empty a till. When product has already
+    // moved -- preparing, ready, or a register sale open -- onLeaflyOrderCanceled
+    // changes NOTHING and escalates to a human instead. That is the enterprise
+    // standard the owner asked about, and the reasoning is in decideCancelPlan.
+    //
+    // WE MAY NOT REFUSE THIS. The spec is explicit: "These webhook events are
+    // not the place to apply business rules or validations on the order
+    // lifecycle." So this runs, and it still answers 200 regardless.
+    const isCancel = parsed.status === "canceled" || parsed.eventType === "order_cancel";
+    if (saved.ok && isCancel) {
+      const { onLeaflyOrderCanceled } = await import("./bridge-server");
+      const cancelled = await onLeaflyOrderCanceled(
+        parsed.orderId,
+        parsed.cancelationReasonCode ?? null,
+      );
+      // A collision is NOT an error -- it is the system working correctly --
+      // but it must be visible in the log, because it is the one case where a
+      // human has been handed a decision and may not have noticed.
+      if (!cancelled.ok || cancelled.plan?.dispositionRequired) {
+        notes.push(cancelled.summary);
+      }
+    }
   }
 
   await markLeaflyWebhookProcessed(bodySha256);
