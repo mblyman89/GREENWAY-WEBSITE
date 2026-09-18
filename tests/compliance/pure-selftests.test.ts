@@ -60,6 +60,7 @@ import { __runLeaflyOrderAckTests } from "@/lib/leafly/order-ack-core";
 import { __runLeaflyScheduleTests } from "@/lib/leafly/schedule-core";
 import { __runLeaflyEvidenceTests } from "@/lib/leafly/evidence-core";
 import { __runOrderOriginTests } from "@/lib/orders/order-origin-core";
+import { __runLeaflyBridgeTests } from "@/lib/leafly/bridge-core";
 import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "@/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "@/lib/syndication/sync-plan-core";
@@ -380,6 +381,18 @@ describe("embedded pure self-test suites", () => {
     const r = __runOrderOriginTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(40);
+  });
+  // SLICE L-10 -- the bridge between a Leafly order and the shop floor. This
+  // core encodes the owner's two-stage split: announce + print on ARRIVAL so
+  // staff have the fifteen-minute acknowledgement window in front of them,
+  // then create the local order (and therefore register visibility) only on
+  // ACCEPTANCE. A floor is asserted because the most dangerous regression
+  // here is silent: if the suite body were gutted the pipeline would still
+  // "pass" while double-printing or never printing at all.
+  it("leafly-bridge-core (SLICE L-10: arrival announces/prints, acceptance creates)", () => {
+    const r = __runLeaflyBridgeTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(114);
   });
   it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {
     expect(() => __runWmPayloadTests()).not.toThrow();
