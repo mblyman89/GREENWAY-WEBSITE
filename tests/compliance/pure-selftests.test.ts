@@ -403,7 +403,13 @@ describe("embedded pure self-test suites", () => {
     // ABSENT announced_at/printed_at column means "not tracked" and must stay
     // silent, rather than accusing every order in the shop of never having
     // rung the bell while migration 0228 is still unapplied.
-    expect(r.passed).toBeGreaterThanOrEqual(354);
+    //
+    // Raised 354 -> 374 with the per-order-type sound picker (slice L-11).
+    // The added assertions pin soundSelectionToColumns, whose entire job is
+    // to stop a stale upload path outliving a switch back to a built-in --
+    // the failure where the settings screen shows one sound and the speakers
+    // play another, which cannot be diagnosed from the screen.
+    expect(r.passed).toBeGreaterThanOrEqual(374);
   });
   it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {
     expect(() => __runWmPayloadTests()).not.toThrow();

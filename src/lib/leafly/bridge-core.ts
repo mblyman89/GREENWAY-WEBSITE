@@ -678,6 +678,59 @@ export function resolveOriginSoundWithLibrary(input: {
 }
 
 /**
+ * Turn ONE dropdown value into the pair of columns it must be stored in.
+ *
+ * ── WHY THIS IS NOT JUST A STRING ASSIGNMENT ────────────────────────────
+ * The sound picker is a single <select>. Its options are a mix of two
+ * fundamentally different things, exactly as `optionsForSounds()` builds them:
+ *
+ *   * a BUILT-IN id  — "chime", "bell", "ding", "alert", "cash", "voice"
+ *   * an UPLOAD path — a storage path like "sounds/abc123.mp3"
+ *
+ * The database keeps those in two separate columns per origin, and the
+ * resolver gives the upload column precedence. That design is right — it is
+ * what lets a deleted upload fall back to an audible built-in instead of to
+ * silence — but it creates a trap for the WRITE path that does not exist on
+ * the read path:
+ *
+ *   If the owner switches from an upload back to a built-in, and we write the
+ *   built-in column while leaving the stale upload path in place, the resolver
+ *   will keep preferring the upload and the shop will keep hearing the old
+ *   sound. The settings screen will show the new choice. The speakers will
+ *   disagree with the screen, and there is no way to tell from the UI which
+ *   one is lying.
+ *
+ * So every save writes BOTH columns, always, and clears the one that does not
+ * apply. There is no code path that writes one and leaves the other.
+ *
+ * Returns null for the empty string, meaning "no explicit choice" — which
+ * clears both columns and lets the origin's default apply. That is a real
+ * choice the owner can make, not an error.
+ */
+export function soundSelectionToColumns(
+  selected: string | null | undefined,
+  isCustomPath: (value: string) => boolean,
+): { soundId: string | null; customPath: string | null } {
+  const value = typeof selected === "string" ? selected.trim() : "";
+
+  // No choice: clear both, fall back to the origin default. Note that BOTH
+  // are nulled rather than left alone -- "reset to default" has to actually
+  // reset, or the owner can never undo a choice once made.
+  if (value === "") return { soundId: null, customPath: null };
+
+  if (isCustomPath(value)) {
+    // An upload. The built-in column is cleared so that if this file is ever
+    // deleted, the fallback is the ORIGIN DEFAULT (a guaranteed-present
+    // built-in) rather than some built-in the owner chose months ago and has
+    // long since forgotten about.
+    return { soundId: null, customPath: value };
+  }
+
+  // A built-in. The upload column is cleared so it cannot outrank this.
+  return { soundId: value, customPath: null };
+}
+
+/**
  * Are the website and Leafly sounds actually different?
  *
  * The owner asked for a Leafly fallback that is "not the same as the fallback
@@ -1587,6 +1640,114 @@ export function __runLeaflyBridgeTests(): { passed: number; failed: number } {
       ORIGIN_DEFAULT_SOUND_IDS.leafly,
     ) === null,
   );
+
+  // ---- writing the choice back (slice L-11) ------------------------------
+  // The picker is one dropdown; the database is two columns per origin. The
+  // whole risk lives in the gap between those two facts.
+  const isPath = (v: string) => v.includes("/");
+
+  const pickBuiltIn = soundSelectionToColumns("bell", isPath);
+  eq("choosing a built-in stores it as the sound id", pickBuiltIn.soundId, "bell");
+  ok(
+    "...and CLEARS any upload, which would otherwise outrank it",
+    pickBuiltIn.customPath === null,
+  );
+
+  const pickUpload = soundSelectionToColumns("sounds/custom.mp3", isPath);
+  eq("choosing an upload stores it as the path", pickUpload.customPath, "sounds/custom.mp3");
+  ok(
+    "...and clears the built-in, so a deleted file falls back to the ORIGIN default",
+    pickUpload.soundId === null,
+  );
+
+  // THE BUG THIS FUNCTION EXISTS TO PREVENT. Switching upload -> built-in
+  // must not leave the upload behind: the resolver prefers uploads, so the
+  // speakers would keep playing the old file while the settings screen showed
+  // the new choice. A screen that disagrees with the speakers is unfixable
+  // from the screen.
+  const switchBack = soundSelectionToColumns("chime", isPath);
+  ok(
+    "switching from an upload back to a built-in leaves NO stale upload path",
+    switchBack.customPath === null && switchBack.soundId === "chime",
+  );
+  // Proven end to end against the real resolver, not just on the column pair:
+  // with the stale path cleared, the resolver must actually return the
+  // built-in even though the old file is still sitting in the bucket.
+  eq(
+    "...and the resolver therefore plays the built-in, not the old upload",
+    resolveOriginSoundWithLibrary({
+      origin: "leafly",
+      configuredCustomPath: switchBack.customPath,
+      configuredSoundId: switchBack.soundId,
+      availableCustomPaths: ["sounds/custom.mp3"],
+    }),
+    "chime",
+  );
+  // And the inverse, to prove the clearing is not one-directional: with the
+  // path present the upload wins, which is the behaviour the owner asked for.
+  eq(
+    "an upload selection really does outrank the origin default",
+    resolveOriginSoundWithLibrary({
+      origin: "leafly",
+      configuredCustomPath: pickUpload.customPath,
+      configuredSoundId: pickUpload.soundId,
+      availableCustomPaths: ["sounds/custom.mp3"],
+    }),
+    "sounds/custom.mp3",
+  );
+
+  // "No choice" must CLEAR BOTH, or the owner can never undo a choice.
+  for (const empty of ["", "   ", null, undefined]) {
+    const cleared = soundSelectionToColumns(empty as string | null, isPath);
+    ok(
+      `an empty selection (${JSON.stringify(empty)}) clears both columns`,
+      cleared.soundId === null && cleared.customPath === null,
+    );
+  }
+  // And clearing must land back on the origin default, differently per origin.
+  eq(
+    "a cleared Leafly choice falls back to the Leafly default",
+    resolveOriginSoundWithLibrary({
+      origin: "leafly",
+      configuredCustomPath: null,
+      configuredSoundId: null,
+      availableCustomPaths: [],
+    }),
+    ORIGIN_DEFAULT_SOUND_IDS.leafly,
+  );
+  eq(
+    "a cleared website choice falls back to the website default",
+    resolveOriginSoundWithLibrary({
+      origin: "greenway",
+      configuredCustomPath: null,
+      configuredSoundId: null,
+      availableCustomPaths: [],
+    }),
+    ORIGIN_DEFAULT_SOUND_IDS.greenway,
+  );
+
+  // Whitespace is trimmed, because a value round-tripped through a form is
+  // not always the value that left it.
+  eq(
+    "a padded built-in is trimmed before storage",
+    soundSelectionToColumns("  bell  ", isPath).soundId,
+    "bell",
+  );
+  eq(
+    "a padded upload path is trimmed before storage",
+    soundSelectionToColumns("  sounds/a.mp3  ", isPath).customPath,
+    "sounds/a.mp3",
+  );
+  // Exactly one column is ever populated. Asserted as an invariant over a
+  // spread of inputs rather than case by case, so a future branch that sets
+  // both cannot slip through.
+  for (const v of ["bell", "sounds/a.mp3", "", "chime", "x/y/z.wav"]) {
+    const r = soundSelectionToColumns(v, isPath);
+    ok(
+      `never both columns at once for ${JSON.stringify(v)}`,
+      !(r.soundId !== null && r.customPath !== null),
+    );
+  }
 
   // ---- spoken text -------------------------------------------------------
   // The assertions that used to sit here were moved to announcer-core.ts,

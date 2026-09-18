@@ -30,7 +30,13 @@ import {
 } from "@/lib/announcer/announcer-admin-store";
 import { enqueueAnnouncement } from "@/lib/announcer/announcer-enqueue";
 import { createPairing } from "@/lib/announcer/announcer-store";
-import { contentTypeFor, formatBytes, validateUpload } from "@/lib/announcer/announcer-sounds-core";
+import {
+  contentTypeFor,
+  formatBytes,
+  isValidStoragePath,
+  validateUpload,
+} from "@/lib/announcer/announcer-sounds-core";
+import { soundSelectionToColumns } from "@/lib/leafly/bridge-core";
 import {
   createSound,
   deleteSound,
@@ -234,6 +240,100 @@ export async function announcerUpdateSettingsAction(form: FormData): Promise<voi
     entityType: "announcer_settings",
     entityId: "1",
     after: { summary: result.message },
+  });
+
+  revalidatePath(ORDERS_PATH);
+}
+
+/**
+ * Choose which sound plays for website orders and which for Leafly orders.
+ *
+ * ── THE OWNER'S REQUEST ───────────────────────────────────────────
+ *   "I want the sound to be connected to our sound library, so we can upload
+ *    custom sounds to play for each type. there are already several preloaded
+ *    sounds, you can set it to fall back to one of the other sounds that is
+ *    not the same as the fallback one for our online orders noise."
+ *
+ * Migration 0228 added the four columns and slice L-10 wired the READ path
+ * (announcer-store reads them, planFanout honours them). This is the write
+ * path: the screen that lets him actually choose.
+ *
+ * ── WHY IT IS A SEPARATE ACTION FROM announcerUpdateSettingsAction ────────
+ * The existing settings action builds a patch of only the keys whose fields
+ * were non-empty, because an empty field there means "leave it alone". That
+ * rule is exactly wrong for these four columns, where an empty selection is a
+ * real instruction meaning "clear my choice and go back to the default". If
+ * these fields were folded into that form, the owner could set a sound but
+ * never unset one. Two different meanings for an empty field cannot share one
+ * handler, so they do not.
+ *
+ * ── WHAT IT REFUSES TO STORE ──────────────────────────────────────
+ * A submitted value is only treated as an upload if `isValidStoragePath`
+ * accepts it — the same guard the library uses to decide what it is willing
+ * to display. Anything else is stored as a built-in id, and an id the
+ * announcer does not recognise is ignored by `resolveOriginSound` at play
+ * time, which falls back to an audible default. So the worst a hand-crafted
+ * POST can achieve here is the shop's normal sound, never silence and never a
+ * path outside the bucket.
+ */
+export async function announcerUpdateOriginSoundsAction(form: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  // One shared predicate for both origins, so they cannot diverge.
+  const isCustom = (value: string) => isValidStoragePath(value);
+
+  const greenway = soundSelectionToColumns(field(form, "greenwaySound"), isCustom);
+  const leafly = soundSelectionToColumns(field(form, "leaflySound"), isCustom);
+
+  // All four columns are written every time, including the nulls. See
+  // `soundSelectionToColumns`: writing one column and leaving the other is
+  // how the speakers end up disagreeing with the screen.
+  const result = await updateAnnouncerSettings({
+    greenway_sound_id: greenway.soundId,
+    greenway_custom_sound_path: greenway.customPath,
+    leafly_sound_id: leafly.soundId,
+    leafly_custom_sound_path: leafly.customPath,
+  });
+
+  // ── WHEN THE MIGRATION IS NOT APPLIED YET ───────────────────────────
+  // These four columns arrive with migration 0228, which is applied by hand.
+  // Until then this upsert is rejected with 42703 and the READ path silently
+  // degrades -- so without this branch the owner picks a sound, presses Save,
+  // and the dropdown snaps back with no explanation. A silent no-op on a
+  // settings screen is the worst possible outcome: it looks like the software
+  // is broken, or worse, like it worked.
+  //
+  // Throwing is the right call in a form action. Next.js surfaces it on the
+  // error boundary rather than swallowing it, and the alternative -- carrying
+  // on as though the save succeeded -- is the failure mode being prevented.
+  if (!result.ok) {
+    const missingColumn =
+      /column .* does not exist|could not find .* column|42703/i.test(result.message);
+    throw new Error(
+      missingColumn
+        ? "Per-order-type sounds need database migration 0228 " +
+          "(0228_leafly_bridge_to_the_floor.sql). Run it in the Supabase SQL " +
+          "editor, then choose your sounds again. Nothing else on this page is " +
+          "affected."
+        : `Those sounds could not be saved: ${result.message}`,
+    );
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "announcer.origin_sounds_updated",
+    entityType: "announcer_settings",
+    entityId: "1",
+    // The chosen values are recorded, not just a success flag. "Why did the
+    // Leafly sound change last Tuesday" is a question somebody will ask.
+    after: {
+      summary: result.message,
+      greenway_sound_id: greenway.soundId,
+      greenway_custom_sound_path: greenway.customPath,
+      leafly_sound_id: leafly.soundId,
+      leafly_custom_sound_path: leafly.customPath,
+    },
   });
 
   revalidatePath(ORDERS_PATH);
