@@ -1355,9 +1355,12 @@ __runLiquidVolumeTests();
   __runFacetTypeaheadCoreTests();
 
   // SLICE 27 — online order announcer decision layer.
-  assertNoFailures("announcer-core", __runAnnouncerCoreTests());
+  // SLICE L-10 raised these from assertNoFailures to assertRan. An empty
+  // suite has zero failures, so "no failures" alone would let the origin
+  // assertions be deleted without CI noticing.
+  assertRan("announcer-core", __runAnnouncerCoreTests(), 181);
   assertNoFailures("announcer-protocol-core", __runAnnouncerProtocolTests());
-  assertNoFailures("announcer-fanout-core", __runAnnouncerFanoutTests());
+  assertRan("announcer-fanout-core", __runAnnouncerFanoutTests(), 85);
   assertNoFailures("announcer-admin-core", __runAnnouncerAdminTests());
   assertNoFailures("announcer-sounds-core", __runAnnouncerSoundsTests());
   assertNoFailures("announcer-library-core", __runAnnouncerLibraryTests());
@@ -1372,7 +1375,7 @@ __runLiquidVolumeTests();
   // order's life, whether the PA sounds, whether paper comes out of the
   // printer, and whether a row appears in `orders` (which is what makes the
   // register able to see it at all).
-  assertRan("leafly-bridge-core", __runLeaflyBridgeTests(), 114);
+  assertRan("leafly-bridge-core", __runLeaflyBridgeTests(), 108);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

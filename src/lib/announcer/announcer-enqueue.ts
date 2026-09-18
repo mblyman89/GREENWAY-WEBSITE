@@ -25,6 +25,7 @@
  */
 import "server-only";
 
+import { type OrderOrigin } from "@/lib/orders/order-origin-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
@@ -70,6 +71,12 @@ export async function enqueueAnnouncement(input: {
   isTest?: boolean;
   /** Injectable for tests. Defaults to the real clock. */
   now?: Date;
+  /**
+   * SLICE L-10. Where the order came from, which decides both the sound and
+   * the spoken line. Optional: every call site that predates Leafly means the
+   * website, and `planFanout` defaults accordingly.
+   */
+  origin?: OrderOrigin;
 }): Promise<EnqueueResult> {
   try {
     if (!isSupabaseServiceConfigured) return failure("service not configured");
@@ -102,9 +109,15 @@ export async function enqueueAnnouncement(input: {
     // file deleted out from under a device falls back to a built-in rather than
     // queueing a path the Pi will 404 on. Only the paths currently referenced
     // are worth checking, and only if at least one device uses one.
-    const referenced = deviceRows
-      .map((d) => (d as FanoutDevice).custom_sound_path)
-      .filter((p): p is string => typeof p === "string" && p.trim() !== "");
+    // SLICE L-10. The shop-level per-origin uploads have to be included here.
+    // They are resolved by the same existence check as the device-level ones,
+    // and a path that is never looked up is a path that always looks deleted --
+    // which would silently downgrade every custom sound to a built-in.
+    const referenced = [
+      ...deviceRows.map((d) => (d as FanoutDevice).custom_sound_path),
+      settings.leafly_custom_sound_path,
+      settings.greenway_custom_sound_path,
+    ].filter((p): p is string => typeof p === "string" && p.trim() !== "");
 
     let availableCustomPaths: string[] = [];
     if (referenced.length > 0) {
@@ -127,6 +140,7 @@ export async function enqueueAnnouncement(input: {
       orderNumber: input.orderNumber,
       isTest,
       availableCustomPaths,
+      origin: input.origin,
     });
 
     if (plan.inserts.length === 0) {
@@ -161,6 +175,8 @@ export async function enqueueAnnouncement(input: {
 export function enqueueAnnouncementInBackground(input: {
   orderId: string | null;
   orderNumber: string | null;
+  /** SLICE L-10. Passed straight through; see enqueueAnnouncement. */
+  origin?: OrderOrigin;
 }): void {
   void enqueueAnnouncement(input)
     .then((result) => {

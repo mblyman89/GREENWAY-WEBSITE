@@ -45,6 +45,13 @@ import {
   type ResolvedSound,
 } from "./announcer-core";
 
+import {
+  DEFAULT_ORDER_ORIGIN,
+  ORIGIN_DEFAULT_SOUND_IDS,
+  shouldAnnounceOrigin,
+  type OrderOrigin,
+} from "../orders/order-origin-core";
+
 /** The subset of a device row the fan-out actually needs. */
 export type FanoutDevice = {
   id: string;
@@ -61,7 +68,77 @@ export type FanoutSettings = {
   quiet_end: string;
   default_sound_id: string;
   default_volume: number;
+  /**
+   * SLICE L-10 -- per-origin sound overrides, both optional.
+   *
+   * The owner asked for two things that look like one: sounds that differ by
+   * where the order came from, AND the ability to upload his own. So each
+   * origin can name a built-in id or point at an upload in the sound library,
+   * and when it names neither, the origin core's default applies.
+   *
+   * These are optional on the type on purpose. `getAnnouncerSettings()` is
+   * contractually unable to throw, and it reads a table that may predate the
+   * L-10 migration; an optional field lets an older row keep announcing
+   * instead of failing.
+   */
+  leafly_sound_id?: string | null;
+  leafly_custom_sound_path?: string | null;
+  greenway_sound_id?: string | null;
+  greenway_custom_sound_path?: string | null;
 };
+
+/**
+ * The shop-level built-in sound for one origin.
+ *
+ * Precedence, highest first:
+ *   1. what the owner chose for THIS origin on the settings page
+ *   2. for the website only, the long-standing shop-wide default
+ *   3. the origin core's default for this origin
+ *
+ * Step 2 is what stops this change from being heard as a regression. Before
+ * L-10 there was one `default_sound_id` and it meant "the sound this shop
+ * makes for an online order". Every shop that has set it set it for website
+ * orders, so the website keeps honouring it. Leafly deliberately does NOT
+ * inherit it -- if it did, both origins would play the same sound and the
+ * entire point of the feature would be lost on day one.
+ */
+export function originDefaultSoundId(
+  settings: FanoutSettings,
+  origin: OrderOrigin,
+): string {
+  const chosen =
+    origin === "leafly"
+      ? settings.leafly_sound_id
+      : origin === "greenway"
+        ? settings.greenway_sound_id
+        : null;
+
+  const clean = typeof chosen === "string" ? chosen.trim() : "";
+  if (clean !== "") return clean;
+
+  if (origin === "greenway") {
+    const legacy =
+      typeof settings.default_sound_id === "string" ? settings.default_sound_id.trim() : "";
+    if (legacy !== "") return legacy;
+  }
+
+  return ORIGIN_DEFAULT_SOUND_IDS[origin];
+}
+
+/** The shop-level custom upload for one origin, or null when there is none. */
+export function originDefaultCustomPath(
+  settings: FanoutSettings,
+  origin: OrderOrigin,
+): string | null {
+  const chosen =
+    origin === "leafly"
+      ? settings.leafly_custom_sound_path
+      : origin === "greenway"
+        ? settings.greenway_custom_sound_path
+        : null;
+  const clean = typeof chosen === "string" ? chosen.trim() : "";
+  return clean === "" ? null : clean;
+}
 
 /** One row to insert into announcer_queue. */
 export type QueueInsert = {
@@ -101,10 +178,32 @@ export function planFanout(input: {
   orderNumber: string | null;
   isTest: boolean;
   availableCustomPaths: readonly string[];
+  /**
+   * SLICE L-10. Where the order came from. Optional because every call site
+   * that predates Leafly means the website, and silently changing what those
+   * announce would be worse than requiring the parameter.
+   */
+  origin?: OrderOrigin;
 }): FanoutPlan {
   const inserts: QueueInsert[] = [];
   const skipped: FanoutSkip[] = [];
   const nowMinutes = clockMinutesOf(input.now);
+  const origin: OrderOrigin = input.origin ?? DEFAULT_ORDER_ORIGIN;
+
+  // An in-store register sale must not ring the shop's own doorbell: the
+  // customer is already standing at the counter. That rule is not restated
+  // here -- `shouldAnnounceOrigin` in the origin core owns it (rule 11).
+  // A test bypasses it, because pressing Test is an explicit request for a
+  // noise and must work from any page.
+  if (!input.isTest && !shouldAnnounceOrigin(origin)) {
+    return {
+      inserts: [],
+      skipped: input.devices.map((d) => ({
+        deviceId: d.id,
+        reason: `origin ${origin} does not announce`,
+      })),
+    };
+  }
 
   for (const device of input.devices) {
     const decision = shouldAnnounce({
@@ -122,10 +221,15 @@ export function planFanout(input: {
       continue;
     }
 
+    // SLICE L-10. The shop-wide default is now per-origin, so a Leafly order
+    // and a website order are distinguishable by ear. A device that names its
+    // own sound still wins -- that is a deliberate per-speaker override and
+    // `resolveSound` already owns that precedence.
     const sound = resolveSound({
       deviceSoundId: device.sound_id,
       deviceCustomPath: device.custom_sound_path,
-      defaultSoundId: input.settings.default_sound_id,
+      defaultSoundId: originDefaultSoundId(input.settings, origin),
+      defaultCustomPath: originDefaultCustomPath(input.settings, origin),
       availableCustomPaths: input.availableCustomPaths,
     });
 
@@ -141,7 +245,11 @@ export function planFanout(input: {
       device_id: device.id,
       kind: input.isTest ? "test" : "order",
       order_id: input.isTest ? null : input.orderId,
-      message: announcementText({ orderNumber: input.orderNumber, isTest: input.isTest }),
+      message: announcementText({
+        orderNumber: input.orderNumber,
+        isTest: input.isTest,
+        origin,
+      }),
       sound: soundToColumn(sound),
       volume,
     });
@@ -447,6 +555,171 @@ export function __runAnnouncerFanoutTests(): { passed: number; failed: number } 
   check("test message: no speakers paired says exactly that", outcome(0, 0).includes("no speakers paired"));
   check("test message: an outright failure is never dressed up as success", outcome(0, 0, false).startsWith("Could not send"));
   check("test message: failure outranks the counts it was given", describeTestOutcome({ queued: 5, skipped: 0, ok: false, holdSeconds: 25 }).startsWith("Could not send"));
+
+  // ========================================================================
+  // SLICE L-10 -- PER-ORIGIN SOUND AND THE REGISTER'S SILENCE
+  // ========================================================================
+  // The owner's requirement: "I want the sound to be connected to our sound
+  // library, so we can upload custom sounds to play for each type ... you can
+  // set it to fall back to one of the other sounds that is not the same as
+  // the fallback one for our online orders noise."
+
+  const originBase = { ...base, devices: [dev("a", { sound_id: null })] };
+  const soundOf = (plan: FanoutPlan): string => plan.inserts[0]?.sound ?? "";
+
+  // The headline requirement, asserted on the real plan rather than on the
+  // resolver in isolation: the two origins must not sound the same.
+  const leaflyPlan = planFanout({ ...originBase, origin: "leafly" });
+  const sitePlan = planFanout({ ...originBase, origin: "greenway" });
+  check("L-10: a Leafly order and a website order queue different sounds", soundOf(leaflyPlan) !== soundOf(sitePlan));
+  check("L-10: both still queue exactly one row", leaflyPlan.inserts.length === 1 && sitePlan.inserts.length === 1);
+  // Pinned BY NAME. "different from each other" alone would still pass if both
+  // silently became the wrong sound.
+  eq("L-10: Leafly falls back to the bell", soundOf(leaflyPlan), "bell");
+  eq("L-10: the website keeps the shop-wide default it always had", soundOf(sitePlan), "chime");
+
+  // Back-compatibility: every caller written before L-10 omits `origin`.
+  // If the default ever flipped to leafly, website orders would change sound
+  // for every existing shop without anyone touching a setting.
+  eq("L-10: omitting origin behaves exactly like the website", soundOf(planFanout(originBase)), soundOf(sitePlan));
+
+  // The owner's explicit ask: the Leafly fallback must not be the website's.
+  check(
+    "L-10: the two built-in fallbacks are genuinely different ids",
+    originDefaultSoundId({ ...settings, default_sound_id: "chime" }, "leafly") !==
+      originDefaultSoundId({ ...settings, default_sound_id: "chime" }, "greenway"),
+  );
+
+  // Owner picks a built-in for Leafly on the settings page.
+  eq(
+    "L-10: a chosen built-in for Leafly is used",
+    soundOf(planFanout({ ...originBase, origin: "leafly", settings: { ...settings, leafly_sound_id: "alert" } })),
+    "alert",
+  );
+  // ... and it must not bleed into website orders.
+  eq(
+    "L-10: choosing a Leafly sound does not change website orders",
+    soundOf(planFanout({ ...originBase, origin: "greenway", settings: { ...settings, leafly_sound_id: "alert" } })),
+    "chime",
+  );
+
+  // THE SOUND LIBRARY. A custom upload chosen for an origin plays shop-wide.
+  eq(
+    "L-10: a custom upload for Leafly plays when the file exists",
+    soundOf(planFanout({
+      ...originBase,
+      origin: "leafly",
+      settings: { ...settings, leafly_custom_sound_path: "sounds/leafly.mp3" },
+      availableCustomPaths: ["sounds/leafly.mp3"],
+    })),
+    "sounds/leafly.mp3",
+  );
+  // THE INVARIANT THAT MATTERS MOST: an upload the owner deleted must never
+  // become silence. This is the case that actually happens in a real shop.
+  eq(
+    "L-10: a DELETED custom upload falls back to the origin built-in, never silence",
+    soundOf(planFanout({
+      ...originBase,
+      origin: "leafly",
+      settings: { ...settings, leafly_custom_sound_path: "sounds/gone.mp3" },
+      availableCustomPaths: [],
+    })),
+    "bell",
+  );
+  // A custom upload outranks a chosen built-in for the same origin.
+  eq(
+    "L-10: the upload wins over the built-in for the same origin",
+    soundOf(planFanout({
+      ...originBase,
+      origin: "leafly",
+      settings: { ...settings, leafly_sound_id: "alert", leafly_custom_sound_path: "sounds/leafly.mp3" },
+      availableCustomPaths: ["sounds/leafly.mp3"],
+    })),
+    "sounds/leafly.mp3",
+  );
+  // But a speaker that names its own sound keeps it -- a per-device override
+  // is a deliberate act and outranks a shop-wide origin setting.
+  eq(
+    "L-10: a per-speaker sound still outranks the origin setting",
+    soundOf(planFanout({
+      ...base,
+      devices: [dev("a", { sound_id: "ding" })],
+      origin: "leafly",
+      settings: { ...settings, leafly_custom_sound_path: "sounds/leafly.mp3" },
+      availableCustomPaths: ["sounds/leafly.mp3"],
+    })),
+    "ding",
+  );
+
+  // THE SPOKEN LINE travels too, or the `voice` sound says the wrong thing.
+  check(
+    "L-10: the queued message names Leafly",
+    (leaflyPlan.inserts[0]?.message ?? "").includes("Leafly"),
+  );
+  check(
+    "L-10: the website message does NOT name Leafly",
+    !(sitePlan.inserts[0]?.message ?? "").includes("Leafly"),
+  );
+
+  // THE REGISTER MUST NOT RING. The customer is already at the counter.
+  const registerPlan = planFanout({ ...originBase, origin: "register" });
+  eq("L-10: a register sale queues nothing", registerPlan.inserts.length, 0);
+  eq("L-10: and says why, per speaker", registerPlan.skipped.length, 1);
+  check(
+    "L-10: the skip reason names the origin",
+    (registerPlan.skipped[0]?.reason ?? "").includes("register"),
+  );
+  // NON-VACUITY: the same devices and settings DO announce for a pickup
+  // origin, so the assertion above is about the origin and not about a
+  // fixture that was never going to announce anyway.
+  check("L-10: the same devices DO announce for a pickup origin", leaflyPlan.inserts.length === 1);
+
+  // Pressing Test must work from anywhere, including a register screen.
+  check(
+    "L-10: a TEST still fires even for a non-announcing origin",
+    planFanout({ ...originBase, origin: "register", isTest: true }).inserts.length === 1,
+  );
+
+  // Origin must never be able to override the master switch or quiet hours --
+  // it sits underneath them, not above.
+  eq(
+    "L-10: origin cannot defeat the master off switch",
+    planFanout({ ...originBase, origin: "leafly", settings: { ...settings, enabled: false } }).inserts.length,
+    0,
+  );
+  eq(
+    "L-10: origin cannot defeat quiet hours",
+    planFanout({ ...originBase, origin: "leafly", now: THREE_AM }).inserts.length,
+    0,
+  );
+
+  // Hostile settings: junk in the per-origin fields must degrade to the
+  // built-in, never to an empty `sound` column the Pi would fail to play.
+  for (const junk of ["", "   ", null, undefined] as const) {
+    check(
+      `L-10: junk leafly_sound_id (${JSON.stringify(junk)}) still resolves to a real sound`,
+      soundOf(planFanout({
+        ...originBase,
+        origin: "leafly",
+        settings: { ...settings, leafly_sound_id: junk as string | null },
+      })).trim() !== "",
+    );
+  }
+  // An older settings row that predates the L-10 migration has none of the
+  // new fields at all. It must keep announcing.
+  const legacyRow = {
+    enabled: true,
+    quiet_hours_enabled: true,
+    quiet_start: "21:00",
+    quiet_end: "08:00",
+    default_sound_id: "chime",
+    default_volume: 70,
+  } as FanoutSettings;
+  eq(
+    "L-10: a pre-migration settings row still announces Leafly orders",
+    soundOf(planFanout({ ...originBase, origin: "leafly", settings: legacyRow })),
+    "bell",
+  );
 
   return { passed, failed };
 }

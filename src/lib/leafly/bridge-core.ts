@@ -293,29 +293,22 @@ export function describeSoundCollision(
 // ============================================================================
 
 /**
- * The spoken line, for when the `voice` sound is selected.
+ * NOTE ON WHAT IS NOT IN THIS FILE: the spoken announcement sentence.
  *
- * Delegates the wording to `originAnnouncementText` in the L-2 core (rule 11)
- * and adds only the test case, which is the announcer's own concern and not
- * the origin module's.
+ * An earlier draft of this module had its own `bridgeAnnouncementText()`. It
+ * was deleted before it ever shipped, because it was a character-for-character
+ * copy of `originAnnouncementText()` in the L-2 origin core -- a straight
+ * breach of rule 11, written by hand, with a doc comment that claimed it
+ * delegated when it did not.
  *
- * Note what is deliberately absent: the customer's name and what they bought.
- * This is said out loud across a sales floor with other customers standing in
- * it. The fact is ours to broadcast; the shopper's details are not.
+ * The real fix was not to make this file delegate; it was to notice that
+ * `announcementText()` in announcer-core.ts -- the function the PA queue
+ * actually calls -- was the one hardcoding "New online order." for every
+ * order. That function now takes an `origin` and delegates the wording to the
+ * origin core. So the sentence has exactly one home, and the production path
+ * goes through it. Tests for it live with announcer-core and the origin core.
  */
-export function bridgeAnnouncementText(input: {
-  origin: OrderOrigin;
-  orderNumber?: string | null;
-  isTest?: boolean;
-}): string {
-  if (input.isTest === true) return "Announcer test. This speaker is working.";
-  const num =
-    typeof input.orderNumber === "string" && input.orderNumber.trim() !== ""
-      ? input.orderNumber.trim()
-      : "";
-  const lead = input.origin === "leafly" ? "New Leafly order" : "New online order";
-  return num === "" ? `${lead}.` : `${lead}. Number ${num}.`;
-}
+
 
 /**
  * The header block for the printed ticket.
@@ -682,38 +675,10 @@ export function __runLeaflyBridgeTests(): { passed: number; failed: number } {
   );
 
   // ---- spoken text -------------------------------------------------------
-  eq(
-    "leafly is named out loud",
-    bridgeAnnouncementText({ origin: "leafly", orderNumber: "1042" }),
-    "New Leafly order. Number 1042.",
-  );
-  eq(
-    "the website is not named leafly",
-    bridgeAnnouncementText({ origin: "greenway", orderNumber: "1042" }),
-    "New online order. Number 1042.",
-  );
-  eq(
-    "no number still speaks",
-    bridgeAnnouncementText({ origin: "leafly" }),
-    "New Leafly order.",
-  );
-  eq(
-    "a test says it is a test",
-    bridgeAnnouncementText({ origin: "leafly", isTest: true }),
-    "Announcer test. This speaker is working.",
-  );
-  ok(
-    "the two spoken lines are distinguishable",
-    bridgeAnnouncementText({ origin: "leafly", orderNumber: "7" }) !==
-      bridgeAnnouncementText({ origin: "greenway", orderNumber: "7" }),
-  );
-  // PRIVACY: the spoken line must never carry a name.
-  ok(
-    "the spoken line never contains a customer name",
-    !bridgeAnnouncementText({ origin: "leafly", orderNumber: "1042" })
-      .toLowerCase()
-      .includes("jane"),
-  );
+  // The assertions that used to sit here were moved to announcer-core.ts,
+  // alongside `announcementText()` -- the function the PA queue actually
+  // calls. Testing a private copy of the sentence here proved nothing about
+  // what the speaker really says, which is the thing the owner cares about.
 
   // ---- receipt header ----------------------------------------------------
   const arrivalTicket = bridgeReceiptHeaderLines({

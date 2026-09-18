@@ -392,7 +392,7 @@ describe("embedded pure self-test suites", () => {
   it("leafly-bridge-core (SLICE L-10: arrival announces/prints, acceptance creates)", () => {
     const r = __runLeaflyBridgeTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(114);
+    expect(r.passed).toBeGreaterThanOrEqual(108);
   });
   it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {
     expect(() => __runWmPayloadTests()).not.toThrow();
