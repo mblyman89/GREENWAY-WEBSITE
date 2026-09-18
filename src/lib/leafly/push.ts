@@ -36,6 +36,7 @@
 import "server-only";
 
 import { getLeaflyBaseUrl, getLeaflyConfig, getLeaflyTokenUrl } from "./config";
+import { getLeaflyAccessToken, resetLeaflyTokenCache } from "./token";
 import { refreshLeaflyConfig } from "./runtime";
 import {
   buildLeaflyDeletePayload,
@@ -196,47 +197,23 @@ export async function previewLeaflyPush(): Promise<LeaflyPreview> {
 // ---------------------------------------------------------------------------
 // OAuth2 client-credentials token
 // ---------------------------------------------------------------------------
-type CachedToken = { token: string; expiresAt: number };
-let tokenCache: CachedToken | null = null;
-
-async function getAccessToken(): Promise<string> {
-  const config = getLeaflyConfig();
-  if (!config.clientId || !config.clientSecret) {
-    throw new Error("Leafly OAuth credentials are not configured.");
-  }
-  const now = Date.now();
-  if (tokenCache && tokenCache.expiresAt > now + 30_000) {
-    return tokenCache.token;
-  }
-
-  const tokenUrl = getLeaflyTokenUrl(config.environment);
-  const basic = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64");
-  const res = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ grant_type: "client_credentials" }).toString(),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Leafly token request failed (${res.status}): ${text.slice(0, 300)}`);
-  }
-  const json = (await res.json()) as { access_token?: string; expires_in?: number };
-  if (!json.access_token) {
-    throw new Error("Leafly token response missing access_token.");
-  }
-  const ttlMs = (json.expires_in ?? 3600) * 1000;
-  tokenCache = { token: json.access_token, expiresAt: now + ttlMs };
-  return json.access_token;
-}
-
-/** Clear the cached token (e.g. after a 401 expired-token response). */
-export function resetLeaflyTokenCache() {
-  tokenCache = null;
-}
+// SLICE L-6: this token cache USED TO LIVE HERE, as a module-private
+// `tokenCache` plus a private `getAccessToken()`. It moved to ./token.ts when
+// the Order API became a second caller, because the two Leafly APIs share one
+// token endpoint and one (empty) scope set -- verified in both vendored specs
+// at components.securitySchemes.OAuth2ClientCredentials.flows.clientCredentials
+// -- so two private caches would have meant two copies of the same credential,
+// double the token requests, and a `resetLeaflyTokenCache()` on one API that
+// left the other still using the token just declared suspect. Nothing about the
+// behaviour changed: same 30s expiry margin, same 3600s fallback TTL, same
+// Basic-auth form post. Only the ownership moved. See ./token.ts for the full
+// reasoning and the spec citations.
+//
+// `resetLeaflyTokenCache` is still re-exported from here so that every existing
+// import site keeps working and nothing had to be touched to land the move. It
+// is re-exported from the already-imported binding rather than with a second
+// `export { ... } from "./token"`, which would be a duplicate declaration.
+export { resetLeaflyTokenCache };
 
 function menuItemsUrl(): string {
   const config = getLeaflyConfig();
@@ -287,7 +264,7 @@ async function authedFetch(
   let didRetryAuth = false;
 
   for (let attempt = 1; ; attempt += 1) {
-    const token = await getAccessToken();
+    const token = await getLeaflyAccessToken();
     const res = await fetch(url, {
       method,
       headers: {

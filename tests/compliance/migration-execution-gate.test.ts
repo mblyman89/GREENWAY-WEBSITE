@@ -883,7 +883,80 @@ describe("the migration list is ordered the way the database will see it", () =>
     // fired alongside the pass), and a SQLSTATE grep for the literal word
     // "SQLSTATE", which psql never prints -- it renders `ERROR:  23505:`.
     // Harness: scripts/compliance/prove-0225-executes.sh
-    expect(listed[listed.length - 1]).toMatch(/^0225_/);
+    //
+    // 0226 (SLICE L6) adds the SENDING side of the same API, plus the column
+    // whose absence was a latent bug. Two jobs:
+    //   1. public.leafly_outbound_attempts -- an append-only log of every call
+    //      we make TO Leafly (acknowledge / status / cart), including the ones
+    //      we REFUSED to make. A refusal is stored with response_status NULL,
+    //      which is why that column is nullable: "we decided not to send this"
+    //      and "we sent it and got nothing back" are different facts, and a
+    //      NOT NULL would have forced them to share a representation.
+    //   2. public.orders.origin -- text NOT NULL DEFAULT 'greenway', with a
+    //      CHECK over exactly ORDER_ORIGINS from src/lib/orders/order-origin-core.ts.
+    //
+    // WHY (2) MATTERS MORE THAN IT LOOKS. public.orders was created in 0007 to
+    // hold website orders and has never had an origin column -- measured
+    // across all 225 preceding migrations, not assumed. So "this is a Greenway
+    // order" was never RECORDED anywhere; it was implied by the row existing.
+    // That implication was true for 225 migrations and stops being true the
+    // moment Leafly orders share the table. Without the column, the checkout
+    // confirmation email would fire for Leafly shoppers, breaching Leafly's
+    // requirement to be "the sole originator of automated consumer facing
+    // communications" -- invisibly, because the complaint goes to Leafly, not
+    // to us. The DEFAULT is what makes the 225 migrations of existing history
+    // correct rather than null: every order already in the table genuinely was
+    // a Greenway order, so 'greenway' is a measurement, not a guess.
+    //
+    // The CHECK is added in a separate idempotent `do $$` block rather than
+    // inline on the column, because `add column if not exists` silently skips
+    // its inline constraints on a second run -- so an inline CHECK would exist
+    // on a fresh database and be absent on an upgraded one. That asymmetry is
+    // exactly the kind that passes every test and then fails in production.
+    //
+    // PROVEN to execute by applying all 226 migrations in order to a real
+    // PostgreSQL 15.19 (applied 226 / failed 0), re-applying 0226 for
+    // idempotency (5 "already exists, skipping" notices), and then measuring,
+    // among other things:
+    //   * a legacy-style insert naming no origin lands 'greenway';
+    //   * 'Leafly', 'doordash' and '' are each rejected with SQLSTATE 23514,
+    //     and the row's prior value survives the rejected UPDATE;
+    //   * the operation CHECK rejects 'cancel' with 23514 while 0225's inbound
+    //     event_type ACCEPTS an invented 'order_teleport' -- the asymmetry
+    //     proven in BOTH directions, because 0225 must store anything Leafly
+    //     sends (it owes them a 200) and 0226 must not send anything Leafly
+    //     never defined;
+    //   * created_by's FK is confdeltype 'n', and the attempt row survives
+    //     deletion of the staff member with created_by set to NULL -- an audit
+    //     log that vanishes when someone leaves is not an audit log;
+    //   * the partial trouble index's predicate read back from pg_indexes;
+    //   * RLS enabled with 0 policies and 0 anon/authenticated grants;
+    //   * 0209's factory reset empties the log (12 -> 0, reported as
+    //     "leafly_outbound_attempts": 12) while integration_credentials and
+    //     the origin column survive -- and, before that, that the WAC
+    //     314-55-087(1) retention guard and the confirmation-phrase guard both
+    //     still fire, so the reset assertions are not vacuous.
+    //
+    // FIVE HARNESS DEFECTS were found and fixed while writing that proof, all
+    // mine, and the first is the one worth remembering: section 3 inserted into
+    // orders with GUESSED columns and silenced both attempts with 2>/dev/null,
+    // so both inserts failed and the section then reported "rows with
+    // null/empty origin (must be 0): 0" -- which READS AS A PASS while
+    // counting zero rows. It now measures 0007's real shape and asserts the
+    // seed count first. The others: passing `\set VERBOSITY verbose` as a
+    // separate -c captured the word "SET" instead of the error (fixed with a
+    // heredoc feeding both statements over one STDIN session); staff_profiles
+    // was seeded with guessed columns when 0127's trigger already creates the
+    // row readonly/inactive, so `on conflict do nothing` did nothing and
+    // is_owner() returned f, presenting as "the reset is broken"; the reset
+    // confirmation phrase was invented rather than read ('ERASE ALL TEST DATA'
+    // with a second acknowledge_wac_314_55_087 argument); and a
+    // `grep -qiE "ERROR|RESET_"` banner matched `reset_at` inside the SUCCESS
+    // json and printed "*** reset raised ***" over a perfect run -- false
+    // alarms train readers to skim the real ones, so it is now anchored and
+    // case-sensitive.
+    // Harness: scripts/compliance/prove-0226-executes.sh
+    expect(listed[listed.length - 1]).toMatch(/^0226_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

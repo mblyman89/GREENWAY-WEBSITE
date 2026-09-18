@@ -206,6 +206,37 @@ export async function POST(request: Request) {
         customerEmail: input.customerEmail ?? null,
         itemCount,
         totalMinorUnits: input.totalMinorUnits,
+        // SLICE L-6: stated EXPLICITLY rather than left to the default.
+        //
+        // This route is the Greenway website checkout, so the value is
+        // 'greenway' and nothing else. notifyOrderPlaced() already defaults to
+        // DEFAULT_ORDER_ORIGIN ('greenway') when origin is omitted, so this
+        // line changes no behaviour today. It is here because of what the
+        // omission MEANT, which stopped being true in this slice.
+        //
+        // Until migration 0226, public.orders had no origin column at all
+        // (verified: zero matches across the preceding 225 migrations). The
+        // table was created in 0007 to hold website orders and had never held
+        // anything else, so "this is a Greenway order" was not recorded
+        // anywhere -- it was implied by the row existing. Omitting origin here
+        // was therefore indistinguishable from asserting it.
+        //
+        // L-6 and L-7 put Leafly orders into that same table so staff work one
+        // queue instead of two, and at that point the implication is false.
+        // Leafly's Order API spec states that "Leafly will be the sole
+        // originator of automated consumer facing communications related to
+        // orders placed on the Leafly platform", so a Leafly order that reaches
+        // this notifier looking like a website order would trigger a
+        // confirmation email we are contractually forbidden to send -- and the
+        // complaint would go to Leafly, not to us, so we would never find out.
+        //
+        // Naming it explicitly means the website path asserts its origin
+        // instead of inheriting it, and any future path that forgets is a
+        // visible omission rather than a silent inheritance of the wrong
+        // answer. mayEmailCustomerForOrigin() in order-origin-core.ts is what
+        // reads it, and it asks "is this origin explicitly PERMITTED?" so that
+        // an unrecognised origin fails towards silence.
+        origin: "greenway",
       });
       if (summary.logLine) console.log(summary.logLine);
       if (summary.orderEventNote) {

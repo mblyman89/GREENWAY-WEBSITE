@@ -32,6 +32,14 @@ import { OrderNamePoolManager } from "@/components/admin/orders/OrderNamePoolMan
 import { NewOrderAlert } from "@/components/admin/orders/NewOrderAlert";
 import { AnnouncerPanel } from "@/components/admin/orders/AnnouncerPanel";
 import { withBackParam } from "@/lib/admin/back-link-core";
+// SLICE L-6 — Leafly orders live on THIS page, with Greenway's own orders,
+// because the owner asked for exactly that and because a Leafly order carries a
+// 15-minute auto-cancel deadline that must not sit behind a tab.
+import {
+  loadLeaflyOrderBoard,
+  countLeaflyOrdersAwaitingAck,
+} from "@/lib/leafly/order-board-server";
+import { LeaflyOrdersPanel } from "@/components/admin/orders/LeaflyOrdersPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +95,16 @@ export default async function OrdersAdminPage({
     poolMsg?: string;
     poolErr?: string;
     printTest?: string;
+    // SLICE L-6 — outcome of a Leafly acknowledge/status push, carried back by
+    // the server action. `leaflyCode`/`leaflyFix` are the pure core's decision
+    // codes, kept separate from the message so the panel can offer the RIGHT
+    // next step (a link to Integrations for a credential problem, the same
+    // button again for a transient one) instead of one flattened sentence.
+    leaflyMsg?: string;
+    leaflyWarn?: string;
+    leaflyErr?: string;
+    leaflyCode?: string;
+    leaflyFix?: string;
   }>;
 }) {
   await requirePermission("orders.view");
@@ -137,13 +155,26 @@ export default async function OrdersAdminPage({
     totalMax,
   };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
-  const [firstPage, counts, poolStatus, printerSettings] = await Promise.all([
+  const [
+    firstPage,
+    counts,
+    poolStatus,
+    printerSettings,
+    leaflyBoard,
+    leaflyPendingAck,
+  ] = await Promise.all([
     listOrdersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
     getOrderStatusCounts(),
     // SLICE 113: order-NAME pool + printer heartbeat, both fallback-safe (empty
     // pool / null settings when 0147 isn't applied or the printer isn't set up).
     listPoolNamesStatus(),
     getPrinterSettings(),
+    // SLICE L-6: both are non-throwing by construction and report their own
+    // failures, so a Leafly or migration problem degrades the Leafly panel
+    // rather than 500-ing the screen the shop runs its own orders on. They join
+    // the existing Promise.all so the Leafly read costs no extra round trip.
+    loadLeaflyOrderBoard(),
+    countLeaflyOrdersAwaitingAck(),
   ]);
   let { rows: orders, total } = firstPage;
   const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
@@ -238,6 +269,33 @@ export default async function OrdersAdminPage({
           <StatCard label="Ready" value={counts.ready} accent="green" hint="Waiting for pickup" icon="✅" />
           <StatCard label="Active total" value={activeCount} icon="🧾" />
         </div>
+
+        {/* SLICE L-6 — LEAFLY ORDERS.
+
+            Placed here deliberately: directly under the status summary and
+            ABOVE Greenway's own order cards. A Leafly order is the only order
+            in the building with a hard external deadline — Leafly auto-cancels
+            anything not acknowledged within fifteen minutes — so it is the
+            first thing on this page that can cost a real customer their order.
+            Everything below it (printer status, name pool, filters) can wait;
+            this cannot.
+
+            It renders NOTHING when Leafly order handling has never been set up
+            and nothing has arrived, so the page is unchanged for a shop not
+            using it. It never hides a failure. */}
+        <LeaflyOrdersPanel
+          board={leaflyBoard}
+          pendingAckCount={leaflyPendingAck}
+          // The clock is read ONCE here and injected, so every countdown on the
+          // page is measured from the same instant. Reading the time inside the
+          // component per order would let two rows disagree about what time it
+          // is; the pure core takes `now` as a parameter precisely so this is a
+          // decision made in one visible place.
+          now={new Date()}
+          message={sp.leaflyMsg ?? sp.leaflyWarn ?? null}
+          error={sp.leaflyErr ?? null}
+          errorCode={sp.leaflyFix ?? sp.leaflyCode ?? null}
+        />
 
         {/* SLICE 113 — Receipt-printer status at a glance + one-tap test print.
             Lives here so whoever is working the orders queue can confirm the
