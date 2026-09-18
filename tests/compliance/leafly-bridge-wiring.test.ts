@@ -285,9 +285,27 @@ describe("L-13: every seam of the Leafly bridge is actually connected", () => {
       // evaluates to null, and passed the first version of this assertion
       // because the identifier was still there. So the assignment is matched
       // as an assignment, and its right-hand side must begin with a string.
-      expect(src, "bridgeWarning must be assigned a literal message").toMatch(
-        /bridgeWarning\s*=\s*[`"']/,
-      );
+      // EVERY assignment must be a real message. There are two of them - one
+      // for a bridge that returned a failure, one for a bridge that threw -
+      // and mutation M10 neutered only the first, with
+      // `bridgeWarning = null && "..."`. A regex looking for "at least one
+      // string assignment" was satisfied by the surviving second one, so the
+      // gate passed while the commonest failure path went silent.
+      //
+      // Note also that `\s*` spans newlines, which is how the second
+      // assignment (string on the following line) kept rescuing the first.
+      const assignments = [...src.matchAll(/bridgeWarning\s*=\s*([^;]*);/g)];
+      expect(assignments.length, "expected both bridgeWarning assignments").toBeGreaterThanOrEqual(2);
+      for (const [, rhs] of assignments) {
+        const value = rhs.trim();
+        // A message, not a conditional that can evaluate to nothing.
+        expect(value[0], `bridgeWarning assigned a non-message: ${value.slice(0, 60)}`).toMatch(
+          /[`"']/,
+        );
+        expect(value, "a bridgeWarning must never be short-circuited away").not.toMatch(
+          /^(null|undefined|false)\b/,
+        );
+      }
       // ...and the message must name the irreversibility, because that is the
       // instruction the staff member needs: acknowledging again is not an
       // option, so they have to build from the printed ticket.
@@ -443,11 +461,28 @@ describe("L-13: every seam of the Leafly bridge is actually connected", () => {
       // the path — so the owner picks "bell", sees "bell" selected, and keeps
       // hearing last month's custom upload.
       const src = code(source(PATHS.announcerActions));
-      expect(src).toContain("soundSelectionToColumns");
       expect(src).toContain("greenway_sound_id");
       expect(src).toContain("greenway_custom_sound_path");
       expect(src).toContain("leafly_sound_id");
       expect(src).toContain("leafly_custom_sound_path");
+
+      // BOTH origins must go through the shared splitter.
+      //
+      // Mutation M16 left the greenway call alone and hand-rolled the leafly
+      // one as `{ soundId: value || null, customPath: null }`. That passes a
+      // check for "soundSelectionToColumns appears somewhere" and a check for
+      // "all four column names appear somewhere", and it is subtly broken: it
+      // can never store a CUSTOM UPLOAD for Leafly, so the owner uploads a
+      // Leafly chime, saves successfully, and keeps hearing the built-in bell
+      // with no error shown anywhere.
+      //
+      // Asymmetry between two origins is exactly the defect house rule 11
+      // exists to prevent, and it is invisible unless the symmetry itself is
+      // asserted.
+      const splits = [...src.matchAll(/soundSelectionToColumns\s*\(/g)];
+      expect(splits.length, "both origins must use the shared column splitter").toBe(2);
+      expect(src).toMatch(/greenway\s*=\s*soundSelectionToColumns\s*\(/);
+      expect(src).toMatch(/leafly\s*=\s*soundSelectionToColumns\s*\(/);
     });
 
     it("a failed save tells the owner WHY instead of silently reverting", () => {
