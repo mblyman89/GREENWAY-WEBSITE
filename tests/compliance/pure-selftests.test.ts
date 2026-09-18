@@ -58,6 +58,7 @@ import { __runLeaflyWebhookParseTests } from "@/lib/leafly/webhook-parse-core";
 import { __runLeaflyPreviewTests } from "@/lib/leafly/preview-core";
 import { __runLeaflyOrderAckTests } from "@/lib/leafly/order-ack-core";
 import { __runLeaflyScheduleTests } from "@/lib/leafly/schedule-core";
+import { __runLeaflyEvidenceTests } from "@/lib/leafly/evidence-core";
 import { __runOrderOriginTests } from "@/lib/orders/order-origin-core";
 import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "@/lib/integrations/integration-credentials-core";
@@ -353,6 +354,27 @@ describe("embedded pure self-test suites", () => {
     // non-vacuity guards, because a sweep is the easiest kind of test to
     // accidentally empty.
     expect(r.passed).toBeGreaterThanOrEqual(255);
+  });
+  it("leafly-evidence-core (SLICE L-8: the webhook evidence reader)", () => {
+    const r = __runLeaflyEvidenceTests();
+    expect(r.failed).toBe(0);
+    // Floored at 300 against 323 measured. The two load-bearing properties:
+    //
+    //  * THE PRIVACY AUDIT. This core decides what leaves the building in a
+    //    file the owner emails to Leafly. Leafly's own Order schema REQUIRES
+    //    firstName, lastName, emailAddress and phoneNumber and may carry
+    //    dateOfBirth and medicalCardNumber, all of which land in
+    //    leafly_orders.raw_order. The suite proves every exported column is
+    //    PII-free AND that the audit still catches a PII column when one is
+    //    deliberately added -- so the guard cannot decay into a function that
+    //    returns false for everything and passes vacuously.
+    //  * THE VERDICT PRECEDENCE. A log in which every delivery failed on
+    //    `missing_key` satisfies both `misconfigured` and `all_rejected`.
+    //    `misconfigured` must win, because "you have not saved your HMAC key"
+    //    is actionable and "everything is failing" is not. Swapping the two
+    //    branches would leave every other assertion in this suite passing, so
+    //    the precedence is asserted directly.
+    expect(r.passed).toBeGreaterThanOrEqual(300);
   });
   it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {
     const r = __runOrderOriginTests();

@@ -223,6 +223,8 @@ import { __runLeaflyOrderAckTests } from "../../src/lib/leafly/order-ack-core";
 // integrations page. A frozen menu under a green panel is the specific outcome
 // its `summarizeAutomation` assertions exist to make impossible.
 import { __runLeaflyScheduleTests } from "../../src/lib/leafly/schedule-core";
+// SLICE L-8 -- the READ side of the Leafly webhook evidence log.
+import { __runLeaflyEvidenceTests } from "../../src/lib/leafly/evidence-core";
 import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
@@ -832,6 +834,23 @@ __runLiquidVolumeTests();
   // clock is exactly the kind of loop that can be made vacuous by a one-line
   // edit. It carries its own non-vacuity guards; this floor is the outer net.
   assertRan("leafly-schedule-core", __runLeaflyScheduleTests(), 255);
+  // SLICE L-8 -- the Leafly webhook evidence reader.
+  //
+  // Floored at 300 against 316 measured. Two things in this core are worth a
+  // floor rather than a bare call:
+  //
+  //  1. THE PRIVACY AUDIT. `EVIDENCE_FORBIDDEN_KEYS` is what stops a customer's
+  //     phone number, date of birth or medical card number reaching a file the
+  //     owner emails to Leafly. The suite sweeps every declared forbidden key,
+  //     every exported column of a fully populated bundle, AND asserts the
+  //     audit still catches a PII column when one is deliberately added -- so
+  //     the guard cannot rot into a function that returns false for everything.
+  //  2. THE VERDICT ORDERING. A log where every delivery failed on
+  //     `missing_key` satisfies both `misconfigured` and `all_rejected`.
+  //     `misconfigured` must win, because it is the one the owner can fix
+  //     himself. That precedence is asserted explicitly; without it the two
+  //     branches could be swapped and every other assertion would still pass.
+  assertRan("leafly-evidence-core", __runLeaflyEvidenceTests(), 300);
   __runWmPayloadTests();
   // Floored, not just called. This core gained the Leafly HMAC + order
   // integration key this slice, so it is now the thing that decides whether the
