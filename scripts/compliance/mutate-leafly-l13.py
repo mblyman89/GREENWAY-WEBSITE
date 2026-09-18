@@ -74,18 +74,20 @@ MUTATIONS = [
     (
         "M13: the board stops tolerating a pre-0228 database",
         "src/lib/leafly/order-board-server.ts",
-        "BOARD_COLUMNS_LEGACY",
-        "BOARD_COLUMNS_LEGACY_RENAMED_BY_MISTAKE",
+        "      ({ data, error } = await runOne(BOARD_COLUMNS_LEGACY));",
+        "      // fallback removed",
         "AGENTS rule 6 means the owner applies migrations by hand, so there is "
-        "always a deploy-before-migration window. Losing the fallback blanks "
-        "the board during exactly that window \u2014 and blocks acknowledgement, "
-        "which makes Leafly auto-cancel.",
+        "always a deploy-before-migration window. This drops the fallback on "
+        "the SINGLE-ORDER read, which is the worst of the three: the Accept "
+        "action then refuses, and Leafly auto-cancels a real order. Dropping "
+        "one of three fallbacks in a refactor is far likelier than dropping "
+        "all of them, and it is invisible in review.",
     ),
     (
         "M14: the three-state guarantee is broken with a single ??",
         "src/components/admin/orders/LeaflyOrdersPanel.tsx",
-        "announced_at: order.announced_at,",
-        "announced_at: order.announced_at ?? null,",
+        "    announcedAt: order.announced_at,",
+        "    announcedAt: order.announced_at ?? null,",
         "Two characters. Every order on a pre-0228 database is then accused of "
         "arriving silently, so the one REAL silent arrival hides among eleven "
         "false alarms and staff learn to ignore the warning.",
@@ -102,11 +104,12 @@ MUTATIONS = [
     (
         "M16: the per-origin sound save stops clearing the other column",
         "src/app/admin/orders/announcer-actions.ts",
-        "soundSelectionToColumns",
-        "soundSelectionToColumnsRenamed",
-        "A stale custom upload path survives a switch back to a built-in, and "
-        "the resolver prefers the path \u2014 so the owner picks 'bell', sees "
-        "'bell' selected, and keeps hearing last month's upload.",
+        '  const leafly = soundSelectionToColumns(field(form, "leaflySound"), isCustom);',
+        '  const leafly = { soundId: field(form, "leaflySound") || null, customPath: null };',
+        "Hand-rolling the column split for ONE origin. It looks harmless and "
+        "it even works for built-ins, but it can never store a custom upload "
+        "for Leafly - so the owner uploads a Leafly chime, saves, and keeps "
+        "hearing the built-in bell with no error anywhere.",
     ),
     (
         "M17: the code-vs-comment trap \u2014 call deleted, comment left behind",
