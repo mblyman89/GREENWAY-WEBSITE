@@ -52,6 +52,10 @@ import { __runLeaflyPayloadValidateTests } from "@/lib/leafly/payload-validate-c
 import { __runLeaflyOrderabilityTests } from "@/lib/leafly/orderability-core";
 import { __runLeaflyReadbackTests } from "@/lib/leafly/readback-core";
 import { __runLeaflyCertificationTests } from "@/lib/leafly/certification-core";
+import { __runLeaflyHmacTests } from "@/lib/leafly/hmac-core";
+import { __runLeaflyOrderMapTests } from "@/lib/leafly/order-map-core";
+import { __runLeaflyWebhookParseTests } from "@/lib/leafly/webhook-parse-core";
+import { __runLeaflyPreviewTests } from "@/lib/leafly/preview-core";
 import { __runOrderOriginTests } from "@/lib/orders/order-origin-core";
 import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "@/lib/integrations/integration-credentials-core";
@@ -240,6 +244,48 @@ describe("embedded pure self-test suites", () => {
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(60);
   });
+  it("leafly-hmac-core (SLICE L-5: raw-body HMAC, timing-safe, fails closed)", () => {
+    const r = __runLeaflyHmacTests();
+    expect(r.failed).toBe(0);
+    // Floor raised 70 -> 80 after the L-5 mutation sweep. Three mutations of
+    // timingSafeStringEqual survived the whole suite (a plain `===`
+    // short-circuit, a length short-circuit, and dropping the length fold), so
+    // a NUL-padding case and a structural check that the compare has no early
+    // return were added. Measured: 82.
+    expect(r.passed).toBeGreaterThan(80);
+  });
+  it("leafly-order-map-core (SLICE L-5: status vocabulary in both directions)", () => {
+    const r = __runLeaflyOrderMapTests();
+    expect(r.failed).toBe(0);
+    // Floor raised 135 -> 145 after the L-5 mutation sweep: repointing
+    // LEAFLY_CANCEL_REASON_WE_MISSED_ACK at "store_closed" survived, because
+    // the only assertion touching it interpolated the constant into the very
+    // message it then searched. Measured: 149.
+    expect(r.passed).toBeGreaterThan(145);
+  });
+  it("leafly-webhook-parse-core (SLICE L-5: fails soft, because the spec demands 200)", () => {
+    const r = __runLeaflyWebhookParseTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(90);
+  });
+  it("leafly-preview-core (SLICE L-5: the money a shopper reads before buying)", () => {
+    const r = __runLeaflyPreviewTests();
+    expect(r.failed).toBe(0);
+    // Floor raised 45 -> 68 after the L-5 mutation sweep: a halved excise rate,
+    // two identical tax labels, and accepting a blank variant id all survived.
+    // The first two survived because the tax-exclusive presentation derives
+    // sales tax as the RESIDUAL, so the total still reconciled to the penny
+    // while the breakdown was wrong. Measured: 73.
+    //
+    // A blank variant id needed a SECOND attempt: checking that it never
+    // reaches the body did not close the mutation, because with the guard
+    // removed the blank id falls through to the catalogue lookup and is removed
+    // by the next branch with the identical adjustment code. The only
+    // observable difference is the diagnostic NOTE -- "carried no variant id"
+    // versus "not found in the Greenway catalogue" -- which is also the more
+    // useful of the two, so that is what is asserted.
+    expect(r.passed).toBeGreaterThan(71);
+  });
   it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {
     const r = __runOrderOriginTests();
     expect(r.failed).toBe(0);
@@ -248,8 +294,13 @@ describe("embedded pure self-test suites", () => {
   it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {
     expect(() => __runWmPayloadTests()).not.toThrow();
   });
-  it("integration-credentials-core (DB-over-env overrides + masking)", () => {
-    expect(() => __runIntegrationCredentialsTests()).not.toThrow();
+  // SLICE L-5 gave this core the Leafly HMAC key and order integration key, so
+  // it is now what decides whether the webhook receivers can authenticate at
+  // all. A floor is added because `not.toThrow()` alone also passes if the
+  // suite body were ever emptied.
+  it("integration-credentials-core (DB-over-env overrides + masking; L-5 Leafly keys)", () => {
+    const r = __runIntegrationCredentialsTests();
+    expect(r.passed).toBeGreaterThan(55);
   });
   it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {
     expect(() => __runSyncPlanTests()).not.toThrow();

@@ -21,6 +21,13 @@ import {
   type EmailSendOutcome,
   type NotifySummary,
 } from "./notify-outcome-core";
+import {
+  DEFAULT_ORDER_ORIGIN,
+  mayEmailCustomerForOrigin,
+  mayEmailStaffForOrigin,
+  toOrderOrigin,
+  type OrderOrigin,
+} from "./order-origin-core";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
@@ -34,6 +41,25 @@ export type OrderPlacedNotification = {
   customerEmail: string | null;
   itemCount: number;
   totalMinorUnits: number;
+  /**
+   * SLICE L-5 — where the order came from.
+   *
+   * Optional, and absent means `greenway`, so every existing call site keeps
+   * its current behaviour unchanged. It exists because Leafly's Order API
+   * specification states, verbatim:
+   *
+   *   "Leafly will be the sole originator of automated consumer facing
+   *    communications related to orders placed on the Leafly platform. That is,
+   *    Leafly shoppers should receive _no_ automated emails or text messages
+   *    from a partner system with regard to order confirmation, status updates,
+   *    etc."
+   *
+   * Sending our own confirmation for a Leafly order is therefore a breach of
+   * the integration agreement, not merely a duplicate email — and it is the
+   * kind of breach that is invisible to us, because the complaint goes to
+   * Leafly.
+   */
+  origin?: OrderOrigin | string | null;
 };
 
 /**
@@ -81,6 +107,19 @@ async function sendEmail(params: {
  * order's timeline needs a visible warning. Never throws.
  */
 export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<NotifySummary> {
+  // SLICE L-5. Resolve the origin FIRST, before any provider check, so the
+  // marketplace rule holds even on a deployment where Resend is unconfigured
+  // today and configured tomorrow. `toOrderOrigin` normalises anything unknown
+  // to the default rather than throwing; `mayEmailCustomerForOrigin` then asks
+  // "is this origin explicitly PERMITTED?", so a future marketplace that nobody
+  // remembers to whitelist stays silent instead of emailing.
+  const origin: OrderOrigin =
+    n.origin === undefined || n.origin === null
+      ? DEFAULT_ORDER_ORIGIN
+      : toOrderOrigin(n.origin);
+  const customerAllowed = mayEmailCustomerForOrigin(origin);
+  const staffAllowed = mayEmailStaffForOrigin(origin);
+
   const apiKey = process.env.RESEND_API_KEY ?? "";
   const from = process.env.ORDER_EMAIL_FROM ?? "";
   if (!apiKey || !from) {
@@ -96,8 +135,20 @@ export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<Not
 
   const tasks: Promise<EmailSendOutcome>[] = [];
 
-  // Customer confirmation
-  if (n.customerEmail) {
+  // Customer confirmation.
+  //
+  // `customerAllowed` is checked BEFORE the address, so a Leafly order is
+  // recorded as a deliberate suppression rather than looking like an order that
+  // merely happened to have no email on file. The two are very different when
+  // someone is later asking why no confirmation went out.
+  if (!customerAllowed) {
+    console.log(
+      `[orders/notify] ${n.orderNumber}: customer email SUPPRESSED — origin "${origin}". ` +
+        `Leafly is the sole originator of consumer order communications for orders placed ` +
+        `on its platform, so sending our own confirmation would breach the integration.`,
+    );
+    tasks.push(Promise.resolve<EmailSendOutcome>({ audience: "customer", status: "skipped" }));
+  } else if (n.customerEmail) {
     tasks.push(
       sendEmail({
         audience: "customer",
@@ -127,7 +178,11 @@ export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<Not
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (staffEmails.length) {
+  // Staff alert. Note the ASYMMETRY with the customer branch above, which is
+  // the whole point of having two separate predicates: Leafly's restriction is
+  // about the CONSUMER relationship, so telling our own team that a Leafly
+  // order just arrived is not only permitted, it is how the shop finds out.
+  if (staffAllowed && staffEmails.length) {
     tasks.push(
       sendEmail({
         audience: "staff",

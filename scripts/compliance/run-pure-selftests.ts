@@ -181,6 +181,21 @@ import { __runLeaflyOrderabilityTests } from "../../src/lib/leafly/orderability-
 import { __runLeaflyReadbackTests } from "../../src/lib/leafly/readback-core";
 // SLICE L-4 — Leafly's five published menu-certification criteria.
 import { __runLeaflyCertificationTests } from "../../src/lib/leafly/certification-core";
+// SLICE L-5 — receiving orders FROM Leafly. Four pure cores, all registered
+// here because each one decides something that is invisible when it goes wrong:
+//   hmac-core          — whether an inbound webhook is genuine at all. A broken
+//                        comparison either rejects every real order or accepts
+//                        forged ones, and neither announces itself.
+//   order-map-core     — the status vocabulary in both directions, including
+//                        Leafly's "canceled" (one l) vs Greenway's "cancelled".
+//   webhook-parse-core — fails SOFT by contract, because the spec forbids a
+//                        non-200 answer; that makes a parsing bug silent unless
+//                        it is tested directly.
+//   preview-core       — money a shopper reads before deciding to buy.
+import { __runLeaflyHmacTests } from "../../src/lib/leafly/hmac-core";
+import { __runLeaflyOrderMapTests } from "../../src/lib/leafly/order-map-core";
+import { __runLeaflyWebhookParseTests } from "../../src/lib/leafly/webhook-parse-core";
+import { __runLeaflyPreviewTests } from "../../src/lib/leafly/preview-core";
 import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
@@ -649,6 +664,13 @@ function assertRan(
         `${minAssertions}. A suite that runs no assertions is not a passing suite.`,
     );
   }
+  // Report the count, not just the pass. Floored suites used to succeed in
+  // total silence, which meant the log could not answer "how close is this
+  // suite to its floor?" -- the one question you need when deciding whether a
+  // floor is still protecting anything.
+  console.log(
+    `${name}: ${result.passed} assertions passed, 0 failed (floor ${minAssertions})`,
+  );
 }
 
 async function main() {
@@ -722,8 +744,52 @@ __runLiquidVolumeTests();
   assertRan("leafly-orderability-core", __runLeaflyOrderabilityTests(), 50);
   assertRan("leafly-readback-core", __runLeaflyReadbackTests(), 82);
   assertRan("leafly-certification-core", __runLeaflyCertificationTests(), 60);
+  // SLICE L-5 -- receiving orders FROM Leafly. Four cores, each registered with
+  // a floor for a reason specific to it:
+  //   hmac-core          -- decides whether an inbound webhook is genuine. A bug
+  //                         here is either "we reject real orders" (silent lost
+  //                         revenue) or "we accept forged ones" (worse). Neither
+  //                         shows up in a UI.
+  //   order-map-core     -- the status vocabulary in BOTH directions, including
+  //                         Leafly's "canceled" (one l) vs Greenway's
+  //                         "cancelled" (two). A one-character mismatch here
+  //                         strands an order in a status nothing can read.
+  //   webhook-parse-core -- fails SOFT by contract, because the spec forbids
+  //                         answering a notification with a non-200. That design
+  //                         is correct and it is also exactly why a parsing bug
+  //                         is INVISIBLE in production: the caller is told 200
+  //                         either way. Direct assertions are the only place a
+  //                         regression can surface.
+  //   preview-core       -- money a shopper reads on Leafly before deciding to
+  //                         buy. Wrong by construction is wrong in public.
+  // Floors RAISED after the L-5 mutation sweep closed 7 survivors. The sweep
+  // mutated each core 68 ways; 7 mutations changed behaviour without failing a
+  // single test, and the assertions written to catch them are counted here so
+  // they cannot be deleted quietly. Measured after the fix: hmac 82, map 149,
+  // parse 93, preview 70. The floors sit just below each, which is the point of
+  // a floor -- it catches a whole battery vanishing, not a single added case.
+  assertRan("leafly-hmac-core", __runLeaflyHmacTests(), 80);
+  assertRan("leafly-order-map-core", __runLeaflyOrderMapTests(), 145);
+  assertRan("leafly-webhook-parse-core", __runLeaflyWebhookParseTests(), 90);
+  assertRan("leafly-preview-core", __runLeaflyPreviewTests(), 71);
   __runWmPayloadTests();
-  __runIntegrationCredentialsTests();
+  // Floored, not just called. This core gained the Leafly HMAC + order
+  // integration key this slice, so it is now the thing that decides whether the
+  // webhook receivers above can authenticate AT ALL -- and it was previously
+  // registered as a bare call whose result was discarded. It returns
+  // `{ passed }` only (it throws on the first failed assertion rather than
+  // counting), so it takes the inline floor guard used for the other
+  // throw-on-failure cores above, not assertRan.
+  {
+    const r = __runIntegrationCredentialsTests();
+    if (r.passed < 55) {
+      throw new Error(
+        `integration-credentials-core self-tests ran only ${r.passed} assertion(s); ` +
+          `expected at least 55. A suite that runs no assertions is not a passing suite.`,
+      );
+    }
+    console.log(`integration-credentials-core: ${r.passed} assertions passed`);
+  }
   __runSyncPlanTests();
   __runPreflightTests();
   __runRichnessTests();

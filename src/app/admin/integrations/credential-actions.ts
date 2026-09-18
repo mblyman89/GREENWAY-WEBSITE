@@ -28,6 +28,13 @@ export async function saveLeaflyCredentialsAction(
     leaflyMenuIntegrationKey: str(fd, "leaflyMenuIntegrationKey"),
     leaflyClientId: str(fd, "leaflyClientId"),
     leaflyClientSecret: str(fd, "leaflyClientSecret"),
+    // Slice L-5: Order API credentials. Read with the same str() helper, which
+    // returns undefined for an ABSENT field and "" for a field the user
+    // cleared. That distinction is load-bearing -- undefined means "leave
+    // alone", "" means "delete" -- so a form that omits these fields entirely
+    // can never wipe the owner's saved HMAC key.
+    leaflyHmacKey: str(fd, "leaflyHmacKey"),
+    leaflyOrderIntegrationKey: str(fd, "leaflyOrderIntegrationKey"),
   };
   const res = await updateIntegrationCredentials(form);
   if (!res.ok) return { ok: false, error: res.error };

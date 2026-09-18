@@ -22,7 +22,7 @@ fail CI; a vendored machine-readable schema can, and now does
 | File | Live URL | md5 |
 |---|---|---|
 | `menu-integration-v2.openapi.json` | `https://docs.leafly.io/menu-integration-docs/v2.json` | `df77378ba607452a70281967a37b3496` |
-| `order-api-v1.openapi.json` | `https://docs.leafly.io/reservations-api/order-api/order.json` | `daab7bcf6f77177de85425adf7f805f1` |
+| `order-api-v1.openapi.json` | `https://docs.leafly.io/api-api/reservations-api/docs/order-api/order.json` | `daab7bcf6f77177de85425adf7f805f1` |
 | `schemas/v2-items.json` | `https://docs.leafly.io/menu-integration-docs/schemas/v2/items.json` | `1f57b1f657a233f7d39f0ef89218685c` |
 | `schemas/v2-show.json` | `https://docs.leafly.io/menu-integration-docs/schemas/v2/show.json` | `a8dc70de57e0f9a80c33707fa47bde1d` |
 | `schemas/v1-items.json` | `https://docs.leafly.io/menu-integration-docs/schemas/v1/items.json` | `b5d36afcf6bdad9c1a766f60ba97af88` |
@@ -79,7 +79,7 @@ curl -sS -o schemas/v1-ids.json \
 curl -sS -o schemas/v1-status.json \
   https://docs.leafly.io/menu-integration-docs/schemas/v1/status.json
 curl -sS -o order-api-v1.openapi.json \
-  https://docs.leafly.io/reservations-api/order-api/order.json
+  https://docs.leafly.io/api-api/reservations-api/docs/order-api/order.json
 md5sum *.json schemas/*.json      # update the table above
 npm run test -- tests/compliance/leafly-contract.test.ts
 ```
@@ -87,6 +87,25 @@ npm run test -- tests/compliance/leafly-contract.test.ts
 Then reconcile: if a field name, enum or required-flag changed, `leafly-contract.test.ts`
 will fail. **Fix the code and `docs/leafly-menu-api-v2.md`, then update the md5 table** —
 in that order. A failing contract test is the system working as designed.
+
+## URL CORRECTION, SLICE L-5
+
+The order-api URL recorded above was updated in L-5. The address this file
+originally carried,
+`https://docs.leafly.io/reservations-api/order-api/order.json`, now answers
+**301** (moved); Leafly has relocated it to
+`https://docs.leafly.io/api-api/reservations-api/docs/order-api/order.json`,
+which answers **200**.
+
+Verified before changing anything here, because a moved URL and a CHANGED
+document are very different problems and the checksum is the only thing that
+tells them apart: the file fetched from the new address is **byte-identical** to
+the vendored copy, md5 `daab7bcf6f77177de85425adf7f805f1`, unchanged from when
+it was first vendored in L-4. So the document did not move on from us -- only
+its address moved. Nothing downstream needed re-deriving.
+
+Recorded rather than silently edited so that a future reader who finds the old
+URL in an older commit knows it was a relocation and not a different spec.
 
 ## Confirmed NOT to exist (checked, 404)
 

@@ -620,6 +620,30 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "syndication_logs", disposition: "WIPE", because: "Test pushes of your menu to third-party sites." },
   { table: "syndication_sync_state", disposition: "WIPE", because: "Where each syndication feed left off during testing." },
   { table: "syndication_sync_settings", disposition: "KEEP", because: "Which sites you syndicate to — settings." },
+  // Leafly ORDER API (migration 0225, slice L-5). Both are WIPE, and the
+  // reasoning is recorded rather than left to the prefix, because one of them
+  // is append-only and the other holds a customer's order.
+  //
+  // leafly_webhook_events is append-only and doubles as the idempotency guard
+  // (its unique index on body_sha256 is what makes a repeated delivery a
+  // no-op). WIPE is right and is also necessary: rehearsal deliveries left in
+  // that table would keep answering "already seen" for their hashes, so the
+  // first real webhook that happened to repeat a test body would be silently
+  // discarded. That is the one case where KEEPing a log would change future
+  // behaviour rather than merely clutter a screen.
+  { table: "leafly_webhook_events", disposition: "WIPE", because: "Every order webhook Leafly sent during testing, and the duplicate-guard fingerprints that go with them. Practice traffic: it must not be able to make a real order look like one you have already seen." },
+  // (No foreign key ties these two together: order_id on the log is plain
+  // text, because the activation webhooks carry no order at all.)
+  //
+  // leafly_orders holds practice orders placed against the sandbox. Leafly
+  // itself only serves an order while live or within 24 hours of a terminal
+  // state, so these rows are our only copy — which is exactly why they are
+  // named explicitly here instead of being swept up by a prefix rule.
+  // WIPE is still correct: a sandbox order is a rehearsal, not a sale, and
+  // WAC 314-55-087's retention duty attaches to actual transactions. Real
+  // orders taken after go-live are never touched by this, because the reset
+  // is a pre-go-live tool.
+  { table: "leafly_orders", disposition: "WIPE", because: "Practice orders received from Leafly's sandbox, including the saved copy of each one. Rehearsal orders, not sales — leaving them behind would show phantom Leafly orders on your dashboard on day one." },
   { table: "license_settings", disposition: "KEEP", because: "Your I-502 licence number and CCRS identifiers." },
   { table: "tax_settings", disposition: "KEEP", because: "Your excise and sales tax rates." },
   { table: "tax_category_rules", disposition: "KEEP", because: "Which categories are taxed which way." },

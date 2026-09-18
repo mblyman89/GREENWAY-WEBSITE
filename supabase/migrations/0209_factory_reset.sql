@@ -344,6 +344,26 @@ begin
   delete from public.compliance_reminder_log where true;   get diagnostics n = row_count; counts := counts || jsonb_build_object('compliance_reminder_log', n);
   delete from public.syndication_logs where true;          get diagnostics n = row_count; counts := counts || jsonb_build_object('syndication_logs', n);
   delete from public.syndication_sync_state where true;    get diagnostics n = row_count; counts := counts || jsonb_build_object('syndication_sync_state', n);
+  -- Leafly Order API (migration 0225, slice L-5). Added here rather than in a
+  -- new migration because this function is `create or replace` and the repo's
+  -- factory-reset test reads THIS file to prove the SQL and the core cannot
+  -- drift; a second copy of the function elsewhere is what produced D-62.
+  --
+  -- There is deliberately NO foreign key between these two tables:
+  -- leafly_webhook_events.order_id is plain text, because the activation and
+  -- deactivation webhooks legitimately carry no orderId and a FK would reject a
+  -- correctly signed Leafly delivery. So the delete order is not forced by a
+  -- constraint. The log is still emptied first, to match the child-before-parent
+  -- convention used throughout this function and to stay correct if a FK is
+  -- ever added.
+  --
+  -- leafly_webhook_events also carries the unique body_sha256 idempotency
+  -- index. Rehearsal rows left behind would keep answering "already seen" for
+  -- their fingerprints, so a real webhook repeating a test body would be
+  -- silently dropped -- the one case where failing to wipe a log changes
+  -- future behaviour instead of merely leaving clutter.
+  delete from public.leafly_webhook_events where true;     get diagnostics n = row_count; counts := counts || jsonb_build_object('leafly_webhook_events', n);
+  delete from public.leafly_orders where true;             get diagnostics n = row_count; counts := counts || jsonb_build_object('leafly_orders', n);
 
   -- ══ 3. Payroll, time and the year-to-date figures ════════════════════════
   -- payroll_ytd_accumulators and sick_leave_ledger are the two the old reset

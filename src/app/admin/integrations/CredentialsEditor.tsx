@@ -41,6 +41,8 @@ export function LeaflyCredentialsForm({ view }: { view: CredentialsView["leafly"
   const [key, setKey] = useState(view.menuIntegrationKey);
   const [clientId, setClientId] = useState(view.clientId);
   const [secret, setSecret] = useState(view.clientSecret);
+  const [hmacKey, setHmacKey] = useState(view.hmacKey);
+  const [orderKey, setOrderKey] = useState(view.orderIntegrationKey);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   function save() {
@@ -50,6 +52,8 @@ export function LeaflyCredentialsForm({ view }: { view: CredentialsView["leafly"
     fd.set("leaflyMenuIntegrationKey", key);
     fd.set("leaflyClientId", clientId);
     fd.set("leaflyClientSecret", secret);
+    fd.set("leaflyHmacKey", hmacKey);
+    fd.set("leaflyOrderIntegrationKey", orderKey);
     startTransition(async () => {
       const res = await saveLeaflyCredentialsAction(fd);
       setMsg(
@@ -111,6 +115,60 @@ export function LeaflyCredentialsForm({ view }: { view: CredentialsView["leafly"
           />
           <Note />
         </Field>
+      </div>
+
+      {/*
+        Slice L-5 -- Order API credentials.
+
+        Kept in their own labelled block rather than mixed in above, because
+        Leafly issues them at a DIFFERENT time (menu integration first, then
+        order sandbox access on request) and they are easy to confuse with the
+        menu key. The heading says which is which so the owner is not choosing
+        between four boxes that all say "key".
+      */}
+      <div className="mt-6 border-t border-[var(--admin-border)] pt-4">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-[var(--admin-text)]">
+          Order API (receiving orders from Leafly)
+        </h3>
+        <p className="mt-1 mb-4 text-xs text-[var(--admin-text-muted)]">
+          These two are issued separately from the menu credentials above, when Leafly grants
+          Order API access. Leave them blank until Leafly sends them — an incorrect value here
+          causes Leafly&rsquo;s order notifications to be rejected.
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Webhook HMAC key">
+            <Input
+              value={hmacKey}
+              onChange={(e) => setHmacKey(e.target.value)}
+              placeholder="LEAFLY_HMAC_KEY"
+              autoComplete="off"
+            />
+            <p className="mt-1 text-[11px] text-[var(--admin-text-faint)]">
+              Proves an incoming order really came from Leafly. Treat it like a password.
+            </p>
+            <Note />
+            <span className="mt-1 inline-block text-[11px] text-[var(--admin-text-faint)]">
+              Source: <SourceBadge source={view.sources.hmacKey} />
+            </span>
+          </Field>
+
+          <Field label="Order integration key">
+            <Input
+              value={orderKey}
+              onChange={(e) => setOrderKey(e.target.value)}
+              placeholder="LEAFLY_ORDER_INTEGRATION_KEY"
+              autoComplete="off"
+            />
+            <p className="mt-1 text-[11px] text-[var(--admin-text-faint)]">
+              Identifies this store to Leafly. Not a secret, so it is shown in full — check it
+              character-for-character against Leafly&rsquo;s email.
+            </p>
+            <span className="mt-1 inline-block text-[11px] text-[var(--admin-text-faint)]">
+              Source: <SourceBadge source={view.sources.orderIntegrationKey} />
+            </span>
+          </Field>
+        </div>
       </div>
 
       <div className="mt-4 flex items-center gap-3">

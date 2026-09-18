@@ -777,7 +777,113 @@ describe("the migration list is ordered the way the database will see it", () =>
     // holds nothing" and would silently switch the 72 fl oz cap off, so that
     // distinction is the one the whole slice rests on.
     // Harness: scripts/compliance/prove-0224-executes.sh
-    expect(listed[listed.length - 1]).toMatch(/^0224_/);
+    //
+    // 0225 (SLICE L5) adds the RECEIVING side of the Leafly Order API: two
+    // credential columns on integration_credentials (leafly_hmac_key,
+    // leafly_order_integration_key), public.leafly_webhook_events -- the
+    // append-only delivery log -- and public.leafly_orders, our own copy of
+    // each Leafly order. It also edits 0209 in place to empty both new tables,
+    // the same way 0222 edited it for the announcer tables and 0212 for
+    // deposit_bags: 0209 is `create or replace` and that is the established
+    // pattern in this repo, not an improvisation.
+    //
+    // It exists because six webhooks now arrive from outside, and the Order API
+    // spec permits exactly ONE response code -- 200 -- for every one of them.
+    // That single fact drives the whole schema. We cannot tell Leafly "that was
+    // malformed" or "I could not store that", so anything we cannot answer
+    // properly has to be answered 200 and recorded for a human. Hence an
+    // append-only log rather than a status field we overwrite.
+    //
+    // PROVEN to execute by applying all 225 migrations in order to a real
+    // PostgreSQL 15.19, then re-applying 0225 a second time for idempotency
+    // (225 applied / 0 failed; the re-apply emits the expected "already
+    // exists, skipping" notices for both columns, both tables and all six
+    // indexes, and succeeds), then INSPECTING the result rather than assuming
+    // the DDL did what it reads like. Ten things were measured, each of which
+    // fails SILENTLY if wrong:
+    //
+    //   * The UNIQUE index on body_sha256 really refuses a second insert of the
+    //     same hash, and the SQLSTATE it raises is 23505 -- read back from psql
+    //     under \set VERBOSITY verbose, because the route branches on the
+    //     STRING '23505' to turn a Leafly retry into a no-op. If the database
+    //     ever raised a different code, that branch would never run and a
+    //     retried delivery would be processed twice, duplicating a customer's
+    //     order. The code the app looks for is therefore proven to be the code
+    //     the database emits, not assumed to be.
+    //
+    //   * event_type and order_id are NULLABLE (information_schema: YES). The
+    //     activation and deactivation webhooks carry no orderId at all; a NOT
+    //     NULL here would make a genuine, correctly signed delivery impossible
+    //     to store -- and impossible to report, since only 200 is permitted. A
+    //     live insert naming neither column succeeds and both read back null.
+    //
+    //   * signature_verified is `boolean not null default false`. Measured over
+    //     the inserted rows: 2 defaulted false, 0 defaulted true. A default of
+    //     true would mean a row written before verification finishes reads as
+    //     authenticated, which is the worst possible direction for this field
+    //     to fail in.
+    //
+    //   * The two new credential columns are `text not null default ''`, which
+    //     MATCHES the sibling leafly_menu_integration_key (0053) rather than
+    //     inventing a nullable variant for one member of a set of three. A
+    //     draft of the harness asserted "nullable, no default" on the reasoning
+    //     that NULL must stay distinguishable from ''; the reasoning was sound
+    //     but the premise was wrong, and it was corrected after measuring
+    //     rather than by changing the migration to match the guess.
+    //
+    //     That shape is only safe because the refusal lives in the CODE, so the
+    //     two are proven together in one run: verifyLeaflySignature with
+    //     hmacKey: "" returns { ok: false, reason: "missing_key" } -- it
+    //     DECLINES to verify -- while the same body signed with a real key
+    //     still returns ok: true. The control case matters, because a core that
+    //     refused everything would also satisfy the first half.
+    //
+    //   * The factory-reset door (0209) can actually empty both tables: seeded
+    //     4 events and 2 orders, called gl_factory_reset for real, and got both
+    //     the function's own reported counts (4 and 2) and the tables' actual
+    //     counts (0 and 0). Both are checked, because a DELETE aimed at the
+    //     wrong table could still report a plausible number.
+    //
+    //   * The reset does NOT clear integration_credentials. Seeded Leafly keys
+    //     survive a reset verbatim, which is the point: a rehearsal reset
+    //     discards test ORDERS, and silently de-authenticating the integration
+    //     would look like Leafly had revoked us.
+    //
+    //   * The owner guard on the reset is real, checked as five separate
+    //     refusals rather than one: no session identity, an ACTIVE manager, an
+    //     INACTIVE owner (is_owner() requires role = 'owner' AND active, and
+    //     those are two conditions, so one test could not say which held), the
+    //     right identity with the phrase in lowercase, and -- as the owner with
+    //     the correct phrase -- the WAC 314-55-087(1) five-year retention guard
+    //     firing on a single completed sale. All five refused. This was added
+    //     because the harness's first run hit RESET_NOT_OWNER and the tempting
+    //     response was to work around it; the correct response was to recognise
+    //     0209's guard doing its job and assert it, establishing a real owner
+    //     identity via auth.uid() rather than redefining is_owner() -- which
+    //     would have "proved" the DELETEs against a function that no longer
+    //     resembled production.
+    //
+    // THE HARNESS WAS ITSELF TESTED, by three sabotages of a throwaway copy,
+    // each restored and diffed byte-identical afterwards:
+    //   1. `delete from leafly_webhook_events where true` -> `where false`:
+    //      section 8 reported MISMATCH (before 4 events, after 4 events).
+    //   2. is_owner() body replaced with `select true`: exactly the 3 identity
+    //      refusals broke and the phrase and retention gates correctly still
+    //      held, which is the discriminating result -- a harness that reported
+    //      all 5 broken would have been measuring one thing, not five.
+    //   3. the empty-key refusal disabled in hmac-core: section 10 failed, and
+    //      informatively -- an empty key then returned reason "mismatch",
+    //      meaning it had actually computed an HMAC keyed on "". That is
+    //      precisely the behaviour the `default ''` column relies on never
+    //      happening.
+    // Two harness DEFECTS were found and fixed this way, both of which had
+    // produced false alarms that looked like schema faults: a `psql | grep ||`
+    // idiom that cannot work under `set -o pipefail` (psql exits non-zero when
+    // the query raises, which here is the SUCCESS case, so the failure banner
+    // fired alongside the pass), and a SQLSTATE grep for the literal word
+    // "SQLSTATE", which psql never prints -- it renders `ERROR:  23505:`.
+    // Harness: scripts/compliance/prove-0225-executes.sh
+    expect(listed[listed.length - 1]).toMatch(/^0225_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
