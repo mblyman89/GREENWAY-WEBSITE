@@ -18,7 +18,7 @@
  *
  * To regenerate: npx tsx scripts/generate-schema-tables.ts
  *
- * Measured 258 tables across 224 migrations at the time of writing.
+ * Measured 260 tables across 225 migrations at the time of writing.
  */
 
 export const SCHEMA_TABLES: readonly string[] = [
@@ -166,6 +166,8 @@ export const SCHEMA_TABLES: readonly string[] = [
   "lab_results",
   "leaflink_menu_items",
   "leaflink_menu_snapshots",
+  "leafly_orders",
+  "leafly_webhook_events",
   "license_settings",
   "loyalty_accounts",
   "loyalty_config",

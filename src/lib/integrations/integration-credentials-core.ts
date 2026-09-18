@@ -25,6 +25,23 @@ export type IntegrationCredentialsRow = {
   leafly_menu_integration_key: string;
   leafly_client_id: string;
   leafly_client_secret: string;
+
+  // Leafly ORDER API (Slice L-5 / migration 0225) --------------------------
+  //
+  // The Order API needs two credentials the Menu API does not, and they are NOT
+  // interchangeable with the menu key. Per Leafly's Order API specification:
+  // "The OAuth2 credentials and HMAC key are unique to each integrator, while
+  // there is a unique `orderIntegrationKey` for each retailer managed through
+  // your integration."
+  //
+  // So leafly_hmac_key is issued to the INTEGRATOR (verifies that an inbound
+  // webhook really came from Leafly) while leafly_order_integration_key
+  // identifies THIS RETAILER. Storing them as separate columns rather than
+  // reusing leafly_menu_integration_key matters: pasting the menu key into the
+  // order slot would produce webhook signature failures that look exactly like
+  // a network problem.
+  leafly_hmac_key: string;
+  leafly_order_integration_key: string;
   weedmaps_environment: string;
   weedmaps_menu_id: string;
   weedmaps_client_id: string;
@@ -45,6 +62,12 @@ export type IntegrationEnv = {
   leaflyMenuIntegrationKey?: string;
   leaflyClientId?: string;
   leaflyClientSecret?: string;
+  // Order API (Slice L-5). Separate from the menu key on purpose: see the note
+  // on IntegrationCredentialsRow above. LEAFLY_HMAC_KEY authenticates inbound
+  // webhooks; LEAFLY_ORDER_INTEGRATION_KEY identifies this retailer in the
+  // Order API's own URL path.
+  leaflyHmacKey?: string;
+  leaflyOrderIntegrationKey?: string;
   weedmapsEnvironment?: string;
   weedmapsMenuId?: string;
   weedmapsClientId?: string;
@@ -63,6 +86,10 @@ export type LeaflyOverrides = {
   menuIntegrationKey?: string;
   clientId?: string;
   clientSecret?: string;
+  /** Order API: verifies the X-Leafly-Signature on inbound webhooks. */
+  hmacKey?: string;
+  /** Order API: identifies THIS retailer in webhook bodies and API paths. */
+  orderIntegrationKey?: string;
 };
 
 /** Resolved WeedMaps credential overrides (DB wins over env). */
@@ -91,6 +118,8 @@ export const EMPTY_CREDENTIALS_ROW: IntegrationCredentialsRow = {
   leafly_menu_integration_key: "",
   leafly_client_id: "",
   leafly_client_secret: "",
+  leafly_hmac_key: "",
+  leafly_order_integration_key: "",
   weedmaps_environment: "sandbox",
   weedmaps_menu_id: "",
   weedmaps_client_id: "",
@@ -147,6 +176,11 @@ export function resolveLeaflyOverrides(
     menuIntegrationKey: pick(row.leafly_menu_integration_key, env.leaflyMenuIntegrationKey),
     clientId: pick(row.leafly_client_id, env.leaflyClientId),
     clientSecret: pick(row.leafly_client_secret, env.leaflyClientSecret),
+    hmacKey: pick(row.leafly_hmac_key, env.leaflyHmacKey),
+    orderIntegrationKey: pick(
+      row.leafly_order_integration_key,
+      env.leaflyOrderIntegrationKey,
+    ),
   };
 }
 
@@ -204,10 +238,20 @@ export type CredentialsView = {
     menuIntegrationKey: string; // masked
     clientId: string; // clear (id, not secret)
     clientSecret: string; // masked
+    hmacKey: string; // masked (Order API webhook secret)
+    /**
+     * Shown in the CLEAR, deliberately. It is an identifier, not a secret, and
+     * the owner has to be able to read it back to check it against the value
+     * Leafly sent him. Masking an identifier only makes it impossible to spot
+     * the transposed character that is causing every webhook to be rejected.
+     */
+    orderIntegrationKey: string;
     sources: {
       menuIntegrationKey: CredentialSource;
       clientId: CredentialSource;
       clientSecret: CredentialSource;
+      hmacKey: CredentialSource;
+      orderIntegrationKey: CredentialSource;
     };
   };
   weedmaps: {
@@ -247,6 +291,8 @@ export function buildCredentialsView(
       menuIntegrationKey: maskSecret(leafly.menuIntegrationKey ?? ""),
       clientId: leafly.clientId ?? "",
       clientSecret: maskSecret(leafly.clientSecret ?? ""),
+      hmacKey: maskSecret(leafly.hmacKey ?? ""),
+      orderIntegrationKey: leafly.orderIntegrationKey ?? "",
       sources: {
         menuIntegrationKey: credentialSource(
           row.leafly_menu_integration_key,
@@ -254,6 +300,11 @@ export function buildCredentialsView(
         ),
         clientId: credentialSource(row.leafly_client_id, env.leaflyClientId),
         clientSecret: credentialSource(row.leafly_client_secret, env.leaflyClientSecret),
+        hmacKey: credentialSource(row.leafly_hmac_key, env.leaflyHmacKey),
+        orderIntegrationKey: credentialSource(
+          row.leafly_order_integration_key,
+          env.leaflyOrderIntegrationKey,
+        ),
       },
     },
     weedmaps: {
@@ -292,6 +343,8 @@ export type CredentialsFormInput = {
   leaflyMenuIntegrationKey?: string;
   leaflyClientId?: string;
   leaflyClientSecret?: string;
+  leaflyHmacKey?: string;
+  leaflyOrderIntegrationKey?: string;
   weedmapsEnvironment?: string;
   weedmapsMenuId?: string;
   weedmapsClientId?: string;
@@ -345,6 +398,14 @@ export function applyCredentialsUpdate(
     ),
     leafly_client_id: foldPlain(form.leaflyClientId, current.leafly_client_id),
     leafly_client_secret: foldSecret(form.leaflyClientSecret, current.leafly_client_secret),
+    // The HMAC key folds as a SECRET (a masked resubmission means "unchanged"),
+    // the order integration key as a PLAIN identifier. Getting this backwards
+    // would let the literal string "••••abcd" be saved as a real credential.
+    leafly_hmac_key: foldSecret(form.leaflyHmacKey, current.leafly_hmac_key),
+    leafly_order_integration_key: foldPlain(
+      form.leaflyOrderIntegrationKey,
+      current.leafly_order_integration_key,
+    ),
     weedmaps_environment: normEnvInput(form.weedmapsEnvironment, current.weedmaps_environment),
     weedmaps_menu_id: foldPlain(form.weedmapsMenuId, current.weedmaps_menu_id),
     weedmaps_client_id: foldPlain(form.weedmapsClientId, current.weedmaps_client_id),
@@ -479,6 +540,97 @@ export function __runIntegrationCredentialsTests(): { passed: number } {
   ok(fUpd.flux_api_key === "bfl-abcdef", "flux masked key preserved");
   ok(fUpd.flux_endpoint === "flux-2-max", "flux endpoint updated");
   ok(applyCredentialsUpdate(fluxRow, { fluxEndpoint: "" }).flux_endpoint === "flux-2-max", "flux endpoint empty -> default");
+
+  // =========================================================================
+  // SLICE L-5 -- Leafly ORDER API credentials
+  //
+  // Two new fields that behave DIFFERENTLY from each other on purpose. The HMAC
+  // key is a secret (masked, folds as a secret); the orderIntegrationKey is an
+  // identifier (shown clear, folds as plain text). Every assertion below exists
+  // because getting one of them backwards is silent: a masked identifier saved
+  // as a literal "••••abcd" authenticates nothing and reports no error.
+  // =========================================================================
+
+  const orderRow: IntegrationCredentialsRow = {
+    ...EMPTY_CREDENTIALS_ROW,
+    leafly_hmac_key: "hmac-supersecret-9911",
+    leafly_order_integration_key: "greenway-port-orchard-01",
+  };
+
+  // Resolve: DB wins, env falls back -- same contract as every sibling field.
+  const lo = resolveLeaflyOverrides(orderRow, {});
+  ok(lo.hmacKey === "hmac-supersecret-9911", "L5: hmac key resolves from db");
+  ok(lo.orderIntegrationKey === "greenway-port-orchard-01", "L5: order key resolves from db");
+  const loEnv = resolveLeaflyOverrides(EMPTY_CREDENTIALS_ROW, {
+    leaflyHmacKey: "env-hmac",
+    leaflyOrderIntegrationKey: "env-order-key",
+  });
+  ok(loEnv.hmacKey === "env-hmac", "L5: hmac key falls back to env");
+  ok(loEnv.orderIntegrationKey === "env-order-key", "L5: order key falls back to env");
+  ok(
+    resolveLeaflyOverrides(EMPTY_CREDENTIALS_ROW, {}).hmacKey === undefined,
+    "L5: absent hmac key is undefined, NOT an empty string -- an empty string is a " +
+      "value that could be mistaken for a configured key and used to verify a signature",
+  );
+
+  // The order key must NOT leak the menu key, and vice versa. These are
+  // different credentials from Leafly and confusing them produces signature
+  // failures that look like a network fault.
+  const mixed = resolveLeaflyOverrides(
+    { ...EMPTY_CREDENTIALS_ROW, leafly_menu_integration_key: "MENU-KEY" },
+    {},
+  );
+  ok(mixed.orderIntegrationKey === undefined, "L5: menu key does not populate the order key");
+  ok(mixed.hmacKey === undefined, "L5: menu key does not populate the hmac key");
+
+  // View: hmac MASKED, order key CLEAR.
+  const oView = buildCredentialsView(orderRow, {});
+  ok(oView.leafly.hmacKey === "••••9911", "L5: hmac key masked in the view");
+  ok(
+    !oView.leafly.hmacKey.includes("supersecret"),
+    "L5: the hmac secret never appears in the view",
+  );
+  ok(
+    oView.leafly.orderIntegrationKey === "greenway-port-orchard-01",
+    "L5: order key shown in the clear so the owner can check it against Leafly's email",
+  );
+  ok(oView.leafly.sources.hmacKey === "database", "L5: hmac source db");
+  ok(oView.leafly.sources.orderIntegrationKey === "database", "L5: order key source db");
+  ok(
+    buildCredentialsView(EMPTY_CREDENTIALS_ROW, {}).leafly.sources.hmacKey === "unset",
+    "L5: hmac source unset when nowhere configured",
+  );
+
+  // Update folding: the asymmetry that matters.
+  const oUpd = applyCredentialsUpdate(orderRow, {
+    leaflyHmacKey: "••••9911", // user did not retype the secret
+    leaflyOrderIntegrationKey: "  greenway-port-orchard-02  ",
+  });
+  ok(oUpd.leafly_hmac_key === "hmac-supersecret-9911", "L5: masked hmac resubmission preserved");
+  ok(
+    oUpd.leafly_order_integration_key === "greenway-port-orchard-02",
+    "L5: order key updated and trimmed",
+  );
+  ok(
+    applyCredentialsUpdate(orderRow, { leaflyHmacKey: "rotated-key" }).leafly_hmac_key ===
+      "rotated-key",
+    "L5: a genuinely new hmac key replaces the old one (key rotation must work)",
+  );
+  ok(
+    applyCredentialsUpdate(orderRow, { leaflyHmacKey: "" }).leafly_hmac_key === "",
+    "L5: empty clears the hmac key",
+  );
+  ok(
+    applyCredentialsUpdate(orderRow, {}).leafly_hmac_key === "hmac-supersecret-9911",
+    "L5: absent hmac field leaves the stored key untouched",
+  );
+  // Saving the Leafly section must not disturb the OTHER services' secrets.
+  const untouched = applyCredentialsUpdate(
+    { ...orderRow, weedmaps_access_token: "wm-token", flux_api_key: "flux-key" },
+    { leaflyHmacKey: "rotated" },
+  );
+  ok(untouched.weedmaps_access_token === "wm-token", "L5: weedmaps token untouched");
+  ok(untouched.flux_api_key === "flux-key", "L5: flux key untouched");
 
   return { passed };
 }
