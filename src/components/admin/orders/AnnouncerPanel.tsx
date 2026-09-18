@@ -33,7 +33,12 @@ import {
   announcerToggleDeviceAction,
   announcerUpdateDeviceAction,
   announcerUpdateSettingsAction,
+  announcerUpdateOriginSoundsAction,
 } from "@/app/admin/orders/announcer-actions";
+import {
+  describeSoundCollision,
+  resolveOriginSoundWithLibrary,
+} from "@/lib/leafly/bridge-core";
 
 const DOT: Record<AdminDeviceView["tone"], string> = {
   good: "bg-[var(--admin-accent)]",
@@ -95,6 +100,40 @@ export async function AnnouncerPanel() {
   // are storage paths, which is exactly what the Pi agent expects.
   const library = await listSounds();
   const soundOptions = optionsForSounds(library.sounds);
+
+  // ── SLICE L-11: what will ACTUALLY play, per origin ────────────────────
+  // Resolved through the same function the PA queue uses, not re-derived
+  // here. The screen must not be able to claim one sound while the speakers
+  // play another -- if this ever disagreed with reality it would be worse
+  // than showing nothing, because it would be believed.
+  //
+  // The available-paths list is what makes this honest: a sound whose file
+  // has been deleted from the bucket resolves to the fallback here exactly as
+  // it will at play time, so the screen shows the truth rather than the
+  // setting.
+  const availableCustomPaths = library.sounds.map((row) => row.storage_path);
+  const greenwaySelected =
+    settings.greenway_custom_sound_path ?? settings.greenway_sound_id ?? "";
+  const leaflySelected =
+    settings.leafly_custom_sound_path ?? settings.leafly_sound_id ?? "";
+  const greenwayEffective = resolveOriginSoundWithLibrary({
+    origin: "greenway",
+    configuredCustomPath: settings.greenway_custom_sound_path,
+    configuredSoundId: settings.greenway_sound_id,
+    availableCustomPaths,
+  });
+  const leaflyEffective = resolveOriginSoundWithLibrary({
+    origin: "leafly",
+    configuredCustomPath: settings.leafly_custom_sound_path,
+    configuredSoundId: settings.leafly_sound_id,
+    availableCustomPaths,
+  });
+  // The owner explicitly asked for these two to differ. He is still allowed
+  // to set them the same -- this warns, it does not refuse.
+  const soundCollision = describeSoundCollision(greenwayEffective, leaflyEffective);
+  // A label for a value that may be a built-in id or a storage path.
+  const labelForSound = (value: string) =>
+    soundOptions.find((o) => o.value === value)?.label ?? value;
 
   // The migration has not been run. This is a setup state, not a fault, so it
   // says exactly what to do rather than showing an error.
@@ -357,6 +396,86 @@ export async function AnnouncerPanel() {
             <div className="sm:col-span-2 lg:col-span-3">
               <Button type="submit" variant="save" size="sm">
                 Save settings
+              </Button>
+            </div>
+          </form>
+        </details>
+
+        {/* ── SLICE L-11: A DIFFERENT NOISE FOR EACH KIND OF ORDER ───────────
+            The owner asked to be able to tell a website order from a Leafly
+            order by ear, using uploads from the same sound library, with
+            different fallbacks. The read path shipped in L-10; this is where
+            he chooses.
+
+            Its own <form> and its own action, deliberately. In the settings
+            form above, an empty field means "leave this alone"; here an empty
+            selection means "clear my choice". Sharing a handler between those
+            two meanings would make a chosen sound impossible to un-choose. */}
+        <details className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-1)] px-3.5 py-3">
+          <summary className="cursor-pointer text-sm font-bold text-[var(--admin-text)]">
+            🎵 Different sound per order type
+          </summary>
+
+          <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+            Website orders and Leafly orders can make different noises, so you
+            know which is which without looking. Uploads from your sound
+            library appear in both lists. Leave a box on{" "}
+            <span className="font-bold">Use the default</span> to go back to the
+            built-in sound for that type.
+          </p>
+
+          {/* The collision warning. Computed from what will ACTUALLY play,
+              after deleted-file fallbacks are applied — not from the raw
+              settings, which can look different while sounding identical. */}
+          {soundCollision ? (
+            <p className="mt-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-3 py-2 text-xs font-bold text-[var(--admin-gold)]">
+              ⚠️ {soundCollision}
+            </p>
+          ) : null}
+
+          <form
+            action={announcerUpdateOriginSoundsAction}
+            className="mt-3 grid gap-3 sm:grid-cols-2"
+          >
+            <Field
+              label="Website orders"
+              hint={`Currently plays: ${labelForSound(greenwayEffective)}`}
+            >
+              <select
+                name="greenwaySound"
+                defaultValue={greenwaySelected}
+                className={INPUT_CLS}
+              >
+                <option value="">Use the default</option>
+                {soundOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.group === "My uploads" ? `${o.label} (mine)` : o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field
+              label="Leafly orders"
+              hint={`Currently plays: ${labelForSound(leaflyEffective)}`}
+            >
+              <select
+                name="leaflySound"
+                defaultValue={leaflySelected}
+                className={INPUT_CLS}
+              >
+                <option value="">Use the default</option>
+                {soundOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.group === "My uploads" ? `${o.label} (mine)` : o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <div className="sm:col-span-2">
+              <Button type="submit" variant="save" size="sm">
+                Save order sounds
               </Button>
             </div>
           </form>
