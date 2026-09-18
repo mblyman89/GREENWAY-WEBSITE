@@ -128,6 +128,47 @@ function code(src: string): string {
 
 // The files that make up the bridge. Named once so a rename is a single edit
 // and so the list itself is reviewable.
+/**
+ * Assert that `fnName` is both IMPORTED from the bridge and actually CALLED,
+ * in `src` (already comment-stripped).
+ *
+ * WHY THIS HELPER EXISTS - AND WHY IT IS NOT `toContain(fnName)`
+ * -------------------------------------------------------------
+ * The first version of this gate used `expect(src).toContain("onLeaflyOrderArrived")`.
+ * Mutation testing (scripts/compliance/mutate-leafly-l13.py) severed the
+ * bridge two different ways and the gate said nothing to either:
+ *
+ *   M9  replaced the call with a hardcoded success object and left a
+ *       `void onLeaflyOrderArrived;` behind. The name is still in the file.
+ *       No order is ever announced or printed again.
+ *
+ *   M17 deleted the `await import("./bridge-server")` and declared a LOCAL
+ *       stub with the identical name. The name is still in the file. The
+ *       cancellation never reaches the floor.
+ *
+ * Both are realistic: M9 is what a hurried "temporarily disable this" looks
+ * like, and M17 is what a bad merge or an over-eager mock looks like. So the
+ * assertion has to pin down three separate things:
+ *
+ *   1. the binding comes from "./bridge-server" (not a local shadow),
+ *   2. it is invoked, with `await` (an un-awaited promise is a lost result),
+ *   3. its return value is bound to something (a call whose result is thrown
+ *      away cannot influence the response, so failures cannot surface).
+ */
+function expectBridgeCall(src: string, fnName: string): void {
+  // 1. imported from the bridge, by name
+  const importRe = new RegExp(
+    `\\{[^}]*\\b${fnName}\\b[^}]*\\}\\s*=\\s*await\\s+import\\(\\s*["']\\./bridge-server["']`,
+  );
+  expect(src, `${fnName} must be destructured from an import of "./bridge-server"`).toMatch(
+    importRe,
+  );
+
+  // 2 + 3. awaited, and the result captured
+  const callRe = new RegExp(`(const|let)\\s+\\w+\\s*=\\s*await\\s+${fnName}\\s*\\(`);
+  expect(src, `${fnName} must be awaited and its result kept`).toMatch(callRe);
+}
+
 const PATHS = {
   bridgeCore: "src/lib/leafly/bridge-core.ts",
   bridgeServer: "src/lib/leafly/bridge-server.ts",
@@ -152,12 +193,21 @@ describe("L-13: every seam of the Leafly bridge is actually connected", () => {
   // STAGE 1 — ARRIVAL: the speaker and the printer, immediately
   // =========================================================================
   describe("stage 1 — arrival reaches the speaker and the printer", () => {
-    it("the order_submit webhook handler calls onLeaflyOrderArrived", () => {
+    it("the order_submit webhook handler really calls onLeaflyOrderArrived", () => {
       const src = code(source(PATHS.webhookServer));
-      expect(src).toContain("onLeaflyOrderArrived");
-      // Imported from the bridge, not redefined locally. A local helper of
-      // the same name would satisfy a bare name check while doing nothing.
-      expect(src).toMatch(/import\([\s\S]{0,40}["']\.\/bridge-server["']\)/);
+      expectBridgeCall(src, "onLeaflyOrderArrived");
+    });
+
+    it("the arrival result is INSPECTED, not discarded", () => {
+      // Calling the bridge and ignoring what it says is only marginally
+      // better than not calling it: a failure to announce or to print would
+      // then leave no trace anywhere, and the whole point of stage 1 is that
+      // the shop finds out fast. The handler must look at `ok` and at the
+      // announced/printed flags.
+      const src = code(source(PATHS.webhookServer));
+      expect(src).toMatch(/bridged\.ok/);
+      expect(src).toMatch(/bridged\.announced/);
+      expect(src).toMatch(/bridged\.printed/);
     });
 
     it("arrival is wired to the order_submit event specifically", () => {
@@ -226,8 +276,23 @@ describe("L-13: every seam of the Leafly bridge is actually connected", () => {
       // cannabis that no screen in the building knows about. The staff member
       // who pressed Accept MUST be told.
       const src = code(source(PATHS.ackServer));
-      expect(src).toContain("bridgeWarning");
-      // and it must actually leave the function
+      expectBridgeCall(src, "onLeaflyOrderAccepted");
+
+      // It must be ASSIGNED A REAL MESSAGE, not merely mentioned.
+      //
+      // Mutation M10 changed the assignment to `bridgeWarning = null && "..."`,
+      // which reads almost exactly like the original in a diff, always
+      // evaluates to null, and passed the first version of this assertion
+      // because the identifier was still there. So the assignment is matched
+      // as an assignment, and its right-hand side must begin with a string.
+      expect(src, "bridgeWarning must be assigned a literal message").toMatch(
+        /bridgeWarning\s*=\s*[`"']/,
+      );
+      // ...and the message must name the irreversibility, because that is the
+      // instruction the staff member needs: acknowledging again is not an
+      // option, so they have to build from the printed ticket.
+      expect(src).toMatch(/DO NOT acknowledge it again/);
+      // ...and it must actually leave the function.
       expect(src).toMatch(/warning[\s\S]{0,200}bridgeWarning/);
     });
 
@@ -259,9 +324,23 @@ describe("L-13: every seam of the Leafly bridge is actually connected", () => {
   // STAGE 3 — CANCELLATION: Q-B, the owner's question
   // =========================================================================
   describe("stage 3 — a Leafly cancellation follows the order to the floor", () => {
-    it("the cancel webhook calls onLeaflyOrderCanceled", () => {
+    it("the cancel webhook really calls onLeaflyOrderCanceled", () => {
       const src = code(source(PATHS.webhookServer));
-      expect(src).toContain("onLeaflyOrderCanceled");
+      expectBridgeCall(src, "onLeaflyOrderCanceled");
+    });
+
+    it("the cancellation carries Leafly's reason code through", () => {
+      // The reason code is the difference between "the customer changed
+      // their mind" and "we could not verify the customer" - and it is what
+      // the floor needs in order to know whether to restock quietly or to
+      // find a manager. Dropping it makes every cancellation look the same.
+      const src = code(source(PATHS.webhookServer));
+      expect(src).toMatch(/onLeaflyOrderCanceled\([\s\S]{0,200}cancelationReasonCode/);
+    });
+
+    it("a cancellation that needs a human is not allowed to pass silently", () => {
+      const src = code(source(PATHS.webhookServer));
+      expect(src).toMatch(/dispositionRequired/);
     });
 
     it("the cancellation decision comes from the shared core, not from the server file", () => {
@@ -407,6 +486,27 @@ describe("L-13: every seam of the Leafly bridge is actually connected", () => {
       expect(src).toContain("origin: OrderOrigin");
       expect(src).toContain("originLabel");
       expect(src).toContain("isMarketplace");
+    });
+
+    it("the three fields are COMPUTED, not hardcoded", () => {
+      // Mutation M11 replaced `isMarketplace: isMarketplaceOrigin(origin)`
+      // with `isMarketplace: false` - reintroducing the exact defect this
+      // slice exists to fix - and the first version of this gate passed,
+      // because the word "isMarketplace" was still present.
+      //
+      // Note that the behavioural mirror in pickup-core.test.ts DOES catch
+      // this one. Both are kept: the behavioural test proves the value is
+      // right, and this proves it is derived from the shared core rather
+      // than from a local re-implementation that happens to agree today.
+      const src = code(source(PATHS.pickupCore));
+      const start = src.indexOf("export function toPickupQueueEntry");
+      expect(start).toBeGreaterThan(-1);
+      const body = src.slice(start, src.indexOf("}", src.indexOf("return {", start)) + 1);
+      expect(body).toMatch(/origin\s*=\s*toOrderOrigin\(/);
+      expect(body).toMatch(/originLabel:\s*orderOriginLabel\(/);
+      expect(body).toMatch(/isMarketplace:\s*isMarketplaceOrigin\(/);
+      // and never pinned to a constant
+      expect(body).not.toMatch(/isMarketplace:\s*(true|false)\b/);
     });
 
     it("the label comes from the shared core, not a copy on the iPad", () => {
