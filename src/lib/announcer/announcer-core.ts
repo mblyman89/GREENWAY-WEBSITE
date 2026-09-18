@@ -31,6 +31,11 @@
  * is structurally incapable of returning silence.
  */
 
+import {
+  DEFAULT_ORDER_ORIGIN,
+  originAnnouncementText,
+  type OrderOrigin,
+} from "../orders/order-origin-core";
 import { pacificParts } from "../reports/timezone";
 
 // ============================================================================
@@ -341,6 +346,15 @@ export function resolveSound(input: {
   deviceCustomPath: string | null | undefined;
   defaultSoundId: string | null | undefined;
   availableCustomPaths: readonly string[];
+  /**
+   * SLICE L-10. A custom upload chosen at the SHOP level rather than on one
+   * speaker -- this is how "play my own sound for Leafly orders" reaches
+   * every speaker at once without editing each device.
+   *
+   * It sits BELOW both device-level choices and ABOVE the shop's built-in
+   * default: a speaker that has been given its own voice keeps it.
+   */
+  defaultCustomPath?: string | null | undefined;
 }): ResolvedSound {
   const custom =
     typeof input.deviceCustomPath === "string" ? input.deviceCustomPath.trim() : "";
@@ -350,6 +364,13 @@ export function resolveSound(input: {
   // Either no custom sound was chosen, or the one that was chosen is gone.
   if (isBuiltInSound(input.deviceSoundId)) {
     return { kind: "built-in", id: input.deviceSoundId as string };
+  }
+  // Same existence check as the device-level path: an upload the owner has
+  // since deleted must fall through to a built-in, never to silence.
+  const shopCustom =
+    typeof input.defaultCustomPath === "string" ? input.defaultCustomPath.trim() : "";
+  if (shopCustom !== "" && input.availableCustomPaths.includes(shopCustom)) {
+    return { kind: "custom", path: shopCustom };
   }
   if (isBuiltInSound(input.defaultSoundId)) {
     return { kind: "built-in", id: input.defaultSoundId as string };
@@ -539,14 +560,26 @@ export function pollBackoffSeconds(consecutiveFailures: number): number {
 export function announcementText(input: {
   orderNumber: string | null | undefined;
   isTest: boolean;
+  /**
+   * SLICE L-10. Where the order came from. Optional, defaulting to the
+   * website, because every call site that predates Leafly means the website.
+   *
+   * Before this parameter existed the sentence below was hardcoded to "New
+   * online order." for everything. That was not wrong at the time -- there
+   * was only one kind of online order -- which is exactly what made it
+   * dangerous: the day a second kind arrived the speaker would have gone on
+   * saying the same sentence and nobody would have got an error.
+   */
+  origin?: OrderOrigin;
 }): string {
   if (input.isTest) return "Announcer test. This speaker is working.";
-  const num =
-    typeof input.orderNumber === "string" && input.orderNumber.trim() !== ""
-      ? input.orderNumber.trim()
-      : "";
-  if (num === "") return "New online order.";
-  return `New online order. Number ${num}.`;
+  // RULE 11. The wording for each origin has exactly one home, and it is
+  // order-origin-core.ts, which owns the origin vocabulary. This function
+  // owns only the test-versus-real branch, which is an announcer concern.
+  return originAnnouncementText({
+    origin: input.origin ?? DEFAULT_ORDER_ORIGIN,
+    orderNumber: input.orderNumber,
+  });
 }
 
 // ============================================================================
@@ -1020,6 +1053,115 @@ export function __runAnnouncerCoreTests(): { passed: number; failed: number } {
   check(
     "text: never leaks a customer name field it was not given",
     !announcementText({ orderNumber: "A-101", isTest: false }).toLowerCase().includes("customer"),
+  );
+
+  // SLICE L-10. The speaker now has to tell the shop WHICH marketplace an
+  // order came from. These assertions live here, against the function the PA
+  // queue actually calls, rather than against a private copy in the Leafly
+  // bridge -- a copy proves only that the copy works.
+  eq(
+    "text: a Leafly order is named out loud as Leafly",
+    announcementText({ orderNumber: "1042", isTest: false, origin: "leafly" }),
+    "New Leafly order. Number 1042.",
+  );
+  eq(
+    "text: a website order is NOT described as Leafly",
+    announcementText({ orderNumber: "1042", isTest: false, origin: "greenway" }),
+    "New online order. Number 1042.",
+  );
+  eq(
+    "text: a Leafly order with no number still names Leafly",
+    announcementText({ orderNumber: null, isTest: false, origin: "leafly" }),
+    "New Leafly order.",
+  );
+  // THE POINT OF THE WHOLE CHANGE: from across the sales floor the two must
+  // not sound the same. If a refactor ever collapsed the origin branch, every
+  // other assertion above would still pass -- this is the one that would not.
+  check(
+    "text: the two origins are audibly different for the same number",
+    announcementText({ orderNumber: "7", isTest: false, origin: "leafly" }) !==
+      announcementText({ orderNumber: "7", isTest: false, origin: "greenway" }),
+  );
+  // Back-compatibility: every call site written before L-10 omits `origin`
+  // and means the website. If the default ever flipped, the shop would start
+  // announcing website orders as Leafly orders.
+  eq(
+    "text: omitting origin still means the website",
+    announcementText({ orderNumber: "A-101", isTest: false }),
+    announcementText({ orderNumber: "A-101", isTest: false, origin: "greenway" }),
+  );
+  // A test is a test regardless of origin -- the origin branch must not leak
+  // into the test line and start saying "New Leafly order" when you press Test.
+  eq(
+    "text: a Leafly test still says it is a test",
+    announcementText({ orderNumber: "1042", isTest: true, origin: "leafly" }),
+    "Announcer test. This speaker is working.",
+  );
+  // PRIVACY, restated for the origin-aware path: this sentence is said out
+  // loud in a room containing other customers.
+  check(
+    "text: the Leafly line carries no shopper detail",
+    !announcementText({ orderNumber: "1042", isTest: false, origin: "leafly" })
+      .toLowerCase()
+      .includes("jane"),
+  );
+
+  // SLICE L-10 -- the shop-level custom upload rung of resolveSound().
+  // The invariant restated at this level: this resolver may never return
+  // silence, whatever it is handed.
+  eq(
+    "sound: a shop-level upload plays when the file exists",
+    resolveSound({
+      deviceSoundId: null,
+      deviceCustomPath: null,
+      defaultSoundId: "chime",
+      defaultCustomPath: "sounds/leafly.mp3",
+      availableCustomPaths: ["sounds/leafly.mp3"],
+    }),
+    { kind: "custom", path: "sounds/leafly.mp3" },
+  );
+  eq(
+    "sound: a shop-level upload that was DELETED falls back to a built-in",
+    resolveSound({
+      deviceSoundId: null,
+      deviceCustomPath: null,
+      defaultSoundId: "chime",
+      defaultCustomPath: "sounds/gone.mp3",
+      availableCustomPaths: [],
+    }),
+    { kind: "built-in", id: "chime" },
+  );
+  eq(
+    "sound: a per-device built-in still outranks the shop-level upload",
+    resolveSound({
+      deviceSoundId: "ding",
+      deviceCustomPath: null,
+      defaultSoundId: "chime",
+      defaultCustomPath: "sounds/leafly.mp3",
+      availableCustomPaths: ["sounds/leafly.mp3"],
+    }),
+    { kind: "built-in", id: "ding" },
+  );
+  eq(
+    "sound: a per-device upload still outranks the shop-level upload",
+    resolveSound({
+      deviceSoundId: null,
+      deviceCustomPath: "sounds/device.mp3",
+      defaultSoundId: "chime",
+      defaultCustomPath: "sounds/leafly.mp3",
+      availableCustomPaths: ["sounds/device.mp3", "sounds/leafly.mp3"],
+    }),
+    { kind: "custom", path: "sounds/device.mp3" },
+  );
+  check(
+    "sound: never silent even when every input is junk",
+    resolveSound({
+      deviceSoundId: "  ",
+      deviceCustomPath: "  ",
+      defaultSoundId: "",
+      defaultCustomPath: "   ",
+      availableCustomPaths: [],
+    }).kind === "built-in",
   );
 
   // ---- 11. device names ------------------------------------------------

@@ -363,6 +363,15 @@ export type AnnouncerSettings = {
   quiet_end: string;
   default_sound_id: string;
   default_volume: number;
+  /**
+   * SLICE L-10 -- per-origin sounds, so a Leafly order and a website order
+   * are distinguishable by ear from across the shop. Null means "no choice
+   * made", and the origin core's default applies.
+   */
+  leafly_sound_id: string | null;
+  leafly_custom_sound_path: string | null;
+  greenway_sound_id: string | null;
+  greenway_custom_sound_path: string | null;
 };
 
 export const FALLBACK_SETTINGS: AnnouncerSettings = {
@@ -372,7 +381,19 @@ export const FALLBACK_SETTINGS: AnnouncerSettings = {
   quiet_end: "08:00",
   default_sound_id: "chime",
   default_volume: 70,
+  leafly_sound_id: null,
+  leafly_custom_sound_path: null,
+  greenway_sound_id: null,
+  greenway_custom_sound_path: null,
 };
+
+/** The columns that existed before slice L-10. */
+const LEGACY_SETTINGS_COLUMNS =
+  "enabled, quiet_hours_enabled, quiet_start, quiet_end, default_sound_id, default_volume";
+
+/** Those plus the per-origin sound columns added by the L-10 migration. */
+const SETTINGS_COLUMNS =
+  `${LEGACY_SETTINGS_COLUMNS}, leafly_sound_id, leafly_custom_sound_path, greenway_sound_id, greenway_custom_sound_path`;
 
 /**
  * Read the single settings row.
@@ -386,12 +407,40 @@ export async function getAnnouncerSettings(): Promise<AnnouncerSettings> {
   if (!isSupabaseServiceConfigured) return FALLBACK_SETTINGS;
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
+
+    // SLICE L-10 -- DEPLOY ORDER SAFETY.
+    //
+    // Migrations are applied by hand, so there is necessarily a window where
+    // this code is live and the new columns do not exist yet. A select naming
+    // a missing column fails the WHOLE query, which would drop the shop back
+    // to FALLBACK_SETTINGS and quietly discard its real quiet hours and
+    // volume -- a far worse outcome than not having per-origin sounds yet.
+    //
+    // So we ask for the new columns, and if the database says it has never
+    // heard of them, we ask again for the old ones. The cost is one extra
+    // round trip in exactly one situation: before the migration is applied.
+    let { data, error } = await admin
       .from("announcer_settings")
-      .select("enabled, quiet_hours_enabled, quiet_start, quiet_end, default_sound_id, default_volume")
+      .select(SETTINGS_COLUMNS)
       .eq("id", 1)
       .maybeSingle<AnnouncerSettings>();
+
+    if (error) {
+      const retry = await admin
+        .from("announcer_settings")
+        .select(LEGACY_SETTINGS_COLUMNS)
+        .eq("id", 1)
+        .maybeSingle<AnnouncerSettings>();
+      data = retry.data;
+      error = retry.error;
+    }
+
     if (error || !data) return FALLBACK_SETTINGS;
+    // A column that is absent reads as undefined here, which `textOrNull`
+    // turns into null -- the same value as "no choice made". That is what
+    // makes the pre-migration state behave identically to a fresh install.
+    const textOrNull = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() !== "" ? v.trim() : null;
     return {
       enabled: data.enabled !== false,
       quiet_hours_enabled: data.quiet_hours_enabled === true,
@@ -402,6 +451,10 @@ export async function getAnnouncerSettings(): Promise<AnnouncerSettings> {
           ? data.default_sound_id
           : FALLBACK_SETTINGS.default_sound_id,
       default_volume: normalizeVolume(data.default_volume),
+      leafly_sound_id: textOrNull(data.leafly_sound_id),
+      leafly_custom_sound_path: textOrNull(data.leafly_custom_sound_path),
+      greenway_sound_id: textOrNull(data.greenway_sound_id),
+      greenway_custom_sound_path: textOrNull(data.greenway_custom_sound_path),
     };
   } catch {
     return FALLBACK_SETTINGS;
