@@ -306,6 +306,27 @@ begin
   delete from public.order_lines where true;               get diagnostics n = row_count; counts := counts || jsonb_build_object('order_lines', n);
   delete from public.medical_exempt_sales where true;      get diagnostics n = row_count; counts := counts || jsonb_build_object('medical_exempt_sales', n);
   delete from public.sales_limit_events where true;        get diagnostics n = row_count; counts := counts || jsonb_build_object('sales_limit_events', n);
+  -- leafly_register_interrupts (migration 0229, slice L-14) — the blocking
+  -- cancellation alerts shown at a register, and the record of who answered
+  -- each one. Deleted HERE, immediately above public.orders, for two reasons
+  -- rather than by habit:
+  --
+  --   1. It is a CHILD of public.orders via local_order_id ... on delete
+  --      cascade. Deleting orders first would take these rows with it silently
+  --      and report a count of 0, so the reset would under-report what it
+  --      destroyed. Child-before-parent, as everywhere else in this function.
+  --   2. The explicit delete is NOT redundant with the cascade: local_order_id
+  --      is nullable (an interrupt about an order we hold no row for is the
+  --      anomaly worth keeping), and such a row would not cascade at all. It
+  --      would survive into go-live as exactly the unclearable modal this
+  --      table exists to prevent.
+  --
+  -- And it is emptied AT ALL for a behavioural reason, not a cosmetic one: an
+  -- open interrupt (resolved_at is null) BLOCKS the till holding its order,
+  -- and the partial unique index would then refuse to raise a real interrupt
+  -- for that same order id — so a leftover practice row would both brick a
+  -- register and suppress a genuine Leafly cancellation.
+  delete from public.leafly_register_interrupts where true; get diagnostics n = row_count; counts := counts || jsonb_build_object('leafly_register_interrupts', n);
   delete from public.orders where true;                    get diagnostics n = row_count; counts := counts || jsonb_build_object('orders', n);
 
   delete from public.till_verifications where true;        get diagnostics n = row_count; counts := counts || jsonb_build_object('till_verifications', n);

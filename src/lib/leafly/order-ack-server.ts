@@ -384,7 +384,12 @@ export async function acknowledgeLeaflyOrder(input: {
 
   if (ok) {
     const { markLeaflyOrderAcknowledged } = await import("./webhook-server");
-    const stamped = await markLeaflyOrderAcknowledged(orderId);
+    // Pinned rather than left to a default, because this exact instant is used
+    // twice: once to stamp the row, and once to build the post-acknowledgement
+    // snapshot handed to the status push below. Two separate `new Date()` calls
+    // could land either side of a second boundary and disagree.
+    const acknowledgedAt = new Date();
+    const stamped = await markLeaflyOrderAcknowledged(orderId, acknowledgedAt);
     if (!stamped.ok) {
       // Leafly HAS accepted the acknowledgement and the ID images are already
       // gone. Failing to record that locally does not undo it, so this must
@@ -451,6 +456,95 @@ export async function acknowledgeLeaflyOrder(input: {
       );
       bridgeWarning =
         "Leafly has accepted this order, but we could not confirm it reached the register. DO NOT acknowledge it again. Check the register's pickup queue, and build from the printed ticket if it is not there.";
+    }
+
+    // ── SLICE L-14: TELL LEAFLY WE ARE MAKING IT ─────────────────────────────
+    //
+    // THE CORRECTION. Leafly's spec draws a line this codebase did not:
+    //
+    //   acknowledge  = "confirms that your system has retrieved all necessary
+    //                   details regarding an order". A RECEIPT. It says we have
+    //                   the data. It is not a business decision, and Leafly
+    //                   forces it within fifteen minutes or auto-cancels.
+    //
+    //   status=confirmed = "Move an order along its lifecycle." THE BUSINESS
+    //                   ACCEPTANCE -- the store agreeing to make the order.
+    //
+    // This is the EDI 997-vs-855 distinction, which is the long-standing
+    // enterprise standard for exactly this situation: the functional
+    // acknowledgment confirms technical receipt and syntax only and explicitly
+    // does NOT confirm that the business transaction was accepted, while the
+    // purchase order acknowledgment carries acceptance, rejection or change.
+    //
+    // Until now we sent ONLY the receipt. The shopper's Leafly order therefore
+    // sat at `pending` forever -- the customer was never told the store had
+    // confirmed it -- even though a human here had decided to make it and the
+    // order was on the floor being built. Leafly asks that status updates "are
+    // a best-approximation ... and that they result in a reasonably smooth and
+    // intuitive order lifecycle for the end shopper"; leaving it at pending is
+    // neither.
+    //
+    // WHY HERE: this is the point where a HUMAN pressed Accept. That is the
+    // business decision, and it is the moment the order becomes floor-visible.
+    //
+    // NEVER ALLOWED TO FAIL THE ACKNOWLEDGEMENT, for the same reason as the
+    // bridge above: Leafly has already taken the acknowledgement and the ID
+    // images are already gone. A failed status push is recoverable (it can be
+    // re-sent); an acknowledgement nobody believes happened is not.
+    try {
+      const confirmed = await setLeaflyOrderStatus({
+        order: {
+          ...input.order,
+          // NOT cosmetic, and the reason this block works at all.
+          // `setLeaflyOrderStatus` re-derives legality from the snapshot it is
+          // given, and `decideStatusChange` RULE 1 -- "Updates to order status
+          // are only available after an order has been acknowledged" -- refuses
+          // outright when `acknowledged_at` is blank. `input.order` is the row
+          // as it was read BEFORE this function ran, so its `acknowledged_at`
+          // is null by definition: that is exactly why `decideAcknowledgement`
+          // permitted the acknowledgement. Passing it unchanged would make
+          // every confirmed push refuse with `not_acknowledged`, write a
+          // refusal row, send nothing, and leave the shopper looking at
+          // `pending` forever -- while the log insisted we had tried.
+          acknowledged_at: acknowledgedAt.toISOString(),
+          // Corrected in the same breath so the snapshot is not fresh in one
+          // field and stale in another. We have just acknowledged, so whatever
+          // Leafly showed a moment ago, `pending` is the state we are moving
+          // forward from.
+          leafly_status: "pending",
+        },
+        nextStatus: "confirmed",
+        staffId: input.staffId ?? null,
+      });
+      if (!confirmed.ok) {
+        console.error(
+          `[leafly/outbound] acknowledged ${orderId} but could not set status=confirmed: ${confirmed.message}`,
+        );
+        // Appended rather than overwriting: a bridge failure and a status
+        // failure are different problems and a budtender may be looking at
+        // both. Overwriting would hide whichever happened first.
+        const note =
+          "Leafly was not told we confirmed this order, so the customer may still see it as pending. The order IS accepted here \u2014 do not accept it again.";
+        // Template-literal form so the right-hand side begins with a string,
+        // per the L-13 wiring guard: a bridgeWarning assignment must never be
+        // something that CAN evaluate to nothing. `note` is a non-empty
+        // constant, so this is always a real message, and `bridgeWarning ?? ""`
+        // preserves any earlier warning rather than overwriting it.
+        bridgeWarning = `${bridgeWarning ?? ""} ${note}`.trim();
+      }
+    } catch (err) {
+      console.error(
+        `[leafly/outbound] acknowledged ${orderId} but the status push threw:`,
+        err,
+      );
+      const note =
+        "Leafly was not told we confirmed this order, so the customer may still see it as pending. The order IS accepted here \u2014 do not accept it again.";
+      // Template-literal form so the right-hand side begins with a string,
+      // per the L-13 wiring guard: a bridgeWarning assignment must never be
+      // something that CAN evaluate to nothing. `note` is a non-empty
+      // constant, so this is always a real message, and `bridgeWarning ?? ""`
+      // preserves any earlier warning rather than overwriting it.
+      bridgeWarning = `${bridgeWarning ?? ""} ${note}`.trim();
     }
   }
 

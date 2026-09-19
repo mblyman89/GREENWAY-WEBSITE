@@ -1084,7 +1084,84 @@ describe("the migration list is ordered the way the database will see it", () =>
     // is_owner() returns f. Recorded because every one of these presents as a
     // migration defect and none of them is one.
     // Harness: scripts/compliance/prove-0228-executes.sh
-    expect(listed[listed.length - 1]).toMatch(/^0228_/);
+    //
+    // SLICE L-14 adds 0229_leafly_register_claim.sql — the claim columns on
+    // leafly_orders plus leafly_register_interrupts, the table behind the
+    // blocking cancellation modal. Proven the same way: all 229 migrations
+    // applied in order to a real PostgreSQL 15.19, 0229 re-applied cleanly
+    // (idempotent, which matters because the owner pastes these BY HAND per
+    // AGENTS rule 6), and 39 live property checks passed. The ones worth
+    // naming, each with the floor consequence that justifies it:
+    //
+    //   * resolved_at is NULLABLE WITH NO DEFAULT. Exactly the same class of
+    //     defect as 0228's announced_at, and exactly as invisible to a
+    //     text-reading test: `resolved_at is null` IS the definition of "this
+    //     interrupt is still blocking a register". A default of now() would
+    //     mean every interrupt is born already resolved, the modal would never
+    //     block anything, and a CANCELLED order would be bagged and handed to
+    //     the customer. Only executing it can catch that;
+    //   * the retry guard proven by DOING IT: inserting a second open
+    //     interrupt for the same order really is rejected with 23505. Leafly
+    //     retries webhooks, and without this a budtender dismisses the same
+    //     cancellation three times — which is how people learn to dismiss
+    //     modals without reading them;
+    //   * and proven PARTIAL by resolving the first row and inserting again,
+    //     which must SUCCEED. A non-partial unique index passes the 23505 test
+    //     above while permanently blocking every later cancellation of that
+    //     order. The two assertions only mean something together;
+    //   * both indexes carry their PREDICATES, read out of pg_indexes.indexdef
+    //     rather than assumed from their names — an index with the wrong
+    //     predicate still exists and still shows in \d;
+    //   * disposition is an ALLOWLIST (23514 on an undesigned value, 'void'
+    //     and 'walk_in' accepted) while cancel_reason_code is UNCONSTRAINED.
+    //     That asymmetry is the point and both halves are tested: values WE
+    //     invent are constrained because an unexpected one is our own bug;
+    //     values LEAFLY sends are stored verbatim because a CHECK there would
+    //     reject the inbound truth the first time they add a code;
+    //   * interrupts CASCADE away with their order. An interrupt pointing at a
+    //     deleted order is a modal no employee can ever clear;
+    //   * register_device_id has NO foreign key, asserted rather than
+    //     commented, for 0228's reason: "we chose not to" and "we forgot to"
+    //     look identical six months later. Retiring a till must not block the
+    //     delete or orphan the audit trail;
+    //   * RLS enabled with ZERO policies (the register reaches this table
+    //     through /api/pos/pickup with the admin client), so the table is
+    //     unreachable from a browser holding the anon key;
+    //   * 0209's factory reset still runs, with is_owner() asserted TRUE first
+    //     so the reset assertions cannot pass vacuously.
+    //
+    // THREE HARNESS DEFECTS FOUND AND FIXED, recorded because every one
+    // presented as a migration defect and none of them was one:
+    //   1. the fixture insert was silently rejected (public.orders
+    //      .customer_first_name is NOT NULL with no default), so the behaviour
+    //      tests ran against a table with no rows. Now the fixture failure is
+    //      fatal and loud, and a non-vacuity check asserts the row exists;
+    //   2. `psql -tAc` on `INSERT ... RETURNING` prints the value AND the
+    //      command tag — the SAME defect 0228's ledger above records as the
+    //      costliest on 0225/0226/0227. There it corrupted a uuid; here it made
+    //      "inserted\nINSERT 0 1" compare unequal to "inserted". Carried
+    //      across properly this time with a helper that takes only the
+    //      sentinel line;
+    //   3. the SQLSTATE parser anchored on a "SQLSTATE" label that psql does
+    //      NOT print (verbose format is `ERROR:  23514: ...`), so both negative
+    //      tests yielded "" — failing SAFELY while proving nothing at all.
+    //      Fixed, and the function no longer returns "" on any path: it returns
+    //      NO_ERROR when the statement wrongly succeeded (a migration defect)
+    //      and UNPARSED when it failed but the code did not parse (a harness
+    //      defect), because conflating those two sends you to the wrong file.
+    //
+    // AND THE PROOF ITSELF WAS TESTED. scripts/compliance/sabotage-0229-proof.sh
+    // damages 0229 in 13 ways that would each hurt the floor and requires the
+    // proof to go RED for every one; it verifies the baseline is green first
+    // (so a red cannot be credited to the wrong cause), restores the migration
+    // sha256-verified afterwards, and re-runs to confirm green. Its first run
+    // found THREE REAL HOLES in a proof that was reporting "33 passed, 0
+    // failed": the hot poll index's predicate was never checked, the CHECK on
+    // `kind` was never exercised, and `title not null` was never asserted.
+    // Sections 5b and 5c exist because of that run. Now 13 caught, 0 survived.
+    // Harness: scripts/compliance/prove-0229-executes.sh
+    //          scripts/compliance/sabotage-0229-proof.sh
+    expect(listed[listed.length - 1]).toMatch(/^0229_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

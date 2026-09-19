@@ -687,6 +687,28 @@ export const TABLE_RULES: readonly TableRule[] = [
   // all — no sale, no product movement, no customer. It is telemetry about a
   // third-party API call.
   { table: "leafly_sync_runs", disposition: "WIPE", because: "The record of every automatic menu sync and every manual push during testing. Practice telemetry — and leaving the practice failures behind would have automatic syncing start out already slowed down, as if Leafly were still refusing us." },
+  //
+  // leafly_register_interrupts (0229, slice L-14) is the blocking cancellation
+  // modal and the record of how each one was answered. WIPE, and like the
+  // three above it this one has a BEHAVIOURAL reason rather than a tidiness
+  // one, which is why it is not left to the shared "leafly_" stem:
+  //
+  // An interrupt with resolved_at null BLOCKS the till holding that order —
+  // that is the entire purpose of the table. A rehearsal interrupt left behind
+  // would therefore put an unclearable modal on a register on go-live morning,
+  // naming a practice order that this same reset has just deleted. Worse, the
+  // partial unique index on (local_order_id) where resolved_at is null would
+  // then REFUSE to raise a real interrupt for that order, so a genuine Leafly
+  // cancellation would never reach the floor at all. KEEP would brick a
+  // register AND suppress a real cancellation — the same trap as
+  // leafly_webhook_events' fingerprints and leafly_sync_runs' backoff counter.
+  //
+  // Checked against WAC 314-55-087 before writing WIPE: the retention duty
+  // attaches to actual transactions. A sandbox cancellation of a sandbox order
+  // is not one, and the resolved rows here are the disposition audit trail for
+  // practice orders that this reset deletes from public.orders anyway — an
+  // audit trail about nothing.
+  { table: "leafly_register_interrupts", disposition: "WIPE", because: "Cancellation alerts shown at the register during testing, and the record of how each was answered. Practice interrupts — and leaving one behind would put a message a cashier cannot clear on a register on your first real day, about an order that no longer exists." },
   { table: "license_settings", disposition: "KEEP", because: "Your I-502 licence number and CCRS identifiers." },
   { table: "tax_settings", disposition: "KEEP", because: "Your excise and sales tax rates." },
   { table: "tax_category_rules", disposition: "KEEP", because: "Which categories are taxed which way." },

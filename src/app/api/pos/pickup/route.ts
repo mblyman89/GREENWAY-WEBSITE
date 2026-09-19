@@ -100,6 +100,38 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
       employeeName,
     });
     if (!loaded.ok) return NextResponse.json({ error: loaded.error }, { status: 422 });
+
+    // ── SLICE L-14: this till now holds the order ──────────────────────────
+    //
+    // Recording the claim is what makes `decideCancelPlan`'s collision branch
+    // reachable: until L-14 nothing in the system knew a register was holding
+    // an order, so a cancellation arriving mid-sale was classified as though
+    // the counter were empty.
+    //
+    // Only for marketplace orders. A website order has no upstream that can
+    // cancel it out from under the counter, so claiming one would write a lock
+    // nothing ever reads.
+    //
+    // Best-effort, and deliberately AFTER the load succeeded: a claim that
+    // cannot be written must never stop a budtender serving a customer. The
+    // cost of a missing claim is one cancellation escalated to a human, which
+    // is the safe direction. It is also self-correcting -- the claim is a
+    // lease and the register renews it on every poll.
+    if (loaded.isMarketplace) {
+      const { claimLeaflyOrderForRegister } = await import("@/lib/leafly/register-claim-server");
+      const claimed = await claimLeaflyOrderForRegister({
+        localOrderId: loaded.orderId,
+        deviceId: auth.device.id,
+        deviceName: auth.device.name,
+        employeeName,
+      });
+      if (!claimed.ok) {
+        console.error(
+          `[pos/pickup] loaded ${loaded.orderNumber} but could not claim it for ${auth.device.name}: ${claimed.error ?? "unknown"}`,
+        );
+      }
+    }
+
     return NextResponse.json({
       loaded: {
         // The source order's id — the register carries it into the sale it is

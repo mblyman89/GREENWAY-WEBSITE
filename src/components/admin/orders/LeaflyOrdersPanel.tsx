@@ -97,6 +97,14 @@ import {
   type LeaflyWorkflowBucket,
 } from "@/lib/leafly/bridge-core";
 import type { LeaflyBoardState } from "@/lib/leafly/order-board-server";
+// SLICE L-14 — the classification of an interrupt is the pure core’s job,
+// not this file’s. Both helpers are asserted in CI without a database.
+import {
+  summariseInterrupt,
+  summariseInterrupts,
+  type InterruptRecord,
+} from "@/lib/leafly/register-claim-core";
+import type { BoardInterrupts } from "@/lib/leafly/register-claim-server";
 import { ANNOUNCER_PANEL_ANCHOR } from "./AnnouncerPanel";
 import { LeaflyOrderActions } from "./LeaflyOrderActions";
 import {
@@ -220,6 +228,14 @@ function toWorkflowRow(order: BoardRow): WorkflowRow {
 export function LeaflyOrdersPanel({
   board,
   pendingAckCount,
+  /**
+   * SLICE L-14 — register cancellation interrupts, keyed by local order id.
+   *
+   * Optional so that any caller that has not been updated renders exactly as
+   * it did before this slice, rather than crashing a page the shop runs its
+   * own orders on.
+   */
+  interrupts,
   /** Injected so the panel is deterministic and the clock is testable. */
   now,
   /** Outcome of the last action, lifted from the URL by the page. */
@@ -229,12 +245,20 @@ export function LeaflyOrdersPanel({
 }: {
   board: LeaflyBoardState;
   pendingAckCount: number | null;
+  interrupts?: BoardInterrupts;
   now: Date;
   message?: string | null;
   error?: string | null;
   errorCode?: string | null;
 }) {
   const hasOrders = board.orders.length > 0;
+  // SLICE L-14 — one tally for the whole board, computed ONCE here rather
+  // than per card, so the banner and the cards cannot disagree about how many
+  // tills are stopped. The counting itself is the pure core’s.
+  const allInterrupts: InterruptRecord[] = interrupts
+    ? Array.from(interrupts.byOrderId.values()).flat()
+    : [];
+  const interruptTally = summariseInterrupts(allInterrupts);
   const hasProblem = board.problem.trim().length > 0;
   const hasOutcome = Boolean(message || error);
 
@@ -341,6 +365,44 @@ export function LeaflyOrdersPanel({
           ) : null
         ) : (
           <div className="mt-4 space-y-5">
+            {/* ── SLICE L-14: tills stopped by a Leafly cancellation ─────────
+                Above the buckets because it outranks them. A bucket says what
+                to do next; this says that a register is STOPPED right now and
+                a cashier is standing there waiting to be told what to do with
+                product that is already in a bag.
+
+                The count comes from the pure core and is a true count, not the
+                length of a clipped list. */}
+            {interruptTally.openCount > 0 ? (
+              <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]">
+                <p className="font-black">
+                  🚨 {interruptTally.openCount === 1
+                    ? "A register is waiting on a cancelled order."
+                    : `${interruptTally.openCount} registers are waiting on cancelled orders.`}
+                </p>
+                <p className="mt-1 font-normal">
+                  Leafly cancelled {interruptTally.openCount === 1 ? "an order" : "orders"} that
+                  {" "}{interruptTally.openCount === 1 ? "was" : "were"} already being built. Until
+                  somebody at the till says what happened to the product, it is neither back in
+                  stock nor sold — so the count on the shelf is wrong either way.
+                </p>
+              </div>
+            ) : null}
+
+            {/* A read failure here is stated, never silent: an empty list and
+                an unreadable table look identical on screen, and that is how a
+                stopped till goes unnoticed for a shift. */}
+            {interrupts?.degraded ? (
+              <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-xs text-[var(--admin-gold)]">
+                Register cancellation alerts aren’t available yet — migration 0229 hasn’t been
+                applied. Orders below are accurate; only the cancellation alerts are missing.
+              </div>
+            ) : null}
+            {interrupts?.problem ? (
+              <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-xs text-[var(--admin-gold)]">
+                {interrupts.problem}
+              </div>
+            ) : null}
             {/* ── The workflow buckets ──────────────────────────────────
                 Grouped by the pure core and rendered in the order a budtender
                 actually works: accept the ones on a countdown, rescue the ones
@@ -377,6 +439,11 @@ export function LeaflyOrdersPanel({
                           placement={placement}
                           board={board}
                           now={now}
+                          interrupts={
+                            order.local_order_id
+                              ? interrupts?.byOrderId.get(order.local_order_id)
+                              : undefined
+                          }
                         />
                       ))}
                     </div>
@@ -407,11 +474,14 @@ function LeaflyOrderCard({
   placement,
   board,
   now,
+  /** SLICE L-14 — this order’s interrupts, newest first. */
+  interrupts,
 }: {
   order: WorkflowRow;
   placement: LeaflyWorkflowPlacement;
   board: LeaflyBoardState;
   now: Date;
+  interrupts?: InterruptRecord[];
 }) {
   // ── Everything below is READ from the pure core, never decided here.
   const clock = assessAckClock({
@@ -549,6 +619,56 @@ function LeaflyOrderCard({
               Jump to the order announcer ↑
             </a>
           </p>
+        </div>
+      ) : null}
+
+      {/* ── SLICE L-14: what the till was asked, and what it answered ────────
+          The ONLY record anywhere of what happened to product that was already
+          bagged when Leafly cancelled. Resolved rows are shown as well as open
+          ones, quietly, because a manager reconciling the shelf tomorrow needs
+          the answer as much as a manager watching a stopped till needs the
+          question.
+
+          Every word of state below is read from summariseInterrupt in the pure
+          core. This block chooses colours, nothing else. */}
+      {(interrupts ?? []).length > 0 ? (
+        <div className="mt-3 space-y-2">
+          {(interrupts ?? []).map((row) => {
+            const summary = summariseInterrupt(row);
+            const blocking = summary.state === "BLOCKING";
+            return (
+              <div
+                key={row.rowId}
+                className={`rounded-[var(--admin-radius-lg)] border px-3 py-2 text-xs ${
+                  blocking
+                    ? "border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]"
+                    : "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)]"
+                }`}
+              >
+                <p className="font-bold">
+                  <span aria-hidden>{blocking ? "🛑" : "📋"}</span>{" "}
+                  {summary.headline}
+                </p>
+                <p className="mt-1 font-normal">{summary.reason}</p>
+                {summary.decision ? (
+                  <p className="mt-1 font-normal">
+                    <span className="font-bold">{summary.decision.label}:</span>{" "}
+                    {summary.decision.detail}
+                    {row.resolvedByEmployee ? ` — ${row.resolvedByEmployee}` : ""}
+                  </p>
+                ) : null}
+                {/* Stated rather than hidden. A resolved row whose recorded
+                    decision is not one this software recognises is a real
+                    reconciliation problem, and showing whichever option
+                    happened to be first would be a guess. */}
+                {summary.needsAttention && !blocking ? (
+                  <p className="mt-1 font-bold text-[var(--admin-gold)]">
+                    Needs a look — no recognised decision was recorded for this one.
+                  </p>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       ) : null}
 

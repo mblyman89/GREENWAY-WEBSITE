@@ -40,6 +40,13 @@ import {
   loadLeaflyOrderBoard,
   countLeaflyOrdersAwaitingAck,
 } from "@/lib/leafly/order-board-server";
+// SLICE L-14 — register cancellation interrupts, shown per order on the
+// board so the back office can see which tills are blocked and how each
+// cancellation was answered. Non-throwing and degrade-safe by construction.
+import {
+  listInterruptsForOrders,
+  type BoardInterrupts,
+} from "@/lib/leafly/register-claim-server";
 import { LeaflyOrdersPanel } from "@/components/admin/orders/LeaflyOrdersPanel";
 
 export const dynamic = "force-dynamic";
@@ -177,6 +184,24 @@ export default async function OrdersAdminPage({
     loadLeaflyOrderBoard(),
     countLeaflyOrdersAwaitingAck(),
   ]);
+  // SLICE L-14 — cancellation interrupts for the orders the board just loaded.
+  //
+  // NOT part of the Promise.all above, and deliberately so: this takes the ids
+  // the board ACTUALLY returned rather than re-deriving them with a second
+  // query. Re-deriving would let the two disagree about which orders are on
+  // screen, and a mismatch there shows one order’s cancellation on another
+  // order’s card. One sequential round trip — indexed, capped, and skipped
+  // entirely when the board is empty — is the cheaper side of that trade.
+  //
+  // No try/catch: listInterruptsForOrders never throws and reports its own
+  // failure in `problem`. Wrapping it would imply a failure mode that cannot
+  // happen and invite someone to swallow a real one.
+  const leaflyInterrupts: BoardInterrupts =
+    leaflyBoard.orders.length > 0
+      ? await listInterruptsForOrders(
+          leaflyBoard.orders.map((o) => o.local_order_id ?? ""),
+        )
+      : { byOrderId: new Map(), degraded: false, problem: "" };
   let { rows: orders, total } = firstPage;
   const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
   if (win.page !== rawPage && total > 0) {
@@ -287,6 +312,7 @@ export default async function OrdersAdminPage({
         <LeaflyOrdersPanel
           board={leaflyBoard}
           pendingAckCount={leaflyPendingAck}
+          interrupts={leaflyInterrupts}
           // The clock is read ONCE here and injected, so every countdown on the
           // page is measured from the same instant. Reading the time inside the
           // component per order would let two rows disagree about what time it

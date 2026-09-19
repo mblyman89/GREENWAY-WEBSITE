@@ -1145,6 +1145,23 @@ async function processSale(
   // paid-for sale must never be undone by a supersede hiccup — if the cancel
   // fails we leave a loud audit row so the manager can close the order by hand.
   if (sale.sourceOrderId && sale.sourceOrderId !== order.id) {
+    // ── SLICE L-14: release the register claim ────────────────────────────
+    //
+    // The sale is finished, so this till is no longer holding the order and a
+    // later Leafly cancellation must not be treated as a mid-sale collision.
+    //
+    // Best-effort and wrapped separately from the supersede below, because a
+    // completed, paid-for sale must never be undone by a lock that would not
+    // clear. An unreleased claim is self-correcting anyway: it is a lease and
+    // goes stale on its own, so the worst case is one cancellation escalated
+    // to a human within the next ten minutes -- the safe direction.
+    try {
+      const { releaseLeaflyOrderClaim } = await import("@/lib/leafly/register-claim-server");
+      await releaseLeaflyOrderClaim(sale.sourceOrderId);
+    } catch {
+      // Never let a lock release touch a completed sale.
+    }
+
     try {
       const source = await getOrder(sale.sourceOrderId);
       const ACTIVE = new Set(["new", "acknowledged", "preparing", "ready"]);
