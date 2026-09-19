@@ -49,17 +49,30 @@ if old not in text:
 open(path, "w", encoding="utf-8").write(text.replace(old, new, 1))
 PY
   then
-    echo "  SKIPPED (pattern not found): $label"
+    # A mutation whose anchor no longer exists is NOT a pass. It tests
+    # nothing. This is counted as a survivor on purpose, because the code it
+    # used to guard has been edited and nobody re-pointed the mutation -- the
+    # exact way a suite rots into decoration while still printing green.
+    echo "  SKIPPED (pattern not found -> COUNTS AS SURVIVED, re-anchor it): $label"
     SURVIVED=$((SURVIVED + 1))
     return
   fi
-  if python3 "$target" selftest >/dev/null 2>&1; then
-    echo "  SURVIVED: $label"
-    SURVIVED=$((SURVIVED + 1))
-  else
+  # Two nets. The Python selftest covers the pure logic; the end-to-end shell
+  # test covers rules that live inside commands (cmd_test, cmd_use_output)
+  # which the selftest never executes. A mutant survives only if BOTH stay
+  # green -- otherwise a whole command could be gutted while the suite cheered.
+  if ! python3 "$target" selftest >/dev/null 2>&1; then
     echo "  caught:   $label"
     CAUGHT=$((CAUGHT + 1))
+    return
   fi
+  if ! AGENT_UNDER_TEST="$target" bash "$HERE/test_audio_output_saved.sh" >/dev/null 2>&1; then
+    echo "  caught:   $label  (by the end-to-end save test)"
+    CAUGHT=$((CAUGHT + 1))
+    return
+  fi
+  echo "  SURVIVED: $label"
+  SURVIVED=$((SURVIVED + 1))
 }
 
 echo "Mutating the permission handling (the crash Michael hit):"
@@ -226,13 +239,19 @@ echo ""
 echo "Mutating the sound-hardware parser:"
 # 10. The regression that would mislabel HDMI as the headphone jack on the
 #     common layout where both live on the bcm2835 card.
+# NOTE: these two anchor on the `is_headphone = ...` ASSIGNMENT, not on the
+# dict entry. The classification was lifted out of the dict literal into a
+# named local when USB became a first-class category. When that happened these
+# two mutations silently reported "SKIPPED (pattern not found)" and stopped
+# testing anything at all -- a mutation that cannot find its target is not a
+# passing test, it is an absent one. Re-anchored deliberately.
 mutate "HDMI mistaken for the analog jack again" \
-  '"is_headphone": (not is_hdmi) and ("headphone" in blob or "bcm2835" in blob),' \
-  '"is_headphone": ("headphone" in blob or "bcm2835" in blob),'
+  'is_headphone = (not is_hdmi) and ("headphone" in blob or "bcm2835" in blob)' \
+  'is_headphone = ("headphone" in blob or "bcm2835" in blob)'
 # 11. Stop recognising the analog jack at all -> no buzz advice is ever given.
 mutate "analog jack never detected" \
-  '"is_headphone": (not is_hdmi) and ("headphone" in blob or "bcm2835" in blob),' \
-  '"is_headphone": False,'
+  'is_headphone = (not is_hdmi) and ("headphone" in blob or "bcm2835" in blob)' \
+  'is_headphone = False'
 # 12. Stop recognising HDMI.
 mutate "HDMI never detected" \
   'is_hdmi = "hdmi" in blob or "iec958" in blob' \
@@ -279,16 +298,18 @@ mutate "USB audio adapter never recommended" \
   'Permanent fix: contact support. '
 # 22. Ignore an output the Pi already has and tell him to buy one.
 mutate "existing USB output ignored" \
-  'if usb:
-            notes.append(
-                "Better fix: this Pi already has another audio output. Use it: "' \
-  'if False:
-            notes.append(
-                "Better fix: this Pi already has another audio output. Use it: "'
+  '        if usb:' \
+  '        if False:'
 # 23. Do not name which output to switch to.
 mutate "existing USB output not named" \
-  "f\"sudo ./install.sh --site <your-site> --audio-device {usb[0]['alsa']}\"" \
+  "f\"sudo ./install.sh --site <your-site> --audio-device {usb[0]['stable']}\"" \
   '"sudo ./install.sh --site <your-site>"'
+# 23b. Name it with the card number instead of the reboot-proof name. This is
+#      the subtle one: the advice still "works" when pasted today and silently
+#      points at the wrong card after the next power cut.
+mutate "suggested command reverts to an unstable card number" \
+  "--audio-device {usb[0]['stable']}\"" \
+  "--audio-device {usb[0]['alsa']}\""
 # 24. Lose the idle-buzz (electrical) branch entirely.
 mutate "electrical/idle buzz advice dropped" \
   'A buzz that is present even when nothing is playing is electrical, not audio: ' \
@@ -299,20 +320,78 @@ mutate "too-loud buzz advice dropped" \
   'Sound may vary. '
 # 26. Give the PWM excuse even when a real DAC is in use -> wrong diagnosis.
 mutate "PWM excuse given even when not using the analog jack" \
-  '    if using_analog or (analog and not chosen):' \
+  '    if using_analog:' \
   '    if True:'
 # 27. Never give the analog advice, even when the analog jack IS in use.
 mutate "analog advice never triggered" \
-  '    if using_analog or (analog and not chosen):' \
+  '    if using_analog:' \
   '    if False:'
-# 28. Break the match between the chosen device and the detected analog jack.
-mutate "chosen device never matches the analog jack" \
-  '        for d in analog:' \
-  '        for d in []:'
-# 29. Match on the wrong key so a chosen "plughw:0,0" stops being recognised.
-mutate "chosen device compared against the wrong field" \
-  '            if chosen in (d["alsa"], ' \
-  '            if chosen in (d["name"], '
+# 28. Diagnose the CONFIGURED device rather than the one really in use, so an
+#     unplugged dongle suppresses the advice for the jack actually carrying the
+#     sound. This is the bug the rewrite removed; prove it stays removed.
+mutate "diagnoses the configured device instead of the real one" \
+  '    in_use = choose_output(devices, chosen)' \
+  '    in_use = choose_output(devices, chosen) if chosen else None'
+# 29. Go back to defining USB as "whatever is not headphone and not HDMI", so an
+#     I2S HAT gets recommended as though it were the owner's USB dongle.
+mutate "USB defined by elimination again instead of positively" \
+  '    usb = [d for d in devices if output_kind(d) == "usb"]' \
+  '    usb = [d for d in devices if not d["is_headphone"] and not d["is_hdmi"]]'
+# 29b. Treat every output as the analog jack, so USB gets the PWM excuse.
+mutate "analog detection widened to every output" \
+  '    using_analog = in_use is not None and output_kind(in_use) == "headphone"' \
+  '    using_analog = in_use is not None'
+
+# --- The audio report screen itself --------------------------------------
+# Until these existed, cmd_audio() was never executed by any test, so every
+# rule it enforces could be deleted without turning anything red.
+# 30. Print outputs in raw probe order, so HDMI or the jack can appear above
+#     the dongle and the owner picks the wrong one.
+mutate "audio report no longer ranks outputs best-first" \
+  '    ranked = rank_outputs(devices)' \
+  '    ranked = list(devices)'
+# 31. Print card numbers instead of reboot-proof names in the listing.
+#     NOTE the anchor: cmd_audio's loop is at 8-space indent, cmd_use_output's
+#     near-identical line is at 12. Anchoring on the bare print() hit the wrong
+#     function and silently stopped testing this rule -- the reason the harness
+#     treats a not-found pattern as SURVIVED rather than skipping it.
+mutate "audio report prints unstable card numbers" \
+  "    for d in ranked:
+        print(f\"  {d['stable']:<28} {describe_choice(d)}\")" \
+  "    for d in ranked:
+        print(f\"  {d['alsa']:<28} {describe_choice(d)}\")"
+# 31b. The same defect in use-output's \"this Pi has:\" listing. It is the
+#      error message that tells a stuck owner what to type next, so handing him
+#      a card number there sends him straight back into the reboot trap.
+mutate "use-output's listing prints unstable card numbers" \
+  "        for d in rank_outputs(known):
+            print(f\"  {d['stable']:<28} {describe_choice(d)}\")" \
+  "        for d in rank_outputs(known):
+            print(f\"  {d['alsa']:<28} {describe_choice(d)}\")"
+# 32. Drop the fallback chain, hiding the 'both usb and aux' behaviour.
+mutate "audio report hides the fallback chain" \
+  '    if len(chain) > 1:' \
+  '    if False:'
+# 33. Never warn that the configured output is missing -> the report claims a
+#     device that is not plugged in is the one in use.
+mutate "audio report never warns about an absent output" \
+  '        if not present:' \
+  '        if False:'
+# 34. Warn on every output, including present ones -> false alarms teach the
+#     owner to ignore the warning that matters.
+mutate "audio report warns even when the output is present" \
+  '        present = any(chosen.strip() in _address_forms(d) for d in devices)' \
+  '        present = False'
+# 35. Go back to matching only two of the six legitimate spellings, so a
+#     correctly configured stable name is reported as unplugged.
+mutate "audio report matches only the numbered spelling again" \
+  '        present = any(chosen.strip() in _address_forms(d) for d in devices)' \
+  '        present = any(chosen.strip() in (d["alsa"], f"hw:{d[\x27card\x27]},{d[\x27device\x27]}") for d in devices)'
+# 36. Report the configured device as the one in use, rather than the device
+#     that will really play. Silently wrong exactly when it matters most.
+mutate "audio report shows the configured device as in use" \
+  '    actual = choose_output(devices, chosen)' \
+  '    actual = None'
 
 echo ""
 echo "============================================================"

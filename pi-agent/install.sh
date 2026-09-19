@@ -46,7 +46,13 @@ Greenway Order Announcer installer
 Options:
   --site URL          Your website address (required on a first install)
   --code CODE         The 8-character pairing code from the back office
-  --audio-device DEV  ALSA device, e.g. "plughw:1,0" (default: system default)
+  --audio-device DEV  ALSA device. Prefer the reboot-proof form, e.g.
+                      "plughw:CARD=Device,DEV=0" -- card NUMBERS like
+                      "plughw:1,0" are assigned in plug-in order and can point
+                      at a different card after a power cut. Run
+                      'sudo greenway-announcer audio' to see the right names.
+                      (default: pick the best output automatically -- USB
+                      adapter first, then the Pi's 3.5 mm jack)
   --mixer-control C   ALSA mixer name, e.g. "PCM" (default: auto)
   --agent-file PATH   Install from a local greenway_announcer.py instead of downloading
   --uninstall         Remove the announcer completely
