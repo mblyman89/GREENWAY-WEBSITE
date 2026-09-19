@@ -127,19 +127,28 @@ Almost always the speaker, not the Pi. Work down this list:
    - **You hear them** → the Pi and speaker are perfect. The problem is a
      setting in the back office: check the speaker is **Enabled**, check its
      **Volume** is not 0, and check **Quiet hours** is not currently on.
-   - **You hear nothing** → the audio output is wrong. Run:
+   - **You hear nothing** → the audio output is wrong. You should not have to
+     do anything: `test` tries every output, finds one that works, saves it,
+     and restarts the service by itself. If you want to choose by hand, run:
 
      ```bash
-     aplay -l
+     sudo greenway-announcer audio
      ```
 
-     That lists the audio devices. Note the card and device numbers, then set
-     the right one in `/etc/greenway-announcer/config.json` as `audioDevice`,
-     for example `"plughw:1,0"`. Then:
+     That lists every output **best first**, already written the way you should
+     type it. Copy the one you want and set it in one command:
 
      ```bash
-     sudo systemctl restart greenway-announcer
+     sudo greenway-announcer use-output plughw:CARD=Device,DEV=0
      ```
+
+     That saves it and restarts the service for you. There is no need to edit
+     `/etc/greenway-announcer/config.json` by hand.
+
+     > Use the long `plughw:CARD=...` name, not `plughw:1,0`. Card numbers are
+     > handed out in plug-in order, so a saved number can point at a different
+     > device after a reboot or a re-plug — a speaker that works for weeks and
+     > then goes silent with nobody having touched it.
 
    - **You hear nothing and `aplay -l` lists nothing** → check `alsamixer`.
      `MM` under a channel means **muted**; highlight it and press `M` to
@@ -393,6 +402,70 @@ deliberate — check the back office before you go looking at hardware.
 
 **"I rebooted the Pi and nothing happened for a minute."**
 Normal. A Pi takes 30–90 seconds to boot. Wait two minutes before worrying.
+
+**"I plugged in a USB audio adapter and didn't change any settings."**
+Nothing to change. The announcer re-checks the sound hardware about once a
+minute and prefers a USB adapter over the Pi's own 3.5 mm jack, so the sound
+moves to the dongle by itself, usually within a minute. Run
+`sudo greenway-announcer audio` to confirm — the dongle should be top of the
+list and named on the `In use:` line.
+
+**"I unplugged the USB adapter mid-shift and the shop kept announcing."**
+That is deliberate. The Pi does not play to one socket and give up if it
+fails: it tries each output in turn — USB adapter, then the 3.5 mm jack, then
+anything else, with HDMI last — and an announcement is only reported as failed
+if **every** output fails. So pulling the dongle drops the sound back to the
+aux jack instead of silencing the shop. Plug it back in and it returns to the
+dongle on its own. **A worse-sounding noise is infinitely better than no
+noise.**
+
+---
+
+## PART 7b — WHICH SOCKET THE SOUND COMES OUT OF
+
+The short version: **you do not have to manage this.** It is worth knowing
+anyway, because it explains behaviour that would otherwise look like a fault.
+
+**The order of preference**, best first:
+
+1. **A USB audio adapter** — a real DAC. Best quality, and preferred whenever
+   one is plugged in.
+2. **The Pi's own 3.5 mm jack** — works, but it is PWM-driven and genuinely
+   hisses. That hiss is the hardware, not a broken speaker.
+3. **Any other add-on sound card** (an I2S HAT, for instance).
+4. **HDMI, last on purpose.** On a Pi with no screen attached, HDMI audio
+   cannot open at all. It is often the system default, which is exactly why a
+   headless Pi can play silence while every screen says it is fine.
+
+**How "forever" works.** The choice is not a one-off command that a power cut
+can undo:
+
+- The Pi **re-checks the hardware about once a minute** while running, so
+  plugging or unplugging a dongle is picked up without a reboot.
+- If nothing is pinned in the config, it simply picks the best output present
+  **every time it looks** — so the preference order above survives any reboot
+  by definition, with nothing saved anywhere.
+- If an output **is** pinned (because you ran `use-output`, or `test` found a
+  working one and saved it), it is stored in
+  `/etc/greenway-announcer/config.json`, which persists across power cycles.
+- A pinned output is honoured **only while it is actually plugged in.** If it
+  is missing, the Pi falls back to the best output that is present rather than
+  playing to a device that is not there. That is the one behaviour that most
+  often looked like "the Pi ignored my dongle" before.
+
+**Why the names look long.** Outputs are saved as
+`plughw:CARD=Device,DEV=0`, not `plughw:1,0`. ALSA hands out card *numbers* in
+plug-in order, so a saved number can point at a completely different device
+after a reboot or a re-plug. The `CARD=` name follows the device itself. Both
+spellings are accepted everywhere, but the tools always print and save the
+long one.
+
+To see all of it at once — every output, which one is in use, and the exact
+fallback order:
+
+```bash
+sudo greenway-announcer audio
+```
 
 ---
 

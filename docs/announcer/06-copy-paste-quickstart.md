@@ -372,9 +372,9 @@ tries every output, finds the one that works, and **saves it for you**, then
 restarts the speaker service so real orders use it too. You will see:
 
 ```
-Found a working output: plughw:1,0
+Found a working output: USB Audio — your USB audio adapter (a real DAC, best quality)
 
-Saved. This speaker will use plughw:1,0 from now on.
+Saved. This speaker will use plughw:CARD=Device,DEV=0 from now on.
 The announcer has been restarted, so it is using it already.
 ```
 
@@ -389,18 +389,26 @@ line should now name that output instead of saying `(system default)`.
 > that is the fault, and the fix is the command below.
 
 If you ever need to set the output yourself — a second speaker, a USB dongle
-swapped in, or you simply want a different socket — list what the Pi can see:
+swapped in, or you simply want a different socket — ask the Pi what it has:
 
 ```bash
-aplay -l
+sudo greenway-announcer audio
 ```
 
-You will get a list like `card 1: Device [USB Audio Device], device 0:`. Read
-off the **card number** and the **device number** — here, card `1`, device `0`,
-which is written `plughw:1,0`. Then set it in one command:
+It lists every output **best first**, already written in the form you should
+use:
+
+```
+Found 3 outputs, best first:
+  plughw:CARD=Device,DEV=0     USB Audio — your USB audio adapter (a real DAC, best quality)
+  plughw:CARD=Headphones,DEV=0 bcm2835 Headphones — the Pi's own 3.5 mm jack (works, but hisses)
+  plughw:CARD=vc4hdmi,DEV=0    MAI PCM i2s-hifi-0 — HDMI (only works with a screen plugged in)
+```
+
+Copy the name you want and set it in one command:
 
 ```bash
-sudo greenway-announcer use-output plughw:1,0
+sudo greenway-announcer use-output plughw:CARD=Device,DEV=0
 ```
 
 That saves it and restarts the service. It keeps your existing pairing, so no
@@ -408,8 +416,15 @@ new code is needed and nothing has to be re-installed. To hear an output
 without saving it, add the flag to `test` instead:
 
 ```bash
-sudo greenway-announcer test --audio-device plughw:1,0
+sudo greenway-announcer test --audio-device plughw:CARD=Device,DEV=0
 ```
+
+> **Use the long `plughw:CARD=...` name, not `plughw:1,0`.** Both work today.
+> But the number is just the Pi's plug-in order: unplug the dongle, add a
+> second one, or simply reboot, and card `1` can become card `2`. A saved
+> number then points at the wrong device and the shop goes silent with nobody
+> having touched it. The `CARD=` name follows the device itself, so it survives
+> reboots and re-plugging. That is why `audio` prints the long form.
 
 Still silent? Check nothing is muted:
 
@@ -469,12 +484,24 @@ sudo greenway-announcer test
 
 **The permanent cure** is a **USB audio adapter** — a small dongle, about $10,
 with a USB plug on one end and a headphone socket on the other. It bypasses the
-Pi's noisy socket completely and the hiss disappears. Plug it in, run
-`sudo greenway-announcer audio` to find its name (something like `plughw:1,0`),
-then make it permanent in one command:
+Pi's noisy socket completely and the hiss disappears.
+
+**Just plug it in.** The announcer prefers a USB audio adapter over the Pi's
+own jack automatically, and re-checks the hardware about once a minute, so the
+sound moves across to the dongle on its own — no command, no reboot. Confirm
+it with:
 
 ```bash
-sudo greenway-announcer use-output plughw:1,0
+sudo greenway-announcer audio
+```
+
+The dongle should be at the top of the list and named on the `In use:` line.
+
+If you would rather pin it explicitly, copy its name from that list (something
+like `plughw:CARD=Device,DEV=0`) and run:
+
+```bash
+sudo greenway-announcer use-output plughw:CARD=Device,DEV=0
 ```
 
 That saves the choice and restarts the speaker service. Your pairing is

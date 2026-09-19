@@ -31,7 +31,13 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-AGENT="$HERE/../greenway_announcer.py"
+# AGENT_UNDER_TEST lets the mutation harness point this file at a deliberately
+# broken COPY of the agent. Some rules here -- notably "save only the address
+# you actually proved" -- live in cmd_test(), which the Python selftest never
+# executes. Without this hook those rules could be deleted and every mutation
+# would still come back green, which is precisely the kind of decorative
+# testing this project treats as a defect.
+AGENT="${AGENT_UNDER_TEST:-$HERE/../greenway_announcer.py}"
 WORK="$(mktemp -d)"
 chmod 755 "$WORK"
 trap 'rm -rf "$WORK"' EXIT
@@ -73,11 +79,20 @@ done
 
 # No -D means the system default, which on this headless Pi is HDMI: it fails
 # exactly the way his did.
-if [ -z "$DEV" ] || [ "$DEV" = "plughw:0,0" ]; then
+if [ -z "$DEV" ] || [ "$DEV" = "plughw:0,0" ] || [ "$DEV" = "plughw:CARD=vc4hdmi,DEV=0" ]; then
   echo "aplay: main:850: audio open error: Unknown error 524" >&2
   exit 1
 fi
-if [ "$DEV" = "plughw:1,0" ]; then
+# Real ALSA accepts BOTH spellings of the same output. The earlier fake only
+# accepted the card number, which quietly hid whether the program saved a
+# reboot-proof name or a positional one.
+if [ "$DEV" = "plughw:1,0" ] || [ "$DEV" = "plughw:CARD=Headphones,DEV=0" ]; then
+  # Optionally simulate a card whose stable name cannot be opened, to prove a
+  # working output is never rejected just because its preferred spelling fails.
+  if [ "${STABLE_NAME_BROKEN:-0}" = "1" ] && [ "$DEV" = "plughw:CARD=Headphones,DEV=0" ]; then
+    echo "aplay: audio open error: No such file or directory" >&2
+    exit 1
+  fi
   exit 0
 fi
 echo "aplay: device not found" >&2
@@ -139,17 +154,37 @@ else
   fail "the test failed even though plughw:1,0 works (exit $CODE)"
 fi
 
-if grep -q "plughw:1,0" "$WORK/out.txt" && grep -q "WORKS" "$WORK/out.txt"; then
+if grep -q "Headphones" "$WORK/out.txt" && grep -q "WORKS" "$WORK/out.txt"; then
   pass "it reports which output works"
 else
   fail "it does not report the working output"
 fi
 
 # THE POINT OF THIS WHOLE FILE
-if [ "$(saved_device)" = "plughw:1,0" ]; then
+if [ "$(saved_device)" = "plughw:CARD=Headphones,DEV=0" ]; then
   pass "the working output was SAVED to the config"
 else
   fail "the working output was found and thrown away (config says '$(saved_device)')"
+fi
+
+# ...and it must be the REBOOT-PROOF spelling. Saving "plughw:1,0" pins the
+# shop to a card position; ALSA hands out those numbers in probe order, so a
+# power cut or a replugged dongle can point it at a different device. That is
+# a speaker that works for weeks and then goes silent with nothing touched.
+case "$(saved_device)" in
+  plughw:CARD=*|hw:CARD=*)
+    pass "the saved name survives a reboot (CARD= form, not a card number)" ;;
+  *)
+    fail "the saved name is positional ('$(saved_device)') and will break on reboot" ;;
+esac
+
+# The saved address must be one the program actually PLAYED THROUGH. Saving a
+# name that was never proven is how a config ends up looking correct and
+# working nowhere.
+if PATH="$WORK/bin:$PATH" "$WORK/bin/aplay" -D "$(saved_device)" /dev/null 2>/dev/null; then
+  pass "the saved output is one that was proven to make a sound"
+else
+  fail "it saved '$(saved_device)', an address that cannot actually be opened"
 fi
 
 if grep -qi "saved" "$WORK/out.txt"; then
@@ -174,6 +209,25 @@ if grep -q "install.sh" "$WORK/out.txt"; then
   fail "it still sends the user back to the installer to apply the fix"
 else
   pass "it applies the fix itself instead of sending the user to the installer"
+fi
+
+echo ""
+echo "3b. a working output is never rejected because of its preferred spelling"
+# Preferring the reboot-proof name must not become a NEW way to fail. If the
+# CARD= form cannot be opened on some card, the output still works and must
+# still be found and saved -- just under the spelling that actually opened.
+write_config ""
+: > "$SYSTEMCTL_LOG"
+CODE=$(STABLE_NAME_BROKEN=1 run_agent test)
+if [ "$CODE" = "0" ]; then
+  pass "the working output is still found when the CARD= spelling fails"
+else
+  fail "preferring the stable name made a working output unusable (exit $CODE)"
+fi
+if [ "$(saved_device)" = "plughw:1,0" ]; then
+  pass "it falls back to the spelling that actually opened"
+else
+  fail "it saved '$(saved_device)', which is not the spelling that worked"
 fi
 
 echo ""
@@ -231,15 +285,64 @@ if [ "$CODE" = "0" ]; then
 else
   pass "a non-existent output is refused (exit $CODE)"
 fi
-if grep -q "plughw:1,0" "$WORK/out.txt"; then
+if grep -q "Headphones" "$WORK/out.txt"; then
   pass "it lists the outputs this Pi actually has"
 else
   fail "it refuses without saying what the real options are"
+fi
+# That list is the next thing a stuck owner will copy. If it offers card
+# numbers he pastes one, it works today, and the next power cut renumbers the
+# cards and silences the shop -- so the refusal message must recommend the
+# reboot-proof spelling too.
+if grep -q "plughw:CARD=Headphones,DEV=0" "$WORK/out.txt"; then
+  pass "the options it offers are reboot-proof CARD= names"
+else
+  fail "it offers card numbers that will break on the next reboot"
 fi
 if [ "$(saved_device)" = "plughw:1,0" ]; then
   pass "the previous good setting was not clobbered"
 else
   fail "a rejected value still changed the config"
+fi
+
+echo ""
+echo "8. use-output accepts the reboot-proof name the tool itself recommends"
+# `greenway-announcer audio` prints plughw:CARD=... names and tells the owner
+# to use them. If use-output only understood card numbers, the tool would
+# reject the exact string it had just handed him -- a dead end with no way out
+# except editing JSON as root.
+write_config "plughw:1,0"
+: > "$SYSTEMCTL_LOG"
+CODE=$(run_agent use-output plughw:CARD=Headphones,DEV=0)
+if [ "$CODE" = "0" ] && [ "$(saved_device)" = "plughw:CARD=Headphones,DEV=0" ]; then
+  pass "the CARD= name the report recommends is accepted and saved"
+else
+  fail "it rejected its own recommended name (exit $CODE, saved '$(saved_device)')"
+fi
+
+# The old numbered spelling must keep working: upgrading must not strand a Pi
+# that was configured before stable names existed.
+write_config ""
+CODE=$(run_agent use-output plughw:1,0)
+if [ "$CODE" = "0" ] && [ "$(saved_device)" = "plughw:1,0" ]; then
+  pass "the older numbered spelling is still accepted"
+else
+  fail "upgrading broke the spelling that used to work (exit $CODE)"
+fi
+
+# Negative control: widening what we accept must not mean accepting anything.
+# Without this, "accept every spelling" could be implemented as "accept all".
+write_config "plughw:1,0"
+CODE=$(run_agent use-output plughw:CARD=Nonexistent,DEV=0)
+if [ "$CODE" = "0" ]; then
+  fail "a plausible-looking CARD= name for a missing device was accepted"
+else
+  pass "a CARD= name for a device this Pi does not have is still refused"
+fi
+if [ "$(saved_device)" = "plughw:1,0" ]; then
+  pass "the good setting survived the rejected CARD= name"
+else
+  fail "a rejected CARD= name still changed the config"
 fi
 
 echo ""

@@ -39,6 +39,15 @@ banner "6/10 Testing the tests: mutating the audio diagnosis and sudo handling"
 bash "$HERE/mutation-announcer-audio.sh" | tail -5
 bash "$HERE/mutation-announcer-audio.sh" | grep -q "MUTATION TESTING PASSED" || FAILED=1
 
+# Which SOCKET the sound comes out of. A shop bought a USB audio adapter to
+# escape the hiss of the Pi's own 3.5 mm jack, and the agent ignored it: the
+# saved device was read once at startup and never reconsidered. These mutations
+# hold the fix in place -- USB is preferred, the aux jack still works as a
+# fallback, and the address survives the cards being renumbered at boot.
+banner "6b/10 Testing the tests: mutating USB-vs-aux output selection"
+bash "$HERE/mutation-announcer-usb.sh" | tail -5
+bash "$HERE/mutation-announcer-usb.sh" | grep -q "MUTATION TESTING PASSED" || FAILED=1
+
 # Step 2 of the installer once hung forever on a real shop's Pi, with no output
 # at all. FAST=1 shrinks the installer's own apt timeouts so the same guarantees
 # are proven in seconds; the slow, fully-realistic run is:
