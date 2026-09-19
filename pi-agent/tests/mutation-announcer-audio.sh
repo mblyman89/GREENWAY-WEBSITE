@@ -413,9 +413,24 @@ mutate "use-output's listing prints unstable card numbers" \
   "        for d in rank_outputs(known):
             print(f\"  {d['alsa']:<28} {describe_choice(d)}\")"
 # 32. Drop the fallback chain, hiding the 'both usb and aux' behaviour.
+#     ANCHORED ON THE PRINT, NOT JUST THE `if`. A bare `if len(chain) > 1:`
+#     anchor silently began matching a DIFFERENT function once auto-pick added
+#     a second chain listing earlier in the file -- so this mutation was
+#     mutating code no test covered and coming back "survived" for a reason
+#     that had nothing to do with the rule it was written to check.
 mutate "audio report hides the fallback chain" \
-  '    if len(chain) > 1:' \
-  '    if False:'
+  '    if len(chain) > 1:
+        print("\nIf the first output fails, these are tried in order:")' \
+  '    if False:
+        print("\nIf the first output fails, these are tried in order:")'
+# 32b. The same omission on the auto-pick screen. "It is cleared" is a claim;
+#      the ordered list is the proof, and it is the only way the owner can
+#      confirm auto did what he wanted without walking to the speaker.
+mutate "the auto-pick screen hides which outputs it will fall back to" \
+  '        if len(chain) > 1:
+            print("\nIf that output fails or is unplugged, these are tried in order:")' \
+  '        if False:
+            print("\nIf that output fails or is unplugged, these are tried in order:")'
 # 33. Never warn that the configured output is missing -> the report claims a
 #     device that is not plugged in is the one in use.
 mutate "audio report never warns about an absent output" \
