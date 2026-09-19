@@ -26,6 +26,27 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      # ======================================================================
+      # THE FILE A RASPBERRY PI DOWNLOADS MUST BE THE FILE THAT WAS REVIEWED.
+      #
+      # install.sh fetches "${SITE}/announcer/greenway_announcer.py", which
+      # Next.js serves from public/announcer/. So the agent exists twice, and
+      # only the served copy is the one a speaker in the shop installs.
+      #
+      # Three PRs (#1181, #1182, #1183) changed pi-agent/greenway_announcer.py
+      # and not the served copy. The repo looked correct. The served agent fell
+      # 1400 lines behind, and the owner was given a command - use-output auto
+      # - that did not exist in the file his Pi would have downloaded.
+      #
+      # A drift guard DID exist in tests/compliance/announcer-admin.test.ts and
+      # was red the whole time; it was simply not looked at before merging.
+      # This step runs first and costs milliseconds, so the failure arrives at
+      # the top of the log in plain language, naming the one command that fixes
+      # it, instead of being one assertion inside a 16,000-test run.
+      #
+      # tests/compliance/announcer-admin.test.ts pins this step by name.
+      - name: The Pi downloads what we reviewed (public/announcer sync)
+        run: npm run announcer:check
       - name: Compliance test harness (vitest + golden files)
         run: npm run test:compliance
       - name: Pure self-test runner (tsx)

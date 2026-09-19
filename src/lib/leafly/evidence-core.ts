@@ -247,6 +247,7 @@ export type EvidenceDisposition =
   | "accepted_unprocessed"
   | "rejected_ours"
   | "rejected_theirs"
+  | "rejected_unsigned"
   | "rejected_unknown";
 
 export const ALL_EVIDENCE_DISPOSITIONS: readonly EvidenceDisposition[] = [
@@ -254,6 +255,7 @@ export const ALL_EVIDENCE_DISPOSITIONS: readonly EvidenceDisposition[] = [
   "accepted_unprocessed",
   "rejected_ours",
   "rejected_theirs",
+  "rejected_unsigned",
   "rejected_unknown",
 ] as const;
 
@@ -275,9 +277,38 @@ export function classifyEvidenceDelivery(row: EvidenceEventRow): EvidenceDisposi
   }
   const reason = (row.rejectionReason ?? "").trim();
   if (!isRecognisedRejectionReason(reason)) return "rejected_unknown";
-  return isLeaflyHmacLocalFault(reason as LeaflyHmacFailureReason)
-    ? "rejected_ours"
-    : "rejected_theirs";
+  if (isLeaflyHmacLocalFault(reason as LeaflyHmacFailureReason)) return "rejected_ours";
+  if (isUnsignedRequest(reason as LeaflyHmacFailureReason)) return "rejected_unsigned";
+  return "rejected_theirs";
+}
+
+/**
+ * Did this request arrive with no signature at all?
+ *
+ * WHY THIS IS A THIRD CATEGORY AND NOT A SHADE OF "rejected_theirs".
+ *
+ * A request that carries a signature which does not match is a genuine alarm:
+ * somebody holding a key we also hold produced a digest we disagree with. The
+ * usual cause is a rotated HMAC key, and the correct advice is "re-copy the key
+ * from Leafly".
+ *
+ * A request that carries NO signature header is a different event entirely. It
+ * cannot be a key mismatch, because there was no key involved. Leafly always
+ * signs; anything unsigned did not come from Leafly. In practice it is a port
+ * scanner or a crawler finding a public URL, and turning it away with a 401 is
+ * the system working exactly as designed.
+ *
+ * Collapsing the two was not cosmetic. The sandbox review showed four rejected
+ * deliveries, all of them `missing_header` - four unsigned internet probes,
+ * correctly refused - and the owner-facing advice told him his HMAC key was
+ * probably wrong and to go re-copy it. That is a fully green system reporting a
+ * credential fault. Acting on that advice means rotating a working key, and the
+ * next real mismatch hides inside the same noise.
+ *
+ * Advice that always fires is nagging, not diagnosis.
+ */
+export function isUnsignedRequest(reason: LeaflyHmacFailureReason | null): boolean {
+  return reason === "missing_header";
 }
 
 /**
@@ -301,6 +332,12 @@ export function evidenceDispositionTone(d: EvidenceDisposition): EvidenceTone {
       return "bad";
     case "rejected_theirs":
       return "bad";
+    case "rejected_unsigned":
+      // Deliberately "info", not "bad". An unsigned request turned away is the
+      // door being locked, not the lock being broken. Painting routine internet
+      // background noise red is how a dashboard teaches its owner that red
+      // means nothing.
+      return "info";
     case "rejected_unknown":
       return "warn";
   }
@@ -316,6 +353,8 @@ export function evidenceDispositionLabel(d: EvidenceDisposition): string {
       return "Rejected — our configuration";
     case "rejected_theirs":
       return "Rejected — bad signature";
+    case "rejected_unsigned":
+      return "Turned away — unsigned request";
     case "rejected_unknown":
       return "Rejected — unrecognised reason";
   }
@@ -343,10 +382,18 @@ export function evidenceDispositionExplanation(d: EvidenceDisposition): string {
       );
     case "rejected_theirs":
       return (
-        "The signature on this request did not match. The usual cause is that the HMAC key " +
-        "saved here is not the key Leafly is signing with — for example after a rotation. It " +
-        "can also be an unsigned probe from the open internet, which is exactly what we want " +
-        "turned away."
+        "This request WAS signed, but the signature did not match. The usual cause is that " +
+        "the HMAC key saved here is not the key Leafly is signing with — for example after a " +
+        "rotation. Re-copy the HMAC key from Leafly into Integrations → Leafly. If these keep " +
+        "arriving after that, send me the export."
+      );
+    case "rejected_unsigned":
+      return (
+        "This request arrived with no signature at all, so we turned it away. Leafly always " +
+        "signs, which means this did not come from Leafly — it is almost always an automated " +
+        "scanner finding a public address. Nothing is wrong and there is nothing to fix: this " +
+        "is the door being locked, not the lock being broken. Your HMAC key is not involved " +
+        "and must NOT be changed because of these."
       );
     case "rejected_unknown":
       return (
@@ -558,6 +605,7 @@ function emptyCounts(): EvidenceCounts {
     accepted_unprocessed: 0,
     rejected_ours: 0,
     rejected_theirs: 0,
+    rejected_unsigned: 0,
     rejected_unknown: 0,
   };
 }
@@ -858,31 +906,69 @@ export function buildEvidenceCriteria(
 ): EvidenceCriterion[] {
   const out: EvidenceCriterion[] = [];
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // REACHABILITY MUST MEAN "LEAFLY REACHED US", NOT "SOMEBODY REACHED US".
+  //
+  // This criterion used to read `summary.total === 0 ? "unknown" : "pass"`, so
+  // ANY logged delivery turned it green. In the sandbox review the only four
+  // deliveries on record were unsigned probes from the open internet, every one
+  // of them correctly refused with a 401 - and this criterion reported, on a
+  // page headed "certification evidence", that Leafly could reach our webhook.
+  //
+  // Nothing had ever arrived from Leafly. A port scanner had proved that our
+  // DNS resolves. Those are not the same claim, and the second one is the one
+  // certification turns on.
+  //
+  // Only a signature-verified delivery proves Leafly reached us: the signature
+  // is the only thing in the request that a stranger cannot forge. So the pass
+  // condition is `verified > 0`. Unsigned traffic alone is reported as its own
+  // honest state - we are online and refusing strangers, which is worth seeing,
+  // but it is NOT reachability.
+  // ─────────────────────────────────────────────────────────────────────────
+  const unsignedOnly = summary.total > 0 && summary.verified === 0;
   out.push({
     id: "deliveries-received",
     title: "Leafly can reach our webhook endpoints",
-    status: summary.total === 0 ? "unknown" : "pass",
+    status: summary.verified > 0 ? "pass" : "unknown",
     detail:
       summary.total === 0
         ? "No deliveries logged, so reachability is unproven. Expected before Leafly activates the sandbox integration."
-        : `${summary.total} delivery(ies) logged between ${summary.firstReceivedAt ?? "?"} and ${summary.lastReceivedAt ?? "?"}.`,
+        : unsignedOnly
+          ? `${summary.total} request(s) reached the endpoint, but NONE carried a valid Leafly signature, so none of them prove Leafly reached us — unsigned traffic is almost always internet scanners, and refusing it is correct. Reachability stays unproven until the first signature-verified delivery arrives.`
+          : `${summary.verified} signature-verified delivery(ies) from Leafly, out of ${summary.total} request(s) logged, between ${summary.firstReceivedAt ?? "?"} and ${summary.lastReceivedAt ?? "?"}.`,
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // THE SAME CONFUSION, IN REVERSE.
+  //
+  // This criterion used to fail whenever `unverified > 0`. An unsigned probe
+  // increments `unverified`, so four internet scanners - refused exactly as
+  // intended - made a certification page report FAIL against the HMAC
+  // criterion. A security control working perfectly was rendered as a defect.
+  //
+  // Only a delivery that CARRIED a signature can say anything about our
+  // signature handling. Requests with no signature at all are excluded from the
+  // judgement and reported separately, so both facts stay visible without
+  // either one contaminating the other.
+  // ─────────────────────────────────────────────────────────────────────────
+  const unsigned = summary.counts.rejected_unsigned;
+  const signedAttempts = summary.total - unsigned;
+  const badlySigned = summary.unverified - unsigned;
+  const unsignedNote =
+    unsigned > 0
+      ? ` (${unsigned} further request(s) arrived unsigned and were turned away — those are scanners, not Leafly, and they say nothing about our key.)`
+      : "";
 
   out.push({
     id: "signatures-verified",
-    title: "Every delivery is signature-verified (HMAC-SHA-256)",
-    status:
-      summary.total === 0
-        ? "unknown"
-        : summary.unverified === 0
-          ? "pass"
-          : "fail",
+    title: "Every signed delivery verifies (HMAC-SHA-256)",
+    status: signedAttempts === 0 ? "unknown" : badlySigned === 0 ? "pass" : "fail",
     detail:
-      summary.total === 0
-        ? "No deliveries to verify yet."
-        : summary.unverified === 0
-          ? `All ${summary.total} verified.`
-          : `${summary.unverified} of ${summary.total} failed verification. Rejections are logged deliberately — a burst of them is how a rotated key is detected.`,
+      signedAttempts === 0
+        ? `No signed deliveries to verify yet.${unsignedNote}`
+        : badlySigned === 0
+          ? `All ${signedAttempts} signed delivery(ies) verified.${unsignedNote}`
+          : `${badlySigned} of ${signedAttempts} signed delivery(ies) failed verification. That is the signature of a rotated key — re-copy the HMAC key from Leafly.${unsignedNote}`,
   });
 
   out.push({
@@ -1050,6 +1136,7 @@ export function buildEvidenceBundle(input: {
       { item: "Accepted, not finished", value: summary.counts.accepted_unprocessed },
       { item: "Rejected — our config", value: summary.counts.rejected_ours },
       { item: "Rejected — bad signature", value: summary.counts.rejected_theirs },
+      { item: "Turned away — unsigned", value: summary.counts.rejected_unsigned },
       { item: "Rejected — unrecognised", value: summary.counts.rejected_unknown },
       { item: "Distinct orders referenced", value: summary.distinctOrders },
       { item: "First delivery", value: summary.firstReceivedAt ?? "(none)" },
@@ -1299,19 +1386,26 @@ export function __runLeaflyEvidenceTests(): { passed: number; failed: number } {
   let reasonsSwept = 0;
   let oursSeen = 0;
   let theirsSeen = 0;
+  let unsignedSeen = 0;
   for (const r of LEAFLY_HMAC_FAILURE_REASONS) {
     reasonsSwept += 1;
     const d = classifyEvidenceDelivery(ev({ signatureVerified: false, rejectionReason: r }));
     ok(d !== "rejected_unknown", `declared reason ${r} is recognised`);
     if (d === "rejected_ours") oursSeen += 1;
     if (d === "rejected_theirs") theirsSeen += 1;
+    if (d === "rejected_unsigned") unsignedSeen += 1;
     ok(isRecognisedRejectionReason(r), `isRecognisedRejectionReason accepts ${r}`);
   }
   ok(reasonsSwept === LEAFLY_HMAC_FAILURE_REASONS.length, "swept every hmac reason");
   ok(reasonsSwept === 7, "hmac-core still declares exactly 7 reasons");
   // Absolute counts, not counts relative to the list -- the L-7 M27 lesson.
   ok(oursSeen === 2, "exactly two reasons are our fault");
-  ok(theirsSeen === 5, "exactly five reasons indict the request");
+  // Was 5. `missing_header` now has its own disposition, because a request that
+  // carried NO signature cannot be evidence of a key mismatch, and advising a
+  // key rotation over one is how a working system gets broken by hand.
+  ok(theirsSeen === 4, "exactly four reasons indict a signature that WAS sent");
+  ok(unsignedSeen === 1, "exactly one reason means no signature was sent at all");
+  ok(oursSeen + theirsSeen + unsignedSeen === 7, "every declared reason lands in exactly one bucket");
   ok(!isRecognisedRejectionReason("totally_made_up"), "unknown reason rejected by the recogniser");
   ok(!isRecognisedRejectionReason(""), "empty reason rejected by the recogniser");
 
@@ -1330,14 +1424,18 @@ export function __runLeaflyEvidenceTests(): { passed: number; failed: number } {
     ok(evidenceDispositionExplanation(d).length > 40, `explanation for ${d} is substantive`);
   }
   ok(dispSwept === ALL_EVIDENCE_DISPOSITIONS.length, "swept every disposition");
-  ok(dispSwept === 5, "exactly five dispositions");
+  ok(dispSwept === 6, "exactly six dispositions");
   // Pin tones BY NAME, not just "some known tone" -- the L-7 M59 lesson.
   ok(evidenceDispositionTone("accepted") === "good", "accepted is good");
   ok(evidenceDispositionTone("rejected_ours") === "bad", "our-fault rejection is bad");
   ok(evidenceDispositionTone("rejected_theirs") === "bad", "signature rejection is bad");
   ok(evidenceDispositionTone("accepted_unprocessed") === "warn", "unprocessed is a warning");
   ok(evidenceDispositionTone("rejected_unknown") === "warn", "unknown reason is a warning");
-  ok(tones.size === 3, "dispositions use exactly three distinct tones");
+  // "info", and deliberately so: an unsigned request turned away is the lock
+  // working. Painting routine internet noise red teaches the owner that red
+  // means nothing, which is how a real alarm gets missed.
+  ok(evidenceDispositionTone("rejected_unsigned") === "info", "an unsigned probe is informational");
+  ok(tones.size === 4, "dispositions use exactly four distinct tones");
   // The our-fault explanation must tell the owner where to go.
   ok(
     evidenceDispositionExplanation("rejected_ours").includes("HMAC key"),
@@ -2021,6 +2119,75 @@ export function __runLeaflyEvidenceTests(): { passed: number; failed: number } {
     emptyBundle.sheets.find((s) => s.name === "Criteria")!.rows.length === 5,
     "empty bundle still reports all five criteria",
   );
+
+  // ---- unsigned probes are not a key fault --------------------------------
+  //
+  // THE DEFECT: four `missing_header` rejections - unsigned scanners from the
+  // open internet, refused exactly as designed - were classified alongside real
+  // signature mismatches. The owner-facing advice therefore told Michael his
+  // HMAC key was probably wrong and to go re-copy it, on a system where nothing
+  // was wrong. Acting on that means rotating a working key.
+  const probe = ev({ signatureVerified: false, rejectionReason: "missing_header", responseStatus: 401, processedAt: null });
+  const badSig = ev({ signatureVerified: false, rejectionReason: "mismatch", responseStatus: 401, processedAt: null });
+  const noKey = ev({ signatureVerified: false, rejectionReason: "missing_key", responseStatus: 503, processedAt: null });
+
+  ok(classifyEvidenceDelivery(probe) === "rejected_unsigned", "an unsigned probe is its own category");
+  ok(classifyEvidenceDelivery(badSig) === "rejected_theirs", "a real mismatch is still rejected_theirs");
+  ok(classifyEvidenceDelivery(noKey) === "rejected_ours", "a missing local key is still our fault");
+  ok(isUnsignedRequest("missing_header"), "missing_header is the unsigned case");
+  ok(!isUnsignedRequest("mismatch"), "a mismatch is NOT unsigned - it carried a signature");
+  ok(!isUnsignedRequest("empty_header"), "an empty header is malformed, not absent");
+  ok(!isUnsignedRequest(null), "no reason at all is not the unsigned case");
+
+  // The wording is the whole point of the fix, so assert the wording.
+  const probeText = evidenceDispositionExplanation("rejected_unsigned");
+  ok(!/re-?copy the HMAC key|Paste the HMAC key/i.test(probeText), "unsigned advice does NOT tell the owner to change a working key");
+  ok(/must NOT be changed/i.test(probeText), "unsigned advice explicitly protects the key");
+  ok(evidenceDispositionTone("rejected_unsigned") === "info", "routine scanner traffic is not painted red");
+
+  // Negative control: the mismatch case MUST still give the key advice, or the
+  // fix above has simply deleted a real warning instead of aiming it.
+  const mismatchText = evidenceDispositionExplanation("rejected_theirs");
+  ok(/HMAC key/i.test(mismatchText), "a genuine mismatch still names the HMAC key");
+  ok(evidenceDispositionTone("rejected_theirs") === "bad", "a genuine mismatch is still bad");
+
+  // ---- reachability must mean LEAFLY reached us ---------------------------
+  //
+  // THE DEFECT: `summary.total === 0 ? "unknown" : "pass"` meant any logged
+  // request turned this green. Four refused port scans "proved" that Leafly
+  // could reach our webhook. Nothing from Leafly had ever arrived.
+  const probesOnly = summarizeEvidence([probe, probe, probe, probe]);
+  const probeCriteria = buildEvidenceCriteria(probesOnly, summarizeAckEvidence([], NOW));
+  const reach = probeCriteria.find((c) => c.id === "deliveries-received")!;
+  ok(reach.status === "unknown", "unsigned probes alone do NOT prove Leafly can reach us");
+  ok(/unsigned/i.test(reach.detail), "the reachability detail explains what the traffic actually was");
+
+  // ...and the HMAC criterion must not read as a failure because of them.
+  const sig = probeCriteria.find((c) => c.id === "signatures-verified")!;
+  ok(sig.status !== "fail", "refused scanners do not make signature handling look broken");
+
+  // Positive control: one genuine verified delivery flips both to pass.
+  const realOne = summarizeEvidence([ev(), probe]);
+  const realCriteria = buildEvidenceCriteria(realOne, summarizeAckEvidence([], NOW));
+  ok(
+    realCriteria.find((c) => c.id === "deliveries-received")!.status === "pass",
+    "one signature-verified delivery DOES prove reachability",
+  );
+  ok(
+    realCriteria.find((c) => c.id === "signatures-verified")!.status === "pass",
+    "a verified delivery alongside probes still passes the HMAC criterion",
+  );
+
+  // And a genuinely bad signature must still FAIL, or the fix has disarmed the
+  // alarm it was meant to aim.
+  const withBad = buildEvidenceCriteria(summarizeEvidence([ev(), badSig]), summarizeAckEvidence([], NOW));
+  ok(
+    withBad.find((c) => c.id === "signatures-verified")!.status === "fail",
+    "a real signature mismatch still fails the HMAC criterion",
+  );
+
+  ok(probesOnly.counts.rejected_unsigned === 4, "unsigned probes are counted separately");
+  ok(probesOnly.counts.rejected_theirs === 0, "unsigned probes are not counted as mismatches");
 
   if (failures.length > 0) {
     for (const f of failures) console.error(`leafly-evidence-core FAIL: ${f}`);

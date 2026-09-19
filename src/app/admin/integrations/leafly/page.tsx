@@ -5,7 +5,12 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Badge, Card } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import { previewLeaflyPush } from "@/lib/leafly/push";
-import { assessMenuCertificationReadiness } from "@/lib/leafly/certification-core";
+import { loadLeaflyAuthAttempts } from "@/lib/leafly/auth-evidence";
+import {
+  assessMenuCertificationReadiness,
+  deriveAuthSucceeded,
+  type AuthenticatedAttempt,
+} from "@/lib/leafly/certification-core";
 import { listSyndicationLogs } from "@/lib/syndication/store";
 import { getLeaflySyncSettings, getSyncState } from "@/lib/syndication/engine-store";
 import { classifyHealth, scoreRichness } from "@/lib/syndication/richness-core";
@@ -71,7 +76,8 @@ function fmtDate(iso: string) {
 export default async function LeaflyIntegrationPage() {
   await requirePermission("settings.manage");
 
-  const [preview, logs, settings, syncState, scheduleHealth, evidence] = await Promise.all([
+  const [preview, logs, settings, syncState, scheduleHealth, evidence, statusAttempts] =
+    await Promise.all([
     previewLeaflyPush(),
     listSyndicationLogs("leafly", 40),
     getLeaflySyncSettings(),
@@ -87,6 +93,11 @@ export default async function LeaflyIntegrationPage() {
     // page is when Leafly orders have STOPPED arriving -- so the diagnostics
     // must not be the second thing that fails.
     loadLeaflyEvidence(),
+    // The recorded "Check integration status" calls. Same best-effort contract:
+    // it returns [] rather than throwing, and [] means "untested", never
+    // "failed". This is what lets a successful read-only status check clear the
+    // authentication criterion instead of waiting on a first menu push.
+    loadLeaflyAuthAttempts(),
   ]);
 
   // The SERVER's clock, passed to the panel so its relative times ("4 minutes
@@ -130,10 +141,31 @@ export default async function LeaflyIntegrationPage() {
   // and failure without pretending to know an exact code we did not store.
   const recentPushStatuses = livePushes.map((log) => (log.status === "ok" ? 200 : 0));
 
-  // A successful live push proves the token exchange worked. No live push at all
-  // means untested -- NOT failed.
-  const authSucceeded =
-    livePushes.length === 0 ? null : livePushes.some((log) => log.status === "ok");
+  // AUTHENTICATION IS PROVED BY ANY TOKEN-BEARING CALL, NOT ONLY BY A PUSH.
+  //
+  // This used to read:
+  //   livePushes.length === 0 ? null : livePushes.some((l) => l.status === "ok")
+  //
+  // which answers "have we published a menu?", not "do our credentials work?".
+  // During onboarding those come apart: the panel tells the owner to press
+  // "Check integration status" FIRST because it is read-only and proves auth.
+  // He did, Leafly answered 200, and the gate still said UNTESTED because no
+  // menu had been pushed. The remedy the page printed could never clear the
+  // criterion the page was showing.
+  //
+  // Both sources are now folded together, oldest-first, and the verdict is
+  // decided by the pure `deriveAuthSucceeded` (which refuses to call a 500 a
+  // credential failure). A push remains proof; it is simply no longer the ONLY
+  // proof.
+  const authAttempts: AuthenticatedAttempt[] = [
+    ...statusAttempts,
+    ...livePushes.map((log) => ({
+      kind: "menu push",
+      httpStatus: log.status === "ok" ? 200 : 0,
+      at: log.created_at,
+    })),
+  ];
+  const authSucceeded = deriveAuthSucceeded(authAttempts);
 
   const variantCount = preview.payload.items.reduce((n, item) => n + item.variants.length, 0);
   const inStockVariantCount = preview.payload.items.reduce(

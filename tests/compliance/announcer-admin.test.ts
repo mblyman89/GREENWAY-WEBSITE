@@ -10,7 +10,9 @@
  *   3. Reporting a busy mid-afternoon as quiet hours (the Slice 29 bug class).
  *   4. Showing a problem without showing the fix.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -392,9 +394,75 @@ describe("D-67 — the installer the field manual tells you to run must exist", 
       const served = readFileSync(join(process.cwd(), "public", "announcer", f), "utf8");
       expect(
         served,
-        `public/announcer/${f} has drifted from pi-agent/${f}. Re-copy it.`,
+        `public/announcer/${f} has drifted from pi-agent/${f}.\n` +
+          `A Raspberry Pi installing right now would download the OLD file.\n` +
+          `Fix it with:  npm run announcer:sync`,
       ).toBe(src);
     }
+  });
+
+  it("the drift is reported in a way you can act on", () => {
+    // This guard existed and was correct, and three PRs still merged with it
+    // red - the served agent fell 1400 lines behind and the owner was handed a
+    // command that did not exist in the file his Pi would install.
+    //
+    // The failure said "Re-copy it." with no command, so fixing it meant
+    // working out the right cp by hand under pressure. A guard that states a
+    // problem but not its remedy is a guard that gets postponed. The fix is
+    // now one named command, and this test makes sure the message keeps
+    // naming it - including if someone later rewrites the message.
+    const suite = readFileSync(
+      join(process.cwd(), "tests", "compliance", "announcer-admin.test.ts"),
+      "utf8",
+    );
+    expect(
+      suite,
+      "the drift failure message must name the exact command that fixes it",
+    ).toContain("npm run announcer:sync");
+
+    // ...and that command must really be defined, not just quoted.
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8"));
+    expect(pkg.scripts["announcer:sync"], "npm run announcer:sync must exist").toBeTruthy();
+    expect(pkg.scripts["announcer:check"], "npm run announcer:check must exist").toBeTruthy();
+  });
+
+  it("CI runs the sync check, so a stale served copy cannot merge green", () => {
+    // Standing rule 39: a verifier nobody runs approves everything. The drift
+    // guard in this very file was correct AND red while three PRs merged. The
+    // missing piece was never the assertion - it was that nothing forced a
+    // human to look before pressing merge. Pin the workflow step by name.
+    const wf = readFileSync(
+      join(process.cwd(), ".github", "workflows", "compliance-tests.yml"),
+      "utf8",
+    );
+    expect(wf, "CI must run the served-copy check").toContain("npm run announcer:check");
+    expect(
+      wf.indexOf("npm run announcer:check"),
+      "the sync check should run BEFORE the long test suite, so the failure is readable",
+    ).toBeLessThan(wf.indexOf("npm run test:compliance"));
+  });
+
+  it("the sync script refuses to pass when the served copy is stale", () => {
+    // A one-command fix is only trustworthy if its --check mode really fails.
+    // Prove it against a deliberately wrong copy in a scratch tree, so we are
+    // testing detection rather than trusting it.
+    const scratch = mkdtempSync(join(tmpdir(), "announcer-sync-"));
+    try {
+      const realSrc = join(process.cwd(), "pi-agent", "greenway_announcer.py");
+      const stale = join(scratch, "stale.py");
+      writeFileSync(stale, readFileSync(realSrc, "utf8").slice(0, 500));
+      // Truncated copy must not equal the source - the shape of real drift.
+      expect(readFileSync(stale, "utf8")).not.toBe(readFileSync(realSrc, "utf8"));
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+
+    // And the live check must currently PASS, or this whole suite is moot.
+    const out = execFileSync("node", ["scripts/announcer/sync-served-copy.mjs", "--check"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+    expect(out).toContain("in sync");
   });
 
   it("the served agent is valid Python, not a truncated copy", () => {

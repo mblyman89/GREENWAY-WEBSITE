@@ -41,6 +41,7 @@ Raspberry Pi OS image, with `mpg123` used only if an MP3 is supplied.
 from __future__ import annotations
 
 import argparse
+import builtins
 import json
 import logging
 import logging.handlers
@@ -55,9 +56,10 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 import wave
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 try:
     import requests
@@ -344,6 +346,7 @@ def should_save_audio_device(
     found: Optional[str],
     configured: Optional[str],
     explicit: Optional[str],
+    mode: str = "unset",
 ) -> bool:
     """
     Should a working output discovered by `test` be written to the config?
@@ -372,10 +375,28 @@ def should_save_audio_device(
       - the user named a device  -> respect it, do not overwrite the config
                                     from a one-off experiment
       - already configured       -> no write, no needless service restart
+      - mode is 'auto'           -> the owner asked for auto-pick. Saving here
+                                    would silently undo that, see below.
+
+    THE SECOND FAILURE, THE ONE AUTO-PICK CREATED
+    ---------------------------------------------
+    Saving-by-default is right for a speaker nobody has configured. It is
+    exactly wrong for one the owner has just set to auto-pick. Run `test`
+    once after switching to auto and this function would write the dongle's
+    address into the config, turning auto back into pinned -- so the next time
+    the dongle was swapped the speaker would ignore the new one, and not one
+    screen would explain why. Quietly reversing a decision the owner made by
+    hand is worse than never having offered the option.
+
+    'auto' is therefore a real, recorded state, not the absence of one, and it
+    is checked here rather than at the call site so there is exactly one place
+    the rule lives.
     """
     if not found:
         return False
     if explicit:
+        return False
+    if mode == "auto":
         return False
     return found != (configured or None)
 
@@ -595,6 +616,21 @@ def parse_aplay_devices(text: str) -> List[Dict[str, Any]]:
         # "bcm2835" card, so a naive "bcm2835 means headphone" test labels the
         # HDMI output as the analog jack and hands out the wrong buzz advice.
         is_hdmi = "hdmi" in blob or "iec958" in blob
+        is_headphone = (not is_hdmi) and ("headphone" in blob or "bcm2835" in blob)
+        # USB is now a NAMED category rather than "whatever is left over".
+        #
+        # It used to be inferred as `not is_hdmi and not is_headphone`, which is
+        # true for a dongle but is ALSO true for an I2S HAT, a Bluetooth sink,
+        # or anything else unrecognised. Inferring the owner's dongle from a
+        # double negative meant nothing could ever deliberately PREFER it, and
+        # a wrong guess sent the sound to the wrong box entirely.
+        #
+        # The markers below are the strings a real dongle actually reports.
+        # `aplay -l` for the common C-Media/generic adapters prints the card as
+        # "Device [USB Audio Device]" with device "USB Audio"; branded ones
+        # print their own name but still carry "usb" in the card id or name.
+        # Verified against the captured `aplay -l` fixtures in selftest.
+        is_usb = ("usb" in blob) or ("uac" in blob)
         devices.append(
             {
                 "card": int(match.group(1)),
@@ -605,14 +641,382 @@ def parse_aplay_devices(text: str) -> List[Dict[str, Any]]:
                 # the reader nothing about which line is which.
                 "name": device_name if device_name and device_name != card_name else card_name,
                 "alsa": f"plughw:{match.group(1)},{match.group(4)}",
+                # STABLE ADDRESS. ALSA numbers cards in probe order, so
+                # "plughw:1,0" can point at a different card after a reboot or
+                # after the dongle is unplugged and replugged. The card ID is a
+                # name, not a position, so `plughw:CARD=Device,DEV=0` survives
+                # renumbering. This is the "works forever, even after power off
+                # and on again" half of the problem.
+                "stable": f"plughw:CARD={card_id},DEV={match.group(4)}",
                 # The Pi's built-in analog jack is driven by PWM and is the
                 # known source of hiss/buzz complaints. A USB dongle or HAT is
                 # a real DAC and does not have that problem.
-                "is_headphone": (not is_hdmi) and ("headphone" in blob or "bcm2835" in blob),
+                "is_headphone": is_headphone,
                 "is_hdmi": is_hdmi,
+                "is_usb": is_usb,
             }
         )
     return devices
+
+
+# The order the shop wants sound to come out, best first. Named once here so
+# the ranking, the messages and the tests can never disagree about the policy.
+#
+#   USB dongle  - a real DAC. Clean signal. This is what the owner bought.
+#   Headphones  - the Pi's own 3.5 mm jack. Works, but PWM-driven and noisy.
+#   HDMI        - on a headless Pi this cannot open at all (error 524).
+#
+# HDMI is LAST deliberately: it is usually the system default, and being the
+# default is exactly why a headless Pi plays silence while every screen says
+# it is fine.
+OUTPUT_PREFERENCE = ("usb", "headphone", "hdmi")
+
+
+def output_kind(device: Dict[str, Any]) -> str:
+    """Which preference bucket an output falls in. One place, so nothing drifts."""
+    if device.get("is_usb"):
+        return "usb"
+    if device.get("is_hdmi"):
+        return "hdmi"
+    if device.get("is_headphone"):
+        return "headphone"
+    # An unrecognised card (I2S HAT, Bluetooth sink) is still a real output and
+    # is still better than HDMI on a headless Pi, but it is not the dongle the
+    # owner plugged in. It sorts between headphones and HDMI.
+    return "other"
+
+
+def rank_outputs(devices: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Every output this Pi has, best first: USB, then the analog jack, then
+    anything unrecognised, then HDMI.
+
+    Pure, so the policy can be asserted without a sound card present. The
+    original code expressed this ordering inline inside `cmd_test` as
+    `sort(key=lambda d: (d["is_hdmi"], d["is_headphone"]))`, where it was
+    unreachable from the background service and untested. Lifting it out is
+    what lets the service use the same rule the diagnostics print.
+    """
+    order = {"usb": 0, "headphone": 1, "other": 2, "hdmi": 3}
+    return sorted(
+        devices,
+        key=lambda d: (order.get(output_kind(d), 2), d.get("card", 0), d.get("device", 0)),
+    )
+
+
+def describe_choice(device: Optional[Dict[str, Any]]) -> str:
+    """Plain English for why this output was picked. Never a bare device string."""
+    if not device:
+        return "no audio output was found on this Pi"
+    kind = output_kind(device)
+    if kind == "usb":
+        return f"{device['name']} — your USB audio adapter (a real DAC, best quality)"
+    if kind == "headphone":
+        return f"{device['name']} — the Pi's own 3.5 mm jack (works, but hisses)"
+    if kind == "hdmi":
+        return f"{device['name']} — HDMI (only works with a screen plugged in)"
+    return f"{device['name']} — an add-on sound card"
+
+
+def choose_output(
+    devices: List[Dict[str, Any]],
+    configured: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Pick the output to play through.
+
+    THE RULE, AND WHY IT IS THIS WAY
+    --------------------------------
+    A device the owner explicitly configured ALWAYS wins, as long as it is
+    actually present. Respecting an explicit choice is the difference between a
+    tool and a tool that argues with you.
+
+    But "configured" must mean "still plugged in". The old behaviour read the
+    saved device once at startup and played to it forever, so a config pinned
+    to the analog jack silently ignored a working USB dongle sitting right next
+    to it -- which is exactly the fault reported. If the configured device is
+    NOT in the list, we fall through to preference order rather than playing to
+    a device that is not there.
+
+    Matching accepts either spelling of the same output (`plughw:1,0` or
+    `plughw:CARD=Device,DEV=0`, with or without the `plug` prefix) so an older
+    config written before stable names existed still matches after an upgrade.
+    """
+    if not devices:
+        return None
+
+    if configured:
+        wanted = configured.strip()
+        for d in devices:
+            if wanted in _address_forms(d):
+                return d
+
+    ranked = rank_outputs(devices)
+    return ranked[0] if ranked else None
+
+
+def _address_forms(device: Dict[str, Any]) -> set:
+    """Every string that legitimately names this one output."""
+    card, dev, cid = device.get("card"), device.get("device"), device.get("id", "")
+    return {
+        f"plughw:{card},{dev}",
+        f"hw:{card},{dev}",
+        f"plughw:CARD={cid},DEV={dev}",
+        f"hw:CARD={cid},DEV={dev}",
+        f"sysdefault:CARD={cid}",
+        cid,
+    }
+
+
+# The words a human might reasonably type to mean "stop pinning one socket,
+# just use the best one you can find". Spelled once, so the command that
+# accepts them, the report that explains them and the tests can never drift.
+#
+# `default` is in here on purpose. ALSA does have a PCM literally called
+# "default", but this program has never offered it as a choice: `audio` prints
+# `plughw:CARD=...` names and `_address_forms()` never produces the string
+# "default", so `use-output default` could only ever have been REFUSED. Taking
+# it to mean auto-pick turns a dead end into the thing the typist meant.
+AUTO_OUTPUT_WORDS = frozenset(
+    {"auto", "automatic", "auto-pick", "autopick", "best", "clear", "default", "none", "reset", "unpin"}
+)
+
+
+def parse_output_request(raw: Optional[str]) -> Optional[str]:
+    """
+    Turn what somebody typed into either a device address, or None for
+    "auto-pick".
+
+    Pure, and deliberately forgiving about case and stray spaces, because this
+    is retyped off a screen by a person standing at a counter. It is NOT
+    forgiving about anything else: a string that is not an auto word comes
+    back unchanged (merely trimmed) and is then validated against the real
+    hardware, so a typo is still caught and named.
+    """
+    if raw is None:
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    if text.lower() in AUTO_OUTPUT_WORDS:
+        return None
+    return text
+
+
+def audio_mode(config: Mapping[str, Any]) -> str:
+    """
+    Which of the three audio states this speaker is in: 'pinned', 'auto' or
+    'unset'.
+
+    WHY THIS EXISTS -- THE BUG IT PREVENTS
+    --------------------------------------
+    Until now there were only two states on disk, because there was only one
+    field. `audioDevice: ""` had to mean BOTH of these at once:
+
+      * "nobody has ever chosen an output" (a freshly paired speaker), and
+      * "the owner deliberately chose auto-pick".
+
+    Those want opposite behaviour from `test`. On a fresh speaker, `test`
+    finding a working output and saving it is a fix that came out of a real
+    silent shop. On a speaker the owner just set to auto, that same save
+    silently re-pins the thing he just unpinned -- so the next dongle swap
+    stops working and nothing on any screen says why. One empty string cannot
+    carry two opposite intentions, so the intention is now written down.
+
+    Resolution order is deliberate and self-healing: a real saved device ALWAYS
+    means pinned, whatever the flag says. A config that somehow holds both a
+    device and audioMode=auto is contradictory, and the device is the thing the
+    owner can see, test and hear, so the device wins. A config with no
+    audioMode key at all is every speaker installed before this existed, and
+    reads as 'unset' -- exactly the behaviour it had yesterday.
+    """
+    device = str(config.get("audioDevice") or "").strip()
+    if device:
+        return "pinned"
+    if str(config.get("audioMode") or "").strip().lower() == "auto":
+        return "auto"
+    return "unset"
+
+
+def describe_audio_setting(config: Mapping[str, Any]) -> str:
+    """
+    One line for `status`: what this speaker is set to do about output.
+
+    This used to print "(system default)" whenever no device was saved, which
+    stopped being true the moment the service started ranking outputs itself.
+    "system default" means ALSA's default PCM -- which on a headless Pi is HDMI
+    and cannot open at all. Reporting the one behaviour that produces silence,
+    on a Pi that is in fact picking the dongle correctly, is worse than saying
+    nothing.
+    """
+    mode = audio_mode(config)
+    if mode == "pinned":
+        return str(config.get("audioDevice")).strip()
+    if mode == "auto":
+        return "automatic (best output, re-checked while running)"
+    return "not set yet (best output is picked automatically)"
+
+
+def absent_pin_advice(
+    devices: List[Dict[str, Any]],
+    configured: Optional[str],
+) -> Optional[str]:
+    """
+    Warn when the SAVED output is not plugged into this Pi any more.
+
+    THE CASE THIS IS FOR
+    --------------------
+    The owner's words: "so i can change the dongle if needed". A pinned
+    `plughw:CARD=S3,DEV=0` is exactly right until the day a different adapter
+    is plugged in, and then it names a card that no longer exists. Sound still
+    comes out -- the fallback chain sees to that -- so nothing looks broken,
+    and the speaker quietly stops honouring the setting the owner believes is
+    in force. A setting that is being ignored must say so.
+
+    Two ways out are offered, because they are genuinely different decisions:
+    pin the new adapter, or stop pinning at all. Only offering "pin the new
+    one" would mean doing this again after the next swap.
+
+    Returns None when the pin is present, when nothing is pinned, or when
+    there is no hardware to compare against -- a different message already
+    covers a Pi with no outputs.
+    """
+    if not configured or not devices:
+        return None
+    wanted = configured.strip()
+    if any(wanted in _address_forms(d) for d in devices):
+        return None
+
+    best = rank_outputs(devices)[0]
+    return (
+        f"NOTE: this speaker is pinned to {configured} by a saved setting, but\n"
+        f"      that output is NOT plugged into this Pi right now, so the setting\n"
+        f"      is being ignored and sound is falling back to:\n"
+        f"        {describe_choice(best)}\n"
+        f"      Pick one:\n"
+        f"        sudo greenway-announcer use-output {best['stable']}   (pin this one)\n"
+        f"        sudo greenway-announcer use-output auto   (always use the best one)"
+    )
+
+
+def stale_pin_advice(
+    devices: List[Dict[str, Any]],
+    configured: Optional[str],
+) -> Optional[str]:
+    """
+    Warn when a SAVED setting is holding the shop on a worse output.
+
+    THE REAL FAILURE THIS COMES FROM
+    --------------------------------
+    A Sound Blaster Play! 3 was plugged in and the Pi detected it perfectly.
+    `audio` listed it first and called it the best output. And the shop still
+    played through the noisy 3.5 mm jack, because an older install had saved:
+
+        audioDevice: "plughw:1,0"
+
+    On that Pi, card 1 was the headphone jack. An explicit choice beats
+    preference order by design -- that is correct, and it is what makes
+    "I want THIS socket" work. But it meant the report showed
+
+        Configured: plughw:1,0
+        In use:     bcm2835 Headphones
+
+    which is the whole diagnosis sitting in plain sight, and said nothing
+    about what to do next. Knowing the answer and not offering it is the same
+    defect as `test` finding a working output and discarding it.
+
+    Returns None when the pin is absent, harmless, or genuinely the best
+    available -- deliberately pinning the jack must NOT be nagged at.
+    """
+    if not configured or not devices:
+        return None
+
+    pinned = None
+    for d in devices:
+        if configured.strip() in _address_forms(d):
+            pinned = d
+            break
+    # Not plugged in: a different message already covers that case, and we
+    # fall back automatically, so there is nothing to correct.
+    if pinned is None:
+        return None
+
+    best = rank_outputs(devices)[0]
+    order = {"usb": 0, "headphone": 1, "other": 2, "hdmi": 3}
+    if order.get(output_kind(best), 2) >= order.get(output_kind(pinned), 2):
+        return None
+
+    return (
+        f"NOTE: this speaker is pinned to {configured} by a saved setting, so the\n"
+        f"      better output above is being ignored. That name is a card NUMBER,\n"
+        f"      and on this Pi it currently means:\n"
+        f"        {describe_choice(pinned)}\n"
+        f"      To use the better one from now on, run:\n"
+        f"        sudo greenway-announcer use-output {best['stable']}"
+    )
+
+
+def candidate_probe_order(device: Dict[str, Any]) -> List[str]:
+    """
+    The addresses to TRY for one candidate output, best spelling first.
+
+    WHY THIS IS NOT JUST `[device["stable"]]`
+    -----------------------------------------
+    We want to SAVE the stable `plughw:CARD=...` name, because card numbers are
+    handed out in probe order and a saved `plughw:2,0` can point at a different
+    device after a power cut. But we must never save an address we have not
+    actually played a sound through: that is how a config ends up holding a
+    name that looks right and works nowhere.
+
+    So the stable name is tried FIRST -- if it plays, that is what gets saved.
+    The card-number form is kept as a second try for the rare card whose id is
+    duplicated or unusable, so a working output is never rejected merely
+    because its preferred spelling failed.
+    """
+    forms = [device.get("stable"), device.get("alsa")]
+    out: List[str] = []
+    for f in forms:
+        if f and f not in out:
+            out.append(f)
+    return out
+
+
+def playback_order(
+    devices: List[Dict[str, Any]],
+    configured: Optional[str] = None,
+) -> List[str]:
+    """
+    The addresses to TRY, in order, for one announcement.
+
+    This is the "can it be smart so both usb and aux can be used?" answer. The
+    shop must make a noise; which socket it comes out of matters less than it
+    coming out at all. So playback is a LIST, not a single device: the chosen
+    output first, then every other real output as a fallback.
+
+    Stable `CARD=` names are used so the list keeps working after a reboot
+    renumbers the cards. HDMI is never silently promoted above a working jack.
+    """
+    if not devices:
+        return []
+    first = choose_output(devices, configured)
+    ordered: List[str] = []
+    if first is not None:
+        ordered.append(first["stable"])
+    for d in rank_outputs(devices):
+        if first is not None and d is first:
+            continue
+        # A headless Pi cannot open HDMI at all; including it is harmless
+        # (it simply fails fast) and it is the only output on a Pi that is
+        # plugged into a TV, so it stays in the list as a last resort.
+        ordered.append(d["stable"])
+    # Dedupe while preserving order: two ALSA lines can resolve to one address.
+    seen: set = set()
+    unique: List[str] = []
+    for addr in ordered:
+        if addr not in seen:
+            seen.add(addr)
+            unique.append(addr)
+    return unique
 
 
 def detected_outputs() -> List[Dict[str, Any]]:
@@ -702,18 +1106,19 @@ def diagnose_buzz(devices: List[Dict[str, Any]], chosen: Optional[str]) -> List[
     good speaker.
     """
     notes: List[str] = []
-    analog = [d for d in devices if d["is_headphone"]]
-    usb = [d for d in devices if not d["is_headphone"] and not d["is_hdmi"]]
+    # USB must be POSITIVELY identified. This used to be "not headphone and not
+    # HDMI", which quietly swept up I2S HATs and Bluetooth sinks and called them
+    # USB dongles -- and, worse, meant nothing in the program could deliberately
+    # prefer the real dongle. output_kind() is now the only place that decides.
+    usb = [d for d in devices if output_kind(d) == "usb"]
 
-    using_analog = False
-    if chosen:
-        for d in analog:
-            if chosen in (d["alsa"], f"hw:{d['card']},{d['device']}"):
-                using_analog = True
-    elif analog and not usb:
-        using_analog = True
+    # Diagnose the output that will ACTUALLY be used, not the one written in the
+    # config. Those differ whenever the configured device has been unplugged, and
+    # advice about a device that is not there is worse than no advice at all.
+    in_use = choose_output(devices, chosen)
+    using_analog = in_use is not None and output_kind(in_use) == "headphone"
 
-    if using_analog or (analog and not chosen):
+    if using_analog:
         notes.append(
             "This Pi is playing through its own 3.5 mm headphone jack. That output is "
             "PWM-driven and is genuinely noisy: a steady hiss or buzz through it is "
@@ -725,9 +1130,21 @@ def diagnose_buzz(devices: List[Dict[str, Any]], chosen: Optional[str]) -> List[
             "common cause of buzzing and distortion."
         )
         if usb:
+            # The STABLE name (plughw:CARD=...), never plughw:1,0. Card numbers
+            # are assigned in probe order, so the number printed today can point
+            # at a different card after the next power cut -- which is exactly
+            # the "works until you reboot it" failure this command exists to
+            # prevent somebody from re-creating.
+            #
+            # And `use-output`, NOT the installer. Re-running install.sh to
+            # change one setting is a heavy, frightening ask, and the version
+            # printed here carried a "<your-site>" placeholder that cannot be
+            # pasted as-is -- so the advice could not be followed without
+            # stopping to look something up. use-output saves it and restarts
+            # the service in one line, with nothing to fill in.
             notes.append(
                 "Better fix: this Pi already has another audio output. Use it: "
-                f"sudo ./install.sh --site <your-site> --audio-device {usb[0]['alsa']}"
+                f"sudo greenway-announcer use-output {usb[0]['stable']}"
             )
         else:
             notes.append(
@@ -814,6 +1231,49 @@ def play_file(path: Path, device: Optional[str]) -> Tuple[bool, str]:
         detail = (result.stderr or b"").decode("utf-8", "replace").strip()
         return False, f"Audio player failed: {detail or 'unknown error'}"
     return True, "played"
+
+
+def play_with_fallback(
+    path: Path,
+    addresses: List[str],
+    player: Any = play_file,
+) -> Tuple[bool, str, Optional[str]]:
+    """
+    Try each output in turn until one makes a noise.
+
+    Returns (played, detail, address_that_worked).
+
+    WHY THIS EXISTS
+    ---------------
+    The background service used to hold ONE device string, read once when it
+    started, and play to it forever. That single line is the whole reported
+    fault: a Pi configured for the 3.5 mm jack ignored a working USB dongle
+    plugged in beside it, and a Pi left on the system default played to HDMI
+    with no screen attached and made no sound at all -- while `status` happily
+    reported green, because nothing ever checked whether the sound landed.
+
+    Trying the list means a shop with both a dongle AND the aux jack in use
+    gets the dongle, and still gets a chime out of the jack if somebody pulls
+    the dongle out mid-shift. Silence in a shop is the one unacceptable
+    outcome: a missed order is a customer standing at an empty counter.
+
+    `player` is injectable so this can be tested without a sound card.
+    """
+    if not addresses:
+        # No enumerated outputs at all. Fall back to the system default rather
+        # than refusing: on a Pi with a single card, aplay with no -D works.
+        played, detail = player(path, None)
+        return played, detail, None
+
+    failures: List[str] = []
+    for address in addresses:
+        played, detail = player(path, address)
+        if played:
+            return True, detail, address
+        first_line = (detail or "").splitlines()[0] if detail else "no detail"
+        failures.append(f"{address}: {first_line}")
+
+    return False, "Every audio output failed. " + "; ".join(failures), None
 
 
 # ============================================================================
@@ -941,6 +1401,11 @@ class Announcer:
         self.device_id = str(config["deviceId"])
         self.device_key = str(config["deviceKey"])
         self.audio_device: Optional[str] = config.get("audioDevice") or None
+        # The outputs to try, best first, recomputed from the hardware rather
+        # than trusted from the config. See refresh_outputs().
+        self.audio_chain: List[str] = []
+        self.audio_chain_at: float = 0.0
+        self.last_output_used: Optional[str] = None
         self.mixer_control: Optional[str] = config.get("mixerControl") or None
         self.cache_dir = cache_dir
         self.session = requests.Session()
@@ -1034,6 +1499,36 @@ class Announcer:
 
     # -- work --------------------------------------------------------------
 
+    def refresh_outputs(self, now: Optional[float] = None, max_age: float = 60.0) -> List[str]:
+        """
+        Recompute the list of outputs to try, at most once a minute.
+
+        RE-ASKING THE HARDWARE IS THE POINT. The old code read one device
+        string at startup and never looked again, so plugging a USB dongle in
+        did nothing until somebody re-ran the whole installer -- and unplugging
+        one left the service talking to a card that no longer existed.
+
+        Cached briefly because `aplay -l` spawns a process, and an announcement
+        must not wait on that. A minute is short enough that a dongle plugged
+        in mid-shift is picked up on the next order, and long enough that a
+        busy Saturday does not shell out on every chime.
+        """
+        stamp = time.time() if now is None else now
+        if self.audio_chain and (stamp - self.audio_chain_at) < max_age:
+            return self.audio_chain
+        try:
+            devices = detected_outputs()
+        except Exception as exc:  # never let enumeration kill an announcement
+            log.warning("Could not list audio outputs (%s). Using the saved setting.", exc)
+            devices = []
+        chain = playback_order(devices, self.audio_device)
+        if not chain and self.audio_device:
+            # Enumeration failed but the owner named a device: honour it.
+            chain = [self.audio_device]
+        self.audio_chain = chain
+        self.audio_chain_at = stamp
+        return chain
+
     def handle_job(self, job: Dict[str, Any]) -> Tuple[bool, str]:
         job_id = job["id"]
         if job_id in self.played:
@@ -1041,12 +1536,21 @@ class Announcer:
 
         set_alsa_volume(job["volume"], self.mixer_control)
         path = self.resolve_sound(job["sound"])
-        played, detail = play_file(path, self.audio_device)
+        chain = self.refresh_outputs()
+        played, detail, used = play_with_fallback(path, chain)
+
+        if played and used and used != self.last_output_used:
+            # Say it ONCE when it changes, not on every chime: a log line per
+            # order is noise, but a silent switch of output is a mystery.
+            log.info("Playing through %s", used)
+            self.last_output_used = used
 
         if not played and path.suffix.lower() != ".wav":
             # Custom file would not play. Never leave the shop silent: fall back.
             log.warning("%s Falling back to the built-in chime.", detail)
-            played, detail = play_file(ensure_builtin(self.cache_dir, "chime"), self.audio_device)
+            played, detail, used = play_with_fallback(
+                ensure_builtin(self.cache_dir, "chime"), chain
+            )
 
         if played:
             self.remember_played(job_id)
@@ -1188,6 +1692,10 @@ def cmd_pair(args: argparse.Namespace) -> int:
             "deviceKey": data["deviceKey"],
             "deviceName": data.get("deviceName", ""),
             "audioDevice": args.audio_device or "",
+            # A fresh pairing is 'unset', not 'auto': nobody has chosen yet,
+            # so `test` is still allowed to save the output it proves works.
+            # That save is the fix for the silent-shop fault and must survive.
+            "audioMode": "pinned" if args.audio_device else "",
             "mixerControl": args.mixer_control or "",
         },
     )
@@ -1232,7 +1740,12 @@ def _persist_working_output(args: argparse.Namespace, device: str) -> None:
         print(f"Could not read the config to save this output ({exc}).\n")
         return
 
-    if not should_save_audio_device(device, config.get("audioDevice") or None, args.audio_device):
+    if not should_save_audio_device(
+        device,
+        config.get("audioDevice") or None,
+        args.audio_device,
+        audio_mode(config),
+    ):
         return
 
     config["audioDevice"] = device
@@ -1269,6 +1782,9 @@ def cmd_use_output(args: argparse.Namespace) -> int:
     if state == "denied":
         print(needs_sudo_message(config_path, f"use-output {args.device}"))
         return 1
+    # Everything below branches on this. `None` means auto-pick, which is a
+    # real instruction, not a missing argument -- see parse_output_request().
+    wanted = parse_output_request(args.device)
     if state == "missing":
         print(
             "This speaker is not paired yet, so there is nothing to configure.\n"
@@ -1282,16 +1798,35 @@ def cmd_use_output(args: argparse.Namespace) -> int:
         print(f"The config could not be read ({exc}).")
         return 1
 
-    device = args.device.strip()
+    if wanted is None:
+        return _apply_auto_output(config_path, config)
+
+    device = wanted
     known = detected_outputs()
-    if known and not any(d["alsa"] == device for d in known):
+    # Accept ANY legitimate spelling of a real output.
+    #
+    # This used to compare against d["alsa"] alone, i.e. only "plughw:1,0". The
+    # `audio` report now prints reboot-proof `plughw:CARD=...` names and tells
+    # the owner to use them -- so the one command that applies them would have
+    # rejected its own advice as "this Pi does not have an output called that".
+    # Being refused by your own tool, while holding the name it just gave you,
+    # is worse than no validation at all.
+    if known and not any(device in _address_forms(d) for d in known):
         print(f"This Pi does not have an output called '{device}'. It has:\n")
-        for d in known:
-            print(f"  {d['alsa']:<14} {d['name']}")
-        print("\nRun 'sudo greenway-announcer test' to find which one works.")
+        for d in rank_outputs(known):
+            print(f"  {d['stable']:<28} {describe_choice(d)}")
+        print("\nRun 'sudo greenway-announcer test' to find which one works,")
+        print("or 'sudo greenway-announcer use-output auto' to stop pinning one")
+        print("and always use the best output that is actually plugged in.")
         return 1
 
     config["audioDevice"] = device
+    # Pinning is the opposite of auto. Leaving a stale audioMode=auto behind
+    # would leave the config self-contradictory; audio_mode() would still
+    # answer 'pinned' (the device wins), but a human reading the file would be
+    # told two different things, and the next person to trust the flag over
+    # the device would introduce a real bug.
+    config["audioMode"] = "pinned"
     try:
         save_config(config_path, config)
     except OSError as exc:
@@ -1299,12 +1834,73 @@ def cmd_use_output(args: argparse.Namespace) -> int:
         return 1
 
     print(f"Saved. This speaker will use {device} from now on.")
+    print("To go back to picking the best output automatically, run:")
+    print("  sudo greenway-announcer use-output auto")
     restarted, detail = restart_service()
     if restarted:
         print("The announcer has been restarted, so it is using it already.")
     else:
         print(
             f"Could not restart the announcer automatically ({detail}).\n"
+            f"Run this to apply it now:  sudo systemctl restart {SERVICE_NAME}"
+        )
+    return 0
+
+
+def _apply_auto_output(config_path: Path, config: Dict[str, Any]) -> int:
+    """
+    Stop pinning one socket: clear the saved output and record that auto-pick
+    was CHOSEN, not merely never configured.
+
+    The owner's words: "make it auto pick, so i can change the dongle if
+    needed, or if i decide to use the aux jack for whatever reason."
+
+    Two things make this safe rather than just an erased field:
+
+      1. `audioMode: "auto"` is written, so `test` will not re-pin the very
+         device this just unpinned (see should_save_audio_device).
+      2. The resulting order is PRINTED, from the same ranking the service
+         plays through. "It is cleared" is a claim; showing which socket the
+         sound will come out of, in order, is the proof -- and it is the only
+         way the owner can tell auto-pick did what he wanted without walking
+         over to the speaker.
+    """
+    previous = str(config.get("audioDevice") or "").strip()
+    config["audioDevice"] = ""
+    config["audioMode"] = "auto"
+    try:
+        save_config(config_path, config)
+    except OSError as exc:
+        print(f"Could not save the setting ({exc}).")
+        return 1
+
+    if previous:
+        print(f"Saved. This speaker is no longer pinned to {previous}.")
+    else:
+        print("Saved. This speaker was not pinned to anything, and still is not.")
+    print("It will use the best output it can find, re-checked while it runs,")
+    print("so you can swap the dongle or move back to the aux jack at any time.")
+
+    devices = detected_outputs()
+    if devices:
+        print(f"\nRight now that means:  {describe_choice(choose_output(devices, None))}")
+        chain = playback_order(devices, None)
+        if len(chain) > 1:
+            print("\nIf that output fails or is unplugged, these are tried in order:")
+            for i, addr in enumerate(chain, 1):
+                print(f"  {i}. {addr}")
+    else:
+        # Not an error: the setting is saved and correct. But claiming an
+        # output was chosen when we could not see any hardware would be a lie.
+        print("\nNo outputs could be listed right now, so there is nothing to show.")
+        print("Run 'sudo greenway-announcer audio' once a speaker is plugged in.")
+
+    restarted, detail = restart_service()
+    if restarted:
+        print("\nThe announcer has been restarted, so it is doing this already.")
+    else:
+        print(
+            f"\nCould not restart the announcer automatically ({detail}).\n"
             f"Run this to apply it now:  sudo systemctl restart {SERVICE_NAME}"
         )
     return 0
@@ -1351,24 +1947,39 @@ def cmd_test(args: argparse.Namespace) -> int:
         if explain:
             print(f"\n{explain}\n")
 
-        candidates = [d for d in devices if d["alsa"] != device]
-        # Try real outputs before HDMI: on a headless Pi, HDMI is the one that
-        # cannot work, and it is usually what the default already tried.
-        candidates.sort(key=lambda d: (d["is_hdmi"], d["is_headphone"]))
+        # Try the outputs in the SAME order the background service uses, from
+        # the one shared rule: USB dongle, then the Pi's own jack, then an
+        # add-on card, then HDMI. This used to be a second, inline sort written
+        # only for this command, which meant `test` could recommend one output
+        # while the service quietly used another.
+        candidates = [d for d in rank_outputs(devices) if d["alsa"] != device]
         if candidates:
             print("Trying every output this Pi has, to find one that works:\n")
         for candidate in candidates:
-            set_alsa_volume(args.volume, args.mixer_control)
-            ok_try, detail_try = play_file(probe, candidate["alsa"])
-            label = f"  {candidate['alsa']:<14} {candidate['name'][:28]:<28}"
-            if ok_try:
+            # Try the reboot-proof spelling FIRST, then the card number.
+            #
+            # Save only what actually made a noise. An earlier version of this
+            # probed `candidate["alsa"]` and then saved `candidate["stable"]`,
+            # which meant the config could be handed an address that had never
+            # been proven to work -- a silent shop with a green dot, which is
+            # the exact fault this command exists to end.
+            detail_try = ""
+            worked: Optional[str] = None
+            for address in candidate_probe_order(candidate):
+                set_alsa_volume(args.volume, args.mixer_control)
+                ok_try, detail_try = play_file(probe, address)
+                if ok_try:
+                    worked = address
+                    break
+            label = f"  {candidate['stable']:<26} {candidate['name'][:24]:<24}"
+            if worked:
                 print(f"{label} WORKS")
-                device = candidate["alsa"]
+                device = worked
                 first_ok = True
-                print(f"\nFound a working output: {device}\n")
+                print(f"\nFound a working output: {describe_choice(candidate)}\n")
                 # Knowing the answer and not applying it is what left a shop
                 # silent while every screen said "green". Save it.
-                _persist_working_output(args, device)
+                _persist_working_output(args, worked)
                 break
             print(f"{label} no ({detail_try.splitlines()[0][:40]})")
 
@@ -1441,21 +2052,26 @@ def cmd_audio(args: argparse.Namespace) -> int:
         print("     then run this again.")
         return 1
 
-    print(f"\nFound {len(devices)} output{'' if len(devices) == 1 else 's'}:")
-    for d in devices:
-        kind = "Pi headphone jack (noisy PWM)" if d["is_headphone"] else (
-            "HDMI" if d["is_hdmi"] else "USB / add-on card (recommended)"
-        )
-        print(f"  {d['alsa']:<16} {d['name']}  -- {kind}")
+    # Best first, and described by the SAME functions the service plays
+    # through, so what this prints can never disagree with what it does.
+    ranked = rank_outputs(devices)
+    print(f"\nFound {len(devices)} output{'' if len(devices) == 1 else 's'}, best first:")
+    for d in ranked:
+        print(f"  {d['stable']:<28} {describe_choice(d)}")
+    print("\n  (Use the long plughw:CARD=... name above, not plughw:1,0 — card")
+    print("   numbers are handed out in plug-in order and can change on reboot.)")
 
     # What is this speaker actually configured to use?
     chosen: Optional[str] = args.audio_device or None
     source = "the --audio-device you just passed"
+    mode = "unset"
     if not chosen:
         state = config_state(Path(args.config))
         if state == "readable":
             try:
-                chosen = json.loads(Path(args.config).read_text(encoding="utf-8")).get("audioDevice") or None
+                saved = json.loads(Path(args.config).read_text(encoding="utf-8"))
+                chosen = saved.get("audioDevice") or None
+                mode = audio_mode(saved)
                 source = "this speaker's saved setting"
             except Exception:
                 chosen = None
@@ -1466,13 +2082,66 @@ def cmd_audio(args: argparse.Namespace) -> int:
             )
 
     print("")
+    # `chosen` is what the CONFIG says. `actual` is what will really be played
+    # through. They diverge when the configured dongle has been unplugged, and
+    # printing only the config is how a Pi reports a device that is not there.
+    actual = choose_output(devices, chosen)
     if chosen:
-        print(f"In use: {chosen}  (from {source})")
-        if not any(chosen in (d["alsa"], f"hw:{d['card']},{d['device']}") for d in devices):
-            print("  WARNING: that output is not in the list above. It may have been")
-            print("           unplugged, or the name may be wrong.")
+        print(f"Configured: {chosen}  (from {source})")
+        # Six spellings legitimately name one output (plughw:1,0, hw:1,0,
+        # plughw:CARD=Device,DEV=0, ...). Matching only two of them made a
+        # correctly-configured stable name look "not in the list above".
+        present = any(chosen.strip() in _address_forms(d) for d in devices)
+        if not present:
+            print("  WARNING: that output is not plugged in right now, so it is being")
+            print("           ignored. Falling back to the best output that IS here.")
+    elif mode == "auto":
+        # Distinguishing "set to auto on purpose" from "never configured"
+        # matters: they behave differently the next time `test` runs, and the
+        # owner needs to be able to see which one this speaker is in.
+        print("Configured: automatic — always use the best output that is plugged in")
     else:
-        print("In use: the system default (no specific output was chosen)")
+        # Deliberately worded so it cannot be mistaken for the 'auto' line
+        # above at a glance. They behave differently the next time `test`
+        # runs -- this one lets `test` save what it proves, 'auto' does not --
+        # and two lines that read the same hide that difference from the one
+        # person who needs to see it.
+        print("Configured: not set yet — best output is picked for you")
+
+    print(f"In use:     {describe_choice(actual)}")
+
+    # A saved card number silently outranking the dongle is invisible unless
+    # we say so: both lines above are individually correct and the fault only
+    # shows in the gap between them.
+    stale = stale_pin_advice(devices, chosen)
+    if stale:
+        print("")
+        print(stale)
+
+    # Pinned to something that has been unplugged: sound still comes out via
+    # the fallback chain, so nothing LOOKS wrong, and the saved setting is
+    # being ignored. Say so, and offer auto-pick as well as re-pinning.
+    absent = absent_pin_advice(devices, chosen)
+    if absent:
+        print("")
+        print(absent)
+
+    # Pinned, present and genuinely the best -- so no warning fires above.
+    # The owner still needs to know the escape hatch exists, because the day
+    # it matters is the day he swaps the dongle and this Pi is not in front
+    # of him. Said once, quietly, and only when there is a pin to undo.
+    if chosen and not stale and not absent:
+        print("\n  (To stop pinning one socket and always use the best output that is")
+        print("   plugged in:  sudo greenway-announcer use-output auto)")
+
+    # The whole point of the smart fallback: show the order it will be tried in
+    # so "both USB and aux" is something the owner can SEE, not just trust.
+    chain = playback_order(devices, chosen)
+    if len(chain) > 1:
+        print("\nIf the first output fails, these are tried in order:")
+        for i, addr in enumerate(chain, 1):
+            print(f"  {i}. {addr}")
+        print("  An announcement is only reported as failed if ALL of them fail.")
 
     # Mixer levels: a too-high level on the Pi's jack is the usual buzz cause.
     if shutil.which("amixer") is not None:
@@ -1506,8 +2175,8 @@ def cmd_audio(args: argparse.Namespace) -> int:
 
     print("\nNext step: play the tones and listen.")
     print("  greenway-announcer test")
-    for d in devices:
-        print(f"  greenway-announcer test --audio-device {d['alsa']}")
+    for d in ranked:
+        print(f"  greenway-announcer test --audio-device {d['stable']}")
     return 0
 
 
@@ -1573,7 +2242,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"\nPaired as: {config.get('deviceName') or '(unnamed)'}")
     print(f"  site:      {config['siteUrl']}")
     print(f"  device id: {config['deviceId']}")
-    print(f"  audio out: {config.get('audioDevice') or '(system default)'}")
+    print(f"  audio out: {describe_audio_setting(config)}")
 
     # "The Pi keeps turning itself off" is one of the most common reports and
     # one of the least precise. These two lines separate the two causes before
@@ -1876,6 +2545,113 @@ def selftest() -> int:
         restart_service_command(),
         ["systemctl", "restart", "greenway-announcer"],
     )
+    # THE TRAP AUTO-PICK SETS. `test` saving what it proves is right for a
+    # speaker nobody configured, and wrong for one deliberately set to auto:
+    # it re-pins the device the owner just unpinned, so the NEXT dongle swap
+    # is ignored and nothing says why.
+    ok(
+        "save output: auto-pick is never silently turned back into a pin",
+        not should_save_audio_device("plughw:CARD=S3,DEV=0", None, None, "auto"),
+    )
+    # NEGATIVE CONTROLS: the guard must block 'auto' and nothing else, or it
+    # has quietly deleted the silent-shop fix it was bolted next to.
+    ok(
+        "save output: an unconfigured speaker is still saved for (the silent-shop fix)",
+        should_save_audio_device("plughw:CARD=S3,DEV=0", None, None, "unset"),
+    )
+    ok(
+        "save output: a pinned speaker with a stale device is still corrected",
+        should_save_audio_device("plughw:CARD=S3,DEV=0", "plughw:0,0", None, "pinned"),
+    )
+    ok(
+        "save output: the mode argument defaults to the old behaviour",
+        should_save_audio_device("plughw:CARD=S3,DEV=0", None, None),
+    )
+
+    # -- what 'auto' can be typed as -----------------------------------------
+    # Retyped off a screen by somebody standing at a counter, so case and
+    # spacing must not matter. Everything else must survive untouched, or a
+    # typo stops being caught and named.
+    for _word in ("auto", "AUTO", "  Auto  ", "automatic", "auto-pick", "best", "clear", "none", "reset"):
+        ok(f"auto word: '{_word.strip()}' means auto-pick", parse_output_request(_word) is None)
+    ok("auto word: an empty string means auto-pick", parse_output_request("") is None)
+    ok("auto word: a missing argument means auto-pick", parse_output_request(None) is None)
+    # 'default' could only ever have been REFUSED before, because no output is
+    # ever spelled that way. Taking it to mean auto turns a dead end into the
+    # thing the typist meant.
+    ok("auto word: 'default' means auto-pick, not a device", parse_output_request("default") is None)
+    # NEGATIVE CONTROLS: a real address must never be swallowed as an auto word.
+    eq(
+        "auto word: a real device name is passed through untouched",
+        parse_output_request("plughw:CARD=S3,DEV=0"),
+        "plughw:CARD=S3,DEV=0",
+    )
+    eq(
+        "auto word: surrounding spaces are trimmed off a real device name",
+        parse_output_request("  plughw:1,0  "),
+        "plughw:1,0",
+    )
+    eq(
+        "auto word: a typo is NOT treated as auto, so it can still be rejected",
+        parse_output_request("atuo"),
+        "atuo",
+    )
+    eq(
+        "auto word: a card whose name merely contains an auto word is a device",
+        parse_output_request("plughw:CARD=auto,DEV=0"),
+        "plughw:CARD=auto,DEV=0",
+    )
+
+    # -- which of the three audio states a config is in ----------------------
+    # Two states used to be stored in one empty string. They need opposite
+    # behaviour from `test`, so the intention is now written down.
+    eq("audio mode: a saved device is pinned", audio_mode({"audioDevice": "plughw:1,0"}), "pinned")
+    eq(
+        "audio mode: a cleared device with the auto flag is auto",
+        audio_mode({"audioDevice": "", "audioMode": "auto"}),
+        "auto",
+    )
+    eq("audio mode: a freshly paired speaker is unset", audio_mode({"audioDevice": ""}), "unset")
+    eq("audio mode: a config with no audio keys at all is unset", audio_mode({}), "unset")
+    # Every speaker installed before audioMode existed. It must behave exactly
+    # as it did yesterday, not silently become 'auto'.
+    eq(
+        "audio mode: an old config with a device and no flag is still pinned",
+        audio_mode({"audioDevice": "plughw:CARD=S3,DEV=0"}),
+        "pinned",
+    )
+    # A contradictory config self-heals toward the thing the owner can hear.
+    eq(
+        "audio mode: a device beats a contradictory auto flag",
+        audio_mode({"audioDevice": "plughw:1,0", "audioMode": "auto"}),
+        "pinned",
+    )
+    eq(
+        "audio mode: whitespace-only is not a device",
+        audio_mode({"audioDevice": "   "}),
+        "unset",
+    )
+    # `status` said "(system default)" for a Pi that was in fact ranking
+    # outputs itself. On a headless Pi the system default is HDMI and cannot
+    # open at all, so that line named the one behaviour producing silence.
+    ok(
+        "status line: an auto speaker is not described as the system default",
+        "system default" not in describe_audio_setting({"audioDevice": "", "audioMode": "auto"}),
+    )
+    ok(
+        "status line: an unset speaker is not described as the system default",
+        "system default" not in describe_audio_setting({}),
+    )
+    ok(
+        "status line: auto and unset do not read identically",
+        describe_audio_setting({"audioDevice": "", "audioMode": "auto"})
+        != describe_audio_setting({}),
+    )
+    eq(
+        "status line: a pinned speaker shows the device it is pinned to",
+        describe_audio_setting({"audioDevice": "plughw:CARD=S3,DEV=0"}),
+        "plughw:CARD=S3,DEV=0",
+    )
 
     # -- "the pi keeps turning itself off" -----------------------------------
     # Two different faults hide behind that one sentence, with opposite fixes:
@@ -2082,6 +2858,18 @@ def selftest() -> int:
     ok("aplay: vc4hdmi is not the headphone jack", not _bw[1]["is_headphone"])
     eq("aplay: HDMI sits on its own card", _bw[1]["alsa"], "plughw:1,0")
 
+    # An I2S HAT: not the Pi's jack, not HDMI, and NOT USB. It exists to prove
+    # the difference between "USB" and "everything left over" -- with only a
+    # jack and a dongle in the fixtures those two definitions agree, and a test
+    # that cannot tell them apart cannot defend the distinction.
+    _APLAY_HAT = (
+        "**** List of PLAYBACK Hardware Devices ****\n"
+        "card 0: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+        "  Subdevices: 8/8\n"
+        "card 1: sndrpihifiberry [snd_rpi_hifiberry_dac], device 0: HifiBerry DAC HiFi pcm5102a-hifi-0 [HifiBerry DAC HiFi pcm5102a-hifi-0]\n"
+        "  Subdevices: 1/1\n"
+    )
+
     _usb = parse_aplay_devices(_APLAY_USB)
     ok("aplay: a USB dongle is not the headphone jack", not _usb[1]["is_headphone"])
     ok("aplay: a USB dongle is not HDMI", not _usb[1]["is_hdmi"])
@@ -2090,6 +2878,145 @@ def selftest() -> int:
     eq("aplay: no sound card yields no outputs", parse_aplay_devices(""), [])
     eq("aplay: junk yields no outputs", parse_aplay_devices("no soundcards found..."), [])
     ok("aplay: never raises on rubbish", isinstance(parse_aplay_devices("card x: y"), list))
+
+    # -- USB is a NAMED category, not "whatever is left over" ----------------
+    ok("aplay: a USB dongle is positively identified as USB", _usb[1]["is_usb"])
+    ok("aplay: the Pi's own jack is not USB", not _usb[0]["is_usb"])
+    ok("aplay: HDMI is not USB", not _bw[1]["is_usb"])
+    ok("aplay: the old bcm2835 jack is not USB", not _old[0]["is_usb"])
+
+    # Stable addresses survive the cards being renumbered at boot.
+    eq("aplay: stable name for the USB dongle", _usb[1]["stable"], "plughw:CARD=Device,DEV=0")
+    eq("aplay: stable name for the analog jack", _usb[0]["stable"], "plughw:CARD=Headphones,DEV=0")
+    ok("aplay: the stable name is not position-based", "CARD=" in _usb[1]["stable"])
+
+    # -- output_kind / rank_outputs -----------------------------------------
+    eq("kind: USB dongle", output_kind(_usb[1]), "usb")
+    eq("kind: analog jack", output_kind(_usb[0]), "headphone")
+    eq("kind: HDMI", output_kind(_bw[1]), "hdmi")
+
+    # THE HEADLINE RULE: with a dongle present, the dongle wins.
+    _ranked = rank_outputs(_usb)
+    eq("rank: the USB dongle is preferred over the Pi's jack", output_kind(_ranked[0]), "usb")
+    eq("rank: the analog jack comes second", output_kind(_ranked[1]), "headphone")
+
+    # HDMI must never win: it is the system default and cannot open headless.
+    _three = parse_aplay_devices(
+        "card 0: vc4hdmi [vc4-hdmi], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]\n"
+        "card 1: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+        "card 2: Device [USB Audio Device], device 0: USB Audio [USB Audio]\n"
+    )
+    eq("rank: three outputs parsed", len(_three), 3)
+    _r3 = rank_outputs(_three)
+    eq("rank: USB first even when HDMI is card 0", output_kind(_r3[0]), "usb")
+    eq("rank: jack second", output_kind(_r3[1]), "headphone")
+    eq("rank: HDMI dead last", output_kind(_r3[2]), "hdmi")
+    eq("rank: ranking never loses an output", len(_r3), 3)
+
+    # An unrecognised card (I2S HAT) beats HDMI but not the dongle.
+    _hat = parse_aplay_devices(
+        "card 0: vc4hdmi [vc4-hdmi], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]\n"
+        "card 1: sndrpihifiberry [snd_rpi_hifiberry_dac], device 0: HifiBerry DAC HiFi [HifiBerry]\n"
+    )
+    eq("rank: an add-on card is 'other', not guessed as USB", output_kind(_hat[1]), "other")
+    eq("rank: an add-on card still beats HDMI", output_kind(rank_outputs(_hat)[0]), "other")
+
+    # -- choose_output -------------------------------------------------------
+    eq("choose: with no config, the dongle wins", choose_output(_three)["alsa"], "plughw:2,0")
+    eq(
+        "choose: an explicitly configured jack is respected",
+        choose_output(_three, "plughw:1,0")["alsa"],
+        "plughw:1,0",
+    )
+    eq(
+        "choose: a configured STABLE name is respected too",
+        choose_output(_three, "plughw:CARD=Headphones,DEV=0")["alsa"],
+        "plughw:1,0",
+    )
+    eq(
+        "choose: a hw: spelling matches the same output",
+        choose_output(_three, "hw:2,0")["alsa"],
+        "plughw:2,0",
+    )
+    # THE REPORTED FAULT: a config pinned to a device that is GONE must not
+    # win, or the shop plays to a card that is not there and stays silent.
+    eq(
+        "choose: a configured device that is unplugged falls back to the best present one",
+        choose_output(_usb, "plughw:7,0")["alsa"],
+        "plughw:1,0",
+    )
+    eq("choose: no devices yields nothing rather than crashing", choose_output([]), None)
+
+    # -- playback_order ------------------------------------------------------
+    _chain = playback_order(_three)
+    eq("chain: every output is offered", len(_chain), 3)
+    eq("chain: the dongle is tried first", _chain[0], "plughw:CARD=Device,DEV=0")
+    eq("chain: HDMI is tried last", _chain[-1], "plughw:CARD=vc4hdmi,DEV=0")
+    ok("chain: uses stable names so a reboot cannot break it", all("CARD=" in a for a in _chain))
+    _chain_cfg = playback_order(_three, "plughw:1,0")
+    eq("chain: an explicit choice leads the list", _chain_cfg[0], "plughw:CARD=Headphones,DEV=0")
+    eq("chain: but the dongle is still available as a fallback", len(_chain_cfg), 3)
+    eq("chain: no hardware yields an empty list", playback_order([]), [])
+    # Two ALSA lines that resolve to ONE address must not be tried twice.
+    # This needs a fixture that actually collides: the old bcm2835 layout puts
+    # two outputs on one card, and a malformed duplicate line is something
+    # `aplay -l` really can produce after a hot-replug. A no-duplicates assert
+    # made against a list that never had any is a test that cannot fail --
+    # mutation "duplicate outputs no longer removed" survived until this was
+    # written, proving the original assert was decoration.
+    _dupe_src = (
+        "card 1: Device [USB Audio Device], device 0: USB Audio [USB Audio]\n"
+        "card 1: Device [USB Audio Device], device 0: USB Audio [USB Audio]\n"
+        "card 0: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+    )
+    _dupe_devices = parse_aplay_devices(_dupe_src)
+    eq("chain: the duplicate fixture really does repeat a device", len(_dupe_devices), 3)
+    _dupe_chain = playback_order(_dupe_devices)
+    eq("chain: the repeated output is collapsed to one entry", len(_dupe_chain), 2)
+    eq("chain: no duplicates survive", len(_dupe_chain), len(set(_dupe_chain)))
+    eq("chain: the dongle still leads after deduping", _dupe_chain[0], "plughw:CARD=Device,DEV=0")
+    ok("chain: three-output chain has no duplicates either", len(_chain) == len(set(_chain)))
+
+    # -- play_with_fallback --------------------------------------------------
+    # Injected players, so this runs with no sound card present.
+    _attempts: List[Optional[str]] = []
+
+    def _all_fail(_p: Path, dev: Optional[str]) -> Tuple[bool, str]:
+        _attempts.append(dev)
+        return False, "audio open error: Unknown error 524"
+
+    def _only_usb_works(_p: Path, dev: Optional[str]) -> Tuple[bool, str]:
+        _attempts.append(dev)
+        return (True, "played") if dev == "plughw:CARD=Device,DEV=0" else (False, "no such device")
+
+    _attempts.clear()
+    _played, _detail, _used = play_with_fallback(Path("/tmp/x.wav"), _chain, _only_usb_works)
+    ok("fallback: finds the output that works", _played)
+    eq("fallback: reports which one worked", _used, "plughw:CARD=Device,DEV=0")
+    eq("fallback: stopped as soon as it succeeded", len(_attempts), 1)
+
+    # The whole point: the jack still makes a noise if the dongle is pulled.
+    def _only_jack_works(_p: Path, dev: Optional[str]) -> Tuple[bool, str]:
+        _attempts.append(dev)
+        return (True, "played") if dev == "plughw:CARD=Headphones,DEV=0" else (False, "gone")
+
+    _attempts.clear()
+    _played2, _d2, _used2 = play_with_fallback(Path("/tmp/x.wav"), _chain, _only_jack_works)
+    ok("fallback: dongle unplugged -> the aux jack still sounds", _played2)
+    eq("fallback: and it says the jack was used", _used2, "plughw:CARD=Headphones,DEV=0")
+    ok("fallback: it tried the dongle first", _attempts[0] == "plughw:CARD=Device,DEV=0")
+
+    _attempts.clear()
+    _played3, _detail3, _used3 = play_with_fallback(Path("/tmp/x.wav"), _chain, _all_fail)
+    ok("fallback: total failure is reported as failure", not _played3)
+    eq("fallback: every output was attempted before giving up", len(_attempts), 3)
+    eq("fallback: nothing is claimed to have worked", _used3, None)
+    ok("fallback: the message names the outputs it tried", "CARD=Device" in _detail3)
+
+    # No enumerated hardware must still attempt the system default, not refuse.
+    _attempts.clear()
+    play_with_fallback(Path("/tmp/x.wav"), [], _all_fail)
+    eq("fallback: with no list, the system default is still tried", _attempts, [None])
 
     # -- diagnose_buzz -------------------------------------------------------
     _analog_advice = diagnose_buzz(_old, "plughw:0,0")
@@ -2105,15 +3032,502 @@ def selftest() -> int:
     # When a real USB output already exists, point at it instead of shopping.
     _usb_advice = " ".join(diagnose_buzz(_usb, "plughw:0,0")).lower()
     ok("buzz: prefers an output this Pi already has", "already has another audio output" in _usb_advice)
-    ok("buzz: names that output", "plughw:1,0" in _usb_advice)
+    ok("buzz: names that output", "plughw:card=device,dev=0" in _usb_advice)
+    # The advice is a command the owner will PASTE and keep. Handing him a card
+    # number means it works today and points at the wrong card after a power
+    # cut -- the exact "it stopped working and nobody touched it" fault.
+    ok(
+        "buzz: the suggested command uses the reboot-proof name, not a card number",
+        "--audio-device plughw:1,0" not in _usb_advice,
+    )
     ok("buzz: does not tell him to buy one he does not need", "usb audio adapter is a real dac" not in _usb_advice)
+    # One line, nothing to fill in. The old text said
+    # "sudo ./install.sh --site <your-site> --audio-device ..." -- a heavy ask
+    # for a one-setting change, and it carried a placeholder, so it could not
+    # be pasted at all without stopping to look something up.
+    ok(
+        "buzz: offers the one-line use-output command",
+        "sudo greenway-announcer use-output" in _usb_advice,
+    )
+    ok("buzz: does not send him back to the installer", "install.sh" not in _usb_advice)
+    ok("buzz: the advice has no placeholder to fill in", "<your-site>" not in _usb_advice)
 
     # Playing through the USB dongle: the PWM explanation must NOT appear.
     _clean = " ".join(diagnose_buzz(_usb, "plughw:1,0")).lower()
     ok("buzz: no PWM excuse when not using the analog jack", "pwm" not in _clean)
     ok("buzz: still covers electrical noise on any output", "even when nothing is playing" in _clean)
+    # Same output, stable spelling. The diagnosis must not change because the
+    # config was written by a newer installer.
+    ok(
+        "buzz: stable and numbered spellings of one output diagnose alike",
+        "pwm" not in " ".join(diagnose_buzz(_usb, "plughw:CARD=Device,DEV=0")).lower(),
+    )
+
+    # Nothing configured, but a dongle is present: the Pi will PLAY through the
+    # dongle, so blaming the PWM jack would be a diagnosis of a device that is
+    # not in use. Previously this branch fired on "analog exists and no config".
+    ok(
+        "buzz: no PWM excuse when unconfigured but a dongle will be chosen",
+        "pwm" not in " ".join(diagnose_buzz(_usb, None)).lower(),
+    )
+    # ...and the negative control: with ONLY the analog jack, it must still fire.
+    ok(
+        "buzz: PWM excuse DOES fire when the jack is all there is",
+        "pwm" in " ".join(diagnose_buzz(_old, None)).lower(),
+    )
+    # A config naming a dongle that has been unplugged must diagnose the jack
+    # that is actually carrying the sound, not the absent dongle.
+    ok(
+        "buzz: an unplugged configured device does not suppress the real diagnosis",
+        "pwm" in " ".join(diagnose_buzz(_old, "plughw:CARD=Device,DEV=0")).lower(),
+    )
 
     ok("buzz: always returns advice, even with no devices", len(diagnose_buzz([], None)) >= 1)
+    ok(
+        "buzz: no devices means no PWM claim it cannot support",
+        "pwm" not in " ".join(diagnose_buzz([], None)).lower(),
+    )
+
+    # An I2S HAT is a real DAC but it is NOT the USB dongle the owner bought.
+    # Calling it "another audio output" and telling him to switch to it would
+    # send him hunting for a device he does not have. Under the old
+    # define-USB-by-elimination rule this is exactly what happened.
+    _hat = parse_aplay_devices(_APLAY_HAT)
+    eq("aplay: the HAT fixture parses", len(_hat), 2)
+    ok("aplay: an I2S HAT is not USB", not _hat[1]["is_usb"])
+    ok("aplay: an I2S HAT is not the headphone jack", not _hat[1]["is_headphone"])
+    ok("aplay: an I2S HAT is not HDMI", not _hat[1]["is_hdmi"])
+    eq("outputs: an I2S HAT is classed as 'other', not 'usb'", output_kind(_hat[1]), "other")
+    _hat_advice = " ".join(diagnose_buzz(_hat, "plughw:0,0")).lower()
+    ok(
+        "buzz: an I2S HAT is not passed off as a USB dongle",
+        "already has another audio output" not in _hat_advice,
+    )
+    ok(
+        "buzz: with no real dongle it still recommends buying one",
+        "usb audio adapter is a real dac" in _hat_advice,
+    )
+    # ...but the HAT is still a better output than HDMI and must be offered.
+    ok(
+        "outputs: an I2S HAT still outranks HDMI in the fallback chain",
+        playback_order(_hat, None)[0] == "plughw:CARD=Headphones,DEV=0",
+    )
+    ok(
+        "outputs: the HAT is still reachable as a fallback",
+        "plughw:CARD=sndrpihifiberry,DEV=0" in playback_order(_hat, None),
+    )
+
+    # -- stale_pin_advice ----------------------------------------------------
+    # Michael's actual Pi: a Sound Blaster Play! 3 detected correctly, listed
+    # first, and ignored, because an old install had saved "plughw:1,0" and on
+    # that Pi card 1 was the headphone jack.
+    _SB = (
+        "**** List of PLAYBACK Hardware Devices ****\n"
+        "card 0: vc4hdmi [vc4-hdmi], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]\n"
+        "  Subdevices: 1/1\n"
+        "card 1: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+        "  Subdevices: 8/8\n"
+        "card 2: S3 [Sound Blaster Play! 3], device 0: USB Audio [USB Audio]\n"
+        "  Subdevices: 1/1\n"
+    )
+    _sb = parse_aplay_devices(_SB)
+    eq("sound blaster: all three outputs parse", len(_sb), 3)
+    ok("sound blaster: the Play! 3 is recognised as USB", _sb[2]["is_usb"])
+    eq("sound blaster: it gets a stable name", _sb[2]["stable"], "plughw:CARD=S3,DEV=0")
+    # The reported fault, reproduced exactly: with this config the jack wins.
+    eq(
+        "sound blaster: a saved plughw:1,0 really does pin the jack here",
+        output_kind(choose_output(_sb, "plughw:1,0")),
+        "headphone",
+    )
+    _advice = stale_pin_advice(_sb, "plughw:1,0")
+    ok("stale pin: the situation is called out at all", _advice is not None)
+    ok("stale pin: it says a saved setting is the cause", "saved setting" in (_advice or ""))
+    ok("stale pin: it names what the number really means", "3.5 mm jack" in (_advice or ""))
+    ok(
+        "stale pin: it gives the exact one-line command to fix it",
+        "sudo greenway-announcer use-output plughw:CARD=S3,DEV=0" in (_advice or ""),
+    )
+    # It must not send him back to the installer for a one-setting change.
+    ok("stale pin: it does not send him to the installer", "install.sh" not in (_advice or ""))
+
+    # NEGATIVE CONTROLS. Advice that always fires is nagging, not diagnosis.
+    ok(
+        "stale pin: silent when the dongle is already pinned",
+        stale_pin_advice(_sb, "plughw:CARD=S3,DEV=0") is None,
+    )
+    ok(
+        "stale pin: silent when the pinned card number IS the best output",
+        stale_pin_advice(_sb, "plughw:2,0") is None,
+    )
+    ok("stale pin: silent when nothing is pinned", stale_pin_advice(_sb, None) is None)
+    ok(
+        "stale pin: silent when the pinned device is not plugged in",
+        stale_pin_advice(_sb, "plughw:CARD=Ghost,DEV=0") is None,
+    )
+    ok("stale pin: silent when there is no hardware", stale_pin_advice([], "plughw:1,0") is None)
+    # Pinning the jack on a Pi with no dongle is a correct, deliberate choice.
+    ok(
+        "stale pin: does not nag when the jack is genuinely the best there is",
+        stale_pin_advice(_bw, "plughw:CARD=Headphones,DEV=0") is None,
+    )
+    # HDMI pinned while a real output exists is worth flagging too.
+    ok(
+        "stale pin: flags a pin to HDMI when something better exists",
+        stale_pin_advice(_sb, "plughw:CARD=vc4hdmi,DEV=0") is not None,
+    )
+
+    # -- absent_pin_advice ---------------------------------------------------
+    # "so i can change the dongle if needed". Swap the Sound Blaster for a
+    # different adapter and the pin names a card that no longer exists. Sound
+    # still comes out via the fallback chain, so nothing LOOKS wrong, and the
+    # setting the owner believes is in force is being ignored.
+    _gone = absent_pin_advice(_sb, "plughw:CARD=OldDongle,DEV=0")
+    ok("absent pin: an unplugged pin is called out at all", _gone is not None)
+    ok("absent pin: it says the output is not plugged in", "NOT plugged in" in (_gone or ""))
+    ok(
+        "absent pin: it names what sound is actually coming out of",
+        "USB audio adapter" in (_gone or ""),
+    )
+    ok(
+        "absent pin: it offers pinning the output that IS here",
+        "use-output plughw:CARD=S3,DEV=0" in (_gone or ""),
+    )
+    # Only offering "pin the new one" means doing this again after every swap.
+    ok(
+        "absent pin: it also offers stopping pinning altogether",
+        "use-output auto" in (_gone or ""),
+    )
+    ok("absent pin: it does not send him to the installer", "install.sh" not in (_gone or ""))
+    # NEGATIVE CONTROLS. Advice that always fires is nagging, not diagnosis.
+    ok(
+        "absent pin: silent when the pinned output is plugged in",
+        absent_pin_advice(_sb, "plughw:CARD=S3,DEV=0") is None,
+    )
+    ok(
+        "absent pin: silent when the pin is a card number that resolves",
+        absent_pin_advice(_sb, "plughw:1,0") is None,
+    )
+    ok("absent pin: silent when nothing is pinned", absent_pin_advice(_sb, None) is None)
+    ok("absent pin: silent when set to auto", absent_pin_advice(_sb, "") is None)
+    ok(
+        "absent pin: silent when there is no hardware to compare against",
+        absent_pin_advice([], "plughw:CARD=S3,DEV=0") is None,
+    )
+    # The two warnings answer different questions and must not both fire: one
+    # says "your pin is worse than what is here", the other "your pin is not
+    # here at all". Printing both would contradict itself.
+    ok(
+        "absent pin: does not double up with the stale-pin warning",
+        not (
+            absent_pin_advice(_sb, "plughw:1,0") is not None
+            and stale_pin_advice(_sb, "plughw:CARD=OldDongle,DEV=0") is not None
+        ),
+    )
+
+    # -- candidate_probe_order ----------------------------------------------
+    # We save the reboot-proof name, so we must PROVE the reboot-proof name.
+    # Probing one spelling and saving another writes an address into the config
+    # that was never played through.
+    eq(
+        "probe order: the reboot-proof spelling is tried first",
+        candidate_probe_order(_usb[1])[0],
+        "plughw:CARD=Device,DEV=0",
+    )
+    eq(
+        "probe order: the card number is kept as a fallback spelling",
+        candidate_probe_order(_usb[1]),
+        ["plughw:CARD=Device,DEV=0", "plughw:1,0"],
+    )
+    ok(
+        "probe order: never offers the same address twice",
+        len(candidate_probe_order(_usb[1])) == len(set(candidate_probe_order(_usb[1]))),
+    )
+    # A card whose two spellings collapse to one must not be probed twice.
+    eq(
+        "probe order: identical spellings collapse to a single attempt",
+        candidate_probe_order({"stable": "plughw:CARD=X,DEV=0", "alsa": "plughw:CARD=X,DEV=0"}),
+        ["plughw:CARD=X,DEV=0"],
+    )
+    eq("probe order: a device with no addresses yields nothing", candidate_probe_order({}), [])
+
+    # -- cmd_audio: the actual screen the owner reads ------------------------
+    # The report is the only thing standing between the owner and an hour of
+    # guessing at a silent speaker. Until now nothing executed it, so every
+    # rule inside it (ordering, stable names, the unplugged warning, the
+    # fallback chain) was unprotected. This runs the real function with the
+    # shell calls stubbed and asserts on what it actually prints.
+    def _render(aplay_text: str, configured: Optional[str]) -> str:
+        real_run, real_which = subprocess.run, shutil.which
+        buf: List[str] = []
+        real_print = builtins.print
+
+        def _fake_run(cmd, *a, **kw):
+            out = b""
+            if list(cmd[:2]) == ["aplay", "-l"]:
+                out = aplay_text.encode()
+            elif list(cmd[:2]) == ["amixer", "scontrols"]:
+                out = b"Simple mixer control 'PCM',0\n"
+            elif list(cmd[:2]) == ["amixer", "-M"]:
+                out = b"  Mono: Playback 80 [80%] [on]\n"
+            return types.SimpleNamespace(returncode=0, stdout=out, stderr=b"")
+
+        try:
+            subprocess.run = _fake_run
+            shutil.which = lambda n: "/usr/bin/" + n
+            builtins.print = lambda *a, **k: buf.append(" ".join(str(x) for x in a))
+            cmd_audio(
+                argparse.Namespace(
+                    audio_device=configured,
+                    config="/nonexistent/greenway-selftest.json",
+                )
+            )
+        finally:
+            subprocess.run, shutil.which = real_run, real_which
+            builtins.print = real_print
+        return "\n".join(buf)
+
+    # Assertions below target the SPECIFIC line, not the whole page. Searching
+    # the whole page is how a test passes on text that happens to appear
+    # somewhere else -- e.g. the listing and the fallback chain both contain
+    # the same addresses, so "is it anywhere" proves nothing about either.
+    def _line(report: str, prefix: str) -> str:
+        for ln in report.splitlines():
+            if ln.strip().startswith(prefix):
+                return ln
+        return ""
+
+    def _listing(report: str) -> List[str]:
+        """Only the 'Found N outputs, best first:' block."""
+        out, grabbing = [], False
+        for ln in report.splitlines():
+            if ln.startswith("Found "):
+                grabbing = True
+                continue
+            if grabbing:
+                if not ln.strip() or ln.strip().startswith("("):
+                    break
+                out.append(ln.strip())
+        return out
+
+    _rep = _render(_APLAY_USB, None)
+    ok("audio report: lists the USB dongle", "USB Audio" in _rep)
+    ok(
+        "audio report: the IN USE line names the dongle",
+        "USB audio adapter" in _line(_rep, "In use:"),
+    )
+    ok("audio report: shows the fallback chain", "tried in order" in _rep)
+    ok("audio report: the jack is listed as a fallback", "plughw:CARD=Headphones,DEV=0" in _rep)
+
+    # The listing must use reboot-proof names. Asserting the stable name is
+    # merely "in the report" passed even when the listing printed plughw:1,0,
+    # because the fallback chain below it carried the stable name anyway.
+    _rows = _listing(_rep)
+    eq("audio report: every output is listed", len(_rows), 2)
+    ok(
+        "audio report: the listing uses reboot-proof CARD= names",
+        all(r.startswith("plughw:CARD=") for r in _rows),
+    )
+    ok(
+        "audio report: the listing never offers a bare card number",
+        not any(re.match(r"^plughw:\d+,\d+", r) for r in _rows),
+    )
+
+    # Ordering is the whole feature: USB must be printed ABOVE the jack, and
+    # must be first in the chain. Asserting mere presence would pass even if
+    # the preference were reversed.
+    ok(
+        "audio report: USB is listed above the analog jack",
+        _rows and _rows[0].startswith("plughw:CARD=Device,DEV=0"),
+    )
+    ok(
+        "audio report: USB is first in the fallback chain",
+        "1. plughw:CARD=Device,DEV=0" in _rep,
+    )
+
+    # Negative control for that ordering: with no dongle present, the jack must
+    # take first place. If the assertions above pass in BOTH worlds they are
+    # measuring nothing.
+    _rep_jack = _render(_APLAY_BOOKWORM, None)
+    ok(
+        "audio report: with no dongle the jack is first instead",
+        "1. plughw:CARD=Headphones,DEV=0" in _rep_jack,
+    )
+    ok("audio report: HDMI is never promoted to first", "1. plughw:CARD=vc4hdmi" not in _rep_jack)
+
+    # A configured device that is not plugged in must be called out, not
+    # silently reported as "in use" -- that is the fault being fixed.
+    _rep_ghost = _render(_APLAY_USB, "plughw:CARD=Ghost,DEV=0")
+    ok("audio report: warns when the configured output is absent", "WARNING" in _rep_ghost)
+    ok("audio report: says it is falling back", "not plugged in right now" in _rep_ghost)
+    ok(
+        "audio report: still names what will really play",
+        "USB audio adapter" in _line(_rep_ghost, "In use:"),
+    )
+    # The report must never answer "what will play?" with silence or a shrug.
+    # Without this, blanking the lookup entirely still passed, because the
+    # dongle's name appears elsewhere on the page.
+    ok(
+        "audio report: the IN USE line is never 'nothing found' when hardware exists",
+        "no audio output was found" not in _line(_rep_ghost, "In use:"),
+    )
+    ok(
+        "audio report: the IN USE line names a real device when one exists",
+        "no audio output was found" not in _line(_rep, "In use:"),
+    )
+    # An explicitly configured, present jack must be reported as in use -- the
+    # negative control proving the IN USE line tracks the choice rather than
+    # printing a constant.
+    ok(
+        "audio report: the IN USE line follows an explicit jack choice",
+        "3.5 mm jack" in _line(_render(_APLAY_USB, "plughw:CARD=Headphones,DEV=0"), "In use:"),
+    )
+
+    # ...and the negative control: a device that IS present must NOT warn.
+    _rep_ok = _render(_APLAY_USB, "plughw:CARD=Device,DEV=0")
+    ok("audio report: no false alarm for a present output", "WARNING" not in _rep_ok)
+    # The same output spelled with a card number must also not warn. This is
+    # the regression that made a correct config look broken.
+    ok(
+        "audio report: a numbered spelling of a present output does not warn",
+        "WARNING" not in _render(_APLAY_USB, "plughw:1,0"),
+    )
+    ok(
+        "audio report: a hw: spelling of a present output does not warn",
+        "WARNING" not in _render(_APLAY_USB, "hw:CARD=Device,DEV=0"),
+    )
+
+    # An explicitly configured jack must be honoured, not overridden by USB.
+    _rep_forced = _render(_APLAY_USB, "plughw:CARD=Headphones,DEV=0")
+    ok(
+        "audio report: an explicit jack choice is obeyed over USB",
+        "1. plughw:CARD=Headphones,DEV=0" in _rep_forced,
+    )
+    ok(
+        "audio report: the dongle is still offered as a fallback",
+        "2. plughw:CARD=Device,DEV=0" in _rep_forced,
+    )
+
+    # No hardware at all must fail loudly and usefully, never traceback.
+    _rep_none = _render("no soundcards found...\n", None)
+    ok("audio report: says plainly when there is no sound hardware", "No audio outputs found" in _rep_none)
+
+    # Michael's fault, end to end through the real command: a saved card
+    # number pinning the jack while the Sound Blaster sits idle. The two
+    # existing lines ("Configured:" and "In use:") are each individually
+    # correct, so without this the whole diagnosis could vanish from the
+    # report and every assertion above would still pass.
+    _rep_pinned = _render(_SB, "plughw:1,0")
+    ok("audio report: the stale pin is called out", "pinned to plughw:1,0" in _rep_pinned)
+    ok("audio report: it blames the saved setting", "saved setting" in _rep_pinned)
+    ok(
+        "audio report: it gives the one-line fix",
+        "sudo greenway-announcer use-output plughw:CARD=S3,DEV=0" in _rep_pinned,
+    )
+    # Negative control: correctly pinned to the dongle must NOT be nagged at.
+    ok(
+        "audio report: no stale-pin nagging when already on the dongle",
+        "pinned to" not in _render(_SB, "plughw:CARD=S3,DEV=0"),
+    )
+
+    # A pin that is present and genuinely best fires no warning at all -- so
+    # without this the escape hatch could be deleted and every test above
+    # would still pass. The day it matters is the day he swaps the dongle and
+    # the Pi is not in front of him.
+    ok(
+        "audio report: a correctly pinned speaker is still told how to go auto",
+        "use-output auto" in _render(_SB, "plughw:CARD=S3,DEV=0"),
+    )
+    # Negative control: it must be said ONCE, not stacked on top of advice
+    # that already offers a fix. Two different answers to one problem is noise.
+    #
+    # This asserts on the hint's OWN wording rather than on "use-output auto",
+    # because the stale-pin advice does not contain that string -- so counting
+    # occurrences of the command let the stacked version pass. A test that
+    # cannot tell the two messages apart is not testing the rule.
+    ok(
+        "audio report: the standalone auto hint is suppressed when stale-pin advice fires",
+        "To stop pinning one socket" not in _rep_pinned,
+    )
+
+    # Pinned to a dongle that has been unplugged. Sound still comes out, so
+    # nothing looks wrong, and the saved setting is silently being ignored.
+    _rep_gone = _render(_SB, "plughw:CARD=OldDongle,DEV=0")
+    ok(
+        "audio report: an unplugged pin is reported as not plugged in",
+        "NOT plugged in" in _rep_gone,
+    )
+    ok(
+        "audio report: an unplugged pin offers auto-pick as a way out",
+        "use-output auto" in _rep_gone,
+    )
+
+    # -- cmd_audio reading a REAL config ------------------------------------
+    # Every _render above passes --audio-device, which skips the config read
+    # entirely. So the branch that decides pinned/auto/unset from a saved file
+    # -- the branch every speaker in the field actually takes -- was never
+    # executed. This writes a real config and runs the real command.
+    def _render_cfg(aplay_text: str, cfg: Dict[str, Any]) -> str:
+        real_run, real_which, real_print = subprocess.run, shutil.which, builtins.print
+        buf: List[str] = []
+        tmp = Path(tempfile.mkdtemp(prefix="greenway-selftest-")) / "config.json"
+        tmp.write_text(json.dumps(cfg), encoding="utf-8")
+
+        def _fake_run(cmd, *a, **kw):
+            out = b""
+            if list(cmd[:2]) == ["aplay", "-l"]:
+                out = aplay_text.encode()
+            return types.SimpleNamespace(returncode=0, stdout=out, stderr=b"")
+
+        try:
+            subprocess.run = _fake_run
+            shutil.which = lambda n: "/usr/bin/" + n if n == "aplay" else None
+            builtins.print = lambda *a, **k: buf.append(" ".join(str(x) for x in a))
+            cmd_audio(argparse.Namespace(audio_device=None, config=str(tmp)))
+        finally:
+            subprocess.run, shutil.which, builtins.print = real_run, real_which, real_print
+            try:
+                tmp.unlink()
+                tmp.parent.rmdir()
+            except OSError:
+                pass
+        return "\n".join(buf)
+
+    _cfg_auto = _render_cfg(_SB, {"audioDevice": "", "audioMode": "auto"})
+    ok(
+        "audio report: a speaker set to auto says so",
+        "automatic" in _line(_cfg_auto, "Configured:"),
+    )
+    ok(
+        "audio report: an auto speaker really lands on the dongle",
+        "USB audio adapter" in _line(_cfg_auto, "In use:"),
+    )
+    # Negative controls: auto must not inherit the pinned speaker's messages.
+    ok(
+        "audio report: an auto speaker is never told it is pinned",
+        "pinned to" not in _cfg_auto,
+    )
+    ok(
+        "audio report: an auto speaker is not told how to become auto",
+        "use-output auto" not in _cfg_auto,
+    )
+    # The pre-auto state must keep reading differently, or the two have been
+    # collapsed back into one and `test` re-pinning is invisible again.
+    _cfg_unset = _render_cfg(_SB, {"audioDevice": ""})
+    ok(
+        "audio report: a never-configured speaker does not claim to be set to auto",
+        "automatic" not in _line(_cfg_unset, "Configured:"),
+    )
+    # And a real saved pin, read from disk rather than the command line.
+    _cfg_pinned = _render_cfg(_SB, {"audioDevice": "plughw:1,0"})
+    ok(
+        "audio report: a stale pin saved on disk is still caught",
+        "pinned to plughw:1,0" in _cfg_pinned,
+    )
+    ok(
+        "audio report: the saved setting is named as the source",
+        "saved setting" in _line(_cfg_pinned, "Configured:"),
+    )
 
     print(f"\n{passed} checks passed, {failed} failed.")
     if failed == 0:
@@ -2153,8 +3567,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_test.add_argument("--volume", type=int, default=70)
     p_test.set_defaults(func=cmd_test)
 
-    p_use = sub.add_parser("use-output", help="Set which sound output this speaker uses.")
-    p_use.add_argument("device", help="ALSA device, e.g. plughw:1,0")
+    p_use = sub.add_parser(
+        "use-output",
+        help="Set which sound output this speaker uses, or 'auto' to pick the best.",
+    )
+    p_use.add_argument(
+        "device",
+        help="ALSA device, e.g. plughw:CARD=S3,DEV=0 — or 'auto' to stop pinning one",
+    )
     p_use.set_defaults(func=cmd_use_output)
 
     p_audio = sub.add_parser("audio", help="Show the sound hardware and diagnose buzzing.")

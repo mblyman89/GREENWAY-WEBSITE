@@ -19,6 +19,7 @@
  * These are deliberately cheap string checks. They are not trying to prove the
  * manual is well written — only that the FACTS in it still match the code.
  */
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -43,6 +44,39 @@ const card = read(CARD_PATH);
 const installer = read(INSTALLER_PATH);
 const agent = read(AGENT_PATH);
 const unit = read(UNIT_PATH);
+
+/**
+ * The subcommands the agent REALLY registers, read from its own --help.
+ *
+ * Source-text greps for `add_parser("x"` are coupled to formatting: reflowing
+ * the call across two lines broke three tests without breaking any behaviour.
+ * They are also too weak in the other direction - they cannot tell a live
+ * command from one mentioned in a comment. Running the program removes both
+ * failure modes at once.
+ *
+ * Cached: argparse output cannot change between assertions in one run, and
+ * spawning Python per case is slow enough to be noticed in CI.
+ */
+let cachedSubcommands: string[] | null = null;
+function agentSubcommands(): string[] {
+  if (cachedSubcommands) return cachedSubcommands;
+
+  // Python may be absent in some sandboxes. Failing loudly beats skipping:
+  // a silently-skipped contract test is an absent one.
+  const help = execFileSync("python3", [join(ROOT, AGENT_PATH), "--help"], {
+    encoding: "utf8",
+    timeout: 30_000,
+  });
+
+  // argparse prints the choices as "{run,pair,test,use-output,...}", possibly
+  // wrapped across lines. Take the first such block and split it.
+  const block = help.replace(/\n\s+/g, "").match(/\{([a-z][a-z,-]*)\}/);
+  if (!block) {
+    throw new Error(`could not read the subcommand list out of --help:\n${help}`);
+  }
+  cachedSubcommands = block[1].split(",").filter(Boolean);
+  return cachedSubcommands;
+}
 
 describe("the manual the installer promises actually exists", () => {
   it("install.sh points at a file that is present", () => {
@@ -85,7 +119,29 @@ describe("every command the manual tells you to run really exists", () => {
   const documented = ["status", "test", "selftest", "pair", "run", "audio", "use-output"];
 
   it.each(documented)("greenway-announcer %s is a real subcommand", (cmd) => {
-    expect(agent).toContain(`add_parser("${cmd}"`);
+    // Ask the PROGRAM, not the source text. The original assertion grepped for
+    // the literal `add_parser("use-output"`. When that call was reformatted
+    // across two lines to fit a longer help string, the command still existed
+    // and still worked, but the test failed - and the only honest reading of
+    // that failure ("the manual documents a command that does not exist") was
+    // wrong. A test that reports a false cause trains you to ignore it.
+    //
+    // The inverse is the real danger: a grep for a string in a comment, or a
+    // parser entry that exists but is never wired to a function, would PASS a
+    // text search while the command died at runtime. --help only lists a
+    // subcommand argparse genuinely registered.
+    expect(agentSubcommands(), `greenway-announcer ${cmd} must be a real subcommand`).toContain(
+      cmd,
+    );
+  });
+
+  it("the parser check can actually fail (negative control)", () => {
+    // A membership assertion against a list that silently came back empty, or
+    // that contains everything, passes forever. Prove both directions.
+    const subs = agentSubcommands();
+    expect(subs.length, "no subcommands were parsed out of --help at all").toBeGreaterThan(4);
+    expect(subs).not.toContain("use-ouput"); // transposed typo
+    expect(subs).not.toContain("reboot"); // never existed
   });
 
   /**
@@ -399,12 +455,42 @@ describe("quickstart: the agent's output is quoted exactly", () => {
   });
 
   it("names the mute-check tools the agent's own advice names", () => {
-    expect(agent).toContain("aplay -l");
+    // The point of this test is that a shop owner reading the quickstart sees
+    // the SAME tool names the Pi prints at them when a sound does not play.
+    // It used to hard-code "aplay -l" on both sides. That was right when the
+    // agent's step 3 said "run aplay -l yourself and work out which line is
+    // your dongle" - a raw kernel listing with no hint which entry to use.
+    //
+    // The agent now says "run 'sudo greenway-announcer audio'", which prints
+    // the same hardware already matched to plain-English names and volumes.
+    // Pinning the old string would force the manual to keep teaching the
+    // harder tool forever. So assert the CONTRACT (the two documents agree)
+    // rather than one frozen spelling of it.
+    const step3 = agent.match(/3\. Run '([^']+)'/);
+    expect(step3, "the agent's 'no sound' advice must have a step 3 naming a command").not.toBeNull();
+    const recommended = step3![1].replace(/^sudo /, "");
+    expect(
+      quickstart,
+      `the agent tells you to run "${recommended}" but the quickstart never mentions it`,
+    ).toContain(recommended);
+
+    // The mute check is still alsamixer in both places.
     expect(agent).toContain("alsamixer");
     expect(agent).toContain("MM means muted");
-    expect(quickstart).toContain("aplay -l");
     expect(quickstart).toContain("alsamixer");
     expect(quickstart).toMatch(/MM.{0,40}mute/i);
+  });
+
+  it("does not send the owner to a raw aplay listing any more", () => {
+    // Negative control for the test above, and a real regression guard: the
+    // whole point of `greenway-announcer audio` is that nobody has to read
+    // `aplay -l` and guess which card is theirs. If that instruction creeps
+    // back into the owner-facing quickstart, the friendlier command is being
+    // bypassed and this should fail.
+    expect(
+      /^\s*(sudo )?aplay -l\s*$/m.test(quickstart),
+      "the quickstart tells the owner to run 'aplay -l' instead of 'greenway-announcer audio'",
+    ).toBe(false);
   });
 });
 
@@ -416,9 +502,9 @@ describe("quickstart: every command it tells you to run is real", () => {
     expect(subcommands.length).toBeGreaterThan(0);
     for (const sub of new Set(subcommands)) {
       expect(
-        agent,
+        agentSubcommands(),
         `greenway-announcer ${sub} is in the quickstart but not in the agent's parser`,
-      ).toContain(`add_parser("${sub}"`);
+      ).toContain(sub);
     }
   });
 
@@ -435,10 +521,35 @@ describe("quickstart: every command it tells you to run is real", () => {
   });
 
   it("uses the audio flags with the exact example value the code documents", () => {
-    expect(installer).toContain('--audio-device DEV  ALSA device, e.g. "plughw:1,0"');
-    expect(quickstart).toContain("--audio-device plughw:1,0");
+    // This used to pin the example to "plughw:1,0" in both files. That number
+    // is the Pi's plug-in ORDER, not an identity: reboot with a second USB
+    // device attached and card 1 can become card 2, so a saved "plughw:1,0"
+    // silently points at the wrong hardware and the shop goes quiet with
+    // nobody having touched anything. Both documents now teach the
+    // reboot-proof "plughw:CARD=Name,DEV=0" form, and this test must enforce
+    // the SAFE advice rather than freeze the dangerous advice in place.
+    expect(installer).toContain("--audio-device DEV");
+    expect(installer).toMatch(/plughw:CARD=[A-Za-z]+,DEV=0/);
+    expect(quickstart).toMatch(/--audio-device plughw:CARD=[A-Za-z]+,DEV=0/);
+
+    // The mixer example is still a plain control name in both places.
     expect(installer).toContain('--mixer-control C   ALSA mixer name, e.g. "PCM"');
     expect(quickstart).toContain("--mixer-control PCM");
+  });
+
+  it("never offers a bare card NUMBER as the example to copy", () => {
+    // Negative control for the rule above. "plughw:1,0" may still be MENTIONED
+    // (the quickstart explains why not to use it), but it must never appear as
+    // the value on a command line the owner is told to paste.
+    for (const [name, text] of [
+      ["the installer's help", installer],
+      ["the quickstart", quickstart],
+    ] as const) {
+      expect(
+        /--audio-device\s+"?plughw:\d+,\d+/.test(text),
+        `${name} tells the owner to paste a bare card number, which breaks on reboot`,
+      ).toBe(false);
+    }
   });
 
   it("only passes flags to 'greenway-announcer' that its subcommands define", () => {
@@ -497,7 +608,7 @@ describe("quickstart: the saved-audio-output advice matches the agent", () => {
   });
 
   it("teaches use-output instead of re-running the installer for audio", () => {
-    expect(agent).toContain('add_parser("use-output"');
+    expect(agentSubcommands()).toContain("use-output");
     expect(quickstart).toContain("sudo greenway-announcer use-output");
     // The obsolete instruction must not survive anywhere in the document.
     expect(
