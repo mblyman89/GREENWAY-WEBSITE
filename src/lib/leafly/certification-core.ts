@@ -152,6 +152,77 @@ function isSuccess(status: number): boolean {
 }
 
 /**
+ * One recorded call to Leafly that required an access token.
+ *
+ * Deliberately not "a push". See `deriveAuthSucceeded` for why that distinction
+ * is the whole point.
+ */
+export type AuthenticatedAttempt = {
+  /** What was called, for the owner-facing finding. e.g. "status check". */
+  kind: string;
+  /** The HTTP status Leafly returned. */
+  httpStatus: number;
+  /** ISO timestamp, used only to report the most recent proof. */
+  at?: string | null;
+};
+
+/**
+ * Did we ever successfully authenticate with Leafly?
+ *
+ * WHY THIS EXISTS.
+ *
+ * The page used to answer this question from live MENU PUSHES alone:
+ *
+ *     authSucceeded = livePushes.length === 0
+ *       ? null
+ *       : livePushes.some((log) => log.status === "ok");
+ *
+ * That conflates "we proved our credentials work" with "we have published a
+ * menu". They are different events, and during onboarding the first happens
+ * long before the second.
+ *
+ * In the sandbox review the owner pressed "Check integration status" and Leafly
+ * answered HTTP 200 with menuIntegrationEnabled:true and integratedItemCount:
+ * 1876. That call carries an OAuth bearer token. A 200 on it is proof - Leafly
+ * itself verified the credentials - and the certification page still reported
+ * authentication as UNTESTED, because no menu had been pushed yet.
+ *
+ * The criterion's own remedy text even said: "Run one Check Status from this
+ * page. It is a read-only call and it proves auth." He ran it. It proved it.
+ * The gate was not listening. Advice you follow that changes nothing is worse
+ * than no advice, because it makes the owner distrust the whole panel.
+ *
+ * So: ANY recorded call that required a token and came back 2xx proves
+ * authentication. A 401/403 disproves it. Anything else (a 500, a timeout, a
+ * network error) proves NOTHING either way and must leave the verdict null
+ * rather than record a failure we cannot evidence - house rule 3.
+ */
+export function deriveAuthSucceeded(
+  attempts: readonly AuthenticatedAttempt[],
+): boolean | null {
+  if (attempts.length === 0) return null;
+
+  // A single success is permanent proof: the credentials WERE accepted at least
+  // once, which is exactly what Leafly's criterion asks. A later 500 does not
+  // un-prove it.
+  if (attempts.some((a) => isSuccess(a.httpStatus))) return true;
+
+  // No successes. Only an explicit credential rejection may be reported as a
+  // failure; a server error says nothing about our key.
+  if (attempts.some((a) => a.httpStatus === 401 || a.httpStatus === 403)) return false;
+
+  return null;
+}
+
+/** The most recent attempt that proves authentication, for the finding text. */
+export function latestSuccessfulAttempt(
+  attempts: readonly AuthenticatedAttempt[],
+): AuthenticatedAttempt | null {
+  const ok = attempts.filter((a) => isSuccess(a.httpStatus));
+  return ok.length === 0 ? null : ok[ok.length - 1];
+}
+
+/**
  * Assess readiness to request Leafly MENU certification.
  *
  * Fails closed in every direction: no inputs at all produces a clear "not ready" with
@@ -202,7 +273,9 @@ export function assessMenuCertificationReadiness(
       finding:
         "Credentials are saved but no live call has been made, so authentication is " +
         "untested.",
-      remedy: "Run one Check Status from this page. It is a read-only call and it proves auth.",
+      remedy:
+        "Press 'Check integration status' on this page. It is a read-only call, it cannot " +
+        "change anything at Leafly, and a 200 back from it proves the credentials work.",
     });
   }
 
@@ -800,6 +873,103 @@ export function __runLeaflyCertificationTests(): { passed: number; failed: numbe
   check(
     "every blocker contains both a finding and a remedy",
     nothing.blockers.every((b) => b.includes("\u2014") && b.length > 60),
+  );
+
+  // --- deriveAuthSucceeded (the "UNTESTED after a 200" defect) -----------
+  //
+  // The defect these pin: the owner pressed "Check integration status", Leafly
+  // answered 200, and the gate still reported authentication as untested
+  // because only menu pushes were consulted.
+  check("no recorded calls at all is untested, NOT failed", deriveAuthSucceeded([]) === null);
+
+  check(
+    "a 200 from a read-only status check proves authentication",
+    deriveAuthSucceeded([{ kind: "status check", httpStatus: 200 }]) === true,
+  );
+
+  check(
+    "a 204 counts too - any 2xx came back through a validated token",
+    deriveAuthSucceeded([{ kind: "status check", httpStatus: 204 }]) === true,
+  );
+
+  check(
+    "a 401 is a real credential failure",
+    deriveAuthSucceeded([{ kind: "status check", httpStatus: 401 }]) === false,
+  );
+  check(
+    "a 403 is a real credential failure",
+    deriveAuthSucceeded([{ kind: "status check", httpStatus: 403 }]) === false,
+  );
+
+  // A 500 means Leafly fell over. It says nothing about our key, and reporting
+  // it as a credential failure would send the owner to rotate a working secret.
+  check(
+    "a 500 leaves authentication untested rather than blaming our key",
+    deriveAuthSucceeded([{ kind: "status check", httpStatus: 500 }]) === null,
+  );
+  check(
+    "a 0 (network error / never sent) also leaves it untested",
+    deriveAuthSucceeded([{ kind: "menu push", httpStatus: 0 }]) === null,
+  );
+
+  // Order independence: one success is permanent proof. Credentials that were
+  // accepted once WERE valid, which is exactly what Leafly's criterion asks.
+  check(
+    "an earlier success is not undone by a later server error",
+    deriveAuthSucceeded([
+      { kind: "status check", httpStatus: 200 },
+      { kind: "menu push", httpStatus: 500 },
+    ]) === true,
+  );
+  check(
+    "a success after a failure also proves it",
+    deriveAuthSucceeded([
+      { kind: "status check", httpStatus: 401 },
+      { kind: "status check", httpStatus: 200 },
+    ]) === true,
+  );
+
+  check(
+    "latestSuccessfulAttempt returns the most recent success, not the first",
+    latestSuccessfulAttempt([
+      { kind: "status check", httpStatus: 200, at: "2026-01-01T00:00:00Z" },
+      { kind: "menu push", httpStatus: 200, at: "2026-02-01T00:00:00Z" },
+    ])?.at === "2026-02-01T00:00:00Z",
+  );
+  check(
+    "latestSuccessfulAttempt is null when nothing succeeded",
+    latestSuccessfulAttempt([{ kind: "status check", httpStatus: 401 }]) === null,
+  );
+
+  // End-to-end through the gate: this is the exact sandbox situation.
+  const statusOnly = assessMenuCertificationReadiness({
+    ...ready,
+    authSucceeded: deriveAuthSucceeded([{ kind: "status check", httpStatus: 200 }]),
+    recentPushStatuses: [],
+  });
+  const authCriterion = statusOnly.criteria.find((c) => c.id === "auth");
+  check(
+    "a store that has only run a status check still PASSES authentication",
+    authCriterion?.status === "pass",
+  );
+
+  // Negative control. If the line above passed because every criterion is
+  // hard-coded to "pass", this one catches it: with nothing recorded at all,
+  // the same criterion must report unknown.
+  const neverCalled = assessMenuCertificationReadiness({
+    ...ready,
+    authSucceeded: deriveAuthSucceeded([]),
+    recentPushStatuses: [],
+  });
+  check(
+    "with no calls recorded, authentication is reported unknown",
+    neverCalled.criteria.find((c) => c.id === "auth")?.status === "unknown",
+  );
+  check(
+    "the untested remedy names the button that actually clears it",
+    neverCalled.criteria
+      .find((c) => c.id === "auth")
+      ?.remedy.includes("Check integration status") === true,
   );
 
   return { passed, failed };

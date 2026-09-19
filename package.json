@@ -12,6 +12,8 @@
     "seed:vendors:cultivera": "tsx scripts/seed/seed_vendors_from_cultivera.ts",
     "test": "vitest run",
     "test:compliance": "vitest run tests/compliance",
+    "announcer:sync": "node scripts/announcer/sync-served-copy.mjs",
+    "announcer:check": "node scripts/announcer/sync-served-copy.mjs --check",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "register:build": "vite build --config register-app/vite.config.ts",
