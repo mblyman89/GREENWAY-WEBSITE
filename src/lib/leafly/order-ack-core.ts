@@ -270,7 +270,9 @@ export const LEAFLY_ACK_IRREVERSIBLE_WARNING =
   "Acknowledging tells Leafly we have everything we need for this order. " +
   "Leafly then permanently revokes our access to the customer's government ID " +
   "and medical ID images — you will not be able to see them again, and there is " +
-  "no way to undo this. Open and check any ID you need BEFORE acknowledging.";
+  "no way to undo this. Open and check any ID you need BEFORE acknowledging. " +
+  "This also tells Leafly we are making the order, so the customer stops seeing " +
+  "it as pending, and it puts the order on the register's pickup list.";
 
 // ============================================================================
 // 5. MAY WE ACKNOWLEDGE THIS ORDER?

@@ -77,6 +77,14 @@ import {
   medicalTestModeBannerActive,
 } from "@/lib/pos/medical-testmode-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
+// SLICE L-14 — the blocking cancellation modal. A Leafly order can be
+// cancelled from outside the building while a till has it open; this is the
+// interrupt that stops the handover.
+import {
+  RegisterInterruptModal,
+  type RegisterInterruptView,
+  type CancelDisposition,
+} from "./RegisterInterruptModal";
 import {
   hydrateSecureStore,
   loadPairing,
@@ -858,6 +866,58 @@ export function RegisterShell({
       clearInterval(t);
     };
   }, [screen, creds, online]);
+
+  // ── SLICE L-14: the blocking interrupt channel ────────────────────────
+  //
+  // Leafly can cancel an order from outside the building at any moment,
+  // INCLUDING while this register has it open in a sale. The enterprise
+  // standard says such an event may inform the counter but must never act on
+  // it, so this polls for interrupts and shows a modal; it never reaches into
+  // the cart.
+  //
+  // DELIBERATELY NOT gated on `screen === "home"`, unlike the pickup count
+  // above. The whole point is to reach a cashier who is MID-SALE — gating it
+  // on the idle screen would guarantee it only ever appeared when it no longer
+  // mattered.
+  //
+  // Faster than the 45s pickup poll (15s) because this one is racing a
+  // handover: every extra second is a second in which regulated product can
+  // cross the counter for an order that no longer exists.
+  const [interrupt, setInterrupt] = useState<RegisterInterruptView | null>(null);
+
+  useEffect(() => {
+    if (!creds || !online) return;
+    let cancelled = false;
+    const pollInterrupts = async () => {
+      try {
+        const res = await posFetch("/api/pos/interrupts", {
+          headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+        });
+        if (!res.ok) return;
+        const body = (await res.json().catch(() => null)) as
+          | { interrupts?: RegisterInterruptView[] }
+          | null;
+        const next = Array.isArray(body?.interrupts) ? body.interrupts[0] ?? null : null;
+        if (cancelled) return;
+        // Only ever REPLACE a null. If a modal is already on screen, leaving it
+        // alone matters: swapping the object under someone's finger mid-tap
+        // would record a decision against a different interrupt than the one
+        // they read.
+        setInterrupt((current) => current ?? next);
+      } catch {
+        // Silent. A register that cannot reach the interrupt channel must keep
+        // selling; the staff note and the back-office board still carry the
+        // warning.
+      }
+    };
+    const i0 = setTimeout(() => void pollInterrupts(), 0);
+    const i1 = setInterval(() => void pollInterrupts(), 15_000);
+    return () => {
+      cancelled = true;
+      clearTimeout(i0);
+      clearInterval(i1);
+    };
+  }, [creds, online]);
 
   // SLICE 14 — release the "already completed" latch whenever a NEW sale
   // begins. Done centrally here rather than at each of the four
@@ -1708,6 +1768,52 @@ export function RegisterShell({
           void flush();
         }}
       />
+      {/* SLICE L-14 — the blocking cancellation modal. Rendered FIRST among the
+          modals and at a higher z-index than the sale flow, because it is the
+          one message in this app that must never be worked around: by the time
+          it appears, a cashier may be seconds from handing over product for an
+          order Leafly has already cancelled. It has no close button by design. */}
+      {interrupt ? (
+        <RegisterInterruptModal
+          interrupt={interrupt}
+          employeeName={employee?.fullName ?? ""}
+          onSubmit={async (rowId, disposition) => {
+            if (!creds) return "This register is not set up.";
+            try {
+              const res = await posFetch("/api/pos/interrupts", {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  "x-pos-device-id": creds.deviceId,
+                  "x-pos-device-key": creds.deviceKey,
+                },
+                body: JSON.stringify({
+                  rowId,
+                  disposition,
+                  employeeName: employee?.fullName ?? "",
+                }),
+              });
+              if (!res.ok) {
+                const body = (await res.json().catch(() => null)) as { error?: string } | null;
+                return body?.error ?? `Could not record the decision (${res.status}).`;
+              }
+              return null;
+            } catch {
+              return "No connection — the decision was not recorded.";
+            }
+          }}
+          onResolved={(disposition: CancelDisposition) => {
+            setInterrupt(null);
+            // The banner is what remains on screen after the modal closes, so
+            // it has to carry the instruction the cashier now has to act on.
+            setBanner(
+              disposition === "void"
+                ? "Leafly cancelled that order. Void this sale and restock anything already bagged."
+                : "Leafly cancelled that order. Ring it up as a normal walk-in sale — it is no longer a Leafly order.",
+            );
+          }}
+        />
+      ) : null}
       {noSaleOpen && employee ? (
         <NoSaleModal
           creds={creds}

@@ -49,6 +49,9 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { enqueueAnnouncement } from "@/lib/announcer/announcer-enqueue";
 import { queueOrderReceipt } from "@/lib/printing/printer-store";
 import { pacificParts } from "@/lib/reports/timezone";
+// SLICE L-14. The register claim: the fact that makes decideCancelPlan's
+// collision branch reachable, and the interrupt that blocks the till.
+import { readRegisterClaim, raiseRegisterInterrupt } from "./register-claim-server";
 
 import {
   bridgeReceiptHeaderLines,
@@ -545,13 +548,18 @@ export async function onLeaflyOrderCanceled(
     // ordinary case, and the one Leafly's own fifteen-minute auto-cancel
     // produces. Nothing on the floor to undo.
     let localStatus: string | null = null;
+    // L-14: read the order NUMBER in the same round trip as the status. The
+    // interrupt has to name the order in words a budtender can match against
+    // the ticket in their hand -- a uuid is useless across a counter -- and a
+    // second query for one column would be a second chance to fail.
+    let localOrderNumber = "";
     if (localOrderId) {
       const admin = createSupabaseAdminClient();
       const { data, error } = await admin
         .from("orders")
-        .select("status")
+        .select("status, order_number")
         .eq("id", localOrderId)
-        .maybeSingle<{ status: string | null }>();
+        .maybeSingle<{ status: string | null; order_number: string | null }>();
       if (error) {
         // We cannot see what state the order is in, so we must not guess.
         // Escalate rather than assume it was safe to cancel.
@@ -560,9 +568,28 @@ export async function onLeaflyOrderCanceled(
         );
       }
       localStatus = data?.status ?? null;
+      localOrderNumber = (data?.order_number ?? "").trim();
     }
 
-    const plan = decideCancelPlan({ localStatus, registerSaleOpen: false, reasonCode });
+    // ── SLICE L-14: ask whether a till is actually holding this ─────────────
+    //
+    // This used to be a hardcoded `registerSaleOpen: false`. `decideCancelPlan`
+    // has always had a collision branch -- the one the owner asked about in
+    // Q-B, fully written and fully self-tested -- and that literal meant it
+    // could never fire in production. Correct code wired to a constant: the
+    // same class of defect as the L-12 origin gap.
+    //
+    // `readRegisterClaim` degrades to "unclaimed" whenever it cannot answer
+    // (no migration 0229, unreadable row, database down). That fallback is
+    // deliberately the pre-L-14 behaviour: if we do not KNOW a register holds
+    // it, the status-based rules decide, exactly as they did before.
+    const claim = await readRegisterClaim(id);
+
+    const plan = decideCancelPlan({
+      localStatus,
+      registerSaleOpen: claim.registerSaleOpen,
+      reasonCode,
+    });
 
     if (localOrderId && (plan.cancelLocalOrder || plan.alertFloor)) {
       const admin = createSupabaseAdminClient();
@@ -592,6 +619,39 @@ export async function onLeaflyOrderCanceled(
         actor_label: "Leafly",
         note: plan.staffMessage || plan.summary,
       });
+
+      // ── SLICE L-14: BLOCK THE TILL ───────────────────────────────────────
+      //
+      // The staff note below is durable but PASSIVE -- it is only seen by
+      // someone who opens the order. A cashier mid-sale is looking at the sale
+      // screen, not at the order record, so on its own the note is a warning
+      // that arrives after the handover it was meant to prevent.
+      //
+      // This raises the blocking interrupt the register polls for. It is
+      // written BEFORE the staff note so that if anything below fails, the
+      // loudest signal is already in place.
+      //
+      // Best-effort: an interrupt that cannot be written must never turn a
+      // cancellation into a failure. Leafly has already cancelled the order,
+      // and refusing the webhook would only make them retry. The staff note,
+      // the order_events row and the board warning all still happen.
+      if (plan.alertFloor) {
+        const raised = await raiseRegisterInterrupt({
+          leaflyOrderId: id,
+          localOrderId,
+          orderNumber: localOrderNumber,
+          // Null when the claim went stale: nobody in particular owns it, so
+          // the next register to ask is the one that gets told.
+          registerDeviceId: claim.state === "held" ? claim.deviceId : null,
+          plan,
+          reasonCode,
+        });
+        if (!raised.ok) {
+          console.error(
+            `[leafly/cancel] ${id}: could not raise the register interrupt (${raised.error ?? "unknown"})`,
+          );
+        }
+      }
 
       // On a collision the order stays live and workable, so the warning has
       // to live somewhere a budtender will actually see it. `staff_note` is
