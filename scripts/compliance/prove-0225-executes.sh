@@ -54,8 +54,28 @@ set -uo pipefail
 DB=greenway_migtest_0225
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../supabase/migrations" && pwd)"
 
-psql -q -c "drop database if exists $DB;" >/dev/null
-psql -q -c "create database $DB;" >/dev/null
+# `-d postgres` EXPLICITLY. Without it, `psql -c` connects to a database named
+# after the invoking user -- which exists on some machines and not others. When
+# it does not exist, the scratch database below is never created and every
+# check in this file then fails with "database does not exist", i.e. THE
+# HARNESS REPORTS AN ENVIRONMENT PROBLEM AS A MIGRATION DEFECT. That is the
+# most expensive false alarm a proof can raise: it points at correct SQL and
+# says it is wrong. `postgres` exists on every PostgreSQL install and is
+# reachable by both documented invocations of this script.
+psql -q -d postgres -c "drop database if exists $DB;" >/dev/null
+psql -q -d postgres -c "create database $DB;" >/dev/null
+
+# REFUSE TO CONTINUE if the scratch database is not actually there. Running the
+# checks anyway would produce a page of red that blames the migration for a
+# problem the migration cannot cause. Exit 2 is deliberately neither 0
+# (proved) nor 1 (a real failure): "not proven" is a third outcome.
+if ! psql -d "$DB" -tAc "select 1" >/dev/null 2>&1; then
+  echo "FATAL: could not create or connect to $DB."
+  echo "This is an ENVIRONMENT problem, not a migration problem."
+  echo "NOTHING about this migration has been proven or disproven."
+  psql -d "$DB" -tAc "select 1" 2>&1 | sed 's/^/  /'
+  exit 2
+fi
 
 # Supabase supplies these; a bare Postgres does not. Created up front so the
 # migrations run against the shape they were written for.
