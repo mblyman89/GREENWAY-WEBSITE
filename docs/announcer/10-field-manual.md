@@ -432,6 +432,31 @@ sudo greenway-announcer use-output plughw:CARD=S3,DEV=0
 Use the name from the list on *your* Pi. This is the single best argument for
 the long `CARD=` names: a pin written that way means what you meant.
 
+Or, better, stop pinning anything at all:
+
+```bash
+sudo greenway-announcer use-output auto
+```
+
+That clears the saved setting and lets the Pi pick the best output it can
+find, re-checked while it runs. It is the right answer if you expect to
+change the dongle, or to move back to the aux jack later, because it means
+never having to come back and edit this again.
+
+**"I swapped the dongle for a different one and the shop stopped using it."**
+A pin names *one* device. Swap the hardware and that name points at a card
+that is no longer there — sound still comes out, because the Pi falls back to
+the jack, so nothing looks broken. `audio` now says so in as many words:
+
+```
+NOTE: this speaker is pinned to plughw:CARD=S3,DEV=0 by a saved setting, but
+      that output is NOT plugged into this Pi right now, so the setting
+      is being ignored...
+```
+
+Then either pin the new adapter, or run `use-output auto` and stop doing this
+after every swap.
+
 **"I unplugged the USB adapter mid-shift and the shop kept announcing."**
 That is deliberate. The Pi does not play to one socket and give up if it
 fails: it tries each output in turn — USB adapter, then the 3.5 mm jack, then
@@ -467,6 +492,18 @@ can undo:
 - If nothing is pinned in the config, it simply picks the best output present
   **every time it looks** — so the preference order above survives any reboot
   by definition, with nothing saved anywhere.
+- **Auto-pick is a setting you can choose**, not just the absence of one. Run
+  `sudo greenway-announcer use-output auto` and the Pi records that you meant
+  it. That matters: without it, the next `sudo greenway-announcer test` would
+  find a working output, helpfully save it, and quietly pin the speaker again
+  — undoing the thing you just asked for. `status` tells you which state you
+  are in:
+
+  | `status` says | What it means |
+  |---|---|
+  | `audio out: plughw:CARD=S3,DEV=0` | Pinned to that one device |
+  | `audio out: automatic (best output, re-checked while running)` | You chose auto-pick |
+  | `audio out: not set yet (best output is picked automatically)` | Nobody has chosen; `test` may still pin one for you |
 - If an output **is** pinned (because you ran `use-output`, or `test` found a
   working one and saved it), it is stored in
   `/etc/greenway-announcer/config.json`, which persists across power cycles.

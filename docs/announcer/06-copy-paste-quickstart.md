@@ -412,8 +412,21 @@ sudo greenway-announcer use-output plughw:CARD=Device,DEV=0
 ```
 
 That saves it and restarts the service. It keeps your existing pairing, so no
-new code is needed and nothing has to be re-installed. To hear an output
-without saving it, add the flag to `test` instead:
+new code is needed and nothing has to be re-installed.
+
+**Or let it choose for itself.** If you expect to change the dongle, or to go
+back to the aux jack later, do not pin anything:
+
+```bash
+sudo greenway-announcer use-output auto
+```
+
+The Pi then uses the best output that is actually plugged in, re-checked
+about once a minute while it runs, and prints the order it will fall back
+through so you can see what it decided. Swap the hardware whenever you like;
+there is nothing to update afterwards.
+
+To hear an output without saving it, add the flag to `test` instead:
 
 ```bash
 sudo greenway-announcer test --audio-device plughw:CARD=Device,DEV=0
@@ -506,6 +519,13 @@ sudo greenway-announcer use-output plughw:CARD=Device,DEV=0
 
 That saves the choice and restarts the speaker service. Your pairing is
 untouched, so there is no new code to generate and nothing to re-install.
+
+If you would rather it never be pinned to one socket — so you can change the
+dongle, or use the aux jack, without editing anything — run this instead:
+
+```bash
+sudo greenway-announcer use-output auto
+```
 
 When the noise is acceptable, go to step 9.
 

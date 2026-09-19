@@ -221,6 +221,157 @@ mutate "use-output validates nothing at all" \
   '    if False:'
 
 echo ""
+echo "Mutating auto-pick (the owner must be able to swap the dongle):"
+# 25. THE TRAP AUTO-PICK SETS. Remove the guard and `test` writes the dongle
+#     back into the config, turning auto silently back into pinned. The next
+#     swap is then ignored and nothing on any screen explains why. This rule
+#     lives in should_save_audio_device but only BITES via cmd_test.
+mutate "test silently re-pins a speaker that was set to auto" \
+  '    if mode == "auto":
+        return False' \
+  '    if mode == "auto":
+        pass'
+# 26. Over-correct: never save anything. This must be caught by a DIFFERENT
+#     test than #25 -- it deletes the silent-shop fix (a Pi that found its
+#     working output and threw it away) while looking like a safety measure.
+mutate "the auto guard over-reaches and kills the silent-shop fix" \
+  '    if mode == "auto":
+        return False' \
+  '    if True:
+        return False'
+# 27. Clear the pin but do not record WHY. The config then looks exactly like
+#     a never-configured speaker, so the very next `test` re-pins it. This is
+#     the mutation that proves audioMode earns its place: without it, "auto"
+#     would last until somebody ran one diagnostic.
+mutate "auto forgets that it was chosen, so the next test undoes it" \
+  '    config["audioMode"] = "auto"' \
+  '    config["audioMode"] = ""'
+# 28. Do not actually clear the device, just set the flag. audio_mode() gives
+#     the device priority, so this speaker stays pinned while reporting auto.
+mutate "auto sets the flag but leaves the speaker pinned" \
+  '    config["audioDevice"] = ""
+    config["audioMode"] = "auto"' \
+  '    config["audioMode"] = "auto"'
+# 29. Leave a stale auto flag behind when pinning, so the config asserts two
+#     contradictory things at once.
+mutate "pinning leaves a contradictory auto flag in the config" \
+  '    config["audioMode"] = "pinned"' \
+  '    pass'
+# 30. Never restart, so the change is real on disk and invisible in the shop
+#     until somebody reboots the Pi.
+mutate "auto saves the setting but never applies it" \
+  '    restarted, detail = restart_service()
+    if restarted:
+        print("\nThe announcer has been restarted, so it is doing this already.")' \
+  '    restarted, detail = (True, "")
+    if restarted:
+        print("\nThe announcer has been restarted, so it is doing this already.")'
+
+echo ""
+echo "Mutating what counts as the word 'auto':"
+# 31. Stop understanding the word entirely: 'auto' falls through to validation
+#     and is refused as a device this Pi does not have -- the owner is told to
+#     his face that the documented command is wrong.
+mutate "the word 'auto' is no longer understood" \
+  '    if text.lower() in AUTO_OUTPUT_WORDS:
+        return None' \
+  '    if False:
+        return None'
+# 32. Treat EVERYTHING as auto, so naming a real device silently unpins the
+#     speaker instead of pinning it.
+mutate "every value is treated as auto-pick" \
+  '    if text.lower() in AUTO_OUTPUT_WORDS:
+        return None' \
+  '    if True:
+        return None'
+# 33. Case-sensitive matching: 'AUTO' typed off a screen stops working.
+mutate "auto only works in lower case" \
+  '    if text.lower() in AUTO_OUTPUT_WORDS:' \
+  '    if text in AUTO_OUTPUT_WORDS:'
+# 34. Substring matching instead of equality, so a card legitimately named
+#     'auto' or any address containing one of these words unpins the speaker.
+mutate "a device whose name contains an auto word unpins the speaker" \
+  '    if text.lower() in AUTO_OUTPUT_WORDS:' \
+  '    if any(w in text.lower() for w in AUTO_OUTPUT_WORDS):'
+# 35. Do not trim, so a trailing space pasted off a screen is a hard error.
+mutate "a pasted value with stray spaces stops being understood" \
+  '    text = raw.strip()' \
+  '    text = raw'
+
+echo ""
+echo "Mutating the three-state report (pinned / auto / unset):"
+# 36. Collapse auto back into unset. They need opposite behaviour from `test`,
+#     so a speaker that reads the same in both states hides which one it is in.
+mutate "auto and never-configured become indistinguishable" \
+  '    if str(config.get("audioMode") or "").strip().lower() == "auto":
+        return "auto"' \
+  '    if False:
+        return "auto"'
+# 37. Trust the flag over the device, so a contradictory config reports auto
+#     while the service is still pinned to a socket.
+mutate "a stale auto flag overrides a real saved device" \
+  '    device = str(config.get("audioDevice") or "").strip()
+    if device:
+        return "pinned"' \
+  '    device = str(config.get("audioDevice") or "").strip()
+    if False:
+        return "pinned"'
+# 38. Every speaker installed before audioMode existed silently becomes auto,
+#     so upgrading the agent unpins shops that never asked for it.
+mutate "an upgrade silently unpins every existing speaker" \
+  '    return "unset"' \
+  '    return "auto"'
+# 39. Go back to reporting "(system default)". On a headless Pi that is HDMI,
+#     which cannot open at all -- so status names the one behaviour that
+#     produces silence, on a Pi that is actually picking the right output.
+mutate "status calls auto-pick the system default again" \
+  '        return "automatic (best output, re-checked while running)"' \
+  '        return "(system default)"'
+
+echo ""
+echo "Mutating the warning that a pinned dongle has been unplugged:"
+# 40. Stay silent. Sound still comes out via the fallback chain, so nothing
+#     looks wrong -- and the setting the owner believes is in force is being
+#     ignored. "so i can change the dongle if needed" is exactly this case.
+mutate "an unplugged pin is never reported" \
+  '    if any(wanted in _address_forms(d) for d in devices):
+        return None' \
+  '    if True:
+        return None'
+# 41. Fire always, including when the pinned output is plugged in and working.
+#     Advice that always fires is nagging, not diagnosis.
+mutate "the unplugged warning fires even when the device is present" \
+  '    if any(wanted in _address_forms(d) for d in devices):
+        return None' \
+  '    if False:
+        return None'
+# 42. Only offer re-pinning, dropping auto. The owner then has to do this
+#     again after every single hardware swap.
+mutate "the unplugged warning stops offering auto-pick" \
+  '        f"        sudo greenway-announcer use-output auto   (always use the best one)"' \
+  '        f""'
+# 43. Match only one spelling, so a pin written as a card number looks absent
+#     and a correctly-configured speaker is warned about for no reason.
+mutate "the unplugged check only understands one spelling" \
+  '    if any(wanted in _address_forms(d) for d in devices):' \
+  '    if any(wanted == d.get("stable") for d in devices):'
+
+echo ""
+echo "Mutating the escape hatch on a correctly pinned speaker:"
+# 44. Remove the one line that tells a correctly-pinned owner how to go auto.
+#     No warning fires in that state, so nothing else would notice it is gone
+#     -- and the day it matters is the day he swaps the dongle and the Pi is
+#     not in front of him.
+mutate "a correctly pinned speaker is never told auto-pick exists" \
+  '    if chosen and not stale and not absent:' \
+  '    if False:'
+# 45. Show it always, stacking a second fix on top of advice that already
+#     offers one. Two different answers to one problem is noise.
+mutate "the auto hint is stacked on top of the stale-pin advice" \
+  '    if chosen and not stale and not absent:' \
+  '    if chosen:'
+
+echo ""
 echo "============================================================"
 echo "caught: $CAUGHT    survived: $SURVIVED"
 if [ "$SURVIVED" -eq 0 ]; then

@@ -143,6 +143,10 @@ saved_device () {
   python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('audioDevice',''))" "$CONFIG"
 }
 
+saved_mode () {
+  python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('audioMode',''))" "$CONFIG"
+}
+
 echo "1. his exact situation: default is broken, a real output works"
 write_config ""
 : > "$SYSTEMCTL_LOG"
@@ -343,6 +347,188 @@ if [ "$(saved_device)" = "plughw:1,0" ]; then
   pass "the good setting survived the rejected CARD= name"
 else
   fail "a rejected CARD= name still changed the config"
+fi
+
+echo ""
+echo "9. use-output auto stops pinning one socket"
+# The owner's words: "make it auto pick, so i can change the dongle if needed,
+# or if i decide to use the aux jack for whatever reason." Pinning is right
+# until the hardware changes; then the pin names a card that is gone.
+write_config "plughw:1,0"
+: > "$SYSTEMCTL_LOG"
+CODE=$(run_agent use-output auto)
+if [ "$CODE" = "0" ]; then
+  pass "use-output auto is accepted"
+else
+  fail "use-output auto was refused (exit $CODE)"
+fi
+if [ -z "$(saved_device)" ]; then
+  pass "the pin was actually cleared from the config"
+else
+  fail "the pin is still there ('$(saved_device)') after asking for auto"
+fi
+# Clearing alone is not enough -- see test 10. The INTENT has to be recorded.
+if [ "$(saved_mode)" = "auto" ]; then
+  pass "auto-pick is recorded as a deliberate choice, not an empty field"
+else
+  fail "auto was not recorded (audioMode is '$(saved_mode)'), so test will re-pin"
+fi
+if grep -q "restart greenway-announcer" "$SYSTEMCTL_LOG"; then
+  pass "use-output auto restarts the service so it applies now"
+else
+  fail "use-output auto did not restart the service"
+fi
+# "It is cleared" is a claim. Showing which socket sound will come out of is
+# the proof, and it is the only way to check without walking to the speaker.
+if grep -q "3.5 mm jack" "$WORK/out.txt"; then
+  pass "it shows which output auto-pick actually lands on"
+else
+  fail "it cleared the pin without saying what will be used instead"
+fi
+# ...and the ORDER it will fall back through, which is the actual "both usb
+# and aux" promise. Naming only the winner proves nothing about what happens
+# when that one is unplugged -- which is the whole reason for going auto.
+if grep -q "1. plughw:CARD=Headphones,DEV=0" "$WORK/out.txt" \
+   && grep -q "2. plughw:CARD=vc4hdmi,DEV=0" "$WORK/out.txt"; then
+  pass "it shows the fallback order auto-pick will work through"
+else
+  fail "it does not show what auto-pick falls back to if the first output dies"
+fi
+if grep -q "install.sh" "$WORK/out.txt"; then
+  fail "it sends the user back to the installer"
+else
+  pass "it does not send the user to the installer"
+fi
+
+echo ""
+echo "10. running test after going auto must NOT silently re-pin"
+# THE TRAP AUTO-PICK SETS, AND THE REASON audioMode EXISTS.
+# `test` saves the output it proves works -- the fix for a shop that was
+# silent while every screen said green. Run it once after switching to auto
+# and that same save writes the dongle back into the config, turning auto
+# back into pinned. The next dongle swap is then ignored and nothing on any
+# screen explains why. Quietly reversing a decision the owner made by hand is
+# worse than never having offered the option.
+#
+# This rule lives in cmd_test(), which the Python selftest never executes, so
+# without this check it could be deleted and everything would still be green.
+run_agent use-output auto >/dev/null
+: > "$SYSTEMCTL_LOG"
+run_agent test >/dev/null
+if [ -z "$(saved_device)" ]; then
+  pass "test left the speaker on auto-pick"
+else
+  fail "test silently re-pinned the speaker to '$(saved_device)'"
+fi
+if [ "$(saved_mode)" = "auto" ]; then
+  pass "the auto choice survived a test run"
+else
+  fail "the auto choice was erased by a test run (mode now '$(saved_mode)')"
+fi
+# NEGATIVE CONTROL. The guard must block 'auto' and nothing else. If it were
+# implemented as "never save", it would delete the silent-shop fix that the
+# whole top half of this file exists to protect -- and tests 1-3 would still
+# pass, because they run against a config written before the guard existed.
+write_config ""
+python3 - "$CONFIG" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d.pop("audioMode", None)          # a speaker installed before auto existed
+json.dump(d, open(p, "w"))
+PY
+run_agent test >/dev/null
+if [ -n "$(saved_device)" ]; then
+  pass "a never-configured speaker still gets its working output saved"
+else
+  fail "the auto guard also killed the silent-shop fix: nothing was saved"
+fi
+
+echo ""
+echo "11. going auto and back to pinned both work, repeatedly"
+# Swapping hardware is not a one-way trip. "or if i decide to use the aux jack
+# for whatever reason" means going back must be as easy as leaving.
+run_agent use-output auto >/dev/null
+CODE=$(run_agent use-output plughw:CARD=Headphones,DEV=0)
+if [ "$CODE" = "0" ] && [ "$(saved_device)" = "plughw:CARD=Headphones,DEV=0" ]; then
+  pass "pinning again after auto works"
+else
+  fail "could not pin again after going auto (exit $CODE, '$(saved_device)')"
+fi
+# A leftover audioMode=auto next to a real device is a self-contradictory
+# config. The device wins either way, but a human reading the file is told
+# two different things, and the next person to trust the flag writes a bug.
+if [ "$(saved_mode)" = "pinned" ]; then
+  pass "pinning clears the stale auto flag"
+else
+  fail "the config now says pinned AND auto (mode '$(saved_mode)')"
+fi
+run_agent use-output auto >/dev/null
+if [ -z "$(saved_device)" ] && [ "$(saved_mode)" = "auto" ]; then
+  pass "going back to auto a second time still works"
+else
+  fail "auto was not idempotent ('$(saved_device)' / '$(saved_mode)')"
+fi
+# Asking for auto when already auto must be a no-op that still succeeds,
+# not an error -- somebody will run it twice to be sure.
+CODE=$(run_agent use-output auto)
+if [ "$CODE" = "0" ]; then
+  pass "asking for auto when already auto succeeds"
+else
+  fail "running auto twice failed (exit $CODE)"
+fi
+
+echo ""
+echo "12. the other spellings of auto, and the things that are NOT auto"
+for WORD in AUTO clear none default reset best; do
+  write_config "plughw:1,0"
+  CODE=$(run_agent use-output "$WORD")
+  if [ "$CODE" = "0" ] && [ -z "$(saved_device)" ]; then
+    pass "'$WORD' is understood as auto-pick"
+  else
+    fail "'$WORD' was not understood as auto-pick (exit $CODE, '$(saved_device)')"
+  fi
+done
+# NEGATIVE CONTROL. Being generous about what 'auto' means must not turn into
+# accepting anything: a typo has to stay an error, or a mistyped device name
+# silently unpins the shop's speaker instead of telling anyone.
+write_config "plughw:1,0"
+CODE=$(run_agent use-output atuo)
+if [ "$CODE" = "0" ]; then
+  fail "a typo'd 'atuo' was swallowed as auto instead of being refused"
+else
+  pass "a typo is still refused rather than silently unpinning"
+fi
+if [ "$(saved_device)" = "plughw:1,0" ]; then
+  pass "the typo left the existing setting alone"
+else
+  fail "a refused typo still changed the config to '$(saved_device)'"
+fi
+
+echo ""
+echo "13. status reports the three states differently"
+# `status` used to print "(system default)" whenever no device was saved. On a
+# headless Pi the system default is HDMI and cannot open at all, so that line
+# named the one behaviour that produces silence -- on a Pi that was in fact
+# picking the right output.
+run_agent use-output auto >/dev/null
+run_agent status >/dev/null
+if grep -q "system default" "$WORK/out.txt"; then
+  fail "an auto speaker is still reported as using the system default"
+else
+  pass "an auto speaker is not mislabelled as the system default"
+fi
+if grep -qi "automatic" "$WORK/out.txt"; then
+  pass "status says the speaker is on automatic"
+else
+  fail "status does not report that auto-pick is in force"
+fi
+write_config "plughw:CARD=Headphones,DEV=0"
+run_agent status >/dev/null
+if grep -q "plughw:CARD=Headphones,DEV=0" "$WORK/out.txt"; then
+  pass "status names the device a pinned speaker is pinned to"
+else
+  fail "status does not show the pinned device"
 fi
 
 echo ""
