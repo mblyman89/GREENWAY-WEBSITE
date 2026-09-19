@@ -302,14 +302,58 @@ mutate "existing USB output ignored" \
   '        if False:'
 # 23. Do not name which output to switch to.
 mutate "existing USB output not named" \
-  "f\"sudo ./install.sh --site <your-site> --audio-device {usb[0]['stable']}\"" \
-  '"sudo ./install.sh --site <your-site>"'
+  "f\"sudo greenway-announcer use-output {usb[0]['stable']}\"" \
+  '"sudo greenway-announcer use-output"'
 # 23b. Name it with the card number instead of the reboot-proof name. This is
 #      the subtle one: the advice still "works" when pasted today and silently
 #      points at the wrong card after the next power cut.
 mutate "suggested command reverts to an unstable card number" \
-  "--audio-device {usb[0]['stable']}\"" \
-  "--audio-device {usb[0]['alsa']}\""
+  "use-output {usb[0]['stable']}\"" \
+  "use-output {usb[0]['alsa']}\""
+# 23c. Send him back to the installer for a one-setting change. The old text
+#      also carried a "<your-site>" placeholder, so it could not even be
+#      pasted without stopping to look something up.
+mutate "buzz advice sends him to the installer instead of use-output" \
+  "f\"sudo greenway-announcer use-output {usb[0]['stable']}\"" \
+  "f\"sudo ./install.sh --site <your-site> --audio-device {usb[0]['stable']}\""
+
+echo ""
+echo "Mutating the stale-pin diagnosis (Michael's Sound Blaster fault):"
+# 23d. Never mention that a saved card number is overriding a better output.
+#      The two lines above it are each individually correct; the fault lives
+#      only in the gap between them, so staying quiet hides it completely.
+mutate "stale pin never reported" \
+  '    stale = stale_pin_advice(devices, chosen)' \
+  '    stale = None'
+# 23e. Report it but omit the command that fixes it -- diagnosing without
+#      offering the fix is the same defect as finding a working output and
+#      throwing it away.
+mutate "stale pin reported without the fix command" \
+  "        f\"        sudo greenway-announcer use-output {best['stable']}\"" \
+  '        f"        (ask somebody)"'
+# 23f. Recommend the unstable card number, walking him straight back into the
+#      same trap he is currently in.
+mutate "stale pin fix recommends an unstable card number" \
+  "        f\"        sudo greenway-announcer use-output {best['stable']}\"" \
+  "        f\"        sudo greenway-announcer use-output {best['alsa']}\""
+# 23g. Fire the warning unconditionally, including when the dongle is already
+#      pinned. Advice that always fires is nagging, not diagnosis, and trains
+#      him to ignore the one time it matters.
+mutate "stale pin warns even when the pin is already correct" \
+  '    if order.get(output_kind(best), 2) >= order.get(output_kind(pinned), 2):
+        return None' \
+  '    if False:
+        return None'
+# 23h. Compare the wrong way round, so it stays silent on a genuinely stale
+#      pin and complains about correct ones.
+mutate "stale pin comparison inverted" \
+  '    if order.get(output_kind(best), 2) >= order.get(output_kind(pinned), 2):' \
+  '    if order.get(output_kind(best), 2) <= order.get(output_kind(pinned), 2):'
+# 23i. Match the pin with one spelling only, so a config holding the stable
+#      name is treated as "not plugged in" and never checked.
+mutate "stale pin matches only one spelling" \
+  '        if configured.strip() in _address_forms(d):' \
+  '        if configured.strip() == d["alsa"]:'
 # 24. Lose the idle-buzz (electrical) branch entirely.
 mutate "electrical/idle buzz advice dropped" \
   'A buzz that is present even when nothing is playing is electrical, not audio: ' \

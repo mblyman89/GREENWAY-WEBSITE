@@ -410,6 +410,28 @@ moves to the dongle by itself, usually within a minute. Run
 `sudo greenway-announcer audio` to confirm — the dongle should be top of the
 list and named on the `In use:` line.
 
+**"`audio` lists my dongle first and calls it best, but the sound still comes
+out of the headphone jack."**
+An older setting is pinning it. Look at these two lines:
+
+```
+Configured: plughw:1,0  (from this speaker's saved setting)
+In use:     bcm2835 Headphones — the Pi's own 3.5 mm jack (works, but hisses)
+```
+
+A device you have explicitly chosen always beats the automatic preference —
+that is deliberate, and it is what makes "I want *this* socket" work. But
+`plughw:1,0` is a card *number*, and on your Pi card 1 may well be the
+headphone jack, so an old setting keeps winning even after you plug a better
+device in. The report now spots this and prints the exact command to fix it:
+
+```bash
+sudo greenway-announcer use-output plughw:CARD=S3,DEV=0
+```
+
+Use the name from the list on *your* Pi. This is the single best argument for
+the long `CARD=` names: a pin written that way means what you meant.
+
 **"I unplugged the USB adapter mid-shift and the shop kept announcing."**
 That is deliberate. The Pi does not play to one socket and give up if it
 fails: it tries each output in turn — USB adapter, then the 3.5 mm jack, then
