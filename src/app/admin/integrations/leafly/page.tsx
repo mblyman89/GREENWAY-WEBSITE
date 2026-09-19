@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
@@ -226,6 +227,21 @@ export default async function LeaflyIntegrationPage() {
             <p>
               AI description drafts are <strong>drafts only</strong> &mdash; review and approve before
               attaching them to a product. Leafly descriptions must be plain text.
+            </p>
+            {/* SLICE B. This panel answers "how does this work"; the handbook
+                answers "walk me through it, one step at a time, and tell me
+                what every single control does and why". Linked rather than
+                inlined so this panel stays skimmable. */}
+            <p>
+              <Link
+                href="/admin/integrations/leafly/help"
+                className="text-[var(--admin-accent)] underline"
+              >
+                Open the full Leafly handbook
+              </Link>{" "}
+              &mdash; a step-by-step walkthrough of this page, every control explained,
+              what to do when something looks wrong, and a first-time checklist that
+              keeps the reversible steps before the irreversible ones.
             </p>
           </HelpPanel>
         }

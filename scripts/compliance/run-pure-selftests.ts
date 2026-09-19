@@ -226,6 +226,14 @@ import { __runLeaflyOrderAckTests } from "../../src/lib/leafly/order-ack-core";
 import { __runLeaflyScheduleTests } from "../../src/lib/leafly/schedule-core";
 // SLICE L-8 -- the READ side of the Leafly webhook evidence log.
 import { __runLeaflyEvidenceTests } from "../../src/lib/leafly/evidence-core";
+// SLICE B -- the Leafly handbook. Registered here because the handbook
+// QUOTES real button names and real deadlines. Its self-tests prove the
+// content is internally coherent (every step explains itself, every unsafe
+// control carries a caution, the checklist never returns to safety after
+// going live). Whether it matches the actual screens is a separate,
+// stronger check in tests/compliance/leafly-helper.test.ts, which reads the
+// real source off disk. Pure: no I/O.
+import { __runLeaflyHelperTests } from "../../src/lib/leafly/helper-core";
 import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
@@ -852,6 +860,7 @@ __runLiquidVolumeTests();
   //     himself. That precedence is asserted explicitly; without it the two
   //     branches could be swapped and every other assertion would still pass.
   assertRan("leafly-evidence-core", __runLeaflyEvidenceTests(), 300);
+  assertRan("leafly-helper-core", __runLeaflyHelperTests(), 300);
   __runWmPayloadTests();
   // Floored, not just called. This core gained the Leafly HMAC + order
   // integration key this slice, so it is now the thing that decides whether the
