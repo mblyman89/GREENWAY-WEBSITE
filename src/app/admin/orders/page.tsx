@@ -274,6 +274,23 @@ export default async function OrdersAdminPage({
               The big touch-friendly cards work on a phone or tablet at the
               counter. Each order&apos;s status flow shows exactly where it is.
             </p>
+            {/* SLICE B. Leafly orders behave differently from website orders in
+                one way that matters enormously: they carry a countdown, and
+                acknowledging one permanently ends our access to the shopper's
+                ID images. That is explained in full in the handbook rather
+                than compressed into this panel, where it would be either too
+                long to read or too short to be true. */}
+            <p>
+              Leafly orders work differently &mdash; they arrive with a deadline, and
+              one of the buttons cannot be undone.{" "}
+              <Link
+                href="/admin/integrations/leafly/help"
+                className="text-[var(--admin-accent)] underline"
+              >
+                Read the Leafly handbook
+              </Link>{" "}
+              before you handle your first one.
+            </p>
           </HelpPanel>
         }
       />

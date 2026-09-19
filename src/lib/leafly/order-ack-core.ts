@@ -935,7 +935,17 @@ export const LEAFLY_OFFERABLE_STATUSES: readonly LeaflyStatus[] =
  * part of the decision: "Mark picked up" is irreversible and the label has to
  * carry that weight. A component-local label table would drift from the rules.
  */
-const STATUS_ACTION_WORDING: Readonly<
+/**
+ * The label on the acknowledge button, in exactly one place.
+ *
+ * Exported because the Leafly helper/handbook quotes this button by name. A
+ * handbook that hard-codes "Acknowledge" while the button says "Acknowledge to
+ * Leafly" teaches staff to look for a control that does not exist, which is
+ * worst precisely when it matters most: inside a fifteen-minute clock.
+ */
+export const LEAFLY_ACK_ACTION_LABEL = "Acknowledge to Leafly";
+
+export const LEAFLY_STATUS_ACTION_WORDING: Readonly<
   Record<string, { label: string; hint: string }>
 > = {
   confirmed: {
@@ -1009,7 +1019,7 @@ export function planLeaflyOrderActions(input: {
         {
           kind: "acknowledge",
           status: null,
-          label: "Acknowledge to Leafly",
+          label: LEAFLY_ACK_ACTION_LABEL,
           hint:
             "Confirms to Leafly that you have this order. Required before anything " +
             "else can be sent, and it permanently ends your access to the customer's " +
@@ -1057,7 +1067,7 @@ export function planLeaflyOrderActions(input: {
     });
     if (!decision.allowed) continue;
 
-    const wording = STATUS_ACTION_WORDING[status];
+    const wording = LEAFLY_STATUS_ACTION_WORDING[status];
     // Never render a raw enum. If wording is somehow missing, say so plainly
     // rather than printing `out_for_delivery` at a customer-facing counter.
     const label = wording ? wording.label : `Set status: ${status}`;
@@ -2122,7 +2132,7 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
     "every offerable status is settable per L-5's shared rule",
   );
   ok(
-    LEAFLY_OFFERABLE_STATUSES.every((s) => STATUS_ACTION_WORDING[s] !== undefined),
+    LEAFLY_OFFERABLE_STATUSES.every((s) => LEAFLY_STATUS_ACTION_WORDING[s] !== undefined),
     "every offerable status has human wording (no raw enum can reach the screen)",
   );
 

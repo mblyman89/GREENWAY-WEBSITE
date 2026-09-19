@@ -864,6 +864,21 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: "Open the Leafly or WeedMaps page from Integrations. Use Preview to see exactly what would be sent, then confirm a live push once your account is set up and certified.",
         href: "/admin/integrations/leafly",
       },
+      {
+        q: "Is there a full walkthrough of the Leafly push and preview page?",
+        a: "Yes \u2014 the Leafly handbook walks the page one step at a time, explains what every control does and why it behaves that way, lists what to do when something looks wrong, and includes a first-time checklist ordered so every reversible step happens before any step a customer can see.",
+        href: "/admin/integrations/leafly/help",
+      },
+      {
+        q: "What is the difference between acknowledging a Leafly order and confirming it?",
+        a: "Acknowledging is a receipt: it tells Leafly the order reached us and stops the auto-cancel countdown. Confirming is the business decision that we will actually fill it. They are separate because they answer different questions, and acknowledging is irreversible \u2014 it permanently ends our access to the shopper's ID images, so read any ID you need first. The Leafly handbook covers this in full.",
+        href: "/admin/integrations/leafly/help",
+      },
+      {
+        q: "Will pushing to Leafly delete items from my listing?",
+        a: "It can, and that is intended. A POST is a full sync: Leafly's menu becomes exactly what we send, so anything missing from the feed is removed from the listing. That is what keeps Leafly matching the shop. A PUT only adds and updates, leaving anything unmentioned alone. The Leafly handbook explains when to reach for each.",
+        href: "/admin/integrations/leafly/help",
+      },
     ],
   },
 
