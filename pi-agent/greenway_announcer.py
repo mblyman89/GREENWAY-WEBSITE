@@ -749,6 +749,63 @@ def _address_forms(device: Dict[str, Any]) -> set:
     }
 
 
+def stale_pin_advice(
+    devices: List[Dict[str, Any]],
+    configured: Optional[str],
+) -> Optional[str]:
+    """
+    Warn when a SAVED setting is holding the shop on a worse output.
+
+    THE REAL FAILURE THIS COMES FROM
+    --------------------------------
+    A Sound Blaster Play! 3 was plugged in and the Pi detected it perfectly.
+    `audio` listed it first and called it the best output. And the shop still
+    played through the noisy 3.5 mm jack, because an older install had saved:
+
+        audioDevice: "plughw:1,0"
+
+    On that Pi, card 1 was the headphone jack. An explicit choice beats
+    preference order by design -- that is correct, and it is what makes
+    "I want THIS socket" work. But it meant the report showed
+
+        Configured: plughw:1,0
+        In use:     bcm2835 Headphones
+
+    which is the whole diagnosis sitting in plain sight, and said nothing
+    about what to do next. Knowing the answer and not offering it is the same
+    defect as `test` finding a working output and discarding it.
+
+    Returns None when the pin is absent, harmless, or genuinely the best
+    available -- deliberately pinning the jack must NOT be nagged at.
+    """
+    if not configured or not devices:
+        return None
+
+    pinned = None
+    for d in devices:
+        if configured.strip() in _address_forms(d):
+            pinned = d
+            break
+    # Not plugged in: a different message already covers that case, and we
+    # fall back automatically, so there is nothing to correct.
+    if pinned is None:
+        return None
+
+    best = rank_outputs(devices)[0]
+    order = {"usb": 0, "headphone": 1, "other": 2, "hdmi": 3}
+    if order.get(output_kind(best), 2) >= order.get(output_kind(pinned), 2):
+        return None
+
+    return (
+        f"NOTE: this speaker is pinned to {configured} by a saved setting, so the\n"
+        f"      better output above is being ignored. That name is a card NUMBER,\n"
+        f"      and on this Pi it currently means:\n"
+        f"        {describe_choice(pinned)}\n"
+        f"      To use the better one from now on, run:\n"
+        f"        sudo greenway-announcer use-output {best['stable']}"
+    )
+
+
 def candidate_probe_order(device: Dict[str, Any]) -> List[str]:
     """
     The addresses to TRY for one candidate output, best spelling first.
@@ -928,9 +985,16 @@ def diagnose_buzz(devices: List[Dict[str, Any]], chosen: Optional[str]) -> List[
             # at a different card after the next power cut -- which is exactly
             # the "works until you reboot it" failure this command exists to
             # prevent somebody from re-creating.
+            #
+            # And `use-output`, NOT the installer. Re-running install.sh to
+            # change one setting is a heavy, frightening ask, and the version
+            # printed here carried a "<your-site>" placeholder that cannot be
+            # pasted as-is -- so the advice could not be followed without
+            # stopping to look something up. use-output saves it and restarts
+            # the service in one line, with nothing to fill in.
             notes.append(
                 "Better fix: this Pi already has another audio output. Use it: "
-                f"sudo ./install.sh --site <your-site> --audio-device {usb[0]['stable']}"
+                f"sudo greenway-announcer use-output {usb[0]['stable']}"
             )
         else:
             notes.append(
@@ -1799,6 +1863,14 @@ def cmd_audio(args: argparse.Namespace) -> int:
 
     print(f"In use:     {describe_choice(actual)}")
 
+    # A saved card number silently outranking the dongle is invisible unless
+    # we say so: both lines above are individually correct and the fault only
+    # shows in the gap between them.
+    stale = stale_pin_advice(devices, chosen)
+    if stale:
+        print("")
+        print(stale)
+
     # The whole point of the smart fallback: show the order it will be tried in
     # so "both USB and aux" is something the owner can SEE, not just trust.
     chain = playback_order(devices, chosen)
@@ -2599,6 +2671,16 @@ def selftest() -> int:
         "--audio-device plughw:1,0" not in _usb_advice,
     )
     ok("buzz: does not tell him to buy one he does not need", "usb audio adapter is a real dac" not in _usb_advice)
+    # One line, nothing to fill in. The old text said
+    # "sudo ./install.sh --site <your-site> --audio-device ..." -- a heavy ask
+    # for a one-setting change, and it carried a placeholder, so it could not
+    # be pasted at all without stopping to look something up.
+    ok(
+        "buzz: offers the one-line use-output command",
+        "sudo greenway-announcer use-output" in _usb_advice,
+    )
+    ok("buzz: does not send him back to the installer", "install.sh" not in _usb_advice)
+    ok("buzz: the advice has no placeholder to fill in", "<your-site>" not in _usb_advice)
 
     # Playing through the USB dongle: the PWM explanation must NOT appear.
     _clean = " ".join(diagnose_buzz(_usb, "plughw:1,0")).lower()
@@ -2663,6 +2745,66 @@ def selftest() -> int:
     ok(
         "outputs: the HAT is still reachable as a fallback",
         "plughw:CARD=sndrpihifiberry,DEV=0" in playback_order(_hat, None),
+    )
+
+    # -- stale_pin_advice ----------------------------------------------------
+    # Michael's actual Pi: a Sound Blaster Play! 3 detected correctly, listed
+    # first, and ignored, because an old install had saved "plughw:1,0" and on
+    # that Pi card 1 was the headphone jack.
+    _SB = (
+        "**** List of PLAYBACK Hardware Devices ****\n"
+        "card 0: vc4hdmi [vc4-hdmi], device 0: MAI PCM i2s-hifi-0 [MAI PCM i2s-hifi-0]\n"
+        "  Subdevices: 1/1\n"
+        "card 1: Headphones [bcm2835 Headphones], device 0: bcm2835 Headphones [bcm2835 Headphones]\n"
+        "  Subdevices: 8/8\n"
+        "card 2: S3 [Sound Blaster Play! 3], device 0: USB Audio [USB Audio]\n"
+        "  Subdevices: 1/1\n"
+    )
+    _sb = parse_aplay_devices(_SB)
+    eq("sound blaster: all three outputs parse", len(_sb), 3)
+    ok("sound blaster: the Play! 3 is recognised as USB", _sb[2]["is_usb"])
+    eq("sound blaster: it gets a stable name", _sb[2]["stable"], "plughw:CARD=S3,DEV=0")
+    # The reported fault, reproduced exactly: with this config the jack wins.
+    eq(
+        "sound blaster: a saved plughw:1,0 really does pin the jack here",
+        output_kind(choose_output(_sb, "plughw:1,0")),
+        "headphone",
+    )
+    _advice = stale_pin_advice(_sb, "plughw:1,0")
+    ok("stale pin: the situation is called out at all", _advice is not None)
+    ok("stale pin: it says a saved setting is the cause", "saved setting" in (_advice or ""))
+    ok("stale pin: it names what the number really means", "3.5 mm jack" in (_advice or ""))
+    ok(
+        "stale pin: it gives the exact one-line command to fix it",
+        "sudo greenway-announcer use-output plughw:CARD=S3,DEV=0" in (_advice or ""),
+    )
+    # It must not send him back to the installer for a one-setting change.
+    ok("stale pin: it does not send him to the installer", "install.sh" not in (_advice or ""))
+
+    # NEGATIVE CONTROLS. Advice that always fires is nagging, not diagnosis.
+    ok(
+        "stale pin: silent when the dongle is already pinned",
+        stale_pin_advice(_sb, "plughw:CARD=S3,DEV=0") is None,
+    )
+    ok(
+        "stale pin: silent when the pinned card number IS the best output",
+        stale_pin_advice(_sb, "plughw:2,0") is None,
+    )
+    ok("stale pin: silent when nothing is pinned", stale_pin_advice(_sb, None) is None)
+    ok(
+        "stale pin: silent when the pinned device is not plugged in",
+        stale_pin_advice(_sb, "plughw:CARD=Ghost,DEV=0") is None,
+    )
+    ok("stale pin: silent when there is no hardware", stale_pin_advice([], "plughw:1,0") is None)
+    # Pinning the jack on a Pi with no dongle is a correct, deliberate choice.
+    ok(
+        "stale pin: does not nag when the jack is genuinely the best there is",
+        stale_pin_advice(_bw, "plughw:CARD=Headphones,DEV=0") is None,
+    )
+    # HDMI pinned while a real output exists is worth flagging too.
+    ok(
+        "stale pin: flags a pin to HDMI when something better exists",
+        stale_pin_advice(_sb, "plughw:CARD=vc4hdmi,DEV=0") is not None,
     )
 
     # -- candidate_probe_order ----------------------------------------------
@@ -2851,6 +2993,24 @@ def selftest() -> int:
     # No hardware at all must fail loudly and usefully, never traceback.
     _rep_none = _render("no soundcards found...\n", None)
     ok("audio report: says plainly when there is no sound hardware", "No audio outputs found" in _rep_none)
+
+    # Michael's fault, end to end through the real command: a saved card
+    # number pinning the jack while the Sound Blaster sits idle. The two
+    # existing lines ("Configured:" and "In use:") are each individually
+    # correct, so without this the whole diagnosis could vanish from the
+    # report and every assertion above would still pass.
+    _rep_pinned = _render(_SB, "plughw:1,0")
+    ok("audio report: the stale pin is called out", "pinned to plughw:1,0" in _rep_pinned)
+    ok("audio report: it blames the saved setting", "saved setting" in _rep_pinned)
+    ok(
+        "audio report: it gives the one-line fix",
+        "sudo greenway-announcer use-output plughw:CARD=S3,DEV=0" in _rep_pinned,
+    )
+    # Negative control: correctly pinned to the dongle must NOT be nagged at.
+    ok(
+        "audio report: no stale-pin nagging when already on the dongle",
+        "pinned to" not in _render(_SB, "plughw:CARD=S3,DEV=0"),
+    )
 
     print(f"\n{passed} checks passed, {failed} failed.")
     if failed == 0:
