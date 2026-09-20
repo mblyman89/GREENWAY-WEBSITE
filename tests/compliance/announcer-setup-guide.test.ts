@@ -235,3 +235,39 @@ describe("it answers the question he actually asked", () => {
     expect(guide).toContain("Must be right");
   });
 });
+
+describe("the installer does not cry wolf", () => {
+  // FIELD-REPORTED. A real install on the shop's Pi finished with every step
+  // reporting OK, but printed this in the middle of it:
+  //
+  //   bash: line 500: /sys/module/kernel/parameters/consoleblank: Permission denied
+  //
+  // Nothing was broken -- turning off screen blanking is cosmetic -- but the
+  // owner stopped and asked whether the install had actually worked. That is
+  // the real cost: an installer that prints scary errors during a successful
+  // run teaches people to ignore its output, and then they ignore a real one.
+
+  it("suppresses stderr BEFORE the redirection, not after", () => {
+    // The subtlety that caused the bug: when a REDIRECTION fails, the shell
+    // prints the error itself before the command ever runs, so a trailing
+    // `2>/dev/null` has not taken effect yet and cannot suppress it. The
+    // redirect must come first. Verified empirically against an unwritable
+    // path -- `echo 0 > p 2>/dev/null` leaks, `echo 0 2>/dev/null > p` does not.
+    const line = installer
+      .split("\n")
+      .find((l) => l.includes("consoleblank") && l.trim().startsWith("echo"));
+    expect(line, "installer must still write consoleblank").toBeTruthy();
+    expect(line!).toMatch(/echo 0 2>\/dev\/null > \/sys\/module\/kernel\/parameters\/consoleblank/);
+    // The broken form must not come back.
+    expect(line!).not.toMatch(/consoleblank 2>\/dev\/null/);
+  });
+
+  it("never lets an optional cosmetic step abort the install", () => {
+    // `set -e` plus a failing write would end the run at step 7 of 8, with the
+    // service installed but the user told nothing. `|| true` keeps it advisory.
+    const line = installer
+      .split("\n")
+      .find((l) => l.includes("consoleblank") && l.trim().startsWith("echo"));
+    expect(line!).toMatch(/\|\| true\s*$/);
+  });
+});
