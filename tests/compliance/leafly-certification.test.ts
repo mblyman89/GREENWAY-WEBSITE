@@ -62,11 +62,13 @@ const specFlat = specText.replace(/\s+/g, " ");
 /** A reconcile result with nothing wrong, for fixtures. */
 const cleanReconcile: LeaflyReconcileResult = {
   ok: true,
+  scope: "full",
   sentItemCount: 10,
   readbackItemCount: 10,
   comparedItemCount: 10,
   missingFromLeafly: [],
   extraAtLeafly: [],
+  untouchedAtLeafly: null,
   issues: [],
   unverifiable: [],
 };

@@ -14,6 +14,7 @@ import type {
   LeaflyReconcileResult,
   ReadbackTimingVerdict,
 } from "@/lib/leafly/readback-core";
+import type { ReadbackBaseline } from "@/lib/leafly/readback-baseline-core";
 import { draftLeaflyDescription } from "@/lib/leafly/ai";
 import { recordSyndicationLog } from "@/lib/syndication/store";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
@@ -482,6 +483,14 @@ export type MenuReadbackActionResult =
        * as such instead of being read as a list of defects.
        */
       timing: ReadbackTimingVerdict;
+      /**
+       * Which payload the comparison was made against, and what it may
+       * conclude. Carried to the client because a comparison is only as
+       * trustworthy as its baseline: after a targeted push, a whole-menu diff
+       * reports thousands of untouched products as failures, and the owner
+       * must be able to SEE which comparison he is reading.
+       */
+      baseline: ReadbackBaseline | null;
     }
   | { ok: false; error: string };
 
@@ -527,6 +536,11 @@ export async function fetchLeaflyMenuReadbackAction(): Promise<MenuReadbackActio
         // needs to know whether the comparison was even run late enough to be valid.
         comparisonWasPremature: result.timing.tooSoon,
         secondsSinceLastPush: result.timing.secondsSincePush,
+        // Audited because "why did we think the menu was wrong" is
+        // unanswerable without knowing what it was compared against.
+        baselineSource: result.baseline?.source ?? null,
+        baselineScope: result.baseline?.scope ?? null,
+        baselineItemCount: result.baseline?.payload?.items.length ?? null,
       },
     });
     // Recorded to syndication_logs as a "preview" mode entry: it contacted Leafly, but it
@@ -550,6 +564,7 @@ export async function fetchLeaflyMenuReadbackAction(): Promise<MenuReadbackActio
       parseWarnings: result.parse.ok ? result.parse.warnings : [result.parse.reason],
       itemsAtLeafly: result.parse.ok ? result.parse.items.length : 0,
       timing: result.timing,
+      baseline: result.baseline,
     };
   } catch (err) {
     return {

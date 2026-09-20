@@ -61,6 +61,12 @@ import {
   type LeaflyReconcileResult,
   type ReadbackTimingVerdict,
 } from "./readback-core";
+import {
+  chooseReadbackBaseline,
+  type ReadbackBaseline,
+  type ReadbackLogRow,
+} from "./readback-baseline-core";
+import { listSyndicationLogs } from "@/lib/syndication/store";
 import { getMedTaxSettings } from "@/lib/medical/store";
 import { loadSyndicationFeed } from "@/lib/syndication/feed-source";
 import type { SyndicationItem } from "@/lib/syndication/menu-feed-core";
@@ -583,10 +589,18 @@ export type LeaflyMenuReadbackResult = {
   /** Parsed readback. `ok: false` when the shape was unusable. */
   parse: LeaflyReadbackParse;
   /**
-   * Comparison against the payload we would send right now. Null when we could not
-   * build a payload to compare with (e.g. the preview itself failed).
+   * Comparison against WHAT WE ACTUALLY SENT (see `baseline` for which push
+   * that was). Null when no baseline could be established at all.
    */
   reconcile: LeaflyReconcileResult | null;
+  /**
+   * Which payload the comparison was made against, and what it is entitled to
+   * conclude. Surfaced rather than kept internal because a comparison is only
+   * as trustworthy as its baseline, and the owner should never have to read
+   * source code to discover he is looking at a whole-menu diff after a
+   * targeted push. Null when no comparison was made.
+   */
+  baseline: ReadbackBaseline | null;
   /**
    * Whether this comparison was run inside Leafly's documented ingest window
    * (finding L-19). When `tooSoon` is true the differences may be the previous menu
@@ -655,18 +669,53 @@ export async function getLeaflyMenu(): Promise<LeaflyMenuReadbackResult> {
   }
   const timing = assessReadbackTiming(lastSyncedAt, new Date(), config.environment);
 
-  // Compare against the payload we WOULD send right now. This is an honest comparison
-  // only if the menu has not changed since the last push; the UI says so, and
-  // `lastSyncedAt`/`lastModifiedAt` from GET /status is the cross-check.
+  // Compare against WHAT WE ACTUALLY SENT.
+  //
+  // FIELD-REPORTED. This used to compare against `previewLeaflyPush()` -- the
+  // payload we WOULD send right now, i.e. the whole 2,562-item feed. After the
+  // owner's first targeted push of 8 products (which succeeded completely) the
+  // readback diffed 2,562 against 8 and reported the 2,554 untouched products
+  // as failures:
+  //
+  //     We sent "1937 - 3.5g Flower - Blackberry - 3.5g" but Leafly's menu
+  //     does not contain it.
+  //
+  // We never sent it. The reconciler was not wrong about the data; it was
+  // handed the wrong baseline. The bug hid because the whole-feed baseline is
+  // CORRECT after a full sync, which was the only case anyone had exercised.
+  //
+  // `syndication_logs` already stores the exact payload of every live push, so
+  // the honest baseline is recoverable rather than needing to be invented. The
+  // live preview survives only as an explicitly-labelled last resort.
   let reconcile: LeaflyReconcileResult | null = null;
+  let baseline: ReadbackBaseline | null = null;
   try {
-    const preview = await previewLeaflyPush();
-    const payload = preview.payload as LeaflyItemsPayload | undefined;
-    reconcile = reconcileLeaflyMenu(payload ?? null, parse);
+    // Read the history first. A preview failure must not cost us the ability
+    // to compare, and the log is the more trustworthy of the two sources.
+    let rows: ReadbackLogRow[] = [];
+    try {
+      rows = await listSyndicationLogs("leafly", 25);
+    } catch {
+      rows = [];
+    }
+
+    let livePreview: LeaflyItemsPayload | null = null;
+    try {
+      const preview = await previewLeaflyPush();
+      livePreview = (preview.payload as LeaflyItemsPayload | undefined) ?? null;
+    } catch {
+      livePreview = null;
+    }
+
+    baseline = chooseReadbackBaseline(rows, livePreview);
+    reconcile = baseline.payload
+      ? reconcileLeaflyMenu(baseline.payload, parse, baseline.scope)
+      : null;
   } catch {
-    // A preview failure must not turn a successful readback into an exception. The
-    // readback body is still useful on its own.
+    // Neither source was usable. The readback body is still worth showing on
+    // its own, so this is not an error.
     reconcile = null;
+    baseline = null;
   }
 
   const baseSummary = !result.ok
@@ -688,6 +737,7 @@ export async function getLeaflyMenu(): Promise<LeaflyMenuReadbackResult> {
     body: result.body,
     parse,
     reconcile,
+    baseline,
     timing,
     summary,
   };

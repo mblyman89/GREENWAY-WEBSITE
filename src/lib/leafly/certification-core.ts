@@ -512,11 +512,13 @@ export function __runLeaflyCertificationTests(): { passed: number; failed: numbe
 
   const cleanReconcile: LeaflyReconcileResult = {
     ok: true,
+    scope: "full",
     sentItemCount: 10,
     readbackItemCount: 10,
     comparedItemCount: 10,
     missingFromLeafly: [],
     extraAtLeafly: [],
+    untouchedAtLeafly: null,
     issues: [],
     unverifiable: [],
   };

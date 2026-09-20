@@ -226,6 +226,32 @@ function ReadbackReport({ report }: { report: MenuReadbackActionResult }) {
 
       <p className="mb-2 text-xs text-[var(--admin-text)]">{report.summary}</p>
 
+      {/*
+        WHAT THIS WAS COMPARED AGAINST.
+
+        FIELD-REPORTED. The owner's first targeted push of 8 products succeeded
+        completely and this panel told him he had nineteen problems, because
+        the comparison silently used the whole 2,562-item feed as its baseline.
+        He had no way to discover that from the screen -- the report looked
+        authoritative and was answering a question he had not asked.
+
+        A comparison is only as trustworthy as its baseline, so the baseline is
+        now stated on the face of the report rather than buried in the code.
+        The "live-preview" fallback carries its own warning, because that is
+        the one case where a partial push genuinely will look wrong.
+      */}
+      {report.baseline ? (
+        <p
+          className={
+            report.baseline.source === "live-preview"
+              ? "mb-2 rounded border border-[var(--admin-warning,orange)] px-2 py-1.5 text-xs text-[var(--admin-warning,orange)]"
+              : "mb-2 text-xs text-[var(--admin-text-muted)]"
+          }
+        >
+          <strong>What this was checked against:</strong> {report.baseline.explanation}
+        </p>
+      ) : null}
+
       {errors.length > 0 ? (
         <ul className="mb-2 space-y-1">
           {errors.map((issue, i) => (

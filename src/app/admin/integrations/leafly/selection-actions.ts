@@ -40,6 +40,15 @@ import {
   type SelectionSort,
   type SelectionSpec,
 } from "@/lib/leafly/selection-core";
+// The read-back decides which payload to compare Leafly's menu against by
+// recognising targeted pushes in the syndication log BY THEIR MESSAGE PREFIX.
+// That makes this string a contract between two modules, not cosmetic text.
+// It is imported rather than retyped so that renaming it cannot quietly break
+// the read-back: a hand-typed copy here would still compile, still log, and
+// would silently send every future read-back back to comparing against the
+// whole 2,562-item feed -- which is the exact bug that produced the owner's
+// "19 PROBLEMS!" screen.
+import { TARGETED_PUSH_LOG_PREFIX } from "@/lib/leafly/readback-baseline-core";
 import type { SyndicationItem } from "@/lib/syndication/menu-feed-core";
 
 const BASE = "/admin/integrations/leafly";
@@ -234,7 +243,7 @@ export async function pushLeaflySelectionAction(input: {
       itemCount: result.itemCount,
       payload: result.payload,
       response: result.response,
-      message: `Targeted push — ${result.message}`,
+      message: `${TARGETED_PUSH_LOG_PREFIX} — ${result.message}`,
       createdBy: session.userId,
     });
 
@@ -274,7 +283,7 @@ export async function pushLeaflySelectionAction(input: {
       mode: "live",
       status: "error",
       itemCount: 0,
-      message: `Targeted push failed — ${message}`,
+      message: `${TARGETED_PUSH_LOG_PREFIX} failed — ${message}`,
       createdBy: session.userId,
     });
     revalidatePath(BASE);

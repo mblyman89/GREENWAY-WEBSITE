@@ -180,6 +180,22 @@ import { __runLeaflyPayloadValidateTests } from "../../src/lib/leafly/payload-va
 import { __runLeaflyOrderabilityTests } from "../../src/lib/leafly/orderability-core";
 // SLICE L-4 — the GET /menu readback contract (L-14) and its reconciler.
 import { __runLeaflyReadbackTests } from "../../src/lib/leafly/readback-core";
+// SLICE L-19 — WHICH payload the read-back compares Leafly's menu against.
+// Registered here because getting it wrong is not a subtle miscount: after the
+// shop's first targeted push of 8 products, the read-back compared the whole
+// 2,562-item feed against the 8 Leafly was asked to hold and reported "19
+// PROBLEMS!" on a transmission that had in fact succeeded completely. A tool
+// that cries wolf on a perfect result is worse than no tool, because the next
+// warning -- the real one -- gets dismissed too.
+import { __runLeaflyReadbackBaselineTests } from "../../src/lib/leafly/readback-baseline-core";
+// SLICE L-19 — the picker's view logic: which quick start is in effect, which
+// rows the table shows, and what exactly is about to be transmitted. Pure: no
+// React, no DOM. Registered here because the highlight is DERIVED from the
+// filters rather than remembered, and that derivation is the only thing
+// stopping a lit-up pill from asserting something false about the list beneath
+// it. It also computes how many selected products are hidden off-screen --
+// items that would be sent without ever being reviewed.
+import { __runLeaflyPickerViewTests } from "../../src/lib/leafly/picker-view-core";
 // SLICE L-4 — Leafly's five published menu-certification criteria.
 import { __runLeaflyCertificationTests } from "../../src/lib/leafly/certification-core";
 // SLICE L-5 — receiving orders FROM Leafly. Four pure cores, all registered
@@ -789,7 +805,11 @@ __runLiquidVolumeTests();
   assertRan("leafly-payload-core", __runLeaflyPayloadTests(), 100);
   assertRan("leafly-payload-validate-core", __runLeaflyPayloadValidateTests(), 100);
   assertRan("leafly-orderability-core", __runLeaflyOrderabilityTests(), 50);
-  assertRan("leafly-readback-core", __runLeaflyReadbackTests(), 82);
+  // Raised from 82 to 95 in SLICE L-19: the scope-aware reconciliation added
+  // ~16 assertions, including the negative control proving a targeted read-back
+  // still fails when an item it DID send is genuinely absent. Leaving the floor
+  // at 82 would let all of that be deleted with CI still green.
+  assertRan("leafly-readback-core", __runLeaflyReadbackTests(), 95);
   assertRan("leafly-certification-core", __runLeaflyCertificationTests(), 60);
   // SLICE L-5 -- receiving orders FROM Leafly. Four cores, each registered with
   // a floor for a reason specific to it:
@@ -1401,6 +1421,11 @@ __runLiquidVolumeTests();
   // feed was chosen; the plan never emits deletes at all), and those are
   // exactly the assertions a careless edit would quietly drop.
   assertRan("leafly-selection-core", __runLeaflySelectionTests(), 100);
+  // SLICE L-19. The floors are set just under the current counts so that
+  // deleting a meaningful block of assertions fails CI, while adding more
+  // never does.
+  assertRan("leafly-readback-baseline-core", __runLeaflyReadbackBaselineTests(), 30);
+  assertRan("leafly-picker-view-core", __runLeaflyPickerViewTests(), 110);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
