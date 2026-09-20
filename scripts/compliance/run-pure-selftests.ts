@@ -234,6 +234,15 @@ import { __runLeaflyEvidenceTests } from "../../src/lib/leafly/evidence-core";
 // stronger check in tests/compliance/leafly-helper.test.ts, which reads the
 // real source off disk. Pure: no I/O.
 import { __runLeaflyHelperTests } from "../../src/lib/leafly/helper-core";
+// SLICE L-11 -- the Leafly ITEM PICKER's decision core. Registered here for a
+// blunter reason than most: Leafly treats POST as a FULL MENU REPLACEMENT, so
+// a partial POST does not "send 20 items", it deletes the other 1,856. The
+// coercion rule in this core (a selection that is not the whole feed may only
+// ever go as PUT) is the single guard standing between the owner picking a
+// handful of products and the store's Leafly menu going dark. It is pure -- no
+// network, no database -- precisely so CI can prove that rule on every push
+// without a sandbox key, even if the vitest mirror is ever renamed or skipped.
+import { __runLeaflySelectionTests } from "../../src/lib/leafly/selection-core";
 import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
 import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
 import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
@@ -1385,6 +1394,13 @@ __runLiquidVolumeTests();
   // printer, and whether a row appears in `orders` (which is what makes the
   // register able to see it at all).
   assertRan("leafly-bridge-core", __runLeaflyBridgeTests(), 374);
+
+  // SLICE L-11 -- the item picker's decision core. Floored, not merely called:
+  // the assertions that matter most here are the small ones (a 20-item pick is
+  // coerced from POST to PUT; the plan never writes sync state unless the whole
+  // feed was chosen; the plan never emits deletes at all), and those are
+  // exactly the assertions a careless edit would quietly drop.
+  assertRan("leafly-selection-core", __runLeaflySelectionTests(), 100);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

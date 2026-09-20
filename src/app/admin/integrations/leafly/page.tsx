@@ -39,6 +39,7 @@ import {
   checkLeaflyScheduleNowAction,
 } from "./actions";
 import { LeaflyPushClient } from "./leafly-client";
+import { LeaflyItemPicker } from "./leafly-picker-client";
 
 export const dynamic = "force-dynamic";
 
@@ -332,6 +333,21 @@ export default async function LeaflyIntegrationPage() {
         itemCount={preview.itemCount}
         sandbox={preview.readiness.environment === "sandbox"}
       />
+
+      {/*
+        SLICE L-18 -- the item picker.
+
+        PLACEMENT. Immediately below the full-sync card, because the two are
+        alternatives and the operator is choosing between them at this exact
+        moment. Putting the targeted push somewhere else in the page would mean
+        the only visible option at the point of decision is the one that
+        replaces the entire menu.
+
+        It sits ABOVE the automation card on purpose too: a targeted push is a
+        manual, deliberate act like the button above it, whereas everything
+        below is about what happens unattended.
+      */}
+      <LeaflyItemPicker configured={preview.readiness.configured} />
 
       {/*
         SLICE L-7 -- automatic syncing.
