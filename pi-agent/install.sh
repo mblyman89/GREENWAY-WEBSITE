@@ -496,8 +496,26 @@ fi
 # Cosmetic, and included precisely because it is the thing people SEE. A black
 # screen on a Pi that is running perfectly is indistinguishable from a Pi that
 # has turned itself off, and that confusion costs a shop an afternoon.
+# The `2>/dev/null` must come BEFORE the `>` redirection, and the `-w` test is
+# not enough on its own. Both facts are counter-intuitive and were learned from
+# a real install on the shop's Pi, which printed:
+#
+#   bash: line 500: /sys/module/kernel/parameters/consoleblank: Permission denied
+#
+# Two things combined to produce that line:
+#   1. `-w` reports the FILE MODE, and root passes it. But this is sysfs, and
+#      the kernel can still refuse the write (the parameter is read-only on
+#      some kernels regardless of mode). So the guard passes, then the write
+#      fails anyway.
+#   2. When a REDIRECTION fails, the shell prints the error itself, before the
+#      command runs -- so a trailing `2>/dev/null` has not taken effect yet and
+#      cannot suppress it. Moving the redirect earlier silences it properly.
+#
+# Cosmetic either way, but a scary red "Permission denied" in the middle of an
+# otherwise all-OK install makes the owner stop and ask whether it worked. An
+# installer that cries wolf trains people to ignore it.
 if [ -w /sys/module/kernel/parameters/consoleblank ] 2>/dev/null; then
-  echo 0 > /sys/module/kernel/parameters/consoleblank 2>/dev/null || true
+  echo 0 2>/dev/null > /sys/module/kernel/parameters/consoleblank || true
 fi
 setterm --blank 0 --powerdown 0 >/dev/null 2>&1 || true
 ok "Screen blanking turned off (a black screen is not a Pi that is off)"
