@@ -421,17 +421,64 @@ export type LeaflyReconcileIssue = {
   message: string;
 };
 
+/**
+ * WHAT THE COMPARISON IS ENTITLED TO CONCLUDE.
+ *
+ * FIELD-REPORTED, and the reason this type exists. After the owner's first
+ * targeted push -- 8 products, chosen deliberately -- the readback reported
+ * nineteen "problems", led by sentences like:
+ *
+ *   We sent "1937 - 3.5g Flower - Blackberry - 3.5g" but Leafly's menu does
+ *   not contain it.
+ *
+ * We did not send it. The reconciler was handed the WHOLE 2,562-item feed as
+ * the baseline and diffed it against the 8 items Leafly actually holds, so
+ * 2,554 untouched products were each reported as a failure. The reconciler was
+ * not wrong about the data; it was answering a question nobody asked.
+ *
+ *   "full"     -- the baseline is the entire menu we intend Leafly to have.
+ *                 Absence IS a defect, and an item at Leafly that we did not
+ *                 send is genuinely unexpected (a POST full sync would have
+ *                 removed it). This is the correct reading after a full sync.
+ *
+ *   "targeted" -- the baseline is ONLY the items we deliberately sent. Every
+ *                 other item at Leafly is UNTOUCHED, which is the entire
+ *                 promise of a targeted push -- not an anomaly to report.
+ *
+ * The distinction is not cosmetic and it is not a display filter. In targeted
+ * scope the reconciler is never given ids it did not send, so "missing" for an
+ * unsent item is impossible BY CONSTRUCTION rather than suppressed after the
+ * fact. A warning you have to filter out later is a warning that will come
+ * back the next time somebody forgets the filter.
+ */
+export type LeaflyReconcileScope = "full" | "targeted";
+
 export type LeaflyReconcileResult = {
   /** True only when there are zero `error`-severity issues. */
   ok: boolean;
+  /**
+   * What this comparison was entitled to conclude. Carried in the result so the
+   * UI never has to guess, and so a stored result stays interpretable later.
+   */
+  scope: LeaflyReconcileScope;
   sentItemCount: number;
   readbackItemCount: number;
   /** Items present on both sides, compared field by field. */
   comparedItemCount: number;
   /** Sent but absent from the readback. */
   missingFromLeafly: string[];
-  /** Present at Leafly but not in our payload (manual Menu Manager items live here). */
+  /**
+   * Present at Leafly but not in our payload (manual Menu Manager items live here).
+   * Always empty in `targeted` scope: items outside the selection are untouched
+   * by definition, so calling them "extra" would be false.
+   */
   extraAtLeafly: string[];
+  /**
+   * In `targeted` scope, how many items Leafly holds that were outside this
+   * push. Reported as a plain fact, never as a problem. Null in `full` scope,
+   * where the same items are genuinely unexpected and appear in `extraAtLeafly`.
+   */
+  untouchedAtLeafly: number | null;
   issues: LeaflyReconcileIssue[];
   /** Correspondences we declined to check, carried through so the UI can say why. */
   unverifiable: readonly LeaflyUnverifiedCorrespondence[];
@@ -472,6 +519,7 @@ function firstCompoundContent(
 export function reconcileLeaflyMenu(
   sentPayload: LeaflyItemsPayload | null | undefined,
   readback: LeaflyReadbackParse,
+  scope: LeaflyReconcileScope = "full",
 ): LeaflyReconcileResult {
   const issues: LeaflyReconcileIssue[] = [];
   const perCode = new Map<string, number>();
@@ -501,11 +549,13 @@ export function reconcileLeaflyMenu(
   if (!readback.ok) {
     return {
       ok: false,
+      scope,
       sentItemCount: sentItems.length,
       readbackItemCount: 0,
       comparedItemCount: 0,
       missingFromLeafly: [],
       extraAtLeafly: [],
+      untouchedAtLeafly: null,
       issues: [
         {
           severity: "error",
@@ -704,26 +754,44 @@ export function reconcileLeaflyMenu(
     }
   }
 
-  for (const id of backById.keys()) {
-    if (!sentById.has(id)) {
-      extraAtLeafly.push(id);
-      add(
-        "info",
-        "extra_at_leafly",
-        id,
-        `Leafly has item "${id}" that we did not send. A POST full sync deletes omitted ` +
-          "items, so this is usually an item added by hand in Menu Manager.",
-      );
+  // Items at Leafly that were not in our payload.
+  //
+  // In FULL scope these are genuinely unexpected: a POST full sync deletes
+  // omitted items, so anything surviving was almost certainly added by hand in
+  // Menu Manager, and the owner should know.
+  //
+  // In TARGETED scope the identical set means the exact opposite -- it is the
+  // rest of the menu, deliberately left alone, which is the whole point of a
+  // targeted push. Counting it is useful; flagging it would be false.
+  let untouchedAtLeafly: number | null = null;
+  if (scope === "targeted") {
+    let untouched = 0;
+    for (const id of backById.keys()) if (!sentById.has(id)) untouched += 1;
+    untouchedAtLeafly = untouched;
+  } else {
+    for (const id of backById.keys()) {
+      if (!sentById.has(id)) {
+        extraAtLeafly.push(id);
+        add(
+          "info",
+          "extra_at_leafly",
+          id,
+          `Leafly has item "${id}" that we did not send. A POST full sync deletes omitted ` +
+            "items, so this is usually an item added by hand in Menu Manager.",
+        );
+      }
     }
   }
 
   return {
     ok: issues.every((i) => i.severity !== "error"),
+    scope,
     sentItemCount: sentItems.length,
     readbackItemCount: readback.items.length,
     comparedItemCount: compared,
     missingFromLeafly,
     extraAtLeafly,
+    untouchedAtLeafly,
     issues,
     unverifiable: LEAFLY_READBACK_UNVERIFIED_CORRESPONDENCES,
   };
@@ -879,6 +947,19 @@ export function describeReconcileResult(result: LeaflyReconcileResult): string {
     errors === 0 && warnings === 0
       ? "with no differences."
       : `with ${errors} problem(s) and ${warnings} thing(s) to look at.`;
+
+  // In targeted scope, say what was NOT examined. The owner's first readback
+  // said "8 of 2562 item(s) matched up with 10 problem(s)", which reads as a
+  // catastrophe when it was in fact a complete success: all 8 landed. Naming
+  // the untouched remainder turns an alarming ratio into an accurate sentence.
+  if (result.scope === "targeted") {
+    const rest =
+      result.untouchedAtLeafly && result.untouchedAtLeafly > 0
+        ? ` The other ${result.untouchedAtLeafly} item(s) on your Leafly menu were not part of this push and were left alone.`
+        : "";
+    return `Checked the ${result.sentItemCount} item(s) you sent: ${result.comparedItemCount} matched up ${tail}${rest}`;
+  }
+
   return `${head} ${tail}`;
 }
 
@@ -1323,6 +1404,88 @@ export function __runLeaflyReadbackTests(): { passed: number; failed: number } {
     "every timing verdict carries a non-empty message",
     [soon, later, never, garbage, future].every((v) => v.message.trim().length > 20),
   );
+
+  // -------------------------------------------------------------------------
+  // SCOPE. Field-reported: the owner's first targeted push of 8 products was a
+  // complete success and the readback called it nineteen problems, because the
+  // baseline handed to the reconciler was the whole 2,562-item feed.
+  // -------------------------------------------------------------------------
+
+  // Reproduce the shape of the real failure: we "sent" two items but Leafly was
+  // only ever given one of them, because the other was never part of the push.
+  const twoSent: LeaflyItemsPayload = {
+    items: [
+      sent.items[0],
+      { ...sent.items[0], id: "SKU-NOT-PUSHED", name: "Blackberry 3.5g" } as LeaflyItem,
+    ],
+  };
+  const oneBack = parseLeaflyMenuReadback({
+    result: [
+      {
+        id: "SKU-1",
+        name: "Blue Dream",
+        brandName: "Greenway",
+        strainName: "Blue Dream",
+        imageUrl: "https://example.com/a.jpg",
+        thcContent: 22.5,
+        thcUnit: "percent",
+        cbdContent: null,
+        cbdUnit: null,
+        variants: [
+          {
+            id: "11",
+            inventoryLevel: 10,
+            medical: false,
+            packagePrice: 1200,
+            packageSize: 3.5,
+            packageUnit: "g",
+            packageWeightGrams: 3.5,
+          },
+        ],
+      },
+      { id: "LEAFLY-OTHER-1", name: "Something we left alone", variants: [] },
+      { id: "LEAFLY-OTHER-2", name: "Also left alone", variants: [] },
+    ],
+    metadata: { totalCount: 3 },
+  });
+
+  // FULL scope keeps today's behaviour exactly.
+  const fullScope = reconcileLeaflyMenu(twoSent, oneBack, "full");
+  check("full scope defaults are unchanged", reconcileLeaflyMenu(twoSent, oneBack).scope === "full");
+  check("full scope reports the unsent item as missing", fullScope.missingFromLeafly.includes("SKU-NOT-PUSHED"));
+  check("full scope still lists items only Leafly has", fullScope.extraAtLeafly.length === 2);
+  check("full scope reports no untouched count", fullScope.untouchedAtLeafly === null);
+
+  // TARGETED scope: the caller passes ONLY what it sent, so nothing it did not
+  // send can be called missing -- and the rest of the menu is not "extra".
+  const oneSent: LeaflyItemsPayload = { items: [sent.items[0]] };
+  const targeted = reconcileLeaflyMenu(oneSent, oneBack, "targeted");
+  check("targeted scope records its scope", targeted.scope === "targeted");
+  check("targeted scope compares only what was sent", targeted.comparedItemCount === 1);
+  check("targeted scope finds nothing missing", targeted.missingFromLeafly.length === 0);
+  check("targeted scope reports no extras at all", targeted.extraAtLeafly.length === 0);
+  check("targeted scope counts the untouched remainder", targeted.untouchedAtLeafly === 2);
+  check("targeted scope passes", targeted.ok === true);
+  check(
+    "targeted scope raises no extra_at_leafly issue",
+    !targeted.issues.some((i) => i.code === "extra_at_leafly"),
+  );
+
+  // NEGATIVE CONTROL. Targeted scope must not become a blanket amnesty: if an
+  // item we DID send is genuinely absent, that is still an error. A scope that
+  // silences every complaint would be worse than the bug it replaced.
+  const targetedMissing = reconcileLeaflyMenu(twoSent, oneBack, "targeted");
+  check(
+    "targeted scope still fails when a SENT item is absent",
+    targetedMissing.missingFromLeafly.includes("SKU-NOT-PUSHED"),
+  );
+  check("targeted scope with a genuine miss is not ok", targetedMissing.ok === false);
+
+  // The sentence the owner reads must not imply the untouched menu is a problem.
+  const targetedText = describeReconcileResult(targeted);
+  check("targeted summary names what was sent", targetedText.includes("1 item(s) you sent"));
+  check("targeted summary explains the remainder", targetedText.includes("left alone"));
+  check("targeted summary does not claim a 1-of-2562 style ratio", !targetedText.startsWith("1 of 3"));
 
   return { passed, failed };
 }

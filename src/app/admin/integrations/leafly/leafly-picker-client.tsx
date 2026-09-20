@@ -39,6 +39,19 @@ import {
   type SelectionSpec,
   type TriState,
 } from "@/lib/leafly/selection-core";
+import {
+  CLEARED_PICKER_FILTER_STATE,
+  buildSendManifest,
+  computeSelectionVisibility,
+  countActiveFilters,
+  describeHiddenSelection,
+  describeSendManifest,
+  matchActivePresetId,
+  presetFilterState,
+  visibleRows,
+  type PickerFilterState,
+  type PickerView,
+} from "@/lib/leafly/picker-view-core";
 import type { SelectionPreviewResult } from "@/lib/leafly/selection-server";
 
 function money(minorUnits: number): string {
@@ -64,21 +77,50 @@ const TRI: { value: TriState; label: string }[] = [
 export function LeaflyItemPicker({ configured }: { configured: boolean }) {
   const [pending, startTransition] = useTransition();
 
-  // Filter state
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
-  const [brand, setBrand] = useState("");
-  const [strainType, setStrainType] = useState("");
-  const [stock, setStock] = useState<"any" | "in-stock" | "out-of-stock">("in-stock");
-  const [hasImage, setHasImage] = useState<TriState>("any");
-  const [hasDescription, setHasDescription] = useState<TriState>("any");
-  const [hasMultipleVariants, setHasMultipleVariants] = useState<TriState>("any");
-  const [isDohRestricted, setIsDohRestricted] = useState<TriState>("any");
-  const [priceMin, setPriceMin] = useState("");
-  const [priceMax, setPriceMax] = useState("");
-  const [thcMin, setThcMin] = useState("");
-  const [thcMax, setThcMax] = useState("");
-  const [sort, setSort] = useState<SelectionSort>("relevance");
+  // Filter state.
+  //
+  // Held as ONE object rather than thirteen useState calls. That is not tidiness
+  // for its own sake: the quick-start pills light up by comparing the current
+  // filters against what each preset would set, and that comparison cannot be
+  // written at all when the values live in thirteen separate variables that no
+  // function can be handed. Keeping them together is what makes the highlight
+  // derivable instead of remembered -- see picker-view-core for why remembering
+  // it produces a highlight that lies.
+  //
+  // The screen opens on in-stock because an out-of-stock product cannot exercise
+  // inventory or orderability, which are two of the mappings most worth proving.
+  // Note this differs from CLEARED_PICKER_FILTER_STATE on purpose: "the default
+  // view" and "no filters at all" are different things.
+  const [filters, setFilters] = useState<PickerFilterState>({
+    ...CLEARED_PICKER_FILTER_STATE,
+    stock: "in-stock",
+  });
+
+  // One setter per field, so the JSX below reads the same as it did before and
+  // no control can accidentally drop its siblings by spreading incorrectly.
+  const setField = useCallback(
+    <K extends keyof PickerFilterState>(key: K, value: PickerFilterState[K]) => {
+      setFilters((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
+
+  const {
+    search,
+    category,
+    brand,
+    strainType,
+    stock,
+    hasImage,
+    hasDescription,
+    hasMultipleVariants,
+    isDohRestricted,
+    priceMin,
+    priceMax,
+    thcMin,
+    thcMax,
+    sort,
+  } = filters;
 
   // Data
   const [rows, setRows] = useState<PickerRow[]>([]);
@@ -93,6 +135,13 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
   // picks two more. Clearing on filter change would silently discard the first
   // two and they would only find out by reading the count.
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Which rows the table shows: everything matching the filters, or only the
+  // picks. The owner reported that after "Suggest a sample" the table still
+  // showed all 2,555 matches with eight ticks buried somewhere inside it, which
+  // made the single most important question on the screen -- what am I actually
+  // sending? -- effectively unanswerable.
+  const [view, setView] = useState<PickerView>("all");
 
   // Preview / push
   //
@@ -157,6 +206,17 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
     thcMax,
   ]);
 
+  // Which quick start the current filters correspond to, or null for "custom".
+  // DERIVED, never stored: editing any control by hand un-lights the pill with
+  // no event handler involved, so the highlight cannot come to disagree with
+  // the filters it claims to describe.
+  const activePresetId = useMemo(
+    () => matchActivePresetId(filters, SELECTION_PRESETS),
+    [filters],
+  );
+
+  const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
+
   const load = useCallback(() => {
     setLoadError(null);
     startTransition(async () => {
@@ -203,6 +263,18 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
   const selectedCount = selected.size;
   const overLimit = selectedCount > TARGETED_PUSH_MAX_ITEMS;
 
+  // Where the selection sits relative to what is on screen, and what exactly
+  // the push would transmit. Both are pure functions of state that is already
+  // here, so neither can drift from the checkboxes the operator ticked.
+  const visibility = useMemo(
+    () => computeSelectionVisibility(rows, selected),
+    [rows, selected],
+  );
+  const hiddenNotice = useMemo(() => describeHiddenSelection(visibility), [visibility]);
+  const manifest = useMemo(() => buildSendManifest(rows, selected), [rows, selected]);
+  const manifestSentence = useMemo(() => describeSendManifest(manifest), [manifest]);
+  const shownRows = useMemo(() => visibleRows(rows, selected, view), [rows, selected, view]);
+
   function toggle(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -228,51 +300,44 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
     });
   }
 
+  // Both samplers switch the table to "selected" as well as setting the
+  // selection. Choosing a sample and being shown the same 2,555-row list is
+  // what made the feature look broken: the work had been done, it was simply
+  // invisible. Showing the result of an action is part of performing it.
   function useSuggested() {
     setSelected(new Set(suggestedIds));
+    setView("selected");
   }
 
   function suggestFromWholeFeed() {
     startTransition(async () => {
       const res = await suggestLeaflySampleAction({ size: 8 });
-      if (res.ok) setSelected(new Set(res.ids));
+      if (res.ok) {
+        setSelected(new Set(res.ids));
+        // This sampler draws from the WHOLE feed on purpose, so its picks are
+        // frequently outside the current filters. Clearing the filters is what
+        // makes them visible; without it the table would switch to "selected"
+        // and show fewer than eight rows, which is worse than showing none.
+        setFilters(CLEARED_PICKER_FILTER_STATE);
+        setView("selected");
+      }
     });
   }
 
+  // Applying and highlighting a preset go through the SAME function, so a
+  // preset cannot apply one set of values and light up based on another.
   function applyPreset(presetId: string) {
     const preset = SELECTION_PRESETS.find((p) => p.id === presetId);
     if (!preset) return;
-    setSearch(preset.spec.search ?? "");
-    setCategory(preset.spec.categories?.[0] ?? "");
-    setBrand(preset.spec.brands?.[0] ?? "");
-    setStrainType(preset.spec.strainTypes?.[0] ?? "");
-    setStock(preset.spec.stock ?? "any");
-    setHasImage(preset.spec.hasImage ?? "any");
-    setHasDescription(preset.spec.hasDescription ?? "any");
-    setHasMultipleVariants(preset.spec.hasMultipleVariants ?? "any");
-    setIsDohRestricted(preset.spec.isDohRestricted ?? "any");
-    setPriceMin("");
-    setPriceMax("");
-    setThcMin("");
-    setThcMax("");
-    setSort(preset.sort);
+    setFilters(presetFilterState(preset));
+    // Re-filtering is a browsing action; drop back to the full list so the
+    // operator can see what the preset actually matched.
+    setView("all");
   }
 
   function clearFilters() {
-    setSearch("");
-    setCategory("");
-    setBrand("");
-    setStrainType("");
-    setStock("any");
-    setHasImage("any");
-    setHasDescription("any");
-    setHasMultipleVariants("any");
-    setIsDohRestricted("any");
-    setPriceMin("");
-    setPriceMax("");
-    setThcMin("");
-    setThcMax("");
-    setSort("relevance");
+    setFilters(CLEARED_PICKER_FILTER_STATE);
+    setView("all");
   }
 
   function doPreview() {
@@ -338,37 +403,62 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
           <span className="text-xs font-medium uppercase tracking-wide opacity-70">
             Quick starts
           </span>
-          {SELECTION_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              title={preset.description}
-              onClick={() => applyPreset(preset.id)}
-              className="rounded-full border border-white/20 px-3 py-1 text-xs hover:bg-white/10"
-            >
-              {preset.label}
-            </button>
-          ))}
+          {SELECTION_PRESETS.map((preset) => {
+            const isActive = activePresetId === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                title={preset.description}
+                onClick={() => applyPreset(preset.id)}
+                // aria-pressed, not just colour. A toggle that communicates its
+                // state only through a background tint is invisible to a screen
+                // reader and to anyone who cannot distinguish the two greens.
+                aria-pressed={isActive}
+                className={
+                  isActive
+                    ? "rounded-full border border-emerald-400 bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.5)]"
+                    : "rounded-full border border-white/20 px-3 py-1 text-xs hover:bg-white/10"
+                }
+              >
+                {isActive ? `✓ ${preset.label}` : preset.label}
+              </button>
+            );
+          })}
           <button
             type="button"
             onClick={clearFilters}
             className="rounded-full border border-white/10 px-3 py-1 text-xs opacity-70 hover:bg-white/10"
           >
-            Clear filters
+            {activeFilterCount > 0 ? `Clear filters (${activeFilterCount})` : "Clear filters"}
           </button>
         </div>
+
+        {/*
+          Says out loud what the filters currently correspond to. Without this
+          line, "no pill is lit" is ambiguous between "you have a custom filter"
+          and "the highlighting is broken again" -- and the owner has already
+          had one of those, so he is entitled to be told which it is.
+        */}
+        <p className="-mt-3 text-xs opacity-70">
+          {activePresetId
+            ? `Showing the "${SELECTION_PRESETS.find((p) => p.id === activePresetId)?.label}" quick start.`
+            : activeFilterCount > 0
+              ? `Custom filter — ${activeFilterCount} filter${activeFilterCount === 1 ? "" : "s"} active. No quick start matches this exactly.`
+              : "No filters applied — showing everything in the published feed."}
+        </p>
 
         {/* Filters */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Search">
             <Input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => setField("search", e.target.value)}
               placeholder="Name, brand, strain or product key"
             />
           </Field>
           <Field label="Category">
-            <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <Select value={category} onChange={(e) => setField("category", e.target.value)}>
               <option value="">All categories</option>
               {facets?.categories.map((f) => (
                 <option key={f.value} value={f.value}>
@@ -378,7 +468,7 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
             </Select>
           </Field>
           <Field label="Brand">
-            <Select value={brand} onChange={(e) => setBrand(e.target.value)}>
+            <Select value={brand} onChange={(e) => setField("brand", e.target.value)}>
               <option value="">All brands</option>
               {facets?.brands.map((f) => (
                 <option key={f.value} value={f.value}>
@@ -388,7 +478,7 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
             </Select>
           </Field>
           <Field label="Strain type">
-            <Select value={strainType} onChange={(e) => setStrainType(e.target.value)}>
+            <Select value={strainType} onChange={(e) => setField("strainType", e.target.value)}>
               <option value="">All types</option>
               {facets?.strainTypes.map((f) => (
                 <option key={f.value} value={f.value}>
@@ -401,7 +491,7 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
           <Field label="Stock">
             <Select
               value={stock}
-              onChange={(e) => setStock(e.target.value as typeof stock)}
+              onChange={(e) => setField("stock", e.target.value as typeof stock)}
             >
               <option value="any">Any</option>
               <option value="in-stock">In stock only</option>
@@ -409,7 +499,7 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
             </Select>
           </Field>
           <Field label="Has a photo">
-            <Select value={hasImage} onChange={(e) => setHasImage(e.target.value as TriState)}>
+            <Select value={hasImage} onChange={(e) => setField("hasImage", e.target.value as TriState)}>
               {TRI.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
@@ -420,7 +510,7 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
           <Field label="Has a description">
             <Select
               value={hasDescription}
-              onChange={(e) => setHasDescription(e.target.value as TriState)}
+              onChange={(e) => setField("hasDescription", e.target.value as TriState)}
             >
               {TRI.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -432,7 +522,7 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
           <Field label="More than one size">
             <Select
               value={hasMultipleVariants}
-              onChange={(e) => setHasMultipleVariants(e.target.value as TriState)}
+              onChange={(e) => setField("hasMultipleVariants", e.target.value as TriState)}
             >
               {TRI.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -443,22 +533,22 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
           </Field>
 
           <Field label="Min price ($)">
-            <Input value={priceMin} onChange={(e) => setPriceMin(e.target.value)} placeholder="0" />
+            <Input value={priceMin} onChange={(e) => setField("priceMin", e.target.value)} placeholder="0" />
           </Field>
           <Field label="Max price ($)">
-            <Input value={priceMax} onChange={(e) => setPriceMax(e.target.value)} placeholder="200" />
+            <Input value={priceMax} onChange={(e) => setField("priceMax", e.target.value)} placeholder="200" />
           </Field>
           <Field label="Min THC (%)">
-            <Input value={thcMin} onChange={(e) => setThcMin(e.target.value)} placeholder="0" />
+            <Input value={thcMin} onChange={(e) => setField("thcMin", e.target.value)} placeholder="0" />
           </Field>
           <Field label="Max THC (%)">
-            <Input value={thcMax} onChange={(e) => setThcMax(e.target.value)} placeholder="100" />
+            <Input value={thcMax} onChange={(e) => setField("thcMax", e.target.value)} placeholder="100" />
           </Field>
 
           <Field label="DOH medical only">
             <Select
               value={isDohRestricted}
-              onChange={(e) => setIsDohRestricted(e.target.value as TriState)}
+              onChange={(e) => setField("isDohRestricted", e.target.value as TriState)}
             >
               {TRI.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -468,7 +558,7 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
             </Select>
           </Field>
           <Field label="Sort by">
-            <Select value={sort} onChange={(e) => setSort(e.target.value as SelectionSort)}>
+            <Select value={sort} onChange={(e) => setField("sort", e.target.value as SelectionSort)}>
               {SORTS.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
@@ -480,12 +570,27 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
 
         {/* Selection toolbar */}
         <div className="flex flex-wrap items-center gap-2 rounded border border-white/10 bg-white/5 p-3">
+          {/*
+            The selected count is the headline, not an afterthought appended to
+            the match count. "2,555 of 2,562 products match · 8 selected" buries
+            the only number the operator is about to act on behind two he is
+            not. The number that is about to be transmitted gets the large type.
+          */}
           <span className="text-sm">
-            <strong>{matchedCount}</strong> of {feedCount} products match
-            {selectedCount > 0 && (
+            {selectedCount > 0 ? (
               <>
-                {" · "}
-                <strong>{selectedCount}</strong> selected
+                <strong className="text-base text-emerald-300">
+                  {selectedCount} selected to send
+                </strong>
+                <span className="opacity-70">
+                  {" "}
+                  — out of {matchedCount} shown, {feedCount} in the feed
+                </span>
+              </>
+            ) : (
+              <>
+                <strong>{matchedCount}</strong> of {feedCount} products match.{" "}
+                <span className="opacity-70">Nothing selected yet.</span>
               </>
             )}
           </span>
@@ -511,12 +616,75 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
               Deselect shown
             </Button>
             {selectedCount > 0 && (
-              <Button type="button" variant="neutral" onClick={() => setSelected(new Set())}>
+              <Button
+                type="button"
+                variant="neutral"
+                onClick={() => {
+                  setSelected(new Set());
+                  // An empty "only selected" table is a dead end with no way
+                  // out except guessing. Emptying the selection returns to the
+                  // full list.
+                  setView("all");
+                }}
+              >
                 Clear selection
               </Button>
             )}
           </div>
         </div>
+
+        {/* Table view toggle */}
+        {selectedCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide opacity-70">
+              Table shows
+            </span>
+            <button
+              type="button"
+              aria-pressed={view === "all"}
+              onClick={() => setView("all")}
+              className={
+                view === "all"
+                  ? "rounded-full border border-emerald-400 bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-100"
+                  : "rounded-full border border-white/20 px-3 py-1 text-xs hover:bg-white/10"
+              }
+            >
+              Everything that matches ({matchedCount})
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === "selected"}
+              onClick={() => setView("selected")}
+              className={
+                view === "selected"
+                  ? "rounded-full border border-emerald-400 bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-100"
+                  : "rounded-full border border-white/20 px-3 py-1 text-xs hover:bg-white/10"
+              }
+            >
+              Only what I am sending ({visibility.visible})
+            </button>
+          </div>
+        )}
+
+        {/*
+          A selected product that is filtered off-screen WILL be transmitted and
+          CANNOT be reviewed, which is the most dangerous state this screen can
+          reach. It is also a routine one, because the toolbar sampler draws
+          from the whole feed while the table shows a filtered slice.
+
+          This renders only when it is true. A banner that appears on every load
+          teaches the reader to scroll past it, and then it is not there on the
+          day it matters -- which is why the self-tests pin the silent case as
+          hard as the noisy one.
+        */}
+        {hiddenNotice && (
+          <div className="flex flex-wrap items-center gap-3 rounded border border-amber-400/40 bg-amber-400/10 p-3 text-sm">
+            <span>{hiddenNotice}</span>
+            <Button type="button" variant="neutral" onClick={clearFilters}>
+              Clear the filters
+            </Button>
+          </div>
+        )}
 
         {overLimit && (
           <p className="rounded border border-amber-400/40 bg-amber-400/10 p-3 text-sm">
@@ -545,14 +713,18 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 && !pending && (
+              {shownRows.length === 0 && !pending && (
                 <tr>
                   <td colSpan={7} className="p-6 text-center text-sm opacity-70">
-                    Nothing matches these filters. Try clearing one.
+                    {view === "selected"
+                      ? selectedCount === 0
+                        ? "You have not selected anything yet."
+                        : "Everything you have selected is hidden by the filters above. Clear them to see it."
+                      : "Nothing matches these filters. Try clearing one."}
                   </td>
                 </tr>
               )}
-              {rows.map((row) => {
+              {shownRows.map((row) => {
                 const isSelected = selected.has(row.id);
                 return (
                   <tr
@@ -591,6 +763,55 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
             </tbody>
           </table>
         </div>
+
+        {/*
+          The manifest. The owner's words were "refine the process so it is
+          easier for me to know what exactly i am sending", and the honest
+          answer to "what am I sending?" is a list of the things, by name, short
+          enough to read before clicking. Ticks scattered through a 2,555-row
+          scroller are not that list, no matter how correct they are.
+
+          It sits ABOVE the preview button because it needs no server round
+          trip: it is built from rows already in the browser, so it is there the
+          instant a checkbox changes, and the operator can catch a mis-click
+          before spending a preview on it.
+        */}
+        {selectedCount > 0 && (
+          <div className="space-y-2 rounded border border-emerald-400/30 bg-emerald-400/5 p-4">
+            <h4 className="font-semibold">What you are about to send</h4>
+            <p className="text-sm">{manifestSentence}</p>
+
+            <ol className="max-h-56 list-decimal overflow-auto pl-6 text-sm">
+              {manifest.rows.map((row) => (
+                <li key={row.id} className="py-0.5">
+                  <span className="font-medium">{row.name}</span>
+                  <span className="opacity-60">
+                    {" "}
+                    — {row.category} · {money(row.priceMinorUnits)} · {row.id}
+                  </span>
+                </li>
+              ))}
+            </ol>
+
+            {/*
+              Named, not silently omitted. A manifest listing six items beside a
+              button offering to send eight is worse than no manifest, because
+              it is precise and wrong.
+            */}
+            {manifest.unknownIds.length > 0 && (
+              <p className="text-sm opacity-80">
+                <strong>{manifest.unknownIds.length}</strong> more selected product(s) cannot be
+                described here because they are outside the current filters:{" "}
+                {manifest.unknownIds.join(", ")}. They would still be sent.
+              </p>
+            )}
+
+            <p className="border-t border-white/10 pt-2 text-xs opacity-70">
+              These are sent as an update. Nothing else on your Leafly menu is changed or
+              removed. This list is what your read-back will be checked against afterwards.
+            </p>
+          </div>
+        )}
 
         {/* Preview + push */}
         <div className="flex flex-wrap items-center gap-2">
