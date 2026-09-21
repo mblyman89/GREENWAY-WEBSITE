@@ -51,6 +51,7 @@ import {
   resolveMenuVisibility,
   type MenuVisibilitySettings,
 } from "@/lib/leafly/menu-visibility-core";
+import { isInvalidItemPolicy, type InvalidItemPolicy } from "@/lib/leafly/quarantine-core";
 
 export type LeaflySyncMode = "post" | "put";
 
@@ -105,6 +106,23 @@ export type LeaflySyncSettings = ChannelSyncSettings & {
    */
   visibility: MenuVisibilitySettings;
   /**
+   * TASK I. What to do when items fail our pre-flight contract validation.
+   *
+   * `block` (the default, and the behaviour that has always existed) sends
+   * nothing at all. `quarantine` drops only the offending items, sends the
+   * rest, and reports exactly what was held back and why.
+   *
+   * Defaulting to `block` is deliberate. Quarantine is the right answer for a
+   * few mistyped product records and the wrong answer for a defect in our own
+   * builder, and only a human can tell those apart on the first occurrence.
+   * The owner opts in once they have seen the report and agree it is data.
+   *
+   * The ceiling that stops quarantine from masking a systematic failure lives
+   * in `quarantine-core.ts`, not here, for the same reason `visibility`'s
+   * default does: one module decides what the rule means.
+   */
+  invalidItemPolicy: InvalidItemPolicy;
+  /**
    * SLICE L-7. When the menu is sent automatically, without anyone pressing a button.
    *
    * Always a complete, clamped object -- never partial and never absent -- because
@@ -151,6 +169,13 @@ export const DEFAULT_LEAFLY_SETTINGS: LeaflySyncSettings = {
   // rather than restated here, so there is exactly one place that decides what an
   // unconfigured low-stock rule means.
   visibility: DEFAULT_MENU_VISIBILITY,
+  // TASK I. Blocking is the status quo and stays the default. Quarantine is
+  // the right call for a few bad product records and the WRONG call for a
+  // builder defect, and on the first occurrence only a human can tell which
+  // one they are looking at. So the owner turns it on knowingly, after seeing
+  // a report, rather than discovering one day that items have been quietly
+  // dropping out of his menu for months.
+  invalidItemPolicy: "block",
   // Automation also starts OFF, for the same reason and by the same rule: the default
   // is owned by `schedule-core.ts`, not restated here, so there is exactly one place
   // that decides what an unconfigured schedule means.
@@ -214,6 +239,13 @@ export function resolveLeaflySettings(raw: Record<string, unknown> | null | unde
     visibility: resolveMenuVisibility(
       isPlainObject(r["visibility"]) ? (r["visibility"] as Record<string, unknown>) : null,
     ),
+    // TASK I. Fail-closed in the strongest sense: anything that is not the
+    // exact string "quarantine" resolves to "block". A typo, a stale value, a
+    // half-written migration -- all of them land on the behaviour that cannot
+    // silently omit a product from the menu.
+    invalidItemPolicy: isInvalidItemPolicy(r["invalidItemPolicy"])
+      ? r["invalidItemPolicy"]
+      : d.invalidItemPolicy,
     // Delegated, not duplicated (rule 11). Anything that is not a usable object --
     // absent, null, a string, an array -- resolves to the safe defaults rather than
     // being coerced, because a malformed schedule must fail towards "off", not towards
@@ -266,6 +298,51 @@ export function __runSyncSettingsTests(): { passed: number; failed: number } {
   const l = resolveLeaflySettings(null);
   ok("leafly defaults", JSON.stringify(l) === JSON.stringify(DEFAULT_LEAFLY_SETTINGS));
   ok("leafly default mode post", l.syncMode === "post");
+
+  // --- TASK I: the invalid-item policy -----------------------------------
+  // Default must be the status quo. If this ever flips by accident, items
+  // start dropping out of the menu without anybody having asked for it.
+  ok("invalid-item policy defaults to block", l.invalidItemPolicy === "block");
+  ok(
+    "invalid-item policy accepts quarantine",
+    resolveLeaflySettings({ invalidItemPolicy: "quarantine" }).invalidItemPolicy === "quarantine",
+  );
+  ok(
+    "invalid-item policy accepts an explicit block",
+    resolveLeaflySettings({ invalidItemPolicy: "block" }).invalidItemPolicy === "block",
+  );
+  // Fail-closed across every shape of junk. Each of these is a real thing a
+  // stale row or a bad form post can contain.
+  for (const junk of [
+    "Quarantine", // wrong case -- NOT accepted, the guard is exact
+    "skip",
+    "",
+    null,
+    undefined,
+    0,
+    1,
+    true,
+    [],
+    {},
+  ] as unknown[]) {
+    ok(
+      `invalid-item policy fails closed for ${JSON.stringify(junk) ?? "undefined"}`,
+      resolveLeaflySettings({ invalidItemPolicy: junk }).invalidItemPolicy === "block",
+    );
+  }
+  // A missing key on an old settings row must read as block, not as absent.
+  ok(
+    "legacy row without the key reads as block",
+    resolveLeaflySettings({ pacingMs: 0, syncMode: "post" }).invalidItemPolicy === "block",
+  );
+  // ROUND TRIP. `saveSyncSettings` writes the whole blob back, so a setting
+  // that does not survive resolve(resolve(x)) is a setting that silently
+  // resets itself the next time the owner edits an unrelated checkbox.
+  {
+    const once = resolveLeaflySettings({ invalidItemPolicy: "quarantine" });
+    const twice = resolveLeaflySettings(once as unknown as Record<string, unknown>);
+    ok("invalid-item policy survives a round trip", twice.invalidItemPolicy === "quarantine");
+  }
   // SLICE L-3. The previous assertion here read "leafly images default off (no v2 image
   // field)" and locked a FALSE premise into the test suite: it made the disproven claim
   // load-bearing, so correcting the default would have looked like a regression. The v2

@@ -198,6 +198,10 @@ import { __runLeaflyReadbackBaselineTests } from "../../src/lib/leafly/readback-
 import { __runLeaflyPickerViewTests } from "../../src/lib/leafly/picker-view-core";
 import { __runLeaflyVariantIdentityTests } from "../../src/lib/leafly/variant-identity-core";
 import { __runLeaflyMenuVisibilityTests } from "../../src/lib/leafly/menu-visibility-core";
+// TASK I — the full-menu push failure.
+import { __runLeaflyPotencyTests } from "../../src/lib/leafly/potency-core";
+import { __runLeaflyQuarantineTests } from "../../src/lib/leafly/quarantine-core";
+import { __runLeaflyDeleteRequestTests } from "../../src/lib/leafly/delete-request-core";
 // SLICE L-4 — Leafly's five published menu-certification criteria.
 import { __runLeaflyCertificationTests } from "../../src/lib/leafly/certification-core";
 // SLICE L-5 — receiving orders FROM Leafly. Four pure cores, all registered
@@ -917,7 +921,10 @@ __runLiquidVolumeTests();
   // also resolves the automatic sync schedule, and the round trip it asserts
   // (resolve -> store -> resolve) is what stops an owner's automation setting
   // from being silently reset by an unrelated save on the same jsonb row.
-  assertRan("sync-settings-core", __runSyncSettingsTests(), 64);
+  // TASK I raised this from 64: the invalidItemPolicy resolver added a
+  // fail-closed loop over ten junk values plus a round-trip, taking the count
+  // from 66 to 81. Raising the floor with the count is the point of the floor.
+  assertRan("sync-settings-core", __runSyncSettingsTests(), 78);
   __runApplySettingsTests();
   __runSyndicationPlaybookTests();
   __runPosSaleEventTests();
@@ -1430,6 +1437,12 @@ __runLiquidVolumeTests();
   assertRan("leafly-picker-view-core", __runLeaflyPickerViewTests(), 138);
   assertRan("leafly-variant-identity-core", __runLeaflyVariantIdentityTests(), 75);
   assertRan("leafly-menu-visibility-core", __runLeaflyMenuVisibilityTests(), 108);
+
+  // TASK I. The three cores behind the full-menu push failure. Floors set
+  // just under the current counts, per the note above: 128 / 79 / 86.
+  assertRan("leafly-potency-core", __runLeaflyPotencyTests(), 120);
+  assertRan("leafly-quarantine-core", __runLeaflyQuarantineTests(), 75);
+  assertRan("leafly-delete-request-core", __runLeaflyDeleteRequestTests(), 80);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

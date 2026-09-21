@@ -4,11 +4,17 @@ import { useState, useTransition } from "react";
 import { Badge, Button, Card, Field, Input, Select, Textarea } from "@/components/admin/ui";
 import {
   pushLeaflyAction,
+  deleteLeaflyItemsAction,
   fetchLeaflyStatusAction,
   fetchLeaflyMenuReadbackAction,
   draftLeaflyDescriptionAction,
   type MenuReadbackActionResult,
 } from "./actions";
+import {
+  MAX_DELETE_IDS,
+  parseDeleteIds,
+  describeDeleteProblems,
+} from "@/lib/leafly/delete-request-core";
 
 const CATEGORIES = [
   "flower",
@@ -178,8 +184,154 @@ export function LeaflyPushClient({
         </div>
       </Card>
 
+      <DeleteFromLeafly configured={configured} />
+
       <DescriptionDrafter />
     </div>
+  );
+}
+
+/**
+ * TASK I -- remove specific products from the Leafly menu.
+ *
+ * WHY THIS IS A SEPARATE CARD AND NOT A MODE ON THE PUSH CARD.
+ *
+ * The push card's dangerous control is a dropdown, and adding "DELETE" as a
+ * third option would put an irreversible action one mis-click from a routine
+ * one. Removal gets its own card, its own text box that must be filled in by
+ * hand, and its own confirmation. None of that is decoration: a product
+ * silently vanishing from a live menu is exactly the class of fault Leafly
+ * grades an integration on.
+ *
+ * The parse runs LOCALLY as the owner types, so the count he is about to
+ * confirm is the real, de-duplicated count rather than a guess at how many
+ * lines he pasted. The server re-parses the same text with the same pure
+ * function and does not trust this number -- the client copy is for the
+ * owner's eyes, not for the request.
+ */
+function DeleteFromLeafly({ configured }: { configured: boolean }) {
+  const [pending, startTransition] = useTransition();
+  const [ids, setIds] = useState("");
+  const [armed, setArmed] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [warn, setWarn] = useState<string | null>(null);
+  const [ok, setOk] = useState<boolean | null>(null);
+
+  const parsed = parseDeleteIds(ids);
+  const localProblem = ids.trim().length > 0 ? describeDeleteProblems(parsed) : null;
+  const canArm = configured && parsed.ok && !pending;
+
+  function doDelete() {
+    setMsg(null);
+    setWarn(null);
+    setOk(null);
+    const fd = new FormData();
+    fd.set("confirm", "true");
+    fd.set("ids", ids);
+    startTransition(async () => {
+      const res = await deleteLeaflyItemsAction(fd);
+      if (res.ok) {
+        setOk(true);
+        setMsg(res.message);
+        setWarn(res.warning);
+        setIds("");
+      } else {
+        setOk(false);
+        setMsg(res.error);
+      }
+      setArmed(false);
+    });
+  }
+
+  return (
+    <Card>
+      <h2 className="mb-2 text-sm font-bold text-[var(--admin-text)]">
+        Remove products from the Leafly menu
+      </h2>
+      <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+        Takes named products off Leafly straight away, without touching anything else. Paste the
+        product IDs below &mdash; one per line, or separated by commas. Up to {MAX_DELETE_IDS} at a
+        time. This cannot be undone; to put a product back you push it again.
+      </p>
+
+      <div className="mb-3">
+        <Field
+          label="Product IDs to remove"
+          htmlFor="leafly-delete-ids"
+          help={
+            parsed.ids.length > 0
+              ? `${parsed.ids.length} ID${parsed.ids.length === 1 ? "" : "s"} ready${
+                  parsed.duplicates.length > 0
+                    ? ` \u00b7 ${parsed.duplicates.length} duplicate${
+                        parsed.duplicates.length === 1 ? "" : "s"
+                      } ignored`
+                    : ""
+                }`
+              : "Find an ID in the product list, a push payload, or the menu read-back."
+          }
+        >
+          <Textarea
+            id="leafly-delete-ids"
+            rows={4}
+            value={ids}
+            placeholder={"pos-45c6e282e0e8-cca24072824d\npos-45c6e282e0e8-00de6c9e8f2c"}
+            onChange={(e) => {
+              setIds(e.target.value);
+              setArmed(false);
+            }}
+            disabled={pending}
+          />
+        </Field>
+      </div>
+
+      {localProblem ? (
+        <p className="mb-2 text-xs text-[var(--admin-danger)]">{localProblem}</p>
+      ) : null}
+
+      {!configured ? (
+        <Badge tone="orange">Add credentials to enable removals</Badge>
+      ) : !armed ? (
+        <Button variant="neutral" size="sm" onClick={() => setArmed(true)} disabled={!canArm}>
+          Remove {parsed.ids.length > 0 ? parsed.ids.length : ""} from Leafly&hellip;
+        </Button>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-[var(--admin-danger)]">
+            Permanently remove {parsed.ids.length} product
+            {parsed.ids.length === 1 ? "" : "s"} from the live Leafly menu?
+          </span>
+          <Button variant="danger" size="sm" onClick={doDelete} disabled={pending}>
+            {pending ? "Removing\u2026" : "Yes, remove now"}
+          </Button>
+          <Button variant="neutral" size="sm" onClick={() => setArmed(false)} disabled={pending}>
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      {msg ? (
+        <p
+          className={`mt-3 text-xs ${
+            ok ? "text-[var(--admin-accent)]" : "text-[var(--admin-danger)]"
+          }`}
+        >
+          {msg}
+        </p>
+      ) : null}
+
+      {/*
+        Shown SEPARATELY from the success message and in a warning tone on
+        purpose. Leafly answers a removal for an id that was never on the menu
+        with a success, so "it worked" and "your typo did nothing" look
+        identical from the response. This is the only place that difference
+        surfaces.
+      */}
+      {warn ? (
+        <p className="mt-2 rounded border border-[var(--admin-warning,orange)] px-2 py-1.5 text-xs text-[var(--admin-warning,orange)]">
+          {warn}
+        </p>
+      ) : null}
+    </Card>
   );
 }
 
