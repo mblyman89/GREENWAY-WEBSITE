@@ -46,6 +46,11 @@ import {
   resolveScheduleSettings,
   type LeaflyScheduleSettings,
 } from "@/lib/leafly/schedule-core";
+import {
+  DEFAULT_MENU_VISIBILITY,
+  resolveMenuVisibility,
+  type MenuVisibilitySettings,
+} from "@/lib/leafly/menu-visibility-core";
 
 export type LeaflySyncMode = "post" | "put";
 
@@ -84,6 +89,21 @@ export type LeaflySyncSettings = ChannelSyncSettings & {
    * `true` in place. See `orderability-core.ts`.
    */
   sendPickupAvailability: boolean;
+  /**
+   * TASK H (finding L-22). The owner's low-stock rule: what to do with a size
+   * he still HAS but does not have enough of to promise to a stranger.
+   *
+   * Nested, and delegated to `menu-visibility-core.ts`, for exactly the two
+   * reasons `schedule` is: the natural field names inside it (`mode`,
+   * `minimumStock`) are generic enough to be ambiguous at the top level of a
+   * blob that also configures transmission, and the decisions belong to the
+   * module that is tested against them rather than being restated here.
+   *
+   * Defaults to OFF, so merging Task H changes nobody's menu. See that file's
+   * header for why Leafly's own equivalent toggle cannot be used instead (it
+   * exists, but their spec says it is "not currently supported via API").
+   */
+  visibility: MenuVisibilitySettings;
   /**
    * SLICE L-7. When the menu is sent automatically, without anyone pressing a button.
    *
@@ -125,6 +145,12 @@ export const DEFAULT_LEAFLY_SETTINGS: LeaflySyncSettings = {
   syncMode: "post",
   // Ordering starts OFF. See the field's doc comment: this one is a promise to fulfil.
   sendPickupAvailability: false,
+  // TASK H. The low-stock rule also starts OFF, and for the strongest version of
+  // the same reason: this is the only setting here that can REMOVE a product the
+  // owner is genuinely selling. Its default is owned by `menu-visibility-core.ts`
+  // rather than restated here, so there is exactly one place that decides what an
+  // unconfigured low-stock rule means.
+  visibility: DEFAULT_MENU_VISIBILITY,
   // Automation also starts OFF, for the same reason and by the same rule: the default
   // is owned by `schedule-core.ts`, not restated here, so there is exactly one place
   // that decides what an unconfigured schedule means.
@@ -179,6 +205,15 @@ export function resolveLeaflySettings(raw: Record<string, unknown> | null | unde
     forceResend: asBool(r["forceResend"], d.forceResend),
     syncMode: mode === "put" ? "put" : "post",
     sendPickupAvailability: asBool(r["sendPickupAvailability"], d.sendPickupAvailability),
+    // Delegated, not duplicated (rule 11), and fail-closed by the same argument
+    // as `schedule`: anything that is not a usable object -- absent, null, a
+    // string, an array -- resolves to the safe defaults, and for this setting
+    // "safe" means OFF. A malformed low-stock rule must never be guessed at,
+    // because every wrong guess either hides stock he is selling or promises
+    // stock he cannot deliver.
+    visibility: resolveMenuVisibility(
+      isPlainObject(r["visibility"]) ? (r["visibility"] as Record<string, unknown>) : null,
+    ),
     // Delegated, not duplicated (rule 11). Anything that is not a usable object --
     // absent, null, a string, an array -- resolves to the safe defaults rather than
     // being coerced, because a malformed schedule must fail towards "off", not towards
@@ -378,6 +413,57 @@ export function __runSyncSettingsTests(): { passed: number; failed: number } {
     // `DEFAULT_LEAFLY_SETTINGS` could be written to the database incomplete.
     ok("the defaults carry a schedule object", typeof DEFAULT_LEAFLY_SETTINGS.schedule === "object");
     ok("the default schedule has automation off", DEFAULT_LEAFLY_SETTINGS.schedule.enabled === false);
+  }
+
+  // --- TASK H: the nested low-stock visibility block ----------------------
+  // Same argument as the schedule block above, but with higher stakes. This
+  // resolver is what `saveSyncSettings` writes back as a WHOLE blob, so if the
+  // visibility rule did not survive a round trip, the owner ticking "send
+  // images" on the transmission form would silently switch his low-stock
+  // protection back off -- and he would only find out when a customer drove
+  // over for the last gram of something.
+  {
+    const withVis = resolveLeaflySettings({
+      visibility: { mode: "withhold", minimumStock: 3, perCategory: { flower: 5 } },
+    });
+    ok("visibility block is read, not ignored", withVis.visibility.mode === "withhold");
+    ok("visibility threshold is read", withVis.visibility.minimumStock === 3);
+    ok("visibility category override is read", withVis.visibility.perCategory["flower"] === 5);
+  }
+  {
+    const first = resolveLeaflySettings({
+      sendImages: false,
+      visibility: { mode: "not_orderable", minimumStock: 2, perCategory: { edible: 4 } },
+    });
+    const second = resolveLeaflySettings(first as unknown as Record<string, unknown>);
+    ok(
+      "visibility survives a full resolve -> store -> resolve round trip",
+      JSON.stringify(second.visibility) === JSON.stringify(first.visibility),
+    );
+    ok("round trip keeps the low-stock mode", second.visibility.mode === "not_orderable");
+    ok("round trip keeps the threshold", second.visibility.minimumStock === 2);
+    ok("round trip keeps category overrides", second.visibility.perCategory["edible"] === 4);
+    ok("round trip does not disturb the transmission toggles", second.sendImages === false);
+    ok("round trip does not disturb the schedule", second.schedule.enabled === false);
+  }
+  {
+    // A row written before Task H has no `visibility` key at all. Reading that
+    // as "off" is the only honest interpretation -- nobody who saved settings
+    // last month consented to products being held back.
+    ok(
+      "settings saved before Task H (key absent) read as OFF",
+      resolveLeaflySettings({ pacingMs: 0, syncMode: "post" }).visibility.mode === "off",
+    );
+    ok(
+      "a malformed visibility block fails closed to OFF",
+      resolveLeaflySettings({ visibility: "aggressive" }).visibility.mode === "off",
+    );
+    ok(
+      "a visibility array fails closed to OFF",
+      resolveLeaflySettings({ visibility: [3] }).visibility.mode === "off",
+    );
+    ok("the defaults carry a visibility object", typeof DEFAULT_LEAFLY_SETTINGS.visibility === "object");
+    ok("the default low-stock rule is OFF", DEFAULT_LEAFLY_SETTINGS.visibility.mode === "off");
   }
 
   console.log(`sync-settings: ${passed} passed, ${failed} failed`);

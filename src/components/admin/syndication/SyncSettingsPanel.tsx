@@ -20,6 +20,12 @@ import {
   MAX_RETRIES_MAX,
   PACING_MS_MAX,
 } from "@/lib/syndication/sync-settings-core";
+import {
+  MENU_VISIBILITY_MAX_THRESHOLD,
+  MENU_VISIBILITY_RECOMMENDED_THRESHOLD,
+  describeMenuVisibilityMode,
+  withholdEffectiveness,
+} from "@/lib/leafly/menu-visibility-core";
 
 type AnySettings = LeaflySyncSettings | WeedmapsSyncSettings;
 
@@ -257,6 +263,83 @@ export function SyncSettingsPanel({
             defaultChecked={settings.forceResend}
           />
         </div>
+
+        {/*
+          TASK H (finding L-22) — the owner's low-stock rule.
+
+          Deliberately its own block rather than another toggle in the grid
+          above. Every control in that grid changes what DETAIL is sent about a
+          product; this one can decide that a product the shop is genuinely
+          selling does not appear at all. That is a different kind of decision
+          and it should not be one checkbox among eight.
+
+          It is Leafly-only because it is implemented by changing what we send
+          to Leafly. Weedmaps has its own `unpublishWhenOutOfStock` behaviour.
+        */}
+        {isLeafly ? (
+          <div className="rounded-lg border border-[var(--admin-border)] p-3">
+            <p className="text-sm font-medium">Low-stock protection</p>
+            <p className="mt-1 text-xs text-[var(--admin-muted)]">
+              Stops your Leafly menu promising the last one or two of something. A shopper
+              who drives over for a specific product and finds it gone is the problem this
+              solves. Leafly has this feature too, but only inside their own settings
+              screen — their API cannot be told about it, so we do it here instead, where
+              it can also work size-by-size rather than hiding the whole product.
+            </p>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field
+                label="What to do when stock is low"
+                htmlFor="leafly-visibility-mode"
+                help={describeMenuVisibilityMode(lf.visibility.mode)}
+              >
+                <Select
+                  id="leafly-visibility-mode"
+                  name="visibilityMode"
+                  defaultValue={lf.visibility.mode}
+                >
+                  <option value="off">Off — list anything with at least 1 in stock</option>
+                  <option value="not_orderable">
+                    Show it, but don&apos;t let them reserve it (recommended)
+                  </option>
+                  <option value="withhold">Hold it back off the menu completely</option>
+                </Select>
+              </Field>
+
+              <Field
+                label="Keep back anything with fewer than…"
+                htmlFor="leafly-visibility-min"
+                help={
+                  `Counted per size, not per product. ${MENU_VISIBILITY_RECOMMENDED_THRESHOLD} is a ` +
+                  `sensible starting point. 0 or 1 means the rule does nothing, because ` +
+                  `sold-out items are already left off. Leafly stops counting above ` +
+                  `${MENU_VISIBILITY_MAX_THRESHOLD}, so that is the highest this can go.`
+                }
+              >
+                <Input
+                  id="leafly-visibility-min"
+                  name="visibilityMinimumStock"
+                  type="number"
+                  min={0}
+                  max={MENU_VISIBILITY_MAX_THRESHOLD}
+                  step={1}
+                  defaultValue={lf.visibility.minimumStock}
+                />
+              </Field>
+            </div>
+
+            {/*
+              The PUT trap, rendered from the same function the tests pin. A
+              safety feature that quietly does nothing is worse than none: it
+              manufactures exactly the false confidence the owner is buying.
+            */}
+            {!withholdEffectiveness(lf.visibility, lf.syncMode).effective ? (
+              <p className="mt-3 rounded border border-[var(--admin-danger)] p-2 text-xs text-[var(--admin-danger)]">
+                {withholdEffectiveness(lf.visibility, lf.syncMode).warning}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
           <Button type="submit" variant="save" size="sm" disabled={pending}>

@@ -197,6 +197,7 @@ import { __runLeaflyReadbackBaselineTests } from "../../src/lib/leafly/readback-
 // items that would be sent without ever being reviewed.
 import { __runLeaflyPickerViewTests } from "../../src/lib/leafly/picker-view-core";
 import { __runLeaflyVariantIdentityTests } from "../../src/lib/leafly/variant-identity-core";
+import { __runLeaflyMenuVisibilityTests } from "../../src/lib/leafly/menu-visibility-core";
 // SLICE L-4 — Leafly's five published menu-certification criteria.
 import { __runLeaflyCertificationTests } from "../../src/lib/leafly/certification-core";
 // SLICE L-5 — receiving orders FROM Leafly. Four pure cores, all registered
@@ -803,7 +804,7 @@ __runLiquidVolumeTests();
   // THREW THE RESULT AWAY: a suite reporting failures would have been read as
   // a pass. Getting this wrong ships an invalid menu to Leafly, Leafly rejects
   // the batch, and the store's Leafly menu goes dark with nobody told.
-  assertRan("leafly-payload-core", __runLeaflyPayloadTests(), 100);
+  assertRan("leafly-payload-core", __runLeaflyPayloadTests(), 195);
   assertRan("leafly-payload-validate-core", __runLeaflyPayloadValidateTests(), 124);
   assertRan("leafly-orderability-core", __runLeaflyOrderabilityTests(), 50);
   // Raised from 82 to 95 in SLICE L-19: the scope-aware reconciliation added
@@ -916,7 +917,7 @@ __runLiquidVolumeTests();
   // also resolves the automatic sync schedule, and the round trip it asserts
   // (resolve -> store -> resolve) is what stops an owner's automation setting
   // from being silently reset by an unrelated save on the same jsonb row.
-  assertRan("sync-settings-core", __runSyncSettingsTests(), 45);
+  assertRan("sync-settings-core", __runSyncSettingsTests(), 64);
   __runApplySettingsTests();
   __runSyndicationPlaybookTests();
   __runPosSaleEventTests();
@@ -1428,6 +1429,7 @@ __runLiquidVolumeTests();
   assertRan("leafly-readback-baseline-core", __runLeaflyReadbackBaselineTests(), 30);
   assertRan("leafly-picker-view-core", __runLeaflyPickerViewTests(), 138);
   assertRan("leafly-variant-identity-core", __runLeaflyVariantIdentityTests(), 75);
+  assertRan("leafly-menu-visibility-core", __runLeaflyMenuVisibilityTests(), 108);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
