@@ -61,6 +61,15 @@ import {
   isLeaflyVariantUnit,
 } from "./contract-core";
 import type { LeaflyItem, LeaflyItemsPayload, LeaflyVariant } from "./payload-core";
+// FINDING L-21. The rule for "can Leafly tell these two sizes apart" lives in
+// exactly one place so that the pre-flight warning in the picker, this
+// validator finding, and the after-the-fact explanation on a read-back error
+// cannot drift into disagreeing with each other. They are the same function.
+import {
+  findVariantCollisions,
+  remedyForCollision,
+  type IdentifiedVariant,
+} from "./variant-identity-core";
 
 // ---------------------------------------------------------------------------
 // Result shape
@@ -677,6 +686,77 @@ function checkItem(item: unknown, index: number, c: IssueCollector): number {
     checkVariant(v, `${path}.variants[${i}]`, itemId, itemType, seenVariantIds, c);
   });
 
+  // FINDING L-21 -- two variants Leafly cannot tell apart.
+  //
+  // Leafly's variant describes its size with exactly one pair of fields:
+  // `amount` and `unit`. There is no label, no name, no size string. So two
+  // variants of the same item carrying the same amount+unit are not two similar
+  // sizes to Leafly -- they are one size sent twice, and only one survives.
+  //
+  // This is how the owner's first push produced four "Size/variant ... is
+  // missing from Leafly's menu" errors on a push that was otherwise a complete
+  // success. Nothing failed in transit. Two sizes described themselves
+  // identically, and Leafly kept one.
+  //
+  // The collision is easy to create without noticing, because every rule that
+  // produces it is individually correct. `variantAmountAndUnit()` maps every
+  // variant of a COUNTED type (Topical, PreRoll, Edible, Accessory, Seeds,
+  // Clone, Other) to `1 each`, because Leafly permits no other unit for those
+  // types and a variant IS one package. MIXED types (Cartridge, Concentrate) do
+  // the same whenever the label carries no readable weight. Both behaviours are
+  // documented and deliberate. It is the COMBINATION with a multi-size product
+  // that loses data -- the same shape of defect as the read-back scope bug.
+  //
+  // This is an ERROR, not a warning. A warning would be the softer, safer-looking
+  // choice, and it would be wrong: the outcome is a size silently vanishing from
+  // a cannabis menu, which is a pricing and compliance problem, not a cosmetic
+  // one. It is also perfectly detectable before we send, so there is no reason
+  // to let it through and discover it in a read-back afterwards.
+  //
+  // We do NOT auto-merge or auto-drop the losers. Choosing which size survives
+  // is a decision about what the shop sells, and it belongs to the shop.
+  {
+    const identified: IdentifiedVariant[] = [];
+    for (const v of rec.variants) {
+      if (v === null || typeof v !== "object" || Array.isArray(v)) continue;
+      const vr = v as Record<string, unknown>;
+      // Only consider variants that are otherwise well-formed enough to have a
+      // size. A variant with a missing or non-numeric amount already produced
+      // its own finding above, and reporting it a second time as a "collision"
+      // would be duplicate noise about a single underlying problem.
+      if (typeof vr.id !== "string" || vr.id.trim() === "") continue;
+      if (typeof vr.amount !== "number" || !Number.isFinite(vr.amount)) continue;
+      if (typeof vr.unit !== "string" || vr.unit.trim() === "") continue;
+      identified.push({ id: vr.id, amount: vr.amount, unit: vr.unit });
+    }
+
+    for (const collision of findVariantCollisions(identified)) {
+      c.error(
+        "variant_size_indistinguishable",
+        `${path}.variants`,
+        itemId,
+        `${collision.variantIds.length} sizes of this item are all described to Leafly as ` +
+          `"${collision.size}" (${collision.variantIds.join(", ")}). Leafly identifies a size ` +
+          `only by its amount and unit, so it will keep one and silently discard the ` +
+          `${collision.likelyLostIds.length === 1 ? "other" : "others"}. ` +
+          // Type-aware: "relabel them" is impossible advice for an each-only
+          // type such as Topical or PreRoll, and impossible advice is worse
+          // than none. See remedyForCollision().
+          //
+          // An unrecognised type is already an error of its own further up, and
+          // Leafly funnels it to `Other`, which is each-only -- so falling back
+          // to the each-only wording is the honest answer rather than a guess.
+          `${remedyForCollision(
+            isLeaflyFunnelType(itemType)
+              ? LEAFLY_TYPE_UNIT_MATRIX[itemType].variantUnits
+              : LEAFLY_TYPE_UNIT_MATRIX.Other.variantUnits,
+          )} ` +
+          `A size that vanishes from the menu is not something a customer or an inspector ` +
+          `will forgive.`,
+      );
+    }
+  }
+
   return rec.variants.length;
 }
 
@@ -1103,6 +1183,95 @@ export function __runLeaflyPayloadValidateTests(): { passed: number; failed: num
     const bad = clone(good);
     (bad.items[0].variants[0] as unknown as Record<string, unknown>).medical = "false";
     ok("string medical rejected", hasCode(bad, "variant_medical_not_boolean"));
+  }
+
+  // --- FINDING L-21: sizes Leafly cannot tell apart --------------------------
+  //
+  // The NEGATIVE CONTROL comes first, deliberately. A check that fires on a
+  // correct payload is worse than no check, because it trains the reader to
+  // scroll past it.
+  {
+    const distinct = clone(good);
+    distinct.items[0].variants = [
+      { ...distinct.items[0].variants[0], id: "v-a", amount: 3.5, unit: "g" },
+      { ...distinct.items[0].variants[0], id: "v-b", amount: 7, unit: "g" },
+    ];
+    ok(
+      "genuinely distinct sizes produce NO collision finding",
+      !hasCode(distinct, "variant_size_indistinguishable"),
+    );
+  }
+  {
+    const single = clone(good);
+    single.items[0].variants = [{ ...single.items[0].variants[0], id: "v-only", amount: 1, unit: "each" }];
+    ok(
+      "a single variant cannot collide with itself",
+      !hasCode(single, "variant_size_indistinguishable"),
+    );
+  }
+  {
+    // The owner's real case: two counted-type sizes both mapping to `1 each`.
+    const collide = clone(good);
+    collide.items[0].variants = [
+      { ...collide.items[0].variants[0], id: "v-1", amount: 1, unit: "each" },
+      { ...collide.items[0].variants[0], id: "v-2", amount: 1, unit: "each" },
+    ];
+    ok("two identical sizes rejected", hasCode(collide, "variant_size_indistinguishable"));
+    ok("collision is an ERROR not a warning", !validateLeaflyPayload(collide).ok);
+  }
+  {
+    // Same amount, different unit is NOT a collision.
+    const mixed = clone(good);
+    mixed.items[0].variants = [
+      { ...mixed.items[0].variants[0], id: "v-1", amount: 1, unit: "g" },
+      { ...mixed.items[0].variants[0], id: "v-2", amount: 1, unit: "each" },
+    ];
+    ok(
+      "same amount with different units does not collide",
+      !hasCode(mixed, "variant_size_indistinguishable"),
+    );
+  }
+  {
+    // CRITICAL: the same size on two DIFFERENT items must never be reported.
+    // A menu where every product has a 1g would otherwise light up entirely.
+    const twoItems = clone(good);
+    const second = clone(good).items[0];
+    second.id = "second-item";
+    second.variants = [{ ...second.variants[0], id: "s-1", amount: 1, unit: "each" }];
+    twoItems.items[0].variants = [
+      { ...twoItems.items[0].variants[0], id: "f-1", amount: 1, unit: "each" },
+    ];
+    twoItems.items.push(second);
+    ok(
+      "the same size on different items is not a collision",
+      !hasCode(twoItems, "variant_size_indistinguishable"),
+    );
+  }
+  {
+    // A variant with a broken amount already reports its own defect; it must not
+    // ALSO be counted as a collision, or one problem produces two findings.
+    const broken = clone(good);
+    broken.items[0].variants = [
+      { ...broken.items[0].variants[0], id: "b-1", amount: 1, unit: "each" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { ...broken.items[0].variants[0], id: "b-2", amount: "1" as any, unit: "each" },
+    ];
+    ok(
+      "a malformed amount is not double-reported as a collision",
+      !hasCode(broken, "variant_size_indistinguishable"),
+    );
+  }
+  {
+    const three = clone(good);
+    three.items[0].variants = [
+      { ...three.items[0].variants[0], id: "t-1", amount: 1, unit: "each" },
+      { ...three.items[0].variants[0], id: "t-2", amount: 1, unit: "each" },
+      { ...three.items[0].variants[0], id: "t-3", amount: 1, unit: "each" },
+    ];
+    const res = validateLeaflyPayload(three);
+    const hits = res.errors.filter((e) => e.code === "variant_size_indistinguishable");
+    ok("a three-way collision is reported once, not twice", hits.length === 1);
+    ok("the collision message names every colliding id", hits[0].message.includes("t-3"));
   }
 
   // --- imageUrl -------------------------------------------------------------

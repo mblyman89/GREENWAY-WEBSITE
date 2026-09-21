@@ -59,6 +59,11 @@ import {
   LEAFLY_INVENTORY_LEVEL_CAP,
 } from "./contract-core";
 import type { LeaflyItem, LeaflyItemsPayload } from "./payload-core";
+// FINDING L-21. The same function that WARNS about a size collision before the
+// push EXPLAINS it after the read-back. One rule, two moments -- so the advice
+// we give beforehand and the diagnosis we give afterwards cannot contradict
+// each other.
+import { explainMissingVariant } from "./variant-identity-core";
 
 // ---------------------------------------------------------------------------
 // The readback vocabulary
@@ -705,11 +710,34 @@ export function reconcileLeaflyMenu(
       if (svid === null) continue;
       const bv = backVariants.get(svid);
       if (!bv) {
+        // FINDING L-21. A missing variant has two very different causes, and
+        // telling the owner which one they are looking at is the difference
+        // between an actionable message and an alarming one.
+        //
+        // If the size collided with a sibling on amount+unit, nothing failed in
+        // transit -- Leafly received it and discarded it as a duplicate
+        // descriptor. That is a data-shape problem in our own menu, fixable by
+        // relabelling, and we can prove it from the payload we sent.
+        //
+        // `explainMissingVariant` returns null when we CANNOT prove that, and
+        // then the plain message stands. It would have been easy to write an
+        // explainer that always produces a confident-sounding cause; that is
+        // just a guess with good grammar, and a wrong explanation is worse than
+        // none because it sends the reader off to fix the wrong thing.
+        const why = explainMissingVariant({
+          missingVariantId: svid,
+          sentVariants: sent.variants.map((v) => ({
+            id: String(v.id),
+            amount: v.amount,
+            unit: v.unit,
+          })),
+        });
         add(
           "error",
           "variant_missing",
           id,
-          `Size/variant "${svid}" of "${sent.name}" is missing from Leafly's menu.`,
+          `Size/variant "${svid}" of "${sent.name}" is missing from Leafly's menu.` +
+            (why === null ? "" : ` ${why}`),
         );
         continue;
       }
@@ -1164,6 +1192,106 @@ export function __runLeaflyReadbackTests(): { passed: number; failed: number } {
     "the missing-item message names the product",
     missing.issues.some((i) => i.code === "missing_from_leafly" && i.message.includes("Blue Dream")),
   );
+
+  // --- FINDING L-21: explaining a missing variant ------------------------
+  //
+  // Two sizes of one item that both describe themselves as `1 each`. Leafly
+  // keeps one. The read-back must still report the other as missing -- it IS
+  // missing -- but it must also say why, because "missing" alone sends the
+  // owner looking for a transmission failure that never happened.
+  {
+    const collidingSent: LeaflyItemsPayload = {
+      items: [
+        {
+          id: "TOPICAL-1",
+          type: "Topical",
+          name: "Ceres Dragon Balm CBD RED",
+          variants: [
+            { id: "tv-kept", medical: false, price: 1000, amount: 1, unit: "each", inventoryLevel: 5 },
+            { id: "tv-lost", medical: false, price: 2000, amount: 1, unit: "each", inventoryLevel: 5 },
+          ],
+        },
+      ],
+    };
+    // Leafly returns only the first of the two.
+    const collidingBack = parseLeaflyMenuReadback({
+      result: [
+        {
+          id: "TOPICAL-1",
+          name: "Ceres Dragon Balm CBD RED",
+          variants: [
+            {
+              id: "tv-kept",
+              inventoryLevel: 5,
+              medical: false,
+              packagePrice: 1000,
+              packageSize: 1,
+              packageUnit: "each",
+            },
+          ],
+        },
+      ],
+      metadata: { totalCount: 1 },
+    });
+    const rec = reconcileLeaflyMenu(collidingSent, collidingBack, "targeted");
+    const vm = rec.issues.find((i) => i.code === "variant_missing");
+    check("a collided variant is still reported missing", vm !== undefined);
+    check(
+      "the missing-variant message explains the collision",
+      (vm?.message ?? "").includes("Leafly identifies a size only by its amount and unit"),
+    );
+    check(
+      "the explanation names the surviving sibling",
+      (vm?.message ?? "").includes("tv-kept"),
+    );
+    check(
+      "the explanation rules out a transmission failure",
+      (vm?.message ?? "").includes("not a transmission failure"),
+    );
+  }
+  {
+    // NEGATIVE CONTROL. A genuinely absent variant, with NO collision in the
+    // payload, must get the plain message and no invented cause.
+    const distinctSent: LeaflyItemsPayload = {
+      items: [
+        {
+          id: "FLOWER-1",
+          type: "Flower",
+          name: "Khush Kush",
+          variants: [
+            { id: "fv-1", medical: false, price: 1200, amount: 3.5, unit: "g", inventoryLevel: 5 },
+            { id: "fv-2", medical: false, price: 2200, amount: 7, unit: "g", inventoryLevel: 5 },
+          ],
+        },
+      ],
+    };
+    const partialBack = parseLeaflyMenuReadback({
+      result: [
+        {
+          id: "FLOWER-1",
+          name: "Khush Kush",
+          variants: [
+            {
+              id: "fv-1",
+              inventoryLevel: 5,
+              medical: false,
+              packagePrice: 1200,
+              packageSize: 3.5,
+              packageUnit: "g",
+            },
+          ],
+        },
+      ],
+      metadata: { totalCount: 1 },
+    });
+    const rec = reconcileLeaflyMenu(distinctSent, partialBack, "targeted");
+    const vm = rec.issues.find((i) => i.code === "variant_missing");
+    check("a genuinely absent variant is still an error", vm !== undefined);
+    check(
+      "no collision explanation is invented for a distinct size",
+      !(vm?.message ?? "").includes("Leafly identifies a size only by its amount and unit"),
+    );
+  }
 
   // Dropped image — the L-10 regression detector
   const noImageBack = parseLeaflyMenuReadback({

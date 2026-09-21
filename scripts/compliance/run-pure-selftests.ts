@@ -196,6 +196,7 @@ import { __runLeaflyReadbackBaselineTests } from "../../src/lib/leafly/readback-
 // it. It also computes how many selected products are hidden off-screen --
 // items that would be sent without ever being reviewed.
 import { __runLeaflyPickerViewTests } from "../../src/lib/leafly/picker-view-core";
+import { __runLeaflyVariantIdentityTests } from "../../src/lib/leafly/variant-identity-core";
 // SLICE L-4 — Leafly's five published menu-certification criteria.
 import { __runLeaflyCertificationTests } from "../../src/lib/leafly/certification-core";
 // SLICE L-5 — receiving orders FROM Leafly. Four pure cores, all registered
@@ -803,13 +804,13 @@ __runLiquidVolumeTests();
   // a pass. Getting this wrong ships an invalid menu to Leafly, Leafly rejects
   // the batch, and the store's Leafly menu goes dark with nobody told.
   assertRan("leafly-payload-core", __runLeaflyPayloadTests(), 100);
-  assertRan("leafly-payload-validate-core", __runLeaflyPayloadValidateTests(), 100);
+  assertRan("leafly-payload-validate-core", __runLeaflyPayloadValidateTests(), 124);
   assertRan("leafly-orderability-core", __runLeaflyOrderabilityTests(), 50);
   // Raised from 82 to 95 in SLICE L-19: the scope-aware reconciliation added
   // ~16 assertions, including the negative control proving a targeted read-back
   // still fails when an item it DID send is genuinely absent. Leaving the floor
   // at 82 would let all of that be deleted with CI still green.
-  assertRan("leafly-readback-core", __runLeaflyReadbackTests(), 95);
+  assertRan("leafly-readback-core", __runLeaflyReadbackTests(), 104);
   assertRan("leafly-certification-core", __runLeaflyCertificationTests(), 60);
   // SLICE L-5 -- receiving orders FROM Leafly. Four cores, each registered with
   // a floor for a reason specific to it:
@@ -1425,7 +1426,8 @@ __runLiquidVolumeTests();
   // deleting a meaningful block of assertions fails CI, while adding more
   // never does.
   assertRan("leafly-readback-baseline-core", __runLeaflyReadbackBaselineTests(), 30);
-  assertRan("leafly-picker-view-core", __runLeaflyPickerViewTests(), 110);
+  assertRan("leafly-picker-view-core", __runLeaflyPickerViewTests(), 138);
+  assertRan("leafly-variant-identity-core", __runLeaflyVariantIdentityTests(), 75);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

@@ -46,8 +46,10 @@ import {
   countActiveFilters,
   describeHiddenSelection,
   describeSendManifest,
+  describeSizeLoss,
   matchActivePresetId,
   presetFilterState,
+  summarizeSizeLoss,
   visibleRows,
   type PickerFilterState,
   type PickerView,
@@ -271,6 +273,11 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
     [rows, selected],
   );
   const hiddenNotice = useMemo(() => describeHiddenSelection(visibility), [visibility]);
+  // FINDING L-21. Derived, never stored. The moment a row is selected or
+  // deselected this recomputes, so the banner cannot describe a selection the
+  // owner has already moved on from.
+  const sizeLoss = useMemo(() => summarizeSizeLoss(rows, selected), [rows, selected]);
+  const sizeLossNotice = useMemo(() => describeSizeLoss(sizeLoss), [sizeLoss]);
   const manifest = useMemo(() => buildSendManifest(rows, selected), [rows, selected]);
   const manifestSentence = useMemo(() => describeSendManifest(manifest), [manifest]);
   const shownRows = useMemo(() => visibleRows(rows, selected, view), [rows, selected, view]);
@@ -686,6 +693,36 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
           </div>
         )}
 
+        {/*
+          FINDING L-21 -- sizes that will not survive the trip.
+
+          This is the warning that would have saved the owner's first push. Two
+          sizes of the Ceres topical both described themselves to Leafly as
+          "1 each", Leafly kept one, and the read-back afterwards reported the
+          other as missing from the menu. Nothing failed in transit; the data
+          arrived and was deduplicated.
+
+          Stated BEFORE the push, because afterwards it is a diagnosis and
+          beforehand it is a decision. Rendered only when something is actually
+          being lost -- the self-tests pin the silent case explicitly.
+        */}
+        {sizeLossNotice && (
+          <div className="space-y-2 rounded border border-amber-400/40 bg-amber-400/10 p-3 text-sm">
+            <p>
+              <strong>
+                {sizeLoss.totalLost} size{sizeLoss.totalLost === 1 ? "" : "s"} will not appear on
+                Leafly.
+              </strong>
+            </p>
+            <p>{sizeLossNotice}</p>
+            <p className="text-xs opacity-80">
+              You can still send this push — everything else about it is fine, and the sizes
+              that do arrive will be correct. But the read-back afterwards will report the
+              missing ones, and it will be right to.
+            </p>
+          </div>
+        )}
+
         {overLimit && (
           <p className="rounded border border-amber-400/40 bg-amber-400/10 p-3 text-sm">
             {selectedCount} products are selected. A targeted push is capped at{" "}
@@ -708,7 +745,20 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
                 <th className="p-2">Category</th>
                 <th className="p-2">Price</th>
                 <th className="p-2">THC</th>
-                <th className="p-2">Sizes</th>
+                {/*
+                  FINDING L-21. This column used to read "Sizes" and show how
+                  many sizes the product has in our system. That is not the
+                  number the owner needs. Leafly tells sizes apart only by
+                  amount+unit, so a product with two sizes can arrive as one.
+                  The column now reports what Leafly will actually hold, and
+                  says so in its own heading.
+                */}
+                <th
+                  className="p-2"
+                  title="How many sizes Leafly will end up showing for this product. If it is lower than the number of sizes you have, two of them look identical to Leafly."
+                >
+                  Sizes to Leafly
+                </th>
                 <th className="p-2">Flags</th>
               </tr>
             </thead>
@@ -748,7 +798,24 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
                     <td className="p-2">{row.category}</td>
                     <td className="p-2">{money(row.priceMinorUnits)}</td>
                     <td className="p-2">{row.thc ?? "—"}</td>
-                    <td className="p-2">{row.variantCount}</td>
+                    {/*
+                      Show the honest number, and show the loss beside it rather
+                      than instead of it. Replacing "2" with "1" would be
+                      truthful and still useless — the owner would have no way to
+                      tell a one-size product from a two-size product that lost
+                      one. The strikethrough makes the difference legible at a
+                      glance, which is the only place this ever gets read.
+                    */}
+                    <td className="p-2">
+                      {row.lostVariantCount > 0 ? (
+                        <span className="text-amber-300" title={`This product has ${row.variantCount} sizes, but ${row.lostVariantCount} of them describe themselves to Leafly the same way as another, so Leafly will only show ${row.sentVariantCount}.`}>
+                          <span className="opacity-50 line-through">{row.variantCount}</span>{" "}
+                          <strong>{row.sentVariantCount}</strong>
+                        </span>
+                      ) : (
+                        row.sentVariantCount
+                      )}
+                    </td>
                     <td className="p-2">
                       <div className="flex flex-wrap gap-1">
                         {!row.inStock && <Badge tone="orange">Out of stock</Badge>}
