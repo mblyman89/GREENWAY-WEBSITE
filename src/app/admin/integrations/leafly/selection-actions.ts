@@ -23,7 +23,7 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { recordSyndicationLog } from "@/lib/syndication/store";
-import { isLeaflyConfigured } from "@/lib/leafly/push";
+import { requireLeaflyReady } from "@/lib/leafly/readiness-gate";
 import {
   browseLeaflySelection,
   previewLeaflySelection,
@@ -56,6 +56,22 @@ import { TARGETED_PUSH_LOG_PREFIX } from "@/lib/leafly/readback-baseline-core";
 import { variantsFor } from "@/lib/leafly/payload-core";
 import { variantSizeKey } from "@/lib/leafly/variant-identity-core";
 import type { SyndicationItem } from "@/lib/syndication/menu-feed-core";
+// ROADMAP R6/R7 (owner asks 1-5, 7). The triage decides what may be sent and
+// names what may not; the rotating sampler suggests a DIFFERENT, contract-
+// aware sample each time; the identity loader supplies vendor and barcode so
+// no message has to lead with a product id.
+import {
+  triageLeaflySelection,
+  type SelectionTriageResult,
+} from "@/lib/leafly/selection-server";
+import {
+  buildRotatingSample,
+  describeSample,
+  type SampleCandidate,
+} from "@/lib/leafly/sample-rotation-core";
+import { humanLabel, fixHrefFor } from "@/lib/leafly/sendability-core";
+import { loadProductIdentities } from "@/lib/leafly/identity-server";
+import type { ProductIdentity } from "@/lib/leafly/product-identity-core";
 
 const BASE = "/admin/integrations/leafly";
 
@@ -262,12 +278,11 @@ export async function pushLeaflySelectionAction(input: {
   if (!input.confirm) {
     return { ok: false, error: "Confirmation required for a targeted Leafly push." };
   }
-  if (!isLeaflyConfigured()) {
-    return {
-      ok: false,
-      error:
-        "Leafly is not configured. Set the menu integration key and OAuth credentials first.",
-    };
+  // FINDING J-4: refresh-then-check via the shared gate, so a cold lambda
+  // never reports configured credentials as missing.
+  const gate = await requireLeaflyReady();
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
   }
 
   try {
@@ -352,6 +367,334 @@ export async function suggestLeaflySampleAction(input: {
     const inStock = selectItems(allItems, { stock: "in-stock" }, "name");
     const pool = inStock.length > 0 ? inStock : allItems;
     return { ok: true, ids: buildRepresentativeSample(pool, size).map((i) => i.id) };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not build a suggested sample.",
+    };
+  }
+}
+
+/* ========================================================================== */
+/* Sendability triage + partial send (ROADMAP R6 -- owner asks 4, 5, 7)       */
+/* ========================================================================== */
+
+export type TriageActionResult =
+  | { ok: true; result: SelectionTriageResult }
+  | { ok: false; error: string };
+
+/**
+ * Answer "which of these will Leafly take, and what is wrong with the rest".
+ *
+ * Touches no network and changes nothing, but still requires
+ * `settings.manage` for the same reason browsing does: it reads live product
+ * data and the back office has no lesser tier.
+ */
+export async function triageLeaflySelectionAction(input: {
+  ids: string[];
+}): Promise<TriageActionResult> {
+  await requirePermission("settings.manage");
+  try {
+    const result = await triageLeaflySelection({ ids: input.ids ?? [] });
+    return { ok: true, result };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Could not work out which products Leafly will accept.",
+    };
+  }
+}
+
+/**
+ * Send ONLY the products that pass Leafly's contract, and report the rest.
+ *
+ * ###########################################################################
+ * # THE OWNER'S WORDS                                                       #
+ * #                                                                        #
+ * #   "i want the ability to send the products that do pass leafly's       #
+ * #    contract skipping the bad ones ... listing them with the button     #
+ * #    that directs me to the area to fix it."                             #
+ * #                                                                        #
+ * #   "it did not give me the option to send the good products and         #
+ * #    withhold the bad ones."                                             #
+ * ###########################################################################
+ *
+ * SAFETY PROPERTIES, each deliberate:
+ *
+ *   1. The skip list is DERIVED, never supplied by the caller. A client that
+ *      could name the products to skip could also name products to skip that
+ *      are perfectly fine, and quietly shrink the menu.
+ *
+ *   2. If nothing passes, this REFUSES rather than sending an empty payload.
+ *      A PUT of zero items against a menu endpoint is not a no-op in spirit,
+ *      and "we sent nothing successfully" is not a success worth reporting.
+ *
+ *   3. If errors could not be attributed to specific products, this REFUSES.
+ *      Skipping the named ones would not make the payload valid, so the push
+ *      would fail anyway -- and it would fail after telling the owner we had
+ *      solved his problem.
+ *
+ *   4. Every withheld product is recorded in the audit log and the
+ *      syndication log, by name. Nothing is dropped silently.
+ */
+export async function pushLeaflyPassingOnlyAction(input: {
+  ids: string[];
+  confirm: boolean;
+}): Promise<
+  | {
+      ok: true;
+      result: SelectionPushResult;
+      skipped: Array<{ id: string; label: string; fixHref: string | null }>;
+    }
+  | { ok: false; error: string; triage?: SelectionTriageResult }
+> {
+  const session = await requirePermission("settings.manage");
+  if (!input.confirm) {
+    return { ok: false, error: "Confirmation required for a targeted Leafly push." };
+  }
+  const gate = await requireLeaflyReady();
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
+  }
+
+  try {
+    const triaged = await triageLeaflySelection({ ids: input.ids ?? [] });
+    const { triage } = triaged;
+
+    // Property 3.
+    if (triage.unattributedErrorCount > 0) {
+      return {
+        ok: false,
+        error:
+          `Some problems could not be traced to a specific product, so sending ` +
+          `only the good ones would not make this push succeed. ${triaged.summary}`,
+        triage: triaged,
+      };
+    }
+    // Property 2.
+    if (triage.sendableIds.length === 0) {
+      return {
+        ok: false,
+        error:
+          `None of the ${triage.totalConsidered} selected products meet Leafly's ` +
+          `contract yet, so there is nothing to send.`,
+        triage: triaged,
+      };
+    }
+
+    // Property 1: the ids come from the triage, not from the client.
+    const result = await pushLeaflySelection({
+      ids: triage.sendableIds,
+      confirm: true,
+      requestedMethod: "PUT",
+    });
+
+    const skipped = triage.blocked.map((b) => ({
+      id: b.id,
+      label: b.label,
+      fixHref: b.fixHref,
+    }));
+
+    // Property 4: the withheld products are named in the durable record.
+    await recordSyndicationLog({
+      channel: "leafly",
+      mode: "live",
+      status: result.ok ? "ok" : "error",
+      itemCount: result.itemCount,
+      payload: result.payload,
+      response: result.response,
+      message:
+        `${TARGETED_PUSH_LOG_PREFIX} (passing only) — ${result.message} ` +
+        `Withheld ${skipped.length}: ${skipped.map((s) => s.label).join("; ")}`,
+      createdBy: session.userId,
+    });
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: result.ok
+        ? "leafly.selection.push.passing_only.success"
+        : "leafly.selection.push.passing_only.error",
+      entityType: "syndication",
+      entityId: "leafly",
+      after: {
+        requested: triage.totalConsidered,
+        sent: result.itemCount,
+        withheld: skipped.length,
+        withheldIds: skipped.map((s) => s.id),
+        httpStatus: result.httpStatus,
+        syncStateWritten: result.syncStateWritten,
+        deletesIssued: result.deletesIssued,
+      },
+    });
+
+    revalidatePath(BASE);
+    return { ok: true, result, skipped };
+  } catch (err) {
+    if (err instanceof SelectionRefusedError) {
+      return { ok: false, error: err.message };
+    }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Targeted Leafly push failed.",
+    };
+  }
+}
+
+/* ========================================================================== */
+/* Intelligent, rotating sample (ROADMAP R7 -- owner asks 1, 2, 3)            */
+/* ========================================================================== */
+
+export type RotatingSampleResult =
+  | {
+      ok: true;
+      ids: string[];
+      round: number;
+      exhausted: boolean;
+      /** Products in the sample known to FAIL, named, each with a fix link. */
+      failing: Array<{ id: string; label: string; reason: string | null; fixHref: string | null }>;
+      note: string;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Suggest a sample, a DIFFERENT one each time, that prefers products Leafly
+ * will actually accept.
+ *
+ * ###########################################################################
+ * # THE OWNER'S WORDS                                                       #
+ * #                                                                        #
+ * #   "will you make the suggest a sample button ... be more intelligent   #
+ * #    and have it pick a different set of 8 products to send as a sample. #
+ * #    if the sample set has a product in it that does not meet leafly's   #
+ * #    contract, please both identify it, and give me a way to fix it, a   #
+ * #    button that sends me to the page in the back office that lets me    #
+ * #    fix it."                                                            #
+ * ###########################################################################
+ *
+ * WHY THE CALLER PASSES THE ROUND
+ *
+ * `round` is what makes "suggest another" work while keeping the result
+ * reproducible: the same round always yields the same sample. A random
+ * sampler would give the owner a different set on every render and make a
+ * failed push impossible to reproduce -- which is exactly why the original
+ * sampler was deterministic in the first place. Rotation gives him variety
+ * without giving up that property.
+ *
+ * WHY CONTRACT STATUS IS MEASURED, NOT ASSUMED
+ *
+ * Sendability comes from building and validating the real payload for the
+ * candidate pool, so "passes" means the same thing here as it does at the
+ * moment of the push.
+ */
+export async function suggestRotatingSampleAction(input: {
+  size?: number;
+  round?: number;
+}): Promise<RotatingSampleResult> {
+  await requirePermission("settings.manage");
+  try {
+    const size = Math.min(Math.max(1, Math.floor(input.size ?? 8)), 50);
+    const round = Math.max(0, Math.floor(input.round ?? 0));
+
+    const { allItems } = await browseLeaflySelection({}, "name");
+    if (allItems.length === 0) {
+      return { ok: false, error: "The published menu feed is empty." };
+    }
+
+    // Prefer sellable stock, exactly as the classic sampler did: an
+    // out-of-stock product cannot exercise inventory or orderability.
+    const inStock = selectItems(allItems, { stock: "in-stock" }, "name");
+    const pool = inStock.length > 0 ? inStock : allItems;
+
+    // Establish who passes. Validating 2,500 products on every click would be
+    // wasteful, so a bounded working set is triaged: large enough that the
+    // sampler has real choice, small enough to stay responsive.
+    const WORKING_SET = Math.min(pool.length, Math.max(size * 12, 120));
+    const window = pool.slice(0, WORKING_SET);
+    let passing = new Set<string>();
+    const failingReason = new Map<string, string>();
+    let checked = false;
+    try {
+      const triaged = await triageLeaflySelection({ ids: window.map((i) => i.id) });
+      passing = new Set(triaged.triage.sendableIds);
+      for (const b of triaged.triage.blocked) {
+        failingReason.set(b.id, b.reasons[0] ?? "Does not meet Leafly's contract.");
+      }
+      checked = triaged.triage.unattributedErrorCount === 0;
+    } catch {
+      // Unchecked is NOT the same as failing. If the check cannot run we fall
+      // back to the coverage-only sampler rather than declaring the whole
+      // menu broken and refusing to suggest anything.
+      checked = false;
+    }
+
+    const candidates: SampleCandidate[] = window.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      brand: item.brand,
+      strainType: item.strainType,
+      inStock: item.inStock,
+      variantCount: item.variants.length,
+      hasImage: Boolean(item.imageUrl),
+      hasDescription: (item.description ?? "").trim().length > 0,
+      hasPotency: typeof item.thc === "string" && item.thc.trim().length > 0,
+      // Tri-state on purpose: undefined means "not checked", which must not
+      // be scored as a failure.
+      passesContract: checked ? passing.has(item.id) : undefined,
+      failureReason: failingReason.get(item.id) ?? null,
+    }));
+
+    const selection = buildRotatingSample(candidates, size, round);
+    const pickedIds = selection.picked.map((p) => p.id);
+
+    // Name any failures that still made the cut, with a fix link each.
+    let identities: Map<string, ProductIdentity> = new Map();
+    try {
+      identities = await loadProductIdentities(selection.failing.map((f) => f.id));
+    } catch {
+      identities = new Map();
+    }
+
+    const failing = selection.failing.map((f) => {
+      const identity = identities.get(f.id) ?? null;
+      return {
+        id: f.id,
+        label: humanLabel(
+          identity === null
+            ? null
+            : {
+                id: identity.id,
+                productName: identity.productName ?? identity.name,
+                brand: identity.brand,
+                vendor: identity.vendor,
+                barcodes: identity.barcodes,
+                category: identity.category,
+                size: null,
+              },
+          f.id,
+        ),
+        reason: f.failureReason ?? null,
+        fixHref: fixHrefFor(f.id),
+      };
+    });
+
+    const note = checked
+      ? describeSample(selection)
+      : `${describeSample(selection)} (Leafly's contract could not be checked for this ` +
+        `suggestion, so these products have not been verified as sendable.)`;
+
+    return {
+      ok: true,
+      ids: pickedIds,
+      round: selection.round,
+      exhausted: selection.exhausted,
+      failing,
+      note,
+    };
   } catch (err) {
     return {
       ok: false,

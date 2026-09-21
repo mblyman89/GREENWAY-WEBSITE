@@ -49,10 +49,28 @@ import { getLeaflyAccessToken, resetLeaflyTokenCache } from "./token";
 import { refreshLeaflyConfig } from "./runtime";
 import {
   buildLeaflyItemsResult,
+  toLeaflyType,
   type LeaflyItem,
   type LeaflyItemsPayload,
   type LeaflyVariantRejection,
 } from "./payload-core";
+import {
+  triageSendability,
+  describeTriage,
+  describeBlockedProducts,
+  type SendabilityTriage,
+  type SendabilityIdentity,
+} from "./sendability-core";
+import {
+  planRemedies,
+  describeRemedyPlan,
+  type RemedyItem,
+  type RemedyPlan,
+} from "./collision-remedy-core";
+import {
+  loadProductIdentities,
+  toSendabilityIdentities,
+} from "./identity-server";
 import { assertLeaflyPayloadValid, validateLeaflyPayload } from "./payload-validate-core";
 import { summarizeOrderability, type OrderabilitySummary } from "./orderability-core";
 import {
@@ -351,4 +369,127 @@ function leaflyMessageForStatus(status: number): string {
   if (status === 429) return "Leafly rate-limited the request (429). Wait a moment and try again.";
   if (status >= 500) return `Leafly had a server error (${status}). This is on their side; nothing is wrong with your credentials.`;
   return `Leafly returned HTTP ${status}.`;
+}
+
+// ---------------------------------------------------------------------------
+// Sendability triage (ROADMAP R3/R4/R6 -- owner asks 4, 5, 6, 7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Work out which of the chosen products Leafly will accept, and explain the
+ * rest in human terms with a fix link each.
+ *
+ * WHY THIS IS NOT PART OF `previewLeaflySelection`
+ *
+ * The preview answers "what exactly would we transmit". This answers "what
+ * should we do about it". Keeping them apart matters because the triage does
+ * an extra database round trip to resolve vendor names and barcodes, and the
+ * preview is on the hot path of the picker UI.
+ *
+ * WHY IT VALIDATES THE REAL PAYLOAD AND NOT A CHEAPER PROXY
+ *
+ * The only trustworthy answer to "will Leafly accept this" comes from
+ * building the payload the push would actually send and running the same
+ * validator the push runs. Anything cheaper is a second implementation of
+ * the contract, and the two would drift; the owner would then be told his
+ * product passes and watch the push reject it, which is precisely the kind
+ * of contradiction that destroys confidence in the whole screen.
+ */
+export type SelectionTriageResult = {
+  triage: SendabilityTriage;
+  /** Human sentence for the top of the panel. */
+  summary: string;
+  /** One line per held-back product, led by its name. */
+  blockedLines: string[];
+  /** The bulk remedy plan for the repeated size-collapse defect, when any. */
+  remedyPlan: RemedyPlan | null;
+  /** Plain-English description of that plan. */
+  remedyNarrative: string | null;
+  versionId: string | null;
+};
+
+export async function triageLeaflySelection(input: {
+  ids: readonly string[];
+}): Promise<SelectionTriageResult> {
+  await refreshLeaflyConfig();
+  const { versionId, items } = await loadSyndicationFeed();
+
+  const wanted = new Set(input.ids ?? []);
+  const selected = items.filter((item) => wanted.has(item.id));
+
+  const [settings, medSettings] = await Promise.all([
+    getLeaflySyncSettings(),
+    getMedTaxSettings(),
+  ]);
+
+  const built = buildLeaflyItemsResult(selected, {
+    pickupEnabled: settings.sendPickupAvailability,
+    medicallyEndorsed: medSettings.medicallyEndorsed,
+  });
+  const payload: LeaflyItemsPayload = {
+    items: applyLeaflySettings(built.payload.items, settings),
+  };
+  const validation = validateLeaflyPayload(payload);
+
+  // Human identifiers. Never allowed to break the triage: if this lookup
+  // fails the owner still gets his answer, just with plainer labels.
+  let identities: SendabilityIdentity[] = [];
+  try {
+    const loaded = await loadProductIdentities(
+      selected.map((s) => s.id),
+      versionId,
+    );
+    identities = toSendabilityIdentities(loaded);
+  } catch {
+    identities = [];
+  }
+
+  const triage = triageSendability({
+    candidateIds: selected.map((s) => s.id),
+    issues: validation.issues,
+    identities,
+  });
+
+  // The blanket fix for FINDING J-1. Only the products actually blocked by
+  // the size-collapse defect are planned -- planning a remedy for a product
+  // that is not broken would be noise at best.
+  const collapsed = new Set(
+    triage.blocked
+      .filter((b) => b.codes.includes("variant_size_indistinguishable"))
+      .map((b) => b.id),
+  );
+  let remedyPlan: RemedyPlan | null = null;
+  let remedyNarrative: string | null = null;
+  if (collapsed.size > 0) {
+    const remedyItems: RemedyItem[] = selected
+      .filter((s) => collapsed.has(s.id))
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        // `toLeaflyType` is the SAME mapper the push uses. Re-deriving the
+        // type here by any other route would let the remedy plan disagree
+        // with the payload it is supposed to be repairing.
+        leaflyType: toLeaflyType(s.category),
+        variants: s.variants.map((v) => ({
+          id: String(v.id),
+          label: v.label,
+          priceMinorUnits: v.priceMinorUnits,
+          // The syndication feed carries no per-variant medical flag, so this
+          // is not guessed. It affects only the variant-id hash, which the
+          // remedy planner does not recompute.
+          medical: false,
+        })),
+      }));
+    remedyPlan = planRemedies(remedyItems);
+    remedyNarrative = describeRemedyPlan(remedyPlan);
+  }
+
+  return {
+    triage,
+    summary: describeTriage(triage),
+    blockedLines: describeBlockedProducts(triage, 50),
+    remedyPlan,
+    remedyNarrative,
+    versionId,
+  };
 }

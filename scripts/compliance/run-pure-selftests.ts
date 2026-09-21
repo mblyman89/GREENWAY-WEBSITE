@@ -202,6 +202,11 @@ import { __runLeaflyMenuVisibilityTests } from "../../src/lib/leafly/menu-visibi
 import { __runLeaflyPotencyTests } from "../../src/lib/leafly/potency-core";
 import { __runLeaflyQuarantineTests } from "../../src/lib/leafly/quarantine-core";
 import { __runLeaflyDeleteRequestTests } from "../../src/lib/leafly/delete-request-core";
+import { __runLeaflyProductIdentityTests } from "../../src/lib/leafly/product-identity-core";
+import { __runLeaflyCollisionRemedyTests } from "../../src/lib/leafly/collision-remedy-core";
+import { __runLeaflySampleRotationTests } from "../../src/lib/leafly/sample-rotation-core";
+import { __runLeaflySendabilityTests } from "../../src/lib/leafly/sendability-core";
+import { __runLeaflyMenuBrowserTests } from "../../src/lib/leafly/menu-browser-core";
 // SLICE L-4 — Leafly's five published menu-certification criteria.
 import { __runLeaflyCertificationTests } from "../../src/lib/leafly/certification-core";
 // SLICE L-5 — receiving orders FROM Leafly. Four pure cores, all registered
@@ -1443,6 +1448,16 @@ __runLiquidVolumeTests();
   assertRan("leafly-potency-core", __runLeaflyPotencyTests(), 120);
   assertRan("leafly-quarantine-core", __runLeaflyQuarantineTests(), 75);
   assertRan("leafly-delete-request-core", __runLeaflyDeleteRequestTests(), 80);
+
+  // TASK J. The three cores behind the Cultivera remediation work. Floors set
+  // just under the current counts (94 / 76 / 49), same convention as above: a
+  // floor proves the suite RAN, so a core that silently stops asserting fails
+  // CI instead of passing vacuously.
+  assertRan("leafly-product-identity-core", __runLeaflyProductIdentityTests(), 90);
+  assertRan("leafly-collision-remedy-core", __runLeaflyCollisionRemedyTests(), 72);
+  assertRan("leafly-sample-rotation-core", __runLeaflySampleRotationTests(), 46);
+  assertRan("leafly-sendability-core", __runLeaflySendabilityTests(), 80);
+  assertRan("leafly-menu-browser-core", __runLeaflyMenuBrowserTests(), 66);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

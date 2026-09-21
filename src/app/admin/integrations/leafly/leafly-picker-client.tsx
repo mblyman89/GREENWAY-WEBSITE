@@ -28,8 +28,12 @@ import {
   previewLeaflySelectionAction,
   pushLeaflySelectionAction,
   suggestLeaflySampleAction,
+  suggestRotatingSampleAction,
   type PickerRow,
 } from "./selection-actions";
+// ROADMAP R3/R4/R6 (owner asks 3, 4, 7): see what Leafly will refuse BEFORE
+// pressing send, and send the passing products without the failing ones.
+import { SendabilityPanel } from "./sendability-panel";
 import {
   SELECTION_PRESETS,
   TARGETED_PUSH_MAX_ITEMS,
@@ -131,6 +135,15 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
   const [matchedCount, setMatchedCount] = useState(0);
   const [suggestedIds, setSuggestedIds] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // ROADMAP R7 (owner asks 1 and 2). `sampleRound` is what makes "suggest
+  // another" produce a DIFFERENT eight while keeping each round
+  // reproducible. See `suggestRotating` for why this is not randomness.
+  const [sampleRound, setSampleRound] = useState(0);
+  const [sampleNote, setSampleNote] = useState<string | null>(null);
+  const [sampleFailing, setSampleFailing] = useState<
+    Array<{ id: string; label: string; reason: string | null; fixHref: string | null }>
+  >([]);
 
   // Selection — ids persist across filter changes on purpose. Someone building
   // a cross-category sample filters to flower, picks two, filters to edibles,
@@ -314,6 +327,47 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
   function useSuggested() {
     setSelected(new Set(suggestedIds));
     setView("selected");
+  }
+
+  /**
+   * ROADMAP R7 -- owner asks 1 and 2.
+   *
+   * ########################################################################
+   * # "i tried to resend the same 8 products we sent before, but the       #
+   * #  system wont let me send them again ... will you make the suggest a  #
+   * #  sample button ... be more intelligent and have it pick a DIFFERENT  #
+   * #  set of 8 products to send as a sample."                             #
+   * ########################################################################
+   *
+   * WHY A ROUND COUNTER AND NOT `Math.random()`. The old sampler was
+   * deterministic on purpose: a failed push has to be reproducible, and a
+   * random sample makes "send me exactly what you sent last time" impossible
+   * to honour. Incrementing a round keeps BOTH properties -- the owner gets
+   * a different eight on every click, and any given round always yields the
+   * same eight, so a failure can be reproduced by asking for that round
+   * again. The counter lives in the client because it is a property of this
+   * person's clicking, not of the menu.
+   *
+   * The server prefers products that PASS Leafly's contract and names any
+   * that do not, which is what makes the second click useful rather than
+   * just different.
+   */
+  function suggestRotating() {
+    startTransition(async () => {
+      const next = sampleRound + 1;
+      const res = await suggestRotatingSampleAction({ size: 8, round: next });
+      if (res.ok) {
+        setSampleRound(next);
+        setSampleNote(res.note);
+        setSampleFailing(res.failing);
+        setSelected(new Set(res.ids));
+        setFilters(CLEARED_PICKER_FILTER_STATE);
+        setView("selected");
+      } else {
+        setSampleNote(res.error);
+        setSampleFailing([]);
+      }
+    });
   }
 
   function suggestFromWholeFeed() {
@@ -602,8 +656,24 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
             )}
           </span>
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button type="button" variant="neutral" onClick={suggestFromWholeFeed} disabled={pending}>
-              Suggest a sample
+            {/*
+              ROADMAP R7. This replaces the old always-identical sampler as
+              the primary control: it picks a different eight each time and
+              prefers products that actually pass Leafly's contract, which is
+              what the owner asked for after the same eight were refused on a
+              re-send.
+            */}
+            <Button type="button" variant="primary" onClick={suggestRotating} disabled={pending}>
+              {sampleRound === 0 ? "Suggest a sample" : "Suggest another 8"}
+            </Button>
+            <Button
+              type="button"
+              variant="neutral"
+              onClick={suggestFromWholeFeed}
+              disabled={pending}
+              title="The original fixed sample: the same spread every time, for reproducing an earlier push"
+            >
+              Same sample as before
             </Button>
             {suggestedIds.length > 0 && (
               <Button
@@ -692,6 +762,49 @@ export function LeaflyItemPicker({ configured }: { configured: boolean }) {
             </Button>
           </div>
         )}
+
+        {/*
+          ROADMAP R7 -- what the rotating sampler just did, and ROADMAP R3 --
+          any product in the suggested set that Leafly will refuse, named,
+          with the button that goes to the page where it can be corrected.
+        */}
+        {sampleNote && (
+          <div className="rounded border border-white/15 bg-white/[0.03] p-3 text-sm">
+            <p className="leading-relaxed">{sampleNote}</p>
+            {sampleFailing.length > 0 && (
+              <ul className="mt-2 space-y-1.5">
+                {sampleFailing.map((f) => (
+                  <li
+                    key={f.id}
+                    className="flex flex-wrap items-start gap-2 rounded bg-white/[0.04] p-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold">{f.label}</div>
+                      {f.reason && (
+                        <div className="text-[0.7rem] text-white/70">{f.reason}</div>
+                      )}
+                    </div>
+                    {f.fixHref && (
+                      <Button type="button" variant="primary" size="sm" href={f.fixHref}>
+                        Fix this product
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/*
+          ROADMAP R4/R6 -- the pre-flight the owner asked for: what will
+          Leafly take, what will it refuse, how do I fix the refusals, and
+          send the good ones without the bad ones.
+        */}
+        <SendabilityPanel
+          selectedIds={Array.from(selected)}
+          onPushed={() => setSelected(new Set())}
+        />
 
         {/*
           FINDING L-21 -- sizes that will not survive the trip.

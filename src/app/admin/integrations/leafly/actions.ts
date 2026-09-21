@@ -8,9 +8,19 @@ import {
   deleteLeaflyItems,
   getLeaflyStatus,
   getLeaflyMenu,
-  isLeaflyConfigured,
   type LeaflyPushResult,
 } from "@/lib/leafly/push";
+import { requireLeaflyReady } from "@/lib/leafly/readiness-gate";
+// ROADMAP R8 (owner ask 6). The menu browser lets the owner SEE what is on
+// the Leafly menu and remove it by name; the identity loader supplies the
+// vendor and barcode that make a product recognisable without an id.
+import {
+  loadLeaflyMenuBrowser,
+  type MenuBrowserResult,
+} from "@/lib/leafly/menu-browser-server";
+import type { MenuBrowserSort } from "@/lib/leafly/menu-browser-core";
+import { loadProductIdentities } from "@/lib/leafly/identity-server";
+import { describeProductIdentity } from "@/lib/leafly/product-identity-core";
 import {
   parseDeleteIds,
   describeDeleteProblems,
@@ -94,11 +104,11 @@ export async function pushLeaflyAction(formData: FormData): Promise<PushActionRe
   if (!confirm) {
     return { ok: false, error: "Confirmation required for a live Leafly push." };
   }
-  if (!isLeaflyConfigured()) {
-    return {
-      ok: false,
-      error: "Leafly is not configured. Set the menu integration key and OAuth credentials first.",
-    };
+  // FINDING J-4: refresh-then-check, via the one shared gate. A synchronous
+  // isLeaflyConfigured() here reported "not configured" on any cold lambda.
+  const gate = await requireLeaflyReady();
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
   }
 
   // Tell the scheduler a human is working. See the note above on why a failure
@@ -489,8 +499,12 @@ export type StatusActionResult =
 
 export async function fetchLeaflyStatusAction(): Promise<StatusActionResult> {
   const session = await requirePermission("settings.manage");
-  if (!isLeaflyConfigured()) {
-    return { ok: false, error: "Leafly is not configured." };
+  // FINDING J-4: this is the exact button the owner reported -- "check
+  // integration status", clicked twice without leaving the page, working the
+  // first time and failing the second.
+  const gate = await requireLeaflyReady();
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
   }
   try {
     const status = await getLeaflyStatus();
@@ -550,12 +564,10 @@ export type MenuReadbackActionResult =
  */
 export async function fetchLeaflyMenuReadbackAction(): Promise<MenuReadbackActionResult> {
   const session = await requirePermission("settings.manage");
-  if (!isLeaflyConfigured()) {
-    return {
-      ok: false,
-      error:
-        "Leafly is not configured. Enter the menu integration key and OAuth credentials first.",
-    };
+  // FINDING J-4: refresh-then-check via the shared gate.
+  const gate = await requireLeaflyReady();
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
   }
   try {
     const result = await getLeaflyMenu();
@@ -717,11 +729,10 @@ export async function deleteLeaflyItemsAction(
   if (!confirm) {
     return { ok: false, error: "Confirmation required to remove products from Leafly." };
   }
-  if (!isLeaflyConfigured()) {
-    return {
-      ok: false,
-      error: "Leafly is not configured. Set the menu integration key and OAuth credentials first.",
-    };
+  // FINDING J-4: refresh-then-check via the shared gate.
+  const gate = await requireLeaflyReady();
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
   }
 
   // Parse BEFORE the credential-spending call. A malformed request must cost
@@ -796,6 +807,189 @@ export async function deleteLeaflyItemsAction(
       status: "error",
       itemCount: 0,
       message,
+      createdBy: session.userId,
+    });
+    revalidatePath(BASE);
+    return { ok: false, error: message };
+  }
+}
+
+/* ========================================================================== */
+/* Menu browser (ROADMAP R8 -- owner ask 6)                                   */
+/* ========================================================================== */
+
+export type MenuBrowserActionResult =
+  | { ok: true; result: MenuBrowserResult }
+  | { ok: false; error: string };
+
+/**
+ * List what is on the Leafly menu so it can be found by name and removed.
+ *
+ * ###########################################################################
+ * # THE OWNER'S WORDS                                                       #
+ * #                                                                        #
+ * #   "there is no way to know what's on the menu so we can delete         #
+ * #    something ... i want ... the enterprise grade solution that allows  #
+ * #    me to delete products in an easy, efficient, effective,             #
+ * #    intelligent way."                                                   #
+ * ###########################################################################
+ *
+ * Filtering and sorting happen on the SERVER because the menu can be
+ * thousands of rows and the browser should not be asked to hold all of them
+ * to answer "show me everything from this vendor".
+ */
+export async function browseLeaflyMenuAction(input: {
+  query?: string | null;
+  brand?: string | null;
+  vendor?: string | null;
+  type?: string | null;
+  orphanedOnly?: boolean;
+  hiddenOnly?: boolean;
+  sort?: MenuBrowserSort;
+}): Promise<MenuBrowserActionResult> {
+  await requirePermission("settings.manage");
+  // FINDING J-4: refresh-then-check via the shared gate, so a cold lambda
+  // never reports configured credentials as missing.
+  const gate = await requireLeaflyReady();
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
+  }
+  try {
+    const result = await loadLeaflyMenuBrowser({
+      filter: {
+        query: input.query ?? null,
+        brand: input.brand ?? null,
+        vendor: input.vendor ?? null,
+        type: input.type ?? null,
+        orphanedOnly: input.orphanedOnly === true,
+        hiddenOnly: input.hiddenOnly === true,
+      },
+      sort: input.sort ?? "name",
+    });
+    return { ok: true, result };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Could not list what is on the Leafly menu.",
+    };
+  }
+}
+
+/**
+ * Remove products chosen from the browser, confirming by NAME.
+ *
+ * WHY THIS EXISTS ALONGSIDE `deleteLeaflyItemsAction`
+ *
+ * That action takes a textarea of ids, which is the thing the owner said was
+ * unusable. This one takes the ids the UI already holds for rows he ticked,
+ * and — crucially — reports back the NAMES of what was removed, so the
+ * confirmation he reads is in the same language as the list he chose from.
+ *
+ * The id list still travels, because the Leafly DELETE contract is by id and
+ * nothing else would be exact. The difference is that the owner never types
+ * one, never reads one, and never has to recognise one.
+ */
+export async function deleteLeaflyMenuSelectionAction(input: {
+  ids: string[];
+  confirm: boolean;
+}): Promise<DeleteActionResult> {
+  const session = await requirePermission("settings.manage");
+  if (input.confirm !== true) {
+    return { ok: false, error: "Confirmation required to remove products from Leafly." };
+  }
+  const gate = await requireLeaflyReady();
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
+  }
+
+  // Reuse the SAME parser the textarea path uses, rather than trusting the
+  // client. A selection arriving over the wire is still input.
+  const parsed = parseDeleteIds((input.ids ?? []).join("\n"));
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      error: describeDeleteProblems(parsed) ?? "The selected products could not be read.",
+    };
+  }
+
+  // Resolve names BEFORE deleting. Afterwards the product may be gone from
+  // every source we could ask, and a confirmation that can only say "3 items
+  // removed" is exactly the unusable feedback being replaced here.
+  let labels: string[] = [];
+  try {
+    const identities = await loadProductIdentities(parsed.ids);
+    labels = parsed.ids.map((id) => {
+      const identity = identities.get(id);
+      if (identity === undefined) return `Unknown product (id ${id})`;
+      return describeProductIdentity(identity);
+    });
+  } catch {
+    labels = [];
+  }
+
+  let known: Set<string> | null = null;
+  try {
+    const state = await getSyncState("leafly");
+    if (state.hashes.size > 0) known = new Set(state.hashes.keys());
+  } catch {
+    known = null;
+  }
+  const reconciliation = reconcileDeleteRequest(parsed.ids, known);
+  const warning = describeUnknownDeleteIds(reconciliation);
+
+  try {
+    const result = await deleteLeaflyItems({ ids: parsed.ids, confirm: true });
+    await recordSyndicationLog({
+      channel: "leafly",
+      mode: "live",
+      status: result.ok ? "ok" : "error",
+      itemCount: parsed.ids.length,
+      response: result.response,
+      message:
+        `Leafly delete (from menu browser) — removed ${parsed.ids.length}: ` +
+        `${labels.length > 0 ? labels.join("; ") : parsed.ids.join(", ")}`,
+      createdBy: session.userId,
+    });
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: result.ok ? "leafly.menu.delete.success" : "leafly.menu.delete.error",
+      entityType: "syndication",
+      entityId: "leafly",
+      after: {
+        ids: parsed.ids,
+        // Names in the audit trail: a reviewer six months from now should not
+        // have to resolve an id against a table that may no longer hold it.
+        labels,
+        httpStatus: result.httpStatus,
+        unknownToUs: reconciliation.unknown,
+      },
+    });
+    revalidatePath(BASE);
+
+    const named =
+      labels.length > 0
+        ? ` Removed: ${labels.slice(0, 5).join("; ")}${labels.length > 5 ? `; and ${labels.length - 5} more` : ""}.`
+        : "";
+    return {
+      ok: true,
+      ids: parsed.ids,
+      httpStatus: result.httpStatus,
+      message: `${describeDeleteOutcome(parsed.ids.length)}${named}`,
+      unknownIds: reconciliation.unknown,
+      checked: reconciliation.checked,
+      warning,
+    };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Could not remove the selected products.";
+    await recordSyndicationLog({
+      channel: "leafly",
+      mode: "live",
+      status: "error",
+      itemCount: 0,
+      message: `Leafly delete (from menu browser) failed — ${message}`,
       createdBy: session.userId,
     });
     revalidatePath(BASE);

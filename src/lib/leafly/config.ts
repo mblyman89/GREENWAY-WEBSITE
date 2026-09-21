@@ -19,6 +19,20 @@ export function setLeaflyOverrideCache(overrides: LeaflyOverrides | null): void 
   overrideCache = overrides;
 }
 
+/**
+ * Is a DB-resolved credential set currently installed in THIS process?
+ *
+ * FINDING J-4. `refreshLeaflyConfig()` needs to distinguish "the lookup failed
+ * and we have nothing" from "the lookup failed but a good value is still
+ * cached", so that a transient database error never destroys working
+ * credentials and never tells the owner to re-enter credentials that are
+ * perfectly fine. Exposed as a predicate rather than by exporting the cache
+ * itself, so no caller can reach in and mutate it.
+ */
+export function hasLeaflyOverrideCache(): boolean {
+  return overrideCache !== null;
+}
+
 function envConfig(): LeaflyClientConfig {
   return {
     environment: process.env.LEAFLY_ENVIRONMENT === "production" ? "production" : "sandbox",
