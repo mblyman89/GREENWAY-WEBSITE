@@ -49,6 +49,12 @@ import {
 // whole 2,562-item feed -- which is the exact bug that produced the owner's
 // "19 PROBLEMS!" screen.
 import { TARGETED_PUSH_LOG_PREFIX } from "@/lib/leafly/readback-baseline-core";
+// FINDING L-21. The picker's "Sizes" column used to report how many sizes the
+// product has in OUR system, which is not the same as how many Leafly will end
+// up holding. These two imports let the column report the number that actually
+// matters, using the same mapper the push itself uses rather than a copy of it.
+import { variantsFor } from "@/lib/leafly/payload-core";
+import { variantSizeKey } from "@/lib/leafly/variant-identity-core";
 import type { SyndicationItem } from "@/lib/syndication/menu-feed-core";
 
 const BASE = "/admin/integrations/leafly";
@@ -71,12 +77,41 @@ export type PickerRow = {
   priceMinorUnits: number;
   inStock: boolean;
   variantCount: number;
+  /**
+   * FINDING L-21 — how many sizes Leafly will actually be able to SEE.
+   *
+   * `variantCount` is how many sizes the product has in our system. This is how
+   * many survive the trip. They are usually the same number, and when they are
+   * not, the difference is the whole story.
+   *
+   * Leafly describes a variant's size with exactly one pair of fields, `amount`
+   * and `unit`. Two sizes that come out to the same pair are one size to Leafly,
+   * and it keeps one. The owner's first push hit this: a topical with two sizes
+   * both mapped to `1 each`, and the read-back afterwards correctly reported a
+   * size as missing from Leafly's menu.
+   *
+   * Computing this on the SERVER is the point. The browser only ever receives
+   * `PickerRow`, which carries no amount or unit, so a client-side check would
+   * have to re-derive the mapping from data it does not have — which is to say,
+   * it would have to guess. Here we run the same `variantsFor()` the push runs.
+   */
+  sentVariantCount: number;
+  /** `variantCount - sentVariantCount`. Sizes that will be lost. Usually 0. */
+  lostVariantCount: number;
   hasImage: boolean;
   hasDescription: boolean;
   dohRestricted: boolean;
 };
 
 function toRow(item: SyndicationItem): PickerRow {
+  // Run the REAL mapper — not a reimplementation of it. If `variantsFor` ever
+  // changes how it assigns amount+unit, this column changes with it on the same
+  // commit. A second copy of the rule here would be a second thing to forget.
+  const built = variantsFor(item);
+  const distinctSizes = new Set(
+    built.variants.map((v) => variantSizeKey({ amount: v.amount, unit: v.unit })),
+  ).size;
+
   return {
     id: item.id,
     name: item.name,
@@ -87,6 +122,12 @@ function toRow(item: SyndicationItem): PickerRow {
     priceMinorUnits: item.priceMinorUnits,
     inStock: item.inStock,
     variantCount: item.variants.length,
+    sentVariantCount: distinctSizes,
+    // Measured against what we HAVE, not against what mapped. A variant the
+    // mapper refused outright (a Flower with no readable weight) is also a size
+    // the customer will not see, and the owner should not have to learn two
+    // different numbers to understand one outcome.
+    lostVariantCount: Math.max(0, item.variants.length - distinctSizes),
     hasImage: Boolean(item.imageUrl),
     hasDescription: (item.description ?? "").trim().length > 0,
     dohRestricted: Boolean(item.dohCategory),

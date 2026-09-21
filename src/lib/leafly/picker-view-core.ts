@@ -353,6 +353,87 @@ export function describeHiddenSelection(
 // What is about to be sent
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Size loss (FINDING L-21)
+// ---------------------------------------------------------------------------
+
+/** A row carrying the two size counts the server computes. */
+export type SizeLossSource = RowLike & {
+  name: string;
+  variantCount: number;
+  sentVariantCount: number;
+  lostVariantCount: number;
+};
+
+export type SizeLossSummary = {
+  /** Selected products that will lose at least one size. */
+  affected: { id: string; name: string; have: number; sent: number; lost: number }[];
+  /** Total sizes lost across the selection. */
+  totalLost: number;
+};
+
+/**
+ * Which of the SELECTED products will lose a size, and how many.
+ *
+ * Scoped to the selection rather than the whole table on purpose. A warning
+ * about a product the owner is not sending is noise, and noise is how a real
+ * warning gets ignored. The moment it becomes relevant is the moment it is in
+ * the outgoing push.
+ */
+export function summarizeSizeLoss(
+  rows: readonly SizeLossSource[],
+  selectedIds: ReadonlySet<string>,
+): SizeLossSummary {
+  const affected: SizeLossSummary["affected"] = [];
+  let totalLost = 0;
+
+  for (const row of rows) {
+    if (!selectedIds.has(row.id)) continue;
+    const lost = Math.max(0, Math.floor(row.lostVariantCount));
+    if (lost <= 0) continue;
+    affected.push({
+      id: row.id,
+      name: row.name,
+      have: row.variantCount,
+      sent: row.sentVariantCount,
+      lost,
+    });
+    totalLost += lost;
+  }
+
+  return { affected, totalLost };
+}
+
+/**
+ * One sentence, or `null` when nothing is being lost.
+ *
+ * The null is the important half. Most pushes will lose nothing, and a banner
+ * that appears on every push is furniture rather than information.
+ */
+export function describeSizeLoss(summary: SizeLossSummary): string | null {
+  if (summary.affected.length === 0) return null;
+  const productWord = summary.affected.length === 1 ? "product" : "products";
+  const sizeWord = summary.totalLost === 1 ? "size" : "sizes";
+  const names = summary.affected.map((a) => `${a.name} (${a.have} sizes → ${a.sent})`);
+  return (
+    `${summary.affected.length} ${productWord} you have selected will lose ${summary.totalLost} ` +
+    `${sizeWord} on Leafly: ${names.join("; ")}. Leafly tells sizes apart only by their amount ` +
+    `and unit, so sizes that come out the same — for example two that both end up as "1 each" — ` +
+    `arrive as one. ` +
+    // This banner can cover several products of different types at once, and
+    // the fix is not the same for all of them: a cartridge or concentrate can
+    // be separated by putting a real weight in the label, but Leafly allows a
+    // topical, pre-roll or edible no unit except "each", so no label will ever
+    // separate those. Promising a relabel would work for every row here would
+    // be wrong for some of them, so the sentence offers the remedy that always
+    // works and marks the other as conditional. The per-product error on the
+    // push itself names the exact remedy for that product's type.
+    `Sending them as separate products always works. For cartridges and concentrates you can ` +
+    `instead put a real weight in each label (for example "1g" and "0.5g") — but for topicals, ` +
+    `pre-rolls and edibles Leafly permits only "each", so relabelling those cannot help.`
+  );
+}
+
 /** One line of the manifest: enough to recognise a product without the table. */
 export type ManifestRow = {
   id: string;
@@ -946,6 +1027,79 @@ export function __runLeaflyPickerViewTests(): { passed: number; failed: number }
     const text = describeSendManifest(buildSendManifest(rows, new Set(["a"])));
     check("singular grammar for one product", text.startsWith("This will send 1 product "));
     check("singular grammar for one category", text.includes("1 category"));
+  }
+
+  // ---- summarizeSizeLoss / describeSizeLoss (FINDING L-21) ----
+  const sizeRows: SizeLossSource[] = [
+    { id: "ok1", name: "Khush Kush", variantCount: 3, sentVariantCount: 3, lostVariantCount: 0 },
+    { id: "bad1", name: "Ceres Dragon Balm", variantCount: 2, sentVariantCount: 1, lostVariantCount: 1 },
+    { id: "bad2", name: "Rosin One Piece", variantCount: 3, sentVariantCount: 1, lostVariantCount: 2 },
+    { id: "ok2", name: "Trees Co Preroll", variantCount: 1, sentVariantCount: 1, lostVariantCount: 0 },
+  ];
+  {
+    // NEGATIVE CONTROL first: a selection of healthy products says nothing.
+    const s = summarizeSizeLoss(sizeRows, new Set(["ok1", "ok2"]));
+    check("clean selection has no affected products", s.affected.length === 0);
+    check("clean selection loses nothing", s.totalLost === 0);
+    check("clean selection describes nothing", describeSizeLoss(s) === null);
+  }
+  {
+    const s = summarizeSizeLoss(sizeRows, new Set(["bad1"]));
+    check("one bad product is affected", s.affected.length === 1);
+    check("one size lost", s.totalLost === 1);
+    check("the affected product is named", s.affected[0].name === "Ceres Dragon Balm");
+    check("the have count is reported", s.affected[0].have === 2);
+    check("the sent count is reported", s.affected[0].sent === 1);
+    const text = describeSizeLoss(s) ?? "";
+    check("singular product grammar", text.includes("1 product"));
+    check("singular size grammar", text.includes("lose 1 size"));
+    check("the sentence shows the before and after", text.includes("2 sizes → 1"));
+    check("the sentence explains the cause", text.includes("amount"));
+    // The banner must offer a remedy, and the remedy it leads with must be one
+    // that works for EVERY product type -- splitting into separate products.
+    // Relabelling may also be mentioned, but only as the conditional option,
+    // because Leafly permits no unit but "each" for topicals, pre-rolls and
+    // edibles, so no label can ever separate those sizes.
+    check("the sentence offers a fix", text.includes("separate products"));
+    check(
+      "the always-works remedy is stated unconditionally",
+      text.includes("separate products always works"),
+    );
+    check(
+      "relabelling is not promised for types that cannot use it",
+      text.includes("only \"each\"") || !text.includes("Give them distinct weights"),
+    );
+  }
+  {
+    const s = summarizeSizeLoss(sizeRows, new Set(["bad1", "bad2"]));
+    check("two bad products are affected", s.affected.length === 2);
+    check("three sizes lost in total", s.totalLost === 3);
+    const text = describeSizeLoss(s) ?? "";
+    check("plural product grammar", text.includes("2 products"));
+    check("plural size grammar", text.includes("lose 3 sizes"));
+  }
+  {
+    // A bad product that is NOT selected must not be reported.
+    const s = summarizeSizeLoss(sizeRows, new Set(["ok1"]));
+    check("an unselected bad product is not reported", s.affected.length === 0);
+  }
+  {
+    const s = summarizeSizeLoss(sizeRows, new Set());
+    check("an empty selection reports nothing", s.affected.length === 0);
+    check("an empty selection describes nothing", describeSizeLoss(s) === null);
+  }
+  {
+    // Row order is preserved, not selection order.
+    const s = summarizeSizeLoss(sizeRows, new Set(["bad2", "bad1"]));
+    check("affected list follows row order", s.affected[0].id === "bad1" && s.affected[1].id === "bad2");
+  }
+  {
+    // A negative or fractional loss count must not corrupt the total.
+    const odd: SizeLossSource[] = [
+      { id: "x", name: "Odd", variantCount: 2, sentVariantCount: 2, lostVariantCount: -1 },
+    ];
+    const s = summarizeSizeLoss(odd, new Set(["x"]));
+    check("a negative loss count is ignored", s.affected.length === 0 && s.totalLost === 0);
   }
 
   console.log(`leafly picker-view-core self-tests: ${passed} passed, ${failed} failed`);
