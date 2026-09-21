@@ -207,6 +207,8 @@ import { __runLeaflyCollisionRemedyTests } from "../../src/lib/leafly/collision-
 import { __runLeaflySampleRotationTests } from "../../src/lib/leafly/sample-rotation-core";
 import { __runLeaflySendabilityTests } from "../../src/lib/leafly/sendability-core";
 import { __runLeaflyMenuBrowserTests } from "../../src/lib/leafly/menu-browser-core";
+import { __runLeaflyCollisionApplyTests } from "../../src/lib/leafly/collision-apply-core";
+import { __runLeaflyCollisionSplitTests } from "../../src/lib/leafly/collision-split-core";
 // SLICE L-4 — Leafly's five published menu-certification criteria.
 import { __runLeaflyCertificationTests } from "../../src/lib/leafly/certification-core";
 // SLICE L-5 — receiving orders FROM Leafly. Four pure cores, all registered
@@ -1458,6 +1460,8 @@ __runLiquidVolumeTests();
   assertRan("leafly-sample-rotation-core", __runLeaflySampleRotationTests(), 46);
   assertRan("leafly-sendability-core", __runLeaflySendabilityTests(), 80);
   assertRan("leafly-menu-browser-core", __runLeaflyMenuBrowserTests(), 66);
+  assertRan("leafly-collision-apply-core", __runLeaflyCollisionApplyTests(), 66);
+  assertRan("leafly-collision-split-core", __runLeaflyCollisionSplitTests(), 60);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

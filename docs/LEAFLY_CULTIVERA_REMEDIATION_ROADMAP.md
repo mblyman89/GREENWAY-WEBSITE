@@ -368,3 +368,77 @@ it "killed", so detection was moved to process exit codes. Separately, two guard
 comment prose rather than code — including one that tripped on the paragraph *explaining why*
 `Math.random()` was rejected. All three are the same underlying mistake: **checking the text that
 describes the behaviour instead of the behaviour.**
+
+---
+
+## R7 closed — the collision is now REPAIRED, not merely reported
+
+Everything above this line diagnosed the 124 errors. Nothing fixed one. `planRemedies()`
+*described* a remedy and had **no apply path anywhere in the tree**, so every one of the owner's
+collisions was still live on `main` after the diagnosis shipped.
+
+Two pure cores close it, in a deliberate order.
+
+| Stage | Module | What it does | When it applies |
+|---|---|---|---|
+| 1 | `collision-apply-core.ts` | Corrects `amount`/`unit` in place | Type allows a weight (Flower, Concentrate, Cartridge), **or** the labels record real pack counts (`2pk`, `10pk`) |
+| 2 | `collision-split-core.ts` | Lists one product as several products, one per size | Each-only type whose sizes differ by **weight** — the owner's actual case |
+
+**Why that order and never the reverse.** Splitting changes what a shopper sees; correcting an
+amount does not. So the cheap, invisible fix is exhausted first. Run the other way round, a Flower
+item labelled 1g/3g/5g — which stage 1 fixes perfectly by restoring the real weights — would be
+shattered into three products for no reason.
+
+**Why splitting is lawful, from Leafly's own schema.** `items` is an unconstrained array;
+`item.id` need only be unique and stable (a deterministic `${parentId}--${slug(label)}` is both);
+and decisively `variant.id` *"Takes precedence over top-level id for order integration purposes"*.
+Each split product keeps its **original variant id untouched**, so an incoming order still resolves
+to the same POS variant. **Splitting cannot break ordering.**
+
+**Measured end to end**, real feed → real builder → real validator, across all ten funnel types:
+`variant_size_indistinguishable` goes to **zero**, with **no new violation of any other code**,
+every variant surviving exactly once, and no price, stock, unit or id changed.
+
+Wired into `pushLeaflySelection({ repairCollisions })` — **off by default**, applied after
+`applyLeaflySettings` (so it measures what is really about to be sent) and **before**
+`assertLeaflyPayloadValid` (so the validator, not the repair, is the judge of success). The repair
+can never mask a failure.
+
+### Finding J-2 — an assumption that would have written a wrong weight onto cannabis
+
+The first draft of the server bridge paired source to built variants **by position**, justified by
+a confident comment claiming the built variant id was a re-derived hash, and that `toLeaflyItem`
+preserves variant order. Both halves were false:
+
+* `toLeaflyVariant()` emits `id: String(v.id)` — the **source id, copied verbatim**. The
+  `${itemId}-${stableId(...)}` shape is minted far upstream in `toMenuItem()`. A direct lookup hits.
+* `variantsFor()` **drops** variants in two places (the low-stock withhold rule, and an unreadable
+  weight on a weight-only type). Either drop shifts every later index.
+
+Measured harm: for labels `["1g", "MYSTERY BAG", "5g"]` the middle variant is rejected, and
+positional pairing then reports the surviving **5g** variant's label as **"MYSTERY BAG"**.
+
+The bridge now joins **by id only, with no positional fallback** — a fallback here would be a
+silent guess, and a silently guessed weight is the worst output this module could produce. All four
+facts are pinned by tests so the wrong assumption cannot return.
+
+**The lesson, again:** the comment was more confident than the code was true. Both claims took one
+script to disprove.
+
+### Verification
+
+* `collision-apply-core` 76 assertions · `collision-split-core` 65 assertions — both registered
+  with floors in the pure self-test runner.
+* Mutation-tested: CONTROL **SURVIVED**, and **11/11** mutants **KILLED** (missing-label guard,
+  duplicate-label guard, id-clash guard, variant-id rewrite, reprice, size-drop, name
+  disambiguation, unstable id, assumed-clean, medical dimension, id seeding).
+* `tests/compliance/leafly-collision-apply.test.ts` — 41 tests, including a **drift guard** parsing
+  the unit matrix out of the published `v2-items.json` markdown table rather than trusting our copy.
+* Suite-level mutation check: breaking `clean` or drifting the matrix makes the new suite **fail**
+  (1 and 6 tests respectively) — the tests were tested.
+* Full run: **637 files, 16,947 tests, 0 failures.** `tsc --noEmit` clean, `eslint` clean.
+
+One further self-inflicted lesson: a test in this very file originally asserted the absence of a
+field with a regex that **could never fail**. It was replaced with one that runs the join and
+asserts the emitted variant carries exactly the six v2 fields. Same mistake as the incident above —
+*checking the text that describes the behaviour instead of the behaviour.*

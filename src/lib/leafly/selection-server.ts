@@ -71,6 +71,7 @@ import {
   loadProductIdentities,
   toSendabilityIdentities,
 } from "./identity-server";
+import { repairAndSplitBuiltPayload } from "./collision-apply-server";
 import { assertLeaflyPayloadValid, validateLeaflyPayload } from "./payload-validate-core";
 import { summarizeOrderability, type OrderabilitySummary } from "./orderability-core";
 import {
@@ -256,6 +257,24 @@ export type SelectionPushResult = {
   syncStateWritten: false;
   /** Always false — proves no DELETE was issued. */
   deletesIssued: false;
+  /**
+   * TASK J ask 7. What the blanket size repair did, when it was asked for.
+   * `null` when it was not requested, so an unchanged caller can tell "no
+   * repair ran" apart from "a repair ran and changed nothing".
+   */
+  collisionRepair: {
+    /** Sizes whose amount/unit were corrected in place. */
+    repairedItemCount: number;
+    repairedVariantCount: number;
+    /** Products listed as several products, one per size. */
+    splitItemCount: number;
+    createdItemCount: number;
+    /** Still unfixable after both stages; each carries a plain-English reason. */
+    refusals: Array<{ itemId: string; itemName: string; reason: string }>;
+    /** Verified against the payload that was actually sent. */
+    clean: boolean;
+    narrative: string;
+  } | null;
 };
 
 export class SelectionRefusedError extends Error {
@@ -289,6 +308,17 @@ export async function pushLeaflySelection(input: {
   ids: readonly string[];
   confirm: boolean;
   requestedMethod?: "POST" | "PUT";
+  /**
+   * TASK J ask 7. Apply the blanket size repair before sending.
+   *
+   * OFF BY DEFAULT, deliberately. Stage 2 of the repair turns one product
+   * into several on the Leafly menu, which is a visible change to what a
+   * shopper sees. A change of that kind is the owner's decision, so it is
+   * requested explicitly and previewed first -- it is never something a push
+   * quietly does on his behalf. With this absent, every existing caller
+   * behaves exactly as it did before.
+   */
+  repairCollisions?: boolean;
 }): Promise<SelectionPushResult> {
   if (!input.confirm) {
     throw new Error("A targeted Leafly push requires explicit confirmation.");
@@ -327,7 +357,24 @@ export async function pushLeaflySelection(input: {
     pickupEnabled: settings.sendPickupAvailability,
     medicallyEndorsed: medSettings.medicallyEndorsed,
   });
-  const leaflyItems: LeaflyItem[] = applyLeaflySettings(built.payload.items, settings);
+  const settled: LeaflyItem[] = applyLeaflySettings(built.payload.items, settings);
+
+  // TASK J ask 7 -- the blanket fix, applied at the LAST possible moment.
+  //
+  // It runs after `applyLeaflySettings` so it measures the payload that is
+  // actually about to be transmitted, and before `assertLeaflyPayloadValid`
+  // so the validator is the judge of whether the repair worked. If the repair
+  // were run before settings, a later setting could reintroduce a collision
+  // and nothing would notice.
+  //
+  // The repair cannot mask a failure: it never suppresses a validation error,
+  // and anything it could not fix is still present for the validator to
+  // reject. A repair that silently made an invalid payload "pass" would be far
+  // worse than the original 124 errors.
+  const repaired = input.repairCollisions === true
+    ? repairAndSplitBuiltPayload(settled, selected)
+    : null;
+  const leaflyItems: LeaflyItem[] = repaired?.items ?? settled;
 
   assertLeaflyPayloadValid({ items: leaflyItems });
 
@@ -356,6 +403,22 @@ export async function pushLeaflySelection(input: {
       : leaflyMessageForStatus(result.status),
     syncStateWritten: false,
     deletesIssued: false,
+    collisionRepair:
+      repaired === null
+        ? null
+        : {
+            repairedItemCount: repaired.repairedItemCount,
+            repairedVariantCount: repaired.repairedVariantCount,
+            splitItemCount: repaired.splitItemCount,
+            createdItemCount: repaired.createdItemCount,
+            refusals: repaired.refusals.map((r) => ({
+              itemId: r.itemId,
+              itemName: r.itemName,
+              reason: r.reason,
+            })),
+            clean: repaired.clean,
+            narrative: repaired.narrative,
+          },
   };
 }
 
