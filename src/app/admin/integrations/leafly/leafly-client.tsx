@@ -15,6 +15,7 @@ import {
   parseDeleteIds,
   describeDeleteProblems,
 } from "@/lib/leafly/delete-request-core";
+import { LeaflyMenuBrowser } from "./menu-browser-client";
 
 const CATEGORIES = [
   "flower",
@@ -184,6 +185,14 @@ export function LeaflyPushClient({
         </div>
       </Card>
 
+      {/*
+        ROADMAP R8 (owner ask 6). The browser is the PRIMARY way to remove a
+        product: see the menu, find the product by name/vendor/barcode, tick
+        it, confirm by name. It is placed ABOVE the id textarea deliberately
+        -- the usable path should be the one you reach first.
+      */}
+      <LeaflyMenuBrowser configured={configured} />
+
       <DeleteFromLeafly configured={configured} />
 
       <DescriptionDrafter />
@@ -246,12 +255,15 @@ function DeleteFromLeafly({ configured }: { configured: boolean }) {
   return (
     <Card>
       <h2 className="mb-2 text-sm font-bold text-[var(--admin-text)]">
-        Remove products from the Leafly menu
+        Remove by product ID (advanced)
       </h2>
       <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-        Takes named products off Leafly straight away, without touching anything else. Paste the
-        product IDs below &mdash; one per line, or separated by commas. Up to {MAX_DELETE_IDS} at a
-        time. This cannot be undone; to put a product back you push it again.
+        Most of the time you should use <strong>What is on your Leafly menu</strong> above,
+        where you can find products by name, vendor or barcode and tick them. This box is
+        the fallback for when you already have an exact product ID &mdash; for example one
+        copied out of an error message or a support ticket from Leafly. Paste IDs one per
+        line, or separated by commas, up to {MAX_DELETE_IDS} at a time. This cannot be
+        undone; to put a product back you push it again.
       </p>
 
       <div className="mb-3">
