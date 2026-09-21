@@ -7,6 +7,10 @@ import { StatCard } from "@/components/admin/StatCard";
 import { previewLeaflyPush } from "@/lib/leafly/push";
 import { loadLeaflyAuthAttempts } from "@/lib/leafly/auth-evidence";
 import {
+  describePotencySummary,
+  describeRefusalRecord,
+} from "@/lib/leafly/potency-core";
+import {
   assessMenuCertificationReadiness,
   deriveAuthSucceeded,
   type AuthenticatedAttempt,
@@ -535,6 +539,60 @@ export default async function LeaflyIntegrationPage() {
           </div>
         )}
       </Card>
+
+      {/*
+        TASK I -- potency readings we would not publish.
+
+        FIELD-REPORTED. A full menu push failed with 128 errors, most of them
+        "content is 1000 with unit percent". A milligram figure had been saved
+        in a field the product's Leafly type defines as a percentage, and the
+        builder kept the number while discarding the word "mg" -- producing a
+        claim of 1000% THC. Our own pre-send check caught it, so nothing wrong
+        ever reached Leafly, but the whole menu was blocked.
+
+        We now send "unknown" (Leafly's documented preference over 0) rather
+        than a fabricated figure. That unblocks the push, and it also makes the
+        bad data invisible -- which is why this card exists. A null nobody can
+        see is how a wrong potency survives for a year. The affected products
+        are named, with the exact text we could not use, so the fix is a
+        two-minute edit rather than a hunt.
+
+        The card renders nothing at all when there is nothing wrong. A
+        permanent "0 problems" panel trains people to stop reading panels.
+      */}
+      {preview.potency.total > 0 ? (
+        <Card>
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-sm font-bold text-[var(--admin-text)]">
+              Potency figures being sent as &ldquo;unknown&rdquo;
+            </h2>
+            <Badge tone="orange">
+              {preview.potency.productCount} product
+              {preview.potency.productCount === 1 ? "" : "s"}
+            </Badge>
+          </div>
+          <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+            {describePotencySummary(preview.potency)}
+          </p>
+          <div className="space-y-1">
+            {preview.potency.examples.map((r, i) => (
+              <p
+                key={`${r.productId}-${r.field}-${i}`}
+                className="rounded-md border border-[var(--admin-border)] px-3 py-2 text-xs text-[var(--admin-text)]"
+              >
+                {describeRefusalRecord(r)}
+              </p>
+            ))}
+          </div>
+          {preview.potency.total > preview.potency.examples.length ? (
+            <p className="mt-2 text-[11px] text-[var(--admin-text-faint)]">
+              &hellip;and {preview.potency.total - preview.potency.examples.length} more.
+              Fix these first &mdash; the same mistake is usually repeated across a batch of
+              products entered at the same time.
+            </p>
+          ) : null}
+        </Card>
+      ) : null}
 
       <Card>
         <h2 className="mb-2 text-sm font-bold text-[var(--admin-text)]">

@@ -42,16 +42,34 @@ import {
   buildLeaflyDeletePayload,
   buildLeaflyItemsPayload,
   buildLeaflyItemsResult,
+  collectPotencyRefusals,
   type LeaflyItem,
   type LeaflyItemsPayload,
   type LeaflyVariantRejection,
 } from "./payload-core";
 import {
-  assertLeaflyPayloadValid,
+  describePotencySummary,
+  summarizePotencyRefusals,
+  type PotencyRefusalRecord,
+  type PotencySummary,
+} from "./potency-core";
+import {
+  // NB `assertLeaflyPayloadValid` is deliberately NOT imported here any more.
+  // TASK I replaced the unconditional assert with validate + quarantine, and
+  // leaving the throwing helper in scope is an invitation to reinstate the
+  // all-or-nothing behaviour by accident. It is still the right tool for the
+  // TARGETED push (selection-server.ts), where the operator hand-picked a
+  // handful of items and silently dropping one would defeat the point.
+  LeaflyPayloadInvalidError,
   validateLeaflyPayload,
   type LeaflyValidationResult,
 } from "./payload-validate-core";
 import { summarizeOrderability, type OrderabilitySummary } from "./orderability-core";
+import {
+  decideQuarantine,
+  describeQuarantine,
+  describeQuarantinedItems,
+} from "./quarantine-core";
 import {
   assessReadbackTiming,
   describeReconcileResult,
@@ -156,6 +174,24 @@ export type LeaflyPreview = {
    * what was actually sent.
    */
   orderability: OrderabilitySummary;
+  /**
+   * TASK I — potency readings we refused to believe, grouped.
+   *
+   * FIELD-REPORTED. A full menu push failed with 128 errors, most of them
+   * "content is 1000 with unit percent". The cause was a milligram figure
+   * saved in a field the item's product type says is a percentage: the builder
+   * kept the number and threw the word "mg" away.
+   *
+   * We now send `null` (Leafly's own sanctioned way to say "not tested")
+   * instead of publishing a 1000% THC claim next to a regulated product. But a
+   * silent null is how data rot survives for years, so every refusal is
+   * counted here and named on screen. `examples` carries the product name and
+   * the exact text we could not use, which is what makes the fix actionable
+   * rather than a number to worry about.
+   */
+  potency: PotencySummary;
+  /** The individual refusals behind `potency`, for anyone who wants the full list. */
+  potencyRefusals: PotencyRefusalRecord[];
 };
 
 /**
@@ -182,6 +218,8 @@ export async function previewLeaflyPush(): Promise<LeaflyPreview> {
     medicallyEndorsed: medSettingsForPreview.medicallyEndorsed,
   });
 
+  const potencyRefusals = potencyRefusalsFor(items);
+
   return {
     mode: "preview",
     itemCount: items.length,
@@ -197,7 +235,27 @@ export async function previewLeaflyPush(): Promise<LeaflyPreview> {
     orderability: summarizeOrderability(items, {
       pickupEnabled: settingsForPreview.sendPickupAvailability,
     }),
+    // Same feed, same items. Computed from the source records rather than from
+    // the built payload on purpose: by the time a reading reaches the payload
+    // it has already become `null`, and a null is indistinguishable from a
+    // product that was honestly never tested. The refusal is only visible at
+    // the point of reading, which is where this looks.
+    potency: summarizePotencyRefusals(potencyRefusals),
+    potencyRefusals,
   };
+}
+
+/**
+ * Every potency reading in the feed that we refused to publish.
+ *
+ * Kept as a named helper rather than inlined because the live push needs the
+ * identical list, and two copies of this loop would be two chances for the
+ * preview and the push to disagree about what was wrong with the data.
+ */
+function potencyRefusalsFor(items: readonly SyndicationItem[]): PotencyRefusalRecord[] {
+  const out: PotencyRefusalRecord[] = [];
+  for (const item of items) out.push(...collectPotencyRefusals(item));
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -319,6 +377,22 @@ export type LeaflyPushResult = {
   message: string | null;
 };
 
+/**
+ * Append the quarantine report to a success message.
+ *
+ * TASK I. A quarantine that is not reported is the whole failure mode this
+ * feature has to avoid: items quietly missing from the menu for months while
+ * every sync reports success. So the note rides along on the SUCCESS message,
+ * where it cannot be mistaken for an error and cannot be missed either.
+ *
+ * Returns the base message unchanged when there is nothing to report, so a
+ * clean sync reads exactly as it always has.
+ */
+function withQuarantineNote(base: string, ...notes: (string | null)[]): string {
+  const extra = notes.filter((n): n is string => n !== null && n.length > 0);
+  return extra.length === 0 ? base : `${base} ${extra.join(" ")}`;
+}
+
 function leaflyMessageForStatus(status: number): string {
   if (status === 401) return "Unauthorized (401): the access token is missing, invalid, or expired.";
   if (status === 403) return "Forbidden (403): the client credentials are not authorized for this menu integration key.";
@@ -390,7 +464,18 @@ export async function pushLeaflyMenu(opts: {
   //                        reading it means the day the endorsement lands, nobody has to
   //                        remember to come back and edit a constant in a mapper.
   const medSettings = await getMedTaxSettings();
-  const leaflyItems: LeaflyItem[] = applyLeaflySettings(
+  // `let`, not `const`: the quarantine step below may replace this with the
+  // surviving subset. Reassigning is deliberate — the alternative is a second
+  // name for "the items we are actually sending", and two names for one thing
+  // is how the wrong one ends up on the wire.
+  let quarantineNote: string | null = null;
+  // TASK I. Read from the SOURCE items, before the builder turns a refused
+  // reading into a null. After that point a refusal and an untested product
+  // are the same value, and the owner would never learn which he had.
+  const potencyNote = describePotencySummary(
+    summarizePotencyRefusals(potencyRefusalsFor(items)),
+  );
+  let leaflyItems: LeaflyItem[] = applyLeaflySettings(
     buildLeaflyItemsPayload(items, {
       pickupEnabled: settings.sendPickupAvailability,
       medicallyEndorsed: medSettings.medicallyEndorsed,
@@ -413,7 +498,42 @@ export async function pushLeaflyMenu(opts: {
   // means the BUILDER is wrong, and a wrong builder fails systematically
   // across many items at once. Sending "the valid ones" would publish a
   // partial menu and hide the cause.
-  assertLeaflyPayloadValid({ items: leaflyItems });
+  //
+  // TASK I. That reasoning still stands and is still the DEFAULT. What it did
+  // not distinguish is a BUILDER defect from a DATA defect. A real full-menu
+  // push failed with 128 errors traceable to a handful of products whose
+  // potency had been typed in the wrong unit, and the whole several-hundred
+  // item menu stayed off Leafly as a result. Several hundred good products
+  // were punished for two bad records, and the owner was left with no menu at
+  // all while hunting the typo.
+  //
+  // So the throw is now conditional on the owner's policy. `block` is
+  // unchanged and remains the default. `quarantine` drops only the offending
+  // ITEMS and reports them -- and refuses itself when the failure share looks
+  // systematic rather than incidental, which is precisely the case the
+  // original comment was written to protect. See quarantine-core.ts.
+  const validation = validateLeaflyPayload({ items: leaflyItems });
+  if (!validation.ok) {
+    const decision = decideQuarantine({
+      items: leaflyItems.map((i) => ({ id: i.id, name: i.name })),
+      issues: validation.issues,
+      policy: settings.invalidItemPolicy,
+    });
+    if (!decision.proceed) {
+      throw new LeaflyPayloadInvalidError(validation);
+    }
+    const keep = new Set(decision.keptItemIds);
+    leaflyItems = leaflyItems.filter((i) => keep.has(i.id));
+    // The headline AND the named list. `describeQuarantine` ends with "fix the
+    // few below", and for a while there was no below: the list function
+    // existed with no caller, so the message pointed at nothing. A summary
+    // that says "some products were held back" without saying WHICH is not a
+    // report, it is an anxiety.
+    quarantineNote = [describeQuarantine(decision), ...describeQuarantinedItems(decision)]
+      .filter((s): s is string => s !== null && s.length > 0)
+      .join(" ");
+    if (quarantineNote.length === 0) quarantineNote = null;
+  }
 
   // 3. Delta plan (payload-hash idempotency).
   const state = await getSyncState("leafly");
@@ -437,7 +557,14 @@ export async function pushLeaflyMenu(opts: {
       planSummary,
       payload: { items: [] },
       response: null,
-      message: `Skipped — no changes since the last successful sync (${plan.counts.unchanged} items unchanged).`,
+      // The quarantine note rides along even here. "Nothing changed" is a
+      // reassuring sentence, and pairing it with silence about held-back
+      // products is exactly how a quarantine becomes invisible.
+      message: withQuarantineNote(
+        `Skipped — no changes since the last successful sync (${plan.counts.unchanged} items unchanged).`,
+        quarantineNote,
+        potencyNote,
+      ),
     };
   }
 
@@ -462,7 +589,11 @@ export async function pushLeaflyMenu(opts: {
       payload,
       response: result.body,
       message: result.ok
-        ? `Full sync sent (${planSummary}). Allow ~2.5 min (sandbox) / ~5 min (production) for the menu to update.`
+        ? withQuarantineNote(
+            `Full sync sent (${planSummary}). Allow ~2.5 min (sandbox) / ~5 min (production) for the menu to update.`,
+            quarantineNote,
+            potencyNote,
+          )
         : leaflyMessageForStatus(result.status),
     };
   }
@@ -520,7 +651,11 @@ export async function pushLeaflyMenu(opts: {
     payload,
     response: { upsert: upsertBody, delete: deleteBody },
     message: ok
-      ? `Upserted ${toSend.length}, removed ${plan.counts.deletes}, skipped ${settings.forceResend ? 0 : plan.counts.unchanged} unchanged (${planSummary}).`
+      ? withQuarantineNote(
+          `Upserted ${toSend.length}, removed ${plan.counts.deletes}, skipped ${settings.forceResend ? 0 : plan.counts.unchanged} unchanged (${planSummary}).`,
+          quarantineNote,
+          potencyNote,
+        )
       : leaflyMessageForStatus(!upsertOk ? upsertStatus : deleteStatus),
   };
 }

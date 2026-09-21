@@ -5,11 +5,19 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import {
   pushLeaflyMenu,
+  deleteLeaflyItems,
   getLeaflyStatus,
   getLeaflyMenu,
   isLeaflyConfigured,
   type LeaflyPushResult,
 } from "@/lib/leafly/push";
+import {
+  parseDeleteIds,
+  describeDeleteProblems,
+  reconcileDeleteRequest,
+  describeUnknownDeleteIds,
+  describeDeleteOutcome,
+} from "@/lib/leafly/delete-request-core";
 import type {
   LeaflyReconcileResult,
   ReadbackTimingVerdict,
@@ -32,7 +40,12 @@ import {
   resolveScheduleSettings,
   type LeaflyScheduleSettings,
 } from "@/lib/leafly/schedule-core";
-import { getLeaflySyncSettings, resetSyncState, saveSyncSettings } from "@/lib/syndication/engine-store";
+import {
+  getLeaflySyncSettings,
+  getSyncState,
+  resetSyncState,
+  saveSyncSettings,
+} from "@/lib/syndication/engine-store";
 import {
   beginManualRun,
   finishManualRun,
@@ -216,6 +229,10 @@ export async function saveLeaflySettingsAction(
     // SLICE L-3 (L-09). Without this key the owner's ordering toggle would post to a
     // server action that ignores it, and the form would silently revert every save.
     "sendPickupAvailability",
+    // TASK I. Same reasoning as the line above: the panel renders this control,
+    // so omitting the key here would reset the owner's choice to "block" on
+    // every unrelated save and he would never be told.
+    "invalidItemPolicy",
   ]) {
     const v = formData.get(key);
     if (v !== null) raw[key] = v;
@@ -625,5 +642,163 @@ export async function draftLeaflyDescriptionAction(
       return { ok: false, error: "AI is not configured. Add an AI provider key to enable drafting." };
     }
     return { ok: false, error: err instanceof Error ? err.message : "Drafting failed." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TASK I -- removing products from the Leafly menu
+// ---------------------------------------------------------------------------
+
+export type DeleteActionResult =
+  | {
+      ok: true;
+      /** Ids we actually asked Leafly to remove. */
+      ids: string[];
+      httpStatus: number;
+      /** Owner-facing confirmation. */
+      message: string;
+      /**
+       * Ids we have no record of sending. Leafly answers these with a cheerful
+       * success, so without this the owner cannot tell a real removal from a
+       * typo. Empty when everything was recognised OR when we had no record to
+       * check against (see `checked`).
+       */
+      unknownIds: string[];
+      /** False when we had no sync state, i.e. the warning above is not evidence of anything. */
+      checked: boolean;
+      /** Non-null when at least one id looked like a typo. */
+      warning: string | null;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Remove specific products from the Leafly menu (HTTP DELETE).
+ *
+ * WHY THIS EXISTS AT ALL.
+ *
+ * `deleteLeaflyItems()` has been sitting in push.ts issuing a correct DELETE
+ * for some time with NO CALLER ANYWHERE. A grep across every .ts and .tsx in
+ * the repo found exactly one mention: a test asserting the targeted item
+ * picker does NOT use it. So the capability was built, guarded, and never
+ * given a door. The owner could not remove a product he had published, and
+ * Leafly's certification checklist expects to see DELETE traffic.
+ *
+ * WHY NOT JUST REUSE THE FULL SYNC.
+ *
+ * A POST full sync already deletes anything absent from the feed, and that is
+ * the right mechanism for the normal case. It is the wrong mechanism for "this
+ * one product must come off the menu now", because it requires the item to
+ * first disappear from the source feed and then requires pushing all ~2,500
+ * items to express a one-item intention. This is the surgical instrument.
+ *
+ * WHY THE UNKNOWN-ID CHECK IS NOT OPTIONAL POLISH.
+ *
+ * Leafly returns success for a DELETE naming an id that is not on the menu --
+ * correctly, since the end state they were asked for is already true. The
+ * consequence is that a typo and a real removal are indistinguishable from the
+ * response alone. We therefore compare the request against our own record of
+ * what we have sent and say so plainly. When we have no record we say THAT
+ * instead of inventing reassurance: `checked: false` is an honest answer and a
+ * confident-sounding guess is not.
+ *
+ * The delete still PROCEEDS when ids look unknown. Our sync state is our
+ * belief, not Leafly's ground truth -- it can be stale, it can have been reset,
+ * and an item pushed by a targeted push may never have entered it. Refusing a
+ * removal on the strength of our own bookkeeping would be the worse failure:
+ * the owner would be unable to take a product down. So we act and we warn.
+ */
+export async function deleteLeaflyItemsAction(
+  formData: FormData,
+): Promise<DeleteActionResult> {
+  const session = await requirePermission("settings.manage");
+  const confirm = formData.get("confirm") === "true";
+  const rawIds = formData.get("ids");
+
+  if (!confirm) {
+    return { ok: false, error: "Confirmation required to remove products from Leafly." };
+  }
+  if (!isLeaflyConfigured()) {
+    return {
+      ok: false,
+      error: "Leafly is not configured. Set the menu integration key and OAuth credentials first.",
+    };
+  }
+
+  // Parse BEFORE the credential-spending call. A malformed request must cost
+  // nothing and must never reach Leafly.
+  const parsed = parseDeleteIds(typeof rawIds === "string" ? rawIds : null);
+  if (!parsed.ok) {
+    return { ok: false, error: describeDeleteProblems(parsed) ?? "The list of IDs could not be read." };
+  }
+
+  // Our belief about what is live. Best-effort: if this read fails we proceed
+  // unchecked rather than blocking the removal.
+  let known: Set<string> | null = null;
+  try {
+    const state = await getSyncState("leafly");
+    // An empty map means "we have no record", not "nothing is live". Treating
+    // it as the latter would flag every single id as a typo on a fresh state.
+    if (state.hashes.size > 0) known = new Set(state.hashes.keys());
+  } catch {
+    known = null;
+  }
+  const reconciliation = reconcileDeleteRequest(parsed.ids, known);
+  const warning = describeUnknownDeleteIds(reconciliation);
+
+  try {
+    const result = await deleteLeaflyItems({ ids: parsed.ids, confirm: true });
+    await recordSyndicationLog({
+      channel: "leafly",
+      mode: "live",
+      status: result.ok ? "ok" : "error",
+      itemCount: result.itemCount,
+      payload: result.payload,
+      response: result.response,
+      message: result.message,
+      createdBy: session.userId,
+    });
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: result.ok ? "leafly.delete.success" : "leafly.delete.error",
+      entityType: "syndication",
+      entityId: "leafly",
+      after: {
+        ids: parsed.ids,
+        itemCount: result.itemCount,
+        httpStatus: result.httpStatus,
+        unknownIds: reconciliation.unknown,
+        checkedAgainstSyncState: reconciliation.checked,
+      },
+    });
+    revalidatePath(BASE);
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        error: result.message ?? `Leafly returned HTTP ${result.httpStatus}.`,
+      };
+    }
+    return {
+      ok: true,
+      ids: parsed.ids,
+      httpStatus: result.httpStatus,
+      message: describeDeleteOutcome(parsed.ids.length),
+      unknownIds: reconciliation.unknown,
+      checked: reconciliation.checked,
+      warning,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Leafly delete failed.";
+    await recordSyndicationLog({
+      channel: "leafly",
+      mode: "live",
+      status: "error",
+      itemCount: 0,
+      message,
+      createdBy: session.userId,
+    });
+    revalidatePath(BASE);
+    return { ok: false, error: message };
   }
 }

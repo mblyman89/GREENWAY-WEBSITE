@@ -59,6 +59,7 @@ import {
   thresholdForCategory,
   type MenuVisibilitySettings,
 } from "./menu-visibility-core";
+import { readPotency, type PotencyRefusalRecord } from "./potency-core";
 import {
   LEAFLY_TYPE_UNIT_MATRIX,
   compoundUnitForType,
@@ -305,9 +306,77 @@ export function toCompound(
   const asString = String(raw).trim();
   if (asString.length === 0) return null;
 
-  const numeric = Number.parseFloat(asString.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(numeric)) return { type, content: null, unit };
-  return { type, content: numeric, unit };
+  // TASK I. This used to be:
+  //
+  //   const numeric = Number.parseFloat(asString.replace(/[^0-9.]/g, ""));
+  //
+  // which deleted every non-digit from the source text and then stapled on
+  // whatever unit the item TYPE implies. For a Flower item carrying "1000mg"
+  // that produced `{ content: 1000, unit: "percent" }` — a claim that a flower
+  // product is one thousand percent THC. Our own pre-flight validator caught
+  // it and refused the whole 600-item menu push with 128 errors.
+  //
+  // The word "mg" in the source is evidence, not noise. readPotency() reads it
+  // and, when it contradicts the unit Leafly ties to this product type,
+  // reports the value as unknown (`null`) rather than converting or relabelling
+  // it. Converting mg to percent needs a net weight we do not reliably have
+  // here, and a percentage computed from a guessed weight is a fabricated lab
+  // result next to a regulated product.
+  //
+  // `null` is not a dodge: Leafly's own spec says "If cannabinoid information
+  // is absent the value `null` should be submitted rather than `0`", and it
+  // renders to shoppers as "unknown" instead of a false "0mg".
+  //
+  // The refusal is not swallowed — collectPotencyRefusals() below surfaces
+  // every one of them so the owner gets a worklist instead of a silent gap.
+  const reading = readPotency(asString, unit);
+  return { type, content: reading.content, unit: reading.unit };
+}
+
+/**
+ * Report every potency reading on an item that we refused to trust.
+ *
+ * Deliberately a SEPARATE pass rather than an output of `toCompound`. The
+ * builder's job is to produce a payload; changing its return shape to carry
+ * diagnostics would ripple through every caller and every test for a concern
+ * none of them have. This function answers the diagnostic question on its own,
+ * using the same `readPotency` decision, so the two can never disagree about
+ * what was refused.
+ *
+ * Returns an empty array for a clean item, so callers can concat freely.
+ */
+export function collectPotencyRefusals(item: SyndicationItem): PotencyRefusalRecord[] {
+  const itemType = toLeaflyType(item.category);
+  const unit = compoundUnitForType(itemType);
+  // Leafly ignores cannabinoids entirely for these types (Accessory, Topical,
+  // Other, Seeds, Clone). A bad reading on one of them is not worth the
+  // owner's attention because it was never going to appear on the menu.
+  if (unit === null) return [];
+
+  const out: PotencyRefusalRecord[] = [];
+  const fields: { field: string; raw: string | number | null | undefined }[] = [
+    { field: "thc", raw: item.thc },
+    { field: "cbd", raw: item.cbd },
+  ];
+
+  for (const { field, raw } of fields) {
+    if (raw == null) continue;
+    const text = String(raw).trim();
+    if (text.length === 0) continue;
+    const reading = readPotency(text, unit);
+    if (reading.refusal === null) continue;
+    out.push({
+      productId: item.id,
+      productName: item.name,
+      field,
+      raw: text,
+      refusal: reading.refusal,
+      expected: unit,
+      stated: reading.stated,
+    });
+  }
+
+  return out;
 }
 
 /** The totals carry no `type` -- see LeaflyTotalCompound. */

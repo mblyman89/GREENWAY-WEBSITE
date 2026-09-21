@@ -202,6 +202,42 @@ export function SyncSettingsPanel({
           </Field>
         ) : null}
 
+        {/*
+          TASK I -- what to do when some products fail the pre-send check.
+
+          FIELD-REPORTED. A full menu push failed with 128 errors and sent
+          NOTHING, because the pre-send check throws on the first invalid
+          payload. That is the right behaviour when the fault is in our
+          BUILDER -- a systematic bug would corrupt every item and a partial
+          send would hide it. It is the wrong behaviour when the fault is in a
+          handful of PRODUCT RECORDS, which is what actually happened: a few
+          bad potency figures kept ~600 good products off the menu.
+
+          The default stays "send nothing". Changing that default silently
+          would mean an owner who has never seen this screen starts getting
+          partial menus, and a menu that is quietly missing products is worse
+          than a menu that visibly failed to send. So it is opt-in, it names
+          what it skips, and it still refuses when too much of the menu is
+          failing at once -- at that scale the cause is systematic and skipping
+          is just hiding it.
+        */}
+        {isLeafly ? (
+          <Field
+            label="If some products fail the pre-send check"
+            htmlFor="leafly-invalid-policy"
+            help="Products are checked against Leafly's rules before anything is sent. 'Send nothing' is the safe default. 'Skip the bad ones' publishes the rest and tells you exactly which products were held back and why — but it refuses if a quarter or more of the menu is failing, because that means the fault is ours, not the data's."
+          >
+            <Select
+              id="leafly-invalid-policy"
+              name="invalidItemPolicy"
+              defaultValue={lf.invalidItemPolicy}
+            >
+              <option value="block">Send nothing until they are fixed (default)</option>
+              <option value="quarantine">Skip the bad ones and send the rest</option>
+            </Select>
+          </Field>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Toggle
             name="sendDescriptions"
