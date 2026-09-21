@@ -223,6 +223,28 @@ export async function saveLeaflySettingsAction(
   // Carry the schedule across untouched. This form has no schedule controls, so
   // it must not express an opinion about the schedule.
   raw["schedule"] = existing.schedule;
+
+  // TASK H (L-22) — the low-stock rule. This form DOES own these controls, so
+  // unlike `schedule` it must build the block rather than carry it across.
+  //
+  // Read the warning at the top of this function before touching this. The
+  // per-category overrides are NOT rendered by this form, so they are carried
+  // across from storage exactly as the schedule is; building the block from the
+  // two submitted fields alone would wipe them on every save.
+  //
+  // `minimumStock` is read only when present. A missing field means the input
+  // was not rendered (non-Leafly channel, or an older cached form), and in that
+  // case the stored value must survive rather than collapse to 0 — silently
+  // switching a safety rule off is the one direction this must never fail in.
+  const modeSubmitted = formData.get("visibilityMode");
+  const minSubmitted = formData.get("visibilityMinimumStock");
+  raw["visibility"] = {
+    mode: modeSubmitted !== null ? modeSubmitted : existing.visibility.mode,
+    minimumStock:
+      minSubmitted !== null ? minSubmitted : existing.visibility.minimumStock,
+    perCategory: existing.visibility.perCategory,
+  };
+
   const settings = resolveLeaflySettings(raw);
   const saved = await saveSyncSettings("leafly", settings, session.userId);
   if (!saved.ok) {

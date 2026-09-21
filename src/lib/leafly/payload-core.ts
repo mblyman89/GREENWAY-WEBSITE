@@ -54,6 +54,12 @@ import {
   type VariantMedicalInput,
 } from "./orderability-core";
 import {
+  DEFAULT_MENU_VISIBILITY,
+  decideVariantVisibility,
+  thresholdForCategory,
+  type MenuVisibilitySettings,
+} from "./menu-visibility-core";
+import {
   LEAFLY_TYPE_UNIT_MATRIX,
   compoundUnitForType,
   isLeaflyFunnelType,
@@ -150,6 +156,30 @@ export type LeaflyVariantRejection = {
   variantId: string;
   label: string;
   reason: string;
+};
+
+/**
+ * TASK H (finding L-22). A size the owner's own low-stock rule held back.
+ *
+ * Deliberately a SEPARATE type from `LeaflyVariantRejection`, even though both
+ * describe a variant that did not reach Leafly, because they mean opposite
+ * things and must never be reported in the same list. A rejection is a DEFECT
+ * the owner has to go and fix (a label with no readable weight). A withholding
+ * is the system CORRECTLY OBEYING him. Merging them would bury real defects in
+ * a pile of healthy, intentional decisions, and would make the error badge red
+ * for doing exactly what it was told.
+ *
+ * It carries the numbers rather than a sentence so the UI can say "2 left, your
+ * rule is 3" instead of a pre-baked string nobody can re-word.
+ */
+export type LeaflyVariantWithheld = {
+  itemId: string;
+  variantId: string;
+  label: string;
+  /** What we actually had on hand. */
+  inventoryLevel: number;
+  /** The threshold it was measured against. */
+  threshold: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -444,10 +474,16 @@ export function variantsFor(
 ): {
   variants: LeaflyVariant[];
   rejected: LeaflyVariantRejection[];
+  /** TASK H: sizes the owner's low-stock rule removed from the payload. */
+  withheld: LeaflyVariantWithheld[];
+  /** TASK H: sizes kept, but too thin to be offered for reservation. */
+  unreservableVariantIds: string[];
 } {
   const itemType = toLeaflyType(item.category);
   const variants: LeaflyVariant[] = [];
   const rejected: LeaflyVariantRejection[] = [];
+  const withheld: LeaflyVariantWithheld[] = [];
+  const unreservableVariantIds: string[] = [];
 
   // SLICE L-3. The medical answer is a property of the STORE (endorsement) and the
   // PRODUCT (verified DOH category), so it is computed once per item and shared by
@@ -458,8 +494,43 @@ export function variantsFor(
     dohCategory: item.dohCategory ?? null,
   };
 
+  // TASK H (finding L-22). The owner's low-stock rule, applied HERE because
+  // this is the one funnel every caller already shares -- the payload builder,
+  // the validator, the admin preview and the picker all reach Leafly variants
+  // through `variantsFor`. Filtering anywhere else would give two callers two
+  // different menus, which is the exact class of drift that produced L-21.
+  //
+  // It runs BEFORE the mapper rather than after, so a size the owner has
+  // decided not to promise is never even measured for unit legality: we do not
+  // want a rejection notice about a label we were never going to send.
+  //
+  // Absent settings mean OFF, so this loop is a no-op for every existing
+  // caller (`visibility` is optional on LeaflyBuildOptions).
+  const visibility = opts?.visibility ?? DEFAULT_MENU_VISIBILITY;
+  const visibilityThreshold = thresholdForCategory(visibility, item.category);
+
   if (item.variants.length > 0) {
     for (const v of item.variants) {
+      const held = decideVariantVisibility(
+        { id: String(v.id), label: v.label, inStock: v.inStock, inventoryLevel: v.inventoryLevel },
+        visibility.mode,
+        visibilityThreshold,
+      );
+      if (held.outcome === "withheld") {
+        // Recorded, never silent. A size vanishing from the menu with no
+        // explanation is indistinguishable from a bug, and the owner has to be
+        // able to see that his own rule did this and why.
+        withheld.push({
+          itemId: item.id,
+          variantId: String(v.id),
+          label: v.label ?? "",
+          inventoryLevel: held.inventoryLevel,
+          threshold: held.threshold,
+        });
+        continue;
+      }
+      if (held.outcome === "keep_not_orderable") unreservableVariantIds.push(String(v.id));
+
       const mapped = toLeaflyVariant(v, itemType, medical);
       if (mapped === null) {
         rejected.push({
@@ -476,7 +547,7 @@ export function variantsFor(
       }
       variants.push(mapped);
     }
-    return { variants, rejected };
+    return { variants, rejected, withheld, unreservableVariantIds };
   }
 
   const au = variantAmountAndUnit(itemType, null);
@@ -489,9 +560,21 @@ export function variantsFor(
         `Item has no variants and Leafly type "${itemType}" is sold by weight, so a default ` +
         `variant cannot be synthesized without inventing a weight.`,
     });
-    return { variants, rejected };
+    return { variants, rejected, withheld, unreservableVariantIds };
   }
 
+  // TASK H, deliberately NOT gated by the low-stock rule.
+  //
+  // This is the synthesized-default branch: the item has no variants at all, so
+  // the `inventoryLevel: 1` below is a PLACEHOLDER standing in for "in stock",
+  // not a count of anything. Measuring a threshold of 3 against a placeholder of
+  // 1 would withhold every variant-less product in the shop and report it as a
+  // low-stock decision, which would be a fabricated reason -- the system does
+  // not know how many of these there are.
+  //
+  // So the rule abstains here rather than guessing, exactly as
+  // `explainMissingVariant()` refuses to invent an explanation it cannot prove.
+  // These items keep behaving as they do today.
   variants.push({
     id: `${item.id}-default`,
     medical: variantMedicalFlag(medical),
@@ -500,7 +583,7 @@ export function variantsFor(
     unit: au.unit,
     inventoryLevel: variantInventoryLevel({ inStock: item.inStock, inventoryLevel: 1 }),
   });
-  return { variants, rejected };
+  return { variants, rejected, withheld, unreservableVariantIds };
 }
 
 // ---------------------------------------------------------------------------
@@ -510,6 +593,8 @@ export function variantsFor(
 export type LeaflyItemResult = {
   item: LeaflyItem | null;
   rejected: LeaflyVariantRejection[];
+  /** TASK H: sizes the owner's low-stock rule held back. Never a defect. */
+  withheld: LeaflyVariantWithheld[];
 };
 
 /**
@@ -530,6 +615,12 @@ export type LeaflyBuildOptions = {
    * FALSE. Today this is false (owner, Q5), and false is also the safe answer.
    */
   medicallyEndorsed?: boolean;
+  /**
+   * TASK H (finding L-22). The owner's low-stock rule. DEFAULTS OFF when absent,
+   * so every existing caller keeps producing byte-identical payloads and the
+   * feature cannot switch itself on by omission.
+   */
+  visibility?: MenuVisibilitySettings;
 };
 
 /**
@@ -557,9 +648,18 @@ export function toLeaflyItemResult(
   opts?: LeaflyBuildOptions,
 ): LeaflyItemResult {
   const type = toLeaflyType(item.category);
-  const { variants, rejected } = variantsFor(item, opts);
+  const { variants, rejected, withheld, unreservableVariantIds } = variantsFor(item, opts);
 
-  if (variants.length === 0) return { item: null, rejected };
+  // TASK H. Zero surviving variants can now mean one of TWO different things,
+  // and they must not be conflated. Either nothing could be represented (the
+  // pre-existing case), or the owner's low-stock rule held everything back
+  // (the new one). Both drop the item, but only the first is a defect. The
+  // caller learns which from `withheld` being non-empty.
+  //
+  // Dropping the item here is also the only schema-legal option: Leafly v2
+  // states "There must be at least one member of the `variants[]` array on
+  // items", so an item stripped to nothing cannot be sent at all.
+  if (variants.length === 0) return { item: null, rejected, withheld };
 
   // `name` is `minLength: 1`, so an all-whitespace name is a schema violation --
   // and a padded name is a storefront defect (" Blue Dream" sorts under space
@@ -579,7 +679,7 @@ export function toLeaflyItemResult(
         `Item has a blank name, and Leafly requires a non-empty name (minLength 1). ` +
         `A name is never invented — set a real product name on this item.`,
     });
-    return { item: null, rejected };
+    return { item: null, rejected, withheld };
   }
 
   const out: LeaflyItem = {
@@ -630,13 +730,27 @@ export function toLeaflyItemResult(
   // stock AND a product that is not DOH card-only. See orderability-core.ts for why each
   // condition exists. The value is always a real boolean -- `null` is illegal here, the
   // schema declares a plain `"type": "boolean"`.
-  out.availableForPickup = decideOrderability({
-    inStock: item.inStock,
-    dohCategory: item.dohCategory ?? null,
-    pickupEnabled: opts?.pickupEnabled === true,
-  }).availableForPickup;
+  //
+  // TASK H adds one more way to reach `false`. `availableForPickup` is an
+  // ITEM-level field -- Leafly has no per-variant orderability -- so when the
+  // owner's rule marks a size unreservable, the only honest thing the wire
+  // format lets us do is withdraw ordering for the whole item while KEEPING it
+  // listed. That is precisely the "show it, but don't let them reserve it"
+  // promise, and it is why `every` is the right test and `some` would be a bug:
+  // an item with one thin size and one deep size can still be reliably
+  // fulfilled from the deep one, so it stays orderable. Only when EVERY
+  // surviving size is thin does the item stop being a safe promise.
+  const everySurvivingSizeIsThin =
+    unreservableVariantIds.length > 0 && unreservableVariantIds.length === variants.length;
 
-  return { item: out, rejected };
+  out.availableForPickup =
+    decideOrderability({
+      inStock: item.inStock,
+      dohCategory: item.dohCategory ?? null,
+      pickupEnabled: opts?.pickupEnabled === true,
+    }).availableForPickup && !everySurvivingSizeIsThin;
+
+  return { item: out, rejected, withheld };
 }
 
 /** Back-compat single-item mapper. Returns null when the item is not publishable. */
@@ -648,6 +762,17 @@ export type LeaflyBuildResult = {
   payload: LeaflyItemsPayload;
   rejected: LeaflyVariantRejection[];
   droppedItemIds: string[];
+  /** TASK H: every size the owner's low-stock rule held back, across the menu. */
+  withheld: LeaflyVariantWithheld[];
+  /**
+   * TASK H: items dropped SOLELY because the low-stock rule emptied them.
+   *
+   * A strict subset of `droppedItemIds`, and separated from it on purpose: the
+   * admin surface reports dropped items as a problem to investigate, and these
+   * are not a problem. Without this split, turning the rule on would light up
+   * the push report with what look like new failures.
+   */
+  withheldItemIds: string[];
 };
 
 /**
@@ -665,15 +790,26 @@ export function buildLeaflyItemsResult(
   const out: LeaflyItem[] = [];
   const rejected: LeaflyVariantRejection[] = [];
   const droppedItemIds: string[] = [];
+  const withheld: LeaflyVariantWithheld[] = [];
+  const withheldItemIds: string[] = [];
 
   for (const item of items) {
     const result = toLeaflyItemResult(item, opts);
     rejected.push(...result.rejected);
-    if (result.item === null) droppedItemIds.push(item.id);
-    else out.push(result.item);
+    withheld.push(...result.withheld);
+    if (result.item === null) {
+      droppedItemIds.push(item.id);
+      // TASK H. Attribute the drop honestly. It counts as a WITHHOLDING only
+      // when the low-stock rule took sizes from this item and nothing was
+      // rejected for a real defect -- otherwise a genuinely broken item that
+      // also happened to be low on stock would be filed as a healthy decision
+      // and never fixed.
+      const itemRejected = result.rejected.length > 0;
+      if (!itemRejected && result.withheld.length > 0) withheldItemIds.push(item.id);
+    } else out.push(result.item);
   }
 
-  return { payload: { items: out }, rejected, droppedItemIds };
+  return { payload: { items: out }, rejected, droppedItemIds, withheld, withheldItemIds };
 }
 
 export function buildLeaflyItemsPayload(
@@ -1269,6 +1405,175 @@ export function __runLeaflyPayloadTests(): { passed: number; failed: number } {
   // dohCategory is OUR internal field. Leafly has no such property, so leaking it would
   // be sending an undeclared field on every DOH-verified product.
   ok("internal dohCategory never leaks onto the wire", !l3Json.includes('"dohCategory"'));
+
+  // --- TASK H (L-22): the low-stock rule, THROUGH THE REAL BUILDER --------
+  //
+  // These assertions go through `buildLeaflyItemsResult`/`toLeaflyItemResult`
+  // rather than calling `menu-visibility-core` directly, because the unit
+  // behaviour is already proven there. What is unproven, and what actually
+  // matters, is the WIRING: that the option is read, that withheld sizes really
+  // are absent from the JSON, and that nothing else moved.
+  {
+    const vis = (
+      mode: "off" | "not_orderable" | "withhold",
+      minimumStock: number,
+      perCategory: Record<string, number> = {},
+    ): MenuVisibilitySettings => ({ mode, minimumStock, perCategory });
+
+    const thinAndDeep: SyndicationItem = {
+      ...flower,
+      id: "h-1",
+      variants: [
+        { id: "thin", label: "3.5g", priceMinorUnits: 1500, inStock: true, inventoryLevel: 1 },
+        { id: "deep", label: "28g", priceMinorUnits: 9000, inStock: true, inventoryLevel: 40 },
+      ],
+    };
+
+    // NEGATIVE CONTROL, and the single most important assertion in this block:
+    // with no option passed at all, the payload must be EXACTLY what it was
+    // before Task H existed. If this ever fails, the feature has switched
+    // itself on for every caller that never asked for it.
+    ok(
+      "no visibility option => byte-identical payload",
+      JSON.stringify(toLeaflyItemResult(thinAndDeep).item) ===
+        JSON.stringify(toLeaflyItemResult(thinAndDeep, { visibility: vis("off", 3) }).item),
+    );
+    ok("no visibility option => nothing withheld", toLeaflyItemResult(thinAndDeep).withheld.length === 0);
+    ok(
+      "mode off keeps both sizes",
+      toLeaflyItemResult(thinAndDeep, { visibility: vis("off", 3) }).item?.variants.length === 2,
+    );
+
+    // withhold: the thin size really leaves the wire.
+    const wh = toLeaflyItemResult(thinAndDeep, { visibility: vis("withhold", 3) });
+    ok("withhold keeps the item", wh.item !== null);
+    ok("withhold leaves exactly one size", wh.item?.variants.length === 1);
+    ok("withhold kept the DEEP size", wh.item?.variants[0]?.id === "deep");
+    ok("withhold reported the thin size", wh.withheld.length === 1);
+    ok("the withheld record names the variant", wh.withheld[0]?.variantId === "thin");
+    ok("the withheld record carries the real count", wh.withheld[0]?.inventoryLevel === 1);
+    ok("the withheld record carries the threshold", wh.withheld[0]?.threshold === 3);
+    ok("withholding is NOT reported as a rejection/defect", wh.rejected.length === 0);
+    ok(
+      "the withheld size is genuinely absent from the JSON",
+      !JSON.stringify(wh.item).includes('"thin"'),
+    );
+
+    // An item whose every size is thin cannot be sent at all (schema requires
+    // >= 1 variant), and must be attributed to the rule, not to a defect.
+    const allThin: SyndicationItem = {
+      ...flower,
+      id: "h-2",
+      variants: [
+        { id: "a", label: "3.5g", priceMinorUnits: 1500, inStock: true, inventoryLevel: 2 },
+      ],
+    };
+    const allThinR = buildLeaflyItemsResult([allThin], { visibility: vis("withhold", 3) });
+    ok("an all-thin item is not sent", allThinR.payload.items.length === 0);
+    ok("an all-thin item is recorded as dropped", allThinR.droppedItemIds.includes("h-2"));
+    ok("...and attributed to the low-stock rule", allThinR.withheldItemIds.includes("h-2"));
+    ok("...and NOT recorded as a defect", allThinR.rejected.length === 0);
+
+    // A genuinely BROKEN item that is also low on stock must stay filed as
+    // broken, or the owner would never be told to fix it.
+    const brokenAndThin: SyndicationItem = {
+      ...flower,
+      id: "h-3",
+      variants: [
+        { id: "ok", label: "3.5g", priceMinorUnits: 1500, inStock: true, inventoryLevel: 1 },
+        { id: "bad", label: "large", priceMinorUnits: 1500, inStock: true, inventoryLevel: 50 },
+      ],
+    };
+    const batR = buildLeaflyItemsResult([brokenAndThin], { visibility: vis("withhold", 3) });
+    ok("the unreadable label is still rejected", batR.rejected.some((r) => r.variantId === "bad"));
+    ok("the thin size is still withheld", batR.withheld.some((w) => w.variantId === "ok"));
+    ok(
+      "a dropped item with a real defect is NOT filed as a healthy withholding",
+      !batR.withheldItemIds.includes("h-3"),
+    );
+
+    // not_orderable: nothing leaves the menu, but the promise is withdrawn.
+    const noR = toLeaflyItemResult(thinAndDeep, {
+      visibility: vis("not_orderable", 3),
+      pickupEnabled: true,
+    });
+    ok("not_orderable keeps BOTH sizes on the menu", noR.item?.variants.length === 2);
+    ok("not_orderable withholds nothing", noR.withheld.length === 0);
+    ok(
+      "a mixed item stays orderable (the deep size can still be honoured)",
+      noR.item?.availableForPickup === true,
+    );
+
+    const allThinOrder = toLeaflyItemResult(allThin, {
+      visibility: vis("not_orderable", 3),
+      pickupEnabled: true,
+    });
+    ok("an all-thin item stays LISTED in not_orderable mode", allThinOrder.item !== null);
+    ok("...with its size intact", allThinOrder.item?.variants.length === 1);
+    ok(
+      "...but can no longer be reserved",
+      allThinOrder.item?.availableForPickup === false,
+    );
+    // Proof the previous assertion is caused by the RULE and not by something
+    // else refusing pickup: the same item, same options, rule off, is orderable.
+    ok(
+      "NEGATIVE CONTROL: the same item with the rule off IS orderable",
+      toLeaflyItemResult(allThin, { visibility: vis("off", 3), pickupEnabled: true }).item
+        ?.availableForPickup === true,
+    );
+
+    // Per-category overrides must reach the builder, not just the core.
+    const edible: SyndicationItem = {
+      ...flower,
+      id: "h-4",
+      category: "edible",
+      variants: [
+        { id: "e1", label: "1 each", priceMinorUnits: 1000, inStock: true, inventoryLevel: 4 },
+      ],
+    };
+    const flower4: SyndicationItem = {
+      ...flower,
+      id: "h-5",
+      variants: [
+        { id: "f1", label: "3.5g", priceMinorUnits: 1500, inStock: true, inventoryLevel: 4 },
+      ],
+    };
+    const catR = buildLeaflyItemsResult([edible, flower4], {
+      visibility: vis("withhold", 3, { flower: 6 }),
+    });
+    ok("the stricter per-category rule reached the builder", catR.withheldItemIds.includes("h-5"));
+    ok("the looser global left the edible alone", !catR.withheldItemIds.includes("h-4"));
+    ok("so exactly one item survived", catR.payload.items.length === 1);
+
+    // The abstention rule: a variant-less item is measured against a
+    // PLACEHOLDER inventory of 1, so the threshold must not touch it.
+    const noVariantEach: SyndicationItem = {
+      ...bare,
+      id: "h-6",
+      inStock: true,
+      variants: [],
+    };
+    const nvR = buildLeaflyItemsResult([noVariantEach], { visibility: vis("withhold", 3) });
+    ok(
+      "a variant-less item is NOT withheld on a placeholder count",
+      nvR.payload.items.length === 1,
+    );
+    ok("...and nothing is claimed about it", nvR.withheld.length === 0);
+
+    // Out-of-stock stays attributed to the pre-existing rule.
+    const oos: SyndicationItem = {
+      ...flower,
+      id: "h-7",
+      inStock: false,
+      variants: [
+        { id: "z", label: "3.5g", priceMinorUnits: 1500, inStock: false, inventoryLevel: 0 },
+      ],
+    };
+    ok(
+      "an out-of-stock size is not credited to the low-stock rule",
+      buildLeaflyItemsResult([oos], { visibility: vis("withhold", 3) }).withheld.length === 0,
+    );
+  }
 
   console.log(`leafly-payload: ${passed} passed, ${failed} failed`);
   if (failed > 0) throw new Error(`${failed} leafly-payload test(s) failed`);
