@@ -274,6 +274,11 @@ import { __runLeaflyOrderAckTests } from "../../src/lib/leafly/order-ack-core";
 //               All three are asserted over the full 8 x 5 operation/fault
 //               matrix rather than sampled.
 import { __runLeaflyDeadlineTests } from "../../src/lib/leafly/deadline-core";
+import { __runLeaflySetupCacheTests } from "../../src/lib/leafly/setup-cache-core";
+import {
+  MENU_CACHE_TAG,
+  MENU_CACHE_TTL_SECONDS,
+} from "../../src/lib/menu/menu-cache-policy-core";
 // SLICE M-1 -- fetching the order body. The order_submit webhook carries ONLY
 //              metadata (eventTime, eventType, orderId, orderIntegrationKey,
 //              acknowledgeBy). The cart, the customer and the totals live
@@ -951,6 +956,20 @@ __runLiquidVolumeTests();
   // way to weaken this core is to shrink the matrix rather than to change an
   // answer inside it -- which a floor catches and a green suite would not.
   assertRan("leafly-deadline-core", __runLeaflyDeadlineTests(), 500);
+  // SLICE L-18. The cache policy behind the settings-save hang. The live menu's
+  // real tag and TTL are INJECTED rather than copied, so the claim "we share
+  // the live menu's invalidation" is checked against the actual constants and
+  // a drift fails here instead of silently leaving a stale count on screen.
+  // Floor set just under the measured count for the same reason as above: the
+  // cheapest way to weaken this core is to delete a trap case.
+  assertRan(
+    "leafly-setup-cache-core",
+    __runLeaflySetupCacheTests({
+      liveMenuTag: MENU_CACHE_TAG,
+      liveMenuTtlSeconds: MENU_CACHE_TTL_SECONDS,
+    }),
+    145,
+  );
   // SLICE M. Floors set just under the current counts (92 / 46). The fetch
   // core is what makes a receipt possible at all; the readiness core is what
   // stops the dashboard from hiding while setup is half finished.

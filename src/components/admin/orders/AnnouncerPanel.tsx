@@ -26,6 +26,9 @@ import { optionsForSounds } from "@/lib/announcer/announcer-library-core";
 import { AnnouncerSoundLibrary } from "@/components/admin/orders/AnnouncerSoundLibrary";
 import { AnnouncerTestButton } from "@/components/admin/orders/AnnouncerTestButton";
 import { AnnouncerSetupGuide } from "@/components/admin/orders/AnnouncerSetupGuide";
+// SLICE L-18: the save buttons get a real pending state. See SaveButton.tsx
+// for why this must be a child component of the <form> and not inline.
+import { SaveButton } from "@/components/admin/orders/SaveButton";
 import type { AdminDeviceView, ShopVerdict } from "@/lib/announcer/announcer-admin-core";
 import {
   announcerCreatePairingAction,
@@ -271,9 +274,7 @@ export async function AnnouncerPanel() {
                     </Field>
                   </div>
                   <div className="col-span-2 flex items-center gap-2">
-                    <Button type="submit" variant="save" size="sm">
-                      Save
-                    </Button>
+                    <SaveButton label="Save" busyLabel="Saving…" />
                   </div>
                 </form>
 
@@ -394,9 +395,7 @@ export async function AnnouncerPanel() {
               />
             </Field>
             <div className="sm:col-span-2 lg:col-span-3">
-              <Button type="submit" variant="save" size="sm">
-                Save settings
-              </Button>
+              <SaveButton label="Save settings" busyLabel="Saving settings…" />
             </div>
           </form>
         </details>
@@ -474,9 +473,7 @@ export async function AnnouncerPanel() {
             </Field>
 
             <div className="sm:col-span-2">
-              <Button type="submit" variant="save" size="sm">
-                Save order sounds
-              </Button>
+              <SaveButton label="Save order sounds" busyLabel="Saving order sounds…" />
             </div>
           </form>
         </details>
