@@ -23,7 +23,24 @@ import { useState } from "react";
 
 type CopyState = "idle" | "copied" | "failed";
 
-export function CopyCommandButton({ command }: { command: string }) {
+export function CopyCommandButton({
+  command,
+  /**
+   * What the copied text IS, for the screen-reader label only.
+   *
+   * SLICE M-2. This button is now also used for the six webhook addresses the
+   * owner has to email Leafly, and "Copy command: https://…" read aloud is
+   * simply wrong — it is an address, not a command. Defaulted so that every
+   * existing call site renders and announces exactly as it did before.
+   */
+  describeAs = "command",
+  /** Visible button text, when "Copy" is too vague (e.g. "Copy all six"). */
+  idleLabel = "Copy",
+}: {
+  command: string;
+  describeAs?: string;
+  idleLabel?: string;
+}) {
   const [state, setState] = useState<CopyState>("idle");
 
   async function copy() {
@@ -38,13 +55,14 @@ export function CopyCommandButton({ command }: { command: string }) {
     setTimeout(() => setState("idle"), 2000);
   }
 
-  const label = state === "copied" ? "✓ Copied" : state === "failed" ? "Select it above" : "Copy";
+  const label =
+    state === "copied" ? "✓ Copied" : state === "failed" ? "Select it above" : idleLabel;
 
   return (
     <button
       type="button"
       onClick={copy}
-      aria-label={`Copy command: ${command}`}
+      aria-label={`Copy ${describeAs}: ${command}`}
       className="admin-focus shrink-0 self-start rounded-[var(--admin-radius-sm,8px)] border border-[var(--admin-border)] bg-[var(--admin-surface-2,var(--admin-surface-1))] px-2.5 py-1 text-[0.7rem] font-bold text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
     >
       {label}

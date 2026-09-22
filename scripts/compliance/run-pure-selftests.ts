@@ -253,6 +253,25 @@ import { __runLeaflyPreviewTests } from "../../src/lib/leafly/preview-core";
 //                        acceptable answer — every rejection must be classified
 //                        as retry, fix-config, fix-request or gone.
 import { __runLeaflyOrderAckTests } from "../../src/lib/leafly/order-ack-core";
+// SLICE M-1 -- fetching the order body. The order_submit webhook carries ONLY
+//              metadata (eventTime, eventType, orderId, orderIntegrationKey,
+//              acknowledgeBy). The cart, the customer and the totals live
+//              behind a separate GET that Leafly marks *Required*. Without
+//              that GET nothing can print, because the printer is handed a
+//              payload with no order id in it. Registered with a floor because
+//              every failure mode in this file is SILENT: a bad URL, a dropped
+//              token refresh or a mis-read 404 all end with the order simply
+//              never appearing, which is exactly the bug this core exists to
+//              make impossible to reintroduce.
+import { __runLeaflyOrderFetchTests } from "../../src/lib/leafly/order-fetch-core";
+// SLICE M-2 -- readiness. An order can be silent for reasons that are not
+//              code defects at all: Leafly may never have been told our
+//              webhook URLs, or the order integration key may not be set.
+//              This core turns "nothing happened" into a named, ordered next
+//              step, and decides whether the dashboard panel may hide itself.
+//              Floored because a panel that wrongly hides is invisible by
+//              definition -- no one can report a bug they cannot see.
+import { __runLeaflyOrderReadinessTests } from "../../src/lib/leafly/order-readiness-core";
 // SLICE L-7 -- the automatic sync schedule. Registered with a floor because the
 // two things this core decides are both silent when wrong: it decides WHETHER
 // to talk to Leafly (getting that wrong too often is a certification failure,
@@ -885,6 +904,11 @@ __runLiquidVolumeTests();
   // filter quietly removing a legal action -- verified by sabotage, which the
   // matrix caught in six places at once.
   assertRan("leafly-order-ack-core", __runLeaflyOrderAckTests(), 370);
+  // SLICE M. Floors set just under the current counts (92 / 46). The fetch
+  // core is what makes a receipt possible at all; the readiness core is what
+  // stops the dashboard from hiding while setup is half finished.
+  assertRan("leafly-order-fetch-core", __runLeaflyOrderFetchTests(), 98);
+  assertRan("leafly-order-readiness-core", __runLeaflyOrderReadinessTests(), 42);
   // Floor 230, set from a measured 242 at registration. Deliberately close to
   // the measured figure: this core is where a platform limit is encoded (Vercel
   // Hobby permits one cron tick per day, so the daily full sync is driven by an

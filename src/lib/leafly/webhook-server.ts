@@ -401,6 +401,49 @@ export async function handleLeaflyWebhook(input: {
     // turn a valid delivery into a non-200, which would make Leafly retry and
     // could end with a real customer's order auto-cancelled.
     if (saved.ok && expectedEvent === "order_submit") {
+      // ── SLICE L-15: COLLECT THE ORDER BEFORE RINGING THE BELL ──────────
+      //
+      // THE BUG THIS FIXES. The owner placed a real Leafly order and got no
+      // receipt. The cause was not the printer, the bridge, or the bell: it
+      // is that `order_submit` DOES NOT CONTAIN THE ORDER. Leafly's own
+      // example payload is five fields -- eventTime, eventType, orderId,
+      // orderIntegrationKey, acknowledgeBy. No cart. No customer. No totals.
+      //
+      // The upsert above therefore stored those five fields into
+      // `raw_order`, and `onLeaflyOrderArrived` then asked
+      // `readLeaflyOrderPayload(raw_order)` to build a ticket out of them.
+      // Measured against the spec's own example, that call returns
+      // ok=false, "the stored Leafly payload has no order id". It could
+      // never have succeeded. The receipt was unreachable by construction.
+      //
+      // The missing piece is `GET /{key}/orders/{id}`, which Leafly marks
+      // **_Required_** and which did not exist anywhere in this repository.
+      // That endpoint returns the real Order -- cartItems, subtotal, total,
+      // taxes, firstName, lastName -- and `collectLeaflyOrder` overwrites
+      // `raw_order` with it.
+      //
+      // WHY IT RUNS HERE, BEFORE the bridge rather than inside it: the
+      // bridge reads the row. Collecting first means the row it reads is the
+      // real order. Collecting after would print from the metadata again.
+      //
+      // WHY A FAILURE DOES NOT SKIP THE BRIDGE: `decideArrivalPlan` is
+      // explicit that a failed collection STILL announces. Leafly
+      // auto-cancels at fifteen minutes, so a silent failure costs a real
+      // customer's order, while a chime with no paper costs somebody a look
+      // at the Leafly dashboard. The bell is the cheap half and it must not
+      // depend on the expensive half succeeding.
+      //
+      // CANNOT THROW: collectLeaflyOrder returns every failure as a value,
+      // so this cannot turn an authentic delivery into a non-200.
+      const { collectLeaflyOrder } = await import("./order-fetch-server");
+      const collected = await collectLeaflyOrder({
+        leaflyOrderId: parsed.orderId,
+        // The upsert above just wrote the row, so a 404 here means Leafly has
+        // aged the order out, NOT that the order never existed.
+        knownLocally: true,
+      });
+      if (!collected.ok) notes.push(collected.summary);
+
       const { onLeaflyOrderArrived } = await import("./bridge-server");
       const bridged = await onLeaflyOrderArrived(parsed.orderId);
       if (!bridged.ok) notes.push(bridged.summary);

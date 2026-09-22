@@ -265,6 +265,30 @@ export function LeaflyOrdersPanel({
   // Nothing set up, nothing received, nothing wrong, nothing to report → render
   // nothing. See the file header: the orders page does not grow a permanent
   // empty section for a feature that is not in use.
+  //
+  // ── SLICE M-2: WHY THIS RULE NOW HAS A COMPANION, AND WHY IT SURVIVED ──
+  //
+  // The owner placed a real Leafly order and reported four silences at once:
+  // no row, no receipt, no sound, and "there is nothing in the online orders
+  // dashboard page that has a Leafly orders section". That last symptom was
+  // THIS LINE, behaving exactly as designed — proven by executing this very
+  // predicate against his state (no order integration key saved, no orders
+  // yet, no problem, no outcome → null).
+  //
+  // The rule is not wrong; it is incomplete. "Do not grow a permanent empty
+  // section for an unused feature" is correct, but it is at its most silent
+  // precisely when somebody is HALFWAY through setup and needs to be told what
+  // is missing. A screen that hides during setup cannot be debugged, and a bug
+  // nobody can see is a bug nobody can report.
+  //
+  // The fix deliberately does NOT weaken this condition. Loosening it would
+  // put a permanently empty "Leafly orders" card on the orders page of a shop
+  // that does not use Leafly — trading one defect for the one this rule was
+  // written to prevent. Instead, `LeaflyOrderSetupPanel` owns the empty state:
+  // it renders the reason, the remaining steps and the six webhook addresses,
+  // and `assessOrderReadiness().showPanel` decides when (any setup progress at
+  // all, or any order ever received). So this list still renders nothing when
+  // there is nothing to list, and the PAGE is no longer blank.
   if (!hasOrders && !hasProblem && !hasOutcome && !board.orderIntegrationKeyPresent) {
     return null;
   }
