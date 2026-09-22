@@ -467,14 +467,34 @@ export async function isPickupAvailabilityEnabled(): Promise<boolean | null> {
  * not read it.
  */
 export async function countPublishedLeaflyVariants(): Promise<number | null> {
-  try {
-    const { buildLeaflyVariantLookup } = await import("./preview-lookup");
-    const built = await buildLeaflyVariantLookup();
-    if (!built.loaded) return null;
-    return Number.isFinite(built.variantCount) ? built.variantCount : null;
-  } catch {
-    return null;
-  }
+  // SLICE L-18 — THE SETTINGS SAVE THAT NEVER FINISHED.
+  //
+  // This used to call `buildLeaflyVariantLookup()` directly, on every render
+  // of a `force-dynamic` page, to produce one integer. That rebuilt the whole
+  // published menu -- getPublishedVersion, a paged read of menu_items and
+  // menu_variants, resolveProductImagesBatch, and the DOH registry -- and then
+  // threw all of it away except `.size`. Every server action on the page ends
+  // with revalidatePath("/admin/orders"), so each save paid for it again
+  // before the screen could repaint. That wait IS the reported hang.
+  //
+  // The read now goes through a cached, display-only entry point tagged with
+  // the live menu's own cache tag, so a menu publish clears it instantly and a
+  // 60-second TTL is the floor underneath that.
+  //
+  // WHAT IS DELIBERATELY NOT CACHED: `buildLeaflyVariantLookup` itself. Its
+  // other caller is the order_preview webhook, which prices a real shopper's
+  // cart. See setup-cache-core.ts for why caching that function would both
+  // break the house "never cache the money" rule AND, because unstable_cache
+  // stores JSON and JSON.stringify deletes functions, hand the webhook a
+  // `lookup` of undefined.
+  //
+  // The null-vs-zero distinction this function has always made is now carried
+  // by a named type rather than by a bare `number | null`, and a failed read
+  // is never written to the cache -- so a transient blip cannot pin "0
+  // variants published" on the panel for a minute.
+  const { loadPublishedVariantCountOutcome } = await import("./setup-cache-server");
+  const { countForDisplay } = await import("./setup-cache-core");
+  return countForDisplay(await loadPublishedVariantCountOutcome());
 }
 
 /* ------------------------------------------------------------------------- *
