@@ -171,6 +171,34 @@ export type ReadinessInput = {
   speakerReady: boolean;
   /** Is a receipt printer configured? */
   printerReady: boolean;
+  /**
+   * Is the shop telling Leafly its items may be bought through the
+   * marketplace? (`sendPickupAvailability` in the Leafly sync settings.)
+   *
+   * SLICE L-16 — WHY THIS BECAME ITS OWN STEP, AND WHY IT IS THREE-VALUED.
+   *
+   * It reads like a menu-sync preference and it is stored as one, but
+   * `preview-lookup.ts` threads the same field into `decideOrderability()`,
+   * whose first line is `if (!input.pickupEnabled) return { availableForPickup:
+   * false, reason: "pickup_disabled" }`. The preview webhook therefore answers
+   * Leafly that every line in the cart is unsellable, and per the spec that
+   * response IS the cart, so the shopper's basket empties.
+   *
+   * `sync-settings-core.ts` defaults it to FALSE. That combination produced
+   * the exact state the owner was in: six URLs registered, HMAC key saved,
+   * order key saved, signatures verifying, every step on this checklist
+   * ticked, the headline reading "Everything needed is in place" — and a
+   * shopper who could not complete a single order. A readiness panel that
+   * reports READY for a shop that cannot take an order is not merely
+   * incomplete, it is wrong, and it sends the owner looking at Leafly for a
+   * fault that is one toggle away on our own settings page.
+   *
+   * `null` means "could not be read". It is a third value rather than a
+   * collapse to false because false is a diagnosis here — it renders the
+   * sentence "pickup ordering is switched off, so every item is removed" —
+   * and a failed read must never produce a diagnosis.
+   */
+  pickupAvailabilityEnabled: boolean | null;
 };
 
 export type ReadinessStep = {
@@ -251,6 +279,24 @@ export function assessOrderReadiness(input: ReadinessInput): OrderReadiness {
         "contents and we cannot accept it, so Leafly cancels it automatically after fifteen " +
         "minutes.",
       done: input.orderIntegrationKeyPresent,
+      blocking: true,
+    },
+    {
+      id: "pickup_availability",
+      title: "Pickup ordering is switched on for Leafly",
+      detail:
+        "This is the one that empties a shopper’s basket while everything else looks perfect. " +
+        "When Leafly asks us to confirm a cart, this setting is what decides whether we answer " +
+        "that the items may be sold through a marketplace. With it off we answer “none of " +
+        "these”, Leafly honours that answer, and the shopper sees an empty cart at checkout. " +
+        "It ships switched off, so it has to be turned on deliberately in the Leafly sync " +
+        "settings.",
+      // `null` (unreadable) is NOT treated as done. This step is blocking, and
+      // marking an unverified step complete is precisely how the panel came to
+      // report READY for a shop that could not take an order. An unreadable
+      // setting is reported as not-confirmed, and the reason is carried
+      // separately in `problems`.
+      done: input.pickupAvailabilityEnabled === true,
       blocking: true,
     },
     {
@@ -350,6 +396,7 @@ const ALL_DONE: ReadinessInput = {
   anyOrderEverReceived: true,
   speakerReady: true,
   printerReady: true,
+  pickupAvailabilityEnabled: true,
 };
 
 const NOTHING_DONE: ReadinessInput = {
@@ -360,6 +407,7 @@ const NOTHING_DONE: ReadinessInput = {
   anyOrderEverReceived: false,
   speakerReady: false,
   printerReady: false,
+  pickupAvailabilityEnabled: false,
 };
 
 export function __runLeaflyOrderReadinessTests(): { passed: number; failed: number } {
@@ -527,15 +575,85 @@ export function __runLeaflyOrderReadinessTests(): { passed: number; failed: numb
     "every step has a real title and a real instruction",
     all.steps.every((s) => s.title.trim().length > 5 && s.detail.trim().length > 30),
   );
-  ok("there are six steps", all.steps.length === 6);
+  // Seven since slice L-16 added `pickup_availability`.
+  ok("there are seven steps", all.steps.length === 7);
   ok(
     "step ids are unique",
     new Set(all.steps.map((s) => s.id)).size === all.steps.length,
   );
   ok(
-    "exactly four steps are blocking",
-    all.steps.filter((s) => s.blocking).length === 4,
+    "exactly five steps are blocking",
+    all.steps.filter((s) => s.blocking).length === 5,
   );
+
+  // ---- SLICE L-16: the step that stops a false READY --------------------
+  // THE DEFECT, RESTATED AS A TEST. A shop with every other step complete
+  // could not take a single order, because `sendPickupAvailability` defaults
+  // off and the preview webhook therefore told Leafly every item in the cart
+  // was unsellable. This panel said "Everything needed is in place".
+  {
+    const pickupOff = assessOrderReadiness({ ...ALL_DONE, pickupAvailabilityEnabled: false });
+    ok(
+      "a shop that cannot sell through the marketplace is NOT ready",
+      pickupOff.ready === false,
+    );
+    eq(
+      "and pickup availability is named as the thing to do",
+      pickupOff.nextStep?.id,
+      "pickup_availability",
+    );
+    ok(
+      "the pickup step is blocking, not advisory",
+      pickupOff.steps.find((s) => s.id === "pickup_availability")?.blocking === true,
+    );
+    ok(
+      "the headline never claims everything is in place while pickup is off",
+      !/everything needed is in place/i.test(pickupOff.headline),
+    );
+
+    // The three-valued input is the point: unreadable must not be ticked off.
+    const pickupUnknown = assessOrderReadiness({
+      ...ALL_DONE,
+      pickupAvailabilityEnabled: null,
+    });
+    ok(
+      "an UNREADABLE pickup setting is not treated as done",
+      pickupUnknown.steps.find((s) => s.id === "pickup_availability")?.done === false,
+    );
+    ok(
+      "and an unreadable pickup setting does not let the shop read as ready",
+      pickupUnknown.ready === false,
+    );
+
+    const pickupOn = assessOrderReadiness({ ...ALL_DONE, pickupAvailabilityEnabled: true });
+    ok("with pickup on, a fully set-up shop is ready", pickupOn.ready === true);
+    ok(
+      "and the pickup step reads done",
+      pickupOn.steps.find((s) => s.id === "pickup_availability")?.done === true,
+    );
+
+    // Exhaustive: only `true` may ever complete this step.
+    for (const v of [true, false, null] as const) {
+      const r = assessOrderReadiness({ ...ALL_DONE, pickupAvailabilityEnabled: v });
+      ok(
+        `pickup step done iff the setting is exactly true (${String(v)})`,
+        (r.steps.find((s) => s.id === "pickup_availability")?.done === true) === (v === true),
+      );
+    }
+
+    // Turning pickup off must not disturb any other step's verdict — a new
+    // step that silently changed the others would hide the original faults.
+    {
+      const base = assessOrderReadiness(ALL_DONE);
+      const others = pickupOff.steps.filter((s) => s.id !== "pickup_availability");
+      ok(
+        "adding the pickup step leaves every other step's verdict untouched",
+        others.every(
+          (s) => base.steps.find((b) => b.id === s.id)?.done === s.done,
+        ),
+      );
+    }
+  }
   // If anything is outstanding there must always be a next step, or the panel
   // tells somebody they are stuck with no way forward.
   ok(

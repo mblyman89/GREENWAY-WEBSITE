@@ -689,6 +689,7 @@ describe("readiness explains the silence instead of hiding", () => {
     anyOrderEverReceived: false,
     speakerReady: false,
     printerReady: false,
+    pickupAvailabilityEnabled: false,
   };
 
   it("REPRODUCES the owner's state and names the webhook addresses as the blocker", () => {
@@ -776,9 +777,29 @@ describe("readiness explains the silence instead of hiding", () => {
       hmacKeyPresent: true,
       orderIntegrationKeyPresent: true,
       verifiedDeliveryEverReceived: true,
+      // SLICE L-16. `pickupAvailabilityEnabled` became a fifth blocking step,
+      // and NOTHING has it false, so this case is no longer ready without it.
+      // That is the point of the new step rather than an inconvenience: a shop
+      // with every credential saved and a verified delivery STILL cannot sell
+      // while this toggle is off, because the preview webhook answers Leafly
+      // that no item may be sold through the marketplace. The old expectation
+      // encoded exactly the false READY the owner was shown.
+      pickupAvailabilityEnabled: true,
     });
     expect(withDelivery.steps.find((s) => s.id === "webhook_urls")?.done).toBe(true);
     expect(withDelivery.ready).toBe(true);
+
+    // And the proof that the new step is what changed the answer.
+    const withDeliveryButPickupOff = assessOrderReadiness({
+      ...NOTHING,
+      menuConfigured: true,
+      hmacKeyPresent: true,
+      orderIntegrationKeyPresent: true,
+      verifiedDeliveryEverReceived: true,
+      pickupAvailabilityEnabled: false,
+    });
+    expect(withDeliveryButPickupOff.ready).toBe(false);
+    expect(withDeliveryButPickupOff.nextStep?.id).toBe("pickup_availability");
   });
 
   it("orders the steps so the next action is always the first unfinished blocker", () => {

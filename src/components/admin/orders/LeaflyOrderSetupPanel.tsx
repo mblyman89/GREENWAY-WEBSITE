@@ -173,6 +173,12 @@ export function LeaflyOrderSetupPanel({
   const { readiness, destinations, destinationProblem, originSource, evidence, explanation } =
     setup;
 
+  // SLICE L-16. Computed in `order-readiness-server.ts` from the recorded
+  // `rejection_reason`, never re-derived here. The whole defect being repaired
+  // was a UI file deciding what a number meant.
+  const diagnosis = evidence.refusalDiagnosis;
+  const emptyCart = setup.emptyCart;
+
   const remaining = readiness.steps.filter((s) => !s.done && s.blocking).length;
 
   // The addresses are shown whenever the webhook step is unconfirmed — not
@@ -249,16 +255,72 @@ export function LeaflyOrderSetupPanel({
             <p className="mt-0.5 text-sm font-black text-[var(--admin-text)]">
               {evidence.problem ? "—" : evidence.rejectedDeliveries}
             </p>
-            {/* Shown only when non-zero, and shown loudly. A refused delivery
-                means Leafly IS sending orders and we are turning them away,
-                which is a worse state than not being set up at all: the
-                customer's order exists and is being auto-cancelled. */}
+            {/* ── SLICE L-16: the count no longer speaks for itself ─────────
+                This used to read, on ANY non-zero count: "Leafly is reaching
+                us but the signature didn't match ... the webhook HMAC key here
+                doesn't match the one Leafly issued."
+
+                That sentence was wrong in the only case it ever actually
+                fired. The owner's six refusals were all `missing_header` —
+                requests that arrived carrying no signature at all, several of
+                them hand-run probes against the public URL during diagnosis. A
+                request with no signature involved no key, and so can say
+                nothing whatever about whether our key is right. A completely
+                healthy integration was reporting a credential fault, and the
+                remedy it recommended was to rotate a working key.
+
+                `diagnoseRefusals` now decides this from the recorded
+                `rejection_reason`, and exactly ONE of the seven reasons
+                (`mismatch`) is permitted to point at Leafly. */}
             {!evidence.problem && evidence.rejectedDeliveries > 0 ? (
-              <p className="mt-1 text-[0.7rem] font-bold leading-snug text-[var(--admin-danger)]">
-                Leafly is reaching us but the signature didn’t match. That almost always means the
-                webhook HMAC key here doesn’t match the one Leafly issued. Orders are being turned
-                away.
-              </p>
+              <>
+                <p
+                  className={`mt-1 text-[0.7rem] font-bold leading-snug ${
+                    diagnosis.contactLeafly || diagnosis.actionIsOurs
+                      ? "text-[var(--admin-danger)]"
+                      : "text-[var(--admin-text-muted)]"
+                  }`}
+                >
+                  {diagnosis.headline}
+                </p>
+                <p className="mt-1 text-[0.68rem] leading-snug text-[var(--admin-text-muted)]">
+                  {diagnosis.detail}
+                </p>
+                {/* The per-reason split. This is the evidence behind the
+                    sentence above, shown so the owner never has to take the
+                    verdict on trust. */}
+                {diagnosis.breakdown.buckets.length > 0 ? (
+                  <ul className="mt-1.5 space-y-1">
+                    {diagnosis.breakdown.buckets.map((bucket) => (
+                      <li key={bucket.reason} className="leading-snug">
+                        <span className="font-mono text-[0.66rem] font-bold text-[var(--admin-text)]">
+                          {bucket.count}× {bucket.reason}
+                        </span>
+                        <span
+                          className={`ml-1.5 rounded px-1 py-[1px] text-[0.6rem] font-bold uppercase tracking-wide ${
+                            bucket.owner === "leafly"
+                              ? "bg-[var(--admin-danger)] text-white"
+                              : bucket.owner === "us"
+                                ? "bg-[var(--admin-warning)] text-black"
+                                : "bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]"
+                          }`}
+                        >
+                          {bucket.owner === "leafly"
+                            ? "Leafly’s key"
+                            : bucket.owner === "us"
+                              ? "ours to fix"
+                              : bucket.owner === "not_leafly"
+                                ? "not Leafly"
+                                : "unrecognised"}
+                        </span>
+                        <span className="mt-0.5 block text-[0.66rem] text-[var(--admin-text-muted)]">
+                          {bucket.meaning}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
             ) : null}
           </div>
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] px-3 py-2">
@@ -283,6 +345,52 @@ export function LeaflyOrderSetupPanel({
         </div>
 
         {/* ── The checklist ──────────────────────────────────────────────── */}
+        {/* SLICE L-16: why the shopper's cart empties.
+            THE SYMPTOM THIS BLOCK EXISTS FOR, IN THE OWNER'S OWN WORDS:
+            "I can add the product to the cart, then when I go to complete the
+            order, it vanishes and I get a blank cart screen."
+
+            Nothing on any screen mentioned this, because nothing on any screen
+            knew it was possible. Per the vendored Order API spec the preview
+            webhook's response IS the cart -- our integration may "adjust items
+            quantities (downward only), remove items entirely, correct
+            top-of-line pricing". So any answer we give that contains no items
+            empties the shopper's basket, and THREE separate conditions produce
+            that answer, all of which look identical from the shop floor:
+
+              refused signature   -> 401, no body at all
+              pickup switched off -> every line removed_not_orderable
+              no published menu   -> nothing to price against
+
+            The middle one is the trap: `sendPickupAvailability` defaults OFF,
+            and with it off a shop that has done everything else correctly
+            still cannot take an order while every indicator reads green.
+
+            Shown ABOVE the checklist because it is a live, blocking fault, and
+            below the evidence because it is often caused by what the evidence
+            has just finished explaining. */}
+        {emptyCart.blocking ? (
+          <div className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] p-3 sm:p-4">
+            <p className="text-sm font-black text-[var(--admin-danger)]">{emptyCart.headline}</p>
+            <p className="mt-1 text-[0.8rem] leading-relaxed text-[var(--admin-text)]">
+              {emptyCart.detail}
+            </p>
+            {/* The causes whose fix lives on another page get a link. Telling
+                somebody to change a setting without saying where it is is half
+                an instruction. */}
+            {emptyCart.cause === "pickup_disabled" || emptyCart.cause === "menu_unavailable" ? (
+              <Link
+                href="/admin/integrations/leafly"
+                className="admin-focus mt-2 inline-block text-[0.78rem] font-bold underline text-[var(--admin-danger)]"
+              >
+                {emptyCart.cause === "pickup_disabled"
+                  ? "Open Leafly sync settings"
+                  : "Open Leafly menu sync"}
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+
         <ul className="mt-3 divide-y divide-[var(--admin-border)]">
           {readiness.steps.map((step, i) => (
             <StepRow key={step.id} step={step} index={i} />

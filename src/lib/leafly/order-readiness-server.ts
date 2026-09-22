@@ -67,6 +67,15 @@ import {
   type ReadinessInput,
   type WebhookDestination,
 } from "./order-readiness-core";
+import {
+  breakdownRefusals,
+  diagnoseRefusals,
+  explainEmptyCart,
+  signatureRefusalBlockingNow as isSignatureRefusalBlockingNow,
+  type EmptyCartAdvice,
+  type RefusalDiagnosis,
+  type RefusalRow,
+} from "./refusal-diagnosis-core";
 
 /* ------------------------------------------------------------------------- *
  * The site's public origin
@@ -127,9 +136,45 @@ export type DeliveryEvidence = {
   lastVerifiedDeliveryAt: string | null;
   /** Distinct event types Leafly has actually sent us, verified or not. */
   eventTypesSeen: string[];
+  /**
+   * The refused deliveries, split by the reason we recorded at the time.
+   *
+   * SLICE L-16. `rejectedDeliveries` above is a bare count, and a bare count
+   * cannot tell "Leafly signed with the wrong key" apart from "a port scanner
+   * found the URL". The panel used to treat the count alone as proof of a key
+   * mismatch, which turned six unsigned probes into a confident instruction to
+   * go and rotate a working credential. `leafly_webhook_events.rejection_reason`
+   * has been written since migration 0225 and this is the first reader of it
+   * on the order side.
+   */
+  refusals: RefusalRow[];
+  /** Verdict over the refusals, naming who (if anyone) has to act. */
+  refusalDiagnosis: RefusalDiagnosis;
+  /**
+   * Is a refusal that could actually stop a checkout happening RIGHT NOW?
+   *
+   * Narrow on purpose: unsigned noise inside the window does not count,
+   * because a scanner being turned away has no bearing on whether a real
+   * shopper's cart survives.
+   */
+  signatureRefusalBlockingNow: boolean;
   /** Non-empty when the log could not be read. Never blocks the page. */
   problem: string;
 };
+
+/**
+ * The diagnosis for "we have no refusals to look at".
+ *
+ * Built by calling the real core on an empty list rather than hand-writing a
+ * literal. A hand-written "healthy" would be a second, untested copy of the
+ * core's own wording, free to drift away from it — and the one thing this
+ * slice is about is the panel and the evidence never disagreeing again.
+ */
+const NO_REFUSALS: RefusalDiagnosis = diagnoseRefusals({
+  breakdown: breakdownRefusals([]),
+  verifiedDeliveryEverReceived: false,
+  hmacKeyPresent: true,
+});
 
 const NO_EVIDENCE: DeliveryEvidence = {
   verifiedDeliveryEverReceived: false,
@@ -138,6 +183,9 @@ const NO_EVIDENCE: DeliveryEvidence = {
   lastDeliveryAt: null,
   lastVerifiedDeliveryAt: null,
   eventTypesSeen: [],
+  refusals: [],
+  refusalDiagnosis: NO_REFUSALS,
+  signatureRefusalBlockingNow: false,
   problem: "",
 };
 
@@ -162,7 +210,17 @@ const NO_EVIDENCE: DeliveryEvidence = {
  */
 export async function loadLeaflyDeliveryEvidence(
   sampleSize = 200,
+  options: { hmacKeyPresent?: boolean; nowIso?: string } = {},
 ): Promise<DeliveryEvidence> {
+  // Defaults to TRUE, and the direction matters. `diagnoseRefusals` treats a
+  // missing key as "this is ours to fix" and suppresses the advice to contact
+  // Leafly. If an unknown key state defaulted to false we would announce a
+  // configuration fault we never checked for — inventing the very kind of
+  // confident-but-unverified claim this slice removes. Callers that know the
+  // answer pass it; `loadLeaflyOrderSetupState` below always does.
+  const hmacKeyPresent = options.hmacKeyPresent !== false;
+  const nowIso = options.nowIso ?? new Date().toISOString();
+
   if (!isSupabaseServiceConfigured) {
     return {
       ...NO_EVIDENCE,
@@ -174,7 +232,10 @@ export async function loadLeaflyDeliveryEvidence(
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin
       .from("leafly_webhook_events")
-      .select("event_type, signature_verified, received_at")
+      // `rejection_reason` added in slice L-16. It has been written since
+      // migration 0225 and never read here, which is the entire reason the
+      // panel could only ever offer one explanation for a refusal.
+      .select("event_type, signature_verified, received_at, rejection_reason")
       .order("received_at", { ascending: false })
       .limit(sampleSize);
 
@@ -197,15 +258,27 @@ export async function loadLeaflyDeliveryEvidence(
       event_type: string | null;
       signature_verified: boolean | null;
       received_at: string | null;
+      rejection_reason: string | null;
     }>;
 
     let rejected = 0;
     let lastVerifiedDeliveryAt: string | null = null;
     const eventTypes = new Set<string>();
+    const refusals: RefusalRow[] = [];
 
     for (const row of rows) {
       const verified = row.signature_verified === true;
-      if (!verified) rejected += 1;
+      if (!verified) {
+        rejected += 1;
+        // Collect the reason as recorded. No normalising, no defaulting to a
+        // plausible reason — the core is built to report an absent or
+        // unrecognised reason as exactly that.
+        refusals.push({
+          reason: row.rejection_reason,
+          eventType: row.event_type,
+          receivedAt: row.received_at,
+        });
+      }
       // Rows arrive newest-first, so the FIRST verified row we meet is the
       // most recent one. Comparing timestamps here would work too, but it
       // would silently depend on the ordering staying correct; taking the
@@ -217,13 +290,28 @@ export async function loadLeaflyDeliveryEvidence(
       if (et) eventTypes.add(et);
     }
 
+    const verifiedEver = lastVerifiedDeliveryAt !== null;
+
     return {
-      verifiedDeliveryEverReceived: lastVerifiedDeliveryAt !== null,
+      verifiedDeliveryEverReceived: verifiedEver,
       totalDeliveries: rows.length,
       rejectedDeliveries: rejected,
       lastDeliveryAt: rows[0]?.received_at ?? null,
       lastVerifiedDeliveryAt,
       eventTypesSeen: [...eventTypes].sort(),
+      refusals,
+      // Diagnose over ALL refusals in the sample, so a genuine mismatch from
+      // last week is still visible and named.
+      refusalDiagnosis: diagnoseRefusals({
+        breakdown: breakdownRefusals(refusals),
+        verifiedDeliveryEverReceived: verifiedEver,
+        hmacKeyPresent,
+      }),
+      // But decide "is checkout broken right now" over the RECENT window only.
+      // The two questions are different and were previously answered by the
+      // same number: refusals from the hour the integration was being set up
+      // are history, not a live fault.
+      signatureRefusalBlockingNow: isSignatureRefusalBlockingNow(refusals, nowIso),
       problem: "",
     };
   } catch (err) {
@@ -318,6 +406,78 @@ export async function isPrinterReady(): Promise<boolean> {
 }
 
 /* ------------------------------------------------------------------------- *
+ * Pickup availability — the trap that empties a cart with a perfect signature
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Is the shop telling Leafly its items may be bought through the marketplace?
+ *
+ * ── WHY THIS IS ON THE ORDER READINESS PANEL AT ALL ──────────────────────────
+ * It looks like a menu-sync setting, and it is stored as one. But
+ * `preview-lookup.ts` reads the SAME field to decide orderability:
+ *
+ *     pickupEnabled = settings.sendPickupAvailability === true;
+ *
+ * and `decideOrderability` opens with
+ *
+ *     if (!input.pickupEnabled) return { availableForPickup: false,
+ *                                        reason: "pickup_disabled" };
+ *
+ * so with the toggle off, the preview webhook answers Leafly that every line
+ * is unsellable. Per the vendored spec the preview response *is* the cart —
+ * the integration may "remove items entirely" — so Leafly honours that answer
+ * and the shopper's basket empties. Proven by execution, not inferred:
+ *
+ *     pickupEnabled=true   cartItems -> [{v1, qty 1, 3000}]   EMPTY? no
+ *     pickupEnabled=false  cartItems -> []                     EMPTY? YES
+ *                          removed   -> ['removed_not_orderable']
+ *
+ * `sync-settings-core.ts` defaults it to FALSE. So a shop that has done
+ * everything else correctly — six URLs registered, HMAC key saved, order
+ * integration key saved, signatures verifying — still cannot take an order,
+ * and every screen reports READY. That is exactly the state the owner was in,
+ * and nothing on any panel mentioned this field.
+ *
+ * Returns null, not false, when it cannot be read. False is a diagnosis
+ * ("this is why your cart empties") and a failed read must never produce one.
+ */
+export async function isPickupAvailabilityEnabled(): Promise<boolean | null> {
+  try {
+    const { getLeaflySyncSettings } = await import("@/lib/syndication/engine-store");
+    const settings = await getLeaflySyncSettings();
+    return settings.sendPickupAvailability === true;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * How many variants the published menu can actually price.
+ *
+ * Calls the SAME `buildLeaflyVariantLookup()` the preview webhook calls, so
+ * the number on the panel is the number the webhook will really work from.
+ * Deriving it from the products table instead would let the panel report a
+ * healthy menu while the webhook sees none — and `variantCount` here counts
+ * reconstructed Leafly ids, including the synthesized `${item.id}-default`
+ * for items with no variants, which exists nowhere in the database.
+ *
+ * Returns null on failure, and ALSO when the feed did not load (`loaded:
+ * false`). That case returns `variantCount: 0` by design, and reporting that
+ * zero as fact would tell the owner his menu is empty when we simply could
+ * not read it.
+ */
+export async function countPublishedLeaflyVariants(): Promise<number | null> {
+  try {
+    const { buildLeaflyVariantLookup } = await import("./preview-lookup");
+    const built = await buildLeaflyVariantLookup();
+    if (!built.loaded) return null;
+    return Number.isFinite(built.variantCount) ? built.variantCount : null;
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------------- *
  * The whole picture
  * ------------------------------------------------------------------------- */
 
@@ -334,6 +494,22 @@ export type LeaflyOrderSetupState = {
   evidence: DeliveryEvidence;
   /** One paragraph answering "why did my order vanish?". */
   explanation: string;
+  /**
+   * Is the shop telling Leafly its items may be bought through the
+   * marketplace? Null when it could not be read — never guessed.
+   *
+   * SLICE L-16. This is its own field, and its own checklist step, because it
+   * is the one setting that can empty a shopper's cart while every other
+   * indicator on the page reads green.
+   */
+  pickupAvailabilityEnabled: boolean | null;
+  /** Variants the preview webhook could price. Null when unreadable. */
+  publishedVariantCount: number | null;
+  /**
+   * Why a shopper's cart would empty at "proceed to preorder", or that
+   * nothing should be emptying it.
+   */
+  emptyCart: EmptyCartAdvice;
   /**
    * Things that went wrong while GATHERING this picture, as opposed to things
    * wrong with the setup. Kept separate on purpose: "we could not check" and
@@ -355,25 +531,38 @@ export async function loadLeaflyOrderSetupState(): Promise<LeaflyOrderSetupState
   const problems: string[] = [];
   const { origin, originSource } = resolveSiteOrigin();
 
-  const [menuReadiness, hmacKey, orderKey, evidence, everOrdered, speakerReady, printerReady] =
+  // Two passes are needed, not one. `loadLeaflyDeliveryEvidence` has to know
+  // whether an HMAC key is saved before it can decide whether a wall of
+  // refusals means "email Leafly" or "you have not pasted your key yet", and
+  // that is exactly the misdiagnosis this slice exists to remove. So the
+  // credential reads are issued first, then the evidence read alongside the
+  // remaining independent reads. Both passes are still fully parallel
+  // internally; the cost is one extra round of latency, paid to stop the page
+  // giving confident advice it has not checked.
+  const [menuReadiness, hmacKey, orderKey] = await Promise.all([
+    // Rule 11: menu readiness already has a home, and that home is the ONLY
+    // thing that refreshes the credential cache from the database first.
+    import("./push")
+      .then((m) => m.describeLeaflyReadinessAsync())
+      .catch(() => null),
+    import("./webhook-server")
+      .then((m) => m.loadLeaflyHmacKey())
+      .catch(() => null),
+    import("./webhook-server")
+      .then((m) => m.loadLeaflyOrderIntegrationKey())
+      .catch(() => null),
+  ]);
+
+  const hmacKeyPresent = Boolean(hmacKey && hmacKey.trim());
+
+  const [evidence, everOrdered, speakerReady, printerReady, pickupEnabled, variantCount] =
     await Promise.all([
-      // Rule 11: menu readiness already has a home, and that home is the ONLY
-      // thing that refreshes the credential cache from the database first.
-      // Re-deriving it here would reintroduce finding J-4 — the intermittent
-      // false "not configured" on a cold lambda.
-      import("./push")
-        .then((m) => m.describeLeaflyReadinessAsync())
-        .catch(() => null),
-      import("./webhook-server")
-        .then((m) => m.loadLeaflyHmacKey())
-        .catch(() => null),
-      import("./webhook-server")
-        .then((m) => m.loadLeaflyOrderIntegrationKey())
-        .catch(() => null),
-      loadLeaflyDeliveryEvidence(),
+      loadLeaflyDeliveryEvidence(200, { hmacKeyPresent }),
       anyLeaflyOrderEverReceived(),
       isSpeakerReady(),
       isPrinterReady(),
+      isPickupAvailabilityEnabled(),
+      countPublishedLeaflyVariants(),
     ]);
 
   if (menuReadiness === null) {
@@ -383,10 +572,18 @@ export async function loadLeaflyOrderSetupState(): Promise<LeaflyOrderSetupState
   if (everOrdered === null) {
     problems.push("Whether any Leafly order has ever arrived couldn’t be checked just now.");
   }
+  if (pickupEnabled === null) {
+    problems.push(
+      "Whether pickup ordering is switched on for Leafly couldn’t be checked just now.",
+    );
+  }
+  if (variantCount === null) {
+    problems.push("The published Leafly menu couldn’t be read just now.");
+  }
 
   const input: ReadinessInput = {
     menuConfigured: menuReadiness?.configured === true,
-    hmacKeyPresent: Boolean(hmacKey && hmacKey.trim()),
+    hmacKeyPresent,
     orderIntegrationKeyPresent: Boolean(orderKey && orderKey.trim()),
     verifiedDeliveryEverReceived: evidence.verifiedDeliveryEverReceived,
     // A null (could-not-check) becomes false here. That is safe in a way the
@@ -396,10 +593,36 @@ export async function loadLeaflyOrderSetupState(): Promise<LeaflyOrderSetupState
     anyOrderEverReceived: everOrdered === true,
     speakerReady,
     printerReady,
+    // Passed through as the three-valued fact it is. The core deliberately
+    // does NOT treat null as done, so an unreadable setting shows as
+    // not-confirmed rather than being quietly ticked off.
+    pickupAvailabilityEnabled: pickupEnabled,
   };
 
   const readiness = assessOrderReadiness(input);
   const built = buildWebhookDestinations(origin);
+
+  // WHY THE UNREADABLE CASES LEAN THE WAY THEY DO.
+  //
+  // `pickupAvailabilityEnabled: pickupEnabled !== false` — an unreadable
+  // setting is passed as ENABLED, so we do not accuse the owner of having
+  // pickup switched off when we never managed to look. The uncertainty is
+  // already in `problems`, where it belongs.
+  //
+  // `menuVariantCount: variantCount ?? 1` — likewise. A null means "could not
+  // read", and passing 0 would render the confident sentence "we have no
+  // published menu to price the cart against" off the back of a failed read.
+  // One is the smallest value that does not trigger that claim.
+  //
+  // Both leanings are the same principle: when we do not know, say nothing,
+  // rather than say something false. That is the whole defect being repaired
+  // here — the panel previously converted a count it had not interpreted into
+  // a diagnosis it had not verified.
+  const emptyCart = explainEmptyCart({
+    signatureRefusalsRecent: evidence.signatureRefusalBlockingNow,
+    pickupAvailabilityEnabled: pickupEnabled !== false,
+    menuVariantCount: variantCount ?? 1,
+  });
 
   return {
     readiness,
@@ -409,6 +632,9 @@ export async function loadLeaflyOrderSetupState(): Promise<LeaflyOrderSetupState
     origin,
     evidence,
     explanation: explainSilentOrder(readiness),
+    pickupAvailabilityEnabled: pickupEnabled,
+    publishedVariantCount: variantCount,
+    emptyCart,
     problems,
   };
 }

@@ -138,6 +138,53 @@ export async function POST(request: Request): Promise<Response> {
 
     const built = buildLeaflyPreviewResponse({ lines, lookup });
     console.log(built.logLine);
+
+    /* ── SLICE L-16: name the silent, total emptying ──────────────────────
+     * THE REPORT: "I can add the product to the cart, then when I go to
+     * complete the order, it vanishes and I get a blank cart screen."
+     *
+     * Per the spec the preview response IS the cart, so a response with no
+     * `cartItems` empties the shopper's basket. That is correct behaviour for
+     * an out-of-stock or statutorily-blocked item. It is a CONFIGURATION FAULT
+     * when it happens to every line at once because the owner's pickup toggle
+     * is off — `sendPickupAvailability` defaults false, and
+     * `decideOrderability` opens with `if (!input.pickupEnabled) return
+     * { availableForPickup: false, reason: "pickup_disabled" }`.
+     *
+     * WHY THIS ONLY LOGS, AND DOES NOT "FIX" THE CART.
+     * The tempting fix — echo the cart unchanged when pickup is off — is
+     * unsafe, and provably so. `removed_not_orderable` is the single code used
+     * for BOTH causes, and `pickup_disabled` MASKS `doh_restricted`:
+     *
+     *   High-THC, pickup OFF -> { availableForPickup: false, pickup_disabled }
+     *   High-THC, pickup ON  -> { availableForPickup: false, doh_restricted }
+     *
+     * So the removals cannot be told apart from here. Echoing the cart back
+     * would offer a WAC 246-70 High-THC product for unattended marketplace
+     * pickup, where the registered-patient card cannot be checked. A confusing
+     * empty cart is a support call; selling that product is a licence problem.
+     * The cart stays empty, and the OWNER gets told why, on the setup panel.
+     */
+    const allRemoved = built.body.cartItems.length === 0 && built.removed.length > 0;
+    const allNotOrderable =
+      allRemoved && built.removed.every((r) => r.adjustment === "removed_not_orderable");
+    if (allNotOrderable) {
+      console.warn(
+        `[leafly order_preview] EVERY cart line (${built.removed.length}) was removed as ` +
+          `not-orderable, so Leafly will show the shopper an empty cart. The usual cause is ` +
+          `that "send pickup availability" is switched off in the Leafly sync settings — it ` +
+          `defaults off, and with it off we tell Leafly nothing may be sold through the ` +
+          `marketplace. It can also mean every item is DOH High-THC (WAC 246-70), which is ` +
+          `never orderable. Check the Leafly orders setup panel in the back office.`,
+      );
+    } else if (allRemoved) {
+      console.warn(
+        `[leafly order_preview] every cart line was removed (` +
+          `${built.removed.map((r) => r.adjustment).join(", ")}), so the shopper will see an ` +
+          `empty cart.`,
+      );
+    }
+
     for (const removedLine of built.removed) console.log(`  removed — ${removedLine.note}`);
     for (const keptLine of built.lines) {
       if (keptLine.adjustment !== "unchanged") console.log(`  adjusted — ${keptLine.note}`);

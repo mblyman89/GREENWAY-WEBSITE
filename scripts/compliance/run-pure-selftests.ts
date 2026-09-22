@@ -272,6 +272,22 @@ import { __runLeaflyOrderFetchTests } from "../../src/lib/leafly/order-fetch-cor
 //              Floored because a panel that wrongly hides is invisible by
 //              definition -- no one can report a bug they cannot see.
 import { __runLeaflyOrderReadinessTests } from "../../src/lib/leafly/order-readiness-core";
+// SLICE L-16 -- refusal diagnosis. The setup panel told the owner "Leafly is
+//              reaching us but the signature didn't match ... the webhook HMAC
+//              key here doesn't match the one Leafly issued" on the strength of
+//              a bare COUNT of refused deliveries. Six of those refusals were
+//              unsigned probes (`missing_header`), several of them run by hand
+//              during diagnosis -- requests that never carried a key and so can
+//              say nothing whatever about one. A fully healthy integration was
+//              reporting a credential fault, and acting on that advice means
+//              rotating a working key. This core splits refusals by their
+//              recorded reason and permits exactly ONE of the seven
+//              (`mismatch`) to point at Leafly. Floored because the failure it
+//              prevents is confident, plausible, wrong advice -- the most
+//              expensive kind, since it is acted on.
+import {
+  __runLeaflyRefusalDiagnosisTests,
+} from "../../src/lib/leafly/refusal-diagnosis-core";
 // SLICE L-7 -- the automatic sync schedule. Registered with a floor because the
 // two things this core decides are both silent when wrong: it decides WHETHER
 // to talk to Leafly (getting that wrong too often is a certification failure,
@@ -908,7 +924,16 @@ __runLiquidVolumeTests();
   // core is what makes a receipt possible at all; the readiness core is what
   // stops the dashboard from hiding while setup is half finished.
   assertRan("leafly-order-fetch-core", __runLeaflyOrderFetchTests(), 98);
-  assertRan("leafly-order-readiness-core", __runLeaflyOrderReadinessTests(), 42);
+  // Floor raised 42 -> 54 by slice L-16, which added the `pickup_availability`
+  // step (measured 58). Raising the floor with the count is deliberate: this
+  // core is what decides whether the dashboard may call a shop READY, and the
+  // bug being fixed was it saying READY about a shop that could not sell.
+  assertRan("leafly-order-readiness-core", __runLeaflyOrderReadinessTests(), 54);
+  // SLICE L-16. Floor 600, set from a measured 631. The gap is deliberately
+  // small: most of the count comes from exhaustive sweeps over the seven
+  // refusal reasons and the empty-cart cause matrix, so a drop below this
+  // means a sweep stopped sweeping rather than a few cases being tidied up.
+  assertRan("leafly-refusal-diagnosis-core", __runLeaflyRefusalDiagnosisTests(), 600);
   // Floor 230, set from a measured 242 at registration. Deliberately close to
   // the measured figure: this core is where a platform limit is encoded (Vercel
   // Hobby permits one cron tick per day, so the daily full sync is driven by an
