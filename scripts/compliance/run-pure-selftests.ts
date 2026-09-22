@@ -209,6 +209,14 @@ import { __runLeaflySendabilityTests } from "../../src/lib/leafly/sendability-co
 import { __runLeaflyMenuBrowserTests } from "../../src/lib/leafly/menu-browser-core";
 import { __runLeaflyCollisionApplyTests } from "../../src/lib/leafly/collision-apply-core";
 import { __runLeaflyCollisionSplitTests } from "../../src/lib/leafly/collision-split-core";
+import { __runLeaflyFixLinkTests } from "../../src/lib/leafly/fix-link-core";
+import { __runLeaflyFullMenuTests } from "../../src/lib/leafly/full-menu-core";
+// The owner asked what "stage 2 changes how your menu looks to shoppers"
+// actually means. This core is the answer: it names the listings a shopper
+// would see instead of reporting a count. Registered here because the WORDING
+// is the deliverable -- a regression that turned the prose back into "3
+// products became 9" would satisfy every type check and still fail him.
+import { __runLeaflySplitPreviewTests } from "../../src/lib/leafly/split-preview-core";
 // SLICE L-4 — Leafly's five published menu-certification criteria.
 import { __runLeaflyCertificationTests } from "../../src/lib/leafly/certification-core";
 // SLICE L-5 — receiving orders FROM Leafly. Four pure cores, all registered
@@ -1462,6 +1470,14 @@ __runLiquidVolumeTests();
   assertRan("leafly-menu-browser-core", __runLeaflyMenuBrowserTests(), 66);
   assertRan("leafly-collision-apply-core", __runLeaflyCollisionApplyTests(), 66);
   assertRan("leafly-collision-split-core", __runLeaflyCollisionSplitTests(), 60);
+  // TASK J ask 2: every "fix this product" button must land on a page that
+  // exists. Floor set below the current 58 so an added assertion never fails
+  // the build, but high enough that deleting the split/synthesized branches
+  // would.
+  assertRan("leafly-fix-link-core", __runLeaflyFixLinkTests(), 52);
+  // TASK J ask 3: send the whole menu, withhold the bad ones, name them.
+  assertRan("leafly-full-menu-core", __runLeaflyFullMenuTests(), 62);
+  assertRan("leafly-split-preview-core", __runLeaflySplitPreviewTests(), 80);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

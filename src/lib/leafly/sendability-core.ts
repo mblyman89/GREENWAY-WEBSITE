@@ -367,12 +367,43 @@ export function humanLabel(identity: SendabilityIdentity | null, fallbackId: str
 /**
  * Back-office address that repairs a product.
  *
- * Mirrors `productFixHref` in `product-identity-core.ts`. Verified to exist:
- * `src/app/admin/products/[key]/page.tsx` resolves its route parameter via
- * `getItemBySourceKey(published.id, key)`, i.e. it is keyed by
- * `source_item_id` -- which is the id carried here.
+ * Mirrors `productFixHref` in `product-identity-core.ts`. Verified to exist,
+ * by following the id the whole way rather than by assuming:
+ *
+ *   menu_items.source_item_id
+ *     -> feed-source.ts            `source_item_id: row.source_item_id`
+ *     -> menu-feed-core.ts:157     `id: item.source_item_id`
+ *     -> payload-core.ts:755       `id: item.id`
+ *     -> payload-validate-core.ts  `itemId` on every issue
+ *     -> here
+ *     -> /admin/products/[key]     `.eq("source_item_id", key)`
  *
  * Returns null rather than a guess when there is no id. Rule 3.
+ *
+ * ###########################################################################
+ * # A LIMIT ON THIS FUNCTION -- READ BEFORE REUSING IT                      #
+ * #                                                                        #
+ * # This is a FORMATTER (id -> URL). It assumes the id it is handed is a   #
+ * # real `menu_items.source_item_id`. That assumption holds for every      #
+ * # current caller, and the reason is specific: `triageLeaflySelection`    #
+ * # validates the payload BEFORE the collision repair runs, so only        #
+ * # genuine source ids ever reach it.                                      #
+ * #                                                                        #
+ * # It stops holding the moment anything validates a REPAIRED payload.     #
+ * # `collision-split-core.ts` mints ids of the form `${parentId}--1g`,     #
+ * # which exist on Leafly but NOT in `menu_items`, so this function would  #
+ * # cheerfully produce a link that 404s.                                   #
+ * #                                                                        #
+ * # For that case use `resolveFixLink` in `fix-link-core.ts`, which        #
+ * # decomposes synthetic ids to the real product and refuses when it       #
+ * # cannot. `full-menu-server.ts` validates post-repair and therefore uses #
+ * # the resolver, not this. A compliance test pins that rule.              #
+ * #                                                                        #
+ * # This function is NOT changed to do the same, deliberately: it lives in #
+ * # a zero-import pure core, and conflating "format a URL" with "work out  #
+ * # which product this really is" would make the split rule untestable     #
+ * # except through the whole triage.                                       #
+ * ###########################################################################
  */
 export function fixHrefFor(productId: string | null | undefined): string | null {
   const id = trim(productId);

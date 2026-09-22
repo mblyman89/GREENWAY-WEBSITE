@@ -62,6 +62,15 @@ import {
   loadLeaflySyncHealth,
   runScheduledLeaflySync,
 } from "@/lib/leafly/schedule-server";
+// TASK J ask 3 + ask 4. "Send the full menu, withhold the bad ones" and the
+// preview that lets the owner SEE a split before it changes his storefront.
+import {
+  previewFullMenuPassingOnly,
+  pushFullMenuPassingOnly,
+  FullMenuRefusedError,
+  type FullMenuPreviewResult,
+  type FullMenuPushResult,
+} from "@/lib/leafly/full-menu-server";
 
 const BASE = "/admin/integrations/leafly";
 
@@ -179,6 +188,223 @@ export async function pushLeaflyAction(formData: FormData): Promise<PushActionRe
       channel: "leafly",
       mode: "live",
       // Preflight blocks are "skipped" (nothing was transmitted), not channel errors.
+      status: blocked ? "skipped" : "error",
+      itemCount: 0,
+      payload: blocked ? { preflight: (err as PreflightBlockedError).report } : undefined,
+      message,
+      createdBy: session.userId,
+    });
+    revalidatePath(BASE);
+    return { ok: false, error: message };
+  }
+}
+
+/* ========================================================================== */
+/* TASK J ask 3 -- send the full menu, withholding the bad ones               */
+/* ========================================================================== */
+
+export type FullMenuPreviewActionResult =
+  | { ok: true; preview: FullMenuPreviewResult }
+  | { ok: false; error: string };
+
+/**
+ * Show what "send the good ones" would do. Touches no network to Leafly.
+ *
+ * This is also the answer to the owner's "I'm not sure what you mean by
+ * stage 2 changes how my menu looks to shoppers". Running this with
+ * `repair: true` lists, by name, every product that would be created by a
+ * split -- so he can look at the actual names a shopper would see before
+ * anything is transmitted, instead of taking a sentence on trust.
+ */
+export async function previewFullMenuPassingOnlyAction(input: {
+  repair?: boolean;
+}): Promise<FullMenuPreviewActionResult> {
+  await requirePermission("settings.manage");
+  // NOTE: no `requireLeaflyReady` gate here, deliberately. A preview sends
+  // nothing, and refusing to let the owner LOOK at his own menu because a
+  // credential is missing would be gatekeeping the diagnosis behind the
+  // thing being diagnosed.
+  try {
+    const preview = await previewFullMenuPassingOnly({ repair: input?.repair === true });
+    return { ok: true, preview };
+  } catch (err) {
+    if (err instanceof PreflightBlockedError) {
+      return {
+        ok: false,
+        error:
+          `The menu data itself failed its safety check, so no payload could be built. ` +
+          `This is not about individual products meeting Leafly's rules — it is the feed, ` +
+          `and withholding products cannot fix it.`,
+      };
+    }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not preview the menu send.",
+    };
+  }
+}
+
+export type FullMenuPushActionResult =
+  | { ok: true; result: FullMenuPushResult }
+  | { ok: false; error: string; withheldLines?: string[] };
+
+/**
+ * Send the whole menu, holding back only the products Leafly would reject,
+ * and naming every one that was held back.
+ *
+ * ###########################################################################
+ * # THE OWNER'S QUESTION                                                    #
+ * #   "Is it possible to send the full menu withholding the bad ones?"     #
+ * ###########################################################################
+ *
+ * WHY THIS IS A SEPARATE ACTION FROM `pushLeaflyAction`
+ *
+ * `pushLeaflyAction` runs the ordinary full sync, which can POST. POST tells
+ * Leafly "this is the entire menu" and Leafly deletes everything omitted.
+ * This action omits products on purpose, so it must never POST — and the way
+ * to guarantee that is to call a function that has no POST path in it at all,
+ * rather than to add another conditional to one that does.
+ *
+ * WHY THE MANUAL-RUN LOCK IS STILL TAKEN
+ *
+ * This is a real menu publish, so the scheduler must stand aside exactly as
+ * it does for the ordinary push. As there, a failure to write the lock row
+ * does NOT stop the publish: a person has pressed the button and confirmed.
+ */
+export async function pushFullMenuPassingOnlyAction(input: {
+  confirm: boolean;
+  repair?: boolean;
+}): Promise<FullMenuPushActionResult> {
+  const session = await requirePermission("settings.manage");
+  if (!input?.confirm) {
+    return { ok: false, error: "Confirmation required to send the menu to Leafly." };
+  }
+  const gate = await requireLeaflyReady();
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
+  }
+
+  const manualRunId = await beginManualRun(session.userId);
+
+  try {
+    const result = await pushFullMenuPassingOnly({
+      confirm: true,
+      repair: input.repair === true,
+    });
+
+    await finishManualRun({
+      id: manualRunId,
+      ok: result.ok,
+      skipped: false,
+      method: result.method,
+      httpStatus: result.httpStatus,
+      itemCount: result.itemCount,
+      planSummary: `${result.itemCount} sent, ${result.withheldCount} held back`,
+      errorDetail: result.ok ? null : result.message,
+    });
+
+    // The durable record NAMES what was withheld. A held-back product that
+    // appears in no log is exactly the failure mode this whole area exists
+    // to prevent: silently missing from the menu for months.
+    await recordSyndicationLog({
+      channel: "leafly",
+      mode: "live",
+      status: result.ok ? "ok" : "error",
+      itemCount: result.itemCount,
+      payload: result.payload,
+      response: result.response,
+      message:
+        `${result.message}` +
+        (result.withheldCount > 0
+          ? ` Held back ${result.withheldCount}: ${result.withheld
+              .map((w) => w.itemName ?? w.itemId)
+              .join("; ")}`
+          : "") +
+        // The certification record must show shopper-visible changes too. A
+        // send that turned one product into three listings altered the live
+        // menu in a way a customer can see, and that belongs in the same
+        // durable record as the transmission itself.
+        (result.splitNarrative !== null && result.splitPreview?.noChange === false
+          ? ` ${result.splitNarrative}`
+          : ""),
+      createdBy: session.userId,
+    });
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: result.ok
+        ? "leafly.push.passing_only.success"
+        : "leafly.push.passing_only.error",
+      entityType: "syndication",
+      entityId: "leafly",
+      after: {
+        feedCount: result.feedCount,
+        sent: result.itemCount,
+        withheld: result.withheldCount,
+        withheldIds: result.withheld.map((w) => w.itemId),
+        httpStatus: result.httpStatus,
+        repairRequested: input.repair === true,
+        repair: result.repair,
+        syncStateWritten: result.syncStateWritten,
+        // NAME the shopper-visible changes, do not merely count them.
+        //
+        // A split creates listings that a customer can see and order from. Six
+        // weeks later the only question anybody asks is "where did this
+        // listing come from?", and a stored count of 9 cannot answer it. The
+        // ids and names are recorded so it can be answered from the audit
+        // trail alone, without re-running anything.
+        splitCreatedListings:
+          result.splitPreview?.changes.flatMap((c) =>
+            c.listings.map((l) => ({ id: l.id, name: l.name, from: c.currentId })),
+          ) ?? [],
+        splitRefusals:
+          result.splitPreview?.refusals.map((r) => ({ id: r.itemId, name: r.itemName })) ?? [],
+      },
+    });
+
+    revalidatePath(BASE);
+    return { ok: true, result };
+  } catch (err) {
+    // A refusal means NOTHING was transmitted. It is recorded as "skipped"
+    // rather than "error" for the same reason a preflight block is: it is not
+    // a channel failure and must not count towards the backoff.
+    if (err instanceof FullMenuRefusedError) {
+      await finishManualRun({
+        id: manualRunId,
+        ok: true,
+        skipped: true,
+        method: null,
+        errorDetail: err.build.narrative,
+      });
+      await recordSyndicationLog({
+        channel: "leafly",
+        mode: "live",
+        status: "skipped",
+        itemCount: 0,
+        message: err.build.narrative,
+        createdBy: session.userId,
+      });
+      revalidatePath(BASE);
+      return {
+        ok: false,
+        error: err.build.narrative,
+        withheldLines: err.build.withheldLines,
+      };
+    }
+
+    const blocked = err instanceof PreflightBlockedError;
+    const message = err instanceof Error ? err.message : "Sending the menu failed.";
+    await finishManualRun({
+      id: manualRunId,
+      ok: blocked,
+      skipped: blocked,
+      method: null,
+      errorDetail: message,
+    });
+    await recordSyndicationLog({
+      channel: "leafly",
+      mode: "live",
       status: blocked ? "skipped" : "error",
       itemCount: 0,
       payload: blocked ? { preflight: (err as PreflightBlockedError).report } : undefined,

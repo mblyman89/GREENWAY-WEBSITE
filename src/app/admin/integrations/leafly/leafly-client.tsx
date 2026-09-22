@@ -16,6 +16,7 @@ import {
   describeDeleteProblems,
 } from "@/lib/leafly/delete-request-core";
 import { LeaflyMenuBrowser } from "./menu-browser-client";
+import { FullMenuPanel } from "./full-menu-panel";
 
 const CATEGORIES = [
   "flower",
@@ -184,6 +185,15 @@ export function LeaflyPushClient({
           {readback ? <ReadbackReport report={readback} /> : null}
         </div>
       </Card>
+
+      {/*
+        TASK J asks 3 + 4. Placed immediately after the push card and BEFORE
+        the menu browser, because "send my whole menu but hold back the bad
+        ones" is the thing the owner actually wants to do most often, and the
+        plain full-sync button above it is the thing that fails for him. The
+        useful path should be the one you reach first.
+      */}
+      <FullMenuPanel configured={configured} />
 
       {/*
         ROADMAP R8 (owner ask 6). The browser is the PRIMARY way to remove a

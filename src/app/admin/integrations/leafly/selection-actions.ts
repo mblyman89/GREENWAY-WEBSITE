@@ -272,6 +272,33 @@ export async function pushLeaflySelectionAction(input: {
   ids: string[];
   confirm: boolean;
   method?: "POST" | "PUT";
+  /**
+   * TASK J ask 7. Apply the blanket size repair before sending.
+   *
+   * WHY THIS IS WIRED HERE AND DELIBERATELY *NOT* ON
+   * `pushLeaflyPassingOnlyAction`
+   *
+   * `pushLeaflySelection` runs the repair AFTER settings and BEFORE
+   * `assertLeaflyPayloadValid`, so the validator judges the repaired payload.
+   * That ordering makes the repair meaningful here: a colliding product goes
+   * in broken and comes out valid.
+   *
+   * The passing-only action is the opposite case. It derives its id list from
+   * `triageLeaflySelection`, which validates the UNREPAIRED payload
+   * (`selection-server.ts`, where `validateLeaflyPayload` is called on
+   * `applyLeaflySettings(...)` with no repair in between). So by the time a
+   * repair could run, the colliding products have ALREADY been excluded from
+   * `triage.sendableIds`. Passing `repairCollisions` down that path would
+   * repair a set from which nothing repairable remains -- it would look like
+   * a feature and do nothing, while the products it claimed to fix stayed off
+   * the menu. Offering it there would be a lie told by a checkbox.
+   *
+   * The owner's real need -- "send my whole menu, fixing the sizes first" --
+   * is served correctly by `pushFullMenuPassingOnlyAction`, which repairs
+   * first and validates the repaired result, and previews the shopper-visible
+   * consequences before anything is sent.
+   */
+  repairCollisions?: boolean;
 }): Promise<SelectionPushActionResult> {
   const session = await requirePermission("settings.manage");
 
@@ -290,6 +317,7 @@ export async function pushLeaflySelectionAction(input: {
       ids: input.ids ?? [],
       confirm: true,
       requestedMethod: input.method ?? "PUT",
+      repairCollisions: input.repairCollisions === true,
     });
 
     await recordSyndicationLog({
@@ -320,6 +348,10 @@ export async function pushLeaflySelectionAction(input: {
         syncStateWritten: result.syncStateWritten,
         deletesIssued: result.deletesIssued,
         methodWasCoerced: result.plan.methodWasCoerced,
+        // Recorded because the repair's second stage is SHOPPER-VISIBLE: it
+        // lists one product as several. A change a customer can see must be
+        // attributable to the person who asked for it.
+        repairRequested: input.repairCollisions === true,
       },
     });
 
