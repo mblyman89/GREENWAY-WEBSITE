@@ -10,6 +10,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { assessEmailReadiness } from "@/lib/orders/email-readiness-core";
 
 export type CheckState = "done" | "todo" | "unknown";
 
@@ -92,7 +93,22 @@ export type SetupStatus = {
 
 export async function getSetupStatus(): Promise<SetupStatus> {
   const supabaseConfigured = isSupabaseServiceConfigured;
-  const smtpConfigured = Boolean(process.env.RESEND_API_KEY);
+  // SLICE L-19 — this used to be `Boolean(process.env.RESEND_API_KEY)`, and it
+  // was wrong in a way the owner could see and we could not.
+  //
+  // `notify.ts` requires RESEND_API_KEY *and* ORDER_EMAIL_FROM; if either is
+  // missing it sends nothing. This checklist asked only about the key, so a
+  // deployment with the key and no from-address displayed a green "Set up email
+  // sending — done" while every single order email was silently skipped. The
+  // one answer the owner could actually SEE was the wrong one.
+  //
+  // One predicate, one home, both callers (house rule 11).
+  const emailReadiness = assessEmailReadiness({
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    ORDER_EMAIL_FROM: process.env.ORDER_EMAIL_FROM,
+    ORDER_STAFF_EMAILS: process.env.ORDER_STAFF_EMAILS,
+  });
+  const smtpConfigured = emailReadiness.canSend;
 
   const [posProbe, importsProbe, menuPublished, teamInvited] =
     await Promise.all([
@@ -146,9 +162,13 @@ export async function getSetupStatus(): Promise<SetupStatus> {
     {
       id: "smtp",
       label: "Set up email sending",
+      // SLICE L-19 — name what is actually missing. "Add a Resend API key" is
+      // unhelpful and, in the half-configured case, actively misleading: the
+      // key was already there and ORDER_EMAIL_FROM was the missing half.
       detail: smtpConfigured
-        ? "Email (Resend) is configured."
-        : "Add a Resend API key so invites & order emails send reliably.",
+        ? emailReadiness.problem ?? "Email (Resend) is configured."
+        : emailReadiness.problem ??
+          "Add a Resend API key so invites & order emails send reliably.",
       state: bool(smtpConfigured),
     },
     {

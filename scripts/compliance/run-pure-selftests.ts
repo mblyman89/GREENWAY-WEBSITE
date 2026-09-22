@@ -472,6 +472,7 @@ import { __runIdScanCoreTests } from "../../src/lib/pos/id-scan-core";
 import { __runPosSyncCoreTests } from "../../src/lib/pos/sync-core";
 import { __runPendingRecoveryCoreTests } from "../../src/lib/pos/pending-recovery-core";
 import { __runNotifyOutcomeCoreTests } from "../../src/lib/orders/notify-outcome-core";
+import { __runEmailReadinessTests } from "../../src/lib/orders/email-readiness-core";
 import { __runStatusCasCoreTests } from "../../src/lib/orders/status-cas-core";
 import { __runRpcFallbackCoreTests } from "../../src/lib/db/rpc-fallback-core";
 import { __runRegisterClientCoreTests } from "../../src/lib/pos/register-client-core";
@@ -1046,6 +1047,12 @@ __runLiquidVolumeTests();
   __runPosSyncCoreTests();
   __runPendingRecoveryCoreTests();
   __runNotifyOutcomeCoreTests();
+  // SLICE L-19. The judgement that tells a FAULT (the email provider is not
+  // configured, so nobody is being emailed) apart from CORRECT BEHAVIOUR (a
+  // Leafly order, where emailing the shopper would breach the integration).
+  // Floor set just under the measured count: the cheapest way to weaken this
+  // core is to delete a severity case, and a floor is what notices.
+  assertRan("email-readiness-core", __runEmailReadinessTests(), 75);
   __runStatusCasCoreTests();
   __runRpcFallbackCoreTests();
   __runExciseReturnTests();
