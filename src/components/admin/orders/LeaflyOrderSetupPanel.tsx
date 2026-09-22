@@ -62,6 +62,8 @@ import { Card, CardHeader, Badge } from "@/components/admin/ui";
 import type { LeaflyOrderSetupState } from "@/lib/leafly/order-readiness-server";
 import type { ReadinessStep, WebhookDestination } from "@/lib/leafly/order-readiness-core";
 import { CopyCommandButton } from "./CopyCommandButton";
+import { DisclosurePanel } from "@/components/admin/ui/DisclosurePanel";
+import { shouldStartOpen } from "@/lib/admin/disclosure-core";
 
 /**
  * Anchor so other screens can link straight here.
@@ -195,22 +197,53 @@ export function LeaflyOrderSetupPanel({
     .map((d) => `${d.event} (${d.requirement}): ${d.url}`)
     .join("\n");
 
+  /*
+   * SLICE L-20 — THE PANEL NOW COLLAPSES.
+   *
+   * The owner asked for this panel to fold away behind a green bar identical
+   * to the speaker guide's. It is long, and once Leafly is working it is
+   * reference material rather than something to read — but it has to stay
+   * on the page, because the two OPTIONAL steps it tracks (speaker, printer)
+   * are exactly the ones that let an order arrive silently.
+   *
+   * Both bars are the same component now, so "identical" is structural
+   * rather than copied. See src/lib/admin/disclosure-core.ts.
+   *
+   * WHEN IT STARTS OPEN. Collapsed is the default and the request. But this
+   * panel is the only thing on the page that can explain an empty Leafly
+   * board, and hiding it while setup is incomplete would silently re-create
+   * the M-2 bug — a blank space with no explanation, which is the report
+   * that caused this panel to be built. So `shouldStartOpen` keeps it
+   * expanded while blocking steps remain AND nothing has ever arrived. Once
+   * real orders exist, evidence outranks the checklist and it folds away.
+   *
+   * The step count rides on the bar itself, so the owner can see whether he
+   * needs to open it WITHOUT opening it.
+   */
+  const startOpen = shouldStartOpen(remaining, readiness.anyOrderEverReceived);
+
   return (
     <div className="mt-4" id={LEAFLY_SETUP_ANCHOR}>
+      <DisclosurePanel
+        icon={readiness.ready ? "✅" : "🧩"}
+        title="Leafly orders"
+        subtitle="setup"
+        defaultOpen={startOpen}
+        badge={
+          remaining > 0 ? (
+            <Badge tone="danger">
+              {remaining} {remaining === 1 ? "step" : "steps"} left
+            </Badge>
+          ) : (
+            <Badge tone="green">ready</Badge>
+          )
+        }
+      >
       <Card padding="sm" accent={readiness.ready ? "green" : "gold"} className="sm:p-5">
         <CardHeader
           title="Leafly orders — setup"
           subtitle={readiness.headline}
           icon={readiness.ready ? "✅" : "🧩"}
-          action={
-            remaining > 0 ? (
-              <Badge tone="danger">
-                {remaining} {remaining === 1 ? "step" : "steps"} left
-              </Badge>
-            ) : (
-              <Badge tone="green">ready</Badge>
-            )
-          }
         />
 
         {/* ── Why the order vanished ─────────────────────────────────────────
@@ -499,6 +532,7 @@ export function LeaflyOrderSetupPanel({
           </Link>
         </div>
       </Card>
+      </DisclosurePanel>
     </div>
   );
 }

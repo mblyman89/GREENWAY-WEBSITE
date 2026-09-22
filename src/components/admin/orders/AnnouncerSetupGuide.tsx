@@ -36,6 +36,7 @@ import {
 } from "@/lib/announcer/announcer-setup-core";
 import type { SetupCommand } from "@/lib/announcer/announcer-setup-core";
 import { CopyCommandButton } from "./CopyCommandButton";
+import { DisclosurePanel } from "@/components/admin/ui/DisclosurePanel";
 
 /** A command in a black box, with a button that copies the exact bytes. */
 function CommandLine({ entry }: { entry: SetupCommand }) {
@@ -69,10 +70,13 @@ export function AnnouncerSetupGuide({
   const sections = buildSetupGuide({ siteUrl, pairingCode, hasPairedSpeaker });
 
   return (
-    <details className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/[0.06] px-3.5 py-3">
-      <summary className="cursor-pointer text-sm font-bold text-[var(--admin-text)]">
-        📖 Set up a speaker — full step-by-step guide
-      </summary>
+    /* SLICE L-20. This bar used to be a hand-written <details> with its class
+       strings inline. The owner then asked for the Leafly setup panel to have
+       a bar "identical" to this one, and the only way to make "identical"
+       true permanently is to define it once. Both panels now render
+       DisclosurePanel, so the two bars cannot drift apart. The rendered
+       output here is unchanged — asserted in announcer-setup-guide.test.ts. */
+    <DisclosurePanel icon="📖" title="Set up a speaker" subtitle="full step-by-step guide">
 
       {/* ── Read this first ──────────────────────────────────────────── */}
       <div className="mt-3 rounded-[var(--admin-radius-sm,8px)] border border-[var(--admin-border)] bg-[var(--admin-surface-1)] px-3 py-2.5">
@@ -195,6 +199,6 @@ export function AnnouncerSetupGuide({
           ))}
         </div>
       </section>
-    </details>
+    </DisclosurePanel>
   );
 }

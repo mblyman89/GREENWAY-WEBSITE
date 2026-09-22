@@ -221,6 +221,18 @@ export type OrderReadiness = {
   nextStep: ReadinessStep | null;
   /** One sentence for the top of the panel. */
   headline: string;
+  /**
+   * SLICE L-20. Has any Leafly order ever actually arrived?
+   *
+   * Echoed straight back from the input, NOT re-derived. The collapsible
+   * setup panel needs it to decide whether to start open, and the alternative
+   * — letting the component ask "are there orders on screen?" — would be a
+   * second, subtly different answer to a question this core already owns
+   * (house rule 11). It is the difference between "nothing is set up" and
+   * "this is working and the panel is just a reference", and only one of
+   * those should be expanded at the owner every time the page loads.
+   */
+  anyOrderEverReceived: boolean;
 };
 
 /**
@@ -347,7 +359,14 @@ export function assessOrderReadiness(input: ReadinessInput): OrderReadiness {
     headline = `${blockingIncomplete.length} things are still missing before Leafly orders can arrive.`;
   }
 
-  return { ready, showPanel: anyProgress, steps, nextStep, headline };
+  return {
+    ready,
+    showPanel: anyProgress,
+    steps,
+    nextStep,
+    headline,
+    anyOrderEverReceived: input.anyOrderEverReceived === true,
+  };
 }
 
 /**
@@ -482,6 +501,24 @@ export function __runLeaflyOrderReadinessTests(): { passed: number; failed: numb
   ok("everything done shows the panel", all.showPanel);
   ok("everything done has no next step", all.nextStep === null);
   ok("the headline says it is arriving", all.headline.includes("arriving"));
+
+  // SLICE L-20. The flag the collapsible panel reads to decide whether to
+  // start open. It must be an ECHO of the input, never a re-derivation.
+  ok("evidence of a real order is echoed back", all.anyOrderEverReceived === true);
+  ok(
+    "a shop with no orders reports none",
+    assessOrderReadiness({ ...ALL_DONE, anyOrderEverReceived: false }).anyOrderEverReceived ===
+      false,
+  );
+  ok(
+    "the echo tracks the input even when nothing else is done",
+    assessOrderReadiness({ ...NOTHING_DONE, anyOrderEverReceived: true }).anyOrderEverReceived ===
+      true,
+  );
+  ok(
+    "the echo is independent of readiness",
+    assessOrderReadiness({ ...NOTHING_DONE, anyOrderEverReceived: true }).ready === false,
+  );
 
   const none = assessOrderReadiness(NOTHING_DONE);
   ok("nothing done is not ready", !none.ready);
