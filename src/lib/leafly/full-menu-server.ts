@@ -82,6 +82,8 @@ import "server-only";
 
 import { getLeaflyBaseUrl, getLeaflyConfig } from "./config";
 import { getLeaflyAccessToken, resetLeaflyTokenCache } from "./token";
+import { leaflyFetchWithDeadline } from "./deadline-fetch";
+import type { LeaflyOperation } from "./deadline-core";
 import { refreshLeaflyConfig } from "./runtime";
 import {
   buildLeaflyItemsResult,
@@ -142,6 +144,10 @@ function menuItemsUrl(): string {
 async function authedFetch(
   url: string,
   method: string,
+  // SLICE L-17. Named explicitly even though this file has exactly one call
+  // site, for the same reason the verb is hard-coded above: the guarantee
+  // should survive an edit by somebody who has not read the header.
+  operation: LeaflyOperation,
   body: unknown,
   opts?: { maxRetries?: number },
 ): Promise<{ ok: boolean; status: number; body: unknown }> {
@@ -150,7 +156,13 @@ async function authedFetch(
 
   for (let attempt = 1; ; attempt += 1) {
     const token = await getLeaflyAccessToken();
-    const res = await fetch(url, {
+    // SLICE L-17 -- a bounded attempt. `operation` is resolved by the caller
+    // (see the `operation` parameter) because ONE wrapper serves more than
+    // one endpoint here, and the budgets differ. Failure throws, which is the
+    // behaviour this wrapper already had -- an unbounded `fetch` that rejects
+    // propagates too. What changes is that it now rejects in finite time and
+    // with a sentence the operator can act on.
+    const call = await leaflyFetchWithDeadline(operation, url, {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -158,6 +170,10 @@ async function authedFetch(
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    if (!call.ok) {
+      throw new Error(call.verdict.message);
+    }
+    const res = call.response;
     const text = await res.text().catch(() => "");
     let parsed: unknown = text;
     try {
@@ -505,7 +521,7 @@ export async function pushFullMenuPassingOnly(input: {
 
   // PUT, hard-coded. See the header: a POST here would delete every withheld
   // product from the live Leafly menu.
-  const result = await authedFetch(menuItemsUrl(), "PUT", payload, {
+  const result = await authedFetch(menuItemsUrl(), "PUT", "full_menu_push", payload, {
     maxRetries: settings.maxRetries,
   });
 

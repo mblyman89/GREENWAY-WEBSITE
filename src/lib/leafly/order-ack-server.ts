@@ -71,6 +71,8 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getLeaflyConfig } from "./config";
 import { refreshLeaflyConfig } from "./runtime";
 import { getLeaflyAccessToken, resetLeaflyTokenCache } from "./token";
+// SLICE L-17 — the acknowledge POST is the call the owner watched hang.
+import { leaflyFetchWithDeadline } from "./deadline-fetch";
 import { loadLeaflyOrderIntegrationKey } from "./webhook-server";
 import {
   LEAFLY_ACK_SUCCESS_STATUS,
@@ -211,14 +213,56 @@ type RawResponse = {
 async function orderApiPost(
   url: string,
   body: unknown | undefined,
+  /**
+   * SLICE L-17 — which operation is being performed, so the right budget
+   * applies.
+   *
+   * Acknowledge and status push share this function but not their meaning:
+   * only one of them is irreversible, and the pure core needs to know which
+   * so it can decide whether a timeout is safe to retry. Passing the
+   * operation is what lets one transport serve two different safety answers.
+   */
+  operation: "acknowledge" | "status_push",
 ): Promise<RawResponse> {
   let didRetryAuth = false;
 
   for (;;) {
     let res: Response;
-    try {
-      const token = await getLeaflyAccessToken();
-      res = await fetch(url, {
+    {
+      // SLICE L-17 — THE HANG THE OWNER REPORTED, AND WHERE IT LIVED.
+      //
+      //   > "i can click the acknowledge button, confirm the action, then it
+      //   >  sits waiting forever stuck."
+      //
+      // This `for(;;)` loop awaited an UNBOUNDED `fetch`, twice over: once for
+      // the token mint and once for this POST, with a 401 retry able to run
+      // both again. A connection that is accepted and then never answered
+      // (a black hole, not a refusal) therefore parked the server action
+      // indefinitely. The button is a real `<form>` submit, so its spinner
+      // spins until the navigation resolves — and the navigation could not
+      // resolve until the platform killed the function. "Forever" was
+      // literally correct.
+      //
+      // The budget is 12s per attempt (deadline-core.ts), which makes the
+      // operator's true worst case 40s: two attempts, each paying a mint. That
+      // arithmetic is asserted in the core precisely because eyeballing the
+      // 12 alone gives the wrong answer.
+      //
+      // WHAT IS DELIBERATELY UNCHANGED: a timeout is reported as a network
+      // failure with `status: null`, exactly as a thrown fetch always was. It
+      // is NOT promoted into a refusal and NOT treated as a success. For an
+      // acknowledge those would be the two dangerous lies — Leafly may well
+      // have received and processed the POST while we stopped listening, and
+      // acknowledgement permanently revokes our access to the shopper's ID
+      // images. The verdict's wording says "we cannot tell", which is the only
+      // true statement available.
+      const token = await getLeaflyAccessToken().catch((err: unknown) => err as Error);
+      if (token instanceof Error) {
+        // The mint failed, and it now fails FAST rather than hanging. Its
+        // message is already the pure core's operator sentence.
+        return { status: null, body: null, networkError: token.message };
+      }
+      const attempt = await leaflyFetchWithDeadline(operation, url, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -230,15 +274,19 @@ async function orderApiPost(
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
-    } catch (err) {
-      // A thrown fetch never produced a status. Returning status: null keeps
-      // that distinguishable from a real HTTP error, because "Leafly refused
-      // us" and "we never reached Leafly" need different responses.
-      return {
-        status: null,
-        body: null,
-        networkError: err instanceof Error ? err.message : "Network request failed.",
-      };
+      if (!attempt.ok) {
+        // A bounded give-up never produced a status. Returning status: null
+        // keeps that distinguishable from a real HTTP error, because "Leafly
+        // refused us" and "we never got an answer from Leafly" need different
+        // responses — and the operator sentence carries the distinction
+        // between "nothing was sent" and "we cannot tell".
+        return {
+          status: null,
+          body: null,
+          networkError: attempt.verdict.message,
+        };
+      }
+      res = attempt.response;
     }
 
     const text = await res.text().catch(() => "");
@@ -348,7 +396,7 @@ export async function acknowledgeLeaflyOrder(input: {
   // operation, so none is sent. Sending `{}` would also probably work, and that
   // is precisely why it is worth being explicit: "probably works" is how an
   // undocumented dependency gets created.
-  const raw = await orderApiPost(url, undefined);
+  const raw = await orderApiPost(url, undefined, "acknowledge");
 
   if (raw.status === null) {
     const message = `Could not reach Leafly to acknowledge this order: ${raw.networkError ?? "network error"}. The order is NOT acknowledged; Leafly's fifteen-minute window is still running.`;
@@ -669,7 +717,7 @@ export async function setLeaflyOrderStatus(input: {
   const orderId = (input.order.leafly_order_id ?? "").trim();
   const key = (orderIntegrationKey ?? "").trim();
   const url = leaflyStatusUrl(environment, key, orderId);
-  const raw = await orderApiPost(url, decision.body);
+  const raw = await orderApiPost(url, decision.body, "status_push");
 
   if (raw.status === null) {
     const message = `Could not reach Leafly to set this order to "${input.nextStatus}": ${raw.networkError ?? "network error"}. Leafly still shows the previous status.`;

@@ -253,6 +253,27 @@ import { __runLeaflyPreviewTests } from "../../src/lib/leafly/preview-core";
 //                        acceptable answer — every rejection must be classified
 //                        as retry, fix-config, fix-request or gone.
 import { __runLeaflyOrderAckTests } from "../../src/lib/leafly/order-ack-core";
+// SLICE L-17 -- deadlines. Before this slice every outbound Leafly fetch was
+//               untimed; `grep -rn "AbortController\|AbortSignal.timeout"
+//               src/lib/leafly/` returned nothing, while seventeen other
+//               client files in this repo already bounded their requests.
+//               The owner felt it directly: "i can click the acknowledge
+//               button, confirm the action, then it sits waiting forever
+//               stuck."
+//
+//               This core owns three things that are rules rather than
+//               plumbing, which is why it is floored rather than trusted to
+//               a code review. (1) EVERY operation has a finite budget --
+//               the invariant whose violation IS the bug. (2) A TIMEOUT IS
+//               NOT A DELIVERY FAILURE: when we stop listening we do not
+//               learn that nothing arrived, so an acknowledge that timed out
+//               may never be reported as safe to repeat -- acknowledging
+//               twice cannot be undone and revokes the customer's ID images.
+//               (3) The budgets must fit inside Leafly's fifteen-minute
+//               auto-cancel window with room left to actually recover.
+//               All three are asserted over the full 8 x 5 operation/fault
+//               matrix rather than sampled.
+import { __runLeaflyDeadlineTests } from "../../src/lib/leafly/deadline-core";
 // SLICE M-1 -- fetching the order body. The order_submit webhook carries ONLY
 //              metadata (eventTime, eventType, orderId, orderIntegrationKey,
 //              acknowledgeBy). The cart, the customer and the totals live
@@ -919,7 +940,17 @@ __runLiquidVolumeTests();
   // withheld. The second direction is the one that catches an over-eager
   // filter quietly removing a legal action -- verified by sabotage, which the
   // matrix caught in six places at once.
-  assertRan("leafly-order-ack-core", __runLeaflyOrderAckTests(), 370);
+  // Floor raised 370 -> 470 by slice L-17, which added `busyLabel` to every
+  // planned action and asserts its four properties across the whole
+  // acknowledgement/status/mechanism matrix (measured 478). The count moved
+  // because the matrix multiplies: the wording is checked on every action the
+  // planner can emit, not on a sample.
+  assertRan("leafly-order-ack-core", __runLeaflyOrderAckTests(), 470);
+  // SLICE L-17. Measured 515. The floor is deliberately close to the count
+  // because most of these assertions ARE the 8 x 5 matrix, and the cheapest
+  // way to weaken this core is to shrink the matrix rather than to change an
+  // answer inside it -- which a floor catches and a green suite would not.
+  assertRan("leafly-deadline-core", __runLeaflyDeadlineTests(), 500);
   // SLICE M. Floors set just under the current counts (92 / 46). The fetch
   // core is what makes a receipt possible at all; the readiness core is what
   // stops the dashboard from hiding while setup is half finished.

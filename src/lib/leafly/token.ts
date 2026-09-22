@@ -53,6 +53,8 @@
 import "server-only";
 
 import { getLeaflyConfig, getLeaflyTokenUrl } from "./config";
+// SLICE L-17 — every Leafly request, including this one, now has a deadline.
+import { leaflyFetchWithDeadline } from "./deadline-fetch";
 
 type CachedToken = { token: string; expiresAt: number };
 
@@ -94,7 +96,22 @@ export async function getLeaflyAccessToken(): Promise<string> {
 
   const tokenUrl = getLeaflyTokenUrl(config.environment);
   const basic = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64");
-  const res = await fetch(tokenUrl, {
+  // SLICE L-17 — the mint is now bounded, and it is the most important of the
+  // seven to bound.
+  //
+  // This call runs BEFORE every other Leafly request: the acknowledge, the
+  // status push, the order fetch, both menu pushes and the readback all begin
+  // by awaiting this function. Until this slice it had no timeout, so a
+  // black-holed connection to sso.leafly.com hung an operation that had not
+  // started yet — and because the operation's own log line is written after
+  // its fetch, the hang left no trace attributable to the mint at all. That is
+  // the hardest version of the defect the owner reported ("it sits waiting
+  // forever stuck") to diagnose from the outside.
+  //
+  // The budget (8s, deadline-core.ts) is deliberately the tightest of the
+  // seven, so a slow mint is charged to the mint rather than quietly consuming
+  // the acknowledge's entire allowance and presenting as Leafly ignoring us.
+  const attempt = await leaflyFetchWithDeadline("token_mint", tokenUrl, {
     method: "POST",
     headers: {
       Authorization: `Basic ${basic}`,
@@ -102,6 +119,19 @@ export async function getLeaflyAccessToken(): Promise<string> {
     },
     body: new URLSearchParams({ grant_type: "client_credentials" }).toString(),
   });
+
+  if (!attempt.ok) {
+    // THROWS, matching this function's existing contract exactly — it already
+    // threw for absent credentials and for a non-ok response, and both of its
+    // callers are built around that. Converting it to a return value here
+    // would silently change six call sites.
+    //
+    // The message is the pure core's operator sentence, not a raw fetch
+    // string, so "we could not reach Leafly to sign in" reaches the screen
+    // instead of "fetch failed".
+    throw new Error(`Leafly sign-in failed: ${attempt.verdict.message}`);
+  }
+  const res = attempt.response;
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");

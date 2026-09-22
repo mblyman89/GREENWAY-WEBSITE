@@ -40,12 +40,123 @@
  * without the extra question, the same as any other form in the back office.
  * The alternative (fetch-on-click) would leave a dead button on a screen whose
  * job is time-critical.
+ *
+ * ===========================================================================
+ * SLICE L-17 -- WHY THE BUTTON NOW SAYS WHAT IT IS DOING
+ * ===========================================================================
+ * The owner reported, about this exact control:
+ *
+ *   > "for the leafly orders specifically, i can click the acknowledge
+ *   >  button, confirm the action, then it sits waiting forever stuck."
+ *
+ * There were TWO defects behind that one sentence, and fixing either alone
+ * would have left him with the same complaint:
+ *
+ *   1. THE SERVER GENUINELY COULD HANG. Every outbound Leafly fetch was
+ *      untimed (`grep AbortController src/lib/leafly/` returned nothing),
+ *      including the token mint that runs BEFORE the acknowledge POST. That
+ *      is fixed in `src/lib/leafly/deadline-fetch.ts`; the request now gives
+ *      up in a bounded time and returns a sentence.
+ *
+ *   2. THE BUTTON LOOKED IDENTICAL THE WHOLE TIME. This is the half fixed
+ *      here. `AnnouncerPanel.tsx:175` already documents the same bug class
+ *      in this very folder, in the owner's words: "as a plain server form it
+ *      had no pending state and its action returned void, so pressing it
+ *      changed nothing on screen ... the owner reasonably read that as 'the
+ *      button does nothing, it hangs'." The Leafly buttons had exactly that
+ *      shape -- a real <form>, a void-returning server action, no pending
+ *      state -- so between the click and the redirect the screen said
+ *      nothing at all.
+ *
+ * `useFormStatus` is the right hook here rather than `useActionState` (which
+ * AnnouncerTestButton uses): these actions end in `redirect()`, so they have
+ * no return value to render, and the result is communicated by the page the
+ * operator lands on. All that is needed is the pending flag -- and it must
+ * be read from a CHILD of the form, which is why SubmitButton exists as a
+ * separate component below rather than as markup inside ActionForm.
+ *
+ * Disabling while pending is a safety property, not a nicety. Acknowledge is
+ * the one-way door; a second click during a slow first request is exactly
+ * how a double submit happens, and it is the scenario the deadline core
+ * refuses to call safe (`safeToRetry === false` for an acknowledge whose
+ * outcome is unknown).
  */
 
 import { useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { Button, CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { ConfirmDialog } from "@/components/admin/ux";
 import type { PlannedAction } from "@/lib/leafly/order-ack-core";
+
+/**
+ * The submit control, split out purely so it can call `useFormStatus()`.
+ *
+ * The hook reports the status of the nearest ANCESTOR form, so it returns
+ * `{ pending: false }` forever if it is called in the same component that
+ * renders the <form>. That is not a style preference -- calling it one level
+ * up is simply broken, and it is broken silently, which is why this split is
+ * documented rather than looking like indirection for its own sake.
+ *
+ * The three visual weights mirror what the plan asked for, unchanged. The
+ * only thing added is what the control does while the request is in flight:
+ * it names the wait, spins, and refuses a second press.
+ */
+function SubmitButton({
+  action,
+}: {
+  action: PlannedAction;
+}) {
+  const { pending } = useFormStatus();
+
+  // The verb is the action's own label turned into a present participle by
+  // the core's wording, NOT by string surgery here. `busyLabel` arrives from
+  // planLeaflyOrderActions(), so the sentence an operator reads under stress
+  // is the same reviewed, self-tested wording as the idle label.
+  const label = pending ? action.busyLabel : action.label;
+
+  const spinner = (
+    <span
+      aria-hidden
+      className="mr-1.5 inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent align-[-1px]"
+    />
+  );
+
+  // aria-busy, not just a spinner: the spinner is invisible to a screen
+  // reader and this panel is used one-handed at a counter.
+  const content = pending ? (
+    <>
+      {spinner}
+      {label}
+    </>
+  ) : (
+    label
+  );
+
+  if (action.emphasis === "primary" || action.emphasis === "danger") {
+    return (
+      <Button
+        type="submit"
+        variant={action.emphasis}
+        size="sm"
+        disabled={pending}
+        aria-busy={pending}
+      >
+        {content}
+      </Button>
+    );
+  }
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      aria-busy={pending}
+      className={`${action.irreversible ? CHIP_NEUTRAL : CHIP_ACTION} disabled:cursor-not-allowed disabled:opacity-60`}
+    >
+      {content}
+    </button>
+  );
+}
 
 /**
  * A single planned action, rendered as a form + (maybe) a confirmation.
@@ -82,21 +193,9 @@ function ActionForm({
   // exactly one `primary` per order. The cancel action is the shop's existing
   // `danger` variant; everything else is a tinted chip, per the density rule
   // documented in Button.tsx ("many tinted chips per screen, at most ONE solid
-  // orange primary per page region").
-  const button =
-    action.emphasis === "primary" ? (
-      <Button type="submit" variant="primary" size="sm">
-        {action.label}
-      </Button>
-    ) : action.emphasis === "danger" ? (
-      <Button type="submit" variant="danger" size="sm">
-        {action.label}
-      </Button>
-    ) : (
-      <button type="submit" className={action.irreversible ? CHIP_NEUTRAL : CHIP_ACTION}>
-        {action.label}
-      </button>
-    );
+  // orange primary per page region"). The rendering moved into SubmitButton
+  // (see its header) because the pending flag can only be read from inside
+  // the form.
 
   return (
     <>
@@ -123,7 +222,7 @@ function ActionForm({
             reason defaults to `dispensary`, and sending a value we were told we
             do not need to send would be inventing data. The default is DISPLAYED
             in the confirmation instead, so it is informed rather than hidden. */}
-        {button}
+        <SubmitButton action={action} />
       </form>
 
       {action.irreversible ? (
