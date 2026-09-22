@@ -50,6 +50,8 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getLeaflyAccessToken, resetLeaflyTokenCache } from "./token";
+// SLICE L-17 — no Leafly request may outlive its budget.
+import { leaflyFetchWithDeadline } from "./deadline-fetch";
 import { getLeaflyConfig } from "./config";
 import { refreshLeaflyConfig } from "./runtime";
 import { loadLeaflyOrderIntegrationKey } from "./webhook-server";
@@ -152,19 +154,30 @@ export async function fetchLeaflyOrder(input: {
   let didRetryAuth = false;
   for (;;) {
     let res: Response;
-    try {
-      const token = await getLeaflyAccessToken();
-      res = await fetch(url, {
+    {
+      // SLICE L-17 — bounded. This GET runs on the path Leafly itself is
+      // timing (we fetch the order after a submission webhook), so an
+      // unbounded wait here did not merely hang our screen: it held the
+      // request open while the fifteen-minute auto-cancel clock ran down.
+      // 15s per attempt, two attempts, each paying a mint (deadline-core.ts).
+      const token = await getLeaflyAccessToken().catch((err: unknown) => err as Error);
+      if (token instanceof Error) {
+        const assessment = assessOrderFetch(null, { knownLocally: input.knownLocally });
+        return fail(assessment, null, `sign-in failure (${token.message})`);
+      }
+      const attempt = await leaflyFetchWithDeadline("order_fetch", url, {
         method: "GET",
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       });
-    } catch (err) {
-      const assessment = assessOrderFetch(null, { knownLocally: input.knownLocally });
-      return fail(
-        assessment,
-        null,
-        `network failure (${err instanceof Error ? err.message : "unknown"})`,
-      );
+      if (!attempt.ok) {
+        // Unchanged in KIND: still `assessOrderFetch(null, ...)`, still a
+        // network failure rather than a refusal, so a timeout can never be
+        // mistaken for "Leafly does not have that order" — which would be a
+        // reason to stop trying.
+        const assessment = assessOrderFetch(null, { knownLocally: input.knownLocally });
+        return fail(assessment, null, `network failure (${attempt.detail})`);
+      }
+      res = attempt.response;
     }
 
     if (res.status === 401 && !didRetryAuth) {

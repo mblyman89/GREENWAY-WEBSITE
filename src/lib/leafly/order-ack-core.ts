@@ -891,6 +891,26 @@ export type PlannedAction = {
   status: LeaflyStatus | null;
   /** Button text. Plain English, never a raw enum value. */
   label: string;
+  /**
+   * What the button says WHILE the request to Leafly is in flight.
+   *
+   * SLICE L-17. The owner reported the acknowledge button "sits waiting
+   * forever stuck". Half of that was a genuinely unbounded fetch (now fixed
+   * in `deadline-fetch.ts`); the other half was that the button looked
+   * identical before, during and after the press, so a slow-but-working
+   * request and a hung one were indistinguishable.
+   *
+   * The busy wording lives HERE, beside the idle label, for the reason
+   * already stated above the wording table: the words are part of the
+   * decision. "Acknowledging..." has to carry the same weight as
+   * "Acknowledge to Leafly", and a component-local participle table would
+   * drift from the labels it is supposed to shadow -- and would do it
+   * silently, because nobody reviews a string that is only visible for two
+   * seconds under load.
+   *
+   * Always present, always distinct from `label`, both asserted in CI.
+   */
+  busyLabel: string;
   /** One sentence explaining what pressing it does. Never empty. */
   hint: string;
   /**
@@ -945,31 +965,53 @@ export const LEAFLY_OFFERABLE_STATUSES: readonly LeaflyStatus[] =
  */
 export const LEAFLY_ACK_ACTION_LABEL = "Acknowledge to Leafly";
 
+/**
+ * What the acknowledge button says while the request is in flight.
+ *
+ * Exported next to the label it shadows, for the same reason the label is
+ * exported: the Leafly helper quotes these controls by name, and a handbook
+ * that describes a state the button never enters is a handbook that teaches
+ * staff to distrust the screen.
+ *
+ * "Sending to Leafly..." rather than "Acknowledging..." is deliberate. It
+ * states what is happening on the WIRE, which is the thing that is actually
+ * uncertain while the spinner turns. "Acknowledging" reads as though the
+ * acknowledgement is already a fact, and the one guarantee this slice makes
+ * is that we never claim an outcome we do not have.
+ */
+export const LEAFLY_ACK_ACTION_BUSY_LABEL = "Sending to Leafly…";
+
 export const LEAFLY_STATUS_ACTION_WORDING: Readonly<
-  Record<string, { label: string; hint: string }>
+  Record<string, { label: string; hint: string; busyLabel: string }>
 > = {
   confirmed: {
     label: "Confirm order",
+    busyLabel: "Confirming…",
     hint: "Tells the Leafly shopper you have accepted their order and are working on it.",
   },
   ready: {
     label: "Mark ready for pickup",
+    busyLabel: "Marking ready…",
     hint: "Tells the Leafly shopper their order is waiting for them at the counter.",
   },
   out_for_delivery: {
     label: "Mark out for delivery",
+    busyLabel: "Marking out for delivery…",
     hint: "Delivery orders only. Washington does not permit cannabis delivery, so this should not normally appear.",
   },
   arrived_at_customer: {
     label: "Mark arrived at customer",
+    busyLabel: "Marking arrived…",
     hint: "Delivery orders only. Washington does not permit cannabis delivery, so this should not normally appear.",
   },
   picked_up: {
     label: "Mark picked up",
+    busyLabel: "Closing the order…",
     hint: "Closes the order on Leafly. This is final — Leafly does not allow an order to be moved again afterwards.",
   },
   canceled: {
     label: "Cancel on Leafly",
+    busyLabel: "Cancelling…",
     hint: "Cancels the order on Leafly and tells the shopper. This is final and cannot be undone.",
   },
 };
@@ -1020,6 +1062,7 @@ export function planLeaflyOrderActions(input: {
           kind: "acknowledge",
           status: null,
           label: LEAFLY_ACK_ACTION_LABEL,
+          busyLabel: LEAFLY_ACK_ACTION_BUSY_LABEL,
           hint:
             "Confirms to Leafly that you have this order. Required before anything " +
             "else can be sent, and it permanently ends your access to the customer's " +
@@ -1074,12 +1117,19 @@ export function planLeaflyOrderActions(input: {
     const hint = wording
       ? wording.hint
       : `Sends the status "${status}" to Leafly.`;
+    // The fallback busy label is generic on purpose. It must never be empty
+    // (the UI would render a bare spinner with no explanation) and it must
+    // never be the idle label (the button would appear not to have reacted),
+    // which is the exact defect this field exists to prevent. Both
+    // properties are asserted for every offerable status in the self-tests.
+    const busyLabel = wording ? wording.busyLabel : "Sending to Leafly…";
 
     const terminal = isTerminalForOutbound(status);
     actions.push({
       kind: "status",
       status,
       label,
+      busyLabel,
       hint,
       irreversible: terminal,
       emphasis:
@@ -1887,6 +1937,34 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
   );
 
   // Unacknowledged: EXACTLY one action, and it is the acknowledgement.
+  // The acknowledge button's two labels, pinned by name. The helper and the
+  // handbook quote this control, so a silent rename must fail CI.
+  ok(
+    LEAFLY_ACK_ACTION_LABEL === "Acknowledge to Leafly",
+    `the acknowledge idle label is stable (got "${LEAFLY_ACK_ACTION_LABEL}")`,
+  );
+  ok(
+    LEAFLY_ACK_ACTION_BUSY_LABEL === "Sending to Leafly\u2026",
+    `the acknowledge busy label is stable (got "${LEAFLY_ACK_ACTION_BUSY_LABEL}")`,
+  );
+  ok(
+    !/acknowledg/i.test(LEAFLY_ACK_ACTION_BUSY_LABEL),
+    "the acknowledge busy label does not claim the acknowledgement happened",
+  );
+  // Every entry in the wording table carries all three strings. A status
+  // added with a label and a hint but no busy label would otherwise fall
+  // back to the generic sentence and nobody would notice.
+  for (const status of LEAFLY_OFFERABLE_STATUSES) {
+    const w = LEAFLY_STATUS_ACTION_WORDING[status];
+    ok(Boolean(w), `\u201c${status}\u201d has wording at all`);
+    if (!w) continue;
+    ok(w.label.trim().length > 0, `\u201c${status}\u201d has a label`);
+    ok(w.hint.trim().length > 0, `\u201c${status}\u201d has a hint`);
+    ok(w.busyLabel.trim().length > 0, `\u201c${status}\u201d has a busy label`);
+    ok(w.busyLabel !== w.label, `\u201c${status}\u201d busy differs from idle`);
+    ok(w.busyLabel.endsWith("\u2026"), `\u201c${status}\u201d busy is open-ended`);
+  }
+
   const fresh = planLeaflyOrderActions({
     leaflyOrderId: "ord-1",
     orderIntegrationKeyPresent: true,
@@ -2061,6 +2139,46 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
         // Direction 1: everything offered is accepted.
         for (const action of plan.actions) {
           offeredTotal += 1;
+
+          // SLICE L-17 -- the busy wording, checked on EVERY action the
+          // planner can ever emit rather than on a hand-picked sample.
+          //
+          // These three properties are the whole contract, and each one maps
+          // to a way the owner's original complaint could come back:
+          //
+          //   non-empty      -> a spinner with no words is a button that has
+          //                     stopped explaining itself.
+          //   !== label      -> if the busy text equals the idle text, the
+          //                     button looks unchanged while it works, which
+          //                     is EXACTLY the defect being fixed
+          //                     (AnnouncerPanel.tsx:175 documents the same
+          //                     bug class in this folder).
+          //   no success claim -> the request is still in flight; wording
+          //                     that reads as a completed fact would be the
+          //                     one thing this slice refuses to do.
+          ok(
+            typeof action.busyLabel === "string" && action.busyLabel.trim().length > 0,
+            `every offered action has busy wording (${action.label})`,
+          );
+          ok(
+            action.busyLabel !== action.label,
+            `busy wording differs from the idle label (${action.label})`,
+          );
+          ok(
+            !/\backnowledged\b|\bconfirmed\b|\bsent\b|\bdone\b|\bcomplete\b/i.test(
+              action.busyLabel,
+            ),
+            `busy wording claims nothing (${action.label})`,
+          );
+          // Trailing ellipsis: the shop's convention for "still working",
+          // used by AnnouncerTestButton ("Sending...") and AiBusyButton
+          // ("Working..."). Asserted so a new status cannot arrive with
+          // wording that reads as finished.
+          ok(
+            action.busyLabel.trim().endsWith("\u2026"),
+            `busy wording is open-ended (${action.label})`,
+          );
+
           if (action.kind === "acknowledge") {
             const d = decideAcknowledgement({
               leaflyOrderId: "ord-1",

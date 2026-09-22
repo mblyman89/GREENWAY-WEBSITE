@@ -46,6 +46,8 @@ import "server-only";
 
 import { getLeaflyBaseUrl, getLeaflyConfig } from "./config";
 import { getLeaflyAccessToken, resetLeaflyTokenCache } from "./token";
+import { leaflyFetchWithDeadline } from "./deadline-fetch";
+import type { LeaflyOperation } from "./deadline-core";
 import { refreshLeaflyConfig } from "./runtime";
 import {
   buildLeaflyItemsResult,
@@ -107,6 +109,11 @@ function menuItemsUrl(): string {
 async function authedFetch(
   url: string,
   method: string,
+  // SLICE L-17. This file PUTs to menuItemsUrl(), so it is a menu push --
+  // not, as a first reading of the audit assumed, the readback. The readback
+  // is push.ts:786 against menuReadbackUrl(). Recorded because the two carry
+  // different budgets and the mistake is easy to repeat.
+  operation: LeaflyOperation,
   body: unknown,
   opts?: { maxRetries?: number },
 ) {
@@ -115,7 +122,13 @@ async function authedFetch(
 
   for (let attempt = 1; ; attempt += 1) {
     const token = await getLeaflyAccessToken();
-    const res = await fetch(url, {
+    // SLICE L-17 -- a bounded attempt. `operation` is resolved by the caller
+    // (see the `operation` parameter) because ONE wrapper serves more than
+    // one endpoint here, and the budgets differ. Failure throws, which is the
+    // behaviour this wrapper already had -- an unbounded `fetch` that rejects
+    // propagates too. What changes is that it now rejects in finite time and
+    // with a sentence the operator can act on.
+    const call = await leaflyFetchWithDeadline(operation, url, {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -123,6 +136,10 @@ async function authedFetch(
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    if (!call.ok) {
+      throw new Error(call.verdict.message);
+    }
+    const res = call.response;
     const text = await res.text().catch(() => "");
     let parsed: unknown = text;
     try {
@@ -379,7 +396,7 @@ export async function pushLeaflySelection(input: {
   assertLeaflyPayloadValid({ items: leaflyItems });
 
   const payload: LeaflyItemsPayload = { items: leaflyItems };
-  const result = await authedFetch(menuItemsUrl(), "PUT", payload, {
+  const result = await authedFetch(menuItemsUrl(), "PUT", "menu_push", payload, {
     maxRetries: settings.maxRetries,
   });
 
