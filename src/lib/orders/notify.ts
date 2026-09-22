@@ -31,6 +31,26 @@ import {
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
+/**
+ * SLICE L-19 — the staff recipient list, parsed in ONE place.
+ *
+ * Exported so the compliance test can prove that the copy in the pure
+ * `email-readiness-core.ts` (which imports nothing, and so cannot import this)
+ * agrees with it on a shared corpus of hostile inputs. Proving the duplicate
+ * has not drifted is worth more than asserting that it has not.
+ *
+ * It matters because `assessEmailReadiness` reports "no staff addresses are
+ * configured" as a FAULT. If these two disagreed about whether `" , "` is a
+ * recipient, the dashboard would warn about a problem that does not exist, or
+ * stay silent about one that does.
+ */
+export function parseStaffEmailList(raw: string | null | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function formatCurrency(minor: number): string {
   return `$${(minor / 100).toFixed(2)}`;
 }
@@ -123,10 +143,21 @@ export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<Not
   const apiKey = process.env.RESEND_API_KEY ?? "";
   const from = process.env.ORDER_EMAIL_FROM ?? "";
   if (!apiKey || !from) {
-    // Not configured — a deliberate, quiet skip (rollout posture).
+    // SLICE L-19 — this used to be a SILENT skip, and that was the bug.
+    //
+    // The rollout posture that justified silence ("checkout must work before
+    // the email provider is wired up") was correct in its day and is now the
+    // reason the owner placed a real order, received no confirmation, and
+    // found nothing on the timeline, nothing in the logs and nothing on screen
+    // to tell him why. Not sending is still the right behaviour; saying
+    // nothing about it is not.
+    //
+    // The skip now carries its reason, so `summarizeNotifyOutcomes` can tell
+    // this — a fault — apart from a Leafly order, which is a contractual
+    // requirement and must stay quiet. See email-readiness-core.ts.
     return summarizeNotifyOutcomes(n.orderNumber, [
-      { audience: "customer", status: "skipped" },
-      { audience: "staff", status: "skipped" },
+      { audience: "customer", status: "skipped", skipReason: "provider_unconfigured" },
+      { audience: "staff", status: "skipped", skipReason: "provider_unconfigured" },
     ]);
   }
 
@@ -147,7 +178,15 @@ export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<Not
         `Leafly is the sole originator of consumer order communications for orders placed ` +
         `on its platform, so sending our own confirmation would breach the integration.`,
     );
-    tasks.push(Promise.resolve<EmailSendOutcome>({ audience: "customer", status: "skipped" }));
+    tasks.push(
+      Promise.resolve<EmailSendOutcome>({
+        audience: "customer",
+        status: "skipped",
+        // CORRECT BEHAVIOUR, NOT A FAULT. This one must never raise a warning:
+        // a warning on every Leafly order teaches staff to ignore warnings.
+        skipReason: "marketplace_origin",
+      }),
+    );
   } else if (n.customerEmail) {
     tasks.push(
       sendEmail({
@@ -170,14 +209,18 @@ export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<Not
       }),
     );
   } else {
-    tasks.push(Promise.resolve<EmailSendOutcome>({ audience: "customer", status: "skipped" }));
+    // No address on file. Normal — not every order has one.
+    tasks.push(
+      Promise.resolve<EmailSendOutcome>({
+        audience: "customer",
+        status: "skipped",
+        skipReason: "no_customer_address",
+      }),
+    );
   }
 
   // Staff alert
-  const staffEmails = (process.env.ORDER_STAFF_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const staffEmails = parseStaffEmailList(process.env.ORDER_STAFF_EMAILS);
   // Staff alert. Note the ASYMMETRY with the customer branch above, which is
   // the whole point of having two separate predicates: Leafly's restriction is
   // about the CONSUMER relationship, so telling our own team that a Leafly
@@ -200,7 +243,16 @@ export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<Not
       }),
     );
   } else {
-    tasks.push(Promise.resolve<EmailSendOutcome>({ audience: "staff", status: "skipped" }));
+    // Two different situations, and they are not the same thing: policy says
+    // this audience may not be emailed (correct), versus nobody configured an
+    // address to email (a fault — an order arrives and the shop never hears).
+    tasks.push(
+      Promise.resolve<EmailSendOutcome>({
+        audience: "staff",
+        status: "skipped",
+        skipReason: !staffAllowed ? "not_permitted" : "no_staff_addresses",
+      }),
+    );
   }
 
   const outcomes = await Promise.all(tasks); // sendEmail never rejects

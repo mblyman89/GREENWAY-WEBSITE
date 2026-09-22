@@ -55,6 +55,8 @@ import { LeaflyOrdersPanel } from "@/components/admin/orders/LeaflyOrdersPanel";
 // instead of going blank, and it shows the six webhook addresses that have to
 // be emailed to Leafly before any order can arrive at all.
 import { loadLeaflyOrderSetupState } from "@/lib/leafly/order-readiness-server";
+import { assessEmailReadiness } from "@/lib/orders/email-readiness-core";
+import { EmailReadinessBanner } from "@/components/admin/orders/EmailReadinessBanner";
 import { LeaflyOrderSetupPanel } from "@/components/admin/orders/LeaflyOrderSetupPanel";
 
 export const dynamic = "force-dynamic";
@@ -267,6 +269,16 @@ export default async function OrdersAdminPage({
   const printerNeedsAttention = printerConfigured && autoPrintOn && !printerOnline && activeCount > 0;
   const printTestQueued = sp.printTest === "1";
 
+  // SLICE L-19 — computed here, on the server, from the same single predicate
+  // the setup checklist uses (setup-status.ts). Two readers, one answer: the
+  // bug this replaces was the checklist saying "email is configured" while the
+  // notifier silently sent nothing, because they asked different questions.
+  const emailReadiness = assessEmailReadiness({
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    ORDER_EMAIL_FROM: process.env.ORDER_EMAIL_FROM,
+    ORDER_STAFF_EMAILS: process.env.ORDER_STAFF_EMAILS,
+  });
+
   return (
     <div>
       <AdminPageHeader
@@ -310,6 +322,16 @@ export default async function OrdersAdminPage({
       />
 
       <div className="px-5 py-6 sm:px-8">
+        {/* SLICE L-19 — "the customer never got a confirmation email."
+            It was not Leafly and it was not a broken send: the email provider
+            was not configured, so notify.ts skipped both emails and said
+            nothing. This banner is the "said nothing" half of that bug. It
+            renders NOTHING when email is configured, and nothing for a Leafly
+            order, so it cannot become furniture. First thing on the page,
+            above even the new-order watcher, because if this is showing then
+            this page is the only notification anyone is getting. */}
+        <EmailReadinessBanner readiness={emailReadiness} />
+
         {/* New-order watcher (polls + chimes when new orders arrive) */}
         <NewOrderAlert />
 
