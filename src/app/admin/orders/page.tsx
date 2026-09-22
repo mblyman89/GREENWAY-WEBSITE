@@ -48,6 +48,14 @@ import {
   type BoardInterrupts,
 } from "@/lib/leafly/register-claim-server";
 import { LeaflyOrdersPanel } from "@/components/admin/orders/LeaflyOrdersPanel";
+// SLICE M-2 — the owner placed a real Leafly order and got four silences: no
+// row, no receipt, no sound, and no Leafly section on this page. The last of
+// those was the orders panel correctly hiding itself while setup was
+// incomplete. This panel owns that empty state so the page explains itself
+// instead of going blank, and it shows the six webhook addresses that have to
+// be emailed to Leafly before any order can arrive at all.
+import { loadLeaflyOrderSetupState } from "@/lib/leafly/order-readiness-server";
+import { LeaflyOrderSetupPanel } from "@/components/admin/orders/LeaflyOrderSetupPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -170,6 +178,7 @@ export default async function OrdersAdminPage({
     printerSettings,
     leaflyBoard,
     leaflyPendingAck,
+    leaflySetup,
   ] = await Promise.all([
     listOrdersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
     getOrderStatusCounts(),
@@ -183,6 +192,11 @@ export default async function OrdersAdminPage({
     // the existing Promise.all so the Leafly read costs no extra round trip.
     loadLeaflyOrderBoard(),
     countLeaflyOrdersAwaitingAck(),
+    // SLICE M-2: why a placed Leafly order produced no record, no receipt and
+    // no sound. Joins the same Promise.all for the same reason as the two
+    // above, and is non-throwing by construction — a failure degrades to
+    // "couldn't check" inside the panel rather than 500-ing this page.
+    loadLeaflyOrderSetupState(),
   ]);
   // SLICE L-14 — cancellation interrupts for the orders the board just loaded.
   //
@@ -326,6 +340,28 @@ export default async function OrdersAdminPage({
             It renders NOTHING when Leafly order handling has never been set up
             and nothing has arrived, so the page is unchanged for a shop not
             using it. It never hides a failure. */}
+        {/* SLICE M-2 — LEAFLY ORDER SETUP / "WHERE DID MY ORDER GO".
+
+            Rendered ABOVE the orders board, and only when there is something
+            to say: `showPanel` is true once any setup progress exists or any
+            order has ever arrived, so a shop that has never touched Leafly
+            orders sees this page exactly as it did before.
+
+            It is shown even when everything is ready, in `compact` form — the
+            two optional steps it tracks (speaker, printer) are precisely the
+            ones that let an order arrive SILENTLY, and a silent arrival is
+            worse than no arrival: the order is real, the 15-minute
+            auto-cancel clock is running, and nobody in the building has been
+            told. The compact form drops the explanatory paragraph and keeps
+            the evidence and the checklist.
+
+            The ordering matters. When setup is incomplete the board below
+            renders nothing, so this is the only thing on screen that can
+            explain the blank space — which is the whole reported bug. */}
+        {leaflySetup.readiness.showPanel ? (
+          <LeaflyOrderSetupPanel setup={leaflySetup} compact={leaflySetup.readiness.ready} />
+        ) : null}
+
         <LeaflyOrdersPanel
           board={leaflyBoard}
           pendingAckCount={leaflyPendingAck}
