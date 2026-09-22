@@ -442,3 +442,127 @@ One further self-inflicted lesson: a test in this very file originally asserted 
 field with a regex that **could never fail**. It was replaced with one that runs the join and
 asserts the emitted variant carries exactly the six v2 fields. Same mistake as the incident above —
 *checking the text that describes the behaviour instead of the behaviour.*
+
+---
+
+## TASK J — the owner's four follow-up questions (asks 1–4)
+
+The owner asked four things after the collision repair merged: how do I delete products and what is
+left to build; are the fix-and-edit redirect buttons ready; can the full menu be sent while
+withholding the bad ones; and what did "stage 2 changes how your menu looks to shoppers" mean.
+
+Each was treated as a claim to be **verified or refuted**, not a feature to be described.
+
+### Finding J-5 — the fix buttons work, and had a latent 404 one wiring change away
+
+The id chain was followed through six files by reading source, not by assuming:
+
+`menu_items.source_item_id` → `feed-source.ts` → `menu-feed-core.ts:157` → `payload-core.ts:755`
+→ `payload-validate-core.ts:517` → `sendability-core.ts:377 fixHrefFor(id)` → `/admin/products/[key]`
+→ `getItemBySourceKey()` → `.eq("source_item_id", key)`.
+
+**The chain closes.** Ordinary fix buttons work.
+
+But `collision-split-core.ts` mints `${parentId}--1g` ids that exist on Leafly and **not** in
+`menu_items`. A fix button for a split listing would have 404'd. It was latent only because
+`triageLeaflySelection` validates the **unrepaired** payload (`selection-server.ts:493`) — luck of
+ordering, not design, and it would have ended the moment the repair reached the UI, which is exactly
+what this task did.
+
+`fix-link-core.ts` (58 assertions, floor 52) closes it: known-set check **first** (so a real id
+containing `--` stays `direct`), then split→parent, then synthesized→item, then **refuse with
+`href: null`** rather than emit a link that might be wrong.
+
+### Finding J-6 — "withhold the bad ones" already existed and REFUSED on this owner's menu
+
+`invalidItemPolicy: "quarantine"` predated the request. Measured through the **real** builder,
+**real** validator and **real** quarantine decision (19/19 assertions):
+
+| Menu | Bad | Share | Outcome |
+|---|---|---|---|
+| 600 | 60 | 10% | proceeds — sends 540, names 60 |
+| 600 | 200 | **33.3%** | **REFUSES — nothing sent** |
+| 600 | 200 | 33.3% | **repair first → 1000 items, 0 bad, nothing withheld** |
+
+`QUARANTINE_MAX_SHARE_PERCENT = 25` with a `>=` comparison. The owner's real case (124 failures)
+sits **above** the ceiling, so the pre-existing feature would have produced an error and nothing
+else. Boundary verified at exactly 25% (refuses) and 24.8% (proceeds).
+
+**The shortcut was considered and rejected.** Raising the ceiling would have shipped a green
+report over a builder defect. The ceiling is a correct alarm; the honest fix is to remove the
+*cause* before the alarm is consulted. `TARGETED_PUSH_MAX_ITEMS = 250` also makes the targeted
+picker structurally incapable of carrying a several-hundred-product menu — hence a separate
+whole-menu path rather than a flag on the existing one.
+
+### Finding J-7 — the preview promised names and delivered counts
+
+`buildFullMenuDecision` computed `ItemSplit.products` — the exact product names a shopper would
+see — and then **discarded them**, returning only `splitItemCount` / `createdItemCount`. The
+preview's own docstring promised it "lists the products that would be created by a split, **by
+name**". A count cannot answer *"what will my shoppers see?"*.
+
+`split-preview-core.ts` (87 assertions, floor 80) is the shape that carries them out: current name
+beside created names, per-listing price and stock joined **from the pre-split payload** (so the
+preview can still reveal a price the split altered, rather than agreeing with it by construction),
+refusals included as part of the preview, stable alphabetical order with an id tiebreak, and a
+missing price stated in words rather than rendered as `$0.00`.
+
+Its prose deliberately contains none of "stage 1", "stage 2", "collision", "variant", "payload" or
+"split" — those are our words for our defect; the owner asked what it does to his shop.
+
+### Finding J-8 — the deliberate omission that would have been a lying checkbox
+
+`repairCollisions` is wired into `pushLeaflySelectionAction` (which repairs after settings and
+before `assertLeaflyPayloadValid`, so the validator judges the repaired payload) and is
+**deliberately not** offered on `pushLeaflyPassingOnlyAction`.
+
+That path derives its ids from `triageLeaflySelection`, which validates the **unrepaired** payload.
+Every colliding product is therefore already excluded from `sendableIds` before a repair could run.
+The flag would have repaired a set with nothing repairable left in it — looking like a feature,
+doing nothing, and leaving the products it claimed to fix off the menu. A test fails if anyone adds
+it, and a companion test pins the triage ordering that makes the reasoning true.
+
+### Safety properties of the new whole-menu send
+
+* **PUT only, hard-coded, no POST path exists.** A POST of a deliberately-withheld menu would
+  instruct Leafly to DELETE every held-back product — turning "hold this back" into "destroy this".
+* Sync state is written **only** for sent items; withheld ids are left untouched rather than
+  written (which would claim Leafly holds them) or deleted (which would make the next PUT sync
+  issue a DELETE for a product that may still be live).
+* A sync-state write failure never turns a live publish into a reported failure.
+* Preflight still **throws** rather than withholding — a structural feed fault cannot be fixed by
+  omitting products.
+* Rules F1–F4: never report success for an empty send; never withhold without naming; never
+  proceed on unattributed errors; the ceiling still applies, measured **after** repair.
+* The repair is **off by default** everywhere, and the UI clears a stale preview when the toggle
+  changes, so the button can never do something other than what was previewed.
+* The audit trail records created listings **by name** (`splitCreatedListings`), not as a count —
+  a shopper-orderable listing that appears in no log is unanswerable six weeks later.
+
+### Verification
+
+* `fix-link-core` 58 · `full-menu-core` 69 · `split-preview-core` 87 — all registered with floors
+  in the pure self-test runner; **ALL PURE SELF-TESTS PASSED**.
+* `tests/compliance/leafly-full-menu.test.ts` — **80 tests**, built through the real builder,
+  real validator and real split engine.
+* Mutation round 1 (cores/server): **18/18** should-kill **KILLED**, CONTROL **SURVIVED**.
+* Mutation round 2 (preview, server wiring, UI, picker): **24/24** should-kill **KILLED**,
+  CONTROL **SURVIVED**.
+
+**Four mutants survived round 2 on first run — every one was a test matching the right words in the
+wrong place**, and they are worth recording because they are the same mistake in four costumes:
+
+1. "the prose reassures about orders" was satisfied by `ordering ids` in an **earlier sentence**, so
+   deleting the actual reassurance went unnoticed.
+2. "refusals reach the preview" was satisfied by `repaired.refusals.length` used a few lines earlier
+   to build `refusalCount` — the loose `toMatch` hit the wrong occurrence.
+3. "the panel calls the preview action" was satisfied by the **import statement**. An import proves a
+   file knows a name; only an `await` at a call site proves it runs it.
+4. "the refusal names a next step" was reading the **checkbox label** higher up the file, which
+   shares wording — so the whole explanation could have been replaced with "Too widespread." and the
+   test would have passed.
+
+All four are now scoped to the call site or the branch, and assert the **substance** (the promise
+that orders still resolve; the specific `previewSplits({...})` arguments; an `await`; the advice
+inside the refusal branch) rather than the vocabulary. This is the third recurrence in this file of
+one lesson: *checking the text that describes the behaviour instead of the behaviour.*

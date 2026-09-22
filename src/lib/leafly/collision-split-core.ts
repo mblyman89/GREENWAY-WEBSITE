@@ -153,9 +153,28 @@ export function labelSlug(label: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/**
+ * The marker that separates a parent product id from its size slug.
+ *
+ * EXPORTED DELIBERATELY, and this is not cosmetic. A split id is the one id
+ * in the system that does NOT exist in `menu_items`, so anything that wants
+ * to turn an id back into a back-office product page has to recognise the
+ * marker and strip it. Before this constant existed the separator was a
+ * string literal inside `splitItemId`, which meant any reader had to
+ * re-derive it by eye -- and a reader who guessed `"-"` instead of `"--"`
+ * would produce a link that silently 404s.
+ *
+ * Two hyphens rather than one because single hyphens are extremely common
+ * inside real POS product keys (`pos-45c6e282e0e8`). A single-hyphen marker
+ * could not be told apart from the key's own punctuation.
+ *
+ * `fix-link-core.ts` imports this and a drift test pins the two together.
+ */
+export const SPLIT_ID_SEPARATOR = "--";
+
 /** Deterministic, stable id for a split product. */
 export function splitItemId(parentId: string, label: string): string {
-  return `${parentId}--${labelSlug(label)}`;
+  return `${parentId}${SPLIT_ID_SEPARATOR}${labelSlug(label)}`;
 }
 
 /**
