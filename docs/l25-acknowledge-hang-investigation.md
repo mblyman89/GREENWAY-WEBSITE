@@ -692,3 +692,195 @@ And the near-miss is worth as much as the fix: the intended solution was
 disproven by measurement **before** it shipped. Had it gone out, it would have
 passed every test and failed in production under GC pressure — a fourth
 correct-looking fix for the same bug.
+
+---
+
+# CHAPTER SIX — SLICE L-27: THE HOLE UNDERNEATH THE FLOOR
+
+## The report that finally located it
+
+> "I tested the acknowledge button again after placing an order. it spun for
+> 5 minutes then quit. it is still not working. I dont understand how this is
+> so difficult. everything else about leafly connections and communications
+> works and did not require this much effort to fix it."
+
+The frustration is earned. This is the fifth attempt. But the report contains
+one detail none of the previous four had, and it is the detail that solved it:
+**five minutes, then quit.**
+
+Previously the button "sat waiting forever". Now it terminates — at a specific,
+reproducible time. Five minutes is not a number this codebase picks anywhere.
+It is `export const maxDuration = 300` on `src/app/admin/orders/page.tsx`: the
+platform's own killer.
+
+## What that one number ruled out
+
+The acknowledge path is held to three deadlines:
+
+| Deadline | Value | Added |
+|---|---|---|
+| `LEAFLY_ACK_TOTAL_BUDGET_MS` | 240s | L-25 |
+| `DB_REQUEST_FLOOR_MS` | 15s | L-26 |
+| `RENDER_READER_BUDGET_MS` | 20s | L-26 |
+| `maxDuration` (platform) | **300s** | — |
+
+If any of ours had fired, the operator would have seen a sentence at 240s at
+the very latest. He saw a dead page at 300s. **Not one of our three deadlines
+fired.** So the blocking work was somewhere all three are blind to — and the
+job was no longer "bound the database", it was "find what is not a database
+query".
+
+## Where it was
+
+The first statement of `acknowledgeLeaflyOrderAction`:
+
+```ts
+const session = await requirePermission("orders.manage");
+```
+
+which reaches `getStaffSession()`, whose first await is:
+
+```ts
+const { data: { user } } = await supabase.auth.getUser();
+```
+
+Two properties had to hold simultaneously for this to survive four fixes:
+
+**1. It is not a PostgREST request.** L-26's floor is a PostgREST option.
+Reading `@supabase/supabase-js/dist/index.mjs`:
+
+- line 684 — `timeout: settings.db.timeout` → handed to `PostgrestClient`
+- line 813 — `_initSupabaseAuthClient(...)` → **never receives it**
+
+and `@supabase/auth-js/dist/module/lib/fetch.js` line 109 performs the request
+as `await fetcher(url, Object.assign({}, requestParams))`. There is no `signal`
+anywhere in that file. The auth client has never had a timeout of any kind.
+
+**2. It runs before the backstop.** L-25's 240s race is armed on the line
+*after* the permission check. Work that hangs inside `requirePermission`
+happens before the race exists, so the race cannot lose — it is never started.
+L-25's comment promised a backstop that "does not depend on the enumeration
+being complete". It was right about everything downstream of itself, and the
+gap was upstream.
+
+Together: a click blocks on an unbounded socket, no deadline is armed, and the
+platform kills the function at 300s having rendered nothing. Exactly the
+report.
+
+## The measurement (`scripts/recon/l27-auth-hang-probe.mjs`)
+
+Never assume. Against a local black-hole server that accepts the connection and
+answers nothing for 25 seconds:
+
+```
+P1  PostgREST, db.timeout = 15000 ........ 15005ms  AbortError   BOUNDED
+P2  auth.getUser(), SAME client .......... 25009ms  resolved     UNBOUNDED
+P3  auth.getUser(), global.fetch bounded ..  8002ms  AbortError   BOUNDED
+```
+
+P1 and P2 use the **same client with the same options**. The only difference is
+which sub-client serves the call. That is the entire bug, measured. P3 is the
+fix, measured.
+
+## Is there community support on this? (the owner asked directly)
+
+Yes — and it describes our symptom almost word for word.
+
+- **supabase/supabase#35754**, labelled `bug`: *"Client-side
+  `supabase.auth.getUser()` hangs indefinitely"*. Next.js App Router, deployed
+  to Vercel. Their diagnosis used the same instrument we did: *"We've confirmed
+  this hang by wrapping the getUser() call in a Promise.race with a 10-second
+  timeout, which consistently logs a timeout error for this specific call."*
+- **supabase/supabase-js#2111**, labelled `bug` + `auth-js`: *"auth methods
+  hang indefinitely due to orphaned Web Locks"*. Its first stated expectation:
+  *"Auth methods should complete or fail within a reasonable timeout, not hang
+  indefinitely."*
+
+Neither is fixed upstream. Every thread converges on the same remedy: bound the
+transport yourself, because the library will not.
+
+On the Leafly side, the **POS Order Integration Connection Issue Hub**
+(help.leafly.com, updated Apr 2026) is the relevant authoritative page. It
+documents Partner Outages and Credential Issues, and confirms the operational
+fallback: *"During an outage or credential issue, orders may not appear in your
+POS system, so you'll need to monitor and manage them in the Leafly Order
+Dashboard until the problem is resolved."* Leafly's developer FAQ category is
+gated behind a Salesforce partner login. Nothing in Leafly's public material
+describes an acknowledge endpoint that hangs — consistent with our finding that
+the fault was never on Leafly's side at all, which is also why "everything else
+about Leafly works": every other Leafly path is a background job or a cron,
+none of which sit behind a per-request auth check the way a button press does.
+
+## The fix
+
+`src/lib/supabase/fetch-floor.ts` — a bounded `global.fetch`, installed on all
+three Supabase factories (`admin.ts`, `server.ts`, `middleware.ts`).
+
+`global.fetch` is the one seam every sub-client funnels through: auth,
+PostgREST, Storage, Functions. Bounding it bounds all of them at once,
+including sub-clients that do not exist yet. A `Promise.race` around
+`getStaffSession()` would have fixed the orders page and left everything else
+exposed — and "the enumeration was incomplete" is precisely the mistake that
+made L-17, L-23, L-25 and L-26 each look complete and each fall short.
+
+The floor is **20s**, chosen to sit above every tighter deadline (so those keep
+winning, which is intended) and far below the platform ceiling (so a stall
+still leaves room to render a sentence).
+
+Signals are composed **by hand** with `addEventListener("abort", …)`, mirroring
+what postgrest-js itself does for `db.timeout`. `AbortSignal.any()` remains
+banned: nodejs/node#57736 and #55428, both `confirmed-bug`, hold source signals
+weakly, so after GC the timer never fires — it would have silently recreated
+this exact bug.
+
+## Two consequences that had to be handled
+
+A bound converts a hang into a **throw**, and an unhandled throw is a worse
+outage than a slow page.
+
+1. **Middleware** — `auth.getUser()` there now `.catch(() => undefined)`. An
+   unhandled rejection in middleware fails every `/admin/*` request, turning a
+   slow auth server into a total blackout of the back office. Swallowing is
+   correct because that call only refreshes the cookie opportunistically; it is
+   not a guard. Access is enforced downstream by `requireStaff()`.
+
+2. **`getStaffSession()`** — wrapped in `try/catch`. The signature deliberately
+   did **not** change. Widening it to
+   `StaffSession | null | { unavailable: true }` was considered and rejected on
+   security grounds: there are 26 call sites and the dominant shape is
+   `if (session) { …allow… }`. A returned object is truthy, so widening would
+   have silently flipped every one of those guards to ALLOW during an auth
+   outage — converting an availability bug into an authentication bypass across
+   the entire back office, with the compiler catching none of the sites that
+   only test truthiness. The failure therefore stays `null`: fail closed,
+   exactly as before. The distinction travels out of band via
+   `authCheckUnavailable()`, backed by a request-scoped React `cache()` box (a
+   module-level `let` would leak one operator's outage onto another operator's
+   screen on the same warm instance), and is consumed **only** by the login
+   screen for explanation — never by a guard.
+
+## What the operator sees now
+
+Instead of a five-minute spinner ending in a dead page, an auth stall produces
+a redirect to the sign-in screen carrying a true sentence: that the failure is
+ours and not their password, and — critically — that if they were mid-acknowledge
+they should check the board before pressing Accept again. An acknowledge whose
+outcome we never learned is the one state where a second press is genuinely
+dangerous, because acknowledgement permanently revokes access to the shopper's
+ID images.
+
+## Verification
+
+- `tsc --noEmit` — 0 errors
+- `tests/compliance/leafly-l27-auth-fetch-floor.test.ts` — 27 tests, all green;
+  behaviour is exercised against an injected fetch rather than asserted on the
+  shape of a config object
+- `scripts/recon/l27-mutation-test.mjs` — 12 realistic mutations, **12/12
+  caught, 0 survived**
+
+The sweep earned its keep: on the first run, mutation 12 ("login page stops
+explaining, blaming the operator's password") **SURVIVED**, because the test
+only checked that the identifier `authCheckUnavailable` appeared somewhere in
+the file. Replacing the call with a hard-coded `false` passed. The test was
+tightened to pin the call itself and the branch it drives, and the sweep then
+came back 12/12. That is a hole that would otherwise have shipped.

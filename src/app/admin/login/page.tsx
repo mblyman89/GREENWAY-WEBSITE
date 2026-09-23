@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getStaffSession } from "@/lib/auth/session";
+import { authCheckUnavailable, getStaffSession } from "@/lib/auth/session";
 import { LoginForm } from "@/components/admin/LoginForm";
 
 export default async function AdminLoginPage({
@@ -10,6 +10,22 @@ export default async function AdminLoginPage({
   const session = await getStaffSession();
   if (session) redirect("/admin");
   const { error } = await searchParams;
+
+  // SLICE L-27 — say WHOSE fault it is.
+  //
+  // Everyone who cannot be verified lands here, and until now they were all
+  // shown the same blank sign-in box. That is right for someone who is signed
+  // out, and actively misleading for someone whose session is perfectly valid
+  // but whose auth check timed out: they type correct credentials, succeed,
+  // and bounce straight back. The screen blames them for our outage.
+  //
+  // This does not weaken the gate. `getStaffSession()` already returned null
+  // and the redirect above did not happen, so nobody is being let in — the
+  // only thing that changes is that the sentence is true.
+  const unavailable = authCheckUnavailable();
+  const shownError = unavailable
+    ? "We could not reach the sign-in service just now, so we could not check your session. This is a problem on our side, not with your password. Wait a moment and try again — and if you were in the middle of acknowledging a Leafly order, check the Online Orders board before pressing Accept a second time."
+    : (error ?? null);
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-16">
@@ -23,7 +39,7 @@ export default async function AdminLoginPage({
             Staff sign-in. Authorized employees only.
           </p>
         </div>
-        <LoginForm initialError={error ?? null} />
+        <LoginForm initialError={shownError} />
         <p className="mt-6 text-center text-xs text-white/40">
           This is a private system. All activity is logged.
         </p>
