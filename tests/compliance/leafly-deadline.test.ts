@@ -213,15 +213,75 @@ describe("leaflyFetchWithDeadline", () => {
     return mod.leaflyFetchWithDeadline;
   };
 
-  it("returns the response untouched when the call succeeds", async () => {
+  /**
+   * SLICE L-23 REWROTE THIS TEST, AND THE REASON IS WORTH READING.
+   *
+   * It used to assert IDENTITY — `expect(out.response).toBe(body)` — with
+   * this stated justification:
+   *
+   *   "Identity, not equality: a helper that reconstructs the Response would
+   *    lose the body stream and the call site would silently read ''."
+   *
+   * That FEAR IS COMPLETELY CORRECT and is the most valuable sentence in the
+   * original suite. A silently-empty body on the order path is how an order
+   * gets processed with nothing in it. The fear is kept.
+   *
+   * But identity was only ever a PROXY for the fear, and L-23 proved the
+   * proxy was the weaker of the two available checks. L-23 must reconstruct
+   * the Response, because the body has to be read INSIDE the deadline — a
+   * `fetch()` promise resolves at the HEADERS, so returning the original
+   * Response object is precisely what left the body read unbounded and gave
+   * the owner a five-minute hang.
+   *
+   * So the assertion now tests the FEAR DIRECTLY rather than the proxy: can
+   * the call site still read the body, and does it get the real bytes? That
+   * is strictly stronger. The old identity check would happily pass for a
+   * helper that returned the original object with an already-consumed
+   * stream; this one would not.
+   *
+   * The lesson, which is the same one this slice is built on: assert the
+   * thing you are afraid of, not a stand-in that usually correlates with it.
+   */
+  it("gives the call site a readable body with the real bytes in it", async () => {
     const fn = await load();
-    const body = new Response("{}", { status: 200 });
+    const body = new Response('{"hello":"world"}', {
+      status: 200,
+      headers: { "X-Trace": "keepme" },
+    });
     vi.stubGlobal("fetch", vi.fn(async () => body));
     const out = await fn("acknowledge", "https://x.test/a", { method: "POST" });
     expect(out.ok).toBe(true);
-    // Identity, not equality: a helper that reconstructs the Response would
-    // lose the body stream and the call site would silently read "".
-    expect(out.response).toBe(body);
+    if (!out.ok) return;
+
+    // THE FEAR, STATED DIRECTLY: the call site must not silently read "".
+    const text = await out.response.text();
+    expect(text).toBe('{"hello":"world"}');
+    expect(text).not.toBe("");
+
+    // And the rest of the response must survive the rebuild, because the
+    // classifier reads the status and the callers read headers.
+    expect(out.response.status).toBe(200);
+    expect(out.response.ok).toBe(true);
+    expect(out.response.headers.get("x-trace")).toBe("keepme");
+  });
+
+  /**
+   * The body must be read inside the budget, which means it is ALREADY in
+   * memory by the time the caller sees it. Proven by consuming it twice over
+   * two different reads of the helper: a streamed body could only be read
+   * once, so a buffered one is the only way this can hold.
+   */
+  it("hands back a body that is already buffered, not still streaming", async () => {
+    const fn = await load();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("payload", { status: 200 })));
+    const out = await fn("acknowledge", "https://x.test/a", { method: "POST" });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+
+    // bodyUsed is false because the ORIGINAL stream was drained and its
+    // contents handed over in a fresh, unread Response.
+    expect(out.response.bodyUsed).toBe(false);
+    await expect(out.response.text()).resolves.toBe("payload");
   });
 
   it("passes a live AbortSignal to fetch", async () => {

@@ -394,6 +394,103 @@ export function classifyNetworkFault(input: {
 }
 
 /* ------------------------------------------------------------------------- *
+ * 2b. SLICE L-23 — the half of the request the deadline never covered
+ * ------------------------------------------------------------------------- */
+
+/**
+ * HTTP statuses that are forbidden from carrying a response body.
+ *
+ * ═══ WHY THIS LIST IS IN A PURE CORE AND NOT INLINE AT THE CALL SITE ═══════
+ * L-23 buffers the response body INSIDE the deadline (see `deadline-fetch.ts`
+ * for why), which means it must then hand the caller a reconstructed
+ * `Response`. The `Response` constructor THROWS a TypeError if a null-body
+ * status is given any body at all — including the empty string that
+ * `await res.text()` returns for a bodiless response.
+ *
+ * That is not a theoretical edge. Measured, from the vendored spec
+ * `docs/leafly-specs/order-api-v1.openapi.json`:
+ *
+ *   POST /{order_integration_key}/orders/{id}/acknowledge  →  204
+ *
+ * **204 is the success code of the single most important call in the
+ * integration, and it is the one that is irreversible.** Getting this list
+ * wrong would not produce a rare edge-case bug — it would throw a TypeError
+ * on EVERY successful acknowledgement, after Leafly had already accepted it
+ * and after the shopper's ID images were already destroyed. The order would
+ * then fail to reach the register, and the screen would report a failure for
+ * an action that had in fact succeeded and could never be repeated.
+ *
+ * So the list is here, with the reasoning attached, and it is asserted in CI
+ * rather than remembered.
+ *
+ * The three members are not a preference. They are fixed by the Fetch
+ * standard's "null body status" definition (101, 103, 204, 205 and 304); the
+ * two informational codes never surface as a resolved `Response` from
+ * `fetch`, so the three that can are the three listed.
+ */
+export const NULL_BODY_STATUSES = [204, 205, 304] as const;
+
+/**
+ * May a response with this status legally carry a body?
+ *
+ * Used to decide whether the buffered text is passed to the reconstructed
+ * `Response` or replaced with `null`. Non-numeric and out-of-range input is
+ * treated as "may carry a body", because the only consequence of being wrong
+ * in that direction is an unnecessary empty string, whereas being wrong in
+ * the other direction throws.
+ */
+export function mayCarryBody(status: number | null | undefined): boolean {
+  if (typeof status !== "number" || !Number.isFinite(status)) return true;
+  return !(NULL_BODY_STATUSES as readonly number[]).includes(status);
+}
+
+/**
+ * The two distinct ways a bounded request can run out of time.
+ *
+ * ═══ WHY THIS DISTINCTION EARNS ITS OWN TYPE ══════════════════════════════
+ * `connect` — we never got an answer at all. No headers, no status. This is
+ *   the fault L-17 fixed, and for an acknowledge it means "we cannot tell
+ *   whether Leafly got it", because the request may have been processed
+ *   after we stopped listening.
+ *
+ * `body` — Leafly ANSWERED. We have the status line and the headers; the
+ *   response body then stalled mid-stream. This is a materially different
+ *   event, and conflating the two would throw away the most valuable fact we
+ *   possess at the worst possible moment.
+ *
+ * Why it matters so much for exactly one operation: the acknowledge endpoint
+ * returns **204 No Content**. A 204 has no body to wait for. So if we have
+ * received the status line and it says 204, the acknowledgement has
+ * *succeeded* — there is nothing further to read, and giving up at that point
+ * and reporting failure would be a lie in the most expensive direction: the
+ * ID images are already gone, the door is already closed, and telling the
+ * operator it failed invites a second press against a door that cannot open
+ * twice.
+ *
+ * Keeping the two faults separate is what lets the code say "Leafly answered
+ * 204, we are done" instead of "we stopped waiting, we cannot tell".
+ */
+export const DEADLINE_PHASES = ["connect", "body"] as const;
+export type DeadlinePhase = (typeof DEADLINE_PHASES)[number];
+
+/**
+ * Given a status that HAS arrived, is the outcome already fully determined
+ * even though the body never finished arriving?
+ *
+ * True only when the status itself is a null-body status: there was never
+ * going to be a body, so a stalled read tells us nothing we do not already
+ * know, and the status is the entire answer.
+ *
+ * This is deliberately narrow. A 200 whose body stalls is NOT determined —
+ * the body is the payload, and inventing an empty one would hand the caller
+ * a successful-looking response with nothing in it.
+ */
+export function outcomeSettledByStatusAlone(status: number | null | undefined): boolean {
+  if (typeof status !== "number" || !Number.isFinite(status)) return false;
+  return !mayCarryBody(status);
+}
+
+/* ------------------------------------------------------------------------- *
  * 3. What to tell the operator
  * ------------------------------------------------------------------------- */
 
@@ -447,15 +544,49 @@ export function isIrreversibleOperation(operation: LeaflyOperation): boolean {
 export function describeDeadlineFailure(input: {
   operation: LeaflyOperation;
   fault: LeaflyNetworkFault;
+  /**
+   * SLICE L-23 — WHERE the time ran out. Optional, defaulting to `connect`,
+   * so the existing call shape and every existing sentence are unchanged.
+   *
+   * `body` is only ever passed when a status line was genuinely received and
+   * the body then stalled. It changes the sentence because it changes what
+   * is true: "Leafly never answered" and "Leafly answered and then went
+   * quiet mid-sentence" are different facts, and the second one is far more
+   * useful to the person holding the tablet.
+   */
+  phase?: DeadlinePhase;
+  /**
+   * The status we DID receive, when `phase` is `body`. Named in the message
+   * because a status we actually hold is the strongest evidence available,
+   * and withholding it would be throwing away the best fact we have.
+   */
+  receivedStatus?: number | null;
 }): DeadlineVerdict {
   const { operation, fault } = input;
+  const phase: DeadlinePhase = input.phase ?? "connect";
   const seconds = Math.round(timeoutForOperation(operation) / 1000);
   const irreversible = isIrreversibleOperation(operation);
   const certainlyNotDelivered = fault !== "timeout" && fault !== "unknown";
   const wasOurClock = fault === "timeout";
 
   let message: string;
-  if (fault === "timeout") {
+  if (fault === "timeout" && phase === "body") {
+    // Leafly ANSWERED. We are not guessing about delivery any more, and the
+    // sentence must not pretend otherwise — saying "we cannot tell whether
+    // Leafly received it" when we are holding their status line would send
+    // the operator to check something we already know.
+    const statusPart =
+      typeof input.receivedStatus === "number" && Number.isFinite(input.receivedStatus)
+        ? `Leafly answered (HTTP ${input.receivedStatus})`
+        : `Leafly began answering`;
+    message = irreversible
+      ? `${statusPart} but the reply did not finish arriving within ${seconds} seconds. ` +
+        `Leafly DID receive this acknowledgement — the request reached them. ` +
+        `Do NOT acknowledge it again. Refresh this page to confirm the order's status.`
+      : `${statusPart} but the reply did not finish arriving within ${seconds} ` +
+        `seconds. The request did reach Leafly. Refresh this page to see the ` +
+        `current status before trying again.`;
+  } else if (fault === "timeout") {
     message = irreversible
       ? `Leafly did not answer within ${seconds} seconds, so we stopped waiting. ` +
         `We cannot tell whether Leafly received the acknowledgement or not. ` +
@@ -494,6 +625,15 @@ export function describeDeadlineFailure(input: {
     message,
     certainlyNotDelivered,
     // Safe when we know it never arrived, OR when repeating it is harmless.
+    //
+    // SLICE L-23: a BODY-phase timeout is never safe to retry on an
+    // irreversible operation, and for the strongest possible reason — we
+    // have Leafly's status line, so we know the request ARRIVED. The
+    // general clause below already yields false for that case
+    // (certainlyNotDelivered is false for a timeout, and acknowledge is
+    // irreversible), so no special case is added here. It is called out in
+    // this comment because the temptation, on seeing "we got a status", is
+    // to conclude the call is safe to repeat — it is the exact opposite.
     safeToRetry: certainlyNotDelivered || !irreversible,
     wasOurClock,
   };
@@ -876,6 +1016,140 @@ export function __runLeaflyDeadlineTests(): { passed: number; failed: number } {
         ok(`${op}/${fault} irreversible+unknown is not safe`, !v.safeToRetry);
       }
     }
+  }
+
+  // ---- SLICE L-23. The body-phase deadline ---------------------------------
+  //
+  // These assertions exist because the deadline that shipped in L-17 covered
+  // the connection and not the response, and the owner felt the difference as
+  // a five-minute hang. Each one pins a fact that, if it flipped, would bring
+  // that hang back or replace it with something worse.
+
+  // The null-body list. Getting this wrong throws on every successful
+  // acknowledgement, which is the single most expensive throw available here.
+  eq("there are three null-body statuses", NULL_BODY_STATUSES.length, 3);
+  for (const s of [204, 205, 304]) {
+    ok(`${s} is a null-body status`, (NULL_BODY_STATUSES as readonly number[]).includes(s));
+    ok(`${s} may NOT carry a body`, !mayCarryBody(s));
+    ok(`${s} is settled by its status alone`, outcomeSettledByStatusAlone(s));
+  }
+  // 204 is called out by name: it is the acknowledge endpoint's documented
+  // success code, per docs/leafly-specs/order-api-v1.openapi.json.
+  ok("the acknowledge success code 204 may not carry a body", !mayCarryBody(204));
+  ok("the acknowledge success code 204 is settled by status alone", outcomeSettledByStatusAlone(204));
+
+  // Statuses that DO carry a body must never be rescued. A 200 whose body
+  // stalled has lost its payload, and pretending otherwise hands the caller a
+  // successful-looking response with nothing in it.
+  for (const s of [200, 201, 202, 400, 401, 403, 404, 409, 422, 429, 500, 502, 503]) {
+    ok(`${s} may carry a body`, mayCarryBody(s));
+    ok(`${s} is NOT settled by status alone`, !outcomeSettledByStatusAlone(s));
+  }
+  // The status-push success code is 200, deliberately different from the
+  // acknowledge's 204 — so it must fall on the other side of this rule.
+  ok("the status-push success code 200 is not rescued", !outcomeSettledByStatusAlone(200));
+
+  // Absent/garbage input. Wrong in the "may carry a body" direction costs an
+  // unnecessary empty string; wrong the other way throws.
+  for (const bad of [null, undefined, NaN, Infinity, -Infinity]) {
+    ok(`${String(bad)} defaults to may-carry-body`, mayCarryBody(bad as number | null | undefined));
+    ok(`${String(bad)} is not settled by status alone`, !outcomeSettledByStatusAlone(bad as number | null));
+  }
+
+  eq("there are two deadline phases", DEADLINE_PHASES.length, 2);
+  ok("connect is a phase", (DEADLINE_PHASES as readonly string[]).includes("connect"));
+  ok("body is a phase", (DEADLINE_PHASES as readonly string[]).includes("body"));
+
+  // The phase changes the SENTENCE, and it must change it in the direction
+  // that reflects what we actually know.
+  {
+    const connect = describeDeadlineFailure({ operation: "acknowledge", fault: "timeout" });
+    const body = describeDeadlineFailure({
+      operation: "acknowledge",
+      fault: "timeout",
+      phase: "body",
+      receivedStatus: 204,
+    });
+    ok("connect and body timeouts read differently", connect.message !== body.message);
+
+    // The connect sentence must admit we cannot tell. The body sentence must
+    // NOT, because we are holding Leafly's status line.
+    ok("connect timeout says we cannot tell", /cannot tell/i.test(connect.message));
+    ok("body timeout does NOT say we cannot tell", !/cannot tell/i.test(body.message));
+
+    // The body sentence must state the fact that makes it useful.
+    ok("body timeout says Leafly did receive it", /did receive|reached them/i.test(body.message));
+    ok("body timeout names the status we hold", body.message.includes("204"));
+    ok("body timeout forbids a second press", /do not acknowledge it again/i.test(body.message));
+
+    // Both remain unsafe to retry. The temptation on seeing "we got a status"
+    // is to conclude the call is repeatable; it is the exact opposite, because
+    // we now KNOW it arrived.
+    ok("connect timeout on acknowledge is not safe to retry", !connect.safeToRetry);
+    ok("body timeout on acknowledge is not safe to retry", !body.safeToRetry);
+    ok("body timeout is still our clock", body.wasOurClock);
+    ok("body timeout is not 'certainly not delivered'", !body.certainlyNotDelivered);
+
+    // Neither may ever claim success. This is the invariant that protects the
+    // ID images from a second acknowledgement.
+    for (const v of [connect, body]) {
+      ok(
+        "a timeout never claims the order was acknowledged",
+        !/\bsucceeded\b|\bwas acknowledged\b/i.test(v.message),
+      );
+    }
+  }
+
+  // A body-phase timeout with no status still has to produce a true sentence:
+  // it must not invent a status it does not have.
+  {
+    const v = describeDeadlineFailure({
+      operation: "acknowledge",
+      fault: "timeout",
+      phase: "body",
+      receivedStatus: null,
+    });
+    ok("body timeout without a status says 'began answering'", /began answering/i.test(v.message));
+    ok("body timeout without a status invents no HTTP code", !/HTTP \d/.test(v.message));
+  }
+
+  // Omitting the phase must behave EXACTLY as before this slice, so that the
+  // five other call sites and every existing assertion are untouched.
+  for (const op of LEAFLY_OPERATIONS) {
+    for (const fault of LEAFLY_NETWORK_FAULTS) {
+      const implicit = describeDeadlineFailure({ operation: op, fault });
+      const explicit = describeDeadlineFailure({ operation: op, fault, phase: "connect" });
+      eq(`${op}/${fault} default phase is connect`, implicit.message, explicit.message);
+      ok(
+        `${op}/${fault} default phase keeps its flags`,
+        implicit.safeToRetry === explicit.safeToRetry &&
+          implicit.certainlyNotDelivered === explicit.certainlyNotDelivered,
+      );
+    }
+  }
+
+  // The body phase only changes the sentence for a TIMEOUT. A DNS failure did
+  // not reach Leafly regardless of what phase we claim, and saying otherwise
+  // would be the dangerous lie pointed the other way.
+  for (const fault of LEAFLY_NETWORK_FAULTS) {
+    if (fault === "timeout") continue;
+    const a = describeDeadlineFailure({ operation: "acknowledge", fault });
+    const b = describeDeadlineFailure({ operation: "acknowledge", fault, phase: "body" });
+    eq(`${fault} reads the same in either phase`, a.message, b.message);
+  }
+
+  // A non-irreversible body timeout may still be retried, and must say so —
+  // otherwise a menu push would be stranded by a rule written for the
+  // acknowledge.
+  {
+    const v = describeDeadlineFailure({
+      operation: "menu_push",
+      fault: "timeout",
+      phase: "body",
+      receivedStatus: 200,
+    });
+    ok("a reversible body timeout is safe to retry", v.safeToRetry);
+    ok("a reversible body timeout still says it reached Leafly", /did reach Leafly/i.test(v.message));
   }
 
   return { passed, failed };
