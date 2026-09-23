@@ -19,17 +19,27 @@
  * are pinned in tests/compliance: URL changed (navigation landed), pressed
  * button left the document (page re-rendered in place), or the safety
  * timeout — the UI can never get stuck busy.
+ *
+ * SLICE L-30 — a house rule earned the hard way, please do not undo it:
+ * NOTHING in this file may branch on `event.defaultPrevented`, and no
+ * decision here may be deferred to a microtask. Both were tried in L-29,
+ * both passed 37 tests, and both were wrong, because a scripted
+ * dispatchEvent() and a real user click have different microtask timing and
+ * because react-dom cancels the default on SUCCESSFUL server-action submits.
+ * If a form's submits are not always real saves, the form says so in markup
+ * with PENDING_OPT_OUT_ATTR. The keeper does not guess.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   PENDING_BUTTON_CLASS,
+  PENDING_OPT_OUT_ATTR,
   PENDING_POLL_MS,
   isEligibleNavClick,
   isServerActionForm,
   pendingHint,
   shouldClearPending,
-  submitDidStart,
+  submitShouldShowPending,
   type PendingKind,
 } from "@/lib/admin/pending-core";
 
@@ -78,48 +88,62 @@ export function PendingKeeper() {
 
   // Form saves: spinner on the pressed button + double-submit guard + bar.
   //
-  // SLICE L-29. This listener is in the CAPTURE phase, which runs BEFORE the
-  // form's own onSubmit handler. So at this moment we do not yet know whether
-  // the submit is real: a confirm-first action (LeaflyOrderActions) cancels
-  // its first submit with preventDefault() to open a dialog. Committing here
-  // gave the owner a two-minute progress bar for a request that did not
-  // exist, and — because `gwBusy` was left set — made the keeper swallow the
-  // genuine submit when he finally confirmed. See the long note on
-  // `submitDidStart` in pending-core.ts.
+  // ─────────────────────────────────────────────────────────────────────────
+  // SLICE L-30 — WHY THIS DECIDES IMMEDIATELY AGAIN, AND READS NO EVENT FLAGS
+  // ─────────────────────────────────────────────────────────────────────────
+  // L-29 made this listener ARM and let a queueMicrotask() decide, on the
+  // theory that `defaultPrevented` would by then be final. It shipped green
+  // and did not work. Two facts, both measured in a real browser rather than
+  // reasoned about, killed that design:
   //
-  // The listener therefore ARMS, and a microtask decides. `defaultPrevented`
-  // is only meaningful once the event has finished propagating.
+  //   1. A REAL user click runs a microtask checkpoint BETWEEN listeners
+  //      (the JS stack empties after each browser-invoked callback), so the
+  //      microtask fired BEFORE the form's onSubmit — the exact opposite of
+  //      a scripted dispatchEvent(), which keeps the whole chain in one stack
+  //      frame. Every DOM test in this repo used the scripted form, so the
+  //      suite could not have caught it. See l30-real-click-probe.mjs, which
+  //      runs the same tree both ways and prints the divergence.
+  //
+  //   2. react-dom calls preventDefault() ITSELF on every SUCCESSFUL
+  //      server-action submit — that is how it replaces the native POST. So
+  //      the flag is true for "cancelled to ask a question" and true for
+  //      "worked perfectly". It never carried the information L-29 read out
+  //      of it. See l30-plain-form-regression-probe.mjs.
+  //
+  // So the keeper stops inferring. A submit here is a real save unless the
+  // form explicitly opted out, and the ONE construct that used to submit-then-
+  // cancel (the Leafly confirm dialog) no longer exists — acknowledging is a
+  // single click now, because Leafly never required the confirmation. Deciding
+  // synchronously also restores the instant feedback H12f was built for.
   useEffect(() => {
     function onSubmit(e: Event) {
       const form = e.target instanceof HTMLFormElement ? e.target : null;
       if (!form) return;
-      // Only React SERVER-ACTION forms (React marks them with a javascript:
-      // sentinel action) — client panels with their own onSubmit handlers
-      // (chat boxes, importers) manage their own feedback.
-      if (!isServerActionForm(form.getAttribute("action"))) return;
       // Second click while the action is running — swallow it.
       if (form.dataset.gwBusy === "1") {
         e.preventDefault();
         e.stopPropagation();
         return;
       }
+      if (
+        !submitShouldShowPending({
+          // Only React SERVER-ACTION forms (React marks them with a
+          // javascript: sentinel action) — client panels with their own
+          // onSubmit handlers (chat boxes, importers) own their feedback.
+          serverAction: isServerActionForm(form.getAttribute("action")),
+          formConnected: form.isConnected,
+          optedOut: form.hasAttribute(PENDING_OPT_OUT_ATTR),
+        })
+      ) {
+        return;
+      }
       const submitter = (e as SubmitEvent).submitter;
-      const rec: PendingRecord = {
+      startPending({
         hrefAtStart: window.location.href,
         startedAt: Date.now(),
         kind: "form",
         submitter: submitter instanceof HTMLElement ? submitter : null,
         form,
-      };
-      // Settle on a microtask: dispatch is synchronous, so by the time this
-      // runs every other handler for this event has been given its say and
-      // `defaultPrevented` is final. A microtask (not a timeout) keeps the
-      // feedback within the same frame as the click — it still looks instant.
-      queueMicrotask(() => {
-        if (!submitDidStart({ defaultPrevented: e.defaultPrevented, formConnected: form.isConnected })) {
-          return; // cancelled to ask a question, or the form is gone
-        }
-        startPending(rec);
       });
     }
     document.addEventListener("submit", onSubmit, true);

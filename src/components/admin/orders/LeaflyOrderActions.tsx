@@ -4,82 +4,151 @@
  * src/components/admin/orders/LeaflyOrderActions.tsx
  *
  * SLICE L-6 — THE BUTTONS, AND THE DOOR THAT ONLY OPENS ONE WAY.
+ * SLICE L-30 — THE DOOR NOW OPENS IN ONE CLICK.
+ *
+ * ===========================================================================
+ * SLICE L-30 — WHY THE ACKNOWLEDGE CONFIRMATION IS GONE
+ * ===========================================================================
+ * The owner, after the fourth failed attempt to fix this one button:
+ *
+ *   > "again, is it required by leafly to have this double click for
+ *   >  acknowledging? if not, please get rid of it. ... I say just get rid
+ *   >  of it. one click to acknowledge."
+ *
+ * He asked a question of fact, so it was answered from Leafly's own published
+ * specification rather than from memory. `docs/leafly-specs/order-api-v1.
+ * openapi.json` was re-downloaded live from Leafly's docs host and is
+ * BYTE-IDENTICAL to the vendored copy (md5 daab7bcf6f77177de85425adf7f805f1),
+ * so the following is current, not historical.
+ *
+ * The complete specification of the acknowledge operation is:
+ *
+ *   POST /{order_integration_key}/orders/{id}/acknowledge
+ *   "This endpoint confirms that your system has retrieved all necessary
+ *    details regarding an order, including any associated media...
+ *    - Acknowledgement of order receipt is required before any changes can be
+ *      made to that order through other API operations
+ *    - Once an order has been acknowledged, access to an order's associated
+ *      media is revoked."
+ *
+ * No request body. No confirmation parameter. No two-step handshake. The
+ * requirements table marks "Acknowledge Order | Endpoint | Successful
+ * requests | Required" — the ENDPOINT is required; Leafly says nothing
+ * whatsoever about how a retailer's own screen should ask for it.
+ *
+ * And Leafly's stated expectation actively argues AGAINST a modal:
+ *
+ *   "Orders are acknowledged as having been retrieved in whole by your system
+ *    within fifteen minutes of receiving an order submission webhook. Any
+ *    orders not acknowledged by this deadline will be auto canceled."
+ *
+ * ANSWER: no, Leafly does not require it. The confirmation was this
+ * codebase's own invention, and a dialog that waits on a human being is a
+ * liability when the action it guards has a fifteen-minute clock. It is
+ * removed. Acknowledging is one click.
+ *
+ * WHAT WAS PROTECTING, AND WHERE IT WENT. The dialog existed for a real
+ * reason: acknowledging destroys our access to the customer's ID images, and
+ * a thumb on a phone at the counter is one tap from that. The protection is
+ * not deleted, it is MOVED to where it actually works — the warning is now
+ * printed ON THE SCREEN, next to the button, before the press, where it can
+ * be read without dismissing anything. That is strictly better than a modal
+ * for the failure mode that matters: a modal is answered reflexively, whereas
+ * standing text is present every time the operator looks at the order. The
+ * owner is the one carrying this risk and he has asked for it twice; the
+ * wording is unchanged and still comes from the core.
+ *
+ * THE SECOND, LARGER REASON IT HAD TO GO. The dialog was implemented by
+ * letting the form submit and then CANCELLING that submit with
+ * preventDefault() to open the modal. That made "a submit event happened"
+ * stop meaning "a save started" for every listener in the admin, and
+ * PendingKeeper — which watches all forms — had no sound way to tell the two
+ * apart. L-29 tried to tell them apart with `defaultPrevented` and failed,
+ * because react-dom also calls preventDefault() on SUCCESSFUL server-action
+ * submits. Measured, not assumed:
+ * `scripts/recon/l30-real-click-probe.mjs` drives this exact component in
+ * real Chromium with a real trusted click and reports, for the old version,
+ * `serverActionCalls: 0` — the acknowledgement never left the browser. That
+ * is the whole mystery of "it spins forever and gives me no error": there was
+ * never a request to fail.
+ *
+ * So the rule now, and it is the important line in this file:
+ * ******** A SUBMIT EVENT IN THIS ADMIN ALWAYS MEANS A REAL SAVE. ********
+ * A form must never submit in order to ask a question. The two remaining
+ * confirm-first actions (picked up / cancelled — both genuinely terminal in
+ * Leafly, and neither on a clock) now open their dialog from a plain
+ * `type="button"` click and submit exactly once, AFTER the answer. That is
+ * the same pattern the content panels have always used.
  *
  * ===========================================================================
  * WHY THIS IS A CLIENT COMPONENT WHEN ALMOST NOTHING ELSE ON THE PAGE IS
  * ===========================================================================
  * The Leafly orders panel is a server component, like the rest of
- * /admin/orders. This one small piece is not, for exactly one reason: two of
- * these actions cannot be undone, and confirming an action requires state.
+ * /admin/orders. This one small piece is not, because two of these actions
+ * cannot be undone and confirming an action requires state:
  *
- *   * ACKNOWLEDGE destroys our access to the customer's ID images. Leafly's
- *     spec, verbatim: "Once an order has been acknowledged, access to an
- *     order's associated media is revoked."
  *   * PICKED UP and CANCELLED are terminal. Leafly's spec, verbatim: "Orders
  *     cannot be moved out of a terminal status."
  *
- * A plain `<form action={serverAction}>` submit on a phone at the counter is
- * one accidental thumb away from any of those. So the irreversible ones are
- * gated behind the shop's existing ConfirmDialog (house rule 11: reuse what
- * exists — this is the same dialog used for deleting a FAQ and for a
- * compliance-critical tax deviation), and the reversible ones submit directly,
- * because confirming everything trains people to click through confirmations
- * without reading them, which is worse than not having them.
+ * Those stay behind the shop's existing ConfirmDialog (house rule 11: reuse
+ * what exists). The reversible ones submit directly, because confirming
+ * everything trains people to click through confirmations without reading
+ * them, which is worse than not having them — and that same argument is
+ * exactly why the acknowledgement, which is REQUIRED and time-limited, should
+ * never have been confirmed in the first place.
  *
  * WHICH actions are irreversible is NOT decided here. It arrives on the
- * `irreversible` flag from `planLeaflyOrderActions()` in
- * `order-ack-core.ts`, where it is asserted in CI. A component that decided
- * this for itself would be a second, untested copy of Leafly's rules.
+ * `irreversible` flag from `planLeaflyOrderActions()` in `order-ack-core.ts`,
+ * where it is asserted in CI. A component that decided this for itself would
+ * be a second, untested copy of Leafly's rules. L-30 does NOT change that
+ * flag — acknowledging is still irreversible, and still says so. What changed
+ * is only what the UI DOES about it: it warns in place instead of
+ * interrupting.
  *
  * ===========================================================================
  * THE FORMS ARE REAL FORMS
  * ===========================================================================
- * Every action is a real `<form>` posting to a real server action, and the
- * dialog works by calling `requestSubmit()` on it. That means the buttons still
- * function if the confirmation JavaScript fails to hydrate — they just submit
- * without the extra question, the same as any other form in the back office.
- * The alternative (fetch-on-click) would leave a dead button on a screen whose
- * job is time-critical.
+ * Every action is a real `<form>` posting to a real server action. For the
+ * confirm-first ones the dialog works by calling `requestSubmit()`. That
+ * means the buttons still function if the confirmation JavaScript fails to
+ * hydrate — they just submit without the extra question, the same as any
+ * other form in the back office. The alternative (fetch-on-click) would leave
+ * a dead button on a screen whose job is time-critical. The acknowledge
+ * button is now the purest version of this: a plain submit, nothing
+ * intercepting it, which works with or without JavaScript.
  *
  * ===========================================================================
- * SLICE L-17 -- WHY THE BUTTON NOW SAYS WHAT IT IS DOING
+ * SLICE L-17 -- WHY THE BUTTON SAYS WHAT IT IS DOING
  * ===========================================================================
  * The owner reported, about this exact control:
  *
  *   > "for the leafly orders specifically, i can click the acknowledge
  *   >  button, confirm the action, then it sits waiting forever stuck."
  *
- * There were TWO defects behind that one sentence, and fixing either alone
- * would have left him with the same complaint:
+ * There were TWO defects behind that one sentence:
  *
  *   1. THE SERVER GENUINELY COULD HANG. Every outbound Leafly fetch was
- *      untimed (`grep AbortController src/lib/leafly/` returned nothing),
- *      including the token mint that runs BEFORE the acknowledge POST. That
- *      is fixed in `src/lib/leafly/deadline-fetch.ts`; the request now gives
- *      up in a bounded time and returns a sentence.
+ *      untimed, including the token mint that runs BEFORE the acknowledge
+ *      POST. Fixed in `src/lib/leafly/deadline-fetch.ts`.
  *
- *   2. THE BUTTON LOOKED IDENTICAL THE WHOLE TIME. This is the half fixed
- *      here. `AnnouncerPanel.tsx:175` already documents the same bug class
- *      in this very folder, in the owner's words: "as a plain server form it
- *      had no pending state and its action returned void, so pressing it
- *      changed nothing on screen ... the owner reasonably read that as 'the
- *      button does nothing, it hangs'." The Leafly buttons had exactly that
- *      shape -- a real <form>, a void-returning server action, no pending
- *      state -- so between the click and the redirect the screen said
- *      nothing at all.
+ *   2. THE BUTTON LOOKED IDENTICAL THE WHOLE TIME. `AnnouncerPanel.tsx:175`
+ *      documents the same bug class in this very folder: a real <form>, a
+ *      void-returning server action, no pending state — so between the click
+ *      and the redirect the screen said nothing at all.
  *
  * `useFormStatus` is the right hook here rather than `useActionState` (which
  * AnnouncerTestButton uses): these actions end in `redirect()`, so they have
- * no return value to render, and the result is communicated by the page the
- * operator lands on. All that is needed is the pending flag -- and it must
- * be read from a CHILD of the form, which is why SubmitButton exists as a
- * separate component below rather than as markup inside ActionForm.
+ * no return value to render. All that is needed is the pending flag -- and it
+ * must be read from a CHILD of the form, which is why SubmitButton exists as
+ * a separate component below rather than as markup inside ActionForm.
  *
  * Disabling while pending is a safety property, not a nicety. Acknowledge is
- * the one-way door; a second click during a slow first request is exactly
- * how a double submit happens, and it is the scenario the deadline core
- * refuses to call safe (`safeToRetry === false` for an acknowledge whose
- * outcome is unknown).
+ * the one-way door; a second click during a slow first request is exactly how
+ * a double submit happens, and it is the scenario the deadline core refuses
+ * to call safe (`safeToRetry === false` for an acknowledge whose outcome is
+ * unknown). With the dialog gone this is now the ONLY thing standing between
+ * a jittery thumb and a duplicate acknowledge, so it matters more than it
+ * did, not less.
  */
 
 import { useRef, useState } from "react";
@@ -97,14 +166,20 @@ import type { PlannedAction } from "@/lib/leafly/order-ack-core";
  * up is simply broken, and it is broken silently, which is why this split is
  * documented rather than looking like indirection for its own sake.
  *
- * The three visual weights mirror what the plan asked for, unchanged. The
- * only thing added is what the control does while the request is in flight:
- * it names the wait, spins, and refuses a second press.
+ * SLICE L-30: `type` is a prop now. A confirm-first action renders this as a
+ * `type="button"` that opens its dialog; only the confirmed press submits.
+ * Making the button NOT a submit control is the entire fix for the class of
+ * bug that produced four failed slices: a form that never submits to ask a
+ * question can never be mistaken for a form that is saving.
  */
 function SubmitButton({
   action,
+  type = "submit",
+  onClick,
 }: {
   action: PlannedAction;
+  type?: "submit" | "button";
+  onClick?: () => void;
 }) {
   const { pending } = useFormStatus();
 
@@ -135,7 +210,8 @@ function SubmitButton({
   if (action.emphasis === "primary" || action.emphasis === "danger") {
     return (
       <Button
-        type="submit"
+        type={type}
+        onClick={onClick}
         variant={action.emphasis}
         size="sm"
         disabled={pending}
@@ -148,7 +224,8 @@ function SubmitButton({
 
   return (
     <button
-      type="submit"
+      type={type}
+      onClick={onClick}
       disabled={pending}
       aria-busy={pending}
       className={`${action.irreversible ? CHIP_NEUTRAL : CHIP_ACTION} disabled:cursor-not-allowed disabled:opacity-60`}
@@ -165,14 +242,24 @@ function SubmitButton({
  * shared dialog needs to track WHICH action is pending, and getting that wrong
  * means confirming "cancel the order" and sending "picked up". Per-action state
  * makes that mistake unrepresentable.
+ *
+ * SLICE L-30 — three properties this component now guarantees, all pinned in
+ * tests/compliance/leafly-l30-one-click-acknowledge.test.ts:
+ *
+ *   1. The acknowledge action has NO dialog and NO onSubmit handler at all.
+ *      One click, one submit, straight to the server action.
+ *   2. No form here calls preventDefault() on submit, ever. The dialog for
+ *      terminal statuses opens from a button click, not from a cancelled
+ *      submit, so a submit event always means a real save.
+ *   3. Consequently there is no `confirming` flag read across a render
+ *      closure and no permission ref — the L-29 hazards are not fixed, they
+ *      are structurally absent.
  */
 function ActionForm({
   action,
   leaflyOrderId,
   acknowledgeAction,
   statusAction,
-  /** Shown inside the acknowledge confirmation, verbatim from the core. */
-  irreversibleWarning,
   /** Shown inside the cancel confirmation so the reason is no surprise. */
   defaultCancelReasonLabel,
 }: {
@@ -180,126 +267,91 @@ function ActionForm({
   leaflyOrderId: string;
   acknowledgeAction: (formData: FormData) => void | Promise<void>;
   statusAction: (formData: FormData) => void | Promise<void>;
-  irreversibleWarning: string;
   defaultCancelReasonLabel: string;
 }) {
   const [confirming, setConfirming] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  /**
-   * SLICE L-29 — permission to submit, held in a ref rather than in state.
-   *
-   * The previous version gated the confirmed submit on the `confirming` STATE
-   * flag, read through the render closure that `onSubmit` was created in.
-   * That made correctness depend on React not having re-rendered yet when
-   * `requestSubmit()` ran on a microtask — and React flushes discrete-event
-   * updates synchronously at the end of the handler, i.e. BEFORE queued
-   * microtasks. Under that (actual) ordering the handler saw
-   * `confirming === false`, cancelled the submit, and re-opened the dialog:
-   * the acknowledgement would never be sent.
-   *
-   * It was invisible only because a second bug hid it — PendingKeeper's stale
-   * `gwBusy` flag swallowed the submit with stopPropagation() before this
-   * handler ever ran. Fixing the keeper alone would have swapped a phantom
-   * spinner for a dialog that reopens forever, which to the owner is the same
-   * complaint. Both are fixed together; see
-   * scripts/recon/l29-confirm-reentry-probe.mjs, which runs this logic under
-   * both flush orderings and shows the state version disagreeing with itself.
-   *
-   * A ref is read live, so it does not care when React renders. It is
-   * one-shot: consumed on use, so a later stray submit asks again rather than
-   * silently inheriting an old yes on a one-way door.
-   */
-  const confirmedRef = useRef(false);
 
   const isAck = action.kind === "acknowledge";
   const isCancel = action.status === "canceled";
 
-  // Visual weight follows the plan's `emphasis`, which the core guarantees has
-  // exactly one `primary` per order. The cancel action is the shop's existing
-  // `danger` variant; everything else is a tinted chip, per the density rule
-  // documented in Button.tsx ("many tinted chips per screen, at most ONE solid
-  // orange primary per page region"). The rendering moved into SubmitButton
-  // (see its header) because the pending flag can only be read from inside
-  // the form.
+  // The acknowledgement is irreversible but NOT confirmed — see the header.
+  // Leafly does not require a confirmation, and it is the one action on a
+  // fifteen-minute clock. Everything else that is irreversible is terminal,
+  // is not on a clock, and keeps its dialog.
+  const needsConfirm = action.irreversible && !isAck;
 
+  const hiddenFields = (
+    <>
+      <input type="hidden" name="leaflyOrderId" value={leaflyOrderId} />
+      {!isAck && action.status ? (
+        <input type="hidden" name="nextStatus" value={action.status} />
+      ) : null}
+      {/* No cancelationReasonCode is posted. Leafly documents that an absent
+          reason defaults to `dispensary`, and sending a value we were told we
+          do not need to send would be inventing data. The default is DISPLAYED
+          in the confirmation instead, so it is informed rather than hidden. */}
+    </>
+  );
+
+  // ── The ordinary case, and now the acknowledge case: a plain form ────────
+  // No onSubmit. Nothing to intercept it. This is the shape the whole
+  // back office uses, and the shape PendingKeeper is built for.
+  if (!needsConfirm) {
+    return (
+      <form
+        ref={formRef}
+        action={isAck ? acknowledgeAction : statusAction}
+        className="inline"
+      >
+        {hiddenFields}
+        <SubmitButton action={action} />
+      </form>
+    );
+  }
+
+  // ── Terminal status changes: ask first, then submit exactly once ─────────
   return (
     <>
       <form
         ref={formRef}
-        action={isAck ? acknowledgeAction : statusAction}
-        onSubmit={(e) => {
-          // Intercept ONLY the irreversible ones, and only while we still
-          // need an answer. Once confirmed, the dialog calls requestSubmit()
-          // and this handler must let it through.
-          //
-          // SLICE L-29: the permission is read from a REF, not from the
-          // `confirming` state flag. State is captured by this closure at
-          // render time, and React has already flushed `confirming: false`
-          // by the time the confirmed submit arrives — so the state version
-          // cancelled the very submit it was meant to allow. See the note on
-          // `confirmedRef` above.
-          if (!action.irreversible) return;
-          if (confirmedRef.current) {
-            confirmedRef.current = false; // one-shot: consume the permission
-            return; // let the real submit through
-          }
-          e.preventDefault();
-          setConfirming(true);
-        }}
+        action={statusAction}
         className="inline"
       >
-        <input type="hidden" name="leaflyOrderId" value={leaflyOrderId} />
-        {!isAck && action.status ? (
-          <input type="hidden" name="nextStatus" value={action.status} />
-        ) : null}
-        {/* No cancelationReasonCode is posted. Leafly documents that an absent
-            reason defaults to `dispensary`, and sending a value we were told we
-            do not need to send would be inventing data. The default is DISPLAYED
-            in the confirmation instead, so it is informed rather than hidden. */}
-        <SubmitButton action={action} />
+        {hiddenFields}
+        {/* type="button": pressing this does NOT submit. It opens the
+            question. The form submits once, later, from onConfirm. */}
+        <SubmitButton
+          action={action}
+          type="button"
+          onClick={() => setConfirming(true)}
+        />
       </form>
 
-      {action.irreversible ? (
-        <ConfirmDialog
-          open={confirming}
-          title={
-            isAck
-              ? "Acknowledge this order to Leafly?"
-              : isCancel
-                ? "Cancel this order on Leafly?"
-                : `${action.label}?`
-          }
-          description={
-            isAck
-              ? irreversibleWarning
-              : isCancel
-                ? `This tells Leafly the order is cancelled and notifies the shopper. Leafly does not allow a cancelled order to be moved again. Leafly will record the reason as “${defaultCancelReasonLabel}”.`
-                : "Leafly does not allow an order to be moved again once it reaches this status."
-          }
-          confirmLabel={action.label}
-          cancelLabel="Not yet"
-          // `warning` (gold) for the acknowledgement, `danger` (red) for a
-          // cancellation. The acknowledgement is not destructive — it is
-          // REQUIRED, and the shop must not be discouraged from doing it
-          // quickly — it simply cannot be undone. Painting it red would push
-          // staff to hesitate on the one action that has a fifteen-minute clock.
-          tone={isCancel ? "danger" : "warning"}
-          onConfirm={() => {
-            // Grant permission BEFORE submitting. The ref is read live by the
-            // onSubmit handler above, so this is not sensitive to when React
-            // re-renders — which is exactly the bug this replaced.
-            confirmedRef.current = true;
-            setConfirming(false);
-            formRef.current?.requestSubmit();
-          }}
-          onCancel={() => {
-            // Revoke any permission on the way out. Nothing should be able to
-            // leave a standing "yes" behind on a one-way door.
-            confirmedRef.current = false;
-            setConfirming(false);
-          }}
-        />
-      ) : null}
+      <ConfirmDialog
+        open={confirming}
+        title={
+          isCancel
+            ? "Cancel this order on Leafly?"
+            : `${action.label}?`
+        }
+        description={
+          isCancel
+            ? `This tells Leafly the order is cancelled and notifies the shopper. Leafly does not allow a cancelled order to be moved again. Leafly will record the reason as “${defaultCancelReasonLabel}”.`
+            : "Leafly does not allow an order to be moved again once it reaches this status."
+        }
+        confirmLabel={action.label}
+        cancelLabel="Not yet"
+        tone={isCancel ? "danger" : "warning"}
+        onConfirm={() => {
+          // Close first, then submit. There is no permission flag to grant:
+          // the form has no onSubmit to talk out of cancelling, because it
+          // never cancels anything. This is the whole point of L-30.
+          setConfirming(false);
+          formRef.current?.requestSubmit();
+        }}
+        onCancel={() => setConfirming(false)}
+      />
     </>
   );
 }
@@ -320,19 +372,56 @@ export function LeaflyOrderActions({
   defaultCancelReasonLabel: string;
 }) {
   if (actions.length === 0) return null;
+
+  // SLICE L-30 — the warning the dialog used to carry, now standing on the
+  // screen instead of interrupting it.
+  //
+  // This is not a downgrade of the protection, it is a relocation of it. A
+  // modal is answered from muscle memory after the third time you see it; a
+  // sentence sitting next to the button is legible every time the operator
+  // looks at the order, INCLUDING before they have decided to press anything.
+  // It is rendered ABOVE the buttons for the same reason the detail panel is
+  // rendered above the clock (see LeaflyOrdersPanel): an instruction to read
+  // the ID first only works if it appears before the control that ends your
+  // ability to.
+  //
+  // The text is `LEAFLY_ACK_IRREVERSIBLE_WARNING`, passed in unchanged from
+  // the core, where its content is asserted in CI. It is deliberately the
+  // SAME STRING the dialog used, so nothing the owner already learned to
+  // recognise has changed wording.
+  const showAckWarning = actions.some(
+    (a) => a.kind === "acknowledge" && a.irreversible,
+  );
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {actions.map((action) => (
-        <ActionForm
-          key={`${action.kind}:${action.status ?? "ack"}`}
-          action={action}
-          leaflyOrderId={leaflyOrderId}
-          acknowledgeAction={acknowledgeAction}
-          statusAction={statusAction}
-          irreversibleWarning={irreversibleWarning}
-          defaultCancelReasonLabel={defaultCancelReasonLabel}
-        />
-      ))}
+    <div className="flex flex-col items-end gap-2">
+      {showAckWarning ? (
+        <p
+          // role="note" rather than "alert": it must not be announced as an
+          // interruption every render, but it must be reachable and obviously
+          // not decoration.
+          role="note"
+          data-testid="leafly-ack-warning"
+          className="max-w-[34rem] text-right text-xs leading-relaxed text-[var(--admin-gold)]"
+        >
+          <span aria-hidden className="mr-1">
+            ⚠️
+          </span>
+          {irreversibleWarning}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {actions.map((action) => (
+          <ActionForm
+            key={`${action.kind}:${action.status ?? "ack"}`}
+            action={action}
+            leaflyOrderId={leaflyOrderId}
+            acknowledgeAction={acknowledgeAction}
+            statusAction={statusAction}
+            defaultCancelReasonLabel={defaultCancelReasonLabel}
+          />
+        ))}
+      </div>
     </div>
   );
 }
