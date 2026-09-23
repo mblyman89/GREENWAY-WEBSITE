@@ -55,6 +55,63 @@ import {
   type OutboundResult,
 } from "@/lib/leafly/order-ack-server";
 import { getLeaflyBoardOrder } from "@/lib/leafly/order-board-server";
+// SLICE L-25 — the outer race that guarantees a sentence rather than a spinner.
+import { withActionDeadline } from "@/lib/leafly/action-deadline";
+
+/**
+ * SLICE L-25 — WHY THERE IS NO `maxDuration` IN THIS FILE
+ * ===========================================================================
+ * There was, briefly, and it broke the Vercel build outright. Recording why,
+ * because the mistake is silent locally and obvious only in CI.
+ *
+ * A file carrying the `"use server"` directive may export **async functions
+ * and nothing else**. Adding `export const maxDuration = 300` here did not
+ * merely get ignored — it invalidated the ENTIRE module. The build failed
+ * with:
+ *
+ *   The export loadLeaflyOrderDetailAction was not found in module
+ *   [project]/src/app/admin/orders/leafly-actions.ts [app-rsc]
+ *   The module has no exports at all.
+ *
+ * One non-function export and every server action in this file disappeared,
+ * taking the orders page and the financial-statements page down with it.
+ *
+ * ── WHERE THE CEILING ACTUALLY BELONGS ─────────────────────────────────────
+ * On the route segment, not on the action. Next.js documents this directly:
+ *
+ *   > Server Actions inherit the Route Segment Config from the page or
+ *   > layout they are used on, including fields like `maxDuration`.
+ *
+ * So `export const maxDuration = 300` lives in
+ * `src/app/admin/orders/page.tsx`, and it governs these actions from there.
+ * Nothing is lost by its absence here; putting it here was simply the wrong
+ * address for the right idea.
+ *
+ * That page-level ceiling matters for a second reason worth keeping in view:
+ * with a real `<form>`, `useFormStatus().pending` stays true until the
+ * NAVIGATION resolves, which includes rendering the redirect target. The
+ * board's own render time is therefore part of how long the button spins, so
+ * the ceiling has to be on the board either way.
+ *
+ * ── WHY THE NUMBER IS 300 AND NOT 240 ──────────────────────────────────────
+ * The internal budget (`LEAFLY_ACK_TOTAL_BUDGET_MS`, 240s) is what actually
+ * stops the work. It needs headroom beneath the platform's limit to write its
+ * audit row and render its answer. Matching the two would put them in a photo
+ * finish and hand the race back to the platform killer, which renders
+ * nothing — the original "spins then refreshes and does nothing" symptom.
+ *
+ * Guarded by `tests/compliance/leafly-l25-db-deadline.test.ts`, which asserts
+ * both that the page declares the ceiling and that no `"use server"` file in
+ * the repository exports a non-function.
+ */
+// SLICE L-24 — the detail view the acknowledge warning has always pointed at.
+import type {
+  DetailPayloadState,
+  LeaflyOrderDetail,
+  MediaAccessVerdict,
+} from "@/lib/leafly/order-detail-core";
+import { loadLeaflyOrderDetail } from "@/lib/leafly/order-detail-server";
+import { collectLeaflyOrder } from "@/lib/leafly/order-fetch-server";
 
 /**
  * Where to send the operator afterwards, carrying the outcome.
@@ -140,14 +197,73 @@ export async function acknowledgeLeaflyOrderAction(formData: FormData): Promise<
     );
   }
 
-  const result = await acknowledgeLeaflyOrder({
-    order: {
-      leafly_order_id: order.leafly_order_id,
-      leafly_status: order.leafly_status,
-      acknowledged_at: order.acknowledged_at,
-    },
-    staffId: session.profile.id,
-  });
+  // ── SLICE L-25 — THE BACKSTOP THE PREVIOUS TWO FIXES DID NOT HAVE ───────
+  //
+  // The owner has reported this button hanging three times. Twice we bounded
+  // the network and twice the hang survived:
+  //
+  //   L-17  bounded the CONNECTION      → still hangs
+  //   L-23  bounded the RESPONSE BODY   → still hangs
+  //
+  // Both were correct. Both missed that the DATABASE on this path had no
+  // timeout of any kind — proven against a real black-hole server in
+  // `scripts/recon/supabase-hang-probe.mjs` (8006ms and still hanging;
+  // bounded, it returns in 1505ms).
+  //
+  // That is now fixed at every individual call. This outer race exists
+  // because "every call I thought of is bounded" is precisely the belief that
+  // has already been wrong twice. It does not depend on the enumeration being
+  // complete: whatever holds the request open, the operator gets a sentence
+  // instead of a spinner that runs until Vercel kills the function at 300s —
+  // which is the "about five minutes" he keeps describing.
+  //
+  // `requestWasSent` is read LAZILY, at the moment the deadline fires, so the
+  // wording can distinguish "nothing was sent, safely try again" from "we
+  // cannot tell, do not press again". Captured eagerly it would always say
+  // the first, which on a one-way door is the dangerous lie.
+  let requestWasSent = false;
+  const raced = await withActionDeadline(
+    acknowledgeLeaflyOrder({
+      order: {
+        leafly_order_id: order.leafly_order_id,
+        leafly_status: order.leafly_status,
+        acknowledged_at: order.acknowledged_at,
+      },
+      staffId: session.profile.id,
+      onRequestSent: () => {
+        requestWasSent = true;
+      },
+    }),
+    { requestWasSent: () => requestWasSent },
+  );
+
+  if (raced.timedOut) {
+    // Audited BEFORE the redirect, because a timeout on an irreversible
+    // action is the single most important thing this log will ever hold: it
+    // is the only record that somebody pressed Accept on this order and we
+    // never learned what happened.
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "leafly.order_acknowledge_timeout",
+      entityType: "leafly_order",
+      entityId: leaflyOrderId,
+      after: {
+        code: "action_timeout",
+        requestWasSent,
+        message: raced.message,
+      },
+    }).catch(() => undefined);
+
+    redirect(
+      backTo({
+        leaflyErr: raced.message.slice(0, 500),
+        leaflyCode: "action_timeout",
+      }),
+    );
+  }
+
+  const result = raced.value;
 
   // Audited either way. A refused acknowledgement is as interesting as a
   // successful one — "why did nobody acknowledge this?" is answered by the
@@ -249,4 +365,193 @@ export async function setLeaflyOrderStatusAction(formData: FormData): Promise<vo
 
   revalidatePath("/admin/orders");
   redirect(backTo(resultParams(result)));
+}
+
+/* ------------------------------------------------------------------------- *
+ * SLICE L-24 — opening an order
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Load one Leafly order's full detail for the expandable panel.
+ *
+ * ── WHY THIS IS A CALLABLE ACTION AND NOT PART OF THE PAGE LOAD ────────────
+ * Because `raw_order` is a whole order payload per row, and the board renders
+ * every open order at once. `order-board-server.ts` deliberately excludes it
+ * from the list query for exactly that reason, its own comment saying "The
+ * detail view can fetch it for one order." This is that fetch. Loading it for
+ * the whole board to support a panel that is usually closed would move
+ * megabytes on every page view of the busiest screen in the shop.
+ *
+ * ── WHY IT RETURNS INSTEAD OF REDIRECTING ──────────────────────────────────
+ * Every other action in this file redirects, because every other action
+ * CHANGES something and the operator must land on a screen that reflects the
+ * change. This one only reads. Redirecting would collapse the panel the
+ * operator just opened and scroll them away from the order they are reading,
+ * on a screen where the whole point is to read before pressing a one-way door.
+ *
+ * ── WHY THERE IS NO AUDIT ENTRY FOR THE DETAIL ITSELF ──────────────────────
+ * It is a read of data we already hold, by someone who already has
+ * `orders.manage` and can see most of it on the card. The ID IMAGES are a
+ * different matter and ARE logged, in the image route — that is the access
+ * worth recording, because it is the one that leaves the building.
+ */
+export async function loadLeaflyOrderDetailAction(
+  leaflyOrderId: string,
+): Promise<{
+  ok: boolean;
+  detail: LeaflyOrderDetail | null;
+  /**
+   * SLICE L-25. Why the detail is empty, when it is empty.
+   *
+   * Threaded all the way to the client because the panel cannot tell the
+   * difference on its own: a never-collected order and a genuinely sparse
+   * order both arrive as a `LeaflyOrderDetail` full of nulls. Without this
+   * the component has to guess, and the guess it made before was "render
+   * the blanks", which is what the owner saw.
+   */
+  payloadState: DetailPayloadState | null;
+  mediaAccess: MediaAccessVerdict | null;
+  error: string | null;
+}> {
+  await requirePermission("orders.manage");
+
+  const id = typeof leaflyOrderId === "string" ? leaflyOrderId.trim() : "";
+  if (id === "") {
+    return {
+      ok: false,
+      detail: null,
+      payloadState: null,
+      mediaAccess: null,
+      error: "No Leafly order was identified.",
+    };
+  }
+
+  const result = await loadLeaflyOrderDetail(id);
+  return {
+    ok: result.ok,
+    detail: result.detail,
+    payloadState: result.payloadState,
+    mediaAccess: result.mediaAccess,
+    error: result.error,
+  };
+}
+
+/* ------------------------------------------------------------------------- *
+ * SLICE L-25 — collecting an order we never managed to download
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Fetch the real Order from Leafly for an order whose `raw_order` still
+ * holds only the submission webhook.
+ *
+ * ===========================================================================
+ * THE DEFECT THIS RECOVERS FROM
+ * ===========================================================================
+ * The owner opened an order and found it completely empty:
+ *
+ *   > "when I open an order, everything is completely blank. There is no
+ *   >  info at all. Is this why we can't acknowledge an order? Are we not
+ *   >  getting the proper data from Leafly to acknowledge in the first
+ *   >  place?"
+ *
+ * `raw_order` is written twice in an order's life. The `order_submit`
+ * webhook stores five fields — eventTime, eventType, orderId,
+ * orderIntegrationKey, acknowledgeBy — and then `collectLeaflyOrder()`
+ * performs `GET /{key}/orders/{id}` and OVERWRITES it with the real Order.
+ * When that second step fails, the row keeps the five-field envelope and
+ * the detail view renders 18 blank fields out of 18 (measured —
+ * `scripts/recon/blank-detail-probe.ts`).
+ *
+ * The webhook path does not retry. It pushes the failure onto a notes list
+ * and moves on, deliberately, because a failed collection must still ring
+ * the bell. So before this action there was no way at all to obtain the
+ * order afterwards: the data was missing and the product offered no route
+ * to go and get it.
+ *
+ * ── WHY THIS IS A CORRECTNESS FIX AND NOT A CONVENIENCE ──────────────────
+ * Leafly's rule is that acknowledging marks an order "as having been
+ * retrieved **in whole** by your system". An order we never downloaded has
+ * not been retrieved at all. Acknowledging it asserts something untrue to a
+ * third party, permanently closes our only access to the customer's ID
+ * images, and leaves staff with no cart from which to build the bag.
+ *
+ * ── WHY IT IS SAFE TO CALL AT ANY TIME ───────────────────────────────────
+ * `collectLeaflyOrder` only ever overwrites `raw_order` with a payload
+ * Leafly just served, so re-running it on an already-collected order is a
+ * no-op refresh rather than a mutation. It sends no state to Leafly and
+ * acknowledges nothing. The worst case is a wasted round trip.
+ *
+ * ── WHY IT DOES NOT ACKNOWLEDGE AS A SIDE EFFECT ─────────────────────────
+ * Because acknowledging is irreversible and destroys ID-image access.
+ * Collecting is reversible and destroys nothing, so the two must stay
+ * separate and the operator must remain the one who decides. Fusing them
+ * would mean a button labelled "get the details" also burns the window.
+ */
+export async function collectLeaflyOrderAction(
+  formData: FormData,
+): Promise<void> {
+  const session = await requirePermission("orders.manage");
+
+  const leaflyOrderId = String(formData.get("leaflyOrderId") ?? "").trim();
+  const backTo = (params: Record<string, string>) => {
+    const qs = new URLSearchParams(params).toString();
+    return `/admin/orders?${qs}`;
+  };
+
+  if (leaflyOrderId === "") {
+    redirect(backTo({ leaflyErr: "No Leafly order was identified." }));
+  }
+
+  // Bounded by the same outer backstop the acknowledge click uses. A collect
+  // that hangs would reproduce the exact spinner this slice exists to end,
+  // on the very button offered as the cure for it.
+  const raced = await withActionDeadline(
+    collectLeaflyOrder({ leaflyOrderId, knownLocally: true }),
+  );
+
+  if (raced.timedOut) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "leafly.order_collect_timeout",
+      entityType: "leafly_order",
+      entityId: leaflyOrderId,
+      after: { code: "action_timeout", message: raced.message },
+    }).catch(() => undefined);
+    redirect(
+      backTo({
+        leaflyErr: raced.message.slice(0, 500),
+        leaflyCode: "action_timeout",
+      }),
+    );
+  }
+
+  const result = raced.value;
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: result?.ok ? "leafly.order_collected" : "leafly.order_collect_failed",
+    entityType: "leafly_order",
+    entityId: leaflyOrderId,
+    after: { summary: result?.summary ?? "no result" },
+  }).catch(() => undefined);
+
+  if (!result?.ok) {
+    redirect(
+      backTo({
+        leaflyErr:
+          `We could not download this order from Leafly. ${result?.summary ?? ""}`.trim(),
+        leaflyOrder: leaflyOrderId,
+      }),
+    );
+  }
+
+  revalidatePath("/admin/orders");
+  redirect(
+    backTo({
+      leaflyMsg: "Order details downloaded from Leafly.",
+      leaflyOrder: leaflyOrderId,
+    }),
+  );
 }

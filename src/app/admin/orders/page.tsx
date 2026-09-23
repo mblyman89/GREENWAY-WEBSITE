@@ -85,6 +85,29 @@ import { orderOriginLabel } from "@/lib/orders/order-origin-core";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * SLICE L-25 — an explicit ceiling for the page the acknowledge REDIRECTS TO.
+ *
+ * ── WHY A PAGE'S BUDGET IS PART OF A BUTTON'S BUG ────────────────────────
+ * The Leafly Accept control is a real `<form>` posting to a server action,
+ * and its spinner is driven by `useFormStatus().pending`. That flag does not
+ * clear when the action returns — it clears when the NAVIGATION RESOLVES,
+ * which includes rendering the redirect target. This page IS that target.
+ *
+ * So a slow render here keeps the button spinning long after the
+ * acknowledgement has succeeded, and the operator cannot tell the difference
+ * between "Leafly never answered" and "Leafly answered instantly and the
+ * board is slow". That is a real part of the defect the owner reported, and
+ * it is why bounding the outbound request twice did not change what he saw.
+ *
+ * This render is expensive and honest about it: an eight-way `Promise.all`
+ * plus follow-up reads. Declaring the ceiling explicitly — rather than
+ * silently inheriting the platform maximum — means a pathological render ends
+ * in a visible error page instead of a killed function that renders nothing
+ * and leaves the spinner as the last thing on screen.
+ */
+export const maxDuration = 300;
+
 const STATUS_STYLES: Record<OrderStatus, string> = {
   new: "border-[var(--admin-orange)]/50 bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]",
   acknowledged:

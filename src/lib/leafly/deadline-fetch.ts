@@ -80,6 +80,47 @@ import "server-only";
  * it passes every test that checks for the presence of an AbortController.
  *
  * ===========================================================================
+ * SLICE L-24 — THE BINARY BODY
+ * ===========================================================================
+ * L-23 (above) moved the body read inside the budget by calling `.text()`
+ * and rebuilding the Response from that STRING. That was correct for every
+ * Leafly call that existed at the time, because all six of them were JSON.
+ *
+ * L-24 implemented the two endpoints the spec has always had and this
+ * codebase never built — `GET /{key}/government_id/{id}` and
+ * `GET /{key}/medical_id/{id}` — which return `image/*` BINARY. Sending
+ * those through `.text()` does not degrade the image. It destroys it.
+ *
+ * Measured before writing the fix, against a real 52-byte JPEG served by a
+ * real `node:http` server, rather than reasoned about:
+ *
+ *   [probe] original      len=52 hex=ffd8ffe000104a4649460001
+ *   [probe] via .text()   len=68 hex=efbfbdefbfbdefbfbdefbfbd
+ *   [probe] via arrayBuf  len=52 hex=ffd8ffe000104a4649460001
+ *   [probe] text() path preserves bytes?      false
+ *   [probe] arrayBuffer path preserves bytes? true
+ *   [probe] JPEG magic survived text()?       false
+ *
+ * `.text()` decodes as UTF-8. Every byte that is not valid UTF-8 — which is
+ * most of a JPEG — becomes U+FFFD, the replacement character, which re-encodes
+ * to THREE bytes. The payload grew from 52 to 68 bytes, the `ffd8` magic
+ * number became `efbfbd`, and no amount of re-encoding gets the original
+ * back. The staff member would have been shown a broken image and had to
+ * choose between acknowledging blind and cancelling a real customer's order.
+ *
+ * Hence `options.binary`. It defaults to FALSE, so the six existing JSON
+ * call sites are bit-for-bit unchanged and did not need editing — the same
+ * property that made L-23 a one-file change.
+ *
+ * WHY NOT ALWAYS USE arrayBuffer AND DECODE AT THE CALL SITE: because the
+ * callers do `await res.json()` and `await res.text()` today, and a Response
+ * built from an ArrayBuffer still serves both correctly — so "always binary"
+ * would in fact have worked. It is not done because the flag also documents
+ * INTENT at the call site: `binary: true` is the marker that says "this one
+ * is an ID image, it is PII, do not log it, do not persist it". A silent
+ * uniform change would have deleted that signal.
+ *
+ * ===========================================================================
  * THE ONE THING THIS FILE MUST NEVER DO
  * ===========================================================================
  * It must never convert a timeout into a success, and it must never claim to
@@ -193,9 +234,12 @@ export async function leaflyFetchWithDeadline(
   operation: LeaflyOperation,
   url: string,
   init: RequestInit,
-  options?: { fetchImpl?: FetchLike },
+  options?: { fetchImpl?: FetchLike; binary?: boolean },
 ): Promise<DeadlineFetchResult> {
   const fetchImpl: FetchLike = options?.fetchImpl ?? ((u, i) => fetch(u, i));
+  // SLICE L-24 — see "THE BINARY BODY" in the header. Defaults to false so
+  // all six pre-existing JSON call sites behave EXACTLY as before.
+  const binary = options?.binary === true;
   const budgetMs = timeoutForOperation(operation);
   const controller = new AbortController();
   // Set BEFORE the abort call, read after the throw. This is the fact that
@@ -242,7 +286,16 @@ export async function leaflyFetchWithDeadline(
     //
     // Reading the body here means the timer is still armed while it streams,
     // so a stalled body aborts exactly like a stalled connection.
-    const text = await response.text();
+    // SLICE L-24 — `.text()` for JSON, `.arrayBuffer()` for images. Which one
+    // is NOT a style choice: routing binary through `.text()` destroys it
+    // irreversibly. Measured against a real 52-byte JPEG over a real HTTP
+    // server before this branch was written (see the header note).
+    //
+    // Both read the WHOLE body inside the armed budget, which is the property
+    // L-23 added and which must not be lost by adding a second path.
+    const buffered: string | ArrayBuffer = binary
+      ? await response.arrayBuffer()
+      : await response.text();
 
     // The caller is handed a Response whose body is ALREADY BUFFERED, so the
     // six existing call sites keep calling `.text()` / `.json()` completely
@@ -258,7 +311,7 @@ export async function leaflyFetchWithDeadline(
     // ID images were already destroyed.
     return {
       ok: true,
-      response: new Response(mayCarryBody(response.status) ? text : null, {
+      response: new Response(mayCarryBody(response.status) ? buffered : null, {
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,

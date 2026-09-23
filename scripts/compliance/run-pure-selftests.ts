@@ -289,6 +289,23 @@ import {
 //              token refresh or a mis-read 404 all end with the order simply
 //              never appearing, which is exactly the bug this core exists to
 //              make impossible to reintroduce.
+import { __runLeaflyOrderDetailTests } from "../../src/lib/leafly/order-detail-core";
+// SLICE L-25 -- the DATABASE half of "nothing may hang forever".
+//
+// The acknowledge button hung through two slices that both, correctly,
+// bounded the NETWORK. Nobody had bounded the database: measured against a
+// real black-hole HTTP server, an unbounded PostgREST query was still
+// hanging at 8006ms, while the same query with `.abortSignal()` returned a
+// clean error value at 1505ms (scripts/recon/supabase-hang-probe.mjs).
+//
+// This core owns the budgets and the arithmetic that proves one acknowledge
+// click -- 80s of network worst case plus every database call it can make --
+// still fits under the action's own 240s budget, which in turn loses the
+// race to Vercel's 300s ceiling deliberately, so we render an explanation
+// instead of being killed mid-render.
+import { __selfTestDbDeadlineCore } from "../../src/lib/leafly/db-deadline-core";
+import { __runOnlineOrdersReportTests } from "../../src/lib/leafly/online-orders-report-core";
+import { __runLeaflyStaffAlertTests } from "../../src/lib/leafly/staff-alert-core";
 import { __runLeaflyOrderFetchTests } from "../../src/lib/leafly/order-fetch-core";
 // SLICE M-2 -- readiness. An order can be silent for reasons that are not
 //              code defects at all: Leafly may never have been told our
@@ -975,7 +992,11 @@ __runLiquidVolumeTests();
   // assertions being quietly deleted later; a deadline that covers the
   // connection but not the response is exactly the kind of regression that
   // looks fine in review.
-  assertRan("leafly-deadline-core", __runLeaflyDeadlineTests(), 640);
+  // SLICE L-24 raised this from 640 to 700. Adding the `media_fetch`
+  // operation pushed the measured count 667 -> 737, because every invariant
+  // loop in that core iterates LEAFLY_OPERATIONS. Leaving the floor at 640
+  // would have let the entire ninth operation be deleted without CI noticing.
+  assertRan("leafly-deadline-core", __runLeaflyDeadlineTests(), 700);
   // SLICE L-18. The cache policy behind the settings-save hang. The live menu's
   // real tag and TTL are INJECTED rather than copied, so the claim "we share
   // the live menu's invalidation" is checked against the actual constants and
@@ -994,6 +1015,62 @@ __runLiquidVolumeTests();
   // core is what makes a receipt possible at all; the readiness core is what
   // stops the dashboard from hiding while setup is half finished.
   assertRan("leafly-order-fetch-core", __runLeaflyOrderFetchTests(), 98);
+  // SLICE L-24. The order detail view and the ID-image access window. The
+  // decision this core owns is the one the acknowledge warning has always
+  // pointed at and the product never implemented: whether the customer's
+  // government and medical ID images can still be fetched. Both spec
+  // conditions (not acknowledged AND status pending) are ANDed, because
+  // Leafly's 15-minute auto-cancel routinely produces orders that are
+  // unacknowledged and NOT pending. Measured at 153.
+  // SLICE L-25 raised this floor from 140 to 200. The suite gained the
+  // `classifyDetailPayload` assertions that distinguish Leafly's five-field
+  // submission webhook from a real Order -- the difference between "we never
+  // downloaded this order" and "this order is empty", which is what the
+  // owner was shown as a blank screen. Measured at 211.
+  //
+  // SLICE L-25 raised it again, 200 -> 250, after the money defect. A CONTROL
+  // assertion written from the vendored OpenAPI spec disagreed with the
+  // reader: the spec says every Order money field is already in minor units,
+  // and the reader was running a dollars-to-cents conversion over them, so a
+  // $48.03 order displayed as $4,803.00 while `Order.taxes` -- an ARRAY of
+  // TaxComponent -- read as null on every order ever shown.
+  //
+  // The suite had been GREEN through all of it, because the fixture invented
+  // dollar amounts and cart keys (`totalPrice`, `total`) that appear nowhere
+  // in `CartItemOutgoing`. The fixture was rebuilt from the spec's own
+  // example arithmetic, `readMinorUnits` / `readTaxesMinorUnits` gained
+  // direct coverage, and a negative control now pins the ghost keys so the
+  // old behaviour cannot quietly return. Measured at 254.
+  assertRan("leafly-order-detail-core", __runLeaflyOrderDetailTests(), 250);
+
+  // SLICE L-25. Returns a bare assertion count rather than { passed, failed }
+  // because it throws on the first failure, so a returned count is by
+  // definition an all-passed count. Floored at 50; measured at 56.
+  {
+    const n = __selfTestDbDeadlineCore();
+    if (n < 50) {
+      throw new Error(
+        `db-deadline-core self-tests ran only ${n} assertion(s); expected at least 50. ` +
+          `A suite that runs no assertions is not a passing suite.`,
+      );
+    }
+    console.log(`db-deadline-core: ${n} assertions passed, 0 failed (floor 50)`);
+  }
+  // SLICE 8 (round L-24). The Online Orders report. This core measures a
+  // CONTRACT, not money: orders lost to Leafly's 15-minute auto-cancel, and
+  // LIFECYCLE REACH -- how many acknowledged orders ever got a `ready` or
+  // `picked_up` signal. That second number is the customer-notification
+  // story, because Leafly is the "sole originator of automated consumer
+  // facing communications" and only speaks when we report a transition.
+  // Every rate is null-on-empty-denominator, never 0: "0% on time" and "no
+  // orders yet" demand opposite reactions. Measured at 154.
+  assertRan("leafly-online-orders-report-core", __runOnlineOrdersReportTests(), 145);
+  // STANDING OFFER 2 (round L-24). The staff alert, deliberately built to fire
+  // ONLY when the speaker/printer/register channels the owner relies on have
+  // failed -- he said plainly "I don't need an email sent to us". An alert on
+  // every order would train the mailbox to be ignored, which is how the one
+  // alert that mattered gets missed. Measured at 84.
+  assertRan("leafly-staff-alert-core", __runLeaflyStaffAlertTests(), 80);
   // Floor raised 42 -> 54 by slice L-16, which added the `pickup_availability`
   // step (measured 58). Raising the floor with the count is deliberate: this
   // core is what decides whether the dashboard may call a shop READY, and the
