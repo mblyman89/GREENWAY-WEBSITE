@@ -741,6 +741,20 @@ export function __runLeaflyOrderDetailTests(): { passed: number; failed: number;
   eq("an object is null", toMinorUnits({}), null);
   eq("an array is null", toMinorUnits([]), null);
   eq("a boolean is null", toMinorUnits(true), null);
+  // MUTANT 9 of the L-24 probe survived because NOTHING above reaches the
+  // `whole === "" && frac === ""` branch: "" and "   " exit at the
+  // empty-string guard, "abc" fails the regex, and the non-strings return
+  // before it. These four inputs are the entire reachable set for that line,
+  // established by measurement. `$0.00` instead of "unreadable" is how a bag
+  // leaves the counter without payment.
+  eq("a lone decimal point is null, not zero", toMinorUnits("."), null);
+  eq("a lone minus sign is null, not zero", toMinorUnits("-"), null);
+  eq("a minus and a point is null, not zero", toMinorUnits("-."), null);
+  eq("a stripped currency symbol and a point is null", toMinorUnits("$."), null);
+  // Controls: the guard must reject SEPARATORS, not decimal points generally.
+  eq("a leading decimal point still reads", toMinorUnits(".5"), 50);
+  eq("a trailing decimal point still reads", toMinorUnits("5."), 500);
+  eq("a negative leading point still reads", toMinorUnits("-.5"), -50);
 
   // ---- reading the payload -------------------------------------------------
   const detail = readOrderDetail({

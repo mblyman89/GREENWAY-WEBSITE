@@ -448,6 +448,44 @@ export async function handleLeaflyWebhook(input: {
       const bridged = await onLeaflyOrderArrived(parsed.orderId);
       if (!bridged.ok) notes.push(bridged.summary);
       else if (!bridged.announced || !bridged.printed) notes.push(bridged.summary);
+
+      // ── STANDING OFFER 2 (round L-24): the LAST-RESORT staff alert ────────
+      //
+      // The owner was explicit that he does not want an order-arrived email:
+      //
+      //   "I don't need an email sent to us, the back office dashboard,
+      //    printer and speaker let us know an order has been placed."
+      //
+      // This is not that. `decideStaffAlert` stays SILENT whenever the bell
+      // rang and the paper printed, which is the overwhelmingly common case.
+      // It speaks only when those channels have already failed — at which
+      // point the owner has received no signal at all, and Leafly's
+      // fifteen-minute auto-cancel clock is running on a real customer's
+      // order. Email is then the only remaining way to find out in time.
+      //
+      // STAGE "arrival" IS LOAD-BEARING. The order is deliberately NOT on the
+      // register yet (decideBridgeActions returns createLocalOrder: false at
+      // arrival, by the owner's own two-stage rule), so the register check is
+      // suppressed here. Passing the wrong stage would alert on every order —
+      // exactly the noise he ruled out.
+      //
+      // NON-FATAL BY CONSTRUCTION. This is wrapped and awaited inside its own
+      // try/catch: a webhook that returned non-200 would make Leafly retry and
+      // could end with a customer's order auto-cancelled. An alert failing is
+      // never worth that, so any throw here is downgraded to a note.
+      const { maybeSendLeaflyStaffAlert } = await import("./staff-alert-server");
+      const alertNote = await maybeSendLeaflyStaffAlert({
+        leaflyOrderId: parsed.orderId,
+        stage: "arrival",
+        announced: bridged.ok && bridged.announced === true,
+        printed: bridged.ok && bridged.printed === true,
+        // Suppressed at this stage by the core; reported honestly rather than
+        // faked true, so the core — not the caller — owns the rule.
+        bridgedToRegister: false,
+        collectionFailed: !collected.ok,
+        acknowledgeBy: parsed.acknowledgeBy,
+      });
+      if (alertNote) notes.push(alertNote);
     }
 
     // ── SLICE L-10, THE OTHER DIRECTION: a cancellation must follow the order

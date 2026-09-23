@@ -130,10 +130,29 @@ export function LeaflyCredentialsForm({ view }: { view: CredentialsView["leafly"
         <h3 className="text-xs font-bold uppercase tracking-wide text-[var(--admin-text)]">
           Order API (receiving orders from Leafly)
         </h3>
+        {/*
+          STANDING OFFER, round L-24 — this paragraph used to say "Leave them
+          blank until Leafly sends them."
+
+          That sentence was TRUE when it was written, before Leafly had granted
+          Order API access. It is now the exact opposite of the truth: Leafly
+          has sent both values, and these two fields are what make incoming
+          orders work at all. A blank Webhook HMAC key means every order Leafly
+          delivers fails signature validation and is dropped; a blank Order
+          integration key means nothing can be acknowledged, and Leafly
+          auto-cancels the customer's order after fifteen minutes.
+
+          Guidance that has quietly inverted is worse than no guidance, because
+          it is followed with confidence. The replacement says what to do NOW,
+          and names the consequence of not doing it.
+        */}
         <p className="mt-1 mb-4 text-xs text-[var(--admin-text-muted)]">
-          These two are issued separately from the menu credentials above, when Leafly grants
-          Order API access. Leave them blank until Leafly sends them — an incorrect value here
-          causes Leafly&rsquo;s order notifications to be rejected.
+          Both of these are <strong className="font-bold text-[var(--admin-text)]">required</strong>{" "}
+          for online orders to work. Leafly issues them separately from the menu credentials
+          above, when it grants Order API access. Until both are saved, orders Leafly sends are
+          rejected before they reach this store — and an order that is never acknowledged is
+          auto-cancelled by Leafly after fifteen minutes. Copy each value
+          character-for-character from Leafly&rsquo;s email.
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2">

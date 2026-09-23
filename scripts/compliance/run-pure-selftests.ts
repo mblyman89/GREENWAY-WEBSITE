@@ -290,6 +290,8 @@ import {
 //              never appearing, which is exactly the bug this core exists to
 //              make impossible to reintroduce.
 import { __runLeaflyOrderDetailTests } from "../../src/lib/leafly/order-detail-core";
+import { __runOnlineOrdersReportTests } from "../../src/lib/leafly/online-orders-report-core";
+import { __runLeaflyStaffAlertTests } from "../../src/lib/leafly/staff-alert-core";
 import { __runLeaflyOrderFetchTests } from "../../src/lib/leafly/order-fetch-core";
 // SLICE M-2 -- readiness. An order can be silent for reasons that are not
 //              code defects at all: Leafly may never have been told our
@@ -1007,6 +1009,21 @@ __runLiquidVolumeTests();
   // Leafly's 15-minute auto-cancel routinely produces orders that are
   // unacknowledged and NOT pending. Measured at 153.
   assertRan("leafly-order-detail-core", __runLeaflyOrderDetailTests(), 140);
+  // SLICE 8 (round L-24). The Online Orders report. This core measures a
+  // CONTRACT, not money: orders lost to Leafly's 15-minute auto-cancel, and
+  // LIFECYCLE REACH -- how many acknowledged orders ever got a `ready` or
+  // `picked_up` signal. That second number is the customer-notification
+  // story, because Leafly is the "sole originator of automated consumer
+  // facing communications" and only speaks when we report a transition.
+  // Every rate is null-on-empty-denominator, never 0: "0% on time" and "no
+  // orders yet" demand opposite reactions. Measured at 154.
+  assertRan("leafly-online-orders-report-core", __runOnlineOrdersReportTests(), 145);
+  // STANDING OFFER 2 (round L-24). The staff alert, deliberately built to fire
+  // ONLY when the speaker/printer/register channels the owner relies on have
+  // failed -- he said plainly "I don't need an email sent to us". An alert on
+  // every order would train the mailbox to be ignored, which is how the one
+  // alert that mattered gets missed. Measured at 84.
+  assertRan("leafly-staff-alert-core", __runLeaflyStaffAlertTests(), 80);
   // Floor raised 42 -> 54 by slice L-16, which added the `pickup_availability`
   // step (measured 58). Raising the floor with the count is deliberate: this
   // core is what decides whether the dashboard may call a shop READY, and the

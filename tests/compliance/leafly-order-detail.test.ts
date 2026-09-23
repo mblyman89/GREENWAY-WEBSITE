@@ -295,6 +295,39 @@ describe("L-24 — money is converted on the decimal text, not the binary value"
     }
   });
 
+  it("returns null for a separator with no digits on either side", () => {
+    // MUTANT 9 OF THE L-24 PROBE, which SURVIVED the original suite.
+    //
+    // The mutation was `if (whole === "" && frac === "") return null;` ->
+    // `return 0;`. Nothing in the suite caught it, and the reason was
+    // measured rather than guessed: that branch is reachable ONLY by an input
+    // that matches /^(-)?(\d*)(?:\.(\d*))?$/ with no digits in either group.
+    // Every value in the list above exits earlier — "" and "   " are caught
+    // by the empty-string guard, "abc" fails the regex outright, and the
+    // non-strings return before the regex runs. These four are the entire
+    // reachable set, so without them the branch was never executed at all.
+    //
+    // It matters because $0.00 and "we could not read the total" are
+    // different facts, and the first is how a bag leaves the counter without
+    // payment being taken.
+    for (const separatorOnly of [".", "-", "-.", "$."]) {
+      expect(toMinorUnits(separatorOnly), separatorOnly).toBeNull();
+      // Stated twice on purpose: `toBeNull` would also pass for a mutation
+      // returning undefined, and 0 is the specific wrong answer in question.
+      expect(toMinorUnits(separatorOnly), separatorOnly).not.toBe(0);
+    }
+  });
+
+  it("still reads a bare decimal point when digits are present", () => {
+    // The control for the assertion above. If the separator-only guard were
+    // widened into "anything containing a lone dot is unreadable", these
+    // ordinary values would break, and the test above would be passing for
+    // the wrong reason.
+    expect(toMinorUnits(".5")).toBe(50);
+    expect(toMinorUnits("5.")).toBe(500);
+    expect(toMinorUnits("-.5")).toBe(-50);
+  });
+
   it("renders a missing amount as a dash and a real zero as $0.00", () => {
     expect(formatDetailMoney(null)).toBe("—");
     expect(formatDetailMoney(0)).toBe("$0.00");
