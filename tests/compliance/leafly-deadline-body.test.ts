@@ -578,3 +578,196 @@ describe("L-23 — the self-test registration cannot be quietly disarmed", () =>
     expect(floor).toBeGreaterThan(515);
   });
 });
+
+// ===========================================================================
+// SLICE L-24 — THE BINARY BODY
+// ===========================================================================
+/**
+ * WHY THESE TESTS EXIST, AND WHY THEY USE A REAL SERVER.
+ *
+ * L-23 made the helper buffer the body inside the budget by calling
+ * `.text()`. That was right for all six Leafly calls that existed, because
+ * every one of them was JSON. L-24 added the two ID-image endpoints from the
+ * vendored spec, which return `image/*` binary.
+ *
+ * `.text()` decodes as UTF-8. A JPEG is not UTF-8, so every high byte becomes
+ * U+FFFD and re-encodes to three bytes: the payload is not merely mangled, it
+ * GROWS, and the original cannot be recovered. This was measured against a
+ * real JPEG over a real socket before the fix was written — the numbers are
+ * quoted in the helper's header.
+ *
+ * The consequence is not cosmetic. The staff member opens an order to check
+ * the customer's ID against the name on the cart, sees a broken image, and is
+ * left choosing between acknowledging blind — which permanently destroys the
+ * images — and cancelling a legitimate customer's order.
+ *
+ * A mocked `fetch` could not have caught this, because a mock returns
+ * whatever Response you hand it. Only a real socket carrying real bytes
+ * through the real undici pipeline exercises the decode. Hence `node:http`.
+ */
+describe("L-24 — an ID image survives the deadline helper intact", () => {
+  /**
+   * Real JPEG bytes: SOI, APP0/JFIF, a quantisation-table fragment, EOI.
+   * Chosen over random bytes because the leading `ff d8 ff e0` is the JPEG
+   * magic number — if the decode corrupts anything it corrupts that first,
+   * which makes a failure instantly legible instead of a diff of noise.
+   */
+  const JPEG = Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+    0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43,
+    0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09,
+    0x09, 0x08, 0x0a, 0x0c, 0x14, 0x0d, 0x0c, 0x0b, 0x0b, 0x0c, 0x19, 0x12,
+    0xff, 0xd9,
+  ]);
+
+  const serveJpeg: http.RequestListener = (_req, res) => {
+    res.writeHead(200, {
+      "Content-Type": "image/jpeg",
+      "Content-Length": String(JPEG.length),
+    });
+    res.end(JPEG);
+  };
+
+  it("returns the image byte-for-byte when binary is requested", async () => {
+    const base = await listen(serveJpeg);
+    const r = await leaflyFetchWithDeadline(
+      "media_fetch",
+      `${base}/government_id/abc`,
+      { method: "GET" },
+      { binary: true },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const got = Buffer.from(await r.response.arrayBuffer());
+    // The whole point, stated three ways so a partial regression cannot hide:
+    // the length, the magic number, and the exact bytes.
+    expect(got.length).toBe(JPEG.length);
+    expect(got[0]).toBe(0xff);
+    expect(got[1]).toBe(0xd8);
+    expect(got.equals(JPEG)).toBe(true);
+  });
+
+  /**
+   * THE CONTROL. This is the test that proves the flag is doing the work
+   * rather than the bytes happening to survive for some unrelated reason.
+   *
+   * Same server, same URL, same helper — only the flag removed. If this ever
+   * starts passing, either the default changed (and every JSON call site
+   * needs re-checking) or the assertion above has stopped meaning anything.
+   */
+  it("CORRUPTS the same image without the flag — proving the flag is load-bearing", async () => {
+    const base = await listen(serveJpeg);
+    const r = await leaflyFetchWithDeadline("media_fetch", `${base}/government_id/abc`, {
+      method: "GET",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const got = Buffer.from(await r.response.arrayBuffer());
+    expect(got.equals(JPEG)).toBe(false);
+    // UTF-8 replacement makes it LONGER, which is the counter-intuitive part
+    // worth pinning: a naive reader expects truncation, not growth.
+    expect(got.length).toBeGreaterThan(JPEG.length);
+  });
+
+  it("preserves the Content-Type so the browser can render the image", async () => {
+    const base = await listen(serveJpeg);
+    const r = await leaflyFetchWithDeadline(
+      "media_fetch",
+      `${base}/government_id/abc`,
+      { method: "GET" },
+      { binary: true },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Leafly documents `image/*` — it may send jpeg, png or heic. We must
+    // pass through whatever they said rather than guessing a type, because
+    // guessing wrong renders a broken image for a real ID.
+    expect(r.response.headers.get("content-type")).toBe("image/jpeg");
+  });
+
+  it("still bounds the body read when the image stalls mid-transfer", async () => {
+    // The L-23 property must not be lost by adding a second read path. A
+    // stalled IMAGE has to abort on the same clock a stalled JSON body does,
+    // otherwise the binary branch reintroduces the original five-minute hang
+    // on the one screen where a person is actively waiting.
+    const base = await listen((_req, res) => {
+      res.writeHead(200, { "Content-Type": "image/jpeg" });
+      res.flushHeaders();
+      res.write(Buffer.from([0xff, 0xd8]));
+      // No end(). Socket open, body never completes.
+    });
+    const started = Date.now();
+    const r = await leaflyFetchWithDeadline(
+      "media_fetch",
+      `${base}/government_id/abc`,
+      { method: "GET" },
+      { binary: true },
+    );
+    const elapsed = Date.now() - started;
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.didTimeout).toBe(true);
+    // Bounded by media_fetch's own budget, not some other operation's.
+    expect(elapsed).toBeLessThan(LEAFLY_TIMEOUT_MS.media_fetch + 4000);
+    expect(elapsed).toBeGreaterThanOrEqual(LEAFLY_TIMEOUT_MS.media_fetch - 1500);
+    // A GET that timed out is safe to repeat. Telling the operator otherwise
+    // would push them towards acknowledging without looking.
+    expect(r.verdict.safeToRetry).toBe(true);
+  }, 30_000);
+
+  it("does not throw on a null-body status when binary is requested", async () => {
+    // The L-23 landmine, re-armed by the new branch: `new Response(body, ...)`
+    // THROWS for a 204 given any body at all — and an empty ArrayBuffer is
+    // still a body. If `mayCarryBody` were bypassed on the binary path this
+    // would throw rather than fail, so the test asserts a clean result.
+    const base = await listen((_req, res) => {
+      res.writeHead(204);
+      res.end();
+    });
+    const r = await leaflyFetchWithDeadline(
+      "media_fetch",
+      `${base}/government_id/missing`,
+      { method: "GET" },
+      { binary: true },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.response.status).toBe(204);
+  });
+
+  it("leaves the JSON path byte-identical — the six existing call sites are untouched", async () => {
+    // The regression this slice most plausibly causes. `binary` defaults to
+    // false; if that default ever flips, acknowledge and the menu pushes all
+    // change behaviour silently.
+    const payload = { id: "ord_1", status: "pending", total: "19.99" };
+    const base = await listen((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(payload));
+    });
+    const r = await leaflyFetchWithDeadline("order_fetch", `${base}/orders/ord_1`, {
+      method: "GET",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(await r.response.json()).toEqual(payload);
+  });
+
+  it("treats an explicit binary:false exactly like an omitted flag", async () => {
+    // Guards the `=== true` comparison. A truthiness check would behave the
+    // same here, but `binary: undefined` from a spread options object must
+    // not accidentally select the binary path either.
+    const base = await listen((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end('{"ok":true}');
+    });
+    const r = await leaflyFetchWithDeadline(
+      "order_fetch",
+      `${base}/x`,
+      { method: "GET" },
+      { binary: false },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(await r.response.json()).toEqual({ ok: true });
+  });
+});

@@ -133,6 +133,29 @@
  * Naming the mint separately is deliberate: it is not an operation the owner
  * ever asks for, it is a cost that every other operation silently pays, and
  * it was the least visible hang in the set.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * SLICE L-24 — `media_fetch`, the ninth operation
+ * ─────────────────────────────────────────────────────────────────────────
+ * `GET /{key}/government_id/{id}` and `GET /{key}/medical_id/{id}`, the two
+ * endpoints in the vendored spec that this codebase never implemented. They
+ * return `image/*` binary, not JSON, which makes them the first Leafly call
+ * whose body is not text.
+ *
+ * It is NOT folded into `order_fetch` even though both read one order, and
+ * the reason is the clock rather than tidiness. The spec is explicit:
+ *
+ *   "This endpoint is only usable prior to order acknowledgement and only
+ *    when the order is in pending status."
+ *
+ * So every media read happens inside the fifteen-minute auto-cancel window,
+ * with a person waiting to look at an ID before they press a one-way door.
+ * That is the ATTENDED, clock-bound profile — the acknowledge profile — not
+ * the order_fetch profile, which also runs on a webhook with nobody
+ * watching. Giving media `order_fetch`'s 15s would have been "close enough"
+ * and would have quietly widened an attended budget by three seconds for no
+ * stated reason. Twelve seconds, two attempts, same as the button it
+ * precedes.
  */
 export const LEAFLY_OPERATIONS = [
   "acknowledge",
@@ -143,6 +166,7 @@ export const LEAFLY_OPERATIONS = [
   "menu_readback",
   "integration_status",
   "token_mint",
+  "media_fetch",
 ] as const;
 
 export type LeaflyOperation = (typeof LEAFLY_OPERATIONS)[number];
@@ -197,6 +221,20 @@ export const LEAFLY_AUTO_CANCEL_MS = 15 * 60 * 1000;
  * Because that is the bug this file exists to remove, and an escape hatch is
  * how it comes back. Every operation has a finite budget and the invariant
  * tests below assert it.
+ *
+ * ── WHY THE MEDIA FETCH MATCHES THE ACKNOWLEDGE ────────────────────────────
+ * A staff member is holding the tablet, looking at the order, deciding
+ * whether the face on the ID matches the name on the cart, and the
+ * fifteen-minute auto-cancel clock is running the whole time. That is the
+ * acknowledge's profile exactly, so it gets the acknowledge's number. There
+ * is also a second-order reason to keep it tight: if the images are slow,
+ * the operator's temptation is to give up and press acknowledge WITHOUT
+ * looking — which destroys the images permanently. A budget that fails fast
+ * returns them to a screen that can still offer a retry inside the window.
+ *
+ * Two attempts, not six, for the same reason acknowledge gets two: the
+ * window is shared with the human, and backoff spends the thing we are
+ * short of.
  */
 export const LEAFLY_TIMEOUT_MS: Readonly<Record<LeaflyOperation, number>> = {
   acknowledge: 12_000,
@@ -207,6 +245,7 @@ export const LEAFLY_TIMEOUT_MS: Readonly<Record<LeaflyOperation, number>> = {
   menu_readback: 30_000,
   integration_status: 12_000,
   token_mint: 8_000,
+  media_fetch: 12_000,
 };
 
 /**
@@ -259,6 +298,7 @@ export const LEAFLY_MAX_ATTEMPTS: Readonly<Record<LeaflyOperation, number>> = {
   menu_readback: 6,
   integration_status: 3,
   token_mint: 1,
+  media_fetch: 2,
 };
 
 /** The budget for one attempt. Unknown operations get the tightest budget. */
@@ -669,7 +709,41 @@ export function __runLeaflyDeadlineTests(): { passed: number; failed: number } {
     // person waiting, and over ten is indistinguishable from the old bug.
     ok(`${op} budget is under 10 minutes`, t < 10 * 60 * 1000);
   }
-  eq("there are eight operations", LEAFLY_OPERATIONS.length, 8);
+  // SLICE L-24 — nine, not eight. `media_fetch` joined the set when the two
+  // ID-image endpoints were finally implemented. This count is deliberately
+  // hard-coded rather than derived: it is the assertion that fails when
+  // somebody adds an operation and forgets to give it a budget, an attempt
+  // count, and a reason. The loops above cover the new one automatically;
+  // this line is what makes the ADDITION itself a conscious act.
+  eq("there are nine operations", LEAFLY_OPERATIONS.length, 9);
+  ok("media_fetch is a known operation", isLeaflyOperation("media_fetch"));
+  eq("media_fetch gets the attended budget", LEAFLY_TIMEOUT_MS.media_fetch, 12_000);
+  eq("media_fetch attempts exactly twice", LEAFLY_MAX_ATTEMPTS.media_fetch, 2);
+  // It shares the acknowledge's profile because it shares the acknowledge's
+  // circumstances: a person waiting, inside the 15-minute window. If these
+  // two ever diverge it should be because somebody decided they should.
+  eq(
+    "media_fetch matches the acknowledge it precedes",
+    LEAFLY_TIMEOUT_MS.media_fetch,
+    LEAFLY_TIMEOUT_MS.acknowledge,
+  );
+  ok(
+    "media_fetch is NOT irreversible (looking at an ID changes nothing)",
+    !isIrreversibleOperation("media_fetch"),
+  );
+  // Reading an image is a GET. A timed-out GET is always safe to repeat, and
+  // saying otherwise would discourage the operator from the very thing the
+  // acknowledge warning tells them to do first.
+  ok(
+    "a media_fetch timeout is safe to retry",
+    describeDeadlineFailure({ operation: "media_fetch", fault: "timeout" }).safeToRetry,
+  );
+  ok(
+    "a media_fetch timeout states its own 12s budget",
+    describeDeadlineFailure({ operation: "media_fetch", fault: "timeout" }).message.includes(
+      "12 seconds",
+    ),
+  );
   eq(
     "budget table covers exactly the operations",
     Object.keys(LEAFLY_TIMEOUT_MS).length,
@@ -745,9 +819,17 @@ export function __runLeaflyDeadlineTests(): { passed: number; failed: number } {
     "acknowledge is under 15 seconds (people stop believing the button)",
     LEAFLY_TIMEOUT_MS.acknowledge <= 15_000,
   );
-  // The three budgets a human waits on, held to one standard. order_fetch is
-  // included: it backs a screen the operator is looking at too.
-  for (const attended of ["acknowledge", "status_push", "integration_status", "order_fetch"] as const) {
+  // The budgets a human waits on, held to one standard. order_fetch is
+  // included: it backs a screen the operator is looking at too. L-24 added
+  // media_fetch, which is the most attended of the lot — it is the thing the
+  // operator is literally staring at before an irreversible press.
+  for (const attended of [
+    "acknowledge",
+    "status_push",
+    "integration_status",
+    "order_fetch",
+    "media_fetch",
+  ] as const) {
     ok(
       `${attended} keeps an attended budget (<= 15s)`,
       LEAFLY_TIMEOUT_MS[attended] <= 15_000,

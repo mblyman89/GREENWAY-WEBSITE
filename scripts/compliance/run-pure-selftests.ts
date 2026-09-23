@@ -289,6 +289,7 @@ import {
 //              token refresh or a mis-read 404 all end with the order simply
 //              never appearing, which is exactly the bug this core exists to
 //              make impossible to reintroduce.
+import { __runLeaflyOrderDetailTests } from "../../src/lib/leafly/order-detail-core";
 import { __runLeaflyOrderFetchTests } from "../../src/lib/leafly/order-fetch-core";
 // SLICE M-2 -- readiness. An order can be silent for reasons that are not
 //              code defects at all: Leafly may never have been told our
@@ -975,7 +976,11 @@ __runLiquidVolumeTests();
   // assertions being quietly deleted later; a deadline that covers the
   // connection but not the response is exactly the kind of regression that
   // looks fine in review.
-  assertRan("leafly-deadline-core", __runLeaflyDeadlineTests(), 640);
+  // SLICE L-24 raised this from 640 to 700. Adding the `media_fetch`
+  // operation pushed the measured count 667 -> 737, because every invariant
+  // loop in that core iterates LEAFLY_OPERATIONS. Leaving the floor at 640
+  // would have let the entire ninth operation be deleted without CI noticing.
+  assertRan("leafly-deadline-core", __runLeaflyDeadlineTests(), 700);
   // SLICE L-18. The cache policy behind the settings-save hang. The live menu's
   // real tag and TTL are INJECTED rather than copied, so the claim "we share
   // the live menu's invalidation" is checked against the actual constants and
@@ -994,6 +999,14 @@ __runLiquidVolumeTests();
   // core is what makes a receipt possible at all; the readiness core is what
   // stops the dashboard from hiding while setup is half finished.
   assertRan("leafly-order-fetch-core", __runLeaflyOrderFetchTests(), 98);
+  // SLICE L-24. The order detail view and the ID-image access window. The
+  // decision this core owns is the one the acknowledge warning has always
+  // pointed at and the product never implemented: whether the customer's
+  // government and medical ID images can still be fetched. Both spec
+  // conditions (not acknowledged AND status pending) are ANDed, because
+  // Leafly's 15-minute auto-cancel routinely produces orders that are
+  // unacknowledged and NOT pending. Measured at 153.
+  assertRan("leafly-order-detail-core", __runLeaflyOrderDetailTests(), 140);
   // Floor raised 42 -> 54 by slice L-16, which added the `pickup_availability`
   // step (measured 58). Raising the floor with the count is deliberate: this
   // core is what decides whether the dashboard may call a shop READY, and the
