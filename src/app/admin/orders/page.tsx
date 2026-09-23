@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -68,6 +69,19 @@ import {
   urgentSignals,
 } from "@/lib/admin/orders-tabs-core";
 import { getAnnouncerPanelDataCached } from "@/lib/announcer/announcer-admin-store";
+// SLICE L-22 — the owner's requested board order, and the rule that bends it
+// when a Leafly auto-cancel clock is actually running. Also owns the "label
+// everything or label nothing" rule for the combined history.
+import {
+  decideBoardLayout,
+  describeOriginMix,
+  shouldLabelWebsiteRows,
+  tallyOrigins,
+} from "@/lib/admin/orders-board-order-core";
+// The badge's own word for an origin, passed INTO the summary line rather than
+// re-typed there, so the sentence above the list and the badges inside it can
+// never call the same thing by two different names.
+import { orderOriginLabel } from "@/lib/orders/order-origin-core";
 
 export const dynamic = "force-dynamic";
 
@@ -323,6 +337,44 @@ export default async function OrdersAdminPage({
   const orderBoardSignals = urgentSignals(tabInput);
   const setupNeedsAttention = setupTabNeedsAttention(tabInput);
 
+  // ── SLICE L-22 — WHAT GOES FIRST, AND WHO GETS A LABEL ────────────────────
+  //
+  // The owner worked this screen for real and asked for his own orders first,
+  // with Leafly below and a combined history carrying origin labels. Both of
+  // those reverse a decision an earlier slice made for a stated reason, so
+  // neither is simply overwritten here: the pure core makes each one
+  // CONDITIONAL on a fact, which is how the owner gets the layout he asked for
+  // without losing what the earlier reasoning was buying.
+  //
+  //   - L-6 put Leafly on top because of the 15-minute auto-cancel clock. That
+  //     clock is real, but it is only running when an order is actually
+  //     unacknowledged. decideBoardLayout() keeps the owner's order the normal
+  //     case and promotes Leafly only while the deadline is live — visibly,
+  //     with the reason printed on screen.
+  //   - L-12 hid the "Website" badge because forty identical badges train the
+  //     eye to skip the column. Still true for a shop that never sees a Leafly
+  //     order; wrong for one that does, where an unlabelled row is identified
+  //     only by the ABSENCE of a badge. shouldLabelWebsiteRows() decides.
+  const boardLayout = decideBoardLayout({ leaflyPendingAck });
+  // Shop-level and therefore stable across pages and filters. Deliberately NOT
+  // derived from the rows on screen: page 1 could be mixed and page 2 all
+  // website, and a table that changes its labelling convention as you page
+  // through it is worse than either convention. `anyOrderEverReceived` is
+  // already loaded — echoed, not re-derived (house rule 11) — so this costs no
+  // extra query. The core keeps a safety valve for the case where the flag is
+  // false but a Leafly row is visibly on screen anyway.
+  const labelWebsiteRows = shouldLabelWebsiteRows({
+    shopReceivesLeaflyOrders: leaflySetup.readiness.anyOrderEverReceived,
+    originsOnScreen: orders.map((o) => o.origin),
+  });
+  // The mix summary describes THIS PAGE only, and says so in words the core
+  // owns and asserts, because the alternative reading — that these are the
+  // shop's totals — is the one a reader will reach for first.
+  const originMix = describeOriginMix(
+    tallyOrigins(orders.map((o) => o.origin)),
+    orderOriginLabel,
+  );
+
   // SLICE L-19 — computed here, on the server, from the same single predicate
   // the setup checklist uses (setup-status.ts). Two readers, one answer: the
   // bug this replaces was the checklist saying "email is configured" while the
@@ -332,6 +384,285 @@ export default async function OrdersAdminPage({
     ORDER_EMAIL_FROM: process.env.ORDER_EMAIL_FROM,
     ORDER_STAFF_EMAILS: process.env.ORDER_STAFF_EMAILS,
   });
+
+  // ── SLICE L-22 — THE TWO BOARDS, DEFINED ONCE EACH ──────────────────────
+  //
+  // Each board is built into exactly ONE const and then rendered from the
+  // order the pure core returned. The alternative — writing each board twice
+  // under opposite conditions — is how a page ends up showing the same Leafly
+  // order twice, with two Acknowledge buttons, one of which is stale. There is
+  // one copy of each, so that cannot happen, and a test asserts the count.
+  const leaflySection = (
+    <>
+    {/* SLICE L-6 — LEAFLY ORDERS.  (position revised by L-22, see below)
+
+        L-6 pinned this block directly under the status summary and ABOVE
+        Greenway's own order cards, and said why: a Leafly order is the only
+        order in the building with a hard external deadline — Leafly
+        auto-cancels anything not acknowledged within fifteen minutes — so it
+        was the first thing on the page that could cost a real customer their
+        order.
+
+        That is still the reason the block can be promoted, but it is no
+        longer the reason it is WHERE it is. The owner worked this screen for
+        real and found the absolute version wrong in the ordinary case: nearly
+        every order is a Greenway order, so the emergency layout was slightly
+        wrong all day in exchange for being right occasionally. L-22 therefore
+        hands the position to decideBoardLayout(), which keeps the owner's
+        order normally and promotes this block only while an acknowledgement
+        is actually outstanding.
+
+        This comment is kept rather than deleted because the deadline reasoning
+        is still load-bearing — anyone who removes the promotion needs to know
+        what it was protecting.
+
+        It renders NOTHING when Leafly order handling has never been set up
+        and nothing has arrived, so the page is unchanged for a shop not
+        using it. It never hides a failure. */}
+    {/* SLICE L-21 — THE M-2 FIX, PRESERVED ACROSS THE MOVE.
+
+        The full setup panel now lives on the setup tab. That move had one
+        dangerous side effect: M-2 was the report "there is nothing in the
+        online orders dashboard page that has a Leafly orders section", and
+        the fix for it was precisely this panel, rendered here, explaining
+        why the board below is blank. Moving it away without replacement
+        would have handed that bug straight back.
+
+        So when — and only when — the board will render nothing at all,
+        the orders tab keeps a single line saying so and pointing at the
+        tab that can fix it. The condition is the board's OWN predicate,
+        imported rather than re-typed, so the two cannot drift.
+
+        When the board does render, this disappears entirely: an explained
+        blank space is useful, a note above a working board is clutter. */}
+    {leaflyBoardRendersNothing({
+      hasOrders: leaflyBoard.orders.length > 0,
+      hasProblem: leaflyBoard.problem.trim().length > 0,
+      hasOutcome: Boolean(sp.leaflyMsg || sp.leaflyWarn || sp.leaflyErr),
+      orderIntegrationKeyPresent: leaflyBoard.orderIntegrationKeyPresent,
+    }) ? (
+      <div className="mb-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3 text-sm text-[var(--admin-text-muted)]">
+        Leafly orders are not set up yet, so there is no Leafly section
+        below.{" "}
+        <Link
+          href={ordersTabHref("setup")}
+          className="font-bold text-[var(--admin-accent)] underline underline-offset-2"
+        >
+          Finish setup in Setup &amp; equipment →
+        </Link>
+      </div>
+    ) : null}
+
+    <LeaflyOrdersPanel
+      board={leaflyBoard}
+      pendingAckCount={leaflyPendingAck}
+      interrupts={leaflyInterrupts}
+      // The clock is read ONCE here and injected, so every countdown on the
+      // page is measured from the same instant. Reading the time inside the
+      // component per order would let two rows disagree about what time it
+      // is; the pure core takes `now` as a parameter precisely so this is a
+      // decision made in one visible place.
+      now={new Date()}
+      message={sp.leaflyMsg ?? sp.leaflyWarn ?? null}
+      error={sp.leaflyErr ?? null}
+      errorCode={sp.leaflyFix ?? sp.leaflyCode ?? null}
+    />
+    </>
+  );
+
+  const greenwaySection = (
+    <>
+    {/* Filters + search (SLICE 26: full control — status, search, date
+        range, total range, and sort, all URL-driven and combinable). */}
+    <form method="get" className="mt-6 space-y-3">
+      <div className="flex flex-wrap gap-1.5">
+        {FILTERS.map((f) => (
+          <Link
+            key={f.key}
+            href={statusHref(f.key)}
+            className={`admin-focus rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
+              status === f.key
+                ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
+                : "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+            }`}
+          >
+            {f.label}
+          </Link>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="status" value={status} />
+        <div className="min-w-52 flex-1">
+          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+            Search
+          </label>
+          <Input name="q" defaultValue={search} placeholder="Name, phone, order #" />
+        </div>
+        <div>
+          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+            Placed from
+          </label>
+          <Input type="date" name="from" defaultValue={placedFrom ?? ""} className="w-40" />
+        </div>
+        <div>
+          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+            Placed to
+          </label>
+          <Input type="date" name="to" defaultValue={placedToDate ?? ""} className="w-40" />
+        </div>
+        <div>
+          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+            Total min $
+          </label>
+          <Input name="min" defaultValue={sp.min ?? ""} placeholder="0.00" inputMode="decimal" className="w-24" />
+        </div>
+        <div>
+          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+            Total max $
+          </label>
+          <Input name="max" defaultValue={sp.max ?? ""} placeholder="0.00" inputMode="decimal" className="w-24" />
+        </div>
+        <div>
+          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+            Sort by
+          </label>
+          <Select name="sort" defaultValue={sort.key} aria-label="Sort orders">
+            {ORDER_SORTS.map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Button type="submit" variant="neutral">
+          Apply
+        </Button>
+        {(search || hasExtraFilters) && (
+          <Link
+            href={status !== "active" ? `/admin/orders?status=${status}` : "/admin/orders"}
+            className="pb-2 text-xs text-[var(--admin-text-faint)] underline-offset-2 hover:text-[var(--admin-text)] hover:underline"
+          >
+            Clear
+          </Link>
+        )}
+      </div>
+    </form>
+
+    {/* GW-033: exact count + pager — a clipped list is never silent. */}
+    <div className="mt-4">
+      <ListPager window={win} total={total} noun="order" makeHref={pageHref} />
+    </div>
+
+    {/* SLICE L-22 — WHAT THIS COMBINED LIST IS MADE OF.
+
+        The owner asked for a combined history with origin labels. The list
+        was ALREADY combined — listOrdersPaged selects from `orders` with no
+        origin filter, and Leafly orders are written into that same table —
+        so what was missing was the ability to SEE the mix without reading
+        forty badges one at a time.
+
+        The sentence itself comes from the core, which owns the one claim
+        here that is easy to get wrong: these are the rows on THIS page,
+        after the current filters, not the shop's totals. It renders nothing
+        at all when every row on the page came from the same place, because
+        then the count is just the row count again and the pager above
+        already showed that. */}
+    {originMix ? (
+      <p className="mt-2 text-xs font-semibold text-[var(--admin-text-muted)]">
+        {originMix}
+      </p>
+    ) : null}
+
+    {/* Order cards */}
+    {orders.length === 0 ? (
+      <div className="mt-8">
+        <EmptyState
+          icon="🧾"
+          title="No orders match this view"
+          description="When customers place pickup orders online, they'll show up here automatically — newest first."
+        />
+      </div>
+    ) : (
+      <div className="mt-5 grid gap-3">
+        {orders.map((order) => {
+          const next = ORDER_FORWARD_TRANSITIONS[order.status];
+          return (
+            <Card key={order.id} padding="sm" className="sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={detailHref(order.id)}
+                      className="text-lg font-black text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
+                    >
+                      {resolveOrderDisplay(order.display_name, order.order_number)}
+                    </Link>
+                    <span
+                      className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${STATUS_STYLES[order.status]}`}
+                    >
+                      {ORDER_STATUS_LABELS[order.status]}
+                    </span>
+                    {/* SLICE L-12 hid the "Website" badge unconditionally,
+                        because badging all forty rows trains the eye to
+                        skip the column and takes the Leafly badge with
+                        it. SLICE L-22 keeps that for a shop that has
+                        never had a Leafly order, and drops it for one
+                        that has: in a genuinely mixed list, an unbadged
+                        row is identified only by the ABSENCE of a badge,
+                        which is indistinguishable from a badge that
+                        failed to render. Label everything, or label
+                        nothing — never half. The core decides, once, for
+                        the whole list. */}
+                    <OrderOriginBadge origin={order.origin} hideWebsite={!labelWebsiteRows} />
+                  </div>
+                  {order.display_name && order.display_name.trim() ? (
+                    <p className="mt-0.5 font-mono text-xs text-[var(--admin-text-faint)]">
+                      #{order.order_number}
+                    </p>
+                  ) : null}
+                  <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
+                    {order.customer_first_name}
+                    {order.customer_last_name ? ` ${order.customer_last_name}` : ""}
+                    {order.customer_phone ? ` · ${order.customer_phone}` : ""}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[var(--admin-text-faint)]">
+                    {order.item_count} item{order.item_count === 1 ? "" : "s"} ·{" "}
+                    {formatMinorCurrency(order.total_minor_units)} · placed {timeAgo(order.placed_at)}
+                  </p>
+                  <div className="mt-3">
+                    <OrderStatusFlow status={order.status} />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {next ? (
+                    <form action={setOrderStatusAction}>
+                      <input type="hidden" name="id" value={order.id} />
+                      <input type="hidden" name="status" value={next} />
+                      <Button type="submit" variant="primary" size="sm">
+                        Mark {ORDER_STATUS_LABELS[next]}
+                      </Button>
+                    </form>
+                  ) : null}
+                  <Button href={detailHref(order.id)} variant="neutral" size="sm">
+                    Details
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    )}
+
+    {/* Bottom pager (long lists — save the scroll back up). */}
+    {win.totalPages > 1 && (
+      <div className="mt-5">
+        <ListPager window={win} total={total} noun="order" makeHref={pageHref} />
+      </div>
+    )}
+    </>
+  );
 
   return (
     <div>
@@ -609,231 +940,36 @@ export default async function OrdersAdminPage({
           <StatCard label="Active total" value={activeCount} icon="🧾" />
         </div>
 
-        {/* SLICE L-6 — LEAFLY ORDERS.
+        {/* ── SLICE L-22 — THE OWNER'S ORDER, AND WHEN IT BENDS ─────────────
 
-            Placed here deliberately: directly under the status summary and
-            ABOVE Greenway's own order cards. A Leafly order is the only order
-            in the building with a hard external deadline — Leafly auto-cancels
-            anything not acknowledged within fifteen minutes — so it is the
-            first thing on this page that can cost a real customer their order.
-            Everything below it (printer status, name pool, filters) can wait;
-            this cannot.
+            He asked for his own orders first and Leafly below, and that is now
+            the normal case. The one exception is a Leafly order sitting
+            unacknowledged: Leafly cancels it automatically after fifteen
+            minutes, and that clock is a fact about the world rather than a
+            preference this page gets to hold an opinion about.
 
-            It renders NOTHING when Leafly order handling has never been set up
-            and nothing has arrived, so the page is unchanged for a shop not
-            using it. It never hides a failure. */}
-        {/* SLICE L-21 — THE M-2 FIX, PRESERVED ACROSS THE MOVE.
-
-            The full setup panel now lives on the setup tab. That move had one
-            dangerous side effect: M-2 was the report "there is nothing in the
-            online orders dashboard page that has a Leafly orders section", and
-            the fix for it was precisely this panel, rendered here, explaining
-            why the board below is blank. Moving it away without replacement
-            would have handed that bug straight back.
-
-            So when — and only when — the board will render nothing at all,
-            the orders tab keeps a single line saying so and pointing at the
-            tab that can fix it. The condition is the board's OWN predicate,
-            imported rather than re-typed, so the two cannot drift.
-
-            When the board does render, this disappears entirely: an explained
-            blank space is useful, a note above a working board is clutter. */}
-        {leaflyBoardRendersNothing({
-          hasOrders: leaflyBoard.orders.length > 0,
-          hasProblem: leaflyBoard.problem.trim().length > 0,
-          hasOutcome: Boolean(sp.leaflyMsg || sp.leaflyWarn || sp.leaflyErr),
-          orderIntegrationKeyPresent: leaflyBoard.orderIntegrationKeyPresent,
-        }) ? (
-          <div className="mb-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3 text-sm text-[var(--admin-text-muted)]">
-            Leafly orders are not set up yet, so there is no Leafly section
-            below.{" "}
-            <Link
-              href={ordersTabHref("setup")}
-              className="font-bold text-[var(--admin-accent)] underline underline-offset-2"
-            >
-              Finish setup in Setup &amp; equipment →
-            </Link>
+            When that happens the Leafly board moves to the top AND says so, in
+            the banner below. A layout that rearranges itself silently is
+            indistinguishable from a bug, and teaches the reader to distrust
+            the next rearrangement — including the one that mattered. */}
+        {boardLayout.leaflyPromoted ? (
+          <div
+            className="mt-4 flex items-start gap-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm font-semibold text-[var(--admin-gold)]"
+            role="status"
+          >
+            <span aria-hidden>⏱️</span>
+            {/* The sentence comes from the core, which owns the singular/plural
+                and the mention of the deadline, so the explanation cannot drift
+                away from the rule that caused it. */}
+            <span>{boardLayout.reason}</span>
           </div>
         ) : null}
 
-        <LeaflyOrdersPanel
-          board={leaflyBoard}
-          pendingAckCount={leaflyPendingAck}
-          interrupts={leaflyInterrupts}
-          // The clock is read ONCE here and injected, so every countdown on the
-          // page is measured from the same instant. Reading the time inside the
-          // component per order would let two rows disagree about what time it
-          // is; the pure core takes `now` as a parameter precisely so this is a
-          // decision made in one visible place.
-          now={new Date()}
-          message={sp.leaflyMsg ?? sp.leaflyWarn ?? null}
-          error={sp.leaflyErr ?? null}
-          errorCode={sp.leaflyFix ?? sp.leaflyCode ?? null}
-        />
-
-        {/* Filters + search (SLICE 26: full control — status, search, date
-            range, total range, and sort, all URL-driven and combinable). */}
-        <form method="get" className="mt-6 space-y-3">
-          <div className="flex flex-wrap gap-1.5">
-            {FILTERS.map((f) => (
-              <Link
-                key={f.key}
-                href={statusHref(f.key)}
-                className={`admin-focus rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
-                  status === f.key
-                    ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
-                    : "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
-                }`}
-              >
-                {f.label}
-              </Link>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <input type="hidden" name="status" value={status} />
-            <div className="min-w-52 flex-1">
-              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-                Search
-              </label>
-              <Input name="q" defaultValue={search} placeholder="Name, phone, order #" />
-            </div>
-            <div>
-              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-                Placed from
-              </label>
-              <Input type="date" name="from" defaultValue={placedFrom ?? ""} className="w-40" />
-            </div>
-            <div>
-              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-                Placed to
-              </label>
-              <Input type="date" name="to" defaultValue={placedToDate ?? ""} className="w-40" />
-            </div>
-            <div>
-              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-                Total min $
-              </label>
-              <Input name="min" defaultValue={sp.min ?? ""} placeholder="0.00" inputMode="decimal" className="w-24" />
-            </div>
-            <div>
-              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-                Total max $
-              </label>
-              <Input name="max" defaultValue={sp.max ?? ""} placeholder="0.00" inputMode="decimal" className="w-24" />
-            </div>
-            <div>
-              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-                Sort by
-              </label>
-              <Select name="sort" defaultValue={sort.key} aria-label="Sort orders">
-                {ORDER_SORTS.map((o) => (
-                  <option key={o.key} value={o.key}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <Button type="submit" variant="neutral">
-              Apply
-            </Button>
-            {(search || hasExtraFilters) && (
-              <Link
-                href={status !== "active" ? `/admin/orders?status=${status}` : "/admin/orders"}
-                className="pb-2 text-xs text-[var(--admin-text-faint)] underline-offset-2 hover:text-[var(--admin-text)] hover:underline"
-              >
-                Clear
-              </Link>
-            )}
-          </div>
-        </form>
-
-        {/* GW-033: exact count + pager — a clipped list is never silent. */}
-        <div className="mt-4">
-          <ListPager window={win} total={total} noun="order" makeHref={pageHref} />
-        </div>
-
-        {/* Order cards */}
-        {orders.length === 0 ? (
-          <div className="mt-8">
-            <EmptyState
-              icon="🧾"
-              title="No orders match this view"
-              description="When customers place pickup orders online, they'll show up here automatically — newest first."
-            />
-          </div>
-        ) : (
-          <div className="mt-5 grid gap-3">
-            {orders.map((order) => {
-              const next = ORDER_FORWARD_TRANSITIONS[order.status];
-              return (
-                <Card key={order.id} padding="sm" className="sm:p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Link
-                          href={detailHref(order.id)}
-                          className="text-lg font-black text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
-                        >
-                          {resolveOrderDisplay(order.display_name, order.order_number)}
-                        </Link>
-                        <span
-                          className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${STATUS_STYLES[order.status]}`}
-                        >
-                          {ORDER_STATUS_LABELS[order.status]}
-                        </span>
-                        {/* SLICE L-12. `hideWebsite` because almost every row
-                            here is a website order: badging all forty trains
-                            the eye to skip the column, which would take the
-                            Leafly badge with it. Only the exception is
-                            marked, which is the whole point of marking it. */}
-                        <OrderOriginBadge origin={order.origin} hideWebsite />
-                      </div>
-                      {order.display_name && order.display_name.trim() ? (
-                        <p className="mt-0.5 font-mono text-xs text-[var(--admin-text-faint)]">
-                          #{order.order_number}
-                        </p>
-                      ) : null}
-                      <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-                        {order.customer_first_name}
-                        {order.customer_last_name ? ` ${order.customer_last_name}` : ""}
-                        {order.customer_phone ? ` · ${order.customer_phone}` : ""}
-                      </p>
-                      <p className="mt-0.5 text-xs text-[var(--admin-text-faint)]">
-                        {order.item_count} item{order.item_count === 1 ? "" : "s"} ·{" "}
-                        {formatMinorCurrency(order.total_minor_units)} · placed {timeAgo(order.placed_at)}
-                      </p>
-                      <div className="mt-3">
-                        <OrderStatusFlow status={order.status} />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      {next ? (
-                        <form action={setOrderStatusAction}>
-                          <input type="hidden" name="id" value={order.id} />
-                          <input type="hidden" name="status" value={next} />
-                          <Button type="submit" variant="primary" size="sm">
-                            Mark {ORDER_STATUS_LABELS[next]}
-                          </Button>
-                        </form>
-                      ) : null}
-                      <Button href={detailHref(order.id)} variant="neutral" size="sm">
-                        Details
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Bottom pager (long lists — save the scroll back up). */}
-        {win.totalPages > 1 && (
-          <div className="mt-5">
-            <ListPager window={win} total={total} noun="order" makeHref={pageHref} />
-          </div>
-        )}
+        {boardLayout.sections.map((section) => (
+          <Fragment key={section}>
+            {section === "leafly" ? leaflySection : greenwaySection}
+          </Fragment>
+        ))}
       </div>
       )}
     </div>

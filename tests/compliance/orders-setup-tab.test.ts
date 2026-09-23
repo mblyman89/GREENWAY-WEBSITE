@@ -107,7 +107,74 @@ function tabBranches(src: string): { setup: string; orders: string } {
   return { setup, orders: src.slice(oStart, ordersEnd) };
 }
 
-const BRANCHES = tabBranches(PAGE);
+/**
+ * Extract a balanced `const <name> = ( ... );` initialiser.
+ *
+ * SLICE L-22 restructured the orders tab: the two order sections are now built
+ * into one const each and rendered from the order the pure core returns, so
+ * the layout is data. That indirection is deliberate (it is what makes
+ * "Greenway first, Leafly below" testable, and what guarantees each board is
+ * defined exactly once) but it means the orders BRANCH no longer contains the
+ * board markup literally — it contains a reference to it.
+ *
+ * The L-21 claim is unchanged and still worth pinning: the order boards are on
+ * the orders tab and NOT on the setup tab. So rather than weaken the
+ * assertions, the branch is EXPANDED by substituting the section bodies in.
+ */
+function constBlock(src: string, name: string): string {
+  const needle = `const ${name} = (`;
+  const start = src.indexOf(needle);
+  if (start === -1) return "";
+  let depth = 0;
+  for (let i = start + needle.length - 1; i < src.length; i++) {
+    const c = src[i];
+    if (c === "(") depth++;
+    else if (c === ")") {
+      depth--;
+      if (depth === 0) return src.slice(start, i);
+    }
+  }
+  return "";
+}
+
+const SECTION_CONSTS = ["leaflySection", "greenwaySection"] as const;
+
+function expandSections(branch: string, src: string): string {
+  let out = branch;
+  for (const name of SECTION_CONSTS) {
+    if (branch.includes(name)) out += "\n" + constBlock(src, name);
+  }
+  return out;
+}
+
+const RAW_BRANCHES = tabBranches(PAGE);
+const BRANCHES = {
+  // Expanding is only SAFE because the setup branch is proven below to
+  // reference neither section. If it ever did, this would hide a real leak.
+  orders: expandSections(RAW_BRANCHES.orders, PAGE),
+  setup: RAW_BRANCHES.setup,
+};
+
+describe("L-22 — the section indirection does not smuggle order boards onto the setup tab", () => {
+  it("the setup tab references neither order section", () => {
+    for (const name of SECTION_CONSTS) {
+      expect(RAW_BRANCHES.setup).not.toContain(name);
+    }
+  });
+
+  it("the orders tab is what renders them", () => {
+    for (const name of SECTION_CONSTS) {
+      expect(RAW_BRANCHES.orders).toContain(name);
+    }
+  });
+
+  it("each section is defined exactly once, so no board can be rendered twice", () => {
+    const code = codeOnly(PAGE);
+    for (const name of SECTION_CONSTS) {
+      expect((code.match(new RegExp(`const ${name} = \\(`, "g")) ?? []).length).toBe(1);
+    }
+  });
+});
 
 describe("L-21 — the pure core is registered and green", () => {
   it("every self-test passes", () => {

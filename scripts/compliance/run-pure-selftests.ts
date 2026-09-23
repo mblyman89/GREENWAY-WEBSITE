@@ -302,6 +302,16 @@ import { __runDisclosureTests } from "../../src/lib/admin/disclosure-core";
 // SLICE L-21 -- the setup tab, and the rule that keeps it safe: which live
 //              alarms may NOT be hidden behind a tab.
 import { __runOrdersTabsTests } from "../../src/lib/admin/orders-tabs-core";
+// SLICE L-22 -- what goes first on the orders board, and who gets an origin
+//              label. Two judgements the owner asked to change, both of which
+//              had a previous slice's reasoning behind them: L-6 put Leafly on
+//              top because of the 15-minute auto-cancel clock, and L-12 hid the
+//              "Website" badge because 40 identical badges train the eye to
+//              skip the column. Neither was wrong; both were absolute. This
+//              core makes each conditional on a fact, so the owner gets the
+//              layout he asked for WITHOUT losing the protection that the
+//              earlier reasoning was buying.
+import { __runBoardOrderTests } from "../../src/lib/admin/orders-board-order-core";
 // SLICE L-16 -- refusal diagnosis. The setup panel told the owner "Leafly is
 //              reaching us but the signature didn't match ... the webhook HMAC
 //              key here doesn't match the one Leafly issued" on the strength of
@@ -986,6 +996,11 @@ __runLiquidVolumeTests();
   assertRan("leafly-order-readiness-core", __runLeaflyOrderReadinessTests(), 60);
   assertRan("disclosure-core", __runDisclosureTests(), 30);
   assertRan("orders-tabs-core", __runOrdersTabsTests(), 52);
+  // SLICE L-22. Floor 48, from a measured 57. Deliberately close: most of the
+  // count is exhaustive sweeps over the three-valued pending-ack count and the
+  // label matrix, so a drop below this means a sweep stopped sweeping rather
+  // than a few duplicate cases being tidied away.
+  assertRan("orders-board-order-core", __runBoardOrderTests(), 48);
   // SLICE L-16. Floor 600, set from a measured 631. The gap is deliberately
   // small: most of the count comes from exhaustive sweeps over the seven
   // refusal reasons and the empty-cart cause matrix, so a drop below this
