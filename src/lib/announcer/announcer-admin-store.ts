@@ -31,7 +31,11 @@ import {
   type PendingPairingView,
   type ShopVerdict,
 } from "./announcer-admin-core";
-import { getAnnouncerSettings, type AnnouncerSettings } from "./announcer-store";
+import {
+  FALLBACK_SETTINGS,
+  getAnnouncerSettings,
+  type AnnouncerSettings,
+} from "./announcer-store";
 
 /**
  * SLICE L-21 — the SAME read, shared by the panel and the page.
@@ -51,6 +55,67 @@ import { getAnnouncerSettings, type AnnouncerSettings } from "./announcer-store"
 export const getAnnouncerPanelDataCached = cache(
   async (): Promise<AnnouncerPanelData> => getAnnouncerPanelData(),
 );
+
+/**
+ * SLICE L-26 — this reader's "we stopped waiting" value.
+ *
+ * ── WHY IT LIVES HERE ─────────────────────────────────────────────────────
+ * `getAnnouncerPanelData` already builds an empty state internally (its
+ * local `empty()` helper) for the case where the tables are missing. That
+ * one is not reachable from outside, so the orders page — which now has to
+ * be able to give up on this reader rather than let it hang the board —
+ * would otherwise have to hand-build a tenth-field-perfect copy. The moment
+ * a field is added to `AnnouncerPanelData`, that copy breaks.
+ *
+ * ── WHY `enabled: false` IS THE SAFE DEFAULT AND `notInstalled: false` TOO ─
+ * These two flags drive opposite alarms, so neither may be guessed in the
+ * direction that silences one.
+ *
+ * `settings: FALLBACK_SETTINGS` is the same value `getAnnouncerSettings`
+ * itself returns on any failed read, and its reasoning carries over verbatim:
+ * "NEVER throws and never returns null. If the table is missing, unreachable,
+ * or empty, the shop gets FALLBACK_SETTINGS, which announce. The alternative —
+ * failing closed — means one bad read silences every speaker in the building,
+ * and nobody would know why." Note this object is what renders the "Announce
+ * new orders" toggle; inventing `enabled: false` here would draw that switch
+ * in the OFF position and describe a setting the owner never chose.
+ *
+ * `notInstalled: false` because that flag makes the panel say "run the
+ * migration" — confident, specific, and wrong if the truth is simply that a
+ * read was slow. We did not learn that the tables are missing; we learned
+ * nothing.
+ *
+ * ── WHY THE VERDICT IS HAND-BUILT RATHER THAN `summarizeShop([])` ─────────
+ * Measured, not assumed: `summarizeShop` tests `devices.length === 0` FIRST,
+ * before it ever looks at `globalEnabled`, and returns the fixed headline
+ * "No speakers are set up yet." For the real empty case that is true. Here it
+ * is a fabrication — this shop may well have four healthy speakers that we
+ * simply failed to read in time, and the suggested fix ("Press 'Add a
+ * speaker' to pair your first Raspberry Pi") would send the owner to set up
+ * hardware they already own.
+ *
+ * So the verdict says the one thing we actually know. `willAnnounce: false`
+ * keeps the pessimistic lean that `isSpeakerReady` documents — never claim a
+ * noise we have not verified — while the headline admits the real cause.
+ */
+export function emptyAnnouncerPanelData(_now: Date = new Date()): AnnouncerPanelData {
+  return {
+    devices: [],
+    settings: FALLBACK_SETTINGS,
+    verdict: {
+      willAnnounce: false,
+      headline: "Could not check the speakers in time.",
+      fix: "The rest of this page is up to date. Reload to try the speaker panel again.",
+      tone: "warn",
+      onlineCount: 0,
+      totalCount: 0,
+    },
+    recent: [],
+    notInstalled: false,
+    assignments: [],
+    pendingPairings: [],
+  };
+}
 
 export type AnnouncerPanelData = {
   devices: AdminDeviceView[];

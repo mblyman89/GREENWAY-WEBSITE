@@ -333,13 +333,28 @@ describe("D-66 — the pairing code has to be readable", () => {
     expect(source).toMatch(/pendingPairings:\s*await\s+getPendingPairings\(/);
     expect(source).toMatch(/computePendingPairings\(/);
 
-    // The one legitimate `pendingPairings: []` is the empty()/not-installed
-    // fallback. More than one means the live path was stubbed out.
+    // There are exactly TWO legitimate `pendingPairings: []` sites, and both
+    // are empty states rather than the live path:
+    //
+    //   1. `empty()` inside getAnnouncerPanelData — the not-installed /
+    //      unconfigured fallback this test was originally written against.
+    //   2. `emptyAnnouncerPanelData()` — added in L-26 so the orders page can
+    //      stop waiting on a slow announcer read instead of hanging the whole
+    //      render (the acknowledge-button spinner). See
+    //      tests/compliance/leafly-l26-render-deadline.test.ts.
+    //
+    // A THIRD would mean the live path had been stubbed back to a constant,
+    // which is the original D-66 defect this test exists to catch.
     const stubbed = source.match(/pendingPairings:\s*\[\]/g) ?? [];
     expect(
       stubbed.length,
       "the success path must read real rows, not return a constant empty list",
-    ).toBe(1);
+    ).toBe(2);
+
+    // The assertion above counts empty states, so on its own it would not
+    // notice the live path being deleted outright. Pin the live call too:
+    // exactly one site actually reads the rows.
+    expect(source.match(/await\s+getPendingPairings\(/g) ?? []).toHaveLength(1);
   });
 
   it("REGRESSION: the panel actually renders the code", () => {

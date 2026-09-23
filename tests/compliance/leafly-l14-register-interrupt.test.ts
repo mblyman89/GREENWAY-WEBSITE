@@ -662,7 +662,27 @@ describe("L-14 \u00b7 the page wires it without guessing", () => {
   it("calls the reader exactly once", () => {
     // A second call site would double a round trip on the busiest page in the
     // shop, and the two results could disagree.
-    expect(pageCode.match(/await listInterruptsForOrders\(/g) ?? []).toHaveLength(1);
+    //
+    // Matched WITHOUT requiring a directly adjacent `await`: since L-26 the
+    // call is wrapped in `withRenderBudget(...)`, so the await sits on the
+    // wrapper. What this test actually protects is the number of CALL SITES,
+    // not the token that happens to precede them.
+    expect(pageCode.match(/listInterruptsForOrders\(/g) ?? []).toHaveLength(1);
+  });
+
+  /**
+   * SLICE L-26 — and it must stay bounded.
+   *
+   * This reader is SEQUENTIAL: it runs after the page's main `Promise.all`
+   * because it consumes the ids that board actually returned, so its latency
+   * adds to the render rather than overlapping with it. The render is what
+   * the Leafly acknowledge button waits on (Next.js answers a redirecting
+   * server action only once the destination has rendered), which makes this
+   * the last thing standing between an acknowledged order and the operator
+   * seeing a page again.
+   */
+  it("is bounded, so a slow read cannot hang the acknowledge spinner", () => {
+    expect(pageCode).toMatch(/withRenderBudget\(\s*listInterruptsForOrders\(/);
   });
 });
 

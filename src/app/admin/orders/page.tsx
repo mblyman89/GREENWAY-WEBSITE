@@ -55,7 +55,14 @@ import { LeaflyOrdersPanel } from "@/components/admin/orders/LeaflyOrdersPanel";
 // incomplete. This panel owns that empty state so the page explains itself
 // instead of going blank, and it shows the six webhook addresses that have to
 // be emailed to Leafly before any order can arrive at all.
-import { loadLeaflyOrderSetupState } from "@/lib/leafly/order-readiness-server";
+import {
+  emptyLeaflyOrderSetupState,
+  loadLeaflyOrderSetupState,
+} from "@/lib/leafly/order-readiness-server";
+// SLICE L-26 — the render backstop. See `render-budget.ts` for why a page
+// that a redirecting server action navigates to needs one of these at all.
+import { withRenderBudget } from "@/lib/supabase/render-budget";
+
 import { assessEmailReadiness } from "@/lib/orders/email-readiness-core";
 import { EmailReadinessBanner } from "@/components/admin/orders/EmailReadinessBanner";
 import { LeaflyOrderSetupPanel } from "@/components/admin/orders/LeaflyOrderSetupPanel";
@@ -68,7 +75,10 @@ import {
   setupTabNeedsAttention,
   urgentSignals,
 } from "@/lib/admin/orders-tabs-core";
-import { getAnnouncerPanelDataCached } from "@/lib/announcer/announcer-admin-store";
+import {
+  emptyAnnouncerPanelData,
+  getAnnouncerPanelDataCached,
+} from "@/lib/announcer/announcer-admin-store";
 // SLICE L-22 — the owner's requested board order, and the rule that bends it
 // when a Leafly auto-cancel clock is actually running. Also owns the "label
 // everything or label nothing" rule for the combined history.
@@ -239,26 +249,86 @@ export default async function OrdersAdminPage({
     getOrderStatusCounts(),
     // SLICE 113: order-NAME pool + printer heartbeat, both fallback-safe (empty
     // pool / null settings when 0147 isn't applied or the printer isn't set up).
-    listPoolNamesStatus(),
-    getPrinterSettings(),
+    //
+    // ── SLICE L-26 ────────────────────────────────────────────────────────
+    // From here down, each SECONDARY reader is wrapped in `withRenderBudget`.
+    //
+    // WHY ONLY THE SECONDARY ONES: the first two entries above ARE this page.
+    // An orders board with no orders and no counts is not a degraded board,
+    // it is a lie — it would show "no orders" to a shop that has orders,
+    // which on a screen with a fifteen-minute acknowledgement clock is worse
+    // than an error. Those two are allowed to fail loudly. Everything below
+    // is a side panel whose absence the page already renders gracefully.
+    //
+    // WHY AT ALL, GIVEN THE FLOOR: `db-floor.ts` caps each PostgREST request
+    // at 15s, and that is the primary fix. But this page's spinner is the
+    // Leafly acknowledge button — Next.js documents that a redirecting action
+    // does not answer the browser until the destination has rendered ("the
+    // mutation, the cache invalidation, and the page re-render all complete
+    // in a single roundtrip"). So this render's worst case IS the button's
+    // worst case, and several readers here are internally sequential:
+    // `loadLeaflyOrderSetupState` alone awaits two full Promise.all passes.
+    // Capping each request does not cap their sum. This does.
+    withRenderBudget(listPoolNamesStatus(), { names: [], migrationReady: false }, "order name pool"),
+    withRenderBudget(getPrinterSettings(), null, "printer settings"),
     // SLICE L-6: both are non-throwing by construction and report their own
     // failures, so a Leafly or migration problem degrades the Leafly panel
     // rather than 500-ing the screen the shop runs its own orders on. They join
     // the existing Promise.all so the Leafly read costs no extra round trip.
-    loadLeaflyOrderBoard(),
-    countLeaflyOrdersAwaitingAck(),
+    withRenderBudget(
+      loadLeaflyOrderBoard(),
+      {
+        orders: [],
+        ready: false,
+        orderIntegrationKeyPresent: false,
+        // Not an empty string. An empty `problem` means "the read succeeded
+        // and there is genuinely nothing here", and the panel renders a
+        // calm "no Leafly orders yet". Saying that when we simply stopped
+        // waiting would hide a live order from a shop that has fifteen
+        // minutes to acknowledge it — the single most expensive wrong
+        // sentence this page can produce.
+        // Worded WITHOUT the promotion banner's sentence on purpose. The
+        // L-22 rule is that the "waiting to be acknowledged" phrasing and the
+        // deadline belong to `orders-board-order-core`, which owns the
+        // singular/plural and the minutes and asserts both; a second copy
+        // here would drift from the rule the moment the core changed.
+        // Enforced by tests/compliance/orders-board-order.test.ts.
+        problem:
+          "Leafly orders took too long to load, so this panel is showing nothing. " +
+          "Refresh to try again — anything live is still on the clock.",
+      },
+      "leafly board",
+    ),
+    // `null` is this reader's documented "couldn't check" value — it returns
+    // null rather than 0 precisely so a failed read is never mistaken for
+    // "nothing needs acknowledging". Reusing it here keeps the timeout
+    // indistinguishable from any other failure, which is correct: the panel
+    // already knows how to say "couldn't check".
+    withRenderBudget(countLeaflyOrdersAwaitingAck(), null, "leafly pending-ack count"),
     // SLICE M-2: why a placed Leafly order produced no record, no receipt and
     // no sound. Joins the same Promise.all for the same reason as the two
     // above, and is non-throwing by construction — a failure degrades to
     // "couldn't check" inside the panel rather than 500-ing this page.
-    loadLeaflyOrderSetupState(),
+    withRenderBudget(
+      loadLeaflyOrderSetupState(),
+      emptyLeaflyOrderSetupState(
+        "The Leafly setup checks took too long to run, so this panel could not " +
+          "be filled in. Nothing here means anything is wrong with your setup — " +
+          "refresh to check again.",
+      ),
+      "leafly setup state",
+    ),
     // SLICE L-21: the announcer's own verdict, needed HERE and not only in the
     // panel, because the panel moved to the setup tab and "orders are arriving
     // silently" is not allowed to move with it. This is the cached reader, so
     // when the setup tab renders the panel as well the database is read once.
     // It is non-throwing by construction (every reader degrades to an empty
     // state), so it cannot 500 the screen the shop runs its orders on.
-    getAnnouncerPanelDataCached(),
+    withRenderBudget(
+      getAnnouncerPanelDataCached(),
+      emptyAnnouncerPanelData(),
+      "announcer panel",
+    ),
   ]);
   // SLICE L-14 — cancellation interrupts for the orders the board just loaded.
   //
@@ -272,10 +342,30 @@ export default async function OrdersAdminPage({
   // No try/catch: listInterruptsForOrders never throws and reports its own
   // failure in `problem`. Wrapping it would imply a failure mode that cannot
   // happen and invite someone to swallow a real one.
+  //
+  // SLICE L-26 — budgeted, and this one matters more than most: it is
+  // SEQUENTIAL, so its time is added to the Promise.all above rather than
+  // overlapped with it. It is the last thing between an acknowledged order
+  // and the operator seeing a page again.
   const leaflyInterrupts: BoardInterrupts =
     leaflyBoard.orders.length > 0
-      ? await listInterruptsForOrders(
-          leaflyBoard.orders.map((o) => o.local_order_id ?? ""),
+      ? await withRenderBudget(
+          listInterruptsForOrders(
+            leaflyBoard.orders.map((o) => o.local_order_id ?? ""),
+          ),
+          // `degraded: true` with a plain-English `problem`, NOT a silent
+          // empty map. An empty map renders as "no order was cancelled",
+          // which is a claim; this reader exists to surface cancellations,
+          // and inventing a confident "none" from a read we abandoned is
+          // precisely the class of lie the rest of this page avoids.
+          {
+            byOrderId: new Map(),
+            degraded: true,
+            problem:
+              "Cancellation notices took too long to load, so any that exist " +
+              "aren’t shown on these cards. Refresh to check.",
+          },
+          "leafly register interrupts",
         )
       : { byOrderId: new Map(), degraded: false, problem: "" };
   let { rows: orders, total } = firstPage;
