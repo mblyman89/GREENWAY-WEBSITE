@@ -444,10 +444,25 @@ export async function unlinkOrderCustomerAction(formData: FormData): Promise<voi
 
 const ORDERS_BASE = "/admin/orders";
 
-/** Redirect back to /admin/orders with a success/error banner + the pool panel open. */
+/**
+ * SLICE L-21 — where these actions land.
+ *
+ * The name pool and the printer status bar moved to the "Setup & equipment"
+ * tab. Every redirect below used to end at `/admin/orders`, which is now the
+ * ORDERS tab — so a person who added a name would be thrown back to the order
+ * board, and the confirmation banner they were owed would render on a tab
+ * they are no longer looking at. Silently.
+ *
+ * That is the same bug shape as the one that started this round: the action
+ * worked, and the screen said nothing. Both redirects now name the tab that
+ * actually contains the panel, so the answer appears where the button was.
+ */
+const ORDERS_SETUP_BASE = `${ORDERS_BASE}?tab=setup`;
+
+/** Redirect back to the setup tab with a success/error banner + the pool panel open. */
 function poolRedirect(ok: boolean, message: string): never {
   const key = ok ? "poolMsg" : "poolErr";
-  redirect(`${ORDERS_BASE}?pool=1&${key}=${encodeURIComponent(message.slice(0, 300))}`);
+  redirect(`${ORDERS_SETUP_BASE}&pool=1&${key}=${encodeURIComponent(message.slice(0, 300))}`);
 }
 
 /** Add a name to the recycling pool. requires orders.manage; audited. */
@@ -677,5 +692,8 @@ export async function testPrintFromOrdersAction(): Promise<void> {
     poolRedirect(false, "Could not queue test print — Supabase service role not configured.");
   }
   revalidatePath(ORDERS_BASE);
-  redirect(`${ORDERS_BASE}?printTest=1`);
+  // SLICE L-21: back to the SETUP tab, because that is where the printer
+  // status bar and the "test print queued" banner now live. Landing on the
+  // orders board would render the confirmation on a tab nobody is looking at.
+  redirect(`${ORDERS_SETUP_BASE}&printTest=1`);
 }

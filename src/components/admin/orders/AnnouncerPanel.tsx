@@ -20,12 +20,17 @@
  * fix next to it, in plain English, so nobody has to remember anything.
  */
 import { Button } from "@/components/admin/ui/Button";
-import { getAnnouncerPanelData } from "@/lib/announcer/announcer-admin-store";
+import { getAnnouncerPanelDataCached } from "@/lib/announcer/announcer-admin-store";
 import { listSounds } from "@/lib/announcer/announcer-sounds-store";
 import { optionsForSounds } from "@/lib/announcer/announcer-library-core";
 import { AnnouncerSoundLibrary } from "@/components/admin/orders/AnnouncerSoundLibrary";
 import { AnnouncerTestButton } from "@/components/admin/orders/AnnouncerTestButton";
 import { AnnouncerSetupGuide } from "@/components/admin/orders/AnnouncerSetupGuide";
+// SLICE L-21: the same green collapsible bar as the speaker guide and the
+// Leafly setup panel, so "collapsible" means one component rather than three
+// hand-rolled <details> that drift apart. See disclosure-core.ts.
+import { DisclosurePanel } from "@/components/admin/ui/DisclosurePanel";
+import { announcerStartsOpen } from "@/lib/admin/orders-tabs-core";
 // SLICE L-18: the save buttons get a real pending state. See SaveButton.tsx
 // for why this must be a child component of the <form> and not inline.
 import { SaveButton } from "@/components/admin/orders/SaveButton";
@@ -95,7 +100,10 @@ function announcerSiteUrl(): string {
 export const ANNOUNCER_PANEL_ANCHOR = "order-announcer";
 
 export async function AnnouncerPanel() {
-  const data = await getAnnouncerPanelData();
+  // SLICE L-21: the cached reader, so this panel and the orders page (which
+  // needs the same verdict for the "arriving silently" alarm on the other tab)
+  // share ONE database read and ONE answer per request.
+  const data = await getAnnouncerPanelDataCached();
   const { devices, settings, verdict, recent, notInstalled, assignments, pendingPairings } = data;
 
   // SLICE 34 — uploaded sounds must appear in the same pickers as the built-in
@@ -156,36 +164,65 @@ export async function AnnouncerPanel() {
   }
 
   return (
-    // The id is a link target, not styling. The Leafly board links here when
-    // an order arrived but never announced, and that link has to land on this
-    // panel rather than on a settings page that does not exist. Renaming it
-    // silently breaks that jump, so it is spelled out here.
-    <section
+    /*
+      SLICE L-21 — the panel is now COLLAPSIBLE, and lives on the
+      "Setup & equipment" tab.
+
+      Three things had to survive that move, and each one is load-bearing:
+
+      1. THE ANCHOR. The id stays on the outermost element, because the Leafly
+         board still links here when an order arrived but never announced.
+         That link is now a cross-tab URL (see setupAnchorHref) so it lands on
+         a panel that is actually rendered rather than scrolling nowhere.
+
+      2. THE OPEN STATE. announcerStartsOpen() keeps the panel EXPANDED
+         whenever the next order would not be heard. Collapsed-and-silent is
+         the one combination that would turn this tidy-up into a regression:
+         the order is real, the clock is running, and nobody has been told.
+
+      3. THE SPEAKER COUNT. It rides on the collapsed bar via `badge`, so
+         "will I hear the next order?" is still answerable WITHOUT a click,
+         which was the whole stated purpose of this screen. It is tinted by
+         the verdict, so a bad count is red while closed.
+
+      The Test button deliberately does NOT ride on the bar: a <summary>
+      swallows clicks in order to toggle, so a button placed inside it would
+      fight the disclosure and feel broken. It sits at the top of the body.
+    */
+    <DisclosurePanel
       id={ANNOUNCER_PANEL_ANCHOR}
-      className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)]"
-    >
-      {/* ── 1. THE ONLY QUESTION THAT MATTERS ───────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--admin-border)] px-4 py-3">
-        <h2 className="text-sm font-black uppercase tracking-[0.08em] text-[var(--admin-text)]">
-          🔊 Order Announcer
-        </h2>
-        <span className="text-xs text-[var(--admin-text-muted)]">
+      icon="🔊"
+      title="Order Announcer"
+      subtitle="speakers that call out new orders"
+      defaultOpen={announcerStartsOpen({
+        willAnnounce: verdict.willAnnounce,
+        notInstalled: false,
+      })}
+      badge={
+        <span
+          className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.68rem] font-bold ${
+            verdict.willAnnounce
+              ? "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]"
+              : "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]"
+          }`}
+        >
           {verdict.onlineCount} of {verdict.totalCount} speaker
           {verdict.totalCount === 1 ? "" : "s"} online
         </span>
+      }
+    >
+      <div className="pt-3">
         {/*
           The Test button is a CLIENT component on purpose. As a plain server
-          form it had no pending state and its action returned void, so pressing
-          it changed nothing on screen — and with the Pi's long-poll the chime
-          can be ~25 seconds behind the click. The owner reasonably read that as
-          "the button does nothing, it hangs". See AnnouncerTestButton.tsx.
+          form it had no pending state and its action returned void, so
+          pressing it changed nothing on screen — and with the Pi's
+          long-poll the chime can be ~25 seconds behind the click. The owner
+          reasonably read that as "the button does nothing, it hangs".
+          See AnnouncerTestButton.tsx.
         */}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="mb-3 flex items-center gap-2">
           <AnnouncerTestButton />
         </div>
-      </div>
-
-      <div className="px-4 py-4">
         <div className={`rounded-[var(--admin-radius-lg)] border px-4 py-3 ${VERDICT_FRAME[verdict.tone]}`}>
           <p className="flex items-start gap-2 text-sm font-bold text-[var(--admin-text)]">
             <span aria-hidden>{VERDICT_ICON[verdict.tone]}</span>
@@ -512,6 +549,6 @@ export async function AnnouncerPanel() {
           </details>
         ) : null}
       </div>
-    </section>
+    </DisclosurePanel>
   );
 }

@@ -11,6 +11,12 @@
  */
 import "server-only";
 
+// SLICE L-21 — per-request memoisation for getAnnouncerPanelDataCached(). This
+// is React's `cache`, scoped to a single render pass: it is NOT a data cache
+// and never serves a stale verdict across requests, which matters because the
+// thing being cached is "will I hear the next order?".
+import { cache } from "react";
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
@@ -26,6 +32,25 @@ import {
   type ShopVerdict,
 } from "./announcer-admin-core";
 import { getAnnouncerSettings, type AnnouncerSettings } from "./announcer-store";
+
+/**
+ * SLICE L-21 — the SAME read, shared by the panel and the page.
+ *
+ * The orders page now needs the announcer's verdict even when the announcer
+ * PANEL is not on screen: the panel moved to the "Setup & equipment" tab, and
+ * "no speaker is online, so orders are arriving silently" is one of the two
+ * alarms that is not allowed to move with it (see orders-tabs-core.ts).
+ *
+ * Two readers of the same fact is exactly how the L-19 email bug happened —
+ * the checklist said "configured" while the notifier sent nothing, because
+ * they asked different questions. So the page does not re-derive the verdict
+ * from device rows; it reads THIS, the one answer, through React's per-request
+ * `cache`. On the setup tab the page and the panel both call it and the
+ * database is queried once, not twice.
+ */
+export const getAnnouncerPanelDataCached = cache(
+  async (): Promise<AnnouncerPanelData> => getAnnouncerPanelData(),
+);
 
 export type AnnouncerPanelData = {
   devices: AdminDeviceView[];

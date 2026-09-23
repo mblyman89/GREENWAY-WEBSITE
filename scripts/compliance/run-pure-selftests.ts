@@ -299,6 +299,9 @@ import { __runLeaflyOrderFetchTests } from "../../src/lib/leafly/order-fetch-cor
 //              definition -- no one can report a bug they cannot see.
 import { __runLeaflyOrderReadinessTests } from "../../src/lib/leafly/order-readiness-core";
 import { __runDisclosureTests } from "../../src/lib/admin/disclosure-core";
+// SLICE L-21 -- the setup tab, and the rule that keeps it safe: which live
+//              alarms may NOT be hidden behind a tab.
+import { __runOrdersTabsTests } from "../../src/lib/admin/orders-tabs-core";
 // SLICE L-16 -- refusal diagnosis. The setup panel told the owner "Leafly is
 //              reaching us but the signature didn't match ... the webhook HMAC
 //              key here doesn't match the one Leafly issued" on the strength of
@@ -982,6 +985,7 @@ __runLiquidVolumeTests();
   // bug being fixed was it saying READY about a shop that could not sell.
   assertRan("leafly-order-readiness-core", __runLeaflyOrderReadinessTests(), 60);
   assertRan("disclosure-core", __runDisclosureTests(), 30);
+  assertRan("orders-tabs-core", __runOrdersTabsTests(), 52);
   // SLICE L-16. Floor 600, set from a measured 631. The gap is deliberately
   // small: most of the count comes from exhaustive sweeps over the seven
   // refusal reasons and the empty-cart cause matrix, so a drop below this

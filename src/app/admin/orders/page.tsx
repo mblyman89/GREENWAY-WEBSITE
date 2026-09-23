@@ -58,6 +58,16 @@ import { loadLeaflyOrderSetupState } from "@/lib/leafly/order-readiness-server";
 import { assessEmailReadiness } from "@/lib/orders/email-readiness-core";
 import { EmailReadinessBanner } from "@/components/admin/orders/EmailReadinessBanner";
 import { LeaflyOrderSetupPanel } from "@/components/admin/orders/LeaflyOrderSetupPanel";
+// SLICE L-21 — the setup tab. The pure core owns tab resolution AND the
+// judgement about which live alarms may not be hidden behind a tab.
+import {
+  leaflyBoardRendersNothing,
+  ordersTabHref,
+  resolveOrdersTab,
+  setupTabNeedsAttention,
+  urgentSignals,
+} from "@/lib/admin/orders-tabs-core";
+import { getAnnouncerPanelDataCached } from "@/lib/announcer/announcer-admin-store";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +123,11 @@ export default async function OrdersAdminPage({
     poolMsg?: string;
     poolErr?: string;
     printTest?: string;
+    // SLICE L-21 — "orders" (default) or "setup". Anything unrecognised
+    // resolves to the orders board, never to a settings screen: see
+    // resolveOrdersTab() for why a bad query string must not be able to land
+    // somebody on configuration while a customer is waiting.
+    tab?: string;
     // SLICE L-6 — outcome of a Leafly acknowledge/status push, carried back by
     // the server action. `leaflyCode`/`leaflyFix` are the pure core's decision
     // codes, kept separate from the message so the panel can offer the RIGHT
@@ -181,6 +196,7 @@ export default async function OrdersAdminPage({
     leaflyBoard,
     leaflyPendingAck,
     leaflySetup,
+    announcerData,
   ] = await Promise.all([
     listOrdersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
     getOrderStatusCounts(),
@@ -199,6 +215,13 @@ export default async function OrdersAdminPage({
     // above, and is non-throwing by construction — a failure degrades to
     // "couldn't check" inside the panel rather than 500-ing this page.
     loadLeaflyOrderSetupState(),
+    // SLICE L-21: the announcer's own verdict, needed HERE and not only in the
+    // panel, because the panel moved to the setup tab and "orders are arriving
+    // silently" is not allowed to move with it. This is the cached reader, so
+    // when the setup tab renders the panel as well the database is read once.
+    // It is non-throwing by construction (every reader degrades to an empty
+    // state), so it cannot 500 the screen the shop runs its orders on.
+    getAnnouncerPanelDataCached(),
   ]);
   // SLICE L-14 — cancellation interrupts for the orders the board just loaded.
   //
@@ -269,6 +292,37 @@ export default async function OrdersAdminPage({
   const printerNeedsAttention = printerConfigured && autoPrintOn && !printerOnline && activeCount > 0;
   const printTestQueued = sp.printTest === "1";
 
+  // ── SLICE L-21 — THE SETUP TAB ────────────────────────────────────────────
+  // The owner asked for the four equipment/configuration panels to move to
+  // their own tab, in a specific order. They did. But a tab is a place things
+  // go to be forgotten, and two of those panels carry LIVE warnings that were
+  // previously impossible to miss because they were bolted to the top of this
+  // page. Moving them wholesale would make the shop quieter while appearing to
+  // tidy it up.
+  //
+  // So: the PANEL moves, the ALARM does not. The pure core decides which
+  // conditions are urgent enough to stay on the orders board, and it owns that
+  // judgement so no screen can disagree with it. See orders-tabs-core.ts.
+  const tab = resolveOrdersTab(sp.tab);
+  const tabInput = {
+    printerNeedsAttention,
+    // "Will I hear the next order?" is the announcer's own verdict, read from
+    // the same store the panel reads. Re-deriving it here from device rows
+    // would be a second opinion that can drift from the first — house rule 11.
+    // A never-installed announcer is a setup state, not a silent shop: it has
+    // never made a noise and nobody is expecting one. Only an INSTALLED
+    // announcer that will not announce is an alarm.
+    announcerSilent: !announcerData.notInstalled && !announcerData.verdict.willAnnounce,
+    activeCount,
+    // The SAME expression the setup panel uses for its step count
+    // (LeaflyOrderSetupPanel.tsx:184), so the dot on the tab and the badge on
+    // the bar can never disagree about how many steps are left.
+    leaflyBlockingSteps: leaflySetup.readiness.steps.filter((s) => !s.done && s.blocking).length,
+    leaflyEverReceived: leaflySetup.readiness.anyOrderEverReceived,
+  };
+  const orderBoardSignals = urgentSignals(tabInput);
+  const setupNeedsAttention = setupTabNeedsAttention(tabInput);
+
   // SLICE L-19 — computed here, on the server, from the same single predicate
   // the setup checklist uses (setup-status.ts). Two readers, one answer: the
   // bug this replaces was the checklist saying "email is configured" while the
@@ -321,6 +375,176 @@ export default async function OrdersAdminPage({
         }
       />
 
+
+      {/* ── SLICE L-21 ─ TABS ──────────────────────────────────────────
+          Four equipment/configuration panels used to sit between the owner and
+          the thing he opened this page for. They now live on their own tab, in
+          the order he asked for: printer, name pool, announcer, Leafly setup.
+
+          The dot on the setup tab is what pays for them having moved out of
+          sight — it appears whenever there is anything worth knowing back
+          there, so the tab can be ignored safely the rest of the time.
+
+          Same pattern as /admin/equipment (equipment/page.tsx:116-138), on
+          purpose: two tab bars in the same back office that behave differently
+          is two things to learn instead of one. */}
+      <div className="border-b border-[var(--admin-border)] px-5 pt-1 sm:px-8">
+        <nav className="-mb-px flex gap-1" aria-label="Orders tabs">
+          <Link
+            href={ordersTabHref("orders")}
+            aria-current={tab === "orders" ? "page" : undefined}
+            className={`rounded-t-[var(--admin-radius)] border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+              tab === "orders"
+                ? "border-[var(--admin-accent)] text-[var(--admin-accent)]"
+                : "border-transparent text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+            }`}
+          >
+            Orders
+          </Link>
+          <Link
+            href={ordersTabHref("setup")}
+            aria-current={tab === "setup" ? "page" : undefined}
+            className={`flex items-center gap-2 rounded-t-[var(--admin-radius)] border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+              tab === "setup"
+                ? "border-[var(--admin-accent)] text-[var(--admin-accent)]"
+                : "border-transparent text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+            }`}
+          >
+            <span aria-hidden>⚙️</span> Setup &amp; equipment
+            {/* A dot, not a number. The count is on the panels themselves; out
+                here all that is needed is "there is something back there".
+                aria-label carries it for a screen reader, because a coloured
+                dot with no text is invisible to one. */}
+            {setupNeedsAttention ? (
+              <span
+                className="inline-block h-2 w-2 rounded-full bg-[var(--admin-gold)]"
+                aria-label="Needs attention"
+              />
+            ) : null}
+          </Link>
+        </nav>
+      </div>
+
+      {tab === "setup" ? (
+        <div className="px-5 py-6 sm:px-8">
+          {/* The owner asked for this exact order: receipt printer status bar,
+              then the order name pool, then the announcer, with the Leafly
+              setup panel at the bottom. It runs most-operational to
+              most-one-off, which is also the order they are needed in. */}
+          {/* SLICE 113 — Receipt-printer status at a glance + one-tap test print.
+              Lives here so whoever is working the orders queue can confirm the
+              printer is alive without leaving the page. */}
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-block h-2.5 w-2.5 rounded-full ${
+                  !printerConfigured
+                    ? "bg-[var(--admin-text-faint)]"
+                    : printerOnline
+                      ? "bg-[var(--admin-accent)]"
+                      : "bg-[var(--admin-danger)]"
+                }`}
+                aria-hidden
+              />
+              <span className="text-sm font-bold text-[var(--admin-text)]">
+                🖨️ {printerLabel}
+              </span>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[0.68rem] font-bold uppercase tracking-[0.08em] ${
+                  !printerConfigured
+                    ? "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)]"
+                    : printerOnline
+                      ? "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]"
+                      : "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]"
+                }`}
+              >
+                {!printerConfigured ? "Not set up" : printerOnline ? "Connected" : "Not seen recently"}
+              </span>
+              {printerConfigured ? (
+                <span className="text-xs text-[var(--admin-text-muted)]">
+                  Auto-print {autoPrintOn ? "on" : "off"}
+                </span>
+              ) : null}
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <form action={testPrintFromOrdersAction}>
+                <Button type="submit" variant="neutral" size="sm">
+                  Send test print
+                </Button>
+              </form>
+              <Link
+                href="/admin/equipment?tab=printer"
+                className="admin-focus rounded-lg border border-[var(--admin-border-strong)] bg-white/5 px-3 py-1.5 text-xs font-bold text-[var(--admin-text-muted)] transition hover:text-[var(--admin-text)]"
+              >
+                Printer settings →
+              </Link>
+            </div>
+          </div>
+
+          {printTestQueued ? (
+            <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
+              ✅ Test print queued. If the printer is on and connected it should print within a few seconds.
+            </div>
+          ) : null}
+
+          {printerNeedsAttention ? (
+            <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]">
+              ⚠️ You have {activeCount} active order{activeCount === 1 ? "" : "s"} and auto-print is on, but
+              the printer hasn’t checked in for a while. Receipts may not be printing — check that it’s
+              powered on and connected, then send a test print.
+            </div>
+          ) : null}
+
+          {/* SLICE 113 — Order-name pool manager (fun recycling names for online
+              orders). Fallback-safe: shows a gentle "finish setup" note until
+              migration 0147 is applied. */}
+          <div className="mt-4">
+            <OrderNamePoolManager
+              names={poolStatus.names}
+              migrationReady={poolStatus.migrationReady}
+              message={sp.poolMsg ?? null}
+              error={sp.poolErr ?? null}
+            />
+          </div>
+
+          {/* SLICE 30 — the Raspberry Pi speakers in the office, sales floor
+              and storage. SLICE L-21 moved it here, third, exactly where the
+              owner asked for it, and made it collapsible.
+
+              It is collapsed when the shop is healthy and OPEN when the next
+              order would not be heard — see announcerStartsOpen(). The
+              speaker count rides on the closed bar either way, so "will I hear
+              the next order?" is still answerable without a click.
+
+              The matching alarm stays on the orders tab. A panel may move; an
+              alarm may not. */}
+          <AnnouncerPanel />
+
+          {/* SLICE M-2 — LEAFLY ORDER SETUP / "WHERE DID MY ORDER GO".
+
+              Rendered ABOVE the orders board, and only when there is something
+              to say: `showPanel` is true once any setup progress exists or any
+              order has ever arrived, so a shop that has never touched Leafly
+              orders sees this page exactly as it did before.
+
+              It is shown even when everything is ready, in `compact` form — the
+              two optional steps it tracks (speaker, printer) are precisely the
+              ones that let an order arrive SILENTLY, and a silent arrival is
+              worse than no arrival: the order is real, the 15-minute
+              auto-cancel clock is running, and nobody in the building has been
+              told. The compact form drops the explanatory paragraph and keeps
+              the evidence and the checklist.
+
+              SLICE L-21: it sits LAST on this tab, and it is the only panel
+              here that is not day-to-day equipment — it is a one-off job that
+              ends. It is also the reason the orders tab now carries a one-line
+              pointer when the Leafly board is empty: the blank space still has
+              to be explained on the tab where the blank space is. */}
+          {leaflySetup.readiness.showPanel ? (
+            <LeaflyOrderSetupPanel setup={leaflySetup} compact={leaflySetup.readiness.ready} />
+          ) : null}
+        </div>
+      ) : (
       <div className="px-5 py-6 sm:px-8">
         {/* SLICE L-19 — "the customer never got a confirmation email."
             It was not Leafly and it was not a broken send: the email provider
@@ -335,11 +559,47 @@ export default async function OrdersAdminPage({
         {/* New-order watcher (polls + chimes when new orders arrive) */}
         <NewOrderAlert />
 
-        {/* SLICE 30 — the Raspberry Pi speakers in the office, sales floor and
-            storage. Lives here, next to the printer status, because this is the
-            screen someone is already looking at when they wonder why they did
-            not hear an order. */}
-        <AnnouncerPanel />
+        {/* ── SLICE L-21 ─ THE ALARMS THAT MAY NOT BE HIDDEN ─────────────────
+            The printer bar and the announcer panel moved to the setup tab, and
+            both of them carried a LIVE warning that was previously impossible
+            to miss because it was bolted to the top of this page:
+
+              "auto-print is on, you have live orders, and the printer has not
+               checked in" — receipts are silently not printing, right now.
+              "no speaker is online" — orders are arriving in silence.
+
+            Moving those behind a tab would have made the shop QUIETER while
+            appearing to tidy it up. So the panel moved and the alarm did not.
+
+            `urgentSignals()` decides what qualifies, not this file. Unfinished
+            Leafly SETUP deliberately does NOT qualify, however many steps are
+            outstanding: nothing is failing, and nagging about it on every page
+            load is how a shop learns to ignore this strip — taking the two
+            real alarms with it. It gets the dot on the tab instead.
+
+            This renders NOTHING when the shop is healthy, so it cannot become
+            furniture. */}
+        {orderBoardSignals.length > 0 ? (
+          <div className="mb-4 space-y-2">
+            {orderBoardSignals.map((signal) => (
+              <div
+                key={signal.id}
+                className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]"
+              >
+                <p className="font-bold">⚠️ {signal.message}</p>
+                <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                  <span>{signal.action}</span>
+                  <Link
+                    href={ordersTabHref("setup")}
+                    className="font-bold underline underline-offset-2"
+                  >
+                    Open setup &amp; equipment →
+                  </Link>
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         {/* Status summary */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -362,26 +622,38 @@ export default async function OrdersAdminPage({
             It renders NOTHING when Leafly order handling has never been set up
             and nothing has arrived, so the page is unchanged for a shop not
             using it. It never hides a failure. */}
-        {/* SLICE M-2 — LEAFLY ORDER SETUP / "WHERE DID MY ORDER GO".
+        {/* SLICE L-21 — THE M-2 FIX, PRESERVED ACROSS THE MOVE.
 
-            Rendered ABOVE the orders board, and only when there is something
-            to say: `showPanel` is true once any setup progress exists or any
-            order has ever arrived, so a shop that has never touched Leafly
-            orders sees this page exactly as it did before.
+            The full setup panel now lives on the setup tab. That move had one
+            dangerous side effect: M-2 was the report "there is nothing in the
+            online orders dashboard page that has a Leafly orders section", and
+            the fix for it was precisely this panel, rendered here, explaining
+            why the board below is blank. Moving it away without replacement
+            would have handed that bug straight back.
 
-            It is shown even when everything is ready, in `compact` form — the
-            two optional steps it tracks (speaker, printer) are precisely the
-            ones that let an order arrive SILENTLY, and a silent arrival is
-            worse than no arrival: the order is real, the 15-minute
-            auto-cancel clock is running, and nobody in the building has been
-            told. The compact form drops the explanatory paragraph and keeps
-            the evidence and the checklist.
+            So when — and only when — the board will render nothing at all,
+            the orders tab keeps a single line saying so and pointing at the
+            tab that can fix it. The condition is the board's OWN predicate,
+            imported rather than re-typed, so the two cannot drift.
 
-            The ordering matters. When setup is incomplete the board below
-            renders nothing, so this is the only thing on screen that can
-            explain the blank space — which is the whole reported bug. */}
-        {leaflySetup.readiness.showPanel ? (
-          <LeaflyOrderSetupPanel setup={leaflySetup} compact={leaflySetup.readiness.ready} />
+            When the board does render, this disappears entirely: an explained
+            blank space is useful, a note above a working board is clutter. */}
+        {leaflyBoardRendersNothing({
+          hasOrders: leaflyBoard.orders.length > 0,
+          hasProblem: leaflyBoard.problem.trim().length > 0,
+          hasOutcome: Boolean(sp.leaflyMsg || sp.leaflyWarn || sp.leaflyErr),
+          orderIntegrationKeyPresent: leaflyBoard.orderIntegrationKeyPresent,
+        }) ? (
+          <div className="mb-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3 text-sm text-[var(--admin-text-muted)]">
+            Leafly orders are not set up yet, so there is no Leafly section
+            below.{" "}
+            <Link
+              href={ordersTabHref("setup")}
+              className="font-bold text-[var(--admin-accent)] underline underline-offset-2"
+            >
+              Finish setup in Setup &amp; equipment →
+            </Link>
+          </div>
         ) : null}
 
         <LeaflyOrdersPanel
@@ -398,82 +670,6 @@ export default async function OrdersAdminPage({
           error={sp.leaflyErr ?? null}
           errorCode={sp.leaflyFix ?? sp.leaflyCode ?? null}
         />
-
-        {/* SLICE 113 — Receipt-printer status at a glance + one-tap test print.
-            Lives here so whoever is working the orders queue can confirm the
-            printer is alive without leaving the page. */}
-        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-block h-2.5 w-2.5 rounded-full ${
-                !printerConfigured
-                  ? "bg-[var(--admin-text-faint)]"
-                  : printerOnline
-                    ? "bg-[var(--admin-accent)]"
-                    : "bg-[var(--admin-danger)]"
-              }`}
-              aria-hidden
-            />
-            <span className="text-sm font-bold text-[var(--admin-text)]">
-              🖨️ {printerLabel}
-            </span>
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[0.68rem] font-bold uppercase tracking-[0.08em] ${
-                !printerConfigured
-                  ? "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)]"
-                  : printerOnline
-                    ? "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]"
-                    : "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]"
-              }`}
-            >
-              {!printerConfigured ? "Not set up" : printerOnline ? "Connected" : "Not seen recently"}
-            </span>
-            {printerConfigured ? (
-              <span className="text-xs text-[var(--admin-text-muted)]">
-                Auto-print {autoPrintOn ? "on" : "off"}
-              </span>
-            ) : null}
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <form action={testPrintFromOrdersAction}>
-              <Button type="submit" variant="neutral" size="sm">
-                Send test print
-              </Button>
-            </form>
-            <Link
-              href="/admin/equipment?tab=printer"
-              className="admin-focus rounded-lg border border-[var(--admin-border-strong)] bg-white/5 px-3 py-1.5 text-xs font-bold text-[var(--admin-text-muted)] transition hover:text-[var(--admin-text)]"
-            >
-              Printer settings →
-            </Link>
-          </div>
-        </div>
-
-        {printTestQueued ? (
-          <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
-            ✅ Test print queued. If the printer is on and connected it should print within a few seconds.
-          </div>
-        ) : null}
-
-        {printerNeedsAttention ? (
-          <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]">
-            ⚠️ You have {activeCount} active order{activeCount === 1 ? "" : "s"} and auto-print is on, but
-            the printer hasn’t checked in for a while. Receipts may not be printing — check that it’s
-            powered on and connected, then send a test print.
-          </div>
-        ) : null}
-
-        {/* SLICE 113 — Order-name pool manager (fun recycling names for online
-            orders). Fallback-safe: shows a gentle "finish setup" note until
-            migration 0147 is applied. */}
-        <div className="mt-4">
-          <OrderNamePoolManager
-            names={poolStatus.names}
-            migrationReady={poolStatus.migrationReady}
-            message={sp.poolMsg ?? null}
-            error={sp.poolErr ?? null}
-          />
-        </div>
 
         {/* Filters + search (SLICE 26: full control — status, search, date
             range, total range, and sort, all URL-driven and combinable). */}
@@ -639,6 +835,7 @@ export default async function OrdersAdminPage({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
