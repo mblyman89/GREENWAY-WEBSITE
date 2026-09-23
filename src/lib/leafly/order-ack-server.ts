@@ -73,6 +73,10 @@ import { refreshLeaflyConfig } from "./runtime";
 import { getLeaflyAccessToken, resetLeaflyTokenCache } from "./token";
 // SLICE L-17 — the acknowledge POST is the call the owner watched hang.
 import { leaflyFetchWithDeadline } from "./deadline-fetch";
+// SLICE L-25 — the network on this path was bounded twice (L-17, L-23) and the
+// hang survived both, because the DATABASE on this path was never bounded at
+// all. See db-deadline-core.ts for the probe that proved it.
+import { dbDeadline } from "./db-deadline";
 import { loadLeaflyOrderIntegrationKey } from "./webhook-server";
 import {
   LEAFLY_ACK_SUCCESS_STATUS,
@@ -157,20 +161,37 @@ async function recordAttempt(row: AttemptRow): Promise<void> {
   if (!isSupabaseServiceConfigured) return;
   try {
     const admin = createSupabaseAdminClient();
-    const { error } = await admin.from("leafly_outbound_attempts").insert({
-      leafly_order_id: row.leaflyOrderId,
-      order_integration_key: row.orderIntegrationKey,
-      operation: row.operation,
-      requested_status: row.requestedStatus ?? null,
-      cancelation_reason_code: row.cancelationReasonCode ?? null,
-      request_body: row.requestBody ?? null,
-      response_status: row.responseStatus ?? null,
-      response_body: row.responseBody ?? null,
-      disposition: row.disposition ?? null,
-      refusal_code: row.refusalCode ?? null,
-      message: row.message,
-      created_by: row.createdBy ?? null,
-    });
+    // SLICE L-25 — bounded. This insert runs AFTER Leafly has already
+    // answered, so a hang here strands the operator on a spinner for an
+    // acknowledgement that has, in fact, already succeeded. That is the worst
+    // possible place to wait: the one-way door is shut, the ID images are
+    // gone, and the screen still says "Acknowledging…".
+    //
+    // The attempt log is explicitly best-effort (see this function's own
+    // error handling, which logs and returns rather than throwing), so losing
+    // a row to a timeout is the correct trade against making a person wait.
+    const { error } = await admin
+      .from("leafly_outbound_attempts")
+      .insert({
+        leafly_order_id: row.leaflyOrderId,
+        order_integration_key: row.orderIntegrationKey,
+        operation: row.operation,
+        requested_status: row.requestedStatus ?? null,
+        cancelation_reason_code: row.cancelationReasonCode ?? null,
+        request_body: row.requestBody ?? null,
+        response_status: row.responseStatus ?? null,
+        response_body: row.responseBody ?? null,
+        disposition: row.disposition ?? null,
+        refusal_code: row.refusalCode ?? null,
+        message: row.message,
+        created_by: row.createdBy ?? null,
+      })
+      // NOTE THE POSITION: `.abortSignal()` is defined on the TRANSFORM
+      // builder, which `.insert()` returns — not on the query builder that
+      // `.from()` returns. Calling it before `.insert()` is a type error, and
+      // the mistake is worth naming because the fluent chain reads as though
+      // order should not matter. It does.
+      .abortSignal(dbDeadline("attempt_log"));
     if (error) {
       console.error("[leafly/outbound] attempt log insert failed:", error.message);
     }
@@ -354,6 +375,26 @@ async function resolveOrderApiContext(): Promise<{
 export async function acknowledgeLeaflyOrder(input: {
   order: LeaflyOrderSnapshot;
   staffId?: string | null;
+  /**
+   * SLICE L-25 — called the instant the POST leaves the building.
+   *
+   * The outer action deadline needs to know which side of the network call it
+   * timed out on, because the two produce OPPOSITE instructions:
+   *
+   *   before the POST → nothing was sent, the order is untouched, retrying is
+   *                     completely safe and the fifteen-minute window is
+   *                     still running.
+   *   after the POST  → Leafly may already have acknowledged, the ID images
+   *                     may already be gone, and a retry is a second press on
+   *                     a one-way door.
+   *
+   * Telling an operator the first when the second is true is the most
+   * expensive mistake available on this screen, so the fact is reported from
+   * the exact line that knows it rather than inferred from a timestamp.
+   *
+   * Optional, so no existing caller changes.
+   */
+  onRequestSent?: () => void;
 }): Promise<OutboundResult> {
   const { environment, orderIntegrationKey } = await resolveOrderApiContext();
 
@@ -396,6 +437,11 @@ export async function acknowledgeLeaflyOrder(input: {
   // operation, so none is sent. Sending `{}` would also probably work, and that
   // is precisely why it is worth being explicit: "probably works" is how an
   // undocumented dependency gets created.
+  // SLICE L-25 — announced BEFORE the await, not after. After the await it
+  // would never run in the case it exists for: a POST that is sent and never
+  // answered is precisely when the outer deadline fires, and precisely when
+  // the operator must be told "do not press this again".
+  input.onRequestSent?.();
   const raw = await orderApiPost(url, undefined, "acknowledge");
 
   if (raw.status === null) {
@@ -809,7 +855,12 @@ export async function listLeaflyOutboundAttempts(
       )
       .eq("leafly_order_id", leaflyOrderId)
       .order("attempted_at", { ascending: false })
-      .limit(limit);
+      .limit(limit)
+      // SLICE L-25. Bounded. This is the attempt-history read that renders
+      // the diagnostics panel — the very screen an operator opens to find
+      // out WHY an acknowledge is stuck. A hang here would make the
+      // troubleshooting page share the fault it is meant to explain.
+      .abortSignal(dbDeadline("attempt_log"));
     if (error) {
       console.error("[leafly/outbound] attempt history read failed:", error.message);
       return [];

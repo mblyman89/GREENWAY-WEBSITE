@@ -27,6 +27,8 @@ import { createHmac, createHash } from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getLeaflyOverrides } from "@/lib/integrations/integration-credentials-store";
+// SLICE L-25 — the acknowledge stamp runs after Leafly's 204 and must not hang.
+import { dbDeadline } from "./db-deadline";
 import {
   verifyLeaflySignature,
   findSignatureHeader,
@@ -154,16 +156,22 @@ export async function recordLeaflyWebhookEvent(input: {
   }
   try {
     const admin = createSupabaseAdminClient();
-    const { error } = await admin.from("leafly_webhook_events").insert({
-      body_sha256: input.bodySha256,
-      event_type: input.eventType,
-      order_id: input.orderId,
-      order_integration_key: input.orderIntegrationKey,
-      event_time: input.eventTime,
-      signature_verified: input.signatureVerified,
-      rejection_reason: input.rejectionReason,
-      response_status: input.responseStatus,
-    });
+    const { error } = await admin
+      .from("leafly_webhook_events")
+      .insert({
+        body_sha256: input.bodySha256,
+        event_type: input.eventType,
+        order_id: input.orderId,
+        order_integration_key: input.orderIntegrationKey,
+        event_time: input.eventTime,
+        signature_verified: input.signatureVerified,
+        rejection_reason: input.rejectionReason,
+        response_status: input.responseStatus,
+      })
+      // SLICE L-25. Bounded. Leafly retries a webhook we fail to answer
+      // promptly; a hung insert means we never answer at all, so Leafly
+      // redelivers while the original request is still pending.
+      .abortSignal(dbDeadline("order_write"));
     if (error) {
       // 23505 = unique_violation → we have already stored this exact delivery.
       if (error.code === "23505" || /duplicate key|unique/i.test(error.message)) {
@@ -189,7 +197,13 @@ export async function markLeaflyWebhookProcessed(bodySha256: string): Promise<vo
     await admin
       .from("leafly_webhook_events")
       .update({ processed_at: new Date().toISOString() })
-      .eq("body_sha256", bodySha256);
+      .eq("body_sha256", bodySha256)
+      // SLICE L-25. Bounded. The comment below says a failure here is
+      // "bookkeeping loss, not a reason to turn a successful delivery into
+      // a 500" — but an unbounded wait never reaches that catch, because
+      // nothing is thrown. The deadline is what makes the stated policy
+      // true in the one case it was written for.
+      .abortSignal(dbDeadline("order_write"));
   } catch {
     // Deliberately swallowed. Failing to stamp processed_at is a bookkeeping
     // loss, not a reason to turn a successful delivery into a 500.
@@ -246,7 +260,12 @@ export async function upsertLeaflyOrderFromWebhook(
 
     const { error } = await admin
       .from("leafly_orders")
-      .upsert(patch, { onConflict: "leafly_order_id" });
+      .upsert(patch, { onConflict: "leafly_order_id" })
+      // SLICE L-25. Bounded. This is the write that first creates the order
+      // row from the submission webhook, inside a fifteen-minute
+      // acknowledge window. Every second spent stalled here is a second the
+      // staff do not get back.
+      .abortSignal(dbDeadline("order_write"));
 
     if (error) return { ok: false, error: error.message };
     return { ok: true };
@@ -266,10 +285,22 @@ export async function markLeaflyOrderAcknowledged(
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
   try {
     const admin = createSupabaseAdminClient();
+    // SLICE L-25 — bounded. This is the stamp that runs immediately AFTER
+    // Leafly returns its 204, and it is the most dangerous place on the whole
+    // path to wait: the acknowledgement is already irreversible, the
+    // customer's ID images are already gone, and the operator is still
+    // looking at a spinner. Hanging here converts a completed, successful
+    // acknowledgement into what the owner experiences as a total failure.
+    //
+    // A timeout comes back through `error`, and the caller
+    // (`acknowledgeLeaflyOrder`) already treats a failed stamp as a logged
+    // warning rather than a failed acknowledgement — precisely because the
+    // acknowledgement DID succeed and must never invite a second press.
     const { error } = await admin
       .from("leafly_orders")
       .update({ acknowledged_at: at.toISOString() })
-      .eq("leafly_order_id", leaflyOrderId);
+      .eq("leafly_order_id", leaflyOrderId)
+      .abortSignal(dbDeadline("order_write"));
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch (err) {

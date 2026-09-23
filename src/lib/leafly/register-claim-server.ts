@@ -29,6 +29,8 @@
  */
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+
+import { dbDeadline } from "./db-deadline";
 import {
   assessRegisterClaim,
   buildRegisterInterrupt,
@@ -101,7 +103,10 @@ export async function claimLeaflyOrderForRegister(input: {
         register_employee_name: (input.employeeName ?? "").trim() || null,
         register_claimed_at: new Date().toISOString(),
       })
-      .eq("local_order_id", orderId);
+      .eq("local_order_id", orderId)
+      // SLICE L-25. Bounded. Claiming a register happens at the till with a
+      // customer standing there; a hang is felt immediately.
+      .abortSignal(dbDeadline("order_write"));
 
     if (error) {
       if (isMissing0229(error)) return { ok: true, degraded: true };
@@ -143,7 +148,10 @@ export async function releaseLeaflyOrderClaim(
         register_employee_name: null,
         register_claimed_at: null,
       })
-      .eq("local_order_id", orderId);
+      .eq("local_order_id", orderId)
+      // SLICE L-25. Bounded. Releasing a claim must not be able to wedge the
+      // till it is trying to free.
+      .abortSignal(dbDeadline("order_write"));
     if (error) {
       if (isMissing0229(error)) return { ok: true, degraded: true };
       return { ok: false, degraded: false };
@@ -184,6 +192,10 @@ export async function readRegisterClaim(leaflyOrderId: string): Promise<ClaimAss
       .from("leafly_orders")
       .select(CLAIM_COLUMNS)
       .eq("leafly_order_id", id)
+      // SLICE L-25. Bounded. `readRegisterClaim` is called from
+      // `onLeaflyOrderCanceled` and the board, both reachable from the
+      // acknowledge click's redirect.
+      .abortSignal(dbDeadline("order_read"))
       .maybeSingle<ClaimRow>();
 
     // Missing migration or any read failure: fall back to the pre-L-14 answer.
@@ -246,17 +258,24 @@ export async function raiseRegisterInterrupt(input: {
 
   try {
     const admin = createSupabaseAdminClient();
-    const { error } = await admin.from("leafly_register_interrupts").insert({
-      leafly_order_id: input.leaflyOrderId,
-      local_order_id: input.localOrderId,
-      register_device_id: input.registerDeviceId,
-      kind: "leafly_cancel",
-      cancel_reason_code: interrupt.reasonCode,
-      title: interrupt.title,
-      message: interrupt.message,
-      disposition_required: interrupt.dispositionRequired,
-      raised_at: interrupt.raisedAt,
-    });
+    const { error } = await admin
+      .from("leafly_register_interrupts")
+      .insert({
+        leafly_order_id: input.leaflyOrderId,
+        local_order_id: input.localOrderId,
+        register_device_id: input.registerDeviceId,
+        kind: "leafly_cancel",
+        cancel_reason_code: interrupt.reasonCode,
+        title: interrupt.title,
+        message: interrupt.message,
+        disposition_required: interrupt.dispositionRequired,
+        raised_at: interrupt.raisedAt,
+      })
+      // SLICE L-25. Bounded. This is the write that stops a till selling an
+      // order Leafly just cancelled. The error handling below distinguishes
+      // a missing migration from a duplicate from a real fault — none of
+      // which it can do if the insert simply never returns.
+      .abortSignal(dbDeadline("order_write"));
 
     if (error) {
       if (isMissing0229(error)) return { ok: true, raised: false, degraded: true };
@@ -316,6 +335,9 @@ export async function listOpenInterruptsForDevice(
       .or(`register_device_id.eq.${id},register_device_id.is.null`)
       .order("raised_at", { ascending: true })
       .limit(20)
+      // SLICE L-25. Bounded. Polled by every register; a stall would hold a
+      // connection open per till.
+      .abortSignal(dbDeadline("order_read"))
       .returns<InterruptRow[]>();
 
     if (error) {
@@ -387,7 +409,10 @@ export async function resolveRegisterInterrupt(input: {
       // two registers answer the same interrupt: the second update matches
       // nothing, and the first person's decision stands rather than being
       // silently overwritten.
-      .is("resolved_at", null);
+      .is("resolved_at", null)
+      // SLICE L-25. Bounded. A staff member has just answered a modal and
+      // is waiting for it to close.
+      .abortSignal(dbDeadline("order_write"));
 
     if (error) {
       if (isMissing0229(error)) return { ok: false, error: "migration 0229 has not been applied" };
@@ -487,6 +512,9 @@ export async function listInterruptsForOrders(
       .in("local_order_id", ids)
       .order("raised_at", { ascending: false })
       .limit(BOARD_INTERRUPT_LIMIT)
+      // SLICE L-25. Bounded. Renders on `/admin/orders`, the acknowledge
+      // click's redirect target — so a stall here keeps the button spinning.
+      .abortSignal(dbDeadline("order_read"))
       .returns<BoardInterruptRow[]>();
 
     if (error) {

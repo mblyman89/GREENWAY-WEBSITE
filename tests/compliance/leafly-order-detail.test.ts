@@ -353,6 +353,30 @@ describe("L-24 — the detail reader survives every payload it can be handed", (
   });
 
   it("reads a realistic Leafly order", () => {
+    // ── SLICE L-25 — THIS FIXTURE WAS NOT REALISTIC, DESPITE ITS NAME ───────
+    //
+    // It used to send `subtotal: "40.00", taxes: "14.80", total: "54.80"`
+    // with cart items keyed `totalPrice: "30.00"`. Every one of those is
+    // fiction, checked against docs/leafly-specs/order-api-v1.openapi.json:
+    //
+    //   * `Order.subtotal` / `Order.total` are documented "in minor units",
+    //     so a $40.00 subtotal arrives as the NUMBER 4000 — never "40.00".
+    //   * `Order.taxes` is `$ref: Taxes`, an ARRAY of TaxComponent "broken
+    //     out by tax type", each carrying `amountCents`. Never a string.
+    //   * `CartItemOutgoing` has no `totalPrice` key at all. Its required
+    //     money fields are `packagePrice`, `discountedPackagePrice`,
+    //     `discountedPriceCents`, `priceCents`, `savingsCents`.
+    //
+    // Because this fixture claimed decimals, the reader was built to convert
+    // decimals, and the suite stayed green over a screen that multiplied
+    // every price by a hundred: a $48.03 order displayed as $4,803.00, with
+    // the tax line showing an em dash on every order ever opened. Proven in
+    // scripts/recon/detail-money-probe.ts and pinned in
+    // tests/compliance/leafly-l25-order-money-units.test.ts.
+    //
+    // The values below are the spec's own arithmetic. The EXPECTATIONS are
+    // unchanged — 5480, 1480, 3000 — because the dollar amounts are the
+    // same; only the wire format is now truthful.
     const d = readOrderDetail({
       id: "ord_abc",
       status: "pending",
@@ -361,12 +385,23 @@ describe("L-24 — the detail reader survives every payload it can be handed", (
       emailAddress: "jane@example.test",
       phoneNumber: "+15095550123",
       dateOfBirth: "1990-04-01",
-      subtotal: "40.00",
-      taxes: "14.80",
-      total: "54.80",
+      subtotal: 4000,
+      taxes: [
+        { label: "excise tax", amountCents: 1000 },
+        { label: "state sales tax", amountCents: 480 },
+      ],
+      total: 5480,
       cartItems: [
-        { name: "Blue Dream 3.5g", quantity: 2, totalPrice: "30.00" },
-        { name: "Pre-roll", quantity: 1, totalPrice: "10.00" },
+        // packagePrice x quantity === priceCents, the identity the spec's own
+        // published example satisfies for all three of its items.
+        {
+          name: "Blue Dream 3.5g",
+          quantity: 2,
+          packagePrice: 1500,
+          priceCents: 3000,
+          discountedPriceCents: 3000,
+        },
+        { name: "Pre-roll", quantity: 1, packagePrice: 1000, priceCents: 1000 },
       ],
     });
     expect(d.customerName).toBe("Jane Doe");
@@ -375,6 +410,11 @@ describe("L-24 — the detail reader survives every payload it can be handed", (
     expect(d.lines).toHaveLength(2);
     expect(d.lines[0]?.quantity).toBe(2);
     expect(d.lines[0]?.lineTotalMinorUnits).toBe(3000);
+    // The regression, stated outright: $54.80 must not render as $5,480.00.
+    expect(d.totalMinorUnits).not.toBe(548_000);
+    expect(d.subtotalMinorUnits).toBe(4000);
+    // And the figures must reconcile, which only holds if they share a unit.
+    expect((d.subtotalMinorUnits ?? 0) + (d.taxesMinorUnits ?? 0)).toBe(d.totalMinorUnits);
   });
 
   it("survives an UberEats order, where Leafly documents most fields as absent", () => {
@@ -400,12 +440,24 @@ describe("L-24 — the detail reader survives every payload it can be handed", (
   it("keeps an unnamed or malformed cart line rather than dropping it", () => {
     // A line the staff cannot see at all is worse than one they must look up:
     // the bag would go out short and nobody would know why.
+    // SLICE L-25: the first item used to carry `totalPrice: "9.00"`, a key
+    // that does not exist in `CartItemOutgoing`. This test passed anyway
+    // because it never asserted that line's price — so the ghost key went
+    // unnoticed here even after it had corrupted every total on the screen.
+    // It now sends the real field and asserts the price, so the gap closes.
     const d = readOrderDetail({
-      cartItems: [{ quantity: 3, totalPrice: "9.00" }, null, "junk", { name: "Real", quantity: 1 }],
+      cartItems: [
+        { quantity: 3, packagePrice: 300, priceCents: 900 },
+        null,
+        "junk",
+        { name: "Real", quantity: 1 },
+      ],
     });
     expect(d.lines).toHaveLength(2);
     expect(d.lines[0]?.name).toBe("Unnamed item");
     expect(d.lines[0]?.quantity).toBe(3);
+    // The unnamed line still shows its real price, taken as given.
+    expect(d.lines[0]?.lineTotalMinorUnits).toBe(900);
     // A line with no price shows a dash, not a free item.
     expect(d.lines[1]?.lineTotalMinorUnits).toBeNull();
   });

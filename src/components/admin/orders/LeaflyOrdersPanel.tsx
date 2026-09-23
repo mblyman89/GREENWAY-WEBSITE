@@ -114,6 +114,8 @@ import { LeaflyOrderActions } from "./LeaflyOrderActions";
 import { LeaflyOrderDetailPanel } from "./LeaflyOrderDetail";
 import {
   acknowledgeLeaflyOrderAction,
+  // SLICE L-25 — the recovery path for an order we never downloaded.
+  collectLeaflyOrderAction,
   loadLeaflyOrderDetailAction,
   setLeaflyOrderStatusAction,
 } from "@/app/admin/orders/leafly-actions";
@@ -633,6 +635,7 @@ function LeaflyOrderCard({
         <LeaflyOrderDetailPanel
           leaflyOrderId={fullId}
           load={loadLeaflyOrderDetailAction}
+          collect={collectLeaflyOrderAction}
         />
       ) : null}
 

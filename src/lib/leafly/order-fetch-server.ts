@@ -51,6 +51,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getLeaflyAccessToken, resetLeaflyTokenCache } from "./token";
 // SLICE L-17 — no Leafly request may outlive its budget.
+import { dbDeadline } from "./db-deadline";
 import { leaflyFetchWithDeadline } from "./deadline-fetch";
 import { getLeaflyConfig } from "./config";
 import { refreshLeaflyConfig } from "./runtime";
@@ -283,7 +284,13 @@ export async function storeFetchedLeaflyOrder(input: {
     const { error } = await admin
       .from("leafly_orders")
       .update(patch)
-      .eq("leafly_order_id", input.leaflyOrderId);
+      .eq("leafly_order_id", input.leaflyOrderId)
+      // SLICE L-25. Bounded. THIS is the write that replaces the five-field
+      // submission webhook in `raw_order` with the real Order payload. When
+      // it does not happen, the detail view renders 18 blank fields out of
+      // 18 — exactly what the owner reported seeing. A silent hang here is
+      // one of the ways an order ends up permanently uncollected.
+      .abortSignal(dbDeadline("order_write"));
 
     if (error) return { ok: false, error: error.message };
     return { ok: true, error: null };

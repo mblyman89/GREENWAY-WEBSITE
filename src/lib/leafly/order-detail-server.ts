@@ -80,12 +80,15 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 import { getLeaflyConfig } from "./config";
+import { dbDeadline } from "./db-deadline";
 import { leaflyFetchWithDeadline } from "./deadline-fetch";
 import { leaflyOrderApiBaseUrl } from "./order-ack-core";
 import {
+  classifyDetailPayload,
   decideMediaAccess,
   leaflyMediaUrl,
   readOrderDetail,
+  type DetailPayloadState,
   type LeaflyMediaKind,
   type LeaflyOrderDetail,
   type MediaAccessVerdict,
@@ -101,6 +104,28 @@ import { loadLeaflyOrderIntegrationKey } from "./webhook-server";
 export type OrderDetailResult = {
   ok: boolean;
   detail: LeaflyOrderDetail | null;
+  /**
+   * SLICE L-25 — what is actually stored in `raw_order`, so the panel can say
+   * WHY it has nothing to show.
+   *
+   * ── WHY THIS IS NULLABLE, AND WHY NULL IS NOT A FOURTH STATE ────────────
+   * `null` means "we never got far enough to look" — no order id was given,
+   * the database is not configured, the read failed, or there is no such row.
+   * In every one of those cases `ok` is false and `error` carries the
+   * sentence.
+   *
+   * The alternative was widening `DetailPayloadState` with an `"unknown"`
+   * member. That was rejected because the pure core's three states describe
+   * the CONTENTS OF A PAYLOAD, and in all four failure paths there is no
+   * payload to describe — we hold no row at all. Folding "I could not read
+   * the database" into the same union as "the payload is not a shape I
+   * recognise" would let a transient outage render as a data-quality
+   * problem, and send the operator to press "collect this order" when the
+   * real fault is that the order was never found.
+   *
+   * So: non-null exactly when `ok` is true, and the type says so out loud.
+   */
+  payloadState: DetailPayloadState | null;
   /** Whether the ID images may be fetched right now, and why not if not. */
   mediaAccess: MediaAccessVerdict;
   /** A sentence for the operator when `ok` is false. Never a stack trace. */
@@ -158,6 +183,9 @@ export async function loadLeaflyOrderDetail(
     return {
       ok: false,
       detail: null,
+      // No id means no row was ever looked up, so there is no payload whose
+      // state could be described. See the note on `payloadState`.
+      payloadState: null,
       mediaAccess: unknownAccess("No Leafly order number was supplied."),
       error: "No Leafly order number was supplied.",
     };
@@ -170,6 +198,7 @@ export async function loadLeaflyOrderDetail(
     return {
       ok: false,
       detail: null,
+      payloadState: null,
       mediaAccess: unknownAccess(
         "The order database is not configured on this deployment, so the order " +
           "could not be opened.",
@@ -185,11 +214,23 @@ export async function loadLeaflyOrderDetail(
       .from("leafly_orders")
       .select(DETAIL_COLUMNS)
       .eq("leafly_order_id", id)
+      // SLICE L-25. Bounded like every other Leafly database read. This one
+      // pulls `raw_order`, the largest column on the table, so it is the most
+      // likely of all our reads to stall on a slow link — and a stall here
+      // hangs the detail page a staff member opened during a fifteen-minute
+      // window. `.abortSignal()` lives on the TRANSFORM builder, so it must
+      // come after `.select()`; putting it on the `.from()` builder does not
+      // type-check.
+      .abortSignal(dbDeadline("order_read"))
       .maybeSingle();
     if (error) {
       return {
         ok: false,
         detail: null,
+        // A failed read is a fault, not a verdict about the payload. Never
+        // report this as `never_fetched` — that would offer a "collect this
+        // order from Leafly" button as the fix for a database outage.
+        payloadState: null,
         mediaAccess: unknownAccess(
           "The order could not be read from the database, so we cannot tell " +
             "whether the ID images are still available.",
@@ -203,6 +244,7 @@ export async function loadLeaflyOrderDetail(
     return {
       ok: false,
       detail: null,
+      payloadState: null,
       mediaAccess: unknownAccess(
         "The order could not be read from the database, so we cannot tell " +
           "whether the ID images are still available.",
@@ -215,6 +257,11 @@ export async function loadLeaflyOrderDetail(
     return {
       ok: false,
       detail: null,
+      // No row at all is different from a row with an uncollected payload.
+      // The first means the webhook never arrived; the second means the
+      // webhook arrived and the follow-up fetch failed. Different faults,
+      // different fixes, so they must not share a state.
+      payloadState: null,
       mediaAccess: unknownAccess(
         "We have no record of that Leafly order, so there is nothing to show.",
       ),
@@ -234,9 +281,27 @@ export async function loadLeaflyOrderDetail(
     leaflyStatus: row.leafly_status,
   });
 
+  // ── SLICE L-25 — SAY WHY IT IS BLANK ────────────────────────────────────
+  //
+  // The owner opened an order and saw nothing at all. Before this slice, that
+  // is exactly what this function produced: `ok: true` with every field null,
+  // rendered as an empty form with no explanation. The screen looked broken
+  // and gave him no way to tell a fault from an empty order.
+  //
+  // It was neither. `raw_order` still held Leafly's five-field SUBMISSION
+  // WEBHOOK, because the separate `GET /{key}/orders/{id}` that fetches the
+  // real Order never succeeded. Measured against the spec's own example
+  // payload through this very reader: 18 blank fields out of 18.
+  //
+  // Reporting the state — rather than rendering the blanks — is what lets the
+  // panel say "we never managed to download this order" and offer to try
+  // again, instead of implying Leafly sent an order with no customer in it.
+  const payloadState = classifyDetailPayload(row.raw_order);
+
   return {
     ok: true,
     detail: readOrderDetail(row.raw_order),
+    payloadState,
     mediaAccess,
     error: null,
   };

@@ -358,6 +358,107 @@ function str(value: unknown): string | null {
  * genuinely free item are different facts, and showing "$0.00" for the first
  * one is how a staff member hands over a bag without taking money.
  */
+/**
+ * Read a money field that Leafly ALREADY sends in minor units.
+ *
+ * ===========================================================================
+ * WHY THIS EXISTS ALONGSIDE `toMinorUnits`
+ * ===========================================================================
+ * Because they solve opposite problems, and using the wrong one multiplies
+ * every price on the screen by a hundred.
+ *
+ * `toMinorUnits` converts a DECIMAL CURRENCY AMOUNT ("19.99") into cents. It
+ * is careful, correct, and well tested. It is also the wrong tool for an
+ * Order payload, because Leafly does not send decimals there.
+ *
+ * ── THE SPEC, VERBATIM (docs/leafly-specs/order-api-v1.openapi.json) ──────
+ *   Order.subtotal            "order total before taxes and fees in minor units"
+ *   Order.total               "order grand total in minor units, ..."
+ *   Order.deliveryFee         "order delivery fee in minor units..."
+ *   Order.totalDiscounts      "total of discounts applied to the order in minor units"
+ *   TaxComponent.amountCents  "tax amount in minor units"
+ *   CartItemOutgoing.priceCents / .discountedPriceCents / .packagePrice
+ *                             "...in minor units"
+ *
+ * Every money field on an Order is already cents.
+ *
+ * ── THE DEFECT THIS FIXES, MEASURED ──────────────────────────────────────
+ * `scripts/recon/detail-money-probe.ts`, against a spec-shaped $48.03 order:
+ *
+ *   Subtotal: $4,000.00   (truth: $40.00)
+ *   Taxes:    —           (truth: $8.03)
+ *   Total:    $4,803.00   (truth: $48.03)
+ *   Line:     —           (truth: $40.00)
+ *
+ * Found by a CONTROL assertion in the blank-detail regression test, which
+ * expected 4803 and got 480300. The control existed to prove the reader was
+ * innocent of the blank-screen bug. It proved something else instead.
+ *
+ * ── WHY THIS IS SERIOUS ──────────────────────────────────────────────────
+ * This is the screen a staff member reads before handing a bag to a
+ * customer, inside a fifteen-minute window. A total off by 100x is not a
+ * cosmetic slip: it is the number somebody reconciles a till against. And
+ * `sendability-core` already refuses to push a menu whose prices look
+ * implausible — the detail view had no equivalent check.
+ *
+ * ── WHY IT TAKES A LIST OF CANDIDATES ────────────────────────────────────
+ * Leafly names the same quantity differently across cart-item shapes
+ * (`discountedPriceCents` vs `priceCents`). Trying them in priority order
+ * here keeps that decision in one tested place instead of at each call site.
+ *
+ * ── WHY IT DEMANDS AN INTEGER ────────────────────────────────────────────
+ * The same reason `order-fetch-core`'s `intOrNull` does. A fractional value
+ * in a field documented as minor units means the sender is not speaking the
+ * protocol we think it is, and silently rounding it would convert a
+ * detectable contract violation into a quiet money error. `null` renders as
+ * an em dash, which a person investigates; a wrong number they do not.
+ */
+export function readMinorUnits(...candidates: unknown[]): number | null {
+  for (const value of candidates) {
+    if (typeof value === "number" && Number.isFinite(value) && Number.isInteger(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
+/**
+ * Sum Leafly's `taxes` array into a single minor-units figure.
+ *
+ * ── WHY A DEDICATED READER ───────────────────────────────────────────────
+ * Because `Order.taxes` is NOT a number. The spec has it as
+ * `$ref: Taxes`, which is an "array of TaxComponent ... broken out by tax
+ * type", each carrying `amountCents`.
+ *
+ * The old code called `toMinorUnits(o.taxes)` on that array. `toMinorUnits`
+ * accepts only numbers and strings, so an array fell through to `null` and
+ * the tax line rendered as an em dash on every single order — measured.
+ *
+ * ── WHY A MISSING ARRAY IS NULL BUT AN EMPTY ONE IS ZERO ─────────────────
+ * They are different facts. No `taxes` key means we were not told; an empty
+ * array means Leafly told us there were none. The first must render "—" so
+ * a person looks it up, the second may honestly render "$0.00".
+ *
+ * ── WHY ONE BAD COMPONENT POISONS THE SUM ────────────────────────────────
+ * A partial tax total is worse than no tax total. If one component is
+ * unreadable, the sum understates the tax, and understating tax on a
+ * cannabis order is the direction that gets a shop in trouble. Returning
+ * null makes the gap visible instead of plausible.
+ */
+export function readTaxesMinorUnits(value: unknown): number | null {
+  if (!Array.isArray(value)) return null;
+  let sum = 0;
+  for (const component of value) {
+    if (component === null || typeof component !== "object" || Array.isArray(component)) {
+      return null;
+    }
+    const amount = readMinorUnits((component as Record<string, unknown>).amountCents);
+    if (amount === null) return null;
+    sum += amount;
+  }
+  return sum;
+}
+
 export function toMinorUnits(value: unknown): number | null {
   let text: string;
   if (typeof value === "number") {
@@ -455,7 +556,36 @@ export function readOrderDetail(raw: unknown): LeaflyOrderDetail {
     lines.push({
       name,
       quantity,
-      lineTotalMinorUnits: toMinorUnits(li.totalPrice ?? li.total ?? li.price),
+      // ── SLICE L-25 — READ THE FIELDS LEAFLY ACTUALLY SENDS ──────────────
+      //
+      // The previous key list — totalPrice / total / price — does not appear
+      // anywhere in `CartItemOutgoing`. Measured against a spec-shaped cart
+      // item, every line price came back null and every line rendered "—"
+      // (scripts/recon/detail-money-probe.ts).
+      //
+      // The spec's actual whole-line fields, in the order that matters:
+      //
+      //   discountedPriceCents  "price of entire cart item (all quantity) in
+      //                          minor units after discount application"
+      //   priceCents            "original price of entire cart item (all
+      //                          quantity) in minor units"
+      //
+      // `discountedPriceCents` comes FIRST because it is what the shopper
+      // was actually charged. Showing the pre-discount figure to a staff
+      // member reconciling a till would overstate every discounted line.
+      //
+      // `packagePrice` is the per-unit price, so it is multiplied by the
+      // quantity to reach a line total. It is last because it is a fallback:
+      // deriving a line total is strictly worse than being told one.
+      //
+      // ALREADY MINOR UNITS — note there is no `toMinorUnits` here. The
+      // field names say `Cents` and the spec says "in minor units". Running
+      // the dollars-to-cents converter over them multiplied every price by a
+      // hundred.
+      lineTotalMinorUnits: readMinorUnits(li.discountedPriceCents, li.priceCents) ??
+        (readMinorUnits(li.packagePrice) === null
+          ? null
+          : (readMinorUnits(li.packagePrice) as number) * quantity),
     });
   }
 
@@ -474,11 +604,108 @@ export function readOrderDetail(raw: unknown): LeaflyOrderDetail {
     medicalCardState: str(o.medicalCardState),
     medicalCardExpiration: str(o.medicalCardExpiration),
     lines,
-    subtotalMinorUnits: toMinorUnits(o.subtotal),
-    taxesMinorUnits: toMinorUnits(o.taxes),
-    totalMinorUnits: toMinorUnits(o.total),
+    // ALREADY MINOR UNITS. There is deliberately no `toMinorUnits` on these
+    // three lines, and that absence is the whole fix. See `readMinorUnits`
+    // above for the spec quotes and the measured 100x defect; in short, the
+    // spec says `subtotal` is "order total before taxes and fees in minor
+    // units" and `total` is "order grand total in minor units", so a $48.03
+    // order arrives as 4803 and multiplying it again rendered $4,803.00.
+    //
+    // `taxes` gets its own reader because it is not a number at all: the
+    // spec has it as an array of TaxComponent "broken out by tax type", so
+    // it must be summed over `amountCents` rather than parsed.
+    subtotalMinorUnits: readMinorUnits(o.subtotal),
+    taxesMinorUnits: readTaxesMinorUnits(o.taxes),
+    totalMinorUnits: readMinorUnits(o.total),
     createdAt: str(o.createdAt),
   };
+}
+
+/* ------------------------------------------------------------------------- *
+ * SLICE L-25 — TELLING "NEVER COLLECTED" FROM "EMPTY"
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Why a detail view has nothing to show.
+ *
+ * - `collected`     — we have the real Order payload. Render it.
+ * - `never_fetched` — `raw_order` still holds Leafly's five-field submission
+ *                     webhook. We never downloaded the order.
+ * - `unreadable`    — there is a payload, but it is not a shape we recognise.
+ */
+export type DetailPayloadState = "collected" | "never_fetched" | "unreadable";
+
+/**
+ * Classify what is actually stored in `leafly_orders.raw_order`.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THE DEFECT THIS EXISTS TO NAME
+ * ═══════════════════════════════════════════════════════════════════════════
+ * The owner opened a Leafly order and found nothing at all:
+ *
+ *   > "when I open an order, everything is completely blank. There is no info
+ *   >  at all. Is this why we can't acknowledge an order? Are we not getting
+ *   >  the proper data from Leafly to acknowledge in the first place?"
+ *
+ * He diagnosed it correctly from the symptom alone.
+ *
+ * `raw_order` is written TWICE in an order's life:
+ *
+ *   1. `upsertLeaflyOrderFromWebhook()` stores the submission webhook, which
+ *      per Leafly's own example is FIVE FIELDS — eventTime, eventType,
+ *      orderId, orderIntegrationKey, acknowledgeBy. No cart. No customer. No
+ *      totals.
+ *   2. `collectLeaflyOrder()` performs the separate, authenticated
+ *      `GET /{key}/orders/{id}` and OVERWRITES `raw_order` with the real
+ *      Order — which is where cartItems, subtotal, total, firstName and
+ *      lastName actually live.
+ *
+ * So a completely blank detail view is not a rendering bug. It is POSITIVE
+ * EVIDENCE that step 2 never succeeded for that order.
+ *
+ * Measured rather than argued (`scripts/recon/blank-detail-probe.ts`): the
+ * spec's own example webhook, run through the real production
+ * `readOrderDetail`, yields 18 blank fields out of 18, while a real Order
+ * payload through the same reader parses perfectly. The reader is fine; the
+ * data was never there.
+ *
+ * ── WHY THIS IS A COMPLIANCE MATTER, NOT A COSMETIC ONE ──────────────────
+ * Leafly's rule, verbatim: orders are acknowledged "as having been retrieved
+ * **in whole** by your system". Acknowledging an order we never retrieved
+ * asserts something untrue to a third party, permanently destroys our only
+ * access to the customer's ID images, and leaves staff with no cart to build
+ * the bag from.
+ *
+ * ── WHY THE WEBHOOK'S OWN KEYS ARE THE TEST ──────────────────────────────
+ * The discriminator is `eventType` + `orderId` WITHOUT `id`. That combination
+ * is unique to the webhook envelope: the real Order schema has `id`, and the
+ * webhook has no `id` at all. Testing for "no cartItems" instead would be
+ * wrong — a real order genuinely can have an empty cart, and reporting that
+ * as "never collected" would send staff chasing a download that already
+ * happened.
+ */
+export function classifyDetailPayload(raw: unknown): DetailPayloadState {
+  if (raw === null || raw === undefined) return "never_fetched";
+  if (typeof raw !== "object" || Array.isArray(raw)) return "unreadable";
+
+  const o = raw as Record<string, unknown>;
+
+  // The real Order carries `id`. The submission webhook never does.
+  const hasOrderId = typeof o.id === "string" && o.id.trim() !== "";
+  if (hasOrderId) return "collected";
+
+  // The webhook envelope, identified by its own two markers.
+  const hasEventType = typeof o.eventType === "string" && o.eventType.trim() !== "";
+  const hasWebhookOrderId = typeof o.orderId === "string" && o.orderId.trim() !== "";
+  if (hasEventType || hasWebhookOrderId) return "never_fetched";
+
+  // An object with neither an `id` nor webhook markers. Could be `{}` from a
+  // partial write. Reported as never_fetched rather than unreadable because
+  // the ACTION is the same — collect it — and "unreadable" invites a bug
+  // report where "press this button" would have fixed it.
+  if (Object.keys(o).length === 0) return "never_fetched";
+
+  return "unreadable";
 }
 
 /**
@@ -720,7 +947,74 @@ export function __runLeaflyOrderDetailTests(): { passed: number; failed: number;
     !leaflyMediaUrl(base, "k", "a?b=1", "medical_id").includes("?b=1"),
   );
 
-  // ---- money ---------------------------------------------------------------
+  // ---- money, already in minor units (L-25) --------------------------------
+  // These guard the 100x defect. `readMinorUnits` must NEVER scale, because
+  // every money field on a Leafly Order is documented as minor units already.
+  eq("an integer is taken as given, never scaled", readMinorUnits(4803), 4803);
+  eq("zero is zero, not null", readMinorUnits(0), 0);
+  eq("a negative reads (refunds exist)", readMinorUnits(-500), -500);
+  eq("a fraction is refused, not rounded", readMinorUnits(19.99), null);
+  eq("a numeric string is refused", readMinorUnits("4803"), null);
+  eq("null is null", readMinorUnits(null), null);
+  eq("undefined is null", readMinorUnits(undefined), null);
+  eq("NaN is null", readMinorUnits(NaN), null);
+  eq("Infinity is null", readMinorUnits(Infinity), null);
+  eq("an object is null", readMinorUnits({}), null);
+  eq("a boolean is null", readMinorUnits(true), null);
+  eq("no candidates at all is null", readMinorUnits(), null);
+  // Candidate priority: the discounted price wins, because that is what the
+  // customer is actually charged.
+  eq("the first readable candidate wins", readMinorUnits(6710, 9999), 6710);
+  eq("an unreadable first candidate falls through", readMinorUnits(undefined, 6710), 6710);
+  eq("a fractional first candidate falls through", readMinorUnits(1.5, 6710), 6710);
+  eq("zero still wins over a later candidate", readMinorUnits(0, 6710), 0);
+  eq("all candidates unreadable is null", readMinorUnits(undefined, null, "x"), null);
+
+  // ---- money, the taxes ARRAY (L-25) --------------------------------------
+  // `Order.taxes` is an array of TaxComponent, not a number. Reading it with
+  // a scalar parser returned null on every order ever displayed.
+  eq(
+    "components are summed over amountCents",
+    readTaxesMinorUnits([{ label: "excise", amountCents: 500 }, { label: "state", amountCents: 303 }]),
+    803,
+  );
+  eq("a single component reads", readTaxesMinorUnits([{ label: "x", amountCents: 8582 }]), 8582);
+  // Two different facts, two different answers.
+  eq("an EMPTY array is a truthful zero", readTaxesMinorUnits([]), 0);
+  eq("a MISSING array is null, not zero", readTaxesMinorUnits(undefined), null);
+  eq("null is null", readTaxesMinorUnits(null), null);
+  eq("a bare number is null (it is not an array)", readTaxesMinorUnits(803), null);
+  eq("a numeric string is null", readTaxesMinorUnits("803"), null);
+  eq("an object is null", readTaxesMinorUnits({ amountCents: 803 }), null);
+  // One bad component poisons the sum: understating cannabis tax is the
+  // direction that gets a shop in trouble, so the gap must stay visible.
+  eq(
+    "one unreadable component poisons the whole sum",
+    readTaxesMinorUnits([{ amountCents: 500 }, { amountCents: "303" }]),
+    null,
+  );
+  eq(
+    "a component missing amountCents poisons the sum",
+    readTaxesMinorUnits([{ amountCents: 500 }, { label: "state" }]),
+    null,
+  );
+  eq("a null component poisons the sum", readTaxesMinorUnits([{ amountCents: 500 }, null]), null);
+  eq("a nested array component poisons the sum", readTaxesMinorUnits([[500]]), null);
+  eq(
+    "a fractional component poisons the sum",
+    readTaxesMinorUnits([{ amountCents: 50.5 }]),
+    null,
+  );
+  // Proof the sum is not silently scaled anywhere.
+  ok(
+    "the summed taxes are never multiplied by a hundred",
+    readTaxesMinorUnits([{ amountCents: 803 }]) === 803,
+  );
+
+  // ---- money, decimal currency strings ------------------------------------
+  // `toMinorUnits` stays: it is the correct reader for DECIMAL amounts, which
+  // is a different problem from an Order payload. Cross-checked against
+  // `reportMoneyToMinor` in the online-orders-report suite.
   eq("a plain number converts", toMinorUnits(12), 1200);
   eq("a decimal converts", toMinorUnits(19.99), 1999);
   // The float trap: 19.99 * 100 is 1998.9999999999998 in IEEE 754. Truncation
@@ -769,13 +1063,46 @@ export function __runLeaflyOrderDetailTests(): { passed: number; failed: number;
     phoneNumber: "+12065550100",
     emailAddress: "dana@example.com",
     medicalStatus: "none",
-    subtotal: 40,
-    taxes: 14.8,
-    total: 54.8,
+    // ── SLICE L-25 — THIS FIXTURE NOW MATCHES THE SPEC ──────────────────────
+    //
+    // It used to read `subtotal: 40, taxes: 14.8, total: 54.8` with cart keys
+    // `totalPrice` / `total`. Not one of those was a real Leafly shape:
+    //
+    //   * `Order.subtotal` and `Order.total` are documented "in minor units",
+    //     so a $40 subtotal arrives as 4000, never as 40.
+    //   * `Order.taxes` is `$ref: Taxes` — an ARRAY of TaxComponent "broken
+    //     out by tax type", each with `amountCents`. Never a decimal.
+    //   * `CartItemOutgoing` has no `totalPrice`, no `total` and no `price`.
+    //     Its required money keys are `packagePrice`, `discountedPackagePrice`,
+    //     `discountedPriceCents`, `priceCents`, `savingsCents`.
+    //
+    // Because the fixture invented dollars, the assertions below demanded a
+    // x100 conversion, and the reader was written to satisfy them. The suite
+    // was green and the screen was wrong by a factor of a hundred. That is
+    // the real lesson of this defect: a fixture is an authority claim, and
+    // this one was never checked against the spec it claimed to model.
+    //
+    // Values below are the spec's OWN example arithmetic, verified:
+    //   packagePrice 3355 x quantity 2 === priceCents 6710
+    //   (docs/leafly-specs/order-api-v1.openapi.json, components.examples.Order)
+    subtotal: 4000,
+    taxes: [
+      { label: "excise tax", amountCents: 1000 },
+      { label: "state sales tax", amountCents: 480 },
+    ],
+    total: 5480,
     createdAt: "2026-01-02T03:04:05Z",
     cartItems: [
-      { name: "Blue Dream 3.5g", quantity: 2, totalPrice: 30 },
-      { productName: "Gummies", quantity: 1, total: "10.00" },
+      // Whole-line price given outright, discounted equal to original.
+      {
+        name: "Blue Dream 3.5g",
+        quantity: 2,
+        packagePrice: 1500,
+        priceCents: 3000,
+        discountedPriceCents: 3000,
+      },
+      // Fallback path: no whole-line field, so packagePrice x quantity.
+      { productName: "Gummies", quantity: 1, packagePrice: 1000 },
     ],
   });
   eq("the order id is read", detail.leaflyOrderId, "ord-77");
@@ -787,12 +1114,58 @@ export function __runLeaflyOrderDetailTests(): { passed: number; failed: number;
   eq("two lines are read", detail.lines.length, 2);
   eq("the first line name", detail.lines[0]?.name, "Blue Dream 3.5g");
   eq("the first line quantity", detail.lines[0]?.quantity, 2);
-  eq("the first line total", detail.lines[0]?.lineTotalMinorUnits, 3000);
+  // The expected figures are unchanged from before the fix; what changed is
+  // that they are now reached from a spec-shaped payload instead of an
+  // invented one. $30.00 is 3000 minor units on the wire and 3000 on screen.
+  eq("the first line total is taken as given", detail.lines[0]?.lineTotalMinorUnits, 3000);
   eq("the fallback product name key works", detail.lines[1]?.name, "Gummies");
-  eq("a string line total converts", detail.lines[1]?.lineTotalMinorUnits, 1000);
-  eq("the subtotal converts", detail.subtotalMinorUnits, 4000);
-  eq("the taxes convert", detail.taxesMinorUnits, 1480);
-  eq("the total converts", detail.totalMinorUnits, 5480);
+  eq("a per-unit price is multiplied by quantity", detail.lines[1]?.lineTotalMinorUnits, 1000);
+  eq("the subtotal is not rescaled", detail.subtotalMinorUnits, 4000);
+  eq("the taxes array is summed", detail.taxesMinorUnits, 1480);
+  eq("the total is not rescaled", detail.totalMinorUnits, 5480);
+
+  // ── THE 100x REGRESSION, PINNED ───────────────────────────────────────────
+  // The exact defect the operator would have seen: a $54.80 order displayed
+  // as $5,480.00. If anyone reintroduces a dollars-to-cents conversion on
+  // this path, these three fail immediately and by name.
+  ok("the total is NOT a hundred times the wire value", detail.totalMinorUnits !== 548_000);
+  ok("the subtotal is NOT a hundred times the wire value", detail.subtotalMinorUnits !== 400_000);
+  ok("the line total is NOT a hundred times the wire value", detail.lines[0]?.lineTotalMinorUnits !== 300_000);
+  // And the taxes array must not silently read as "unknown" any more.
+  ok("the taxes are no longer null on every order", detail.taxesMinorUnits !== null);
+  // Internal consistency: subtotal + taxes === total, which is the check a
+  // person does by eye and the one that catches a unit mismatch fastest.
+  eq(
+    "subtotal plus taxes equals the total",
+    (detail.subtotalMinorUnits ?? 0) + (detail.taxesMinorUnits ?? 0),
+    detail.totalMinorUnits,
+  );
+  // And the lines must add up to the subtotal.
+  eq(
+    "the line totals add up to the subtotal",
+    detail.lines.reduce((sum, l) => sum + (l.lineTotalMinorUnits ?? 0), 0),
+    detail.subtotalMinorUnits,
+  );
+
+  // ── NEGATIVE CONTROL: THE KEYS THAT NEVER EXISTED ─────────────────────────
+  // `totalPrice` / `total` / `price` are the keys the old reader looked for.
+  // They appear nowhere in `CartItemOutgoing`, so a cart item carrying only
+  // those must read as UNKNOWN rather than inventing a figure. This control
+  // is what proves the fixture rewrite above was a real fix and not a
+  // repainted expectation: if the old keys still worked, nothing changed.
+  {
+    const ghost = readOrderDetail({
+      id: "ord-ghost",
+      cartItems: [{ name: "Phantom", quantity: 2, totalPrice: 30, total: "10.00", price: 15 }],
+    });
+    eq("a ghost-key cart item still yields a line", ghost.lines.length, 1);
+    eq("...with the name intact", ghost.lines[0]?.name, "Phantom");
+    eq("...but no price, because Leafly never sends those keys", ghost.lines[0]?.lineTotalMinorUnits, null);
+    // An order with no money fields at all must report unknown, not zero.
+    eq("a payload with no subtotal reports unknown", ghost.subtotalMinorUnits, null);
+    eq("a payload with no taxes reports unknown", ghost.taxesMinorUnits, null);
+    eq("a payload with no total reports unknown", ghost.totalMinorUnits, null);
+  }
 
   // Total-function guarantees. `raw_order` is jsonb written by a handler that
   // must answer 200 even for payloads it does not recognise, so every one of
@@ -931,6 +1304,99 @@ export function __runLeaflyOrderDetailTests(): { passed: number; failed: number;
   ok("a masked card does keep the last four", masked !== null && masked.endsWith("4321"));
   ok("a masked card is never the original", maskMedicalCardNumber("WA-987654321") !== "WA-987654321");
   eq("the card is trimmed before masking", maskMedicalCardNumber("  12345  "), "•2345");
+
+  // ---- SLICE L-25: classifyDetailPayload -----------------------------------
+  //
+  // The owner reported opening an order and seeing "everything is completely
+  // blank. There is no info at all." These assertions pin the distinction
+  // that explains it: a five-field submission webhook is NOT an order.
+
+  // The exact payload Leafly's own spec gives as the `order_submit` example.
+  // This is the shape that was sitting in `raw_order` when the detail view
+  // rendered 18 blank fields out of 18.
+  const submissionWebhook = {
+    eventTime: "2024-01-01T00:00:00Z",
+    eventType: "order_submit",
+    orderId: "abc-123",
+    orderIntegrationKey: "key-1",
+    acknowledgeBy: "2024-01-01T00:15:00Z",
+  };
+  eq(
+    "the submission webhook is recognised as never collected",
+    classifyDetailPayload(submissionWebhook),
+    "never_fetched",
+  );
+
+  // A real Order. The discriminator is `id`, which the webhook never carries.
+  eq(
+    "a real order payload is collected",
+    classifyDetailPayload({ id: "abc-123", cartItems: [] }),
+    "collected",
+  );
+
+  // THE ASSERTION THAT PROTECTS A REAL ORDER FROM A FALSE ALARM.
+  // It is tempting to classify by "has no cartItems", and that is wrong: an
+  // order can legitimately have an empty cart, and calling it "never
+  // collected" would send staff chasing a download that already happened.
+  eq(
+    "a collected order with an empty cart is still collected",
+    classifyDetailPayload({ id: "abc-123", cartItems: [], total: 0 }),
+    "collected",
+  );
+  eq(
+    "an order with an id but nothing else is still collected",
+    classifyDetailPayload({ id: "abc-123" }),
+    "collected",
+  );
+
+  // An id that is present but blank is not an id.
+  eq("a blank id is not a collected order", classifyDetailPayload({ id: "   " }), "unreadable");
+  eq(
+    "a blank id with webhook markers is never_fetched",
+    classifyDetailPayload({ id: "", eventType: "order_submit" }),
+    "never_fetched",
+  );
+
+  // Either webhook marker alone is enough; Leafly could add or drop fields.
+  eq(
+    "eventType alone marks the envelope",
+    classifyDetailPayload({ eventType: "order_submit" }),
+    "never_fetched",
+  );
+  eq(
+    "orderId alone marks the envelope",
+    classifyDetailPayload({ orderId: "abc-123" }),
+    "never_fetched",
+  );
+
+  // Nothing stored at all. Same action as never_fetched: go and collect it.
+  eq("null is never collected", classifyDetailPayload(null), "never_fetched");
+  eq("undefined is never collected", classifyDetailPayload(undefined), "never_fetched");
+  eq("an empty object is never collected", classifyDetailPayload({}), "never_fetched");
+
+  // Shapes that are not an order payload at all.
+  eq("a string is unreadable", classifyDetailPayload("abc-123"), "unreadable");
+  eq("a number is unreadable", classifyDetailPayload(42), "unreadable");
+  eq("an array is unreadable", classifyDetailPayload([{ id: "abc" }]), "unreadable");
+  eq(
+    "an unrecognised object is unreadable",
+    classifyDetailPayload({ something: "else" }),
+    "unreadable",
+  );
+
+  // THE END-TO-END TIE-BACK. The classifier's verdict must agree with what
+  // the reader actually produces, or the panel would explain one thing and
+  // render another.
+  const webhookDetail = readOrderDetail(submissionWebhook);
+  ok(
+    "the reader finds no customer in a submission webhook",
+    webhookDetail.customerName === null,
+  );
+  ok("the reader finds no cart in a submission webhook", webhookDetail.lines.length === 0);
+  ok(
+    "the reader finds no total in a submission webhook",
+    webhookDetail.totalMinorUnits === null,
+  );
 
   return { passed, failed, messages };
 }

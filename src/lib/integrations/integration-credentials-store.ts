@@ -15,6 +15,9 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { decryptSecret, encryptSecret } from "@/lib/security/at-rest-crypto";
+// SLICE L-25 — the credentials read is on the acknowledge path four times per
+// click, and it was the largest unbounded wait in the application.
+import { dbDeadline } from "@/lib/leafly/db-deadline";
 import {
   EMPTY_CREDENTIALS_ROW,
   applyCredentialsUpdate,
@@ -103,7 +106,41 @@ function coerceRow(data: Record<string, unknown> | null): IntegrationCredentials
 export async function getIntegrationCredentialsRow(): Promise<IntegrationCredentialsRow> {
   if (!isSupabaseServiceConfigured) return { ...EMPTY_CREDENTIALS_ROW };
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.from(TABLE).select("*").eq("id", true).maybeSingle();
+  // ── SLICE L-25 — THE QUERY THAT COULD HANG FOREVER ──────────────────────
+  //
+  // This single-row lookup is the shared root of `getLeaflyOverrides`,
+  // `loadLeaflyHmacKey` and `loadLeaflyOrderIntegrationKey`, and ONE press of
+  // the Leafly Accept button reaches it FOUR times: twice in
+  // `resolveOrderApiContext`, and twice more inside the nested
+  // `setLeaflyOrderStatus("confirmed")`.
+  //
+  // Until this slice it had no timeout of any kind. That is not a theoretical
+  // risk — it was reproduced against a real `node:http` server that accepts
+  // the connection and then answers nothing, which is what a saturated
+  // connection pooler looks like from the outside
+  // (`scripts/recon/supabase-hang-probe.mjs`):
+  //
+  //   [probe 1] UNBOUNDED (today's code): after 8006ms settled=false
+  //                                       -> STILL HANGING
+  //   [probe 2] BOUNDED (abortSignal 1500ms): after 1505ms
+  //             -> returned an error value: TimeoutError
+  //
+  // On Vercel the unbounded version hangs until the PLATFORM kills the
+  // function — "about five minutes", exactly what the owner reported three
+  // times running. L-17 bounded the connection and L-23 bounded the response
+  // body; both were right, and both were bounding the network while THIS sat
+  // unbounded on the same path.
+  //
+  // The timeout arrives through the ordinary `error` channel (probe 2), so
+  // the existing `if (error || !data)` line below already handles it and the
+  // established posture — fall back to the env row rather than throw — is
+  // preserved exactly.
+  const { data, error } = await admin
+    .from(TABLE)
+    .select("*")
+    .eq("id", true)
+    .abortSignal(dbDeadline("credentials_read"))
+    .maybeSingle();
   if (error || !data) return { ...EMPTY_CREDENTIALS_ROW };
   const row = coerceRow(data as Record<string, unknown>);
   // S-10: decrypt secret columns (legacy plaintext passes through).
@@ -161,7 +198,11 @@ export async function updateIntegrationCredentials(
   const admin = createSupabaseAdminClient();
   const { error } = await admin
     .from(TABLE)
-    .upsert({ id: true, ...toStore }, { onConflict: "id" });
+    .upsert({ id: true, ...toStore }, { onConflict: "id" })
+    // SLICE L-25. Bounded, for symmetry with the read above. Saving
+    // credentials is an interactive settings action; if it hangs, the owner
+    // cannot tell whether the secret was stored and will paste it again.
+    .abortSignal(dbDeadline("credentials_read"));
   if (error) {
     return { ok: false, error: error.message };
   }
