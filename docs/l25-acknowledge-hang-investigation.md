@@ -1097,3 +1097,151 @@ pin carries the scope it applies to: `PENDING_QUERY`, `CLOSED_QUERY`, or
 Worth stating plainly, because it is the more useful half: when a lesson is
 learned mid-slice, the work already completed in that slice has to be audited
 against it. Otherwise the write-up describes a standard the code does not meet.
+
+---
+
+# CHAPTER EIGHT — SLICE L-29: THE SPINNER THAT TIMED A HUMAN BEING
+
+## The report
+
+> "the acknowledge still spins forever, even longer than the 20 second limit
+> and still isnt giving any errors or details why. is it the pop up dialog box
+> that asks me to confirm the acknowledgement? am I clicking it too quickly? is
+> this box even needed and causing problems. ... I click the acknowledge
+> button, the pop up appears, the top of the page has the loading bar that
+> spins forever, and I get the 'still working - big saves like finalizing a
+> manifest can take awhile'. is this the problem? this pop up getting stuck?"
+
+The screenshot settled it before a single file was opened. The confirmation
+dialog is **still open and unanswered**, and above it the page reads *"Still
+working — 120s."*
+
+Nothing had been submitted. He had not answered the question yet. So what was
+the page working on for two minutes?
+
+Answer: **it was timing him reading the dialog.** It was counting his reading
+time as server time.
+
+## Defect one — capture runs before cancel
+
+`PendingKeeper` listens for `submit` with `capture: true`, which it must, in
+order to see every form in the back office from one place in the layout. But
+the capture phase runs **before** the target's own bubble-phase handler, by
+definition. That ordering is the whole bug.
+
+`LeaflyOrderActions` is the only panel in the admin that *submits and then
+cancels*: pressing Acknowledge fires a real submit, and its `onSubmit` calls
+`preventDefault()` so it can open the confirmation instead. By the time that
+cancellation happens, the keeper has already decided a save is in flight — bar
+on, spinner on, and `form.dataset.gwBusy = "1"`.
+
+Two consequences, and the second is the serious one:
+
+1. A progress bar and a "Still working" banner for a request that does not
+   exist. Because form saves carry the five-minute ceiling rather than the
+   twenty-second one, the safety net never fired — hence *"spins forever, even
+   longer than the 20 second limit."*
+2. `gwBusy` was still `"1"` when he finally pressed **Acknowledge to Leafly**.
+   The keeper's own double-submit guard swallowed the real submit with
+   `stopPropagation()`. **The acknowledgement never left the browser.** That is
+   the precise reason there was no error and no detail: there was no request to
+   fail. Every previous slice had been hunting a hang on the wire; there was no
+   wire.
+
+Worth noting what this means about the earlier server-side work in this
+document. The deadline fetch, the auth fetch floor, the bounded queries — all
+of it was real and all of it was needed, but none of it could have fixed this,
+because this request never reached any of it.
+
+### Why only this button
+
+Four other panels pair a `ConfirmDialog` with `requestSubmit()`: `SectionCard`,
+`CarouselSlideCard`, `FaqItemCard`, `ContentBulkBar`. None of them are
+affected, and the difference is one attribute. They open their dialog from a
+`type="button"` with an `onClick`, so **no submit event is ever fired** and the
+keeper never engages. Only the Leafly panel submits first and cancels second.
+That is exactly why this was the one button in the whole back office that hung.
+
+## Defect two — the one hiding behind the first
+
+Fixing the keeper alone would have been a trap, and this is the part worth
+remembering. Once the keeper stops swallowing the confirmed submit, that submit
+finally reaches `ActionForm`'s own guard:
+
+```
+if (action.irreversible && !confirming) { e.preventDefault(); setConfirming(true); }
+```
+
+with
+
+```
+onConfirm={() => { setConfirming(false); Promise.resolve().then(() => requestSubmit()); }}
+```
+
+Read the order. The submit is allowed through only when `confirming` is
+**true**, but `onConfirm` sets it to **false** and then submits. The whole
+thing depends on React not having re-rendered yet — on the handler still being
+the stale closure. The original comment says the microtask exists so React
+"has applied `confirming: false`", which is the opposite of what makes the
+guard pass; the code worked against its own stated reasoning.
+
+React flushes discrete-event updates synchronously at the end of the handler,
+i.e. **before** queued microtasks. `scripts/recon/l29-confirm-reentry-probe.mjs`
+runs the logic under both orderings and they disagree:
+
+```
+CURRENT DESIGN (state flag through a render closure):
+   React flushes before the microtask  -> submitted=0, dialog opened 2x
+   React flushes after  the microtask  -> submitted=1, dialog opened 1x
+```
+
+Under the real ordering the acknowledgement is **never sent** and the dialog
+**reopens**. Shipping only the keeper fix would have traded a phantom spinner
+for a dialog that reopens forever — which, to the owner, is the same complaint
+with a different animation. He would have been back within the hour.
+
+The fix removes the timing dependency rather than betting on it: permission
+lives in a `useRef`, granted before `requestSubmit()`, read live by the
+handler, and consumed on use so a stray later submit has to ask again. Correct
+under both orderings.
+
+## Was the dialog the problem?
+
+No, and it stays. He asked directly — *"is this box even needed and causing
+problems"* — and the honest answer is that the dialog was the victim, not the
+culprit. It is the only thing standing between a thumb and permanently losing
+access to a customer's government ID. What made it *look* guilty is that the
+longer he did the right thing and actually read it, the worse the symptom got.
+
+And *"am I clicking it too quickly?"* — the opposite. Clicking fast would have
+made it look better. Reading carefully ran the clock up. He was being punished
+for being careful, which is the worst possible incentive to build into a
+one-way door.
+
+## Verification
+
+- `scripts/recon/l29-phantom-submit-probe.mjs` — replays the click sequence
+  against a DOM with real capture/bubble ordering, importing the real clearing
+  rules. Reproduces the 120s phantom, the swallowed submit, and shows the fix
+  resolving both.
+- `scripts/recon/l29-confirm-reentry-probe.mjs` — runs the confirm guard under
+  both React flush orderings and shows the state version disagreeing with
+  itself while the ref version does not.
+- `tests/compliance/leafly-l29-phantom-pending.test.ts` — 37 tests.
+- `scripts/recon/l29-mutation-test.mjs` — 18 mutations, **18 caught, 0
+  survived** on the first sweep. Both defects are pinned, including a mutation
+  that reverts each one individually.
+
+## The lesson
+
+The generalisable one is not about React. It is this: **a UI that infers
+"something is happening" from an event that has not finished happening yet
+will eventually lie.** The keeper was guessing at capture time about an outcome
+that is only knowable after propagation, when the browser itself will simply
+tell you via `defaultPrevented`. The fix is to stop guessing and ask.
+
+The second lesson is the one that nearly cost another round trip: **when a bug
+is caused by something swallowing an event, fix it expecting to find another
+bug directly behind it.** The swallow was load-bearing. It had been hiding a
+broken confirm guard for as long as both have existed, and a suite that was
+green throughout never noticed, because nothing ever got far enough to fail.

@@ -59,6 +59,71 @@ export function pendingHint(kind: PendingKind, elapsedMs: number): string | null
 /** How often the keeper re-checks whether the pending state should clear. */
 export const PENDING_POLL_MS = 250;
 
+/**
+ * SLICE L-29 — WHY A SUBMIT IS ONLY "PENDING" AFTER THE EVENT FINISHES.
+ *
+ * The owner, on the Leafly acknowledge button:
+ *
+ *   > "I click the acknowledge button, the pop up appears, the top of the
+ *   >  page has the loading bar that spins forever, and I get the 'still
+ *   >  working - big saves like finalizing a manifest can take awhile'."
+ *
+ * His screenshot shows the confirmation dialog STILL OPEN, unanswered, above
+ * a banner reading "Still working — 120s". Nothing had been submitted. The
+ * bar was timing how long he spent READING the dialog.
+ *
+ * The mechanism is the capture phase. PendingKeeper listens for `submit` with
+ * `capture: true` so it can see every form in the admin, and capture by
+ * definition runs BEFORE the form's own bubble-phase onSubmit. An action that
+ * needs confirmation — `LeaflyOrderActions` — cancels its first submit with
+ * preventDefault() in order to open the dialog. By then the keeper has
+ * already started the bar and stamped `form.dataset.gwBusy = "1"`.
+ *
+ * Two failures follow from that one mistake:
+ *
+ *   1. A progress bar and a "Still working" banner for a request that does
+ *      not exist. Because form saves get the 5-minute ceiling, the 20s
+ *      safety net never rescues it — hence "spins forever".
+ *   2. Far worse: `gwBusy` is still "1" when he answers the dialog, so the
+ *      keeper's own double-submit guard SWALLOWS the real submit. The
+ *      acknowledgement never leaves the browser. That is why he saw no error
+ *      and no detail — no request was ever made to fail.
+ *
+ * The rule below is the fix, and it is deliberately boring: a submit seen in
+ * the capture phase is only *provisional*. Once the event has finished
+ * propagating we can simply look at whether it was cancelled, and only then
+ * decide. `defaultPrevented` is the browser's own answer to "is this form
+ * actually submitting?", so the keeper stops guessing and reads it.
+ *
+ * PURE so the rule is pinned in tests/compliance rather than living as an
+ * untested `if` inside a client component.
+ */
+export type SubmitSettle = {
+  /**
+   * Did any handler cancel the submit? Read AFTER dispatch completes, so it
+   * accounts for bubble-phase handlers that ran after the keeper's capture
+   * listener.
+   */
+  defaultPrevented: boolean;
+  /**
+   * Is the form still in the document? A handler may have replaced the whole
+   * subtree; there is nothing left to show a spinner on.
+   */
+  formConnected: boolean;
+};
+
+/**
+ * Did this submit actually become a real, in-flight save?
+ *
+ * Returns false for the confirm-first case (cancelled to open a dialog), which
+ * is precisely the case that produced a two-minute phantom spinner.
+ */
+export function submitDidStart(s: SubmitSettle): boolean {
+  if (s.defaultPrevented) return false;
+  if (!s.formConnected) return false;
+  return true;
+}
+
 /** Class the keeper puts on the pressed submit button (styled in globals.css). */
 export const PENDING_BUTTON_CLASS = "gw-submit-busy";
 
