@@ -5,6 +5,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServiceRoleKey, supabaseUrl } from "./env";
 import { SUPABASE_DB_OPTIONS } from "./db-floor";
+import { SUPABASE_GLOBAL_OPTIONS } from "./fetch-floor";
 
 export function createSupabaseAdminClient() {
   if (!supabaseUrl || !supabaseServiceRoleKey) {
@@ -29,5 +30,18 @@ export function createSupabaseAdminClient() {
     // A timeout surfaces through the ordinary `{ data, error }` channel, so
     // all 300 of those call sites handle it correctly without being edited.
     db: SUPABASE_DB_OPTIONS,
+    // SLICE L-27 — the floor UNDER the floor.
+    //
+    // `db.timeout` above is handed only to the PostgREST sub-client
+    // (supabase-js `index.mjs:684`). The auth and storage sub-clients never
+    // receive it and have no timeout of their own. Measured against a
+    // black-hole server: PostgREST aborted at 15005ms, `auth.getUser()` on
+    // the SAME client ran 25009ms unbounded
+    // (`scripts/recon/l27-auth-hang-probe.mjs`).
+    //
+    // `global.fetch` is the one seam every sub-client shares, so bounding it
+    // bounds auth, storage and functions too. The tighter PostgREST deadlines
+    // still win, which is intended — this is the outermost backstop.
+    global: SUPABASE_GLOBAL_OPTIONS,
   });
 }
