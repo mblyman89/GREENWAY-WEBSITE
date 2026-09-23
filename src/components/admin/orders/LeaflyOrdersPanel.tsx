@@ -92,11 +92,28 @@ import {
 } from "@/lib/leafly/order-ack-core";
 import {
   groupLeaflyWorkflow,
+  // SLICE L-28 — the bucket is computed once in the panel and shared between
+  // the filter and the headings, so the two cannot disagree.
+  placeLeaflyOrder,
   type LeaflyWorkflowInput,
   type LeaflyWorkflowPlacement,
   type LeaflyWorkflowBucket,
 } from "@/lib/leafly/bridge-core";
 import type { LeaflyBoardState } from "@/lib/leafly/order-board-server";
+// SLICE L-28 — the filter/sort/search decisions are made in a pure core so CI
+// can prove them without a database. See that file's header for the invariant
+// that a filter may never silently hide an order that needs a human.
+import {
+  BOARD_FILTERS,
+  BOARD_SORTS,
+  boardEmptyMessage,
+  boardFilterLabel,
+  boardHiddenWarning,
+  boardSortLabel,
+  buildBoardView,
+  type BoardFilter,
+  type BoardSort,
+} from "@/lib/leafly/board-view-core";
 // SLICE L-14 — the classification of an interrupt is the pure core’s job,
 // not this file’s. Both helpers are asserted in CI without a database.
 import {
@@ -250,6 +267,17 @@ export function LeaflyOrdersPanel({
   message,
   error,
   errorCode,
+  /**
+   * SLICE L-28 — the view the operator chose, lifted from the URL by the page.
+   *
+   * All three are optional and default to the core's defaults, so any caller
+   * that has not been updated renders the board exactly as this slice
+   * intends: open orders only, most urgent first. A missing prop must never
+   * mean "show nothing".
+   */
+  filter,
+  sort,
+  search,
 }: {
   board: LeaflyBoardState;
   pendingAckCount: number | null;
@@ -258,6 +286,9 @@ export function LeaflyOrdersPanel({
   message?: string | null;
   error?: string | null;
   errorCode?: string | null;
+  filter?: BoardFilter;
+  sort?: BoardSort;
+  search?: string | null;
 }) {
   const hasOrders = board.orders.length > 0;
   // SLICE L-14 — one tally for the whole board, computed ONCE here rather
@@ -314,6 +345,26 @@ export function LeaflyOrdersPanel({
   ) {
     return null;
   }
+
+  // ── SLICE L-28. The operator's chosen view, computed by the pure core ────
+  //
+  // `groupLeaflyWorkflow` needs the bucket for each row, and so does the
+  // filter — so the placement is computed ONCE here and handed to both,
+  // rather than each deciding independently. Two independent placements is
+  // how a filter and a heading end up disagreeing about which pile an order
+  // is in, which is indistinguishable from the order having vanished.
+  const workflowRows = board.orders.map(toWorkflowRow);
+  const view = buildBoardView(
+    workflowRows.map((r) => ({
+      ...r,
+      bucket: placeLeaflyOrder(r).bucket,
+      acknowledgeBy: r.acknowledge_by,
+      updatedAt: r.updated_at,
+    })),
+    { filter, sort, search },
+  );
+  const hiddenWarning = boardHiddenWarning(view);
+  const emptyMessage = boardEmptyMessage(view);
 
   return (
     <div className="mt-4">
@@ -458,7 +509,103 @@ export function LeaflyOrdersPanel({
                 headings. Five "0 orders" headings on a quiet Tuesday is noise,
                 and noise is what stops people reading the one heading that
                 matters. */}
-            {groupLeaflyWorkflow(board.orders.map(toWorkflowRow))
+            {/* ── SLICE L-28: the filter, sort and search controls ────────
+                A plain GET <form>, not a client component. The board is a
+                server component that already re-renders from the URL on
+                every acknowledge, so the view belongs in the URL too: it
+                survives the redirect after a button press, it survives a
+                refresh, and it can be bookmarked or sent to another member
+                of staff. Making this interactive would have meant shipping
+                the whole board to the browser to change one dropdown.
+
+                `submit`-on-change is handled without JavaScript by the
+                submit button, which remains visible and usable; the form
+                works with scripting disabled, which matters on a shop
+                tablet with an aggressive battery saver. */}
+            <form
+              method="get"
+              className="flex flex-wrap items-end gap-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-line)] bg-[var(--admin-surface-2)] px-3 py-3"
+            >
+              {/* The anchor keeps the browser on the Leafly panel after the
+                  form submits, instead of jumping to the top of a long page. */}
+              <input type="hidden" name="tab" value="orders" />
+              <label className="flex flex-col gap-1 text-xs text-[var(--admin-text-faint)]">
+                Show
+                <select
+                  name="lfilter"
+                  defaultValue={view.filter}
+                  className="rounded-[var(--admin-radius-md)] border border-[var(--admin-line)] bg-[var(--admin-surface)] px-2 py-1.5 text-sm text-[var(--admin-text)]"
+                >
+                  {BOARD_FILTERS.map((f) => (
+                    <option key={f} value={f}>
+                      {boardFilterLabel(f)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-[var(--admin-text-faint)]">
+                Sort
+                <select
+                  name="lsort"
+                  defaultValue={view.sort}
+                  className="rounded-[var(--admin-radius-md)] border border-[var(--admin-line)] bg-[var(--admin-surface)] px-2 py-1.5 text-sm text-[var(--admin-text)]"
+                >
+                  {BOARD_SORTS.map((s) => (
+                    <option key={s} value={s}>
+                      {boardSortLabel(s)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-[var(--admin-text-faint)]">
+                Find an order
+                <input
+                  type="search"
+                  name="lq"
+                  defaultValue={view.search ?? ""}
+                  placeholder="Order number"
+                  className="rounded-[var(--admin-radius-md)] border border-[var(--admin-line)] bg-[var(--admin-surface)] px-2 py-1.5 text-sm text-[var(--admin-text)]"
+                />
+              </label>
+              <button
+                type="submit"
+                className="rounded-[var(--admin-radius-md)] border border-[var(--admin-line)] bg-[var(--admin-surface)] px-3 py-1.5 text-sm font-semibold text-[var(--admin-text)] hover:bg-[var(--admin-surface-3)]"
+              >
+                Apply
+              </button>
+              {/* Escape hatch back to the default view, so an operator who
+                  has filtered himself into a corner is one click from the
+                  board he started with. */}
+              <Link
+                href="/admin/orders?tab=orders"
+                className="px-2 py-1.5 text-xs font-semibold text-[var(--admin-text-faint)] underline hover:text-[var(--admin-text)]"
+              >
+                Reset
+              </Link>
+            </form>
+
+            {/* ── SLICE L-28: THE LINE THAT MAKES THE FILTER SAFE ─────────
+                A view that can hide an order needing acknowledgement is the
+                bug this slice fixed, rebuilt in the UI. Leafly auto-cancels
+                after fifteen minutes, so the operator is told — every time,
+                unmissably — when his chosen view is concealing live work.
+                The count comes from the pure core and is asserted in CI. */}
+            {hiddenWarning ? (
+              <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-3 text-xs font-semibold text-[var(--admin-danger)]">
+                {hiddenWarning}
+              </div>
+            ) : null}
+
+            {/* An empty view explains WHICH emptiness it is: nothing has
+                arrived, nothing matches the search, or nothing is open. Three
+                causes, three remedies, never one vague "no orders". */}
+            {emptyMessage ? (
+              <p className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-line)] bg-[var(--admin-surface-2)] px-4 py-3 text-sm text-[var(--admin-text-faint)]">
+                {emptyMessage}
+              </p>
+            ) : null}
+
+            {groupLeaflyWorkflow(view.rows)
               .filter((group) => group.orders.length > 0)
               .map((group) => {
                 const style = BUCKET_STYLES[group.bucket];

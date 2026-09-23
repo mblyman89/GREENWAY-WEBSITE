@@ -49,6 +49,13 @@ import {
   type BoardInterrupts,
 } from "@/lib/leafly/register-claim-server";
 import { LeaflyOrdersPanel } from "@/components/admin/orders/LeaflyOrdersPanel";
+// SLICE L-28 — validate the Leafly board's view params before they reach the
+// panel, so a hand-edited URL cannot produce an empty board.
+import {
+  parseBoardFilter,
+  parseBoardSearch,
+  parseBoardSort,
+} from "@/lib/leafly/board-view-core";
 // SLICE M-2 — the owner placed a real Leafly order and got four silences: no
 // row, no receipt, no sound, and no Leafly section on this page. The last of
 // those was the orders panel correctly hiding itself while setup was
@@ -185,6 +192,15 @@ export default async function OrdersAdminPage({
     leaflyErr?: string;
     leaflyCode?: string;
     leaflyFix?: string;
+    // SLICE L-28 — the Leafly board's own view controls. Prefixed `l` so they
+    // cannot collide with the Greenway order list's existing `q`/`sort`
+    // params, which sit on the same page and would otherwise be driven by the
+    // same dropdown. Anything unrecognised resolves to the default view (open
+    // orders, most urgent first) rather than to an empty board — a stale link
+    // must never look like "no orders".
+    lfilter?: string;
+    lsort?: string;
+    lq?: string;
   }>;
 }) {
   await requirePermission("orders.view");
@@ -569,6 +585,11 @@ export default async function OrdersAdminPage({
     <LeaflyOrdersPanel
       board={leaflyBoard}
       pendingAckCount={leaflyPendingAck}
+      // SLICE L-28 — the chosen view, validated by the pure core. Garbage in
+      // the URL becomes the default view, never an empty screen.
+      filter={parseBoardFilter(sp.lfilter)}
+      sort={parseBoardSort(sp.lsort)}
+      search={parseBoardSearch(sp.lq)}
       interrupts={leaflyInterrupts}
       // The clock is read ONCE here and injected, so every countdown on the
       // page is measured from the same instant. Reading the time inside the
