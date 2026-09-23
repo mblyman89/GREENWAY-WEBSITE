@@ -290,6 +290,20 @@ import {
 //              never appearing, which is exactly the bug this core exists to
 //              make impossible to reintroduce.
 import { __runLeaflyOrderDetailTests } from "../../src/lib/leafly/order-detail-core";
+// SLICE L-25 -- the DATABASE half of "nothing may hang forever".
+//
+// The acknowledge button hung through two slices that both, correctly,
+// bounded the NETWORK. Nobody had bounded the database: measured against a
+// real black-hole HTTP server, an unbounded PostgREST query was still
+// hanging at 8006ms, while the same query with `.abortSignal()` returned a
+// clean error value at 1505ms (scripts/recon/supabase-hang-probe.mjs).
+//
+// This core owns the budgets and the arithmetic that proves one acknowledge
+// click -- 80s of network worst case plus every database call it can make --
+// still fits under the action's own 240s budget, which in turn loses the
+// race to Vercel's 300s ceiling deliberately, so we render an explanation
+// instead of being killed mid-render.
+import { __selfTestDbDeadlineCore } from "../../src/lib/leafly/db-deadline-core";
 import { __runOnlineOrdersReportTests } from "../../src/lib/leafly/online-orders-report-core";
 import { __runLeaflyStaffAlertTests } from "../../src/lib/leafly/staff-alert-core";
 import { __runLeaflyOrderFetchTests } from "../../src/lib/leafly/order-fetch-core";
@@ -1008,7 +1022,40 @@ __runLiquidVolumeTests();
   // conditions (not acknowledged AND status pending) are ANDed, because
   // Leafly's 15-minute auto-cancel routinely produces orders that are
   // unacknowledged and NOT pending. Measured at 153.
-  assertRan("leafly-order-detail-core", __runLeaflyOrderDetailTests(), 140);
+  // SLICE L-25 raised this floor from 140 to 200. The suite gained the
+  // `classifyDetailPayload` assertions that distinguish Leafly's five-field
+  // submission webhook from a real Order -- the difference between "we never
+  // downloaded this order" and "this order is empty", which is what the
+  // owner was shown as a blank screen. Measured at 211.
+  //
+  // SLICE L-25 raised it again, 200 -> 250, after the money defect. A CONTROL
+  // assertion written from the vendored OpenAPI spec disagreed with the
+  // reader: the spec says every Order money field is already in minor units,
+  // and the reader was running a dollars-to-cents conversion over them, so a
+  // $48.03 order displayed as $4,803.00 while `Order.taxes` -- an ARRAY of
+  // TaxComponent -- read as null on every order ever shown.
+  //
+  // The suite had been GREEN through all of it, because the fixture invented
+  // dollar amounts and cart keys (`totalPrice`, `total`) that appear nowhere
+  // in `CartItemOutgoing`. The fixture was rebuilt from the spec's own
+  // example arithmetic, `readMinorUnits` / `readTaxesMinorUnits` gained
+  // direct coverage, and a negative control now pins the ghost keys so the
+  // old behaviour cannot quietly return. Measured at 254.
+  assertRan("leafly-order-detail-core", __runLeaflyOrderDetailTests(), 250);
+
+  // SLICE L-25. Returns a bare assertion count rather than { passed, failed }
+  // because it throws on the first failure, so a returned count is by
+  // definition an all-passed count. Floored at 50; measured at 56.
+  {
+    const n = __selfTestDbDeadlineCore();
+    if (n < 50) {
+      throw new Error(
+        `db-deadline-core self-tests ran only ${n} assertion(s); expected at least 50. ` +
+          `A suite that runs no assertions is not a passing suite.`,
+      );
+    }
+    console.log(`db-deadline-core: ${n} assertions passed, 0 failed (floor 50)`);
+  }
   // SLICE 8 (round L-24). The Online Orders report. This core measures a
   // CONTRACT, not money: orders lost to Leafly's 15-minute auto-cancel, and
   // LIFECYCLE REACH -- how many acknowledged orders ever got a `ready` or

@@ -112,6 +112,32 @@ vi.mock("@/lib/supabase/admin", () => ({
       select: () => builder,
       eq: () => builder,
       limit: () => builder,
+      // ── SLICE L-25 — THE MOCK MUST MODEL THE REAL CLIENT ──────────────────
+      //
+      // `abortSignal` is new here, and its absence broke this suite the
+      // moment the real query was given a deadline. That is worth recording,
+      // because the failure was in the MOCK, not in the code under test.
+      //
+      // L-25 bounded every database call on the acknowledge path: measured
+      // against a black-hole server, an unbounded PostgREST query was still
+      // hanging at 8006ms, which is why the owner's acknowledge button span
+      // forever. The media read in `order-detail-server` is one of those
+      // calls, so it now ends `.abortSignal(dbDeadline("order_read"))`.
+      //
+      // This builder did not offer that method, so the chain threw
+      // "abortSignal is not a function", the route's catch turned it into a
+      // 502, and assertions expecting 200 / 409 failed. Nothing about the
+      // route's real behaviour changed.
+      //
+      // The lesson: a hand-rolled fake is a claim about the real client's
+      // interface. `abortSignal` exists on the installed postgrest-js
+      // transform builder, so a fake without it was always a lie — it just
+      // had not been caught out yet. It is a passthrough here because the
+      // deadline's EFFECT is proven elsewhere against a real server
+      // (scripts/recon/supabase-hang-probe.mjs) and asserted in
+      // tests/compliance/leafly-l25-db-deadline.test.ts; this suite is about
+      // the media route's status codes.
+      abortSignal: () => builder,
       maybeSingle: async () => ({ data: orderRow, error: null }),
       single: async () => ({ data: orderRow, error: null }),
     };

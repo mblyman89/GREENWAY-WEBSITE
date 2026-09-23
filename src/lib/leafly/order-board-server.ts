@@ -43,6 +43,9 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+// SLICE L-25 — the single-order re-read sits between the operator's click and
+// anything reaching Leafly, so it must not be able to hang.
+import { dbDeadline } from "./db-deadline";
 import { loadLeaflyOrderIntegrationKey } from "./webhook-server";
 
 /**
@@ -231,7 +234,14 @@ export async function loadLeaflyOrderBoard(
         .select(columns)
         .is("acknowledged_at", null)
         .order("acknowledge_by", { ascending: true, nullsFirst: true })
-        .limit(limit);
+        .limit(limit)
+        // SLICE L-25. Bounded. `/admin/orders` is the REDIRECT TARGET of the
+        // acknowledge action, and with a real <form> the button's spinner
+        // keeps spinning until this page finishes rendering. A stall in the
+        // board query therefore presents to the owner as "the acknowledge
+        // button never finishes" even when the acknowledgement itself
+        // already succeeded at Leafly.
+        .abortSignal(dbDeadline("order_read"));
 
     let pending = await runPending(BOARD_COLUMNS);
     if (isMissingColumnError(pending.error)) {
@@ -262,7 +272,10 @@ export async function loadLeaflyOrderBoard(
           .select(columns)
           .not("acknowledged_at", "is", null)
           .order("updated_at", { ascending: false })
-          .limit(remaining);
+          .limit(remaining)
+          // SLICE L-25. Bounded, same reasoning as the pending query above:
+          // this renders on the redirect target of the acknowledge click.
+          .abortSignal(dbDeadline("order_read"));
 
       let acked = await runAcked(BOARD_COLUMNS);
       if (isMissingColumnError(acked.error)) {
@@ -319,7 +332,11 @@ export async function countLeaflyOrdersAwaitingAck(): Promise<number | null> {
     const { count, error } = await admin
       .from("leafly_orders")
       .select("id", { count: "exact", head: true })
-      .is("acknowledged_at", null);
+      .is("acknowledged_at", null)
+      // SLICE L-25. Bounded. A count for a badge is the least important
+      // query on the page, which makes it the least acceptable one to hang
+      // the whole render on.
+      .abortSignal(dbDeadline("order_read"));
     if (error) {
       console.error("[leafly/board] pending-ack count failed:", error.message);
       return null;
@@ -351,11 +368,23 @@ export async function getLeaflyBoardOrder(
   if (!isSupabaseServiceConfigured) return null;
   try {
     const admin = createSupabaseAdminClient();
+    // SLICE L-25 — bounded. This is the re-read the acknowledge action
+    // performs before it touches Leafly (see the "THE RE-READ IS THE POINT"
+    // note in leafly-actions.ts), so it sits between the operator's click and
+    // anything happening at all. A hang here is a spinner that never resolves
+    // with nothing sent and nothing logged — the hardest version of the
+    // owner's report to diagnose, because it leaves no trace anywhere.
+    //
+    // A timeout returns through `error`, which the existing branch below
+    // already handles by returning null and refusing the acknowledgement.
+    // That is the correct fail-closed outcome: refusing to send is recoverable
+    // (the fifteen-minute window is still running), sending blind is not.
     const runOne = (columns: string) =>
       admin
         .from("leafly_orders")
         .select(columns)
         .eq("leafly_order_id", id)
+        .abortSignal(dbDeadline("order_read"))
         .maybeSingle();
 
     let { data, error } = await runOne(BOARD_COLUMNS);

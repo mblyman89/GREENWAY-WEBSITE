@@ -68,6 +68,7 @@ import {
   MEDIA_KIND_LABEL,
   formatDetailMoney,
   maskMedicalCardNumber,
+  type DetailPayloadState,
   type LeaflyMediaKind,
   type LeaflyOrderDetail as DetailModel,
   type MediaAccessVerdict,
@@ -76,6 +77,12 @@ import {
 type LoadResult = {
   ok: boolean;
   detail: DetailModel | null;
+  /**
+   * SLICE L-25. Why there is nothing to show, when there is nothing to show.
+   * `null` means we never got far enough to look — in that case `ok` is
+   * false and `error` carries the sentence.
+   */
+  payloadState: DetailPayloadState | null;
   mediaAccess: MediaAccessVerdict | null;
   error: string | null;
 };
@@ -222,13 +229,87 @@ function IdImage({
   );
 }
 
+/* ------------------------------------------------------------------------- *
+ * SLICE L-25 — the "we never downloaded this order" panel
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Shown INSTEAD of the detail grid when `raw_order` never received the real
+ * Order payload.
+ *
+ * ── WHY A REAL <form> AND NOT AN onClick ────────────────────────────────
+ * Every other mutating control on this board is a real form posting to a
+ * server action, and this one matches deliberately. A form still works if
+ * the client bundle fails to hydrate — which matters more here than
+ * anywhere else on the page, because this button is the recovery path for
+ * an order that is already broken, inside a fifteen-minute window. A
+ * recovery control that needs everything else to be healthy is not a
+ * recovery control.
+ *
+ * ── WHY THE WARNING IS NOT A `confirm()` ────────────────────────────────
+ * Because the dangerous action is the acknowledge button ABOVE this panel,
+ * not this one. Collecting is safe and reversible. The sentence's job is to
+ * stop somebody acknowledging a blank order, so it must be readable at the
+ * moment they are looking at the blank order — not hidden behind a dialog
+ * on the safe button.
+ */
+function UncollectedOrder({
+  leaflyOrderId,
+  unreadable,
+  collect,
+}: {
+  leaflyOrderId: string;
+  unreadable: boolean;
+  collect: (formData: FormData) => void | Promise<void>;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-bold text-[var(--admin-warning)]">
+        {unreadable
+          ? "We have something stored for this order, but it is not in a shape we recognise, so there is nothing safe to show."
+          : "We never downloaded this order from Leafly."}
+      </p>
+
+      <p className="text-xs leading-relaxed text-[var(--admin-text-muted)]">
+        {unreadable
+          ? "Downloading it again from Leafly will replace whatever is stored with the current order."
+          : `We received Leafly's notification for ${leaflyOrderId}, but we never managed to download the order itself — so there is no customer, no cart and no total to show. This is OUR side failing to collect it, not Leafly sending an empty order.`}
+      </p>
+
+      {/* The refusal, stated plainly and next to the thing it refuses.
+          Leafly's own wording is that acknowledging marks an order "as
+          having been retrieved in whole by your system" — which is exactly
+          what we cannot claim here. */}
+      <p className="text-xs font-bold leading-relaxed text-[var(--admin-danger)]">
+        Do NOT acknowledge until the cart appears. Acknowledging tells Leafly we
+        have the order in full, and it permanently ends your access to the
+        customer&rsquo;s ID images.
+      </p>
+
+      <form action={collect}>
+        <input type="hidden" name="leaflyOrderId" value={leaflyOrderId} />
+        <Button type="submit" variant="primary" size="sm">
+          Get the order details from Leafly
+        </Button>
+      </form>
+    </div>
+  );
+}
+
 export function LeaflyOrderDetailPanel({
   leaflyOrderId,
   load,
+  collect,
 }: {
   leaflyOrderId: string;
   /** The server action. Injected so this component never imports server code. */
   load: (id: string) => Promise<LoadResult>;
+  /**
+   * SLICE L-25. The collect-now server action, injected for the same reason
+   * `load` is: this file is a client component and must not import server
+   * code.
+   */
+  collect: (formData: FormData) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -251,6 +332,7 @@ export function LeaflyOrderDetailPanel({
       setResult({
         ok: false,
         detail: null,
+        payloadState: null,
         mediaAccess: null,
         error: "The order details could not be loaded. You can try again.",
       });
@@ -282,6 +364,34 @@ export function LeaflyOrderDetailPanel({
             <p className="text-xs font-bold text-[var(--admin-danger)]">
               {result.error ?? "The order could not be opened."}
             </p>
+          ) : result.payloadState === "never_fetched" ||
+            result.payloadState === "unreadable" ? (
+            /* ── SLICE L-25 — SAY IT, DO NOT DRAW IT BLANK ──────────────────
+             *
+             * THE BUG THIS REPLACES. The owner opened an order and reported:
+             *
+             *   > "everything is completely blank. There is no info at all."
+             *
+             * He was looking at the branch below, rendering a real
+             * `LeaflyOrderDetail` in which every single field was null — a
+             * customer with no name, a cart with no items, a total of "—".
+             * The screen looked broken, and gave him no way to tell a fault
+             * from an order that genuinely had nothing in it.
+             *
+             * It was neither. `raw_order` still held Leafly's five-field
+             * submission webhook because `GET /{key}/orders/{id}` never
+             * succeeded for this order. Measured: 18 blank fields out of 18.
+             *
+             * An empty form is the worst possible rendering of that, because
+             * it silently implies Leafly sent us an order with no customer
+             * and no products in it. This branch says what actually happened
+             * and offers the one action that fixes it.
+             */
+            <UncollectedOrder
+              leaflyOrderId={leaflyOrderId}
+              unreadable={result.payloadState === "unreadable"}
+              collect={collect}
+            />
           ) : (
             <>
               {/* ── The customer ─────────────────────────────────────────── */}

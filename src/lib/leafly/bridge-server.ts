@@ -51,6 +51,7 @@ import { queueOrderReceipt } from "@/lib/printing/printer-store";
 import { pacificParts } from "@/lib/reports/timezone";
 // SLICE L-14. The register claim: the fact that makes decideCancelPlan's
 // collision branch reachable, and the interrupt that blocks the till.
+import { dbDeadline } from "./db-deadline";
 import { readRegisterClaim, raiseRegisterInterrupt } from "./register-claim-server";
 
 import {
@@ -136,6 +137,13 @@ async function loadBridgeRow(
       .from("leafly_orders")
       .select(BRIDGE_COLUMNS)
       .eq("leafly_order_id", leaflyOrderId)
+      // SLICE L-25. Bounded. `onLeaflyOrderAccepted` runs INSIDE the
+      // acknowledge click, after the irreversible POST to Leafly has already
+      // succeeded — so a stall here leaves an order acknowledged at Leafly
+      // and absent from our floor, with the operator staring at a spinner
+      // that never resolves. That is the worst state this system can reach,
+      // and it is reached by doing nothing at all.
+      .abortSignal(dbDeadline("bridge_write"))
       .maybeSingle<BridgeRow>();
     if (error) return { ok: false, error: error.message };
     if (!data) return { ok: false, error: "no such Leafly order" };
@@ -193,7 +201,12 @@ export async function onLeaflyOrderArrived(leaflyOrderId: string): Promise<Bridg
       .update({ announced_at: now, printed_at: now })
       .eq("leafly_order_id", id)
       .is("announced_at", null)
-      .select("leafly_order_id");
+      .select("leafly_order_id")
+      // SLICE L-25. Bounded. This is the atomic claim that decides which
+      // delivery announces an arriving order. Hanging here does not just
+      // delay the announcement — it holds the claim open, so no other
+      // delivery can take it either.
+      .abortSignal(dbDeadline("bridge_write"));
 
     if (claimError) {
       return outcome({ summary: `${id}: could not claim the arrival (${claimError.message})` });
@@ -330,7 +343,12 @@ export async function onLeaflyOrderAccepted(leaflyOrderId: string): Promise<Brid
       .from("leafly_orders")
       .update({ local_order_id: created.orderId })
       .eq("leafly_order_id", id)
-      .is("local_order_id", null);
+      .is("local_order_id", null)
+      // SLICE L-25. Bounded. The very last write of the acknowledge click,
+      // and the one whose failure is already tolerated below. Same argument
+      // as the breadcrumb: tolerating a failure is not the same as
+      // tolerating an infinite wait.
+      .abortSignal(dbDeadline("bridge_write"));
 
     if (linkError) {
       // The order exists and the floor can see it; only the back-link failed.
@@ -420,6 +438,10 @@ async function insertLocalOrder(
         .from("orders")
         .insert(payload)
         .select("id")
+        // SLICE L-25. Bounded. Note the builder order: `.abortSignal()` is
+        // defined on the TRANSFORM builder, so it must follow `.insert()`
+        // and `.select()`. Placed before `.insert()` it does not compile.
+        .abortSignal(dbDeadline("bridge_write"))
         .maybeSingle<{ id: string }>();
       if (!error && data?.id) {
         orderId = data.id;
@@ -435,21 +457,36 @@ async function insertLocalOrder(
     if (!orderId) return { ok: false, error: `could not create the local order (${lastError})` };
 
     if (draft.lines.length > 0) {
-      const { error: lineError } = await admin.from("order_lines").insert(
-        draft.lines.map((l) => ({
-          order_id: orderId,
-          product_name: l.productName,
-          variant_label: l.variantLabel,
-          quantity: l.quantity,
-          price_minor_units: l.priceMinorUnits,
-        })),
-      );
+      const { error: lineError } = await admin
+        .from("order_lines")
+        .insert(
+          draft.lines.map((l) => ({
+            order_id: orderId,
+            product_name: l.productName,
+            variant_label: l.variantLabel,
+            quantity: l.quantity,
+            price_minor_units: l.priceMinorUnits,
+          })),
+        )
+        // SLICE L-25. Bounded. A stall here is especially nasty: the header
+        // row is already committed, so hanging forever leaves a visible
+        // order with no lines — the empty-bag state the rollback below
+        // exists to prevent. Timing out turns that into a clean error the
+        // rollback can actually act on.
+        .abortSignal(dbDeadline("bridge_write"));
       if (lineError) {
         // A header with no lines is worse than no header: it puts an order on
         // the floor's queue that looks like it has nothing in it, and somebody
         // would hand a customer an empty bag. Roll it back, exactly as the
         // website's own placement path does.
-        await admin.from("orders").delete().eq("id", orderId);
+        // SLICE L-25. Bounded. This is the rollback; if IT hangs we have
+        // both an orphaned header AND a hung request, so it is the last
+        // place that can afford to wait forever.
+        await admin
+          .from("orders")
+          .delete()
+          .eq("id", orderId)
+          .abortSignal(dbDeadline("bridge_write"));
         return {
           ok: false,
           error: `could not create the order lines, so the order was rolled back (${lineError.message})`,
@@ -461,13 +498,21 @@ async function insertLocalOrder(
     // insert fails the order is still perfectly usable -- so it is deliberately
     // not checked. It exists so that six months from now, somebody looking at
     // an order's history can see it came from Leafly and when we accepted it.
-    await admin.from("order_events").insert({
-      order_id: orderId,
-      event_type: "placed",
-      to_status: "new",
-      actor_label: "Leafly",
-      note: `Accepted from Leafly (${draft.displayLabel}). Leafly order ${draft.leaflyOrderId}.`,
-    });
+    await admin
+      .from("order_events")
+      .insert({
+        order_id: orderId,
+        event_type: "placed",
+        to_status: "new",
+        actor_label: "Leafly",
+        note: `Accepted from Leafly (${draft.displayLabel}). Leafly order ${draft.leaflyOrderId}.`,
+      })
+      // SLICE L-25. Bounded. The comment above says this breadcrumb is not
+      // load-bearing and its error is deliberately unchecked — but an
+      // unchecked error and an unbounded WAIT are different things. Not
+      // caring whether it succeeded is fine; blocking the acknowledge click
+      // forever on a write nobody reads is not.
+      .abortSignal(dbDeadline("bridge_write"));
 
     return { ok: true, orderId };
   } catch (err) {
@@ -559,6 +604,11 @@ export async function onLeaflyOrderCanceled(
         .from("orders")
         .select("status, order_number")
         .eq("id", localOrderId)
+        // SLICE L-25. Bounded. The error branch below escalates to "CHECK
+        // THE REGISTER BY HAND" because guessing an order's state is
+        // unsafe. Without a deadline that branch is unreachable on a stall,
+        // and nobody is ever told to check.
+        .abortSignal(dbDeadline("bridge_write"))
         .maybeSingle<{ status: string | null; order_number: string | null }>();
       if (error) {
         // We cannot see what state the order is in, so we must not guess.
@@ -603,7 +653,11 @@ export async function onLeaflyOrderCanceled(
           // If somebody started picking it between our read and this write,
           // the update matches nothing and the order is left alone -- which is
           // the correct outcome, and is exactly the collision case.
-          .in("status", ["new", "acknowledged"]);
+          .in("status", ["new", "acknowledged"])
+          // SLICE L-25. Bounded. Cancelling a local order that Leafly has
+          // already cancelled is time-critical: every second it stays
+          // sellable is a second a till can sell it.
+          .abortSignal(dbDeadline("bridge_write"));
         if (error) {
           return { ...outcome({ summary: `${id}: could not cancel the local order (${error.message})` }), plan };
         }
@@ -612,13 +666,18 @@ export async function onLeaflyOrderCanceled(
       // The breadcrumb, written for BOTH paths. On the auto-cancel path it
       // explains why an order vanished; on the collision path it is the only
       // durable record that a human was asked to make a call.
-      await admin.from("order_events").insert({
-        order_id: localOrderId,
-        event_type: plan.cancelLocalOrder ? "status_changed" : "note",
-        to_status: plan.cancelLocalOrder ? "cancelled" : null,
-        actor_label: "Leafly",
-        note: plan.staffMessage || plan.summary,
-      });
+      await admin
+        .from("order_events")
+        .insert({
+          order_id: localOrderId,
+          event_type: plan.cancelLocalOrder ? "status_changed" : "note",
+          to_status: plan.cancelLocalOrder ? "cancelled" : null,
+          actor_label: "Leafly",
+          note: plan.staffMessage || plan.summary,
+        })
+        // SLICE L-25. Bounded. A durable record that a human was asked to
+        // make a call must not itself become the reason nobody was asked.
+        .abortSignal(dbDeadline("bridge_write"));
 
       // ── SLICE L-14: BLOCK THE TILL ───────────────────────────────────────
       //
@@ -661,6 +720,8 @@ export async function onLeaflyOrderCanceled(
           .from("orders")
           .select("staff_note")
           .eq("id", localOrderId)
+          // SLICE L-25. Bounded, as is the update that follows it.
+          .abortSignal(dbDeadline("bridge_write"))
           .maybeSingle<{ staff_note: string | null }>();
         const prefix = (existing?.staff_note ?? "").trim();
         await admin
@@ -668,7 +729,9 @@ export async function onLeaflyOrderCanceled(
           .update({
             staff_note: `${prefix ? `${prefix}\n\n` : ""}*** ${plan.staffMessage} ***`.slice(0, 2000),
           })
-          .eq("id", localOrderId);
+          .eq("id", localOrderId)
+          // SLICE L-25. Bounded. The last write on the cancel path.
+          .abortSignal(dbDeadline("bridge_write"));
       }
     }
 
