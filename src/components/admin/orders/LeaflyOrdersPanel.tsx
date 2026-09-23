@@ -110,8 +110,11 @@ import { ANNOUNCER_PANEL_ANCHOR } from "./AnnouncerPanel";
 // must cross tabs rather than scroll within this page. See setupAnchorHref().
 import { leaflyBoardRendersNothing, setupAnchorHref } from "@/lib/admin/orders-tabs-core";
 import { LeaflyOrderActions } from "./LeaflyOrderActions";
+// SLICE L-24 — the detail panel the acknowledge hint has always pointed at.
+import { LeaflyOrderDetailPanel } from "./LeaflyOrderDetail";
 import {
   acknowledgeLeaflyOrderAction,
+  loadLeaflyOrderDetailAction,
   setLeaflyOrderStatusAction,
 } from "@/app/admin/orders/leafly-actions";
 
@@ -614,6 +617,24 @@ function LeaflyOrderCard({
           />
         ) : null}
       </div>
+
+      {/* ── SLICE L-24: the order, openable ───────────────────────
+          The acknowledge hint has always ended with "so open the order
+          and read what you need FIRST". Until this slice there was no
+          way to do that, which the owner found the hard way:
+
+            "But there is no way to click the order and see the order
+             details, or customer id image."
+
+          Placed ABOVE the clock and the action list deliberately. An
+          instruction to read first only works if reading is offered
+          before the button that permanently ends it. */}
+      {fullId ? (
+        <LeaflyOrderDetailPanel
+          leaflyOrderId={fullId}
+          load={loadLeaflyOrderDetailAction}
+        />
+      ) : null}
 
       {/* ── The acknowledgement clock ─────────────────────────────
           Rendered for every unacknowledged order and suppressed

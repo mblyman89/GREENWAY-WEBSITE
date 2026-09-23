@@ -141,9 +141,18 @@ describe("no Leafly request may be unbounded", () => {
     );
     // Six physical call sites were found by the audit; they live in five
     // files (order-ack-server serves two operations from one fetch).
+    //
+    // SLICE L-24 added `order-detail-server.ts`, the seventh call site and
+    // the first that fetches BINARY (the two ID-image endpoints). This list
+    // is exhaustive ON PURPOSE rather than a "contains" check: adding an
+    // outbound Leafly call should require editing this test, so that the new
+    // call site is a decision somebody made rather than one that appeared.
+    // That is the property that would have caught the original defect, where
+    // six unbounded fetches accumulated without anyone counting them.
     expect(callers.map((c) => c.name).sort()).toEqual([
       "full-menu-server.ts",
       "order-ack-server.ts",
+      "order-detail-server.ts",
       "order-fetch-server.ts",
       "push.ts",
       "selection-server.ts",

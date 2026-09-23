@@ -481,6 +481,53 @@ export function readOrderDetail(raw: unknown): LeaflyOrderDetail {
   };
 }
 
+/**
+ * Minor units -> a string a person reads.
+ *
+ * Lives here rather than in the component so it is covered by the self-tests
+ * below. There are half a dozen `formatCents` functions in this repository
+ * already; none of them is imported because all of them take a NUMBER and
+ * this view's whole point is that a missing amount is not zero.
+ *
+ * `null` becomes an em dash, never "$0.00". A staff member reading "$0.00"
+ * on a total concludes the order is free and hands over the bag; reading "—"
+ * they conclude the figure is missing and look it up. The two are opposite
+ * actions, so they must not share a rendering.
+ */
+export function formatDetailMoney(minorUnits: number | null | undefined): string {
+  if (typeof minorUnits !== "number" || !Number.isFinite(minorUnits)) return "—";
+  const negative = minorUnits < 0;
+  const abs = Math.abs(Math.trunc(minorUnits));
+  const dollars = Math.floor(abs / 100);
+  const cents = abs % 100;
+  // Thousands separators: an order total is rarely four digits, but a monthly
+  // figure rendered through the same helper would be unreadable without them.
+  const grouped = String(dollars).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${negative ? "-" : ""}$${grouped}.${String(cents).padStart(2, "0")}`;
+}
+
+/**
+ * Mask a medical card number for display.
+ *
+ * ── WHY THIS IS MASKED WHEN THE REST OF THE ORDER IS NOT ───────────────────
+ * The name, the cart and the phone number are all things the staff member is
+ * about to see in person anyway — the customer is standing at the counter.
+ * A medical card number is different: it is a state-issued identifier that is
+ * useful to somebody who steals it and useless to the person checking an
+ * order. Showing the last four is enough to CONFIRM a card the customer is
+ * holding, which is the only job this field has on this screen.
+ *
+ * Short values are masked entirely rather than partially. Revealing the last
+ * four of a five-character value reveals almost all of it.
+ */
+export function maskMedicalCardNumber(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const t = value.trim();
+  if (t === "") return null;
+  if (t.length <= 4) return "•".repeat(t.length);
+  return `${"•".repeat(Math.min(t.length - 4, 8))}${t.slice(-4)}`;
+}
+
 // ---------------------------------------------------------------------------
 // 4. SELF-TESTS (house rule 5)
 // ---------------------------------------------------------------------------
@@ -816,6 +863,60 @@ export function __runLeaflyOrderDetailTests(): { passed: number; failed: number;
   eq("the card number is read", medical.medicalCardNumber, "WA-12345");
   eq("the card state is read", medical.medicalCardState, "WA");
   eq("the card expiry is read", medical.medicalCardExpiration, "2027-01-01");
+
+  // ---- 5. formatDetailMoney ----------------------------------------------
+  // THE assertion of this group. A missing amount and a free item must not
+  // render the same way, because the staff response to each is opposite.
+  eq("null money is an em dash, never $0.00", formatDetailMoney(null), "—");
+  eq("undefined money is an em dash", formatDetailMoney(undefined), "—");
+  eq("NaN money is an em dash", formatDetailMoney(Number.NaN), "—");
+  eq("Infinity money is an em dash", formatDetailMoney(Number.POSITIVE_INFINITY), "—");
+  // A genuine zero IS rendered as zero. It is a fact, not a gap.
+  eq("a genuine zero renders as $0.00", formatDetailMoney(0), "$0.00");
+  eq("one cent", formatDetailMoney(1), "$0.01");
+  eq("ten cents pads correctly", formatDetailMoney(10), "$0.10");
+  eq("ninety-nine cents", formatDetailMoney(99), "$0.99");
+  eq("a dollar", formatDetailMoney(100), "$1.00");
+  eq("a typical price", formatDetailMoney(1999), "$19.99");
+  eq("a round hundred", formatDetailMoney(10_000), "$100.00");
+  // Grouping only kicks in at four digits of dollars.
+  eq("no separator below a thousand", formatDetailMoney(99_999), "$999.99");
+  eq("a thousand gets a separator", formatDetailMoney(100_000), "$1,000.00");
+  eq("a million groups twice", formatDetailMoney(100_000_000), "$1,000,000.00");
+  // Negatives: a refund line. The sign goes BEFORE the dollar sign, which is
+  // the convention every other money surface in this repo uses.
+  eq("a negative keeps the sign outside", formatDetailMoney(-1999), "-$19.99");
+  eq("a negative cent", formatDetailMoney(-1), "-$0.01");
+  eq("negative zero is not signed", formatDetailMoney(-0), "$0.00");
+  // A non-integer minor unit is a programming error upstream; truncate
+  // rather than throw, because a detail view must stay standing.
+  eq("a fractional minor unit truncates", formatDetailMoney(1999.7), "$19.99");
+  ok("money output always starts with $ or -", /^-?\$/.test(formatDetailMoney(1234)));
+  ok("money output always has exactly two decimals", /\.\d{2}$/.test(formatDetailMoney(5)));
+
+  // ---- 6. maskMedicalCardNumber ------------------------------------------
+  eq("null card masks to null", maskMedicalCardNumber(null), null);
+  eq("undefined card masks to null", maskMedicalCardNumber(undefined), null);
+  eq("empty card masks to null", maskMedicalCardNumber(""), null);
+  eq("whitespace card masks to null", maskMedicalCardNumber("   "), null);
+  // Short values are masked ENTIRELY. Showing the last four of a five
+  // character value would reveal four fifths of it.
+  eq("a 4-char card is fully masked", maskMedicalCardNumber("1234"), "••••");
+  eq("a 1-char card is fully masked", maskMedicalCardNumber("7"), "•");
+  eq("a 5-char card shows only the last four", maskMedicalCardNumber("12345"), "•2345");
+  eq("a typical card shows the last four", maskMedicalCardNumber("WA-123456789"), "••••••••6789");
+  // The mask is capped so a long identifier does not render as a wall of dots
+  // that pushes the useful digits off a narrow tablet screen.
+  eq(
+    "the dot run is capped at eight",
+    maskMedicalCardNumber("A".repeat(40) + "6789"),
+    "••••••••6789",
+  );
+  const masked = maskMedicalCardNumber("WA-987654321");
+  ok("a masked card never contains the leading characters", masked !== null && !masked.includes("WA-"));
+  ok("a masked card does keep the last four", masked !== null && masked.endsWith("4321"));
+  ok("a masked card is never the original", maskMedicalCardNumber("WA-987654321") !== "WA-987654321");
+  eq("the card is trimmed before masking", maskMedicalCardNumber("  12345  "), "•2345");
 
   return { passed, failed, messages };
 }

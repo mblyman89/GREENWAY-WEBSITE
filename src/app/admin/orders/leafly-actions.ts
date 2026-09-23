@@ -55,6 +55,12 @@ import {
   type OutboundResult,
 } from "@/lib/leafly/order-ack-server";
 import { getLeaflyBoardOrder } from "@/lib/leafly/order-board-server";
+// SLICE L-24 — the detail view the acknowledge warning has always pointed at.
+import type {
+  LeaflyOrderDetail,
+  MediaAccessVerdict,
+} from "@/lib/leafly/order-detail-core";
+import { loadLeaflyOrderDetail } from "@/lib/leafly/order-detail-server";
 
 /**
  * Where to send the operator afterwards, carrying the outcome.
@@ -249,4 +255,61 @@ export async function setLeaflyOrderStatusAction(formData: FormData): Promise<vo
 
   revalidatePath("/admin/orders");
   redirect(backTo(resultParams(result)));
+}
+
+/* ------------------------------------------------------------------------- *
+ * SLICE L-24 — opening an order
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Load one Leafly order's full detail for the expandable panel.
+ *
+ * ── WHY THIS IS A CALLABLE ACTION AND NOT PART OF THE PAGE LOAD ────────────
+ * Because `raw_order` is a whole order payload per row, and the board renders
+ * every open order at once. `order-board-server.ts` deliberately excludes it
+ * from the list query for exactly that reason, its own comment saying "The
+ * detail view can fetch it for one order." This is that fetch. Loading it for
+ * the whole board to support a panel that is usually closed would move
+ * megabytes on every page view of the busiest screen in the shop.
+ *
+ * ── WHY IT RETURNS INSTEAD OF REDIRECTING ──────────────────────────────────
+ * Every other action in this file redirects, because every other action
+ * CHANGES something and the operator must land on a screen that reflects the
+ * change. This one only reads. Redirecting would collapse the panel the
+ * operator just opened and scroll them away from the order they are reading,
+ * on a screen where the whole point is to read before pressing a one-way door.
+ *
+ * ── WHY THERE IS NO AUDIT ENTRY FOR THE DETAIL ITSELF ──────────────────────
+ * It is a read of data we already hold, by someone who already has
+ * `orders.manage` and can see most of it on the card. The ID IMAGES are a
+ * different matter and ARE logged, in the image route — that is the access
+ * worth recording, because it is the one that leaves the building.
+ */
+export async function loadLeaflyOrderDetailAction(
+  leaflyOrderId: string,
+): Promise<{
+  ok: boolean;
+  detail: LeaflyOrderDetail | null;
+  mediaAccess: MediaAccessVerdict | null;
+  error: string | null;
+}> {
+  await requirePermission("orders.manage");
+
+  const id = typeof leaflyOrderId === "string" ? leaflyOrderId.trim() : "";
+  if (id === "") {
+    return {
+      ok: false,
+      detail: null,
+      mediaAccess: null,
+      error: "No Leafly order was identified.",
+    };
+  }
+
+  const result = await loadLeaflyOrderDetail(id);
+  return {
+    ok: result.ok,
+    detail: result.detail,
+    mediaAccess: result.mediaAccess,
+    error: result.error,
+  };
 }
