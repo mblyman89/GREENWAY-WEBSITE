@@ -37,6 +37,49 @@ import "server-only";
  * the `signal` live here. The call sites just name their operation.
  *
  * ===========================================================================
+ * SLICE L-23 — THE HALF THE DEADLINE MISSED
+ * ===========================================================================
+ * L-17 (above) bounded the CONNECTION and shipped. The owner tested again and
+ * reported the identical symptom, in more detail:
+ *
+ *   > "I am still unable to acknowledge the order. It thinks for 5 minutes,
+ *   >  vercels max, then refreshes the page not working."
+ *
+ * The reason the fix did not hold is a property of `fetch()` that is easy to
+ * miss: **`fetch()` resolves when the response HEADERS arrive, not when the
+ * response is complete.** The body is still streaming at that moment.
+ *
+ * So the original shape —
+ *
+ *     try   { return { ok: true, response: await fetch(...) }; }
+ *     finally { clearTimeout(timer); }
+ *
+ * — disarmed the guard at the instant the headers landed, and every one of
+ * the six call sites then read the body with no deadline at all:
+ *
+ *     order-ack-server.ts:292   await res.text()
+ *     order-fetch-server.ts:199 await res.text()
+ *     token.ts:137/140          await res.text() / res.json()
+ *     push.ts:361, full-menu-server.ts:177, selection-server.ts:143
+ *
+ * Reproduced against a real HTTP server that flushed headers, wrote a partial
+ * chunk, and then stalled — the shape of a proxy or load balancer that dies
+ * mid-response:
+ *
+ *     [repro] budget is 1500ms
+ *     [repro] helper returned ok=true after 30ms (headers received)
+ *     [repro] after 8031ms the body read is: STILL-HANGING
+ *
+ * The budget had expired six and a half seconds earlier and nothing was left
+ * to stop the read. On Vercel that runs to the platform's limit — five
+ * minutes — and then the function is killed and the page reloads having done
+ * nothing. That is the owner's sentence, exactly.
+ *
+ * THE LESSON, worth more than the fix: a timeout that covers the connection
+ * but not the response is not a timeout. It is a timeout-shaped object, and
+ * it passes every test that checks for the presence of an AbortController.
+ *
+ * ===========================================================================
  * THE ONE THING THIS FILE MUST NEVER DO
  * ===========================================================================
  * It must never convert a timeout into a success, and it must never claim to
@@ -49,6 +92,8 @@ import "server-only";
 import {
   classifyNetworkFault,
   describeDeadlineFailure,
+  mayCarryBody,
+  outcomeSettledByStatusAlone,
   timeoutForOperation,
   type DeadlineVerdict,
   type LeaflyOperation,
@@ -105,11 +150,52 @@ export type DeadlineFetchResult =
  * call site whose contract disagreed would have had to catch its own
  * helper's throw to put it back, which is how a silent swallow gets born.
  */
+/**
+ * The shape of `fetch` this helper actually depends on. Declared so the test
+ * seam below cannot silently widen into "anything goes".
+ */
+type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
+
+/**
+ * ── THE TEST SEAM, AND WHY IT HAD TO EXIST ────────────────────────────────
+ *
+ * Added in L-23 only after a mutation probe proved the 204 rescue below was
+ * being DESCRIBED by the suite and not PINNED DOWN by it: mutating the rescue
+ * to `if (false)` left every test green.
+ *
+ * The cause was measured, not guessed. Two throwaway probes against a raw
+ * socket server established:
+ *
+ *   1. A null-body status NEVER stalls its body read. undici completes
+ *      204/205/304 the instant the status line lands — under bare framing,
+ *      under Content-Length, and under chunked alike. (A 200 stalls exactly
+ *      as expected, so the probe itself was sound.)
+ *
+ *   2. If the deadline fires in the window BETWEEN the status line arriving
+ *      and `.text()` being called, that read rejects with `AbortError`
+ *      **even though the 204 already arrived complete**.
+ *
+ * Finding (1) means the rescue is unreachable by stalling a socket, so no
+ * real-server test can execute it. Finding (2) means the rescue is genuinely
+ * load-bearing: without it, an acknowledge that SUCCEEDED at Leafly is
+ * reported to the operator as failed, inviting a second press on a one-way
+ * door after the shopper's ID images are already destroyed.
+ *
+ * A branch that is real, dangerous and unreachable by the test harness is
+ * exactly what a seam is for. This one is deliberately the narrowest
+ * possible: one optional argument, defaulting to the global `fetch`, unused
+ * by all six production call sites, and typed to the four members this
+ * helper actually touches. It does NOT stub the stall that caused the
+ * original bug — that is still proven against a real `node:http` server,
+ * because a mock could never have reproduced it.
+ */
 export async function leaflyFetchWithDeadline(
   operation: LeaflyOperation,
   url: string,
   init: RequestInit,
+  options?: { fetchImpl?: FetchLike },
 ): Promise<DeadlineFetchResult> {
+  const fetchImpl: FetchLike = options?.fetchImpl ?? ((u, i) => fetch(u, i));
   const budgetMs = timeoutForOperation(operation);
   const controller = new AbortController();
   // Set BEFORE the abort call, read after the throw. This is the fact that
@@ -120,13 +206,90 @@ export async function leaflyFetchWithDeadline(
     controller.abort();
   }, budgetMs);
 
+  // SLICE L-23 — set the moment headers arrive, so the catch below can tell
+  // a connect stall from a BODY stall. See the "THE HALF THE DEADLINE MISSED"
+  // note in the file header for why that distinction is load-bearing.
+  let receivedStatus: number | null = null;
+
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    return { ok: true, response };
+    const response = await fetchImpl(url, { ...init, signal: controller.signal });
+    receivedStatus = response.status;
+
+    // ═══ SLICE L-23 — THE BODY IS READ HERE, INSIDE THE BUDGET ═════════════
+    //
+    // `fetch()` resolves as soon as the RESPONSE HEADERS arrive. The body is
+    // still streaming at that moment. Before this slice the helper returned
+    // here and `finally` cleared the timer — so the guard was disarmed
+    // BEFORE the body had been read, and every one of the six call sites
+    // then did `await res.text()` with no deadline of any kind.
+    //
+    // That is not a hypothesis. It was reproduced against a real HTTP server
+    // that flushed headers, wrote a partial chunk and then stalled:
+    //
+    //   [repro] budget is 1500ms
+    //   [repro] helper returned ok=true after 30ms (headers received)
+    //   [repro] after 8031ms the body read is: STILL-HANGING
+    //
+    // The budget had expired 6.5 seconds earlier and the read was still
+    // running, with nothing left to stop it. On Vercel it runs until the
+    // platform kills the function — which is precisely what the owner
+    // reported: "It thinks for 5 minutes, vercels max, then refreshes the
+    // page not working."
+    //
+    // L-17 was right about the diagnosis and fixed the half it could see.
+    // This is the other half: a deadline that covers the connection but not
+    // the response is not a deadline, it is a deadline-shaped object.
+    //
+    // Reading the body here means the timer is still armed while it streams,
+    // so a stalled body aborts exactly like a stalled connection.
+    const text = await response.text();
+
+    // The caller is handed a Response whose body is ALREADY BUFFERED, so the
+    // six existing call sites keep calling `.text()` / `.json()` completely
+    // unchanged and get an instant, local answer. This is what makes the fix
+    // a one-file change instead of six risky edits to code paths that handle
+    // money and irreversible actions.
+    //
+    // `mayCarryBody` is consulted rather than assumed: the Response
+    // constructor THROWS for a null-body status given any body at all —
+    // including the empty string `.text()` returns. Acknowledge's documented
+    // success code is 204, so getting this wrong would throw on every
+    // successful acknowledgement, after Leafly had accepted it and after the
+    // ID images were already destroyed.
+    return {
+      ok: true,
+      response: new Response(mayCarryBody(response.status) ? text : null, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      }),
+    };
   } catch (err) {
     const detail = err instanceof Error ? err.message : "Network request failed.";
     const fault = classifyNetworkFault({ aborted: weAborted, message: detail });
-    const verdict = describeDeadlineFailure({ operation, fault });
+    const phase = receivedStatus === null ? "connect" : "body";
+
+    // ── THE 204 RESCUE ───────────────────────────────────────────────────
+    // If the status line arrived and that status can never carry a body,
+    // then the stalled read told us nothing we did not already know: the
+    // status IS the whole answer. Reporting a failure here would be a lie in
+    // the most expensive direction available in this codebase — Leafly's
+    // acknowledge returns exactly 204, so we would be telling the operator
+    // that an irreversible action failed when we are holding Leafly's own
+    // confirmation that it succeeded. That invites a second press against a
+    // door that is already closed.
+    //
+    // A 200 whose body stalls is NOT rescued: there, the body is the payload
+    // and inventing an empty one would hand the caller a successful-looking
+    // response with nothing in it.
+    if (phase === "body" && outcomeSettledByStatusAlone(receivedStatus)) {
+      return {
+        ok: true,
+        response: new Response(null, { status: receivedStatus as number }),
+      };
+    }
+
+    const verdict = describeDeadlineFailure({ operation, fault, phase, receivedStatus });
     return {
       ok: false,
       response: null,
@@ -135,7 +298,15 @@ export async function leaflyFetchWithDeadline(
       // The budget is appended so the attempt log records what we allowed,
       // not just what happened. Two identical "timeout" rows taken either
       // side of a budget change are otherwise indistinguishable.
-      detail: weAborted ? `timed out after ${budgetMs}ms: ${detail}` : detail,
+      // SLICE L-23 — the PHASE is recorded too. Two "timed out after 12000ms"
+      // rows, one where we never reached Leafly and one where Leafly answered
+      // and went quiet, describe different incidents and need different
+      // responses. Without the phase the attempt log cannot tell them apart.
+      detail: weAborted
+        ? `timed out after ${budgetMs}ms during ${phase}${
+            receivedStatus === null ? "" : ` (Leafly answered HTTP ${receivedStatus})`
+          }: ${detail}`
+        : detail,
     };
   } finally {
     clearTimeout(timer);

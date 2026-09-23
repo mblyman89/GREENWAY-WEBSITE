@@ -970,7 +970,12 @@ __runLiquidVolumeTests();
   // because most of these assertions ARE the 8 x 5 matrix, and the cheapest
   // way to weaken this core is to shrink the matrix rather than to change an
   // answer inside it -- which a floor catches and a green suite would not.
-  assertRan("leafly-deadline-core", __runLeaflyDeadlineTests(), 500);
+  // Floor raised 500 -> 640 by slice L-23, which added the body-phase
+  // deadline assertions (667 measured). The floor is what stops the new
+  // assertions being quietly deleted later; a deadline that covers the
+  // connection but not the response is exactly the kind of regression that
+  // looks fine in review.
+  assertRan("leafly-deadline-core", __runLeaflyDeadlineTests(), 640);
   // SLICE L-18. The cache policy behind the settings-save hang. The live menu's
   // real tag and TTL are INJECTED rather than copied, so the claim "we share
   // the live menu's invalidation" is checked against the actual constants and
