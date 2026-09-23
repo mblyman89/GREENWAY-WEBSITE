@@ -106,6 +106,9 @@ import {
 } from "@/lib/leafly/register-claim-core";
 import type { BoardInterrupts } from "@/lib/leafly/register-claim-server";
 import { ANNOUNCER_PANEL_ANCHOR } from "./AnnouncerPanel";
+// SLICE L-21: the announcer now lives on the setup tab, so the jump link below
+// must cross tabs rather than scroll within this page. See setupAnchorHref().
+import { leaflyBoardRendersNothing, setupAnchorHref } from "@/lib/admin/orders-tabs-core";
 import { LeaflyOrderActions } from "./LeaflyOrderActions";
 import {
   acknowledgeLeaflyOrderAction,
@@ -289,7 +292,21 @@ export function LeaflyOrdersPanel({
   // and `assessOrderReadiness().showPanel` decides when (any setup progress at
   // all, or any order ever received). So this list still renders nothing when
   // there is nothing to list, and the PAGE is no longer blank.
-  if (!hasOrders && !hasProblem && !hasOutcome && !board.orderIntegrationKeyPresent) {
+  //
+  // SLICE L-21 — the condition itself now lives in orders-tabs-core, because
+  // the orders PAGE has to ask the same question. The setup panel that
+  // explains this blank space moved to the setup tab, so the orders tab shows
+  // a one-line pointer in its place — and that pointer must appear under
+  // exactly these conditions, never approximately these conditions. Two
+  // copies of this line would drift; one copy cannot.
+  if (
+    leaflyBoardRendersNothing({
+      hasOrders,
+      hasProblem,
+      hasOutcome,
+      orderIntegrationKeyPresent: board.orderIntegrationKeyPresent,
+    })
+  ) {
     return null;
   }
 
@@ -630,17 +647,25 @@ function LeaflyOrderCard({
           <p>⚠️ {placement.pipelineWarning}</p>
           <p className="mt-1 font-normal">
             The order itself is fine — this is about the alert not reaching you.{" "}
-            {/* An in-page jump, not a route. The announcer panel is rendered
-                ABOVE this one on the same page (/admin/orders, line ~263 vs
-                ~286), which is why the arrow points up -- verified, because a
-                screen whose arrows point the wrong way is a screen staff stop
-                trusting. The anchor name is imported rather than typed, so a
-                rename breaks the build instead of breaking the link. */}
+            {/* SLICE L-21 — this WAS an in-page jump. It is not any more.
+                The announcer panel used to be rendered above this one on the
+                same page, so a bare "#order-announcer" worked and the arrow
+                pointed up. L-21 moved that panel to the "Setup & equipment"
+                tab, which means the element is no longer in this document at
+                all -- and a bare fragment pointing at an element that does not
+                exist scrolls NOWHERE and reports nothing. It would have become
+                a link that silently does nothing, on the one banner that only
+                ever appears when an order arrived and nobody heard it.
+
+                setupAnchorHref() builds the cross-tab URL, so the click
+                changes tab AND lands on the panel. Both halves -- the anchor
+                name and the tab href -- are imported rather than typed, so a
+                rename is a compile error instead of a dead link. */}
             <a
-              href={`#${ANNOUNCER_PANEL_ANCHOR}`}
+              href={setupAnchorHref(ANNOUNCER_PANEL_ANCHOR)}
               className="font-bold underline underline-offset-2"
             >
-              Jump to the order announcer ↑
+              Open the order announcer →
             </a>
           </p>
         </div>
