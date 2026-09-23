@@ -63,7 +63,7 @@
  *      nothing at all and the spinner never stops.
  */
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -383,9 +383,78 @@ describe("abortSignal is attached to the transform builder", () => {
  * ========================================================================= */
 
 describe("maxDuration is declared where the spinner is waiting", () => {
-  it("is declared on the acknowledge action module", () => {
+  it("is NOT declared in the action file, which would break the build", () => {
+    // ── THIS TEST USED TO ASSERT THE OPPOSITE, AND IT WAS WRONG ────────────
+    //
+    // It demanded `export const maxDuration` in leafly-actions.ts. That file
+    // carries the `"use server"` directive, and such a file may export
+    // **async functions and nothing else**. The non-function export did not
+    // get ignored; it invalidated the entire module, and Vercel failed with:
+    //
+    //   The export loadLeaflyOrderDetailAction was not found in module
+    //   .../leafly-actions.ts [app-rsc]
+    //   The module has no exports at all.
+    //
+    // Every server action in the file vanished at once, taking the orders
+    // page and the financial-statements page down with it. `tsc --noEmit`,
+    // eslint and 17,720 vitest assertions were all perfectly happy, because
+    // the rule is enforced by the Next.js bundler and by nothing else. The
+    // repo cannot run `next build` locally (it OOMs), so CI was the first
+    // place it could possibly surface.
+    //
+    // Next.js documents where the ceiling really belongs:
+    //
+    //   > Server Actions inherit the Route Segment Config from the page or
+    //   > layout they are used on, including fields like `maxDuration`.
+    //
+    // So the assertion is inverted: the action file must NOT carry it, and
+    // the page must.
     const source = stripComments(read("src/app/admin/orders/leafly-actions.ts"));
-    expect(source).toMatch(/export const maxDuration\s*=\s*\d+/);
+
+    expect(source).toContain('"use server"');
+    expect(source).not.toMatch(/^export const maxDuration/m);
+  });
+
+  it("lets no 'use server' file anywhere export a non-function", () => {
+    // The general form of the same mistake. Written repo-wide rather than for
+    // one file, because the failure mode is catastrophic (every action in the
+    // module disappears), invisible to every local gate, and easy to repeat
+    // in good faith — `maxDuration`, `revalidate` and `dynamic` all look like
+    // they belong next to the code they govern.
+    const roots = ["src"];
+    const files: string[] = [];
+
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) walk(rel);
+        else if (/\.tsx?$/.test(entry.name)) files.push(rel);
+      }
+    };
+    for (const root of roots) walk(root);
+    expect(files.length).toBeGreaterThan(100); // the walk actually walked
+
+    const offenders: string[] = [];
+    for (const rel of files) {
+      const raw = read(rel);
+      // Only the directive at the very top of the file makes the whole module
+      // a server-action module. An inline `"use server"` inside a single
+      // function body does not, so it must not be matched here.
+      if (!/^\s*["']use server["'];/.test(raw)) continue;
+
+      const source = stripComments(raw);
+      for (const match of source.matchAll(/^export (?:const|let|var) (\w+)\s*=\s*(.*)$/gm)) {
+        const [, name, value] = match;
+        // An exported async arrow IS a function and is therefore allowed.
+        if (/^(?:async\s|\(?[\w\s,{}]*\)?\s*=>)/.test(value.trim())) continue;
+        offenders.push(`${rel}: export const ${name}`);
+      }
+    }
+
+    expect(
+      offenders,
+      `a "use server" file may only export async functions; found:\n  ${offenders.join("\n  ")}`,
+    ).toEqual([]);
   });
 
   it("is declared on /admin/orders, the redirect TARGET", () => {

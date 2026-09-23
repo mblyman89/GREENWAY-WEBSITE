@@ -353,3 +353,106 @@ fail in the mock and the failure will look like a code bug.** They were left
 untouched because this slice's sole purpose was the acknowledge hang, and
 editing nine unrelated suites would have been scope the owner did not ask for.
 Adding `abortSignal: () => builder` to the fake is the whole fix.
+
+---
+
+## 11. THE BUILD FAILURE THIS SLICE CAUSED, AND WHY NO LOCAL GATE SAW IT
+
+The first L-25 push failed Vercel. Worth recording in full, because the
+mistake was made in good faith, was invisible to every gate available
+locally, and would be easy to repeat.
+
+### The error
+
+```
+The export loadLeaflyOrderDetailAction was not found in module
+  [project]/src/app/admin/orders/leafly-actions.ts [app-rsc] (ecmascript).
+The module has no exports at all.
+Export setLeaflyOrderStatusAction doesn't exist in target module
+```
+
+Import traces named `LeaflyOrdersPanel.tsx` -> `page.tsx`, and also the
+financial-statements page. So the orders board **and** an unrelated accounting
+page both went down.
+
+### The cause
+
+This, added to bound the acknowledge action:
+
+```ts
+export const maxDuration = 300;   // in a "use server" file
+```
+
+A file carrying the `"use server"` directive may export **async functions and
+nothing else**. The non-function export was not ignored — it invalidated the
+**entire module**, which is why the error is "no exports at all" rather than
+anything mentioning `maxDuration`. Every server action in the file vanished
+at once.
+
+### Where the ceiling actually belongs
+
+On the route segment. Next.js documents it plainly:
+
+> Server Actions inherit the Route Segment Config from the page or layout they
+> are used on, including fields like `maxDuration`.
+
+`src/app/admin/orders/page.tsx` already declared `maxDuration = 300`, so
+**nothing was lost by removing it from the action file** — the ceiling was
+already in the only place that works. The page-level declaration also matters
+independently: with a real `<form>`, `useFormStatus().pending` stays true
+until the navigation resolves, which includes rendering the redirect target,
+so the board's render time is part of how long the button spins.
+
+### Why every local gate missed it
+
+| Gate | Result |
+|---|---|
+| `tsc --noEmit` | clean |
+| `eslint` | clean |
+| pure self-tests | all passed |
+| vitest (17,720) | all passed |
+| CI `compliance` job | **passed** |
+| CI `build` job (`next build`) | **FAILED in 1m8s** |
+
+The rule is enforced by the **Next.js bundler and by nothing else**. It is not
+a type error and not a lint rule. And this repo cannot run `next build`
+locally — it OOMs — so CI was the first place it could possibly surface.
+
+### The fix, and the guard
+
+The export was removed and replaced with a comment explaining where the
+ceiling lives and why. Then the *test* was fixed, because it had asserted the
+**opposite** of the truth: it demanded `export const maxDuration` in the
+action file, so it was actively enforcing the bug. It now asserts the action
+file does **not** carry it, and a second test walks **all of `src/`** and
+fails if any `"use server"` file exports a non-function — the general form of
+the mistake, since `revalidate` and `dynamic` are equally tempting to put next
+to the code they govern.
+
+Mutation-checked by reintroducing the exact breaking line:
+
+```
+MUTANT (reintroduce the exact Vercel-breaking export): KILLED (as required)
+```
+
+Verified against the real bundler by running `next build` in the background
+and reading the log:
+
+```
+✓ Compiled successfully in 78s
+grep -c "has no exports at all"      -> 0
+grep -c "was not found in module"    -> 0
+```
+
+The build later dies with `SIGKILL` during `Running TypeScript` — that is the
+sandbox running out of memory in a stage CI has the headroom for, and
+`tsc --noEmit` already covers it. The **bundler stage that failed on Vercel
+now passes.**
+
+### The lesson
+
+The compliance job passing is not the same as the build passing. For anything
+touching a route segment, a server action, or module-level exports in
+`src/app/`, the only authority is `next build`, and it can be run here in the
+background even though it cannot finish: reaching
+`✓ Compiled successfully` is enough to clear this entire class of failure.

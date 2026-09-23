@@ -59,20 +59,51 @@ import { getLeaflyBoardOrder } from "@/lib/leafly/order-board-server";
 import { withActionDeadline } from "@/lib/leafly/action-deadline";
 
 /**
- * SLICE L-25 — an explicit ceiling for these actions.
+ * SLICE L-25 — WHY THERE IS NO `maxDuration` IN THIS FILE
+ * ===========================================================================
+ * There was, briefly, and it broke the Vercel build outright. Recording why,
+ * because the mistake is silent locally and obvious only in CI.
  *
- * Without this the route inherits the platform maximum (300s on Vercel), and
- * a function that reaches the maximum is KILLED rather than returning — it
- * renders nothing, which is exactly the "it spins for about five minutes then
- * refreshes and does nothing" the owner reported three rounds running.
+ * A file carrying the `"use server"` directive may export **async functions
+ * and nothing else**. Adding `export const maxDuration = 300` here did not
+ * merely get ignored — it invalidated the ENTIRE module. The build failed
+ * with:
  *
- * 300 is kept deliberately, NOT lowered: the internal budget
- * (`LEAFLY_ACK_TOTAL_BUDGET_MS`, 240s) is what actually stops the work, and it
- * needs headroom underneath the platform's limit to write its audit row and
- * render its answer. Lowering the platform ceiling to 240 would put the two
- * clocks in a photo finish and hand the race back to the killer.
+ *   The export loadLeaflyOrderDetailAction was not found in module
+ *   [project]/src/app/admin/orders/leafly-actions.ts [app-rsc]
+ *   The module has no exports at all.
+ *
+ * One non-function export and every server action in this file disappeared,
+ * taking the orders page and the financial-statements page down with it.
+ *
+ * ── WHERE THE CEILING ACTUALLY BELONGS ─────────────────────────────────────
+ * On the route segment, not on the action. Next.js documents this directly:
+ *
+ *   > Server Actions inherit the Route Segment Config from the page or
+ *   > layout they are used on, including fields like `maxDuration`.
+ *
+ * So `export const maxDuration = 300` lives in
+ * `src/app/admin/orders/page.tsx`, and it governs these actions from there.
+ * Nothing is lost by its absence here; putting it here was simply the wrong
+ * address for the right idea.
+ *
+ * That page-level ceiling matters for a second reason worth keeping in view:
+ * with a real `<form>`, `useFormStatus().pending` stays true until the
+ * NAVIGATION resolves, which includes rendering the redirect target. The
+ * board's own render time is therefore part of how long the button spins, so
+ * the ceiling has to be on the board either way.
+ *
+ * ── WHY THE NUMBER IS 300 AND NOT 240 ──────────────────────────────────────
+ * The internal budget (`LEAFLY_ACK_TOTAL_BUDGET_MS`, 240s) is what actually
+ * stops the work. It needs headroom beneath the platform's limit to write its
+ * audit row and render its answer. Matching the two would put them in a photo
+ * finish and hand the race back to the platform killer, which renders
+ * nothing — the original "spins then refreshes and does nothing" symptom.
+ *
+ * Guarded by `tests/compliance/leafly-l25-db-deadline.test.ts`, which asserts
+ * both that the page declares the ceiling and that no `"use server"` file in
+ * the repository exports a non-function.
  */
-export const maxDuration = 300;
 // SLICE L-24 — the detail view the acknowledge warning has always pointed at.
 import type {
   DetailPayloadState,
