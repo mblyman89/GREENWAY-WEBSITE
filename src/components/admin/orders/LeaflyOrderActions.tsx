@@ -185,6 +185,31 @@ function ActionForm({
 }) {
   const [confirming, setConfirming] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  /**
+   * SLICE L-29 — permission to submit, held in a ref rather than in state.
+   *
+   * The previous version gated the confirmed submit on the `confirming` STATE
+   * flag, read through the render closure that `onSubmit` was created in.
+   * That made correctness depend on React not having re-rendered yet when
+   * `requestSubmit()` ran on a microtask — and React flushes discrete-event
+   * updates synchronously at the end of the handler, i.e. BEFORE queued
+   * microtasks. Under that (actual) ordering the handler saw
+   * `confirming === false`, cancelled the submit, and re-opened the dialog:
+   * the acknowledgement would never be sent.
+   *
+   * It was invisible only because a second bug hid it — PendingKeeper's stale
+   * `gwBusy` flag swallowed the submit with stopPropagation() before this
+   * handler ever ran. Fixing the keeper alone would have swapped a phantom
+   * spinner for a dialog that reopens forever, which to the owner is the same
+   * complaint. Both are fixed together; see
+   * scripts/recon/l29-confirm-reentry-probe.mjs, which runs this logic under
+   * both flush orderings and shows the state version disagreeing with itself.
+   *
+   * A ref is read live, so it does not care when React renders. It is
+   * one-shot: consumed on use, so a later stray submit asks again rather than
+   * silently inheriting an old yes on a one-way door.
+   */
+  const confirmedRef = useRef(false);
 
   const isAck = action.kind === "acknowledge";
   const isCancel = action.status === "canceled";
@@ -203,14 +228,23 @@ function ActionForm({
         ref={formRef}
         action={isAck ? acknowledgeAction : statusAction}
         onSubmit={(e) => {
-          // Intercept ONLY the irreversible ones, and only while we still need
-          // an answer. Once confirmed, the dialog calls requestSubmit() and
-          // this handler must let it through — hence the `confirming` check
-          // rather than a blanket preventDefault.
-          if (action.irreversible && !confirming) {
-            e.preventDefault();
-            setConfirming(true);
+          // Intercept ONLY the irreversible ones, and only while we still
+          // need an answer. Once confirmed, the dialog calls requestSubmit()
+          // and this handler must let it through.
+          //
+          // SLICE L-29: the permission is read from a REF, not from the
+          // `confirming` state flag. State is captured by this closure at
+          // render time, and React has already flushed `confirming: false`
+          // by the time the confirmed submit arrives — so the state version
+          // cancelled the very submit it was meant to allow. See the note on
+          // `confirmedRef` above.
+          if (!action.irreversible) return;
+          if (confirmedRef.current) {
+            confirmedRef.current = false; // one-shot: consume the permission
+            return; // let the real submit through
           }
+          e.preventDefault();
+          setConfirming(true);
         }}
         className="inline"
       >
@@ -251,13 +285,19 @@ function ActionForm({
           // staff to hesitate on the one action that has a fifteen-minute clock.
           tone={isCancel ? "danger" : "warning"}
           onConfirm={() => {
+            // Grant permission BEFORE submitting. The ref is read live by the
+            // onSubmit handler above, so this is not sensitive to when React
+            // re-renders — which is exactly the bug this replaced.
+            confirmedRef.current = true;
             setConfirming(false);
-            // Deferred to a microtask so React has applied `confirming: false`
-            // before the submit re-enters onSubmit above; submitting first
-            // would hit the guard again and reopen the dialog.
-            Promise.resolve().then(() => formRef.current?.requestSubmit());
+            formRef.current?.requestSubmit();
           }}
-          onCancel={() => setConfirming(false)}
+          onCancel={() => {
+            // Revoke any permission on the way out. Nothing should be able to
+            // leave a standing "yes" behind on a one-way door.
+            confirmedRef.current = false;
+            setConfirming(false);
+          }}
         />
       ) : null}
     </>

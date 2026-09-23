@@ -29,6 +29,7 @@ import {
   isServerActionForm,
   pendingHint,
   shouldClearPending,
+  submitDidStart,
   type PendingKind,
 } from "@/lib/admin/pending-core";
 
@@ -76,6 +77,18 @@ export function PendingKeeper() {
   );
 
   // Form saves: spinner on the pressed button + double-submit guard + bar.
+  //
+  // SLICE L-29. This listener is in the CAPTURE phase, which runs BEFORE the
+  // form's own onSubmit handler. So at this moment we do not yet know whether
+  // the submit is real: a confirm-first action (LeaflyOrderActions) cancels
+  // its first submit with preventDefault() to open a dialog. Committing here
+  // gave the owner a two-minute progress bar for a request that did not
+  // exist, and — because `gwBusy` was left set — made the keeper swallow the
+  // genuine submit when he finally confirmed. See the long note on
+  // `submitDidStart` in pending-core.ts.
+  //
+  // The listener therefore ARMS, and a microtask decides. `defaultPrevented`
+  // is only meaningful once the event has finished propagating.
   useEffect(() => {
     function onSubmit(e: Event) {
       const form = e.target instanceof HTMLFormElement ? e.target : null;
@@ -91,12 +104,22 @@ export function PendingKeeper() {
         return;
       }
       const submitter = (e as SubmitEvent).submitter;
-      startPending({
+      const rec: PendingRecord = {
         hrefAtStart: window.location.href,
         startedAt: Date.now(),
         kind: "form",
         submitter: submitter instanceof HTMLElement ? submitter : null,
         form,
+      };
+      // Settle on a microtask: dispatch is synchronous, so by the time this
+      // runs every other handler for this event has been given its say and
+      // `defaultPrevented` is final. A microtask (not a timeout) keeps the
+      // feedback within the same frame as the click — it still looks instant.
+      queueMicrotask(() => {
+        if (!submitDidStart({ defaultPrevented: e.defaultPrevented, formConnected: form.isConnected })) {
+          return; // cancelled to ask a question, or the form is gone
+        }
+        startPending(rec);
       });
     }
     document.addEventListener("submit", onSubmit, true);
