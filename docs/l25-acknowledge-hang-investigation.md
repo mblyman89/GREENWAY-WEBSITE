@@ -884,3 +884,216 @@ only checked that the identifier `authCheckUnavailable` appeared somewhere in
 the file. Replacing the call with a hard-coded `false` passed. The test was
 tightened to pin the call itself and the branch it drives, and the sweep then
 came back 12/12. That is a hole that would otherwise have shipped.
+
+---
+
+# CHAPTER SEVEN — SLICE L-28: THE NINTH ORDER
+
+## The report
+
+The owner placed a real order, saw the back office react to it, and could not
+find it on the board:
+
+> "I placed a new order, the back office is aware of it, but it is not in the
+> list. there are currently 9 orders in total, 8 of which have expired, one is
+> still pending. but I cannot see the 9th order, maybe the ui doesnt allow for
+> more than 8?"
+
+He asked a precise question — *is this a new bug, or the UI not allowed to
+display more than 8?* — and the honest answer is that he had found the number
+but not the mechanism. It was a bug, and the number 8 was the fingerprint.
+
+## What was actually wrong
+
+`order-board-server.ts` declared `LEAFLY_BOARD_LIMIT = 8`. The board built
+itself from two queries. The first asked for orders still needing
+acknowledgement, and its only filter was:
+
+    .is("acknowledged_at", null)
+
+That filter is wrong, and it is wrong in a way that is easy to read past for
+months. **An expired order is never acknowledged — that is precisely why it
+expired.** Nothing in the codebase stamps `acknowledged_at` on expiry:
+`webhook-server.ts` stamps `canceled_at` on cancellation, and `acknowledged_at`
+is written only when a human accepts an order or the bridge does it for them.
+
+So every one of the eight dead orders permanently satisfied "not yet
+acknowledged". The sort made it fatal:
+
+    .order("acknowledge_by", { ascending: true, nullsFirst: true })
+
+Oldest deadline first. The expired orders had the oldest deadlines *by
+definition*, so they sorted to the very top and filled all eight slots.
+`remaining` then computed to `8 - 8 = 0`, and the second query — the one that
+would have shown anything else — never ran at all.
+
+The failure therefore pointed in the worst possible direction. It did not clip
+an arbitrary order off the end of a list. It clipped **the only order that
+still needed a human**, and it did so reliably, every time, getting worse with
+each order that expired.
+
+## The safety net had the same blind spot
+
+The old comment above the constant claimed a clipped list was "never silent",
+because the count of everything outstanding was reported separately. That was
+true of the mechanism and false of the outcome, because
+`countLeaflyOrdersAwaitingAck` used the *same* filter. It counted the eight
+dead orders too, and announced **"9 awaiting acknowledgement"** above a list in
+which the live one was the missing one.
+
+That is worse than no badge. The operator was told the order existed, shown a
+list that refused to contain it, and left to conclude the screen was broken.
+A guard that shares the blind spot of the thing it guards is not a guard.
+
+## Proven by execution, not by reading
+
+`scripts/recon/l28-board-overflow-probe.mjs` reconstructs his exact stated
+board — nine orders, eight expired, one live — and replays it through a model
+of the two real queries. The model is pinned to the source file: it reads
+`LEAFLY_BOARD_LIMIT` out of the code and asserts the filter and sort clauses
+still exist, so it fails loudly rather than "proving" something about code that
+has since changed.
+
+    TODAY — what the board actually returns:
+       LFY-1001  expired #1
+       ... (eight expired orders) ...
+       (acked query got 0 leftover slots, so it NEVER RAN)
+
+       Rows returned ............. 8
+       Live order visible? ....... NO  <-- THE BUG
+       "Awaiting acknowledgement" badge says: 9
+
+    WITH THE FIX:
+       LFY-1009  >>> THE NEW LIVE ORDER <<<
+       Live order visible? ....... YES
+       "Awaiting acknowledgement" badge says: 1  (matches the list)
+
+## The fix, in three parts
+
+**1. Terminal orders are not pending.** Both the list query and the count now
+exclude cancelled and terminal-status orders. The vocabulary is not re-decided
+here — `TERMINAL_STATUSES` is asserted in CI to be identical to
+`BRIDGE_TERMINAL_STATUSES` in `bridge-core.ts`, so the query and the UI cannot
+drift apart about what "over" means.
+
+**2. The cap went from 8 to 200.** Excluding dead orders fixes the inversion;
+it does not fix the clipping. Nine genuinely live orders on a busy Friday would
+have clipped the newest again — and that time the badge would have been right
+and the board still wrong. Not unbounded, because an unbounded select against a
+forever-growing table is how a fast page becomes slow in two years.
+
+**3. A third query, for the orders that died unacknowledged.** This one exists
+because the first two would otherwise have opened a hole. After the new filter,
+an expired-but-never-acknowledged order matched *neither* query — so the
+owner's eight expired orders would not have moved to the bottom of his board,
+they would have disappeared from it. He asked to **hide** finished orders, not
+lose them. Hiding is a view decision and belongs in the UI where he can switch
+it back on.
+
+## The UI he asked for
+
+> "I would like to upgrade the panel to hide the finished orders exposing only
+> the open ones. there would need to be a filter and sort feature added to it
+> as well so its easy to find an order if needed."
+
+`board-view-core.ts` is a pure module — no database, no `server-only` — so
+every decision about what is visible is provable in CI. It provides five
+filters (Open, Needs accepting, Needs attention, Finished, All), three sorts
+(most urgent, newest, oldest) and a substring search over both the Leafly and
+local order ids, because staff quote whichever one is in front of them and
+usually only the last few characters.
+
+The controls are a plain GET form rather than a client component. The view
+therefore lives in the URL: it survives the redirect after an acknowledge, it
+survives a refresh, it can be bookmarked or sent to another member of staff,
+and it works with scripting disabled on a tablet in battery-saver mode.
+
+## The rule that outranks the request
+
+A filter that can hide an order needing acknowledgement is the bug we just
+fixed, rebuilt deliberately in the user interface. Leafly auto-cancels after
+fifteen minutes, so "the operator could not see it" costs a real customer a
+real order.
+
+So the core enforces one invariant no filter choice may override:
+
+**NEVER SILENTLY HIDE A LIVE ORDER.**
+
+`hiddenLiveCount` reports how many orders needing a human fall outside the
+current view, and the panel is required to render a warning whenever it is
+non-zero. The count is measured against the **final** visible set, not merely
+the bucket filter, because a search term hides orders just as effectively as a
+filter does. The operator may choose a narrow view; he may not be kept ignorant
+of what it is costing him.
+
+The empty states are similarly specific. "Nothing has arrived yet", "nothing
+matches that search" and "nothing is open right now" are three different
+situations with three different remedies, and collapsing them into one vague
+"no orders" is the same category of mistake as the board that showed eight
+expired orders and called it a day.
+
+## Testing the tests
+
+The first mutation sweep came back **14 of 16**. Two mutations survived, and
+both were real holes in the suite rather than quirks of the harness:
+
+- Deleting the `canceled_at` filter from the pending query left the tests
+  green, because the assertion searched the whole file and an identical line
+  survived in the closed-orders query further down.
+- Deleting the terminal-status filter from the count function survived for the
+  same reason: the slice ran from the function name to the end of the file and
+  still caught text from a query above it.
+
+Both assertions were making a claim about *one query* while testing the *whole
+file*. They were rewritten to slice out the specific function body, bounded on
+both sides. The re-run came back **16 of 16, zero survivors**.
+
+That is the second slice running in which mutation testing caught a hole that
+a green suite had hidden. The lesson generalises: a source assertion must be
+scoped to the construct it is making a claim about, or it degrades into
+"this string appears somewhere in this file", which is not the claim.
+
+## Testing the probe
+
+The compliance suite was not the only thing that needed testing. The probe had
+two defects of its own, and both were found by running the same treatment
+against it — mutate the source, check that the probe notices.
+
+**The first was a fuse that blows on success.** The original probe read every
+number out of `order-board-server.ts`, including the board limit, and used
+those values for *both* the "before" and the "after" model. That looks like
+the rigorous choice. It is the opposite. The moment the fix landed and the
+source said `200`, the "before" model silently became the "after" model, the
+bug could no longer be reproduced, and the probe exited `1` with *"harness did
+not reproduce the reported symptom — do not ship a fix on the strength of this
+run."* The fix was correct and the probe was calling it unproven.
+
+The rule that falls out of it:
+
+> A **before** model must be pinned to **history**, which is frozen.
+> An **after** model must be pinned to **source**, which moves.
+
+So `BROKEN_LIMIT = 8` and the old single-filter pending query are now
+hard-coded constants describing code that no longer exists, while the fixed
+model is still read from and asserted against the live file. A reproduction
+harness has to keep reproducing the original bug *after* the fix ships, or it
+stops being a regression guard the day it is needed.
+
+**The second was the whole-file scoping mistake again, in a new file.** With
+the probe rebuilt, eight mutations were applied to the server to check that it
+noticed. Seven were caught. One survived: deleting `.is("canceled_at", null)`
+from the pending query left the probe printing *"PROVEN ABOVE BY EXECUTION."*
+The pin searched the entire file, and the identical line in
+`countLeaflyOrdersAwaitingAck` satisfied it.
+
+This is the same defect, in the same slice, for the same reason — and it had
+already been written up in the section above. Knowing the lesson did not
+prevent repeating it, because the pins were written before the lesson was
+learned and were never revisited in light of it. The probe now uses a
+`bodyBetween(start, end)` helper identical in spirit to the suite's, and every
+pin carries the scope it applies to: `PENDING_QUERY`, `CLOSED_QUERY`, or
+`COUNT_FN`. Re-run: **8 of 8 caught, zero survivors.**
+
+Worth stating plainly, because it is the more useful half: when a lesson is
+learned mid-slice, the work already completed in that slice has to be audited
+against it. Otherwise the write-up describes a standard the code does not meet.

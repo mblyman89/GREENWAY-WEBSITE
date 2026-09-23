@@ -166,14 +166,65 @@ export type LeaflyBoardState = {
 };
 
 /**
+ * The Leafly statuses that mean "this order is over".
+ *
+ * SLICE L-28. Named here as a PostgREST-shaped list because the filter below
+ * has to be expressed in PostgREST syntax, but the VALUES are not re-decided:
+ * they are asserted identical to `BRIDGE_TERMINAL_STATUSES` in bridge-core.ts
+ * by tests/compliance/leafly-l28-board-overflow.test.ts. One vocabulary, two
+ * shapes, and CI fails the moment they disagree.
+ */
+const TERMINAL_STATUSES = ["picked_up", "canceled", "expired"] as const;
+
+/**
  * How many orders the board shows at once.
  *
- * Small on purpose. This is a panel on a page that already has a paged list of
- * Greenway's own orders; it is a "what needs me right now" view, not an
- * archive. The count of everything outstanding is reported separately, so a
- * clipped list is never silent — the same rule the Greenway order list follows.
+ * ===========================================================================
+ * SLICE L-28 — WHY THIS NUMBER WENT FROM 8 TO 200
+ * ===========================================================================
+ * THE OWNER'S REPORT, VERBATIM:
+ *   "there are currently 9 orders in total, 8 of which have expired, one is
+ *    still pending. but I cannot see the 9th order, maybe the ui doesnt allow
+ *    for more than 8?"
+ *
+ * He was looking straight at it. The old value of this constant was 8, and
+ * the old pending query filtered on `acknowledged_at IS NULL` ALONE.
+ *
+ * An expired order is never acknowledged — that is WHY it expired. Nothing in
+ * the codebase stamps `acknowledged_at` on expiry: webhook-server.ts stamps
+ * `canceled_at` (line ~254), and `acknowledged_at` is written only by a human
+ * acknowledging or by the bridge. So all eight dead orders still satisfied
+ * "not yet acknowledged", they sorted FIRST because the sort is by deadline
+ * ASCENDING and their deadlines were the oldest, and they consumed all eight
+ * slots. `remaining` then computed to zero, so the second query never ran.
+ *
+ * The result was not merely a clipped list. It was clipped in the single
+ * worst possible direction: the ONLY order that still needed a human was the
+ * exact one pushed off the board. Reproduced by execution, not inferred —
+ * `scripts/recon/l28-board-overflow-probe.mjs` replays those nine rows and
+ * prints the live order missing, then present after the fix.
+ *
+ * The old comment here claimed "a clipped list is never silent" because the
+ * count is reported separately. That was wrong too, and wrong for the same
+ * reason: `countLeaflyOrdersAwaitingAck` used the SAME filter, so it counted
+ * the eight dead orders and announced "9 awaiting acknowledgement" over a
+ * list in which the live one was the missing one. The safety net shared the
+ * blind spot of the thing it was guarding.
+ *
+ * TWO CHANGES, BOTH NEEDED. Excluding terminal orders fixes the inversion.
+ * Raising the cap fixes the clipping. Either one alone still fails: with the
+ * old cap of 8, nine genuinely-live orders on a busy Friday would clip the
+ * newest again, and this time the badge would be right and the board would
+ * still be wrong.
+ *
+ * WHY 200 AND NOT "NO LIMIT". An unbounded select against a table that grows
+ * forever is how a fast page becomes a slow one two years from now. 200 is far
+ * above any plausible count of simultaneously-open Leafly orders for a single
+ * shop, and the UI added in this slice hides finished orders by default, so
+ * the operator's screen stays short regardless. If a shop ever exceeds 200
+ * genuinely-open orders it has a much larger problem than pagination.
  */
-export const LEAFLY_BOARD_LIMIT = 8;
+export const LEAFLY_BOARD_LIMIT = 200;
 
 /**
  * Read the Leafly orders that need a human, plus the setup state.
@@ -233,6 +284,28 @@ export async function loadLeaflyOrderBoard(
         .from("leafly_orders")
         .select(columns)
         .is("acknowledged_at", null)
+        // ── SLICE L-28. THE TWO LINES THAT MAKE THE 9TH ORDER VISIBLE ──
+        //
+        // "Not acknowledged" is NOT the same as "needs a human". An expired
+        // or cancelled order was never acknowledged — that is precisely why
+        // it expired — so without these two filters every dead order stays
+        // in the pending set forever, sorts to the TOP (oldest deadline
+        // first), and crowds out the live one. See the long note on
+        // LEAFLY_BOARD_LIMIT above and the probe that reproduces it.
+        //
+        // Expressed as two separate filters because they are two separate
+        // facts: `canceled_at` is stamped by the cancellation webhook, while
+        // `leafly_status` carries Leafly's own word for the outcome. An order
+        // can have either without the other — a status of "expired" with no
+        // cancellation event, or a cancellation stamp that arrived before the
+        // status did — and missing either one puts a dead order back on the
+        // board. This is the same pair `placeLeaflyOrder` uses to choose the
+        // `closed` bucket (bridge-core.ts), so the query and the UI agree on
+        // what "over" means instead of each deciding for itself.
+        .is("canceled_at", null)
+        .or(
+          `leafly_status.is.null,leafly_status.not.in.(${TERMINAL_STATUSES.join(",")})`,
+        )
         .order("acknowledge_by", { ascending: true, nullsFirst: true })
         .limit(limit)
         // SLICE L-25. Bounded. `/admin/orders` is the REDIRECT TARGET of the
@@ -296,8 +369,61 @@ export async function loadLeaflyOrderBoard(
       ackedRows = (acked.data ?? []) as unknown as LeaflyBoardOrder[];
     }
 
+    // ── SLICE L-28. THE ORDERS THAT DIED WITHOUT EVER BEING ACKNOWLEDGED ──
+    //
+    // A third query, and it exists because of a hole the first two would
+    // otherwise open. The pending query now excludes terminal orders; the
+    // acked query only ever matched `acknowledged_at IS NOT NULL`. An order
+    // that EXPIRED was never acknowledged, so after this slice's filter it
+    // matches NEITHER — and the owner's eight expired orders would not have
+    // moved to the bottom of his board, they would have vanished from it
+    // entirely.
+    //
+    // That is not what he asked for. His words were "hide the finished
+    // orders exposing only the open ones" — hide, not delete. Hiding is a
+    // VIEW decision and belongs in the UI, where he can switch it back on.
+    // Silently dropping the rows server-side would make the filter control
+    // added in this slice a liar: "Show closed" would reveal nothing,
+    // because nothing was ever fetched.
+    //
+    // Ordered newest-first and taken from whatever budget the live orders
+    // did not use, so a genuinely busy board always spends its rows on the
+    // orders that still need something.
+    const closedBudget = limit - pendingRows.length - ackedRows.length;
+    let closedRows: LeaflyBoardOrder[] = [];
+    if (closedBudget > 0) {
+      const runClosed = (columns: string) =>
+        admin
+          .from("leafly_orders")
+          .select(columns)
+          .is("acknowledged_at", null)
+          .or(
+            `canceled_at.not.is.null,leafly_status.in.(${TERMINAL_STATUSES.join(",")})`,
+          )
+          .order("updated_at", { ascending: false })
+          .limit(closedBudget)
+          // SLICE L-25. Bounded, same reasoning as the queries above.
+          .abortSignal(dbDeadline("order_read"));
+
+      let closed = await runClosed(BOARD_COLUMNS);
+      if (isMissingColumnError(closed.error)) {
+        closed = await runClosed(BOARD_COLUMNS_LEGACY);
+      }
+      // Same posture as the acked query: a failure here is reported, but the
+      // live orders are still returned. History is never worth a live order.
+      if (closed.error) {
+        return {
+          orders: [...pendingRows, ...ackedRows],
+          ready: keyPresent,
+          orderIntegrationKeyPresent: keyPresent,
+          problem: `Some Leafly order history couldn’t be read: ${closed.error.message}`,
+        };
+      }
+      closedRows = (closed.data ?? []) as unknown as LeaflyBoardOrder[];
+    }
+
     return {
-      orders: [...pendingRows, ...ackedRows],
+      orders: [...pendingRows, ...ackedRows, ...closedRows],
       ready: keyPresent,
       orderIntegrationKeyPresent: keyPresent,
       problem: "",
@@ -333,6 +459,17 @@ export async function countLeaflyOrdersAwaitingAck(): Promise<number | null> {
       .from("leafly_orders")
       .select("id", { count: "exact", head: true })
       .is("acknowledged_at", null)
+      // SLICE L-28. The SAME two filters as the pending list query, and they
+      // are not optional. Before this slice the count said "9 awaiting
+      // acknowledgement" while every row on screen was expired, because an
+      // expired order is unacknowledged forever. A badge that inflates itself
+      // with dead orders trains the operator to ignore it, which is worse
+      // than having no badge: the one evening the number is real, nobody
+      // looks. The list and the count must answer the same question.
+      .is("canceled_at", null)
+      .or(
+        `leafly_status.is.null,leafly_status.not.in.(${TERMINAL_STATUSES.join(",")})`,
+      )
       // SLICE L-25. Bounded. A count for a badge is the least important
       // query on the page, which makes it the least acceptable one to hang
       // the whole render on.
