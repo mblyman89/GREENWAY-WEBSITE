@@ -456,3 +456,239 @@ touching a route segment, a server action, or module-level exports in
 `src/app/`, the only authority is `next build`, and it can be run here in the
 background even though it cannot finish: reaching
 `✓ Compiled successfully` is enough to clear this entire class of failure.
+
+---
+
+# SLICE L-26 — the fourth attempt, and the half of the work nobody had bounded
+
+> *"its still not letting me acknowledge the order... because it doesnt stop
+> spinning, i am unable to record an error message."*
+
+Three shipped fixes, three times the spinner came back:
+
+| slice | what it bounded | result |
+|-------|-----------------|--------|
+| L-17  | the outbound fetch **connection** | hang persisted |
+| L-23  | the response **body** read | hang persisted |
+| L-25  | every **database call on the action path** | hang persisted |
+
+Every one of them was correct. Every one of them bounded the same half of the
+work, because every one of them assumed the spinner was waiting on the
+**action**.
+
+## 1. What the spinner is actually waiting for
+
+From the Next.js documentation, verbatim:
+
+> "When a Server Action triggers an immediate revalidation, Next.js does the
+> work inside one HTTP request: it runs the action, then re-renders the
+> current route server-side."
+
+> "Calls `redirect`. The response navigates the router and streams the
+> destination's RSC Payload."
+
+> "The mutation, the cache invalidation, and the page re-render all complete
+> in a single roundtrip."
+
+`acknowledgeLeaflyOrderAction` calls **both** `revalidatePath("/admin/orders")`
+**and** `redirect(...)`. So the one HTTP response the browser is waiting on
+contains the acknowledge **plus a complete server render of `/admin/orders`**.
+
+`useFormStatus().pending` clears when **that response** completes — not when
+the acknowledge completes.
+
+**The spinner is the render.** And the render was entirely unbounded.
+
+`scripts/recon/db-call-inventory.mjs`, run against `main@28e9b22c`, put a
+number on it. Every module the ACTION reaches: bounded by L-25. Every module
+the PAGE RENDER reaches: unbounded.
+
+```
+announcer-store           12 unbounded queries
+printer-store             13
+orders-store              30
+announcer-sounds-store    11
+order-name-pool-store     11
+announcer-admin-store      6
+order-readiness-server     3   <-- a Leafly file L-25 missed: it is on the
+                                   PAGE path, not the action path
+```
+
+This is why the acknowledge itself always "worked". It did. The order was
+acknowledged in the database. The browser just never got told, because the
+render that had to finish first never finished.
+
+## 2. The fix that would have been the fourth failure
+
+The plan was a global floor composed with `AbortSignal.any([...])`, so a
+per-client deadline could combine with any caller's own shorter signal.
+
+A probe was written to prove it worked before shipping it. It proved the
+opposite (`scripts/recon/l26-signal-gc.mjs`, run with `--expose-gc`):
+
+```
+[G1 any(), no gc           ] TimeoutError after 904ms
+[G2 any(), FORCED GC       ] HUNG (>6000ms)   <-- DEADLINE NEVER FIRED
+[G3 any(), sources pinned  ] TimeoutError after 901ms
+[G4 bare timeout, FORCED GC] TimeoutError after 900ms
+[G5 bare timeout, pinned   ] TimeoutError after 900ms
+```
+
+`AbortSignal.any()` holds its source signals **weakly**. Once a GC cycle
+collects the sources, their timers never fire and the composite can never
+abort. Confirmed upstream, not inferred:
+
+- `nodejs/node#57736` — "AbortSignal.any() is unreliable and breaks timeouts",
+  label `confirmed-bug`, PR #57867
+- `nodejs/node#55428` — "Request signal isn't aborted after garbage
+  collection", label `confirmed-bug`, still open
+
+A timeout that works until the garbage collector runs is the **worst possible
+shape** for this particular bug: it passes every test, passes code review,
+passes a smoke test, and then hangs in production under memory pressure —
+which is precisely the report, four times over.
+
+It is now banned by a test, with a CONTROL proving the detector works.
+
+## 3. The mechanism that was shipped instead
+
+supabase-js's own `db: { timeout }` option. postgrest-js implements it with a
+plain `AbortController` + `setTimeout` (`dist/index.mjs:4888`) — **not**
+`AbortSignal.any` — and a pending `setTimeout` is a **GC root**, so it cannot
+be collected out from under the request.
+
+Proven end-to-end against a real black-hole socket
+(`scripts/recon/l26-db-timeout-proof.mjs`):
+
+```
+[P1 CONTROL no timeout   ] HUNG (>9000ms)
+[P2 timeout 1200         ] settled after 1205ms -> "AbortError: This operation was aborted"
+[P3 timeout + FORCED GC  ] survived GC, settled after 1202ms
+[P4 floor 30s + query 800] settled after 802ms   <-- the tighter deadline wins
+[P5 error channel        ] arrives as an ERROR VALUE, not a throw
+[P6 healthy query        ] settled after 8ms -> data intact
+```
+
+P4 is what makes this safe to apply globally: it **bridges** a caller's own
+signal rather than replacing it, so L-25's tighter per-operation budgets keep
+winning. P5 is what makes it cheap: a timeout arrives through the ordinary
+`{ data, error }` channel, so all ~300 existing `if (error)` branches handle it
+unmodified. P6 is the control — healthy queries are untouched.
+
+Installed in **both** client factories, because missing either leaves a whole
+class of queries unbounded:
+
+- `src/lib/supabase/admin.ts` — the service-role client, used by every store
+- `src/lib/supabase/server.ts` — the cookie-bound client, which resolves the
+  staff session on every render **and** every action
+
+## 4. Why the floor alone is not enough
+
+The floor caps **one request**. It does not cap a **sum**. Several page
+readers are internally sequential — `loadLeaflyOrderSetupState` alone awaits
+two full `Promise.all` passes — and not everything on the render path is even
+PostgREST (storage, `auth.getUser()`).
+
+So `withRenderBudget` (`src/lib/supabase/render-budget.ts`) caps each
+**secondary** reader and degrades it to an empty state rather than letting it
+hold the render open.
+
+**The primary readers are deliberately NOT wrapped.** `listOrdersPaged` and
+`getOrderStatusCounts` **are** this page. A board rendered with no orders and
+no counts is not a degraded board, it is a **lie** — it would tell a shop with
+live orders that there is nothing to do, on a screen with a fifteen-minute
+acknowledgement clock. Those two are allowed to fail loudly. This is pinned by
+a test in both directions.
+
+### The fallbacks are not allowed to invent facts
+
+A fallback is shown to the owner as if it were fact, so it may say only what
+we actually know.
+
+The sharp case is the announcer. `summarizeShop` checks `devices.length === 0`
+**before** it checks `globalEnabled`, and returns the fixed headline *"No
+speakers are set up yet."* with the fix *"Press 'Add a speaker' to pair your
+first Raspberry Pi."* For a genuinely empty shop that is true. For a shop
+whose speakers we merely **failed to read in time**, it is a fabrication that
+would send the owner to set up hardware they already own. So
+`emptyAnnouncerPanelData()` hand-builds a verdict that names the real cause,
+and reuses `FALLBACK_SETTINGS` rather than inventing `enabled: false` — which
+would draw the visible "Announce new orders" toggle OFF and describe a setting
+the owner never chose.
+
+Same rule for the Leafly board: its degraded `problem` string is deliberately
+**non-empty**, because an empty `problem` renders as a calm "no Leafly orders
+yet" — the single most expensive wrong sentence this page can produce.
+
+## 5. Testing the tests
+
+`tests/compliance/leafly-l26-render-deadline.test.ts` — 30 tests, all green.
+
+Because a green suite is exactly what the previous three failures also had,
+the suite itself was put under test. `scripts/recon/l26-mutation-test.mjs`
+applies twelve **realistic** regressions to production source, requires the
+suite to go RED for each, then restores the file and verifies the restore by
+SHA-256 hash:
+
+```
+baseline: GREEN
+M1  remove the db floor from the admin client            caught
+M2  remove the db floor from the server client           caught
+M3  make the render budget infinite                      caught
+M4  withRenderBudget stops guarding and just awaits      caught
+M5  drop the label from the timeout log                  caught
+M6  unwrap the announcer reader on the orders page       caught
+M7  announcer fallback claims the shop has no speakers   caught
+M8  announcer fallback claims a missing migration        caught
+M9  reintroduce AbortSignal.any                          caught
+M10 hard-code the floor instead of sharing the constant  caught
+M11 wrap a PRIMARY reader, faking an empty board         caught
+M12 Leafly setup fallback discards the problem text      caught
+
+caught: 12/12   survived: 0/12
+```
+
+Two of this file's own tests failed on first run — and both were the **test's**
+bug, not the code's:
+
+1. `LEAFLY_DB_TIMEOUT_MS` is a `Record`, not a number, so the comparison was
+   `number > object`. Now takes `Math.max(...Object.values(...))`, which also
+   means a slower operation added later must push the floor rather than
+   silently slipping under a stale literal.
+2. `spy.mockRestore()` clears `mock.calls`, so reading the log **after**
+   restoring always yielded `""` — an assertion that could never fail. Now
+   read inside the `try`, before the `finally` restores.
+
+Both are worth recording: they are the exact shape of a test that looks green
+and proves nothing.
+
+## 6. Three pre-existing compliance tests had to move
+
+Not weakened — **re-aimed at the invariant they actually protect**:
+
+- `leafly-l14-register-interrupt` asserted `await listInterruptsForOrders(`
+  exactly once. The call is now wrapped, so the `await` sits on the wrapper.
+  What the test protects is the number of **call sites**, so it now matches
+  the call itself. A test that it stays **bounded** was added alongside it.
+- `announcer-admin` counted `pendingPairings: []` and required exactly `1`.
+  There are now two legitimate empty states. Raised to `2`, and — since that
+  assertion counts empty states and would not notice the live path being
+  deleted — a companion assertion pins the single `await getPendingPairings(`.
+- `orders-board-order` forbids re-typing the promotion sentence in the page.
+  This was a **real violation on my part**: the new Leafly fallback string had
+  re-used "waiting to be acknowledged", which belongs to the core that owns
+  the singular/plural and the deadline. The rule is right; the **string was
+  reworded**.
+
+## 7. The lesson
+
+Three slices bounded the action because the action was the plausible suspect,
+and nobody asked what the browser was actually waiting on. The answer was in
+the framework's own documentation the whole time: with `revalidatePath` plus
+`redirect`, **the render is part of the response**, so the render is part of
+the spinner.
+
+And the near-miss is worth as much as the fix: the intended solution was
+disproven by measurement **before** it shipped. Had it gone out, it would have
+passed every test and failed in production under GC pressure — a fourth
+correct-looking fix for the same bug.

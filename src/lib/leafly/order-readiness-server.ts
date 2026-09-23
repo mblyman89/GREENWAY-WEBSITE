@@ -547,6 +547,62 @@ export type LeaflyOrderSetupState = {
  * informs another, so serialising them would only add latency to a panel that
  * renders on a page the shop loads constantly.
  */
+/**
+ * SLICE L-26 — this reader's "we stopped waiting" value.
+ *
+ * ── WHY IT LIVES HERE AND NOT AT THE CALL SITE ────────────────────────────
+ * `LeaflyOrderSetupState` has eleven fields, three of which are themselves
+ * computed objects (`readiness`, `evidence`, `emptyCart`). A caller that
+ * hand-built an empty one would be writing a second, unreviewed opinion
+ * about what "nothing is known" means for Leafly readiness — and the moment
+ * a field is added here, that copy silently goes stale and starts rendering
+ * a confident answer to a question nobody asked.
+ *
+ * The module that owns the type owns its empty state. The page asks for it.
+ *
+ * ── WHY EVERY UNKNOWN IS null OR false, NEVER A GUESS ─────────────────────
+ * Exactly the leaning already documented in `loadLeaflyOrderSetupState`:
+ * when we do not know, say nothing rather than something false. The
+ * three-valued fields stay null (`pickupAvailabilityEnabled`,
+ * `publishedVariantCount`) so the checklist shows "not confirmed" rather
+ * than ticking or accusing, and the reason is stated plainly in `problems`
+ * where a human will read it.
+ */
+export function emptyLeaflyOrderSetupState(problem: string): LeaflyOrderSetupState {
+  const { origin, originSource } = resolveSiteOrigin();
+  const built = buildWebhookDestinations(origin);
+  const readiness = assessOrderReadiness({
+    menuConfigured: false,
+    hmacKeyPresent: false,
+    orderIntegrationKeyPresent: false,
+    verifiedDeliveryEverReceived: false,
+    anyOrderEverReceived: false,
+    speakerReady: false,
+    printerReady: false,
+    pickupAvailabilityEnabled: null,
+  });
+
+  return {
+    readiness,
+    destinations: built.destinations,
+    destinationProblem: built.problem,
+    originSource,
+    origin,
+    evidence: { ...NO_EVIDENCE, problem },
+    explanation: explainSilentOrder(readiness),
+    pickupAvailabilityEnabled: null,
+    publishedVariantCount: null,
+    emptyCart: explainEmptyCart({
+      signatureRefusalsRecent: false,
+      // Both lean the same way the live reader does when a value is
+      // unreadable: `true` and `1` are the values that make no accusation.
+      pickupAvailabilityEnabled: true,
+      menuVariantCount: 1,
+    }),
+    problems: [problem],
+  };
+}
+
 export async function loadLeaflyOrderSetupState(): Promise<LeaflyOrderSetupState> {
   const problems: string[] = [];
   const { origin, originSource } = resolveSiteOrigin();
