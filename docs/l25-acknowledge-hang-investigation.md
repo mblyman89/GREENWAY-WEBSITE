@@ -1245,3 +1245,252 @@ is caused by something swallowing an event, fix it expecting to find another
 bug directly behind it.** The swallow was load-bearing. It had been hiding a
 broken confirm guard for as long as both have existed, and a suite that was
 green throughout never noticed, because nothing ever got far enough to fail.
+
+---
+
+# CHAPTER NINE — L-30: THE ANSWER WAS "NO", AND THE TEST HARNESS WAS THE BUG
+
+## The report
+
+> *"that did not fix the problem. again, is it required by leafly to have this
+> double click for acknowledging? if not, please get rid of it. the progress bar
+> spins forever for it which means it spins forever after pressing confirm
+> acknowledge. why is the pop up box getting stuck. I say just get rid of it.
+> one click to acknowledge. why is this so difficult for you, I really dont
+> understand."*
+
+Five slices — L-17, L-23, L-25, L-27, L-29 — have each ended with a confident
+claim that this button was fixed. Five times it was not. Chapter Eight closed
+with a lesson ("stop guessing and ask the browser via `defaultPrevented`") that
+this chapter has to retract, because it was wrong, and because the 37 tests that
+certified it were structurally incapable of failing.
+
+Start with the question he actually asked, because it has a real answer and
+nobody had gone and looked.
+
+## Is the confirmation dialog required by Leafly? No.
+
+Answered from the vendored authoritative spec, `docs/leafly-specs/order-api-v1.openapi.json`,
+re-downloaded live this slice and confirmed **byte-identical** to the copy in
+the repo, md5 `daab7bcf6f77177de85425adf7f805f1`. Three facts, each read out of
+the document rather than remembered:
+
+**One.** The acknowledge operation is
+`POST /{order_integration_key}/orders/{id}/acknowledge`. It has **no
+`requestBody`**, **no operation-level parameters**, and its only path-level
+parameters are `OrderIntegrationKey` and `OrderId` — the two values needed to
+name the order. There is no confirmation token, no `confirmed=true` flag, no
+two-phase handshake. There is nothing in the wire protocol that a second click
+could possibly supply.
+
+**Two.** The "Preparing for Production" requirements table lists:
+
+    | Acknowledge Order | Endpoint | Successful requests | **_Required_** |
+
+What is required is that the **endpoint gets called successfully**. The
+requirement is about the HTTP request, not about how a human is asked to
+authorise it. Leafly does not specify retailer UI at all.
+
+**Three — and this is the one that turns the answer from "not required" to
+"actively harmful".** From the Expectations section, verbatim:
+
+> *"Orders are acknowledged as having been retrieved in whole by your system
+> within fifteen minutes of receiving an order submission webhook. Any orders
+> not acknowledged by this deadline will be auto canceled."*
+
+Leafly imposes a **fifteen-minute deadline**, after which the customer's order
+is **cancelled automatically**. A modal that inserts friction into the single
+most time-critical action in the integration is not a safety feature. It is a
+liability. The dialog was ours. We invented it, and it was working against the
+one deadline Leafly actually enforces.
+
+**So: removed. One click to acknowledge.**
+
+The irreversibility warning was not deleted — it was *relocated*. It now renders
+as a persistent `role="note"` line above the buttons (`data-testid="leafly-ack-warning"`),
+so the operator reads it *before* deciding, instead of after committing. The
+protection survives; the blocking step does not. Confirmation is still required
+for the genuinely terminal status changes (`picked_up`, `canceled`), which have
+no deadline and are true one-way doors.
+
+## Why L-29's 37 green tests could never have caught this
+
+This is the part that matters more than the fix, because it explains five
+failed slices.
+
+L-29's fix was: at capture time, queue a microtask; let propagation finish; if
+the form cancelled the submit, `defaultPrevented` will be true and the microtask
+declines to start the progress bar. Its tests drove this with
+`element.dispatchEvent(new SubmitEvent(...))`, which is how essentially every
+test in `tests/compliance` simulates a click.
+
+Per the HTML spec, the **microtask checkpoint runs when the JavaScript execution
+context stack becomes empty**. That single sentence is the whole bug:
+
+- Under a **scripted `dispatchEvent()`**, the entire listener chain runs inside
+  one synchronous call, in **one stack frame**. The stack does not empty until
+  the last listener returns. So the queued microtask runs **after** every
+  handler — exactly as L-29 assumed.
+- Under a **real trusted click**, the browser dispatches from a task and invokes
+  each listener as its own callback. **The stack empties between listeners.** So
+  a microtask queued by the capture-phase listener runs **before** the form's
+  own `onSubmit` ever gets a chance to cancel.
+
+L-29's logic was correct in the world its tests lived in and wrong in the world
+Michael lives in. No amount of additional assertions of the same shape would
+ever have found it. The harness was the bug.
+
+There was a second, independent fatal flaw in the same design. react-dom 19.2.4's
+form-action plugin (`extractEvents$1`, ~line 12180 of
+`react-dom-client.production.js`) calls `event.preventDefault()` **itself**, on
+every *successful* server-action submit — that is the mechanism by which it
+replaces the native form POST:
+
+```js
+} else
+  "function" === typeof action &&
+    (event.preventDefault(), ... startHostTransition(...))
+```
+
+So `defaultPrevented === true` means "the form cancelled to ask a question"
+**and** it means "the submit worked perfectly". Chapter Eight's lesson — *"stop
+guessing and ask the browser"* — asked the browser a question the browser cannot
+answer. The signal is ambiguous by construction. It had to be abandoned, not
+re-timed.
+
+## Proven by execution, not by reading
+
+`scripts/recon/l30-real-click-probe.mjs` bundles the **real** react-dom 19.2.4,
+the **real** `pending-core.ts`, the **real** `PendingKeeper.tsx` and the **real**
+`LeaflyOrderActions.tsx` with esbuild, and drives them in **real Chromium with
+real trusted clicks** via Playwright. It counts server-action requests off the
+wire.
+
+The L-29 logic is not imported — it is **copied verbatim** into the probe as
+`submitDidStart_L29_FROZEN`. That is the L-28 rule about "before" models: a
+probe that imports the code it is modelling is a fuse that blows the moment you
+fix the bug, and then tells you nothing.
+
+Same page, same code, same click sequence. Only the dispatch mechanism differs:
+
+| | scripted `dispatchEvent()` | **real trusted click** |
+|---|---|---|
+| bar shown while dialog open | `false` | **`true`** |
+| microtask ran before `onSubmit` | `false` | **`true`** |
+| `form.dataset.gwBusy` at confirm | `null` | **`"1"`** |
+| **server action calls** | `1` | **`0`** |
+
+**`serverActionCalls = 0`.** That number is the whole five-slice mystery,
+finally measured instead of theorised. The acknowledgement **never left the
+browser**. The phantom bar started while the dialog was still open, stamped the
+form `gwBusy="1"`, and then the keeper's *own* double-submit guard swallowed the
+real submit when Michael pressed Confirm. No request was ever made — which is
+precisely why he watched a spinner forever and **never got an error**. There was
+no failure to report. There was no request.
+
+Every prior slice assumed something was slow. Nothing was slow. Nothing was
+happening at all.
+
+The same probe then runs the **live shipped source** under a real click:
+
+    a dialog appeared .................. false
+    progress bar running ............... true
+    ACKNOWLEDGEMENTS SENT .............. 1
+
+One click. One request. A bar that is spinning for something real.
+
+## The fix
+
+The ambiguous, timing-dependent predicate is deleted. `submitDidStart` is gone
+from `pending-core.ts`, replaced by a rule whose every input is a **DOM fact**
+that reads identically under a scripted dispatch and a real click:
+
+```ts
+export function submitShouldShowPending(s: SubmitStart): boolean {
+  if (!s.serverAction) return false;
+  if (!s.formConnected) return false;
+  if (s.optedOut) return false;
+  return true;
+}
+```
+
+`PendingKeeper`'s submit path now decides **synchronously**, at capture time,
+with no deferral and no reference to `defaultPrevented`. The file carries a
+standing prohibition in its header saying so. (The *nav* listener still reads
+`defaultPrevented`, and legitimately: it guards anchors, where the flag is
+unambiguous. A test asserts that use is deliberate rather than an oversight.)
+
+But a pure rule is only sound if the premise underneath it holds, and the
+premise is structural:
+
+> **NO FORM MAY SUBMIT IN ORDER TO ASK A QUESTION.**
+
+That was the real defect, and it predates every slice in this document. A form
+that fires `submit` and then cancels itself to open a modal is lying to every
+listener in the page, including the browser's own. It is why five successive
+attempts to *interpret* the submit event all failed — the event itself was
+false. So `LeaflyOrderActions` no longer has an `onSubmit`, no
+`preventDefault`, and no `confirmedRef`. Confirm-first actions render a
+`type="button"` that opens the dialog directly; `onConfirm` calls
+`formRef.current?.requestSubmit()`. A `submit` event now means a save is
+happening, always, with no exceptions to interpret.
+
+`SubmitButton` gained `type` (defaulting to `"submit"`) and `onClick`. The
+default matters: these remain real forms that still work if the confirmation
+JavaScript never hydrates.
+
+## Testing the tests
+
+- `tests/compliance/leafly-l30-one-click-acknowledge.test.ts` — **51 tests**,
+  including the Leafly spec facts above pinned as executable assertions, the
+  owner's screenshot pinned as history, and a test whose name is the lesson:
+  *"the rule has no input that differs between a scripted and a real click."*
+- `scripts/recon/l30-mutation-test.mjs` — **26 mutations, 26 caught, 0 survived,
+  0 inert.** It detects no-op mutations and fails on them, so a mutation cannot
+  be "caught" by accident. Mutation 19 is *"THE BIG ONE — the acknowledge
+  confirmation dialog is put back."* Mutation 1 restores the L-29 microtask
+  design. Mutation 20 restores submit-to-ask-a-question.
+- `scripts/recon/l30-plain-form-regression-probe.mjs` — asks whether L-29 had
+  silently disabled the bar for every ordinary admin save. It had not, but the
+  probe is what produced the `preventDefault()` finding above.
+- Full suite: **662 files, 17,877 tests, all green.** `tsc --noEmit` clean,
+  eslint clean.
+
+Three L-29 artefacts were **deleted**, not amended — the test file, both probes,
+and the mutation script. They pinned a design that was wrong. Leaving them would
+have preserved the belief that the microtask approach was sound.
+
+One pre-existing test in `leafly-deadline.test.ts` failed correctly and was
+re-aimed rather than relaxed: it counted `type="submit"` string literals to
+prove every control disables while in flight, and `type` became a prop. It now
+counts `type={type}` and additionally asserts the default is still `"submit"`.
+
+## The lesson
+
+Chapter Eight's lesson is **retracted**. It said the fix was to stop guessing and
+ask the browser. The browser could not answer, and the way we asked only worked
+in a simulator.
+
+The replacement is harder and more useful:
+
+**A test that simulates the user is not testing the user.** Scripted
+`dispatchEvent()` and a real click differ in a way the HTML spec guarantees —
+when the stack empties, and therefore when microtasks run. Any logic whose
+correctness depends on event timing is, by construction, untestable by the
+harness we use everywhere. L-29 scored 18/18 on its mutation sweep while being
+completely broken, because **a mutation sweep measures whether tests pin the
+code, not whether the code is correct.** Pinning is not proof.
+
+The corollary, and the standing rule going forward: when behaviour depends on
+*when* something runs rather than *what* it computes, the assertion must be
+produced by **execution in a real browser**, counting real effects — here,
+requests on the wire. And the surest fix is to remove the timing dependence
+altogether, so that the pure rule has no input that can differ between the two
+worlds.
+
+The last lesson is the cheapest one, and it is the one that would have saved
+five slices: **the owner asked a direct question — "is this required?" — and
+the answer was written down in a specification already sitting in the repo.**
+Nobody read it. Four slices were spent trying to make a dialog work that Leafly
+never asked for and that its own fifteen-minute auto-cancel deadline argues
+directly against.

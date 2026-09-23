@@ -540,14 +540,38 @@ describe("the Leafly action buttons acknowledge the press", () => {
     // them left the other's attribute in the file and the test stayed green.
     // A partially-disabled button is not a fixed button -- and the emphasis
     // that was left live is the chip, which is what most status actions use.
+    //
+    // SLICE L-30 — WHY THIS COUNTS `type={type}` RATHER THAN `type="submit"`.
+    //
+    // This test failed when L-30 landed, and it was RIGHT to fail: it is a
+    // source-text proxy, and the source shape changed underneath it. L-30
+    // made `type` a prop on SubmitButton, because the two terminal status
+    // actions now open their confirmation from a `type="button"` control
+    // instead of submitting-then-cancelling. (A form that submits in order to
+    // ask a question is what made "a submit happened" stop meaning "a save
+    // started", and cost four slices.) So the literal `type="submit"` no
+    // longer appears in the component and the old count fell to zero.
+    //
+    // The assertion is re-aimed at the same property, not relaxed: count the
+    // CONTROLS SubmitButton renders, and require that every one of them is
+    // disabled and marked busy while the request is in flight. The count is
+    // still >= 2 and the equality is still exact, so the mutation that
+    // originally motivated this test (neuter one control, leave the other)
+    // is still caught — verified in scripts/recon/l30-mutation-test.mjs,
+    // mutation 25.
     const code = codeOnly(component);
-    const submits = code.match(/type="submit"/g) ?? [];
+    const controls = code.match(/type=\{type\}/g) ?? [];
     const disabled = code.match(/disabled=\{pending\}/g) ?? [];
     const busy = code.match(/aria-busy=\{pending\}/g) ?? [];
 
-    expect(submits.length).toBeGreaterThanOrEqual(2);
-    expect(disabled.length).toBe(submits.length);
-    expect(busy.length).toBe(submits.length);
+    expect(controls.length).toBeGreaterThanOrEqual(2);
+    expect(disabled.length).toBe(controls.length);
+    expect(busy.length).toBe(controls.length);
+
+    // And the default must remain "submit": these are real forms that must
+    // still work if the confirmation JavaScript never hydrates. A default of
+    // "button" would leave a dead control on a time-critical screen.
+    expect(code).toMatch(/type\s*=\s*"submit"\s*,?\s*\n?\s*onClick/);
 
     // And nothing may hard-code the flag off, which is how a "temporary"
     // debugging edit becomes permanent.

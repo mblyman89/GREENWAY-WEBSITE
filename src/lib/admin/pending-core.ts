@@ -60,67 +60,113 @@ export function pendingHint(kind: PendingKind, elapsedMs: number): string | null
 export const PENDING_POLL_MS = 250;
 
 /**
- * SLICE L-29 — WHY A SUBMIT IS ONLY "PENDING" AFTER THE EVENT FINISHES.
+ * ===========================================================================
+ * SLICE L-30 — WHY `defaultPrevented` WAS THE WRONG QUESTION ALL ALONG
+ * ===========================================================================
  *
- * The owner, on the Leafly acknowledge button:
+ * This replaces the L-29 rule (`submitDidStart`), which shipped with 37 green
+ * tests and an 18/18 mutation sweep and did not work. The owner's reply, in
+ * full: "that did not fix the problem."
  *
- *   > "I click the acknowledge button, the pop up appears, the top of the
- *   >  page has the loading bar that spins forever, and I get the 'still
- *   >  working - big saves like finalizing a manifest can take awhile'."
+ * L-29's idea was that a submit seen in the CAPTURE phase is only provisional,
+ * so the keeper should wait a microtask and then ask the browser whether the
+ * submit had been cancelled. Two independent facts, each verified by running
+ * a real browser rather than by reasoning, destroy that idea.
  *
- * His screenshot shows the confirmation dialog STILL OPEN, unanswered, above
- * a banner reading "Still working — 120s". Nothing had been submitted. The
- * bar was timing how long he spent READING the dialog.
+ * ── FACT 1: a real click and a scripted click have different timing ────────
  *
- * The mechanism is the capture phase. PendingKeeper listens for `submit` with
- * `capture: true` so it can see every form in the admin, and capture by
- * definition runs BEFORE the form's own bubble-phase onSubmit. An action that
- * needs confirmation — `LeaflyOrderActions` — cancels its first submit with
- * preventDefault() in order to open the dialog. By then the keeper has
- * already started the bar and stamped `form.dataset.gwBusy = "1"`.
+ * `scripts/recon/l30-real-click-probe.mjs` runs the identical component tree
+ * twice, in real Chromium, with the real react-dom this repo ships.
  *
- * Two failures follow from that one mistake:
+ *   dispatchEvent(new Event("submit"))  →  microtask ran AFTER onSubmit ✔
+ *   a real trusted user click           →  microtask ran BEFORE onSubmit ✘
  *
- *   1. A progress bar and a "Still working" banner for a request that does
- *      not exist. Because form saves get the 5-minute ceiling, the 20s
- *      safety net never rescues it — hence "spins forever".
- *   2. Far worse: `gwBusy` is still "1" when he answers the dialog, so the
- *      keeper's own double-submit guard SWALLOWS the real submit. The
- *      acknowledgement never leaves the browser. That is why he saw no error
- *      and no detail — no request was ever made to fail.
+ * Per the HTML spec, the microtask checkpoint runs when the JavaScript
+ * execution context stack becomes EMPTY. A scripted dispatch holds the whole
+ * listener chain inside one stack frame, so the checkpoint is deferred until
+ * every listener has run — exactly what L-29 assumed. A real click is
+ * dispatched by the browser from a task, each listener is its own callback,
+ * and the stack empties between them — so the microtask runs BETWEEN
+ * listeners, before the form's own onSubmit can cancel anything.
  *
- * The rule below is the fix, and it is deliberately boring: a submit seen in
- * the capture phase is only *provisional*. Once the event has finished
- * propagating we can simply look at whether it was cancelled, and only then
- * decide. `defaultPrevented` is the browser's own answer to "is this form
- * actually submitting?", so the keeper stops guessing and reads it.
+ * So L-29's tests did not merely miss the bug; they were structurally
+ * incapable of finding it. They proved the fix works in the one world where
+ * the bug does not exist. Under a real click the probe measured the original
+ * symptom exactly: phantom bar visible, `gwBusy` stuck at "1", and
+ * `serverActionCalls === 0` — the acknowledgement never left the browser.
+ * That last number is why he "gets no errors and no details": there was never
+ * a request to fail.
  *
- * PURE so the rule is pinned in tests/compliance rather than living as an
- * untested `if` inside a client component.
+ * ── FACT 2: React prevents the default on SUCCESS ──────────────────────────
+ *
+ * From react-dom 19.2.4's form-action plugin, verbatim:
+ *
+ *     } else
+ *       "function" === typeof action &&
+ *         (event.preventDefault(), ... startHostTransition(...))
+ *
+ * When `<form action={serverActionFn}>` submits for real, REACT ITSELF calls
+ * preventDefault(). That is not a cancellation — it is the mechanism by which
+ * a server action replaces the native form POST. `l30-plain-form-regression-
+ * probe.mjs` confirms it on an ordinary admin save: the action runs, and
+ * `defaultPrevented === true`.
+ *
+ * Therefore `defaultPrevented` is TRUE for a submit that was cancelled to ask
+ * a question AND TRUE for a submit that succeeded. It cannot distinguish the
+ * two. No amount of re-timing fixes an ambiguous signal; the L-29 bar only
+ * still worked for ordinary saves by the accident of reading the flag too
+ * early. The rule is removed rather than repaired.
+ *
+ * ── THE REPLACEMENT ────────────────────────────────────────────────────────
+ *
+ * Stop inferring. A submit event that reaches the keeper is a real save
+ * UNLESS the page has told us otherwise, and the only code that knows whether
+ * a submit is real is the form that raised it. So the ambiguity is removed at
+ * the source instead: no form in the admin may submit-then-cancel to ask a
+ * question. Confirm-first actions open their dialog from a `type="button"`
+ * click and submit only once, after the answer (the pattern the content
+ * panels already use). `formIsConfirmFirst` below lets the keeper recognise
+ * such a form by an explicit opt-out marker, so the rule is declared in
+ * markup and pinned in CI rather than guessed from event flags.
+ *
+ * PURE, so tests/compliance can hold it.
  */
-export type SubmitSettle = {
-  /**
-   * Did any handler cancel the submit? Read AFTER dispatch completes, so it
-   * accounts for bubble-phase handlers that ran after the keeper's capture
-   * listener.
-   */
-  defaultPrevented: boolean;
+
+/**
+ * Marker attribute a form sets to say "my submits are not always real saves".
+ * Kept as a constant so the component and the keeper cannot drift apart by a
+ * typo — a silently misspelled data attribute is exactly how this class of
+ * bug returns.
+ */
+export const PENDING_OPT_OUT_ATTR = "data-gw-no-pending";
+
+export type SubmitStart = {
   /**
    * Is the form still in the document? A handler may have replaced the whole
    * subtree; there is nothing left to show a spinner on.
    */
   formConnected: boolean;
+  /**
+   * Does the form carry the opt-out marker? Read from the DOM, not inferred
+   * from event state.
+   */
+  optedOut: boolean;
+  /** Is this a React server-action form? Client panels own their feedback. */
+  serverAction: boolean;
 };
 
 /**
- * Did this submit actually become a real, in-flight save?
+ * Should this submit light up the progress bar?
  *
- * Returns false for the confirm-first case (cancelled to open a dialog), which
- * is precisely the case that produced a two-minute phantom spinner.
+ * Deliberately has NO dependence on event timing, on `defaultPrevented`, or on
+ * anything that differs between a scripted and a real click. Every input is a
+ * fact about the DOM that is equally true in both worlds — which is the
+ * property L-29's rule lacked and the reason it passed its own tests.
  */
-export function submitDidStart(s: SubmitSettle): boolean {
-  if (s.defaultPrevented) return false;
+export function submitShouldShowPending(s: SubmitStart): boolean {
+  if (!s.serverAction) return false;
   if (!s.formConnected) return false;
+  if (s.optedOut) return false;
   return true;
 }
 

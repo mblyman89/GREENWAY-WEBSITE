@@ -78,3 +78,9 @@ __pycache__/
 # SLICE 17 mutation-testing crash sentinel (never committed)
 .mutation-in-progress
 .mutation-in-progress.bak
+
+# SLICE L-30 — scratch dirs for the real-browser recon probes. They must live
+# inside the repo so esbuild can resolve the real node_modules, and they are
+# removed on exit; this is the belt-and-braces for an interrupted run.
+.l30-probe-*/
+.l30-plain-*/
