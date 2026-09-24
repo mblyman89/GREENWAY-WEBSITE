@@ -480,6 +480,103 @@ export async function handleLeaflyWebhook(input: {
       if (!bridged.ok) notes.push(bridged.summary);
       else if (!bridged.announced || !bridged.printed) notes.push(bridged.summary);
 
+      // ── SLICE L-33: PRESS THE ACKNOWLEDGE BUTTON OURSELVES ──────────────
+      //
+      // The owner, verbatim:
+      //
+      //   > "I feel like 15 minutes is not enough time for us to press that
+      //   >  button. When we are busy, we can tell a customer, 'hang on, I have
+      //   >  to go push a button in the office', that's lame. ... So we should
+      //   >  be able to acknowledge it automatically, print a receipt, make
+      //   >  noise, then when we are ready, we confirm it and fill it and
+      //   >  complete it. ... It can't be acknowledge and confirm in the same
+      //   >  step though. Just auto acknowledge."
+      //
+      // Leafly's spec assigns this to us in so many words: "Orders are
+      // acknowledged as having been retrieved in whole BY YOUR SYSTEM within
+      // fifteen minutes". The endpoint carries no actor field, so there is no
+      // sense in which a machine acknowledgement is a different thing from a
+      // manual one. The fifteen-minute gate was ours, not Leafly's.
+      //
+      // ── WHY IT RUNS *AFTER* THE BELL AND THE PAPER, NOT BEFORE ──────────
+      //
+      // The tempting order is to acknowledge first, since that is the thing
+      // with the deadline on it. It is the wrong order, for the reason this
+      // file already states about collection a few lines above: "The bell is
+      // the cheap half and it must not depend on the expensive half
+      // succeeding."
+      //
+      // Acknowledging is an outbound HTTPS call to Leafly and can be slow,
+      // rate-limited or refused. Announcing and printing are local enqueues.
+      // Sequencing the cheap, local, always-works half behind the expensive,
+      // remote, sometimes-fails half would mean that a bad minute at Leafly
+      // costs the shop its receipt and its chime — the two things the owner
+      // relies on to know an order exists at all. Nothing is lost by waiting:
+      // both bridge steps are bounded by `dbDeadline`, so the acknowledgement
+      // is still sent within seconds, against a fifteen-minute deadline.
+      //
+      // It also matches the owner's own two-stage model, which this codebase
+      // already implements: ARRIVAL announces and prints and deliberately
+      // creates no register order; ACCEPTANCE creates it. Auto-acknowledge is
+      // the acceptance stage happening by itself, so it belongs after arrival,
+      // not interleaved with it.
+      //
+      // ── WHY IT CANNOT HURT THIS WEBHOOK ─────────────────────────────────
+      //
+      // `autoAcknowledgeOnArrival` is contractually incapable of throwing —
+      // every failure, including unanticipated ones, returns as a value. That
+      // matters more here than anywhere else on this path: a non-200 makes
+      // Leafly retry, and a retry storm inside the fifteen-minute window is
+      // one of the few ways to actually cause the auto-cancellation this
+      // feature exists to prevent.
+      //
+      // ── WHAT IT DOES *NOT* DO ───────────────────────────────────────────
+      //
+      // It does not confirm. `actor: "auto"` suppresses the L-14
+      // `status=confirmed` push, so the shopper is told nothing and the store
+      // has made no business decision. The order sits acknowledged-and-pending
+      // — which, after this slice, is the normal healthy resting state of
+      // every order, and which `planLeaflyOrderActions` was re-keyed to stop
+      // misreading as a fault.
+      //
+      // The acknowledgement is only NOTED, never treated as a failure of the
+      // delivery. A failed auto-acknowledge leaves the order exactly where it
+      // was before this slice existed: unacknowledged, sitting in the board's
+      // "Accept now — Leafly is counting down" bucket, with a printed ticket
+      // and a chime already delivered. That is a graceful degradation to the
+      // previous behaviour, not a new failure mode.
+      // ── WHY THE STATE IS *NOT* PASSED IN FROM HERE ──────────────────────
+      //
+      // The first version of this call site passed `acknowledgedAt: null` and
+      // `leaflyStatus: null`, on the reasoning that the webhook had just
+      // created the row so it must be fresh and unacknowledged. THAT WAS A
+      // BUG, and it is recorded here rather than quietly fixed, because the
+      // reasoning was plausible enough to survive a review.
+      //
+      // Hard-coding `acknowledgedAt: null` does not merely pass a stale value:
+      // it DEFEATS THE IDEMPOTENCY CHECK ENTIRELY. `decideAutoAcknowledge`
+      // refuses to acknowledge an order whose stamp is already set, and an
+      // input that is always null can never trigger that refusal.
+      //
+      // There is a duplicate guard above, keyed on the body hash, and for an
+      // ordinary Leafly retry it returns early and this code never runs. But
+      // it is not absolute: when `recordLeaflyWebhookEvent` FAILS the handler
+      // deliberately carries on (answering 200 rather than inviting a retry),
+      // and in that window duplicate detection is impossible. Two deliveries
+      // could then both reach this line, both believe the order is
+      // unacknowledged, and both POST an acknowledgement — the second of which
+      // Leafly answers with a 409.
+      //
+      // So the state is read from the ROW, by the function that acts on it, at
+      // the moment it acts. That is the same rule this codebase already states
+      // where it matters: "One authoritative reader, at the point of use."
+      const { autoAcknowledgeOnArrival } = await import("./auto-ack-server");
+      const autoAck = await autoAcknowledgeOnArrival({
+        eventType: parsed.eventType,
+        leaflyOrderId: parsed.orderId,
+      });
+      notes.push(autoAck.summary);
+
       // ── STANDING OFFER 2 (round L-24): the LAST-RESORT staff alert ────────
       //
       // The owner was explicit that he does not want an order-arrived email:

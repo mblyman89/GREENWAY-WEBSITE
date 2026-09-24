@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/leafly-menu-sync",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/leafly-ack-sweep",
+      "schedule": "0 13 * * *"
     }
   ]
 }

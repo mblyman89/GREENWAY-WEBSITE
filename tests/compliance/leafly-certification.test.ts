@@ -447,10 +447,40 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
   // test fails and points here"). It failed, it pointed here, and this is the
   // update. The gate is not weakened -- it is inverted and tightened, because a
   // cron that exists can be wrong in more ways than a cron that does not.
-  it("exactly one declared cron syncs Leafly", () => {
+  //
+  // SLICE L-33 ADDED THE SECOND ONE, and this is the same event happening a
+  // second time. The test failed, it pointed here, and this is the update.
+  //
+  // The two crons do unrelated jobs and must not be confused:
+  //   • leafly-menu-sync  — pushes the MENU to Leafly (L-7, cadence graded by
+  //                         Leafly's certification checklist).
+  //   • leafly-ack-sweep  — acknowledges inbound ORDERS whose arrival webhook
+  //                         was missed (L-33), so they are not auto-cancelled.
+  //
+  // The gate is tightened rather than relaxed: it now pins BOTH paths by name
+  // and asserts they are distinct, so a third Leafly cron — or a rename that
+  // silently points the sweep at the menu sync — still fails here.
+  it("exactly two declared crons touch Leafly, and they do different jobs", () => {
     const leaflyCrons = crons.filter((c) => (c.path ?? "").toLowerCase().includes("leafly"));
-    expect(leaflyCrons).toHaveLength(1);
-    expect(leaflyCrons[0]?.path).toBe("/api/cron/leafly-menu-sync");
+    expect(leaflyCrons).toHaveLength(2);
+    const paths = leaflyCrons.map((c) => c.path).sort();
+    expect(paths).toEqual(["/api/cron/leafly-ack-sweep", "/api/cron/leafly-menu-sync"]);
+  });
+
+  it("the Leafly order-acknowledge sweep route exists and delegates", () => {
+    // Same reasoning as the menu-sync route test below: a cron pointing at a
+    // path with no handler deploys happily and 404s once a day forever, which
+    // looks like a working schedule in vercel.json and is not one.
+    const routePath = path.join("src", "app", "api", "cron", "leafly-ack-sweep", "route.ts");
+    expect(existsSync(path.join(ROOT, routePath))).toBe(true);
+    const routeSource = readText(routePath);
+    // It must delegate, not re-decide. The selection rule is a pure core with
+    // 3,657 self-test assertions; reimplementing any of it in the route throws
+    // that away.
+    expect(routeSource).toContain("sweepUnacknowledgedLeaflyOrders");
+    // Fail-closed like every other cron on this project.
+    expect(routeSource).toContain("shouldRefuseWhenSecretMissing");
+    expect(routeSource).toContain("CRON_SECRET");
   });
 
   it("the Leafly cron route actually exists on disk", () => {

@@ -2034,3 +2034,231 @@ answer to that question was the location of the defect. When someone who uses
 the system every day says *"don't these two do the same thing?"*, that is not a
 terminology request. It is a bug report from the only person positioned to file
 it, and the right response is to go and read the specification.
+
+---
+
+# CHAPTER TWELVE — L-33: THE BUTTON THAT PRESSES ITSELF
+
+## The question, and why it was a good one
+
+The owner did not file a bug this time. He asked a question:
+
+> "Can you tell me if we can build an auto acknowledge feature on our side? I
+> feel like 15 minutes is not enough time for us to press that button. When we
+> are busy, we can tell a customer, 'hang on, I have to go push a button in the
+> office', that's lame. Surely our system is smart enough to push the
+> acknowledge button for us right? Since an email doesn't go to the customer
+> after pressing acknowledge, messages start getting sent after that step. So we
+> should be able to acknowledge it automatically, print a receipt, make noise,
+> then when we are ready, we confirm it and fill it and complete it. Please
+> build me an auto acknowledge feature. **It can't be acknowledge and confirm in
+> the same step though. Just auto acknowledge.**"
+
+Embedded in that paragraph is a piece of reasoning that turned out to be exactly
+right, and which the codebase already agreed with without anyone noticing.
+
+He observed that no email reaches the customer when acknowledge is pressed, and
+concluded that acknowledging is therefore safe to automate: nothing is promised
+to anybody, so a machine can do it. That is precisely what `lifecycle-core.ts`
+had been saying since L-31 — `STEP_CUSTOMER_EFFECT.acknowledged` is `null`, and
+`confirmed` is the first shopper-visible status. He had derived, from watching
+his own inbox, a property the code already encoded.
+
+The answer to "can we?" was therefore not a matter of opinion, and it was not
+mine to give. It was in Leafly's specification:
+
+> "Orders are acknowledged as having been retrieved in whole **by your system**
+> within fifteen minutes of receiving an order submission webhook. Any orders
+> not acknowledged by this deadline will be auto canceled."
+
+*By your system.* Not "by a member of staff". The acknowledge endpoint takes no
+body, no actor and no staff identifier — Leafly cannot distinguish an automated
+acknowledgement from a manual one, because the API has no field in which the
+difference could be expressed.
+
+**The fifteen-minute human deadline was never Leafly's requirement. It was ours,
+by accident.** The owner had been sprinting to the office to satisfy a
+constraint nobody had imposed.
+
+## The part nobody asked about, which was the actual risk
+
+Building the feature was straightforward. The danger was somewhere else, and it
+came from the previous slice.
+
+L-32 shipped a rule treating *"acknowledged AND still pending"* as a
+contradiction — proof that the `status=confirmed` push had been lost — and
+replaced every button on such an order with a single diagnostic: **"Check this
+order with Leafly"**.
+
+Auto-acknowledge makes that exact state the **normal, correct, intended resting
+state of every order in the shop**: acknowledged by the machine, deliberately
+not confirmed, waiting for a human.
+
+This was not reasoned about in the abstract. `scripts/recon/l33-board-breakage-probe.mts`
+ran the real planner against the real row shape, and printed:
+
+```
+  row      : acknowledged + pending  (the NORMAL state after auto-acknowledge)
+  buttons  : Check this order with Leafly [PRIMARY]
+```
+
+One button. The wrong one. On every order, permanently. The owner's entire daily
+workflow — press Confirm, fill it, complete it — would have been replaced by a
+diagnostic for a failure that had not occurred. **The feature he asked for would
+have presented as an outage of the feature he already had.**
+
+The fix was not to delete L-32's rule. Deleting it would have handed him back
+the 400 error he had reported one slice earlier. The rule was **re-keyed onto a
+recorded fact**: a new column, `confirm_push_failed_at`, stamped only when a
+confirm push is actually attempted and actually fails. The two states can no
+longer be told apart by inference, so the difference is now *written down at the
+moment it happens*. Inferring it would have been guessing.
+
+## Three ways this could have shipped broken while green
+
+**1. A re-keyed rule with nothing writing the key.** The planner now asks "was a
+push failure recorded?" If nothing ever records one, the answer is always no,
+the repair path is never offered, and *every test still passes* — because the
+tests supply the flag directly. That is not a fix; it is a quietly disabled
+feature wearing a fix's clothing. Four write sites were added, including the one
+that is easiest to forget: **clearing** the flag when a later push succeeds. A
+warning that never clears is a warning staff learn to ignore, at which point it
+is worse than no warning at all, because it hides the real ones.
+
+**2. The one-line tri-state flattening.** `confirm_push_failed_at` has three
+meaningful states: *absent* (migration 0230 not applied yet — "I don't know"),
+*null* (healthy), and *a timestamp* (failed). The obvious code is
+`order.confirm_push_failed_at !== null`, and it is wrong in the first case,
+because `undefined !== null` is `true`. Every order in a pre-0230 shop would be
+reported as having a failed push — **B1's failure, delivered by B1's fix.** The
+mapping now lives in a tested core, and the naive comparison is pinned in the
+test suite as a *failing* comparison so nobody can simplify it back.
+
+**3. The cliff that replaced a staircase.** The board had two column lists, full
+and legacy. Appending 0230's columns to the full list silently widened the blast
+radius of a missing migration: a shop that *had* applied 0228 would have lost its
+"this order arrived and nobody was told" warnings purely because a *later*
+migration was outstanding. That is the exact class of bug the fallback was built
+to prevent. It is now a staircase — each step drops only the migration it is
+named for — and the four hand-written retries became one named walk, because
+four copies of a three-branch rule is four chances for the next migration to be
+added to three of them.
+
+## The net under the net
+
+The arrival hook only fires if the webhook arrives. A deploy, a cold start that
+times out, a Supabase blip, a delivery failure on Leafly's side — and an order is
+auto-cancelled while nobody is looking. The shopper hears from Leafly, not from
+us, so the first anyone at Greenway learns of it is a customer who never came in.
+
+Shipping only the arrival hook would have answered the letter of the request and
+missed the point of it. So there is a sweeper, with a deliberately narrow window:
+
+- **It waits two minutes.** Sweeping sooner would race the arrival hook and —
+  far worse — *permanently paper over a broken arrival path*, so the real bug
+  would never be found. A net that catches something is telling you the floor
+  above it has a hole.
+- **It stops thirty seconds before the deadline.** Past that, Leafly has already
+  cancelled; acknowledging is shouting at a closed door. Those orders are
+  reported as `expired` rather than dropped, because a loss must be visible.
+- **It acts on the soonest deadline first.** With a per-run cap, the orders left
+  behind must be the ones with time to spare — never the ones about to die. An
+  unsorted query returns oldest-first, which drops exactly the wrong ones.
+
+### An honest limitation, recorded rather than papered over
+
+This project is on Vercel Hobby, which permits **one cron run per day**. A daily
+tick cannot protect a fifteen-minute deadline, and pretending otherwise would be
+the sort of half-truth this log exists to prevent.
+
+It is shipped anyway, for three stated reasons: it is the **only thing in the
+system that will ever tell the owner his arrival webhook is failing** (a run that
+finds expired orders returns HTTP 502 — the status code *is* the alarm); the save
+is occasionally real; and the moment any sub-daily trigger exists — Vercel Pro, a
+free uptime monitor hitting the URL with the `CRON_SECRET`, a scheduled Action —
+it becomes a genuine net **with no code change at all**. That is the owner's
+decision to make, and it is written down rather than made for him.
+
+## Testing the tests
+
+The owner's instruction included *"test it, test the tests"*, and the second half
+is the one that earned its keep.
+
+The suite was green: 56 new compliance tests, 823 + 3,657 pure self-test
+assertions. The mutation sweep then broke the code sixteen ways on purpose and
+demanded the suite go red each time. **Run one: fourteen killed, one survived,
+one inert.** Both findings were real.
+
+The **survivor** was the more interesting. A test asserted that the column-fallback
+walk retried only on a missing-column error — by checking that the string
+`isMissingColumnError` appeared inside the function. The mutation replaced
+`if (!isMissingColumnError(result.error))` with `if (!result.error)`, which makes
+the board retry on *every* failure, including timeouts, three times, on the page
+that is the acknowledge button's redirect target. The identifier was still
+present. **The assertion was satisfied by a mutation that inverted the behaviour
+it claimed to protect.** It was replaced with six tests that *execute* the walk
+and count attempts: a timeout is asked once, not three times.
+
+The **inert** mutation was my own error — the anchor text did not exist, because
+the real guard normalises the value before testing it. Nothing was changed, and
+the "pass" meant nothing. An inert mutation is the most dangerous of the three
+outcomes, because it reports as success in a summary line: *the sweep says "0
+survived" while having tested nothing at all.*
+
+Both are recorded in the files themselves rather than quietly corrected, because
+"the test expected the wrong thing" is the most common way a wiring assertion
+gets weakened into uselessness. Run two: **16 killed, 0 survived, 0 inert.**
+
+## Four stale pins, none weakened
+
+The full suite then surfaced four failures in *other* slices' tests — each one a
+test pinned to "the newest thing" that had stopped being newest. Every one was
+updated in the direction of *more* strictness, not less:
+
+- A test counted occurrences of `BOARD_COLUMNS_LEGACY` and required at least
+  four. With the walk, the count legitimately dropped to two — which would have
+  looked like a regression when the degradation had strictly improved. It now
+  asserts the property the count was a proxy for: exactly four call sites, the
+  ladder ending at legacy, and the single-order read pinned by name.
+- "Exactly one declared cron syncs Leafly" became "exactly two, pinned by name,
+  and they do different jobs" — plus a new test that the sweep route exists,
+  delegates, and fails closed.
+- The migration tail pin moved from 0229 to 0230, with an explicit note that
+  0230 does **not** have a committed execution harness the way 0229 does, so
+  nobody mistakes a tripwire for the stronger guarantee.
+
+## What the owner gets
+
+He stops running to the office. An order arrives, the bell rings, the receipt
+prints, and the machine stops Leafly's cancellation clock — in that order,
+deliberately, because the bell is the cheap half and must not depend on the
+expensive half succeeding. Nothing is said to the shopper. When he is ready, he
+presses Confirm, and *that* is the moment the customer is told.
+
+The board tells him who pressed the button, and only when it actually knows.
+Rows that predate the column say nothing at all, because inventing an audit trail
+is worse than admitting we did not record one.
+
+## The lessons
+
+Chapter Ten: UI behaviour must be rendered, not read. Chapter Eleven: a test that
+cannot be made to fail has not been tested.
+
+**Chapter Twelve has two.**
+
+The first is about scope. *The feature was easy; the interaction was the risk.*
+Nobody asked what auto-acknowledge would do to the board, and the answer was
+"replace every button in the shop with a diagnostic". The dangerous part of a
+change is rarely the part being changed — it is the assumption somewhere else
+that the change quietly falsifies. L-14's confirm-on-acknowledge coupling was
+justified by a comment reading *"this is the point where a HUMAN pressed
+Accept"*: true when written, and evaporated the instant a machine could press it.
+**When you automate something, go and find every comment that says "a human did
+this", because each one is now a lie.**
+
+The second is about the owner. He worked out, from noticing which emails arrived,
+that acknowledging is invisible to the customer and therefore safe to automate —
+and he was right, and the specification agreed with him, and the codebase had
+already encoded it. **He was not asking permission. He was reporting a
+conclusion, and the job was to go and check it against the source of truth rather
+than to have an opinion about it.**

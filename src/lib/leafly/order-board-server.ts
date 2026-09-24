@@ -86,6 +86,24 @@ export type LeaflyBoardOrder = {
    */
   announced_at?: string | null;
   printed_at?: string | null;
+  /**
+   * SLICE L-33. When a `status=confirmed` push was ATTEMPTED and FAILED.
+   *
+   * Optional for the same reason as the two above, and the degradation is the
+   * same shape: until migration 0230 is applied by hand the column does not
+   * exist, the key is absent, and `planLeaflyOrderActions` treats absence as
+   * "no failure recorded" -- which offers the ORDINARY buttons. That is the
+   * safe direction: a missing value can only ever cause us to show the
+   * operator their normal workflow, never to hide it.
+   */
+  confirm_push_failed_at?: string | null;
+  /**
+   * SLICE L-33. 'auto' | 'human' | null. Whether the machine or a person
+   * acknowledged this order. Null on rows that predate the column -- genuinely
+   * unknown, and never guessed, because inventing an audit trail is worse than
+   * admitting we did not record one.
+   */
+  acknowledged_by_kind?: string | null;
 };
 
 /**
@@ -104,6 +122,33 @@ const BOARD_COLUMNS =
   // NOBODY WAS TOLD". Without them a silent arrival is indistinguishable from
   // a healthy one: the row exists, the status looks right, and the only
   // symptom is an order quietly auto-cancelling fifteen minutes later.
+  "announced_at, printed_at, " +
+  // SLICE L-33. `confirm_push_failed_at` is what lets the board tell a
+  // GENUINELY broken order from the ordinary post-auto-acknowledge resting
+  // state -- which, after L-33, look identical in every other column.
+  // `acknowledged_by_kind` is what lets it say WHO acknowledged, so a
+  // budtender does not go hunting for a button the machine already pressed.
+  "confirm_push_failed_at, acknowledged_by_kind";
+
+/**
+ * The same list WITHOUT the two columns migration 0230 adds.
+ *
+ * SLICE L-33. This tier exists because of a mistake that was nearly made when
+ * `confirm_push_failed_at` and `acknowledged_by_kind` were appended above.
+ * There were only ever two lists here -- full and legacy -- so adding columns
+ * to the full list silently widened the blast radius of a missing 0230: the
+ * single retry would have jumped straight to `BOARD_COLUMNS_LEGACY`, and a
+ * shop that HAD applied 0228 would have lost its "this order arrived and
+ * nobody was told" warnings purely because a LATER migration was outstanding.
+ *
+ * That is exactly the class of bug the fallback was built to prevent, so the
+ * fallback is now a staircase rather than a cliff: each step drops only the
+ * migration it is named for.
+ */
+const BOARD_COLUMNS_PRE_L33 =
+  "id, leafly_order_id, leafly_status, fulfillment_mechanism, marketplace, " +
+  "medical_status, payment_preference, acknowledge_by, acknowledged_at, " +
+  "canceled_at, cancelation_reason_code, local_order_id, first_seen_at, updated_at, " +
   "announced_at, printed_at";
 
 /**
@@ -120,6 +165,49 @@ const BOARD_COLUMNS_LEGACY =
   "id, leafly_order_id, leafly_status, fulfillment_mechanism, marketplace, " +
   "medical_status, payment_preference, acknowledge_by, acknowledged_at, " +
   "canceled_at, cancelation_reason_code, local_order_id, first_seen_at, updated_at";
+
+/**
+ * The column lists in the order they are tried: widest first, narrowest last.
+ *
+ * Named as ONE array rather than re-spelled at each call site because there
+ * are four readers in this file and they must not disagree about how far back
+ * to fall. Before L-33 each reader carried its own hand-written single retry;
+ * four copies of a two-branch rule is four chances for the next migration to
+ * be added to three of them.
+ *
+ * The order is not arbitrary. Each entry is a strict superset of the one after
+ * it, so the walk below can stop at the first list Postgres accepts and know
+ * it has the most information this database is capable of giving.
+ */
+const BOARD_COLUMN_TIERS = [
+  BOARD_COLUMNS,
+  BOARD_COLUMNS_PRE_L33,
+  BOARD_COLUMNS_LEGACY,
+] as const;
+
+/**
+ * Run a board query, stepping down one column tier at a time for as long as
+ * Postgres says a COLUMN is missing.
+ *
+ * Only `isMissingColumnError` advances the walk. Every other failure -- a dead
+ * connection, a timeout from `abortSignal`, a permissions error -- is returned
+ * immediately and untouched, because retrying those with fewer columns cannot
+ * help and would only turn one slow failure into three.
+ *
+ * The final tier's result is returned whatever it is. If even the legacy list
+ * fails then the schema is not one this code can read at all, and the caller's
+ * existing `problem` handling is the right place for that to surface.
+ */
+async function readWithColumnFallback<
+  R extends { error: { code?: string; message?: string } | null },
+>(run: (columns: string) => PromiseLike<R>): Promise<R> {
+  let result = await run(BOARD_COLUMN_TIERS[0]);
+  for (let tier = 1; tier < BOARD_COLUMN_TIERS.length; tier += 1) {
+    if (!isMissingColumnError(result.error)) return result;
+    result = await run(BOARD_COLUMN_TIERS[tier]);
+  }
+  return result;
+}
 
 /**
  * True when Postgres is telling us a COLUMN is missing, as opposed to any
@@ -316,15 +404,13 @@ export async function loadLeaflyOrderBoard(
         // already succeeded at Leafly.
         .abortSignal(dbDeadline("order_read"));
 
-    let pending = await runPending(BOARD_COLUMNS);
-    if (isMissingColumnError(pending.error)) {
-      // Migration 0228 is not applied yet. Drop the two pipeline columns and
-      // ask again. The board loses its "nobody was told" warnings -- which is
-      // why `placeLeaflyOrder` treats an ABSENT column as "not tracked" and
-      // stays silent rather than accusing every order of being silent -- but
-      // the shop keeps its orders, which is the part that cannot be lost.
-      pending = await runPending(BOARD_COLUMNS_LEGACY);
-    }
+    // Steps down through the column tiers. A database missing 0230 loses the
+    // auto-acknowledge columns only; a database missing 0228 as well loses the
+    // pipeline warnings too -- which is why `placeLeaflyOrder` treats an
+    // ABSENT column as "not tracked" and stays silent rather than accusing
+    // every order of being silent. In every case the shop keeps its orders,
+    // which is the part that cannot be lost.
+    const pending = await readWithColumnFallback(runPending);
 
     if (pending.error) {
       return {
@@ -350,10 +436,7 @@ export async function loadLeaflyOrderBoard(
           // this renders on the redirect target of the acknowledge click.
           .abortSignal(dbDeadline("order_read"));
 
-      let acked = await runAcked(BOARD_COLUMNS);
-      if (isMissingColumnError(acked.error)) {
-        acked = await runAcked(BOARD_COLUMNS_LEGACY);
-      }
+      const acked = await readWithColumnFallback(runAcked);
       // A failure on the SECOND query is reported as a problem but the pending
       // rows are still returned. The unacknowledged orders are the ones with a
       // deadline attached; withholding them because the history query failed
@@ -405,10 +488,7 @@ export async function loadLeaflyOrderBoard(
           // SLICE L-25. Bounded, same reasoning as the queries above.
           .abortSignal(dbDeadline("order_read"));
 
-      let closed = await runClosed(BOARD_COLUMNS);
-      if (isMissingColumnError(closed.error)) {
-        closed = await runClosed(BOARD_COLUMNS_LEGACY);
-      }
+      const closed = await readWithColumnFallback(runClosed);
       // Same posture as the acked query: a failure here is reported, but the
       // live orders are still returned. History is never worth a live order.
       if (closed.error) {
@@ -524,14 +604,11 @@ export async function getLeaflyBoardOrder(
         .abortSignal(dbDeadline("order_read"))
         .maybeSingle();
 
-    let { data, error } = await runOne(BOARD_COLUMNS);
-    if (isMissingColumnError(error)) {
-      // This retry matters more than the other two, not less. A null from
-      // here makes the server action refuse to acknowledge, and an order that
-      // cannot be acknowledged is an order Leafly auto-cancels. A cosmetic
-      // missing column must never be allowed to cost the shop a sale.
-      ({ data, error } = await runOne(BOARD_COLUMNS_LEGACY));
-    }
+    // This walk matters more than the other three, not less. A null from here
+    // makes the server action refuse to acknowledge, and an order that cannot
+    // be acknowledged is an order Leafly auto-cancels. A cosmetic missing
+    // column must never be allowed to cost the shop a sale.
+    const { data, error } = await readWithColumnFallback(runOne);
     if (error) {
       console.error("[leafly/board] single order read failed:", error.message);
       return null;

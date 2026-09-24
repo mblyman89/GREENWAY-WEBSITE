@@ -1161,7 +1161,22 @@ describe("the migration list is ordered the way the database will see it", () =>
     // Sections 5b and 5c exist because of that run. Now 13 caught, 0 survived.
     // Harness: scripts/compliance/prove-0229-executes.sh
     //          scripts/compliance/sabotage-0229-proof.sh
-    expect(listed[listed.length - 1]).toMatch(/^0229_/);
+    //
+    // SLICE L-33 added 0230_leafly_auto_acknowledge.sql, so the tail moves.
+    // The ledger above about 0229's execution proof is unchanged and still
+    // applies to 0229; only the "which file is last" pin is updated.
+    //
+    // NOTE ON WHAT THIS PIN IS AND IS NOT: it is a tripwire that forces any
+    // slice adding a migration to come and read this block, which is where
+    // the gapless/padded/duplicate rules below are explained. It is NOT a
+    // claim that 0230 has been executed against a real Postgres in CI. 0230
+    // WAS verified against a real Postgres during L-33 (all three statements,
+    // including the CHECK constraint rejecting a bad `acknowledged_by_kind`
+    // and the partial index's predicate), but that was a one-off run in the
+    // build sandbox, not a committed harness like prove-0229-executes.sh.
+    // Recorded plainly rather than implied, so nobody later mistakes this
+    // line for the stronger guarantee 0229 has.
+    expect(listed[listed.length - 1]).toMatch(/^0230_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
