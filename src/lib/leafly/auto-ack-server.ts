@@ -45,11 +45,14 @@ import {
   isAutoAcknowledgeEnabled,
   LEAFLY_AUTO_ACK_ENV_VAR,
 } from "./auto-ack-core";
-// SLICE L-33 (C7) -- the sweeper's selection rule. Pure, no I/O, 3,657
-// self-test assertions. Everything this file does about WHICH orders to
+// SLICE L-33 (C7) -- the sweeper's selection rule. Pure, no I/O, exhaustive
+// self-tests (18,000+ assertions since L-34). Everything this file does about WHICH orders to
 // sweep is decided there, not here.
 import {
+  claimPermitsAcknowledge,
+  decideSweepClaim,
   planAutoAckSweep,
+  type SweepClaimOutcome,
   SWEEP_EXPIRED_REPORT_MS,
   SWEEP_MAX_PER_RUN,
   SWEEP_NULL_DEADLINE_MAX_AGE_MS,
@@ -414,7 +417,54 @@ type SweepRow = {
   first_seen_at: string | null;
   leafly_status: string | null;
   canceled_at: string | null;
+  /** L-34: read so the concurrent-run claim can compare-and-swap on it. */
+  updated_at: string | null;
 };
+
+/**
+ * SLICE L-34 — claim one row for THIS sweep run before pressing acknowledge.
+ *
+ * See `decideSweepClaim` in auto-ack-sweep-core.ts for the full reasoning.
+ * Short version: at a two-minute cadence Vercel may deliver the same tick
+ * twice, two runs may read the same order, and the re-read inside
+ * `autoAcknowledgeOnArrival` is a read, not a lock — both runs can pass it.
+ * The local-order bridge's check-then-insert is not atomic either. This
+ * compare-and-swap on `updated_at` (rewritten by the `set_updated_at` BEFORE
+ * UPDATE trigger) lets exactly one run through. Never throws.
+ */
+async function claimSweepRow(
+  leaflyOrderId: string,
+  readUpdatedAt: string | null,
+): Promise<SweepClaimOutcome> {
+  if (readUpdatedAt === null || readUpdatedAt.trim() === "") {
+    return decideSweepClaim({ readUpdatedAt, error: null, rowsUpdated: null });
+  }
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("leafly_orders")
+      // The value written is irrelevant — the trigger overwrites it with
+      // now(). Writing it explicitly keeps the statement meaningful even if
+      // the trigger were ever dropped.
+      .update({ updated_at: new Date().toISOString() })
+      .eq("leafly_order_id", leaflyOrderId)
+      .is("acknowledged_at", null)
+      .eq("updated_at", readUpdatedAt)
+      .select("leafly_order_id")
+      .abortSignal(dbDeadline("order_write"));
+    return decideSweepClaim({
+      readUpdatedAt,
+      error: error?.message ?? null,
+      rowsUpdated: error ? null : Array.isArray(data) ? data.length : null,
+    });
+  } catch (err) {
+    return decideSweepClaim({
+      readUpdatedAt,
+      error: err instanceof Error ? err.message : "unknown error",
+      rowsUpdated: null,
+    });
+  }
+}
 
 /**
  * Find unacknowledged orders whose arrival hook did not fire, and acknowledge
@@ -490,7 +540,7 @@ export async function sweepUnacknowledgedLeaflyOrders(
     const { data, error } = await admin
       .from("leafly_orders")
       .select(
-        "leafly_order_id, acknowledged_at, acknowledge_by, first_seen_at, leafly_status, canceled_at",
+        "leafly_order_id, acknowledged_at, acknowledge_by, first_seen_at, leafly_status, canceled_at, updated_at",
       )
       // The partial index added in 0225 and widened in 0230 covers exactly
       // this predicate, so the query stays cheap however many orders the shop
@@ -536,13 +586,35 @@ export async function sweepUnacknowledgedLeaflyOrders(
     // takes a handful of orders an hour, and the failure mode of being rate
     // limited here is the exact failure this function exists to prevent. Ten
     // sequential calls fit inside the route's budget with room to spare.
+    // L-34: the value each row had when this run read it, for the claim.
+    const readUpdatedAtById = new Map<string, string | null>();
+    for (const r of rows) {
+      const rid = (r.leafly_order_id ?? "").trim();
+      if (rid) readUpdatedAtById.set(rid, r.updated_at ?? null);
+    }
+
     for (const decision of plan.toSweep) {
       const id = (decision.leaflyOrderId ?? "").trim();
       if (!id) continue;
+      // L-34: CLAIM FIRST. At a two-minute cadence two sweep runs can be in
+      // flight at once (Vercel may deliver a tick twice). The claim is a
+      // compare-and-swap that lets exactly one of them through; a webhook or
+      // human press that touched the row since we read it also makes the
+      // claim fail, which is the correct outcome — the row changed under us.
+      const claim = await claimSweepRow(id, readUpdatedAtById.get(id) ?? null);
+      if (!claimPermitsAcknowledge(claim)) {
+        details.push({
+          leaflyOrderId: id,
+          outcome:
+            `${id}: skipped this run — another run or the arrival path changed ` +
+            `the order after it was read; the next sweep will re-check it.`,
+        });
+        continue;
+      }
       // Reuses the arrival path verbatim, including its re-read of the row.
       // That re-read is what makes the sweep safe against a webhook that
-      // lands in the middle of this loop: the order gets acknowledged once,
-      // by whichever path reaches it first, and the other says
+      // landed before the claim: the order gets acknowledged once, by
+      // whichever path reaches it first, and the other says
       // "already_acknowledged" and moves on.
       const outcome = await autoAcknowledgeOnArrival({
         eventType: "order_submit",

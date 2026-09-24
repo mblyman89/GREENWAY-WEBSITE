@@ -481,6 +481,73 @@ export function planAutoAckSweep(
 }
 
 /* ========================================================================== *
+ * 3b. CONCURRENT-RUN CLAIM  (SLICE L-34)
+ * ========================================================================== */
+
+/**
+ * What to do after trying to CLAIM a candidate row before acknowledging it.
+ *
+ * WHY THIS EXISTS. Vercel's cron documentation states that delivery is best
+ * effort and that the same invocation may occasionally be delivered more than
+ * once. At one tick a day that was academic. At a tick every two minutes, two
+ * concurrent runs can read the same unacknowledged order. Both would then call
+ * `acknowledgeLeaflyOrder`, and both would reach `onLeaflyOrderAccepted`,
+ * whose "no local order yet?" check and its insert are not atomic: the
+ * register could receive the same Leafly order twice.
+ *
+ * THE CLAIM is a compare-and-swap on `leafly_orders.updated_at`, which a
+ * BEFORE UPDATE trigger (`set_updated_at`, migrations 0001/0225) rewrites on
+ * every update. The server issues
+ *
+ *     UPDATE leafly_orders SET updated_at = now()
+ *      WHERE leafly_order_id = $id AND acknowledged_at IS NULL
+ *        AND updated_at = $valueItRead
+ *
+ * Under READ COMMITTED the second of two concurrent writers waits for the
+ * first, re-evaluates the WHERE against the new row version, and matches zero
+ * rows. Exactly one run proceeds. No new column, no migration.
+ *
+ * THE DECISION, and why it is not symmetric:
+ *
+ *   • one row updated   → "claimed": this run owns the order; acknowledge.
+ *   • zero rows updated → "lost_race": another run (or the arrival webhook,
+ *                         or a human press) changed the row after we read it.
+ *                         Skip it THIS tick. If it is still unacknowledged the
+ *                         next tick — two minutes later, well inside the
+ *                         window — reads the fresh value and claims it.
+ *   • error / no value  → "claim_unavailable": we could not establish the
+ *                         claim at all. Act anyway. This module fails towards
+ *                         acting throughout, because a lost sale is worse than
+ *                         the rare duplicate this guard exists to prevent, and
+ *                         a database that cannot run the claim will very
+ *                         likely refuse the acknowledgement path too.
+ */
+export type SweepClaimOutcome = "claimed" | "lost_race" | "claim_unavailable";
+
+export function decideSweepClaim(input: {
+  /** The `updated_at` the sweep query read. Empty/null ⇒ no CAS possible. */
+  readUpdatedAt: string | null | undefined;
+  /** Error message from the conditional update, if any. */
+  error: string | null | undefined;
+  /** How many rows the conditional update returned. */
+  rowsUpdated: number | null | undefined;
+}): SweepClaimOutcome {
+  const read = typeof input.readUpdatedAt === "string" ? input.readUpdatedAt.trim() : "";
+  if (read === "") return "claim_unavailable";
+  if (typeof input.error === "string" && input.error.trim() !== "") return "claim_unavailable";
+  if (typeof input.rowsUpdated !== "number" || !Number.isFinite(input.rowsUpdated)) {
+    return "claim_unavailable";
+  }
+  if (input.rowsUpdated >= 1) return "claimed";
+  return "lost_race";
+}
+
+/** Whether a claim outcome permits pressing acknowledge. */
+export function claimPermitsAcknowledge(outcome: SweepClaimOutcome): boolean {
+  return outcome !== "lost_race";
+}
+
+/* ========================================================================== *
  * 4. SELF-TESTS
  * ========================================================================== */
 
@@ -948,6 +1015,51 @@ export function __runLeaflyAutoAckSweepTests(): { passed: number; failed: number
       "while doing nothing",
   );
   ok(SWEEP_MAX_PER_RUN > 0, "the per-run cap permits work");
+
+  // ── L-34: concurrent-run claim ───────────────────────────────────────────
+  {
+    const T = "2026-09-20T12:00:00.123456+00:00";
+    ok(decideSweepClaim({ readUpdatedAt: T, error: null, rowsUpdated: 1 }) === "claimed",
+      "L-34 claim: one row updated = this run owns the order");
+    ok(decideSweepClaim({ readUpdatedAt: T, error: null, rowsUpdated: 0 }) === "lost_race",
+      "L-34 claim: zero rows = a concurrent run got there first; skip this tick");
+    ok(decideSweepClaim({ readUpdatedAt: T, error: "timeout", rowsUpdated: null }) === "claim_unavailable",
+      "L-34 claim: an error is NOT a lost race");
+    ok(decideSweepClaim({ readUpdatedAt: null, error: null, rowsUpdated: 1 }) === "claim_unavailable",
+      "L-34 claim: no value read means no CAS was possible");
+    ok(decideSweepClaim({ readUpdatedAt: "  ", error: null, rowsUpdated: 0 }) === "claim_unavailable",
+      "L-34 claim: a blank value read is the same as none");
+    ok(decideSweepClaim({ readUpdatedAt: T, error: "", rowsUpdated: 0 }) === "lost_race",
+      "L-34 claim: an empty error string is not an error");
+    ok(decideSweepClaim({ readUpdatedAt: T, error: null, rowsUpdated: Number.NaN }) === "claim_unavailable",
+      "L-34 claim: a non-number row count is not proof of a lost race");
+    ok(decideSweepClaim({ readUpdatedAt: T, error: null, rowsUpdated: undefined }) === "claim_unavailable",
+      "L-34 claim: a missing row count is not proof of a lost race");
+    ok(claimPermitsAcknowledge("claimed") && claimPermitsAcknowledge("claim_unavailable"),
+      "L-34 claim: claimed and unavailable both act (fail towards acting)");
+    ok(!claimPermitsAcknowledge("lost_race"),
+      "L-34 claim: ONLY a proven lost race suppresses the press");
+
+    // Two runs, one row: simulate the CAS exactly as Postgres resolves it.
+    // The winner's update changes updated_at; the loser's WHERE no longer
+    // matches. Exactly one press, for every interleaving of the two.
+    let presses = 0;
+    for (const winnerFirst of [true, false]) {
+      let rowUpdatedAt = T;
+      const attempt = (read: string) => {
+        const matched = rowUpdatedAt === read ? 1 : 0;
+        if (matched) rowUpdatedAt = "2026-09-20T12:00:01.000001+00:00";
+        return decideSweepClaim({ readUpdatedAt: read, error: null, rowsUpdated: matched });
+      };
+      const a = attempt(T);
+      const b = attempt(T);
+      const outcomes = winnerFirst ? [a, b] : [b, a];
+      const n = outcomes.filter(claimPermitsAcknowledge).length;
+      presses += n;
+      ok(n === 1, `L-34 claim: two concurrent runs press exactly once (order ${winnerFirst ? "AB" : "BA"})`);
+    }
+    ok(presses === 2, "L-34 claim: one press per interleaving, two interleavings");
+  }
 
   if (failed === 0) {
     console.log(`leafly-auto-ack-sweep: ${passed} assertions passed, 0 failed`);

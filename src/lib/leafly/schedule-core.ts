@@ -166,6 +166,14 @@ export const BACKOFF_MINUTES_MAX = 240;
  * Hobby, and all three existing crons in `vercel.json` are once-daily, which
  * corroborates it. So in production this scheduler gets ONE tick per day.
  *
+ * SLICE L-34 UPDATE: the project is now on Vercel Pro and the menu-sync cron
+ * ticks every fifteen minutes, so every Pacific hour is visited and the hour
+ * preference below is normally what triggers the full sync. This constant is
+ * KEPT, unchanged, as the safety net for the cases that remain: Vercel
+ * describes cron delivery as best effort, a deployment or Instant Rollback
+ * can interrupt ticks, and the owner may change the hour. The reasoning below
+ * is the original Hobby-era record and is still correct as a worst case.
+ *
  * With one tick per day, an `hour >= dailyFullHour` test is a trap:
  *
  *   - Vercel cron expressions are UTC, and Pacific is UTC-7 in summer but
@@ -576,9 +584,10 @@ export function decideScheduledRun(input: ScheduledRunInput): ScheduledRunDecisi
   const fullOverdue = dailyFullIsOverdue(input.nowIso, input.lastFullSyncIso);
   // Two independent triggers, and the OR between them is the whole point. The
   // first is the owner's preferred time of day. The second is the guarantee that
-  // survives DST shifts, Vercel's +-59 minute precision, a misconfigured hour,
-  // and the fact that on this plan there is only one tick per day to get it
-  // right. See DAILY_CATCHUP_HOURS.
+  // survives DST shifts, a misconfigured hour, and missed ticks. (On Hobby
+  // there was only one tick per day to get it right; on Pro, since L-34,
+  // there are 96, and this OR is the safety net rather than the main path.)
+  // See DAILY_CATCHUP_HOURS.
   if ((hour >= s.dailyFullHour && !fullRanToday) || fullOverdue) {
     return {
       shouldRun: true,
@@ -726,6 +735,58 @@ export function isFullSyncEvidence(row: {
 /** The PostgREST `or=` filter equivalent of `isFullSyncEvidence`. */
 export const FULL_SYNC_EVIDENCE_FILTER =
   "and(method.eq.POST,disposition.eq.success),and(decision_code.eq.daily_full,disposition.eq.skipped)";
+
+/**
+ * SLICE L-34 — WHO WINS WHEN TWO SCHEDULED RUNS START AT ONCE.
+ *
+ * The run lock is "an unfinished row in leafly_sync_runs". The server reads
+ * the in-flight rows, lets the core decide, and only then inserts its own
+ * row. That read-then-insert is not atomic: if Vercel delivers the same tick
+ * twice (its documentation says this can happen), both invocations can read
+ * "nothing in flight" and both insert. On a once-a-day cron that needed a
+ * duplicate delivery on the one tick of the day; at a tick every fifteen
+ * minutes it is ninety-six chances a day.
+ *
+ * The fix is the standard insert-then-verify tie-break. After inserting its
+ * row, each run re-reads the unfinished SCHEDULED rows. Every insert has
+ * committed by then (each PostgREST request is its own transaction), so both
+ * runs see both rows and apply the same deterministic rule: the earliest
+ * non-stale row by (started_at, id) wins. Exactly one proceeds; the other
+ * closes its row as refused with code `run_in_flight`.
+ *
+ * Returns true when `ownId` is the winner. Fails towards PROCEEDING when its
+ * own row is missing from what it read (a lagging read must not make every
+ * run stand down, which would silently stop syncing), matching the existing
+ * posture of `openRun`: a lock row we hold is permission to push.
+ */
+export function wonRunStartRace(input: {
+  ownId: string;
+  rows: readonly { id: string | null | undefined; startedAt: string | null | undefined }[];
+  nowIso: string;
+}): boolean {
+  const own = input.rows.find((r) => r.id === input.ownId);
+  if (!own) return true;
+  const live = input.rows.filter((r) => {
+    if (typeof r.id !== "string" || r.id === "") return false;
+    if (typeof r.startedAt !== "string") return false;
+    const age = minutesBetween(input.nowIso, r.startedAt);
+    // Unparseable or future timestamps are kept (conservative: they compete).
+    if (age === null) return true;
+    return age < STALE_RUN_MINUTES;
+  });
+  if (!live.some((r) => r.id === input.ownId)) return true;
+  const key = (r: { id: string | null | undefined; startedAt: string | null | undefined }) => {
+    const t = Date.parse(String(r.startedAt));
+    return { t: Number.isFinite(t) ? t : Number.POSITIVE_INFINITY, id: String(r.id) };
+  };
+  const winner = [...live].sort((a, b) => {
+    const ka = key(a);
+    const kb = key(b);
+    if (ka.t !== kb.t) return ka.t - kb.t;
+    return ka.id < kb.id ? -1 : ka.id > kb.id ? 1 : 0;
+  })[0]!;
+  return winner.id === input.ownId;
+}
 
 /**
  * Should this refusal be written to the run log? See REFUSAL_HEARTBEAT_MINUTES.
@@ -1777,6 +1838,52 @@ export function __runLeaflyScheduleTests(): { passed: number; failed: number } {
       }
     }
     ok(`L-34: a day of routine refusals at */15 writes 24 rows, not 96 (got ${written})`, written === 24);
+  }
+
+  // --- 7f. SLICE L-34: concurrent scheduled-run start race ----------------
+  {
+    const N = "2026-06-15T19:00:10.000Z";
+    const r = (id: string, startedAt: string) => ({ id, startedAt });
+    const a = r("aaa", "2026-06-15T19:00:00.100Z");
+    const b = r("bbb", "2026-06-15T19:00:00.200Z");
+    ok("L-34 race: the earlier row wins", wonRunStartRace({ ownId: "aaa", rows: [a, b], nowIso: N }));
+    ok("L-34 race: the later row stands down", !wonRunStartRace({ ownId: "bbb", rows: [a, b], nowIso: N }));
+    ok("L-34 race: order of the rows read does not matter",
+      !wonRunStartRace({ ownId: "bbb", rows: [b, a], nowIso: N }) &&
+        wonRunStartRace({ ownId: "aaa", rows: [b, a], nowIso: N }));
+    const t = "2026-06-15T19:00:00.000Z";
+    ok("L-34 race: identical timestamps are broken by id, deterministically",
+      wonRunStartRace({ ownId: "aaa", rows: [r("bbb", t), r("aaa", t)], nowIso: N }) &&
+        !wonRunStartRace({ ownId: "bbb", rows: [r("bbb", t), r("aaa", t)], nowIso: N }));
+    ok("L-34 race: alone, a run always proceeds", wonRunStartRace({ ownId: "aaa", rows: [a], nowIso: N }));
+    ok("L-34 race: own row missing from the read = proceed (never all stand down)",
+      wonRunStartRace({ ownId: "zzz", rows: [a, b], nowIso: N }));
+    const stale = r("old", "2026-06-15T18:00:00.000Z");
+    ok("L-34 race: a STALE abandoned row does not beat a live run",
+      wonRunStartRace({ ownId: "bbb", rows: [stale, b], nowIso: N }));
+    ok("L-34 race: rows with no id or time are ignored",
+      wonRunStartRace({ ownId: "bbb", rows: [{ id: null, startedAt: t }, { id: "x", startedAt: null }, b], nowIso: N }));
+    // Exhaustive: for every set of 1..4 concurrent runs, in every read order,
+    // exactly ONE run proceeds.
+    const ids = ["r1", "r2", "r3", "r4"];
+    const times = ["2026-06-15T19:00:00.000Z", "2026-06-15T19:00:00.000Z", "2026-06-15T19:00:00.300Z", "2026-06-15T19:00:01.000Z"];
+    let sets = 0;
+    let allOne = true;
+    for (let n = 1; n <= 4; n++) {
+      const rows = ids.slice(0, n).map((id, i) => r(id, times[i]!));
+      const perms: (typeof rows)[] = [];
+      const permute = (arr: typeof rows, acc: typeof rows) => {
+        if (arr.length === 0) { perms.push(acc); return; }
+        arr.forEach((x, i) => permute([...arr.slice(0, i), ...arr.slice(i + 1)], [...acc, x]));
+      };
+      permute(rows, []);
+      for (const view of perms) {
+        sets += 1;
+        const winners = rows.filter((x) => wonRunStartRace({ ownId: x.id, rows: view, nowIso: N })).length;
+        if (winners !== 1) allOne = false;
+      }
+    }
+    ok("L-34 race: exactly one winner for every run count and read order (33 cases)", allOne && sets === 33);
   }
 
   // --- 7d2. SLICE L-34: a skipped daily POST is the day's full sync (Defect E)

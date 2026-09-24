@@ -453,15 +453,21 @@ describe("SLICE L-33 §5 — the sweeper", () => {
     const cfg = JSON.parse(SRC.vercel) as { crons: Array<{ path: string; schedule: string }> };
     const entry = cfg.crons.find((c) => c.path === "/api/cron/leafly-ack-sweep");
     expect(entry).toBeDefined();
-    // Vercel Hobby rejects sub-daily expressions AT DEPLOY TIME, which would
-    // fail the whole deployment — not just this feature. Pinned so a
-    // well-meaning "make it every 5 minutes" is caught in CI rather than by a
-    // red deploy. The limitation is recorded in the route's header; lifting
-    // it is a billing decision for the owner.
-    expect(entry?.schedule).toMatch(/^0 \d+ \* \* \*$/);
+    // SLICE L-34 — VERCEL PRO. This used to pin `0 H * * *` because Hobby
+    // rejects sub-daily expressions at deploy time. The project is now on Pro
+    // (minimum interval one minute) and the owner chose a 2–3 minute sweep,
+    // so it is pinned to exactly every 2 minutes. A once-a-day sweep gave an
+    // order whose webhook was missed essentially no chance: Leafly's window is
+    // minutes wide and a daily tick lands inside it ~0 times per order (see
+    // scripts/recon/l34-cadence-probe.mts, PROBE 4).
+    expect(entry?.schedule).toBe("*/2 * * * *");
   });
 
   it("its schedule does not collide with another cron's cold start", () => {
+    // L-34: sub-daily crons necessarily share some minutes with each other
+    // (both Leafly ticks fire at :00, :30 …). What must stay true is that no
+    // two crons are declared with an IDENTICAL expression — that is the
+    // copy-paste mistake this guards against.
     const cfg = JSON.parse(SRC.vercel) as { crons: Array<{ schedule: string }> };
     const hours = cfg.crons.map((c) => c.schedule);
     expect(new Set(hours).size).toBe(hours.length);
@@ -806,19 +812,44 @@ describe("SLICE L-33 §8 — the operating guide matches the shipped system", ()
     expect(GUIDE).toContain(sweep!.schedule);
   });
 
-  it("states the once-a-day limitation rather than overselling the sweeper", () => {
-    // This is a HONESTY pin. The temptation, when writing an owner-facing doc,
-    // is to describe the safety net as a safety net. On Vercel Hobby it runs
-    // once a day, which is not a net for a fifteen-minute window, and the
-    // guide must keep saying so for as long as the schedule says so.
-    const isDaily = /^0 \d+ \* \* \*$/.test(
-      (JSON.parse(SRC.vercel) as { crons: { path: string; schedule: string }[] })
-        .crons.find((c) => c.path === "/api/cron/leafly-ack-sweep")!.schedule,
-    );
+  it("states the sweeper's real cadence, whatever it is (honesty pin, L-34)", () => {
+    // This is a HONESTY pin, in both directions. On Hobby it ran once a day,
+    // which is not a net for a fifteen-minute window, and the guide had to
+    // say so. On Pro (L-34) it runs every two minutes, and the guide must say
+    // THAT — with the number of chances an order actually gets, derived from
+    // the constants rather than typed — so it neither oversells a daily
+    // detector nor undersells a working net.
+    const schedule = (JSON.parse(SRC.vercel) as { crons: { path: string; schedule: string }[] })
+      .crons.find((c) => c.path === "/api/cron/leafly-ack-sweep")!.schedule;
+    const flat = GUIDE.replace(/\s+/g, " ");
+    const isDaily = /^0 \d+ \* \* \*$/.test(schedule);
     if (isDaily) {
-      expect(GUIDE).toMatch(/one cron run per day/i);
-      expect(GUIDE).toMatch(/not\b[^.]*real-time net/i);
+      expect(flat).toMatch(/runs once a day/i);
+      expect(flat).toMatch(/not\b[^.]*real-time net/i);
+      return;
     }
+    const step = /^\*\/(\d+) \* \* \* \*$/.exec(schedule);
+    expect(step, `unrecognised sweep schedule ${schedule}`).not.toBeNull();
+    const minutes = Number.parseInt(step![1]!, 10);
+    const words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+    // Pin the HEADLINE statement, not just any occurrence of the phrase. The
+    // first draft used a bare "every two minutes" and the guide mutation
+    // check (scripts/recon/l33-guide-mutation-check.sh, mutation 3) proved it
+    // survived a rewritten headline because the phrase recurs further down.
+    expect(flat).toContain(`That is **every ${words[minutes]} minutes**`);
+    // Leafly's window is fifteen minutes; the actionable part is that minus
+    // the grace period and the deadline margin. Worst-case phase gives
+    // floor(window / tick) chances. The guide must quote exactly that.
+    const windowMs = 15 * 60_000 - SWEEP_GRACE_MS - SWEEP_DEADLINE_MARGIN_MS;
+    const chances = Math.floor(windowMs / (minutes * 60_000));
+    expect(chances).toBeGreaterThanOrEqual(2);
+    expect(flat).toContain(`roughly **${words[chances]} separate chances**`);
+    // The invocation arithmetic is quoted too; derive and compare.
+    const perMonth = Math.round((1440 / minutes) * 30);
+    expect(flat).toContain(perMonth.toLocaleString("en-US"));
+    // And the best-effort caveat must survive: Vercel does not guarantee
+    // delivery, so the guide must not imply that it does.
+    expect(flat).toMatch(/best effort/i);
   });
 
   it("quotes the sweeper's real safety numbers", () => {

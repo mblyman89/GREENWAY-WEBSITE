@@ -32,7 +32,12 @@ import {
   assessMenuCertificationReadiness,
   type MenuCertificationInputs,
 } from "@/lib/leafly/certification-core";
-import { DAILY_HOUR_DEFAULT } from "@/lib/leafly/schedule-core";
+import {
+  DAILY_HOUR_DEFAULT,
+  INTRADAY_CHOICES,
+  INTRADAY_DUE_TOLERANCE_MINUTES,
+  INTRADAY_MINUTES_MIN,
+} from "@/lib/leafly/schedule-core";
 import type { LeaflyReconcileResult } from "@/lib/leafly/readback-core";
 
 const ROOT = process.cwd();
@@ -469,14 +474,14 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
 
   it("the Leafly order-acknowledge sweep route exists and delegates", () => {
     // Same reasoning as the menu-sync route test below: a cron pointing at a
-    // path with no handler deploys happily and 404s once a day forever, which
+    // path with no handler deploys happily and 404s on every tick forever, which
     // looks like a working schedule in vercel.json and is not one.
     const routePath = path.join("src", "app", "api", "cron", "leafly-ack-sweep", "route.ts");
     expect(existsSync(path.join(ROOT, routePath))).toBe(true);
     const routeSource = readText(routePath);
     // It must delegate, not re-decide. The selection rule is a pure core with
-    // 3,657 self-test assertions; reimplementing any of it in the route throws
-    // that away.
+    // a large exhaustive self-test (18,000+ assertions since L-34);
+    // reimplementing any of it in the route throws that away.
     expect(routeSource).toContain("sweepUnacknowledgedLeaflyOrders");
     // Fail-closed like every other cron on this project.
     expect(routeSource).toContain("shouldRefuseWhenSecretMissing");
@@ -498,40 +503,150 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
     expect(routeSource).toContain("CRON_SECRET");
   });
 
-  it("every cron schedule runs at most once per day (Vercel Hobby limit)", () => {
-    // MEASURED CONSTRAINT, not a style rule. Vercel's cron documentation (read
-    // 2026-09-18, page last updated 2026-07-15) states Hobby accounts are
-    // "limited to cron jobs that run once per day" and that a more frequent
-    // expression "will fail during deployment". This project is recorded as
-    // Vercel Hobby in docs/CRYPTO_PORTFOLIO_BIBLE.md.
-    //
-    // So a sub-daily expression here does not degrade the Leafly sync -- it
-    // BREAKS EVERY DEPLOYMENT of the whole site, including the point of sale.
-    // This test is the guard rail that stops a well-meant "let's sync hourly"
-    // from taking the shop offline.
+  // SLICE L-34 — VERCEL PRO. This block previously read "every cron schedule
+  // runs at most once per day (Vercel Hobby limit)" and pinned the minute and
+  // hour fields to plain integers. That was a MEASURED constraint on Hobby and
+  // it did its job: the day the cadence was raised it failed and pointed here.
+  // The project is now on Vercel Pro (required for deploying this project at
+  // all -- see AGENTS.md "Vercel plan"). Vercel's cron documentation for Pro:
+  // minimum interval once per minute, per-minute scheduling precision, 100
+  // cron jobs per project.
+  //
+  // The gate is NOT deleted, it is replaced with a stricter one. Instead of
+  // "integers only", every expression is PARSED and the number of runs per day
+  // is computed, and each cron is pinned to the cadence it was designed for.
+  // A typo ("*/2" landing on the menu sync), an accidental every-minute
+  // expression, or a sub-daily compliance cron all fail here by name.
+  function countField(field: string, lo: number, hi: number): number | null {
+    // Supports the forms this project uses: "*", "*/N", "N". Anything else
+    // (lists, ranges, names) returns null so the test fails loudly rather
+    // than guessing what the expression means.
+    if (field === "*") return hi - lo + 1;
+    const step = /^\*\/(\d+)$/.exec(field);
+    if (step) {
+      const n = Number.parseInt(step[1]!, 10);
+      if (!(n >= 1)) return null;
+      return Math.floor((hi - lo) / n) + 1;
+    }
+    if (/^\d+$/.test(field)) {
+      const v = Number.parseInt(field, 10);
+      return v >= lo && v <= hi ? 1 : null;
+    }
+    return null;
+  }
+  function runsPerDay(schedule: string): number | null {
+    const parts = schedule.trim().split(/\s+/);
+    if (parts.length !== 5) return null;
+    const [minute, hour, dom, month, dow] = parts as [string, string, string, string, string];
+    if (dom !== "*" || month !== "*" || dow !== "*") return null;
+    const m = countField(minute, 0, 59);
+    const h = countField(hour, 0, 23);
+    if (m === null || h === null) return null;
+    return m * h;
+  }
+  function stepMinutes(schedule: string): number | null {
+    const [minute, hour] = schedule.trim().split(/\s+/);
+    const step = /^\*\/(\d+)$/.exec(minute ?? "");
+    if (!step || hour !== "*") return null;
+    return Number.parseInt(step[1]!, 10);
+  }
+
+  it("the cron parser used below is itself correct (test the test)", () => {
+    expect(runsPerDay("0 16 * * *")).toBe(1);
+    expect(runsPerDay("*/2 * * * *")).toBe(720);
+    expect(runsPerDay("*/15 * * * *")).toBe(96);
+    expect(runsPerDay("* * * * *")).toBe(1440);
+    expect(runsPerDay("0 * * * *")).toBe(24);
+    expect(runsPerDay("1,2 3 * * *")).toBeNull();
+    expect(runsPerDay("0 3 * * 1")).toBeNull();
+    expect(runsPerDay("0 99 * * *")).toBeNull();
+    expect(runsPerDay("*/0 * * * *")).toBeNull();
+    expect(runsPerDay("0 3 * *")).toBeNull();
+    expect(stepMinutes("*/2 * * * *")).toBe(2);
+    expect(stepMinutes("0 12 * * *")).toBeNull();
+  });
+
+  it("every cron schedule parses and respects the Vercel Pro limits (L-34)", () => {
+    // Pro: at most 100 cron jobs; nothing more frequent than once per minute.
+    expect(crons.length).toBeLessThanOrEqual(100);
     for (const c of crons) {
-      const schedule = c.schedule ?? "";
-      const [minute, hour] = schedule.split(/\s+/);
-      // A step or wildcard in the minute or hour field means more than one run
-      // per day. A list (1,2) or range (1-5) does too.
-      expect(minute, `cron "${c.path}" minute field "${minute}"`).toMatch(/^\d+$/);
-      expect(hour, `cron "${c.path}" hour field "${hour}"`).toMatch(/^\d+$/);
+      const n = runsPerDay(c.schedule ?? "");
+      expect(n, `cron "${c.path}" schedule "${c.schedule}" must parse`).not.toBeNull();
+      expect(n!, `cron "${c.path}"`).toBeGreaterThanOrEqual(1);
+      expect(n!, `cron "${c.path}"`).toBeLessThanOrEqual(1440);
     }
   });
 
-  it("the Leafly cron hour lands at or after the default sync hour year-round", () => {
-    // The single daily tick must not land BELOW the schedule's configured hour,
-    // or the hour gate would refuse it and -- with no second tick on this plan --
-    // the daily full sync would depend entirely on the catch-up rule.
-    //
-    // Pacific is UTC-7 (PDT) or UTC-8 (PST). DAILY_HOUR_DEFAULT is 4.
+  it("each cron runs at exactly its designed cadence (L-34)", () => {
+    // The two Leafly crons are the only sub-daily jobs. Everything else is a
+    // once-a-day report or sync and has no reason to run more often --
+    // compliance reminders and the regulatory watch in particular must not
+    // start emailing the owner 96 times a day because of a copy-paste.
+    const expected: Record<string, number> = {
+      "/api/cron/leafly-ack-sweep": 720, // every 2 minutes
+      "/api/cron/leafly-menu-sync": 96, //  every 15 minutes
+    };
+    for (const c of crons) {
+      const want = expected[c.path ?? ""] ?? 1;
+      expect(runsPerDay(c.schedule ?? ""), `cron "${c.path}" schedule "${c.schedule}"`).toBe(want);
+    }
+  });
+
+  it("the menu-sync tick is fine enough for every interval the owner can pick (L-34)", () => {
+    // The owner's intraday choices start at INTRADAY_MINUTES_MIN. A tick
+    // coarser than that silently turns "every 15 minutes" into "every hour"
+    // (which is exactly what happened on Hobby: one tick a day, whatever the
+    // setting said). The tick must also divide 60 so it lands in every hour,
+    // which is what lets the configured daily-full hour be honoured year-round
+    // in both PDT and PST without the catch-up rule.
     const leafly = crons.find((c) => (c.path ?? "").includes("leafly-menu-sync"));
-    const utcHour = Number.parseInt((leafly?.schedule ?? "").split(/\s+/)[1] ?? "", 10);
-    expect(Number.isFinite(utcHour)).toBe(true);
-    const pdtHour = (utcHour - 7 + 24) % 24;
-    const pstHour = (utcHour - 8 + 24) % 24;
-    expect(pdtHour).toBeGreaterThanOrEqual(DAILY_HOUR_DEFAULT);
-    expect(pstHour).toBeGreaterThanOrEqual(DAILY_HOUR_DEFAULT);
+    const step = stepMinutes(leafly?.schedule ?? "");
+    expect(step).not.toBeNull();
+    expect(step!).toBeLessThanOrEqual(INTRADAY_MINUTES_MIN);
+    expect(60 % step!).toBe(0);
+    for (const choice of INTRADAY_CHOICES) {
+      // Every offered interval is a whole number of ticks, so the tolerance
+      // window (INTRADAY_DUE_TOLERANCE_MINUTES) is the only slack needed.
+      expect(choice % step!, `interval ${choice} vs tick ${step}`).toBe(0);
+    }
+    expect(INTRADAY_DUE_TOLERANCE_MINUTES).toBeLessThan(step!);
+    // DAILY_HOUR_DEFAULT is still imported and meaningful: with an hourly-or-
+    // finer tick every Pacific hour is visited, including this one.
+    expect(DAILY_HOUR_DEFAULT).toBeGreaterThanOrEqual(0);
+    expect(DAILY_HOUR_DEFAULT).toBeLessThanOrEqual(23);
+  });
+
+  it("the ack-sweep tick gives every order several chances inside Leafly's window (L-34)", () => {
+    // Leafly auto-cancels an order it has not seen acknowledged by
+    // `acknowledgeBy`. The sweep only acts on orders at least
+    // SWEEP_GRACE_MS old and at least SWEEP_DEADLINE_MARGIN_MS before the
+    // deadline. At a 2-minute tick that is several attempts per order rather
+    // than a once-a-day lottery (see scripts/recon/l34-cadence-probe.mts).
+    const sweep = crons.find((c) => (c.path ?? "").includes("leafly-ack-sweep"));
+    const step = stepMinutes(sweep?.schedule ?? "");
+    expect(step).not.toBeNull();
+    expect(step!).toBeGreaterThanOrEqual(1);
+    expect(step!).toBeLessThanOrEqual(3);
+  });
+
+  it("AGENTS.md records the Vercel Pro rule, and it agrees with vercel.json (L-34)", () => {
+    // The standing rule is what the next session reads first. If it says one
+    // cadence and vercel.json says another, the next person "fixes" the wrong
+    // one. So the rule's stated cadences are checked against the parsed file.
+    const agents = readText("AGENTS.md");
+    expect(agents).toMatch(/\*\*Vercel plan: PRO \(required\)/);
+    expect(agents).toMatch(/once per minute/);
+    expect(agents).toMatch(/Delivery is best effort/);
+    expect(agents).toMatch(/\$0\.60 per million/);
+    const flat = agents.replace(/\s+/g, " ");
+    const sweep = crons.find((c) => c.path === "/api/cron/leafly-ack-sweep");
+    const menu = crons.find((c) => c.path === "/api/cron/leafly-menu-sync");
+    expect(flat).toContain(`\`leafly-ack-sweep\` every ${stepMinutes(sweep?.schedule ?? "")} min`);
+    expect(flat).toContain(`\`leafly-menu-sync\` every ${stepMinutes(menu?.schedule ?? "")} min`);
+    // The owner was explicit that the plan change does NOT alter how code
+    // reaches main. Rules 6 and 7 must still be there, verbatim in substance.
+    expect(agents).toContain("gh pr merge <n> --rebase --delete-branch --admin");
+    expect(agents).toContain("Every commit MUST be authored `Greenway Dev <dev@greenwaymarijuana.com>`");
   });
 
   it("the page's constant matches reality in BOTH directions", () => {
