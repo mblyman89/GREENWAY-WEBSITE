@@ -598,7 +598,7 @@ export default async function OrdersAdminPage({
       // decision made in one visible place.
       now={new Date()}
       message={sp.leaflyMsg ?? null}
-      // SLICE L-35. Was `sp.leaflyMsg ?? sp.leaflyWarn`: every success
+      // SLICE L-35. The message prop used to fall back to the warning: every success
       // carries a message, so the warning was NEVER shown — including
       // "the register order did not close" after Picked up. Now its own prop.
       warning={sp.leaflyWarn ?? null}
