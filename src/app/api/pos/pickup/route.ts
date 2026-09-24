@@ -24,6 +24,16 @@
  *                              COMPLETES. Also returns the linked customer as
  *                              a one-tap member attach.
  *
+ *   POST { orderId, cancel: { pin, reason, employeeName } }   (SLICE L-36)
+ *                            → cancel an ACTIVE online order from the register.
+ *                              Needs a MANAGER or LEAD PIN (same salted verify
+ *                              + brute-force throttle as /api/pos/approve).
+ *                              Leafly orders are cancelled AT LEAFLY first
+ *                              (so the Online Orders report records it); if
+ *                              Leafly refuses, nothing local changes. The
+ *                              Orders board + Reports read live, so they
+ *                              update on their next load.
+ *
  * Device-authenticated (x-pos-device-id/-key) like every register endpoint.
  * ONLINE-ONLY by design: the queue lives on the server and completion
  * mutates durable facts — there is nothing sensible to queue offline.
@@ -41,6 +51,14 @@ import {
   SANCTIONED_HANDOVER_ROUTE,
 } from "@/lib/pos/pickup-handover-core";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
+import { isRegisterCancelReason } from "@/lib/pos/pickup-detail-core";
+import { isOutboundCancelReason } from "@/lib/leafly/order-ack-core";
+import { getEmployeeByPin } from "@/lib/staffing/store";
+import { isValidPin } from "@/lib/staffing/time";
+import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
+
+/** Roles allowed to cancel an online order at the register (employees.job_role). */
+const CANCEL_APPROVER_ROLES = new Set(["manager", "lead"]);
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,6 +96,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     orderId?: unknown;
     complete?: { employeeId?: unknown; tenderedMinor?: unknown; idConfirmed?: unknown; drawerSessionId?: unknown };
     load?: { employeeName?: unknown };
+    cancel?: { pin?: unknown; reason?: unknown; employeeName?: unknown };
   };
   try {
     body = (await req.json()) as typeof body;
@@ -154,6 +173,57 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         origin: loaded.origin,
         originLabel: loaded.originLabel,
         isMarketplace: loaded.isMarketplace,
+      },
+    });
+  }
+
+  // ── Cancel mode (SLICE L-36): manager/lead PIN, then cancel ─────────────
+  if (body.cancel) {
+    const reason = body.cancel.reason;
+    // Both checks: the register's own list AND Leafly's outbound list, so a
+    // reason the register offers can never be one Leafly would reject.
+    if (!isRegisterCancelReason(reason) || !isOutboundCancelReason(reason)) {
+      return NextResponse.json({ error: "Pick a cancel reason." }, { status: 400 });
+    }
+    const employeeName = String(body.cancel.employeeName ?? "").trim();
+    if (!employeeName) {
+      return NextResponse.json({ error: "cancel.employeeName is required." }, { status: 400 });
+    }
+    const throttleScope = deviceThrottleScope(auth.device.id);
+    const locked = await pinPadBlocked(throttleScope);
+    if (locked) return NextResponse.json({ error: locked }, { status: 429 });
+    const pin = String(body.cancel.pin ?? "");
+    if (!isValidPin(pin)) {
+      return NextResponse.json({ error: "Enter a valid 4–6 digit manager PIN." }, { status: 400 });
+    }
+    const approver = await getEmployeeByPin(pin);
+    if (!approver) {
+      await notePinFailure(throttleScope);
+      return NextResponse.json({ error: "No active employee for that PIN." }, { status: 401 });
+    }
+    await notePinSuccess(throttleScope);
+    if (!CANCEL_APPROVER_ROLES.has(approver.job_role)) {
+      return NextResponse.json(
+        { error: `${approver.full_name} is not a manager or lead — cancelling an order needs a manager PIN.` },
+        { status: 403 },
+      );
+    }
+    // Dynamic import keeps the store's cancel path (Leafly push, audit) out of
+    // the module graph for the read-only branches.
+    const { cancelPickupAtRegister } = await import("@/lib/pos/pickup-store");
+    const cancelled = await cancelPickupAtRegister({
+      orderId: body.orderId,
+      reason,
+      approverName: approver.full_name,
+      deviceName: auth.device.name,
+      employeeName,
+    });
+    if (!cancelled.ok) return NextResponse.json({ error: cancelled.error }, { status: 422 });
+    return NextResponse.json({
+      cancelled: {
+        orderNumber: cancelled.orderNumber,
+        displayName: cancelled.displayName,
+        message: cancelled.message,
       },
     });
   }

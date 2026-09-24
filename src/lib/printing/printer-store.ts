@@ -169,6 +169,11 @@ export type OrderReceiptLineExtras = {
   unitGrams?: number | null;
   unitThcMg?: number | null;
   appliedLabel?: string | null;
+  /** SLICE L-36 - picker facts + the line's money discount. */
+  vendor?: string | null;
+  inventoryType?: string | null;
+  categoryLabel?: string | null;
+  lineDiscountMinorUnits?: number | null;
 };
 
 /**
@@ -204,6 +209,10 @@ export async function queueOrderReceipt(input: ReceiptInput & {
    * the shop's wall clock. Printed under the origin line on arrival tickets.
    */
   urgencyLine?: string | null;
+  /** SLICE L-36 - the GWY number when orderNumber is a fun name. */
+  orderRef?: string | null;
+  /** SLICE L-36 - caller-supplied tax lines (Leafly's components). */
+  taxLines?: { label: string; amountMinorUnits: number }[] | null;
 }): Promise<string | null> {
   const settings = await getPrinterSettings();
   if (!settings || !settings.auto_print_orders) return null;
@@ -231,12 +240,18 @@ export async function queueOrderReceipt(input: ReceiptInput & {
       unitGrams: extra?.unitGrams ?? null,
       unitThcMg: extra?.unitThcMg ?? null,
       appliedLabel: extra?.appliedLabel ?? null,
+      vendor: extra?.vendor ?? null,
+      inventoryType: extra?.inventoryType ?? null,
+      categoryLabel: extra?.categoryLabel ?? null,
+      lineDiscountMinorUnits: extra?.lineDiscountMinorUnits ?? null,
     };
   });
 
   const body = formatEscposReceipt(
     {
       orderNumber: input.orderNumber,
+      orderRef: input.orderRef ?? null,
+      taxLines: input.taxLines ?? null,
       placedAt: input.placedAt,
       customerName: input.customerName,
       customerPhone: input.customerPhone ?? null,

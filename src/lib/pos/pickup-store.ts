@@ -28,7 +28,18 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { listOrders, getOrder } from "@/lib/orders/orders-store";
+import { listOrders, getOrder, setOrderStatus } from "@/lib/orders/orders-store";
+import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
+import {
+  buildPickupDetailBreakdown,
+  readLeaflyCart,
+  registerCancelReasonLabel,
+  type PickupDetailLine,
+  type PickupLineInput,
+  type RegisterCancelReason,
+} from "@/lib/pos/pickup-detail-core";
+import { exciseTaxLabel, salesTaxLabel } from "@/lib/pos/receipt-tax-core";
+import { loadMenuFactsByProductId, loadMenuFactsByLeaflyVariantId } from "@/lib/pos/pickup-menu-facts";
 import {
   isPosMaterializedOrder,
   sortPickupQueue,
@@ -57,8 +68,7 @@ const QUEUE_LIMIT = 50;
 export type PickupQueueResult = { ok: true; queue: PickupQueueEntry[] } | { ok: false; error: string };
 
 /**
- * Active website pickup orders for the register, counter-sorted (ready
- * first, oldest first). Register-materialized orders are excluded by the
+ * Active website pickup orders for the register, NEWEST FIRST (SLICE L-36). Register-materialized orders are excluded by the
  * staff_note contract; the per-order completion path re-checks against
  * pos_sale_events too (belt and suspenders).
  */
@@ -97,6 +107,30 @@ export type PickupOrderDetail = {
   origin: OrderOrigin;
   originLabel: string;
   isMarketplace: boolean;
+  /**
+   * SLICE L-36 - the full breakdown the owner asked for. `lines` above is
+   * kept exactly as it was so a register still running an older bundle keeps
+   * working; `items` is the rich version.
+   */
+  displayName: string;
+  items: PickupDetailLine[];
+  /** What the items would have cost with no discounts. */
+  regularTotalMinor: number;
+  dealDiscountMinor: number;
+  loyaltyDiscountMinor: number;
+  /** "Loyalty code ABC123" / "Gold tier pricing", when a loyalty discount applied. */
+  loyaltyLabel: string | null;
+  /** Savings the order recorded at placement (orders.savings_minor_units). */
+  savingsMinor: number;
+  /**
+   * Itemized tax lines summing to taxMinor, or null when the split cannot be
+   * trusted (then the single taxMinor figure is the whole truth).
+   * Website: excise vs state+local sales (RCW 69.50.535(1)(a)).
+   * Leafly: Leafly's own tax components, as Leafly charged them.
+   */
+  taxLines: { label: string; amountMinor: number }[] | null;
+  /** True when line prices EXCLUDE tax (Leafly), false when tax-inclusive (ours). */
+  pricesExcludeTax: boolean;
 };
 
 export type PickupDetailResult = { ok: true; order: PickupOrderDetail } | { ok: false; error: string };
@@ -109,6 +143,8 @@ export async function getRegisterPickupOrder(orderId: string): Promise<PickupDet
     return { ok: false, error: "That order is a register sale, not a website pickup." };
   }
   const origin = toOrderOrigin(order.origin);
+  const marketplace = isMarketplaceOrigin(origin);
+  const rich = await buildRichDetail(order, marketplace);
   return {
     ok: true,
     order: {
@@ -130,9 +166,270 @@ export async function getRegisterPickupOrder(orderId: string): Promise<PickupDet
       })),
       origin,
       originLabel: orderOriginLabel(origin),
-      isMarketplace: isMarketplaceOrigin(origin),
+      isMarketplace: marketplace,
+      displayName: resolveOrderDisplay(order.display_name ?? null, order.order_number),
+      savingsMinor: Math.max(0, order.savings_minor_units ?? 0),
+      ...rich,
     },
   };
+}
+
+type LoyaltyColumns = {
+  loyalty_kind?: string | null;
+  loyalty_code?: string | null;
+  loyalty_tier_label?: string | null;
+  loyalty_discount_minor_units?: number | null;
+};
+
+/**
+ * The rich half of the counter view.
+ *
+ * WEBSITE orders: the stored lines (tax-inclusive prices, regular price and
+ * per-unit loyalty snapshots) + the menu row each line was sold from.
+ *
+ * LEAFLY orders: the local order lines are a bare copy (name, size, qty,
+ * price), so the breakdown is read from Leafly's own stored payload instead -
+ * brand, category, original price, savings and deal title per item, and
+ * Leafly's tax components. Leafly's subtotal is "before taxes", so its prices
+ * exclude tax and our inclusive-price excise split is NOT applied to them;
+ * Leafly's own itemization is shown instead. If the payload cannot be read,
+ * the local lines are shown with dashes - never invented detail.
+ */
+async function buildRichDetail(
+  order: Awaited<ReturnType<typeof getOrder>> & object,
+  marketplace: boolean,
+): Promise<Pick<
+  PickupOrderDetail,
+  "items" | "regularTotalMinor" | "dealDiscountMinor" | "loyaltyDiscountMinor" | "loyaltyLabel" | "taxLines" | "pricesExcludeTax"
+>> {
+  const loyalty = order as unknown as LoyaltyColumns;
+  const loyaltyLabel =
+    (loyalty.loyalty_discount_minor_units ?? 0) > 0
+      ? loyalty.loyalty_kind === "code" && loyalty.loyalty_code
+        ? `Loyalty code ${loyalty.loyalty_code}`
+        : loyalty.loyalty_kind === "tier" && loyalty.loyalty_tier_label
+          ? `${loyalty.loyalty_tier_label} tier pricing`
+          : "Loyalty discount"
+      : null;
+
+  if (marketplace) {
+    const cart = await readLeaflyCartForLocalOrder(order.id);
+    if (cart && cart.lines.length > 0) {
+      const menu = await loadMenuFactsByLeaflyVariantId(cart.lines.map((l) => l.integratorVariantId));
+      const inputs: PickupLineInput[] = cart.lines.map((l) => {
+        const facts = l.integratorVariantId ? menu.get(l.integratorVariantId) : undefined;
+        return {
+          productId: l.integratorVariantId,
+          productName: l.name,
+          brand: l.brandName,
+          variantLabel: l.variantLabel,
+          // OUR category from the matched menu row; Leafly's word is shown
+          // only as a fallback label and never drives tax logic.
+          category: facts?.category ?? null,
+          categoryLabelFallback: l.leaflyCategory,
+          quantity: l.quantity,
+          lineTotalMinor: l.lineTotalMinor,
+          regularLineTotalMinor: l.regularLineTotalMinor,
+          loyaltyLineMinor: null,
+          dealLabel: l.dealTitle,
+        };
+      });
+      const b = buildPickupDetailBreakdown(inputs, menu, order.estimated_tax_minor_units, { splitTax: false });
+      const taxSum = cart.taxes.reduce((a, t) => a + t.amountMinor, 0);
+      return {
+        items: b.lines,
+        regularTotalMinor: b.regularTotalMinor,
+        dealDiscountMinor: b.dealDiscountMinor,
+        loyaltyDiscountMinor: 0,
+        loyaltyLabel: null,
+        // Shown only when Leafly's components add up to the tax on the order.
+        taxLines: cart.taxes.length > 0 && taxSum === order.estimated_tax_minor_units ? cart.taxes.map((t) => ({ label: t.label, amountMinor: t.amountMinor })) : null,
+        pricesExcludeTax: true,
+      };
+    }
+  }
+
+  const menu = marketplace ? new Map() : await loadMenuFactsByProductId(order.lines.map((l) => l.product_id));
+  const lineLoyalty = (l: unknown) => {
+    const v = (l as { loyalty_discount_minor_units?: number | null }).loyalty_discount_minor_units;
+    return typeof v === "number" && v > 0 ? v : 0;
+  };
+  const inputs: PickupLineInput[] = order.lines.map((l) => ({
+    productId: l.product_id,
+    productName: l.product_name,
+    brand: l.brand,
+    variantLabel: l.variant_label,
+    category: l.category ?? null,
+    quantity: l.quantity,
+    lineTotalMinor: l.price_minor_units * l.quantity,
+    regularLineTotalMinor: l.regular_price_minor_units == null ? null : l.regular_price_minor_units * l.quantity,
+    loyaltyLineMinor: lineLoyalty(l) * l.quantity,
+  }));
+  const b = buildPickupDetailBreakdown(inputs, menu, order.estimated_tax_minor_units, { splitTax: !marketplace });
+  const taxLines: { label: string; amountMinor: number }[] = [];
+  if (b.taxSplit) {
+    if (b.taxSplit.anyExcise) taxLines.push({ label: exciseTaxLabel(), amountMinor: b.taxSplit.exciseMinor });
+    if (b.taxSplit.anySales) taxLines.push({ label: salesTaxLabel(), amountMinor: b.taxSplit.salesMinor });
+  }
+  return {
+    items: b.lines,
+    regularTotalMinor: b.regularTotalMinor,
+    dealDiscountMinor: b.dealDiscountMinor,
+    loyaltyDiscountMinor: b.loyaltyDiscountMinor,
+    loyaltyLabel,
+    taxLines: b.taxSplit && taxLines.length > 0 ? taxLines : null,
+    pricesExcludeTax: marketplace,
+  };
+}
+
+/** Leafly's stored cart for the local order it became, or null. */
+async function readLeaflyCartForLocalOrder(localOrderId: string): Promise<ReturnType<typeof readLeaflyCart> | null> {
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data } = await admin
+      .from("leafly_orders")
+      .select("raw_order")
+      .eq("local_order_id", localOrderId)
+      .limit(1)
+      .maybeSingle<{ raw_order: unknown }>();
+    return data ? readLeaflyCart(data.raw_order) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cancel from the register (SLICE L-36)
+// ---------------------------------------------------------------------------
+
+export type CancelPickupResult =
+  | { ok: true; orderNumber: string; displayName: string; message: string }
+  | { ok: false; error: string };
+
+/**
+ * Cancel an ACTIVE online order from the register, after the route has
+ * verified a manager/lead PIN.
+ *
+ * WEBSITE orders go through `setOrderStatus(..., "cancelled")` - the SAME
+ * store call the back-office dashboard uses, so the lifecycle matrix, the
+ * order timeline event and the loyalty-code release all happen exactly as
+ * they would there.
+ *
+ * LEAFLY orders are cancelled AT LEAFLY first, through the same
+ * `setLeaflyOrderStatus` the back-office board uses. That call records the
+ * outbound attempt (which the Online Orders report reads), stores Leafly's
+ * post-change order (so the report sees `canceled`), and closes our local
+ * order through `onLeaflyOrderClosed`. If Leafly refuses or cannot be
+ * reached, NOTHING is cancelled locally and the budtender is told why:
+ * cancelling only our copy would leave the customer holding a live Leafly
+ * order that we silently dropped.
+ */
+export async function cancelPickupAtRegister(input: {
+  orderId: string;
+  reason: RegisterCancelReason;
+  approverName: string;
+  deviceName: string;
+  employeeName: string;
+}): Promise<CancelPickupResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const order = await getOrder(input.orderId);
+  if (!order) return { ok: false, error: "Order not found." };
+  if (isPosMaterializedOrder(order.staff_note)) {
+    return { ok: false, error: "That order is a register sale, not an online order - use Returns / Void instead." };
+  }
+  const ACTIVE = new Set(["new", "acknowledged", "preparing", "ready"]);
+  if (!ACTIVE.has(order.status)) {
+    return { ok: false, error: `Order is already ${order.status} - only an active online order can be cancelled.` };
+  }
+
+  const displayName = resolveOrderDisplay(order.display_name ?? null, order.order_number);
+  const reasonLabel = registerCancelReasonLabel(input.reason);
+  const actorLabel = `${input.approverName} (manager PIN) at ${input.deviceName}, requested by ${input.employeeName}`;
+  const note = `Cancelled at the register: ${reasonLabel}.`;
+  const origin = toOrderOrigin(order.origin);
+  let message = `${displayName} cancelled.`;
+  let leaflyOutcome: string | null = null;
+
+  if (isMarketplaceOrigin(origin)) {
+    const admin = createSupabaseAdminClient();
+    const { data: lf } = await admin
+      .from("leafly_orders")
+      .select("leafly_order_id, leafly_status, acknowledged_at")
+      .eq("local_order_id", order.id)
+      .limit(1)
+      .maybeSingle<{ leafly_order_id: string; leafly_status: string | null; acknowledged_at: string | null }>();
+    if (!lf) {
+      return {
+        ok: false,
+        error: "This Leafly order has no Leafly record linked to it, so it was NOT cancelled. Cancel it from the back-office Orders board.",
+      };
+    }
+    const already = (lf.leafly_status ?? "").trim().toLowerCase();
+    if (already === "canceled" || already === "expired") {
+      leaflyOutcome = `already ${already} at Leafly`;
+    } else {
+      const { setLeaflyOrderStatus } = await import("@/lib/leafly/order-ack-server");
+      const pushed = await setLeaflyOrderStatus({
+        order: { leafly_order_id: lf.leafly_order_id, leafly_status: lf.leafly_status, acknowledged_at: lf.acknowledged_at },
+        nextStatus: "canceled",
+        cancelationReasonCode: input.reason,
+        // staff_profiles FK - a register PIN is an employees row, not a staff
+        // profile, so the attempt is attributed through the audit log instead.
+        staffId: null,
+      });
+      if (!pushed.ok) {
+        await recordAudit({
+          actorId: null,
+          actorEmail: `pos-cancel:${input.deviceName}`,
+          action: "order.register_cancel_failed",
+          entityType: "order",
+          entityId: order.id,
+          after: { orderNumber: order.order_number, displayName, reason: input.reason, approver: input.approverName, employee: input.employeeName, leafly: pushed.message },
+        });
+        return { ok: false, error: `Leafly did not accept the cancel, so nothing was changed: ${pushed.message}` };
+      }
+      leaflyOutcome = "cancelled at Leafly";
+      if (pushed.warning) message += ` Note: ${pushed.warning}`;
+    }
+  }
+
+  // Close OUR order. For a Leafly order the push above normally already did
+  // (onLeaflyOrderClosed); setOrderStatus then reports a no-op, which is
+  // fine. For a website order this is the whole cancel.
+  const closed = await setOrderStatus(order.id, "cancelled", { actorId: null, actorLabel, note });
+  if (!closed.ok) {
+    const { data: now } = await createSupabaseAdminClient()
+      .from("orders")
+      .select("status")
+      .eq("id", order.id)
+      .maybeSingle<{ status: string }>();
+    if (now?.status !== "cancelled") {
+      return {
+        ok: false,
+        error: `${leaflyOutcome ? `Leafly: ${leaflyOutcome}. ` : ""}Our copy of the order could not be closed (${closed.refusal ?? "database error"}). Close it from the back office.`,
+      };
+    }
+  }
+
+  await recordAudit({
+    actorId: null,
+    actorEmail: `pos-cancel:${input.deviceName}`,
+    action: "order.cancelled_at_register",
+    entityType: "order",
+    entityId: order.id,
+    after: {
+      orderNumber: order.order_number,
+      displayName,
+      origin,
+      reason: input.reason,
+      approver: input.approverName,
+      employee: input.employeeName,
+      leafly: leaflyOutcome,
+    },
+  });
+
+  if (leaflyOutcome) message += ` Leafly: ${leaflyOutcome}.`;
+  return { ok: true, orderNumber: order.order_number, displayName, message };
 }
 
 // ---------------------------------------------------------------------------

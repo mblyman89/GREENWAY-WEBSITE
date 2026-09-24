@@ -31,6 +31,7 @@ import {
   isMarketplaceOrigin,
   type OrderOrigin,
 } from "@/lib/orders/order-origin-core";
+import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 
 // ---------------------------------------------------------------------------
 // POS-materialized order detection
@@ -70,6 +71,12 @@ export function minutesBetween(fromIso: string, nowIso: string): number {
 export type PickupQueueEntry = {
   orderId: string;
   orderNumber: string;
+  /**
+   * SLICE L-36 - the name printed big on the pick-and-bag receipt (the fun
+   * overlay name, or LF-XXXXXX for Leafly). Falls back to orderNumber, so it
+   * is never blank. This is what staff say out loud and what they scan.
+   */
+  displayName: string;
   customerLabel: string;
   status: OrderStatus;
   statusLabel: string;
@@ -127,23 +134,18 @@ export type PickupQueueEntry = {
 };
 
 /**
- * Queue order for the counter: READY orders first (the customer may already
- * be standing there), then preparing → acknowledged → new; oldest first
- * within each group so nobody gets buried.
+ * Queue order for the counter (SLICE L-36): NEWEST FIRST, full stop. The
+ * owner's words: "Newest orders on top, scrollable". The old ready-first
+ * ranking buried a just-placed order under every ready one; status is now a
+ * highlight on the tile, not a position in the list.
  */
-const STATUS_RANK: Partial<Record<OrderStatus, number>> = {
-  ready: 0,
-  preparing: 1,
-  acknowledged: 2,
-  new: 3,
-};
-
-export function sortPickupQueue<T extends { status: OrderStatus; placedAtIso: string }>(entries: T[]): T[] {
+export function sortPickupQueue<T extends { placedAtIso: string }>(entries: T[]): T[] {
   return [...entries].sort((a, b) => {
-    const ra = STATUS_RANK[a.status] ?? 9;
-    const rb = STATUS_RANK[b.status] ?? 9;
-    if (ra !== rb) return ra - rb;
-    return a.placedAtIso.localeCompare(b.placedAtIso);
+    // SLICE L-36 - the owner asked for "newest orders on top". Status is no
+    // longer a sort key; READY is highlighted on the tile instead, so the
+    // list reads like a feed and a just-placed order is never below the fold.
+    // Ties (same placed_at) fall back to orderId-free stable input order.
+    return b.placedAtIso.localeCompare(a.placedAtIso);
   });
 }
 
@@ -159,6 +161,8 @@ export function toPickupQueueEntry(
     total_minor_units: number;
     placed_at: string;
     customer_note: string | null;
+    /** SLICE L-36 - `orders.display_name` (fun overlay name / LF- label). Optional: older rows lack it. */
+    display_name?: string | null;
     /**
      * `orders.origin` (migration 0226). OPTIONAL on purpose: this function is
      * called with rows that may predate the column, and a required field here
@@ -175,6 +179,7 @@ export function toPickupQueueEntry(
   return {
     orderId: order.id,
     orderNumber: order.order_number,
+    displayName: resolveOrderDisplay(order.display_name ?? null, order.order_number),
     customerLabel: customerPickupLabel(order.customer_first_name, order.customer_last_name),
     status: order.status,
     statusLabel: ORDER_STATUS_LABELS[order.status] ?? order.status,
@@ -267,7 +272,7 @@ export function __runPickupCoreTests(): void {
   ok(minutesBetween("2026-02-10T11:00:00Z", "2026-02-10T10:00:00Z") === 0, "future placed_at clamps to 0");
   ok(minutesBetween("garbage", "2026-02-10T10:00:00Z") === 0, "bad input → 0, never NaN");
 
-  // Sort: ready first, oldest first within group.
+  // Sort (SLICE L-36): newest first regardless of status.
   const sorted = sortPickupQueue([
     { status: "new" as OrderStatus, placedAtIso: "2026-02-10T09:00:00Z", tag: "new-early" },
     { status: "ready" as OrderStatus, placedAtIso: "2026-02-10T10:00:00Z", tag: "ready-late" },
@@ -275,8 +280,8 @@ export function __runPickupCoreTests(): void {
     { status: "preparing" as OrderStatus, placedAtIso: "2026-02-10T07:00:00Z", tag: "prep" },
   ]);
   ok(
-    sorted.map((e) => (e as { tag: string }).tag).join(",") === "ready-early,ready-late,prep,new-early",
-    "ready first (oldest first), then preparing, then new",
+    sorted.map((e) => (e as { tag: string }).tag).join(",") === "ready-late,new-early,ready-early,prep",
+    "newest first, status is not a sort key",
   );
 
   // Queue entry shaping.
@@ -295,6 +300,7 @@ export function __runPickupCoreTests(): void {
     "2026-02-10T10:20:00Z",
   );
   ok(entry.customerLabel === "Jordan T." && entry.minutesWaiting === 20, "entry label + waiting minutes");
+  ok(entry.displayName === "GW-1042", "no display_name -> falls back to the order number");
   ok(entry.statusLabel === "Ready for pickup" && entry.hasCustomerNote, "status label + note flag");
   ok(
     !toPickupQueueEntry(
