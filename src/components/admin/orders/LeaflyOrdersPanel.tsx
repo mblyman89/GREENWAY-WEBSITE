@@ -127,6 +127,7 @@ import { ANNOUNCER_PANEL_ANCHOR } from "./AnnouncerPanel";
 // must cross tabs rather than scroll within this page. See setupAnchorHref().
 import { leaflyBoardRendersNothing, setupAnchorHref } from "@/lib/admin/orders-tabs-core";
 import { LeaflyOrderActions } from "./LeaflyOrderActions";
+import { LeaflyLifecycleStrip } from "./LeaflyLifecycleStrip";
 // SLICE L-24 — the detail panel the acknowledge hint has always pointed at.
 import { LeaflyOrderDetailPanel } from "./LeaflyOrderDetail";
 import {
@@ -766,6 +767,26 @@ function LeaflyOrderCard({
           />
         ) : null}
       </div>
+
+      {/* ── SLICE L-31: WHICH STEP ARE WE ON? ─────────────────────
+          The owner: "I think we need to make it much more obvious
+          which step we are on, and then we will know we are finished
+          because the order will be marked complete and moved to the
+          hidden table."
+
+          Rendered directly UNDER the buttons, so the answer to "which
+          one do I press?" sits with the buttons themselves rather than
+          somewhere else on the card. Decides nothing — the whole view
+          comes from `lifecycleView()` in lifecycle-core.ts, which is
+          pure and proven by self-tests in CI. */}
+      {fullId ? (
+        <LeaflyLifecycleStrip
+          acknowledgedAt={order.acknowledged_at}
+          leaflyStatus={order.leafly_status}
+          fulfillmentMechanism={order.fulfillment_mechanism}
+          canceledAt={order.canceled_at}
+        />
+      ) : null}
 
       {/* ── SLICE L-24: the order, openable ───────────────────────
           The acknowledge hint has always ended with "so open the order

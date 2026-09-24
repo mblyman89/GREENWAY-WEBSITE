@@ -342,7 +342,41 @@ describe("L-30 — LeaflyOrderActions: one click to acknowledge", () => {
   });
 
   it("the acknowledge action is excluded from confirmation by an explicit rule", () => {
-    expect(actionsCode).toMatch(/const needsConfirm = action\.irreversible && !isAck/);
+    // ── AMENDED BY SLICE L-31, DELIBERATELY AND WITH THE INTENT PRESERVED ──
+    //
+    // This assertion used to be the literal string
+    // `const needsConfirm = action.irreversible && !isAck`. L-31 narrowed
+    // that rule to `const needsConfirm = isCancel;`, because the owner asked
+    // for the "Mark picked up" popup to be removed and `picked_up` was being
+    // swept into the old expression by `irreversible` (it is terminal in
+    // Leafly's spec, exactly as `canceled` is).
+    //
+    // The test failed on that change — correctly, and usefully: it is the
+    // guard that forces anyone touching this line to come here and think.
+    // But it was pinned to an IMPLEMENTATION rather than to the PROPERTY it
+    // was protecting, and the property is unchanged:
+    //
+    //     THE ACKNOWLEDGEMENT MUST NEVER OPEN A DIALOG.
+    //
+    // That is L-30's entire subject, it is still true, and it is now
+    // asserted directly rather than as a side effect of one particular
+    // spelling. Re-pinning it to the new literal would repeat the mistake
+    // and break the next slice for no reason.
+    //
+    // The rule must be a single explicit assignment, not scattered logic —
+    // so that there is exactly one place to read and one place to change.
+    const rule = /const needsConfirm = ([^;]+);/.exec(actionsCode);
+    expect(rule, "needsConfirm must be one explicit rule").toBeTruthy();
+
+    // ...and the plain, no-dialog branch must be the one the acknowledge
+    // form is rendered from.
+    expect(actionsCode).toMatch(/if \(!needsConfirm\)/);
+    expect(actionsCode).toMatch(/action=\{isAck \? acknowledgeAction : statusAction\}/);
+
+    // NOTE: the *behavioural* proof that acknowledge renders no dialog lives
+    // in the render test below. A source-pattern check cannot establish it —
+    // see the comment there, which records a mutation that escaped exactly
+    // such a check during L-31.
   });
 
   it("the confirm-first path opens its dialog from a BUTTON, not a submit", () => {
