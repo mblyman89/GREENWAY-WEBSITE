@@ -155,7 +155,10 @@ import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Button, CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { ConfirmDialog } from "@/components/admin/ux";
-import type { PlannedAction } from "@/lib/leafly/order-ack-core";
+import {
+  LEAFLY_STALE_CONFIRM_NOTICE,
+  type PlannedAction,
+} from "@/lib/leafly/order-ack-core";
 
 /**
  * The submit control, split out purely so it can call `useFormStatus()`.
@@ -260,6 +263,7 @@ function ActionForm({
   leaflyOrderId,
   acknowledgeAction,
   statusAction,
+  reconcileAction,
   /** Shown inside the cancel confirmation so the reason is no surprise. */
   defaultCancelReasonLabel,
 }: {
@@ -267,13 +271,35 @@ function ActionForm({
   leaflyOrderId: string;
   acknowledgeAction: (formData: FormData) => void | Promise<void>;
   statusAction: (formData: FormData) => void | Promise<void>;
+  /**
+   * SLICE L-32 — the re-read. Injected like the other two rather than
+   * imported, because this file is a client component and the actions are
+   * server actions; importing them here would drag server-only code into
+   * the browser bundle.
+   */
+  reconcileAction: (formData: FormData) => void | Promise<void>;
   defaultCancelReasonLabel: string;
 }) {
   const [confirming, setConfirming] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   const isAck = action.kind === "acknowledge";
+  const isReconcile = action.kind === "reconcile";
   const isCancel = action.status === "canceled";
+
+  // SLICE L-32 — which server action this form posts to.
+  //
+  // Written as an explicit three-way rather than the old ternary on `isAck`.
+  // A ternary would have silently routed the new `reconcile` kind to the
+  // STATUS action, which posts no `nextStatus`, fails validation, and would
+  // have produced a second confusing error on the very button added to end
+  // the first one. The kinds are named, so a fourth kind is a type error
+  // rather than a wrong destination.
+  const formAction = isAck
+    ? acknowledgeAction
+    : isReconcile
+      ? reconcileAction
+      : statusAction;
 
   // ── SLICE L-31 ───────────────────────────────────────────────────────────
   // Only CANCEL asks a question now. It used to be `action.irreversible &&
@@ -315,7 +341,11 @@ function ActionForm({
   const hiddenFields = (
     <>
       <input type="hidden" name="leaflyOrderId" value={leaflyOrderId} />
-      {!isAck && action.status ? (
+      {/* SLICE L-32: `!isAck` alone used to be the guard. It is now
+          `action.kind === "status"`, stated positively, because the reconcile
+          action is also "not an acknowledge" and must NOT post a nextStatus —
+          it sends nothing to Leafly at all. */}
+      {action.kind === "status" && action.status ? (
         <input type="hidden" name="nextStatus" value={action.status} />
       ) : null}
       {/* No cancelationReasonCode is posted. Leafly documents that an absent
@@ -334,8 +364,11 @@ function ActionForm({
     // It lost its dialog above; it must not lose the warning the dialog was
     // carrying. Rendered BEFORE the button in DOM order so a screen reader
     // reaches it first, and `title` so it is available on hover too.
+    // SLICE L-32: `action.kind === "status"` rather than `!isAck`. The
+    // reconcile action is never irreversible, so this could not fire for it
+    // today — but relying on that would make the guard correct by accident.
     const terminalNote =
-      action.irreversible && !isAck ? (
+      action.irreversible && action.kind === "status" ? (
         <span
           data-testid={`leafly-terminal-note-${action.status ?? "unknown"}`}
           className="mr-2 text-[11px] leading-tight text-[var(--admin-gold)]"
@@ -350,7 +383,7 @@ function ActionForm({
     return (
       <form
         ref={formRef}
-        action={isAck ? acknowledgeAction : statusAction}
+        action={formAction}
         className="inline-flex items-center"
       >
         {hiddenFields}
@@ -411,6 +444,7 @@ export function LeaflyOrderActions({
   leaflyOrderId,
   acknowledgeAction,
   statusAction,
+  reconcileAction,
   irreversibleWarning,
   defaultCancelReasonLabel,
 }: {
@@ -418,6 +452,8 @@ export function LeaflyOrderActions({
   leaflyOrderId: string;
   acknowledgeAction: (formData: FormData) => void | Promise<void>;
   statusAction: (formData: FormData) => void | Promise<void>;
+  /** SLICE L-32 — the safe re-read offered when this screen and Leafly disagree. */
+  reconcileAction: (formData: FormData) => void | Promise<void>;
   irreversibleWarning: string;
   defaultCancelReasonLabel: string;
 }) {
@@ -443,6 +479,15 @@ export function LeaflyOrderActions({
     (a) => a.kind === "acknowledge" && a.irreversible,
   );
 
+  // SLICE L-32 — say WHY the expected button is missing.
+  //
+  // An operator who acknowledged an order and then came back to find no
+  // "Confirm order" button, and no explanation, would reasonably conclude the
+  // screen is broken — which is the same loss of trust the planner's own
+  // header comment warns about. So the repair state explains itself in the
+  // operator's terms before they press anything.
+  const showStaleNotice = actions.some((a) => a.kind === "reconcile");
+
   return (
     <div className="flex flex-col items-end gap-2">
       {showAckWarning ? (
@@ -460,6 +505,18 @@ export function LeaflyOrderActions({
           {irreversibleWarning}
         </p>
       ) : null}
+      {showStaleNotice ? (
+        <p
+          role="note"
+          data-testid="leafly-stale-confirm-notice"
+          className="max-w-[34rem] text-right text-xs leading-relaxed text-[var(--admin-gold)]"
+        >
+          <span aria-hidden className="mr-1">
+            ⚠️
+          </span>
+          {LEAFLY_STALE_CONFIRM_NOTICE}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center justify-end gap-2">
         {actions.map((action) => (
           <ActionForm
@@ -468,6 +525,7 @@ export function LeaflyOrderActions({
             leaflyOrderId={leaflyOrderId}
             acknowledgeAction={acknowledgeAction}
             statusAction={statusAction}
+            reconcileAction={reconcileAction}
             defaultCancelReasonLabel={defaultCancelReasonLabel}
           />
         ))}

@@ -92,6 +92,11 @@ function renderFor(input: {
       leaflyOrderId="11111111-2222-3333-4444-555555555555"
       acknowledgeAction={noop}
       statusAction={noop}
+      // SLICE L-32. Required, not optional, on purpose: making it optional
+      // would let a caller forget to wire the repair button and ship a
+      // control that silently does nothing. The type error this produced in
+      // THIS file is the feature working.
+      reconcileAction={noop}
       irreversibleWarning={LEAFLY_ACK_IRREVERSIBLE_WARNING}
       defaultCancelReasonLabel="Store cancelled"
     />,

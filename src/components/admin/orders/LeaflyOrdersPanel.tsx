@@ -758,6 +758,13 @@ function LeaflyOrderCard({
             leaflyOrderId={fullId}
             acknowledgeAction={acknowledgeLeaflyOrderAction}
             statusAction={setLeaflyOrderStatusAction}
+            // SLICE L-32 — the same collect action the detail panel already
+            // uses (see below). Reused deliberately rather than written
+            // again: it is already bounded by `withActionDeadline`, already
+            // audited, and already proven in production by the L-25 slice.
+            // A second, near-identical re-read path would be a second thing
+            // to keep correct.
+            reconcileAction={collectLeaflyOrderAction}
             irreversibleWarning={LEAFLY_ACK_IRREVERSIBLE_WARNING}
             defaultCancelReasonLabel={
               leaflyCancelReasonLabel(

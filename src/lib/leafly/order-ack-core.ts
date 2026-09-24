@@ -663,6 +663,10 @@ export function assessOutboundResponse(
     return {
       disposition: "fix_request",
       retryable: false,
+      // SLICE L-32: this sentence is the FALLBACK, used only when Leafly's
+      // own reason cannot be read. The caller is expected to run the body
+      // through `explainLeaflyErrorBody()` and prefer what Leafly actually
+      // said. See the long note on that function for why.
       message:
         "Bad request (400): Leafly rejected the body. Usually an illegal status " +
         "transition, or a cancellation reason Leafly does not accept on this endpoint. " +
@@ -704,6 +708,141 @@ export function assessOutboundResponse(
       `endpoint (expected ${expectedSuccess}). Treated as a failure rather than guessed at.`,
     documented: false,
   };
+}
+
+// ============================================================================
+// 8b. WHAT LEAFLY ACTUALLY SAID  (SLICE L-32)
+// ============================================================================
+
+/**
+ * Pull Leafly's OWN explanation out of an error response body.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS EXISTS
+ * ---------------------------------------------------------------------------
+ * The owner hit a 400 and was shown this, by us:
+ *
+ *   "Bad request (400): Leafly rejected the body. USUALLY an illegal status
+ *    transition, or a cancellation reason Leafly does not accept..."
+ *
+ * "Usually" is the tell. That sentence is a guess written in advance, and it
+ * was the only thing on the screen — while Leafly's actual, specific reason
+ * sat in the response body, was written to `leafly_outbound_attempts.
+ * response_body`, and was never shown to anybody.
+ *
+ * This project has already lost eight slices to an unclear message. Showing an
+ * operator our speculation when the authoritative answer is in hand is the
+ * same mistake with a different face.
+ *
+ * ---------------------------------------------------------------------------
+ * THE TWO DOCUMENTED SHAPES
+ * ---------------------------------------------------------------------------
+ * Both are read from the vendored spec (md5 daab7bcf6f77177de85425adf7f805f1),
+ * and BOTH are handled because the endpoints differ:
+ *
+ *   SchemaError  (400 on the status endpoint)
+ *     { message: string, validation_result?: string[] }
+ *
+ *   Error        (used elsewhere in the same document)
+ *     { errors: [ { title: string, detail: string } ] }
+ *
+ * Handling only the first would have been "correct" against the 400 we are
+ * chasing today and silently useless for the next one.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THIS DELIBERATELY DOES NOT DO
+ * ---------------------------------------------------------------------------
+ * It does not interpret, translate or improve Leafly's words. It extracts them.
+ * If Leafly's message is unhelpful, the operator sees an unhelpful message
+ * FROM LEAFLY, which is still strictly better than a helpful-sounding sentence
+ * from us that may be wrong — and it is the string worth quoting to Leafly
+ * support.
+ *
+ * Returns null when nothing usable is present, so the caller keeps its
+ * existing fallback rather than rendering an empty quote.
+ */
+export function explainLeaflyErrorBody(body: unknown): string | null {
+  if (body === null || body === undefined) return null;
+
+  // A bare string body (some gateways do this on error) is worth showing as-is,
+  // trimmed and bounded. Bounded because this string reaches a URL parameter on
+  // the redirect back to the board, and an unbounded error page would truncate
+  // the useful part or blow the query string.
+  if (typeof body === "string") {
+    const s = body.trim();
+    if (s === "") return null;
+    return s.length > 400 ? `${s.slice(0, 400)}…` : s;
+  }
+
+  if (typeof body !== "object" || Array.isArray(body)) return null;
+  const rec = body as Record<string, unknown>;
+
+  const parts: string[] = [];
+
+  // ── Shape 1: SchemaError ────────────────────────────────────────────────
+  if (typeof rec.message === "string" && rec.message.trim() !== "") {
+    parts.push(rec.message.trim());
+  }
+
+  if (Array.isArray(rec.validation_result)) {
+    const details = rec.validation_result
+      .filter((v): v is string => typeof v === "string" && v.trim() !== "")
+      .map((v) => v.trim());
+    if (details.length > 0) {
+      // Joined with "; " rather than newlines: this string is shown in a
+      // single-line banner and is also carried in a redirect parameter.
+      parts.push(details.join("; "));
+    }
+  }
+
+  // ── Shape 2: Error { errors: [{ title, detail }] } ───────────────────────
+  if (Array.isArray(rec.errors)) {
+    for (const e of rec.errors) {
+      if (e === null || typeof e !== "object" || Array.isArray(e)) continue;
+      const er = e as Record<string, unknown>;
+      const title = typeof er.title === "string" ? er.title.trim() : "";
+      const detail = typeof er.detail === "string" ? er.detail.trim() : "";
+      // Title and detail are both required by the schema, but a body that
+      // violates its own schema is exactly the kind of thing we are reading
+      // here, so neither is assumed present.
+      if (title !== "" && detail !== "") parts.push(`${title}: ${detail}`);
+      else if (detail !== "") parts.push(detail);
+      else if (title !== "") parts.push(title);
+    }
+  }
+
+  if (parts.length === 0) return null;
+
+  // De-duplicate. Leafly sometimes repeats the summary message inside
+  // validation_result, and showing the same sentence twice makes an operator
+  // think they are looking at two different problems.
+  const seen = new Set<string>();
+  const unique = parts.filter((p) => {
+    const k = p.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  const joined = unique.join(" — ");
+  return joined.length > 400 ? `${joined.slice(0, 400)}…` : joined;
+}
+
+/**
+ * Combine our classification with Leafly's own words, preferring Leafly's.
+ *
+ * Our sentence explains what an operator should DO (retry / do not retry /
+ * fix the key). Leafly's explains WHY it refused. The operator needs both, so
+ * neither is discarded — but Leafly's is placed first, because it is the
+ * authoritative fact and ours is the advice built on top of it.
+ */
+export function describeOutboundFailure(
+  assessment: OutboundAssessment,
+  body: unknown,
+): string {
+  const theirs = explainLeaflyErrorBody(body);
+  if (theirs === null) return assessment.message;
+  return `Leafly said: “${theirs}” — ${assessment.message}`;
 }
 
 // ============================================================================
@@ -883,7 +1022,19 @@ const ACK_SOON_MINUTES = 10;
  * JSX.
  */
 
-export type PlannedActionKind = "acknowledge" | "status";
+/**
+ * SLICE L-32 — why there is a third kind.
+ *
+ * `acknowledge` and `status` both PUSH to Leafly. `reconcile` PULLS. It is the
+ * only action on this screen that cannot make anything worse, and it exists
+ * because of the defect the owner hit:
+ *
+ *   > "I am getting an error when I try to go to the next step … Bad request
+ *   >  (400): Leafly rejected the body."
+ *
+ * Proven by execution in `scripts/recon/l32-redundant-confirm-probe.mts`.
+ */
+export type PlannedActionKind = "acknowledge" | "status" | "reconcile";
 
 export type PlannedAction = {
   kind: PlannedActionKind;
@@ -980,6 +1131,154 @@ export const LEAFLY_ACK_ACTION_LABEL = "Acknowledge to Leafly";
  * is that we never claim an outcome we do not have.
  */
 export const LEAFLY_ACK_ACTION_BUSY_LABEL = "Sending to Leafly…";
+
+/* ---------------------------------------------------------------------------
+ * SLICE L-32 — THE REPAIR ACTION, AND WHY IT REPLACES "Confirm order"
+ * -------------------------------------------------------------------------
+ * THE OWNER ASKED, verbatim:
+ *
+ *   > "Can you tell me the difference between acknowledge and confirmed. Do we
+ *   >  need an acknowledge button if the confirm does the same thing?"
+ *
+ * THE ANSWER, from the checksum-verified spec, is that they are NOT the same:
+ *
+ *   acknowledge        POST /{key}/orders/{id}/acknowledge  → 204, no body
+ *                      "confirms that your system has retrieved all necessary
+ *                       details regarding an order, including any associated
+ *                       media." A RECEIPT. Mandatory before any other write,
+ *                       enforced on a fifteen-minute clock, and it PERMANENTLY
+ *                       revokes our access to the customer's ID images.
+ *
+ *   status=confirmed   POST /{key}/orders/{id}/status       → 200 + full Order
+ *                      "Move an order along its lifecycle by advancing its
+ *                       status." A BUSINESS DECISION. This is the call that
+ *                       tells the shopper the store accepted their order.
+ *
+ * This is the EDI 997-vs-855 distinction: a functional acknowledgment confirms
+ * technical receipt and explicitly does NOT confirm business acceptance.
+ * Acknowledge therefore cannot be dropped.
+ *
+ * BUT — and this is the part that answers the question the owner actually
+ * meant — OUR acknowledge button already performs BOTH operations. Since slice
+ * L-14 it acknowledges and then immediately pushes `status=confirmed`. So the
+ * separate "Confirm order" button is the redundant one, not the acknowledge.
+ *
+ * WHY THAT REDUNDANT BUTTON WAS ALSO THE BUG
+ * -------------------------------------------------------------------------
+ * `markLeaflyOrderAcknowledged()` writes ONLY `acknowledged_at`; it never
+ * touches `leafly_status`. The status column is moved by the L-14 confirm push
+ * that follows — and that push is wrapped in a try/catch which, by deliberate
+ * design, is NEVER allowed to fail the acknowledgement (Leafly has already
+ * taken it and the ID images are already gone).
+ *
+ * So when that push fails for any reason, we are left in a state where:
+ *
+ *      LEAFLY says:  confirmed          (the push reached them, or did not)
+ *      OUR ROW says: pending            (the local write did not happen)
+ *
+ * and `planLeaflyOrderActions()` — reasoning honestly from the only data it
+ * has — offers "Confirm order" as the PRIMARY, highlighted button. Pressing it
+ * sends pending → confirmed. Leafly, reasoning from its own true state, sees
+ * confirmed → confirmed and applies its documented rule 3:
+ *
+ *      "Orders cannot be moved from their current status to the same status."
+ *
+ * → 400. Exactly the error the owner reported. Retrying sends the identical
+ * rejected request, so the order is stuck forever.
+ *
+ * WHY THE FIX IS NOT "DELETE THE BUTTON"
+ * -------------------------------------------------------------------------
+ * Deleting it removes the symptom and strands the order: the row would still
+ * read `pending`, the board would still be wrong, and there would now be no
+ * control at all to move it on. That is a worse failure, because it is a
+ * silent one.
+ *
+ * WHY THE FIX IS NOT "SEND `ready` INSTEAD"
+ * -------------------------------------------------------------------------
+ * Tempting, and wrong. We do not KNOW Leafly is at `confirmed`. The row reads
+ * `pending` and there are genuinely two possibilities:
+ *
+ *   (a) the confirm push reached Leafly and only our local write failed
+ *       → Leafly is at `confirmed`, and `ready` would be correct;
+ *   (b) the confirm push never reached Leafly at all
+ *       → Leafly is still at `pending`, and `ready` would SKIP the
+ *         confirmation entirely. The shopper would be told their order is
+ *         waiting at the counter without ever being told it was accepted.
+ *
+ * Guessing between them is precisely what the standing rule forbids. The only
+ * honest move is to ASK LEAFLY, which is what this action does.
+ *
+ * WHAT IT ACTUALLY DOES
+ * -------------------------------------------------------------------------
+ * Re-reads the order from Leafly (`collectLeaflyOrder`) and writes Leafly's
+ * own answer into our row. It sends NOTHING. It cannot 400, it cannot advance
+ * a shopper's order, and it cannot burn anything irreversible. Afterwards the
+ * board is showing the truth and the correct next button appears by itself.
+ * ------------------------------------------------------------------------- */
+
+/** Label for the L-32 repair action. Quoted by name in the owner handbook. */
+export const LEAFLY_RECONCILE_ACTION_LABEL = "Check this order with Leafly";
+
+/**
+ * SLICE L-32, ITEM C5 — what the operator is told when the acknowledge-time
+ * confirm push fails.
+ *
+ * WHY THIS IS A CONSTANT AND NOT A STRING LITERAL
+ * -------------------------------------------------------------------------
+ * It was a literal. Twice — once in the `!confirmed.ok` branch and once in
+ * the `catch` branch of the same block in `order-ack-server.ts`, character
+ * for character. Two copies of a sentence is one copy away from two
+ * DIFFERENT sentences describing the same failure, and the failure in
+ * question is invisible by design (the acknowledgement is never allowed to
+ * fail because of it). A wording drift there would be found by a customer,
+ * not by us.
+ *
+ * WHAT CHANGED IN THE WORDING, AND WHY
+ * -------------------------------------------------------------------------
+ * The old text ended: "The order IS accepted here — do not accept it again."
+ * True, and useful, but it left the operator holding a problem with no move.
+ * It named a prohibition and no remedy.
+ *
+ * This is the precise moment the stale row is created — the moment that
+ * later produces the owner's 400 when he reaches for the next step. So the
+ * message now names the button that fixes it, using the SAME words printed
+ * on that button (interpolated from `LEAFLY_RECONCILE_ACTION_LABEL`, never
+ * retyped, so the instruction cannot drift from the control it describes).
+ */
+export const LEAFLY_CONFIRM_PUSH_FAILED_WARNING =
+  "This order IS accepted here and the acknowledgement went through \u2014 do " +
+  "NOT acknowledge it again. But we could not tell Leafly you confirmed it, " +
+  `so the shopper may still see it as pending. Press \u201c${LEAFLY_RECONCILE_ACTION_LABEL}\u201d ` +
+  "on this order to put that right. Do not press it twice \u2014 it is safe, but " +
+  "once is enough.";
+
+/** Busy label for the repair action. Always distinct from the idle label. */
+export const LEAFLY_RECONCILE_ACTION_BUSY_LABEL = "Asking Leafly…";
+
+/**
+ * The explanation printed under the repair button.
+ *
+ * Deliberately says what it does NOT do first. An operator who has just been
+ * told "Leafly didn't accept that" needs to know the next button is safe
+ * before they will press it.
+ */
+export const LEAFLY_RECONCILE_ACTION_HINT =
+  "Nothing is sent to the shopper. We simply ask Leafly what this order's " +
+  "status really is and correct this screen to match, so the right next " +
+  "step can be offered.";
+
+/**
+ * The sentence shown instead of the old "Confirm order" button.
+ *
+ * States the contradiction in the operator's own terms rather than in ours.
+ * "Stale row" and "transition" are our words for it; "this screen and Leafly
+ * disagree" is theirs.
+ */
+export const LEAFLY_STALE_CONFIRM_NOTICE =
+  "This order was accepted here, but this screen and Leafly may disagree " +
+  "about it. Acknowledging already told Leafly you confirmed it, so sending " +
+  "\u201cconfirmed\u201d again is the one thing Leafly will reject. Check with " +
+  "Leafly first \u2014 it is safe, and it takes a second.";
 
 export const LEAFLY_STATUS_ACTION_WORDING: Readonly<
   Record<string, { label: string; hint: string; busyLabel: string }>
@@ -1091,6 +1390,43 @@ export function planLeaflyOrderActions(input: {
   // `=== "delivery"` rather than `!== "pickup"` on purpose: an absent or
   // unrecognised mechanism must NOT unlock delivery actions.
   const isDelivery = (input.fulfillmentMechanism ?? "").trim() === "delivery";
+
+  // ── SLICE L-32: the stale-confirm state, and the repair that replaces it ──
+  //
+  // Detected by the exact pair of facts that can only co-exist when the L-14
+  // confirm push did not land locally: the order IS acknowledged (we are past
+  // phase 2, so `ack.code === "already_acknowledged"`) and yet the row still
+  // reads `pending`.
+  //
+  // A successful acknowledge always attempts `status=confirmed` immediately
+  // afterwards, so in the healthy case this row NEVER sits at `pending` with
+  // a timestamp on it. Seeing that pair means the push failed, which means we
+  // do not know Leafly's true status, which means every status button below
+  // would be built on a value we cannot trust. So we do not offer any of them.
+  //
+  // `canceled` is withheld along with the rest, deliberately. Cancelling is
+  // irreversible and destroys a real sale; doing it from a row we have just
+  // established is untrustworthy is the worst available combination. One
+  // safe read first, then the true options.
+  const currentStatus = (input.leaflyStatus ?? "").trim();
+  if (currentStatus === "pending") {
+    return {
+      actions: [
+        {
+          kind: "reconcile",
+          status: null,
+          label: LEAFLY_RECONCILE_ACTION_LABEL,
+          busyLabel: LEAFLY_RECONCILE_ACTION_BUSY_LABEL,
+          hint: LEAFLY_RECONCILE_ACTION_HINT,
+          // Reads from Leafly and writes only to our own row. There is
+          // nothing here to take back.
+          irreversible: false,
+          emphasis: "primary",
+        },
+      ],
+      blockedReason: "",
+    };
+  }
 
   const actions: PlannedAction[] = [];
   for (const status of LEAFLY_OFFERABLE_STATUSES) {
@@ -1991,12 +2327,50 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
   );
   ok(fresh.blockedReason === "", "a plan with actions carries no blocked reason");
 
-  // Acknowledged pickup order, still pending on Leafly's side.
-  const ackedPending = planLeaflyOrderActions({
+  // ── SLICE L-32: the stale-confirm state gets its own block ───────────────
+  //
+  // This fixture USED to be `leaflyStatus: "pending"`, and it carried the
+  // whole "what does an acknowledged order offer" contract. That was a
+  // mistake hiding in plain sight: a row that is acknowledged AND still
+  // `pending` is not the ordinary acknowledged order at all. It is the
+  // BROKEN one — the state that only exists when the L-14 confirm push
+  // failed — and the owner's 400 came from pressing the button it offered.
+  //
+  // So the general contract now runs against `confirmed`, which is what an
+  // acknowledged order actually looks like when everything worked, and the
+  // stale state is asserted separately and deliberately below.
+  const stalePending = planLeaflyOrderActions({
     leaflyOrderId: "ord-1",
     orderIntegrationKeyPresent: true,
     acknowledgedAt: ACK_AT,
     leaflyStatus: "pending",
+    fulfillmentMechanism: "pickup",
+  });
+  ok(
+    stalePending.actions.length === 1 &&
+      stalePending.actions[0].kind === "reconcile",
+    "acknowledged + still `pending` offers ONLY the safe re-read, because " +
+      "that pair of facts means we do not know Leafly's true status",
+  );
+  ok(
+    !stalePending.actions.some((a) => a.status === "confirmed"),
+    "…the 'Confirm order' button that produced the owner's 400 is gone",
+  );
+  ok(
+    stalePending.actions.every((a) => !a.irreversible),
+    "…and nothing irreversible is offered from a row we cannot trust",
+  );
+  ok(
+    stalePending.blockedReason === "",
+    "…the repair state is not a dead end: it offers an action, not a refusal",
+  );
+
+  // The ordinary, healthy acknowledged order: Leafly took the confirm push.
+  const ackedPending = planLeaflyOrderActions({
+    leaflyOrderId: "ord-1",
+    orderIntegrationKeyPresent: true,
+    acknowledgedAt: ACK_AT,
+    leaflyStatus: "confirmed",
     fulfillmentMechanism: "pickup",
   });
   ok(
@@ -2039,9 +2413,14 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
     ackedPending.actions.find((a) => a.status === "picked_up")?.irreversible === true,
     "picked_up is flagged irreversible (Leafly will not move it again)",
   );
+  // SLICE L-32 — was `.find(a => a.status === "confirmed")`, which no longer
+  // exists here because this fixture IS a confirmed order now. Re-pointed at
+  // `ready`, which carries the identical property: a non-terminal forward
+  // move must NOT be flagged irreversible, because over-warning is how you
+  // train people to click through the warnings that matter.
   ok(
-    ackedPending.actions.find((a) => a.status === "confirmed")?.irreversible === false,
-    "confirmed is NOT flagged irreversible (over-warning trains people to click through)",
+    ackedPending.actions.find((a) => a.status === "ready")?.irreversible === false,
+    "a non-terminal move is NOT flagged irreversible (over-warning trains people to click through)",
   );
   ok(
     ackedPending.actions.every((a) => a.label.trim().length > 0),
@@ -2190,6 +2569,25 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
               d.allowed,
               `offered acknowledge is accepted (${current}/${mech}/acked=${acknowledged !== null})`,
             );
+          } else if (action.kind === "reconcile") {
+            // SLICE L-32. There is no decision function to consult, because
+            // there is no decision to make: this action SENDS NOTHING. It
+            // reads the order back from Leafly and corrects our own row.
+            //
+            // Direction 1 of the invariant asks "can everything offered
+            // actually be accepted?". For a read, the answer is trivially
+            // yes — Leafly cannot reject a request we do not make. What is
+            // worth asserting instead is that it really is inert, because
+            // the whole safety argument for showing it in the broken state
+            // rests on that.
+            ok(
+              action.status === null,
+              `the reconcile action carries no status to push (${current}/${mech})`,
+            );
+            ok(
+              action.irreversible === false,
+              `the reconcile action is never irreversible (${current}/${mech})`,
+            );
           } else {
             const d = decideStatusChange({
               acknowledgedAt: acknowledged,
@@ -2203,11 +2601,34 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
           }
         }
 
-        // Direction 2: nothing accepted is withheld -- except the two delivery
-        // statuses on a pickup order, which are withheld on WASHINGTON LAW
-        // grounds rather than Leafly grounds. That exception is named
-        // explicitly so it cannot widen unnoticed.
-        if (acknowledged !== null) {
+        // Direction 2: nothing accepted is withheld -- except in exactly TWO
+        // named cases. Both are written out here rather than encoded as a
+        // vague allowance, so neither can widen unnoticed.
+        //
+        //   EXCEPTION 1 (pre-existing): the two delivery statuses on a pickup
+        //   order, withheld on WASHINGTON LAW grounds rather than Leafly
+        //   grounds. RCW 69.50.348 permits on-premises retail sale only.
+        //
+        //   EXCEPTION 2 (SLICE L-32): EVERY status, on an acknowledged order
+        //   whose row still reads `pending`. Our own decision functions
+        //   cheerfully accept those transitions -- and that is precisely the
+        //   problem. They are reasoning from a row we have proven cannot be
+        //   trusted, because a successful acknowledge always attempts
+        //   `status=confirmed` straight afterwards, so this pair of facts can
+        //   only mean that push did not land. Leafly is therefore at either
+        //   `pending` or `confirmed` and we genuinely do not know which.
+        //   Offering a status button here is offering a coin flip, and the
+        //   owner already called the wrong side of it:
+        //
+        //     "Bad request (400): Leafly rejected the body."
+        //
+        //   So the planner withholds all of them and offers the re-read
+        //   instead. This is a DELIBERATE, BOUNDED violation of direction 2:
+        //   it is confined to one state, it withholds in favour of a safe
+        //   action rather than a dead end, and the state is self-clearing --
+        //   one press of the repair button and the row is truthful again.
+        const staleConfirm = acknowledged !== null && current === "pending";
+        if (acknowledged !== null && !staleConfirm) {
           for (const candidate of LEAFLY_OFFERABLE_STATUSES) {
             const d = decideStatusChange({
               acknowledgedAt: acknowledged,
@@ -2225,6 +2646,24 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
               `"${candidate}" from "${current}" on a ${mech} order: offered=${wasOffered}, expected=${expectOffered}`,
             );
           }
+        }
+
+        // EXCEPTION 2, asserted POSITIVELY rather than merely skipped.
+        //
+        // A bare `continue` would mean the stale state is the one state in
+        // the entire matrix that nothing checks -- the exact shape of hole
+        // this invariant exists to prevent. So the substitute contract is
+        // pinned here instead: not "anything goes", but "exactly the repair
+        // action, and nothing that can be sent".
+        if (staleConfirm) {
+          ok(
+            plan.actions.length === 1 && plan.actions[0].kind === "reconcile",
+            `stale-confirm (${mech}) offers ONLY the repair action`,
+          );
+          ok(
+            !plan.actions.some((a) => a.kind === "status"),
+            `stale-confirm (${mech}) offers nothing that pushes to Leafly`,
+          );
         }
       }
     }

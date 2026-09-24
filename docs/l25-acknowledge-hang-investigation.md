@@ -1794,3 +1794,243 @@ quiet." The question as asked had a tempting wrong answer that would have been
 easy to build, easy to test, and a compliance breach. **Going and reading the
 specification is not pedantry; it is the difference between fixing the bug and
 building a violation.**
+
+---
+
+# CHAPTER ELEVEN — L-32: TWO WORDS, ONE BUTTON, AND A 400 THAT WAS OUR OWN FAULT
+
+## The report
+
+Three things arrived in one message, and they turned out to be one thing:
+
+> "Can you tell me the difference between acknowledge and confirmed. Do we need
+> an acknowledge button if the confirm does the same thing? Next, I am getting
+> an error when I try to go to the next step. ... Error message: ⚠️ Leafly
+> didn't accept that. Bad request (400): Leafly rejected the body. Usually an
+> illegal status transition, or a cancellation reason Leafly does not accept on
+> this endpoint. Retrying sends the same rejected request."
+
+The owner thought he was asking a terminology question and, separately,
+reporting a bug. He was not. His terminology question *was* the bug report. The
+two buttons looked like they did the same thing because on the screen in front
+of him they very nearly did — and the 400 was the collision.
+
+## The difference, from Leafly's own specification
+
+Answered from the vendored spec, md5 `daab7bcf6f77177de85425adf7f805f1`,
+re-verified byte-identical to the live download. Not from memory, and not from
+inference about what the words usually mean.
+
+**`POST /{key}/orders/{id}/acknowledge`** — returns **204**, no body:
+
+> "confirms that your system has retrieved all necessary details regarding an
+> order, including any associated media"
+
+> "Acknowledgement of order receipt is required before any changes can be made
+> to that order through other API operations."
+
+**`POST /{key}/orders/{id}/status`** with `status=confirmed` — returns **200**
+and the full Order object:
+
+> "Move an order along its lifecycle by advancing its status."
+
+So:
+
+**ACKNOWLEDGE IS A RECEIPT. CONFIRMED IS A DECISION.**
+
+Acknowledge says *"we got it, and we downloaded the customer's ID photos."* It
+is mandatory, it is on a fifteen-minute clock, it is a precondition for every
+other write, and it permanently burns the customer's ID images — Leafly deletes
+them once you have collected them. It tells the shopper nothing.
+
+Confirmed says *"we looked at this order and we are going to fill it."* That is
+the one that emails the shopper.
+
+The closest everyday analogy is EDI: acknowledge is the 997 functional
+acknowledgement ("your message arrived intact"), confirmed is the 855 purchase
+order acknowledgement ("and here is our answer to it"). A system that sends only
+the 997 has told you nothing about whether it will ship.
+
+## "Do we need the acknowledge button?" — yes, but he was right anyway
+
+The instinct behind the question was correct even though the specific
+conclusion was backwards. **Acknowledge cannot be dropped** — it is required by
+Leafly and nothing else can move without it.
+
+But our Acknowledge button has, since L-14, *also* pushed `status=confirmed`
+immediately after the receipt succeeds. One press already does both jobs. So the
+redundant control was never the acknowledge button — **it was the separate
+Confirm button**, which by that point had nothing left to do.
+
+The owner was looking at two buttons where one of them had already been made
+pointless by our own code, and he noticed. That is a good eye.
+
+## The 400, reproduced by execution
+
+`markLeaflyOrderAcknowledged()` writes **only** `acknowledged_at`. It never
+writes `leafly_status`. The status column is moved by the L-14 confirm push,
+which lives inside a `try`/`catch` that is deliberately never allowed to fail
+the acknowledgement — correctly, because a receipt that succeeded must not be
+reported as failed.
+
+When that confirm push does not land locally, the row comes to rest in a state
+that should not exist: **acknowledged, but still `pending`.**
+
+The planner then read `pending`, concluded the obvious next step was to confirm,
+and offered **"Confirm order" as the PRIMARY button.** Pressing it sent
+`pending → confirmed`. Leafly, which had been sitting at `confirmed` since the
+acknowledgement, applied documented transition rule 3:
+
+> "Orders cannot be moved from their current status to the same status"
+
+400. And our own error text then told him, accurately and uselessly, that
+retrying would send the identical rejected request. It was a dead end with a
+bright, confident, primary-styled button pointing straight into it.
+
+`scripts/recon/l32-redundant-confirm-probe.mts` runs the real planner and prints
+what it actually offered:
+
+```
+buttons: ["Confirm order", "Mark ready for pickup", "Mark picked up", "Cancel on Leafly"]
+primary: Confirm order
+```
+
+That output is preserved verbatim in the probe as a comment, and the probe's
+assertions are now inverted to pin the fix.
+
+## The fix, and the two fixes that were rejected first
+
+**Rejected: delete the button.** The order would then sit there, silently
+stranded, with no way forward and nothing on screen admitting it.
+
+**Rejected: send `ready` instead.** This is the tempting one, and it is a guess.
+We do not actually know whether Leafly is at `pending` or `confirmed` — the push
+failed, and a failed push tells you nothing about what the other side did with
+it. Guessing right most of the time is still guessing, and the standing rule
+forbids it.
+
+**Built: ask Leafly.** In the one state that is provably contradictory —
+acknowledged locally *and* still `pending` — the board stops offering pushes
+entirely and offers a single button:
+
+> **Check this order with Leafly**
+
+It is a *pull*, not a push. It reads the order back, stores what Leafly says,
+and corrects our screen so the right next step can be offered. Nothing is sent
+to the shopper. There is nothing to take back, so it is marked
+`irreversible: false`, and it is safe to press twice.
+
+The new `reconcile` kind sits alongside `acknowledge` and `status` in the
+planner's discriminated union.
+
+## The near-miss that the type system caught
+
+The component chose its form destination with a two-way ternary:
+
+```ts
+action={isAck ? acknowledgeAction : statusAction}
+```
+
+A third kind falls silently into the `else`. The new reconcile button would have
+rendered perfectly, posted to the **status** action, carried no `nextStatus`,
+failed validation — and produced a fresh, different error on the very button
+added to end the first one. The cure would have reproduced the disease.
+
+It is now an explicit three-way keyed on `action.kind`, `reconcileAction` is a
+**required** prop, and the hidden `nextStatus` field is gated on
+`action.kind === "status"` stated positively rather than on `!isAck` — because
+reconcile is also "not an acknowledge", and a guard that is correct only by
+accident is a guard that is waiting to be wrong.
+
+Making the prop required immediately broke an L-31 test file at compile time.
+That is the design working: forgetting to wire it is now a type error, which is
+the strongest catch available.
+
+## Four more things, because they were in the same blast radius
+
+- **C1** — `raw_order` was the only one of seven columns written unguarded, with
+  twenty read sites. A 200 carrying an unreadable body wiped the customer's
+  entire order detail: the "eighteen blank fields" symptom. Now guarded, plus an
+  empty-patch guard that refuses to report success for a write of nothing.
+- **C2** — the message the owner pasted contained the word *"Usually."* We were
+  storing Leafly's real, specific reason in the database and showing him our
+  speculation about it. `explainLeaflyErrorBody()` now surfaces Leafly's own
+  sentence (both documented 400 shapes, including `validation_result`, where the
+  actionable half lives), bounded at 400 characters so a hostile body cannot
+  push the controls off screen.
+- **C3** — a `fix_request` rejection now re-reads the order from Leafly
+  automatically, so the dead end repairs itself. Only `fix_request`: a 401 or a
+  5xx says nothing about an order's status.
+- **C5** — the silent confirm-push failure now announces itself *when it
+  happens*, in one shared constant rather than two duplicated literals, and it
+  names the exact repair button by interpolating that button's own label so the
+  instruction cannot drift from the control.
+
+## Testing the tests
+
+59 new tests in nine sections, 551 assertions in the core self-tests, 13 render
+checks, two executable probes, and a 20-mutation sweep. The sweep is where the
+work actually got done, and it took three runs to become honest:
+
+**Run 1 — 17 caught, 0 survived, 3 INERT.** Three mutations had search strings
+that did not exist in the source: `record.validation_result` where the code says
+`rec.`, an offset of `399` where the code says `400`, and a block indented four
+spaces where the real one sits at two. All three reported "nothing survived"
+because nothing was ever changed. **An inert mutation is a fake pass**, and it
+is worse than a missing test because it looks like a present one. The harness
+exits non-zero on inert, which is the only reason this was visible at all.
+
+**Run 2 — 19 caught, 1 SURVIVED.** Fixing the inert strings exposed a real hole.
+The C3 self-heal could be deleted outright — `if (false)` — and the test stayed
+green, because it asserted only that `fix_request` and `collectLeaflyOrder` both
+*appeared* in the function. Both did: `fix_request` occurs three more times
+further down, and `collectLeaflyOrder` was still sitting there inside the
+now-dead branch. Two true statements about the file, and not one of them said
+the re-read ran.
+
+**Presence is not connection.** The assertion now reads the guard condition back
+out of the very block that performs the re-read, so the two cannot be verified
+independently of each other.
+
+**Run 3 — 20 caught, 0 survived, 0 inert**, including THE ESCAPED MUTATION
+carried forward permanently from L-31.
+
+Two stale L-30 assertions had to be re-pinned along the way, and that file's own
+comment gave the instruction:
+
+> "Re-pinning it to the new literal would repeat the mistake and break the next
+> slice for no reason."
+
+So they were re-pinned to the *property* — the acknowledge form posts to the
+acknowledge action, decided in one explicit place — discovering the destination
+variable from the form rather than assuming its name.
+
+## An honest limitation
+
+`renderToStaticMarkup` replaces **every** function form action with the same
+placeholder string:
+
+```
+action="javascript:throw new Error('React form unexpectedly submitted.')"
+```
+
+The markup is therefore byte-identical whether the wiring is right or wrong.
+Rendering cannot prove where a form posts. A marker-function trick was drafted
+and then thrown away rather than keep an assertion that looks meaningful and
+proves nothing. Wiring is proven by the type system and by bounded source
+assertions instead, and the limitation is written into the render proof in
+plain sight.
+
+## The lesson
+
+Chapter Ten's lesson was that UI behaviour must be rendered, not read. Chapter
+Eleven's is about the instruments themselves:
+
+**A test that cannot be made to fail has not been tested. A mutation that
+changes nothing proves nothing, and it proves it in green.**
+
+The second lesson belongs to the owner. He asked what two words meant, and the
+answer to that question was the location of the defect. When someone who uses
+the system every day says *"don't these two do the same thing?"*, that is not a
+terminology request. It is a bug report from the only person positioned to file
+it, and the right response is to go and read the specification.
