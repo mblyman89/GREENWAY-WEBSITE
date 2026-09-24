@@ -1329,6 +1329,27 @@ export function planLeaflyOrderActions(input: {
   acknowledgedAt: string | null | undefined;
   leaflyStatus: string | null | undefined;
   fulfillmentMechanism: string | null | undefined;
+  /**
+   * SLICE L-33 -- was a `status=confirmed` push ATTEMPTED AND FAILED?
+   *
+   * Read from `leafly_orders.confirm_push_failed_at`, which is stamped by the
+   * code that watched the push fail. NOT inferred from the status columns:
+   * before L-33 "acknowledged and pending" was itself the evidence of a failed
+   * push, but auto-acknowledge makes that state the normal resting position of
+   * every healthy order, so the evidence had to become explicit.
+   *
+   * OPTIONAL, and absence means "no failure recorded". That default is the
+   * safe one in both directions:
+   *   - Until migration 0230 is applied by hand the column does not exist, the
+   *     server passes undefined, and the board behaves exactly as it does
+   *     today -- a graceful degradation, not a crash.
+   *   - A missing value can only ever cause us to offer the ORDINARY buttons,
+   *     never to hide them. The failure mode of a wrong default is "the
+   *     operator sees their normal workflow", which is recoverable, rather
+   *     than "the operator sees nothing they can use", which is the dead end
+   *     this whole area exists to remove.
+   */
+  confirmPushFailed?: boolean | null;
 }): OutboundActionPlan {
   // ── Phase 1: can we address this order at all? ──────────────────────────
   // Asked through the real acknowledgement decision, not by re-checking the
@@ -1398,18 +1419,54 @@ export function planLeaflyOrderActions(input: {
   // phase 2, so `ack.code === "already_acknowledged"`) and yet the row still
   // reads `pending`.
   //
-  // A successful acknowledge always attempts `status=confirmed` immediately
-  // afterwards, so in the healthy case this row NEVER sits at `pending` with
-  // a timestamp on it. Seeing that pair means the push failed, which means we
-  // do not know Leafly's true status, which means every status button below
-  // would be built on a value we cannot trust. So we do not offer any of them.
+  // -- SLICE L-33 RE-KEYED THIS RULE. READ THIS BEFORE CHANGING IT. --------
+  //
+  // L-32's original reasoning was stated here as:
+  //
+  //   "A successful acknowledge ALWAYS attempts `status=confirmed` immediately
+  //    afterwards, so in the healthy case this row NEVER sits at `pending`
+  //    with a timestamp on it."
+  //
+  // THAT PREMISE WAS TRUE WHEN IT WAS WRITTEN AND IS NOW FALSE. L-33 added
+  // auto-acknowledge, and the owner was explicit about its shape:
+  //
+  //   > "It can't be acknowledge and confirm in the same step though.
+  //   >  Just auto acknowledge."
+  //
+  // So an automatically acknowledged order is acknowledged AND pending BY
+  // DESIGN -- that is the correct, healthy, intended resting state of every
+  // order that arrives, waiting for a human to decide. The pair of facts above
+  // no longer distinguishes a failure from the normal case, because after L-33
+  // the normal case produces exactly the same pair.
+  //
+  // Keyed on the status columns alone, this rule fired on EVERY order and
+  // replaced the owner's entire workflow with a diagnostic. That is not a
+  // hypothetical: `scripts/recon/l33-board-breakage-probe.mts` executes this
+  // function against the real post-L-33 row and printed, before this change:
+  //
+  //     buttons  : Check this order with Leafly [PRIMARY]
+  //
+  // One button, the wrong one, on every healthy order.
+  //
+  // THE FIX IS A RECORDED FACT, NOT A CLEVERER INFERENCE. `confirmPushFailed`
+  // is stamped at the moment a confirm push is attempted and fails, by the code
+  // that watched it fail. It is never derived from the status columns, because
+  // those can no longer answer the question. Inferring it would be guessing,
+  // and a guess here decides whether the operator is shown a working button or
+  // a dead end.
+  //
+  // WHY NOT SIMPLY DELETE THE RULE: because the failure it catches is real, it
+  // produced the owner's 400, and it still happens on the human path -- which
+  // still pushes confirm, and whose push can still fail. Deleting the rule
+  // would trade a board that cries wolf for a board that goes silent, and the
+  // silent version is the one that strands a customer's order.
   //
   // `canceled` is withheld along with the rest, deliberately. Cancelling is
   // irreversible and destroys a real sale; doing it from a row we have just
   // established is untrustworthy is the worst available combination. One
   // safe read first, then the true options.
   const currentStatus = (input.leaflyStatus ?? "").trim();
-  if (currentStatus === "pending") {
+  if (currentStatus === "pending" && input.confirmPushFailed === true) {
     return {
       actions: [
         {
@@ -2345,6 +2402,12 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
     acknowledgedAt: ACK_AT,
     leaflyStatus: "pending",
     fulfillmentMechanism: "pickup",
+    // SLICE L-33. This fixture describes the BROKEN row, and after L-33 the
+    // two status columns alone can no longer say so: auto-acknowledge makes
+    // "acknowledged + pending" the healthy norm. The failure is therefore
+    // stated as the recorded fact it now is. Every assertion below is
+    // unchanged -- only the way the state is described has changed.
+    confirmPushFailed: true,
   });
   ok(
     stalePending.actions.length === 1 &&
@@ -2503,167 +2566,201 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
   //   * nothing accepted may be withheld (no hidden capability)
   // The second half is the one that is easy to forget, and it is what would
   // catch an over-eager filter quietly removing a legal action.
+  //
+  // SLICE L-33 ADDED A FOURTH DIMENSION: `confirmPushFailed`. The matrix now
+  // covers both the healthy auto-acknowledged row and the genuinely broken
+  // one, which are IDENTICAL in every other column and must behave completely
+  // differently. Before L-33 that distinction did not exist and could not be
+  // covered; the loop is therefore strictly larger than it was, not rewritten.
   let offeredTotal = 0;
   for (const acknowledged of [null, ACK_AT]) {
     for (const current of LEAFLY_ORDER_STATUS_SEQUENCE) {
       for (const mech of ["pickup", "delivery"] as const) {
-        const plan = planLeaflyOrderActions({
-          leaflyOrderId: "ord-1",
-          orderIntegrationKeyPresent: true,
-          acknowledgedAt: acknowledged,
-          leaflyStatus: current,
-          fulfillmentMechanism: mech,
-        });
+        for (const pushFailed of [false, true]) {
+          const plan = planLeaflyOrderActions({
+            leaflyOrderId: "ord-1",
+            orderIntegrationKeyPresent: true,
+            acknowledgedAt: acknowledged,
+            leaflyStatus: current,
+            fulfillmentMechanism: mech,
+            confirmPushFailed: pushFailed,
+          });
 
-        // Direction 1: everything offered is accepted.
-        for (const action of plan.actions) {
-          offeredTotal += 1;
+          // Direction 1: everything offered is accepted.
+          for (const action of plan.actions) {
+            offeredTotal += 1;
 
-          // SLICE L-17 -- the busy wording, checked on EVERY action the
-          // planner can ever emit rather than on a hand-picked sample.
-          //
-          // These three properties are the whole contract, and each one maps
-          // to a way the owner's original complaint could come back:
-          //
-          //   non-empty      -> a spinner with no words is a button that has
-          //                     stopped explaining itself.
-          //   !== label      -> if the busy text equals the idle text, the
-          //                     button looks unchanged while it works, which
-          //                     is EXACTLY the defect being fixed
-          //                     (AnnouncerPanel.tsx:175 documents the same
-          //                     bug class in this folder).
-          //   no success claim -> the request is still in flight; wording
-          //                     that reads as a completed fact would be the
-          //                     one thing this slice refuses to do.
-          ok(
-            typeof action.busyLabel === "string" && action.busyLabel.trim().length > 0,
-            `every offered action has busy wording (${action.label})`,
-          );
-          ok(
-            action.busyLabel !== action.label,
-            `busy wording differs from the idle label (${action.label})`,
-          );
-          ok(
-            !/\backnowledged\b|\bconfirmed\b|\bsent\b|\bdone\b|\bcomplete\b/i.test(
-              action.busyLabel,
-            ),
-            `busy wording claims nothing (${action.label})`,
-          );
-          // Trailing ellipsis: the shop's convention for "still working",
-          // used by AnnouncerTestButton ("Sending...") and AiBusyButton
-          // ("Working..."). Asserted so a new status cannot arrive with
-          // wording that reads as finished.
-          ok(
-            action.busyLabel.trim().endsWith("\u2026"),
-            `busy wording is open-ended (${action.label})`,
-          );
-
-          if (action.kind === "acknowledge") {
-            const d = decideAcknowledgement({
-              leaflyOrderId: "ord-1",
-              orderIntegrationKey: "present",
-              acknowledgedAt: acknowledged,
-              leaflyStatus: current,
-            });
-            ok(
-              d.allowed,
-              `offered acknowledge is accepted (${current}/${mech}/acked=${acknowledged !== null})`,
-            );
-          } else if (action.kind === "reconcile") {
-            // SLICE L-32. There is no decision function to consult, because
-            // there is no decision to make: this action SENDS NOTHING. It
-            // reads the order back from Leafly and corrects our own row.
+            // SLICE L-17 -- the busy wording, checked on EVERY action the
+            // planner can ever emit rather than on a hand-picked sample.
             //
-            // Direction 1 of the invariant asks "can everything offered
-            // actually be accepted?". For a read, the answer is trivially
-            // yes — Leafly cannot reject a request we do not make. What is
-            // worth asserting instead is that it really is inert, because
-            // the whole safety argument for showing it in the broken state
-            // rests on that.
+            // These three properties are the whole contract, and each one maps
+            // to a way the owner's original complaint could come back:
+            //
+            //   non-empty      -> a spinner with no words is a button that has
+            //                     stopped explaining itself.
+            //   !== label      -> if the busy text equals the idle text, the
+            //                     button looks unchanged while it works, which
+            //                     is EXACTLY the defect being fixed
+            //                     (AnnouncerPanel.tsx:175 documents the same
+            //                     bug class in this folder).
+            //   no success claim -> the request is still in flight; wording
+            //                     that reads as a completed fact would be the
+            //                     one thing this slice refuses to do.
             ok(
-              action.status === null,
-              `the reconcile action carries no status to push (${current}/${mech})`,
+              typeof action.busyLabel === "string" && action.busyLabel.trim().length > 0,
+              `every offered action has busy wording (${action.label})`,
             );
             ok(
-              action.irreversible === false,
-              `the reconcile action is never irreversible (${current}/${mech})`,
+              action.busyLabel !== action.label,
+              `busy wording differs from the idle label (${action.label})`,
             );
-          } else {
-            const d = decideStatusChange({
-              acknowledgedAt: acknowledged,
-              currentStatus: current,
-              nextStatus: action.status as string,
-            });
             ok(
-              d.allowed,
-              `offered "${action.status}" is accepted (from ${current}/${mech})`,
+              !/\backnowledged\b|\bconfirmed\b|\bsent\b|\bdone\b|\bcomplete\b/i.test(
+                action.busyLabel,
+              ),
+              `busy wording claims nothing (${action.label})`,
+            );
+            // Trailing ellipsis: the shop's convention for "still working",
+            // used by AnnouncerTestButton ("Sending...") and AiBusyButton
+            // ("Working..."). Asserted so a new status cannot arrive with
+            // wording that reads as finished.
+            ok(
+              action.busyLabel.trim().endsWith("\u2026"),
+              `busy wording is open-ended (${action.label})`,
+            );
+
+            if (action.kind === "acknowledge") {
+              const d = decideAcknowledgement({
+                leaflyOrderId: "ord-1",
+                orderIntegrationKey: "present",
+                acknowledgedAt: acknowledged,
+                leaflyStatus: current,
+              });
+              ok(
+                d.allowed,
+                `offered acknowledge is accepted (${current}/${mech}/acked=${acknowledged !== null})`,
+              );
+            } else if (action.kind === "reconcile") {
+              // SLICE L-32. There is no decision function to consult, because
+              // there is no decision to make: this action SENDS NOTHING. It
+              // reads the order back from Leafly and corrects our own row.
+              //
+              // Direction 1 of the invariant asks "can everything offered
+              // actually be accepted?". For a read, the answer is trivially
+              // yes — Leafly cannot reject a request we do not make. What is
+              // worth asserting instead is that it really is inert, because
+              // the whole safety argument for showing it in the broken state
+              // rests on that.
+              ok(
+                action.status === null,
+                `the reconcile action carries no status to push (${current}/${mech})`,
+              );
+              ok(
+                action.irreversible === false,
+                `the reconcile action is never irreversible (${current}/${mech})`,
+              );
+            } else {
+              const d = decideStatusChange({
+                acknowledgedAt: acknowledged,
+                currentStatus: current,
+                nextStatus: action.status as string,
+              });
+              ok(
+                d.allowed,
+                `offered "${action.status}" is accepted (from ${current}/${mech})`,
+              );
+            }
+          }
+
+          // Direction 2: nothing accepted is withheld -- except in exactly TWO
+          // named cases. Both are written out here rather than encoded as a
+          // vague allowance, so neither can widen unnoticed.
+          //
+          //   EXCEPTION 1 (pre-existing): the two delivery statuses on a pickup
+          //   order, withheld on WASHINGTON LAW grounds rather than Leafly
+          //   grounds. RCW 69.50.348 permits on-premises retail sale only.
+          //
+          //   EXCEPTION 2 (SLICE L-32): EVERY status, on an acknowledged order
+          //   whose row still reads `pending`. Our own decision functions
+          //   cheerfully accept those transitions -- and that is precisely the
+          //   problem. They are reasoning from a row we have proven cannot be
+          //   trusted, because a successful acknowledge always attempts
+          //   `status=confirmed` straight afterwards, so this pair of facts can
+          //   only mean that push did not land. Leafly is therefore at either
+          //   `pending` or `confirmed` and we genuinely do not know which.
+          //   Offering a status button here is offering a coin flip, and the
+          //   owner already called the wrong side of it:
+          //
+          //     "Bad request (400): Leafly rejected the body."
+          //
+          //   So the planner withholds all of them and offers the re-read
+          //   instead. This is a DELIBERATE, BOUNDED violation of direction 2:
+          //   it is confined to one state, it withholds in favour of a safe
+          //   action rather than a dead end, and the state is self-clearing --
+          //   one press of the repair button and the row is truthful again.
+          // SLICE L-33: `pushFailed` is now part of the definition, because it
+          // is now part of the planner's rule. Deriving it from the status
+          // columns alone would re-introduce the exact conflation this slice
+          // removed, and would make the matrix assert the OLD behaviour while
+          // appearing to test the new one.
+          const staleConfirm =
+            acknowledged !== null && current === "pending" && pushFailed;
+          if (acknowledged !== null && !staleConfirm) {
+            for (const candidate of LEAFLY_OFFERABLE_STATUSES) {
+              const d = decideStatusChange({
+                acknowledgedAt: acknowledged,
+                currentStatus: current,
+                nextStatus: candidate,
+              });
+              if (!d.allowed) continue;
+              const deliveryOnly = (
+                LEAFLY_DELIVERY_ONLY_STATUSES as readonly string[]
+              ).includes(candidate);
+              const expectOffered = mech === "delivery" || !deliveryOnly;
+              const wasOffered = plan.actions.some((a) => a.status === candidate);
+              ok(
+                wasOffered === expectOffered,
+                `"${candidate}" from "${current}" on a ${mech} order: offered=${wasOffered}, expected=${expectOffered}`,
+              );
+            }
+          }
+
+          // EXCEPTION 2, asserted POSITIVELY rather than merely skipped.
+          //
+          // A bare `continue` would mean the stale state is the one state in
+          // the entire matrix that nothing checks -- the exact shape of hole
+          // this invariant exists to prevent. So the substitute contract is
+          // pinned here instead: not "anything goes", but "exactly the repair
+          // action, and nothing that can be sent".
+          if (staleConfirm) {
+            ok(
+              plan.actions.length === 1 && plan.actions[0].kind === "reconcile",
+              `stale-confirm (${mech}) offers ONLY the repair action`,
+            );
+            ok(
+              !plan.actions.some((a) => a.kind === "status"),
+              `stale-confirm (${mech}) offers nothing that pushes to Leafly`,
             );
           }
-        }
-
-        // Direction 2: nothing accepted is withheld -- except in exactly TWO
-        // named cases. Both are written out here rather than encoded as a
-        // vague allowance, so neither can widen unnoticed.
+        // -- SLICE L-33: THE HEALTHY AUTO-ACKNOWLEDGED ROW -----------------
         //
-        //   EXCEPTION 1 (pre-existing): the two delivery statuses on a pickup
-        //   order, withheld on WASHINGTON LAW grounds rather than Leafly
-        //   grounds. RCW 69.50.348 permits on-premises retail sale only.
+        // The state the owner's feature creates on every order: acknowledged,
+        // still `pending`, and NO recorded push failure. Before L-33 this row
+        // was indistinguishable from the broken one and was swallowed by the
+        // repair rule -- the breakage this slice exists to prevent.
         //
-        //   EXCEPTION 2 (SLICE L-32): EVERY status, on an acknowledged order
-        //   whose row still reads `pending`. Our own decision functions
-        //   cheerfully accept those transitions -- and that is precisely the
-        //   problem. They are reasoning from a row we have proven cannot be
-        //   trusted, because a successful acknowledge always attempts
-        //   `status=confirmed` straight afterwards, so this pair of facts can
-        //   only mean that push did not land. Leafly is therefore at either
-        //   `pending` or `confirmed` and we genuinely do not know which.
-        //   Offering a status button here is offering a coin flip, and the
-        //   owner already called the wrong side of it:
-        //
-        //     "Bad request (400): Leafly rejected the body."
-        //
-        //   So the planner withholds all of them and offers the re-read
-        //   instead. This is a DELIBERATE, BOUNDED violation of direction 2:
-        //   it is confined to one state, it withholds in favour of a safe
-        //   action rather than a dead end, and the state is self-clearing --
-        //   one press of the repair button and the row is truthful again.
-        const staleConfirm = acknowledged !== null && current === "pending";
-        if (acknowledged !== null && !staleConfirm) {
-          for (const candidate of LEAFLY_OFFERABLE_STATUSES) {
-            const d = decideStatusChange({
-              acknowledgedAt: acknowledged,
-              currentStatus: current,
-              nextStatus: candidate,
-            });
-            if (!d.allowed) continue;
-            const deliveryOnly = (
-              LEAFLY_DELIVERY_ONLY_STATUSES as readonly string[]
-            ).includes(candidate);
-            const expectOffered = mech === "delivery" || !deliveryOnly;
-            const wasOffered = plan.actions.some((a) => a.status === candidate);
-            ok(
-              wasOffered === expectOffered,
-              `"${candidate}" from "${current}" on a ${mech} order: offered=${wasOffered}, expected=${expectOffered}`,
-            );
-          }
-        }
-
-        // EXCEPTION 2, asserted POSITIVELY rather than merely skipped.
-        //
-        // A bare `continue` would mean the stale state is the one state in
-        // the entire matrix that nothing checks -- the exact shape of hole
-        // this invariant exists to prevent. So the substitute contract is
-        // pinned here instead: not "anything goes", but "exactly the repair
-        // action, and nothing that can be sent".
-        if (staleConfirm) {
+        // Asserted positively, in the invariant itself, so that re-keying the
+        // rule back to the status columns alone cannot pass this matrix.
+        if (acknowledged !== null && current === "pending" && !pushFailed) {
           ok(
-            plan.actions.length === 1 && plan.actions[0].kind === "reconcile",
-            `stale-confirm (${mech}) offers ONLY the repair action`,
+            !plan.actions.some((a) => a.kind === "reconcile"),
+            `healthy auto-acknowledged (${mech}) is NOT treated as broken`,
           );
           ok(
-            !plan.actions.some((a) => a.kind === "status"),
-            `stale-confirm (${mech}) offers nothing that pushes to Leafly`,
+            plan.actions.some((a) => a.status === "confirmed"),
+            `healthy auto-acknowledged (${mech}) can still be confirmed by a human`,
           );
+        }
         }
       }
     }

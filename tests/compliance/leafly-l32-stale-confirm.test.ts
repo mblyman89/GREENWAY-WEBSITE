@@ -105,18 +105,47 @@ const panelCode = stripComments(panelSource);
 const fetchCode = stripComments(fetchSource);
 const ackServerCode = stripComments(ackServerSource);
 
-function planFor(leaflyStatus: string | null, acknowledgedAt: string | null) {
+/**
+ * ── SLICE L-33 CHANGED THE TRIGGER OF THE RULE THESE TESTS GUARD ───────────
+ *
+ * L-32 detected the stale state from two facts: acknowledged, and still
+ * `pending`. L-33 added auto-acknowledge, which makes that exact pair the
+ * NORMAL resting state of every healthy order — so the pair stopped being
+ * evidence of anything, and the trigger moved to a RECORDED fact:
+ * `confirm_push_failed_at`, stamped by the code that watched a push fail.
+ *
+ * The third parameter is therefore added here rather than the tests being
+ * rewritten around a new expectation. EVERY GUARANTEE L-32 BOUGHT IS
+ * PRESERVED EXACTLY — the stale row still offers exactly one action, still
+ * offers no push, still hides Confirm, still hides cancel. The only thing that
+ * changed is how the stale row is RECOGNISED, and that is stated by the
+ * fixture instead of being implied by a coincidence of two columns.
+ *
+ * Defaulted to `false` so that any fixture NOT explicitly describing a failure
+ * describes a healthy order. That default is what makes the new §10 tests
+ * below meaningful: they assert the healthy case keeps its real buttons.
+ */
+function planFor(
+  leaflyStatus: string | null,
+  acknowledgedAt: string | null,
+  confirmPushFailed = false,
+) {
   return planLeaflyOrderActions({
     leaflyOrderId: ORDER_ID,
     orderIntegrationKeyPresent: true,
     acknowledgedAt,
     leaflyStatus,
     fulfillmentMechanism: "pickup",
+    confirmPushFailed,
   });
 }
 
-function renderFor(leaflyStatus: string | null, acknowledgedAt: string | null): string {
-  const plan = planFor(leaflyStatus, acknowledgedAt);
+function renderFor(
+  leaflyStatus: string | null,
+  acknowledgedAt: string | null,
+  confirmPushFailed = false,
+): string {
+  const plan = planFor(leaflyStatus, acknowledgedAt, confirmPushFailed);
   // Guard against a vacuous render: a state with no actions would make every
   // "does not contain" assertion below pass for the wrong reason.
   expect(
@@ -248,7 +277,11 @@ describe("L-32 §2 — why pressing the next step returned 400", () => {
 // ===========================================================================
 
 describe("L-32 §3 — the stale state offers only the safe re-read", () => {
-  const stale = planFor("pending", ACK_AT);
+  // SLICE L-33: `true` = a confirm push was attempted and RECORDED as failed.
+  // Before L-33 this was implied by "acknowledged + pending"; that pair is now
+  // the healthy norm, so the failure is stated explicitly. The guarantees
+  // asserted below are unchanged.
+  const stale = planFor("pending", ACK_AT, true);
 
   it("offers exactly one action", () => {
     expect(stale.actions).toHaveLength(1);
@@ -354,7 +387,8 @@ describe("L-32 §4 — the repair does not leak into working states", () => {
 // ===========================================================================
 
 describe("L-32 §5 — the operator can actually see and press it", () => {
-  const stale = renderFor("pending", ACK_AT);
+  // SLICE L-33: as in §3 — the recorded failure is now stated, not inferred.
+  const stale = renderFor("pending", ACK_AT, true);
 
   it("the button label appears in the rendered HTML", () => {
     expect(stale).toContain(LEAFLY_RECONCILE_ACTION_LABEL);

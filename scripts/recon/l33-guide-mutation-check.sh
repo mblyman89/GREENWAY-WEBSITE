@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# =============================================================================
+# L-33 — TESTING THE TESTS THAT PIN THE OWNER'S OPERATING GUIDE
+# =============================================================================
+#
+# §8 of leafly-l33-auto-acknowledge.test.ts claims that
+# docs/l33-auto-acknowledge-operating-guide.md cannot silently become a lie.
+# That claim is worth exactly as much as the proof that the assertions FAIL
+# when the guide is wrong. A documentation test that passes no matter what is
+# worse than no test, because it advertises a guarantee it does not provide.
+#
+# So: break the guide (and the code the guide describes) five ways, each one a
+# realistic drift that would send the owner to the wrong switch during an
+# incident, and require the suite to go RED every time.
+#
+# SAFETY NOTE, learned the hard way during this slice: several L-33 files are
+# still UNTRACKED, so `git checkout` cannot restore them. A mutation applied
+# with sed and "restored" with git silently stayed in the source. Every
+# mutation here is therefore restored from a byte-for-byte copy taken before
+# the run, and the restore is VERIFIED with cmp before the script exits.
+# =============================================================================
+set -uo pipefail
+cd "$(dirname "$0")/../.."
+
+TEST=tests/compliance/leafly-l33-auto-acknowledge.test.ts
+GUIDE=docs/l33-auto-acknowledge-operating-guide.md
+CORE=src/lib/leafly/auto-ack-core.ts
+VERCEL=vercel.json
+
+BAK=$(mktemp -d)
+cp "$GUIDE" "$BAK/guide"; cp "$CORE" "$BAK/core"; cp "$VERCEL" "$BAK/vercel"
+
+restore() {
+  cp "$BAK/guide" "$GUIDE"; cp "$BAK/core" "$CORE"; cp "$BAK/vercel" "$VERCEL"
+}
+trap 'restore' EXIT
+
+# Runs the suite, returns 0 if GREEN, 1 if RED.
+run_suite() { npx vitest run "$TEST" >/tmp/l33guide.out 2>&1; }
+
+KILLED=0; SURVIVED=0
+
+mutate() {
+  local name="$1"; shift
+  restore
+  "$@"
+  if run_suite; then
+    echo "  SURVIVED  $name"
+    SURVIVED=$((SURVIVED + 1))
+  else
+    echo "  killed    $name"
+    KILLED=$((KILLED + 1))
+  fi
+  restore
+}
+
+echo "BASELINE (must be GREEN):"
+if run_suite; then echo "  green"; else echo "  BASELINE RED — aborting"; exit 1; fi
+
+echo "MUTATIONS (each must be RED):"
+
+# 1. The guide names a switch that does not exist. The owner sets it during an
+#    incident, nothing happens, and he concludes the kill switch is broken.
+mutate "guide names the wrong env var" \
+  sed -i 's/LEAFLY_AUTO_ACKNOWLEDGE/LEAFLY_AUTOACK_ENABLED/g' "$GUIDE"
+
+# 2. The single most consequential sentence in the document, inverted.
+mutate "guide claims the default is OFF" \
+  sed -i 's/unset means the feature is ON/unset means the feature is OFF/' "$GUIDE"
+
+# 3. The honesty pin. The guide stops admitting the sweeper runs once a day and
+#    starts reading like a real-time safety net.
+mutate "guide oversells the sweeper's frequency" \
+  sed -i 's/one cron run per day/one cron run per minute/' "$GUIDE"
+
+# 4. Drift in the OTHER direction: the code is reworded and the guide is left
+#    behind. The owner looks for a badge that is no longer rendered.
+mutate "badge reworded in code, guide stale" \
+  sed -i 's/export const LEAFLY_AUTO_ACK_BADGE = "Accepted automatically";/export const LEAFLY_AUTO_ACK_BADGE = "Auto-accepted";/' "$CORE"
+
+# 5. The schedule moves and the upgrade instruction now names a line that is
+#    not in vercel.json.
+mutate "cron schedule changed, guide stale" \
+  sed -i 's|"0 13 \* \* \*"|"0 15 * * *"|' "$VERCEL"
+
+restore
+echo "VERIFYING RESTORE (byte-for-byte):"
+cmp -s "$BAK/guide" "$GUIDE" && echo "  guide  ok" || { echo "  guide  CORRUPT"; exit 1; }
+cmp -s "$BAK/core" "$CORE"   && echo "  core   ok" || { echo "  core   CORRUPT"; exit 1; }
+cmp -s "$BAK/vercel" "$VERCEL" && echo "  vercel ok" || { echo "  vercel CORRUPT"; exit 1; }
+
+echo "FINAL (must be GREEN again):"
+if run_suite; then echo "  green"; else echo "  RED AFTER RESTORE"; exit 1; fi
+
+echo "RESULT: $KILLED killed / $SURVIVED survived"
+[ "$SURVIVED" -eq 0 ] || exit 1

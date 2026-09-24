@@ -57,6 +57,8 @@ import { __runLeaflyOrderMapTests } from "@/lib/leafly/order-map-core";
 import { __runLeaflyWebhookParseTests } from "@/lib/leafly/webhook-parse-core";
 import { __runLeaflyPreviewTests } from "@/lib/leafly/preview-core";
 import { __runLeaflyOrderAckTests } from "@/lib/leafly/order-ack-core";
+import { __runLeaflyAutoAckTests } from "@/lib/leafly/auto-ack-core";
+import { __runLeaflyAutoAckSweepTests } from "@/lib/leafly/auto-ack-sweep-core";
 import { __runLeaflyScheduleTests } from "@/lib/leafly/schedule-core";
 import { __runLeaflyEvidenceTests } from "@/lib/leafly/evidence-core";
 import { __runOrderOriginTests } from "@/lib/orders/order-origin-core";
@@ -289,6 +291,62 @@ describe("embedded pure self-test suites", () => {
     // versus "not found in the Greenway catalogue" -- which is also the more
     // useful of the two, so that is what is asserted.
     expect(r.passed).toBeGreaterThan(71);
+  });
+  it("leafly-auto-ack-core (SLICE L-33: the machine presses the button)", () => {
+    const r = __runLeaflyAutoAckTests();
+    expect(r.failed).toBe(0);
+    // Floor set at registration from a measured 806.
+    //
+    // WHY THIS ONE IS HELD TO A HIGHER STANDARD THAN ITS SIZE SUGGESTS.
+    // This is the first rule in the codebase that fires an IRREVERSIBLE
+    // outbound action with no human in the loop. Acknowledging revokes the
+    // order's media at Leafly and there is no un-acknowledge endpoint, so a
+    // wrong decision here cannot be walked back by pressing something else.
+    //
+    // The bulk of the count is a five-dimensional totality matrix over event
+    // type, order id, prior acknowledgement, status and the kill switch. It
+    // asserts in BOTH directions: that every decision explains itself, that
+    // `shouldAcknowledge` and `code` can never disagree, and -- the part that
+    // matters -- that the positive branch is only ever reached when all five
+    // preconditions genuinely hold, restated as a guarantee rather than
+    // trusted from the order the branches happen to be written in.
+    //
+    // It also guards against a VACUOUS pass: if a refactor made the rule
+    // refuse everything, every per-case assertion would still pass by never
+    // entering the positive branch. Both branch counters are asserted
+    // non-zero, because "all tests green" on a feature that silently stopped
+    // working is the specific failure this repository keeps meeting.
+    expect(r.passed).toBeGreaterThan(780);
+  });
+  it("leafly-auto-ack-sweep-core (SLICE L-33: the net under the net)", () => {
+    const r = __runLeaflyAutoAckSweepTests();
+    expect(r.failed).toBe(0);
+    // Floor set at registration from a measured 3,657.
+    //
+    // This core decides whether to fire that same irreversible action on a
+    // SCHEDULE, forever, against orders nobody is currently looking at. It is
+    // therefore held to the arrival core's standard and then some, because a
+    // sweeper has two opposite ways to be wrong and both are expensive:
+    //
+    //   • too eager — it races the arrival hook and, far worse, silently
+    //     papers over a permanently broken arrival path, so the real bug is
+    //     never found;
+    //   • too shy — a real customer's order auto-cancels and nobody at
+    //     Greenway ever learns it existed.
+    //
+    // The bulk of the count is a five-dimensional totality matrix over order
+    // id, prior acknowledgement, deadline, first-seen time and status, which
+    // asserts that every one of the 1,200 combinations yields a DECLARED
+    // verdict, a non-empty human-readable reason, and a deadline figure that
+    // is null or finite but never NaN. NaN is called out explicitly because
+    // it compares false against everything and is the classic way a
+    // time-window rule silently starts sweeping the entire table.
+    //
+    // Guarded against a vacuous pass in two ways: the matrix asserts its own
+    // case count, and it asserts that at least six distinct verdicts were
+    // actually observed -- so a refactor that collapsed the rule into always
+    // answering the same way would fail here rather than go green.
+    expect(r.passed).toBeGreaterThan(3600);
   });
   it("leafly-order-ack-core (SLICE L-6: talking back to Leafly, one-way doors)", () => {
     const r = __runLeaflyOrderAckTests();

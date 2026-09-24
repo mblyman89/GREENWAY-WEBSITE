@@ -426,12 +426,41 @@ describe("L-13: every seam of the Leafly bridge is actually connected", () => {
       // there. During that window a 42703 must degrade, not blank the board —
       // and the single-order read matters most, because a failure there makes
       // the Accept action refuse, and Leafly auto-cancels.
+      //
+      // SLICE L-33 CHANGED THE SHAPE OF THIS, NOT THE GUARANTEE.
+      //
+      // This used to count occurrences of `BOARD_COLUMNS_LEGACY` and require
+      // at least four: one definition plus a hand-written retry at each of the
+      // three (later four) readers. L-33 added a THIRD column tier — a shop
+      // that has applied 0228 but not 0230 must lose only 0230's pair, not
+      // 0228's pipeline warnings as collateral — and four copies of a
+      // now-three-branch rule is four chances for the next migration to be
+      // added to three of them. So the retries became one named walk.
+      //
+      // Counting the old identifier would now be counting the wrong thing:
+      // the legacy list is referenced once as a definition and once inside the
+      // tier array, and a count of 2 would look like a REGRESSION when the
+      // degradation is in fact strictly better than it was.
+      //
+      // The test therefore asserts the PROPERTY the old count was a proxy for:
+      // every reader falls back, all the way to legacy, on 42703 only.
       const src = source(PATHS.boardServer);
       expect(src).toContain("BOARD_COLUMNS_LEGACY");
-      const occurrences = src.split("BOARD_COLUMNS_LEGACY").length - 1;
-      // one definition + three fallback call sites (pending, acked, one)
-      expect(occurrences).toBeGreaterThanOrEqual(4);
       expect(src).toContain("42703");
+
+      // The ladder still ends at the legacy list...
+      expect(src).toMatch(/BOARD_COLUMN_TIERS\s*=\s*\[[\s\S]*BOARD_COLUMNS_LEGACY[\s\S]*\]/);
+
+      // ...and all four readers go through it. Four, not "at least four": an
+      // extra reader added later with its own private retry would skip the
+      // middle tier and quietly restore the cliff this slice removed.
+      const callSites = src.match(/await readWithColumnFallback\(/g) ?? [];
+      expect(callSites).toHaveLength(4);
+
+      // The single-order read is the one that matters most, as the comment
+      // above says: a failure there makes the Accept action refuse, and Leafly
+      // auto-cancels. Pinned by name so it cannot be the one that gets missed.
+      expect(src).toMatch(/await readWithColumnFallback\(runOne\)/);
     });
 
     it("the board does NOT collapse an untracked column into 'it never happened'", () => {

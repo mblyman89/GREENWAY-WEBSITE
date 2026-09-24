@@ -210,7 +210,19 @@ describe("L-28: the board query excludes finished orders", () => {
   }
 
   /** The pending query only — up to where the acked query begins. */
-  const pendingQuery = bodyBetween("const runPending", "let pending = await runPending");
+  //
+  // SLICE L-33 RE-ANCHORED THIS. The end anchor was `let pending = await
+  // runPending`, which stopped existing when the four hand-written one-step
+  // column retries were replaced by a single `readWithColumnFallback` walk
+  // (a third column tier was needed so a database missing migration 0230 does
+  // not ALSO lose 0228's pipeline warnings as collateral).
+  //
+  // The assertion above turned the vanished anchor into a loud failure rather
+  // than silently slicing an empty string and passing vacuously, which is
+  // exactly what it was written to do. The CLAIM is unchanged — "the pending
+  // query, and only the pending query, carries these filters" — so only the
+  // anchor moves.
+  const pendingQuery = bodyBetween("const runPending", "const pending = await readWithColumnFallback");
 
   it("the pending query excludes cancelled orders", () => {
     expect(pendingQuery).toMatch(/\.is\("canceled_at", null\)/);

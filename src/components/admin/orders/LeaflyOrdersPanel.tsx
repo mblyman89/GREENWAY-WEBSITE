@@ -90,6 +90,14 @@ import {
   type AckUrgency,
   type LeaflyStatusTone,
 } from "@/lib/leafly/order-ack-core";
+// SLICE L-33 — the auto-acknowledge vocabulary and the one translation rule
+// this component needs. All of it is pure and self-tested; none of it is
+// decided here.
+import {
+  confirmPushFailedFromColumn,
+  acknowledgedByKindLabel,
+  LEAFLY_AUTO_ACK_EXPLANATION,
+} from "@/lib/leafly/auto-ack-core";
 import {
   groupLeaflyWorkflow,
   // SLICE L-28 — the bucket is computed once in the panel and shared between
@@ -225,7 +233,20 @@ const BUCKET_STYLES: Record<
 
 /** One board row, plus the flat camelCase shape the pure core reads. */
 type BoardRow = LeaflyBoardState["orders"][number];
-type WorkflowRow = BoardRow & LeaflyWorkflowInput;
+/**
+ * SLICE L-33 widens this by exactly one field.
+ *
+ * `confirmPushFailed` is added HERE rather than on `LeaflyWorkflowInput`
+ * because that type is bridge-core's input for deciding which COLUMN an order
+ * belongs in, and a failed status push does not move an order between columns
+ * — it changes which BUTTONS the card offers. Widening the placement input
+ * with a field placement does not read would invite a future reader to make it
+ * read it.
+ *
+ * `boolean | undefined` and not `boolean`: see `confirmPushFailedFromColumn`.
+ */
+type WorkflowRow = BoardRow &
+  LeaflyWorkflowInput & { confirmPushFailed?: boolean | undefined };
 
 /**
  * Translate a database row into the core's input shape.
@@ -248,6 +269,14 @@ function toWorkflowRow(order: BoardRow): WorkflowRow {
     localOrderId: order.local_order_id,
     announcedAt: order.announced_at,
     printedAt: order.printed_at,
+    // SLICE L-33. Translated by the pure core, not by an inline comparison,
+    // for the reason recorded in full on `confirmPushFailedFromColumn`: the
+    // obvious one-liner (`order.confirm_push_failed_at !== null`) reports
+    // EVERY order in a pre-0230 shop as having a failed confirm push, because
+    // `undefined !== null`. The board would then replace the ordinary Confirm
+    // button with a diagnostic for the entire shop — which is the exact
+    // failure this slice was opened to prevent.
+    confirmPushFailed: confirmPushFailedFromColumn(order.confirm_push_failed_at),
   };
 }
 
@@ -689,8 +718,27 @@ function LeaflyOrderCard({
     acknowledgedAt: order.acknowledged_at,
     leaflyStatus: order.leafly_status,
     fulfillmentMechanism: order.fulfillment_mechanism,
+    // SLICE L-33. THE LINE THAT KEEPS THE BOARD USABLE AFTER AUTO-ACKNOWLEDGE.
+    //
+    // Before this slice, "acknowledged but still pending at Leafly" was a
+    // contradiction — the only way to reach it was a confirm push that had
+    // silently failed, so the planner replaced the ordinary buttons with a
+    // single diagnostic ("Check this order with Leafly"). After this slice it
+    // is the NORMAL resting state of every order in the shop: the machine
+    // acknowledges on arrival and deliberately does not confirm, because the
+    // owner said "it can't be acknowledge and confirm in the same step".
+    //
+    // Without this argument the planner would keep reading that state as
+    // breakage and would show the whole shop a diagnostic instead of the
+    // Confirm button — turning the feature into an outage. With it, the
+    // planner keys on a RECORDED failure instead of an inference.
+    confirmPushFailed: order.confirmPushFailed,
   });
   const statusLabel = leaflyStatusLabel(order.leafly_status);
+  // SLICE L-33 (C6) — who pressed the button. Null when unrecorded, which is
+  // every row that predates migration 0230; the card then says nothing rather
+  // than inventing an audit trail.
+  const ackKindLabel = acknowledgedByKindLabel(order.acknowledged_by_kind);
   const tone = leaflyStatusTone(order.leafly_status);
   const cancelLabel = leaflyCancelReasonLabel(
     order.cancelation_reason_code,
@@ -733,6 +781,19 @@ function LeaflyOrderCard({
             ) : null}
             {order.local_order_id ? (
               <Badge tone="neutral">Linked to a Greenway order</Badge>
+            ) : null}
+            {/* SLICE L-33 (C6) — WHO pressed acknowledge.
+                Rendered only when the answer was actually RECORDED. A row
+                from before migration 0230 yields null from the label function
+                and shows no badge at all, because "we did not record it" and
+                "a person did it" are different facts and only one of them is
+                true. The title carries the longer explanation so a budtender
+                who has never seen the badge can find out what it means
+                without leaving the board. */}
+            {ackKindLabel ? (
+              <Badge tone="neutral">
+                <span title={LEAFLY_AUTO_ACK_EXPLANATION}>{ackKindLabel}</span>
+              </Badge>
             ) : null}
           </div>
 

@@ -374,9 +374,107 @@ async function resolveOrderApiContext(): Promise<{
  * writing the column here, so there is exactly one place that stamps this
  * field. Two writers would eventually disagree about the timestamp's meaning.
  */
+
+/**
+ * SLICE L-33 — RECORD (OR CLEAR) A FAILED `status=confirmed` PUSH.
+ *
+ * ── WHY THIS FUNCTION HAD TO EXIST ─────────────────────────────────────────
+ *
+ * Slice L-32 detects the "stale confirm" state — acknowledged here, still
+ * `pending` at Leafly — and replaces every button with a safe re-read. Until
+ * this slice it detected that state by INFERENCE: acknowledged-and-pending was
+ * itself the evidence, because a successful acknowledgement always pushed a
+ * confirm immediately afterwards.
+ *
+ * Auto-acknowledge destroys that inference, because after L-33
+ * acknowledged-and-pending is the normal, healthy, intended resting state of
+ * every order. The planner was therefore re-keyed onto `confirmPushFailed` —
+ * and a re-keyed rule with nothing writing the key is not a fix, it is a
+ * quietly disabled feature that still passes its tests.
+ *
+ * THIS is the writer. It stamps only when a push was really attempted and
+ * really failed, from inside the branch that watched it fail.
+ *
+ * ── AND IT CLEARS, WHICH IS THE HALF THAT IS EASY TO FORGET ────────────────
+ *
+ * `failed: false` clears the stamp. Without that, the first failed push would
+ * mark an order broken FOREVER: the operator presses the repair button, the
+ * re-read fixes the row, and the board goes on showing only the diagnostic
+ * because the recorded fact still says "failed". A warning that cannot be
+ * cleared is a warning that teaches people to ignore warnings.
+ *
+ * ── NEVER FATAL, AND DEGRADES BEFORE MIGRATION 0230 ────────────────────────
+ *
+ * Returns void and swallows its own errors. Every caller is in a path where an
+ * irreversible thing has ALREADY happened at Leafly, so a failure to write a
+ * diagnostic column must never turn into a reported failure of the operation
+ * itself. The column also does not exist until Michael applies 0230 by hand
+ * (AGENTS rule 6); until then this fails with "column does not exist", logs
+ * once at debug level, and the board behaves exactly as it does today.
+ */
+async function recordConfirmPushFailure(
+  leaflyOrderId: string,
+  failed: boolean,
+): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  const id = (leaflyOrderId ?? "").trim();
+  if (id === "") return;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("leafly_orders")
+      .update({ confirm_push_failed_at: failed ? new Date().toISOString() : null })
+      .eq("leafly_order_id", id)
+      // SLICE L-25. Bounded like every other write here.
+      .abortSignal(dbDeadline("order_write"));
+    if (error) {
+      // Debug-level on purpose. Before 0230 is applied this is EXPECTED, and
+      // an error-level line on every order would train the owner to ignore
+      // the log he needs when something is actually wrong.
+      console.log(
+        `[leafly/outbound] ${id}: confirm_push_failed_at not recorded (${error.message})`,
+      );
+    }
+  } catch (err) {
+    console.log(
+      `[leafly/outbound] ${id}: confirm_push_failed_at threw (${err instanceof Error ? err.message : "unknown"})`,
+    );
+  }
+}
+
 export async function acknowledgeLeaflyOrder(input: {
   order: LeaflyOrderSnapshot;
   staffId?: string | null;
+  /**
+   * ── SLICE L-33 — WHO IS PRESSING THIS, AND MAY IT DECIDE THE BUSINESS? ────
+   *
+   * `"human"` (the default) preserves every existing caller byte-for-byte.
+   * `"auto"` is the arrival-time acknowledgement, performed by the machine
+   * before any person has looked at the order.
+   *
+   * THIS FLAG EXISTS BECAUSE OF ONE SENTENCE FROM THE OWNER:
+   *
+   *   > "It can't be acknowledge and confirm in the same step though.
+   *   >  Just auto acknowledge."
+   *
+   * Since L-14 this function has pushed `status=confirmed` immediately after a
+   * successful acknowledgement. Its own comment gives the justification:
+   *
+   *   "WHY HERE: this is the point where a HUMAN pressed Accept. That is the
+   *    business decision, and it is the moment the order becomes floor-visible."
+   *
+   * That justification is TRUE for a human press and FALSE for an automatic
+   * one. Under automation nobody has pressed Accept, nobody has read the cart,
+   * and nobody has checked whether the store can actually fill it. Confirming
+   * anyway would have the machine make the store's business decision — at 3am,
+   * while closed, for orders nobody has seen. It would also tell the SHOPPER,
+   * because `confirmed` is the status that emails them (L-32, §1).
+   *
+   * So the actor is passed IN rather than guessed at from context. A guess
+   * here would be a guess about whether a customer gets told their order is
+   * accepted, which is exactly the class of thing the standing rules forbid.
+   */
+  actor?: "human" | "auto";
   /**
    * SLICE L-25 — called the instant the POST leaves the building.
    *
@@ -587,44 +685,89 @@ export async function acknowledgeLeaflyOrder(input: {
     // bridge above: Leafly has already taken the acknowledgement and the ID
     // images are already gone. A failed status push is recoverable (it can be
     // re-sent); an acknowledgement nobody believes happened is not.
-    try {
-      const confirmed = await setLeaflyOrderStatus({
-        order: {
-          ...input.order,
-          // NOT cosmetic, and the reason this block works at all.
-          // `setLeaflyOrderStatus` re-derives legality from the snapshot it is
-          // given, and `decideStatusChange` RULE 1 -- "Updates to order status
-          // are only available after an order has been acknowledged" -- refuses
-          // outright when `acknowledged_at` is blank. `input.order` is the row
-          // as it was read BEFORE this function ran, so its `acknowledged_at`
-          // is null by definition: that is exactly why `decideAcknowledgement`
-          // permitted the acknowledgement. Passing it unchanged would make
-          // every confirmed push refuse with `not_acknowledged`, write a
-          // refusal row, send nothing, and leave the shopper looking at
-          // `pending` forever -- while the log insisted we had tried.
-          acknowledged_at: acknowledgedAt.toISOString(),
-          // Corrected in the same breath so the snapshot is not fresh in one
-          // field and stale in another. We have just acknowledged, so whatever
-          // Leafly showed a moment ago, `pending` is the state we are moving
-          // forward from.
-          leafly_status: "pending",
-        },
-        nextStatus: "confirmed",
-        staffId: input.staffId ?? null,
-      });
-      if (!confirmed.ok) {
+    // ── SLICE L-33: THE GATE ────────────────────────────────────────────────
+    //
+    // Everything below is the L-14 confirm push. It now runs ONLY when a human
+    // pressed the button. See the `actor` parameter for the owner's ruling and
+    // the reasoning; the short version is that "a human decided" was always the
+    // premise of this block, and automation removes the premise.
+    //
+    // Written as an early-exit `if` around the existing block rather than as a
+    // new branch, so the human path is provably unchanged: same call, same
+    // arguments, same error handling, same warning constant.
+    //
+    // A SECOND, UNASKED-FOR CONSEQUENCE, recorded because it is the real prize:
+    // the line below where `leafly_status` is passed as "pending" is annotated
+    // in L-32 as "THIS LINE IS WHERE THE STALE ROW IS BORN". The acknowledged-
+    // but-pending row that produced the owner's 400 is created HERE, by this
+    // push failing silently. Auto-acknowledged orders never enter this block,
+    // so they can never be born stale. L-32 handled that defect; L-33 removes
+    // its source for every automatic acknowledgement.
+    const actor = input.actor ?? "human";
+    if (actor === "human") {
+      try {
+        const confirmed = await setLeaflyOrderStatus({
+          order: {
+            ...input.order,
+            // NOT cosmetic, and the reason this block works at all.
+            // `setLeaflyOrderStatus` re-derives legality from the snapshot it is
+            // given, and `decideStatusChange` RULE 1 -- "Updates to order status
+            // are only available after an order has been acknowledged" -- refuses
+            // outright when `acknowledged_at` is blank. `input.order` is the row
+            // as it was read BEFORE this function ran, so its `acknowledged_at`
+            // is null by definition: that is exactly why `decideAcknowledgement`
+            // permitted the acknowledgement. Passing it unchanged would make
+            // every confirmed push refuse with `not_acknowledged`, write a
+            // refusal row, send nothing, and leave the shopper looking at
+            // `pending` forever -- while the log insisted we had tried.
+            acknowledged_at: acknowledgedAt.toISOString(),
+            // Corrected in the same breath so the snapshot is not fresh in one
+            // field and stale in another. We have just acknowledged, so whatever
+            // Leafly showed a moment ago, `pending` is the state we are moving
+            // forward from.
+            leafly_status: "pending",
+          },
+          nextStatus: "confirmed",
+          staffId: input.staffId ?? null,
+        });
+        if (!confirmed.ok) {
+          console.error(
+            `[leafly/outbound] acknowledged ${orderId} but could not set status=confirmed: ${confirmed.message}`,
+          );
+          // Appended rather than overwriting: a bridge failure and a status
+          // failure are different problems and a budtender may be looking at
+          // both. Overwriting would hide whichever happened first.
+          // SLICE L-32 (C5). Was a string literal here AND an identical one in
+          // the catch below. One constant now, so the two branches cannot drift
+          // apart, and it names the repair button instead of only naming a
+          // prohibition. THIS LINE IS WHERE THE STALE ROW IS BORN: the
+          // acknowledgement succeeded, Leafly may or may not have taken the
+          // confirm, and our row is about to be left at `pending`.
+          const note = LEAFLY_CONFIRM_PUSH_FAILED_WARNING;
+          // Template-literal form so the right-hand side begins with a string,
+          // per the L-13 wiring guard: a bridgeWarning assignment must never be
+          // something that CAN evaluate to nothing. `note` is a non-empty
+          // constant, so this is always a real message, and `bridgeWarning ?? ""`
+          // preserves any earlier warning rather than overwriting it.
+          bridgeWarning = `${bridgeWarning ?? ""} ${note}`.trim();
+          // SLICE L-33. RECORD THE FACT, right where it is known. This is the
+          // key the re-keyed L-32 board rule reads; without this line that
+          // rule can never fire and the repair button becomes unreachable.
+          await recordConfirmPushFailure(orderId, true);
+        } else {
+          // SLICE L-33. The push WORKED, so clear any earlier failure. An
+          // order that failed once and then succeeded is not broken, and a
+          // stamp nobody clears is a permanent false alarm.
+          await recordConfirmPushFailure(orderId, false);
+        }
+      } catch (err) {
         console.error(
-          `[leafly/outbound] acknowledged ${orderId} but could not set status=confirmed: ${confirmed.message}`,
+          `[leafly/outbound] acknowledged ${orderId} but the status push threw:`,
+          err,
         );
-        // Appended rather than overwriting: a bridge failure and a status
-        // failure are different problems and a budtender may be looking at
-        // both. Overwriting would hide whichever happened first.
-        // SLICE L-32 (C5). Was a string literal here AND an identical one in
-        // the catch below. One constant now, so the two branches cannot drift
-        // apart, and it names the repair button instead of only naming a
-        // prohibition. THIS LINE IS WHERE THE STALE ROW IS BORN: the
-        // acknowledgement succeeded, Leafly may or may not have taken the
-        // confirm, and our row is about to be left at `pending`.
+        // SLICE L-32 (C5). The same constant as the branch above, deliberately.
+        // A throw and a non-ok result leave the operator in the identical
+        // situation, so they must not be described in two different voices.
         const note = LEAFLY_CONFIRM_PUSH_FAILED_WARNING;
         // Template-literal form so the right-hand side begins with a string,
         // per the L-13 wiring guard: a bridgeWarning assignment must never be
@@ -632,23 +775,18 @@ export async function acknowledgeLeaflyOrder(input: {
         // constant, so this is always a real message, and `bridgeWarning ?? ""`
         // preserves any earlier warning rather than overwriting it.
         bridgeWarning = `${bridgeWarning ?? ""} ${note}`.trim();
+        // SLICE L-33. Same recorded fact as the non-ok branch above. A throw
+        // and a returned failure leave the row in the IDENTICAL state, so they
+        // must not be recorded differently.
+        await recordConfirmPushFailure(orderId, true);
       }
-    } catch (err) {
-      console.error(
-        `[leafly/outbound] acknowledged ${orderId} but the status push threw:`,
-        err,
-      );
-      // SLICE L-32 (C5). The same constant as the branch above, deliberately.
-      // A throw and a non-ok result leave the operator in the identical
-      // situation, so they must not be described in two different voices.
-      const note = LEAFLY_CONFIRM_PUSH_FAILED_WARNING;
-      // Template-literal form so the right-hand side begins with a string,
-      // per the L-13 wiring guard: a bridgeWarning assignment must never be
-      // something that CAN evaluate to nothing. `note` is a non-empty
-      // constant, so this is always a real message, and `bridgeWarning ?? ""`
-      // preserves any earlier warning rather than overwriting it.
-      bridgeWarning = `${bridgeWarning ?? ""} ${note}`.trim();
     }
+    // ── END OF THE SLICE L-33 GATE ──────────────────────────────────────────
+    // An automatic acknowledgement falls straight past the whole block above:
+    // it sends the receipt, stops Leafly's fifteen-minute auto-cancel clock,
+    // and stops. The shopper is told nothing, because nothing has been decided
+    // yet. A human decides later, at the counter, in their own time — which is
+    // the entire point of the feature.
   }
 
   await recordAttempt({
@@ -1016,6 +1154,26 @@ async function persistStatusAfterPush(input: {
     if (!stored.ok) {
       return `Leafly accepted this change, but we could not record it here (${stored.error}). The board may still show the previous step — reload, and if it has not moved, tell the owner.`;
     }
+
+    // ── SLICE L-33: THE ROW IS TRUTHFUL AGAIN, SO CLEAR THE ALARM ──────────
+    //
+    // Reached only after a status push SUCCEEDED and its result was persisted.
+    // Whatever disagreement existed between our row and Leafly's is now
+    // resolved by Leafly's own response body, so any recorded confirm-push
+    // failure is history.
+    //
+    // WHY HERE AND NOT ONLY IN THE ACKNOWLEDGE PATH: this is the function the
+    // OPERATOR's buttons go through, including the "Confirm order" press that
+    // follows an automatic acknowledgement and the retry that follows a failed
+    // one. If the flag were cleared only where it is set, an order that failed
+    // its automatic-era push would keep showing the repair button even after a
+    // human successfully confirmed it by hand — the board would be arguing
+    // with a fact the operator had already fixed.
+    //
+    // Unconditional rather than `if (previously failed)`: clearing a flag that
+    // is already null is a no-op, and reading it first to avoid a harmless
+    // write would add a round trip and a race for nothing.
+    await recordConfirmPushFailure(input.leaflyOrderId, false);
 
     // ── DEFECT 3: close the register order ────────────────────────────────
     //
