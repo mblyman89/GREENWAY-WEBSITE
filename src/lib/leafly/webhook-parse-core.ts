@@ -332,6 +332,19 @@ export function parseLeaflyWebhook(
     }
   }
 
+  // SLICE L-34. Leafly's OrderCancelWebhook (the vendored spec,
+  // docs/leafly-specs/order-api-v1.openapi.json, md5 daab7bcf...) names this
+  // field `cancelReason`, and marks it REQUIRED — it is not
+  // `cancelationReasonCode`, which is the name used on the Order object and
+  // on the status-change body. Before L-34 only the latter was read, so the
+  // one webhook that says WHY an order was cancelled (including
+  // "order_api_unacknowledged", i.e. we missed the fifteen-minute deadline)
+  // had its reason silently dropped. Read as a fallback so an explicit
+  // cancelationReasonCode, if both ever appear, still wins.
+  if (cancelationReasonCode === null) {
+    cancelationReasonCode = readString(body, "cancelReason");
+  }
+
   const hasFatal = problems.some((p) => p.severity === "error");
 
   return {
@@ -626,6 +639,40 @@ export function __runLeaflyWebhookParseTests(): { passed: number; failed: number
   ok(
     nestedStatus.cancelationReasonCode === "customer",
     "and the nested cancellation reason with it",
+  );
+
+  // SLICE L-34: the spec's own OrderCancelWebhook example, verbatim shape.
+  const specCancel = parseLeaflyWebhook(
+    JSON.stringify({
+      // components.examples.OrderCancelWebhook, copied from the vendored spec.
+      eventTime: "2023-08-11T21:47:34.492Z",
+      eventType: "order_cancel",
+      orderId: "e4dcae37-32d0-4498-ab3d-0c9a93c5f8ea",
+      orderIntegrationKey: "iAYK0fC0rjQIGJQKIJvzRnObjElOC40PhLEK9PEUgFFm",
+      cancelReason: "order_api_unacknowledged",
+    }),
+    "order_cancel",
+  );
+  ok(
+    specCancel.cancelationReasonCode === "order_api_unacknowledged",
+    "L-34: the spec's cancelReason field on order_cancel is read - it is the " +
+      "only place Leafly says an order died because we did not acknowledge it",
+  );
+  ok(specCancel.status === null, "L-34: ...and the cancel webhook carries no status (spec)");
+  const bothReasons = parseLeaflyWebhook(
+    JSON.stringify({
+      eventType: "order_cancel",
+      orderId: "abc",
+      orderIntegrationKey: "k",
+      eventTime: "2026-09-17T12:00:00Z",
+      cancelReason: "dispensary",
+      cancelationReasonCode: "customer",
+    }),
+    "order_cancel",
+  );
+  ok(
+    bothReasons.cancelationReasonCode === "customer",
+    "L-34: an explicit cancelationReasonCode still wins over cancelReason",
   );
 
   const orderNested = parseLeaflyWebhook(
