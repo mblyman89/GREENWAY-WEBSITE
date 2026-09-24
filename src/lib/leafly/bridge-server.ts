@@ -907,6 +907,35 @@ export async function onLeaflyOrderClosed(
     const CLOSEABLE_FROM = ["new", "acknowledged", "preparing", "ready"];
 
     if (!CLOSEABLE_FROM.includes(current)) {
+      // SLICE L-37. A Leafly order whose customer collected it at the register
+      // is closed locally (non-revenue, "picked up at the register") BEFORE
+      // Leafly is told `picked_up`, precisely so this bridge does not create a
+      // second completed order beside the register sale. That is the expected
+      // state, not a disagreement - say so instead of raising the alarm.
+      if (plan.localStatus === "completed" && current === "cancelled") {
+        const { data: lastClose } = await admin
+          .from("order_events")
+          .select("note")
+          .eq("order_id", localOrderId)
+          .eq("event_type", "status_changed")
+          .eq("to_status", "cancelled")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .abortSignal(dbDeadline("bridge_write"))
+          .maybeSingle<{ note: string | null }>();
+        const { isRegisterPickedUpNote } = await import("@/lib/pos/pickup-progress-core");
+        if (isRegisterPickedUpNote(lastClose?.note)) {
+          return {
+            ...outcome({
+              ok: true,
+              localOrderId,
+              summary: `${id}: register order ${orderNumber || localOrderId} was already picked up at the register (the register sale is the sale of record)`,
+            }),
+            attempted: true,
+            localStatus: null,
+          };
+        }
+      }
       return base(
         `${id}: Leafly has this order as "${leaflyStatus}", but the register order ${orderNumber || localOrderId} is "${current}" and was left alone. CHECK THE REGISTER BY HAND.`,
         true,

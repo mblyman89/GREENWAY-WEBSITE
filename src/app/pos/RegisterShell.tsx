@@ -118,6 +118,12 @@ import {
   REGISTER_CANCEL_REASONS,
   type PickupDetailLine,
 } from "@/lib/pos/pickup-detail-core";
+import {
+  nextRegisterStep,
+  pickupSteps,
+  registerAdvanceLabel,
+  type RegisterAdvanceTarget,
+} from "@/lib/pos/pickup-progress-core";
 import { useSocketScanner } from "@/lib/pos/use-socket-scanner";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
 import {
@@ -4298,6 +4304,46 @@ function PickupQueueModal({
     }
   };
 
+  // SLICE L-37 - Confirm / Mark ready from the register. The server moves a
+  // Leafly order AT LEAFLY first and ours only as far as Leafly went; the
+  // back-office Orders board refreshes itself when it sees the change. The
+  // detail and the queue are re-read afterwards - nothing is assumed here.
+  const advanceOrder = async (to: RegisterAdvanceTarget) => {
+    if (!detail || busy) return;
+    const orderId = detail.orderId;
+    setBusy(true);
+    setErrors([]);
+    setNotice(null);
+    try {
+      const res = await posFetch("/api/pos/pickup", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ orderId, advance: { to, employeeName: employee.fullName } }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { advanced?: { status: string; message: string }; error?: string }
+        | null;
+      if (!res.ok || !body?.advanced) {
+        setErrors([body?.error ?? "The order could not be moved along."]);
+      } else {
+        setNotice(body.advanced.message);
+      }
+      // Re-read either way: a partial Leafly walk still moved the order.
+      const [fresh, next] = await Promise.all([
+        posFetch("/api/pos/pickup", { method: "POST", headers, body: JSON.stringify({ orderId }) })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null) as Promise<{ order?: PickupDetail } | null>,
+        loadQueue(),
+      ]);
+      if (fresh?.order) setDetail(fresh.order);
+      onCancelled(next ? next.length : null);
+    } catch {
+      setErrors(["Could not reach the server - the order was NOT confirmed moved. Tap Refresh before trying again."]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const waited = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`);
   const items = detail?.items;
   const detailTitle = detail ? (detail.displayName ?? "").trim() || detail.orderNumber : "";
@@ -4602,6 +4648,68 @@ function PickupQueueModal({
                     Customer note: {detail.customerNote}
                   </p>
                 ) : null}
+
+                {/* SLICE L-37 — where the order is, and the next step. Picked
+                    up is never a button: it happens when the sale completes. */}
+                <div className="mt-3 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3">
+                  <ol className="grid grid-cols-4 gap-2" aria-label="Order progress">
+                    {pickupSteps(detail.status).map((st) => (
+                      <li
+                        key={st.key}
+                        className={`rounded-lg border px-2 py-2 text-center ${
+                          st.state === "current"
+                            ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)]"
+                            : st.state === "done"
+                              ? "border-[var(--pos-border)] bg-[var(--pos-surface)]"
+                              : "border-dashed border-[var(--pos-border-strong)] bg-transparent"
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold">
+                          {st.state === "done" || st.state === "current" ? "✓ " : ""}
+                          {st.label}
+                        </span>
+                        <span className="block text-[0.7rem] text-[var(--pos-text-muted)]">{st.hint}</span>
+                      </li>
+                    ))}
+                  </ol>
+                  {(() => {
+                    const step = nextRegisterStep(detail.status);
+                    return (
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={() => void advanceOrder("acknowledged")}
+                          disabled={busy || cancelOpen || step !== "acknowledged"}
+                          className={`pos-tile rounded-xl py-3 text-base font-semibold disabled:opacity-40 ${
+                            step === "acknowledged"
+                              ? "bg-[var(--pos-info-solid)] text-white"
+                              : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface)]"
+                          }`}
+                        >
+                          {busy && step === "acknowledged" ? "Working…" : registerAdvanceLabel("acknowledged")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void advanceOrder("ready")}
+                          disabled={busy || cancelOpen || step === null}
+                          className={`pos-tile rounded-xl py-3 text-base font-semibold disabled:opacity-40 ${
+                            step === "ready"
+                              ? "bg-[var(--pos-info-solid)] text-white"
+                              : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface)]"
+                          }`}
+                        >
+                          {busy && step === "ready" ? "Working…" : registerAdvanceLabel("ready")}
+                        </button>
+                      </div>
+                    );
+                  })()}
+                  <p className="mt-1 text-xs text-[var(--pos-text-faint)]">
+                    {detail.isMarketplace
+                      ? `Each step is sent to ${detail.originLabel ?? "the marketplace"} too, which updates the customer. `
+                      : ""}
+                    Picked up is marked automatically the moment the register sale for this order completes.
+                  </p>
+                </div>
 
                 {/* SLICE 17 — ONE DOOR. Completion only through the register
                     sale and its REAL ID gate (id-scan-core). */}

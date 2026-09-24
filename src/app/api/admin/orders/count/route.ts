@@ -17,10 +17,14 @@
  * new-order-watch-core.ts.
  *
  * `counts` is kept EXACTLY as it was so existing readers are unaffected.
+ *
+ * SLICE L-37 — also returns `fingerprint` (see changeFingerprint): the board
+ * refreshes itself when it moves, so register activity shows up on its own.
  */
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/session";
-import { getOrderStatusCounts, getRecentOrderArrivals } from "@/lib/orders/orders-store";
+import { getOrderStatusCounts, getRecentOrderArrivals, getLatestOrderChange } from "@/lib/orders/orders-store";
+import { changeFingerprint } from "@/lib/orders/new-order-watch-core";
 
 export const dynamic = "force-dynamic";
 
@@ -31,13 +35,17 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const [counts, arrivals] = await Promise.all([
+  const [counts, arrivals, latest] = await Promise.all([
     getOrderStatusCounts(),
     getRecentOrderArrivals(20),
+    getLatestOrderChange(),
   ]);
   const active = counts.new + counts.acknowledged + counts.preparing + counts.ready;
+  // SLICE L-37 — moves whenever any order changes anywhere (register, Leafly,
+  // back office), so the dashboard can refresh itself instead of going stale.
+  const fingerprint = changeFingerprint({ ...latest, counts });
   return NextResponse.json(
-    { counts, active, arrivals, ts: Date.now() },
+    { counts, active, arrivals, fingerprint, ts: Date.now() },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

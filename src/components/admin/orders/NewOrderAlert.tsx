@@ -75,6 +75,7 @@ import {
   decideWatch,
   normalizeVolume,
   pollIntervalMs,
+  shouldAutoRefresh,
   shouldShowUnlockHint,
   type OrderArrival,
   type WatchState,
@@ -86,7 +87,24 @@ const VOL_KEY = "gw_orders_volume";
 type CountPayload = {
   counts?: { new?: number };
   arrivals?: OrderArrival[];
+  /** SLICE L-37 — moves whenever any order changes anywhere. */
+  fingerprint?: string;
 };
+
+/**
+ * SLICE L-37 — is the operator typing into something on this page? A refresh
+ * must never eat a half-written note, search or override reason.
+ */
+function userIsEditing(): boolean {
+  try {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  } catch {
+    return false;
+  }
+}
 
 /** Does this window have sticky user activation? Conservative when unknown. */
 function hasStickyActivation(): boolean {
@@ -117,6 +135,7 @@ export function NewOrderAlert() {
   // during render, because writing a ref while rendering is unsafe under
   // concurrent React (react-hooks/refs).
   const watch = useRef<WatchState>(EMPTY_WATCH_STATE);
+  const fingerprintRef = useRef<string | null>(null);
   const mutedRef = useRef(muted);
   const volumeRef = useRef(volume);
 
@@ -264,6 +283,21 @@ export function NewOrderAlert() {
         if (decision.shouldChime) {
           playChime(volumeRef.current);
         }
+
+        // SLICE L-37 — something changed elsewhere (a register pressed
+        // Confirm / Mark ready, a sale completed and picked the order up, a
+        // Leafly webhook landed): re-render the board so it never shows a
+        // stale step. Skipped while the operator is typing; the fingerprint
+        // is then NOT advanced, so the refresh happens on the next quiet poll.
+        const fp = typeof data.fingerprint === "string" ? data.fingerprint : null;
+        if (fp !== null) {
+          if (shouldAutoRefresh({ previous: fingerprintRef.current, current: fp, userIsEditing: userIsEditing() })) {
+            fingerprintRef.current = fp;
+            router.refresh();
+          } else if (fingerprintRef.current === null || !userIsEditing()) {
+            fingerprintRef.current = fp;
+          }
+        }
       } catch {
         /* offline or blocked — try again next tick */
       }
@@ -293,7 +327,7 @@ export function NewOrderAlert() {
       if (timer) clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [playChime]);
+  }, [playChime, router]);
 
   // Close the shared AudioContext only when the component really goes away.
   useEffect(() => {
@@ -357,7 +391,7 @@ export function NewOrderAlert() {
           ) : (
             <span className="inline-flex items-center gap-2 text-xs text-white/40">
               <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--admin-accent)]" />
-              Watching for new orders…
+              Watching for new orders and register updates…
             </span>
           )}
         </div>

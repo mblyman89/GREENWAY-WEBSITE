@@ -33,6 +33,17 @@
  *                              Leafly refuses, nothing local changes. The
  *                              Orders board + Reports read live, so they
  *                              update on their next load.
+ *   POST { orderId, advance: { to, employeeName } }   (SLICE L-37)
+ *                            → move an ACTIVE online order forward from the
+ *                              register: to "acknowledged" (Confirm) or
+ *                              "ready" (Mark ready for pickup). Forward only.
+ *                              Leafly orders are pushed to Leafly FIRST (it is
+ *                              the source of truth for the customer's text);
+ *                              if Leafly refuses, nothing local changes. There
+ *                              is NO "picked up" target: picked up happens only
+ *                              when the ID-gated register sale completes (the
+ *                              sync closes the order then). The Online Orders
+ *                              dashboard auto-refreshes on the change.
  *
  * Device-authenticated (x-pos-device-id/-key) like every register endpoint.
  * ONLINE-ONLY by design: the queue lives on the server and completion
@@ -52,6 +63,7 @@ import {
 } from "@/lib/pos/pickup-handover-core";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 import { isRegisterCancelReason } from "@/lib/pos/pickup-detail-core";
+import { isRegisterAdvanceTarget } from "@/lib/pos/pickup-progress-core";
 import { isOutboundCancelReason } from "@/lib/leafly/order-ack-core";
 import { getEmployeeByPin } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
@@ -97,6 +109,7 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     complete?: { employeeId?: unknown; tenderedMinor?: unknown; idConfirmed?: unknown; drawerSessionId?: unknown };
     load?: { employeeName?: unknown };
     cancel?: { pin?: unknown; reason?: unknown; employeeName?: unknown };
+    advance?: { to?: unknown; employeeName?: unknown };
   };
   try {
     body = (await req.json()) as typeof body;
@@ -224,6 +237,42 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         orderNumber: cancelled.orderNumber,
         displayName: cancelled.displayName,
         message: cancelled.message,
+      },
+    });
+  }
+
+  // ── Advance mode (SLICE L-37): Confirm / Mark ready ────────────────────
+  //
+  // Deliberately NOT named `complete`: that key is the retired SLICE 17
+  // checkbox handover and answers 410. There is no "picked up" target here -
+  // an order is picked up only by the register sale completing (the sync
+  // closes it then), so this mode can never finish a handover.
+  if (body.advance) {
+    const to = body.advance.to;
+    if (!isRegisterAdvanceTarget(to)) {
+      return NextResponse.json(
+        { error: "advance.to must be \"acknowledged\" or \"ready\". Pickup completes only through the register sale." },
+        { status: 400 },
+      );
+    }
+    const employeeName = String(body.advance.employeeName ?? "").trim();
+    if (!employeeName) {
+      return NextResponse.json({ error: "advance.employeeName is required." }, { status: 400 });
+    }
+    const { advancePickupAtRegister } = await import("@/lib/pos/pickup-store");
+    const advanced = await advancePickupAtRegister({
+      orderId: body.orderId,
+      to,
+      deviceName: auth.device.name,
+      employeeName,
+    });
+    if (!advanced.ok) return NextResponse.json({ error: advanced.error }, { status: 422 });
+    return NextResponse.json({
+      advanced: {
+        orderNumber: advanced.orderNumber,
+        displayName: advanced.displayName,
+        status: advanced.status,
+        message: advanced.message,
       },
     });
   }

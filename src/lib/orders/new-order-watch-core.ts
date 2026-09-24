@@ -346,6 +346,52 @@ export function pollIntervalMs(visible: boolean): number {
 }
 
 // ---------------------------------------------------------------------------
+// SLICE L-37 — keep the board fresh when orders change ELSEWHERE
+// ---------------------------------------------------------------------------
+//
+// The owner: "These actions need to update the online orders dashboard
+// automatically so the dashboard doesn't become stale from register activity."
+//
+// The chime above only ever watched ARRIVALS; a status change made at the
+// register (Confirm, Mark ready, the automatic pickup) left an open dashboard
+// showing the old step until someone reloaded it. The count route now also
+// returns a CHANGE FINGERPRINT: the newest `updated_at` on orders and on
+// leafly_orders (both maintained by the set_updated_at() trigger, 0007/0225)
+// plus the per-status counts. Any status change moves it. When it moves, the
+// dashboard re-renders itself (router.refresh()).
+
+export type ChangeFingerprintInput = {
+  ordersUpdatedAt: string | null;
+  leaflyUpdatedAt: string | null;
+  counts: Record<string, number> | null | undefined;
+};
+
+/** A stable string that changes whenever any order or Leafly order changes. */
+export function changeFingerprint(input: ChangeFingerprintInput): string {
+  const counts = input.counts ?? {};
+  const keys = Object.keys(counts).sort();
+  const c = keys.map((k) => `${k}=${Number.isFinite(counts[k]) ? counts[k] : 0}`).join(",");
+  return `o:${input.ordersUpdatedAt ?? "-"}|l:${input.leaflyUpdatedAt ?? "-"}|${c}`;
+}
+
+/**
+ * Should the dashboard refresh itself? Only when a PREVIOUS fingerprint exists
+ * and differs (the first poll just records a baseline - the page was rendered
+ * moments ago), and never while the operator is typing in a field on the
+ * page: a refresh must not eat a half-written note or search.
+ */
+export function shouldAutoRefresh(input: {
+  previous: string | null;
+  current: string | null | undefined;
+  userIsEditing: boolean;
+}): boolean {
+  if (typeof input.current !== "string" || input.current === "") return false;
+  if (input.previous === null) return false;
+  if (input.previous === input.current) return false;
+  return !input.userIsEditing;
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (wired into scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
@@ -563,6 +609,24 @@ export function __runNewOrderWatchCoreTests(): void {
   ok(pollIntervalMs(true) === VISIBLE_POLL_MS, "a visible tab polls fast");
   ok(pollIntervalMs(false) === HIDDEN_POLL_MS, "a hidden tab backs off");
   ok(HIDDEN_POLL_MS > VISIBLE_POLL_MS, "backing off means slower, never faster");
+
+  // ── SLICE L-37: change fingerprint + auto refresh ─────────────────────────
+  const fpA = changeFingerprint({ ordersUpdatedAt: "2026-01-01T10:00:00Z", leaflyUpdatedAt: null, counts: { new: 1, ready: 0 } });
+  const fpB = changeFingerprint({ ordersUpdatedAt: "2026-01-01T10:00:05Z", leaflyUpdatedAt: null, counts: { new: 1, ready: 0 } });
+  const fpC = changeFingerprint({ ordersUpdatedAt: "2026-01-01T10:00:00Z", leaflyUpdatedAt: null, counts: { new: 0, ready: 1 } });
+  const fpD = changeFingerprint({ ordersUpdatedAt: "2026-01-01T10:00:00Z", leaflyUpdatedAt: "2026-01-01T10:00:09Z", counts: { new: 1, ready: 0 } });
+  const fpE = changeFingerprint({ ordersUpdatedAt: "2026-01-01T10:00:00Z", leaflyUpdatedAt: null, counts: { ready: 0, new: 1 } });
+  ok(fpA !== fpB, "an order update moves the fingerprint");
+  ok(fpA !== fpC, "a status-count change moves the fingerprint");
+  ok(fpA !== fpD, "a Leafly order update moves the fingerprint");
+  ok(fpA === fpE, "count key order does not matter");
+  ok(changeFingerprint({ ordersUpdatedAt: null, leaflyUpdatedAt: null, counts: null } as never) !== "", "empty input still yields a string");
+  ok(!shouldAutoRefresh({ previous: null, current: fpA, userIsEditing: false }), "first poll is only a baseline");
+  ok(!shouldAutoRefresh({ previous: fpA, current: fpA, userIsEditing: false }), "no change -> no refresh");
+  ok(shouldAutoRefresh({ previous: fpA, current: fpB, userIsEditing: false }), "change -> refresh");
+  ok(!shouldAutoRefresh({ previous: fpA, current: fpB, userIsEditing: true }), "never refresh under a typing operator");
+  ok(!shouldAutoRefresh({ previous: fpA, current: undefined, userIsEditing: false }), "missing fingerprint (old server) -> no refresh");
+  ok(!shouldAutoRefresh({ previous: fpA, current: "", userIsEditing: false }), "blank fingerprint -> no refresh");
 
   console.log(`new-order-watch-core: ${pass} assertions passed`);
   if (fail > 0) throw new Error(`new-order-watch-core: ${fail} failure(s)`);

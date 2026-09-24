@@ -534,6 +534,67 @@ export async function getRecentOrderArrivals(limit = 20): Promise<OrderArrivalRo
     }));
 }
 
+/**
+ * SLICE L-37 — the newest `updated_at` on orders and on leafly_orders. Both
+ * columns are maintained by the set_updated_at() trigger (0007 / 0225), so any
+ * status change anywhere - the back office, the register, a Leafly webhook -
+ * moves one of them. Feeds the dashboard's change fingerprint. Never throws;
+ * a missing table or column just yields null for that half.
+ */
+export async function getLatestOrderChange(): Promise<{ ordersUpdatedAt: string | null; leaflyUpdatedAt: string | null }> {
+  if (!isSupabaseServiceConfigured) return { ordersUpdatedAt: null, leaflyUpdatedAt: null };
+  const admin = createSupabaseAdminClient();
+  const newest = async (table: "orders" | "leafly_orders"): Promise<string | null> => {
+    try {
+      const { data, error } = await admin
+        .from(table)
+        .select("updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ updated_at: string | null }>();
+      if (error) return null;
+      return data?.updated_at ?? null;
+    } catch {
+      return null;
+    }
+  };
+  const [ordersUpdatedAt, leaflyUpdatedAt] = await Promise.all([newest("orders"), newest("leafly_orders")]);
+  return { ordersUpdatedAt, leaflyUpdatedAt };
+}
+
+/**
+ * SLICE L-37 — which of these orders were closed by a register sale (the
+ * customer picked the order up at the counter)? Those orders keep the
+ * NON-REVENUE "cancelled" status so the sale is never counted twice (the
+ * register sale is the sale of record), and screens use this to label them
+ * "Picked up" instead. Keyed on the order_events note written by the sync
+ * (REGISTER_PICKED_UP_NOTE_PREFIX). Never throws; on any error, the empty set
+ * (the order simply shows its raw status).
+ */
+export async function registerPickedUpOrderIds(orderIds: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  const ids = [...new Set(orderIds.filter((x) => typeof x === "string" && x !== ""))];
+  if (!isSupabaseServiceConfigured || ids.length === 0) return out;
+  try {
+    const { REGISTER_PICKED_UP_NOTE_PREFIX } = await import("@/lib/pos/pickup-progress-core");
+    const admin = createSupabaseAdminClient();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data, error } = await admin
+        .from("order_events")
+        .select("order_id")
+        .in("order_id", ids.slice(i, i + 200))
+        .eq("event_type", "status_changed")
+        .eq("to_status", "cancelled")
+        .like("note", `${REGISTER_PICKED_UP_NOTE_PREFIX}%`);
+      if (error) return out;
+      for (const r of (data as { order_id: string }[] | null) ?? []) out.add(r.order_id);
+    }
+  } catch {
+    /* label falls back to the raw status */
+  }
+  return out;
+}
+
 export async function getOrderStatusCounts(): Promise<Record<OrderStatus, number>> {
   const empty: Record<OrderStatus, number> = {
     new: 0,

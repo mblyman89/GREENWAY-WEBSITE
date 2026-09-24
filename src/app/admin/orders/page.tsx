@@ -9,7 +9,8 @@ import { Card } from "@/components/admin/ui/Card";
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
 import { formatMinorCurrency } from "@/lib/leafly/format";
-import { listOrdersPaged, getOrderStatusCounts } from "@/lib/orders/orders-store";
+import { listOrdersPaged, getOrderStatusCounts, registerPickedUpOrderIds } from "@/lib/orders/orders-store";
+import { REGISTER_PICKED_UP_LABEL } from "@/lib/pos/pickup-progress-core";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
 import {
   ORDER_SORTS,
@@ -393,6 +394,12 @@ export default async function OrdersAdminPage({
       to: win.to,
     }));
   }
+  // SLICE L-37 — orders the customer collected at the register read "Picked
+  // up", not "Cancelled" (their status stays non-revenue: the register sale
+  // is the sale of record). Only closed-as-cancelled rows need the lookup.
+  const pickedUpAtRegister = await registerPickedUpOrderIds(
+    orders.filter((o) => o.status === "cancelled").map((o) => o.id),
+  );
   /** Current filter state as URL params (page excluded — added per link). */
   const filterParams = () => {
     const params = new URLSearchParams();
@@ -736,9 +743,12 @@ export default async function OrdersAdminPage({
                       {resolveOrderDisplay(order.display_name, order.order_number)}
                     </Link>
                     <span
-                      className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${STATUS_STYLES[order.status]}`}
+                      className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${
+                        pickedUpAtRegister.has(order.id) ? STATUS_STYLES.completed : STATUS_STYLES[order.status]
+                      }`}
+                      title={pickedUpAtRegister.has(order.id) ? "Collected at the register — the register sale holds the payment and the books." : undefined}
                     >
-                      {ORDER_STATUS_LABELS[order.status]}
+                      {pickedUpAtRegister.has(order.id) ? `${REGISTER_PICKED_UP_LABEL} (register)` : ORDER_STATUS_LABELS[order.status]}
                     </span>
                     {/* SLICE L-12 hid the "Website" badge unconditionally,
                         because badging all forty rows trains the eye to
