@@ -87,6 +87,7 @@ import {
   decideStatusChange,
   describeOutboundFailure,
   leaflyAcknowledgeUrl,
+  leaflyStatusLabel,
   leaflyStatusUrl,
   type AckDecision,
   type OutboundAssessment,
@@ -1055,12 +1056,36 @@ export async function setLeaflyOrderStatus(input: {
     }
   }
 
+  // ── SLICE L-35: SAY WHAT LEAFLY NOW SHOWS, NOT JUST THAT IT SAID 200 ──────
+  // The 200 body is Leafly's full Order. `describeStatusPushOutcome` (pure,
+  // lifecycle-core 4b) compares its status with what we asked for, so the
+  // operator reads "Leafly now shows this order as Ready for pickup" — or a
+  // warning when Leafly's own copy disagrees. Never allowed to throw: the push
+  // already succeeded and nothing here may turn that into an error.
+  let successMessage = assessment.message;
+  let outcomeWarning: string | null = null;
+  if (assessment.disposition === "success") {
+    try {
+      const { normaliseFetchedOrder } = await import("./order-fetch-core");
+      const { describeStatusPushOutcome } = await import("./lifecycle-core");
+      const outcome = describeStatusPushOutcome({
+        requestedStatus: decision.body.status,
+        responseStatus: normaliseFetchedOrder(raw.body).status,
+        label: leaflyStatusLabel,
+      });
+      successMessage = outcome.message;
+      outcomeWarning = outcome.warning;
+    } catch (err) {
+      console.error(`[leafly/outbound] ${orderId}: describing the status outcome threw:`, err);
+    }
+  }
+
   const finalMessage =
     assessment.disposition === "fix_request"
       ? [describeOutboundFailure(assessment, raw.body), reconcileNote]
           .filter((s): s is string => typeof s === "string" && s.trim() !== "")
           .join(" ")
-      : assessment.message;
+      : successMessage;
 
   // Recorded a second time, deliberately and only on a rejection: the first
   // `recordAttempt` above captured the raw exchange, which is the forensic
@@ -1086,7 +1111,10 @@ export async function setLeaflyOrderStatus(input: {
     message: finalMessage,
     httpStatus: raw.status,
     assessment,
-    warning: persistWarning,
+    warning:
+      [outcomeWarning, persistWarning]
+        .filter((w): w is string => typeof w === "string" && w.trim() !== "")
+        .join(" ") || null,
   };
 }
 

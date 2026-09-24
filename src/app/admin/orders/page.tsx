@@ -597,7 +597,11 @@ export default async function OrdersAdminPage({
       // is; the pure core takes `now` as a parameter precisely so this is a
       // decision made in one visible place.
       now={new Date()}
-      message={sp.leaflyMsg ?? sp.leaflyWarn ?? null}
+      message={sp.leaflyMsg ?? null}
+      // SLICE L-35. Was `sp.leaflyMsg ?? sp.leaflyWarn`: every success
+      // carries a message, so the warning was NEVER shown — including
+      // "the register order did not close" after Picked up. Now its own prop.
+      warning={sp.leaflyWarn ?? null}
       error={sp.leaflyErr ?? null}
       errorCode={sp.leaflyFix ?? sp.leaflyCode ?? null}
     />

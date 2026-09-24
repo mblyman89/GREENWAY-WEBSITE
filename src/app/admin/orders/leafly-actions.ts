@@ -55,6 +55,7 @@ import {
   type OutboundResult,
 } from "@/lib/leafly/order-ack-server";
 import { getLeaflyBoardOrder } from "@/lib/leafly/order-board-server";
+import { LEAFLY_ACK_IRREVERSIBLE_WARNING } from "@/lib/leafly/order-ack-core";
 // SLICE L-25 — the outer race that guarantees a sentence rather than a spinner.
 import { withActionDeadline } from "@/lib/leafly/action-deadline";
 
@@ -146,7 +147,13 @@ function resultParams(result: OutboundResult): Record<string, string> {
   };
   if (result.ok) {
     base.leaflyMsg = result.message.slice(0, 500);
-    if (result.warning) base.leaflyWarn = result.warning.slice(0, 500);
+    // SLICE L-35. The warning banner is now actually rendered (it used to be
+    // masked by the success message). The acknowledge path's warning always
+    // opens with the PRE-action caution ("check any ID BEFORE acknowledging"),
+    // which the confirm dialog has already shown; repeating it after the door
+    // has closed would read as an alarm. Only what still needs doing is kept.
+    const warn = (result.warning ?? "").replace(LEAFLY_ACK_IRREVERSIBLE_WARNING, "").trim();
+    if (warn) base.leaflyWarn = warn.slice(0, 500);
   } else {
     base.leaflyErr = result.message.slice(0, 500);
     if (result.assessment) {

@@ -520,6 +520,83 @@ export function planLocalClose(input: {
 }
 
 /* ========================================================================== *
+ * 4b. WHAT THE OPERATOR IS TOLD AFTER A SUCCESSFUL STATUS PUSH (SLICE L-35)
+ * ========================================================================== */
+
+/**
+ * SLICE L-35 — "Leafly accepted the request (200)" proved too little.
+ *
+ * The owner pressed Confirm and Mark ready, saw that sentence both times, and
+ * received no email either time — only the review request after Picked up. He
+ * could not tell whether Leafly had really moved the order or had merely
+ * answered 200.
+ *
+ * Leafly's 200 carries the full Order (spec: `responses.OrderResponse`), so
+ * the answer was already in hand and being thrown away at the screen. This
+ * function turns it into a sentence that says WHAT LEAFLY NOW SHOWS, and
+ * raises a warning in the one case that deserves it: Leafly answered 200 but
+ * its own copy of the order does not show the step we sent.
+ *
+ * It deliberately does NOT promise the shopper got an email. The spec makes
+ * Leafly "the sole originator of automated consumer facing communications"
+ * and forbids us from sending them; which steps Leafly chooses to email about
+ * is Leafly's configuration, not something this system can observe. Claiming
+ * otherwise would be exactly the kind of guess the standing rules forbid.
+ */
+export type StatusPushOutcome = {
+  /** "verified": Leafly's body shows the requested status. */
+  verdict: "verified" | "mismatch" | "unverifiable";
+  /** Sentence for the success banner. Never empty. */
+  message: string;
+  /** Sentence for the warning banner, or null when nothing is wrong. */
+  warning: string | null;
+};
+
+export function describeStatusPushOutcome(input: {
+  requestedStatus: string;
+  responseStatus: string | null | undefined;
+  /** Plain-English label for a status; null for an unknown value. */
+  label: (status: string) => string | null;
+}): StatusPushOutcome {
+  const requested = input.requestedStatus.trim();
+  const reported = (input.responseStatus ?? "").trim();
+  const name = (s: string) => {
+    const l = input.label(s);
+    return l ? `“${l}”` : `“${s}”`;
+  };
+  const whoTellsShopper =
+    "Any notice to the shopper about this step comes from Leafly, not from us.";
+
+  if (reported === "") {
+    return {
+      verdict: "unverifiable",
+      message:
+        `Leafly accepted the change to ${name(requested)} (200), but did not send back ` +
+        `its copy of the order, so we could not double-check it. ${whoTellsShopper}`,
+      warning: null,
+    };
+  }
+  if (reported === requested) {
+    return {
+      verdict: "verified",
+      message:
+        `Done — Leafly now shows this order as ${name(reported)}. ` +
+        `(Checked against the order Leafly sent back, not just its 200.) ${whoTellsShopper}`,
+      warning: null,
+    };
+  }
+  return {
+    verdict: "mismatch",
+    message: `Leafly answered 200, and its copy of the order shows ${name(reported)}.`,
+    warning:
+      `We asked Leafly for ${name(requested)}, but the order Leafly sent back shows ` +
+      `${name(reported)}. The board now follows Leafly. If the shopper was expecting ` +
+      `an update for this step, this is worth raising with Leafly support ` +
+      `(api-support@leafly.com), quoting the order number.`,
+  };
+}
+
+/* ========================================================================== *
  * 5. SELF-TESTS
  * ========================================================================== */
 
@@ -819,6 +896,38 @@ export function runLifecycleCoreSelfTests(): { passed: number } {
       ok("flagged as a fallback", !w.usedResponseBody);
     }
   });
+
+  // ── SLICE L-35: the post-push sentence.
+  {
+    const label = (s: string) =>
+      s === "ready" ? "Ready for pickup" : s === "confirmed" ? "Confirmed" : null;
+    t("L-35: body matches request -> verified, names Leafly's status, no warning", () => {
+      const o = describeStatusPushOutcome({ requestedStatus: "ready", responseStatus: "ready", label });
+      eq("verdict", o.verdict, "verified");
+      ok("names the status", o.message.includes("“Ready for pickup”"));
+      ok("no warning", o.warning === null);
+      ok("does not promise an email", !/email (was|has been) sent/i.test(o.message));
+    });
+    t("L-35: body disagrees -> mismatch WITH a warning naming both", () => {
+      const o = describeStatusPushOutcome({ requestedStatus: "ready", responseStatus: "confirmed", label });
+      eq("verdict", o.verdict, "mismatch");
+      ok("warns", o.warning !== null);
+      ok("names requested", (o.warning ?? "").includes("“Ready for pickup”"));
+      ok("names reported", (o.warning ?? "").includes("“Confirmed”"));
+    });
+    t("L-35: no status in body -> unverifiable, says so, never claims 'Done'", () => {
+      for (const body of [null, undefined, "", "  "]) {
+        const o = describeStatusPushOutcome({ requestedStatus: "confirmed", responseStatus: body, label });
+        eq("verdict", o.verdict, "unverifiable");
+        ok("admits it could not check", /could not double-check/.test(o.message));
+        ok("not 'Done'", !o.message.startsWith("Done"));
+      }
+    });
+    t("L-35: an unknown status is shown raw, never given an invented name", () => {
+      const o = describeStatusPushOutcome({ requestedStatus: "ready", responseStatus: "brand_new", label });
+      ok("raw value shown", (o.warning ?? "").includes("“brand_new”"));
+    });
+  }
 
   // ── The local-close rule.
   t("picked_up closes the register order as completed", () => {

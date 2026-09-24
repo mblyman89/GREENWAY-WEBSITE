@@ -295,6 +295,8 @@ export function LeaflyOrdersPanel({
   now,
   /** Outcome of the last action, lifted from the URL by the page. */
   message,
+  /** SLICE L-35 — a success that still needs a human's attention. */
+  warning,
   error,
   errorCode,
   /**
@@ -314,6 +316,7 @@ export function LeaflyOrdersPanel({
   interrupts?: BoardInterrupts;
   now: Date;
   message?: string | null;
+  warning?: string | null;
   error?: string | null;
   errorCode?: string | null;
   filter?: BoardFilter;
@@ -329,7 +332,7 @@ export function LeaflyOrdersPanel({
     : [];
   const interruptTally = summariseInterrupts(allInterrupts);
   const hasProblem = board.problem.trim().length > 0;
-  const hasOutcome = Boolean(message || error);
+  const hasOutcome = Boolean(message || warning || error);
 
   // Nothing set up, nothing received, nothing wrong, nothing to report → render
   // nothing. See the file header: the orders page does not grow a permanent
@@ -452,6 +455,15 @@ export function LeaflyOrdersPanel({
         {message ? (
           <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             ✅ {message}
+          </div>
+        ) : null}
+
+        {warning ? (
+          <div
+            role="alert"
+            className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]"
+          >
+            ⚠️ {warning}
           </div>
         ) : null}
 
