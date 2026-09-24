@@ -272,7 +272,9 @@ describe("embedded pure self-test suites", () => {
   it("leafly-webhook-parse-core (SLICE L-5: fails soft, because the spec demands 200)", () => {
     const r = __runLeaflyWebhookParseTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThan(90);
+    // SLICE L-34: 90 -> 95 (measured 96) for the spec's `cancelReason` field
+    // on OrderCancelWebhook, which was previously ignored.
+    expect(r.passed).toBeGreaterThanOrEqual(95);
   });
   it("leafly-preview-core (SLICE L-5: the money a shopper reads before buying)", () => {
     const r = __runLeaflyPreviewTests();
@@ -346,7 +348,13 @@ describe("embedded pure self-test suites", () => {
     // case count, and it asserts that at least six distinct verdicts were
     // actually observed -- so a refactor that collapsed the rule into always
     // answering the same way would fail here rather than go green.
-    expect(r.passed).toBeGreaterThan(3600);
+    //
+    // SLICE L-34: floor raised 3,600 -> 18,000 from a measured 18,084. The
+    // matrix gained a sixth dimension (canceledAt) and the verdict set gained
+    // `out_of_window`, plus the concurrent-run claim (`decideSweepClaim`).
+    // At a two-minute cadence each of those rules runs 720 times a day, so
+    // losing any of them silently is 720 times more expensive than it was.
+    expect(r.passed).toBeGreaterThanOrEqual(18000);
   });
   it("leafly-order-ack-core (SLICE L-6: talking back to Leafly, one-way doors)", () => {
     const r = __runLeaflyOrderAckTests();
@@ -412,7 +420,15 @@ describe("embedded pure self-test suites", () => {
     // the second trigger fires at every hour of the clock carries its own
     // non-vacuity guards, because a sweep is the easiest kind of test to
     // accidentally empty.
-    expect(r.passed).toBeGreaterThanOrEqual(255);
+    //
+    // SLICE L-34: the project is now on Vercel Pro and the cron ticks every
+    // fifteen minutes. The OR above is kept as the safety net. Floor raised
+    // 255 -> 315 from a measured 319: the new assertions are the ones that
+    // only matter at Pro cadence -- refusals must not reset the clocks, the
+    // refusal heartbeat, a skipped daily POST counting as the full sync, the
+    // start-race tie-break, and an end-to-end day simulation at 15-minute
+    // ticks. Each was a real defect found by executing the core at 96 ticks.
+    expect(r.passed).toBeGreaterThanOrEqual(315);
   });
   it("leafly-evidence-core (SLICE L-8: the webhook evidence reader)", () => {
     const r = __runLeaflyEvidenceTests();

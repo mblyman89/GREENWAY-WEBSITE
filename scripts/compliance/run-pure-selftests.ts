@@ -951,7 +951,7 @@ __runLiquidVolumeTests();
   // a floor -- it catches a whole battery vanishing, not a single added case.
   assertRan("leafly-hmac-core", __runLeaflyHmacTests(), 80);
   assertRan("leafly-order-map-core", __runLeaflyOrderMapTests(), 145);
-  assertRan("leafly-webhook-parse-core", __runLeaflyWebhookParseTests(), 90);
+  assertRan("leafly-webhook-parse-core", __runLeaflyWebhookParseTests(), 95);
   assertRan("leafly-preview-core", __runLeaflyPreviewTests(), 71);
   // SLICE L-6 -- talking BACK to Leafly. Floored for a reason the L-5 cores do
   // not share: the acknowledge call is IRREVERSIBLE by Leafly's own
@@ -1090,12 +1090,13 @@ __runLiquidVolumeTests();
   assertRan("leafly-refusal-diagnosis-core", __runLeaflyRefusalDiagnosisTests(), 600);
   // Floor 230, set from a measured 242 at registration. Deliberately close to
   // the measured figure: this core is where a platform limit is encoded (Vercel
-  // Hobby permits one cron tick per day, so the daily full sync is driven by an
-  // OR of "the configured hour has arrived" and "20 hours have passed"), and
+  // Hobby permitted one cron tick per day, so the daily full sync is driven by an
+  // OR of "the configured hour has arrived" and "20 hours have passed"; on Pro
+  // since L-34 the tick is every 15 minutes and the OR is the safety net), and
   // the 24-hour sweep that proves the second trigger fires at every hour of the
   // clock is exactly the kind of loop that can be made vacuous by a one-line
   // edit. It carries its own non-vacuity guards; this floor is the outer net.
-  assertRan("leafly-schedule-core", __runLeaflyScheduleTests(), 255);
+  assertRan("leafly-schedule-core", __runLeaflyScheduleTests(), 315);
   // SLICE L-8 -- the Leafly webhook evidence reader.
   //
   // Floored at 300 against 316 measured. Two things in this core are worth a
