@@ -580,6 +580,7 @@ import { __runDeviceSetupCoreTests } from "../../src/lib/pos/device-setup-core";
 import { __runVoidSaleCoreTests } from "../../src/lib/pos/void-sale-core";
 import { __runPickupCoreTests } from "../../src/lib/pos/pickup-core";
 import { __runPickupDetailCoreTests } from "../../src/lib/pos/pickup-detail-core";
+import { __runPickupProgressCoreTests } from "../../src/lib/pos/pickup-progress-core";
 import { __runMemberHistoryCoreTests } from "../../src/lib/pos/member-history-core";
 import { __runEmailReceiptCoreTests } from "../../src/lib/pos/email-receipt-core";
 import { __runChangeCalcCoreTests } from "../../src/lib/pos/change-calc-core";
@@ -1232,6 +1233,7 @@ __runLiquidVolumeTests();
     if (pickupDetail.failed > 0) throw new Error(`pickup-detail-core: ${pickupDetail.failed} failure(s)`);
     console.log(`pickup-detail-core self-tests: ${pickupDetail.passed} passed`);
   }
+  __runPickupProgressCoreTests();
   __runMemberHistoryCoreTests();
   __runEmailReceiptCoreTests();
   __runChangeCalcCoreTests();

@@ -6,7 +6,8 @@
  * customer should see are returned — no staff notes, no other orders.
  */
 import { NextResponse } from "next/server";
-import { getOrderByToken } from "@/lib/orders/orders-store";
+import { getOrderByToken, registerPickedUpOrderIds } from "@/lib/orders/orders-store";
+import { REGISTER_PICKED_UP_LABEL } from "@/lib/pos/pickup-progress-core";
 import { ORDER_STATUS_LABELS } from "@/lib/orders/types";
 import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 
@@ -26,13 +27,20 @@ export async function GET(
     return NextResponse.json({ error: "Order not found." }, { status: 404 });
   }
 
+  // SLICE L-37 — an order the customer picked up at the register is closed with
+  // the NON-REVENUE "cancelled" status (the register sale is the sale of
+  // record). The customer must see "Picked up", never "Cancelled". Best-effort:
+  // registerPickedUpOrderIds never throws (empty set on error).
+  const pickedUpAtRegister =
+    order.status === "cancelled" && (await registerPickedUpOrderIds([order.id])).has(order.id);
+
   // Customer-safe projection. SLICE 113: orderNumber is the friendly pool name
   // when one was assigned, else the unique GWY-XXXXXX number — the confirmation
   // page already renders whatever this string is.
   return NextResponse.json({
     orderNumber: resolveOrderDisplay(order.display_name, order.order_number),
     status: order.status,
-    statusLabel: ORDER_STATUS_LABELS[order.status],
+    statusLabel: pickedUpAtRegister ? REGISTER_PICKED_UP_LABEL : ORDER_STATUS_LABELS[order.status],
     placedAt: order.placed_at,
     customerFirstName: order.customer_first_name,
     subtotalMinorUnits: order.subtotal_minor_units,

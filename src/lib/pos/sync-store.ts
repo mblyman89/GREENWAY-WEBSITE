@@ -30,7 +30,9 @@ import { verifyPin } from "@/lib/security/pin-hash";
 import { recordAudit } from "@/lib/auth/audit";
 import { runCompletionGate } from "@/lib/orders/completion-gate";
 import { setOrderStatus, getOrder } from "@/lib/orders/orders-store";
-import { supersedeNote } from "@/lib/pos/order-to-cart-core";
+import { registerPickedUpNote } from "@/lib/pos/pickup-progress-core";
+import { pushLeaflyPickedUp, scheduleAfterResponse } from "@/lib/pos/pickup-leafly-close";
+import { isMarketplaceOrigin, toOrderOrigin } from "@/lib/orders/order-origin-core";
 import { openWorkPunch, toggleClock } from "@/lib/staffing/store";
 import {
   validateSalePayload,
@@ -1166,10 +1168,47 @@ async function processSale(
       const source = await getOrder(sale.sourceOrderId);
       const ACTIVE = new Set(["new", "acknowledged", "preparing", "ready"]);
       if (source && ACTIVE.has(source.status)) {
+        // SLICE L-37 - this IS the customer picking the order up. The note
+        // says so (the dashboard, the order page and the customer's own
+        // confirmation page read it and show "Picked up"), but the status
+        // stays the NON-REVENUE close: the register order above is the sale
+        // of record, and a second "completed" order would double the revenue,
+        // the excise, CCRS, the ledger, the stock decrement and the points.
+        // See pickup-progress-core.ts.
         const superseded = await setOrderStatus(source.id, "cancelled", {
           actorLabel: `POS · ${employeeName}`,
-          note: supersedeNote(device.name, employeeName),
+          note: registerPickedUpNote({
+            deviceName: device.name,
+            employeeName,
+            registerOrderNumber: order.order_number,
+          }),
         });
+        if (superseded.ok) {
+          await recordAudit({
+            actorId: null,
+            actorEmail: `pos-device:${device.id}`,
+            action: "order.picked_up_at_register",
+            entityType: "order",
+            entityId: source.id,
+            after: {
+              orderNumber: source.order_number,
+              origin: source.origin ?? null,
+              registerOrderId: order.id,
+              registerOrderNumber: order.order_number,
+              employee: employeeName,
+              clientUuid: envelope.clientUuid,
+            },
+          });
+          // Tell Leafly the shopper has their bag. AFTER the local close, on
+          // purpose: Leafly's own close path would otherwise flip our copy to
+          // "completed" and count the sale twice. Scheduled after the response
+          // so a slow Leafly never holds up the register's sync.
+          if (isMarketplaceOrigin(toOrderOrigin(source.origin))) {
+            scheduleAfterResponse(() =>
+              pushLeaflyPickedUp({ localOrderId: source.id, deviceLabel: `pos-device:${device.id}` }),
+            );
+          }
+        }
         if (!superseded.ok) {
           await recordAudit({
             actorId: null,

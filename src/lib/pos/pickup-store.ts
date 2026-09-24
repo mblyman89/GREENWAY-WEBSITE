@@ -54,6 +54,14 @@ import {
   type OrderOrigin,
 } from "@/lib/orders/order-origin-core";
 import { recordAudit } from "@/lib/auth/audit";
+import {
+  leaflyStatusForTarget,
+  localStatusForLeafly,
+  planLeaflyPushes,
+  registerAdvanceActorLabel,
+  registerAdvanceVerdict,
+  type RegisterAdvanceTarget,
+} from "@/lib/pos/pickup-progress-core";
 import { type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 import { getAccountByCustomer, listTiers } from "@/lib/loyalty/loyalty-store";
 import { tierForPoints } from "@/lib/loyalty/engine";
@@ -430,6 +438,172 @@ export async function cancelPickupAtRegister(input: {
 
   if (leaflyOutcome) message += ` Leafly: ${leaflyOutcome}.`;
   return { ok: true, orderNumber: order.order_number, displayName, message };
+}
+
+// ---------------------------------------------------------------------------
+// Confirm / Ready from the register (SLICE L-37)
+// ---------------------------------------------------------------------------
+
+export type AdvancePickupResult =
+  | { ok: true; orderNumber: string; displayName: string; status: string; message: string }
+  | { ok: false; error: string };
+
+/**
+ * Move an ACTIVE online order forward from the register: Confirm
+ * (-> acknowledged) or Mark ready (-> ready). Any budtender may do this - it
+ * is the same step anyone with the back office open does with one click, and
+ * it moves no money and releases no product.
+ *
+ * LEAFLY FIRST, then ours - the same order as the L-36 cancel, for the same
+ * reason: telling OUR board "ready" while Leafly still tells the shopper
+ * "confirmed" is the two-sets-of-books problem L-31 fixed. Leafly is walked
+ * one step at a time (planLeaflyPushes): a still-pending order being marked
+ * ready is sent `confirmed` and then `ready`, because the shopper's emails
+ * hang off each step. If Leafly refuses a step, our order moves only as far as
+ * Leafly actually went, and the budtender is told exactly where it stopped.
+ *
+ * WEBSITE orders are a single `setOrderStatus` call - the SAME store call the
+ * back-office "Mark ..." button uses - so the timeline event, the lifecycle
+ * matrix and the timestamps are identical to a back-office press, with the
+ * register named as the actor.
+ */
+export async function advancePickupAtRegister(input: {
+  orderId: string;
+  to: RegisterAdvanceTarget;
+  deviceName: string;
+  employeeName: string;
+}): Promise<AdvancePickupResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const order = await getOrder(input.orderId);
+  if (!order) return { ok: false, error: "Order not found." };
+  if (isPosMaterializedOrder(order.staff_note)) {
+    return { ok: false, error: "That order is a register sale, not an online order." };
+  }
+  const verdict = registerAdvanceVerdict(order.status, input.to);
+  if (!verdict.allowed) return { ok: false, error: verdict.reason };
+
+  const displayName = resolveOrderDisplay(order.display_name ?? null, order.order_number);
+  const origin = toOrderOrigin(order.origin);
+  const actorLabel = registerAdvanceActorLabel(input.employeeName, input.deviceName);
+  const auditFail = async (why: string, extra: Record<string, unknown> = {}) => {
+    await recordAudit({
+      actorId: null,
+      actorEmail: `pos-advance:${input.deviceName}`,
+      action: "order.register_advance_failed",
+      entityType: "order",
+      entityId: order.id,
+      after: { orderNumber: order.order_number, displayName, to: input.to, employee: input.employeeName, why, ...extra },
+    });
+  };
+
+  // How far the LOCAL order may move. Website: all the way. Leafly: as far
+  // as Leafly actually went.
+  let localTarget: RegisterAdvanceTarget = input.to;
+  let leaflyOutcome: string | null = null;
+  let partialError: string | null = null;
+  const warnings: string[] = [];
+
+  if (isMarketplaceOrigin(origin)) {
+    const admin = createSupabaseAdminClient();
+    const { data: lf } = await admin
+      .from("leafly_orders")
+      .select("leafly_order_id, leafly_status, acknowledged_at")
+      .eq("local_order_id", order.id)
+      .limit(1)
+      .maybeSingle<{ leafly_order_id: string; leafly_status: string | null; acknowledged_at: string | null }>();
+    if (!lf) {
+      await auditFail("no linked Leafly record");
+      return {
+        ok: false,
+        error: "This Leafly order has no Leafly record linked to it, so nothing was changed. Move it from the back-office Orders board.",
+      };
+    }
+    if ((lf.acknowledged_at ?? "").trim() === "") {
+      await auditFail("Leafly order not acknowledged");
+      return {
+        ok: false,
+        error: "Leafly has not acknowledged this order yet, so Leafly will not accept a status change. Acknowledge it on the back-office Orders board first (it normally happens automatically within a minute or two).",
+      };
+    }
+    const plan = planLeaflyPushes(lf.leafly_status, leaflyStatusForTarget(input.to));
+    if (plan.terminal) {
+      await auditFail(`Leafly status is final (${lf.leafly_status})`);
+      return {
+        ok: false,
+        error: `Leafly already has this order as "${lf.leafly_status}", which is final - nothing was changed. Check the order on the back-office board.`,
+      };
+    }
+    if (plan.alreadyThere) {
+      leaflyOutcome = `already ${lf.leafly_status} at Leafly`;
+    } else {
+      const { setLeaflyOrderStatus } = await import("@/lib/leafly/order-ack-server");
+      let current = lf.leafly_status;
+      let reached: RegisterAdvanceTarget | null = null;
+      for (const step of plan.pushes) {
+        const pushed = await setLeaflyOrderStatus({
+          order: { leafly_order_id: lf.leafly_order_id, leafly_status: current, acknowledged_at: lf.acknowledged_at },
+          nextStatus: step,
+          staffId: null,
+        });
+        if (!pushed.ok) {
+          partialError = `Leafly did not accept "${step}": ${pushed.message}`;
+          break;
+        }
+        if (pushed.warning) warnings.push(pushed.warning);
+        current = step;
+        reached = localStatusForLeafly(step) ?? reached;
+      }
+      if (reached === null) {
+        await auditFail("Leafly refused", { leafly: partialError, leaflyStatus: lf.leafly_status });
+        return { ok: false, error: `${partialError ?? "Leafly did not accept the change"}. Nothing was changed.` };
+      }
+      localTarget = reached;
+      leaflyOutcome = `now ${current} at Leafly`;
+    }
+  }
+
+  // Our order - forward only. If Leafly stopped short of where ours already
+  // is, ours is left alone.
+  let finalStatus: string = order.status;
+  if (registerAdvanceVerdict(order.status, localTarget).allowed) {
+    const moved = await setOrderStatus(order.id, localTarget, { actorId: null, actorLabel });
+    if (!moved.ok) {
+      await auditFail(`local status change refused: ${moved.refusal ?? "database error"}`, { leafly: leaflyOutcome });
+      return {
+        ok: false,
+        error: `${leaflyOutcome ? `Leafly: ${leaflyOutcome}. ` : ""}Our copy of the order could not be moved (${moved.refusal ?? "database error"}). Move it from the back office.`,
+      };
+    }
+    finalStatus = moved.order.status;
+  }
+
+  await recordAudit({
+    actorId: null,
+    actorEmail: `pos-advance:${input.deviceName}`,
+    action: "order.advanced_at_register",
+    entityType: "order",
+    entityId: order.id,
+    after: {
+      orderNumber: order.order_number,
+      displayName,
+      origin,
+      from: order.status,
+      requested: input.to,
+      to: finalStatus,
+      employee: input.employeeName,
+      leafly: leaflyOutcome,
+      ...(partialError ? { leaflyPartial: partialError } : {}),
+    },
+  });
+
+  const label = finalStatus === "ready" ? "ready for pickup" : finalStatus === "acknowledged" ? "confirmed" : finalStatus;
+  if (partialError) {
+    return { ok: false, error: `${displayName} is now ${label}, but it could not go further: ${partialError}` };
+  }
+  let message = `${displayName} is now ${label}.`;
+  if (leaflyOutcome) message += ` Leafly: ${leaflyOutcome}.`;
+  if (warnings.length > 0) message += ` Note: ${warnings.join(" ")}`;
+  return { ok: true, orderNumber: order.order_number, displayName, status: finalStatus, message };
 }
 
 // ---------------------------------------------------------------------------

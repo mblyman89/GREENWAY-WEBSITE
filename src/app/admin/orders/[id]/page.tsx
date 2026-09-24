@@ -22,6 +22,7 @@ import { ORDER_REVERSAL_TARGETS } from "@/lib/orders/order-lifecycle-core";
 import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 import { OrderOriginBadge } from "@/components/admin/orders/OrderOriginBadge";
 import { formatDateTime } from "@/lib/pos/format";
+import { REGISTER_PICKED_UP_LABEL, isRegisterPickedUpNote } from "@/lib/pos/pickup-progress-core";
 import {
   setOrderStatusAction,
   updateOrderNoteAction,
@@ -63,6 +64,17 @@ export default async function OrderDetailPage({
   const displayLabel = resolveOrderDisplay(order.display_name, order.order_number);
   const hasFriendlyName = displayLabel !== order.order_number;
   const isClosed = CLOSED_ORDER_STATUSES.includes(order.status);
+  // SLICE L-37 — an online order the customer picked up at the register is
+  // closed with the NON-REVENUE "cancelled" status (the register sale is the
+  // sale of record, so nothing is counted twice). Label it "Picked up".
+  const pickedUpAtRegister =
+    order.status === "cancelled" &&
+    (order.events ?? []).some(
+      (ev) =>
+        ev.event_type === "status_changed" &&
+        ev.to_status === "cancelled" &&
+        isRegisterPickedUpNote(ev.note),
+    );
   const limitFlagged = order.limit_flag === true;
   const limitReasons = Array.isArray(order.limit_reasons) ? order.limit_reasons : [];
   const canOverrideLimit = can(session.profile.role, "sales_limit.override");
@@ -155,9 +167,11 @@ export default async function OrderDetailPage({
                     was told about their order by Leafly, not by us. */}
                 <OrderOriginBadge origin={order.origin} />
                 <span
-                  className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${STATUS_STYLES[order.status]}`}
+                  className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${
+                    pickedUpAtRegister ? STATUS_STYLES.completed : STATUS_STYLES[order.status]
+                  }`}
                 >
-                  {ORDER_STATUS_LABELS[order.status]}
+                  {pickedUpAtRegister ? `${REGISTER_PICKED_UP_LABEL} (register)` : ORDER_STATUS_LABELS[order.status]}
                 </span>
               </div>
             </div>
