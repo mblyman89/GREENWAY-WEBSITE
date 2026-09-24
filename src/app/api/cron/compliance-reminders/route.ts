@@ -65,8 +65,10 @@ export async function GET(req: NextRequest) {
 
   const result = await runComplianceReminders();
 
-  // GW-023 — piggyback the stranded-sale sweeper on the daily cron (Vercel
-  // Hobby allows one daily cron; this reuses it). Finds pos_sale_events rows
+  // GW-023 — piggyback the stranded-sale sweeper on the daily cron (written
+  // when the project was on Vercel Hobby, which allowed only daily crons; the
+  // project is on Pro since L-34, and giving this sweep its own sub-daily
+  // cron is an owner decision recorded in AGENTS.md "Vercel plan"). Finds pos_sale_events rows
   // stuck at `pending` for 10+ minutes and re-processes or escalates them to
   // the manager exception queue. Never throws; a sweep hiccup must not
   // break the reminders.

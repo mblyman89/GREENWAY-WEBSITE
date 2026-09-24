@@ -17,7 +17,7 @@
  * THIS ROUTE DECIDES NOTHING
  * --------------------------
  * Every "should we sync now" question is answered by the pure core in
- * `src/lib/leafly/schedule-core.ts` (156 self-test assertions, no I/O), and the
+ * `src/lib/leafly/schedule-core.ts` (300+ self-test assertions since L-34, no I/O), and the
  * reading/locking/pushing is done by `schedule-server.ts`. This file is only
  * auth plus a JSON response. If you are tempted to add an `if` about timing
  * here, it belongs in the core where it can be tested without a database.
@@ -27,55 +27,53 @@
  * Calling this endpoint is a REQUEST TO CONSIDER SYNCING, not a command to
  * sync. The core enforces the daily hour, the intraday interval, a 10-minute
  * hard floor between runs, backoff after repeated failures, and two in-flight
- * locks. So a tick that arrives early, twice, or from a monitoring service
- * costs one database read and returns `pushed: false` with a reason. That
- * property is what makes the external-scheduler option below safe.
+ * locks (plus, since L-34, a start-race tie-break for duplicate deliveries).
+ * So a tick that arrives early, twice, or from a monitoring service costs a
+ * few database reads and returns `pushed: false` with a reason. That
+ * property is what makes a fifteen-minute cron, a staff "check now" press and
+ * any external monitor safe to combine.
  *
- * SCHEDULING REALITY ON THIS PROJECT (measured, not assumed)
- * ----------------------------------------------------------
- * Vercel's cron docs (read 2026-09-18; page last updated 2026-07-15) state that
- * Hobby accounts are "limited to cron jobs that run once per day" and that a
- * sub-daily expression "will fail during deployment". This project is recorded
- * as Vercel Hobby in `docs/CRYPTO_PORTFOLIO_BIBLE.md`, and all three existing
- * crons are once-daily, which corroborates it.
+ * SCHEDULING: VERCEL PRO, EVERY FIFTEEN MINUTES  (SLICE L-34)
+ * -----------------------------------------------------------
+ * Until L-34 this project was on Vercel Hobby, which permits one cron run per
+ * day, so this route was registered once a day ("0 12 * * *") and the
+ * intraday PUT half of Leafly's recommendation could only run from the
+ * manual button or an external caller. The project is now on Vercel Pro
+ * (required to deploy it at all -- see AGENTS.md, "Vercel plan"), whose cron
+ * documentation allows a minimum interval of one minute with per-minute
+ * precision. `vercel.json` now registers this route as:
  *
- * So `vercel.json` registers this route ONCE per day. That single tick is
- * enough to satisfy Leafly's "daily full POST" recommendation, and the core's
- * `DAILY_CATCHUP_HOURS` guarantee means a tick which lands slightly off the
- * configured hour (DST drift, or Vercel's documented +-59 minute precision)
- * still performs the full sync instead of silently skipping a day.
+ *   "*" + "/15 * * * *"   -- every fifteen minutes, 96 ticks a day.
  *
- * The intraday PUT half of Leafly's recommendation needs more than one tick a
- * day, which this plan cannot schedule. It is NOT dead code and it is not
- * aspirational: it runs on every tick this endpoint receives. Three things
- * already drive it without any plan change --
- *   1. the manual push button, which the owner asked to keep;
- *   2. an authenticated staff session hitting this URL (the `GET` fallback
- *      below), which is how the "Run the check now" button in the admin UI
- *      works;
- *   3. any external scheduler calling this URL with the CRON_SECRET.
- * Upgrading to Vercel Pro would let `vercel.json` do (3) itself. That is a
- * billing decision for the owner, recorded rather than made for him, and
- * nothing here breaks either way.
+ * (Written split because the two characters together would close this
+ * comment block.)
  *
- * WHY THE SCHEDULE IS "0 12 * * *" (and not 11, and not 0)
- * --------------------------------------------------------
- * `vercel.json` is JSON and cannot carry a comment, so the arithmetic lives
- * here. Vercel cron expressions are UTC; Greenway is Pacific (UTC-7 in summer,
- * UTC-8 in winter), and the schedule default is a 4am Pacific full sync:
+ * WHY FIFTEEN. It is INTRADAY_MINUTES_MIN, the finest interval the owner can
+ * choose on the admin page, and every offered interval is a whole multiple
+ * of it. A coarser tick would silently turn the owner's "every 15 minutes"
+ * into something slower -- exactly what one-tick-a-day did to every setting.
+ * A finer tick would buy nothing: the core would refuse it as not due. It
+ * divides sixty, so every Pacific hour is visited and the configured daily
+ * full-sync hour is hit on schedule in both PDT and PST; DAILY_CATCHUP_HOURS
+ * remains as a safety net for a missed tick, no longer as the primary path.
+ * All of this is pinned by tests/compliance/leafly-certification.test.ts.
  *
- *   12:00 UTC -> 05:00 PDT (summer)  /  04:00 PST (winter)
+ * WHAT RAISING THE CADENCE EXPOSED, AND WHAT WAS FIXED FIRST. Running the
+ * real core at 96 ticks a day (scripts/recon/l34-cadence-probe.mts) showed
+ * three defects that one tick a day had hidden: each refusal row reset the
+ * intraday clock, so a 60-minute setting pushed ONCE in six hours; a quiet
+ * day's skipped daily POST was not counted, so the full sync was retried on
+ * every tick; and a duplicate delivery of one tick could open two lock rows
+ * and push twice. All three are fixed in schedule-core / schedule-server and
+ * proven by executing the real server in
+ * tests/compliance/leafly-l34-menu-sync-runtime.test.ts.
  *
- * Both land AT OR AFTER the 4am default, in both halves of the year, so the
- * hour gate never blocks the single daily tick this plan allows. 11:00 UTC was
- * the obvious choice for "4am Pacific" and is subtly worse: it becomes 03:00
- * PST in winter, i.e. BELOW the configured hour, leaving the daily sync
- * dependent on the catch-up rule rather than on the schedule working as
- * written. Midnight was rejected because it is when every other system on
- * shared infrastructure runs its jobs.
+ * COST. Vercel Pro bills function invocations at $0.60 per million (Vercel
+ * docs, "Functions usage and pricing"). 96 a day is about 2,900 a month. A
+ * tick that is not due does a handful of indexed reads and returns.
  *
- * It also avoids the three existing crons (14:00, 16:00, 17:00 UTC), so no two
- * jobs on this project contend for the same cold start.
+ * The owner can still switch automation off entirely on the admin page; a
+ * disabled schedule makes every tick a no-op that writes nothing.
  *
  * AUTH -- identical fail-closed posture to /api/cron/atm-sync:
  *   - CRON_SECRET set           -> Bearer must match, else staff-session fallback.
@@ -94,7 +92,8 @@ export const dynamic = "force-dynamic";
 /**
  * A menu push is one HTTPS request to Leafly plus the menu query behind it. The
  * manual button completes in seconds. 60s is the same ceiling the ATM sync uses
- * and leaves a wide margin; it also sits well under the core's
+ * and leaves a wide margin. It is also far shorter than the fifteen-minute
+ * tick, so one run never overlaps the next scheduled one. It sits well under the core's
  * STALE_RUN_MINUTES (30), so a function killed at this limit is guaranteed to
  * have its lock released by the staleness rule rather than wedging automation.
  */

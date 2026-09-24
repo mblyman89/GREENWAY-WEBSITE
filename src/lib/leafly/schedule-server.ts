@@ -37,6 +37,7 @@ import {
   FULL_SYNC_EVIDENCE_FILTER,
   shouldRecordRefusal,
   summarizeRunHistory,
+  wonRunStartRace,
   STALE_RUN_MINUTES,
   BACKOFF_AFTER_FAILURES,
   type LeaflyScheduleSettings,
@@ -343,6 +344,14 @@ type CloseRunArgs = {
   itemCount?: number | null;
   planSummary?: string | null;
   errorDetail?: string | null;
+  /**
+   * SLICE L-34. Overwrite the decision recorded at open. Used only when a run
+   * loses the start race (`wonRunStartRace`): its row was opened as, say,
+   * `intraday_delta`, but what actually happened is `run_in_flight`, and the
+   * history must say what happened. Both codes are in 0227's CHECK list.
+   */
+  decisionCode?: string;
+  reason?: string | null;
 };
 
 /**
@@ -367,6 +376,8 @@ async function closeRun(args: CloseRunArgs): Promise<void> {
         plan_summary: args.planSummary ?? null,
         error_detail: args.errorDetail ? args.errorDetail.slice(0, 2000) : null,
         finished_at: new Date().toISOString(),
+        ...(args.decisionCode !== undefined ? { decision_code: args.decisionCode } : {}),
+        ...(args.reason !== undefined ? { reason: args.reason } : {}),
       })
       .eq("id", args.id);
   } catch {
@@ -388,6 +399,34 @@ export type ScheduledSyncOutcome = {
   itemCount: number | null;
   message: string;
 };
+
+/**
+ * SLICE L-34. The unfinished SCHEDULED rows, for the start-race tie-break.
+ * Returns null on any read failure — the caller then proceeds, because it
+ * already holds a committed lock row, and a read hiccup must not silently
+ * stop the menu sync (the pre-L-34 behaviour was to proceed unconditionally).
+ */
+async function readScheduledInFlight(): Promise<{ id: string; startedAt: string | null }[] | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from(RUNS_TABLE)
+      .select("id, started_at")
+      .eq("channel", CHANNEL)
+      .eq("trigger_source", "schedule")
+      .is("finished_at", null)
+      .order("started_at", { ascending: true })
+      .limit(20);
+    if (error) return null;
+    return ((data ?? []) as { id?: unknown; started_at?: string | null }[]).map((r) => ({
+      id: String(r.id ?? ""),
+      startedAt: r.started_at ?? null,
+    }));
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Called by `/api/cron/leafly-menu-sync`. Decides, and only then acts.
@@ -493,6 +532,39 @@ export async function runScheduledLeaflySync(nowIso?: string): Promise<Scheduled
       itemCount: null,
       message:
         "Could not record the sync run, so nothing was sent. Without that record two syncs could overlap, and a full sync deletes anything left out.",
+    };
+  }
+
+  // SLICE L-34 — THE START RACE. Reading "nothing in flight" and inserting our
+  // lock row are two requests, so two duplicate deliveries of one tick can
+  // both get here. Re-read the live scheduled rows now that ours is committed
+  // and let the pure tie-break pick exactly one. See `wonRunStartRace`.
+  const race = await readScheduledInFlight();
+  if (race !== null && !wonRunStartRace({ ownId: runId, rows: race, nowIso: now })) {
+    const reason =
+      "Another scheduled run started at the same moment (Vercel delivered the tick twice), so this one stood down.";
+    await closeRun({
+      id: runId,
+      pushed: false,
+      method: null,
+      disposition: "refused",
+      decisionCode: "run_in_flight",
+      reason,
+    });
+    return {
+      decision: {
+        shouldRun: false,
+        method: null,
+        code: "run_in_flight",
+        reason,
+        needsAttention: false,
+      },
+      pushed: false,
+      disposition: "refused",
+      httpStatus: null,
+      planSummary: null,
+      itemCount: null,
+      message: reason,
     };
   }
 

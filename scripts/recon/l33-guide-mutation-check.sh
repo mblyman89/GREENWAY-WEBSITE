@@ -9,7 +9,7 @@
 # when the guide is wrong. A documentation test that passes no matter what is
 # worse than no test, because it advertises a guarantee it does not provide.
 #
-# So: break the guide (and the code the guide describes) five ways, each one a
+# So: break the guide (and the code the guide describes) several ways, each one a
 # realistic drift that would send the owner to the wrong switch during an
 # incident, and require the suite to go RED every time.
 #
@@ -68,10 +68,20 @@ mutate "guide names the wrong env var" \
 mutate "guide claims the default is OFF" \
   sed -i 's/unset means the feature is ON/unset means the feature is OFF/' "$GUIDE"
 
-# 3. The honesty pin. The guide stops admitting the sweeper runs once a day and
-#    starts reading like a real-time safety net.
-mutate "guide oversells the sweeper's frequency" \
-  sed -i 's/one cron run per day/one cron run per minute/' "$GUIDE"
+# 3. The honesty pin. (L-34: rewritten for Vercel Pro. On Hobby this mutation
+#    made the guide claim a per-minute cadence it did not have. On Pro the
+#    guide states the real two-minute cadence; the realistic drift is now the
+#    guide quoting a cadence or a chance count the schedule does not produce.)
+mutate "guide misstates the sweeper's cadence" \
+  sed -i 's/That is \*\*every two minutes\*\*/That is **every minute**/' "$GUIDE"
+
+# 3b. The chance count is inflated — overselling the net.
+mutate "guide oversells the chances per order" \
+  sed -i 's/roughly \*\*six$/roughly **twelve/' "$GUIDE"
+
+# 3c. The best-effort caveat is deleted — the guide implies guaranteed delivery.
+mutate "guide drops the best-effort caveat" \
+  sed -i 's/cron delivery as best effort/cron delivery as reliable/' "$GUIDE"
 
 # 4. Drift in the OTHER direction: the code is reworded and the guide is left
 #    behind. The owner looks for a badge that is no longer rendered.
@@ -81,7 +91,12 @@ mutate "badge reworded in code, guide stale" \
 # 5. The schedule moves and the upgrade instruction now names a line that is
 #    not in vercel.json.
 mutate "cron schedule changed, guide stale" \
-  sed -i 's|"0 13 \* \* \*"|"0 15 * * *"|' "$VERCEL"
+  sed -i 's|"\*/2 \* \* \* \*"|"*/3 * * * *"|' "$VERCEL"
+
+# 6. The schedule is put back to daily (e.g. a revert) while the guide still
+#    describes a two-minute net. Must fail rather than silently oversell.
+mutate "cron reverted to daily, guide still claims a net" \
+  sed -i 's|"\*/2 \* \* \* \*"|"0 13 * * *"|' "$VERCEL"
 
 restore
 echo "VERIFYING RESTORE (byte-for-byte):"

@@ -115,7 +115,7 @@ history and invent an audit trail that had never existed.
 
 ---
 
-## 6. THE SAFETY NET, AND ITS HONEST LIMITATION
+## 6. THE SAFETY NET
 
 Almost all of the time, the acknowledgement happens because the order arrived
 and the arrival hook fired. But a webhook can be missed — if our site is down
@@ -129,42 +129,50 @@ the normal arrival path, stops thirty seconds short of a deadline it cannot
 safely beat, and handles at most ten orders per run so a backlog can never turn
 one run into a runaway.
 
-**Here is the limitation, stated plainly rather than buried.** Our Vercel plan
-(Hobby) permits **one cron run per day**. I measured this; a more frequent
-schedule is rejected at deploy time and would have taken the whole site down
-with it. So as shipped, the sweeper runs once a day at 13:00 UTC. That is
-**not** a real-time net for a fifteen-minute window, and I am not going to
-describe it as one.
+### How often it runs (updated in L-34, Vercel Pro)
 
-What it genuinely is, today, is a **detector**. Once a day it tells you the
-truth about whether the arrival path is working:
+When this guide was first written the project was on Vercel Hobby, which
+permitted only **one cron run per day**, and the sweeper ran once a day at
+13:00 UTC — a detector, **not** a real-time net for a fifteen-minute window.
+That limitation is gone. The project is now on Vercel Pro, and the one schedule
+line in `vercel.json` is:
+
+    "schedule": "*/2 * * * *"
+
+That is **every two minutes**. With a two-minute grace period and a
+thirty-second margin, an order whose webhook was missed now gets roughly **six
+separate chances** to be acknowledged before Leafly's deadline, instead of
+essentially none. Cost on Pro is negligible: about 21,600 invocations a month,
+against Vercel's published price of $0.60 per million.
+
+Two honest caveats remain. Vercel describes cron delivery as best effort: a
+tick can occasionally be skipped or delivered twice. Twice is harmless (the
+sweeper re-reads every order before acting and never acknowledges one twice);
+skipped is why it gets six chances rather than one. And the sweeper cannot help
+if the whole site is down for the entire window — nothing hosted on the site
+can.
+
+### What the response tells you
 
 - **HTTP 200, `acknowledged: 0`** — everything is fine. Every webhook arrived
   and was handled on arrival. A quiet sweep is a successful sweep.
 - **HTTP 502** — something is wrong upstream. Either an order passed its
-  deadline unacknowledged (a customer's order was cancelled) or Leafly refused
-  an acknowledgement. The status code itself is the alarm, so an uptime monitor
-  can catch it without anybody reading the response body.
+  deadline unacknowledged within the last ten minutes (a customer's order was
+  cancelled) or Leafly refused an acknowledgement. The status code itself is
+  the alarm, so an uptime monitor can catch it without anybody reading the
+  response body. Because the sweep runs every two minutes, a lost order raises
+  this alarm on a handful of consecutive runs and then stops; it does not
+  alarm forever, and an order Leafly has already cancelled never alarms.
 - **`arrivalPathSuspect: true`** — the sweeper had to step in. The order is
   saved, but the arrival path did not do its job and that is worth
   investigating.
 
-### Three ways to make it a real net, with zero code changes
+### Running it by hand
 
-The sweeper is already built to run as often as you like. Only the schedule is
-constrained. Any one of these upgrades it:
-
-1. **Upgrade the Vercel plan to Pro.** Change the one schedule line in
-   `vercel.json` from `0 13 * * *` to `*/5 * * * *` and it runs every five
-   minutes. No other change anywhere.
-2. **Point a free external scheduler at it.** The route accepts `POST` as well
-   as `GET` for exactly this reason. Anything that can call a URL on a timer —
-   cron-job.org, an UptimeRobot monitor, a Pi in the shop — sends a request
-   with the `Authorization: Bearer <CRON_SECRET>` header every few minutes and
-   you have the same result on the current plan, for nothing.
-3. **Press it yourself.** Logged in as staff, visiting the route in a browser
-   runs a sweep on the spot, because a valid staff session is accepted as
-   authorisation. Useful if you ever want to check by hand.
+Logged in as staff, visiting the route in a browser runs a sweep on the spot,
+because a valid staff session is accepted as authorisation. The route also
+accepts `POST` with the `Authorization: Bearer <CRON_SECRET>` header, so an
+external monitor can call it too if you ever want a second, independent timer.
 
 *(Route: `src/app/api/cron/leafly-ack-sweep/route.ts`. Decision rules:
 `src/lib/leafly/auto-ack-sweep-core.ts`.)*
@@ -207,7 +215,7 @@ is itself covered by tests.
 |---|---|---|
 | Order shows "Accepted automatically" but no Confirm button | The confirm-failed column has been stamped, or 0230 has not been applied | Run 0230; if already applied, use *Check this order with Leafly* |
 | No badge on a brand-new order | The flag is off, or the arrival webhook did not fire | Check `LEAFLY_AUTO_ACKNOWLEDGE` in Vercel; the next sweep will report it |
-| Sweeper returns 502 | An order expired, or Leafly refused an acknowledgement | Read `details` in the response; an expired order is already cancelled at Leafly |
+| Sweeper returns 502 | An order expired in the last ten minutes, or Leafly refused an acknowledgement | Read `details` in the response; an expired order is already cancelled at Leafly |
 | You want everything back the way it was | — | Set `LEAFLY_AUTO_ACKNOWLEDGE=off`. Nothing else in the slice activates without it |
 
 Turning the flag off is always safe and always reversible. Nothing else in this

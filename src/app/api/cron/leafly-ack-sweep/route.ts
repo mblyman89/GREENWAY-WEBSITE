@@ -23,7 +23,7 @@
  * Auth, and a JSON body. Nothing else. It decides nothing:
  *
  *   • WHICH orders to sweep  → `planAutoAckSweep` in auto-ack-sweep-core.ts,
- *                              pure, 3,657 self-test assertions, no I/O.
+ *                              pure, 18,000+ self-test assertions, no I/O.
  *   • WHETHER to sweep at all → `isAutoAcknowledgeEnabled`, the SAME kill
  *                              switch that governs arrival. One flag, both
  *                              paths.
@@ -35,56 +35,51 @@
  * If you are tempted to add an `if` about timing here, it belongs in the core
  * where it can be proven without a database.
  *
- * ── SCHEDULING: A MEASURED CONSTRAINT, NOT A DESIGN CHOICE ──────────────────
- * This project is on Vercel Hobby (recorded in docs/CRYPTO_PORTFOLIO_BIBLE.md
- * and corroborated by all four existing crons being once-daily). Vercel's
- * documentation states Hobby accounts are "limited to cron jobs that run once
- * per day" and that a sub-daily expression "will fail during deployment".
+ * ── SCHEDULING: EVERY TWO MINUTES ON VERCEL PRO  (SLICE L-34) ─────────────
+ * Until L-34 this project was on Vercel Hobby ("limited to cron jobs that run
+ * once per day"), so this route ran once a day at 13:00 UTC. That was recorded
+ * honestly as a mismatch: a daily tick cannot protect a fifteen-minute
+ * deadline, so it served mainly as a detector.
  *
- * THIS IS A GENUINE MISMATCH AND IT IS RECORDED RATHER THAN PAPERED OVER: a
- * once-daily tick cannot protect a fifteen-minute deadline. A daily run will
- * essentially always find orders in the `expired` bucket rather than the
- * `sweep` one.
+ * The project is now on Vercel Pro (required to deploy it at all — see
+ * AGENTS.md, "Vercel plan"). Pro crons may run as often as once a minute with
+ * per-minute precision. The owner asked for a two-to-three minute sweep, and
+ * vercel.json now registers this route every two minutes (720 ticks a day;
+ * the expression is written in vercel.json and pinned by tests — it cannot be
+ * quoted here because its first two characters would close this comment).
  *
- * That does NOT make the endpoint pointless, and it is registered in
- * vercel.json deliberately, for three reasons:
+ * WHY TWO, NOT ONE OR THREE. Leafly's window is fifteen minutes; the sweep
+ * waits a two-minute grace period and stops thirty seconds short, leaving a
+ * 12.5-minute actionable window. Worst-case phase, that is 6 chances per order
+ * at two minutes, 4 at three, 12 at one. Two gives ample redundancy against a
+ * skipped tick (Vercel describes delivery as best effort) at half the
+ * invocations of one. Cost on Pro: about 21,600 invocations a month at
+ * $0.60 per million. See scripts/recon/l34-cadence-probe.mts, PROBE 4.
  *
- *   1. AS A DETECTOR. A daily run that reports `expired > 0` is the only thing
- *      in this system that will ever tell the owner "your arrival webhook is
- *      failing and you are losing orders". Without it, a broken arrival path
- *      is invisible until a customer complains. Catching the loss late is
- *      worth much more than not knowing about it.
+ * WHAT RAISING THE CADENCE EXPOSED, AND WHAT WAS FIXED FIRST. Executing the
+ * real core at 720 ticks a day showed that a Leafly-cancelled order was
+ * classed "expired" on every tick forever (one lost order → 720 alarms a
+ * day), that historic rows could crowd a live order out of the query window,
+ * and that two concurrent runs could both press acknowledge on the same order
+ * and create its register order twice. Fixed in auto-ack-sweep-core
+ * (`canceledAt`, `out_of_window`, `decideSweepClaim`) and auto-ack-server
+ * (the bounded query and the compare-and-swap claim), and proven by running
+ * the real server in tests/compliance/leafly-l34-sweep-concurrency.test.ts.
  *
- *   2. BECAUSE THE SAVE IS SOMETIMES REAL. The window is fifteen minutes from
- *      the webhook, and the daily tick will occasionally land inside one. A
- *      sweeper that saves one order a month has paid for itself.
+ * THE 502 ALARM AT THIS CADENCE. An order past its deadline is reported as
+ * `expired` only for SWEEP_EXPIRED_REPORT_MS (ten minutes) after the
+ * deadline, i.e. on a handful of consecutive runs, then it drops out as
+ * `out_of_window`. So an uptime monitor sees a short burst of 502s per lost
+ * order — loud enough to notice, bounded so it never becomes noise.
  *
- *   3. BECAUSE IT IS READY. The moment the owner adds any sub-daily trigger —
- *      Vercel Pro, an UptimeRobot monitor hitting this URL every five minutes
- *      with the CRON_SECRET, a GitHub Actions schedule, a phone shortcut —
- *      the net becomes a real one with no code change at all. Every one of
- *      those is free or nearly so. That decision is the owner's to make and is
- *      recorded here rather than made for him; see docs/l33-auto-acknowledge-
- *      facts.md for the options written out.
- *
- * CALLING THIS MORE OFTEN IS SAFE AND IS THE POINT. A tick is a REQUEST TO
- * CONSIDER SWEEPING. The core's grace period ignores anything younger than two
- * minutes, the idempotency check ignores anything already acknowledged, and a
- * run with nothing to do costs one indexed query and returns `acknowledged: 0`.
- *
- * ── WHY "0 13 * * *" ────────────────────────────────────────────────────────
- * vercel.json is JSON and cannot carry a comment, so the arithmetic lives
- * here. Vercel cron expressions are UTC; Greenway is Pacific.
- *
- *   13:00 UTC → 06:00 PDT (summer) / 05:00 PST (winter)
- *
- * Early morning Pacific, which is BEFORE the shop opens. That is deliberate:
- * an overnight order that arrived after closing and whose webhook was missed
- * gets examined before anyone is on the floor, and the alarm is already on
- * screen when the first person logs in.
- *
- * It also avoids all four existing crons (12:00, 14:00, 16:00, 17:00 UTC), so
- * no two jobs on this project contend for the same cold start.
+ * CALLING THIS MORE OFTEN IS SAFE. A tick is a REQUEST TO CONSIDER SWEEPING.
+ * The grace period ignores anything younger than two minutes, the claim and
+ * the idempotency re-read ignore anything another run or path has touched,
+ * and a run with nothing to do costs one indexed query and returns
+ * `acknowledged: 0`. maxDuration (below, 60 s) is shorter than the two-minute
+ * tick, so one run cannot normally overlap the next; the case that remains is
+ * Vercel delivering the same tick twice, which is exactly what the claim is
+ * for.
  *
  * ── AUTH ────────────────────────────────────────────────────────────────────
  * Identical fail-closed posture to /api/cron/leafly-menu-sync and

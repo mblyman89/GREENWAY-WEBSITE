@@ -14,7 +14,7 @@
 ## 0. Owner & context
 
 - **Owner:** Michael, of **Greenway Marijuana** (WA I-502 retailer, Port Orchard).
-- **App:** Supabase-backed Next.js POS / back-office (repo `mblyman89/GREENWAY-WEBSITE`, default branch `main`, Vercel Hobby).
+- **App:** Supabase-backed Next.js POS / back-office (repo `mblyman89/GREENWAY-WEBSITE`, default branch `main`, Vercel **Pro** since L-34 — Hobby could not deploy the project; see AGENTS.md, standing rule "Vercel plan").
 - Michael is a coding novice; **all reports in plain English**.
 - This feature lives in the **Banking area** of the back office, alongside the
   existing **Plaid** bank-feed integration.

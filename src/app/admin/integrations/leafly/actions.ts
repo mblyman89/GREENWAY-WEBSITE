@@ -608,11 +608,11 @@ export async function saveLeaflyScheduleAction(
  * WHY IT EXISTS
  * -------------
  * Without it, the only way to find out whether a schedule works is to wait for
- * it -- and on Vercel Hobby that wait is up to 24 hours, because the platform
- * permits exactly one cron tick per day (measured: Vercel's cron docs, read
- * 2026-09-18, "Hobby accounts are limited to cron jobs that run once per day").
- * Discovering a typo'd credential a day later is not acceptable when a button
- * can prove it in two seconds.
+ * it. On Vercel Hobby that wait was up to 24 hours (one cron tick per day).
+ * Since L-34 the project is on Vercel Pro and the cron ticks every fifteen
+ * minutes, which is better but still a wait: discovering a typo'd credential
+ * even fifteen minutes later is worse than a button that proves it in two
+ * seconds, so the button stays.
  *
  * It calls `runScheduledLeaflySync()` -- the SAME function the cron calls, with
  * no test mode and no bypass flag. Every safety rule still applies: if a manual
