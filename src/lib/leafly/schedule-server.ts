@@ -34,6 +34,9 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   decideScheduledRun,
   resolveScheduleSettings,
+  FULL_SYNC_EVIDENCE_FILTER,
+  shouldRecordRefusal,
+  summarizeRunHistory,
   STALE_RUN_MINUTES,
   BACKOFF_AFTER_FAILURES,
   type LeaflyScheduleSettings,
@@ -121,6 +124,16 @@ export type SyncRunFacts = {
   consecutiveFailures: number;
   runInFlightSinceIso: string | null;
   manualInFlightSinceIso: string | null;
+  /**
+   * SLICE L-34. The newest finished row of ANY disposition, refusals
+   * included. NOT used for timing (see `summarizeRunHistory`) — only to decide
+   * whether a routine refusal needs writing (`shouldRecordRefusal`).
+   */
+  lastRecorded: {
+    decisionCode: string | null;
+    disposition: string | null;
+    startedAt: string | null;
+  } | null;
   /** True when the facts could not be read. The caller must NOT push. */
   problem: string | null;
 };
@@ -141,6 +154,7 @@ export async function readSyncRunFacts(): Promise<SyncRunFacts> {
     consecutiveFailures: 0,
     runInFlightSinceIso: null,
     manualInFlightSinceIso: null,
+    lastRecorded: null,
     problem: null,
   };
 
@@ -151,23 +165,30 @@ export async function readSyncRunFacts(): Promise<SyncRunFacts> {
   try {
     const admin = createSupabaseAdminClient();
 
-    // Most recent successful FULL sync (POST). Drives "has today's authoritative
-    // sync happened". Only 'success' counts -- a POST that was refused or failed
-    // did not make Leafly's menu match ours.
+    // Most recent FULL-SYNC EVIDENCE. Drives "has today's authoritative sync
+    // happened". A POST that was refused or failed did not make Leafly's menu
+    // match ours, so it does not count.
+    //
+    // SLICE L-34: a scheduled daily_full that was SKIPPED (nothing changed, so
+    // Leafly already holds exactly what the POST would send) now counts too.
+    // Before, it did not, and at Pro cadence every tick of a quiet day
+    // re-attempted the full sync. The predicate is `isFullSyncEvidence` in
+    // schedule-core (tested there); this filter is its query form.
     const fullQ = await admin
       .from(RUNS_TABLE)
       .select("started_at")
       .eq("channel", CHANNEL)
-      .eq("method", "POST")
-      .eq("disposition", "success")
+      .or(FULL_SYNC_EVIDENCE_FILTER)
       .order("started_at", { ascending: false })
       .limit(1);
     if (fullQ.error) return { ...empty, problem: fullQ.error.message };
 
-    // Most recent finished run of ANY kind. Drives cooldown + backoff timing.
+    // Most recent finished row of ANY kind, refusals included. SLICE L-34:
+    // this no longer drives timing -- it only tells the refusal writer what
+    // the log already says, so a routine refusal is not written 96 times a day.
     const lastQ = await admin
       .from(RUNS_TABLE)
-      .select("started_at")
+      .select("decision_code, disposition, started_at")
       .eq("channel", CHANNEL)
       .not("finished_at", "is", null)
       .order("started_at", { ascending: false })
@@ -184,8 +205,14 @@ export async function readSyncRunFacts(): Promise<SyncRunFacts> {
       .limit(20);
     if (flightQ.error) return { ...empty, problem: flightQ.error.message };
 
-    // Consecutive failures: walk recent FINISHED runs newest-first and count
-    // until the first non-failure.
+    // Timing + consecutive failures, from recent FINISHED runs newest-first.
+    //
+    // SLICE L-34: REFUSALS ARE EXCLUDED, both here in the query and again in
+    // the pure `summarizeRunHistory` (the query is the optimisation, the core
+    // is the rule). A refusal is the scheduler recording that it did NOT run;
+    // before L-34 it reset `lastRunIso` and broke the failure streak, which
+    // the L-34 cadence probe measured starving intraday syncs to one in six
+    // hours at a fifteen-minute cron. See schedule-core section 6b.
     //
     // 'skipped' deliberately BREAKS the failure streak: the push layer returns
     // skipped when nothing changed since the last successful sync, which means
@@ -196,15 +223,16 @@ export async function readSyncRunFacts(): Promise<SyncRunFacts> {
       .select("disposition, started_at")
       .eq("channel", CHANNEL)
       .not("finished_at", "is", null)
+      .neq("disposition", "refused")
       .order("started_at", { ascending: false })
       .limit(50);
     if (recentQ.error) return { ...empty, problem: recentQ.error.message };
 
-    let consecutive = 0;
-    for (const row of (recentQ.data ?? []) as { disposition?: string | null }[]) {
-      if (row.disposition === "failed") consecutive += 1;
-      else break;
-    }
+    const history = summarizeRunHistory(
+      ((recentQ.data ?? []) as { disposition?: string | null; started_at?: string | null }[]).map(
+        (r) => ({ disposition: r.disposition ?? null, startedAt: r.started_at ?? null }),
+      ),
+    );
 
     let runInFlight: string | null = null;
     let manualInFlight: string | null = null;
@@ -219,14 +247,23 @@ export async function readSyncRunFacts(): Promise<SyncRunFacts> {
     }
 
     const fullRow = (fullQ.data ?? [])[0] as { started_at?: string } | undefined;
-    const lastRow = (lastQ.data ?? [])[0] as { started_at?: string } | undefined;
+    const lastRow = (lastQ.data ?? [])[0] as
+      | { decision_code?: string | null; disposition?: string | null; started_at?: string | null }
+      | undefined;
 
     return {
       lastFullSyncIso: fullRow?.started_at ?? null,
-      lastRunIso: lastRow?.started_at ?? null,
-      consecutiveFailures: consecutive,
+      lastRunIso: history.lastRunIso,
+      consecutiveFailures: history.consecutiveFailures,
       runInFlightSinceIso: runInFlight,
       manualInFlightSinceIso: manualInFlight,
+      lastRecorded: lastRow
+        ? {
+            decisionCode: lastRow.decision_code ?? null,
+            disposition: lastRow.disposition ?? null,
+            startedAt: lastRow.started_at ?? null,
+          }
+        : null,
       problem: null,
     };
   } catch (e) {
@@ -410,7 +447,14 @@ export async function runScheduledLeaflySync(nowIso?: string): Promise<Scheduled
     // 'disabled' is the one code we do NOT log, because logging it would write
     // a row every hour forever while the feature is switched off, and a log
     // that is 99% "switched off" is a log nobody reads.
-    if (decision.code !== "disabled") {
+    //
+    // SLICE L-34: the same reasoning now applies to ROUTINE refusals at Pro
+    // cadence. `shouldRecordRefusal` keeps an hourly heartbeat per refusal
+    // code, and always records anything needing attention. The rule lives in
+    // the pure core (schedule-core section 6b) where it is tested.
+    if (
+      shouldRecordRefusal({ decision, lastRecorded: facts.lastRecorded, nowIso: now })
+    ) {
       const id = await openRun({
         triggerSource: "schedule",
         decisionCode: decision.code,

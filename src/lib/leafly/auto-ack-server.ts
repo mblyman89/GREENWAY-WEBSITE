@@ -50,7 +50,9 @@ import {
 // sweep is decided there, not here.
 import {
   planAutoAckSweep,
+  SWEEP_EXPIRED_REPORT_MS,
   SWEEP_MAX_PER_RUN,
+  SWEEP_NULL_DEADLINE_MAX_AGE_MS,
   type SweepCandidate,
 } from "./auto-ack-sweep-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -380,12 +382,38 @@ export type AutoAckSweepResult = {
  */
 const SWEEP_QUERY_LIMIT = 50;
 
+/**
+ * SLICE L-34. The PostgREST `or=` filter that bounds the sweep read.
+ *
+ * Exported so the exact string is tested (tests/compliance/leafly-l34-*),
+ * because a filter that PostgREST mis-parses does not throw — it returns an
+ * error the sweep reports as "could not read", every tick, and the net goes
+ * quietly dead.
+ *
+ * THE VALUES ARE DOUBLE-QUOTED. PostgREST's URL grammar documents `,` `.` `:`
+ * and `()` as reserved characters that must be quoted inside a filter value
+ * (docs.postgrest.org, "URL Grammar → Reserved characters"), and an ISO
+ * timestamp contains both `.` and `:`. The documentation also says libraries
+ * that encode URLs themselves (supabase-js does) should be given literal `"`
+ * rather than `%22`.
+ */
+export function buildSweepWindowFilter(
+  deadlineFloorIso: string,
+  firstSeenFloorIso: string,
+): string {
+  return (
+    `acknowledge_by.gte."${deadlineFloorIso}",` +
+    `and(acknowledge_by.is.null,first_seen_at.gte."${firstSeenFloorIso}")`
+  );
+}
+
 type SweepRow = {
   leafly_order_id: string | null;
   acknowledged_at: string | null;
   acknowledge_by: string | null;
   first_seen_at: string | null;
   leafly_status: string | null;
+  canceled_at: string | null;
 };
 
 /**
@@ -433,16 +461,43 @@ export async function sweepUnacknowledgedLeaflyOrders(
       );
     }
 
+    // SLICE L-34 (Defect C). THE READ IS BOUNDED TO THE LIVE WINDOW.
+    //
+    // Before L-34 this query read the 50 unacknowledged rows with the OLDEST
+    // deadlines, over the whole life of the table. The cadence probe
+    // (scripts/recon/l34-cadence-probe.mts) measured what that means: once 50
+    // historic auto-cancelled rows exist — the owner already had 8 on the day
+    // L-33 shipped — they fill the entire read and a LIVE order is never even
+    // looked at, and is auto-cancelled by Leafly. The net had a hole exactly
+    // the size of the shop's history.
+    //
+    // So only rows the core could still act on or still report are read:
+    //   • a deadline no older than SWEEP_EXPIRED_REPORT_MS (live, or lost
+    //     recently enough to still be reported), or
+    //   • no deadline at all and first seen within
+    //     SWEEP_NULL_DEADLINE_MAX_AGE_MS (the core's fail-towards-acting case);
+    //   • and no recorded cancellation.
+    // The core applies the SAME bounds again (decideSweepCandidate), so the
+    // filter is an optimisation that cannot change a verdict — it can only
+    // stop dead rows from displacing live ones.
+    const nowMs = now.getTime();
+    const deadlineFloorIso = new Date(nowMs - SWEEP_EXPIRED_REPORT_MS).toISOString();
+    const firstSeenFloorIso = new Date(
+      nowMs - SWEEP_NULL_DEADLINE_MAX_AGE_MS,
+    ).toISOString();
+
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin
       .from("leafly_orders")
       .select(
-        "leafly_order_id, acknowledged_at, acknowledge_by, first_seen_at, leafly_status",
+        "leafly_order_id, acknowledged_at, acknowledge_by, first_seen_at, leafly_status, canceled_at",
       )
       // The partial index added in 0225 and widened in 0230 covers exactly
       // this predicate, so the query stays cheap however many orders the shop
       // has taken over its lifetime.
       .is("acknowledged_at", null)
+      .is("canceled_at", null)
+      .or(buildSweepWindowFilter(deadlineFloorIso, firstSeenFloorIso))
       // Soonest deadline first, so that even if the limit truncates the read,
       // what survives is the urgent end. The core sorts again — this is not
       // redundant, it decides WHICH ROWS ARE READ AT ALL.
@@ -464,6 +519,7 @@ export async function sweepUnacknowledgedLeaflyOrders(
       acknowledgeBy: r.acknowledge_by,
       firstSeenAt: r.first_seen_at,
       leaflyStatus: r.leafly_status,
+      canceledAt: r.canceled_at,
     }));
 
     const plan = planAutoAckSweep(candidates, now.getTime(), SWEEP_MAX_PER_RUN);

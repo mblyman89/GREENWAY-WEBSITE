@@ -201,6 +201,41 @@ export const DAILY_CATCHUP_HOURS = 20;
  */
 export const STALE_RUN_MINUTES = 30;
 
+/**
+ * SLICE L-34. How early an intraday delta may run relative to its interval.
+ *
+ * Two minutes. Without it, a cron tick interval EQUAL to the owner's setting
+ * (15-minute ticks, 15-minute setting) pushes only every OTHER tick: the
+ * previous run's `started_at` is stamped a few seconds after its tick fired,
+ * so the next tick measures 14m55s and refuses as "not due". Vercel documents
+ * Pro cron precision as "within the minute specified", plus function start-up
+ * latency on top — so a tolerance of two minutes absorbs both, measured
+ * rather than guessed. It can never breach the hard floor: the smallest
+ * interval the owner can choose (INTRADAY_MINUTES_MIN = 15) minus this is 13,
+ * which is still above MIN_RUN_GAP_MINUTES (10), and that floor is checked
+ * separately and first anyway.
+ */
+export const INTRADAY_DUE_TOLERANCE_MINUTES = 2;
+
+/**
+ * SLICE L-34. How often a ROUTINE refusal is written to the run log.
+ *
+ * Sixty minutes. On Vercel Hobby the cron ticked once a day, so writing one
+ * "stood down" row per tick cost one row a day. On Pro it ticks every fifteen
+ * minutes, and the same rule would write 96 rows a day — nearly all "not due
+ * yet" — and the integrations page, which shows the last ten runs, would show
+ * two and a half hours of "Stood down" and push every real sync off the screen.
+ *
+ * So a routine refusal (one the owner need not act on) is recorded only when
+ * the newest row is older than this, or is a DIFFERENT refusal. A real run
+ * younger than this already proves the cron is alive, so the "cooldown" and
+ * "not due" ticks that follow it are not written. That keeps an HOURLY
+ * HEARTBEAT — proof the cron is still alive, which is what the refusal row
+ * was for — without drowning the history. Refusals that need attention (not
+ * configured, backoff) are written as soon as they appear, then hourly.
+ */
+export const REFUSAL_HEARTBEAT_MINUTES = 60;
+
 // ---------------------------------------------------------------------------
 // 3. Settings, clamped
 // ---------------------------------------------------------------------------
@@ -577,7 +612,13 @@ export function decideScheduledRun(input: ScheduledRunInput): ScheduledRunDecisi
     };
   }
 
-  if (sinceLastRun !== null && sinceLastRun >= 0 && sinceLastRun < s.intradayMinutes) {
+  // SLICE L-34: `- INTRADAY_DUE_TOLERANCE_MINUTES`, so a tick that lands a few
+  // seconds short of the interval is not pushed a whole tick later.
+  if (
+    sinceLastRun !== null &&
+    sinceLastRun >= 0 &&
+    sinceLastRun < s.intradayMinutes - INTRADAY_DUE_TOLERANCE_MINUTES
+  ) {
     return {
       shouldRun: false,
       method: null,
@@ -594,6 +635,138 @@ export function decideScheduledRun(input: ScheduledRunInput): ScheduledRunDecisi
     reason: "Sending any changes made since the last sync. Unchanged items are skipped automatically.",
     needsAttention: false,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 6b. Reading the run log for the decision (SLICE L-34)
+//
+// Before L-34 the server treated EVERY finished row as "a run": the newest one
+// set `lastRunIso`, and the failure streak stopped at the first non-failure.
+// But a refusal row is not a run — it is the scheduler writing down that it
+// decided NOT to run. Counting it as one had three consequences, all measured
+// by scripts/recon/l34-cadence-probe.mts rather than reasoned about:
+//
+//   1. INTRADAY STARVATION. Each "not due" refusal reset `lastRunIso`, so the
+//      next tick measured the time since the REFUSAL, not since the last push.
+//      With ticks every 15 minutes and a 60-minute setting, the delta never
+//      became due again: one push in six trading hours instead of six.
+//   2. BACKOFF THAT NEVER EXPIRES. The same reset applied to the backoff
+//      clock, so once backing off, each "backoff" refusal restarted the wait.
+//   3. BACKOFF THAT BARELY STARTS. The failure walk broke on the first
+//      refusal, so after three failures one refused tick reset the streak to
+//      zero and the very next tick hammered Leafly again.
+//
+// On a once-a-day cron none of this could show; on Pro all three would have.
+// The fix is one rule, in one place: refusals are the log's commentary, not
+// its history, and are skipped when reading timing and failure state.
+// ---------------------------------------------------------------------------
+
+export type RunHistoryRow = {
+  disposition: string | null | undefined;
+  startedAt: string | null | undefined;
+};
+
+/**
+ * Derive `lastRunIso` and `consecutiveFailures` from finished rows, newest
+ * first. Refused rows are SKIPPED — neither a run nor a streak breaker.
+ * A 'skipped' row (the push layer found nothing to send) IS a run and DOES
+ * break the streak: it proves the integration is healthy.
+ */
+export function summarizeRunHistory(rowsNewestFirst: readonly RunHistoryRow[]): {
+  lastRunIso: string | null;
+  consecutiveFailures: number;
+} {
+  let lastRunIso: string | null = null;
+  let consecutiveFailures = 0;
+  let streakOpen = true;
+  for (const row of rowsNewestFirst) {
+    if (row.disposition === "refused") continue;
+    if (lastRunIso === null && typeof row.startedAt === "string" && row.startedAt !== "") {
+      lastRunIso = row.startedAt;
+    }
+    if (streakOpen) {
+      if (row.disposition === "failed") consecutiveFailures += 1;
+      else streakOpen = false;
+    }
+    if (lastRunIso !== null && !streakOpen) break;
+  }
+  return { lastRunIso, consecutiveFailures };
+}
+
+/**
+ * SLICE L-34 (Defect E). Does this finished row prove the day's full sync
+ * happened?
+ *
+ * Before L-34 only `method = POST, disposition = success` counted. But when
+ * nothing on the menu has changed, the push layer returns SKIPPED for the
+ * daily POST — correctly, because our item hashes already match the last
+ * state Leafly accepted — and closes the row with `method = null`. That
+ * row never counted, so "has today's full sync run?" stayed false all day.
+ *
+ * At one tick a day this cost nothing (the next attempt was tomorrow anyway).
+ * At Pro cadence the L-34 simulation measured it: on a quiet day EVERY tick
+ * (49 of 49 between 3am and 3pm on a fifteen-minute cron) re-attempted the daily full sync,
+ * rebuilt the whole menu to hash it, wrote a row, and the intraday PUT never
+ * got a turn.
+ *
+ * A scheduled `daily_full` that was SKIPPED is therefore the day's full sync:
+ * the check ran and proved Leafly already holds exactly what a POST would
+ * send. A skipped row from any other decision is NOT (an intraday skip says
+ * nothing about the full menu). The server query mirrors this predicate.
+ */
+export function isFullSyncEvidence(row: {
+  method: string | null | undefined;
+  disposition: string | null | undefined;
+  decisionCode: string | null | undefined;
+}): boolean {
+  if (row.method === "POST" && row.disposition === "success") return true;
+  return row.decisionCode === "daily_full" && row.disposition === "skipped";
+}
+
+/** The PostgREST `or=` filter equivalent of `isFullSyncEvidence`. */
+export const FULL_SYNC_EVIDENCE_FILTER =
+  "and(method.eq.POST,disposition.eq.success),and(decision_code.eq.daily_full,disposition.eq.skipped)";
+
+/**
+ * Should this refusal be written to the run log? See REFUSAL_HEARTBEAT_MINUTES.
+ *
+ * `lastRecorded` is the newest finished row of ANY disposition, or null.
+ * 'disabled' is never recorded (the pre-L-34 rule, kept). A refusal that needs
+ * the owner's attention is recorded whenever it is not simply a repeat of the
+ * newest row within the heartbeat. A routine refusal is recorded when
+ * the log is empty, when the newest row is older than the heartbeat, or when
+ * the newest row is a refusal with a DIFFERENT code (the reason changed, e.g.
+ * quiet hours began). It is NOT recorded when the newest row is a recent real
+ * run or the same refusal. Unknown or unparseable timing records — when in
+ * doubt, leave evidence.
+ */
+export function shouldRecordRefusal(input: {
+  decision: Pick<ScheduledRunDecision, "code" | "needsAttention">;
+  lastRecorded: {
+    decisionCode: string | null | undefined;
+    disposition: string | null | undefined;
+    startedAt: string | null | undefined;
+  } | null;
+  nowIso: string;
+}): boolean {
+  if (input.decision.code === "disabled") return false;
+  const last = input.lastRecorded;
+  if (!last) return true;
+  if (typeof last.startedAt !== "string") return true;
+  const age = minutesBetween(input.nowIso, last.startedAt);
+  if (age === null || age < 0) return true;
+  if (age >= REFUSAL_HEARTBEAT_MINUTES) return true;
+  if (input.decision.needsAttention) {
+    // A problem refusal is written the first time it appears after anything
+    // else (so a backoff that starts right after a failure is visible at
+    // once), and then hourly while it persists — NOT on every tick, or an
+    // unconfigured integration would write 96 identical rows a day and push
+    // every useful row off the ten-row history on the integrations page.
+    return !(last.disposition === "refused" && last.decisionCode === input.decision.code);
+  }
+  // Young newest row. A refusal whose reason CHANGED is news; anything else
+  // (a recent real run, or the same refusal again) is not.
+  return last.disposition === "refused" && last.decisionCode !== input.decision.code;
 }
 
 // ---------------------------------------------------------------------------
@@ -1438,6 +1611,310 @@ export function __runLeaflyScheduleTests(): { passed: number; failed: number } {
     ok("intraday off means nothing between full syncs", d.shouldRun === false);
     ok("intraday off reports not_due", d.code === "not_due");
     ok("intraday off explains the button remains", /push button/i.test(describeSchedule(d0Settings())));
+  }
+
+  // --- 7b. SLICE L-34: the intraday boundary, pinned for the first time -----
+  //
+  // Before L-34 no test pinned WHERE the delta becomes due; the two cases above
+  // are 65 and 20 minutes, far from the edge. That left the tolerance below
+  // (and any off-by-one in it) completely unguarded. Mutation-checked in
+  // scripts/recon/l34-mutation-check.sh.
+  {
+    const lastFull = "2026-06-15T11:05:00.000Z";
+    const at = (minsAgo: number) =>
+      decideScheduledRun({
+        ...base,
+        lastFullSyncIso: lastFull,
+        lastRunIso: new Date(Date.parse(NOON_PDT) - minsAgo * 60_000).toISOString(),
+      });
+    const edge = INTRADAY_MINUTES_DEFAULT - INTRADAY_DUE_TOLERANCE_MINUTES;
+    ok("L-34: exactly (interval - tolerance) after the last run IS due", at(edge).shouldRun === true);
+    ok(
+      "L-34: one second short of (interval - tolerance) is NOT due",
+      at(edge - 1 / 60).shouldRun === false,
+    );
+    ok(
+      "L-34: a tick landing 5 seconds short of the interval is due (the Pro " +
+        "precision case that would otherwise push only every other tick)",
+      at(INTRADAY_MINUTES_DEFAULT - 5 / 60).shouldRun === true,
+    );
+    ok(
+      "L-34: the tolerance is small next to the smallest interval",
+      INTRADAY_DUE_TOLERANCE_MINUTES > 0 &&
+        INTRADAY_DUE_TOLERANCE_MINUTES * 5 <= INTRADAY_MINUTES_MIN,
+    );
+    ok(
+      "L-34: even the smallest interval minus the tolerance stays ABOVE the " +
+        "hard floor, so the tolerance can never let two runs come closer " +
+        "than MIN_RUN_GAP_MINUTES",
+      INTRADAY_MINUTES_MIN - INTRADAY_DUE_TOLERANCE_MINUTES > MIN_RUN_GAP_MINUTES,
+    );
+  }
+
+  // --- 7c. SLICE L-34: refusals are not runs (summarizeRunHistory) ----------
+  {
+    const h = (d: string, m: number) => ({
+      disposition: d,
+      startedAt: new Date(Date.parse(NOON_PDT) - m * 60_000).toISOString(),
+    });
+    const empty = summarizeRunHistory([]);
+    ok("L-34: an empty log has no last run", empty.lastRunIso === null);
+    ok("L-34: an empty log has no failures", empty.consecutiveFailures === 0);
+
+    const r1 = summarizeRunHistory([h("refused", 1), h("refused", 16), h("success", 31)]);
+    ok(
+      "L-34: REFUSALS DO NOT RESET THE CLOCK - the last run is the success " +
+        "31 min ago, not the refusal 1 min ago (Defect A)",
+      r1.lastRunIso === h("success", 31).startedAt,
+    );
+    const r2 = summarizeRunHistory([
+      h("failed", 5),
+      h("refused", 10),
+      h("failed", 40),
+      h("refused", 50),
+      h("failed", 70),
+      h("success", 100),
+    ]);
+    ok(
+      "L-34: REFUSALS DO NOT BREAK THE FAILURE STREAK - three failures with " +
+        "refusals between them are three, so backoff actually engages",
+      r2.consecutiveFailures === 3,
+    );
+    ok("L-34: ...and the last run is the newest failure", r2.lastRunIso === h("failed", 5).startedAt);
+    const r3 = summarizeRunHistory([h("failed", 5), h("skipped", 20), h("failed", 40)]);
+    ok(
+      "L-34: 'skipped' still BREAKS the streak (nothing to send = healthy)",
+      r3.consecutiveFailures === 1,
+    );
+    ok("L-34: 'skipped' IS a run for timing", summarizeRunHistory([h("skipped", 7)]).lastRunIso !== null);
+    ok(
+      "L-34: a log of only refusals has NO last run - so the next due check " +
+        "is not blocked by the scheduler's own commentary",
+      summarizeRunHistory([h("refused", 1), h("refused", 2)]).lastRunIso === null,
+    );
+    ok(
+      "L-34: an unknown future disposition counts as a run and breaks the " +
+        "streak (fail towards NOT hammering Leafly)",
+      summarizeRunHistory([h("mystery", 3), h("failed", 9)]).consecutiveFailures === 0 &&
+        summarizeRunHistory([h("mystery", 3)]).lastRunIso !== null,
+    );
+  }
+
+  // --- 7d. SLICE L-34: refusal log heartbeat (shouldRecordRefusal) ----------
+  {
+    const rec = (code: string, disp: string, minsAgo: number) => ({
+      decisionCode: code,
+      disposition: disp,
+      startedAt: new Date(Date.parse(NOON_PDT) - minsAgo * 60_000).toISOString(),
+    });
+    const routine = { code: "not_due" as const, needsAttention: false };
+    const want = (d: typeof routine | { code: ScheduledRunCode; needsAttention: boolean }, last: ReturnType<typeof rec> | null) =>
+      shouldRecordRefusal({ decision: d, lastRecorded: last, nowIso: NOON_PDT });
+    ok("L-34: 'disabled' is never recorded", !want({ code: "disabled", needsAttention: false }, null));
+    ok("L-34: first refusal ever is recorded", want(routine, null));
+    ok("L-34: same routine refusal 15 min later is NOT recorded", !want(routine, rec("not_due", "refused", 15)));
+    ok(
+      "L-34: same routine refusal at the heartbeat IS recorded (proof of life)",
+      want(routine, rec("not_due", "refused", REFUSAL_HEARTBEAT_MINUTES)),
+    );
+    ok("L-34: a DIFFERENT refusal code is recorded", want(routine, rec("quiet_hours", "refused", 5)));
+    ok(
+      "L-34: a routine refusal 5 min after a REAL RUN is not recorded - the " +
+        "run itself proves the cron is alive",
+      !want(routine, rec("intraday_delta", "success", 5)),
+    );
+    ok(
+      "L-34: ...but once the run is heartbeat-old, the refusal IS recorded",
+      want(routine, rec("intraday_delta", "success", REFUSAL_HEARTBEAT_MINUTES)),
+    );
+    ok(
+      "L-34: a refusal after a FAILED run within the hour is not duplicated " +
+        "(the failure row is the evidence)",
+      !want(routine, rec("intraday_delta", "failed", 5)),
+    );
+    ok(
+      "L-34: a problem refusal right after a failure IS recorded at once",
+      want({ code: "backoff", needsAttention: true }, rec("intraday_delta", "failed", 1)),
+    );
+    ok(
+      "L-34: ...but the SAME problem refusal 15 min later is not duplicated",
+      !want({ code: "backoff", needsAttention: true }, rec("backoff", "refused", 15)),
+    );
+    ok(
+      "L-34: ...and is re-recorded hourly while it persists",
+      want({ code: "backoff", needsAttention: true }, rec("backoff", "refused", REFUSAL_HEARTBEAT_MINUTES)),
+    );
+    ok(
+      "L-34: a DIFFERENT problem refusal is recorded at once",
+      want({ code: "not_configured", needsAttention: true }, rec("backoff", "refused", 1)),
+    );
+    {
+      // An integration left enabled but unconfigured, ticking every 15 min.
+      let n = 0;
+      let last: ReturnType<typeof rec> | null = null;
+      for (let t = 0; t < 1440; t += 15) {
+        const nowIso = new Date(Date.parse(NOON_PDT) + t * 60_000).toISOString();
+        const d = { code: "not_configured" as const, needsAttention: true };
+        if (shouldRecordRefusal({ decision: d, lastRecorded: last, nowIso })) {
+          n += 1;
+          last = { decisionCode: "not_configured", disposition: "refused", startedAt: nowIso };
+        }
+      }
+      ok(`L-34: a day unconfigured at */15 writes 24 rows, not 96 (got ${n})`, n === 24);
+    }
+    ok(
+      "L-34: unparseable timing records (when in doubt, leave evidence)",
+      want(routine, { decisionCode: "not_due", disposition: "refused", startedAt: "banana" }),
+    );
+    // Rows written per day at a 15-minute tick, all "not_due": 24, not 96.
+    let written = 0;
+    let last: ReturnType<typeof rec> | null = null;
+    for (let t = 0; t < 1440; t += 15) {
+      const nowIso = new Date(Date.parse(NOON_PDT) + t * 60_000).toISOString();
+      if (shouldRecordRefusal({ decision: routine, lastRecorded: last, nowIso })) {
+        written += 1;
+        last = { decisionCode: "not_due", disposition: "refused", startedAt: nowIso };
+      }
+    }
+    ok(`L-34: a day of routine refusals at */15 writes 24 rows, not 96 (got ${written})`, written === 24);
+  }
+
+  // --- 7d2. SLICE L-34: a skipped daily POST is the day's full sync (Defect E)
+  {
+    ok("L-34: a successful POST is full-sync evidence", isFullSyncEvidence({ method: "POST", disposition: "success", decisionCode: "daily_full" }));
+    ok("L-34: a manual successful POST is evidence", isFullSyncEvidence({ method: "POST", disposition: "success", decisionCode: "manual_requested" }));
+    ok(
+      "L-34: a SKIPPED scheduled daily_full IS evidence - Leafly already holds " +
+        "exactly what the POST would send",
+      isFullSyncEvidence({ method: null, disposition: "skipped", decisionCode: "daily_full" }),
+    );
+    ok(
+      "L-34: a skipped INTRADAY run is not evidence of a full sync",
+      !isFullSyncEvidence({ method: null, disposition: "skipped", decisionCode: "intraday_delta" }),
+    );
+    ok("L-34: a failed POST is not evidence", !isFullSyncEvidence({ method: "POST", disposition: "failed", decisionCode: "daily_full" }));
+    ok("L-34: a refused daily_full is not evidence", !isFullSyncEvidence({ method: null, disposition: "refused", decisionCode: "daily_full" }));
+    ok("L-34: a successful PUT is not evidence", !isFullSyncEvidence({ method: "PUT", disposition: "success", decisionCode: "intraday_delta" }));
+    // The query string and the predicate must describe the same two cases.
+    ok(
+      "L-34: the server filter names both evidence cases and nothing else",
+      FULL_SYNC_EVIDENCE_FILTER.split("),and(").length === 2 &&
+        /method\.eq\.POST,disposition\.eq\.success/.test(FULL_SYNC_EVIDENCE_FILTER) &&
+        /decision_code\.eq\.daily_full,disposition\.eq\.skipped/.test(FULL_SYNC_EVIDENCE_FILTER),
+    );
+  }
+
+  // --- 7e. SLICE L-34: END-TO-END TICK SIMULATION (Defect A, reproduced) ----
+  //
+  // Drives the REAL decideScheduledRun + summarizeRunHistory + shouldRecord-
+  // Refusal through six trading hours of cron ticks, writing rows exactly as
+  // runScheduledLeaflySync does. This is the probe that found Defect A,
+  // folded into the permanent self-tests so it can never silently return.
+  {
+    let lastRows = 0;
+    const simulate = (tickMin: number, intradayMinutes: number): number => {
+      type Row = { decisionCode: string; disposition: string; startedAt: string };
+      const log: Row[] = []; // newest first
+      const startMs = Date.parse(NOON_PDT) - 3 * 3_600_000; // 9am PDT
+      const lastFull = new Date(startMs - 5 * 3_600_000).toISOString(); // 4am
+      let pushes = 0;
+      for (let t = 0; t <= 6 * 60; t += tickMin) {
+        const nowIso = new Date(startMs + t * 60_000 + 3_000).toISOString(); // +3s latency
+        const hist = summarizeRunHistory(log);
+        const d = decideScheduledRun({
+          nowIso,
+          settings: { ...DEFAULT_SCHEDULE_SETTINGS, enabled: true, intradayMinutes },
+          configured: true,
+          lastFullSyncIso: lastFull,
+          lastRunIso: hist.lastRunIso ?? lastFull,
+          consecutiveFailures: hist.consecutiveFailures,
+          runInFlightSinceIso: null,
+          manualInFlightSinceIso: null,
+        });
+        if (d.shouldRun) {
+          pushes += 1;
+          log.unshift({ decisionCode: d.code, disposition: "success", startedAt: nowIso });
+        } else if (shouldRecordRefusal({ decision: d, lastRecorded: log[0] ?? null, nowIso })) {
+          log.unshift({ decisionCode: d.code, disposition: "refused", startedAt: nowIso });
+        }
+      }
+      lastRows = log.length;
+      return pushes;
+    };
+    const p15_60 = simulate(15, 60);
+    const rows15_60 = lastRows;
+    ok(
+      `L-34: 15-min ticks with the default 60-min setting push about hourly ` +
+        `over 6 trading hours (got ${p15_60}; before L-34 it was 1)`,
+      p15_60 >= 6 && p15_60 <= 7,
+    );
+    const p15_15 = simulate(15, 15);
+    ok(
+      `L-34: 15-min ticks with a 15-min setting push on EVERY tick (got ${p15_15} of 25)`,
+      p15_15 === 25,
+    );
+    const p5_60 = simulate(5, 60);
+    ok(
+      `L-34: even 5-min ticks keep the owner's hourly cadence (got ${p5_60})`,
+      p5_60 >= 6 && p5_60 <= 7,
+    );
+    const p5_15 = simulate(5, 15);
+    ok(
+      `L-34: the log stays readable at 15-min ticks - no more rows than ` +
+        `pushes plus one heartbeat per hour (got ${rows15_60} rows)`,
+      rows15_60 <= 7 + 6,
+    );
+    ok(
+      `L-34: the 10-minute hard floor still holds at 5-min ticks - 15-min ` +
+        `setting never pushes more than every 15 (got ${p5_15})`,
+      p5_15 <= 25,
+    );
+    // A QUIET DAY: nothing on the menu changes, so every push is SKIPPED.
+    // 3am-3pm PDT at */15, yesterday's full sync at 4am. The full-sync
+    // evidence is derived with isFullSyncEvidence, exactly as the server does.
+    {
+      type QRow = { decisionCode: string; disposition: string; startedAt: string; method: string | null };
+      const log: QRow[] = [];
+      const start = Date.parse("2026-06-15T10:00:00.000Z"); // 3am PDT
+      let lastFull: string | null = new Date(start - 23 * 3_600_000).toISOString();
+      let fulls = 0;
+      let deltas = 0;
+      for (let t = 0; t <= 12 * 60; t += 15) {
+        const nowIso = new Date(start + t * 60_000 + 3_000).toISOString();
+        const hist = summarizeRunHistory(log);
+        const d = decideScheduledRun({
+          nowIso,
+          settings: { ...DEFAULT_SCHEDULE_SETTINGS, enabled: true },
+          configured: true,
+          lastFullSyncIso: lastFull,
+          lastRunIso: hist.lastRunIso,
+          consecutiveFailures: hist.consecutiveFailures,
+          runInFlightSinceIso: null,
+          manualInFlightSinceIso: null,
+        });
+        if (d.shouldRun) {
+          if (d.code === "daily_full") fulls += 1;
+          else deltas += 1;
+          const row = { decisionCode: d.code, disposition: "skipped", startedAt: nowIso, method: null };
+          log.unshift(row);
+          if (isFullSyncEvidence(row)) lastFull = nowIso;
+        } else if (shouldRecordRefusal({ decision: d, lastRecorded: log[0] ?? null, nowIso })) {
+          log.unshift({ decisionCode: d.code, disposition: "refused", startedAt: nowIso, method: null });
+        }
+      }
+      ok(
+        `L-34 (Defect E): on a quiet day the daily full sync is attempted ONCE ` +
+          `(got ${fulls}; before L-34 every tick re-attempted it: 49 of 49)`,
+        fulls === 1,
+      );
+      ok(
+        `L-34 (Defect E): ...and the hourly update check still runs after it ` +
+          `(got ${deltas} between ~4am and 3pm)`,
+        deltas >= 9 && deltas <= 12,
+      );
+    }
+    const p60_60 = simulate(60, 60);
+    ok(`L-34: hourly ticks with an hourly setting push every tick (got ${p60_60})`, p60_60 === 7);
   }
 
   function d0Settings(): LeaflyScheduleSettings {

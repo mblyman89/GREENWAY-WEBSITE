@@ -108,6 +108,41 @@ export const SWEEP_DEADLINE_MARGIN_MS = 30 * 1000;
  */
 export const SWEEP_MAX_PER_RUN = 10;
 
+/**
+ * SLICE L-34. How long after Leafly's deadline an expired order is still
+ * REPORTED (and so still raises the alarm).
+ *
+ * Ten minutes. Before L-34 there was no such bound, which was harmless while
+ * the sweeper ran once a day and fatal once it ran every two minutes: the
+ * cadence probe (scripts/recon/l34-cadence-probe.mts) measured that a single
+ * day-old auto-cancelled order was reported as "expired" on EVERY tick,
+ * forever — 720 false alarms a day at a two-minute cadence, for one order
+ * that was lost yesterday and already reported. An alarm that never stops
+ * ringing is an alarm that gets muted, and then the real loss is missed.
+ *
+ * Why ten and not two: Vercel's own documentation says cron delivery is best
+ * effort and failed invocations are not retried, so a single tick can be
+ * missed. Ten minutes survives several consecutive missed or late ticks at a
+ * two- or three-minute cadence while still bounding each loss to a handful of
+ * reports rather than an infinite stream.
+ */
+export const SWEEP_EXPIRED_REPORT_MS = 10 * 60 * 1000;
+
+/**
+ * SLICE L-34. How old an order with NO recorded deadline may be and still be
+ * swept.
+ *
+ * Sixty minutes. The no-deadline branch deliberately fails towards acting
+ * (an unknown deadline is not a reason to let an order die). Unbounded, that
+ * meant a single historic row without `acknowledge_by` was re-acknowledged on
+ * every tick for the life of the database — one outbound Leafly call per
+ * tick, forever. Leafly's documented rule cancels at fifteen minutes; sixty is
+ * four times that, so the fail-towards-acting posture is kept for any order
+ * that could conceivably still be saved, and dropped for the ones that
+ * provably cannot.
+ */
+export const SWEEP_NULL_DEADLINE_MAX_AGE_MS = 60 * 60 * 1000;
+
 /* ========================================================================== *
  * 2. THE SHAPES
  * ========================================================================== */
@@ -137,6 +172,18 @@ export type SweepCandidate = {
   firstSeenAt: string | null | undefined;
   /** `leafly_status`, so an order that has already moved on is left alone. */
   leaflyStatus?: string | null | undefined;
+  /**
+   * SLICE L-34. `canceled_at`. Non-null means a cancellation was recorded.
+   *
+   * WHY THIS IS NEEDED IN ADDITION TO THE STATUS: Leafly's OrderCancelWebhook
+   * (the event it sends when it auto-cancels an unacknowledged order, with
+   * cancelReason "order_api_unacknowledged") carries NO `status` field in the
+   * spec. So the webhook stamps `canceled_at` but leaves `leafly_status` at
+   * whatever it was — usually "pending". Reading status alone, the sweeper
+   * saw a cancelled order as live-but-expired and alarmed about it forever.
+   * Measured by the L-34 cadence probe, not inferred.
+   */
+  canceledAt?: string | null | undefined;
 };
 
 /** Why a candidate was or was not selected. One value, always. */
@@ -154,7 +201,14 @@ export type SweepVerdict =
   /** The order is finished, cancelled or otherwise no longer live. */
   | "not_live"
   /** We cannot tell — a missing or unparseable timestamp. Never guessed. */
-  | "unknown_timing";
+  | "unknown_timing"
+  /**
+   * SLICE L-34. Long past saving AND long past reporting: the deadline went
+   * more than `SWEEP_EXPIRED_REPORT_MS` ago (or, with no deadline, the order
+   * is older than `SWEEP_NULL_DEADLINE_MAX_AGE_MS`). Already reported by
+   * earlier ticks; not reported again, not acted on.
+   */
+  | "out_of_window";
 
 export type SweepDecision = {
   leaflyOrderId: string | null | undefined;
@@ -250,6 +304,18 @@ export function decideSweepCandidate(
     };
   }
 
+  if (candidate.canceledAt != null && String(candidate.canceledAt).trim() !== "") {
+    return {
+      leaflyOrderId: id,
+      verdict: "not_live",
+      msUntilDeadline,
+      reason:
+        "A cancellation is recorded for this order (canceled_at is set), so it " +
+        "is no longer waiting on us. Leafly's cancel webhook carries no status " +
+        "field, which is why this is checked separately from the status.",
+    };
+  }
+
   const firstSeenMs = parseMs(candidate.firstSeenAt);
   if (firstSeenMs === null) {
     return {
@@ -276,6 +342,18 @@ export function decideSweepCandidate(
     };
   }
 
+  if (deadlineMs === null && ageMs > SWEEP_NULL_DEADLINE_MAX_AGE_MS) {
+    return {
+      leaflyOrderId: id,
+      verdict: "out_of_window",
+      msUntilDeadline: null,
+      reason:
+        `No deadline recorded and ${Math.round(ageMs / 60_000)} minutes old — ` +
+        "far past Leafly's fifteen-minute rule, so acknowledging cannot save " +
+        "it. Left alone rather than re-tried on every tick forever.",
+    };
+  }
+
   if (deadlineMs === null) {
     // No deadline recorded. This is NOT treated as "expired" — an absent
     // deadline is an absence of information, not evidence of lateness, and
@@ -291,6 +369,19 @@ export function decideSweepCandidate(
         "Past the grace period, unacknowledged, and no deadline was recorded. " +
         "Acknowledging anyway, because an unknown deadline is not a reason to " +
         "let a real order auto-cancel.",
+    };
+  }
+
+  if (msUntilDeadline !== null && msUntilDeadline < -SWEEP_EXPIRED_REPORT_MS) {
+    return {
+      leaflyOrderId: id,
+      verdict: "out_of_window",
+      msUntilDeadline,
+      reason:
+        `Leafly's deadline passed ${Math.round(-msUntilDeadline / 60_000)} minutes ` +
+        "ago. It was reported as lost by the ticks that ran inside the report " +
+        "window; reporting it again on every tick would only teach the operator " +
+        "to ignore the alarm.",
     };
   }
 
@@ -525,6 +616,100 @@ export function __runLeaflyAutoAckSweepTests(): { passed: number; failed: number
     "…nor is an empty one",
   );
 
+  // ── SLICE L-34: recorded cancellation (Defect B) ────────────────────────────
+  ok(
+    decideSweepCandidate(
+      base({ canceledAt: iso(-60_000), leaflyStatus: "pending" }),
+      NOW,
+    ).verdict === "not_live",
+    "A RECORDED CANCELLATION WINS OVER A STALE STATUS. Leafly's cancel webhook " +
+      "carries no status field, so an auto-cancelled order keeps " +
+      "leafly_status='pending'; canceled_at is the only evidence it is gone",
+  );
+  ok(
+    decideSweepCandidate(
+      base({ canceledAt: iso(-60_000), acknowledgeBy: iso(-24 * 3_600_000) }),
+      NOW,
+    ).verdict === "not_live",
+    "a day-old auto-cancelled order is NOT 'expired' — this exact row raised " +
+      "the alarm on every tick before L-34 (measured by the cadence probe)",
+  );
+  ok(
+    decideSweepCandidate(base({ canceledAt: "" }), NOW).verdict === "sweep",
+    "an empty canceled_at is not a cancellation",
+  );
+  ok(
+    decideSweepCandidate(base({ canceledAt: "   " }), NOW).verdict === "sweep",
+    "…nor is whitespace",
+  );
+  ok(
+    decideSweepCandidate(base({ canceledAt: undefined }), NOW).verdict === "sweep",
+    "…nor is an absent field (older callers that do not pass it)",
+  );
+
+  // ── SLICE L-34: the expired alarm fires for a bounded window ──────────────
+  ok(
+    decideSweepCandidate(base({ acknowledgeBy: iso(-SWEEP_EXPIRED_REPORT_MS) }), NOW)
+      .verdict === "expired",
+    "an order exactly at the edge of the report window is STILL reported — " +
+      "the boundary is inclusive on the side that tells the operator",
+  );
+  ok(
+    decideSweepCandidate(base({ acknowledgeBy: iso(-SWEEP_EXPIRED_REPORT_MS - 1) }), NOW)
+      .verdict === "out_of_window",
+    "…and one millisecond older is out of window: reported already, not again",
+  );
+  ok(
+    decideSweepCandidate(base({ acknowledgeBy: iso(-24 * 3_600_000) }), NOW).verdict ===
+      "out_of_window",
+    "a day-old lost order no longer rings the alarm on every tick (720/day at */2)",
+  );
+  {
+    // Every tick at a two-minute cadence reports a lost order a BOUNDED number
+    // of times — at least once (never silently lost), at most a handful.
+    const deadline = NOW;
+    let reports = 0;
+    for (let t = 0; t <= 24 * 60; t += 2) {
+      const d = decideSweepCandidate(
+        base({ acknowledgeBy: new Date(deadline).toISOString(), firstSeenAt: iso(-15 * 60_000) }),
+        NOW + t * 60_000,
+      );
+      if (d.verdict === "expired") reports += 1;
+    }
+    ok(
+      reports >= 1 && reports <= 6,
+      `a single lost order is reported between 1 and 6 times over a whole day ` +
+        `of two-minute ticks (got ${reports}) — never zero, never forever`,
+    );
+  }
+  ok(
+    SWEEP_EXPIRED_REPORT_MS >= 3 * 3 * 60_000,
+    "the report window survives at least three consecutive missed ticks at a " +
+      "three-minute cadence — Vercel does not retry a failed cron invocation",
+  );
+
+  // ── SLICE L-34: the no-deadline branch is bounded ──────────────────────────
+  ok(
+    decideSweepCandidate(
+      base({ acknowledgeBy: null, firstSeenAt: iso(-SWEEP_NULL_DEADLINE_MAX_AGE_MS) }),
+      NOW,
+    ).verdict === "sweep",
+    "a no-deadline order exactly at the age bound is still swept (fail towards acting)",
+  );
+  ok(
+    decideSweepCandidate(
+      base({ acknowledgeBy: null, firstSeenAt: iso(-SWEEP_NULL_DEADLINE_MAX_AGE_MS - 1) }),
+      NOW,
+    ).verdict === "out_of_window",
+    "…and one millisecond older is left alone, instead of costing one Leafly " +
+      "call on every tick for the life of the database",
+  );
+  ok(
+    SWEEP_NULL_DEADLINE_MAX_AGE_MS > 15 * 60_000,
+    "the no-deadline age bound is longer than Leafly's fifteen-minute rule, so " +
+      "no order that could still be saved is ever abandoned by it",
+  );
+
   // ── Unparseable / absent timestamps ──────────────────────────────────────
   ok(
     decideSweepCandidate(base({ firstSeenAt: "not-a-date" }), NOW).verdict ===
@@ -666,14 +851,29 @@ export function __runLeaflyAutoAckSweepTests(): { passed: number; failed: number
       "no_order_id",
       "not_live",
       "unknown_timing",
+      "out_of_window",
     ];
     const seen = new Set<SweepVerdict>();
     let checked = 0;
     for (const id of ["ord-1", null, "", "  "]) {
       for (const ack of [null, iso(-60_000), ""]) {
-        for (const by of [iso(10 * 60_000), iso(-60_000), null, "garbage", iso(5_000)]) {
-          for (const seenAt of [iso(-5 * 60_000), iso(-30_000), null, "garbage"]) {
+        for (const by of [
+          iso(10 * 60_000),
+          iso(-60_000),
+          null,
+          "garbage",
+          iso(5_000),
+          iso(-24 * 3_600_000),
+        ]) {
+          for (const seenAt of [
+            iso(-5 * 60_000),
+            iso(-30_000),
+            null,
+            "garbage",
+            iso(-2 * 3_600_000),
+          ]) {
             for (const st of [null, "pending", "canceled", "brandNew", ""]) {
+              for (const cx of [null, iso(-60_000)]) {
               const d = decideSweepCandidate(
                 {
                   leaflyOrderId: id,
@@ -681,6 +881,7 @@ export function __runLeaflyAutoAckSweepTests(): { passed: number; failed: number
                   acknowledgeBy: by,
                   firstSeenAt: seenAt,
                   leaflyStatus: st,
+                  canceledAt: cx,
                 },
                 NOW,
               );
@@ -699,6 +900,15 @@ export function __runLeaflyAutoAckSweepTests(): { passed: number; failed: number
                 d.msUntilDeadline === null || Number.isFinite(d.msUntilDeadline),
                 "msUntilDeadline is null or finite, never NaN",
               );
+              ok(
+                cx === null || d.verdict !== "sweep",
+                "SLICE L-34: an order with a recorded cancellation is NEVER swept",
+              );
+              ok(
+                cx === null || d.verdict !== "expired",
+                "SLICE L-34: …and never raises the lost-order alarm",
+              );
+              }
             }
           }
         }
@@ -706,14 +916,18 @@ export function __runLeaflyAutoAckSweepTests(): { passed: number; failed: number
     }
     // Guards against a vacuous pass: if the loop were skipped, or if the rule
     // collapsed to a single verdict, every assertion above would still "pass".
-    ok(checked === 4 * 3 * 5 * 4 * 5, `the totality matrix actually ran (${checked} cases)`);
     ok(
-      seen.size >= 6,
-      `the matrix exercises at least six distinct verdicts (saw ${seen.size}) — ` +
+      checked === 4 * 3 * 6 * 5 * 5 * 2,
+      `the totality matrix actually ran (${checked} cases)`,
+    );
+    ok(
+      seen.size >= 7,
+      `the matrix exercises at least seven distinct verdicts (saw ${seen.size}) — ` +
         "proof the rule genuinely branches rather than answering the same way",
     );
     ok(seen.has("sweep"), "…including the one that actually does something");
     ok(seen.has("expired"), "…and the one that means an order was lost");
+    ok(seen.has("out_of_window"), "…and the L-34 historic-row verdict");
   }
 
   // ── Constants: sanity relationships, not magic-number restatement ────────
