@@ -807,6 +807,40 @@ export async function setLeaflyOrderStatus(input: {
     createdBy: input.staffId ?? null,
   });
 
+  // ── SLICE L-31, DEFECTS 1 AND 2 ──────────────────────────────────────────
+  //
+  // Everything above this line was already correct, and that is precisely why
+  // the bug was so hard to see. The POST went to the right host, carried the
+  // right body, came back 200, and was written to the attempt log with
+  // disposition `success`. Leafly moved. The screen said it worked. It DID
+  // work — at Leafly.
+  //
+  // What never happened was the write BACK. `leafly_orders.leafly_status`
+  // stayed on whatever it was before the click, and since
+  // `placeLeaflyOrder()` in bridge-core.ts buckets the board EXCLUSIVELY on
+  // that column, the card never moved out of TO BUILD. Worse, because
+  // `decideStatusChange(pending -> confirmed)` is still perfectly legal from a
+  // stale `pending`, "Confirm order" was re-offered forever. That is exactly
+  // the screenshot the owner sent: an order he had already driven all the way
+  // to picked_up, still sitting in the open table offering to confirm itself.
+  //
+  // There was no error to find because nothing failed. The defect was an
+  // omission, and omissions do not raise.
+  //
+  // This is deliberately placed AFTER recordAttempt. The attempt log is the
+  // forensic record of what we said to Leafly; it must be written even if the
+  // persistence below throws, because a push that reached Leafly and then
+  // vanished from our own history is the single worst state for diagnosis.
+  let persistWarning: string | null = null;
+  if (assessment.disposition === "success") {
+    persistWarning = await persistStatusAfterPush({
+      leaflyOrderId: orderId,
+      requestedStatus: decision.body.status,
+      responseBody: raw.body,
+      staffId: input.staffId ?? null,
+    });
+  }
+
   return {
     ok: assessment.disposition === "success",
     refused: false,
@@ -814,8 +848,97 @@ export async function setLeaflyOrderStatus(input: {
     message: assessment.message,
     httpStatus: raw.status,
     assessment,
-    warning: null,
+    warning: persistWarning,
   };
+}
+
+/**
+ * Write a successful status push back into our own tables, and close the
+ * register order when the push was a terminal one.
+ *
+ * Returns a warning string when something the operator needs to know about
+ * went wrong, or null when everything landed. It NEVER throws: by the time it
+ * runs, Leafly has already accepted the transition, and there is no way to
+ * take that back. Turning a successful, irreversible remote change into a
+ * thrown 500 would leave the operator believing the opposite of the truth.
+ *
+ * ── WHY THE RESPONSE BODY IS PREFERRED OVER WHAT WE ASKED FOR ──────────────
+ * The vendored spec (md5 daab7bcf6f77177de85425adf7f805f1) declares
+ * `POST /{key}/orders/{id}/status` responds **200 with the full Order**, not
+ * 204. That body is Leafly's own post-change truth. We were already receiving
+ * it, logging it into `responseBody`, and throwing it away — while a fully
+ * tested parser (`normaliseFetchedOrder`) and a fully tested writer
+ * (`storeFetchedLeaflyOrder`) for that exact shape sat unused two files away.
+ * Reusing both, rather than writing a third reader of the same contract, is
+ * house rule 11.
+ */
+async function persistStatusAfterPush(input: {
+  leaflyOrderId: string;
+  requestedStatus: string;
+  responseBody: unknown;
+  staffId: string | null;
+}): Promise<string | null> {
+  try {
+    const { normaliseFetchedOrder } = await import("./order-fetch-core");
+    const { storeFetchedLeaflyOrder } = await import("./order-fetch-server");
+    const { decideStatusWriteback } = await import("./lifecycle-core");
+
+    const facts = normaliseFetchedOrder(input.responseBody);
+    const writeback = decideStatusWriteback({
+      requestedStatus: input.requestedStatus,
+      responseStatus: facts.status,
+    });
+
+    if (!writeback.usedResponseBody) {
+      // Not an error — a 200 still means the transition happened — but a
+      // fallback that nobody can see is a fallback nobody can debug.
+      console.warn(
+        `[leafly/outbound] ${input.leaflyOrderId}: status push returned 200 but the body carried no status; persisting the requested "${writeback.status}" instead.`,
+      );
+    }
+
+    // The body Leafly returns IS an Order, so when it is usable we store the
+    // whole thing — status, fulfilment mechanism, cancellation fields and the
+    // raw payload — through the same writer the fetch path uses. When it is
+    // not usable we still force the status through, because leaving the board
+    // stale is the defect we are here to fix.
+    const usableOrder =
+      input.responseBody !== null &&
+      typeof input.responseBody === "object" &&
+      !Array.isArray(input.responseBody);
+
+    const stored = await storeFetchedLeaflyOrder({
+      leaflyOrderId: input.leaflyOrderId,
+      order: usableOrder ? (input.responseBody as Record<string, unknown>) : {},
+      facts: { ...facts, status: writeback.status },
+    });
+
+    if (!stored.ok) {
+      return `Leafly accepted this change, but we could not record it here (${stored.error}). The board may still show the previous step — reload, and if it has not moved, tell the owner.`;
+    }
+
+    // ── DEFECT 3: close the register order ────────────────────────────────
+    //
+    // The bridge resolves `local_order_id` itself, from the row, inside the
+    // same read it needs anyway. Passing a value down from the caller's
+    // snapshot would mean acting on a link that was read before the push and
+    // could have changed since — and the snapshot type does not even carry
+    // it. One authoritative reader, at the point of use.
+    const { onLeaflyOrderClosed } = await import("./bridge-server");
+    const closed = await onLeaflyOrderClosed(input.leaflyOrderId, writeback.status);
+
+    // `attempted: false` means the pure plan said this is not a closing
+    // status — the ordinary case for confirmed/ready, and not a problem.
+    if (!closed.attempted) return null;
+    if (!closed.ok) {
+      return `Leafly has this order as "${writeback.status}", but the register order did not close (${closed.summary}). Close it by hand at the register.`;
+    }
+    return null;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "unknown error";
+    console.error(`[leafly/outbound] ${input.leaflyOrderId}: persisting the status push threw:`, err);
+    return `Leafly accepted this change, but recording it here failed (${message}). Reload the board; if the step has not moved, tell the owner.`;
+  }
 }
 
 // ---------------------------------------------------------------------------

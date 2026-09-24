@@ -275,11 +275,42 @@ function ActionForm({
   const isAck = action.kind === "acknowledge";
   const isCancel = action.status === "canceled";
 
-  // The acknowledgement is irreversible but NOT confirmed — see the header.
-  // Leafly does not require a confirmation, and it is the one action on a
-  // fifteen-minute clock. Everything else that is irreversible is terminal,
-  // is not on a clock, and keeps its dialog.
-  const needsConfirm = action.irreversible && !isAck;
+  // ── SLICE L-31 ───────────────────────────────────────────────────────────
+  // Only CANCEL asks a question now. It used to be `action.irreversible &&
+  // !isAck`, which silently swept in "Mark picked up" too, because
+  // `planLeaflyOrderActions()` sets `irreversible: isTerminalForOutbound()`
+  // and `picked_up` is terminal in Leafly's spec just as `canceled` is.
+  //
+  // The owner, after eight slices were lost to a dialog nobody could see was
+  // the problem:
+  //
+  //   > "the mark picked up button produces a popup asking to confirm the
+  //   >  action. since we wasted like 8 slices trying to figure out how to
+  //   >  talk to leafly only to find out it was the confirm the action pop up
+  //   >  the whole time, I want you to get rid of the confirmation pop up."
+  //
+  // Removed. The two actions are terminal in the same technical sense but not
+  // in the same human sense, and that distinction is the whole justification:
+  //
+  //   MARK PICKED UP is the SUCCESS path. It is pressed while the customer is
+  //   standing at the counter with the bag in their hand, so by the time it is
+  //   pressed the fact it records has already happened in the real world. A
+  //   dialog cannot prevent a mistake that is already true, and it is pressed
+  //   often enough to be answered from muscle memory — which is precisely the
+  //   state in which a confirmation stops protecting anything and becomes one
+  //   more thing between a budtender and a queue.
+  //
+  //   CANCEL ON LEAFLY destroys a sale, is pressed rarely, and is the only
+  //   one of the two whose consequence has NOT already happened when the
+  //   button is pressed. It keeps its dialog. The owner asked for the pickup
+  //   popup to go; deleting the cancel guard as well would be reading an
+  //   instruction wider than it was given.
+  //
+  // Following L-30: the protection is RELOCATED, not deleted. The terminal
+  // warning for picked up is now printed next to the button (see
+  // `terminalNote` below) where it is legible before the press instead of
+  // interrupting it.
+  const needsConfirm = isCancel;
 
   const hiddenFields = (
     <>
@@ -298,13 +329,32 @@ function ActionForm({
   // No onSubmit. Nothing to intercept it. This is the shape the whole
   // back office uses, and the shape PendingKeeper is built for.
   if (!needsConfirm) {
+    // SLICE L-31 — the relocated protection for "Mark picked up".
+    //
+    // It lost its dialog above; it must not lose the warning the dialog was
+    // carrying. Rendered BEFORE the button in DOM order so a screen reader
+    // reaches it first, and `title` so it is available on hover too.
+    const terminalNote =
+      action.irreversible && !isAck ? (
+        <span
+          data-testid={`leafly-terminal-note-${action.status ?? "unknown"}`}
+          className="mr-2 text-[11px] leading-tight text-[var(--admin-gold)]"
+        >
+          <span aria-hidden className="mr-1">
+            ⚠️
+          </span>
+          Final step — Leafly will not let this order move again.
+        </span>
+      ) : null;
+
     return (
       <form
         ref={formRef}
         action={isAck ? acknowledgeAction : statusAction}
-        className="inline"
+        className="inline-flex items-center"
       >
         {hiddenFields}
+        {terminalNote}
         <SubmitButton action={action} />
       </form>
     );

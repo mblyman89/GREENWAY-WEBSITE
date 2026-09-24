@@ -1494,3 +1494,303 @@ the answer was written down in a specification already sitting in the repo.**
 Nobody read it. Four slices were spent trying to make a dialog work that Leafly
 never asked for and that its own fifteen-minute auto-cancel deadline argues
 directly against.
+
+---
+
+# CHAPTER TEN — L-31: THE ORDER THAT WOULD NOT FINISH, AND THE EMAILS THAT WERE NEVER MISSING
+
+## The report
+
+The owner got through the acknowledge step for the first time. He then did
+exactly what the counter staff will do: clicked **Confirm**, then **Mark ready
+for pickup**, then **Mark picked up**. And then, in his words:
+
+> "the order does not change from open to completed and stays visible in the
+> table. I think we need to make it much more obvious which step we are on, and
+> then we will know we are finished because the order with be marked complete
+> and moved to the hidden table."
+
+Alongside that, four more things:
+
+> "the communication from leafly from going through the process only generated
+> one email, the one you get after completing the sale, and its really just a,
+> how was your experience email. surely there is more communication from this
+> process right? ... maybe like the acknowledge button issue, we are not
+> correctly talking with leafly."
+
+> "the mark picked up button produces a popup asking to confirm the action.
+> since we wasted like 8 slices trying to figure out how to talk to leafly only
+> to find out it was the confirm the action pop up the whole time, I want you to
+> get rid of the confirmation pop up."
+
+> "the speaker, pi, and printer are now offline. this is the first time I have
+> opened the back office after a slice was completed ... please look into the pi
+> and its equipment to make certain something you did in the last few slices,
+> particularly last slice, didnt break the connection."
+
+Five complaints. As it turns out, **complaints one and two are the same bug**,
+and complaint five is not our bug at all. Both of those conclusions were reached
+by execution, not by reading.
+
+## The email question, answered from the specification
+
+The owner's instinct — "surely there is more communication from this process" —
+is correct, and his suspicion that we were talking to Leafly wrongly is also
+correct. But the shape of the fix is not the one the question implies. There is
+no notification endpoint we forgot to call.
+
+The vendored spec at `docs/leafly-specs/order-api-v1.openapi.json` was
+re-verified against the live document at
+`https://docs.leafly.io/api-api/reservations-api/docs/order-api/order.json`
+this slice — md5 `daab7bcf6f77177de85425adf7f805f1`, byte-identical. Under
+*Expectations*, it says, verbatim:
+
+> "Leafly will be the sole originator of automated consumer facing
+> communications related to orders placed on the Leafly platform. That is,
+> Leafly shoppers should receive `_no_` automated emails or text messages from a
+> partner system with regard to order confirmation, status updates, etc."
+
+Read that twice, because it inverts the intuition. We are not merely *allowed*
+not to email the customer — we are **forbidden** to. If Greenway had "fixed" the
+missing emails by sending its own, that would have been a compliance breach
+dressed up as a feature, and it would have passed any test we wrote for it.
+
+So what triggers a Leafly email? The status push itself. `POST
+/{key}/orders/{id}/status` is not merely a bookkeeping call; it is the event
+that makes Leafly tell the shopper. **The status push IS the notification.**
+
+Which collapses two complaints into one: the order did not complete *and* the
+customer got one email, because the status transitions never actually landed.
+One defect, two symptoms. The single "how was your experience" email arrived
+because Leafly's own post-sale survey fires on its own schedule, independent of
+anything Greenway does — the one message in the whole flow that did not depend
+on our broken call.
+
+The spec also settles a design question before it could be asked. On
+transitions, it says that "supporting only direct movement to `picked_up` would
+not be allowed." The lifecycle cannot be collapsed into one button, however much
+faster that would be at a counter. Each step must be pushed, in order, because
+each step is a message to a customer standing somewhere wondering about their
+order.
+
+The authoritative status vocabulary, read from
+`components.schemas.OrderStatus.enum` rather than from prose — which matters,
+because an earlier draft of the test matched a `$ref` example list by accident
+and would have pinned the wrong eight strings:
+
+```
+pending, confirmed, ready, out_for_delivery, arrived_at_customer,
+picked_up, canceled, expired
+```
+
+Note `canceled`, one L. Greenway's own column spells it `cancelled`, two Ls.
+That trap is now covered by an explicit mapping rather than a hopeful string
+comparison.
+
+## Three defects, all of them omissions
+
+The probe `scripts/recon/l31-status-persistence-probe.mjs` traced the real path
+from button to database. It found three faults, and the important thing about
+all three is their shape:
+
+**D1 — `setLeaflyOrderStatus()` never wrote `leafly_status` back.** It pushed to
+Leafly, recorded an attempt, and returned. The row on our side kept whatever
+status it had when it was first fetched.
+
+**D2 — Leafly's 200 response body was logged, then discarded.** The endpoint
+returns a full `Order` object, not a `204`. Leafly was telling us, in every
+reply, exactly what state it believed the order was in. We wrote that to a log
+and threw it away.
+
+**D3 — `bridge-server.ts` had no completion stage at all.** It handled
+`arrived`, `accepted`, and `canceled`. Nothing in the codebase was responsible
+for turning a Leafly `picked_up` into a Greenway `completed`. The hidden table
+was not filtering the order out incorrectly; the order was never marked
+finished.
+
+Every one of these is an **omission** — code that was never written, not code
+that was written wrong. That is why no error ever appeared in any log, why the
+buttons all looked like they worked, and why the owner's only clue was an order
+that sat there. A missing call raises nothing. This is the second slice in a row
+where the bug was an absence, and it is becoming the house pattern worth naming:
+**when the symptom is "nothing happened", look for the code that isn't there.**
+
+## The fix
+
+`decideStatusWriteback()` in the new pure core `src/lib/leafly/lifecycle-core.ts`
+takes Leafly's response body and decides what to store, **preferring Leafly's
+word over our own intent** — if we asked for `ready` and Leafly's body says
+`confirmed`, we store `confirmed`, because Leafly is the system of record. It
+falls back to the requested status only when the body is unreadable, so an empty
+200 cannot freeze the row forever.
+
+`order-ack-server.ts` now calls that, and persists — but only when the push
+actually succeeded. Writing a status Leafly rejected would be worse than writing
+nothing, and there is a mutation pinning that distinction.
+
+`bridge-server.ts` gained a fourth stage, `onLeaflyOrderClosed()`, which maps a
+closed Leafly status to a local one and updates the register order. It guards
+with an explicit whitelist:
+
+```ts
+const CLOSEABLE_FROM = ["new", "acknowledged", "preparing", "ready"];
+```
+
+so that an order a human already settled cannot be silently re-closed
+underneath them, and it reads the current status *first* so it can tell
+"already closed" apart from "failed to close" — a distinction the caller needs
+and which a bare `rowCount === 0` would have destroyed. It writes an
+`order_events` breadcrumb, never throws, and does not fabricate a sale.
+
+## "Which step am I on"
+
+`LeaflyLifecycleStrip.tsx` renders the lifecycle as an ordered list with the
+current step carrying `aria-current="step"` — not colour alone, because the
+people using this are on a phone at a counter and some of them are colour-blind.
+There is a mutation that swaps `aria-current` for `data-current` and the suite
+catches it.
+
+The strip is a **server component with no state and no effects**, deliberately.
+The one element whose entire job is to tell you where you are must not be able
+to fail to hydrate. There is a mutation for that too.
+
+It also carries a standing note: *"Leafly sends every customer message for this
+order — Greenway must not."* The owner spent a slice asking that question; the
+answer now lives on the screen where the question occurred, not only in a
+document.
+
+Crucially, the strip does not know the lifecycle. It renders what
+`lifecycleView()` returns. The step labels and the button labels are **the same
+strings from the same table** — there is a test asserting the strip's `nextLabel`
+is identical to `LEAFLY_STATUS_ACTION_WORDING[status].label`, so the strip can
+never tell an operator to look for a button that does not exist under that name.
+
+## The popup
+
+`const needsConfirm = action.irreversible && !isAck;` became
+`const needsConfirm = isCancel;`.
+
+The warning the dialog used to carry was not deleted — it was **relocated** to
+standing text beside the button ("⚠️ Final step — Leafly will not let this order
+move again"), following L-30's rule that you relocate a protection rather than
+drop it. Cancel keeps its dialog: the owner asked for the *picked up* popup to
+go, and reading that instruction wider than he gave it is its own kind of error.
+There is a mutation that removes cancel's dialog too, and it is caught.
+
+## The part where the tests were wrong
+
+The full suite came back **1 failed / 17,911 passed**. The failure was L-30's
+own assertion, which pinned the literal text of the old expression:
+
+```ts
+expect(actionsCode).toMatch(/const needsConfirm = action\.irreversible && !isAck/)
+```
+
+So I rewrote it to test *intent* rather than spelling: parse the right-hand side
+of `needsConfirm`, and require that it either does not mention acknowledge or
+explicitly negates it. It passed. 51/51 green.
+
+Then, because "test the tests" is a standing instruction, I mutated it:
+
+```
+sed -i 's/const needsConfirm = isCancel;/const needsConfirm = action.irreversible;/'
+```
+
+That single edit **puts the popup back on Mark picked up, and adds one to
+acknowledge** — it undoes this slice's fix and L-30's fix together. It is the
+worst realistic regression in this file.
+
+**The suite stayed green. 51 of 51.**
+
+The reason is worth stating precisely, because it generalises. My clever
+assertion asked whether the expression *mentions* `isAck` or `acknowledge`. The
+string `action.irreversible` mentions neither. It is nonetheless **true for the
+acknowledge action at runtime**, because acknowledge is flagged irreversible. I
+had written a test about the *text* of a predicate and told myself it was a test
+about the *behaviour* of a predicate. Those are different things, and no amount
+of care with the regex closes the gap — the gap is the method.
+
+So the heuristic was deleted, not improved. In its place,
+`tests/compliance/leafly-l31-dialog-render.test.tsx` **renders the real
+component** through the real `planLeaflyOrderActions()` and inspects the emitted
+HTML, walking back from each button's label to its opening tag to see whether it
+carries `type="button"` (confirm-first) or is a direct submit.
+
+Against the identical mutation, the two approaches were run side by side:
+
+| Test approach | Same mutation (popup returns) |
+|---|---|
+| Source-reading, 51 tests | **51/51 GREEN — blind** |
+| Render-based, 4 tests | **3/4 RED — caught** |
+
+Fifty-one tests that read the file were worth less than four that ran it.
+
+That mutation is now a permanent, named entry in
+`scripts/recon/l31-mutation-test.mjs` — *"THE ESCAPED MUTATION"* — carrying the
+date it escaped and an instruction: if it ever returns to SURVIVED, the render
+test has been weakened or deleted, and the slice should not be accepted. The
+sweep was also widened to run all three suites, since a sweep that only runs the
+toothless suite measures nothing. Final result: **26 caught, 0 survived, 0
+inert**, green at baseline and green after restore.
+
+Two further test holes were found and closed on the way, both the same species:
+`panel.toContain("LeaflyLifecycleStrip")` was satisfied by the *import line*
+alone (fixed with an element-boundary match plus prop assertions), and
+`toContain("aria-current")` was satisfied by a *comment* explaining aria-current
+(fixed by stripping comments before asserting). Both would have let the feature
+be deleted while the suite cheered.
+
+## The Pi
+
+Two independent probes, both exit 0, and the answer is the same from both: **not
+our code.**
+
+`deviceHealth()` is a pure function of a single column, `last_seen_at`: inside
+`DEVICE_ONLINE_GRACE_SECONDS` (90) it is online, inside `DEVICE_STALE_SECONDS`
+(600) stale, beyond that offline. The printer badge does not use that function at
+all — it uses `receipt_printer_settings.last_poll_at` via `isPrinterOnline()`.
+The two mechanisms share no code, no table, and no helper. Every real writer of
+those timestamps stamps `new Date().toISOString()`. The admin middleware matcher
+is `"/admin/:path*"`, which does not cover `/api`, so nothing in L-30's auth work
+could have blocked a device check-in. This slice touched zero device paths.
+
+Three independent badges going red simultaneously, through two mechanisms that
+share nothing, is not three coincident software bugs. It is **one upstream fault**
+— power, network, or the service on the Pi. The probe ends with a ranked
+90-second triage the owner can run himself.
+
+One more thing happened here that belongs in the record. The probe's **first**
+run reported, confidently, that not every `last_seen_at` writer stamped the
+current time, and listed nine of them. Seven were **self-test fixtures** in
+`announcer-admin-core.ts` — object literals fed to `toDeviceView()`, not database
+writes at all. Had I trusted it, I would have handed the owner a confident,
+wrong answer and sent him hunting a code fault that does not exist, while his
+actual Pi stayed unplugged. The probe was fixed to look only at real write sites
+and to exclude test scaffolding. **A probe is a piece of software and can be
+wrong in exactly the way the code it audits can be wrong.** Test the tests
+includes testing the instruments.
+
+## The lesson
+
+Chapter Nine's lesson was that the answer was already written down and nobody
+read it. Chapter Ten's is narrower and sharper, and it is aimed at this
+codebase's favourite failure mode:
+
+**A rule about what the UI does cannot be proven by reading the source. Render
+it and look at the output.**
+
+Every static assertion about behaviour — every regex over a component file,
+every `toContain` on a predicate — is a proxy measurement. Proxies fail silently
+and they fail *green*, which is the worst direction. L-29 shipped 37 passing
+tests for a fix that did not work. L-31 nearly shipped 51 passing tests for a
+popup that had come back. The difference between those two sentences is nothing,
+and it took a deliberate mutation to see it either time.
+
+The second lesson is about the owner's question. He asked why the customer
+wasn't getting emails, and the honest answer was not "here is the endpoint we
+forgot" — it was "you are forbidden from sending them, and the thing you
+actually broke is that your status pushes never landed, which is why Leafly went
+quiet." The question as asked had a tempting wrong answer that would have been
+easy to build, easy to test, and a compliance breach. **Going and reading the
+specification is not pedantry; it is the difference between fixing the bug and
+building a violation.**

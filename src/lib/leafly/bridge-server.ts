@@ -743,3 +743,199 @@ export async function onLeaflyOrderCanceled(
     return fail(`unexpected failure (${err instanceof Error ? err.message : "unknown"})`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// STAGE FOUR — SLICE L-31: the order finishes
+// ---------------------------------------------------------------------------
+
+export type CloseOutcome = BridgeOutcome & {
+  /**
+   * Did the pure plan even ask us to close anything? False for the ordinary
+   * `confirmed` / `ready` pushes, which are progress, not completion.
+   *
+   * This is separate from `ok` on purpose. "We were not asked to act" and "we
+   * were asked and failed" are different facts, and collapsing them into one
+   * boolean is how a no-op starts getting reported as a failure to the
+   * operator — noise that trains people to ignore real warnings.
+   */
+  attempted: boolean;
+  /** What the local order was moved to, when it moved. */
+  localStatus: "completed" | "cancelled" | null;
+};
+
+/**
+ * STAGE FOUR — a Leafly order reached a terminal status. Close our books.
+ *
+ * ── WHY THIS EXISTS ────────────────────────────────────────────────────────
+ * Before this slice, `bridge-server.ts` exported exactly three stages:
+ * arrived, accepted, canceled. There was no completion stage at all. The
+ * bridge could OPEN a register order (`onLeaflyOrderAccepted` creates the
+ * `orders` row) and it could CANCEL one — but nothing could finish one.
+ *
+ * So the owner did everything right: Confirm, Mark ready for pickup, Mark
+ * picked up. Leafly took all three. And the Greenway order stayed open
+ * forever, because no line of code existed anywhere in this repository that
+ * could move it to `completed` in response to a pickup. The order could not
+ * "move to the hidden table" because the hidden table is filtered on a status
+ * the order was never going to reach.
+ *
+ * That is the third of the three defects in slice L-31, and like the other
+ * two it produced no error of any kind. All three are omissions. Omissions
+ * are invisible in a log, which is why this slice went looking with a probe
+ * that asserts on the ABSENCE of a writer rather than on the presence of a
+ * failure.
+ *
+ * ── WHAT IT WILL AND WILL NOT DO ───────────────────────────────────────────
+ * The decision — close or not, and to what — belongs to `planLocalClose()` in
+ * `lifecycle-core.ts`, where it is proven by self-tests that run in CI with no
+ * Leafly account and no database. This function only carries the plan out.
+ *
+ * It will NOT record a sale. Leafly does not process payments (spec: "At
+ * present Leafly does not process payments for orders placed on its
+ * platform"); money is taken at the counter through the register, under
+ * WAC 314-55-095. `picked_up` means "the customer has their bag", which is
+ * Greenway's `completed` — it is emphatically not a signal to fabricate a
+ * paid transaction.
+ *
+ * It will not move an order that is already terminal, and it will not move one
+ * out of a state the core did not authorise: the update is guarded with an
+ * `.in()` on the statuses it is legal to close FROM, so a race with the
+ * counter loses safely and changes nothing.
+ *
+ * Never throws — same contract as every other stage in this file.
+ */
+export async function onLeaflyOrderClosed(
+  leaflyOrderId: string,
+  leaflyStatus: string,
+): Promise<CloseOutcome> {
+  const base = (summary: string, attempted: boolean): CloseOutcome => ({
+    ...outcome({ summary }),
+    attempted,
+    localStatus: null,
+  });
+
+  try {
+    if (!isSupabaseServiceConfigured) return base("database not connected", true);
+    const id = typeof leaflyOrderId === "string" ? leaflyOrderId.trim() : "";
+    if (id === "") return base("no order id", true);
+
+    const loaded = await loadBridgeRow(id);
+    if (!loaded.ok) return base(`could not read ${id}: ${loaded.error}`, true);
+
+    const { planLocalClose } = await import("./lifecycle-core");
+    const plan = planLocalClose({
+      leaflyStatus,
+      localOrderId: loaded.row.local_order_id,
+    });
+
+    // Not a closing status, or nothing local to close. Either way this is a
+    // legitimate no-op and must not be reported as a failure.
+    if (!plan.shouldClose || plan.localStatus === null) {
+      return {
+        ...outcome({ ok: true, localOrderId: loaded.row.local_order_id, summary: `${id}: ${plan.reason}` }),
+        attempted: false,
+        localStatus: null,
+      };
+    }
+
+    const localOrderId = loaded.row.local_order_id as string;
+    const admin = createSupabaseAdminClient();
+
+    // Read first, so the no-op case can be distinguished from the failure
+    // case. Without this, an order that was ALREADY completed (a double click,
+    // a retry, a webhook racing the button) would match zero rows below and be
+    // indistinguishable from a write that silently did nothing — which is the
+    // exact failure mode this whole slice is about.
+    const { data: before, error: beforeError } = await admin
+      .from("orders")
+      .select("status, order_number")
+      .eq("id", localOrderId)
+      // SLICE L-25. Bounded. Everything in this file that touches the floor
+      // is bounded; an unbounded read here would hang the click that is
+      // supposed to END the order.
+      .abortSignal(dbDeadline("bridge_write"))
+      .maybeSingle<{ status: string | null; order_number: string | null }>();
+
+    if (beforeError) {
+      return base(
+        `${id}: Leafly has this order as "${leaflyStatus}" but we could not read the register order (${beforeError.message}). CHECK THE REGISTER BY HAND.`,
+        true,
+      );
+    }
+
+    const current = (before?.status ?? "").trim();
+    const orderNumber = (before?.order_number ?? "").trim();
+
+    if (current === plan.localStatus) {
+      return {
+        ...outcome({
+          ok: true,
+          localOrderId,
+          summary: `${id}: register order ${orderNumber || localOrderId} was already ${plan.localStatus}`,
+        }),
+        attempted: true,
+        localStatus: plan.localStatus,
+      };
+    }
+
+    // The statuses it is legal to close FROM. Deliberately excludes the
+    // terminal ones (`completed`, `cancelled`, `no_show`): an order that a
+    // human already settled must not be silently re-settled by a remote
+    // event. Migration 0007 defines the full set.
+    const CLOSEABLE_FROM = ["new", "acknowledged", "preparing", "ready"];
+
+    if (!CLOSEABLE_FROM.includes(current)) {
+      return base(
+        `${id}: Leafly has this order as "${leaflyStatus}", but the register order ${orderNumber || localOrderId} is "${current}" and was left alone. CHECK THE REGISTER BY HAND.`,
+        true,
+      );
+    }
+
+    const { error: updateError } = await admin
+      .from("orders")
+      .update({ status: plan.localStatus })
+      .eq("id", localOrderId)
+      // Guard the race. If the counter settled it between our read and this
+      // write, we match nothing and change nothing — the correct outcome.
+      .in("status", CLOSEABLE_FROM)
+      // SLICE L-25. Bounded.
+      .abortSignal(dbDeadline("bridge_write"));
+
+    if (updateError) {
+      return base(
+        `${id}: could not close the register order ${orderNumber || localOrderId} (${updateError.message}). CHECK THE REGISTER BY HAND.`,
+        true,
+      );
+    }
+
+    // The breadcrumb. Best-effort and deliberately unchecked — the order is
+    // closed either way, and failing the close because its diary entry failed
+    // would be the tail wagging the dog — but still bounded, because not
+    // caring about the result is different from waiting forever for it.
+    await admin
+      .from("order_events")
+      .insert({
+        order_id: localOrderId,
+        event_type: "status_changed",
+        to_status: plan.localStatus,
+        actor_label: "Leafly",
+        note: `${plan.reason} Leafly status "${leaflyStatus}" on order ${id}.`,
+      })
+      .abortSignal(dbDeadline("bridge_write"));
+
+    return {
+      ...outcome({
+        ok: true,
+        localOrderId,
+        summary: `${id}: register order ${orderNumber || localOrderId} moved ${current} -> ${plan.localStatus}`,
+      }),
+      attempted: true,
+      localStatus: plan.localStatus,
+    };
+  } catch (err) {
+    return base(
+      `unexpected failure closing ${leaflyOrderId} (${err instanceof Error ? err.message : "unknown"})`,
+      true,
+    );
+  }
+}
