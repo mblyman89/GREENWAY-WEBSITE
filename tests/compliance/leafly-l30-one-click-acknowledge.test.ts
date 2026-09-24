@@ -371,7 +371,37 @@ describe("L-30 — LeaflyOrderActions: one click to acknowledge", () => {
     // ...and the plain, no-dialog branch must be the one the acknowledge
     // form is rendered from.
     expect(actionsCode).toMatch(/if \(!needsConfirm\)/);
-    expect(actionsCode).toMatch(/action=\{isAck \? acknowledgeAction : statusAction\}/);
+
+    // SLICE L-32 ─────────────────────────────────────────────────────────
+    // This line used to read:
+    //
+    //     expect(actionsCode).toMatch(
+    //       /action=\{isAck \? acknowledgeAction : statusAction\}/);
+    //
+    // and it went red when L-32 added a THIRD destination (the reconcile
+    // action, which asks Leafly what an order's status really is and posts
+    // nothing to it). That is the same mistake this very test block is a
+    // monument to, committed one more time: it was pinned to a SPELLING,
+    // not to the property it was bought to protect. The property is:
+    //
+    //     THE ACKNOWLEDGE FORM POSTS TO THE ACKNOWLEDGE SERVER ACTION,
+    //     AND IT IS DECIDED IN ONE EXPLICIT PLACE.
+    //
+    // That is now asserted directly, and in a way that survives a rename or
+    // a fourth destination while still failing if acknowledge is ever routed
+    // somewhere else. The destination variable is discovered FROM the form
+    // rather than assumed, so the two halves cannot drift apart silently.
+    const formDest = /<form\b[\s\S]*?\saction=\{(\w+)\}/.exec(actionsCode);
+    expect(formDest, "a real form posting to a server action must exist").toBeTruthy();
+    const destName = formDest![1];
+
+    // One explicit assignment — one place to read, one place to change.
+    // (If someone wires a prop straight in, there is no `const` to find and
+    // this fails loudly, which is correct: a single hard-wired destination
+    // would send every kind of action to the same endpoint.)
+    const destRule = new RegExp(`const ${destName} =([^;]+);`).exec(actionsCode);
+    expect(destRule, `${destName} must be decided by one explicit rule`).toBeTruthy();
+    expect(destRule![1].replace(/\s+/g, " ")).toMatch(/isAck \? acknowledgeAction/);
 
     // NOTE: the *behavioural* proof that acknowledge renders no dialog lives
     // in the render test below. A source-pattern check cannot establish it —
@@ -404,7 +434,15 @@ describe("L-30 — LeaflyOrderActions: one click to acknowledge", () => {
       "if (!needsConfirm)",
       "return (\n    <>",
     );
-    expect(plainBranch).toMatch(/action=\{isAck \? acknowledgeAction : statusAction\}/);
+    // SLICE L-32: was `/action=\{isAck \? acknowledgeAction : statusAction\}/`.
+    // Re-pinned to the property, for the reason set out at length above: the
+    // plain branch must post to a server action chosen by the kind-dispatch
+    // variable, not to a hard-wired one. `statusAction` appearing here would
+    // mean the acknowledge press sends a status change — the exact defect
+    // L-32 exists to remove — so it is excluded explicitly.
+    expect(plainBranch).toMatch(/<form\b[\s\S]*?\saction=\{\w+\}/);
+    expect(plainBranch).not.toMatch(/action=\{statusAction\}/);
+    expect(plainBranch).not.toMatch(/action=\{acknowledgeAction\}/);
     expect(plainBranch).toMatch(/<SubmitButton action=\{action\} \/>/);
     // and critically, no dialog and no button-type override on this path.
     expect(plainBranch).not.toMatch(/ConfirmDialog/);

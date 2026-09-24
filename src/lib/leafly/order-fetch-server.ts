@@ -271,7 +271,49 @@ export async function storeFetchedLeaflyOrder(input: {
   }
   try {
     const admin = createSupabaseAdminClient();
-    const patch: Record<string, unknown> = { raw_order: input.order };
+
+    // ── SLICE L-32: raw_order IS GUARDED LIKE EVERY OTHER FIELD ────────────
+    //
+    // THE DEFECT THIS FIXES (introduced by L-31, found in L-32, proven by
+    // `scripts/recon/l32-raw-order-wipe-probe.mjs`):
+    //
+    // This line used to be, unconditionally:
+    //
+    //     const patch: Record<string, unknown> = { raw_order: input.order };
+    //
+    // Every OTHER field below is guarded by `if (f.x)` — precisely so a blank
+    // value never overwrites a good one. `raw_order` was the single exception,
+    // and it is the most valuable column of the lot: it holds the entire order
+    // payload, and it is what the detail panel renders.
+    //
+    // L-31 then added a caller that hands this function `{}` on purpose:
+    //
+    //     order: usableOrder ? (input.responseBody as …) : {},
+    //
+    // That caller's intent was right — when Leafly returns 200 with a body we
+    // cannot parse, the STATUS must still be written, because leaving the board
+    // stale was the exact bug L-31 existed to fix. But routing that through an
+    // unguarded `raw_order` meant a successful-but-unreadable response would
+    // advance the step AND erase the customer's items, totals and fulfilment
+    // data in the same write.
+    //
+    // The symptom would have been a detail panel showing blank fields — which
+    // the owner has already reported once before, from a different cause. No
+    // error, no log line, and the step even moves correctly. An omission again.
+    //
+    // WHY EMPTY IS THE TEST, not null: the caller passes `{}`, not null or
+    // undefined, so a null check would not have caught it. What makes a payload
+    // worthless is having no keys, so that is what is checked. A non-empty
+    // payload still overwrites, exactly as before — that is this function's job
+    // on the fetch path, and `collectLeaflyOrder` depends on it.
+    const patch: Record<string, unknown> = {};
+    const hasPayload =
+      input.order !== null &&
+      typeof input.order === "object" &&
+      !Array.isArray(input.order) &&
+      Object.keys(input.order).length > 0;
+    if (hasPayload) patch.raw_order = input.order;
+
     const f = input.facts;
     if (f.status) patch.leafly_status = f.status;
     if (f.fulfillmentMechanism) patch.fulfillment_mechanism = f.fulfillmentMechanism;
@@ -280,6 +322,28 @@ export async function storeFetchedLeaflyOrder(input: {
     if (f.paymentPreference) patch.payment_preference = f.paymentPreference;
     if (f.cancelationReasonCode) patch.cancelation_reason_code = f.cancelationReasonCode;
     if (f.canceledAt) patch.canceled_at = f.canceledAt;
+
+    // ── SLICE L-32: THE HOLE THE FIX ABOVE WOULD OTHERWISE HAVE OPENED ─────
+    //
+    // Guarding `raw_order` made it possible, for the first time, for EVERY
+    // field to be skipped and the patch to be `{}`. Sending an empty update
+    // to PostgREST is not an error — it matches the row, changes nothing, and
+    // returns success. This function would then report `ok: true` having
+    // written nothing at all, which is a lie the caller cannot detect and is
+    // exactly the class of silent no-op that has cost this project whole
+    // slices.
+    //
+    // Reported as a failure with a specific message instead. The caller
+    // already knows what to do with `ok: false` — `persistStatusAfterPush`
+    // turns it into an operator warning telling them to reload and escalate.
+    if (Object.keys(patch).length === 0) {
+      return {
+        ok: false,
+        error:
+          "Nothing to store: Leafly's response carried no usable order payload and no " +
+          "recognisable status, so no field could be written. The order is unchanged here.",
+      };
+    }
 
     const { error } = await admin
       .from("leafly_orders")

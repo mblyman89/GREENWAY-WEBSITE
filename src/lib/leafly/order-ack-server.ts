@@ -80,10 +80,12 @@ import { dbDeadline } from "./db-deadline";
 import { loadLeaflyOrderIntegrationKey } from "./webhook-server";
 import {
   LEAFLY_ACK_SUCCESS_STATUS,
+  LEAFLY_CONFIRM_PUSH_FAILED_WARNING,
   LEAFLY_STATUS_SUCCESS_STATUS,
   assessOutboundResponse,
   decideAcknowledgement,
   decideStatusChange,
+  describeOutboundFailure,
   leaflyAcknowledgeUrl,
   leaflyStatusUrl,
   type AckDecision,
@@ -617,8 +619,13 @@ export async function acknowledgeLeaflyOrder(input: {
         // Appended rather than overwriting: a bridge failure and a status
         // failure are different problems and a budtender may be looking at
         // both. Overwriting would hide whichever happened first.
-        const note =
-          "Leafly was not told we confirmed this order, so the customer may still see it as pending. The order IS accepted here \u2014 do not accept it again.";
+        // SLICE L-32 (C5). Was a string literal here AND an identical one in
+        // the catch below. One constant now, so the two branches cannot drift
+        // apart, and it names the repair button instead of only naming a
+        // prohibition. THIS LINE IS WHERE THE STALE ROW IS BORN: the
+        // acknowledgement succeeded, Leafly may or may not have taken the
+        // confirm, and our row is about to be left at `pending`.
+        const note = LEAFLY_CONFIRM_PUSH_FAILED_WARNING;
         // Template-literal form so the right-hand side begins with a string,
         // per the L-13 wiring guard: a bridgeWarning assignment must never be
         // something that CAN evaluate to nothing. `note` is a non-empty
@@ -631,8 +638,10 @@ export async function acknowledgeLeaflyOrder(input: {
         `[leafly/outbound] acknowledged ${orderId} but the status push threw:`,
         err,
       );
-      const note =
-        "Leafly was not told we confirmed this order, so the customer may still see it as pending. The order IS accepted here \u2014 do not accept it again.";
+      // SLICE L-32 (C5). The same constant as the branch above, deliberately.
+      // A throw and a non-ok result leave the operator in the identical
+      // situation, so they must not be described in two different voices.
+      const note = LEAFLY_CONFIRM_PUSH_FAILED_WARNING;
       // Template-literal form so the right-hand side begins with a string,
       // per the L-13 wiring guard: a bridgeWarning assignment must never be
       // something that CAN evaluate to nothing. `note` is a non-empty
@@ -841,11 +850,102 @@ export async function setLeaflyOrderStatus(input: {
     });
   }
 
+  // ── SLICE L-32: WHEN LEAFLY REFUSES, SAY WHY — AND GET UNSTUCK ──────────
+  //
+  // THE OWNER'S REPORT: he pressed the next step and got
+  //
+  //   "Bad request (400): Leafly rejected the body. Usually an illegal status
+  //    transition..."
+  //
+  // Two things were wrong with that moment, and this block fixes both.
+  //
+  // 1. "Usually" is a guess. Leafly's 400 body is a documented `SchemaError`
+  //    carrying the real reason. We already write it to the attempt log and
+  //    then show the operator our speculation instead. `describeOutboundFailure`
+  //    puts Leafly's own sentence first.
+  //
+  // 2. A rejected transition leaves the operator stuck FOREVER. Our own message
+  //    says "retrying sends the same rejected request" — true, and a dead end.
+  //    The reason a transition is illegal is almost always that our stored
+  //    status disagrees with Leafly's, and there is exactly one authority on
+  //    that question. So we ask it.
+  //
+  //    This is the self-heal: on a `fix_request` failure, re-read the order
+  //    from Leafly and store the truth. The next render of the board then
+  //    offers the moves that are ACTUALLY legal, and the dead end disappears
+  //    without anybody touching the database by hand.
+  //
+  // WHY ONLY `fix_request`: a 401 or a 5xx says nothing about the order's
+  // status, so re-reading would be noise and an extra call on a path that is
+  // already failing. A 400/422-class refusal is the one that means "your idea
+  // of this order is wrong", which is precisely what a re-read repairs.
+  //
+  // NEVER ALLOWED TO THROW, and never allowed to change the outcome: the push
+  // failed, and it still failed after we reconciled. Reconciliation only
+  // improves what the NEXT render knows. Swallowing its errors is deliberate —
+  // a failed recovery attempt must not replace Leafly's actual refusal reason
+  // with a database error the operator can do nothing about.
+  // NOTE: Leafly's own reason is extracted inside `describeOutboundFailure`
+  // below rather than here. An earlier draft of this block also assigned it to
+  // a local, which was dead code that read as though the value were used for
+  // something — exactly the sort of thing that misleads the next reader.
+  let reconcileNote: string | null = null;
+  if (assessment.disposition === "fix_request") {
+    try {
+      const { collectLeaflyOrder } = await import("./order-fetch-server");
+      const refreshed = await collectLeaflyOrder({
+        leaflyOrderId: orderId,
+        knownLocally: true,
+      });
+      if (refreshed.ok && refreshed.facts?.status) {
+        reconcileNote =
+          `We asked Leafly what this order's status actually is: “${refreshed.facts.status}”. ` +
+          "The board has been updated, so reload and the correct next step will be offered.";
+      } else {
+        reconcileNote =
+          "We tried to re-read this order from Leafly to get back in step and could not. " +
+          "Reload the board; if it still will not move, tell the owner.";
+      }
+    } catch (err) {
+      console.error(
+        `[leafly/outbound] ${orderId}: reconcile-after-rejection threw:`,
+        err,
+      );
+      reconcileNote =
+        "We tried to re-read this order from Leafly to get back in step and could not. " +
+        "Reload the board; if it still will not move, tell the owner.";
+    }
+  }
+
+  const finalMessage =
+    assessment.disposition === "fix_request"
+      ? [describeOutboundFailure(assessment, raw.body), reconcileNote]
+          .filter((s): s is string => typeof s === "string" && s.trim() !== "")
+          .join(" ")
+      : assessment.message;
+
+  // Recorded a second time, deliberately and only on a rejection: the first
+  // `recordAttempt` above captured the raw exchange, which is the forensic
+  // record and must not be edited. This one captures what the OPERATOR was
+  // actually told and what we did about it, which is a different question and
+  // the one "why did nobody fix this?" is answered by.
+  if (assessment.disposition === "fix_request") {
+    await recordAttempt({
+      leaflyOrderId: orderId,
+      orderIntegrationKey: key,
+      operation: "status",
+      requestedStatus: decision.body.status,
+      disposition: "fix_request",
+      message: finalMessage,
+      createdBy: input.staffId ?? null,
+    });
+  }
+
   return {
     ok: assessment.disposition === "success",
     refused: false,
     code: assessment.disposition,
-    message: assessment.message,
+    message: finalMessage,
     httpStatus: raw.status,
     assessment,
     warning: persistWarning,
