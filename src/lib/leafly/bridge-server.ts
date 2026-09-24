@@ -48,6 +48,12 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { enqueueAnnouncement } from "@/lib/announcer/announcer-enqueue";
 import { queueOrderReceipt } from "@/lib/printing/printer-store";
+import {
+  buildPickupDetailBreakdown,
+  pickupLinesToReceiptLines,
+  readLeaflyCart,
+  type PickupReceiptLine,
+} from "@/lib/pos/pickup-detail-core";
 import { pacificParts } from "@/lib/reports/timezone";
 // SLICE L-14. The register claim: the fact that makes decideCancelPlan's
 // collision branch reachable, and the interrupt that blocks the till.
@@ -245,22 +251,38 @@ export async function onLeaflyOrderArrived(leaflyOrderId: string): Promise<Bridg
           acknowledgeByLabel: formatAcknowledgeByLabel(row.acknowledge_by),
         });
         try {
+          // SLICE L-36 - the same breakdown the register shows: brand,
+          // vendor, type, category, the deal and its discount, and Leafly's
+          // own tax components. Read from the SAME stored payload the draft
+          // came from; used only when its lines add up to the draft's, else
+          // the plain draft lines print exactly as before.
+          const rich = await leaflyReceiptEnrichment(row.raw_order, draft.draft);
           const jobId = await queueOrderReceipt({
             orderNumber: draft.draft.displayLabel,
             orderId: null,
             placedAt: now,
             customerName: draft.draft.customerLabel ?? "",
             customerPhone: null,
-            lines: draft.draft.lines.map((l) => ({
-              productName: l.productName,
-              brand: null,
-              variantLabel: l.variantLabel,
-              quantity: l.quantity,
-              priceMinorUnits: l.priceMinorUnits,
-            })),
+            lines: rich
+              ? rich.lines.map((l) => ({
+                  productName: l.productName,
+                  brand: l.brand,
+                  variantLabel: l.variantLabel,
+                  quantity: l.quantity,
+                  priceMinorUnits: l.priceMinorUnits,
+                }))
+              : draft.draft.lines.map((l) => ({
+                  productName: l.productName,
+                  brand: null,
+                  variantLabel: l.variantLabel,
+                  quantity: l.quantity,
+                  priceMinorUnits: l.priceMinorUnits,
+                })),
+            lineExtras: rich ? rich.lines.map((l) => l.extras) : undefined,
+            taxLines: rich?.taxLines ?? null,
             itemCount: draft.draft.lines.reduce((a, l) => a + l.quantity, 0),
             subtotalMinorUnits: draft.draft.subtotalMinorUnits,
-            savingsMinorUnits: 0,
+            savingsMinorUnits: rich?.savingsMinorUnits ?? 0,
             estimatedTaxMinorUnits: draft.draft.taxMinorUnits,
             totalMinorUnits: draft.draft.totalMinorUnits,
             origin: "leafly",
@@ -937,5 +959,68 @@ export async function onLeaflyOrderClosed(
       `unexpected failure closing ${leaflyOrderId} (${err instanceof Error ? err.message : "unknown"})`,
       true,
     );
+  }
+}
+
+/**
+ * SLICE L-36 - the rich lines for a Leafly arrival ticket, or null to print
+ * the plain draft lines. Never throws: a print must not be lost to an
+ * enrichment failure.
+ *
+ * Refuses (null) unless the cart's line totals add up to the draft's to the
+ * cent - the draft is what has always printed, and a richer ticket that
+ * disagrees with it would be a worse ticket, not a better one.
+ */
+async function leaflyReceiptEnrichment(
+  rawOrder: unknown,
+  draft: { lines: readonly { quantity: number; priceMinorUnits: number }[]; taxMinorUnits: number },
+): Promise<{
+  lines: PickupReceiptLine[];
+  taxLines: { label: string; amountMinorUnits: number }[] | null;
+  savingsMinorUnits: number;
+} | null> {
+  try {
+    const cart = readLeaflyCart(rawOrder);
+    if (cart.lines.length === 0) return null;
+    const draftSum = draft.lines.reduce((a, l) => a + l.quantity * l.priceMinorUnits, 0);
+    const cartSum = cart.lines.reduce((a, l) => a + l.lineTotalMinor, 0);
+    if (draftSum !== cartSum) return null;
+
+    const { loadMenuFactsByLeaflyVariantId } = await import("@/lib/pos/pickup-menu-facts");
+    const menu = await loadMenuFactsByLeaflyVariantId(cart.lines.map((l) => l.integratorVariantId));
+    const breakdown = buildPickupDetailBreakdown(
+      cart.lines.map((l) => {
+        const facts = l.integratorVariantId ? menu.get(l.integratorVariantId) : undefined;
+        return {
+          productId: l.integratorVariantId,
+          productName: l.name,
+          brand: l.brandName,
+          variantLabel: l.variantLabel,
+          category: facts?.category ?? null,
+          categoryLabelFallback: l.leaflyCategory,
+          quantity: l.quantity,
+          lineTotalMinor: l.lineTotalMinor,
+          regularLineTotalMinor: l.regularLineTotalMinor,
+          loyaltyLineMinor: null,
+          dealLabel: l.dealTitle,
+        };
+      }),
+      menu,
+      draft.taxMinorUnits,
+      { splitTax: false },
+    );
+    const taxSum = cart.taxes.reduce((a, t) => a + t.amountMinor, 0);
+    return {
+      // Leafly prices EXCLUDE tax, so no category slug reaches the printer's
+      // tax-inclusive excise split (see pickupLinesToReceiptLines).
+      lines: pickupLinesToReceiptLines(breakdown.lines, { includeCategorySlug: false }),
+      taxLines:
+        cart.taxes.length > 0 && taxSum === draft.taxMinorUnits
+          ? cart.taxes.map((t) => ({ label: t.label, amountMinorUnits: t.amountMinor }))
+          : null,
+      savingsMinorUnits: breakdown.dealDiscountMinor,
+    };
+  } catch {
+    return null;
   }
 }

@@ -112,6 +112,13 @@ import { buildRejectedReport } from "@/lib/pos/rejected-report-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
+import {
+  exactPickupMatch,
+  pickupMatchesSearch,
+  REGISTER_CANCEL_REASONS,
+  type PickupDetailLine,
+} from "@/lib/pos/pickup-detail-core";
+import { useSocketScanner } from "@/lib/pos/use-socket-scanner";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
 import {
   statusLabel,
@@ -1898,6 +1905,11 @@ export function RegisterShell({
           creds={creds}
           employee={employee}
           onClose={() => setPickupOpen(false)}
+          onCancelled={(queueLength) => {
+            // SLICE L-36 - the modal re-read the queue after the cancel; its
+            // length is the truth for the home-screen badge.
+            if (typeof queueLength === "number") setPickupCount(queueLength);
+          }}
           onLoaded={(loaded) => {
             // AM-D2 — the order is NOT superseded on load; it stays active and
             // is only cancelled when THIS sale completes (sync-store). Rebuild
@@ -3933,7 +3945,7 @@ function ReturnsModal({
 }
 
 // ---------------------------------------------------------------------------
-// B28 — Pickup queue modal: website orders → ID check at handover → cash →
+// B28 / L-36 — Pickup queue modal: online orders → ID check at handover → cash →
 // the SAME server completion gate every sale runs → receipt + drawer pop
 // ---------------------------------------------------------------------------
 
@@ -3959,6 +3971,20 @@ type PickupDetail = {
   origin?: string;
   originLabel?: string;
   isMarketplace?: boolean;
+  /**
+   * SLICE L-36 - the full breakdown. All optional for the same reason as
+   * origin: an older server build will not send them, and the pane then
+   * falls back to `lines` + the single Tax figure.
+   */
+  displayName?: string;
+  items?: PickupDetailLine[];
+  regularTotalMinor?: number;
+  dealDiscountMinor?: number;
+  loyaltyDiscountMinor?: number;
+  loyaltyLabel?: string | null;
+  savingsMinor?: number;
+  taxLines?: { label: string; amountMinor: number }[] | null;
+  pricesExcludeTax?: boolean;
 };
 
 /**
@@ -4026,21 +4052,36 @@ function PickupOriginBadge({
 }
 
 /**
- * The register's window into the website order queue. Two panes in one modal:
- * the queue (ready-first, oldest-first) and one order's lines.
+ * The register's window into the online order queue (website + Leafly).
  *
- * SLICE 17 — there is now exactly ONE way out of this modal: "Start handover",
- * which loads the order into a register sale and puts the customer through the
- * REAL ID gate. The old checkbox-and-cash completion pane is gone, and the
- * endpoint behind it answers 410 Gone, so a stale bundle cannot use it either.
- * ONLINE-ONLY; requires an open drawer (the cash still goes into it, at the
- * register).
+ * SLICE L-36 - rebuilt at the owner's request: "The pop up window can and
+ * should be much larger. It should have an easy way to search for the order
+ * ... Newest orders on top, scrollable, with a way of canceling the order
+ * from the register."
+ *
+ *   - Nearly full-screen, list on the left, the chosen order on the right.
+ *   - A search / scan box that is focused the moment the modal opens. A
+ *     keyboard-wedge scanner types into it; a Socket (SDK) scanner is routed
+ *     into it too. Typing filters live; Enter (which every scanner sends)
+ *     opens the order when the code EXACTLY matches one order's number or
+ *     printed label (exactPickupMatch - an ambiguous code opens nothing).
+ *   - The detail pane shows every line's brand, vendor, type and category,
+ *     unit price, regular price, deal and loyalty discounts, and the tax
+ *     split, all computed on the server (pickup-detail-core).
+ *   - Cancel: reason + manager/lead PIN, done on the server, which cancels a
+ *     Leafly order AT LEAFLY first. The Orders board and the Reports page read
+ *     live, so they reflect it on their next load.
+ *
+ * SLICE 17 still holds: the only way to COMPLETE an order is "Start handover",
+ * which loads it into a register sale and puts the customer through the REAL
+ * ID gate. ONLINE-ONLY; requires an open drawer.
  */
 function PickupQueueModal({
   creds,
   employee,
   onClose,
   onLoaded,
+  onCancelled,
 }: {
   creds: DeviceCreds;
   employee: UnlockedEmployee;
@@ -4063,11 +4104,19 @@ function PickupQueueModal({
     originLabel?: string;
     isMarketplace?: boolean;
   }) => void;
+  /** SLICE L-36 - an order was cancelled here; the shell refreshes its badge count. */
+  onCancelled: (queueLength: number | null) => void;
 }) {
   const [queue, setQueue] = useState<PickupQueueEntry[] | null>(null);
   const [detail, setDetail] = useState<PickupDetail | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState<string>("");
+  const [cancelPin, setCancelPin] = useState("");
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   const headers = useMemo(
     () => ({
@@ -4078,34 +4127,48 @@ function PickupQueueModal({
     [creds],
   );
 
-  const loadQueue = useCallback(async () => {
-    setErrors([]);
+  const loadQueue = useCallback(async (): Promise<PickupQueueEntry[] | null> => {
     try {
       const res = await posFetch("/api/pos/pickup", { headers });
       const body = (await res.json().catch(() => null)) as { queue?: PickupQueueEntry[]; error?: string } | null;
       if (!res.ok || !Array.isArray(body?.queue)) {
         setErrors([body?.error ?? "Could not load the pickup queue."]);
         setQueue([]);
-        return;
+        return null;
       }
       setQueue(body.queue);
+      return body.queue;
     } catch {
       setErrors(["Could not reach the server — try again."]);
       setQueue([]);
+      return null;
     }
   }, [headers]);
 
   useEffect(() => {
     // Deferred a tick (same pattern as the shell's menu refresh) so the
     // effect body never sets state synchronously during mount.
-    const t = setTimeout(() => void loadQueue(), 0);
+    const t = setTimeout(() => {
+      void loadQueue();
+      searchRef.current?.focus();
+    }, 0);
     return () => clearTimeout(t);
   }, [loadQueue]);
+
+  // Newest first comes from the server (sortPickupQueue); filtering keeps it.
+  const visible = useMemo(
+    () => (queue ?? []).filter((q) => pickupMatchesSearch({ ...q, displayName: q.displayName ?? "" }, search)),
+    [queue, search],
+  );
 
   const openOrder = async (orderId: string) => {
     if (busy) return;
     setBusy(true);
     setErrors([]);
+    setNotice(null);
+    setCancelOpen(false);
+    setCancelPin("");
+    setCancelReason("");
     try {
       const res = await posFetch("/api/pos/pickup", { method: "POST", headers, body: JSON.stringify({ orderId }) });
       const body = (await res.json().catch(() => null)) as { order?: PickupDetail; error?: string } | null;
@@ -4121,6 +4184,29 @@ function PickupQueueModal({
     }
   };
 
+  /** Enter / a scan: open the ONE order the code identifies, if exactly one. */
+  const submitSearch = (raw: string) => {
+    const list = (queue ?? []).map((q) => ({ ...q, displayName: q.displayName ?? "" }));
+    const hit = exactPickupMatch(list, raw);
+    if (hit) {
+      setSearch(raw.trim());
+      void openOrder(hit.orderId);
+      return;
+    }
+    setSearch(raw.trim());
+    const partial = list.filter((q) => pickupMatchesSearch(q, raw));
+    if (partial.length === 0) setNotice(`No active online order matches "${raw.trim()}". It may already be picked up or cancelled.`);
+    else if (partial.length > 1) setNotice(`${partial.length} orders match — tap the right one.`);
+    else void openOrder(partial[0].orderId);
+  };
+
+  // Socket (SDK) scanners do not type into the box, so route their scans
+  // here. A keyboard-wedge scanner needs nothing: it types into the focused
+  // search box and ends with Enter.
+  useSocketScanner({
+    enabled: true,
+    onScan: (payload) => submitSearch(payload),
+  });
 
   // AM-D2 — load the order into a register sale: the order stays ACTIVE (NOT
   // superseded on load); the server hands back the raw lines + the source
@@ -4168,175 +4254,456 @@ function PickupQueueModal({
     }
   };
 
+  // SLICE L-36 - cancel from the register. The server re-checks the PIN's
+  // role (manager/lead), the reason, and the order's state; for a Leafly
+  // order it cancels at Leafly FIRST and changes nothing locally if Leafly
+  // refuses. Nothing is assumed here - the queue is re-read afterwards.
+  const cancelOrder = async () => {
+    if (!detail || busy) return;
+    if (!cancelReason) {
+      setErrors(["Pick why the order is being cancelled."]);
+      return;
+    }
+    setBusy(true);
+    setErrors([]);
+    try {
+      const res = await posFetch("/api/pos/pickup", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          orderId: detail.orderId,
+          cancel: { pin: cancelPin, reason: cancelReason, employeeName: employee.fullName },
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { cancelled?: { orderNumber: string; displayName: string; message: string }; error?: string }
+        | null;
+      if (!res.ok || !body?.cancelled) {
+        setErrors([body?.error ?? "The order could not be cancelled."]);
+        return;
+      }
+      setDetail(null);
+      setCancelOpen(false);
+      setCancelPin("");
+      setCancelReason("");
+      setSearch("");
+      setNotice(body.cancelled.message);
+      const next = await loadQueue();
+      onCancelled(next ? next.length : null);
+      searchRef.current?.focus();
+    } catch {
+      setErrors(["Could not reach the server — the order was NOT confirmed cancelled. Check the queue before trying again."]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const waited = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`);
+  const items = detail?.items;
+  const detailTitle = detail ? (detail.displayName ?? "").trim() || detail.orderNumber : "";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
-        <div className="flex items-center justify-between">
-          <h2 className="flex min-w-0 items-center gap-2 text-lg font-semibold">
-            <span className="truncate">
-              {detail ? `Order ${detail.orderNumber} — ${detail.customerLabel}` : "Pickup orders"}
-            </span>
-            {/* L-12 — the detail pane is the last screen before "Start
-                handover", so the origin is repeated here rather than assumed
-                remembered from the tile. */}
-            {detail ? (
-              <PickupOriginBadge originLabel={detail.originLabel} isMarketplace={detail.isMarketplace} />
-            ) : null}
-          </h2>
-          <div className="flex gap-2">
-            {detail ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3">
+      <div className="flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] text-[var(--pos-text)]">
+        {/* Header: title, search / scan, close */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-[var(--pos-border)] p-4">
+          <h2 className="text-lg font-semibold">Online orders</h2>
+          {/* No form element: this shell handles Enter explicitly (see the history
+              modal). Every scanner ends its payload with Enter. */}
+          <div className="flex min-w-[16rem] flex-1 items-center gap-2">
+            <input
+              ref={searchRef}
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setNotice(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitSearch(e.currentTarget.value);
+                }
+              }}
+              inputMode="search"
+              autoComplete="off"
+              aria-label="Search or scan an order"
+              placeholder="Scan or type the order name, GWY number, or customer…"
+              className="w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-3 text-base"
+            />
+            {search ? (
               <button
                 type="button"
                 onClick={() => {
-                  setDetail(null);
-                  setErrors([]);
-                  void loadQueue();
+                  setSearch("");
+                  setNotice(null);
+                  searchRef.current?.focus();
                 }}
-                className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm"
+                className="pos-tile shrink-0 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-3 text-sm"
               >
-                Back
+                Clear
               </button>
             ) : null}
-            <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
-              Close
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setErrors([]);
+              setNotice(null);
+              void loadQueue();
+            }}
+            disabled={busy}
+            className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-3 text-sm disabled:opacity-40"
+          >
+            Refresh
+          </button>
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-3 text-sm">
+            Close
+          </button>
         </div>
 
-        {!detail ? (
-          <>
-            <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
-              Online orders, ready first — from our website and from Leafly. Tap one to hand it over — the ID
-              check happens HERE, at the counter, and the sale runs the same compliance gate as every register
-              sale. Orders that came from a marketplace are badged; that customer was told what to expect by
-              the marketplace, not by us.
+        {errors.length > 0 || notice ? (
+          <div className="space-y-1 px-4 pt-3">
+            {notice ? (
+              <p className="rounded-lg bg-[var(--pos-info-soft)] px-3 py-2 text-sm text-[var(--pos-info)]">{notice}</p>
+            ) : null}
+            {errors.length > 0 ? (
+              <ul className="space-y-1 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">
+                {errors.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="flex min-h-0 flex-1">
+          {/* LEFT: the queue, newest first, scrollable */}
+          <div className="flex w-[38%] min-w-[18rem] flex-col border-r border-[var(--pos-border)]">
+            <p className="px-4 pt-3 text-xs text-[var(--pos-text-muted)]">
+              Newest first — from our website and from Leafly. {queue ? `${visible.length} of ${queue.length} shown.` : ""}{" "}
+              Marketplace orders are badged; that customer was told what to expect by the marketplace, not by us.
             </p>
-            {queue === null ? (
-              <p className="mt-6 text-center text-sm text-[var(--pos-text-faint)]">Loading…</p>
-            ) : queue.length === 0 ? (
-              <p className="mt-6 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-6 text-center text-sm text-[var(--pos-text-faint)]">
-                No online orders waiting. New orders appear here the moment they&rsquo;re placed.
-              </p>
-            ) : (
-              <ul className="mt-4 space-y-2">
-                {queue.map((q) => (
-                  <li key={q.orderId}>
-                    <button
-                      type="button"
-                      onClick={() => void openOrder(q.orderId)}
-                      disabled={busy}
-                      className={`w-full rounded-xl border p-4 text-left disabled:opacity-40 ${
-                        q.status === "ready"
-                          ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)]"
-                          : "border-[var(--pos-border)] bg-[var(--pos-surface-2)]"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex min-w-0 items-center gap-2 text-sm font-semibold">
-                          <span className="truncate">
-                            {q.orderNumber} · {q.customerLabel}
-                          </span>
-                          {/* L-12 — beside the order number, not at the end of
-                              the line: this is the first thing read on the
-                              tile, and a badge after the waiting time would
-                              be read last or not at all. */}
-                          <PickupOriginBadge originLabel={q.originLabel} isMarketplace={q.isMarketplace} />
-                        </span>
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                            q.status === "ready" ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {queue === null ? (
+                <p className="mt-6 text-center text-sm text-[var(--pos-text-faint)]">Loading…</p>
+              ) : queue.length === 0 ? (
+                <p className="mt-6 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-6 text-center text-sm text-[var(--pos-text-faint)]">
+                  No online orders waiting. New orders appear here the moment they&rsquo;re placed.
+                </p>
+              ) : visible.length === 0 ? (
+                <p className="mt-6 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-6 text-center text-sm text-[var(--pos-text-faint)]">
+                  Nothing matches that search.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {visible.map((q) => {
+                    const selected = detail?.orderId === q.orderId;
+                    const name = (q.displayName ?? "").trim() || q.orderNumber;
+                    return (
+                      <li key={q.orderId}>
+                        <button
+                          type="button"
+                          onClick={() => void openOrder(q.orderId)}
+                          disabled={busy}
+                          className={`w-full rounded-xl border p-3 text-left disabled:opacity-40 ${
+                            selected
+                              ? "border-[var(--pos-info-border)] bg-[var(--pos-info-soft)]"
+                              : q.status === "ready"
+                                ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)]"
+                                : "border-[var(--pos-border)] bg-[var(--pos-surface-2)]"
                           }`}
                         >
-                          {q.statusLabel}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
-                        {q.itemCount} item{q.itemCount === 1 ? "" : "s"} · {formatCents(q.totalMinor)} · waiting{" "}
-                        {q.minutesWaiting < 60
-                          ? `${q.minutesWaiting} min`
-                          : `${Math.floor(q.minutesWaiting / 60)}h ${q.minutesWaiting % 60}m`}
-                        {q.hasCustomerNote ? " · has a note" : ""}
-                      </p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="mt-4 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-4">
-              <ul className="space-y-1.5 text-sm">
-                {detail.lines.map((l, i) => (
-                  <li key={i} className="flex items-baseline justify-between gap-3">
-                    <span>
-                      {l.quantity}x {l.productName}
-                      {l.variantLabel ? ` (${l.variantLabel})` : ""}
-                    </span>
-                    <span className="shrink-0 font-mono text-[var(--pos-text)]">{formatCents(l.priceMinor * l.quantity)}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-3 border-t border-[var(--pos-border)] pt-2 text-sm">
-                <div className="flex justify-between text-[var(--pos-text-muted)]">
-                  <span>Subtotal</span>
-                  <span className="font-mono">{formatCents(detail.subtotalMinor)}</span>
-                </div>
-                <div className="flex justify-between text-[var(--pos-text-muted)]">
-                  <span>Tax</span>
-                  <span className="font-mono">{formatCents(detail.taxMinor)}</span>
-                </div>
-                <div className="mt-1 flex justify-between text-base font-bold">
-                  <span>Total due (cash)</span>
-                  <span className="font-mono">{formatCents(detail.totalMinor)}</span>
-                </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="truncate text-lg font-black tracking-wide">{name}</span>
+                              {/* L-12 — beside the order name: the first thing
+                                  read on the tile. */}
+                              <PickupOriginBadge originLabel={q.originLabel} isMarketplace={q.isMarketplace} />
+                            </span>
+                            <span
+                              className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                q.status === "ready" ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                              }`}
+                            >
+                              {q.statusLabel}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 truncate text-sm font-semibold">
+                            {q.customerLabel}
+                            {name !== q.orderNumber ? <span className="font-mono font-normal text-[var(--pos-text-muted)]"> · {q.orderNumber}</span> : null}
+                          </p>
+                          <p className="mt-0.5 text-xs text-[var(--pos-text-muted)]">
+                            {q.itemCount} item{q.itemCount === 1 ? "" : "s"} · {formatCents(q.totalMinor)} · placed {waited(q.minutesWaiting)} ago
+                            {q.hasCustomerNote ? " · has a note" : ""}
+                          </p>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT: the chosen order in full */}
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            {!detail ? (
+              <div className="flex h-full flex-col items-center justify-center text-center text-sm text-[var(--pos-text-faint)]">
+                <p className="text-base font-semibold text-[var(--pos-text-muted)]">Scan the order slip or tap an order.</p>
+                <p className="mt-1 max-w-md">
+                  The printed slip shows the order name and GWY number at the top — scan it with the handheld scanner,
+                  or type either one into the box above.
+                </p>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="flex flex-wrap items-center gap-2 text-2xl font-black tracking-wide">
+                      <span>{detailTitle}</span>
+                      {/* L-12 — repeated on the detail pane: the last screen
+                          before "Start handover". */}
+                      <PickupOriginBadge originLabel={detail.originLabel} isMarketplace={detail.isMarketplace} />
+                    </h3>
+                    <p className="mt-0.5 text-sm text-[var(--pos-text-muted)]">
+                      <span className="font-semibold text-[var(--pos-text)]">{detail.customerLabel}</span> ·{" "}
+                      <span className="font-mono">{detail.orderNumber}</span> · {detail.status} · placed{" "}
+                      {new Date(detail.placedAtIso).toLocaleString()}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetail(null);
+                      setCancelOpen(false);
+                      setErrors([]);
+                      searchRef.current?.focus();
+                    }}
+                    className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm"
+                  >
+                    Deselect
+                  </button>
+                </div>
 
-            {detail.customerNote ? (
-              <p className="mt-3 rounded-lg bg-[var(--pos-info-soft)] px-3 py-2 text-xs text-[var(--pos-info)]">
-                Customer note: {detail.customerNote}
-              </p>
-            ) : null}
+                <div className="mt-3 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3">
+                  {items && items.length > 0 ? (
+                    <ul className="divide-y divide-[var(--pos-border)] text-sm">
+                      {items.map((l, i) => {
+                        const facts = [
+                          l.brand ? `Brand: ${l.brand}` : null,
+                          l.vendor ? `Vendor: ${l.vendor}` : null,
+                          l.inventoryType ? `Type: ${l.inventoryType}` : null,
+                          l.categoryLabel ? `Category: ${l.categoryLabel}` : null,
+                        ].filter((x): x is string => x !== null);
+                        return (
+                          <li key={i} className="py-2">
+                            <div className="flex items-baseline justify-between gap-3">
+                              <span className="font-semibold">
+                                {l.quantity}× {l.productName}
+                                {l.variantLabel ? <span className="font-normal text-[var(--pos-text-muted)]"> ({l.variantLabel})</span> : null}
+                              </span>
+                              <span className="shrink-0 font-mono font-semibold">{formatCents(l.lineTotalMinor)}</span>
+                            </div>
+                            {facts.length > 0 ? (
+                              <p className="mt-0.5 text-xs text-[var(--pos-text-muted)]">{facts.join(" · ")}</p>
+                            ) : null}
+                            <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-[var(--pos-text-muted)]">
+                              {l.unitPriceMinor !== null ? <span>{formatCents(l.unitPriceMinor)} each</span> : null}
+                              {l.regularUnitPriceMinor !== null ? (
+                                <span className="line-through">was {formatCents(l.regularUnitPriceMinor)} each</span>
+                              ) : null}
+                              {l.dealDiscountMinor > 0 ? (
+                                <span className="text-[var(--pos-ok)]">
+                                  {l.dealLabel ? `${l.dealLabel}: ` : "Deal: "}−{formatCents(l.dealDiscountMinor)}
+                                </span>
+                              ) : null}
+                              {l.loyaltyDiscountMinor > 0 ? (
+                                <span className="text-[var(--pos-ok)]">Loyalty: −{formatCents(l.loyaltyDiscountMinor)}</span>
+                              ) : null}
+                            </p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    // An older server build sends only `lines`.
+                    <ul className="space-y-1.5 text-sm">
+                      {detail.lines.map((l, i) => (
+                        <li key={i} className="flex items-baseline justify-between gap-3">
+                          <span>
+                            {l.quantity}x {l.productName}
+                            {l.variantLabel ? ` (${l.variantLabel})` : ""}
+                          </span>
+                          <span className="shrink-0 font-mono">{formatCents(l.priceMinor * l.quantity)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
 
-            {/* SLICE 17 — ONE DOOR. The ID checkbox, the cash field and the
-                "Complete pickup" button are gone. They allowed a cannabis
-                handover on a tick: `idConfirmed` was a plain boolean and the
-                only ID check anywhere on that path. Everything now goes
-                through the register sale, which lands on the REAL gate
-                (id-scan-core: AAMVA parse, 21+, expiry, WAC 314-55-150
-                acceptable types, audited manual entry). Owner: "The former
-                is just a check box. I don't like that." */}
-            <div className="mt-4 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-4">
-              <p className="text-sm text-[var(--pos-warn)]">
-                <strong>Scan {detail.customerLabel}&rsquo;s ID next.</strong> Starting the handover opens this order
-                as a register sale, and the register will not take payment until the ID is verified — age
-                verification happens at handover, not at checkout (WAC 314-55-150).
-              </p>
-            </div>
+                  <div className="mt-3 space-y-0.5 border-t border-[var(--pos-border)] pt-2 text-sm">
+                    {typeof detail.regularTotalMinor === "number" &&
+                    (detail.dealDiscountMinor ?? 0) + (detail.loyaltyDiscountMinor ?? 0) > 0 ? (
+                      <>
+                        <div className="flex justify-between text-[var(--pos-text-muted)]">
+                          <span>Regular price</span>
+                          <span className="font-mono">{formatCents(detail.regularTotalMinor)}</span>
+                        </div>
+                        {(detail.dealDiscountMinor ?? 0) > 0 ? (
+                          <div className="flex justify-between text-[var(--pos-ok)]">
+                            <span>Deals &amp; sale prices</span>
+                            <span className="font-mono">−{formatCents(detail.dealDiscountMinor ?? 0)}</span>
+                          </div>
+                        ) : null}
+                        {(detail.loyaltyDiscountMinor ?? 0) > 0 ? (
+                          <div className="flex justify-between text-[var(--pos-ok)]">
+                            <span>{detail.loyaltyLabel ?? "Loyalty discount"}</span>
+                            <span className="font-mono">−{formatCents(detail.loyaltyDiscountMinor ?? 0)}</span>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+                    <div className="flex justify-between text-[var(--pos-text-muted)]">
+                      <span>Subtotal{detail.pricesExcludeTax ? " (before tax)" : " (tax included)"}</span>
+                      <span className="font-mono">{formatCents(detail.subtotalMinor)}</span>
+                    </div>
+                    {detail.taxLines && detail.taxLines.length > 0 ? (
+                      detail.taxLines.map((t, i) => (
+                        <div key={i} className="flex justify-between text-[var(--pos-text-muted)]">
+                          <span>{t.label}</span>
+                          <span className="font-mono">{formatCents(t.amountMinor)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex justify-between text-[var(--pos-text-muted)]">
+                        <span>Tax</span>
+                        <span className="font-mono">{formatCents(detail.taxMinor)}</span>
+                      </div>
+                    )}
+                    {(detail.savingsMinor ?? 0) > 0 ? (
+                      <div className="flex justify-between text-[var(--pos-ok)]">
+                        <span>Customer saved</span>
+                        <span className="font-mono">{formatCents(detail.savingsMinor ?? 0)}</span>
+                      </div>
+                    ) : null}
+                    <div className="mt-1 flex justify-between text-lg font-bold">
+                      <span>Total due</span>
+                      <span className="font-mono">{formatCents(detail.totalMinor)}</span>
+                    </div>
+                    {detail.pricesExcludeTax ? (
+                      <p className="text-xs text-[var(--pos-text-faint)]">
+                        Leafly prices are shown before tax, and the taxes are Leafly&rsquo;s own figures.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
 
-            <button
-              type="button"
-              onClick={() => void loadIntoSale()}
-              disabled={busy}
-              className="mt-5 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
-            >
-              {busy ? "Opening…" : `Start handover — scan ID · ${formatCents(detail.totalMinor)}`}
-            </button>
-            <p className="mt-1 text-center text-xs text-[var(--pos-text-faint)]">
-              Items reprice at today&rsquo;s menu prices. The website order stays open until this sale completes,
-              so nothing is lost if the customer walks away.
-            </p>
-          </>
-        )}
+                {detail.customerNote ? (
+                  <p className="mt-3 rounded-lg bg-[var(--pos-info-soft)] px-3 py-2 text-sm text-[var(--pos-info)]">
+                    Customer note: {detail.customerNote}
+                  </p>
+                ) : null}
 
-        {errors.length > 0 ? (
-          <ul className="mt-3 space-y-1 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">
-            {errors.map((e, i) => (
-              <li key={i}>{e}</li>
-            ))}
-          </ul>
-        ) : null}
+                {/* SLICE 17 — ONE DOOR. Completion only through the register
+                    sale and its REAL ID gate (id-scan-core). */}
+                <div className="mt-3 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-3">
+                  <p className="text-sm text-[var(--pos-warn)]">
+                    <strong>Scan {detail.customerLabel}&rsquo;s ID next.</strong> Starting the handover opens this order
+                    as a register sale, and the register will not take payment until the ID is verified — age
+                    verification happens at handover, not at checkout (WAC 314-55-150).
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void loadIntoSale()}
+                  disabled={busy || cancelOpen}
+                  className="mt-3 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
+                >
+                  {busy && !cancelOpen ? "Opening…" : `Start handover — scan ID · ${formatCents(detail.totalMinor)}`}
+                </button>
+                <p className="mt-1 text-center text-xs text-[var(--pos-text-faint)]">
+                  Items reprice at today&rsquo;s menu prices. The online order stays open until this sale completes,
+                  so nothing is lost if the customer walks away.
+                </p>
+
+                {/* SLICE L-36 — cancel from the register */}
+                {!cancelOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCancelOpen(true);
+                      setErrors([]);
+                    }}
+                    disabled={busy}
+                    className="mt-4 pos-tile w-full rounded-xl border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] py-2.5 text-sm font-semibold text-[var(--pos-danger)] disabled:opacity-40"
+                  >
+                    Cancel this order…
+                  </button>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] p-3">
+                    <p className="text-sm font-semibold text-[var(--pos-danger)]">Cancel {detailTitle} for {detail.customerLabel}?</p>
+                    <p className="mt-0.5 text-xs text-[var(--pos-danger)]">
+                      {detail.isMarketplace
+                        ? `This cancels it at ${detail.originLabel ?? "the marketplace"} too — the customer is notified by them. `
+                        : ""}
+                      It leaves the Orders board and shows as cancelled in Reports. A manager or lead PIN is required.
+                      Put the bag&rsquo;s items back on the shelf.
+                    </p>
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      {REGISTER_CANCEL_REASONS.map((r) => (
+                        <button
+                          key={r.code}
+                          type="button"
+                          onClick={() => setCancelReason(r.code)}
+                          className={`pos-tile rounded-lg border px-3 py-2 text-left text-sm ${
+                            cancelReason === r.code
+                              ? "border-[var(--pos-danger-solid)] bg-[var(--pos-surface)] font-semibold"
+                              : "border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)]"
+                          }`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        maxLength={6}
+                        value={cancelPin}
+                        onChange={(e) => setCancelPin(e.target.value.replace(/\D/g, ""))}
+                        placeholder="Manager PIN"
+                        aria-label="Manager PIN"
+                        className="w-40 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-base"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void cancelOrder()}
+                        disabled={busy || !cancelReason || cancelPin.length < 4}
+                        className="pos-tile rounded-lg bg-[var(--pos-danger-solid)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                      >
+                        {busy ? "Cancelling…" : "Cancel order"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCancelOpen(false);
+                          setCancelPin("");
+                          setCancelReason("");
+                        }}
+                        disabled={busy}
+                        className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm disabled:opacity-40"
+                      >
+                        Keep order
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -118,11 +118,38 @@ export type EscposReceiptLine = {
   unitThcMg?: number | null;
   /** Name of the promotion that produced the discount. */
   appliedLabel?: string | null;
+  /**
+   * SLICE L-36 - what the picker needs to find the right product on the
+   * shelf: the vendor (licence number stripped), the detailed POS inventory
+   * type and the website category label. From the menu, never guessed;
+   * absent prints nothing.
+   */
+  vendor?: string | null;
+  inventoryType?: string | null;
+  categoryLabel?: string | null;
+  /**
+   * SLICE L-36 - the discount on the WHOLE line (deal + loyalty), minor
+   * units. Printed as its own "Discount" row so the price breakdown is
+   * readable even when the per-unit "was" price cannot be stated.
+   */
+  lineDiscountMinorUnits?: number | null;
 };
 
 export type EscposReceiptInput = {
   /** Customer-facing order label (fun pool name or GWY-XXXXXX). */
   orderNumber: string;
+  /**
+   * SLICE L-36 - the underlying order number (GWY-XXXXXX) when the label is a
+   * fun name. Printed under the label so either can be typed or scanned into
+   * the register's Online Orders search. Absent / equal to the label = skipped.
+   */
+  orderRef?: string | null;
+  /**
+   * SLICE L-36 - itemized tax lines supplied by the caller (Leafly's own tax
+   * components). Printed instead of our excise/sales split ONLY when they sum
+   * exactly to estimatedTaxMinorUnits; otherwise ignored.
+   */
+  taxLines?: { label: string; amountMinorUnits: number }[] | null;
   /** ISO timestamp the order was placed. */
   placedAt: string;
   customerName: string;
@@ -396,6 +423,10 @@ export function formatEscposReceipt(
   const input: EscposReceiptInput = {
     ...rawInput,
     orderNumber: asciiFold(rawInput.orderNumber),
+    orderRef: asciiFold(rawInput.orderRef ?? ""),
+    taxLines: rawInput.taxLines
+      ? rawInput.taxLines.map((t) => ({ label: asciiFold(t.label), amountMinorUnits: t.amountMinorUnits }))
+      : null,
     customerName: asciiFold(rawInput.customerName ?? ""),
     customerPhone: asciiFold(rawInput.customerPhone ?? ""),
     customerNote: asciiFold(rawInput.customerNote ?? ""),
@@ -412,6 +443,9 @@ export function formatEscposReceipt(
       brand: l.brand == null ? l.brand : asciiFold(l.brand),
       variantLabel: l.variantLabel == null ? l.variantLabel : asciiFold(l.variantLabel),
       appliedLabel: l.appliedLabel == null ? l.appliedLabel : asciiFold(l.appliedLabel),
+      vendor: l.vendor == null ? l.vendor : asciiFold(l.vendor),
+      inventoryType: l.inventoryType == null ? l.inventoryType : asciiFold(l.inventoryType),
+      categoryLabel: l.categoryLabel == null ? l.categoryLabel : asciiFold(l.categoryLabel),
     })),
   };
 
@@ -427,6 +461,9 @@ export function formatEscposReceipt(
   // -- Identity block. The register prints "Receipt # X · <register>"; the
   // pickup equivalent names the ORDER and says plainly what this paper is.
   out.push(centerLine(`Receipt # ${input.orderNumber}`, cols));
+  // SLICE L-36 - the second handle for the register search.
+  const ref = (input.orderRef ?? "").trim();
+  if (ref && ref !== input.orderNumber.trim()) out.push(centerLine(`Order # ${ref}`, cols));
   // SLICE L-10. This line used to be the constant "ONLINE PICKUP ORDER",
   // which was accurate while the website was the only source of online
   // orders and became a lie the moment Leafly was added. The wording for
@@ -477,6 +514,25 @@ export function formatEscposReceipt(
           out.push(`  ${wrapped}`);
         }
       }
+      // SLICE L-36 - where it comes from and what it is, for the picker.
+      const src = input.lines[i];
+      const facts = [
+        src.vendor?.trim() ? `Vendor: ${src.vendor.trim()}` : "",
+        src.inventoryType?.trim() ? `Type: ${src.inventoryType.trim()}` : "",
+        src.categoryLabel?.trim() ? `Category: ${src.categoryLabel.trim()}` : "",
+      ].filter(Boolean);
+      if (facts.length > 0) {
+        for (const wrapped of wrapText(facts.join(" · "), cols - 2)) {
+          out.push(`  ${wrapped}`);
+        }
+      }
+    }
+
+    // SLICE L-36 - the line's discount in money, always (not a detail toggle:
+    // it is part of the price breakdown, like the "was" line above).
+    const disc = input.lines[i].lineDiscountMinorUnits;
+    if (typeof disc === "number" && Number.isFinite(disc) && disc > 0) {
+      out.push(twoColumn("  Discount", `-${formatMoneyMinor(disc)}`, cols));
     }
   }
 
@@ -506,7 +562,23 @@ export function formatEscposReceipt(
       )
     : null;
 
-  if (taxSplit && (taxSplit.anyExcise || taxSplit.anySales)) {
+  // SLICE L-36 - caller-supplied tax lines (Leafly's own components) win, but
+  // only when they add up to the tax on the order to the cent.
+  const suppliedTax = (input.taxLines ?? []).filter(
+    (t) => Number.isInteger(t.amountMinorUnits) && t.amountMinorUnits >= 0,
+  );
+  const suppliedTaxOk =
+    onByDefault(input.showTaxBreakdown) &&
+    suppliedTax.length > 0 &&
+    suppliedTax.length === (input.taxLines ?? []).length &&
+    suppliedTax.reduce((a, t) => a + t.amountMinorUnits, 0) === input.estimatedTaxMinorUnits;
+
+  if (suppliedTaxOk) {
+    for (const t of suppliedTax) {
+      out.push(twoColumn(t.label.trim() || "Tax", formatMoneyMinor(t.amountMinorUnits), cols));
+    }
+    out.push(twoColumn("Total tax", formatMoneyMinor(input.estimatedTaxMinorUnits), cols));
+  } else if (taxSplit && (taxSplit.anyExcise || taxSplit.anySales)) {
     if (taxSplit.anyExcise) {
       out.push(twoColumn(exciseTaxLabel(), formatMoneyMinor(taxSplit.exciseMinor), cols));
     }
@@ -826,6 +898,63 @@ export function __runReceiptEscposTests(): void {
     richLines.every((l) => l.length <= 48),
     "rich: no line exceeds the paper width",
   );
+
+  // -- SLICE L-36: picker facts, line discounts, order ref, supplied tax -----
+  const l36 = formatEscposReceipt(
+    {
+      orderNumber: "Purple Rain",
+      orderRef: "GWY-004242",
+      placedAt: "2024-01-15T20:30:00.000Z",
+      customerName: "Jamie R.",
+      lines: [
+        {
+          productName: "Blue Dream 3.5g",
+          quantity: 2,
+          priceMinorUnits: 1500,
+          regularPriceMinorUnits: 1800,
+          brand: "Artizen",
+          vendor: "Ceres Garden",
+          inventoryType: "Usable Marijuana",
+          categoryLabel: "Flower",
+          lineDiscountMinorUnits: 600,
+        },
+      ],
+      subtotalMinorUnits: 3000,
+      savingsMinorUnits: 600,
+      estimatedTaxMinorUnits: 330,
+      totalMinorUnits: 3330,
+      taxLines: [
+        { label: "Excise tax", amountMinorUnits: 111 },
+        { label: "Sales tax", amountMinorUnits: 219 },
+      ],
+    },
+    { columns: 48 },
+  );
+  ok(l36.includes("Order # GWY-004242"), "L-36: GWY number printed under a fun label");
+  ok(l36.includes("Vendor: Ceres Garden"), "L-36: vendor printed");
+  ok(l36.includes("Type: Usable Marijuana"), "L-36: inventory type printed");
+  ok(l36.includes("Category: Flower"), "L-36: category label printed");
+  ok(/ {2}Discount\s+-\$6\.00/.test(l36), "L-36: line discount printed in money");
+  ok(l36.includes("Excise tax") && l36.includes("$2.19") && l36.includes("Total tax"), "L-36: supplied tax lines printed");
+  ok(l36.split("\n").every((l) => l.length <= 48), "L-36: nothing exceeds the paper width");
+  const l36Bad = formatEscposReceipt(
+    {
+      orderNumber: "GWY-1",
+      orderRef: "GWY-1",
+      placedAt: "2024-01-15T20:30:00.000Z",
+      customerName: "",
+      lines: [{ productName: "X", quantity: 1, priceMinorUnits: 100 }],
+      subtotalMinorUnits: 100,
+      savingsMinorUnits: 0,
+      estimatedTaxMinorUnits: 30,
+      totalMinorUnits: 130,
+      taxLines: [{ label: "Wrong", amountMinorUnits: 29 }],
+    },
+    { columns: 48 },
+  );
+  ok(!l36Bad.includes("Order # "), "L-36: ref equal to the label is not repeated");
+  ok(!l36Bad.includes("Wrong"), "L-36: supplied tax lines that do not sum are ignored");
+  ok(!l36Bad.includes("Discount") && !l36Bad.includes("Vendor:"), "L-36: absent facts print nothing");
 
   // The statutory split. 2x$15 flower + 1x$18 edible are both cannabis, so
   // excise applies to the whole basket; the two printed components must sum

@@ -23,6 +23,8 @@ import { notifyOrderPlaced } from "@/lib/orders/notify";
 import { recordOrderNotifyFailure } from "@/lib/orders/notify-event";
 import { queueOrderReceipt } from "@/lib/printing/printer-store";
 import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
+import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+import { stripLicenseSuffix } from "@/lib/inventory/vendor-resolve-core";
 import { repriceOrderLines, clientTotalsMatch } from "@/lib/orders/order-pricing";
 import { evaluateCartWithSettings, logSalesLimitEvent } from "@/lib/compliance/sales-limits";
 import type { NewOrderLineInput, PersistOrderInput } from "@/lib/orders/types";
@@ -252,8 +254,16 @@ export async function POST(request: Request) {
   // longer be dropped by a platform freeze, and a failure is logged.
   after(async () => {
     try {
+      // SLICE L-36 - vendor + detailed POS type for the picker, from the
+      // menu by the same product id the line stores. Enrichment only: an
+      // empty map prints less, never blocks the ticket.
+      const { loadMenuFactsByProductId } = await import("@/lib/pos/pickup-menu-facts");
+      const menuFacts = await loadMenuFactsByProductId(input.lines.map((l) => l.productId ?? null));
       const jobId = await queueOrderReceipt({
         orderNumber: displayLabel,
+        // The GWY number too, when the label is a fun name, so either can be
+        // typed or scanned into the register's Online Orders search.
+        orderRef: result.orderNumber,
         orderId,
         placedAt: new Date().toISOString(),
         customerName: [input.customerFirstName, input.customerLastName ?? ""]
@@ -274,12 +284,23 @@ export async function POST(request: Request) {
         // All of this is data the server ALREADY computed and persisted above
         // — it was simply being dropped at this boundary. Positionally
         // aligned with `lines`.
-        lineExtras: input.lines.map((l) => ({
-          category: l.category ?? null,
-          regularPriceMinorUnits: l.regularPriceMinorUnits ?? null,
-          unitGrams: l.unitGrams ?? null,
-          unitThcMg: l.unitThcMg ?? null,
-        })),
+        lineExtras: input.lines.map((l) => {
+          const facts = l.productId ? menuFacts.get(l.productId) : undefined;
+          const regular = l.regularPriceMinorUnits ?? null;
+          const discount =
+            typeof regular === "number" && regular > l.priceMinorUnits ? (regular - l.priceMinorUnits) * l.quantity : null;
+          const slug = l.category ?? facts?.category ?? null;
+          return {
+            category: l.category ?? null,
+            regularPriceMinorUnits: regular,
+            unitGrams: l.unitGrams ?? null,
+            unitThcMg: l.unitThcMg ?? null,
+            vendor: facts?.vendorName ? stripLicenseSuffix(facts.vendorName) : null,
+            inventoryType: facts?.inventoryType ?? null,
+            categoryLabel: slug ? formatWebsiteCategory(slug) : null,
+            lineDiscountMinorUnits: discount,
+          };
+        }),
         subtotalMinorUnits: input.subtotalMinorUnits,
         savingsMinorUnits: input.savingsMinorUnits,
         estimatedTaxMinorUnits: input.estimatedTaxMinorUnits,

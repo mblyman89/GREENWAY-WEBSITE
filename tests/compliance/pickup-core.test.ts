@@ -40,7 +40,7 @@ describe("pickup-core (POS B28)", () => {
     expect(minutesBetween("garbage", "2026-02-10T10:00:00Z")).toBe(0);
   });
 
-  it("sorts the queue ready-first then oldest-first within each status", () => {
+  it("sorts the queue newest-first regardless of status (L-36)", () => {
     const sorted = sortPickupQueue([
       { status: "new" as OrderStatus, placedAtIso: "2026-02-10T09:00:00Z", tag: "new-early" },
       { status: "ready" as OrderStatus, placedAtIso: "2026-02-10T10:00:00Z", tag: "ready-late" },
@@ -48,10 +48,10 @@ describe("pickup-core (POS B28)", () => {
       { status: "preparing" as OrderStatus, placedAtIso: "2026-02-10T07:00:00Z", tag: "prep" },
     ]);
     expect(sorted.map((e) => (e as { tag: string }).tag)).toEqual([
-      "ready-early",
       "ready-late",
-      "prep",
       "new-early",
+      "ready-early",
+      "prep",
     ]);
   });
 
