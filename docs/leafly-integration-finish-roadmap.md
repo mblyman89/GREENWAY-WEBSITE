@@ -17,8 +17,8 @@ CI and both Vercel checks pass and production reports success.
 |---|---|---|
 | L-41 | Automatic sync actually turns on (the saved schedule was read as OFF) and actually sends (uses the "hold back only the bad ones" build, not the all-or-nothing push) | **Merged, live** (`4ea82512`) |
 | L-42 | Leafly page reorganised: AI drafter removed; method dropdown and failing Push POST/PUT removed; **new simple "Replace my whole Leafly menu (POST)"** for certification; GET/PUT/POST/DELETE explained in plain English; copy fixed across the page | **Merged, live** (`ef2ee943`) |
-| L-43 | Webhook signature: hex only; empty body with no header | **Done: see "L-43: what shipped" below** |
-| L-44 | Order preview tax: tax-inclusive `packagePrice`, empty `taxes` | **Done** (see below) |
+| L-43 | Webhook signature: hex only; empty body with no header | **Merged, live** (`f0420f3a`); see "L-43: what shipped" below |
+| L-44 | Order preview tax: tax-inclusive `packagePrice`, empty `taxes` | **Done** (PR #1224); see "L-44: what shipped" below |
 | L-45 | `orderIntegrationKey` = Dispensary Menu Key cross-check | Next |
 | L-46 | 9-second inbound response budget | Next (most operationally important) |
 | L-47 | Certification "prove every action" evidence panel | Next |
