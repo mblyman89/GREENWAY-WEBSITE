@@ -219,6 +219,7 @@ import { __runLeaflyAutoSyncTests } from "../../src/lib/leafly/auto-sync-core";
 import { __runLeaflyReplaceMenuTests } from "../../src/lib/leafly/replace-menu-core";
 import { __runLeaflyRetailerKeyTests } from "../../src/lib/leafly/retailer-key-core";
 import { __runLeaflyInboundBudgetTests } from "../../src/lib/leafly/inbound-budget-core";
+import { __runLeaflyCertificationProofTests } from "../../src/lib/leafly/certification-proof-core";
 // The owner asked what "stage 2 changes how your menu looks to shoppers"
 // actually means. This core is the answer: it names the listings a shopper
 // would see instead of reporting a count. Registered here because the WORDING
@@ -1731,6 +1732,10 @@ __runLiquidVolumeTests();
   // never assume a retry policy Leafly did not state. Floor just under the
   // measured count.
   assertRan("leafly-inbound-budget-core", __runLeaflyInboundBudgetTests(), 86);
+  // SLICE L-47: certification proof. A row turns green only from a recorded
+  // row; unreadable is "unknown", never "none"; >14 days is "may be gone".
+  // Floor just under the measured 178.
+  assertRan("leafly-certification-proof-core", __runLeaflyCertificationProofTests(), 175);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
