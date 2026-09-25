@@ -18,7 +18,7 @@ CI and both Vercel checks pass and production reports success.
 | L-41 | Automatic sync actually turns on (the saved schedule was read as OFF) and actually sends (uses the "hold back only the bad ones" build, not the all-or-nothing push) | **Merged, live** (`4ea82512`) |
 | L-42 | Leafly page reorganised: AI drafter removed; method dropdown and failing Push POST/PUT removed; **new simple "Replace my whole Leafly menu (POST)"** for certification; GET/PUT/POST/DELETE explained in plain English; copy fixed across the page | **Merged, live** (`ef2ee943`) |
 | L-43 | Webhook signature: hex only; empty body with no header | **Done: see "L-43: what shipped" below** |
-| L-44 | Order preview tax: tax-inclusive `packagePrice`, empty `taxes` | Next |
+| L-44 | Order preview tax: tax-inclusive `packagePrice`, empty `taxes` | **Done** (see below) |
 | L-45 | `orderIntegrationKey` = Dispensary Menu Key cross-check | Next |
 | L-46 | 9-second inbound response budget | Next (most operationally important) |
 | L-47 | Certification "prove every action" evidence panel | Next |
@@ -174,6 +174,50 @@ array.
 - Every preview has an empty `taxes` array.
 - `packagePrice` equals the feed price to the cent.
 - The out-the-door total is unchanged from today.
+
+### L-44: what shipped
+
+- **No money changed.** The preview was already tax-inclusive with `taxes: []`
+  under decision D-2. A test proves the new webhook body is byte-identical to
+  the old default body.
+- `preview-core.ts`:
+  - `LEAFLY_PREVIEW_TAX_PRESENTATION_IS_UNCONFIRMED` is now `false`.
+  - `LEAFLY_PREVIEW_OPEN_QUESTION` was removed. Nothing consumed it; grep
+    confirmed that.
+  - `LEAFLY_PREVIEW_TAX_PRESENTATION_SOURCE` records Ben's answer.
+  - `LEAFLY_PREVIEW_WEBHOOK_TAX_PRESENTATION` is pinned to
+    `tax_inclusive_no_tax_lines`.
+- New pure invariant `checkTaxInclusivePreview(built, lookup)`. It reports five
+  violation kinds:
+  - `tax_lines_present`
+  - `wrong_presentation`
+  - `price_not_feed_price`
+  - `unknown_variant_in_body`
+  - `total_mismatch`
+- New `buildLeaflyWebhookPreviewResponse({lines, lookup})`:
+  - It has **no** presentation parameter.
+  - It builds tax-inclusive, runs the check, and throws
+    `LeaflyPreviewTaxInvariantError` rather than return a violating body.
+  - The route's existing catch then echoes the cart, which is also
+    tax-inclusive with `taxes: []`.
+- The route calls only that builder. Source pins prove:
+  - no file under `src/` other than preview-core names the tax-exclusive
+    presentation or calls `buildLeaflyPreviewResponse`;
+  - every `NextResponse.json` in the route sends `taxes: []`.
+- Self-tests: 73 → 98 (floor 71 → 95).
+- `tests/compliance/leafly-l44-preview-tax.test.ts` has 20 tests. It runs the
+  **real** menu-push builder, the **real** preview lookup and the **real** route
+  with a real HMAC over **one** fake feed, which includes fractional prices that
+  round. It checks:
+  - packagePrice equals the pushed menu price to the cent;
+  - `taxes: []` on the priced, echo, empty-menu, all-removed and empty-unsigned
+    paths;
+  - a stale 3418 (the old pre-tax figure) is corrected to 5000;
+  - a 20-case sweep.
+- `scripts/recon/l44-mutation-check.sh` covers the route, the builder, the
+  checker, the core, and the lookup's rounding. The L-5 harness pattern for the
+  flag was refreshed, so it now mutates `false → true`. **21/21 killed.**
+- Full compliance suite: 678 files, 18,230 tests, all green. tsc exit 0.
 
 ---
 

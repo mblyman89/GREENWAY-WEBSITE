@@ -27,17 +27,24 @@
  *
  * That fallback is the reason this route does not simply reuse the factory.
  *
- * ── THE OPEN QUESTION, DELIBERATELY DEFAULTED ──────────────────────────────
- * Greenway's shelf prices are tax-INCLUSIVE; Leafly's response model is
- * price-plus-tax-lines. Leafly's documentation does not say which convention
- * `packagePrice` should follow. `preview-core.ts` therefore defaults to the
- * presentation that CANNOT overcharge a shopper and flags the question via
- * LEAFLY_PREVIEW_TAX_PRESENTATION_IS_UNCONFIRMED. See slice decision D-2.
+ * ── TAX: SETTLED BY LEAFLY (SLICE L-44) ────────────────────────────────────
+ * Greenway's shelf prices are tax-INCLUSIVE. Leafly's documentation did not say
+ * which convention `packagePrice` should follow, so decision D-2 defaulted to
+ * the one that cannot overcharge. Ben (Leafly, item 8) then confirmed it: send
+ * the tax-inclusive shelf price as `packagePrice` with an EMPTY `taxes` array,
+ * because the store is set to "tax included in menu" and TaxComponent lines
+ * would NOT be added to the shopper's total.
+ *
+ * So this route calls `buildLeaflyWebhookPreviewResponse`, which takes no
+ * presentation argument and proves its own output with
+ * `checkTaxInclusivePreview` before returning it. Every exit from this file
+ * therefore sends `taxes: []`: the priced cart, the echo fallbacks, the empty
+ * unsigned delivery, and the unreadable-body case. A compliance test pins that.
  */
 import { NextResponse } from "next/server";
 import { handleLeaflyWebhook } from "@/lib/leafly/webhook-server";
 import {
-  buildLeaflyPreviewResponse,
+  buildLeaflyWebhookPreviewResponse,
   type IncomingPreviewLine,
   type LeaflyPreviewResponseBody,
 } from "@/lib/leafly/preview-core";
@@ -144,7 +151,10 @@ export async function POST(request: Request): Promise<Response> {
       return NextResponse.json(echoCartUnchanged(lines), { status: 200 });
     }
 
-    const built = buildLeaflyPreviewResponse({ lines, lookup });
+    // SLICE L-44: the webhook-only builder. Tax-inclusive, `taxes: []`, and
+    // self-checked; if the check ever fails it throws into the catch below,
+    // which echoes the cart (also tax-inclusive, also `taxes: []`).
+    const built = buildLeaflyWebhookPreviewResponse({ lines, lookup });
     console.log(built.logLine);
 
     /* ── SLICE L-16: name the silent, total emptying ──────────────────────

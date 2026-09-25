@@ -962,7 +962,8 @@ __runLiquidVolumeTests();
   assertRan("leafly-hmac-core", __runLeaflyHmacTests(), 130);
   assertRan("leafly-order-map-core", __runLeaflyOrderMapTests(), 145);
   assertRan("leafly-webhook-parse-core", __runLeaflyWebhookParseTests(), 95);
-  assertRan("leafly-preview-core", __runLeaflyPreviewTests(), 71);
+  // SLICE L-44: 73 -> 98 with the tax-inclusive invariant (Ben, item 8).
+  assertRan("leafly-preview-core", __runLeaflyPreviewTests(), 95);
   // SLICE L-6 -- talking BACK to Leafly. Floored for a reason the L-5 cores do
   // not share: the acknowledge call is IRREVERSIBLE by Leafly's own
   // documentation ("you will no longer have access to the customer's ID

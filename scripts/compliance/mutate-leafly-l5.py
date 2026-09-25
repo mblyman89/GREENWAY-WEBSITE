@@ -278,9 +278,11 @@ MUTATIONS = [
     (PREVIEW, "D-2 BREACH: the default presentation becomes the one that can OVERCHARGE",
      'export const LEAFLY_PREVIEW_DEFAULT_TAX_PRESENTATION: LeaflyPreviewTaxPresentation =\n  "tax_inclusive_no_tax_lines";',
      'export const LEAFLY_PREVIEW_DEFAULT_TAX_PRESENTATION: LeaflyPreviewTaxPresentation =\n  "tax_exclusive_with_tax_lines";'),
-    (PREVIEW, "the unresolved tax question is quietly marked as confirmed (rule 3 breach)",
-     "export const LEAFLY_PREVIEW_TAX_PRESENTATION_IS_UNCONFIRMED = true;",
-     "export const LEAFLY_PREVIEW_TAX_PRESENTATION_IS_UNCONFIRMED = false;"),
+    # SLICE L-44: Leafly answered (Ben, item 8), so the flag is now FALSE and
+    # the regression is flipping it back to "still unconfirmed".
+    (PREVIEW, "L-44: the ANSWERED tax question is flipped back to unconfirmed",
+     "export const LEAFLY_PREVIEW_TAX_PRESENTATION_IS_UNCONFIRMED = false;",
+     "export const LEAFLY_PREVIEW_TAX_PRESENTATION_IS_UNCONFIRMED = true;"),
     (PREVIEW, "tax lines are emitted ALONGSIDE inclusive prices -- the overcharge itself",
      '  const taxes =\n    presentation === "tax_exclusive_with_tax_lines"\n      ? buildTaxComponents({ exciseMinor, salesMinor })\n      : [];',
      "  const taxes = buildTaxComponents({ exciseMinor, salesMinor });"),
