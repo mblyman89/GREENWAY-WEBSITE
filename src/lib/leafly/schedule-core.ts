@@ -265,6 +265,19 @@ export type LeaflyScheduleSettings = {
    */
   activeFromHour: number | null;
   activeToHour: number | null;
+  /**
+   * SLICE L-41. Apply the size repair before each automatic send -- the SAME
+   * repair as the "Fix the size problem automatically before sending" tick
+   * box on "Send my whole menu, hold back only the bad ones".
+   *
+   * Automatic runs build their payload exactly the way that panel does
+   * (`buildFullMenuDecision`), so the owner's answer to "does the repair run"
+   * has to be stored somewhere the cron can read without a person present.
+   * OFF by default for the reason the panel gives: stage 2 of the repair can
+   * show one product as several listings, which is a change to what shoppers
+   * see, and that is the owner's call rather than a default to inherit.
+   */
+  repairSizes: boolean;
 };
 
 export const DEFAULT_SCHEDULE_SETTINGS: LeaflyScheduleSettings = {
@@ -277,6 +290,7 @@ export const DEFAULT_SCHEDULE_SETTINGS: LeaflyScheduleSettings = {
   intradayMinutes: INTRADAY_MINUTES_DEFAULT,
   activeFromHour: null,
   activeToHour: null,
+  repairSizes: false,
 };
 
 function clampIntLocal(value: unknown, min: number, max: number, fallback: number): number {
@@ -326,6 +340,10 @@ export function resolveScheduleSettings(
     // "active from 9" with no end from being read as a 1-hour window.
     activeFromHour: from !== null && to !== null ? from : null,
     activeToHour: from !== null && to !== null ? to : null,
+    // Strictly `=== true`, like `enabled`: a stored "true" string, a 1, or a
+    // missing key all read as OFF, because this setting changes what shoppers
+    // see and must only ever be on because the owner turned it on.
+    repairSizes: r.repairSizes === true,
   };
 }
 
@@ -729,12 +747,20 @@ export function isFullSyncEvidence(row: {
   decisionCode: string | null | undefined;
 }): boolean {
   if (row.method === "POST" && row.disposition === "success") return true;
+  // SLICE L-41. A SUCCESSFUL scheduled daily_full is the day's full sync
+  // whatever verb it used. When products are held back the daily run sends
+  // the whole passing menu as a PUT (a POST would delete the held-back
+  // products from Leafly) -- it is still today's authoritative send. Without
+  // this, that run would not count, and every fifteen-minute tick would
+  // rebuild and resend the whole menu all day (Defect E again, by another
+  // road).
+  if (row.decisionCode === "daily_full" && row.disposition === "success") return true;
   return row.decisionCode === "daily_full" && row.disposition === "skipped";
 }
 
 /** The PostgREST `or=` filter equivalent of `isFullSyncEvidence`. */
 export const FULL_SYNC_EVIDENCE_FILTER =
-  "and(method.eq.POST,disposition.eq.success),and(decision_code.eq.daily_full,disposition.eq.skipped)";
+  "and(method.eq.POST,disposition.eq.success),and(decision_code.eq.daily_full,disposition.eq.success),and(decision_code.eq.daily_full,disposition.eq.skipped)";
 
 /**
  * SLICE L-34 — WHO WINS WHEN TWO SCHEDULED RUNS START AT ONCE.
@@ -892,15 +918,22 @@ export function describeSchedule(s: LeaflyScheduleSettings): string {
     return "Automatic syncing is off. Your menu goes to Leafly only when you press the push button.";
   }
   const daily = `A full menu sync runs every day at ${formatPacificHour(s.dailyFullHour)} Pacific`;
+  // SLICE L-41. Automatic runs hold back products that fail Leafly's checks
+  // exactly like "Send my whole menu, hold back only the bad ones", and the
+  // owner's size-repair choice is part of what the schedule does, so it is
+  // said here -- the same sentence appears before and after saving.
+  const repair = s.repairSizes
+    ? " The size fix is applied first, and anything still failing Leafly's checks is held back."
+    : " Anything failing Leafly's checks is held back; the size fix is not applied.";
   if (!s.intradayEnabled) {
-    return `${daily}. Between those, nothing is sent automatically — use the push button after a change.`;
+    return `${daily}. Between those, nothing is sent automatically — use the push button after a change.${repair}`;
   }
   const every = describeIntradayInterval(s.intradayMinutes);
   const window =
     s.activeFromHour !== null && s.activeToHour !== null
       ? `, between ${formatPacificHour(s.activeFromHour)} and ${formatPacificHour(s.activeToHour)}`
       : "";
-  return `${daily}, and changes are sent ${every}${window}. Unchanged items are never resent.`;
+  return `${daily}, and changes are sent ${every}${window}. Unchanged items are never resent.${repair}`;
 }
 
 /** Tone for the UI. Never invents a value for an unknown code. */
@@ -1901,14 +1934,46 @@ export function __runLeaflyScheduleTests(): { passed: number; failed: number } {
     );
     ok("L-34: a failed POST is not evidence", !isFullSyncEvidence({ method: "POST", disposition: "failed", decisionCode: "daily_full" }));
     ok("L-34: a refused daily_full is not evidence", !isFullSyncEvidence({ method: null, disposition: "refused", decisionCode: "daily_full" }));
-    ok("L-34: a successful PUT is not evidence", !isFullSyncEvidence({ method: "PUT", disposition: "success", decisionCode: "intraday_delta" }));
-    // The query string and the predicate must describe the same two cases.
+    ok("L-34: a successful intraday PUT is not evidence", !isFullSyncEvidence({ method: "PUT", disposition: "success", decisionCode: "intraday_delta" }));
+    ok("L-41: a manual PUT is not evidence", !isFullSyncEvidence({ method: "PUT", disposition: "success", decisionCode: "manual_requested" }));
     ok(
-      "L-34: the server filter names both evidence cases and nothing else",
-      FULL_SYNC_EVIDENCE_FILTER.split("),and(").length === 2 &&
+      "L-41: a successful scheduled daily_full sent as PUT (products held back) IS evidence",
+      isFullSyncEvidence({ method: "PUT", disposition: "success", decisionCode: "daily_full" }),
+    );
+    ok("L-41: a FAILED daily_full PUT is not evidence", !isFullSyncEvidence({ method: "PUT", disposition: "failed", decisionCode: "daily_full" }));
+    ok("L-41: a failed daily_full with no verb (refused plan) is not evidence", !isFullSyncEvidence({ method: null, disposition: "failed", decisionCode: "daily_full" }));
+    // The query string and the predicate must describe the same three cases.
+    ok(
+      "L-41: the server filter names the three evidence cases and nothing else",
+      FULL_SYNC_EVIDENCE_FILTER.split("),and(").length === 3 &&
         /method\.eq\.POST,disposition\.eq\.success/.test(FULL_SYNC_EVIDENCE_FILTER) &&
+        /decision_code\.eq\.daily_full,disposition\.eq\.success/.test(FULL_SYNC_EVIDENCE_FILTER) &&
         /decision_code\.eq\.daily_full,disposition\.eq\.skipped/.test(FULL_SYNC_EVIDENCE_FILTER),
     );
+    // And they agree row-by-row over every combination the table allows.
+    {
+      const methods = [null, "POST", "PUT", "DELETE"];
+      const dispositions = ["success", "skipped", "refused", "failed"];
+      const codes = ["daily_full", "intraday_delta", "manual_requested", "not_due"];
+      const groups = FULL_SYNC_EVIDENCE_FILTER.replace(/^and\(/, "").replace(/\)$/, "").split("),and(");
+      const matchFilter = (r: { method: string | null; disposition: string; decisionCode: string }) =>
+        groups.some((g) =>
+          g.split(",").every((c) => {
+            const [col, , val] = c.split(".");
+            const v = col === "method" ? r.method : col === "disposition" ? r.disposition : r.decisionCode;
+            return v === val;
+          }),
+        );
+      let agree = 0;
+      let total = 0;
+      for (const method of methods)
+        for (const disposition of dispositions)
+          for (const decisionCode of codes) {
+            total += 1;
+            if (matchFilter({ method, disposition, decisionCode }) === isFullSyncEvidence({ method, disposition, decisionCode })) agree += 1;
+          }
+      ok(`L-41: the filter and the predicate agree on all ${total} row shapes`, agree === total && total === 64);
+    }
   }
 
   // --- 7e. SLICE L-34: END-TO-END TICK SIMULATION (Defect A, reproduced) ----
@@ -2139,6 +2204,27 @@ export function __runLeaflyScheduleTests(): { passed: number; failed: number } {
     ok("on wording says Pacific", /Pacific/.test(on));
     ok("on wording mentions hourly updates", /every hour/.test(on));
     ok("on wording promises no needless resends", /never resent/i.test(on));
+  }
+  // SLICE L-41: the repair choice is part of the sentence, so toggling it
+  // makes the form "dirty" and the owner sees what he is about to change.
+  {
+    const base = { ...DEFAULT_SCHEDULE_SETTINGS, enabled: true, dailyFullHour: 4 };
+    const without = describeSchedule(base);
+    const withFix = describeSchedule({ ...base, repairSizes: true });
+    ok("L41: repair on and off read differently", without !== withFix);
+    ok("L41: repair off says the fix is not applied", /size fix is not applied/.test(without));
+    ok("L41: repair on says the fix is applied first", /size fix is applied first/.test(withFix));
+    ok("L41: both wordings promise failures are held back", /held back/.test(without) && /held back/.test(withFix));
+    const dailyOnly = describeSchedule({ ...base, intradayEnabled: false, repairSizes: true });
+    ok("L41: daily-only wording also carries the repair sentence", /size fix is applied first/.test(dailyOnly));
+    ok("L41: off wording never mentions the repair", !/size fix/.test(describeSchedule({ ...base, enabled: false, repairSizes: true })));
+  }
+  {
+    ok("L41: repairSizes defaults OFF", DEFAULT_SCHEDULE_SETTINGS.repairSizes === false);
+    ok("L41: missing repairSizes resolves OFF", resolveScheduleSettings({}).repairSizes === false);
+    ok("L41: true resolves ON", resolveScheduleSettings({ repairSizes: true }).repairSizes === true);
+    ok("L41: the string 'true' does not turn it on", resolveScheduleSettings({ repairSizes: "true" }).repairSizes === false);
+    ok("L41: 1 does not turn it on", resolveScheduleSettings({ repairSizes: 1 }).repairSizes === false);
   }
   {
     const w = describeSchedule({

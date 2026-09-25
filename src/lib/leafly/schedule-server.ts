@@ -33,7 +33,6 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   decideScheduledRun,
-  resolveScheduleSettings,
   FULL_SYNC_EVIDENCE_FILTER,
   shouldRecordRefusal,
   summarizeRunHistory,
@@ -45,7 +44,9 @@ import {
   type SyncMethod,
 } from "./schedule-core";
 import { getSyncSettingsRaw } from "@/lib/syndication/engine-store";
-import { pushLeaflyMenu, isLeaflyConfigured, describeLeaflyReadinessAsync } from "./push";
+import { readStoredLeaflySchedule } from "@/lib/syndication/sync-settings-core";
+import { isLeaflyConfigured, describeLeaflyReadinessAsync } from "./push";
+import { pushLeaflyAutomatic } from "./auto-sync-server";
 
 const RUNS_TABLE = "leafly_sync_runs";
 const CHANNEL = "leafly";
@@ -112,7 +113,10 @@ function mapRow(r: Record<string, unknown>): SyncRunRow {
  */
 export async function getLeaflyScheduleSettings(): Promise<LeaflyScheduleSettings> {
   const raw = await getSyncSettingsRaw(CHANNEL).catch(() => null);
-  return resolveScheduleSettings(raw);
+  // SLICE L-41: the schedule lives NESTED under `schedule`. Passing the whole
+  // blob to resolveScheduleSettings is what made every saved schedule read as
+  // OFF. readStoredLeaflySchedule is the single, self-tested reader.
+  return readStoredLeaflySchedule(raw);
 }
 
 // ---------------------------------------------------------------------------
@@ -569,31 +573,37 @@ export async function runScheduledLeaflySync(nowIso?: string): Promise<Scheduled
   }
 
   try {
-    const result = await pushLeaflyMenu({ confirm: true, method: decision.method });
+    // SLICE L-41. Automatic runs send through the same build as "Send my
+    // whole menu, hold back only the bad ones" (the path the owner reports
+    // works), not through the all-or-nothing `pushLeaflyMenu` that refused
+    // his whole menu over a few bad products. The verb is chosen by the pure
+    // `planAutomaticTransmission`: POST only on the daily run with nothing
+    // held back; otherwise PUT plus a DELETE of what genuinely left.
+    const kind = decision.code === "daily_full" ? "daily_full" : "intraday_delta";
+    const result = await pushLeaflyAutomatic({ kind, repair: settings.repairSizes });
+    // A withhold-plan refusal transmitted nothing, but it is NOT a quiet
+    // skip: too much of the menu is failing, and that needs the owner. It is
+    // recorded as failed so the health card turns red and the backoff stops
+    // it from rebuilding the menu every fifteen minutes.
     const disposition = result.skipped ? "skipped" : result.ok ? "success" : "failed";
     await closeRun({
       id: runId,
-      pushed: !result.skipped,
-      method: result.skipped ? null : result.method,
+      pushed: !result.skipped && !result.refused,
+      method: result.skipped || result.refused ? null : result.method,
       disposition,
       httpStatus: result.httpStatus || null,
       itemCount: result.itemCount,
       planSummary: result.planSummary,
-      errorDetail: result.ok ? null : (result.message ?? "Leafly rejected the sync."),
+      errorDetail: result.ok ? null : result.message,
     });
     return {
       decision,
-      pushed: !result.skipped,
+      pushed: !result.skipped && !result.refused,
       disposition,
       httpStatus: result.httpStatus || null,
       planSummary: result.planSummary,
       itemCount: result.itemCount,
-      message:
-        result.skipped
-          ? (result.message ?? "Nothing had changed since the last sync, so nothing was sent.")
-          : result.ok
-            ? `${decision.method} sync accepted by Leafly.`
-            : (result.message ?? "Leafly rejected the sync."),
+      message: result.message,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error during the Leafly sync.";

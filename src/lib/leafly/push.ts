@@ -681,6 +681,37 @@ export async function pushLeaflyMenu(opts: {
   };
 }
 
+/**
+ * SLICE L-41 -- the transport for AUTOMATIC runs (auto-sync-server.ts).
+ *
+ * Exported so the automatic path reuses this file's bounded, retrying,
+ * token-refreshing `authedFetch` instead of adding an eighth outbound Leafly
+ * call site (tests/compliance/leafly-deadline.test.ts keeps that list
+ * exhaustive on purpose). It makes NO decision: what to send, and with which
+ * verb, is decided by the pure `planAutomaticTransmission`, which never
+ * chooses POST while any product is held back.
+ *
+ * `operation` stays a required, caller-chosen budget: the daily whole-menu
+ * send uses `full_menu_push` (the same budget as the "Send my whole menu"
+ * button, which the owner reports works), in-between sends use `menu_push`.
+ */
+export async function sendLeaflyMenuRequest(input: {
+  method: "POST" | "PUT" | "DELETE";
+  operation: "menu_push" | "full_menu_push";
+  body: LeaflyItemsPayload | { ids: string[] };
+  maxRetries: number;
+}): Promise<{ ok: boolean; status: number; body: unknown; message: string | null }> {
+  const result = await authedFetch(menuItemsUrl(), input.method, input.operation, input.body, {
+    maxRetries: input.maxRetries,
+  });
+  return {
+    ok: result.ok,
+    status: result.status,
+    body: result.body,
+    message: result.ok ? null : leaflyMessageForStatus(result.status),
+  };
+}
+
 /** Live delete of specific item ids (DELETE). Requires confirmation + credentials. */
 export async function deleteLeaflyItems(opts: {
   ids: string[];

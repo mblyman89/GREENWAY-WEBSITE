@@ -129,6 +129,7 @@ export function LeaflySchedulePanel({
   const [windowed, setWindowed] = useState(s.activeFromHour !== null && s.activeToHour !== null);
   const [fromHour, setFromHour] = useState(String(s.activeFromHour ?? 8));
   const [toHour, setToHour] = useState(String(s.activeToHour ?? 21));
+  const [repairSizes, setRepairSizes] = useState(s.repairSizes);
 
   // What the form currently describes -- resolved by the same pure functions
   // the server will use, so the preview cannot promise something else.
@@ -139,6 +140,7 @@ export function LeaflySchedulePanel({
     intradayMinutes: Number.parseInt(intradayMinutes, 10),
     activeFromHour: windowed ? Number.parseInt(fromHour, 10) : null,
     activeToHour: windowed ? Number.parseInt(toHour, 10) : null,
+    repairSizes,
   };
 
   const summary = summarizeAutomation({
@@ -165,6 +167,7 @@ export function LeaflySchedulePanel({
     // silently is unacceptable.
     fd.set("enabled", enabled ? "true" : "false");
     fd.set("intradayEnabled", intradayEnabled ? "true" : "false");
+    fd.set("repairSizes", repairSizes ? "true" : "false");
     // Both window ends or neither. `resolveScheduleSettings` discards a
     // half-specified window, and sending only one end would read as "no window"
     // -- the difference between syncing all day and syncing almost never.
@@ -352,6 +355,31 @@ export function LeaflySchedulePanel({
             <span className="block text-[11px] text-[var(--admin-text-muted)]">
               Optional. The daily full sync always runs, window or not &mdash; it is usually
               set for the small hours on purpose.
+            </span>
+          </span>
+        </label>
+
+        {/*
+          SLICE L-41. Automatic runs build the menu exactly the way "Send my
+          whole menu, hold back only the bad ones" does, so they need the
+          owner's answer to that panel's size-repair tick box stored where the
+          cron can read it with nobody present.
+        */}
+        <label className="flex items-start gap-2 text-xs text-[var(--admin-text)]">
+          <input
+            type="checkbox"
+            checked={repairSizes}
+            onChange={(e) => setRepairSizes(e.target.checked)}
+            disabled={!enabled}
+            className="mt-0.5 h-3.5 w-3.5 accent-[var(--admin-accent)]"
+          />
+          <span>
+            <span className="font-medium">Fix the size problem automatically before each automatic send</span>
+            <span className="block text-[11px] text-[var(--admin-text-muted)]">
+              The same fix as the tick box on &ldquo;Send my whole menu&rdquo;. Off by default,
+              because it can list one product as several sizes on Leafly. Either way, products
+              that still fail Leafly&rsquo;s checks are held back and named in the log &mdash;
+              they are never sent broken, and never deleted from Leafly because of it.
             </span>
           </span>
         </label>
