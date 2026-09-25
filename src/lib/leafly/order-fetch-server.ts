@@ -95,6 +95,51 @@ export async function fetchLeaflyOrder(input: {
   leaflyOrderId: string;
   knownLocally?: boolean;
 }): Promise<FetchOrderResult> {
+  const ctx: FetchLedgerContext = { dialled: false, key: null };
+  const result = await fetchLeaflyOrderUnrecorded(input, ctx);
+  // SLICE L-47 — Fetch Order is **Required** for Leafly certification, which
+  // is "validated by review of logged activity", and until now this call
+  // left no row anywhere. Recorded only when we actually dialled Leafly (a
+  // local settings failure is not an API call and Leafly cannot see it).
+  if (ctx.dialled) {
+    await recordFetchAttempt(input.leaflyOrderId, ctx.key, result);
+  }
+  return result;
+}
+
+type FetchLedgerContext = { dialled: boolean; key: string | null };
+
+/**
+ * Best-effort, never throws, stores no order body (the Order carries the
+ * customer's name and phone; the ledger needs only the outcome). Imported
+ * lazily so this module does not gain a static edge into order-ack-server,
+ * which itself imports this file lazily.
+ */
+async function recordFetchAttempt(
+  leaflyOrderId: string,
+  key: string | null,
+  result: FetchOrderResult,
+): Promise<void> {
+  try {
+    const { recordLeaflyOutboundAttempt } = await import("./order-ack-server");
+    const { fetchDispositionToLedger } = await import("./certification-proof-core");
+    await recordLeaflyOutboundAttempt({
+      leaflyOrderId,
+      orderIntegrationKey: key,
+      operation: "fetch_order",
+      responseStatus: result.httpStatus,
+      disposition: fetchDispositionToLedger(result.ok ? "success" : result.assessment.disposition),
+      message: result.ok ? "Order fetched from Leafly." : result.assessment.message,
+    });
+  } catch (err) {
+    console.error("[leafly/fetch] attempt log threw:", err);
+  }
+}
+
+async function fetchLeaflyOrderUnrecorded(
+  input: { leaflyOrderId: string; knownLocally?: boolean },
+  ctx: FetchLedgerContext,
+): Promise<FetchOrderResult> {
   const fail = (
     assessment: FetchAssessment,
     httpStatus: number | null,
@@ -153,6 +198,8 @@ export async function fetchLeaflyOrder(input: {
   // again is the documented recovery. Retrying anything else here would hide a
   // real problem behind a doubled latency on the path Leafly is timing.
   let didRetryAuth = false;
+  ctx.dialled = true;
+  ctx.key = (key ?? "").trim();
   for (;;) {
     let res: Response;
     {

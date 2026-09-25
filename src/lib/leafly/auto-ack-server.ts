@@ -263,8 +263,10 @@ export async function autoAcknowledgeOnArrival(input: {
       },
       actor: "auto",
       // Attributed in the ledger so the audit trail never implies a person
-      // did this. `staffId` is a free-text attribution column on
-      // `leafly_outbound_attempts`, not a foreign key.
+      // did this. CORRECTED IN L-47: `created_by` IS a uuid foreign key
+      // (0226), so this string could never be stored there and the insert
+      // failed. The recorder now keeps non-uuid attributions in the message
+      // ("[auto-acknowledge] ...") and leaves created_by null.
       staffId: "auto-acknowledge",
     });
 
