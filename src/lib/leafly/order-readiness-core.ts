@@ -285,11 +285,12 @@ export function assessOrderReadiness(input: ReadinessInput): OrderReadiness {
     },
     {
       id: "order_key",
-      title: "Order integration key saved",
+      title: "Store key saved (used for orders)",
       detail:
-        "This identifies your store to Leafly. Without it we cannot collect the order’s " +
-        "contents and we cannot accept it, so Leafly cancels it automatically after fifteen " +
-        "minutes.",
+        "This identifies your store to Leafly. Leafly confirmed it is the same value as your " +
+        "Menu integration key, so a saved Menu key is enough — the Order integration key box " +
+        "may stay blank. Without either we cannot collect the order’s contents and we cannot " +
+        "accept it, so Leafly cancels it automatically after fifteen minutes.",
       done: input.orderIntegrationKeyPresent,
       blocking: true,
     },

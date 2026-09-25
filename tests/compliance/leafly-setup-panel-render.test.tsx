@@ -96,6 +96,7 @@ function stateFor(input: Partial<typeof READY_INPUT>): LeaflyOrderSetupState {
         },
       },
       signatureRefusalBlockingNow: false,
+      retailerKey: null,
       problem: "",
     },
     explanation: "Nothing is wrong.",

@@ -28,18 +28,24 @@ export type IntegrationCredentialsRow = {
 
   // Leafly ORDER API (Slice L-5 / migration 0225) --------------------------
   //
-  // The Order API needs two credentials the Menu API does not, and they are NOT
-  // interchangeable with the menu key. Per Leafly's Order API specification:
-  // "The OAuth2 credentials and HMAC key are unique to each integrator, while
-  // there is a unique `orderIntegrationKey` for each retailer managed through
-  // your integration."
+  // Per Leafly's Order API specification: "The OAuth2 credentials and HMAC key
+  // are unique to each integrator, while there is a unique
+  // `orderIntegrationKey` for each retailer managed through your integration."
   //
   // So leafly_hmac_key is issued to the INTEGRATOR (verifies that an inbound
-  // webhook really came from Leafly) while leafly_order_integration_key
-  // identifies THIS RETAILER. Storing them as separate columns rather than
-  // reusing leafly_menu_integration_key matters: pasting the menu key into the
-  // order slot would produce webhook signature failures that look exactly like
-  // a network problem.
+  // webhook really came from Leafly) and must never be confused with any
+  // store key: pasting a store key into the HMAC box makes every signature
+  // fail.
+  //
+  // CORRECTED IN SLICE L-45. This comment used to say the order key was "NOT
+  // interchangeable" with the menu key. Leafly (Ben, item 2, recorded in
+  // docs/leafly-ben-email-integration-round.md) has since confirmed the
+  // opposite: "`orderIntegrationKey` is the SAME VALUE as the Dispensary Menu
+  // Key". The separate leafly_order_integration_key column is kept (an explicit
+  // value there still wins, so nobody's working setup changes), but a BLANK
+  // order box now falls back to the menu key. That rule lives in
+  // src/lib/leafly/retailer-key-core.ts (`resolveLeaflyRetailerKey`); the raw
+  // resolver below deliberately stays a plain DB-over-env pick per column.
   leafly_hmac_key: string;
   leafly_order_integration_key: string;
   weedmaps_environment: string;
@@ -62,8 +68,9 @@ export type IntegrationEnv = {
   leaflyMenuIntegrationKey?: string;
   leaflyClientId?: string;
   leaflyClientSecret?: string;
-  // Order API (Slice L-5). Separate from the menu key on purpose: see the note
-  // on IntegrationCredentialsRow above. LEAFLY_HMAC_KEY authenticates inbound
+  // Order API (Slice L-5). A separate variable from the menu key, but per
+  // Leafly (L-45) the order key is the SAME value; blank falls back to the
+  // menu key in retailer-key-core. See the note on IntegrationCredentialsRow. LEAFLY_HMAC_KEY authenticates inbound
   // webhooks; LEAFLY_ORDER_INTEGRATION_KEY identifies this retailer in the
   // Order API's own URL path.
   leaflyHmacKey?: string;
@@ -88,7 +95,11 @@ export type LeaflyOverrides = {
   clientSecret?: string;
   /** Order API: verifies the X-Leafly-Signature on inbound webhooks. */
   hmacKey?: string;
-  /** Order API: identifies THIS retailer in webhook bodies and API paths. */
+  /**
+   * Order API: identifies THIS retailer in webhook bodies and API paths.
+   * Raw box value only. Callers that need the key to USE must go through
+   * `resolveLeaflyRetailerKey` (L-45), which falls back to the menu key.
+   */
   orderIntegrationKey?: string;
 };
 
@@ -573,9 +584,11 @@ export function __runIntegrationCredentialsTests(): { passed: number } {
       "value that could be mistaken for a configured key and used to verify a signature",
   );
 
-  // The order key must NOT leak the menu key, and vice versa. These are
-  // different credentials from Leafly and confusing them produces signature
-  // failures that look like a network fault.
+  // The RAW resolver keeps each box to itself: it reports what is in each
+  // column, nothing more. The L-45 fallback (blank order box -> menu key,
+  // because Leafly confirmed they are the same value) is a separate, tested
+  // rule in retailer-key-core, so this pin still holds and the fallback can
+  // never silently turn into "the menu key populates the HMAC key".
   const mixed = resolveLeaflyOverrides(
     { ...EMPTY_CREDENTIALS_ROW, leafly_menu_integration_key: "MENU-KEY" },
     {},

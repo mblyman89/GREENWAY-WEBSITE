@@ -178,8 +178,9 @@ export function decideOrderFetch(input: {
       allowed: false,
       code: "missing_integration_key",
       reason:
-        "No Order integration key is saved, so Leafly cannot be asked for this order. " +
-        "Add it on the Integrations page under “Order API”.",
+        "No Leafly store key is saved (neither the Menu integration key nor the Order " +
+        "integration key), so Leafly cannot be asked for this order. Leafly uses your Menu " +
+        "integration key for orders too; add it on the Integrations page.",
     };
   }
   return { allowed: true };
@@ -265,7 +266,8 @@ export function assessOrderFetch(
     return {
       disposition: "fix_credentials",
       message:
-        "Leafly refused access to this order. The Order integration key saved here is " +
+        "Leafly refused access to this order. The store key used for orders (the Order " +
+        "integration key box, or the Menu integration key when that box is blank) is " +
         "probably not the key for this store.",
       retryable: false,
     };

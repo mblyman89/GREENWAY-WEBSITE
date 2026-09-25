@@ -209,8 +209,9 @@ export function LeaflyOrdersPanel({
         <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
           <p className="font-bold">Leafly order handling isn’t live yet.</p>
           <p className="mt-1">
-            Your Leafly order integration key hasn’t been entered, so nothing can be
-            sent back to Leafly. Orders they send us will still be recorded here.
+            No Leafly store key is saved (Leafly uses your Menu integration key for orders
+            too), so nothing can be sent back to Leafly. Orders they send us will still be
+            recorded here.
           </p>
           <p className="mt-2">
             <Link href="/admin/integrations/leafly" className="font-bold underline underline-offset-2">

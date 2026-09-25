@@ -335,8 +335,9 @@ export function decideAcknowledgement(input: {
       allowed: false,
       code: "missing_integration_key",
       reason:
-        "No Leafly order integration key is saved, so we cannot prove which store " +
-        "this is. Enter it on the Integrations page first.",
+        "No Leafly store key is saved (neither the Menu nor the Order integration key), " +
+        "so we cannot prove which store this is. Enter your Menu integration key on the " +
+        "Integrations page first; Leafly uses it for orders too.",
       warning: null,
     };
   }
