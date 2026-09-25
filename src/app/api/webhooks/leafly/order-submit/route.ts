@@ -24,5 +24,11 @@ import { createLeaflyWebhookRoute } from "../route-factory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// SLICE L-46: Leafly counts an answer slower than 9 seconds as a failure, so
+// the 200 goes out inside a 6-second budget and any unfinished work keeps
+// running after it (Next `after()`). That work lives only as long as the
+// function, and this is how long that is. Must be a literal (Next reads it
+// statically); pinned equal to LEAFLY_WEBHOOK_MAX_DURATION_S by a test.
+export const maxDuration = 300;
 
 export const POST = createLeaflyWebhookRoute("order_submit");

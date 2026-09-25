@@ -48,7 +48,15 @@ import {
   resolveLeaflyRetailerKey,
   checkWebhookRetailerKey,
   type ResolvedRetailerKey,
+  type WebhookKeyCheck,
 } from "./retailer-key-core";
+// SLICE L-46 - Ben, item 4: answer inside 9 seconds or the delivery "failed".
+import {
+  describeAnsweredAtBudget,
+  describeDeferredFinish,
+  remainingBudgetMs,
+} from "./inbound-budget-core";
+import { keepLeaflyWorkAlive, leaflyInboundBudgetMs, raceLeaflyBudget } from "./inbound-budget";
 
 /**
  * The real HMAC-SHA-256 digester injected into the pure core.
@@ -374,6 +382,15 @@ export type HandledWebhook = {
   duplicate: boolean;
   /** Server-log line. Never returned to Leafly. */
   logLine: string;
+  /**
+   * SLICE L-46. True when the budget ran out before the delivery's work did:
+   * the route answered 200 on time and the work is STILL RUNNING after the
+   * response (kept alive by Next `after()`). `duplicate` is then unknown and
+   * reported false; the finish is logged on a second line.
+   */
+  answeredAtBudget?: boolean;
+  /** SLICE L-46. The notes behind `logLine`, for the deferred finish line. */
+  notes?: string[];
 };
 
 /**
@@ -396,8 +413,29 @@ export async function handleLeaflyWebhook(input: {
   rawBody: string;
   headers: Headers;
   expectedEvent: LeaflyWebhookEventType;
+  /**
+   * SLICE L-46. When the route started, by Date.now(). The route passes the
+   * moment BEFORE it read the body, so the budget covers that too. Defaults
+   * to now.
+   */
+  startedAtMs?: number;
+  /**
+   * SLICE L-46. How long to wait for the work before answering anyway.
+   * Defaults to the inbound budget (6s). The preview route passes less, so
+   * that pricing - the part the shopper waits for - keeps the rest.
+   */
+  budgetMs?: number;
 }): Promise<HandledWebhook> {
   const { rawBody, headers, expectedEvent } = input;
+  const startedAtMs =
+    typeof input.startedAtMs === "number" && Number.isFinite(input.startedAtMs)
+      ? input.startedAtMs
+      : Date.now();
+  const budgetMs =
+    typeof input.budgetMs === "number" && Number.isFinite(input.budgetMs)
+      ? Math.min(input.budgetMs, leaflyInboundBudgetMs())
+      : leaflyInboundBudgetMs();
+  const remaining = () => remainingBudgetMs({ startedAtMs, nowMs: Date.now(), budgetMs });
 
   const { verdict, bodySha256, retailerKeys } = await verifyInboundLeaflyWebhook(rawBody, headers);
   const parsed = parseLeaflyWebhook(rawBody, expectedEvent);
@@ -423,7 +461,10 @@ export async function handleLeaflyWebhook(input: {
 
   if (admission.action === "refuse") {
     // Log the refusal, but never echo the reason to the caller.
-    await recordLeaflyWebhookEvent({
+    // SLICE L-46: the record is raced like everything else. A 401 is only
+    // useful to Leafly if it arrives inside 9 seconds; a slow insert keeps
+    // running after the response instead of holding it up.
+    const refusalRecord = recordLeaflyWebhookEvent({
       bodySha256,
       eventType: parsed.rawEventType,
       orderId: parsed.orderId,
@@ -433,6 +474,8 @@ export async function handleLeaflyWebhook(input: {
       rejectionReason: verdict.reason,
       responseStatus: admission.status,
     });
+    const refusalRace = await raceLeaflyBudget(refusalRecord, remaining());
+    if (!refusalRace.finished) keepLeaflyWorkAlive(refusalRecord);
     return {
       status: admission.status,
       admission: admission.action,
@@ -441,6 +484,99 @@ export async function handleLeaflyWebhook(input: {
       logLine: `[leafly ${expectedEvent}] REFUSED — ${verdict.reason}: ${verdict.detail}`,
     };
   }
+
+  // SLICE L-45: does this AUTHENTIC delivery carry the store key we hold?
+  // Pure, so it is decided here, before any I/O: the answer must reach the
+  // response log line even when the rest of the work runs past the budget.
+  const keyCheck = checkWebhookRetailerKey({
+    bodyKey: parsed.orderIntegrationKey,
+    orderKey: retailerKeys.orderKey,
+    menuKey: retailerKeys.menuKey,
+  });
+
+  // -- SLICE L-46: THE NINE-SECOND RULE ---------------------------------------
+  //
+  // Ben (Leafly), item 4: "Any non-2xx counts as a failure, AND SO DOES
+  // TAKING LONGER THAN 9 SECONDS TO RESPOND." Before this slice every step
+  // below was awaited before the 200, and with the repository's own deadlines
+  // the worst case was minutes (inbound-budget-core.ts has the arithmetic).
+  //
+  // Now ALL of the delivery's work is ONE promise, started here and raced
+  // against the budget (6s from the start of the request, leaving 3s of
+  // Leafly's 9 for cold starts and the network):
+  //
+  //   - it finishes first (the normal case): nothing changes. Same 200, same
+  //     single log line, same order of work.
+  //   - the budget finishes first: answer 200 NOW, and keep the SAME promise
+  //     alive with Next `after()` (Vercel waitUntil, bounded by the route's
+  //     maxDuration = 300). Nothing is cancelled, skipped, reordered or run
+  //     twice. Only the moment of the 200 moves.
+  //
+  // The safety net if the platform ever did kill the deferred work: the
+  // leafly-ack-sweep cron acknowledges any unacknowledged order every two
+  // minutes, and `processed_at` stays null, which the evidence panel reports
+  // as "accepted, not processed".
+  const work = processVerifiedLeaflyDelivery({
+    parsed,
+    bodySha256,
+    expectedEvent,
+    admission: admission.action,
+    keyCheck,
+  });
+  const race = await raceLeaflyBudget(work, remaining());
+  if (race.finished) return race.value;
+
+  const answeredAtMs = Date.now();
+  keepLeaflyWorkAlive(
+    work.then((finished) => {
+      console.log(
+        describeDeferredFinish({
+          event: expectedEvent,
+          totalMs: Date.now() - startedAtMs,
+          duplicate: finished.duplicate,
+          notes: finished.notes ?? [],
+        }),
+      );
+    }),
+  );
+  const earlyNotes: string[] = [];
+  if (keyCheck.alarm) earlyNotes.push(keyCheck.note);
+  earlyNotes.push(
+    describeAnsweredAtBudget({ elapsedMs: answeredAtMs - startedAtMs, budgetMs }),
+  );
+  return {
+    status: 200,
+    admission: admission.action,
+    parsed,
+    duplicate: false,
+    answeredAtBudget: true,
+    notes: earlyNotes,
+    logLine: `[leafly ${expectedEvent}] accepted${problemNoteFor(parsed)} notes=[${earlyNotes.join("; ")}]`,
+  };
+}
+
+/** The ` problems=[...]` suffix of an accepted log line (empty when none). */
+function problemNoteFor(parsed: ParsedLeaflyWebhook): string {
+  return parsed.problems.length > 0
+    ? ` problems=[${parsed.problems.map((p) => `${p.severity}:${p.code}`).join(", ")}]`
+    : "";
+}
+
+/**
+ * SLICE L-46. Everything an authentic delivery does, as one promise, so the
+ * handler can race it against the nine-second budget. The body is the
+ * pre-L-46 handler body, moved verbatim: same steps, same order, same notes.
+ * Never throws (every step it calls returns failures as values).
+ */
+async function processVerifiedLeaflyDelivery(input: {
+  parsed: ParsedLeaflyWebhook;
+  bodySha256: string;
+  expectedEvent: LeaflyWebhookEventType;
+  admission: LeaflyWebhookAdmission["action"];
+  keyCheck: WebhookKeyCheck;
+}): Promise<HandledWebhook> {
+  const { parsed, bodySha256, expectedEvent, keyCheck } = input;
+  const admission = { action: input.admission };
 
   const recorded = await recordLeaflyWebhookEvent({
     bodySha256,
@@ -472,11 +608,7 @@ export async function handleLeaflyWebhook(input: {
   // retailer behind this integrator's HMAC key, so a mismatch can only mean
   // one of OUR boxes holds a typo; dropping would turn that typo into a lost,
   // auto-cancelled customer order. The note never contains a key value.
-  const keyCheck = checkWebhookRetailerKey({
-    bodyKey: parsed.orderIntegrationKey,
-    orderKey: retailerKeys.orderKey,
-    menuKey: retailerKeys.menuKey,
-  });
+  // (`keyCheck` is computed by the caller, before any I/O - see L-46.)
   if (keyCheck.alarm) notes.push(keyCheck.note);
 
   if (!recorded.ok) {
@@ -570,7 +702,9 @@ export async function handleLeaflyWebhook(input: {
       const { onLeaflyOrderArrived } = await import("./bridge-server");
       const bridged = await onLeaflyOrderArrived(parsed.orderId);
       if (!bridged.ok) notes.push(bridged.summary);
-      else if (!bridged.announced || !bridged.printed) notes.push(bridged.summary);
+      else if (bridged.alreadyHandled || !bridged.announced || !bridged.printed) {
+        notes.push(bridged.summary);
+      }
 
       // ── SLICE L-33: PRESS THE ACKNOWLEDGE BUTTON OURSELVES ──────────────
       //
@@ -704,6 +838,12 @@ export async function handleLeaflyWebhook(input: {
         bridgedToRegister: false,
         collectionFailed: !collected.ok,
         acknowledgeBy: parsed.acknowledgeBy,
+        // SLICE L-46 (F5). A retry that reaches here after the first delivery
+        // already rang and printed gets announced=false/printed=false from the
+        // bridge - because there was nothing to do, not because it failed.
+        // Without this the owner got a "the shop may not know" e-mail about
+        // an order the shop already knew about.
+        arrivalAlreadyHandled: bridged.ok && bridged.alreadyHandled === true,
       });
       if (alertNote) notes.push(alertNote);
     }
@@ -744,16 +884,14 @@ export async function handleLeaflyWebhook(input: {
 
   await markLeaflyWebhookProcessed(bodySha256);
 
-  const problemNote =
-    parsed.problems.length > 0
-      ? ` problems=[${parsed.problems.map((p) => `${p.severity}:${p.code}`).join(", ")}]`
-      : "";
+  const problemNote = problemNoteFor(parsed);
 
   return {
     status: 200,
     admission: admission.action,
     parsed,
     duplicate: false,
+    notes,
     logLine: `[leafly ${expectedEvent}] accepted${problemNote}${
       notes.length > 0 ? ` notes=[${notes.join("; ")}]` : ""
     }`,

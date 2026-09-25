@@ -49,9 +49,26 @@ import {
   type LeaflyPreviewResponseBody,
 } from "@/lib/leafly/preview-core";
 import { buildLeaflyVariantLookup } from "@/lib/leafly/preview-lookup";
+// SLICE L-46: previews are never retried (Ben, item 4) and the shopper waits.
+import {
+  LEAFLY_PREVIEW_BOOKKEEPING_MS,
+  describePreviewPricingTimeout,
+  remainingBudgetMs,
+} from "@/lib/leafly/inbound-budget-core";
+import {
+  keepLeaflyWorkAlive,
+  leaflyInboundBudgetMs,
+  raceLeaflyBudget,
+} from "@/lib/leafly/inbound-budget";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// SLICE L-46: Leafly counts an answer slower than 9 seconds as a failure, so
+// the 200 goes out inside a 6-second budget and any unfinished work keeps
+// running after it (Next `after()`). That work lives only as long as the
+// function, and this is how long that is. Must be a literal (Next reads it
+// statically); pinned equal to LEAFLY_WEBHOOK_MAX_DURATION_S by a test.
+export const maxDuration = 300;
 
 /**
  * Echo the shopper's cart back unchanged.
@@ -105,6 +122,7 @@ function readCartLines(body: Record<string, unknown> | null): IncomingPreviewLin
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const startedAtMs = Date.now();
   let rawBody: string;
   try {
     rawBody = await request.text();
@@ -119,6 +137,11 @@ export async function POST(request: Request): Promise<Response> {
     rawBody,
     headers: request.headers,
     expectedEvent: "order_preview",
+    // SLICE L-46: bookkeeping (event row, order row) may hold the cart for at
+    // most this long; anything slower finishes after the response. Pricing
+    // below gets whatever is left of the inbound budget.
+    startedAtMs,
+    budgetMs: LEAFLY_PREVIEW_BOOKKEEPING_MS,
   });
 
   // Signature failure is the ONE case the spec allows a non-200 for.
@@ -138,7 +161,25 @@ export async function POST(request: Request): Promise<Response> {
   const lines = readCartLines(handled.parsed.body);
 
   try {
-    const { lookup, loaded, variantCount } = await buildLeaflyVariantLookup();
+    // SLICE L-46: the menu read (settings + syndication feed) had no bound.
+    // Raced against what is left of the budget; on timeout the cart goes back
+    // unchanged - the same answer as "menu unavailable" below - and the read
+    // finishes harmlessly in the background.
+    const pricingLeft = remainingBudgetMs({
+      startedAtMs,
+      nowMs: Date.now(),
+      budgetMs: leaflyInboundBudgetMs(),
+    });
+    const lookupWork = buildLeaflyVariantLookup();
+    const lookupRace = await raceLeaflyBudget(lookupWork, pricingLeft);
+    if (!lookupRace.finished) {
+      keepLeaflyWorkAlive(lookupWork);
+      console.warn(
+        describePreviewPricingTimeout({ remainingMs: pricingLeft, lineCount: lines.length }),
+      );
+      return NextResponse.json(echoCartUnchanged(lines), { status: 200 });
+    }
+    const { lookup, loaded, variantCount } = lookupRace.value;
 
     // No published menu means we have nothing to validate against. Echoing the
     // cart back beats removing every line, which would empty a real shopper's

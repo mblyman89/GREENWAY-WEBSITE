@@ -218,6 +218,7 @@ import { __runLeaflyFullMenuTests } from "../../src/lib/leafly/full-menu-core";
 import { __runLeaflyAutoSyncTests } from "../../src/lib/leafly/auto-sync-core";
 import { __runLeaflyReplaceMenuTests } from "../../src/lib/leafly/replace-menu-core";
 import { __runLeaflyRetailerKeyTests } from "../../src/lib/leafly/retailer-key-core";
+import { __runLeaflyInboundBudgetTests } from "../../src/lib/leafly/inbound-budget-core";
 // The owner asked what "stage 2 changes how your menu looks to shoppers"
 // actually means. This core is the answer: it names the listings a shopper
 // would see instead of reporting a count. Registered here because the WORDING
@@ -1082,7 +1083,8 @@ __runLiquidVolumeTests();
   // failed -- he said plainly "I don't need an email sent to us". An alert on
   // every order would train the mailbox to be ignored, which is how the one
   // alert that mattered gets missed. Measured at 84.
-  assertRan("leafly-staff-alert-core", __runLeaflyStaffAlertTests(), 80);
+  // SLICE L-46 raised 80 -> 90: nine F5 "already handled" cases (measured 93).
+  assertRan("leafly-staff-alert-core", __runLeaflyStaffAlertTests(), 90);
   // Floor raised 42 -> 54 by slice L-16, which added the `pickup_availability`
   // step (measured 58). Raising the floor with the count is deliberate: this
   // core is what decides whether the dashboard may call a shop READY, and the
@@ -1724,6 +1726,11 @@ __runLiquidVolumeTests();
   // falls back to the menu key; a body key that differs is REPORTED, never
   // dropped. Floor just under the measured 81.
   assertRan("leafly-retailer-key-core", __runLeaflyRetailerKeyTests(), 78);
+  // SLICE L-46: Ben's nine-second rule. Answer inside a 6s budget (3s of
+  // headroom for cold starts), keep the rest of the work alive after the 200,
+  // never assume a retry policy Leafly did not state. Floor just under the
+  // measured count.
+  assertRan("leafly-inbound-budget-core", __runLeaflyInboundBudgetTests(), 86);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

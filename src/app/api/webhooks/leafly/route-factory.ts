@@ -40,6 +40,9 @@ import type { LeaflyWebhookEventType } from "@/lib/leafly/webhook-parse-core";
  */
 export function createLeaflyWebhookRoute(expectedEvent: LeaflyWebhookEventType) {
   return async function POST(request: Request): Promise<Response> {
+    // SLICE L-46: Leafly's 9 seconds start before we read a byte, so the
+    // budget does too.
+    const startedAtMs = Date.now();
     // The RAW body, read exactly once and never re-serialised. The HMAC is over
     // these precise bytes; JSON.parse + JSON.stringify would reorder keys and
     // change whitespace, and the signature would never match again.
@@ -60,6 +63,7 @@ export function createLeaflyWebhookRoute(expectedEvent: LeaflyWebhookEventType) 
       rawBody,
       headers: request.headers,
       expectedEvent,
+      startedAtMs,
     });
 
     if (handled.status === 401) {

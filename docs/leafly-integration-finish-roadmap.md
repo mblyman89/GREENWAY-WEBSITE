@@ -20,7 +20,7 @@ CI and both Vercel checks pass and production reports success.
 | L-43 | Webhook signature: hex only; empty body with no header | **Merged, live** (`f0420f3a`); see "L-43: what shipped" below |
 | L-44 | Order preview tax: tax-inclusive `packagePrice`, empty `taxes` | **Done** (PR #1224); see "L-44: what shipped" below |
 | L-45 | `orderIntegrationKey` = Dispensary Menu Key cross-check | **Done** (see "L-45: what shipped" below) |
-| L-46 | 9-second inbound response budget | Next (most operationally important) |
+| L-46 | 9-second inbound response budget | **Done** (see "L-46: what shipped" below) |
 | L-47 | Certification "prove every action" evidence panel | Next |
 
 ---
@@ -343,6 +343,77 @@ path awaits all of these before answering:
   budget.
 - A test showing a duplicate delivery does not create or announce twice.
 
+### L-46: what shipped
+
+**Design change from the plan above, and why.** The plan said "answer as soon
+as the verified order row is saved, and move the rest into `after()`". That
+would still await a DB write with no budget of its own, and it would change
+behaviour on every delivery, including the fast normal case. What shipped
+instead is ONE race:
+
+- Signature verification stays awaited. It is one credentials read, capped at
+  5 s. It is the only thing that decides 401 versus 200, so it cannot be
+  deferred.
+- Everything after verification is ONE promise,
+  `processVerifiedLeaflyDelivery` in `webhook-server.ts`: record, duplicate
+  check, upsert, collect, bridge, auto-ack, alert, cancel and
+  `markLeaflyWebhookProcessed`. It is the old body, verbatim and in the same
+  order. That promise is raced against `LEAFLY_INBOUND_BUDGET_MS` = 6 000 ms,
+  measured from the top of the route's POST (`route-factory.ts` records
+  `startedAtMs` before `request.text()`).
+- **Fast path** (the normal case): the race is won, and the response and log
+  line are byte-for-byte what they were.
+- **Slow path**: we answer 200 with an `answered 200 at …` note. The SAME
+  promise is handed to `after()` through `keepLeaflyWorkAlive`, so nothing is
+  restarted or run twice. Its end is logged by `describeDeferredFinish`.
+  `maxDuration = 300` is set on all six routes, so Vercel keeps the function
+  alive for the deferred work.
+- **Net under the net**: if the deferred work dies anyway (a deploy, or the
+  300 s cap), `processed_at` stays null (the evidence shows
+  `accepted_unprocessed`), and the 2-minute `leafly-ack-sweep` cron
+  acknowledges the order well inside the 15-minute auto-cancel.
+- The refusal path (bad signature) races its bookkeeping record the same way,
+  so a hung DB cannot turn a 401 into a timeout.
+- **Preview** passes `budgetMs: LEAFLY_PREVIEW_BOOKKEEPING_MS` (2 s) to the
+  handler. It races the price lookup against what is left, and on timeout
+  echoes the cart unchanged (`describePreviewPricingTimeout`). Preview is not
+  retried, so a late answer has no value.
+
+**The proof.** `inbound-budget-core.ts` (pure, 89 self-tests, registered with
+floor 86):
+- `worstCaseResponseMs` = max(verify 5 s, budget 6 s) + 250 ms slack
+  = 6.25 s;
+- `responseFitsLeaflyLimit` requires that plus 2 s minimum headroom to be
+  ≤ 9 s;
+- `legacyAwaitedWorstCaseMs` records the old summed chain as over 90 s.
+
+Ben's retry policy is encoded in `LEAFLY_INBOUND_RETRY_POLICY`. submit, status
+and cancel have 4 deliveries with the stated backoff. Preview is not retried.
+Activate and deactivate are `null` (not stated by Ben, so not assumed).
+
+**Deliberately absent: a "deferred work fits in 300 s" proof.** The
+announcer enqueue and `queueOrderReceipt` have no abort signal, so no honest
+worst case exists for them. The cron sweep is the guarantee, not a
+calculation.
+
+**F5, found while testing: a false staff alert on duplicates.** A duplicate
+delivery, or a bridge claim lost to a concurrent delivery, returned
+`announced:false, printed:false`. That made `decideStaffAlert` send a false
+"not announced or printed" alert for an order that HAD rung and printed.
+`BridgeOutcome.alreadyHandled` now marks both paths, and
+`StaffAlertInput.arrivalAlreadyHandled` suppresses only those two reasons.
+Every other alert reason still fires. 9 self-tests were added, and the
+staff-alert floor was raised from 80 to 90.
+
+**Tests.**
+- `tests/compliance/leafly-l46-inbound-budget.test.ts` has 37 tests. They use
+  real handlers with gated slow insert, upsert, collect and lookup, and a
+  mocked `after()`. They cover the fast path unchanged, 200 first and work
+  finished after the drain, duplicates, the key note surviving deferral, 401
+  on time with a hung record, the preview echo, F5, and static pins.
+- `scripts/recon/l46-mutation-check.sh` runs 29 mutations. Every one must be
+  killed.
+
 ---
 
 ## L-47 — "prove every action" certification evidence
@@ -402,7 +473,7 @@ action once inside them, then email Leafly the window.
 | 1 | Hex HMAC-SHA-256, raw body; empty body has no header | L-43 |
 | 2 | orderIntegrationKey = Menu Key | L-45 (done: blank Order box falls back to the Menu key; body key compared, reported, never dropped) |
 | 3 | IPs rotate | L-43 (HMAC is the only authentication) |
-| 4 | Retries and the 9-second deadline | L-46 |
+| 4 | Retries and the 9-second deadline | L-46 (done: all delivery work raced against a 6 s budget; slow work finishes in `after()`; activate/deactivate retry policy recorded as unknown) |
 | 5 | `medical:false` correct | No change. Tell Leafly when the medical endorsement lands. |
 | 6 | We can place sandbox test orders | L-47 (the "Order webhooks" row) |
 | 7 | Pickup-only fine | No change |

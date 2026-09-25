@@ -73,6 +73,8 @@ export type StaffAlertSendInput = {
   bridgedToRegister: boolean;
   collectionFailed: boolean;
   acknowledgeBy: string | null;
+  /** SLICE L-46 (F5). See StaffAlertInput.arrivalAlreadyHandled. */
+  arrivalAlreadyHandled?: boolean;
   /** Injected so the contract guard is exercised with a real address. */
   customerEmail?: string | null;
 };
@@ -103,6 +105,7 @@ export async function maybeSendLeaflyStaffAlert(
       printed: input.printed,
       bridgedToRegister: input.bridgedToRegister,
       collectionFailed: input.collectionFailed,
+      arrivalAlreadyHandled: input.arrivalAlreadyHandled === true,
       minutesUntilDeadline: minutesUntilDeadline(input.acknowledgeBy, Date.now()),
       hasStaffRecipients: recipients.length > 0,
       providerConfigured: configured,
