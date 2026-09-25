@@ -99,6 +99,15 @@ export type ReportOrderRow = {
 /** The write calls the outbound-health block reports on (SLICE L-47). */
 export const REPORT_OUTBOUND_OPERATIONS = ["acknowledge", "status", "cart"] as const;
 
+/**
+ * The READ calls L-47 started recording as certification evidence. The
+ * report EXCLUDES exactly these rather than allow-listing the write calls:
+ * a row with a missing or unknown operation keeps being counted as it always
+ * was (never silently dropped), and CI asserts the two lists together cover
+ * every operation the 0231 CHECK allows.
+ */
+export const REPORT_EXCLUDED_READ_OPERATIONS = ["fetch_order", "government_id", "medical_id"] as const;
+
 export type ReportAttemptRow = {
   leaflyOrderId?: string | null;
   operation?: string | null;
@@ -413,11 +422,12 @@ export function buildOnlineOrdersReport(input: {
   const orders = Array.isArray(input.orders) ? input.orders : [];
   // SLICE L-47: the ledger now also records the READ calls (fetch_order,
   // government_id, medical_id) as certification evidence. This block is
-  // "Acknowledgements, status pushes and cart updates", so only those count;
-  // otherwise every order's automatic fetch would inflate the total and the
-  // success rate would change meaning without anyone deciding it should.
+  // "Acknowledgements, status pushes and cart updates", so those read calls are
+  // excluded; otherwise every order's automatic fetch would inflate the total
+  // and the success rate would change meaning without anyone deciding it
+  // should. Rows with no/unknown operation are still counted, as before.
   const attempts = (Array.isArray(input.attempts) ? input.attempts : []).filter((a) =>
-    (REPORT_OUTBOUND_OPERATIONS as readonly string[]).includes(String(a.operation ?? "")),
+    !(REPORT_EXCLUDED_READ_OPERATIONS as readonly string[]).includes(String(a.operation ?? "")),
   );
 
   let acknowledgedOrders = 0;
@@ -989,8 +999,10 @@ export function __runOnlineOrdersReportTests(): {
       { operation: null, disposition: "success" },
     ],
   });
-  eq("read calls excluded from outbound total", withReads.outbound.total, 1);
-  eq("read calls excluded from success", withReads.outbound.success, 1);
+  // The null-operation row is KEPT (pre-L-47 behaviour): only the named read
+  // calls are excluded, nothing is dropped for lacking a label.
+  eq("read calls excluded from outbound total", withReads.outbound.total, 2);
+  eq("read calls excluded from success", withReads.outbound.success, 2);
   eq("read calls excluded from gone", withReads.outbound.gone, 0);
   eq("read calls excluded from retry", withReads.outbound.retry, 0);
   eq("outbound success", report.outbound.success, 2);

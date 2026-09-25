@@ -488,7 +488,7 @@ anywhere. Now:
 - Before 0231 the inserts fail the CHECK and are only logged. The row shows
   a "may need migration 0231" hint.
 - The online-orders report counts only write calls
-  (`REPORT_OUTBOUND_OPERATIONS`), so its meaning is unchanged.
+  (it excludes `REPORT_EXCLUDED_READ_OPERATIONS`; unlabelled rows still count), so its meaning is unchanged.
 
 **F6, pre-existing defect fixed: auto-ack ledger rows were silently lost.**
 `created_by` is `uuid references staff_profiles(id)` (0226), but auto-ack
@@ -508,7 +508,7 @@ null plus a `[auto-acknowledge]` message prefix. No schema change.
   vocabularies agreeing with the 0226 and 0231 CHECKs, fetch ledger at
   runtime, the loader's honesty, and the wiring.
 - `leafly-id-image-runtime.test.ts` gained 7 ledger tests.
-- `scripts/recon/l47-mutation-check.sh`: 23 of 23 mutations killed.
+- `scripts/recon/l47-mutation-check.sh`: 24 of 24 mutations killed.
 
 ---
 
