@@ -389,8 +389,8 @@ export function evidenceDispositionExplanation(d: EvidenceDisposition): string {
       );
     case "rejected_unsigned":
       return (
-        "This request arrived with no signature at all, so we turned it away. Leafly always " +
-        "signs, which means this did not come from Leafly — it is almost always an automated " +
+        "This request had a body but no signature, so we turned it away. Leafly signs every " +
+        "delivery that has a body, which means this did not come from Leafly — it is almost always an automated " +
         "scanner finding a public address. Nothing is wrong and there is nothing to fix: this " +
         "is the door being locked, not the lock being broken. Your HMAC key is not involved " +
         "and must NOT be changed because of these."
@@ -761,8 +761,8 @@ export function assessEvidence(summary: EvidenceSummary): EvidenceVerdict {
         "The usual cause is that the HMAC key saved here is not the key Leafly is signing with.",
       nextStep:
         "Re-copy the HMAC key from Leafly and save it again, watching for a truncated paste or a " +
-        "trailing space. If it still fails on every delivery, ask Leafly to confirm the key and " +
-        "whether the signature is hex or base64 encoded.",
+        "trailing space. If it still fails on every delivery, ask Leafly to confirm which HMAC key " +
+        "they are signing with. (The encoding is settled: Leafly confirmed lowercase hex.)",
     };
   }
 
@@ -1717,9 +1717,15 @@ export function __runLeaflyEvidenceTests(): { passed: number; failed: number } {
   const allRejected = assessEvidence(summarizeEvidence([theirsRow, { ...theirsRow, id: "z" }]));
   ok(allRejected.code === "all_rejected", "no verified rows = all_rejected");
   ok(allRejected.tone === "bad", "all_rejected is bad");
+  // L-43: the encoding question is closed (Ben, item 1). The advice must no
+  // longer send the owner to ask it, and must still name the key.
   ok(
-    (allRejected.nextStep ?? "").toLowerCase().includes("base64"),
-    "all_rejected raises the hex/base64 question",
+    !(allRejected.nextStep ?? "").toLowerCase().includes("base64"),
+    "all_rejected no longer raises the settled hex/base64 question",
+  );
+  ok(
+    (allRejected.nextStep ?? "").toLowerCase().includes("lowercase hex"),
+    "all_rejected says the encoding is settled as lowercase hex",
   );
 
   const someRejected = assessEvidence(summarizeEvidence([ev(), theirsRow]));

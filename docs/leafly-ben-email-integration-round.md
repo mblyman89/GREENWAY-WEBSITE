@@ -1,9 +1,11 @@
 # Ben (Leafly) — answers to our integration questions
 
-**Status: LOGGED, NOT YET IMPLEMENTED.** This file exists so that the later
-integration round starts from a written record rather than from memory. Nothing
-in this file has been coded yet. Each item below is marked with whether it
-changes the current dashboard roadmap (slices 2–8) or is deferred.
+**Status: BEING IMPLEMENTED, one slice at a time.** Each item carries an
+`IMPLEMENTED` line once its slice has shipped. The plan for the remaining items
+is in `docs/leafly-integration-finish-roadmap.md`.
+
+This file exists so that the integration round starts from a written record
+rather than from memory.
 
 Received during the dashboard slice round. Recorded verbatim in substance.
 
@@ -23,6 +25,14 @@ code must not treat that case as a rejection.
 > empty body with no header is currently classified as a bad signature. If it
 > is, that is a live false-rejection bug, because a false rejection returns
 > non-2xx, which Leafly counts as a delivery failure (see item 4).
+>
+> **IMPLEMENTED in SLICE L-43.** It WAS a live false-rejection bug: a missing
+> header was refused with 401 before the body was ever looked at.
+> - Now only lowercase or upper-case hex verifies, and base64 is refused.
+> - An empty body with no header gets 200. Nothing is recorded or processed.
+> - A body with no header is still 401.
+> - See `hmac-core.ts` (`planLeaflyWebhookAdmission`) and
+>   `tests/compliance/leafly-l43-hmac.test.ts`.
 
 ## 2. orderIntegrationKey
 
@@ -42,6 +52,10 @@ Leafly's webhook egress IPs **rotate**; there is no stable range to allowlist.
 Rely on signature verification for authenticity, not on network origin.
 
 > ROADMAP IMPACT: none. Confirms we should NOT build IP allowlisting.
+>
+> **IMPLEMENTED in SLICE L-43** as a pin: no Leafly file reads a client IP
+> (`x-forwarded-for`, `x-real-ip`, `request.ip`, `remoteAddress`). The HMAC is
+> the only authentication.
 
 ## 4. Retries and the response deadline  ← MOST OPERATIONALLY IMPORTANT
 

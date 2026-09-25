@@ -32,8 +32,10 @@ import { dbDeadline } from "./db-deadline";
 import {
   verifyLeaflySignature,
   findSignatureHeader,
+  planLeaflyWebhookAdmission,
   type LeaflyHmacEncoding,
   type LeaflyHmacVerdict,
+  type LeaflyWebhookAdmission,
 } from "./hmac-core";
 import {
   parseLeaflyWebhook,
@@ -45,9 +47,9 @@ import { leaflyToGreenwayStatus } from "./order-map-core";
 /**
  * The real HMAC-SHA-256 digester injected into the pure core.
  *
- * Note `createHmac(...).digest(encoding)` — node renders the SAME digest bytes
- * in whichever encoding is asked for, which is exactly what the core needs to
- * try both candidates without computing the HMAC twice differently.
+ * Note `createHmac(...).digest(encoding)`. Since SLICE L-43 the core only ever
+ * asks for "hex" (Leafly confirmed lowercase hex), and the type no longer
+ * admits anything else.
  */
 export function nodeHmacDigest(
   body: string,
@@ -314,6 +316,12 @@ export async function markLeaflyOrderAcknowledged(
 export type HandledWebhook = {
   /** The HTTP status the route should return. */
   status: number;
+  /**
+   * SLICE L-43. What was decided about this delivery. `acknowledge_only` is
+   * Leafly's expected empty, unsigned delivery: the route answers 2xx and
+   * nothing else happened (no event row, no order, no bell).
+   */
+  admission: LeaflyWebhookAdmission["action"];
   parsed: ParsedLeaflyWebhook;
   duplicate: boolean;
   /** Server-log line. Never returned to Leafly. */
@@ -345,8 +353,27 @@ export async function handleLeaflyWebhook(input: {
 
   const { verdict, bodySha256 } = await verifyInboundLeaflyWebhook(rawBody, headers);
   const parsed = parseLeaflyWebhook(rawBody, expectedEvent);
+  // SLICE L-43. The three-way decision lives in the pure core. Before L-43
+  // this was `if (!verdict.ok) -> 401`, which refused Leafly's expected empty,
+  // unsigned delivery and counted it as a failed delivery against us.
+  const admission = planLeaflyWebhookAdmission(verdict);
 
-  if (!verdict.ok) {
+  if (admission.action === "acknowledge_only") {
+    // Ben, item 1: an empty body arrives with no signature header, and that is
+    // expected. Answer 2xx and do nothing. Deliberately NOT recorded: a row
+    // here would carry signature_verified=false and read as a refused
+    // signature on the owner's evidence panel -- the false alarm Ben warned
+    // about. Deliberately NOT processed: nothing was authenticated.
+    return {
+      status: admission.status,
+      admission: admission.action,
+      parsed,
+      duplicate: false,
+      logLine: `[leafly ${expectedEvent}] empty unsigned delivery — expected per Leafly, answered ${admission.status}, nothing processed.`,
+    };
+  }
+
+  if (admission.action === "refuse") {
     // Log the refusal, but never echo the reason to the caller.
     await recordLeaflyWebhookEvent({
       bodySha256,
@@ -356,10 +383,11 @@ export async function handleLeaflyWebhook(input: {
       eventTime: parsed.eventTime,
       signatureVerified: false,
       rejectionReason: verdict.reason,
-      responseStatus: 401,
+      responseStatus: admission.status,
     });
     return {
-      status: 401,
+      status: admission.status,
+      admission: admission.action,
       parsed,
       duplicate: false,
       logLine: `[leafly ${expectedEvent}] REFUSED — ${verdict.reason}: ${verdict.detail}`,
@@ -380,6 +408,7 @@ export async function handleLeaflyWebhook(input: {
   if (recorded.ok && recorded.duplicate) {
     return {
       status: 200,
+      admission: admission.action,
       parsed,
       duplicate: true,
       logLine: `[leafly ${expectedEvent}] duplicate delivery (${bodySha256.slice(0, 12)}…) — acknowledged, no work done.`,
@@ -659,6 +688,7 @@ export async function handleLeaflyWebhook(input: {
 
   return {
     status: 200,
+    admission: admission.action,
     parsed,
     duplicate: false,
     logLine: `[leafly ${expectedEvent}] accepted${problemNote}${

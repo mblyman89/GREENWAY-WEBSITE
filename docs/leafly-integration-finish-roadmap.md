@@ -16,8 +16,8 @@ CI and both Vercel checks pass and production reports success.
 | Slice | What | State |
 |---|---|---|
 | L-41 | Automatic sync actually turns on (the saved schedule was read as OFF) and actually sends (uses the "hold back only the bad ones" build, not the all-or-nothing push) | **Merged, live** (`4ea82512`) |
-| L-42 | Leafly page reorganised: AI drafter removed; method dropdown and failing Push POST/PUT removed; **new simple "Replace my whole Leafly menu (POST)"** for certification; GET/PUT/POST/DELETE explained in plain English; copy fixed across the page | **This round** |
-| L-43 | Webhook signature: hex only; empty body with no header | Next |
+| L-42 | Leafly page reorganised: AI drafter removed; method dropdown and failing Push POST/PUT removed; **new simple "Replace my whole Leafly menu (POST)"** for certification; GET/PUT/POST/DELETE explained in plain English; copy fixed across the page | **Merged, live** (`ef2ee943`) |
+| L-43 | Webhook signature: hex only; empty body with no header | **Done: see "L-43: what shipped" below** |
 | L-44 | Order preview tax: tax-inclusive `packagePrice`, empty `taxes` | Next |
 | L-45 | `orderIntegrationKey` = Dispensary Menu Key cross-check | Next |
 | L-46 | 9-second inbound response budget | Next (most operationally important) |
@@ -108,6 +108,47 @@ killed.
 **Mutation:**
 - Re-enabling base64 must fail a test.
 - Swapping the check order must fail a test.
+
+### L-43: what shipped
+
+- `hmac-core.ts` now accepts only 64 hex characters, compared in constant time and
+  case-insensitively. The correct digest sent as base64 (padded, unpadded, or
+  base64url) is refused as `malformed_header`. `LEAFLY_HMAC_ENCODING_IS_UNCONFIRMED`
+  is `false`, and `LEAFLY_HMAC_ENCODING_SOURCE` cites Ben.
+- Every verdict now has an `outcome`: `verified`, `refused` or `empty_unsigned`.
+  `empty_unsigned` means exactly `""` for the body and no header. It is checked
+  first, before the key, so a missing key cannot turn it into a refusal.
+- A new pure function, `planLeaflyWebhookAdmission`, turns the verdict into what
+  the route does:
+  - **verified**: record, process, answer 200.
+  - **empty_unsigned**: answer 200 and do nothing else. No event row is written,
+    so it never shows up as a refused signature. No order is touched and nothing
+    rings.
+  - **anything else**: record the refusal, answer 401. Anything unrecognised also
+    lands here, so the plan fails closed.
+- `handleLeaflyWebhook` goes through that plan. The old `if (!verdict.ok) -> 401`
+  line is the one that refused Leafly's expected delivery, and it is gone. The
+  preview route answers `empty_unsigned` with `{cartItems:[],taxes:[]}` and never
+  looks up the menu.
+- A signed empty body is now checked like any other body instead of being
+  refused without reading it. `empty_body` stays in the vocabulary so rows
+  written by older builds still classify.
+- The advice text no longer tells the owner to ask Leafly "hex or base64", and
+  the refusal wording now says "a body with no signature".
+- Tests:
+  - Self-tests went from 82 to 133 (floor 130).
+  - `tests/compliance/leafly-l43-hmac.test.ts` has 29 tests. They run the six
+    real routes with real node HMAC.
+  - A spec pin proves the vendored spec still does not name the encoding, so the
+    authority is Ben's answer.
+  - A pin proves nothing reads client IPs, because Leafly's IPs rotate.
+- `scripts/recon/l43-mutation-check.sh` kills all 15 mutations.
+- The older L-5 harness (`scripts/compliance/mutate-leafly-l5.py`) had five HMAC
+  patterns that no longer existed after the hex-only change, plus one label that
+  had become the opposite of true. They were refreshed by
+  `scripts/recon/l43-refresh-l5-harness.py`. Its HMAC section now catches
+  25/25 mutations.
+- Full compliance suite: 677 files, 18,210 tests, all green.
 
 ---
 

@@ -103,9 +103,9 @@ MUTATIONS = [
      '  if (!sawUsableDigest) {',
      '  if (false) {'),
     (HMAC, "FAIL-OPEN: the final verdict flips to accept on mismatch",
-     '  return {\n    ok: false,\n    matchedEncoding: null,\n    reason: "mismatch",',
-     '  return {\n    ok: true,\n    matchedEncoding: null,\n    reason: "mismatch",'),
-    (HMAC, "FAIL-OPEN: an empty request body is accepted",
+     '  return {\n    outcome: "refused",\n    ok: false,\n    matchedEncoding: null,\n    reason: "mismatch",',
+     '  return {\n    outcome: "verified",\n    ok: true,\n    matchedEncoding: null,\n    reason: "mismatch",'),
+    (HMAC, "L-43: Leafly's expected empty UNSIGNED delivery is refused instead of acknowledged",
      '  if (rawBody === "") {',
      '  if (false) {'),
 
@@ -130,12 +130,12 @@ MUTATIONS = [
      "  for (let i = 0; i < 1; i += 1) {"),
 
     # ---- base64 case-sensitivity: a real, subtle correctness trap ----
-    (HMAC, "base64 is compared case-INSENSITIVELY, accepting genuinely wrong digests",
-     '      encoding === "hex"\n        ? timingSafeStringEqual(computed.toLowerCase(), presented.toLowerCase())\n        : timingSafeStringEqual(computed, presented);',
-     '      timingSafeStringEqual(computed.toLowerCase(), presented.toLowerCase());'),
     (HMAC, "hex becomes case-SENSITIVE, so an upper-case digest is rejected",
-     '      encoding === "hex"\n        ? timingSafeStringEqual(computed.toLowerCase(), presented.toLowerCase())\n        : timingSafeStringEqual(computed, presented);',
-     '      timingSafeStringEqual(computed, presented);'),
+     '    const matched = timingSafeStringEqual(computed.toLowerCase(), presented.toLowerCase());',
+     '    const matched = timingSafeStringEqual(computed, presented);'),
+    (HMAC, "FAIL-OPEN: the digest compare always matches",
+     '    const matched = timingSafeStringEqual(computed.toLowerCase(), presented.toLowerCase());',
+     '    const matched = true;'),
 
     # ---- algorithm / header identity ----
     (HMAC, "the algorithm silently changes from sha256 to sha1",
@@ -158,11 +158,11 @@ MUTATIONS = [
 
     # ---- structural screen ----
     (HMAC, "the digest screen accepts anything (malformed no longer distinguishable)",
-     "export function looksLikeSha256Digest(value: string): boolean {\n  if (/^[0-9a-fA-F]{64}$/.test(value)) return true;",
-     "export function looksLikeSha256Digest(value: string): boolean {\n  if (value.length > 0) return true;\n  if (/^[0-9a-fA-F]{64}$/.test(value)) return true;"),
+     "  return /^[0-9a-fA-F]{64}$/.test(value);\n}",
+     "  return value.length > 0 || /^[0-9a-fA-F]{64}$/.test(value);\n}"),
     (HMAC, "the hex length is wrong (63 chars), rejecting every real hex digest",
-     "  if (/^[0-9a-fA-F]{64}$/.test(value)) return true;",
-     "  if (/^[0-9a-fA-F]{63}$/.test(value)) return true;"),
+     "  return /^[0-9a-fA-F]{64}$/.test(value);\n}",
+     "  return /^[0-9a-fA-F]{63}$/.test(value);\n}"),
     (HMAC, "the prefix stripper eats base64 padding, destroying valid signatures",
      '  if (/^[a-z0-9-]{1,12}$/.test(label) && label !== "") {',
      "  if (true) {"),

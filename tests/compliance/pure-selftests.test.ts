@@ -258,7 +258,9 @@ describe("embedded pure self-test suites", () => {
     // short-circuit, a length short-circuit, and dropping the length fold), so
     // a NUL-padding case and a structural check that the compare has no early
     // return were added. Measured: 82.
-    expect(r.passed).toBeGreaterThan(80);
+    // SLICE L-43: hex only, Ben's empty-unsigned delivery, and the admission
+    // plan. Measured: 133.
+    expect(r.passed).toBeGreaterThan(130);
   });
   it("leafly-order-map-core (SLICE L-5: status vocabulary in both directions)", () => {
     const r = __runLeaflyOrderMapTests();

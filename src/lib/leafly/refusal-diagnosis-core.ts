@@ -18,14 +18,18 @@
  * gets refused. `hmac-core.ts` distinguishes seven, and they have completely
  * different owners and completely different fixes:
  *
- *   missing_header     → the caller sent no X-Leafly-Signature at all.
- *                        A genuine Leafly webhook ALWAYS carries one, so this
+ *   missing_header     → a request WITH A BODY carried no X-Leafly-Signature.
+ *                        Leafly signs every delivery that has a body, so this
  *                        is almost never Leafly. It is a probe, a scanner, a
  *                        health check — or an engineer testing with curl.
+ *                        (SLICE L-43: an EMPTY body with no header is Leafly's
+ *                        expected unsigned delivery. It is answered 2xx and is
+ *                        never recorded, so it never reaches this module.)
  *   empty_header       → header present but blank.
  *   missing_key        → OUR key is not configured. Ours to fix, and nothing
  *                        to do with Leafly.
- *   empty_body         → not a Leafly delivery; all six webhooks require one.
+ *   empty_body         → written only by builds before L-43, which refused a
+ *                        signed empty body unread. Kept so those rows classify.
  *   malformed_header   → something posted a value that is not a SHA-256
  *                        digest at all. Again: not Leafly.
  *   digest_unavailable → our own crypto failed. Ours, and urgent.
@@ -148,8 +152,8 @@ export function refusalMeaning(reason: string | null | undefined): string {
       );
     case "missing_header":
       return (
-        "The caller sent no signature header at all. Genuine Leafly deliveries " +
-        "always carry one, so this was almost certainly not Leafly — a scanner, a " +
+        "The caller sent a body with no signature header. Leafly signs every " +
+        "delivery that has a body, so this was almost certainly not Leafly — a scanner, a " +
         "health check, or someone testing the address by hand."
       );
     case "empty_header":
@@ -159,8 +163,10 @@ export function refusalMeaning(reason: string | null | undefined): string {
       );
     case "empty_body":
       return (
-        "The request had no body. All six Leafly webhooks always send one, so this " +
-        "was not a real delivery."
+        "An older build refused this because the body was empty. Since the " +
+        "signature-rules update, an empty unsigned delivery is accepted quietly " +
+        "(Leafly says it is expected) and a signed one is checked like any other, " +
+        "so no new refusal will ever carry this reason."
       );
     case "malformed_header":
       return (
