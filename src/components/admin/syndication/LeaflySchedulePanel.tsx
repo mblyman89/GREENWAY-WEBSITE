@@ -241,8 +241,10 @@ export function LeaflySchedulePanel({
             By hand
           </p>
           <p className="mt-1 text-xs text-[var(--admin-text)]">
-            Always available, in <strong>Live push to Leafly</strong> above. The schedule
-            stands aside while you are pushing and never competes with you.
+            Always available, in the send tools above (<strong>Send my whole menu, hold back
+            only the bad ones</strong>, <strong>Send only certain products</strong>, and
+            <strong>Replace my whole Leafly menu (POST)</strong>). The schedule stands aside
+            while you are sending and never competes with you.
           </p>
         </div>
       </div>

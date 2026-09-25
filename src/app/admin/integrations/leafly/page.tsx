@@ -42,6 +42,7 @@ import {
   saveLeaflyScheduleAction,
   checkLeaflyScheduleNowAction,
 } from "./actions";
+import { isAutoAcknowledgeEnabled } from "@/lib/leafly/auto-ack-core";
 import { LeaflyPushClient } from "./leafly-client";
 import { LeaflyItemPicker } from "./leafly-picker-client";
 
@@ -222,6 +223,10 @@ export default async function LeaflyIntegrationPage() {
   const recentLogs = logs.slice(0, 15);
   const sample = preview.payload.items.slice(0, 3);
 
+  // SLICE L-42: the ordering card states the acknowledgement truth, not a
+  // generic reminder. Same switch the Orders board reads (default on).
+  const autoAcknowledgeOn = isAutoAcknowledgeEnabled(process.env.LEAFLY_AUTO_ACKNOWLEDGE);
+
   return (
     <div className="space-y-6">
       <Breadcrumbs
@@ -232,7 +237,7 @@ export default async function LeaflyIntegrationPage() {
       />
       <AdminPageHeader
         title="Leafly menu sync"
-        subtitle="Build and push the live Menu API v2.0 feed from the published menu."
+        subtitle="Send your published menu to Leafly, check it, and prove every Menu API action for certification."
         help={
           <HelpPanel id="leafly-help" title="How Leafly sync works">
             <p>
@@ -241,17 +246,20 @@ export default async function LeaflyIntegrationPage() {
             </p>
             <p>
               <strong>Preview</strong> is a dry-run &mdash; it shows precisely what would be sent and
-              never contacts Leafly. <strong>Live push</strong> (POST) is a full sync that
-              replaces the Leafly menu and requires credentials plus explicit confirmation.
-              Preflight errors block live pushes; the engine skips syncs when nothing changed.
+              never contacts Leafly. Every button that sends is labelled with the Menu API
+              action it uses: <strong>PUT</strong> adds and updates and never deletes;
+              <strong>POST</strong> replaces the whole menu and deletes anything not sent;
+              <strong>DELETE</strong> removes the products you pick; <strong>GET</strong>
+              only reads. Products Leafly would refuse are held back and named, never
+              silently dropped.
             </p>
             {/* SLICE L-7. The help panel predates automation and described a
                 button-only integration, so the one place on this page whose job
                 is to answer "how does this work" was silent about the schedule. */}
             <p>
-              <strong>Automatic syncing</strong> and the <strong>push button</strong> are both
+              <strong>Automatic syncing</strong> and the <strong>send buttons</strong> are both
               yours and they do not compete. The schedule sends a full sync once a day plus
-              the changes in between; the button sends everything the moment you press it.
+              the changes in between; a button sends the moment you press it.
               While you are pushing by hand the schedule stands aside, and two syncs never
               run within {MIN_RUN_GAP_MINUTES} minutes of each other.
             </p>
@@ -262,8 +270,9 @@ export default async function LeaflyIntegrationPage() {
               syncing card shows how your settings compare with what Leafly recommends.
             </p>
             <p>
-              AI description drafts are <strong>drafts only</strong> &mdash; review and approve before
-              attaching them to a product. Leafly descriptions must be plain text.
+              Leafly&rsquo;s certification asks you to prove each action once. POST is proved
+              with <strong>Replace my whole Leafly menu (POST)</strong>, because automatic
+              syncing only POSTs on days when nothing is held back.
             </p>
             {/* SLICE B. This panel answers "how does this work"; the handbook
                 answers "walk me through it, one step at a time, and tell me
@@ -356,10 +365,10 @@ export default async function LeaflyIntegrationPage() {
       {/*
         SLICE L-7 -- automatic syncing.
 
-        PLACEMENT. Directly under the manual push card and directly above the
+        PLACEMENT. Directly under the manual send tools and directly above the
         certification card, and both halves of that are deliberate.
 
-        Under the push card because the owner's request was "both automation and
+        Under the send tools because the owner's request was "both automation and
         a manual push button" -- the button is what he uses today, and a slice
         whose point is "you keep both" must not begin by demoting one of them.
 
@@ -496,8 +505,11 @@ export default async function LeaflyIntegrationPage() {
         {settings.sendPickupAvailability ? (
           <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
             Ordering is <strong>on</strong>. Leafly may take pickup orders for the items
-            counted above. Remember the <strong>15-minute</strong> acknowledgement window
-            &mdash; an order not accepted in time is cancelled by Leafly automatically.
+            counted above. Leafly cancels an order that is not acknowledged within{" "}
+            <strong>15 minutes</strong> (its <code>acknowledgeBy</code> time).{" "}
+            {autoAcknowledgeOn
+              ? "Automatic acknowledgement is on, so the app accepts each order as it arrives; staff then confirm or cancel it on the Orders board."
+              : "Automatic acknowledgement is OFF, so staff must acknowledge every Leafly order on the Orders board before that deadline."}
           </p>
         ) : (
           <p className="mb-3 text-xs text-[var(--admin-text-muted)]">

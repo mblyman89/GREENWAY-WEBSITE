@@ -695,6 +695,8 @@ describe("ask 8: the back office cannot forget credentials that are set", () => 
     // from the import block of actions.ts, not invented here.
     const LEAFLY_CALLS = [
       "pushLeaflyMenu",
+      // SLICE L-42: the certification POST ("Replace my whole Leafly menu").
+      "replaceLeaflyMenu",
       "deleteLeaflyItems",
       "getLeaflyStatus",
       "getLeaflyMenu",
@@ -731,7 +733,8 @@ describe("ask 8: the back office cannot forget credentials that are set", () => 
     // proof the derivation did not quietly narrow.
     const covered = reachesLeafly.map((f) => f.name);
     for (const required of [
-      "pushLeaflyAction",
+      // SLICE L-42: the old method-dropdown push was replaced by the POST card.
+      "replaceLeaflyMenuAction",
       "fetchLeaflyStatusAction",
       "fetchLeaflyMenuReadbackAction",
       "deleteLeaflyItemsAction",

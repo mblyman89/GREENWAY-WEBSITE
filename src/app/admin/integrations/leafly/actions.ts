@@ -4,11 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import {
-  pushLeaflyMenu,
   deleteLeaflyItems,
   getLeaflyStatus,
   getLeaflyMenu,
-  type LeaflyPushResult,
 } from "@/lib/leafly/push";
 import { requireLeaflyReady } from "@/lib/leafly/readiness-gate";
 // ROADMAP R8 (owner ask 6). The menu browser lets the owner SEE what is on
@@ -33,9 +31,7 @@ import type {
   ReadbackTimingVerdict,
 } from "@/lib/leafly/readback-core";
 import type { ReadbackBaseline } from "@/lib/leafly/readback-baseline-core";
-import { draftLeaflyDescription } from "@/lib/leafly/ai";
 import { recordSyndicationLog } from "@/lib/syndication/store";
-import { AiNotConfiguredError } from "@/lib/ai/provider";
 import { PreflightBlockedError } from "@/lib/syndication/preflight-core";
 import {
   resolveLeaflySettings,
@@ -72,111 +68,156 @@ import {
   type FullMenuPushResult,
 } from "@/lib/leafly/full-menu-server";
 
+// SLICE L-42 -- the certification POST ("Replace my whole Leafly menu").
+import {
+  previewReplaceLeaflyMenu,
+  replaceLeaflyMenu,
+  type ReplaceMenuPreview,
+  type ReplaceMenuResult,
+} from "@/lib/leafly/replace-menu-server";
+
 const BASE = "/admin/integrations/leafly";
 
-export type PushActionResult =
-  | { ok: true; result: LeaflyPushResult }
-  | { ok: false; error: string };
+/* ========================================================================== */
+/* SLICE L-42 -- "Replace my whole Leafly menu" (the certification POST)      */
+/* ========================================================================== */
 
 /**
- * Live full menu sync (POST) to Leafly. Requires settings.manage, full credentials, and
- * explicit confirm=true from the form. Records to syndication_logs + audit either way.
+ * Why this replaced the old method-dropdown push action.
  *
- * SLICE L-7 -- WHY THIS NOW OPENS A RUN ROW.
+ * The owner: "the push post and push put buttons throw errors when pressed".
+ * They went through the all-or-nothing `pushLeaflyMenu`, which refuses the
+ * whole menu when ANY product fails Leafly's checks. He also said: "we have
+ * to prove we can successfully complete every action. So we will need to
+ * have a successful push post ... unless the auto sync does a push post".
+ * Automation POSTs only when nothing is held back (auto-sync-core A1), so this
+ * button is how a POST is proved. It is built exactly like "Send my whole
+ * menu, hold back only the bad ones" and differs only in the verb, with the
+ * consequence of that verb (held-back products leave Leafly) shown by name
+ * and accepted by the owner first. Rules: src/lib/leafly/replace-menu-core.ts.
  *
- * The owner asked for "both automation and a manual push button". Making the
- * button keep working was the easy half; making the two SAFE TOGETHER is this.
- *
- * `leafly_sync_runs` is where the scheduler looks to decide whether it is safe
- * to act, and an unfinished row IS the lock (migration 0227). Before this
- * change a manual push was invisible to it: a cron tick landing while the owner
- * was mid-push would read "nothing in flight" and start a second, concurrent
- * full sync against Leafly -- two overlapping POSTs, the last one winning, and
- * exactly the erratic request pattern their certification checklist marks down.
- *
- * So the push is bracketed. `beginManualRun` writes the row, the scheduler sees
- * `manual_in_flight` and stands aside, and `finishManualRun` closes it in a
- * `finally`-equivalent position on both the success and the error path.
- *
- * Note the deliberate asymmetry: if `beginManualRun` cannot write its row it
- * returns null and the push STILL PROCEEDS. A person who has pressed this
- * button and confirmed it has made a decision, and refusing them because a log
- * table was unreachable would be the wrong trade -- the worst case of pushing
- * anyway is that the scheduler does not know, which the staleness cutoff and
- * the minimum gap already tolerate. `finishManualRun` no-ops on a null id.
+ * Bracketed by a manual run row exactly as the old action was (L-7), so the
+ * scheduler stands aside while it runs. Its row records method POST with a
+ * success, which is also what the schedule's "has today's full sync happened"
+ * evidence rule counts.
  */
-export async function pushLeaflyAction(formData: FormData): Promise<PushActionResult> {
-  const session = await requirePermission("settings.manage");
-  const confirm = formData.get("confirm") === "true";
-  const method = formData.get("method") === "PUT" ? "PUT" : "POST";
+export type ReplaceMenuPreviewActionResult =
+  | { ok: true; preview: ReplaceMenuPreview }
+  | { ok: false; error: string };
 
-  if (!confirm) {
-    return { ok: false, error: "Confirmation required for a live Leafly push." };
+export async function previewReplaceLeaflyMenuAction(input: {
+  repair?: boolean;
+}): Promise<ReplaceMenuPreviewActionResult> {
+  await requirePermission("settings.manage");
+  // No readiness gate: a preview sends nothing (same as the whole-menu preview).
+  try {
+    return { ok: true, preview: await previewReplaceLeaflyMenu({ repair: input?.repair === true }) };
+  } catch (err) {
+    if (err instanceof PreflightBlockedError) {
+      return {
+        ok: false,
+        error:
+          "The menu data itself failed its safety check, so no payload could be built. " +
+          "This is about the feed, not individual products.",
+      };
+    }
+    return { ok: false, error: err instanceof Error ? err.message : "Could not preview the replacement." };
   }
-  // FINDING J-4: refresh-then-check, via the one shared gate. A synchronous
-  // isLeaflyConfigured() here reported "not configured" on any cold lambda.
+}
+
+export type ReplaceMenuActionResult =
+  | { ok: true; result: ReplaceMenuResult }
+  | { ok: false; error: string };
+
+export async function replaceLeaflyMenuAction(input: {
+  confirm: boolean;
+  repair?: boolean;
+  acknowledgedWithheldCount: number | null;
+}): Promise<ReplaceMenuActionResult> {
+  const session = await requirePermission("settings.manage");
+  if (!input?.confirm) {
+    return { ok: false, error: "Confirmation required to replace the Leafly menu." };
+  }
   const gate = await requireLeaflyReady();
   if (!gate.ok) {
     return { ok: false, error: gate.error };
   }
+  const ack =
+    typeof input.acknowledgedWithheldCount === "number" &&
+    Number.isInteger(input.acknowledgedWithheldCount) &&
+    input.acknowledgedWithheldCount >= 0
+      ? input.acknowledgedWithheldCount
+      : null;
 
-  // Tell the scheduler a human is working. See the note above on why a failure
-  // here does not stop the push.
   const manualRunId = await beginManualRun(session.userId);
-
   try {
-    const result = await pushLeaflyMenu({ confirm: true, method });
+    const result = await replaceLeaflyMenu({
+      confirm: true,
+      repair: input.repair === true,
+      acknowledgedWithheldCount: ack,
+    });
+
+    if (!result.sent) {
+      // Refused by the plan: nothing transmitted, so "skipped", never a
+      // channel failure that would count towards the backoff.
+      await finishManualRun({
+        id: manualRunId,
+        ok: true,
+        skipped: true,
+        method: null,
+        errorDetail: result.message,
+      });
+      revalidatePath(BASE);
+      return { ok: true, result };
+    }
+
     await finishManualRun({
       id: manualRunId,
       ok: result.ok,
-      skipped: result.skipped,
-      method: result.method,
+      skipped: false,
+      method: "POST",
       httpStatus: result.httpStatus,
       itemCount: result.itemCount,
-      planSummary: result.planSummary,
-      errorDetail: result.ok ? null : (result.message ?? null),
+      planSummary: result.plan.summary,
+      errorDetail: result.ok ? null : result.message,
     });
+    const held = result.preview.withheld;
     await recordSyndicationLog({
       channel: "leafly",
       mode: "live",
-      status: result.skipped ? "skipped" : result.ok ? "ok" : "error",
+      status: result.ok ? "ok" : "error",
       itemCount: result.itemCount,
+      // The FULL body: the read-back compares against the last full send.
       payload: result.payload,
       response: result.response,
-      message: result.message,
+      message:
+        `Replace whole menu (POST): ${result.message}` +
+        (held.length > 0 ? ` Held back ${held.length}: ${held.map((w) => w.name).join("; ")}` : ""),
       createdBy: session.userId,
     });
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
-      action: result.skipped
-        ? "leafly.push.skipped"
-        : result.ok
-          ? "leafly.push.success"
-          : "leafly.push.error",
+      action: result.ok ? "leafly.push.replace.success" : "leafly.push.replace.error",
       entityType: "syndication",
       entityId: "leafly",
       after: {
-        method: result.method,
-        itemCount: result.itemCount,
+        method: "POST",
         httpStatus: result.httpStatus,
-        plan: result.planSummary,
-        skipped: result.skipped,
+        sent: result.itemCount,
+        withheldIds: held.map((w) => w.id),
+        removedIds: result.plan.removedIds,
+        removedHeldIds: result.plan.removedHeldIds,
+        acknowledgedWithheldCount: ack,
+        repair: input.repair === true,
+        syncStateWritten: result.syncStateWritten,
       },
     });
     revalidatePath(BASE);
     return { ok: true, result };
   } catch (err) {
     const blocked = err instanceof PreflightBlockedError;
-    const message = err instanceof Error ? err.message : "Leafly push failed.";
-    // Close the lock row on the error path too. An exception that left the row
-    // open would make the scheduler believe a manual push was still running --
-    // for STALE_RUN_MINUTES, and every tick in between would stand aside.
-    //
-    // A preflight block is recorded as 'skipped' rather than 'failed', matching
-    // the syndication log below and for the same reason: nothing was
-    // transmitted, so it is not a channel failure and must not count towards
-    // the consecutive-failure backoff.
+    const message = err instanceof Error ? err.message : "Replacing the Leafly menu failed.";
     await finishManualRun({
       id: manualRunId,
       ok: blocked,
@@ -187,7 +228,6 @@ export async function pushLeaflyAction(formData: FormData): Promise<PushActionRe
     await recordSyndicationLog({
       channel: "leafly",
       mode: "live",
-      // Preflight blocks are "skipped" (nothing was transmitted), not channel errors.
       status: blocked ? "skipped" : "error",
       itemCount: 0,
       payload: blocked ? { preflight: (err as PreflightBlockedError).report } : undefined,
@@ -257,9 +297,9 @@ export type FullMenuPushActionResult =
  * #   "Is it possible to send the full menu withholding the bad ones?"     #
  * ###########################################################################
  *
- * WHY THIS IS A SEPARATE ACTION FROM `pushLeaflyAction`
+ * WHY THIS IS A SEPARATE ACTION FROM `replaceLeaflyMenuAction`
  *
- * `pushLeaflyAction` runs the ordinary full sync, which can POST. POST tells
+ * `replaceLeaflyMenuAction` is the certification POST. POST tells
  * Leafly "this is the entire menu" and Leafly deletes everything omitted.
  * This action omits products on purpose, so it must never POST — and the way
  * to guarantee that is to call a function that has no POST path in it at all,
@@ -850,38 +890,6 @@ export async function fetchLeaflyMenuReadbackAction(): Promise<MenuReadbackActio
       ok: false,
       error: err instanceof Error ? err.message : "Menu read-back failed.",
     };
-  }
-}
-
-export type DescriptionDraftResult =
-  | { ok: true; description: string; flags: string[] }
-  | { ok: false; error: string };
-
-/** AI DRAFT a plain-text Leafly description. Drafts only — staff must approve before use. */
-export async function draftLeaflyDescriptionAction(
-  input: {
-    name: string;
-    brand?: string | null;
-    category: string;
-    strainType?: string | null;
-    strainName?: string | null;
-    thc?: string | null;
-    cbd?: string | null;
-    existing?: string | null;
-  },
-): Promise<DescriptionDraftResult> {
-  await requirePermission("settings.manage");
-  if (!input.name || !input.category) {
-    return { ok: false, error: "Product name and category are required." };
-  }
-  try {
-    const { description, compliance } = await draftLeaflyDescription(input);
-    return { ok: true, description, flags: compliance.flags };
-  } catch (err) {
-    if (err instanceof AiNotConfiguredError) {
-      return { ok: false, error: "AI is not configured. Add an AI provider key to enable drafting." };
-    }
-    return { ok: false, error: err instanceof Error ? err.message : "Drafting failed." };
   }
 }
 

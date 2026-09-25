@@ -193,7 +193,7 @@ export function SyncSettingsPanel({
           <Field
             label="Default sync mode"
             htmlFor="leafly-syncmode"
-            help="POST = full sync (Leafly removes items missing from the payload — its recommended daily operation). PUT = upsert only; the engine then removes departed items with an explicit delete. The dropdown on the push card overrides this per-push."
+            help="POST = full sync (Leafly removes items missing from the payload — its recommended daily operation). PUT = upsert only; the engine then removes departed items with an explicit delete. Automatic syncing never POSTs while any product is held back (it uses PUT plus safe deletes instead), and every manual button names the action it uses."
           >
             <Select id="leafly-syncmode" name="syncMode" defaultValue={lf.syncMode}>
               <option value="post">POST — full sync (recommended)</option>

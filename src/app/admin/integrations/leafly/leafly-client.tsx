@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Badge, Button, Card, Field, Input, Select, Textarea } from "@/components/admin/ui";
+import { Badge, Button, Card, Field, Textarea } from "@/components/admin/ui";
 import {
-  pushLeaflyAction,
   deleteLeaflyItemsAction,
   fetchLeaflyStatusAction,
   fetchLeaflyMenuReadbackAction,
-  draftLeaflyDescriptionAction,
   type MenuReadbackActionResult,
 } from "./actions";
 import {
@@ -17,20 +15,23 @@ import {
 } from "@/lib/leafly/delete-request-core";
 import { LeaflyMenuBrowser } from "./menu-browser-client";
 import { FullMenuPanel } from "./full-menu-panel";
+import { ReplaceMenuPanel } from "./replace-menu-panel";
 
-const CATEGORIES = [
-  "flower",
-  "preroll",
-  "cartridge",
-  "concentrate",
-  "edible-solid",
-  "edible-liquid",
-  "tincture",
-  "topical",
-  "rso",
-  "accessories",
-];
-
+/**
+ * SLICE L-42 -- the Leafly tools, reorganised.
+ *
+ * The owner: "Remove the drop down menu to select POST or PUT and remove the
+ * push post and push put buttons since they throw errors when pressed", and
+ * later "we have to prove we can successfully complete every action. So we
+ * will need to have a successful push post". So the dropdown and the old
+ * all-or-nothing push are gone, and each Menu API verb now has exactly one
+ * clearly named home, grouped by what it does to the live menu:
+ *
+ *   Check (reads only)  GET /status, GET /menu     -> "Checks" card
+ *   Add / update (PUT)  whole menu, or picked      -> FullMenuPanel, picker
+ *   Replace (POST)      the certification POST     -> ReplaceMenuPanel
+ *   Remove (DELETE)     by name, or by ID          -> browser, DeleteFromLeafly
+ */
 export function LeaflyPushClient({
   configured,
   itemCount,
@@ -42,12 +43,8 @@ export function LeaflyPushClient({
   sandbox: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  const [confirmArmed, setConfirmArmed] = useState(false);
-  const [method, setMethod] = useState<"POST" | "PUT">("POST");
-  const [pushMsg, setPushMsg] = useState<string | null>(null);
-  const [pushOk, setPushOk] = useState<boolean | null>(null);
-
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [statusOk, setStatusOk] = useState<boolean | null>(null);
   const [readback, setReadback] = useState<MenuReadbackActionResult | null>(null);
 
   function doReadback() {
@@ -57,102 +54,48 @@ export function LeaflyPushClient({
     });
   }
 
-  function doPush() {
-    setPushMsg(null);
-    setPushOk(null);
-    const fd = new FormData();
-    fd.set("confirm", "true");
-    fd.set("method", method);
-    startTransition(async () => {
-      const res = await pushLeaflyAction(fd);
-      if (res.ok) {
-        setPushOk(res.result.ok);
-        setPushMsg(
-          res.result.skipped
-            ? (res.result.message ?? "Skipped — no changes since the last successful sync.")
-            : res.result.ok
-              ? `Sync sent (${res.result.method}${res.result.planSummary ? ` — ${res.result.planSummary}` : ""}). ${res.result.message ?? ""}`
-              : `Leafly returned HTTP ${res.result.httpStatus}. ${res.result.message ?? ""}`,
-        );
-      } else {
-        setPushOk(false);
-        setPushMsg(res.error);
-      }
-      setConfirmArmed(false);
-    });
-  }
-
   function doStatus() {
     setStatusMsg(null);
+    setStatusOk(null);
     startTransition(async () => {
       const res = await fetchLeaflyStatusAction();
       if (res.ok) {
+        setStatusOk(res.httpStatus >= 200 && res.httpStatus < 300);
         setStatusMsg(`HTTP ${res.httpStatus}: ${JSON.stringify(res.body).slice(0, 400)}`);
       } else {
+        setStatusOk(false);
         setStatusMsg(res.error);
       }
     });
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className="space-y-4">
+      <VerbGuide itemCount={itemCount} />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card>
-        <h2 className="mb-2 text-sm font-bold text-[var(--admin-text)]">Live push to Leafly</h2>
+        <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">Checks (read only)</h2>
         <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-          {method === "POST"
-            ? "POST is a full sync — it replaces the Leafly menu and deletes items not in this feed."
-            : "PUT upserts items without deleting anything omitted from the feed."}
+          These two buttons only read from Leafly. They never change your menu.
         </p>
-
-        <div className="mb-3">
-          <Field label="Method" htmlFor="leafly-method" help="POST = full sync · PUT = upsert only">
-            <Select
-              id="leafly-method"
-              value={method}
-              onChange={(e) => setMethod(e.target.value === "PUT" ? "PUT" : "POST")}
-            >
-              <option value="POST">POST — full sync ({itemCount} items)</option>
-              <option value="PUT">PUT — upsert items</option>
-            </Select>
-          </Field>
-        </div>
-
-        {!configured ? (
-          <Badge tone="orange">Add credentials to enable live push</Badge>
-        ) : !confirmArmed ? (
-          <Button variant="primary" size="sm" onClick={() => setConfirmArmed(true)} disabled={pending}>
-            Push {method} to Leafly…
-          </Button>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-[var(--admin-danger)]">
-              Send {itemCount} items via {method} now?
-            </span>
-            <Button variant="danger" size="sm" onClick={doPush} disabled={pending}>
-              {pending ? "Sending…" : "Yes, push now"}
-            </Button>
-            <Button variant="neutral" size="sm" onClick={() => setConfirmArmed(false)} disabled={pending}>
-              Cancel
-            </Button>
-          </div>
-        )}
-
-        {pushMsg ? (
-          <p
-            className={`mt-3 text-xs ${
-              pushOk ? "text-[var(--admin-accent)]" : "text-[var(--admin-danger)]"
-            }`}
-          >
-            {pushMsg}
-          </p>
-        ) : null}
-
-        <div className="mt-4 border-t border-[var(--admin-border)] pt-3">
+        <div>
           <Button variant="neutral" size="sm" onClick={doStatus} disabled={pending || !configured}>
             Check integration status
           </Button>
+          {!configured ? (
+            <span className="ml-2 text-[0.7rem] text-[var(--admin-text-muted)]">
+              Add your Leafly credentials first.
+            </span>
+          ) : null}
           {statusMsg ? (
-            <p className="mt-2 break-words text-xs text-[var(--admin-text-muted)]">{statusMsg}</p>
+            <p
+              className={`mt-2 break-words text-xs ${
+                statusOk ? "text-[var(--admin-accent)]" : "text-[var(--admin-text-muted)]"
+              }`}
+            >
+              {statusMsg}
+            </p>
           ) : null}
         </div>
 
@@ -187,14 +130,23 @@ export function LeaflyPushClient({
       </Card>
 
       {/*
-        TASK J asks 3 + 4. Placed immediately after the push card and BEFORE
-        the menu browser, because "send my whole menu but hold back the bad
-        ones" is the thing the owner actually wants to do most often, and the
-        plain full-sync button above it is the thing that fails for him. The
-        useful path should be the one you reach first.
+        TASK J asks 3 + 4. The everyday path, reached first: whole-menu PUT
+        that holds back only the products Leafly would refuse, never deletes.
       */}
       <FullMenuPanel configured={configured} />
+      </div>
 
+      <GroupHeading
+        title="Replace (POST)"
+        body="Sends your whole menu and removes from Leafly anything not in the send. Needed once for certification; rarely needed day to day."
+      />
+      <ReplaceMenuPanel configured={configured} />
+
+      <GroupHeading
+        title="Remove (DELETE)"
+        body="Take specific products off Leafly. Find them by name first; use the ID box only when you already have an exact ID."
+      />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {/*
         ROADMAP R8 (owner ask 6). The browser is the PRIMARY way to remove a
         product: see the menu, find the product by name/vendor/barcode, tick
@@ -204,9 +156,69 @@ export function LeaflyPushClient({
       <LeaflyMenuBrowser configured={configured} />
 
       <DeleteFromLeafly configured={configured} />
-
-      <DescriptionDrafter />
+      </div>
     </div>
+  );
+}
+
+function GroupHeading({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="border-t border-[var(--admin-border)] pt-4">
+      <h2 className="text-xs font-black uppercase tracking-[0.14em] text-[var(--admin-text)]">{title}</h2>
+      <p className="mt-1 text-xs text-[var(--admin-text-muted)]">{body}</p>
+    </div>
+  );
+}
+
+/**
+ * SLICE L-42 owner ask 4: "explain what PUT means". The four verbs of the
+ * Menu API in one sentence each, in terms of what they do to the storefront.
+ */
+function VerbGuide({ itemCount }: { itemCount: number }) {
+  const rows: { verb: string; plain: string; where: string }[] = [
+    {
+      verb: "GET",
+      plain: "Reads only. Nothing on Leafly changes.",
+      where: "Check integration status \u00b7 Read the menu back",
+    },
+    {
+      verb: "PUT",
+      plain: "Adds new products and updates existing ones. Never deletes anything.",
+      where: "Send my whole menu, hold back only the bad ones \u00b7 Send only certain products",
+    },
+    {
+      verb: "POST",
+      plain: "Replaces the whole menu. Anything not in the send is deleted from Leafly.",
+      where: "Replace my whole Leafly menu (POST)",
+    },
+    {
+      verb: "DELETE",
+      plain: "Removes the specific products you choose.",
+      where: "What is on your Leafly menu \u00b7 Remove by product ID (advanced)",
+    },
+  ];
+  return (
+    <Card>
+      <h2 className="text-sm font-bold text-[var(--admin-text)]">What each kind of send does</h2>
+      <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+        Leafly&rsquo;s Menu API has four actions. Every button below is labelled with the one
+        it uses. Your menu currently has {itemCount} publishable products.
+      </p>
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {rows.map((r) => (
+          <div
+            key={r.verb}
+            className="rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2.5 text-xs"
+          >
+            <div className="flex items-center gap-2">
+              <Badge tone={r.verb === "POST" || r.verb === "DELETE" ? "orange" : "green"}>{r.verb}</Badge>
+              <span className="font-semibold text-[var(--admin-text)]">{r.plain}</span>
+            </div>
+            <p className="mt-1 text-[var(--admin-text-muted)]">{r.where}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -215,9 +227,9 @@ export function LeaflyPushClient({
  *
  * WHY THIS IS A SEPARATE CARD AND NOT A MODE ON THE PUSH CARD.
  *
- * The push card's dangerous control is a dropdown, and adding "DELETE" as a
- * third option would put an irreversible action one mis-click from a routine
- * one. Removal gets its own card, its own text box that must be filled in by
+ * The old push card's dangerous control was a dropdown, and adding "DELETE"
+ * as a third option would have put an irreversible action one mis-click from a
+ * routine one. Removal gets its own card, its own text box that must be filled in by
  * hand, and its own confirmation. None of that is decoration: a product
  * silently vanishing from a live menu is exactly the class of fault Leafly
  * grades an integration on.
@@ -488,122 +500,5 @@ function ReadbackReport({ report }: { report: MenuReadbackActionResult }) {
         </details>
       ) : null}
     </div>
-  );
-}
-
-function DescriptionDrafter() {
-  const [pending, startTransition] = useTransition();
-  const [name, setName] = useState("");
-  const [brand, setBrand] = useState("");
-  const [category, setCategory] = useState("flower");
-  const [strainName, setStrainName] = useState("");
-  const [thc, setThc] = useState("");
-  const [existing, setExisting] = useState("");
-  const [draft, setDraft] = useState<string | null>(null);
-  const [flags, setFlags] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  function doDraft() {
-    setError(null);
-    setDraft(null);
-    setFlags([]);
-    setCopied(false);
-    startTransition(async () => {
-      const res = await draftLeaflyDescriptionAction({
-        name,
-        brand: brand || null,
-        category,
-        strainName: strainName || null,
-        thc: thc || null,
-        existing: existing || null,
-      });
-      if (res.ok) {
-        setDraft(res.description);
-        setFlags(res.flags);
-      } else {
-        setError(res.error);
-      }
-    });
-  }
-
-  return (
-    <Card>
-      <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">AI description drafter</h2>
-      <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-        Drafts a plain-text Leafly description. <strong>Draft only</strong> — review, edit, and
-        approve before using it.
-      </p>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Product name" htmlFor="d-name" required>
-          <Input id="d-name" value={name} onChange={(e) => setName(e.target.value)} />
-        </Field>
-        <Field label="Brand" htmlFor="d-brand">
-          <Input id="d-brand" value={brand} onChange={(e) => setBrand(e.target.value)} />
-        </Field>
-        <Field label="Category" htmlFor="d-cat" required>
-          <Select id="d-cat" value={category} onChange={(e) => setCategory(e.target.value)}>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Strain" htmlFor="d-strain">
-          <Input id="d-strain" value={strainName} onChange={(e) => setStrainName(e.target.value)} />
-        </Field>
-        <Field label="THC" htmlFor="d-thc" help="e.g. 24.1%">
-          <Input id="d-thc" value={thc} onChange={(e) => setThc(e.target.value)} />
-        </Field>
-      </div>
-      <div className="mt-3">
-        <Field label="Existing copy to refine (optional)" htmlFor="d-existing">
-          <Textarea
-            id="d-existing"
-            rows={2}
-            value={existing}
-            onChange={(e) => setExisting(e.target.value)}
-          />
-        </Field>
-      </div>
-
-      <div className="mt-3">
-        <Button variant="save" size="sm" onClick={doDraft} disabled={pending || !name}>
-          {pending ? "Drafting…" : "Draft description"}
-        </Button>
-      </div>
-
-      {error ? <p className="mt-3 text-xs text-[var(--admin-danger)]">{error}</p> : null}
-
-      {draft ? (
-        <div className="mt-4 rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--admin-text-muted)]">Draft</span>
-            <Button
-              variant="neutral"
-              size="sm"
-              onClick={() => {
-                navigator.clipboard?.writeText(draft);
-                setCopied(true);
-              }}
-            >
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-          <p className="text-sm text-[var(--admin-text)]">{draft}</p>
-          {flags.length > 0 ? (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {flags.map((f) => (
-                <Badge key={f} tone="orange">
-                  {f}
-                </Badge>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </Card>
   );
 }
