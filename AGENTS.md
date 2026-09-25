@@ -47,6 +47,12 @@ These rules govern ALL work in this repository. They are owner-mandated and perm
     - **Current schedule (pinned by `tests/compliance/leafly-certification.test.ts`, which parses every expression):** `leafly-ack-sweep` every 2 min (owner asked for 2–3; gives each order ~6 chances inside Leafly's 15-minute window); `leafly-menu-sync` every 15 min (= the finest interval the owner can pick); `compliance-reminders`, `regulatory-watch`, `atm-sync` daily. Changing a cadence means changing that test on purpose, with the reason.
     - **Unchanged by the plan:** rules 6 and 7. The owner may make the GitHub repository public or private depending on Actions minutes; rebase-merge and `Greenway Dev` authorship apply either way, so builds keep working when it goes private again.
 
+13. **Staging is PAUSED by the owner. Ignore it; production is the only deploy that gates a merge.** Owner-stated (after L-45, verbatim): *"I paused the staging site. I was using too much of their usage. Don't worry about it. Add it to the standing rules please. The supabase staging db is paused too."*
+    - The Vercel project **`greenway-staging`** is paused, so its PR check reports **"Deployment was blocked"** on every PR. That is EXPECTED and has no code cause. Do **not** push empty commits for it, do not investigate it, and do not wait for it.
+    - The **Supabase staging database** is paused too, so the **"Supabase Preview"** check may skip or fail. Also expected; ignore it.
+    - **Merge gate while staging is paused:** CI `build`, `compliance`, `migrations` green **and** the production Vercel check **`greenway_website`** green. After merging, verify production with `gh api repos/mblyman89/GREENWAY-WEBSITE/commits/<sha>/status` until `success`. If `greenway_website` fails with no code cause, one empty commit (authored per rule 7) re-triggers it.
+    - Never point code, tests, scripts or docs at the staging URL or the staging database as if it were live. This rule stays until the owner says staging is back on; then delete this rule in its own PR.
+
 ## 🔴 CCRS COMPLIANCE — ALWAYS CHECK AND SATISFY (BINDING)
 
 ### ⛔ MANDATORY FIRST STEP — READ THE BIBLE BEFORE YOU EDIT ANY CCRS CODE
