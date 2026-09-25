@@ -45,6 +45,28 @@ hold. It is one per-retailer key, and that same key appears in the
 > so nobody goes hunting for a key that does not exist separately — this touches
 > the same misleading text already flagged at `CredentialsEditor.tsx:135`
 > ("Leave them blank until Leafly sends them"), which remains an open offer.
+>
+> **IMPLEMENTED in SLICE L-45.** "ROADMAP IMPACT: none" turned out to be wrong.
+> It WAS a live blocking bug: the code read ONLY the Order integration key box.
+> With that box blank (the owner's screenshot showed "NOT SET"), every collect,
+> acknowledge and status push refused with "fix your credentials". This was
+> true even though the Menu key, which is the same value, was saved and
+> working.
+> - Now a blank Order box falls back to the Menu key. An explicitly filled
+>   Order box still wins, so no working setup changes.
+> - Every verified webhook's `orderIntegrationKey` is now compared with ours
+>   using a constant-time comparison. On a mismatch the delivery is **still
+>   processed**, never dropped: Greenway is the only retailer behind this
+>   HMAC key, so a mismatch can only be a typo on our side. The log line says
+>   so loudly, and the setup panel names the box to fix. Key values are never
+>   logged or rendered.
+> - The credentials page says whether the two boxes agree. The copy now reads
+>   "Leafly uses your Menu Integration Key as the order integration key; leave
+>   blank to use it."
+> - The misleading "NOT interchangeable" comment in the credentials core is
+>   corrected.
+> - See `src/lib/leafly/retailer-key-core.ts` and
+>   `tests/compliance/leafly-l45-retailer-key.test.ts`.
 
 ## 3. Webhook egress IPs
 

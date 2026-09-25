@@ -128,7 +128,7 @@ export function LeaflyOutcomeBanners({
                 href="/admin/integrations/leafly"
                 className="font-bold underline underline-offset-2"
               >
-                Enter your Leafly order integration key →
+                Enter your Leafly Menu integration key (used for orders too) →
               </Link>
             </p>
           ) : null}

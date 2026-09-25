@@ -19,7 +19,7 @@ CI and both Vercel checks pass and production reports success.
 | L-42 | Leafly page reorganised: AI drafter removed; method dropdown and failing Push POST/PUT removed; **new simple "Replace my whole Leafly menu (POST)"** for certification; GET/PUT/POST/DELETE explained in plain English; copy fixed across the page | **Merged, live** (`ef2ee943`) |
 | L-43 | Webhook signature: hex only; empty body with no header | **Merged, live** (`f0420f3a`); see "L-43: what shipped" below |
 | L-44 | Order preview tax: tax-inclusive `packagePrice`, empty `taxes` | **Done** (PR #1224); see "L-44: what shipped" below |
-| L-45 | `orderIntegrationKey` = Dispensary Menu Key cross-check | Next |
+| L-45 | `orderIntegrationKey` = Dispensary Menu Key cross-check | **Done** (see "L-45: what shipped" below) |
 | L-46 | 9-second inbound response budget | Next (most operationally important) |
 | L-47 | Certification "prove every action" evidence panel | Next |
 
@@ -241,6 +241,71 @@ array.
 3. The Credentials page says in plain words: "Leafly uses your Menu
    Integration Key as the order integration key."
 
+### L-45: what shipped
+
+**What was found.** The bug was worse than a missing cross-check.
+`loadLeaflyOrderIntegrationKey()` read only the Order integration key box.
+With that box blank, which is the state the owner's credentials screenshot
+showed, collecting an order's contents, acknowledging it and pushing its
+status all refused with "fix your credentials". The Menu key (the same value,
+per Ben) was saved the whole time. The body's `orderIntegrationKey` was stored
+but never compared with anything.
+
+**What changed.**
+- New pure core `src/lib/leafly/retailer-key-core.ts` (81 self-test
+  assertions, registered with floor 78):
+  - `resolveLeaflyRetailerKey`: the Order box if filled, else the Menu key.
+    Values are trimmed and never case-folded.
+  - `checkWebhookRetailerKey`: constant-time comparison. Outcomes are match,
+    match_other_box, mismatch, body_missing and not_configured. The action is
+    always `"process"`.
+  - `summarizeRetailerKeyEvidence`: counts only verified deliveries and names
+    the box to fix.
+  - `describeRetailerKeyAgreement`.
+- `loadLeaflyOrderIntegrationKey()` now uses the resolver, so every Order API
+  caller gets the fallback: collect, acknowledge, status push, board, detail,
+  ID images and readiness. `loadLeaflyRetailerKey()` exposes the full
+  resolution.
+- The webhook handler compares every verified body's key. The HMAC key and
+  both store keys come from the same single credentials read as before, so
+  there are zero extra database round trips on the path Leafly times at 9 s.
+- The setup panel reads `order_integration_key` from recent deliveries and
+  shows a warning naming the box to fix. Only a verdict and counts reach the
+  page, never a key.
+- The credentials page shows whether the two boxes agree (computed on the
+  server, since the Menu key reaches the browser masked). The copy is
+  corrected: only the HMAC key is a separate required value.
+- The readiness step is now titled "Store key saved (used for orders)" and
+  ticks when only the Menu key is saved.
+- The "NOT interchangeable" comment in the credentials core is corrected.
+- Five error messages that said "no Order integration key" now say "no store
+  key (neither box)". After the fallback, that is the only case in which they
+  can appear.
+
+**Decision: step 2 above was REVERSED, deliberately.** "On a mismatch, do not
+create the order" assumed a mismatch means "an order for another store".
+- Per the spec the HMAC key is per-integrator, and Greenway is both the
+  integrator and its only retailer. So a verified delivery with a different
+  key can only mean one of our boxes holds a typo.
+- Dropping the delivery would turn our typo into a silently lost,
+  auto-cancelled customer order.
+- The spec also says webhooks "are not the place to apply business rules or
+  validations".
+
+So a mismatch is processed and made loud (log note plus panel warning). The
+action is a pinned constant, so a future "just drop it" change has to fail a
+test.
+
+**Tests.**
+- `tests/compliance/leafly-l45-retailer-key.test.ts` (31 tests) runs the real
+  routes and handler with a mismatched key: still 200, order row saved, bell
+  rung and acknowledged. It also checks that exactly one credentials read
+  happens, that the store failing still fails closed with 401, that no key
+  value appears in logs, evidence or HTML, that unverified rows never raise the
+  warning, and the panel and editor renders.
+- `scripts/recon/l45-mutation-check.sh` runs 27 mutations. Every one must be
+  killed.
+
 ---
 
 ## L-46 — the 9-second inbound budget (most important)
@@ -335,7 +400,7 @@ action once inside them, then email Leafly the window.
 | # | Answer | Where it lands |
 |---|---|---|
 | 1 | Hex HMAC-SHA-256, raw body; empty body has no header | L-43 |
-| 2 | orderIntegrationKey = Menu Key | L-45 |
+| 2 | orderIntegrationKey = Menu Key | L-45 (done: blank Order box falls back to the Menu key; body key compared, reported, never dropped) |
 | 3 | IPs rotate | L-43 (HMAC is the only authentication) |
 | 4 | Retries and the 9-second deadline | L-46 |
 | 5 | `medical:false` correct | No change. Tell Leafly when the medical endorsement lands. |

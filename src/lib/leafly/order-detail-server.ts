@@ -393,8 +393,9 @@ export async function fetchLeaflyOrderMedia(input: {
     return {
       ok: false,
       message:
-        "The Leafly order integration key is not saved yet, so we cannot ask " +
-        "Leafly for the ID images. Add it in the Leafly settings screen.",
+        "No Leafly store key is saved yet (neither the Menu nor the Order integration " +
+        "key), so we cannot ask Leafly for the ID images. Add your Menu integration key " +
+        "in the Leafly settings screen; Leafly uses it for orders too.",
       retryable: false,
       summary: "media: no order integration key configured",
     };

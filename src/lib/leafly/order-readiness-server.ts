@@ -76,6 +76,8 @@ import {
   type RefusalDiagnosis,
   type RefusalRow,
 } from "./refusal-diagnosis-core";
+// SLICE L-45: does what Leafly SENDS carry the store key we hold?
+import { summarizeRetailerKeyEvidence, type RetailerKeyEvidence } from "./retailer-key-core";
 
 /* ------------------------------------------------------------------------- *
  * The site's public origin
@@ -158,6 +160,17 @@ export type DeliveryEvidence = {
    * shopper's cart survives.
    */
   signatureRefusalBlockingNow: boolean;
+  /**
+   * SLICE L-45. Compares the orderIntegrationKey carried by recent VERIFIED
+   * deliveries with the keys saved on the Integrations page, and names the box
+   * to fix when they disagree. Only a verdict and counts - never a key value -
+   * so nothing secret can reach the rendered page.
+   *
+   * null means "not checked" (the caller did not supply the saved keys, or the
+   * log could not be read). Deliberately NOT a verdict: a made-up "no key
+   * saved" would be exactly the unverified claim these panels exist to avoid.
+   */
+  retailerKey: RetailerKeyEvidence | null;
   /** Non-empty when the log could not be read. Never blocks the page. */
   problem: string;
 };
@@ -186,6 +199,7 @@ const NO_EVIDENCE: DeliveryEvidence = {
   refusals: [],
   refusalDiagnosis: NO_REFUSALS,
   signatureRefusalBlockingNow: false,
+  retailerKey: null,
   problem: "",
 };
 
@@ -210,7 +224,12 @@ const NO_EVIDENCE: DeliveryEvidence = {
  */
 export async function loadLeaflyDeliveryEvidence(
   sampleSize = 200,
-  options: { hmacKeyPresent?: boolean; nowIso?: string } = {},
+  options: {
+    hmacKeyPresent?: boolean;
+    nowIso?: string;
+    /** SLICE L-45: the saved keys to compare against. Omit = not checked. */
+    retailerKeys?: { orderKey: string | null; menuKey: string | null };
+  } = {},
 ): Promise<DeliveryEvidence> {
   // Defaults to TRUE, and the direction matters. `diagnoseRefusals` treats a
   // missing key as "this is ours to fix" and suppresses the advice to contact
@@ -235,7 +254,9 @@ export async function loadLeaflyDeliveryEvidence(
       // `rejection_reason` added in slice L-16. It has been written since
       // migration 0225 and never read here, which is the entire reason the
       // panel could only ever offer one explanation for a refusal.
-      .select("event_type, signature_verified, received_at, rejection_reason")
+      // `order_integration_key` added in slice L-45: written since migration
+      // 0225, never compared with our saved key until now.
+      .select("event_type, signature_verified, received_at, rejection_reason, order_integration_key")
       .order("received_at", { ascending: false })
       .limit(sampleSize);
 
@@ -259,6 +280,7 @@ export async function loadLeaflyDeliveryEvidence(
       signature_verified: boolean | null;
       received_at: string | null;
       rejection_reason: string | null;
+      order_integration_key?: string | null;
     }>;
 
     let rejected = 0;
@@ -312,6 +334,18 @@ export async function loadLeaflyDeliveryEvidence(
       // same number: refusals from the hour the integration was being set up
       // are history, not a live fault.
       signatureRefusalBlockingNow: isSignatureRefusalBlockingNow(refusals, nowIso),
+      // Only VERIFIED rows count inside the core: an unsigned body is
+      // untrusted, and must never talk the owner into changing a working key.
+      retailerKey: options.retailerKeys
+        ? summarizeRetailerKeyEvidence({
+            rows: rows.map((r) => ({
+              signatureVerified: r.signature_verified,
+              orderIntegrationKey: r.order_integration_key ?? null,
+            })),
+            orderKey: options.retailerKeys.orderKey,
+            menuKey: options.retailerKeys.menuKey,
+          })
+        : null,
       problem: "",
     };
   } catch (err) {
@@ -615,7 +649,7 @@ export async function loadLeaflyOrderSetupState(): Promise<LeaflyOrderSetupState
   // remaining independent reads. Both passes are still fully parallel
   // internally; the cost is one extra round of latency, paid to stop the page
   // giving confident advice it has not checked.
-  const [menuReadiness, hmacKey, orderKey] = await Promise.all([
+  const [menuReadiness, hmacKey, retailer] = await Promise.all([
     // Rule 11: menu readiness already has a home, and that home is the ONLY
     // thing that refreshes the credential cache from the database first.
     import("./push")
@@ -624,16 +658,26 @@ export async function loadLeaflyOrderSetupState(): Promise<LeaflyOrderSetupState
     import("./webhook-server")
       .then((m) => m.loadLeaflyHmacKey())
       .catch(() => null),
+    // SLICE L-45: the full resolution (Order box, else the Menu key - Ben:
+    // they are the same value), so the step below ticks when only the Menu
+    // key is saved, and the evidence can be compared with BOTH boxes.
     import("./webhook-server")
-      .then((m) => m.loadLeaflyOrderIntegrationKey())
+      .then((m) => m.loadLeaflyRetailerKey())
       .catch(() => null),
   ]);
+  const orderKey = retailer?.key ?? null;
 
   const hmacKeyPresent = Boolean(hmacKey && hmacKey.trim());
 
   const [evidence, everOrdered, speakerReady, printerReady, pickupEnabled, variantCount] =
     await Promise.all([
-      loadLeaflyDeliveryEvidence(200, { hmacKeyPresent }),
+      loadLeaflyDeliveryEvidence(200, {
+        hmacKeyPresent,
+        // Only when the keys were actually read; otherwise "not checked".
+        retailerKeys: retailer
+          ? { orderKey: retailer.orderKey, menuKey: retailer.menuKey }
+          : undefined,
+      }),
       anyLeaflyOrderEverReceived(),
       isSpeakerReady(),
       isPrinterReady(),

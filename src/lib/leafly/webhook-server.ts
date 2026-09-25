@@ -43,6 +43,12 @@ import {
   type ParsedLeaflyWebhook,
 } from "./webhook-parse-core";
 import { leaflyToGreenwayStatus } from "./order-map-core";
+// SLICE L-45 - Ben, item 2: orderIntegrationKey IS the Menu key.
+import {
+  resolveLeaflyRetailerKey,
+  checkWebhookRetailerKey,
+  type ResolvedRetailerKey,
+} from "./retailer-key-core";
 
 /**
  * The real HMAC-SHA-256 digester injected into the pure core.
@@ -94,21 +100,49 @@ export async function loadLeaflyHmacKey(): Promise<string | null> {
   return null;
 }
 
-/** Load this retailer's orderIntegrationKey, for cross-checking webhook bodies. */
+/**
+ * Load this retailer's orderIntegrationKey - the key in every Order API path
+ * (`/{orderIntegrationKey}/orders/...`) used to collect, acknowledge and push
+ * status for an order.
+ *
+ * SLICE L-45. Ben (Leafly), item 2: "`orderIntegrationKey` is the SAME VALUE
+ * as the Dispensary Menu Key we already hold." Before this slice a blank
+ * "Order integration key" box made every caller refuse with "fix your
+ * credentials" even though the Menu key - the same value - was saved. The
+ * rule (Order box if filled, else the Menu key) lives in the pure
+ * `resolveLeaflyRetailerKey`; this function only feeds it.
+ */
 export async function loadLeaflyOrderIntegrationKey(): Promise<string | null> {
+  return (await loadLeaflyRetailerKey()).key;
+}
+
+/**
+ * The full resolution (which box it came from, whether the two boxes agree),
+ * for the setup panel and the credentials page. Never throws.
+ */
+export async function loadLeaflyRetailerKey(): Promise<
+  ResolvedRetailerKey & { orderKey: string | null; menuKey: string | null }
+> {
   try {
     const leafly = await getLeaflyOverrides();
-    const key = leafly.orderIntegrationKey?.trim();
-    if (key) return key;
+    const orderKey = leafly.orderIntegrationKey ?? null;
+    const menuKey = leafly.menuIntegrationKey ?? null;
+    return { ...resolveLeaflyRetailerKey({ orderKey, menuKey }), orderKey, menuKey };
   } catch {
     /* Same posture as above: null, never a guess. */
   }
-  return null;
+  return { ...resolveLeaflyRetailerKey({ orderKey: null, menuKey: null }), orderKey: null, menuKey: null };
 }
 
 export type WebhookVerification = {
   verdict: LeaflyHmacVerdict;
   bodySha256: string;
+  /**
+   * SLICE L-45: both saved retailer keys, read in the SAME credentials read
+   * as the HMAC key, so checking the body's orderIntegrationKey costs no
+   * extra database round trip on a path Leafly times at 9 seconds.
+   */
+  retailerKeys: { orderKey: string | null; menuKey: string | null };
 };
 
 /**
@@ -119,7 +153,21 @@ export async function verifyInboundLeaflyWebhook(
   rawBody: string,
   headers: Headers,
 ): Promise<WebhookVerification> {
-  const hmacKey = await loadLeaflyHmacKey();
+  // One bounded credentials read for everything this delivery needs. Same
+  // fail-closed posture as loadLeaflyHmacKey: on any failure the HMAC key is
+  // null and the core REFUSES; there is no default key.
+  let hmacKey: string | null = null;
+  let retailerKeys: WebhookVerification["retailerKeys"] = { orderKey: null, menuKey: null };
+  try {
+    const leafly = await getLeaflyOverrides();
+    hmacKey = leafly.hmacKey?.trim() || null;
+    retailerKeys = {
+      orderKey: leafly.orderIntegrationKey ?? null,
+      menuKey: leafly.menuIntegrationKey ?? null,
+    };
+  } catch {
+    /* fail closed: hmacKey stays null */
+  }
   const headerValue = findSignatureHeader(headers);
   const verdict = verifyLeaflySignature({
     rawBody,
@@ -127,7 +175,7 @@ export async function verifyInboundLeaflyWebhook(
     hmacKey,
     digest: nodeHmacDigest,
   });
-  return { verdict, bodySha256: rawBodySha256(rawBody) };
+  return { verdict, bodySha256: rawBodySha256(rawBody), retailerKeys };
 }
 
 export type RecordEventResult =
@@ -351,7 +399,7 @@ export async function handleLeaflyWebhook(input: {
 }): Promise<HandledWebhook> {
   const { rawBody, headers, expectedEvent } = input;
 
-  const { verdict, bodySha256 } = await verifyInboundLeaflyWebhook(rawBody, headers);
+  const { verdict, bodySha256, retailerKeys } = await verifyInboundLeaflyWebhook(rawBody, headers);
   const parsed = parseLeaflyWebhook(rawBody, expectedEvent);
   // SLICE L-43. The three-way decision lives in the pure core. Before L-43
   // this was `if (!verdict.ok) -> 401`, which refused Leafly's expected empty,
@@ -416,6 +464,21 @@ export async function handleLeaflyWebhook(input: {
   }
 
   const notes: string[] = [];
+
+  // SLICE L-45: does this AUTHENTIC delivery carry the store key we hold?
+  // Ben: "that same key appears in the orderIntegrationKey field on every
+  // webhook". The answer is REPORTED, never used to drop the delivery -
+  // `keyCheck.action` is the pinned constant "process". Greenway is the only
+  // retailer behind this integrator's HMAC key, so a mismatch can only mean
+  // one of OUR boxes holds a typo; dropping would turn that typo into a lost,
+  // auto-cancelled customer order. The note never contains a key value.
+  const keyCheck = checkWebhookRetailerKey({
+    bodyKey: parsed.orderIntegrationKey,
+    orderKey: retailerKeys.orderKey,
+    menuKey: retailerKeys.menuKey,
+  });
+  if (keyCheck.alarm) notes.push(keyCheck.note);
+
   if (!recorded.ok) {
     // Storage failed, but the delivery was authentic. Answer 200 anyway: asking
     // Leafly to retry would not fix our database, and the retry could end in an

@@ -35,7 +35,18 @@ function Note() {
   );
 }
 
-export function LeaflyCredentialsForm({ view }: { view: CredentialsView["leafly"] }) {
+export function LeaflyCredentialsForm({
+  view,
+  keyAgreement,
+}: {
+  view: CredentialsView["leafly"];
+  /**
+   * SLICE L-45: whether the two store-key boxes agree, worded server-side by
+   * `describeRetailerKeyAgreement`. Optional so the form still renders if a
+   * caller has not been updated; when absent nothing is claimed.
+   */
+  keyAgreement?: { tone: "good" | "warn" | "info"; text: string };
+}) {
   const [pending, startTransition] = useTransition();
   const [env, setEnv] = useState(view.environment);
   const [key, setKey] = useState(view.menuIntegrationKey);
@@ -146,14 +157,34 @@ export function LeaflyCredentialsForm({ view }: { view: CredentialsView["leafly"
           it is followed with confidence. The replacement says what to do NOW,
           and names the consequence of not doing it.
         */}
+        {/* SLICE L-45: corrected. This used to say both boxes are required.
+            Leafly (Ben, item 2) confirmed the order integration key is the
+            SAME value as the Menu integration key, so a blank Order box now
+            means "use the Menu key". Only the HMAC key is a separate value. */}
         <p className="mt-1 mb-4 text-xs text-[var(--admin-text-muted)]">
-          Both of these are <strong className="font-bold text-[var(--admin-text)]">required</strong>{" "}
-          for online orders to work. Leafly issues them separately from the menu credentials
-          above, when it grants Order API access. Until both are saved, orders Leafly sends are
-          rejected before they reach this store — and an order that is never acknowledged is
-          auto-cancelled by Leafly after fifteen minutes. Copy each value
+          The <strong className="font-bold text-[var(--admin-text)]">Webhook HMAC key</strong> is{" "}
+          <strong className="font-bold text-[var(--admin-text)]">required</strong> for online
+          orders to work: without it, orders Leafly sends are rejected before they reach this
+          store. Leafly uses your <strong className="font-bold text-[var(--admin-text)]">Menu
+          integration key</strong> as the order integration key, so you can leave the Order
+          integration key box blank and the Menu key is used. An order that is never acknowledged
+          is auto-cancelled by Leafly after fifteen minutes. Copy each value
           character-for-character from Leafly&rsquo;s email.
         </p>
+        {keyAgreement ? (
+          <p
+            data-testid="leafly-key-agreement"
+            className={`mb-4 rounded-[var(--admin-radius)] border px-3 py-2 text-xs ${
+              keyAgreement.tone === "warn"
+                ? "border-[var(--admin-gold)]/50 bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]"
+                : keyAgreement.tone === "good"
+                  ? "border-[var(--admin-border)] bg-[var(--admin-surface-2)] text-[var(--admin-text)]"
+                  : "border-[var(--admin-border)] text-[var(--admin-text-muted)]"
+            }`}
+          >
+            <strong className="font-bold">Store key:</strong> {keyAgreement.text}
+          </p>
+        ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Webhook HMAC key">
@@ -180,8 +211,8 @@ export function LeaflyCredentialsForm({ view }: { view: CredentialsView["leafly"
               autoComplete="off"
             />
             <p className="mt-1 text-[11px] text-[var(--admin-text-faint)]">
-              Identifies this store to Leafly. Not a secret, so it is shown in full — check it
-              character-for-character against Leafly&rsquo;s email.
+              Identifies this store to Leafly. Leafly uses your Menu integration key as the order
+              integration key; leave blank to use it. Not a secret, so it is shown in full.
             </p>
             <span className="mt-1 inline-block text-[11px] text-[var(--admin-text-faint)]">
               Source: <SourceBadge source={view.sources.orderIntegrationKey} />

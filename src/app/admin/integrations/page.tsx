@@ -11,6 +11,11 @@ import { guideById } from "@/lib/integrations/integration-guides";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { LeaflyCredentialsForm, WeedmapsCredentialsForm, FluxCredentialsForm } from "./CredentialsEditor";
 import { IntegrationGuidePanel, IntegrationHelper } from "./IntegrationHelpers";
+// SLICE L-45: tell the owner, in plain English, whether his two Leafly store-key
+// boxes agree. Computed HERE (server) because the menu key reaches the browser
+// masked; only the verdict text crosses to the client, never a key value.
+import { loadLeaflyRetailerKey } from "@/lib/leafly/webhook-server";
+import { describeRetailerKeyAgreement } from "@/lib/leafly/retailer-key-core";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +45,8 @@ export default async function IntegrationsPage() {
   const leafly = await describeLeaflyRuntimeAsync();
   const weedmaps = await describeWeedmapsRuntimeAsync();
   const credentials = await getIntegrationCredentialsView();
+  const retailerKey = await loadLeaflyRetailerKey();
+  const keyAgreement = describeRetailerKeyAgreement(retailerKey.agreement);
   const accounting = await getAccountingSettings();
   const missingGl = missingGlAccounts(accounting);
   const sageReady = missingGl.length === 0;
@@ -77,7 +84,7 @@ export default async function IntegrationsPage() {
             </p>
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
-            <LeaflyCredentialsForm view={credentials.leafly} />
+            <LeaflyCredentialsForm view={credentials.leafly} keyAgreement={keyAgreement} />
             <WeedmapsCredentialsForm view={credentials.weedmaps} />
             <FluxCredentialsForm view={credentials.flux} />
           </div>

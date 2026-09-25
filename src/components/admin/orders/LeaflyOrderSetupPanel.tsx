@@ -424,6 +424,33 @@ export function LeaflyOrderSetupPanel({
           </div>
         ) : null}
 
+        {/* SLICE L-45: does what Leafly SENDS carry the store key we hold?
+            Ben (Leafly), item 2: orderIntegrationKey is the SAME value as the
+            Menu integration key, and it is on every webhook. When a verified
+            delivery carries a different value, one of our boxes holds a typo
+            and collecting/accepting orders may fail. Orders are still received
+            (never dropped); this names the box to fix. Carries a verdict and
+            counts only, never a key value. */}
+        {evidence.retailerKey?.warn ? (
+          <div
+            data-testid="leafly-retailer-key-warning"
+            className="mt-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/50 bg-[var(--admin-gold-soft)] p-3 sm:p-4"
+          >
+            <p className="text-sm font-black text-[var(--admin-gold)]">
+              {evidence.retailerKey.headline}
+            </p>
+            <p className="mt-1 text-[0.8rem] leading-relaxed text-[var(--admin-text)]">
+              {evidence.retailerKey.detail}
+            </p>
+            <Link
+              href="/admin/integrations"
+              className="admin-focus mt-2 inline-block text-[0.78rem] font-bold underline text-[var(--admin-gold)]"
+            >
+              Open Integrations (Leafly keys)
+            </Link>
+          </div>
+        ) : null}
+
         <ul className="mt-3 divide-y divide-[var(--admin-border)]">
           {readiness.steps.map((step, i) => (
             <StepRow key={step.id} step={step} index={i} />
