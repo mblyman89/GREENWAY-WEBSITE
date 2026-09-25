@@ -155,6 +155,19 @@ export type StaffAlertInput = {
   hasStaffRecipients?: boolean;
   /** Whether the email provider is configured at all. */
   providerConfigured?: boolean;
+  /**
+   * SLICE L-46 (F5). The bridge did nothing ON PURPOSE for this arrival: an
+   * earlier delivery already rang and printed it (or claimed it first), or
+   * the order is already terminal. Then announced=false / printed=false are
+   * not failures, and alerting on them is a false alarm - an e-mail telling
+   * the owner an order was missed when it was handled.
+   *
+   * It suppresses ONLY the announce/print reasons. A failed collection, or a
+   * missing register order at acceptance, still alerts. Must be exactly
+   * `true`: anything else (omitted, "yes", 1) keeps the check on, because a
+   * malformed field must never silence an alert.
+   */
+  arrivalAlreadyHandled?: boolean;
 };
 
 /**
@@ -176,7 +189,10 @@ export function decideStaffAlert(input: StaffAlertInput): StaffAlertDecision {
   // Gather reasons FIRST, independently of whether we can send. Knowing that
   // an alert was warranted but impossible is more useful than a bare "no".
   const reasons: StaffAlertReason[] = [];
-  if (!announced && !printed) reasons.push("not_announced_or_printed");
+  const alreadyHandled = input.arrivalAlreadyHandled === true;
+  if (alreadyHandled) {
+    // SLICE L-46 (F5): nothing needed announcing; see arrivalAlreadyHandled.
+  } else if (!announced && !printed) reasons.push("not_announced_or_printed");
   else if (!announced) reasons.push("not_announced");
   else if (!printed) reasons.push("not_printed");
   // Only meaningful at acceptance — see StaffAlertStage. At arrival the order
@@ -636,6 +652,50 @@ export function __runLeaflyStaffAlertTests(): {
   ok(
     "every reason text is a complete sentence",
     ALL_REASONS.every((r) => STAFF_ALERT_REASON_TEXT[r].endsWith(".")),
+  );
+
+  // -- SLICE L-46 (F5): an arrival already handled is not a missed arrival --
+  const handledArrival: StaffAlertInput = {
+    ...healthy,
+    stage: "arrival",
+    announced: false,
+    printed: false,
+    bridgedToRegister: false,
+    arrivalAlreadyHandled: true,
+  };
+  const f5 = decideStaffAlert(handledArrival);
+  eq("F5: already-handled arrival sends nothing", f5.send, false);
+  eq("F5: already-handled arrival has no reasons", f5.reasons, []);
+  eq("F5: already-handled arrival is quiet because healthy", f5.quietBecauseHealthy, true);
+  eq(
+    "F5: WITHOUT the flag the same input still alerts (the check is not gone)",
+    decideStaffAlert({ ...handledArrival, arrivalAlreadyHandled: false }).reasons,
+    ["not_announced_or_printed"],
+  );
+  eq(
+    "F5: an omitted flag keeps the check on",
+    decideStaffAlert({ ...handledArrival, arrivalAlreadyHandled: undefined }).send,
+    true,
+  );
+  eq(
+    "F5: a truthy non-true flag keeps the check on",
+    decideStaffAlert({ ...handledArrival, arrivalAlreadyHandled: "yes" as unknown as boolean }).send,
+    true,
+  );
+  eq(
+    "F5: a failed collection still alerts when the arrival was already handled",
+    decideStaffAlert({ ...handledArrival, collectionFailed: true }).reasons,
+    ["collection_failed"],
+  );
+  eq(
+    "F5: at acceptance the register check still applies",
+    decideStaffAlert({ ...handledArrival, stage: "acceptance" }).reasons,
+    ["not_bridged"],
+  );
+  eq(
+    "F5: only announce/print are suppressed, one-sided failure included",
+    decideStaffAlert({ ...handledArrival, announced: true }).send,
+    false,
   );
 
   return { passed, failed, messages };

@@ -105,6 +105,14 @@ Rely on signature verification for authenticity, not on network origin.
 > an order we actually accepted. The 15-minute auto-cancel already recorded in
 > `deadline-core.ts` (`LEAFLY_AUTO_CANCEL_MS`) is confirmed correct.
 
+> **IMPLEMENTED in SLICE L-46.** All of a verified delivery's work is one
+> promise, raced against a 6 s budget. Signature verification (capped at 5 s)
+> is the only thing awaited before it. A slow delivery answers 200 and
+> finishes the same work in `after()`, with `maxDuration = 300` on every
+> route. The 2-minute ack sweep remains the safety net. Ben's retry policy is
+> encoded in `inbound-budget-core.ts`: activate and deactivate are recorded as
+> "not stated". See the roadmap, "L-46: what shipped".
+
 ## 5. medical: false
 
 `medical: false` on every variant is **correct**. The sandbox store is

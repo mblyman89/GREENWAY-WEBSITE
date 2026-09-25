@@ -77,6 +77,14 @@ export type BridgeOutcome = {
   printed: boolean;
   /** The id of the local order row, when this stage created one. */
   localOrderId: string | null;
+  /**
+   * SLICE L-46 (F5). True when this stage did nothing ON PURPOSE: the work
+   * was already done by an earlier delivery, another delivery claimed it
+   * first, or the order is already terminal. `announced`/`printed` are then
+   * false because nothing needed announcing, NOT because announcing failed,
+   * and the staff alert must not read them as a failure.
+   */
+  alreadyHandled: boolean;
   /** One line safe to drop straight into a server log. */
   summary: string;
 };
@@ -87,6 +95,7 @@ function outcome(partial: Partial<BridgeOutcome> & { summary: string }): BridgeO
     announced: partial.announced ?? false,
     printed: partial.printed ?? false,
     localOrderId: partial.localOrderId ?? null,
+    alreadyHandled: partial.alreadyHandled ?? false,
     summary: `leafly-bridge: ${partial.summary}`,
   };
 }
@@ -194,7 +203,8 @@ export async function onLeaflyOrderArrived(leaflyOrderId: string): Promise<Bridg
     });
 
     if (!actions.announce && !actions.print) {
-      return outcome({ ok: true, summary: `${id}: ${actions.summary}` });
+      // SLICE L-46 (F5): nothing to do is not a failure to do it.
+      return outcome({ ok: true, alreadyHandled: true, summary: `${id}: ${actions.summary}` });
     }
 
     const admin = createSupabaseAdminClient();
@@ -219,7 +229,11 @@ export async function onLeaflyOrderArrived(leaflyOrderId: string): Promise<Bridg
     }
     if (!Array.isArray(claimed) || claimed.length === 0) {
       // Someone else got there first. That is a success, not a failure.
-      return outcome({ ok: true, summary: `${id}: already announced by another delivery` });
+      return outcome({
+        ok: true,
+        alreadyHandled: true,
+        summary: `${id}: already announced by another delivery`,
+      });
     }
 
     const label = leaflyDisplayLabel(id);
