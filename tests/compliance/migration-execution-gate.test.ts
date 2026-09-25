@@ -1176,7 +1176,18 @@ describe("the migration list is ordered the way the database will see it", () =>
     // build sandbox, not a committed harness like prove-0229-executes.sh.
     // Recorded plainly rather than implied, so nobody later mistakes this
     // line for the stronger guarantee 0229 has.
-    expect(listed[listed.length - 1]).toMatch(/^0230_/);
+    //
+    // SLICE L-47 added 0231_leafly_certification_proof.sql (widens the
+    // outbound-attempt operation CHECK to the three READ endpoints so Fetch
+    // Order and the ID images leave certification evidence, plus two
+    // IF NOT EXISTS indexes). Verified in the build sandbox against Postgres
+    // 15 bootstrapped exactly as CI does: all 231 migrations executed via
+    // scripts/compliance/verify-migrations-execute.ts, 0231 applied twice
+    // cleanly, the new operation names accepted and a bogus one rejected by
+    // the CHECK. Again a one-off run, recorded plainly, not a committed
+    // harness; tests/compliance/leafly-l47-certification-proof.test.ts pins
+    // the CHECK's list to the code's.
+    expect(listed[listed.length - 1]).toMatch(/^0231_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
