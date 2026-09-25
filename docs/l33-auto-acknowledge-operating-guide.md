@@ -108,6 +108,10 @@ An order the machine handled now carries a small grey badge reading
 clock has been stopped, that the shopper has **not** been told anything yet,
 and that Confirm is still waiting for you.
 
+*(Since L-38 the Leafly steps live on each order's details page, not on the
+dashboard row. Press **Details** on the Leafly row; the badge is shown there,
+next to the step buttons.)*
+
 An order a person acknowledged carries no such badge. Orders from before this
 slice carry no badge either — not because they were manual, but because we
 genuinely do not know, and I was not willing to stamp "human" across your

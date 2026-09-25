@@ -531,9 +531,16 @@ describe("L-24 — the acknowledge warning no longer instructs the impossible", 
     expect(ackCore).toContain("open the order and read what you need FIRST");
   });
 
-  it("renders a detail panel on the order card, so the instruction can be followed", () => {
-    expect(panel).toContain("LeaflyOrderDetailPanel");
-    expect(panel).toContain("loadLeaflyOrderDetailAction");
+  it("renders a detail panel with the order workflow, so the instruction can be followed", () => {
+    // SLICE L-38 — the per-order workflow moved from the dashboard row to
+    // LeaflyOrderWorkflow (the details pages), and the panel opens by default
+    // there, because the operator came to that page to see the order.
+    const workflow = read("src/components/admin/orders/LeaflyOrderWorkflow.tsx");
+    expect(workflow).toContain("LeaflyOrderDetailPanel");
+    expect(workflow).toContain("loadLeaflyOrderDetailAction");
+    expect(workflow).toMatch(/<LeaflyOrderDetailPanel[\s\S]{0,600}defaultOpen/);
+    // ...and the dashboard row no longer carries it.
+    expect(panel).not.toMatch(/<LeaflyOrderDetailPanel[\s/>]/);
   });
 
   it("offers both ID images from that panel", () => {

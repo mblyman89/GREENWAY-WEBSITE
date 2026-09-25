@@ -93,7 +93,10 @@ const SRC = {
   sweepCore: read("src/lib/leafly/auto-ack-sweep-core.ts"),
   webhookServer: read("src/lib/leafly/webhook-server.ts"),
   boardServer: read("src/lib/leafly/order-board-server.ts"),
-  panel: read("src/components/admin/orders/LeaflyOrdersPanel.tsx"),
+  // SLICE L-38 — the per-order workflow (planner wiring, the auto-ack badge)
+  // moved from the dashboard row to LeaflyOrderWorkflow, shown on the
+  // details pages. The key is kept so the assertions below read unchanged.
+  panel: read("src/components/admin/orders/LeaflyOrderWorkflow.tsx"),
   sweepRoute: read("src/app/api/cron/leafly-ack-sweep/route.ts"),
   migration: read("supabase/migrations/0230_leafly_auto_acknowledge.sql"),
   vercel: read("vercel.json"),

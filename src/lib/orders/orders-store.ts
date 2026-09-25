@@ -32,6 +32,7 @@ import type {
   PlacedOrderResult,
 } from "./types";
 import { evaluateOrderTransition } from "./order-lifecycle-core";
+import { excludedOriginsFilter } from "./order-board-split-core";
 import {
   EXPIRABLE_STATUS,
   RESERVATION_SWEEP_ACTOR,
@@ -360,6 +361,13 @@ export async function listOrdersPaged(
     /** Inclusive order-total bounds in minor units (cents). */
     totalMin?: number;
     totalMax?: number;
+    /**
+     * SLICE L-38: origins to leave OUT (e.g. ["leafly"] on the dashboard,
+     * where marketplace orders have their own panel). Applied to every view —
+     * open, closed, filtered and searched — so a hidden order cannot leak
+     * back in through the search box. Omit for "every origin".
+     */
+    excludeOrigins?: readonly string[];
   },
 ): Promise<{ rows: OrderRow[]; total: number }> {
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
@@ -372,6 +380,8 @@ export async function listOrdersPaged(
   // without display_name if the column doesn't exist yet (migration 0147).
   const runQuery = async (withDisplayName: boolean) => {
     let q = admin.from("orders").select("*", { count: "exact" });
+    const notOrigins = filter.excludeOrigins ? excludedOriginsFilter(filter.excludeOrigins) : null;
+    if (notOrigins) q = q.not("origin", "in", notOrigins);
     if (filter.status && filter.status !== "all") {
       if (filter.status === "active") {
         q = q.in("status", ["new", "acknowledged", "preparing", "ready"]);
@@ -432,6 +442,34 @@ export async function listOrders(filter: ListOrdersFilter = {}): Promise<OrderRo
     ({ data } = await runQuery(false));
   }
   return (data as OrderRow[]) ?? [];
+}
+
+/**
+ * SLICE L-38 — the Greenway copies of a set of orders, keyed by id.
+ *
+ * The Leafly panel uses this to show each linked Leafly order with the same
+ * customer / items / total line as a website row, and to let its search box
+ * find "Jane's order" (the website table no longer lists Leafly orders).
+ * One indexed `in` read, capped, skipped for an empty list. Non-throwing:
+ * a failure returns an empty map and the rows fall back to Leafly's own
+ * fields — the panel still works, it just shows less.
+ */
+export async function listOrdersByIds(ids: readonly string[]): Promise<Map<string, OrderRow>> {
+  const out = new Map<string, OrderRow>();
+  const clean = Array.from(new Set(ids.map((i) => (i ?? "").trim()).filter(Boolean))).slice(0, 500);
+  if (clean.length === 0 || !isSupabaseServiceConfigured) return out;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.from("orders").select("*").in("id", clean);
+    if (error) {
+      console.error("[orders] listOrdersByIds failed:", error.message);
+      return out;
+    }
+    for (const row of (data as OrderRow[] | null) ?? []) out.set(row.id, row);
+  } catch (err) {
+    console.error("[orders] listOrdersByIds threw:", err);
+  }
+  return out;
 }
 
 export async function getOrder(id: string): Promise<OrderWithLines | null> {
@@ -595,7 +633,17 @@ export async function registerPickedUpOrderIds(orderIds: string[]): Promise<Set<
   return out;
 }
 
-export async function getOrderStatusCounts(): Promise<Record<OrderStatus, number>> {
+/**
+ * Per-status order counts.
+ *
+ * SLICE L-38: `excludeOrigins` lets the dashboard count ONLY what its website
+ * table shows (Leafly orders have their own panel and badge), so the stat
+ * cards and the rows under them always agree. Other callers (the nav count
+ * API, the cockpit) pass nothing and keep counting every origin.
+ */
+export async function getOrderStatusCounts(
+  opts: { excludeOrigins?: readonly string[] } = {},
+): Promise<Record<OrderStatus, number>> {
   const empty: Record<OrderStatus, number> = {
     new: 0,
     acknowledged: 0,
@@ -610,10 +658,13 @@ export async function getOrderStatusCounts(): Promise<Record<OrderStatus, number
   const statuses = Object.keys(empty) as OrderStatus[];
   const counts = await Promise.all(
     statuses.map(async (status) => {
-      const { count } = await admin
+      let q = admin
         .from("orders")
         .select("id", { count: "exact", head: true })
         .eq("status", status);
+      const notOrigins = opts.excludeOrigins ? excludedOriginsFilter(opts.excludeOrigins) : null;
+      if (notOrigins) q = q.not("origin", "in", notOrigins);
+      const { count } = await q;
       return count ?? 0;
     }),
   );

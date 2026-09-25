@@ -170,6 +170,7 @@ import { __runLeaflyPayloadTests } from "../../src/lib/leafly/payload-core";
 // three hand-rolled copies of the same enum -- the exact shape of the bug the
 // brand matcher already taught this codebase. Pure: no I/O.
 import { __runOrderOriginTests } from "../../src/lib/orders/order-origin-core";
+import { __runOrderBoardSplitTests } from "../../src/lib/orders/order-board-split-core";
 import { __runLeaflyBridgeTests } from "../../src/lib/leafly/bridge-core";
 // SLICE L-2 -- the LAST GATE before a menu payload goes on the wire. Registered
 // here because every defect this slice repaired would have been caught by
@@ -1650,6 +1651,7 @@ __runLiquidVolumeTests();
   // register). Decides the announcer chime, the receipt banner and whether a
   // customer-facing email may be sent at all.
   assertRan("order-origin-core", __runOrderOriginTests(), 40);
+  assertRan("order-board-split-core", __runOrderBoardSplitTests(), 43);
 
   // SLICE L-10 -- the Leafly bridge. Decides, for each stage of a Leafly
   // order's life, whether the PA sounds, whether paper comes out of the

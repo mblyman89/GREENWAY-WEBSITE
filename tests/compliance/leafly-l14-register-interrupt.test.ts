@@ -88,6 +88,11 @@ const MIGRATION = "supabase/migrations/0229_leafly_register_claim.sql";
 // SLICE L-14 dashboard — the back-office surface.
 const ORDERS_PAGE = "src/app/admin/orders/page.tsx";
 const ORDERS_PANEL = "src/components/admin/orders/LeaflyOrdersPanel.tsx";
+// SLICE L-38 — the per-order interrupt record (every notice, its answer, the
+// "not recognised" line) moved with the rest of the workflow to the details
+// pages. The board row keeps only the "till stopped" alarm, computed from the
+// same core tally.
+const ORDER_WORKFLOW = "src/components/admin/orders/LeaflyOrderWorkflow.tsx";
 
 /** Strip line and block comments so prose cannot satisfy a code assertion. */
 function code(src: string): string {
@@ -690,18 +695,26 @@ describe("L-14 \u00b7 the page wires it without guessing", () => {
 describe("L-14 \u00b7 the panel shows it and decides nothing", () => {
   const panel = read(ORDERS_PANEL);
   const panelCode = code(panel);
+  const workflow = read(ORDER_WORKFLOW);
+  const workflowCode = code(workflow);
 
   it("asks the pure core for every judgement", () => {
-    expect(panelCode).toContain("summariseInterrupt(row)");
+    expect(workflowCode).toContain("summariseInterrupt(row)");
     expect(panelCode).toContain("summariseInterrupts(allInterrupts)");
+    // L-38: the row's "till stopped" alarm counts through the same core
+    // tally, never by comparing state names itself.
+    expect(panelCode).toMatch(/summariseInterrupts\(interrupts \?\? \[\]\)\.openCount/);
   });
 
   it("does not re-implement the core's state names as literals", () => {
     // One comparison is legitimate (choosing alarm colours from the state the
-    // core returned). More than that means the panel has started deciding.
-    expect(panelCode.match(/"BLOCKING"/g) ?? []).toHaveLength(1);
-    expect(panelCode).not.toContain('"ANSWERED"');
-    expect(panelCode).not.toContain('"CLOSED_NO_OP"');
+    // core returned). More than that means the view has started deciding.
+    expect(workflowCode.match(/"BLOCKING"/g) ?? []).toHaveLength(1);
+    expect(panelCode.match(/"BLOCKING"/g) ?? []).toHaveLength(0);
+    for (const src of [panelCode, workflowCode]) {
+      expect(src).not.toContain('"ANSWERED"');
+      expect(src).not.toContain('"CLOSED_NO_OP"');
+    }
   });
 
   it("renders resolved interrupts too, not only blocking ones", () => {
@@ -714,15 +727,18 @@ describe("L-14 \u00b7 the panel shows it and decides nothing", () => {
     // realistic form -- `.filter((r) => r.resolvedAt === null)` -- and the
     // suite stayed green. What matters is not the WORD used to filter but
     // that the render list is filtered AT ALL, so that is what is asserted.
-    const render = panelCode.slice(panelCode.indexOf("(interrupts ?? [])"));
-    expect(render).not.toBe("");
+    const render = workflowCode.slice(workflowCode.indexOf("(interrupts ?? []).map("));
+    expect(workflowCode.indexOf("(interrupts ?? []).map(")).toBeGreaterThan(-1);
     // The list is mapped straight to cards. Any .filter() between the list
     // and the .map() is dropping history on the floor.
     expect(render).toMatch(/\(interrupts \?\? \[\]\)\.map\(/);
     expect(render).not.toMatch(/\(interrupts \?\? \[\]\)\s*\.filter\(/);
-    // Belt and braces: no resolution-state filtering anywhere in the panel.
-    expect(panelCode).not.toMatch(/filter\([^)]*resolvedAt/);
-    expect(panelCode).not.toMatch(/filter\([^)]*BLOCKING/);
+    // Belt and braces: no resolution-state filtering anywhere in either view.
+    for (const src of [panelCode, workflowCode]) {
+      expect(src).not.toMatch(/filter\([^)]*resolvedAt/);
+      expect(src).not.toMatch(/filter\([^)]*BLOCKING/);
+      expect(src).not.toMatch(/\(interrupts \?\? \[\]\)\s*\.filter\(/);
+    }
   });
 
   it("counts from the board-wide tally, not from one card", () => {
@@ -752,13 +768,14 @@ describe("L-14 \u00b7 the panel shows it and decides nothing", () => {
   it("keeps the prop optional so an un-updated caller cannot crash the page", () => {
     expect(panelCode).toContain("interrupts?: BoardInterrupts;");
     expect(panelCode).toContain("interrupts?: InterruptRecord[];");
+    expect(workflowCode).toContain("interrupts?: InterruptRecord[];");
   });
 
   it("says something true when a decision was not recognised", () => {
     // summariseInterrupt returns decision:null for an unrecognised
     // disposition rather than guessing. The panel must SAY so, not render a
     // blank line that reads as "nothing to see".
-    expect(panel).toContain("needsAttention");
+    expect(workflow).toContain("needsAttention");
   });
 });
 

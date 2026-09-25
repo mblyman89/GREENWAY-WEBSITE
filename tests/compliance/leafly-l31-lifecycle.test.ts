@@ -115,7 +115,11 @@ const ACK_SERVER = "src/lib/leafly/order-ack-server.ts";
 const BRIDGE_SERVER = "src/lib/leafly/bridge-server.ts";
 const ACTIONS_TSX = "src/components/admin/orders/LeaflyOrderActions.tsx";
 const STRIP_TSX = "src/components/admin/orders/LeaflyLifecycleStrip.tsx";
-const PANEL_TSX = "src/components/admin/orders/LeaflyOrdersPanel.tsx";
+// SLICE L-38 — the per-order Leafly workflow (step buttons, which-step strip,
+// the order itself) moved off the dashboard row into LeaflyOrderWorkflow,
+// which the details pages render. The name is kept so the history reads; the
+// file it points at is where the element now lives.
+const PANEL_TSX = "src/components/admin/orders/LeaflyOrderWorkflow.tsx";
 const CORE = "src/lib/leafly/lifecycle-core.ts";
 
 /* ========================================================================== *
@@ -439,7 +443,7 @@ describe("L-31 · the 'Mark picked up' confirmation is gone", () => {
  * ========================================================================== */
 
 describe("L-31 · the operator can see which step they are on", () => {
-  it("the strip exists and is rendered on the order card", () => {
+  it("the strip exists and is rendered in the order workflow (L-38: details page)", () => {
     expect(existsSync(join(ROOT, STRIP_TSX))).toBe(true);
     const panel = stripComments(read(PANEL_TSX));
 

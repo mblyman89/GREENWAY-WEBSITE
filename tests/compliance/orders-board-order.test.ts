@@ -266,10 +266,13 @@ describe("L-22 — a promotion is visible, never silent", () => {
 
 // ===========================================================================
 describe("L-22 — the history is genuinely combined (verified, not assumed)", () => {
-  it("the query has no origin filter, so Leafly rows are already in the list", () => {
-    // This is the fact the whole 'combined history' request rests on. If a
-    // future change adds an origin filter to this query, the owner's combined
-    // table quietly stops being combined and nothing else would notice.
+  it("the query filters ONLY by an explicit, opt-in origin exclusion (L-38)", () => {
+    // HISTORY. L-22 pinned "no origin filter at all", because the owner then
+    // wanted one combined table. L-38 reversed that on his instruction: Leafly
+    // orders now have their own section and must NOT appear in the online-
+    // orders table (open, closed or searched). The exclusion is opt-in and
+    // passed by the dashboard only, so every other reader of this query still
+    // sees every origin — and it is the ONLY way an origin filter may enter.
     const q = STORE.slice(
       STORE.indexOf("export async function listOrdersPaged"),
       STORE.indexOf("export async function listOrders("),
@@ -278,6 +281,9 @@ describe("L-22 — the history is genuinely combined (verified, not assumed)", (
     expect(q).not.toMatch(/\.eq\("origin"/);
     expect(q).not.toMatch(/\.in\("origin"/);
     expect(q).not.toMatch(/\.neq\("origin"/);
+    // Exactly one origin filter, guarded by the opt-in option.
+    expect(q.match(/\.not\("origin"/g) ?? []).toHaveLength(1);
+    expect(q).toMatch(/filter\.excludeOrigins\s*\?\s*excludedOriginsFilter\(filter\.excludeOrigins\)\s*:\s*null/);
   });
 
   it("Leafly orders are written into that same table with their origin recorded", () => {

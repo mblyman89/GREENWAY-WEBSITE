@@ -176,6 +176,9 @@ const PATHS = {
   ackServer: "src/lib/leafly/order-ack-server.ts",
   boardServer: "src/lib/leafly/order-board-server.ts",
   panel: "src/components/admin/orders/LeaflyOrdersPanel.tsx",
+  // SLICE L-38 — the row mapper moved out of the panel so the details pages
+  // (which now own the workflow) and the panel share ONE copy of it.
+  workflowRow: "src/components/admin/orders/leafly-workflow-row.ts",
   announcerPanel: "src/components/admin/orders/AnnouncerPanel.tsx",
   announcerActions: "src/app/admin/orders/announcer-actions.ts",
   originCore: "src/lib/orders/order-origin-core.ts",
@@ -469,7 +472,11 @@ describe("L-13: every seam of the Leafly bridge is actually connected", () => {
       // mapper would accuse every order on a pre-0228 database of arriving
       // silently, hiding the one real silent arrival inside eleven false
       // alarms — and staff would learn to ignore the warning.
-      const src = code(source(PATHS.panel));
+      // SLICE L-38 — the mapper lives in its own module now; the panel must
+      // import it rather than keep a second (drifting) copy.
+      expect(code(source(PATHS.panel))).not.toContain("function toWorkflowRow");
+      expect(source(PATHS.panel)).toMatch(/import\s*\{[^}]*toWorkflowRow[^}]*\}\s*from\s*"\.\/leafly-workflow-row"/);
+      const src = code(source(PATHS.workflowRow));
       const start = src.indexOf("function toWorkflowRow");
       expect(start).toBeGreaterThan(-1);
       const body = src.slice(start, start + 1200);

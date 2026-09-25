@@ -188,6 +188,15 @@ export type BoardViewRow = {
   acknowledgeBy: string | null;
   /** ISO timestamp of the last change, used by the newest/oldest sorts. */
   updatedAt: string;
+  /**
+   * SLICE L-38 — extra words staff actually quote: the linked Greenway
+   * order's number, name, customer name and phone. Optional, so every
+   * existing caller searches exactly as before. Since L-38 this panel is the
+   * ONLY place a Leafly order can be found on the dashboard (the website
+   * table excludes them), so it has to answer "find Jane's order", not only
+   * "find a uuid fragment".
+   */
+  searchTerms?: readonly (string | null | undefined)[];
 };
 
 export type BoardView<T extends BoardViewRow> = {
@@ -238,7 +247,7 @@ export function isLiveBucket(bucket: LeaflyWorkflowBucket): boolean {
  * exact-match search would be technically tidier and useless at the counter.
  */
 function matchesSearch(row: BoardViewRow, term: string): boolean {
-  const haystacks = [row.leaflyOrderId, row.localOrderId];
+  const haystacks = [row.leaflyOrderId, row.localOrderId, ...(row.searchTerms ?? [])];
   for (const h of haystacks) {
     if (typeof h === "string" && h.toLowerCase().includes(term)) return true;
   }
@@ -450,6 +459,18 @@ export function runBoardViewSelfTests(): void {
     { filter: "all", search: "gw-77" },
   );
   eq("search matches the local id too, case-insensitively", localHit.rows.length, 1);
+
+  // SLICE L-38 — the linked order's number / customer are searchable too.
+  const termHit = buildBoardView(
+    [row({ bucket: "to_build", leaflyOrderId: "uuid-x", searchTerms: ["1042", "Jane Doe", null] })],
+    { filter: "all", search: "jane" },
+  );
+  eq("search matches a linked customer name (L-38)", termHit.rows.length, 1);
+  const termMiss = buildBoardView(
+    [row({ bucket: "to_build", leaflyOrderId: "uuid-x", searchTerms: undefined })],
+    { filter: "all", search: "jane" },
+  );
+  eq("no search terms → no extra matches (L-38)", termMiss.rows.length, 0);
 
   const noHit = buildBoardView(ownersBoard, { filter: "all", search: "zzzz" });
   eq("a search with no hits is empty", noHit.rows.length, 0);

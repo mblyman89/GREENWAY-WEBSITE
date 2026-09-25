@@ -55,6 +55,15 @@ import {
   type OutboundResult,
 } from "@/lib/leafly/order-ack-server";
 import { getLeaflyBoardOrder } from "@/lib/leafly/order-board-server";
+// SLICE L-38 — steps are pressed on the details page, so every action here
+// can send the operator back THERE, and a confirm/ready step now moves our own
+// copy forward the same way the register already does.
+import {
+  leaflyActionReturnHref,
+  localStatusAfterLeaflyStep,
+  LEAFLY_DETAIL_BASE,
+} from "@/lib/orders/order-board-split-core";
+import { getOrder, setOrderStatus } from "@/lib/orders/orders-store";
 import { LEAFLY_ACK_IRREVERSIBLE_WARNING } from "@/lib/leafly/order-ack-core";
 // SLICE L-25 — the outer race that guarantees a sentence rather than a spinner.
 import { withActionDeadline } from "@/lib/leafly/action-deadline";
@@ -127,9 +136,34 @@ import { collectLeaflyOrder } from "@/lib/leafly/order-fetch-server";
  * `slice(0, 500)` mirrors the existing convention in ./actions.ts for the
  * completion-gate refusals, so both kinds of message are bounded the same way.
  */
-function backTo(params: Record<string, string>): string {
-  const qs = new URLSearchParams(params).toString();
-  return `/admin/orders${qs ? `?${qs}` : ""}`;
+function backTo(params: Record<string, string>, from?: FormData): string {
+  // SLICE L-38 — with no form (or no `returnTo`), exactly the old dashboard
+  // URL. With `returnTo=detail`, the details page of THIS order. The path is
+  // built by the pure core from the order id; nothing from the form is ever
+  // used as a path, so a forged field cannot redirect anywhere else.
+  return leaflyActionReturnHref({
+    returnTo: from ? String(from.get("returnTo") ?? "") : null,
+    leaflyOrderId: from ? String(from.get("leaflyOrderId") ?? "") : null,
+    back: from ? String(from.get("back") ?? "") : null,
+    params,
+  });
+}
+
+/** SLICE L-38 — add a warning without dropping one Leafly already gave. */
+function withExtraWarning(params: Record<string, string>, extra: string): Record<string, string> {
+  const joined = [params.leaflyWarn, extra].filter(Boolean).join(" ");
+  return { ...params, leaflyWarn: joined.slice(0, 500) };
+}
+
+/**
+ * SLICE L-38 — refresh every page the order can be looked at on. The detail
+ * pages are revalidated by pattern because the Greenway page's id is only
+ * known after the re-read.
+ */
+function revalidateLeaflyViews(localOrderId?: string | null): void {
+  revalidatePath("/admin/orders");
+  revalidatePath(`${LEAFLY_DETAIL_BASE}/[leaflyOrderId]`, "page");
+  if (localOrderId) revalidatePath(`/admin/orders/${localOrderId}`);
 }
 
 /**
@@ -188,7 +222,7 @@ export async function acknowledgeLeaflyOrderAction(formData: FormData): Promise<
       backTo({
         leaflyErr: "No Leafly order was identified, so nothing was sent.",
         leaflyCode: "missing_order_id",
-      }),
+      }, formData),
     );
   }
 
@@ -200,7 +234,7 @@ export async function acknowledgeLeaflyOrderAction(formData: FormData): Promise<
         leaflyErr:
           "That Leafly order is no longer in our records, so nothing was sent to Leafly.",
         leaflyCode: "not_found_locally",
-      }),
+      }, formData),
     );
   }
 
@@ -266,7 +300,7 @@ export async function acknowledgeLeaflyOrderAction(formData: FormData): Promise<
       backTo({
         leaflyErr: raced.message.slice(0, 500),
         leaflyCode: "action_timeout",
-      }),
+      }, formData),
     );
   }
 
@@ -292,8 +326,11 @@ export async function acknowledgeLeaflyOrderAction(formData: FormData): Promise<
     },
   });
 
-  revalidatePath("/admin/orders");
-  redirect(backTo(resultParams(result)));
+  // SLICE L-38 — also the details pages. The acknowledgement CREATES the
+  // Greenway copy, so the Leafly-only page the operator pressed it on now
+  // forwards to the Greenway order page; both must render fresh.
+  revalidateLeaflyViews(order.local_order_id);
+  redirect(backTo(resultParams(result), formData));
 }
 
 /**
@@ -322,7 +359,7 @@ export async function setLeaflyOrderStatusAction(formData: FormData): Promise<vo
       backTo({
         leaflyErr: "That request was incomplete, so nothing was sent to Leafly.",
         leaflyCode: "incomplete_request",
-      }),
+      }, formData),
     );
   }
 
@@ -333,7 +370,7 @@ export async function setLeaflyOrderStatusAction(formData: FormData): Promise<vo
         leaflyErr:
           "That Leafly order is no longer in our records, so nothing was sent to Leafly.",
         leaflyCode: "not_found_locally",
-      }),
+      }, formData),
     );
   }
 
@@ -370,8 +407,49 @@ export async function setLeaflyOrderStatusAction(formData: FormData): Promise<vo
     },
   });
 
-  revalidatePath("/admin/orders");
-  redirect(backTo(resultParams(result)));
+  // ── SLICE L-38 — OUR COPY FOLLOWS THE STEP LEAFLY JUST ACCEPTED ──────────
+  //
+  // Before this slice a Leafly order confirmed or marked ready from the back
+  // office stayed "New" on our side (only the register moved it), and since
+  // L-38 both statuses are on the SAME page — so the mismatch would be staring
+  // at the operator. The rule is the register's (forward only, never past
+  // where we already are), taken from the pure core, not re-typed. Closing
+  // statuses (picked up / cancelled) are left to onLeaflyOrderClosed, which
+  // already owns them. A failure here never undoes what Leafly accepted; it
+  // is reported as a warning so nobody believes the two agree when they don't.
+  let params = resultParams(result);
+  if (result.ok && order.local_order_id) {
+    try {
+      const local = await getOrder(order.local_order_id);
+      const target = local
+        ? localStatusAfterLeaflyStep({ pushedLeaflyStatus: nextStatus, localStatus: local.status })
+        : null;
+      if (local && target) {
+        const moved = await setOrderStatus(local.id, target, {
+          actorId: session.profile.id,
+          actorLabel: `${session.profile.full_name?.trim() || session.email} (Leafly step)`,
+          note: `Leafly step: ${nextStatus}`,
+        });
+        if (!moved.ok) {
+          params = withExtraWarning(
+            params,
+            `Leafly accepted the step, but our copy of the order could not be moved (${
+              moved.refusal ?? "database error"
+            }).`,
+          );
+        }
+      }
+    } catch (err) {
+      console.error("[leafly-actions] local status mirror threw:", err);
+      params = withExtraWarning(
+        params,
+        "Leafly accepted the step, but our copy of the order could not be updated. Refresh to check.",
+      );
+    }
+  }
+
+  revalidateLeaflyViews(order.local_order_id);
+  redirect(backTo(params, formData));
 }
 
 /* ------------------------------------------------------------------------- *
@@ -500,13 +578,11 @@ export async function collectLeaflyOrderAction(
   const session = await requirePermission("orders.manage");
 
   const leaflyOrderId = String(formData.get("leaflyOrderId") ?? "").trim();
-  const backTo = (params: Record<string, string>) => {
-    const qs = new URLSearchParams(params).toString();
-    return `/admin/orders?${qs}`;
-  };
+  // SLICE L-38 — the file-level backTo(), so a collect pressed on a details
+  // page lands back on that page (it used to always go to the dashboard).
 
   if (leaflyOrderId === "") {
-    redirect(backTo({ leaflyErr: "No Leafly order was identified." }));
+    redirect(backTo({ leaflyErr: "No Leafly order was identified." }, formData));
   }
 
   // Bounded by the same outer backstop the acknowledge click uses. A collect
@@ -529,7 +605,7 @@ export async function collectLeaflyOrderAction(
       backTo({
         leaflyErr: raced.message.slice(0, 500),
         leaflyCode: "action_timeout",
-      }),
+      }, formData),
     );
   }
 
@@ -550,15 +626,15 @@ export async function collectLeaflyOrderAction(
         leaflyErr:
           `We could not download this order from Leafly. ${result?.summary ?? ""}`.trim(),
         leaflyOrder: leaflyOrderId,
-      }),
+      }, formData),
     );
   }
 
-  revalidatePath("/admin/orders");
+  revalidateLeaflyViews();
   redirect(
     backTo({
       leaflyMsg: "Order details downloaded from Leafly.",
       leaflyOrder: leaflyOrderId,
-    }),
+    }, formData),
   );
 }
