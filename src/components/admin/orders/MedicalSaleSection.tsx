@@ -14,6 +14,7 @@
  * column → plan shows no compliant products and attach explains the gap).
  */
 import { Button, CHIP_ACTION } from "@/components/admin/ui";
+import { SaveButton } from "@/components/admin/orders/SaveButton";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
 import { toRecognitionCard, getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
 import { getOrderMedicalContext, getMedicalRegistryForKeys } from "@/lib/medical/sale-store";
@@ -211,9 +212,16 @@ export async function MedicalSaleSection({
           {!isClosed ? (
             <form action={detachMedicalCardAction}>
               <input type="hidden" name="id" value={order.id} />
-              <Button type="submit" variant="neutral" size="sm">
-                Detach card (complete as recreational)
-              </Button>
+              {/* SLICE L-39 — SaveButton, not a plain submit. On success the section
+                  swaps to the "attach" view (the button leaves the page, so the
+                  pending bar clears), but when the detach FAILS the action only
+                  revalidates: same URL, same button, and a plain button would
+                  leave the bar spinning to the 5-minute ceiling. */}
+              <SaveButton
+                label="Detach card (complete as recreational)"
+                busyLabel="Detaching…"
+                variant="neutral"
+              />
             </form>
           ) : null}
         </div>

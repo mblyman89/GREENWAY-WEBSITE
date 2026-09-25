@@ -57,7 +57,7 @@
 
 import { useFormStatus } from "react-dom";
 
-import { Button, type ButtonVariant } from "@/components/admin/ui/Button";
+import { Button, type ButtonSize, type ButtonVariant } from "@/components/admin/ui/Button";
 
 export function SaveButton({
   /** The idle label. What the button says when nothing is happening. */
@@ -72,6 +72,12 @@ export function SaveButton({
   busyLabel,
   /** Matches the variant the plain buttons used, so nothing changes visually. */
   variant = "save",
+  /**
+   * SLICE L-39 — the order page's status buttons are the default size, not
+   * "sm". Optional with the old value as the default, so the three Announcer
+   * saves render exactly as before.
+   */
+  size = "sm",
 }: {
   label: string;
   busyLabel: string;
@@ -84,6 +90,7 @@ export function SaveButton({
    * added or renamed in Button.tsx cannot leave a stale copy behind here.
    */
   variant?: ButtonVariant;
+  size?: ButtonSize;
 }) {
   const { pending } = useFormStatus();
 
@@ -91,7 +98,7 @@ export function SaveButton({
     <Button
       type="submit"
       variant={variant}
-      size="sm"
+      size={size}
       // Disabled is not decoration. Without it, an owner who sees no response
       // presses again, and a second submit fires the same action twice.
       disabled={pending}

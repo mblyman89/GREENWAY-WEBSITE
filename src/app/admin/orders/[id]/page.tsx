@@ -5,8 +5,8 @@ import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { BackLink } from "@/components/admin/ux";
-import { Button } from "@/components/admin/ui";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
+import { SaveButton } from "@/components/admin/orders/SaveButton";
 import { CustomerLinkSection } from "@/components/admin/orders/CustomerLinkSection";
 import { MedicalSaleSection } from "@/components/admin/orders/MedicalSaleSection";
 import { LoyaltySaleSection } from "@/components/admin/orders/LoyaltySaleSection";
@@ -279,7 +279,18 @@ export default async function OrderDetailPage({
             </dl>
           </div>
 
-          {/* Workflow */}
+          {/* Workflow.
+              SLICE L-39 — every submit below is a SaveButton, never a plain
+              <Button type="submit">. These actions finish with revalidatePath
+              and NO redirect, so the page re-renders IN PLACE: same URL, same
+              button node, new label. The layout's PendingKeeper only clears on
+              a URL change, a replaced button, or a button that disables itself
+              — so a plain button left the top bar spinning for its 5-minute
+              ceiling and the form stamped busy, swallowing the next press.
+              SaveButton disables itself for exactly the request (useFormStatus)
+              and the keeper steps aside. Proven in real Chromium by
+              scripts/recon/l39-status-hang-probe.mjs; pinned in
+              tests/compliance/order-detail-pending.test.ts. */}
           {leaflySteps ? (
             <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-5">
               <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/70">
@@ -321,9 +332,12 @@ export default async function OrderDetailPage({
                   <form action={setOrderStatusAction}>
                     <input type="hidden" name="id" value={order.id} />
                     <input type="hidden" name="status" value={next} />
-                    <Button type="submit" variant="confirm">
-                      Mark {ORDER_STATUS_LABELS[next]}
-                    </Button>
+                    <SaveButton
+                      label={`Mark ${ORDER_STATUS_LABELS[next]}`}
+                      busyLabel="Saving…"
+                      variant="confirm"
+                      size="md"
+                    />
                   </form>
                 ) : null}
                 {next === "completed" && limitFlagged && canOverrideLimit ? (
@@ -339,24 +353,23 @@ export default async function OrderDetailPage({
                       placeholder="Manager override reason (logged for audit)"
                       className="min-w-0 flex-1 rounded-lg border border-[var(--admin-gold)]/40 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30"
                     />
-                    <Button type="submit" variant="save">
-                      Complete with logged override
-                    </Button>
+                    <SaveButton
+                      label="Complete with logged override"
+                      busyLabel="Completing…"
+                      variant="save"
+                      size="md"
+                    />
                   </form>
                 ) : null}
                 <form action={setOrderStatusAction}>
                   <input type="hidden" name="id" value={order.id} />
                   <input type="hidden" name="status" value="cancelled" />
-                  <Button type="submit" variant="danger">
-                    Cancel
-                  </Button>
+                  <SaveButton label="Cancel" busyLabel="Cancelling…" variant="danger" size="md" />
                 </form>
                 <form action={setOrderStatusAction}>
                   <input type="hidden" name="id" value={order.id} />
                   <input type="hidden" name="status" value="no_show" />
-                  <Button type="submit" variant="danger">
-                    No-show
-                  </Button>
+                  <SaveButton label="No-show" busyLabel="Saving…" variant="danger" size="md" />
                 </form>
               </div>
             </div>
@@ -385,9 +398,12 @@ export default async function OrderDetailPage({
                   placeholder="Reason for reopening (logged for audit)"
                   className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30"
                 />
-                <Button type="submit" variant="neutral">
-                  Reopen as {ORDER_STATUS_LABELS[ORDER_REVERSAL_TARGETS[order.status] ?? "new"]}
-                </Button>
+                <SaveButton
+                  label={`Reopen as ${ORDER_STATUS_LABELS[ORDER_REVERSAL_TARGETS[order.status] ?? "new"]}`}
+                  busyLabel="Reopening…"
+                  variant="neutral"
+                  size="md"
+                />
               </form>
             </div>
           )}
@@ -470,9 +486,7 @@ export default async function OrderDetailPage({
                 placeholder="Internal note (not shown to the customer)…"
                 className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[var(--admin-accent)]/50 focus:outline-none"
               />
-              <Button type="submit" variant="neutral" size="sm">
-                Save note
-              </Button>
+              <SaveButton label="Save note" busyLabel="Saving…" variant="neutral" />
             </form>
           </div>
         </div>

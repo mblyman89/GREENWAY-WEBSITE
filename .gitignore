@@ -84,3 +84,4 @@ __pycache__/
 # removed on exit; this is the belt-and-braces for an interrupted run.
 .l30-probe-*/
 .l30-plain-*/
+.l39-probe-*/
