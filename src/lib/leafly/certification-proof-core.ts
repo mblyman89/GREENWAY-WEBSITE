@@ -1471,6 +1471,8 @@ export function __runLeaflyCertificationProofTests(): { passed: number; failed: 
   ok(w("order_deactivate", true, 200)[0]?.action === "webhook_order_deactivate", "deactivate maps");
   ok(w("something_new", true, 200).length === 0, "unknown event type ignored");
   ok(w("order_submit", true, null)[0]?.ok === false, "verified but no status recorded is not proof");
+  ok(w("order_submit", false, 200, null)[0]?.ok === false, "unverified row is never proof, even with a 200 recorded");
+  ok(w("order_status", false, 201, "mismatch")[0]?.ok === false, "unverified 201 is never proof");
 
   // ── outbound ─────────────────────────────────────────────────────────────
   const o = (operation: string, disposition: string | null, requestedStatus: string | null = null, refusalCode: string | null = null, responseStatus: number | null = 200) =>

@@ -226,6 +226,27 @@ describe("L-47 — vocabularies agree across files", () => {
     const { REPORT_OUTBOUND_OPERATIONS } = await import("@/lib/leafly/online-orders-report-core");
     expect([...REPORT_OUTBOUND_OPERATIONS]).toEqual(["acknowledge", "status", "cart"]);
   });
+  it("the report's write + excluded-read lists partition every ledger operation", async () => {
+    const m = await import("@/lib/leafly/online-orders-report-core");
+    const union = [...m.REPORT_OUTBOUND_OPERATIONS, ...m.REPORT_EXCLUDED_READ_OPERATIONS];
+    expect(new Set(union).size).toBe(union.length);
+    expect([...union].sort()).toEqual([...core.LEAFLY_OUTBOUND_OPERATIONS].sort());
+  });
+  it("the report excludes read calls but never drops a row with no operation", async () => {
+    const { buildOnlineOrdersReport } = await import("@/lib/leafly/online-orders-report-core");
+    const r = buildOnlineOrdersReport({
+      orders: [],
+      attempts: [
+        { operation: "acknowledge", disposition: "success" },
+        { operation: "fetch_order", disposition: "success" },
+        { operation: "government_id", disposition: "success" },
+        { operation: "medical_id", disposition: "retry" },
+        { disposition: "success" },
+      ],
+    } as never);
+    expect(JSON.stringify(r)).toBeTruthy();
+    expect((r as unknown as { outbound: { total: number } }).outbound.total).toBe(2);
+  });
 });
 
 // ===========================================================================

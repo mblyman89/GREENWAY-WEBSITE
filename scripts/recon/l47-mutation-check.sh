@@ -30,6 +30,13 @@ PY
   cp /tmp/l47-mut-backup "$file"
 }
 
+# BASELINE GATE: if the pinned tests are not green unmutated, every mutation
+# would look "killed". Refuse to run rather than report false kills.
+if ! npx vitest run $TESTS > /tmp/l47-mut-base.log 2>&1 || ! npx tsx scripts/compliance/run-pure-selftests.ts > /tmp/l47-mut-base-pure.log 2>&1; then
+  echo "BASELINE NOT GREEN - fix the tests first (see /tmp/l47-mut-base*.log)"; exit 2
+fi
+echo "baseline green"
+
 C=src/lib/leafly/certification-proof-core.ts
 S=src/lib/leafly/certification-proof-server.ts
 F=src/lib/leafly/order-fetch-server.ts
@@ -85,7 +92,8 @@ mutate "media: image bytes stored"                $D '      responseBody: null,'
 mutate "ack: attribution bypassed (uuid bug back)" $A '        created_by: who.createdBy,' '        created_by: row.createdBy ?? null,'
 
 # -- the report + wiring --------------------------------------------------------
-mutate "report: read calls inflate outbound"      $R '    (REPORT_OUTBOUND_OPERATIONS as readonly string[]).includes(String(a.operation ?? "")),' '    true,'
+mutate "report: read calls inflate outbound"      $R '    !(REPORT_EXCLUDED_READ_OPERATIONS as readonly string[]).includes(String(a.operation ?? "")),' '    true,'
+mutate "report: back to allow-list (drops rows)"  $R '    !(REPORT_EXCLUDED_READ_OPERATIONS as readonly string[]).includes(String(a.operation ?? "")),' '    (REPORT_OUTBOUND_OPERATIONS as readonly string[]).includes(String(a.operation ?? "")),'
 mutate "page: panel unwired"                      $P '      <LeaflyCertificationProofPanel view={certificationProof} />' ''
 
 echo "--------------------------------------------------"
