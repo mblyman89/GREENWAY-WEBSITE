@@ -79,6 +79,11 @@ import { leaflyFetchWithDeadline } from "./deadline-fetch";
 import { dbDeadline } from "./db-deadline";
 import { loadLeaflyOrderIntegrationKey } from "./webhook-server";
 import {
+  ledgerAttribution,
+  ledgerMessage,
+  type LeaflyOutboundOperation,
+} from "./certification-proof-core";
+import {
   LEAFLY_ACK_SUCCESS_STATUS,
   LEAFLY_CONFIRM_PUSH_FAILED_WARNING,
   LEAFLY_STATUS_SUCCESS_STATUS,
@@ -98,8 +103,16 @@ import {
 // Shapes
 // ---------------------------------------------------------------------------
 
-/** Which endpoint an attempt was aimed at. Mirrors the migration's CHECK. */
-export type OutboundOperation = "acknowledge" | "status" | "cart";
+/**
+ * Which endpoint an attempt was aimed at. Mirrors the migration's CHECK.
+ *
+ * SLICE L-47: widened by migration 0231 to the three READ endpoints
+ * (fetch_order, government_id, medical_id). Fetch Order is **Required** for
+ * certification and the ID images are Recommended, and Leafly certifies "by
+ * review of logged activity", so those calls must leave a row too. Kept equal
+ * to certification-proof-core's LEAFLY_OUTBOUND_OPERATIONS (asserted in CI).
+ */
+export type OutboundOperation = LeaflyOutboundOperation;
 
 export type OutboundResult = {
   ok: boolean;
@@ -162,6 +175,11 @@ type AttemptRow = {
  */
 async function recordAttempt(row: AttemptRow): Promise<void> {
   if (!isSupabaseServiceConfigured) return;
+  // SLICE L-47 — `created_by` is a uuid FK (0226). Auto-acknowledge
+  // attributes itself as "auto-acknowledge", which Postgres rejects, and
+  // because this writer is best-effort the WHOLE row was silently lost. Only a
+  // real uuid goes in the column; any other attribution rides in the message.
+  const who = ledgerAttribution(row.createdBy);
   try {
     const admin = createSupabaseAdminClient();
     // SLICE L-25 — bounded. This insert runs AFTER Leafly has already
@@ -186,8 +204,8 @@ async function recordAttempt(row: AttemptRow): Promise<void> {
         response_body: row.responseBody ?? null,
         disposition: row.disposition ?? null,
         refusal_code: row.refusalCode ?? null,
-        message: row.message,
-        created_by: row.createdBy ?? null,
+        message: ledgerMessage(row.message, who.label),
+        created_by: who.createdBy,
       })
       // NOTE THE POSITION: `.abortSignal()` is defined on the TRANSFORM
       // builder, which `.insert()` returns — not on the query builder that
@@ -202,6 +220,22 @@ async function recordAttempt(row: AttemptRow): Promise<void> {
     console.error("[leafly/outbound] attempt log threw:", err);
   }
 }
+
+/**
+ * SLICE L-47 — the same best-effort recorder, exported for the READ paths
+ * (order-fetch-server's GET order, order-detail-server's ID images), which
+ * previously left no trace. Never throws; never stores image bytes (callers
+ * pass no responseBody for media).
+ *
+ * Before migration 0231 is applied the CHECK rejects the three new operation
+ * names; the insert fails, is console-logged, and nothing else changes. That
+ * is why the proof screen says "may need migration 0231" for those rows.
+ */
+export async function recordLeaflyOutboundAttempt(row: AttemptRow): Promise<void> {
+  await recordAttempt(row);
+}
+
+export type LeaflyOutboundAttemptInput = AttemptRow;
 
 // ---------------------------------------------------------------------------
 // The authorized POST

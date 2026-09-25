@@ -371,6 +371,55 @@ export async function fetchLeaflyOrderMedia(input: {
   leaflyOrderId: string;
   kind: LeaflyMediaKind;
 }): Promise<MediaFetchResult> {
+  const ctx: MediaLedgerContext = { dialled: false, key: null, httpStatus: null };
+  const result = await fetchLeaflyOrderMediaUnrecorded(input, ctx);
+  // SLICE L-47 — the ID-image endpoints are Recommended for certification and
+  // certification is "validated by review of logged activity". Recorded only
+  // when we dialled Leafly. NEVER the bytes: no responseBody, no URL, no
+  // content — an outcome, a status and a byte count at most.
+  if (ctx.dialled) {
+    await recordMediaAttempt(input, ctx, result);
+  }
+  return result;
+}
+
+type MediaLedgerContext = { dialled: boolean; key: string | null; httpStatus: number | null };
+
+async function recordMediaAttempt(
+  input: { leaflyOrderId: string; kind: LeaflyMediaKind },
+  ctx: MediaLedgerContext,
+  result: MediaFetchResult,
+): Promise<void> {
+  try {
+    const { recordLeaflyOutboundAttempt } = await import("./order-ack-server");
+    const { mediaStatusToLedger } = await import("./certification-proof-core");
+    // A 200 whose body was empty/oversized/unreadable is not a usable image;
+    // the ledger says so rather than recording the transport's 200 as success.
+    const disposition = result.ok
+      ? "success"
+      : ctx.httpStatus !== null && ctx.httpStatus >= 200 && ctx.httpStatus < 300
+        ? "fix_request"
+        : mediaStatusToLedger(ctx.httpStatus);
+    await recordLeaflyOutboundAttempt({
+      leaflyOrderId: input.leaflyOrderId,
+      orderIntegrationKey: ctx.key,
+      operation: input.kind,
+      responseStatus: ctx.httpStatus,
+      responseBody: null,
+      disposition,
+      message: result.ok
+        ? `${input.kind === "medical_id" ? "Medical" : "Government"} ID image received (${result.byteLength} bytes).`
+        : result.message,
+    });
+  } catch (err) {
+    console.error("[leafly/media] attempt log threw:", err);
+  }
+}
+
+async function fetchLeaflyOrderMediaUnrecorded(
+  input: { leaflyOrderId: string; kind: LeaflyMediaKind },
+  ctx: MediaLedgerContext,
+): Promise<MediaFetchResult> {
   const detail = await loadLeaflyOrderDetail(input.leaflyOrderId);
   if (!detail.mediaAccess.allowed) {
     return {
@@ -414,6 +463,8 @@ export async function fetchLeaflyOrderMedia(input: {
   // anything else here would double the latency on a screen someone is
   // watching, inside a window that is already short.
   let didRetryAuth = false;
+  ctx.dialled = true;
+  ctx.key = key;
   for (;;) {
     const token = await getLeaflyAccessToken().catch((err: unknown) => err as Error);
     if (token instanceof Error) {
@@ -449,6 +500,7 @@ export async function fetchLeaflyOrderMedia(input: {
     }
 
     const res = attempt.response;
+    ctx.httpStatus = res.status;
 
     if (res.status === 401 && !didRetryAuth) {
       didRetryAuth = true;

@@ -1247,6 +1247,82 @@ export function buildCertificationWindowEmail(input: {
 }
 
 // ===========================================================================
+// 10b. Writing the evidence: ledger attribution and disposition mapping
+// ===========================================================================
+
+/** The five dispositions `leafly_outbound_attempts.disposition` accepts (0226's CHECK). */
+export const LEAFLY_LEDGER_DISPOSITIONS = ["success", "retry", "fix_config", "fix_request", "gone"] as const;
+export type LeaflyLedgerDisposition = (typeof LEAFLY_LEDGER_DISPOSITIONS)[number];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Split "who did this" into what the uuid column can hold and what it cannot.
+ *
+ * THE DEFECT THIS FIXES (found while building L-47): `created_by` is
+ * `uuid references staff_profiles(id)` (0226), but auto-acknowledge passes
+ * the attribution "auto-acknowledge". Postgres rejects the whole insert
+ * ("invalid input syntax for type uuid"), the recorder is best-effort, so the
+ * row simply vanished: every automatic acknowledgement, and the status push
+ * nested inside it, left no trace in the ledger Leafly certifies from.
+ *
+ * Only a real uuid goes into the column; anything else becomes a label that
+ * the recorder prefixes to the message, so the attribution is kept AND the
+ * row is written. No schema change, so nothing breaks before 0231 is applied.
+ */
+export function ledgerAttribution(createdBy: string | null | undefined): {
+  createdBy: string | null;
+  label: string | null;
+} {
+  const v = typeof createdBy === "string" ? createdBy.trim() : "";
+  if (v === "") return { createdBy: null, label: null };
+  if (UUID_RE.test(v)) return { createdBy: v, label: null };
+  return { createdBy: null, label: v };
+}
+
+/** The message the recorder stores, carrying a non-uuid attribution visibly. */
+export function ledgerMessage(message: string, label: string | null): string {
+  const m = typeof message === "string" ? message : "";
+  return label ? `[${label}] ${m}` : m;
+}
+
+/**
+ * order-fetch-core's FetchDisposition \u2192 the ledger's vocabulary.
+ * not_found and gone both mean "Leafly has no such order" (404); an
+ * unexpected answer is a request we should not repeat as-is (fix_request).
+ */
+export function fetchDispositionToLedger(d: string | null | undefined): LeaflyLedgerDisposition {
+  switch (d) {
+    case "success":
+      return "success";
+    case "retry":
+      return "retry";
+    case "fix_credentials":
+      return "fix_config";
+    case "not_found":
+    case "gone":
+      return "gone";
+    default:
+      return "fix_request";
+  }
+}
+
+/**
+ * The ledger disposition for an ID-image GET, from the HTTP status Leafly
+ * returned (null = no answer at all). The spec documents 200/401/403/404 for
+ * these endpoints. 403/404 mean the window has closed (acknowledged or no
+ * longer pending), which is "gone" rather than a configuration fault.
+ */
+export function mediaStatusToLedger(status: number | null): LeaflyLedgerDisposition {
+  if (status === null || !Number.isFinite(status)) return "retry";
+  if (status >= 200 && status < 300) return "success";
+  if (status === 401) return "fix_config";
+  if (status === 403 || status === 404) return "gone";
+  if (status === 429 || status >= 500) return "retry";
+  return "fix_request";
+}
+
+// ===========================================================================
 // 11. Self-test
 // ===========================================================================
 
@@ -1609,6 +1685,39 @@ export function __runLeaflyCertificationProofTests(): { passed: number; failed: 
   ok(mail2.startsWith("Subject: Test Shop"), "store name used");
   const mail3 = buildCertificationWindowEmail({ coverage: assessWindowCoverage(empty(), rw.fromIso, rw.toIso), windowStartLabel: "A", windowEndLabel: "B" });
   ok(mail3.includes("do not yet show any successful requests"), "empty window says so");
+
+  // ── ledger attribution / mapping ──
+  const U = "3f2c1a9e-8b7d-4c6e-9a1b-2d3e4f5a6b7c";
+  ok(ledgerAttribution(U).createdBy === U && ledgerAttribution(U).label === null, "uuid kept in column");
+  ok(ledgerAttribution(U.toUpperCase()).createdBy === U.toUpperCase(), "uuid case-insensitive");
+  ok(ledgerAttribution("auto-acknowledge").createdBy === null, "machine name never reaches the uuid column");
+  ok(ledgerAttribution("auto-acknowledge").label === "auto-acknowledge", "machine name kept as label");
+  ok(ledgerAttribution(null).createdBy === null && ledgerAttribution(null).label === null, "null stays null");
+  ok(ledgerAttribution("   ").label === null, "blank is no attribution");
+  ok(ledgerAttribution(U + "x").createdBy === null, "near-uuid rejected");
+  ok(ledgerMessage("Accepted.", "auto-acknowledge") === "[auto-acknowledge] Accepted.", "label prefixed");
+  ok(ledgerMessage("Accepted.", null) === "Accepted.", "no label, message unchanged");
+  ok(fetchDispositionToLedger("success") === "success", "fetch success");
+  ok(fetchDispositionToLedger("retry") === "retry", "fetch retry");
+  ok(fetchDispositionToLedger("fix_credentials") === "fix_config", "fetch creds -> fix_config");
+  ok(fetchDispositionToLedger("not_found") === "gone", "fetch not_found -> gone");
+  ok(fetchDispositionToLedger("gone") === "gone", "fetch gone -> gone");
+  ok(fetchDispositionToLedger("unexpected") === "fix_request", "fetch unexpected -> fix_request");
+  ok(fetchDispositionToLedger(null) === "fix_request", "fetch unknown -> fix_request");
+  ok(mediaStatusToLedger(200) === "success", "media 200");
+  ok(mediaStatusToLedger(null) === "retry", "media no answer");
+  ok(mediaStatusToLedger(401) === "fix_config", "media 401");
+  ok(mediaStatusToLedger(403) === "gone" && mediaStatusToLedger(404) === "gone", "media 403/404 window closed");
+  ok(mediaStatusToLedger(503) === "retry" && mediaStatusToLedger(429) === "retry", "media 5xx/429 retry");
+  ok(mediaStatusToLedger(418) === "fix_request", "media undocumented");
+  ok(mediaStatusToLedger(199) === "fix_request" && mediaStatusToLedger(300) === "fix_request", "media 2xx bounds");
+  ok(
+    LEAFLY_LEDGER_DISPOSITIONS.every((d) => typeof d === "string") &&
+      [fetchDispositionToLedger("x"), mediaStatusToLedger(418)].every((d) =>
+        (LEAFLY_LEDGER_DISPOSITIONS as readonly string[]).includes(d),
+      ),
+    "mappers only emit ledger dispositions",
+  );
 
   if (failures.length > 0) {
     throw new Error(`leafly-certification-proof-core self-test failed:\n  - ${failures.join("\n  - ")}`);

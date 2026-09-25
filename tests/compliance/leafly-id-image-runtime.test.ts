@@ -83,6 +83,14 @@ let permissionGranted = true;
 /** Every permission the route actually demanded. */
 let permissionsAsked: string[] = [];
 
+/**
+ * SLICE L-47 — every row written to the attempt ledger, keyed by table.
+ * The media path now records its outcome for certification evidence, so the
+ * fake client models `.insert()` (the real transform builder has it) and the
+ * suite asserts on WHAT was written — above all, that no bytes were.
+ */
+let inserted: Array<{ table: string; row: Record<string, unknown> }> = [];
+
 function bytes(n: number): ArrayBuffer {
   return new Uint8Array(n).fill(7).buffer;
 }
@@ -141,7 +149,15 @@ vi.mock("@/lib/supabase/admin", () => ({
       maybeSingle: async () => ({ data: orderRow, error: null }),
       single: async () => ({ data: orderRow, error: null }),
     };
-    return { from: () => builder };
+    return {
+      from: (table: string) => ({
+        ...builder,
+        insert: (row: Record<string, unknown>) => {
+          inserted.push({ table, row });
+          return { abortSignal: async () => ({ error: null }) };
+        },
+      }),
+    };
   },
 }));
 
@@ -240,6 +256,7 @@ beforeEach(() => {
   tokenResets = 0;
   permissionGranted = true;
   permissionsAsked = [];
+  inserted = [];
 });
 
 // ===========================================================================
@@ -585,5 +602,80 @@ describe("L-24 — a failed image explains itself in a header, not a body", () =
 
     expect(res.status).toBe(502);
     expect(res.headers.get("x-leafly-media-retryable")).toBe("1");
+  });
+});
+
+// ===========================================================================
+// 9. SLICE L-47 — THE LEDGER ROW (certification evidence, never the image)
+// ===========================================================================
+describe("L-47 — every dialled ID-image request leaves one ledger row", () => {
+  const ledger = () => inserted.filter((i) => i.table === "leafly_outbound_attempts").map((i) => i.row);
+
+  it("records a success as operation=government_id, disposition=success, with NO bytes", async () => {
+    mediaResponses = [{ status: 200, body: bytes(1234) }];
+    const result = await fetchLeaflyOrderMedia({ leaflyOrderId: "ord-1", kind: "government_id" });
+    expect(result.ok).toBe(true);
+    const rows = ledger();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].operation).toBe("government_id");
+    expect(rows[0].disposition).toBe("success");
+    expect(rows[0].response_status).toBe(200);
+    expect(rows[0].response_body).toBeNull();
+    expect(rows[0].leafly_order_id).toBe("ord-1");
+    // No image, no URL (the URL carries the integration key), in ANY field.
+    const flat = JSON.stringify(rows[0]);
+    expect(flat).not.toContain("http");
+    expect(flat).not.toMatch(/\\u0007|\\x07/);
+    for (const v of Object.values(rows[0])) {
+      expect(v instanceof ArrayBuffer || ArrayBuffer.isView(v as never)).toBe(false);
+    }
+    expect(String(rows[0].message)).toContain("1234 bytes");
+  });
+
+  it("records medical_id under its own operation name", async () => {
+    mediaResponses = [{ status: 200, body: bytes(10) }];
+    await fetchLeaflyOrderMedia({ leaflyOrderId: "ord-1", kind: "medical_id" });
+    expect(ledger().map((r) => r.operation)).toEqual(["medical_id"]);
+  });
+
+  it("records Leafly's 403 as gone — the window closed", async () => {
+    mediaResponses = [{ status: 403, body: bytes(0) }];
+    await fetchLeaflyOrderMedia({ leaflyOrderId: "ord-1", kind: "government_id" });
+    expect(ledger()).toHaveLength(1);
+    expect(ledger()[0].disposition).toBe("gone");
+    expect(ledger()[0].response_status).toBe(403);
+  });
+
+  it("records a zero-byte 200 as fix_request, NOT success", async () => {
+    mediaResponses = [{ status: 200, body: bytes(0) }];
+    const r = await fetchLeaflyOrderMedia({ leaflyOrderId: "ord-1", kind: "government_id" });
+    expect(r.ok).toBe(false);
+    expect(ledger()[0].disposition).toBe("fix_request");
+  });
+
+  it("records a 401-then-200 as ONE row, the final answer", async () => {
+    mediaResponses = [
+      { status: 401, body: bytes(0) },
+      { status: 200, body: bytes(5) },
+    ];
+    await fetchLeaflyOrderMedia({ leaflyOrderId: "ord-1", kind: "government_id" });
+    expect(ledger()).toHaveLength(1);
+    expect(ledger()[0].response_status).toBe(200);
+    expect(ledger()[0].disposition).toBe("success");
+  });
+
+  it("records a network failure as retry with no status", async () => {
+    mediaResponses = [];
+    await fetchLeaflyOrderMedia({ leaflyOrderId: "ord-1", kind: "government_id" });
+    expect(ledger()).toHaveLength(1);
+    expect(ledger()[0].disposition).toBe("retry");
+    expect(ledger()[0].response_status).toBeNull();
+  });
+
+  it("writes NOTHING for a local refusal — Leafly was never asked", async () => {
+    orderRow = { ...openWindowOrder(), acknowledged_at: "2026-01-01T00:00:00.000Z" };
+    await fetchLeaflyOrderMedia({ leaflyOrderId: "ord-1", kind: "government_id" });
+    expect(mediaCalls).toHaveLength(0);
+    expect(ledger()).toHaveLength(0);
   });
 });
