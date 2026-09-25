@@ -570,6 +570,8 @@ export async function saveLeaflyScheduleAction(
     // together keeps the intent visible at the call site.
     activeFromHour: from !== null && to !== null ? from : null,
     activeToHour: from !== null && to !== null ? to : null,
+    // SLICE L-41. Explicit "true"/"false" from the panel, strict on read.
+    repairSizes: readBool("repairSizes"),
   });
 
   const saved = await saveSyncSettings(

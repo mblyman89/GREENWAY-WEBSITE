@@ -151,28 +151,68 @@ const settings = {
   intradayEnabled: true,
   intradayMinutes: 60,
 };
+// SLICE L-41. The blob is returned in the shape saveLeaflyScheduleAction
+// really stores: the schedule NESTED under `schedule`. Before L-41 this mock
+// returned the schedule FLAT at the top level -- the one shape production
+// never writes -- and that is exactly why this suite passed while the owner's
+// saved schedule read back as "off" on the live site.
 vi.mock("@/lib/syndication/engine-store", () => ({
-  getSyncSettingsRaw: async () => ({ ...settings }),
+  getSyncSettingsRaw: async () => ({ sendImages: true, schedule: { ...settings } }),
 }));
 
-type PushCall = { method: string };
+type PushCall = { method: string; kind: string; repair: boolean };
 const pushes: PushCall[] = [];
 let pushSkipsWhen: (method: string) => boolean = () => false;
+// SLICE L-41 knobs: the daily verb (PUT when products are held back) and a
+// withhold-plan refusal.
+let dailyVerb: "POST" | "PUT" = "POST";
+let refuseAll = false;
 vi.mock("@/lib/leafly/push", () => ({
   isLeaflyConfigured: () => true,
   describeLeaflyReadinessAsync: async () => null,
-  pushLeaflyMenu: async (args: { method: string }) => {
-    pushes.push({ method: args.method });
+  // SLICE L-41: the scheduler must no longer call this. If it does, the
+  // suite fails loudly rather than counting it as a push.
+  pushLeaflyMenu: async () => {
+    throw new Error("L-41: the scheduler must not use the all-or-nothing pushLeaflyMenu");
+  },
+}));
+// SLICE L-41: automatic runs go through pushLeaflyAutomatic. The mock maps
+// the run kind to the verb the pure planner would pick with nothing held
+// back (daily -> POST, in-between -> PUT), which is what these cadence tests
+// are about. The planner's own verb choice is pinned in auto-sync-core.
+vi.mock("@/lib/leafly/auto-sync-server", () => ({
+  pushLeaflyAutomatic: async (args: { kind: string; repair: boolean }) => {
+    const method = args.kind === "daily_full" ? dailyVerb : "PUT";
+    pushes.push({ method, kind: args.kind, repair: args.repair });
     await new Promise((r) => setTimeout(r, 2));
-    const skipped = pushSkipsWhen(args.method);
+    if (refuseAll) {
+      return {
+        ok: false,
+        skipped: false,
+        refused: true,
+        method: null,
+        httpStatus: 0,
+        itemCount: 0,
+        planSummary: "nothing sent - 90 held back, plan refused",
+        message: "Nothing was sent. Too much of the menu is failing.",
+        withheldCount: 90,
+        deletedCount: 0,
+        plan: null,
+      };
+    }
+    const skipped = pushSkipsWhen(method);
     return {
-      ok: !skipped,
+      ok: true,
       skipped,
-      method: args.method,
+      refused: false,
+      method: skipped ? null : method,
       httpStatus: skipped ? 0 : 200,
       itemCount: 10,
       planSummary: "0 new",
       message: skipped ? "Nothing had changed" : "ok",
+      withheldCount: 0,
+      deletedCount: 0,
+      plan: null,
     };
   },
 }));
@@ -197,6 +237,9 @@ beforeEach(() => {
   pushes.length = 0;
   pushSkipsWhen = () => false;
   settings.intradayMinutes = 60;
+  dailyVerb = "POST";
+  refuseAll = false;
+  delete (settings as Record<string, unknown>).repairSizes;
 });
 
 // 2026-06-15 is PDT (UTC-7). 11:00Z = 04:00 Pacific = dailyFullHour.
@@ -261,5 +304,58 @@ describe("L-34 · two deliveries of the same tick (Vercel double invocation)", (
     const r = await runScheduledLeaflySync(FOUR_AM_PDT);
     expect(r.pushed).toBe(true);
     expect(pushes.length).toBe(1);
+  });
+});
+
+describe("L-41 · automatic sync actually turns on, and actually sends", () => {
+  it("a schedule saved NESTED (the only shape the save action writes) is read as ON and runs", async () => {
+    const r = await runScheduledLeaflySync(FOUR_AM_PDT);
+    expect(r.decision.code).toBe("daily_full");
+    expect(r.pushed).toBe(true);
+    expect(pushes.map((p) => p.kind)).toEqual(["daily_full"]);
+  });
+
+  it("the daily run goes through pushLeaflyAutomatic with the daily kind; in-between runs with the delta kind", async () => {
+    await simulate(FOUR_AM_PDT, 3, 15);
+    expect(pushes[0]?.kind).toBe("daily_full");
+    expect(pushes.slice(1).every((p) => p.kind === "intraday_delta")).toBe(true);
+    expect(pushes.length).toBeGreaterThan(1);
+  });
+
+  it("repair is OFF unless the owner turned it on, and his choice reaches the send", async () => {
+    await runScheduledLeaflySync(FOUR_AM_PDT);
+    expect(pushes[0]?.repair).toBe(false);
+    pushes.length = 0;
+    state.rows = [];
+    (settings as Record<string, unknown>).repairSizes = true;
+    await runScheduledLeaflySync(FOUR_AM_PDT);
+    expect(pushes[0]?.repair).toBe(true);
+  });
+
+  it("a daily run sent as PUT (products held back) still counts as the day's full sync -- not resent every tick", async () => {
+    dailyVerb = "PUT";
+    await simulate(FOUR_AM_PDT, 6, 15);
+    const daily = pushes.filter((p) => p.kind === "daily_full").length;
+    expect(daily).toBe(1);
+    // and the in-between updates still get their turn
+    expect(pushes.filter((p) => p.kind === "intraday_delta").length).toBeGreaterThanOrEqual(5);
+    const dailyRow = state.rows.find((r) => r.decision_code === "daily_full" && r.disposition === "success");
+    expect(dailyRow?.method).toBe("PUT");
+  });
+
+  it("a withhold-plan refusal sends nothing, is recorded as FAILED (not a quiet skip), and backs off", async () => {
+    refuseAll = true;
+    const r = await runScheduledLeaflySync(FOUR_AM_PDT);
+    expect(r.pushed).toBe(false);
+    expect(r.disposition).toBe("failed");
+    const row = state.rows.find((x) => x.decision_code === "daily_full");
+    expect(row?.pushed).toBe(false);
+    expect(row?.method).toBeNull();
+    expect(row?.disposition).toBe("failed");
+    expect(row?.error_detail).toMatch(/Too much of the menu/);
+    // Backoff: over the next hours it does not rebuild the menu every tick.
+    pushes.length = 0;
+    await simulate("2026-06-15T11:15:00.000Z", 3, 15);
+    expect(pushes.length).toBeLessThan(12);
   });
 });

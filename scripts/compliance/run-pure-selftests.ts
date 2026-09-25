@@ -215,6 +215,7 @@ import { __runLeaflyCollisionApplyTests } from "../../src/lib/leafly/collision-a
 import { __runLeaflyCollisionSplitTests } from "../../src/lib/leafly/collision-split-core";
 import { __runLeaflyFixLinkTests } from "../../src/lib/leafly/fix-link-core";
 import { __runLeaflyFullMenuTests } from "../../src/lib/leafly/full-menu-core";
+import { __runLeaflyAutoSyncTests } from "../../src/lib/leafly/auto-sync-core";
 // The owner asked what "stage 2 changes how your menu looks to shoppers"
 // actually means. This core is the answer: it names the listings a shopper
 // would see instead of reporting a count. Registered here because the WORDING
@@ -1106,7 +1107,7 @@ __runLiquidVolumeTests();
   // the 24-hour sweep that proves the second trigger fires at every hour of the
   // clock is exactly the kind of loop that can be made vacuous by a one-line
   // edit. It carries its own non-vacuity guards; this floor is the outer net.
-  assertRan("leafly-schedule-core", __runLeaflyScheduleTests(), 315);
+  assertRan("leafly-schedule-core", __runLeaflyScheduleTests(), 330);
   // SLICE L-8 -- the Leafly webhook evidence reader.
   //
   // Floored at 300 against 316 measured. Two things in this core are worth a
@@ -1153,7 +1154,7 @@ __runLiquidVolumeTests();
   // TASK I raised this from 64: the invalidItemPolicy resolver added a
   // fail-closed loop over ten junk values plus a round-trip, taking the count
   // from 66 to 81. Raising the floor with the count is the point of the floor.
-  assertRan("sync-settings-core", __runSyncSettingsTests(), 78);
+  assertRan("sync-settings-core", __runSyncSettingsTests(), 87);
   __runApplySettingsTests();
   __runSyndicationPlaybookTests();
   __runPosSaleEventTests();
@@ -1709,6 +1710,10 @@ __runLiquidVolumeTests();
   // TASK J ask 3: send the whole menu, withhold the bad ones, name them.
   assertRan("leafly-full-menu-core", __runLeaflyFullMenuTests(), 62);
   assertRan("leafly-split-preview-core", __runLeaflySplitPreviewTests(), 80);
+  // SLICE L-41: what an automatic run transmits. Never POST while anything is
+  // held back; never delete a held-back product or its split family. Floor
+  // just under the measured 69.
+  assertRan("leafly-auto-sync-core", __runLeaflyAutoSyncTests(), 66);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

@@ -257,6 +257,28 @@ export function resolveLeaflySettings(raw: Record<string, unknown> | null | unde
 }
 
 /** Parse a stored/submitted partial into complete, clamped Weedmaps settings. */
+/**
+ * SLICE L-41 -- THE AUTO-SYNC "SAVED BUT OFF" BUG.
+ *
+ * The schedule is stored NESTED, as `{ ..., schedule: { enabled, ... } }`
+ * (see the header). Until L-41 the scheduler handed the WHOLE blob to
+ * `resolveScheduleSettings`, which looked for `enabled` at the top level,
+ * never found it, and so read every saved schedule as OFF. The save worked;
+ * the read was looking in the wrong drawer. The owner saw "Saved", then
+ * "Run the check now" said automatic syncing was off.
+ *
+ * This is the ONE function that turns a stored blob into the schedule, and
+ * it goes through `resolveLeaflySettings` so the save path and the read path
+ * are the same code. A top-level `enabled` (the shape the bug expected) is
+ * deliberately NOT honoured: the only thing that turns automation on is the
+ * nested block the save action actually writes.
+ */
+export function readStoredLeaflySchedule(
+  raw: Record<string, unknown> | null | undefined,
+): LeaflyScheduleSettings {
+  return resolveLeaflySettings(raw).schedule;
+}
+
 export function resolveWeedmapsSettings(raw: Record<string, unknown> | null | undefined): WeedmapsSyncSettings {
   const d = DEFAULT_WEEDMAPS_SETTINGS;
   const r = raw ?? {};
@@ -490,6 +512,30 @@ export function __runSyncSettingsTests(): { passed: number; failed: number } {
     // `DEFAULT_LEAFLY_SETTINGS` could be written to the database incomplete.
     ok("the defaults carry a schedule object", typeof DEFAULT_LEAFLY_SETTINGS.schedule === "object");
     ok("the default schedule has automation off", DEFAULT_LEAFLY_SETTINGS.schedule.enabled === false);
+  }
+
+  // --- SLICE L-41: the scheduler reads the NESTED schedule ----------------
+  // Regression for the "it says Saved, then the check says it is off" bug.
+  {
+    // Exactly what saveLeaflyScheduleAction writes: the whole resolved blob.
+    const stored = resolveLeaflySettings({
+      schedule: { enabled: true, dailyFullHour: 4, intradayEnabled: true, intradayMinutes: 60 },
+    }) as unknown as Record<string, unknown>;
+    const read = readStoredLeaflySchedule(stored);
+    ok("L41: a saved schedule reads back as ON", read.enabled === true);
+    ok("L41: a saved schedule keeps its hour", read.dailyFullHour === 4);
+    ok("L41: a saved schedule keeps its interval", read.intradayMinutes === 60);
+    // The pre-fix reader, reproduced, so this test proves it detects the bug:
+    // the whole blob handed straight to resolveScheduleSettings reads as OFF.
+    ok("L41: the old reader really did read the saved blob as OFF", resolveScheduleSettings(stored).enabled === false);
+  }
+  {
+    const flat = { enabled: true, dailyFullHour: 4, intradayEnabled: true, intradayMinutes: 60 };
+    ok("L41: a FLAT blob is not mistaken for a schedule", readStoredLeaflySchedule(flat).enabled === false);
+    ok("L41: null reads as the safe default (off)", readStoredLeaflySchedule(null).enabled === false);
+    ok("L41: undefined reads as the safe default (off)", readStoredLeaflySchedule(undefined).enabled === false);
+    ok("L41: a nested repairSizes is read", readStoredLeaflySchedule({ schedule: { enabled: true, repairSizes: true } }).repairSizes === true);
+    ok("L41: the reader agrees with resolveLeaflySettings", JSON.stringify(readStoredLeaflySchedule({ schedule: { enabled: true, dailyFullHour: 7 } })) === JSON.stringify(resolveLeaflySettings({ schedule: { enabled: true, dailyFullHour: 7 } }).schedule));
   }
 
   // --- TASK H: the nested low-stock visibility block ----------------------
