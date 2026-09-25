@@ -96,6 +96,9 @@ export type ReportOrderRow = {
   totalRaw?: unknown;
 };
 
+/** The write calls the outbound-health block reports on (SLICE L-47). */
+export const REPORT_OUTBOUND_OPERATIONS = ["acknowledge", "status", "cart"] as const;
+
 export type ReportAttemptRow = {
   leaflyOrderId?: string | null;
   operation?: string | null;
@@ -408,7 +411,14 @@ export function buildOnlineOrdersReport(input: {
   attempts?: readonly ReportAttemptRow[];
 }): OnlineOrdersReport {
   const orders = Array.isArray(input.orders) ? input.orders : [];
-  const attempts = Array.isArray(input.attempts) ? input.attempts : [];
+  // SLICE L-47: the ledger now also records the READ calls (fetch_order,
+  // government_id, medical_id) as certification evidence. This block is
+  // "Acknowledgements, status pushes and cart updates", so only those count;
+  // otherwise every order's automatic fetch would inflate the total and the
+  // success rate would change meaning without anyone deciding it should.
+  const attempts = (Array.isArray(input.attempts) ? input.attempts : []).filter((a) =>
+    (REPORT_OUTBOUND_OPERATIONS as readonly string[]).includes(String(a.operation ?? "")),
+  );
 
   let acknowledgedOrders = 0;
   let autoCanceledOrders = 0;
@@ -968,6 +978,21 @@ export function __runOnlineOrdersReportTests(): {
 
   // Outbound health.
   eq("outbound total", report.outbound.total, 6);
+  // L-47: read calls never enter the write-call health block.
+  const withReads = buildOnlineOrdersReport({
+    orders: [],
+    attempts: [
+      { operation: "acknowledge", disposition: "success" },
+      { operation: "fetch_order", disposition: "success" },
+      { operation: "government_id", disposition: "gone" },
+      { operation: "medical_id", disposition: "retry" },
+      { operation: null, disposition: "success" },
+    ],
+  });
+  eq("read calls excluded from outbound total", withReads.outbound.total, 1);
+  eq("read calls excluded from success", withReads.outbound.success, 1);
+  eq("read calls excluded from gone", withReads.outbound.gone, 0);
+  eq("read calls excluded from retry", withReads.outbound.retry, 0);
   eq("outbound success", report.outbound.success, 2);
   eq("outbound retry", report.outbound.retry, 1);
   eq("outbound fix_request", report.outbound.fixRequest, 1);
