@@ -229,3 +229,19 @@ which are correctness issues rather than cosmetic ones:
 
 And one **defensive check**: an empty webhook body arrives with no signature
 header at all, and must not be classified as a bad signature.
+
+---
+
+## L-47 follow-through (answers 6, 9, 10, 11)
+
+These answers are now built into the "Leafly certification proof" card:
+- Our own sandbox test orders turn the webhook and lifecycle rows green.
+- The production read-back shows "Not needed here".
+- Manual button runs count as proof.
+- A success older than 14 days is flagged "May have expired".
+- The card suggests a two-business-day window with 2 business days' notice,
+  and drafts the email.
+
+See the roadmap, "L-47: what shipped". Questions 1 to 3 in the roadmap's
+"Questions still open for Ben" are still unanswered. The card does not assume
+an answer to any of them.

@@ -21,7 +21,8 @@ CI and both Vercel checks pass and production reports success.
 | L-44 | Order preview tax: tax-inclusive `packagePrice`, empty `taxes` | **Done** (PR #1224); see "L-44: what shipped" below |
 | L-45 | `orderIntegrationKey` = Dispensary Menu Key cross-check | **Done** (see "L-45: what shipped" below) |
 | L-46 | 9-second inbound response budget | **Done** (see "L-46: what shipped" below) |
-| L-47 | Certification "prove every action" evidence panel | Next |
+| L-47 | Certification "prove every action" evidence panel | **Done** (see "L-47: what shipped" below). **Needs migration 0231.** |
+| L-48 | Optional "Update Order's Cart" (change an order's items) on the dashboard and the register | Next |
 
 ---
 
@@ -444,6 +445,71 @@ have expired from Leafly's sandbox logs; run again inside your certification
 window". The card also suggests a window: pick two business days, run each
 action once inside them, then email Leafly the window.
 
+### L-47: what shipped
+
+**The card.** "Leafly certification proof" on Admin → Integrations → Leafly
+(`LeaflyCertificationProofPanel.tsx`, a server component with no logic). The
+loader is `certification-proof-server.ts` and the logic is the pure
+`certification-proof-core.ts` (205 self-tests, registered with a floor).
+
+**Nineteen rows, not seven.** The plan's seven rows became every element of
+Leafly's "Preparing for Production" table (12 rows: 5 Required, 4
+Recommended, 3 Optional), plus the Menu API actions and both terminal
+lifecycle states. The Required/Recommended/Optional labels are pinned to the
+vendored spec text by `leafly-l47-certification-proof.test.ts`, so they
+cannot drift.
+
+**Evidence, read only from recorded rows:**
+
+| Source | Proves |
+|---|---|
+| `leafly_sync_runs` (method, http_status) | Menu POST/PUT/DELETE/status/read-back |
+| `audit_logs` (manual Leafly actions) | the same, from the buttons |
+| `syndication_logs` automatic rows with `deleteIds` and status ok | Menu DELETE via automatic safe delete |
+| `leafly_webhook_events` (signature verified, 2xx) | each webhook; unsigned probes count as neither proof nor failure |
+| `leafly_outbound_attempts` | acknowledge, status (per requested status), cart, **fetch order**, **ID images** |
+
+**Honesty rules.**
+- A failed read shows "Could not read", never "No record yet".
+- A read that hit its row cap marks its rows *saturated*, and the note says
+  an older success may exist.
+- A success older than 14 days shows "May have expired" (Ben 11).
+- The menu read-back in production shows "Not needed here".
+
+**Evidence gap closed (migration 0231, owner runs it by hand, idempotent).**
+Fetch Order by ID (Required) and the ID images (Recommended) left no record
+anywhere. Now:
+- `fetchLeaflyOrder` and `fetchLeaflyOrderMedia` record one ledger row per
+  request actually dialled. Local refusals write nothing.
+- Media rows NEVER store bytes, URLs or bodies (`responseBody: null`).
+- A 200 with an unusable body is recorded as `fix_request`, not `success`.
+- 0231 widens `leafly_outbound_attempts_operation_check` to add
+  `fetch_order`, `government_id` and `medical_id`, and adds two indexes.
+- Before 0231 the inserts fail the CHECK and are only logged. The row shows
+  a "may need migration 0231" hint.
+- The online-orders report counts only write calls
+  (`REPORT_OUTBOUND_OPERATIONS`), so its meaning is unchanged.
+
+**F6, pre-existing defect fixed: auto-ack ledger rows were silently lost.**
+`created_by` is `uuid references staff_profiles(id)` (0226), but auto-ack
+passes `"auto-acknowledge"`. Every auto-ack attempt row, and the status push
+it nests, failed insert and was swallowed. `ledgerAttribution` now stores
+null plus a `[auto-acknowledge]` message prefix. No schema change.
+
+**Window + email.**
+- `suggestCertificationWindow` suggests two business days in store time,
+  with 2 business days' notice, inside log retention.
+- `assessWindowCoverage` over `recentBusinessWindow` gives "If you emailed
+  Leafly today".
+- `buildCertificationWindowEmail` drafts the email.
+
+**Tests.**
+- `leafly-l47-certification-proof.test.ts` (44 tests): spec levels, the
+  vocabularies agreeing with the 0226 and 0231 CHECKs, fetch ledger at
+  runtime, the loader's honesty, and the wiring.
+- `leafly-id-image-runtime.test.ts` gained 7 ledger tests.
+- `scripts/recon/l47-mutation-check.sh`: 23 of 23 mutations killed.
+
 ---
 
 ## Questions still open for Ben
@@ -475,10 +541,10 @@ action once inside them, then email Leafly the window.
 | 3 | IPs rotate | L-43 (HMAC is the only authentication) |
 | 4 | Retries and the 9-second deadline | L-46 (done: all delivery work raced against a 6 s budget; slow work finishes in `after()`; activate/deactivate retry policy recorded as unknown) |
 | 5 | `medical:false` correct | No change. Tell Leafly when the medical endorsement lands. |
-| 6 | We can place sandbox test orders | L-47 (the "Order webhooks" row) |
+| 6 | We can place sandbox test orders | L-47 done (the webhook and lifecycle rows turn green from those orders) |
 | 7 | Pickup-only fine | No change |
 | 8 | Tax-inclusive packagePrice, empty taxes | L-44 |
-| 9 | Production instance later | L-47 note; no code |
-| 10 | Nothing to clear for manual tools | L-47 note; the attestation stays honest |
-| 11 | Certification window; 2-week sandbox logs | L-47 |
+| 9 | Production instance later | L-47 done: the card is environment-aware (read-back is "Not needed here" in production) |
+| 10 | Nothing to clear for manual tools | L-47 done: manual button runs count as proof |
+| 11 | Certification window; 2-week sandbox logs | L-47 done (14-day expiry, window suggestion, email draft) |
 | 12 | Separate production credentials | Already supported (environment-scoped keys) |

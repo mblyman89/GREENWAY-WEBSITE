@@ -1735,7 +1735,7 @@ __runLiquidVolumeTests();
   // SLICE L-47: certification proof. A row turns green only from a recorded
   // row; unreadable is "unknown", never "none"; >14 days is "may be gone".
   // Floor just under the measured 178.
-  assertRan("leafly-certification-proof-core", __runLeaflyCertificationProofTests(), 175);
+  assertRan("leafly-certification-proof-core", __runLeaflyCertificationProofTests(), 200);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
