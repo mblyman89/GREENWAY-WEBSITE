@@ -391,7 +391,11 @@ describe("the /admin/orders render is bounded where it should be", () => {
       "listPoolNamesStatus",
       "getPrinterSettings",
       "loadLeaflyOrderBoard",
-      "countLeaflyOrdersAwaitingAck",
+      // SLICE L-40 removed countLeaflyOrdersAwaitingAck from this page (its
+      // only job was moving the Leafly panel above ours, which the owner
+      // asked to stop). Its slot is taken by the L-38 linked-orders read,
+      // which is just as secondary and was already budgeted.
+      "listOrdersByIds",
       "loadLeaflyOrderSetupState",
       "getAnnouncerPanelDataCached",
       "listInterruptsForOrders",
@@ -401,6 +405,8 @@ describe("the /admin/orders render is bounded where it should be", () => {
       );
       expect(wrapped.test(src), `${reader} must be wrapped in withRenderBudget`).toBe(true);
     }
+    // L-40: and the removed reader must not creep back in UNwrapped.
+    expect(src).not.toMatch(/countLeaflyOrdersAwaitingAck\(/);
   });
 
   /**

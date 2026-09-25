@@ -171,6 +171,9 @@ import { __runLeaflyPayloadTests } from "../../src/lib/leafly/payload-core";
 // brand matcher already taught this codebase. Pure: no I/O.
 import { __runOrderOriginTests } from "../../src/lib/orders/order-origin-core";
 import { __runOrderBoardSplitTests } from "../../src/lib/orders/order-board-split-core";
+// SLICE L-40 -- the ONE set of rules both order panels (Greenway and Leafly)
+// use for tabs, search, dates, totals, sort and paging. Pure: no I/O.
+import { __runOrdersPanelTests } from "../../src/lib/orders/order-panels-core";
 import { __runLeaflyBridgeTests } from "../../src/lib/leafly/bridge-core";
 // SLICE L-2 -- the LAST GATE before a menu payload goes on the wire. Registered
 // here because every defect this slice repaired would have been caught by
@@ -1085,7 +1088,11 @@ __runLiquidVolumeTests();
   // count is exhaustive sweeps over the three-valued pending-ack count and the
   // label matrix, so a drop below this means a sweep stopped sweeping rather
   // than a few duplicate cases being tidied away.
-  assertRan("orders-board-order-core", __runBoardOrderTests(), 48);
+  // SLICE L-40. Lowered 48 -> 32, from a measured 35: the owner removed the
+  // "Leafly above ours while unacknowledged" promotion, so decideBoardLayout
+  // and its 22 self-tests were retired (replaced by 4 fixed-order checks).
+  // Every label / tally / mix test is untouched.
+  assertRan("orders-board-order-core", __runBoardOrderTests(), 32);
   // SLICE L-16. Floor 600, set from a measured 631. The gap is deliberately
   // small: most of the count comes from exhaustive sweeps over the seven
   // refusal reasons and the empty-cart cause matrix, so a drop below this
@@ -1652,6 +1659,10 @@ __runLiquidVolumeTests();
   // customer-facing email may be sent at all.
   assertRan("order-origin-core", __runOrderOriginTests(), 40);
   assertRan("order-board-split-core", __runOrderBoardSplitTests(), 43);
+  // SLICE L-40. Floor 88, from a measured 94. The owner asked for the Leafly
+  // panel to "look and behave identically" to ours; this core is where that
+  // behaviour is written down, so a drop means a behaviour stopped being proven.
+  assertRan("order-panels-core", __runOrdersPanelTests(), 88);
 
   // SLICE L-10 -- the Leafly bridge. Decides, for each stage of a Leafly
   // order's life, whether the PA sounds, whether paper comes out of the

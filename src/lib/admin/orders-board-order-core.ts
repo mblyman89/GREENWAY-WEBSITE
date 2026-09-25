@@ -10,37 +10,29 @@
  *    combined order history table with origin labels."
  *
  * ===========================================================================
- * PART ONE — THE TENSION, STATED HONESTLY
+ * PART ONE — THE SECTION ORDER (L-22, REVISED BY L-40)
  * ===========================================================================
- * Slice L-6 put the Leafly board ABOVE Greenway's own orders, and wrote down
- * why, in the page itself:
+ * L-6 put the Leafly board ABOVE Greenway's own orders because Leafly
+ * auto-cancels anything not acknowledged within fifteen minutes. L-22 made
+ * that conditional: the owner's order (ours first, Leafly below) normally,
+ * with Leafly promoted — and a gold banner explaining why — only while an
+ * order sat unacknowledged. That rule was `decideBoardLayout()`.
  *
- *   "A Leafly order is the only order in the building with a hard external
- *    deadline — Leafly auto-cancels anything not acknowledged within fifteen
- *    minutes — so it is the first thing on this page that can cost a real
- *    customer their order."
+ * SLICE L-40 removed it, on the owner's instruction:
  *
- * That reasoning was not wrong. But it treated the WORST case as the ONLY
- * case, and the owner has now worked the screen for real and found it wrong
- * in the ordinary case: nearly every order is a Greenway order, so the thing
- * he needs nine times out of ten sits below a panel that is usually empty. A
- * dashboard optimised entirely for the emergency is a dashboard that is
- * slightly wrong all day, every day.
+ *   "our system auto acknowledges leafly orders, so there is no 15 minute
+ *    limit we need to obey, the system handles that part for us. so I want
+ *    to remove the leafly section moving above our section. I just want the
+ *    two panels/ sections to be identical and behave identically."
  *
- * Both are right about different moments, so this core does not choose once:
+ * The order is now a fact, not a decision: `BOARD_SECTIONS`, Greenway then
+ * Leafly, always. The deadline the promotion protected is covered where it
+ * belongs — auto-acknowledge runs the moment an order arrives, and if it ever
+ * visibly fails the Leafly ROW says "Not accepted automatically" with its
+ * clock (see order-panels-core / LeaflyOrdersPanel). An alarm that lives with
+ * the order cannot be missed by someone who scrolled past a banner.
  *
- *   - NORMALLY the owner's order applies. Greenway orders first, Leafly
- *     below. This is the layout he asked for and it is correct whenever
- *     nothing is on fire.
- *
- *   - When a Leafly order is UNACKNOWLEDGED, the deadline is real and
- *     running, and the Leafly board is promoted above the Greenway cards for
- *     as long as that stays true. Not because of a setting; because of a
- *     fact about the world.
- *
- * The promotion is visible and explained on screen, never silent. A layout
- * that rearranges itself without saying why is a layout nobody trusts, and
- * an unexplained rearrangement is indistinguishable from a bug.
+ * PART TWO (unchanged) — who gets an origin label, and the origin-mix line.
  *
  * ===========================================================================
  * WHY THIS IS A CORE AND NOT AN `if` IN THE PAGE
@@ -60,72 +52,15 @@ import {
 } from "@/lib/orders/order-origin-core";
 
 /* ------------------------------------------------------------------------ *
- * 1. Section order
+ * 1. Section order (fixed since L-40)
  * ------------------------------------------------------------------------ */
 
+/**
+ * Top to bottom, always. Each panel exactly once. (L-40: fixed; was the
+ * output of L-22's decideBoardLayout, which could put Leafly first.)
+ */
 export const BOARD_SECTIONS = ["greenway", "leafly"] as const;
 export type BoardSection = (typeof BOARD_SECTIONS)[number];
-
-export type BoardOrderInput = {
-  /**
-   * Leafly orders that have arrived and NOT been acknowledged. Each one has a
-   * 15-minute auto-cancel clock running against it.
-   *
-   * Three-valued on purpose. `null` means "we could not count" and is NOT the
-   * same as zero — see `decideBoardLayout`.
-   */
-  leaflyPendingAck: number | null;
-};
-
-export type BoardLayout = {
-  /** Top to bottom. Always contains every section exactly once. */
-  sections: readonly BoardSection[];
-  /**
-   * True when the Leafly board has been promoted ABOVE the owner's requested
-   * order because a deadline is running.
-   */
-  leaflyPromoted: boolean;
-  /**
-   * One sentence explaining a promotion, or "" when the layout is the
-   * ordinary one. Never null, so a caller cannot render "null" by accident
-   * and no call site needs its own empty check.
-   */
-  reason: string;
-};
-
-/**
- * Decide the section order.
- *
- * ── WHY A FAILED COUNT IS NOT ZERO ───────────────────────────────────────
- * `countLeaflyOrdersAwaitingAck()` returns `number | null`, where null means
- * the query failed. Reading that null as zero would be this core promising
- * "nothing is waiting" on the strength of a question it never got an answer
- * to. It is not entitled to make that promise.
- *
- * So an unknown count leaves the layout in the owner's requested order and
- * says nothing. That is the right way to be wrong here: inventing an
- * emergency trains the shop to ignore the promotion, which costs us the
- * promotion that mattered. The uncertainty is not swallowed — the Leafly
- * board reports its own load failures in its own `problem` line, which is
- * where a reader already looks for them. Two components reporting one fault
- * is how a screen starts contradicting itself.
- */
-export function decideBoardLayout(input: BoardOrderInput): BoardLayout {
-  const pending = input.leaflyPendingAck;
-
-  if (typeof pending === "number" && Number.isFinite(pending) && pending > 0) {
-    return {
-      sections: ["leafly", "greenway"],
-      leaflyPromoted: true,
-      reason:
-        pending === 1
-          ? "1 Leafly order is waiting to be acknowledged — Leafly cancels it automatically after 15 minutes, so it is shown first."
-          : `${pending} Leafly orders are waiting to be acknowledged — Leafly cancels them automatically after 15 minutes, so they are shown first.`,
-    };
-  }
-
-  return { sections: ["greenway", "leafly"], leaflyPromoted: false, reason: "" };
-}
 
 /* ------------------------------------------------------------------------ *
  * 2. Origin labels in the combined history
@@ -285,60 +220,11 @@ export function __runBoardOrderTests(): { passed: number; failed: number } {
     }
   };
 
-  // ── The owner's requested order is the NORMAL case ──────────────────────
-  const calm = decideBoardLayout({ leaflyPendingAck: 0 });
-  ok("our orders come first, as asked", calm.sections[0] === "greenway");
-  ok("Leafly sits below", calm.sections[1] === "leafly");
-  ok("nothing is promoted", calm.leaflyPromoted === false);
-  ok("and nothing is explained, because nothing changed", calm.reason === "");
-  ok("both sections are always present", calm.sections.length === 2);
-
-  // ── A running deadline outranks the layout ──────────────────────────────
-  const urgent = decideBoardLayout({ leaflyPendingAck: 1 });
-  ok("an unacknowledged Leafly order is promoted", urgent.sections[0] === "leafly");
-  ok("greenway is still shown, just below", urgent.sections[1] === "greenway");
-  ok("greenway is never dropped when leafly is promoted", urgent.sections.includes("greenway"));
-  ok("the promotion is flagged", urgent.leaflyPromoted === true);
-  ok("the promotion is explained", urgent.reason.length > 20);
-  ok("the explanation names the clock", urgent.reason.includes("15 minutes"));
-  ok("the explanation names Leafly", urgent.reason.includes("Leafly"));
-  ok("one order reads as singular", urgent.reason.startsWith("1 Leafly order is"));
-  ok("the singular sentence is not plural anywhere", !urgent.reason.includes("orders are"));
-
-  const many = decideBoardLayout({ leaflyPendingAck: 3 });
-  ok("three orders read as plural", many.reason.startsWith("3 Leafly orders are"));
-  ok("the plural sentence carries the count", many.reason.includes("3 "));
-  ok("a large count still promotes", decideBoardLayout({ leaflyPendingAck: 99 }).leaflyPromoted);
-
-  // ── A failed count must not be read as "nothing waiting" ────────────────
-  const unknown = decideBoardLayout({ leaflyPendingAck: null });
-  ok("an unknown count does not invent an emergency", unknown.leaflyPromoted === false);
-  ok("an unknown count keeps the requested order", unknown.sections[0] === "greenway");
-  ok("an unknown count stays silent", unknown.reason === "");
-
-  // Nonsense must not promote either: a negative or NaN count is a bug
-  // upstream, and a layout that rearranges on a bug is a layout that teaches
-  // the shop to distrust the rearrangement.
-  ok("a negative count does not promote", decideBoardLayout({ leaflyPendingAck: -1 }).leaflyPromoted === false);
-  ok("NaN does not promote", decideBoardLayout({ leaflyPendingAck: Number.NaN }).leaflyPromoted === false);
-  ok(
-    "Infinity does not promote",
-    decideBoardLayout({ leaflyPendingAck: Number.POSITIVE_INFINITY }).leaflyPromoted === false,
-  );
-
-  const layouts = [calm, urgent, many, unknown];
-  ok(
-    "every layout contains each section exactly once",
-    layouts.every((l) => new Set(l.sections).size === 2 && l.sections.length === 2),
-  );
-  ok(
-    "a promoted layout always explains itself, and an unpromoted one never does",
-    layouts.every((l) => (l.leaflyPromoted ? l.reason.length > 0 : l.reason === "")),
-  );
-  ok(
-    "promotion happens if and only if leafly is on top",
-    layouts.every((l) => l.leaflyPromoted === (l.sections[0] === "leafly")),
-  );
+  // ── The section order is fixed (L-40) ─────────────────────────────────────
+  ok("our orders come first, as asked", BOARD_SECTIONS[0] === "greenway");
+  ok("Leafly sits below", BOARD_SECTIONS[1] === "leafly");
+  ok("both sections are always present", BOARD_SECTIONS.length === 2);
+  ok("each section exactly once", new Set<string>(BOARD_SECTIONS).size === BOARD_SECTIONS.length);
 
   // ── Label everything, or label nothing. Never half. ─────────────────────
   const WEBSITE_ONLY = ["greenway", "greenway", "greenway"];

@@ -1,29 +1,20 @@
-import { Fragment } from "react";
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
-import { StatCard } from "@/components/admin/StatCard";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui/Button";
-import { Input, Select } from "@/components/admin/ui/Field";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { listOrdersPaged, getOrderStatusCounts, registerPickedUpOrderIds, listOrdersByIds } from "@/lib/orders/orders-store";
 import { BOARD_EXCLUDED_ORIGINS } from "@/lib/orders/order-board-split-core";
 import { REGISTER_PICKED_UP_LABEL } from "@/lib/pos/pickup-progress-core";
-import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
-import {
-  ORDER_SORTS,
-  endOfDayIso,
-  parseDollarsToMinor,
-  parseIsoDate,
-  resolveSort,
-} from "@/lib/admin/list-filter-core";
-import { ListPager } from "@/components/admin/ux/ListPager";
-import {
-  ORDER_STATUS_LABELS,
-  type OrderStatus,
-} from "@/lib/orders/types";
+import { listWindow, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
+// SLICE L-40 — both order panels (Greenway and Leafly) render through ONE
+// shell and read their views through ONE pure core, so they look and behave
+// identically by construction. See order-panels-core.ts.
+import { OrdersPanel } from "@/components/admin/orders/OrdersPanel";
+import { OrderStatusPill } from "@/components/admin/orders/OrderStatusPill";
+import { parseOrdersPanelQuery } from "@/lib/orders/order-panels-core";
 import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 import { OrderOriginBadge } from "@/components/admin/orders/OrderOriginBadge";
 import { listPoolNamesStatus } from "@/lib/orders/order-name-pool-store";
@@ -36,12 +27,19 @@ import { NewOrderAlert } from "@/components/admin/orders/NewOrderAlert";
 import { AnnouncerPanel } from "@/components/admin/orders/AnnouncerPanel";
 import { withBackParam } from "@/lib/admin/back-link-core";
 // SLICE L-6 — Leafly orders live on THIS page, with Greenway's own orders,
-// because the owner asked for exactly that and because a Leafly order carries a
-// 15-minute auto-cancel deadline that must not sit behind a tab.
+// because the owner asked for exactly that.
+// SLICE L-40 — the separate "how many await acknowledgement" count is no
+// longer read here: its only job was deciding whether to move the Leafly
+// panel above ours, and the owner asked for that move to go (orders are
+// accepted automatically). One fewer database read per render.
 import {
   loadLeaflyOrderBoard,
-  countLeaflyOrdersAwaitingAck,
+  LEAFLY_BOARD_LIMIT,
 } from "@/lib/leafly/order-board-server";
+import {
+  isAutoAcknowledgeEnabled,
+  LEAFLY_AUTO_ACK_ENV_VAR,
+} from "@/lib/leafly/auto-ack-core";
 // SLICE L-14 — register cancellation interrupts, shown per order on the
 // board so the back office can see which tills are blocked and how each
 // cancellation was answered. Non-throwing and degrade-safe by construction.
@@ -50,13 +48,6 @@ import {
   type BoardInterrupts,
 } from "@/lib/leafly/register-claim-server";
 import { LeaflyOrdersPanel } from "@/components/admin/orders/LeaflyOrdersPanel";
-// SLICE L-28 — validate the Leafly board's view params before they reach the
-// panel, so a hand-edited URL cannot produce an empty board.
-import {
-  parseBoardFilter,
-  parseBoardSearch,
-  parseBoardSort,
-} from "@/lib/leafly/board-view-core";
 // SLICE M-2 — the owner placed a real Leafly order and got four silences: no
 // row, no receipt, no sound, and no Leafly section on this page. The last of
 // those was the orders panel correctly hiding itself while setup was
@@ -87,11 +78,10 @@ import {
   emptyAnnouncerPanelData,
   getAnnouncerPanelDataCached,
 } from "@/lib/announcer/announcer-admin-store";
-// SLICE L-22 — the owner's requested board order, and the rule that bends it
-// when a Leafly auto-cancel clock is actually running. Also owns the "label
-// everything or label nothing" rule for the combined history.
+// SLICE L-22 — the "label everything or label nothing" rule for the list.
+// (L-22's board-order rule, which moved Leafly above our orders, was removed
+// by L-40 at the owner's request: Greenway first, Leafly second, always.)
 import {
-  decideBoardLayout,
   describeOriginMix,
   shouldLabelWebsiteRows,
   tallyOrigins,
@@ -118,7 +108,7 @@ export const dynamic = "force-dynamic";
  * board is slow". That is a real part of the defect the owner reported, and
  * it is why bounding the outbound request twice did not change what he saw.
  *
- * This render is expensive and honest about it: an eight-way `Promise.all`
+ * This render is expensive and honest about it: a seven-way `Promise.all`
  * plus follow-up reads. Declaring the ceiling explicitly — rather than
  * silently inheriting the platform maximum — means a pathological render ends
  * in a visible error page instead of a killed function that renders nothing
@@ -126,32 +116,8 @@ export const dynamic = "force-dynamic";
  */
 export const maxDuration = 300;
 
-const STATUS_STYLES: Record<OrderStatus, string> = {
-  new: "border-[var(--admin-orange)]/50 bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]",
-  acknowledged:
-    "border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]",
-  preparing:
-    "border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]",
-  ready:
-    "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/20 text-[var(--admin-accent)]",
-  completed: "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)]",
-  cancelled:
-    "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]",
-  no_show:
-    "border-[var(--admin-danger)]/30 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]",
-};
-
-const FILTERS: { key: string; label: string }[] = [
-  { key: "active", label: "Active" },
-  { key: "new", label: "New" },
-  { key: "acknowledged", label: "Acknowledged" },
-  { key: "preparing", label: "Preparing" },
-  { key: "ready", label: "Ready" },
-  { key: "completed", label: "Completed" },
-  { key: "cancelled", label: "Cancelled" },
-  { key: "no_show", label: "No-show" },
-  { key: "all", label: "All" },
-];
+// SLICE L-40 — the status pill colours moved to OrderStatusPill and the tab
+// list to ORDERS_PANEL_TABS (order-panels-core), shared by both panels.
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -193,30 +159,27 @@ export default async function OrdersAdminPage({
     leaflyErr?: string;
     leaflyCode?: string;
     leaflyFix?: string;
-    // SLICE L-28 — the Leafly board's own view controls. Prefixed `l` so they
-    // cannot collide with the Greenway order list's existing `q`/`sort`
-    // params, which sit on the same page and would otherwise be driven by the
-    // same dropdown. Anything unrecognised resolves to the default view (open
-    // orders, most urgent first) rather than to an empty board — a stale link
-    // must never look like "no orders".
-    lfilter?: string;
-    lsort?: string;
+    // SLICE L-40 — the Leafly panel's view. The SAME eight knobs as ours
+    // (status/q/from/to/min/max/sort/page), prefixed `l` so the two panels
+    // on this page cannot drive each other. Garbage in any of them means
+    // "that filter off", never an empty panel. (Replaces L-28's lfilter.)
+    lstatus?: string;
     lq?: string;
+    lfrom?: string;
+    lto?: string;
+    lmin?: string;
+    lmax?: string;
+    lsort?: string;
+    lpage?: string;
   }>;
 }) {
   await requirePermission("orders.view");
   const sp = await searchParams;
-  const status = (sp.status as OrderStatus | "active" | "all" | undefined) ?? "active";
-  const search = sp.q ?? "";
-  const rawPage = parsePageParam(sp.page);
-  // SLICE 26: every filter knob validated by the pure grammar — garbage
-  // params silently mean "filter off", never an exception.
-  const sort = resolveSort(sp.sort, ORDER_SORTS);
-  const placedFrom = parseIsoDate(sp.from);
-  const placedToDate = parseIsoDate(sp.to);
-  const placedTo = placedToDate ? endOfDayIso(placedToDate) : undefined;
-  const totalMin = parseDollarsToMinor(sp.min);
-  const totalMax = parseDollarsToMinor(sp.max);
+  // SLICE 26 grammar, now owned by order-panels-core (L-40) and used by BOTH
+  // panels: every knob validated, garbage means "filter off", never an
+  // exception. A garbage `status` means Active (it used to reach the query).
+  const gq = parseOrdersPanelQuery(sp, "greenway");
+  const lq = parseOrdersPanelQuery(sp, "leafly");
   // GW-029: carry the current filters/search into detail links so BackLink
   // can restore this exact view.
   const detailHref = (id: string) => withBackParam(`/admin/orders/${id}`, sp);
@@ -243,27 +206,26 @@ export default async function OrdersAdminPage({
   // requested page is past the end (stale link), clamp and refetch the real
   // last page so the screen is never empty while rows exist.
   const queryFilter = {
-    status,
-    search,
-    sort: sort.columns,
-    placedFrom,
-    placedTo,
-    totalMin,
-    totalMax,
+    status: gq.status,
+    search: gq.search,
+    sort: gq.sortColumns,
+    placedFrom: gq.placedFrom,
+    placedTo: gq.placedTo,
+    totalMin: gq.totalMin,
+    totalMax: gq.totalMax,
     // SLICE L-38 — Leafly (every marketplace origin) has its own panel below,
     // so it is left out of this table in EVERY view: open, closed, filtered
     // and searched. Carried in queryFilter so both reads (first page and the
     // clamped refetch) exclude it — one place, no drift.
     excludeOrigins: BOARD_EXCLUDED_ORIGINS,
   };
-  const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
+  const firstWin = listWindow(Number.MAX_SAFE_INTEGER, gq.page, DEFAULT_PAGE_SIZE);
   const [
     firstPage,
     counts,
     poolStatus,
     printerSettings,
     leaflyBoard,
-    leaflyPendingAck,
     leaflySetup,
     announcerData,
   ] = await Promise.all([
@@ -280,8 +242,7 @@ export default async function OrdersAdminPage({
     // WHY ONLY THE SECONDARY ONES: the first two entries above ARE this page.
     // An orders board with no orders and no counts is not a degraded board,
     // it is a lie — it would show "no orders" to a shop that has orders,
-    // which on a screen with a fifteen-minute acknowledgement clock is worse
-    // than an error. Those two are allowed to fail loudly. Everything below
+    // which is worse than an error. Those two are allowed to fail loudly. Everything below
     // is a side panel whose absence the page already renders gracefully.
     //
     // WHY AT ALL, GIVEN THE FLOOR: `db-floor.ts` caps each PostgREST request
@@ -307,28 +268,21 @@ export default async function OrdersAdminPage({
         orderIntegrationKeyPresent: false,
         // Not an empty string. An empty `problem` means "the read succeeded
         // and there is genuinely nothing here", and the panel renders a
-        // calm "no Leafly orders yet". Saying that when we simply stopped
-        // waiting would hide a live order from a shop that has fifteen
-        // minutes to acknowledge it — the single most expensive wrong
-        // sentence this page can produce.
-        // Worded WITHOUT the promotion banner's sentence on purpose. The
-        // L-22 rule is that the "waiting to be acknowledged" phrasing and the
-        // deadline belong to `orders-board-order-core`, which owns the
-        // singular/plural and the minutes and asserts both; a second copy
-        // here would drift from the rule the moment the core changed.
-        // Enforced by tests/compliance/orders-board-order.test.ts.
+        // calm empty state. Saying that when we simply stopped waiting
+        // would hide a live order behind a confident "nothing here" —
+        // the most expensive wrong sentence this page can produce.
+        // (L-40: no deadline talk. Orders are accepted automatically; the
+        // honest risk is an order nobody has SEEN, not a clock.)
         problem:
           "Leafly orders took too long to load, so this panel is showing nothing. " +
-          "Refresh to try again — anything live is still on the clock.",
+          "Refresh to try again — no order has been lost, it just is not shown yet.",
       },
       "leafly board",
     ),
-    // `null` is this reader's documented "couldn't check" value — it returns
-    // null rather than 0 precisely so a failed read is never mistaken for
-    // "nothing needs acknowledging". Reusing it here keeps the timeout
-    // indistinguishable from any other failure, which is correct: the panel
-    // already knows how to say "couldn't check".
-    withRenderBudget(countLeaflyOrdersAwaitingAck(), null, "leafly pending-ack count"),
+    // SLICE L-40 — the eighth entry, countLeaflyOrdersAwaitingAck(), is gone.
+    // It existed only to decide whether the Leafly panel jumped above ours;
+    // the owner removed that jump. The panel counts its own statuses from the
+    // board it already loaded, so nothing is lost.
     // SLICE M-2: why a placed Leafly order produced no record, no receipt and
     // no sound. Joins the same Promise.all for the same reason as the two
     // above, and is non-throwing by construction — a failure degrades to
@@ -410,8 +364,8 @@ export default async function OrdersAdminPage({
         )
       : new Map();
   let { rows: orders, total } = firstPage;
-  const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
-  if (win.page !== rawPage && total > 0) {
+  const win = listWindow(total, gq.page, DEFAULT_PAGE_SIZE);
+  if (win.page !== gq.page && total > 0) {
     ({ rows: orders, total } = await listOrdersPaged({
       ...queryFilter,
       from: win.from,
@@ -421,38 +375,20 @@ export default async function OrdersAdminPage({
   // SLICE L-37 — orders the customer collected at the register read "Picked
   // up", not "Cancelled" (their status stays non-revenue: the register sale
   // is the sale of record). Only closed-as-cancelled rows need the lookup.
-  const pickedUpAtRegister = await registerPickedUpOrderIds(
-    orders.filter((o) => o.status === "cancelled").map((o) => o.id),
-  );
-  /** Current filter state as URL params (page excluded — added per link). */
-  const filterParams = () => {
-    const params = new URLSearchParams();
-    if (status !== "active") params.set("status", status);
-    if (search) params.set("q", search);
-    if (sort.key !== ORDER_SORTS[0].key) params.set("sort", sort.key);
-    if (placedFrom) params.set("from", placedFrom);
-    if (placedToDate) params.set("to", placedToDate);
-    if (totalMin != null && sp.min) params.set("min", sp.min);
-    if (totalMax != null && sp.max) params.set("max", sp.max);
-    return params;
-  };
-  const pageHref = (p: number) => {
-    const params = filterParams();
-    if (p > 1) params.set("page", String(p));
-    const qs = params.toString();
-    return `/admin/orders${qs ? `?${qs}` : ""}`;
-  };
-  /** Status-chip links carry every OTHER filter and reset to page 1. */
-  const statusHref = (key: string) => {
-    const params = filterParams();
-    params.delete("status");
-    if (key !== "active") params.set("status", key);
-    const qs = params.toString();
-    return `/admin/orders${qs ? `?${qs}` : ""}`;
-  };
-  const hasExtraFilters = Boolean(
-    placedFrom || placedToDate || totalMin != null || totalMax != null || sort.key !== ORDER_SORTS[0].key,
-  );
+  // SLICE L-40 — the Leafly panel now shows OUR status words, so its
+  // cancelled-but-collected copies need the same answer. ONE lookup covers
+  // both panels (no extra round trip), so the two can never disagree about
+  // what "Picked up (register)" means.
+  const pickedUpAtRegister = await registerPickedUpOrderIds([
+    ...orders.filter((o) => o.status === "cancelled").map((o) => o.id),
+    ...[...leaflyLinkedOrders.values()]
+      .filter((o) => o.status === "cancelled")
+      .map((o) => o.id),
+  ]);
+  // SLICE L-40 — the link/URL helpers that lived here (filterParams,
+  // pageHref, statusHref, hasExtraFilters) moved into order-panels-core as
+  // panelHref / panelHasExtraFilters, shared with the Leafly panel and
+  // extended to keep the OTHER panel's view when one panel's link is used.
 
   const activeCount = counts.new + counts.acknowledged + counts.preparing + counts.ready;
 
@@ -497,25 +433,21 @@ export default async function OrdersAdminPage({
   const orderBoardSignals = urgentSignals(tabInput);
   const setupNeedsAttention = setupTabNeedsAttention(tabInput);
 
-  // ── SLICE L-22 — WHAT GOES FIRST, AND WHO GETS A LABEL ────────────────────
+  // ── SLICE L-22 / L-40 — WHO GETS A LABEL, AND WHAT GOES FIRST ─────────────
   //
-  // The owner worked this screen for real and asked for his own orders first,
-  // with Leafly below and a combined history carrying origin labels. Both of
-  // those reverse a decision an earlier slice made for a stated reason, so
-  // neither is simply overwritten here: the pure core makes each one
-  // CONDITIONAL on a fact, which is how the owner gets the layout he asked for
-  // without losing what the earlier reasoning was buying.
-  //
-  //   - L-6 put Leafly on top because of the 15-minute auto-cancel clock. That
-  //     clock is real, but it is only running when an order is actually
-  //     unacknowledged. decideBoardLayout() keeps the owner's order the normal
-  //     case and promotes Leafly only while the deadline is live — visibly,
-  //     with the reason printed on screen.
   //   - L-12 hid the "Website" badge because forty identical badges train the
   //     eye to skip the column. Still true for a shop that never sees a Leafly
   //     order; wrong for one that does, where an unlabelled row is identified
   //     only by the ABSENCE of a badge. shouldLabelWebsiteRows() decides.
-  const boardLayout = decideBoardLayout({ leaflyPendingAck });
+  //   - L-6 put Leafly on top because of Leafly's 15-minute auto-cancel;
+  //     L-22 made that conditional (promote only while an order was
+  //     unacknowledged). L-40 removes it entirely, at the owner's request:
+  //     "our system auto acknowledges leafly orders, so there is no 15
+  //     minute limit we need to obey … I want to remove the leafly section
+  //     moving above our section." Greenway first, Leafly second, always.
+  //     What the promotion protected is still covered: auto-accept runs the
+  //     moment the order arrives, and if it ever visibly fails the Leafly
+  //     row itself shows "Not accepted automatically" with the clock.
   // Shop-level and therefore stable across pages and filters. Deliberately NOT
   // derived from the rows on screen: page 1 could be mixed and page 2 all
   // website, and a table that changes its labelling convention as you page
@@ -545,36 +477,23 @@ export default async function OrdersAdminPage({
     ORDER_STAFF_EMAILS: process.env.ORDER_STAFF_EMAILS,
   });
 
-  // ── SLICE L-22 — THE TWO BOARDS, DEFINED ONCE EACH ──────────────────────
+  // ── SLICE L-22 / L-40 — THE TWO PANELS, DEFINED ONCE EACH ─────────────────
   //
-  // Each board is built into exactly ONE const and then rendered from the
-  // order the pure core returned. The alternative — writing each board twice
-  // under opposite conditions — is how a page ends up showing the same Leafly
-  // order twice, with two Acknowledge buttons, one of which is stale. There is
-  // one copy of each, so that cannot happen, and a test asserts the count.
+  // Each panel is built into exactly ONE const and rendered once, in a fixed
+  // order. One copy of each means the same Leafly order can never appear
+  // twice with two buttons, one of them stale; a test asserts the count.
   const leaflySection = (
     <>
-    {/* SLICE L-6 — LEAFLY ORDERS.  (position revised by L-22, see below)
+    {/* SLICE L-6 — LEAFLY ORDERS.  (L-40: position fixed, below ours)
 
-        L-6 pinned this block directly under the status summary and ABOVE
-        Greenway's own order cards, and said why: a Leafly order is the only
-        order in the building with a hard external deadline — Leafly
-        auto-cancels anything not acknowledged within fifteen minutes — so it
-        was the first thing on the page that could cost a real customer their
-        order.
-
-        That is still the reason the block can be promoted, but it is no
-        longer the reason it is WHERE it is. The owner worked this screen for
-        real and found the absolute version wrong in the ordinary case: nearly
-        every order is a Greenway order, so the emergency layout was slightly
-        wrong all day in exchange for being right occasionally. L-22 therefore
-        hands the position to decideBoardLayout(), which keeps the owner's
-        order normally and promotes this block only while an acknowledgement
-        is actually outstanding.
-
-        This comment is kept rather than deleted because the deadline reasoning
-        is still load-bearing — anyone who removes the promotion needs to know
-        what it was protecting.
+        L-6 pinned this block ABOVE Greenway's own orders because Leafly
+        auto-cancels anything not acknowledged within fifteen minutes; L-22
+        made that promotion conditional. L-40 removed it: the shop accepts
+        Leafly orders automatically the moment they arrive, so there is no
+        clock for a person to race, and the owner asked for the two panels
+        to sit still and look identical. If automatic acceptance ever
+        visibly fails, the row itself says so ("Not accepted automatically")
+        — the alarm lives with the order, not in the page layout.
 
         It renders NOTHING when Leafly order handling has never been set up
         and nothing has arrived, so the page is unchanged for a shop not
@@ -615,12 +534,16 @@ export default async function OrdersAdminPage({
 
     <LeaflyOrdersPanel
       board={leaflyBoard}
-      pendingAckCount={leaflyPendingAck}
-      // SLICE L-28 — the chosen view, validated by the pure core. Garbage in
-      // the URL becomes the default view, never an empty screen.
-      filter={parseBoardFilter(sp.lfilter)}
-      sort={parseBoardSort(sp.lsort)}
-      search={parseBoardSearch(sp.lq)}
+      // SLICE L-40 — the Leafly view, parsed by the SAME grammar as ours
+      // (l-prefixed params). Garbage becomes the default view.
+      query={lq}
+      // Says truthfully whether orders are accepted automatically: it is a
+      // switch, and if it is turned off the panel must not keep claiming it.
+      autoAcknowledge={isAutoAcknowledgeEnabled(process.env[LEAFLY_AUTO_ACK_ENV_VAR])}
+      // The board read is capped; when it is full the panel says so rather
+      // than presenting the most recent N as everything.
+      loadCap={LEAFLY_BOARD_LIMIT}
+      pickedUpAtRegister={pickedUpAtRegister}
       interrupts={leaflyInterrupts}
       // SLICE L-38 — linked Greenway copies (row details + search) and the
       // current view, carried to each Details page as `back`.
@@ -644,184 +567,81 @@ export default async function OrdersAdminPage({
   );
 
   const greenwaySection = (
-    <>
-    {/* Filters + search (SLICE 26: full control — status, search, date
-        range, total range, and sort, all URL-driven and combinable). */}
-    <form method="get" className="mt-6 space-y-3">
-      <div className="flex flex-wrap gap-1.5">
-        {FILTERS.map((f) => (
-          <Link
-            key={f.key}
-            href={statusHref(f.key)}
-            className={`admin-focus rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
-              status === f.key
-                ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
-                : "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
-            }`}
-          >
-            {f.label}
-          </Link>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-end gap-3">
-        <input type="hidden" name="status" value={status} />
-        <div className="min-w-52 flex-1">
-          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-            Search
-          </label>
-          <Input name="q" defaultValue={search} placeholder="Name, phone, order #" />
-        </div>
-        <div>
-          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-            Placed from
-          </label>
-          <Input type="date" name="from" defaultValue={placedFrom ?? ""} className="w-40" />
-        </div>
-        <div>
-          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-            Placed to
-          </label>
-          <Input type="date" name="to" defaultValue={placedToDate ?? ""} className="w-40" />
-        </div>
-        <div>
-          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-            Total min $
-          </label>
-          <Input name="min" defaultValue={sp.min ?? ""} placeholder="0.00" inputMode="decimal" className="w-24" />
-        </div>
-        <div>
-          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-            Total max $
-          </label>
-          <Input name="max" defaultValue={sp.max ?? ""} placeholder="0.00" inputMode="decimal" className="w-24" />
-        </div>
-        <div>
-          <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-            Sort by
-          </label>
-          <Select name="sort" defaultValue={sort.key} aria-label="Sort orders">
-            {ORDER_SORTS.map((o) => (
-              <option key={o.key} value={o.key}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <Button type="submit" variant="neutral">
-          Apply
-        </Button>
-        {(search || hasExtraFilters) && (
-          <Link
-            href={status !== "active" ? `/admin/orders?status=${status}` : "/admin/orders"}
-            className="pb-2 text-xs text-[var(--admin-text-faint)] underline-offset-2 hover:text-[var(--admin-text)] hover:underline"
-          >
-            Clear
-          </Link>
-        )}
-      </div>
-    </form>
-
-    {/* GW-033: exact count + pager — a clipped list is never silent. */}
-    <div className="mt-4">
-      <ListPager window={win} total={total} noun="order" makeHref={pageHref} />
-    </div>
-
-    {/* SLICE L-22 — WHAT THIS COMBINED LIST IS MADE OF.
-
-        The owner asked for a combined history with origin labels. The list
-        was ALREADY combined — listOrdersPaged selects from `orders` with no
-        origin filter, and Leafly orders are written into that same table —
-        so what was missing was the ability to SEE the mix without reading
-        forty badges one at a time.
-
-        The sentence itself comes from the core, which owns the one claim
-        here that is easy to get wrong: these are the rows on THIS page,
-        after the current filters, not the shop's totals. It renders nothing
-        at all when every row on the page came from the same place, because
-        then the count is just the row count again and the pager above
-        already showed that. */}
-    {originMix ? (
-      <p className="mt-2 text-xs font-semibold text-[var(--admin-text-muted)]">
-        {originMix}
-      </p>
-    ) : null}
-
-    {/* Order cards */}
-    {orders.length === 0 ? (
-      <div className="mt-8">
-        <EmptyState
-          icon="🧾"
-          title="No orders match this view"
-          description="When customers place pickup orders online, they'll show up here automatically — newest first."
-        />
-      </div>
-    ) : (
-      <div className="mt-5 grid gap-3">
-        {orders.map((order) => {
-          // SLICE L-38 — no step button on the dashboard any more. The owner:
-          // "Instead of progressing through the steps in the dashboard, it
-          // should be done in the details page only." The row is the shared
-          // OrderBoardRow shell, so the Leafly rows below look identical.
-          return (
-            <OrderBoardRow
-              key={order.id}
-              href={detailHref(order.id)}
-              title={resolveOrderDisplay(order.display_name, order.order_number)}
-              badges={
-                <>
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${
-                      pickedUpAtRegister.has(order.id) ? STATUS_STYLES.completed : STATUS_STYLES[order.status]
-                    }`}
-                    title={pickedUpAtRegister.has(order.id) ? "Collected at the register — the register sale holds the payment and the books." : undefined}
-                  >
-                    {pickedUpAtRegister.has(order.id) ? `${REGISTER_PICKED_UP_LABEL} (register)` : ORDER_STATUS_LABELS[order.status]}
-                  </span>
-                  {/* SLICE L-12 hid the "Website" badge unconditionally,
-                      because badging all forty rows trains the eye to
-                      skip the column and takes the Leafly badge with
-                      it. SLICE L-22 keeps that for a shop that has
-                      never had a Leafly order, and drops it for one
-                      that has: in a genuinely mixed list, an unbadged
-                      row is identified only by the ABSENCE of a badge,
-                      which is indistinguishable from a badge that
-                      failed to render. Label everything, or label
-                      nothing — never half. The core decides, once, for
-                      the whole list. (L-38: Leafly rows no longer land
-                      here, but a register-origin row still can.) */}
-                  <OrderOriginBadge origin={order.origin} hideWebsite={!labelWebsiteRows} />
-                </>
-              }
-              reference={
-                order.display_name && order.display_name.trim() ? `#${order.order_number}` : null
-              }
-              customer={
-                <>
-                  {order.customer_first_name}
-                  {order.customer_last_name ? ` ${order.customer_last_name}` : ""}
-                  {order.customer_phone ? ` · ${order.customer_phone}` : ""}
-                </>
-              }
-              meta={
-                <>
-                  {order.item_count} item{order.item_count === 1 ? "" : "s"} ·{" "}
-                  {formatMinorCurrency(order.total_minor_units)} · placed {timeAgo(order.placed_at)}
-                </>
-              }
-              footer={<OrderStatusFlow status={order.status} />}
-            />
-          );
-        })}
-      </div>
-    )}
-
-    {/* Bottom pager (long lists — save the scroll back up). */}
-    {win.totalPages > 1 && (
-      <div className="mt-5">
-        <ListPager window={win} total={total} noun="order" makeHref={pageHref} />
-      </div>
-    )}
-    </>
+    // SLICE L-40 — "our orders section should be labeled greenway orders".
+    // Rendered through OrdersPanel, the SAME shell as the Leafly panel below,
+    // so the header, cards, tabs, search / dates / totals / sort, Apply,
+    // Clear, pager and empty state are identical by construction. Only the
+    // rows and the origin-mix line are ours to supply.
+    <OrdersPanel
+      panel="greenway"
+      title="Greenway orders"
+      subtitle="Orders placed on our website. Open one to move it through the steps."
+      icon="🧾"
+      counts={counts}
+      query={gq}
+      searchParams={sp}
+      window={win}
+      total={total}
+      emptyDescription="When customers place pickup orders online, they'll show up here automatically — newest first."
+      summary={
+        /* SLICE L-22 — WHAT THIS LIST IS MADE OF. The sentence comes from
+           the core, which owns the one claim here that is easy to get wrong:
+           these are the rows on THIS page, after the current filters, not
+           the shop's totals. It renders nothing when every row came from the
+           same place. */
+        originMix ? (
+          <p className="mt-2 text-xs font-semibold text-[var(--admin-text-muted)]">
+            {originMix}
+          </p>
+        ) : null
+      }
+    >
+      {orders.map((order) => {
+        // SLICE L-38 — no step button on the dashboard: steps are advanced on
+        // the details page only. The row is the shared OrderBoardRow shell,
+        // and the pill is the shared OrderStatusPill, same as the Leafly rows.
+        const collected = pickedUpAtRegister.has(order.id);
+        return (
+          <OrderBoardRow
+            key={order.id}
+            href={detailHref(order.id)}
+            title={resolveOrderDisplay(order.display_name, order.order_number)}
+            badges={
+              <>
+                <OrderStatusPill
+                  status={order.status}
+                  styleAs={collected ? "completed" : undefined}
+                  label={collected ? `${REGISTER_PICKED_UP_LABEL} (register)` : undefined}
+                  title={collected ? "Collected at the register — the register sale holds the payment and the books." : undefined}
+                />
+                {/* SLICE L-12 / L-22 — label everything, or label nothing,
+                    never half; the core decides once for the whole list.
+                    (L-38: Leafly rows no longer land here, but a
+                    register-origin row still can.) */}
+                <OrderOriginBadge origin={order.origin} hideWebsite={!labelWebsiteRows} />
+              </>
+            }
+            reference={
+              order.display_name && order.display_name.trim() ? `#${order.order_number}` : null
+            }
+            customer={
+              <>
+                {order.customer_first_name}
+                {order.customer_last_name ? ` ${order.customer_last_name}` : ""}
+                {order.customer_phone ? ` · ${order.customer_phone}` : ""}
+              </>
+            }
+            meta={
+              <>
+                {order.item_count} item{order.item_count === 1 ? "" : "s"} ·{" "}
+                {formatMinorCurrency(order.total_minor_units)} · placed {timeAgo(order.placed_at)}
+              </>
+            }
+            footer={<OrderStatusFlow status={order.status} />}
+          />
+        );
+      })}
+    </OrdersPanel>
   );
 
   return (
@@ -846,14 +666,15 @@ export default async function OrdersAdminPage({
               counter. Each order&apos;s status flow shows exactly where it is.
             </p>
             {/* SLICE B. Leafly orders behave differently from website orders in
-                one way that matters enormously: they carry a countdown, and
-                acknowledging one permanently ends our access to the shopper's
-                ID images. That is explained in full in the handbook rather
+                one way that matters: accepting one (which the system now does
+                automatically) permanently ends our access to the
+                shopper's ID images, and some of their buttons cannot be undone. That is explained in full in the handbook rather
                 than compressed into this panel, where it would be either too
                 long to read or too short to be true. */}
             <p>
-              Leafly orders work differently &mdash; they arrive with a deadline, and
-              one of the buttons cannot be undone.{" "}
+              Leafly orders have their own panel below ours and are accepted
+              automatically when they arrive. They work a little differently
+              &mdash; one of their buttons cannot be undone.{" "}
               <Link
                 href="/admin/integrations/leafly/help"
                 className="text-[var(--admin-accent)] underline"
@@ -1021,9 +842,8 @@ export default async function OrdersAdminPage({
               It is shown even when everything is ready, in `compact` form — the
               two optional steps it tracks (speaker, printer) are precisely the
               ones that let an order arrive SILENTLY, and a silent arrival is
-              worse than no arrival: the order is real, the 15-minute
-              auto-cancel clock is running, and nobody in the building has been
-              told. The compact form drops the explanatory paragraph and keeps
+              worse than no arrival: the order is real, the customer is on
+              their way, and nobody in the building has been told. The compact form drops the explanatory paragraph and keeps
               the evidence and the checklist.
 
               SLICE L-21: it sits LAST on this tab, and it is the only panel
@@ -1092,44 +912,15 @@ export default async function OrdersAdminPage({
           </div>
         ) : null}
 
-        {/* Status summary */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="New" value={counts.new} accent="orange" hint="Awaiting acknowledgement" icon="🔔" />
-          <StatCard label="Preparing" value={counts.preparing} accent="green" icon="📦" />
-          <StatCard label="Ready" value={counts.ready} accent="green" hint="Waiting for pickup" icon="✅" />
-          <StatCard label="Active total" value={activeCount} icon="🧾" />
-        </div>
+        {/* SLICE L-40 — THE TWO PANELS, IN A FIXED ORDER.
 
-        {/* ── SLICE L-22 — THE OWNER'S ORDER, AND WHEN IT BENDS ─────────────
-
-            He asked for his own orders first and Leafly below, and that is now
-            the normal case. The one exception is a Leafly order sitting
-            unacknowledged: Leafly cancels it automatically after fifteen
-            minutes, and that clock is a fact about the world rather than a
-            preference this page gets to hold an opinion about.
-
-            When that happens the Leafly board moves to the top AND says so, in
-            the banner below. A layout that rearranges itself silently is
-            indistinguishable from a bug, and teaches the reader to distrust
-            the next rearrangement — including the one that mattered. */}
-        {boardLayout.leaflyPromoted ? (
-          <div
-            className="mt-4 flex items-start gap-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm font-semibold text-[var(--admin-gold)]"
-            role="status"
-          >
-            <span aria-hidden>⏱️</span>
-            {/* The sentence comes from the core, which owns the singular/plural
-                and the mention of the deadline, so the explanation cannot drift
-                away from the rule that caused it. */}
-            <span>{boardLayout.reason}</span>
-          </div>
-        ) : null}
-
-        {boardLayout.sections.map((section) => (
-          <Fragment key={section}>
-            {section === "leafly" ? leaflySection : greenwaySection}
-          </Fragment>
-        ))}
+            Greenway first, Leafly second, always — the owner's layout, with
+            L-22's "promote Leafly while an order is unacknowledged" rule
+            and its banner removed at his request (orders are accepted
+            automatically). The page-level stat cards moved INTO each panel,
+            so every number sits directly above the orders it counts. */}
+        {greenwaySection}
+        {leaflySection}
       </div>
       )}
     </div>

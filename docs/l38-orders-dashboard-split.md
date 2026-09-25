@@ -139,3 +139,10 @@ other order.
   Leafly orders.
 
 **Next:** back to the Leafly integration setup, based on Ben's reply.
+
+---
+
+**Update (L-40):** the dashboard layout described above was refined. Our
+section is now labelled **Greenway orders**, and both sections are boxed
+panels with identical controls. Leafly no longer moves above ours: it is
+always second. See `docs/l40-identical-order-panels.md`.

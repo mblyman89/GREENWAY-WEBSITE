@@ -54,7 +54,6 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 const BOARD_SERVER = "src/lib/leafly/order-board-server.ts";
 const PANEL = "src/components/admin/orders/LeaflyOrdersPanel.tsx";
 const PAGE = "src/app/admin/orders/page.tsx";
-const CORE = "src/lib/leafly/board-view-core.ts";
 
 /**
  * Strip comments so a source assertion matches CODE, not prose.
@@ -176,9 +175,13 @@ describe("L-28: a filter may never silently hide work", () => {
     expect(isLiveBucket("closed")).toBe(false);
   });
 
+  // SLICE L-40 — the panel's controls became the shared ones (status tabs
+  // instead of Show), so the warning is now computed by the L-40 core's
+  // hiddenNeedsPersonWarning() from buildLeaflyPanelView's hiddenNeedsPerson.
+  // The guarantee is unchanged and still pinned: computed AND rendered.
   it("the panel RENDERS the warning — not merely computes it", () => {
-    const src = read(PANEL);
-    expect(src).toMatch(/boardHiddenWarning/);
+    const src = stripComments(read(PANEL));
+    expect(src).toMatch(/hiddenNeedsPersonWarning\(view\.hiddenNeedsPerson\)/);
     expect(src).toMatch(/\{hiddenWarning \?/);
   });
 });
@@ -520,47 +523,58 @@ describe("L-28: empty states are specific", () => {
 // 9. THE UI IS ACTUALLY WIRED UP
 // ============================================================================
 
-describe("L-28: the controls exist and are connected", () => {
-  it("the panel renders a filter, a sort and a search control", () => {
-    const src = read(PANEL);
-    expect(src).toMatch(/name="lfilter"/);
-    expect(src).toMatch(/name="lsort"/);
-    expect(src).toMatch(/name="lq"/);
+// SLICE L-40 — the owner asked for the Leafly panel's search, sort and filters
+// to "look and behave identically" to ours. L-28's own controls (Show / Sort /
+// Find, lfilter) were replaced by the shared panel's (status tabs, Search,
+// Placed from/to, Total min/max, Sort by, Apply, Clear). Each L-28 guarantee
+// below is kept and re-pinned against the new wiring.
+describe("L-28: the controls exist and are connected (L-40 wiring)", () => {
+  const SHELL = "src/components/admin/orders/OrdersPanel.tsx";
+  const PANELS_CORE = "src/lib/orders/order-panels-core.ts";
+
+  it("the panel renders through the shared shell, which has status, sort and search controls", () => {
+    const panel = stripComments(read(PANEL));
+    expect(panel).toMatch(/<OrdersPanel\s+panel="leafly"/);
+    const shell = stripComments(read(SHELL));
+    expect(shell).toMatch(/name=\{names\.q\}/);
+    expect(shell).toMatch(/name=\{names\.sort\}/);
+    expect(shell).toMatch(/ORDERS_PANEL_TABS\.map\(/);
   });
 
   it("the panel renders the FILTERED rows, not the raw board", () => {
     // The mutation that matters: rendering `board.orders` again would restore
     // the old behaviour while leaving every control on screen.
     const src = stripComments(read(PANEL));
-    expect(src).toMatch(/groupLeaflyWorkflow\(view\.rows\)/);
-    expect(src).not.toMatch(/groupLeaflyWorkflow\(board\.orders/);
+    expect(src).toMatch(/view\.rows\.map\(/);
+    expect(src).not.toMatch(/board\.orders\.map\(\(\w+\)\s*=>\s*\(?\s*<LeaflyOrderRow/);
   });
 
   it("the page validates the params before passing them down", () => {
     const src = stripComments(read(PAGE));
-    expect(src).toMatch(/filter=\{parseBoardFilter\(sp\.lfilter\)\}/);
-    expect(src).toMatch(/sort=\{parseBoardSort\(sp\.lsort\)\}/);
-    expect(src).toMatch(/search=\{parseBoardSearch\(sp\.lq\)\}/);
+    expect(src).toMatch(/const lq = parseOrdersPanelQuery\(sp, "leafly"\)/);
+    expect(src).toMatch(/query=\{lq\}/);
   });
 
   it("the view controls are a plain GET form, so they survive the redirect", () => {
-    const src = read(PANEL);
-    expect(src).toMatch(/method="get"/);
+    expect(read(SHELL)).toMatch(/method="get"/);
   });
 
-  it("there is a reset link out of any filtered state", () => {
-    expect(read(PANEL)).toMatch(/Reset/);
+  it("there is a way out of any filtered state (Clear)", () => {
+    const shell = stripComments(read(SHELL));
+    expect(shell).toMatch(/kind: "clear"/);
+    expect(shell).toMatch(/Clear/);
   });
 
   it("the Leafly params are prefixed so they cannot collide with the order list", () => {
     // `q` and `sort` already belong to the Greenway order list on the same
     // page. Reusing them would make one dropdown drive two lists.
-    const src = read(CORE);
-    expect(src).toBeTruthy();
+    const core = read(PANELS_CORE);
+    expect(core).toMatch(/lq: "lq"|q: "lq"/);
     const page = read(PAGE);
-    expect(page).toMatch(/lfilter\?: string;/);
-    expect(page).toMatch(/lsort\?: string;/);
-    expect(page).toMatch(/lq\?: string;/);
+    for (const k of ["lstatus", "lq", "lfrom", "lto", "lmin", "lmax", "lsort", "lpage"]) {
+      expect(page).toMatch(new RegExp(`${k}\\?: string;`));
+    }
+    expect(page).not.toMatch(/lfilter\?: string;/);
   });
 });
 

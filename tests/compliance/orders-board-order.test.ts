@@ -31,6 +31,13 @@
  *
  * Hence the assertions below that each section is defined exactly ONCE, and
  * that the board is reached only through the core's list.
+ *
+ * SLICE L-40 — the owner removed the promotion ("our system auto acknowledges
+ * leafly orders, so there is no 15 minute limit … I want to remove the leafly
+ * section moving above our section"). The order is now FIXED — Greenway, then
+ * Leafly — and both panels render through one shared shell. The once-each
+ * guarantee above is unchanged and still pinned; the promotion pins became
+ * "the promotion is gone" pins.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -38,7 +45,6 @@ import { join } from "node:path";
 
 import {
   BOARD_SECTIONS,
-  decideBoardLayout,
   describeOriginMix,
   shouldLabelWebsiteRows,
   tallyOrigins,
@@ -99,7 +105,9 @@ describe("L-22 — the pure core is registered, green, and floored", () => {
   it("every self-test passes", () => {
     const r = __runBoardOrderTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(55);
+    // L-40: 57 → 35 when the 22 promotion self-tests were retired with
+    // decideBoardLayout. Every label / tally / mix test is still here.
+    expect(r.passed).toBeGreaterThanOrEqual(35);
   });
 
   it("is wired into the compliance harness with a floor", () => {
@@ -115,7 +123,7 @@ describe("L-22 — the pure core is registered, green, and floored", () => {
     );
     expect(m).not.toBeNull();
     const floor = Number(m![1]);
-    expect(floor).toBeGreaterThanOrEqual(40);
+    expect(floor).toBeGreaterThanOrEqual(30);
     expect(floor).toBeLessThanOrEqual(__runBoardOrderTests().passed);
   });
 
@@ -132,84 +140,58 @@ describe("L-22 — the pure core is registered, green, and floored", () => {
 });
 
 // ===========================================================================
-describe("L-22 — the owner's requested order, and the one thing that bends it", () => {
-  it("normally shows our orders first and Leafly below, exactly as asked", () => {
-    const l = decideBoardLayout({ leaflyPendingAck: 0 });
-    expect(l.sections).toEqual(["greenway", "leafly"]);
-    expect(l.leaflyPromoted).toBe(false);
+describe("L-40 — the owner's order, fixed: Greenway first, Leafly below", () => {
+  it("the core's section list is exactly the owner's order", () => {
+    expect([...BOARD_SECTIONS]).toEqual(["greenway", "leafly"]);
   });
 
-  it("promotes Leafly only while an acknowledgement is actually outstanding", () => {
-    expect(decideBoardLayout({ leaflyPendingAck: 1 }).sections[0]).toBe("leafly");
-    expect(decideBoardLayout({ leaflyPendingAck: 0 }).sections[0]).toBe("greenway");
-  });
-
-  it("never promotes on a FAILED count — a null is not a zero and not an emergency", () => {
-    const l = decideBoardLayout({ leaflyPendingAck: null });
-    expect(l.leaflyPromoted).toBe(false);
-    expect(l.sections).toEqual(["greenway", "leafly"]);
-    expect(l.reason).toBe("");
-  });
-
-  it("never loses a section, whatever the input", () => {
-    for (const n of [null, -5, 0, 1, 2, 999, Number.NaN, Number.POSITIVE_INFINITY]) {
-      const l = decideBoardLayout({ leaflyPendingAck: n });
-      expect([...l.sections].sort()).toEqual([...BOARD_SECTIONS].sort());
-    }
-  });
-
-  it("explains every promotion, and stays silent when it has not promoted", () => {
-    for (const n of [null, 0, 1, 4]) {
-      const l = decideBoardLayout({ leaflyPendingAck: n });
-      if (l.leaflyPromoted) expect(l.reason.length).toBeGreaterThan(20);
-      else expect(l.reason).toBe("");
-    }
+  it("the promotion rule is gone from the core — nothing can reorder the page", () => {
+    const code = codeOnly(CORE);
+    expect(code).not.toMatch(/decideBoardLayout/);
+    expect(code).not.toMatch(/leaflyPromoted/);
+    expect(code).not.toMatch(/15 minutes/);
   });
 });
 
 // ===========================================================================
-describe("L-22 — the page renders the sections from the core's order, once each", () => {
-  it("asks the core for the layout", () => {
-    // Pinned as an EXPRESSION, not a substring: `const boardLayout = ...`
-    // assigned an empty object literal would leave every grep-style assertion
-    // in this file passing while the page silently stopped reordering.
-    expect(CODE).toMatch(
-      /const boardLayout = decideBoardLayout\(\{\s*leaflyPendingAck\s*,?\s*\}\)/,
-    );
+describe("L-22 / L-40 — the page renders each section once, in a fixed order", () => {
+  it("renders Greenway then Leafly, by position, with nothing in between deciding", () => {
+    const g = CODE.indexOf("{greenwaySection}");
+    const l = CODE.indexOf("{leaflySection}");
+    expect(g).toBeGreaterThan(-1);
+    expect(l).toBeGreaterThan(g);
+    expect((CODE.match(/\{greenwaySection\}/g) ?? []).length).toBe(1);
+    expect((CODE.match(/\{leaflySection\}/g) ?? []).length).toBe(1);
   });
 
-  it("feeds it the SAME count the Leafly board shows, not a second query", () => {
-    // Two counts of one fact is how a screen starts contradicting itself: the
-    // banner could claim an order is waiting while the board below shows none.
-    expect(CODE).toContain("pendingAckCount={leaflyPendingAck}");
-    expect((CODE.match(/countLeaflyOrdersAwaitingAck\(\)/g) ?? []).length).toBe(1);
-  });
-
-  it("renders both sections by mapping the core's list", () => {
-    expect(CODE).toMatch(/\{boardLayout\.sections\.map\(\(section\) => \(/);
-    expect(CODE).toMatch(/section === "leafly" \? leaflySection : greenwaySection/);
+  it("no longer asks for a layout or reads the pending-ack count", () => {
+    expect(CODE).not.toMatch(/boardLayout/);
+    expect(CODE).not.toMatch(/decideBoardLayout/);
+    expect(CODE).not.toMatch(/countLeaflyOrdersAwaitingAck\(/);
+    expect(CODE).not.toMatch(/pendingAckCount=/);
   });
 
   it("defines each section EXACTLY once — a copied board means two Acknowledge buttons", () => {
     expect((CODE.match(/const leaflySection = \(/g) ?? []).length).toBe(1);
     expect((CODE.match(/const greenwaySection = \(/g) ?? []).length).toBe(1);
-    // The board component and the filter bar are the fingerprints of each
-    // section. Exactly one of each in the whole file.
+    // Each panel's fingerprint, exactly once in the whole file.
     expect((CODE.match(/<LeaflyOrdersPanel/g) ?? []).length).toBe(1);
-    expect((CODE.match(/\{FILTERS\.map\(/g) ?? []).length).toBe(1);
+    expect((CODE.match(/<OrdersPanel\s+panel="greenway"/g) ?? []).length).toBe(1);
   });
 
   it("puts the Leafly board inside the Leafly section and the order cards inside ours", () => {
     const leafly = constBlock(CODE, "leaflySection");
     const greenway = constBlock(CODE, "greenwaySection");
     expect(leafly).toContain("<LeaflyOrdersPanel");
-    expect(leafly).not.toContain("{FILTERS.map(");
-    expect(greenway).toContain("{FILTERS.map(");
+    expect(leafly).not.toContain("<OrdersPanel");
+    expect(greenway).toContain('<OrdersPanel\n      panel="greenway"');
+    expect(greenway).toContain('title="Greenway orders"');
     expect(greenway).not.toContain("<LeaflyOrdersPanel");
-    // The order cards, the pager and the empty state all belong to our list.
+    // The order cards belong to our list; the pager and empty state are the
+    // shared shell's, so they are identical in both panels.
     expect(greenway).toContain("{orders.map((order) =>");
-    expect(greenway).toContain("<ListPager");
-    expect(greenway).toContain("No orders match this view");
+    expect(greenway).toContain("window={win}");
+    expect(greenway).toContain("total={total}");
   });
 
   it("does not gate either section behind a dead condition", () => {
@@ -217,50 +199,21 @@ describe("L-22 — the page renders the sections from the core's order, once eac
     // file, but wired so it could never reach the screen.
     expect(CODE).not.toContain("{false &&");
     expect(CODE).not.toMatch(/const (leafly|greenway)Section = \(\s*<>\s*<\/>\s*\)/);
-    expect(CODE).not.toMatch(/boardLayout\.sections\.slice\(/);
-  });
-
-  it("keeps the section list whole — nothing filters a board off the page", () => {
-    expect(CODE).not.toMatch(/boardLayout\.sections\.filter\(/);
-    expect(CODE).toMatch(/\{boardLayout\.sections\.map\(/);
   });
 });
 
 // ===========================================================================
-describe("L-22 — a promotion is visible, never silent", () => {
-  it("renders the core's explanation whenever the layout has been reordered", () => {
-    expect(CODE).toMatch(/\{boardLayout\.leaflyPromoted \? \(/);
-    expect(CODE).toContain("{boardLayout.reason}");
-  });
-
-  it("does not re-type the sentence in JSX, where it could drift from the rule", () => {
-    // The wording belongs to the core, which owns the singular/plural and the
-    // mention of the deadline and asserts both.
+describe("L-40 — the promotion banner and its deadline copy are gone", () => {
+  it("no banner, no gold 'shown first' notice", () => {
+    expect(CODE).not.toContain("leaflyPromoted");
+    expect(CODE).not.toContain("shown first");
     expect(CODE).not.toContain("waiting to be acknowledged");
+  });
+
+  it("no deadline copy anywhere a person reads it on this page", () => {
     expect(CODE).not.toMatch(/15 minutes/);
-  });
-
-  it("announces the banner to assistive tech", () => {
-    const i = CODE.indexOf("{boardLayout.leaflyPromoted ? (");
-    expect(i).toBeGreaterThan(-1);
-    expect(CODE.slice(i, i + 700)).toContain('role="status"');
-  });
-
-  it("uses gold — the house attention colour — and not an invented token", () => {
-    const i = CODE.indexOf("{boardLayout.leaflyPromoted ? (");
-    const banner = CODE.slice(i, i + 700);
-    expect(banner).toContain("--admin-gold");
-    // There is no --admin-warning token in this codebase. Introducing one in a
-    // banner is how a colour comes to mean two things on two screens.
-    expect(banner).not.toContain("--admin-warning");
-  });
-
-  it("the banner appears if and only if the core promoted", () => {
-    // Proven by execution, not by reading the JSX: the JSX is pinned above to
-    // the same flag this exercises.
-    expect(decideBoardLayout({ leaflyPendingAck: 2 }).leaflyPromoted).toBe(true);
-    expect(decideBoardLayout({ leaflyPendingAck: 0 }).leaflyPromoted).toBe(false);
-    expect(decideBoardLayout({ leaflyPendingAck: null }).leaflyPromoted).toBe(false);
+    expect(CODE).not.toMatch(/on the clock/);
+    expect(CODE).not.toMatch(/arrive with a deadline/);
   });
 });
 
@@ -404,7 +357,8 @@ describe("L-22 — the mix summary tells the truth about its own scope", () => {
   });
 
   it("is rendered, and only when it has something to say", () => {
-    expect(CODE).toMatch(/\{originMix \? \(/);
+    // L-40: passed to the shared panel as its `summary`, so no leading brace.
+    expect(CODE).toMatch(/summary=\{\s*originMix \? \(/);
     expect(CODE).toContain("{originMix}");
   });
 
@@ -429,10 +383,11 @@ describe("L-22 — house rules", () => {
   });
 
   it("the L-6 reasoning is corrected in place rather than silently deleted", () => {
-    // The 15-minute deadline is still why promotion exists. Anyone deleting the
-    // promotion needs to find out what it was protecting.
-    expect(PAGE).toContain("position revised by L-22");
+    // L-40 removed the promotion; the comment still says what it protected
+    // (Leafly's fifteen-minute auto-cancel) and what covers that now.
+    expect(PAGE).toContain("L-40: position fixed, below ours");
     expect(PAGE).toContain("fifteen");
+    expect(PAGE).toContain("Not accepted automatically");
     // ...and the now-false claim must be gone.
     expect(PAGE).not.toContain("Placed here deliberately: directly under the status summary and");
   });
