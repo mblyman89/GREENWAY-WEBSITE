@@ -164,7 +164,7 @@ export type HelperWalkthrough = {
  *   Rung 2  Ask Leafly a question — Check status.             Read-only.
  *   Rung 3  Compare              — Read the menu back.        Read-only, sandbox.
  *   Rung 4  Change what we send  — Sync settings, schedule.   Changes future pushes.
- *   Rung 5  Send it              — Live push.                 Changes your listing.
+ *   Rung 5  Send it              — PUT / POST / DELETE cards.  Changes your listing.
  */
 export const PUSH_AND_PREVIEW: HelperWalkthrough = {
   id: "leafly-push-preview",
@@ -283,31 +283,54 @@ export const PUSH_AND_PREVIEW: HelperWalkthrough = {
       expect: "A report listing anything that does not match.",
     },
     {
-      do: "Decide POST or PUT in the Method box. Read this one twice.",
+      do: "Read 'What each kind of send does'. Every send button names the action it uses.",
       why:
-        "POST is a FULL SYNC: Leafly's menu becomes exactly this feed, and " +
-        "anything not in the feed is DELETED from your listing. PUT is an " +
-        "upsert: it adds and updates, and leaves anything you did not mention " +
-        "alone. POST is the right default because it makes Leafly match your " +
-        "shop exactly — including removing what you stopped carrying — but it " +
-        "is also the one that can empty your listing if you push while your " +
-        "menu is half-published.",
-      expect: "The sentence above the box changes to describe the method you picked.",
+        "Leafly's Menu API has four actions. GET only reads. PUT adds and updates " +
+        "and never deletes. POST replaces the whole menu, so anything not in the " +
+        "send is DELETED from your listing. DELETE removes the products you pick. " +
+        "Knowing which one a button uses tells you exactly what it can do to " +
+        "your storefront before you press it.",
+      expect: "Four boxes, one per action, each naming the buttons that use it.",
     },
     {
-      do: "Press the push button. Then read the red confirmation line before pressing 'Yes, push now'.",
+      do: "Press 'Show me what would happen' in 'Send my whole menu, hold back only the bad ones'.",
       why:
-        "The button deliberately arms first and sends second. One press does " +
-        "nothing but reveal a question naming the exact number of items and the " +
-        "method. That pause exists because this is the only control on the page " +
-        "that changes what the public sees, and a single accidental tap on a " +
-        "phone at the counter should not be able to do it.",
-      expect:
-        "A message confirming the result, and a new entry in 'Recent sync activity'.",
+        "This is the everyday send. It looks at every published product, works " +
+        "out which ones Leafly would refuse, and names each one with a link to " +
+        "fix it. It uses PUT, so it never deletes anything from Leafly. Nothing " +
+        "is sent until you press send and then confirm.",
+      expect: "A count of products to send and a named list of any held back.",
       ifStuck:
-        "If preflight errors are listed, the push is blocked on purpose — fix " +
-        "the listed items and try again. The engine also skips a sync when " +
-        "nothing has changed, which is normal and not an error.",
+        "If it says too many would be held back, tick 'Fix the size problem " +
+        "automatically before sending' and look again.",
+    },
+    {
+      do: "Press 'Send these N', then read the confirmation before pressing 'Yes, send them now'.",
+      why:
+        "The button arms first and sends second. One press only reveals a " +
+        "question naming the exact number of products, because this changes " +
+        "what the public sees and a single accidental tap at the counter " +
+        "should not be able to do it.",
+      expect: "A message confirming the result, and a new entry in 'Recent sync activity'.",
+      ifStuck:
+        "The engine skips a sync when nothing has changed, which is normal and " +
+        "not an error.",
+    },
+    {
+      do: "Once, for certification: use 'Replace my whole Leafly menu (POST)'.",
+      why:
+        "Leafly asks you to prove every action, including a successful POST. " +
+        "Automatic syncing only POSTs on days when nothing is held back, so on a " +
+        "menu with any refused product it never POSTs. This card sends every " +
+        "passing product as a POST. POST deletes whatever it does not send, so " +
+        "the card names every held-back product that will leave Leafly and asks " +
+        "you to tick a box stating their exact count before 'Send POST' unlocks.",
+      expect:
+        "After 'Yes, replace the menu': 'POST succeeded (HTTP 200)' and a POST " +
+        "entry in the run history.",
+      ifStuck:
+        "If it refuses because the held-back count changed, press 'Check what a " +
+        "POST would do' again: the menu moved between your look and your send.",
       irreversible: true,
     },
     {
@@ -384,55 +407,60 @@ export const PUSH_AND_PREVIEW: HelperWalkthrough = {
       safe: true,
     },
     {
-      control: "POST \u2014 full sync",
-      does: "Full sync. Leafly's menu becomes exactly this feed; items not included are deleted.",
+      control: "What each kind of send does",
+      does: "Explains GET, PUT, POST and DELETE in one sentence each and names the buttons that use each one.",
       why:
-        "It keeps Leafly honest with your shop, including removals. Most shops " +
-        "want this, which is why it is the default.",
-      useWhen: "Normal daily syncing, once your published menu is correct.",
-      caution:
-        "Never push POST while your menu is mid-publish or partially imported — " +
-        "a half-built feed will delete the rest of your Leafly listing.",
-      safe: false,
-    },
-    {
-      control: "PUT \u2014 upsert items",
-      does: "Upsert. Adds and updates the items in the feed; leaves anything omitted untouched.",
-      why:
-        "Safer for a partial update, but it can never remove a product you " +
-        "stopped carrying — those linger on Leafly until a POST clears them.",
-      useWhen: "Pushing a correction for specific items without resending everything.",
-      caution: "Discontinued items stay visible on Leafly until you run a POST.",
-      safe: false,
-    },
-    {
-      control: "Yes, push now",
-      does:
-        "The second half of the live push. The first press arms it (the button " +
-        "reads \u201cPush POST to Leafly\u2026\u201d or \u201cPush PUT to Leafly\u2026\u201d); this " +
-        "red button is the one that actually sends the menu.",
-      why:
-        "Two presses, because it is the only control here that changes what the " +
-        "public sees. The confirmation names the item count and method so you " +
-        "are confirming a specific action, not a vague one.",
-      useWhen: "When the preview looks right and you have decided POST or PUT.",
-      caution:
-        "This changes your live Leafly listing. There is no undo button — the " +
-        "fix for a bad push is another, correct push.",
-      safe: false,
-    },
-    {
-      control: "AI description drafter",
-      does: "Writes a draft product description from a name, brand, category, strain and THC.",
-      why:
-        "Richness scores affect Leafly placement, and blank descriptions are the " +
-        "most common cause of a low score. Drafts are DRAFTS: nothing is " +
-        "attached to a product until you approve it, because an unreviewed " +
-        "machine-written claim about a cannabis product is a compliance problem, " +
-        "not a time-saver.",
-      useWhen: "When the data-quality panel flags thin descriptions.",
-      caution: "Always read and edit before approving. Leafly descriptions must be plain text.",
+        "The owner asked what PUT means. The honest answer is a sentence, not a " +
+        "dropdown, so each button now carries its action in its label or group.",
+      useWhen: "Whenever you are unsure what a button will do to your listing.",
       safe: true,
+    },
+    {
+      control: "Send my whole menu, hold back only the bad ones",
+      does: "Sends every published product Leafly will accept (PUT) and names every one it holds back.",
+      why:
+        "One refused product used to block the whole menu. This sends the rest " +
+        "and gives you a fix link for each held-back product. It never deletes " +
+        "anything from Leafly.",
+      useWhen: "Everyday manual updates.",
+      caution: "Changes your live Leafly listing after you confirm.",
+      safe: false,
+    },
+    {
+      control: "Send only certain products",
+      does: "Sends just the products you tick (PUT), after a preview of exactly those products.",
+      why:
+        "For a quick correction to a few items without resending everything. " +
+        "Like every PUT, it adds and updates only.",
+      useWhen: "Fixing a price or photo on a handful of products.",
+      caution: "Changes those products on your live Leafly listing after you confirm.",
+      safe: false,
+    },
+    {
+      control: "Replace my whole Leafly menu (POST)",
+      does:
+        "Sends every passing product as a POST, so Leafly's menu becomes exactly " +
+        "that list and anything else is deleted.",
+      why:
+        "Certification requires a successful POST, and automatic syncing only " +
+        "POSTs when nothing is held back. The held-back products are named and " +
+        "must be acknowledged by count, because a POST will delete them from " +
+        "Leafly until they are fixed and sent again.",
+      useWhen: "Once to prove POST for certification, or when you want a clean full sync.",
+      caution:
+        "Deletes from Leafly everything not in the send, including held-back " +
+        "products. There is no undo; the fix is to send them again.",
+      safe: false,
+    },
+    {
+      control: "Remove by product ID (advanced)",
+      does: "Removes the exact product IDs you paste (DELETE).",
+      why:
+        "The fallback for when you already have an ID from an error message. " +
+        "Normally, find the product by name in 'What is on your Leafly menu'.",
+      useWhen: "Removing a product Leafly support named by ID.",
+      caution: "Permanent until the product is sent again.",
+      safe: false,
     },
     {
       control: "Sync settings",
@@ -517,13 +545,17 @@ export const PUSH_AND_PREVIEW: HelperWalkthrough = {
     },
     {
       symptom: "Products you stopped carrying are still on Leafly.",
-      meaning: "You have been pushing PUT, which never deletes.",
-      fix: "Run one POST full sync with a correct published menu.",
+      meaning: "Every PUT button adds and updates only; none of them deletes.",
+      fix:
+        "Remove them in 'What is on your Leafly menu', or run 'Replace my whole " +
+        "Leafly menu (POST)' with a correct published menu.",
     },
     {
       symptom: "Your Leafly listing went nearly empty after a push.",
-      meaning: "A POST full sync ran against a partially published menu.",
-      fix: "Publish the complete menu, confirm the payload preview and item count, POST again.",
+      meaning: "A POST ran against a partially published menu, or many products were held back.",
+      fix:
+        "Publish the complete menu, fix the held-back products, then use 'Send my " +
+        "whole menu, hold back only the bad ones' to put them back.",
     },
   ],
   faq: [
@@ -546,11 +578,13 @@ export const PUSH_AND_PREVIEW: HelperWalkthrough = {
       a: "No. Saving stores them securely. Only a live push sends your menu.",
     },
     {
-      q: "Should I use POST or PUT?",
+      q: "What does PUT mean, and when would I use POST?",
       a:
-        "POST for normal daily syncing — it makes Leafly match your shop exactly, " +
-        "including removing what you no longer carry. PUT only when you want to " +
-        "update specific items without touching anything else.",
+        "PUT means add or update: it never removes anything. Both everyday send " +
+        "buttons use it. POST means replace: Leafly's menu becomes exactly what " +
+        "you send and everything else is deleted. You need one successful POST " +
+        "for certification; automatic syncing does the daily POST for you on " +
+        "days when nothing is held back.",
     },
     {
       q: "Do I still need to push by hand if automatic syncing is on?",
@@ -577,6 +611,9 @@ export const PUSH_AND_PREVIEW: HelperWalkthrough = {
   source: [
     "src/app/admin/integrations/leafly/page.tsx",
     "src/app/admin/integrations/leafly/leafly-client.tsx",
+    "src/app/admin/integrations/leafly/full-menu-panel.tsx",
+    "src/app/admin/integrations/leafly/replace-menu-panel.tsx",
+    "src/app/admin/integrations/leafly/leafly-picker-client.tsx",
     "src/app/admin/integrations/leafly/actions.ts",
     "src/lib/leafly/push.ts",
     "src/lib/leafly/preview-core.ts",
@@ -1240,7 +1277,7 @@ export const FIRST_TIME_CHECKLIST: readonly ChecklistItem[] = [
   },
   {
     id: "sandbox-push",
-    label: "Run a live push IN SANDBOX.",
+    label: "Send the menu IN SANDBOX with 'Send my whole menu, hold back only the bad ones'.",
     why: "The first real push should happen where nobody can see it go wrong.",
     live: false,
   },
@@ -1277,7 +1314,7 @@ export const FIRST_TIME_CHECKLIST: readonly ChecklistItem[] = [
   },
   {
     id: "production-push",
-    label: "Run one POST full sync in production, then check your public Leafly listing.",
+    label: "Send the menu in production, then check your public Leafly listing.",
     why: "POST makes Leafly match your shop exactly. Looking at the listing afterwards is the only true confirmation.",
     live: true,
   },

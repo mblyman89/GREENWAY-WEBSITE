@@ -216,6 +216,7 @@ import { __runLeaflyCollisionSplitTests } from "../../src/lib/leafly/collision-s
 import { __runLeaflyFixLinkTests } from "../../src/lib/leafly/fix-link-core";
 import { __runLeaflyFullMenuTests } from "../../src/lib/leafly/full-menu-core";
 import { __runLeaflyAutoSyncTests } from "../../src/lib/leafly/auto-sync-core";
+import { __runLeaflyReplaceMenuTests } from "../../src/lib/leafly/replace-menu-core";
 // The owner asked what "stage 2 changes how your menu looks to shoppers"
 // actually means. This core is the answer: it names the listings a shopper
 // would see instead of reporting a count. Registered here because the WORDING
@@ -1714,6 +1715,7 @@ __runLiquidVolumeTests();
   // held back; never delete a held-back product or its split family. Floor
   // just under the measured 69.
   assertRan("leafly-auto-sync-core", __runLeaflyAutoSyncTests(), 66);
+  assertRan("leafly-replace-menu-core", __runLeaflyReplaceMenuTests(), 37);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

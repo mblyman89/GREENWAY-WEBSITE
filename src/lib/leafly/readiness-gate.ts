@@ -10,7 +10,7 @@
  * #     return { ok: false, error: "Leafly is not configured. ..." };      #
  * #   }                                                                    #
  * #                                                                        #
- * #   actions.ts:97   pushLeaflyAction                                     #
+ * #   actions.ts:97   (old push; L-42 replaced it: replaceLeaflyMenuAction)#
  * #   actions.ts:492  fetchLeaflyStatusAction     <- the owner's button    #
  * #   actions.ts:553  fetchLeaflyMenuReadbackAction                        #
  * #   actions.ts:720  deleteLeaflyItemsAction                              #

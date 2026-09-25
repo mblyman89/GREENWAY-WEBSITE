@@ -113,7 +113,6 @@ const DESCRIPTIVE_CONTROLS: readonly string[] = [
   "Recent sync activity",
   "Automatic syncing / schedule",
   "Sync settings",
-  "AI description drafter",
   "Leafly menu certification card",
   "Leafly ordering card",
 ];
