@@ -35,6 +35,8 @@ import { LeaflySchedulePanel } from "@/components/admin/syndication/LeaflySchedu
 import { LeaflyEvidencePanel } from "@/components/admin/syndication/LeaflyEvidencePanel";
 import { loadLeaflySyncHealth } from "@/lib/leafly/schedule-server";
 import { loadLeaflyEvidence } from "@/lib/leafly/evidence-server";
+import { loadLeaflyCertificationProof } from "@/lib/leafly/certification-proof-server";
+import { LeaflyCertificationProofPanel } from "@/components/admin/syndication/LeaflyCertificationProofPanel";
 import { MIN_RUN_GAP_MINUTES } from "@/lib/leafly/schedule-core";
 import {
   saveLeaflySettingsAction,
@@ -111,6 +113,15 @@ export default async function LeaflyIntegrationPage() {
   // different string than the server produced microseconds earlier, which React
   // reports as a hydration mismatch.
   const nowIso = new Date().toISOString();
+
+  // SLICE L-47 -- the certification proof card. Runs after the Promise.all
+  // only because it needs the environment the preview resolved (sandbox vs
+  // production changes which rows apply). Never throws: an unreadable source
+  // comes back as "unknown" rows plus a `problem` sentence.
+  const certificationProof = await loadLeaflyCertificationProof({
+    nowIso,
+    environment: preview.readiness.environment === "production" ? "production" : "sandbox",
+  });
 
   // Health is classified from LIVE attempts that actually contacted Leafly.
   // "skipped" logs (no changes to send / preflight-blocked) transmit nothing,
@@ -403,6 +414,15 @@ export default async function LeaflyIntegrationPage() {
         something is wrong rather than when something needs bagging.
       */}
       <LeaflyEvidencePanel view={evidence} nowIso={nowIso} />
+
+      {/*
+        SLICE L-47 -- proof that every Leafly action works. One row per action
+        Leafly's reviewer checks (menu POST/PUT/DELETE, the six order webhooks,
+        the order endpoints, both order endings), each green ONLY from a
+        recorded success, plus a suggested certification window and an email
+        draft. All logic lives in certification-proof-core.
+      */}
+      <LeaflyCertificationProofPanel view={certificationProof} />
 
       {/*
         SLICE L-4 -- certification readiness.

@@ -1194,6 +1194,18 @@ export function proofStateLabel(row: ProofRow): string {
   }
 }
 
+/** Display order and headings for the card. */
+export const LEAFLY_PROOF_GROUPS: readonly { id: ProofGroup; label: string }[] = [
+  { id: "menu", label: "Menu API" },
+  { id: "order_webhook", label: "Order webhooks (Leafly calls us)" },
+  { id: "order_endpoint", label: "Order endpoints (we call Leafly)" },
+  { id: "order_lifecycle", label: "Order lifecycle (both endings)" },
+];
+
+export function rowsInGroup(proof: CertificationProof, group: ProofGroup): ProofRow[] {
+  return proof.rows.filter((r) => r.def.group === group);
+}
+
 export function requirementLabel(r: ProofRequirement): string {
   return r === "required" ? "Required" : r === "recommended" ? "Recommended" : "Optional";
 }
@@ -1718,6 +1730,15 @@ export function __runLeaflyCertificationProofTests(): { passed: number; failed: 
       ),
     "mappers only emit ledger dispositions",
   );
+
+  // ── groups ──
+  ok(LEAFLY_PROOF_GROUPS.length === 4, "four groups");
+  const gp = assessCertificationProof(empty());
+  ok(
+    LEAFLY_PROOF_GROUPS.reduce((n, g) => n + rowsInGroup(gp, g.id).length, 0) === LEAFLY_PROOF_ACTIONS.length,
+    "every row sits in exactly one displayed group",
+  );
+  ok(rowsInGroup(gp, "menu").every((r) => r.def.id.startsWith("menu_")), "menu group is menu rows");
 
   if (failures.length > 0) {
     throw new Error(`leafly-certification-proof-core self-test failed:\n  - ${failures.join("\n  - ")}`);
