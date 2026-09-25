@@ -120,6 +120,14 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
+  // SLICE L-43. Leafly's expected empty, unsigned delivery. There is no cart
+  // to price, and nothing was authenticated, so do not touch the menu lookup:
+  // answer with the empty, schema-valid preview and stop.
+  if (handled.admission === "acknowledge_only") {
+    console.log(handled.logLine);
+    return NextResponse.json({ cartItems: [], taxes: [] }, { status: 200 });
+  }
+
   const lines = readCartLines(handled.parsed.body);
 
   try {

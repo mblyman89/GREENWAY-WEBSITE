@@ -957,7 +957,9 @@ __runLiquidVolumeTests();
   // they cannot be deleted quietly. Measured after the fix: hmac 82, map 149,
   // parse 93, preview 70. The floors sit just below each, which is the point of
   // a floor -- it catches a whole battery vanishing, not a single added case.
-  assertRan("leafly-hmac-core", __runLeaflyHmacTests(), 80);
+  // SLICE L-43: 82 -> 133 after hex-only + Ben's empty-unsigned delivery +
+  // the pure admission plan. Floor just below the measured count.
+  assertRan("leafly-hmac-core", __runLeaflyHmacTests(), 130);
   assertRan("leafly-order-map-core", __runLeaflyOrderMapTests(), 145);
   assertRan("leafly-webhook-parse-core", __runLeaflyWebhookParseTests(), 95);
   assertRan("leafly-preview-core", __runLeaflyPreviewTests(), 71);
