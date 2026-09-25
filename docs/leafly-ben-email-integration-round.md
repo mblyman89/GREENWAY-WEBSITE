@@ -125,6 +125,23 @@ and the store setting must stay aligned.
 > is exactly the kind of invariant that belongs in a self-tested core rather
 > than in a comment.
 
+> **IMPLEMENTED in SLICE L-44.** This was NOT a live bug. The preview was
+> already tax-inclusive with an empty `taxes` array, because decision D-2 chose
+> the reading that cannot overcharge. What changed:
+> - The unconfirmed flag is down. The answer is recorded in code as
+>   `LEAFLY_PREVIEW_TAX_PRESENTATION_SOURCE`, and the old open question is gone.
+> - The webhook now calls a builder that has no tax option at all
+>   (`buildLeaflyWebhookPreviewResponse`). That builder checks its own output
+>   before sending it (`checkTaxInclusivePreview`):
+>   - `taxes` must be empty;
+>   - every `packagePrice` must equal the price our menu push sent Leafly, to
+>     the cent;
+>   - the lines must add up to the out-the-door total.
+>
+>   If that check ever fails, the shopper gets their cart echoed back unchanged
+>   (still tax-inclusive, still no tax lines) instead of a wrong price.
+> - Byte-for-byte, the body Leafly receives is the same as before.
+
 ## 9. Sandbox destination URLs
 
 Sandbox destination URLs are not locking anything in. A separate production
