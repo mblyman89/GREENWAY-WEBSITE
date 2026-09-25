@@ -399,9 +399,18 @@ describe("L-13: every seam of the Leafly bridge is actually connected", () => {
   // THE BACK OFFICE BOARD (Q-C)
   // =========================================================================
   describe("the back-office workflow board is really driven by the core", () => {
-    it("the panel groups orders with groupLeaflyWorkflow", () => {
+    // SLICE L-40 — the panel no longer groups rows under workflow-bucket
+    // headings; the owner asked for it to look and behave like our own panel
+    // (status tabs, one list). The core still DRIVES every row: the L-40 core
+    // calls placeLeaflyOrder() once per row, and the bucket it returns feeds
+    // the "an order that needs a person is hidden by this view" line and the
+    // pipeline warning. These pins follow the core to where it now runs.
+    it("every Leafly row is placed by the core (placeLeaflyOrder)", () => {
+      const panelsCore = code(source("src/lib/orders/order-panels-core.ts"));
+      expect(panelsCore).toContain("placeLeaflyOrder(");
       const src = code(source(PATHS.panel));
-      expect(src).toContain("groupLeaflyWorkflow");
+      expect(src).toContain("toLeaflyPanelRows");
+      expect(src).toContain("buildLeaflyPanelView");
     });
 
     it("the panel renders the pipeline warning the core computes", () => {
@@ -411,16 +420,15 @@ describe("L-13: every seam of the Leafly bridge is actually connected", () => {
       expect(src).toContain("pipelineWarning");
     });
 
-    it("every workflow bucket the core can return has a heading in the UI path", () => {
-      // A bucket with no heading renders as an unlabelled pile of orders.
+    it("every workflow bucket the core can return is still produced by the core", () => {
+      // The buckets survive as the core's vocabulary; the panel's safety line
+      // is computed from them in order-panels-core (needsPerson).
       const core = source(PATHS.bridgeCore);
       for (const bucket of LEAFLY_WORKFLOW_BUCKETS) {
         expect(core).toContain(bucket);
       }
-      const src = source(PATHS.panel);
-      for (const bucket of LEAFLY_WORKFLOW_BUCKETS) {
-        expect(src).toContain(bucket);
-      }
+      const panelsCore = source("src/lib/orders/order-panels-core.ts");
+      expect(panelsCore).toMatch(/needsPerson: NEEDS_PERSON\.includes\(bucket\)/);
     });
 
     it("the board tolerates a database that has not run migration 0228 yet", () => {

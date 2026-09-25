@@ -36,7 +36,6 @@ import {
 } from "../../src/lib/orders/order-board-split-core";
 import { buildBoardView, type BoardViewRow } from "../../src/lib/leafly/board-view-core";
 import { TRANSIENT_QUERY_KEYS } from "../../src/lib/admin/back-link-core";
-import { decideBoardLayout } from "../../src/lib/admin/orders-board-order-core";
 
 const ROOT = join(__dirname, "..", "..");
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
@@ -209,14 +208,16 @@ describe("L-38 · no step buttons on the dashboard, one row shape for both", () 
   });
 
   it("online-order rows come first, the Leafly section below", () => {
-    // Order is decided at runtime by the L-22 core, not by source position:
-    // website first in the normal case; Leafly is promoted (with an on-screen
-    // reason) ONLY while an order is racing Leafly's 15-minute auto-cancel.
-    expect(decideBoardLayout({ leaflyPendingAck: 0 }).sections).toEqual(["greenway", "leafly"]);
-    expect(decideBoardLayout({ leaflyPendingAck: null }).sections).toEqual(["greenway", "leafly"]);
-    expect(decideBoardLayout({ leaflyPendingAck: 1 }).sections[0]).toBe("leafly");
-    expect(PAGE).toMatch(/boardLayout\.sections\.map\(/);
-    expect(PAGE).toMatch(/section === "leafly" \? leaflySection : greenwaySection/);
+    // SLICE L-40 — FIXED order, by source position. L-22's runtime promotion
+    // (Leafly on top while an order was racing the 15-minute auto-cancel) was
+    // removed at the owner's request: Leafly orders are accepted
+    // automatically, so there is nothing to race.
+    const g = PAGE.indexOf("{greenwaySection}");
+    const l = PAGE.indexOf("{leaflySection}");
+    expect(g).toBeGreaterThan(-1);
+    expect(l).toBeGreaterThan(g);
+    expect(PAGE).not.toMatch(/boardLayout/);
+    expect(PAGE).not.toMatch(/decideBoardLayout/);
   });
 });
 

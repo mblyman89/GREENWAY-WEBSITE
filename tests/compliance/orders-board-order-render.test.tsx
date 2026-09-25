@@ -24,7 +24,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { OrderOriginBadge } from "../../src/components/admin/orders/OrderOriginBadge";
 import {
-  decideBoardLayout,
+  BOARD_SECTIONS,
   describeOriginMix,
   shouldLabelWebsiteRows,
   tallyOrigins,
@@ -162,73 +162,34 @@ describe("L-22 — the mix summary, as rendered", () => {
 });
 
 // ===========================================================================
-describe("L-22 — the sections reach the screen in the core's order", () => {
+describe("L-40 — the sections reach the screen in a fixed order", () => {
   /**
-   * The page's own render expression, reproduced with the two sections stood
-   * in for by markers. If the page stops mapping the core's list, or renders
-   * one section twice, this shape is what changes.
+   * SLICE L-40 — L-22 rendered the sections from decideBoardLayout(), which
+   * put Leafly first (with a gold banner) while an order was unacknowledged.
+   * The owner removed that: Leafly orders are accepted automatically, so the
+   * order is fixed. This renders the core's fixed list with markers; the real
+   * panels are rendered side by side in orders-panels-l40.test.tsx.
    */
-  const board = (leaflyPendingAck: number | null) => {
-    const layout = decideBoardLayout({ leaflyPendingAck });
+  const board = () => {
     const section = (s: BoardSection) =>
       s === "leafly" ? <div key={s}>LEAFLY-BOARD</div> : <div key={s}>GREENWAY-CARDS</div>;
-    return renderToStaticMarkup(
-      <>
-        {layout.leaflyPromoted ? <div role="status">{layout.reason}</div> : null}
-        {layout.sections.map(section)}
-      </>,
-    );
+    return renderToStaticMarkup(<>{BOARD_SECTIONS.map(section)}</>);
   };
 
-  it("puts our orders first in the ordinary case, as the owner asked", () => {
-    const html = board(0);
+  it("puts our orders first, as the owner asked", () => {
+    const html = board();
     expect(html.indexOf("GREENWAY-CARDS")).toBeLessThan(html.indexOf("LEAFLY-BOARD"));
   });
 
-  it("promotes Leafly above them while an acknowledgement is outstanding", () => {
-    const html = board(2);
-    expect(html.indexOf("LEAFLY-BOARD")).toBeLessThan(html.indexOf("GREENWAY-CARDS"));
+  it("renders each section exactly once", () => {
+    const html = board();
+    expect((html.match(/LEAFLY-BOARD/g) ?? []).length).toBe(1);
+    expect((html.match(/GREENWAY-CARDS/g) ?? []).length).toBe(1);
   });
 
-  it("keeps our orders on the page even when Leafly is promoted", () => {
-    expect(board(2)).toContain("GREENWAY-CARDS");
-  });
-
-  it("renders each section exactly once, in every state", () => {
-    for (const n of [null, 0, 1, 7]) {
-      const html = board(n);
-      expect((html.match(/LEAFLY-BOARD/g) ?? []).length).toBe(1);
-      expect((html.match(/GREENWAY-CARDS/g) ?? []).length).toBe(1);
-    }
-  });
-
-  it("a failed count renders the ordinary layout and no banner", () => {
-    const html = board(null);
-    expect(html.indexOf("GREENWAY-CARDS")).toBeLessThan(html.indexOf("LEAFLY-BOARD"));
+  it("carries no promotion banner and no deadline wording", () => {
+    const html = board();
     expect(html).not.toContain('role="status"');
-  });
-
-  it("explains the promotion on screen, in words, whenever it reorders", () => {
-    const html = board(1);
-    expect(html).toContain('role="status"');
-    expect(text(html)).toContain("1 Leafly order is waiting to be acknowledged");
-    expect(text(html)).toContain("15 minutes");
-  });
-
-  it("the explanation is grammatical for one and for many", () => {
-    expect(text(board(1))).toContain("1 Leafly order is waiting");
-    expect(text(board(4))).toContain("4 Leafly orders are waiting");
-  });
-
-  it("stays silent when it has not reordered anything", () => {
-    // Asserts on the BANNER specifically, not on the whole render: the two
-    // section markers are always present, and a test written against the full
-    // text would have to be loosened later, which is how a test quietly stops
-    // meaning anything.
-    for (const n of [null, 0]) {
-      const html = board(n);
-      expect(html).not.toContain('role="status"');
-      expect(text(html)).not.toMatch(/waiting to be acknowledged|15 minutes/);
-    }
+    expect(text(html)).not.toMatch(/waiting to be acknowledged|15 minutes/);
   });
 });

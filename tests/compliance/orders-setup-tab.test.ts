@@ -258,9 +258,20 @@ describe("L-21 — the panels actually MOVED (not copied)", () => {
     expect(BRANCHES.setup).not.toContain("<OrderOriginBadge");
   });
 
+  // SLICE L-40 — the four stat cards moved INTO the shared OrdersPanel shell,
+  // one set per panel, so each number sits above the orders it counts. The
+  // guarantee is the same — the cards are on the orders tab and not on setup —
+  // it is now proven through the panels that render them.
   it("the stat cards stay on the orders tab", () => {
-    expect(BRANCHES.orders).toContain("<StatCard");
+    expect(BRANCHES.orders).toContain("<OrdersPanel");
+    expect(BRANCHES.orders).toContain("<LeaflyOrdersPanel");
+    expect(BRANCHES.setup).not.toContain("<OrdersPanel");
     expect(BRANCHES.setup).not.toContain("<StatCard");
+    const shell = readFileSync(
+      join(process.cwd(), "src/components/admin/orders/OrdersPanel.tsx"),
+      "utf8",
+    );
+    expect((shell.match(/<StatCard\s/g) ?? []).length).toBe(4);
   });
 
   it("the new-order watcher stays on the orders tab — it is the thing that chimes", () => {

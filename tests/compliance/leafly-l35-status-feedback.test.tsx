@@ -110,7 +110,6 @@ describe("L-35 · the warning is rendered, not masked by the success message", (
     const html = renderToStaticMarkup(
       React.createElement(LeaflyOrdersPanel, {
         board: { orders: [], ready: true, problem: "", orderIntegrationKeyPresent: true },
-        pendingAckCount: 0,
         now: new Date("2026-09-20T18:00:00Z"),
         message: "Done — all good",
         warning: "The register order did not close",
