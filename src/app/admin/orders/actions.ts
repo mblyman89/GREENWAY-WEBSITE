@@ -43,6 +43,11 @@ import { customerMedicalStatus } from "@/lib/medical/store";
 import { attachCardToOrder, detachCardFromOrder } from "@/lib/medical/sale-store";
 import { clearExemptSalesForOrder } from "@/lib/medical/sale-store";
 import type { OrderStatus } from "@/lib/orders/types";
+import { CLOSED_ORDER_STATUSES } from "@/lib/orders/types";
+import {
+  greenwayStatusChangeAllowed,
+  MARKETPLACE_STEPS_REFUSAL,
+} from "@/lib/orders/order-board-split-core";
 
 const VALID_STATUSES: OrderStatus[] = [
   "new",
@@ -65,6 +70,34 @@ export async function setOrderStatusAction(formData: FormData): Promise<void> {
   const toStatus = String(formData.get("status") ?? "") as OrderStatus;
   const note = String(formData.get("note") ?? "").trim() || null;
   if (!id || !VALID_STATUSES.includes(toStatus)) return;
+
+  // ── L-38 MARKETPLACE STEP LOCK ─────────────────────────────────────────
+  // Leafly (marketplace) orders move through their steps ONLY via the
+  // Leafly workflow on the details page, which pushes each step to Leafly
+  // and mirrors it onto this local order. A Greenway-side status change
+  // here would silently diverge from Leafly, so it is refused server-side
+  // (not just hidden in the UI). A logged REOPEN of an already-closed
+  // order is still allowed, exactly as before.
+  {
+    const current = await getOrder(id);
+    if (
+      current &&
+      !greenwayStatusChangeAllowed({
+        origin: current.origin,
+        fromClosed: CLOSED_ORDER_STATUSES.includes(current.status),
+      })
+    ) {
+      await recordAudit({
+        actorId: session.profile.id,
+        actorEmail: session.email,
+        action: "order.transition_blocked",
+        entityType: "order",
+        entityId: id,
+        after: { reason: "marketplace_steps_on_leafly", from: current.status, to: toStatus },
+      });
+      redirect(`/admin/orders/${id}?blocked=${encodeURIComponent(MARKETPLACE_STEPS_REFUSAL)}`);
+    }
+  }
 
   // ── COMPLETION COMPLIANCE GATE (S-1b + S-2b) ───────────────────────────
   if (toStatus === "completed") {

@@ -83,27 +83,19 @@ import {
   leaflyStatusLabel,
   leaflyCancelReasonLabel,
   leaflyStatusTone,
-  planLeaflyOrderActions,
   LEAFLY_ACK_WINDOW_MINUTES,
-  LEAFLY_ACK_IRREVERSIBLE_WARNING,
-  LEAFLY_DEFAULT_OUTBOUND_CANCEL_REASON,
-  type AckUrgency,
-  type LeaflyStatusTone,
 } from "@/lib/leafly/order-ack-core";
 // SLICE L-33 — the auto-acknowledge vocabulary and the one translation rule
 // this component needs. All of it is pure and self-tested; none of it is
 // decided here.
-import {
-  confirmPushFailedFromColumn,
-  acknowledgedByKindLabel,
-  LEAFLY_AUTO_ACK_EXPLANATION,
-} from "@/lib/leafly/auto-ack-core";
+// SLICE L-38 — the row→core translation (and its L-33 confirm-push rule)
+// moved to ./leafly-workflow-row so the details page shares the same one.
+import { toWorkflowRow, type WorkflowRow } from "./leafly-workflow-row";
 import {
   groupLeaflyWorkflow,
   // SLICE L-28 — the bucket is computed once in the panel and shared between
   // the filter and the headings, so the two cannot disagree.
   placeLeaflyOrder,
-  type LeaflyWorkflowInput,
   type LeaflyWorkflowPlacement,
   type LeaflyWorkflowBucket,
 } from "@/lib/leafly/bridge-core";
@@ -125,69 +117,34 @@ import {
 // SLICE L-14 — the classification of an interrupt is the pure core’s job,
 // not this file’s. Both helpers are asserted in CI without a database.
 import {
-  summariseInterrupt,
   summariseInterrupts,
   type InterruptRecord,
 } from "@/lib/leafly/register-claim-core";
 import type { BoardInterrupts } from "@/lib/leafly/register-claim-server";
-import { ANNOUNCER_PANEL_ANCHOR } from "./AnnouncerPanel";
-// SLICE L-21: the announcer now lives on the setup tab, so the jump link below
-// must cross tabs rather than scroll within this page. See setupAnchorHref().
-import { leaflyBoardRendersNothing, setupAnchorHref } from "@/lib/admin/orders-tabs-core";
-import { LeaflyOrderActions } from "./LeaflyOrderActions";
-import { LeaflyLifecycleStrip } from "./LeaflyLifecycleStrip";
-// SLICE L-24 — the detail panel the acknowledge hint has always pointed at.
-import { LeaflyOrderDetailPanel } from "./LeaflyOrderDetail";
-import {
-  acknowledgeLeaflyOrderAction,
-  // SLICE L-25 — the recovery path for an order we never downloaded.
-  collectLeaflyOrderAction,
-  loadLeaflyOrderDetailAction,
-  setLeaflyOrderStatusAction,
-} from "@/app/admin/orders/leafly-actions";
-
-/**
- * Urgency → the shop's own alert styling.
- *
- * The mapping lives here (a presentation concern) while the JUDGEMENT of which
- * urgency a deadline has lives in the core (a domain concern, asserted in CI).
- * Only the two token families the back office already uses for alarm are used,
- * so a Leafly warning looks like every other warning in the building rather
- * than like a bolted-on integration.
- */
-const URGENCY_STYLES: Record<AckUrgency, string> = {
-  urgent:
-    "border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]",
-  expired:
-    "border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]",
-  // "unknown" is styled as an alarm on purpose: not knowing how long is left
-  // on a clock that auto-cancels a customer's order is an urgent condition,
-  // not a neutral one.
-  unknown:
-    "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]",
-  soon: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]",
-  comfortable:
-    "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)]",
-  none: "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)]",
-};
-
-const URGENCY_ICONS: Record<AckUrgency, string> = {
-  urgent: "🚨",
-  expired: "🚨",
-  unknown: "❓",
-  soon: "⏳",
-  comfortable: "⏱️",
-  none: "✅",
-};
-
-/** Status tone → the Badge tones the back office already ships. */
-const TONE_BADGE: Record<LeaflyStatusTone, BadgeTone> = {
-  waiting: "orange",
-  progress: "green",
-  done: "neutral",
-  bad: "danger",
-  unknown: "gold",
-};
+// SLICE L-21: the announcer now lives on the setup tab. The panel still asks
+// the same predicate whether to render at all.
+import { leaflyBoardRendersNothing } from "@/lib/admin/orders-tabs-core";
+// SLICE L-38 — THE DASHBOARD SHOWS ROWS; THE STEPS LIVE ON THE DETAILS PAGE.
+//
+// The owner: "restyle the Leafly panel to look identical to the online orders
+// rows ... the details button should open up the details page with the
+// options to move the order along its process to completion." So each order
+// is now an OrderBoardRow (the SAME component the website rows use), and the
+// full workflow — step buttons (LeaflyOrderActions), which-step strip
+// (LeaflyLifecycleStrip), the order itself (LeaflyOrderDetailPanel), the
+// register cancellation record — moved to LeaflyOrderWorkflow, rendered by
+// the details pages. The row keeps only the alarms that must be seen WITHOUT
+// opening anything: the countdown, the silent-arrival warning, and a stopped
+// till.
+import { OrderBoardRow } from "./OrderBoardRow";
+import { OrderOriginBadge } from "./OrderOriginBadge";
+import { OrderStatusFlow } from "./OrderStatusFlow";
+import { LeaflyOutcomeBanners, TONE_BADGE, URGENCY_STYLES, URGENCY_ICONS } from "./LeaflyOrderWorkflow";
+import { leaflyDetailPath, leaflySearchTerms } from "@/lib/orders/order-board-split-core";
+import { withBackParam, type SearchParamsShape } from "@/lib/admin/back-link-core";
+import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
+import { formatMinorCurrency } from "@/lib/leafly/format";
+import type { OrderRow } from "@/lib/orders/types";
 
 /**
  * How each workflow bucket looks.
@@ -231,55 +188,6 @@ const BUCKET_STYLES: Record<
   },
 };
 
-/** One board row, plus the flat camelCase shape the pure core reads. */
-type BoardRow = LeaflyBoardState["orders"][number];
-/**
- * SLICE L-33 widens this by exactly one field.
- *
- * `confirmPushFailed` is added HERE rather than on `LeaflyWorkflowInput`
- * because that type is bridge-core's input for deciding which COLUMN an order
- * belongs in, and a failed status push does not move an order between columns
- * — it changes which BUTTONS the card offers. Widening the placement input
- * with a field placement does not read would invite a future reader to make it
- * read it.
- *
- * `boolean | undefined` and not `boolean`: see `confirmPushFailedFromColumn`.
- */
-type WorkflowRow = BoardRow &
-  LeaflyWorkflowInput & { confirmPushFailed?: boolean | undefined };
-
-/**
- * Translate a database row into the core's input shape.
- *
- * `announced_at` and `printed_at` are passed THROUGH, including when they are
- * `undefined` — which is what a pre-0228 database produces, because the board
- * falls back to a column list that omits them. That `undefined` must survive
- * this function intact: the core treats it as "not tracked" and stays quiet,
- * whereas a `?? null` here would make the board accuse every order in the shop
- * of having never rung the bell. The temptation to "tidy" this line is exactly
- * the bug, so it is called out here and pinned by tests in bridge-core.
- */
-function toWorkflowRow(order: BoardRow): WorkflowRow {
-  return {
-    ...order,
-    leaflyOrderId: order.leafly_order_id,
-    leaflyStatus: order.leafly_status,
-    acknowledgedAt: order.acknowledged_at,
-    canceledAt: order.canceled_at,
-    localOrderId: order.local_order_id,
-    announcedAt: order.announced_at,
-    printedAt: order.printed_at,
-    // SLICE L-33. Translated by the pure core, not by an inline comparison,
-    // for the reason recorded in full on `confirmPushFailedFromColumn`: the
-    // obvious one-liner (`order.confirm_push_failed_at !== null`) reports
-    // EVERY order in a pre-0230 shop as having a failed confirm push, because
-    // `undefined !== null`. The board would then replace the ordinary Confirm
-    // button with a diagnostic for the entire shop — which is the exact
-    // failure this slice was opened to prevent.
-    confirmPushFailed: confirmPushFailedFromColumn(order.confirm_push_failed_at),
-  };
-}
-
 export function LeaflyOrdersPanel({
   board,
   pendingAckCount,
@@ -310,6 +218,15 @@ export function LeaflyOrdersPanel({
   filter,
   sort,
   search,
+  /**
+   * SLICE L-38 — the Greenway copies of the linked orders, by local id. Gives
+   * each row the same customer / items / total line a website row has, and
+   * makes the search box find "Jane" or "1042". Optional: without it a row
+   * shows Leafly's own fields and the search matches ids only, as before.
+   */
+  linkedOrders,
+  /** SLICE L-38 — the page's query, carried to the details page as `back`. */
+  searchParams,
 }: {
   board: LeaflyBoardState;
   pendingAckCount: number | null;
@@ -322,6 +239,8 @@ export function LeaflyOrdersPanel({
   filter?: BoardFilter;
   sort?: BoardSort;
   search?: string | null;
+  linkedOrders?: ReadonlyMap<string, OrderRow>;
+  searchParams?: SearchParamsShape;
 }) {
   const hasOrders = board.orders.length > 0;
   // SLICE L-14 — one tally for the whole board, computed ONCE here rather
@@ -393,6 +312,11 @@ export function LeaflyOrdersPanel({
       bucket: placeLeaflyOrder(r).bucket,
       acknowledgeBy: r.acknowledge_by,
       updatedAt: r.updated_at,
+      // SLICE L-38 — this panel is now the ONLY place on the dashboard a
+      // Leafly order can be searched for, so it matches what staff quote.
+      searchTerms: leaflySearchTerms(
+        r.local_order_id ? linkedOrders?.get(r.local_order_id) : null,
+      ),
     })),
     { filter, sort, search },
   );
@@ -423,49 +347,14 @@ export function LeaflyOrdersPanel({
             Shown before anything else. Somebody just pressed a button and is
             waiting to find out what happened; making them hunt for it in a
             list is how a failed acknowledgement gets missed. */}
-        {error ? (
-          <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]">
-            <p className="font-bold">⚠️ Leafly didn’t accept that.</p>
-            <p className="mt-1">{error}</p>
-            {/* The remedy, chosen from the code the pure core produced. A bare
-                error with no next step is what makes staff stop reading them. */}
-            {errorCode === "missing_integration_key" ? (
-              <p className="mt-2">
-                <Link
-                  href="/admin/integrations/leafly"
-                  className="font-bold underline underline-offset-2"
-                >
-                  Enter your Leafly order integration key →
-                </Link>
-              </p>
-            ) : null}
-            {errorCode === "fix_config" ? (
-              <p className="mt-2">
-                <Link
-                  href="/admin/integrations/leafly"
-                  className="font-bold underline underline-offset-2"
-                >
-                  Check your Leafly credentials →
-                </Link>
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {message ? (
-          <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
-            ✅ {message}
-          </div>
-        ) : null}
-
-        {warning ? (
-          <div
-            role="alert"
-            className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]"
-          >
-            ⚠️ {warning}
-          </div>
-        ) : null}
+        {/* SLICE L-38 — one banner component, shared with the details pages,
+            so an outcome looks the same wherever the button was pressed. */}
+        <LeaflyOutcomeBanners
+          message={message}
+          warning={warning}
+          error={error}
+          errorCode={errorCode}
+        />
 
         {/* ── A read failure is never silent ──────────────────────────────── */}
         {hasProblem ? (
@@ -605,7 +494,7 @@ export function LeaflyOrdersPanel({
                   type="search"
                   name="lq"
                   defaultValue={view.search ?? ""}
-                  placeholder="Order number"
+                  placeholder="Order #, name or phone"
                   className="rounded-[var(--admin-radius-md)] border border-[var(--admin-line)] bg-[var(--admin-surface)] px-2 py-1.5 text-sm text-[var(--admin-text)]"
                 />
               </label>
@@ -668,12 +557,13 @@ export function LeaflyOrdersPanel({
 
                     <div className="mt-3 grid gap-3">
                       {group.orders.map(({ order, placement }) => (
-                        <LeaflyOrderCard
+                        <LeaflyOrderRow
                           key={order.id}
                           order={order}
                           placement={placement}
-                          board={board}
                           now={now}
+                          local={order.local_order_id ? linkedOrders?.get(order.local_order_id) : undefined}
+                          searchParams={searchParams}
                           interrupts={
                             order.local_order_id
                               ? interrupts?.byOrderId.get(order.local_order_id)
@@ -693,340 +583,176 @@ export function LeaflyOrdersPanel({
 }
 
 /**
- * One Leafly order, as a card.
+ * One Leafly order, as a ROW — SLICE L-38.
  *
- * Extracted from the panel in slice L-10 when the flat list became a set of
- * workflow buckets: the same markup now renders inside five different
- * sections, and a card duplicated per section is a card that drifts per
- * section. The CONTENTS are unchanged from L-6 apart from the pipeline
- * warning, which is new.
+ * Rendered through OrderBoardRow, the same component the website orders use,
+ * so the two lists look identical by construction: title and badges on the
+ * left, customer / items / total / placed-ago under it, the progress strip
+ * at the bottom, and "Details" on the far right.
  *
- * Still decides nothing. `placement` arrives already computed by
- * `placeLeaflyOrder` in the pure core.
+ * What is NOT here any more, and where it went: the step buttons, the
+ * which-step strip, the order contents and the register cancellation record
+ * are on the details page (LeaflyOrderWorkflow). The owner asked for the
+ * steps to be pressed there and only there.
+ *
+ * What STAYS on the row, and why: three alarms that must be seen without
+ * opening anything, because each one is costing time right now —
+ *   1. the acknowledgement countdown (Leafly auto-cancels at fifteen minutes);
+ *   2. the silent-arrival warning (the speaker never rang, nobody knows);
+ *   3. a till stopped by a Leafly cancellation.
+ * Each is one line; the full explanation is on the details page.
  */
-function LeaflyOrderCard({
+function LeaflyOrderRow({
   order,
   placement,
-  board,
   now,
+  local,
+  searchParams,
   /** SLICE L-14 — this order’s interrupts, newest first. */
   interrupts,
 }: {
   order: WorkflowRow;
   placement: LeaflyWorkflowPlacement;
-  board: LeaflyBoardState;
   now: Date;
+  local?: OrderRow;
+  searchParams?: SearchParamsShape;
   interrupts?: InterruptRecord[];
 }) {
-  // ── Everything below is READ from the pure core, never decided here.
+  // ── Everything below is READ from the pure cores, never decided here.
   const clock = assessAckClock({
     acknowledgedAt: order.acknowledged_at,
     acknowledgeBy: order.acknowledge_by,
     now,
   });
-  const plan = planLeaflyOrderActions({
-    leaflyOrderId: order.leafly_order_id,
-    orderIntegrationKeyPresent: board.orderIntegrationKeyPresent,
-    acknowledgedAt: order.acknowledged_at,
-    leaflyStatus: order.leafly_status,
-    fulfillmentMechanism: order.fulfillment_mechanism,
-    // SLICE L-33. THE LINE THAT KEEPS THE BOARD USABLE AFTER AUTO-ACKNOWLEDGE.
-    //
-    // Before this slice, "acknowledged but still pending at Leafly" was a
-    // contradiction — the only way to reach it was a confirm push that had
-    // silently failed, so the planner replaced the ordinary buttons with a
-    // single diagnostic ("Check this order with Leafly"). After this slice it
-    // is the NORMAL resting state of every order in the shop: the machine
-    // acknowledges on arrival and deliberately does not confirm, because the
-    // owner said "it can't be acknowledge and confirm in the same step".
-    //
-    // Without this argument the planner would keep reading that state as
-    // breakage and would show the whole shop a diagnostic instead of the
-    // Confirm button — turning the feature into an outage. With it, the
-    // planner keys on a RECORDED failure instead of an inference.
-    confirmPushFailed: order.confirmPushFailed,
-  });
   const statusLabel = leaflyStatusLabel(order.leafly_status);
-  // SLICE L-33 (C6) — who pressed the button. Null when unrecorded, which is
-  // every row that predates migration 0230; the card then says nothing rather
-  // than inventing an audit trail.
-  const ackKindLabel = acknowledgedByKindLabel(order.acknowledged_by_kind);
   const tone = leaflyStatusTone(order.leafly_status);
-  const cancelLabel = leaflyCancelReasonLabel(
-    order.cancelation_reason_code,
-  );
-  // Leafly's order id is a uuid. The last six characters are shown
-  // as a handle so two orders are distinguishable at a glance
-  // without printing a 36-character identifier across a phone
-  // screen. The full value is in the title attribute for copying.
+  const cancelLabel = leaflyCancelReasonLabel(order.cancelation_reason_code);
+  // Leafly's order id is a uuid. The last six characters are the handle, so
+  // two orders are distinguishable at a glance; the full value is in the
+  // title attribute for copying.
   const fullId = (order.leafly_order_id ?? "").trim();
   const handle = fullId ? fullId.slice(-6).toUpperCase() : "unknown";
+  const detailPath = leaflyDetailPath({
+    leaflyOrderId: fullId,
+    localOrderId: order.local_order_id,
+  });
+  const href = detailPath ? withBackParam(detailPath, searchParams) : null;
+  // The core's own tally — the row never classifies an interrupt itself.
+  const blockingCount = summariseInterrupts(interrupts ?? []).openCount;
+
+  const customerName = local
+    ? [local.customer_first_name, local.customer_last_name].filter((s) => (s ?? "").trim()).join(" ")
+    : "";
 
   return (
-    <Card key={order.id} padding="sm" raised>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className="font-mono text-sm font-black text-[var(--admin-text)]"
-              title={fullId || undefined}
-            >
-              Leafly ·{handle}
-            </span>
-            {/* An unrecognised status shows the raw value with a
-                plain warning rather than an invented friendly name.
-                The core returns null for unknown values precisely
-                so this case is visible instead of smoothed over. */}
-            <Badge tone={TONE_BADGE[tone]}>
-              {statusLabel ??
-                `Unrecognised status: ${order.leafly_status ?? "none"}`}
-            </Badge>
-            {order.marketplace === "uberEats" ? (
-              <Badge tone="gold">Uber Eats</Badge>
-            ) : null}
-            {order.medical_status === "medical" ? (
-              <Badge tone="green">Medical</Badge>
-            ) : null}
-            {order.fulfillment_mechanism &&
-            order.fulfillment_mechanism !== "pickup" ? (
-              <Badge tone="orange">{order.fulfillment_mechanism}</Badge>
-            ) : null}
-            {order.local_order_id ? (
-              <Badge tone="neutral">Linked to a Greenway order</Badge>
-            ) : null}
-            {/* SLICE L-33 (C6) — WHO pressed acknowledge.
-                Rendered only when the answer was actually RECORDED. A row
-                from before migration 0230 yields null from the label function
-                and shows no badge at all, because "we did not record it" and
-                "a person did it" are different facts and only one of them is
-                true. The title carries the longer explanation so a budtender
-                who has never seen the badge can find out what it means
-                without leaving the board. */}
-            {ackKindLabel ? (
-              <Badge tone="neutral">
-                <span title={LEAFLY_AUTO_ACK_EXPLANATION}>{ackKindLabel}</span>
-              </Badge>
-            ) : null}
-          </div>
-
-          {cancelLabel ? (
-            <p className="mt-1.5 text-xs font-bold text-[var(--admin-danger)]">
-              {cancelLabel}
-            </p>
+    <OrderBoardRow
+      href={href}
+      accent={clock.urgency === "urgent" || clock.urgency === "expired" || clock.urgency === "unknown" ? "orange" : undefined}
+      title={
+        local ? (
+          resolveOrderDisplay(local.display_name, local.order_number)
+        ) : (
+          <span className="font-mono" title={fullId || undefined}>
+            Leafly ·{handle}
+          </span>
+        )
+      }
+      badges={
+        <>
+          {/* An unrecognised status shows the raw value with a plain warning
+              rather than an invented friendly name. */}
+          <Badge tone={TONE_BADGE[tone]}>
+            {statusLabel ?? `Unrecognised status: ${order.leafly_status ?? "none"}`}
+          </Badge>
+          <OrderOriginBadge origin="leafly" />
+          {order.marketplace === "uberEats" ? <Badge tone="gold">Uber Eats</Badge> : null}
+          {order.medical_status === "medical" ? <Badge tone="green">Medical</Badge> : null}
+          {order.fulfillment_mechanism && order.fulfillment_mechanism !== "pickup" ? (
+            <Badge tone="orange">{order.fulfillment_mechanism}</Badge>
           ) : null}
-
-          {order.payment_preference ? (
-            <p className="mt-1 text-xs text-[var(--admin-text-faint)]">
-              Customer expects to pay by {order.payment_preference}. Leafly
-              doesn’t process payments — collect at the counter.
-            </p>
-          ) : null}
-        </div>
-
-        {/* The buttons. Generated from the plan, so the screen can
-            never offer an action Leafly would refuse. */}
-        {fullId ? (
-          <LeaflyOrderActions
-            actions={plan.actions}
-            leaflyOrderId={fullId}
-            acknowledgeAction={acknowledgeLeaflyOrderAction}
-            statusAction={setLeaflyOrderStatusAction}
-            // SLICE L-32 — the same collect action the detail panel already
-            // uses (see below). Reused deliberately rather than written
-            // again: it is already bounded by `withActionDeadline`, already
-            // audited, and already proven in production by the L-25 slice.
-            // A second, near-identical re-read path would be a second thing
-            // to keep correct.
-            reconcileAction={collectLeaflyOrderAction}
-            irreversibleWarning={LEAFLY_ACK_IRREVERSIBLE_WARNING}
-            defaultCancelReasonLabel={
-              leaflyCancelReasonLabel(
-                LEAFLY_DEFAULT_OUTBOUND_CANCEL_REASON,
-              ) ?? LEAFLY_DEFAULT_OUTBOUND_CANCEL_REASON
-            }
-          />
-        ) : null}
-      </div>
-
-      {/* ── SLICE L-31: WHICH STEP ARE WE ON? ─────────────────────
-          The owner: "I think we need to make it much more obvious
-          which step we are on, and then we will know we are finished
-          because the order will be marked complete and moved to the
-          hidden table."
-
-          Rendered directly UNDER the buttons, so the answer to "which
-          one do I press?" sits with the buttons themselves rather than
-          somewhere else on the card. Decides nothing — the whole view
-          comes from `lifecycleView()` in lifecycle-core.ts, which is
-          pure and proven by self-tests in CI. */}
-      {fullId ? (
-        <LeaflyLifecycleStrip
-          acknowledgedAt={order.acknowledged_at}
-          leaflyStatus={order.leafly_status}
-          fulfillmentMechanism={order.fulfillment_mechanism}
-          canceledAt={order.canceled_at}
-        />
-      ) : null}
-
-      {/* ── SLICE L-24: the order, openable ───────────────────────
-          The acknowledge hint has always ended with "so open the order
-          and read what you need FIRST". Until this slice there was no
-          way to do that, which the owner found the hard way:
-
-            "But there is no way to click the order and see the order
-             details, or customer id image."
-
-          Placed ABOVE the clock and the action list deliberately. An
-          instruction to read first only works if reading is offered
-          before the button that permanently ends it. */}
-      {fullId ? (
-        <LeaflyOrderDetailPanel
-          leaflyOrderId={fullId}
-          load={loadLeaflyOrderDetailAction}
-          collect={collectLeaflyOrderAction}
-        />
-      ) : null}
-
-      {/* ── The acknowledgement clock ─────────────────────────────
-          Rendered for every unacknowledged order and suppressed
-          once acknowledged (the core returns urgency "none" and a
-          null countdown in that case, so there is no ticking
-          deadline on an order that no longer has one). */}
-      {clock.urgency !== "none" ? (
-        <div
-          className={`mt-3 flex items-start gap-2 rounded-[var(--admin-radius-lg)] border px-3 py-2 text-xs font-bold ${URGENCY_STYLES[clock.urgency]}`}
-        >
-          <span aria-hidden>{URGENCY_ICONS[clock.urgency]}</span>
-          <span>{clock.label}</span>
-        </div>
-      ) : null}
-
-      {/* ── The pipeline warning ────────────────────────────────────
-          The most important few lines on this screen, and the reason slice
-          L-10 exists. Every other warning here describes something a human
-          can already see: a countdown, a cancellation, a status. This one
-          describes a failure that is INVISIBLE — the order arrived, the row
-          looks perfectly healthy, and the only symptom is that the speaker
-          never rang and the ticket never printed, so nobody in the building
-          knows the order exists. Left alone it auto-cancels and the shop
-          never learns why.
-
-          It renders only when the core says so. A pre-0228 database reports
-          `undefined` rather than null for these columns, and the core stays
-          silent in that case rather than accusing every order at once. */}
-      {placement.pipelineWarning ? (
-        <div className="mt-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] px-3 py-2 text-xs font-bold text-[var(--admin-danger)]">
-          <p>⚠️ {placement.pipelineWarning}</p>
-          <p className="mt-1 font-normal">
-            The order itself is fine — this is about the alert not reaching you.{" "}
-            {/* SLICE L-21 — this WAS an in-page jump. It is not any more.
-                The announcer panel used to be rendered above this one on the
-                same page, so a bare "#order-announcer" worked and the arrow
-                pointed up. L-21 moved that panel to the "Setup & equipment"
-                tab, which means the element is no longer in this document at
-                all -- and a bare fragment pointing at an element that does not
-                exist scrolls NOWHERE and reports nothing. It would have become
-                a link that silently does nothing, on the one banner that only
-                ever appears when an order arrived and nobody heard it.
-
-                setupAnchorHref() builds the cross-tab URL, so the click
-                changes tab AND lands on the panel. Both halves -- the anchor
-                name and the tab href -- are imported rather than typed, so a
-                rename is a compile error instead of a dead link. */}
-            <a
-              href={setupAnchorHref(ANNOUNCER_PANEL_ANCHOR)}
-              className="font-bold underline underline-offset-2"
-            >
-              Open the order announcer →
-            </a>
-          </p>
-        </div>
-      ) : null}
-
-      {/* ── SLICE L-14: what the till was asked, and what it answered ────────
-          The ONLY record anywhere of what happened to product that was already
-          bagged when Leafly cancelled. Resolved rows are shown as well as open
-          ones, quietly, because a manager reconciling the shelf tomorrow needs
-          the answer as much as a manager watching a stopped till needs the
-          question.
-
-          Every word of state below is read from summariseInterrupt in the pure
-          core. This block chooses colours, nothing else. */}
-      {(interrupts ?? []).length > 0 ? (
-        <div className="mt-3 space-y-2">
-          {(interrupts ?? []).map((row) => {
-            const summary = summariseInterrupt(row);
-            const blocking = summary.state === "BLOCKING";
-            return (
+        </>
+      }
+      reference={
+        local ? (
+          <span title={fullId || undefined}>
+            #{local.order_number} · Leafly ·{handle}
+          </span>
+        ) : null
+      }
+      customer={
+        local ? (
+          <>
+            {customerName || "Customer"}
+            {local.customer_phone ? ` · ${local.customer_phone}` : ""}
+          </>
+        ) : (
+          // No Greenway copy yet = not acknowledged yet. Say so rather than
+          // leave a blank where the customer would be.
+          "Not accepted yet — open Details to read the order and accept it."
+        )
+      }
+      meta={
+        local ? (
+          <>
+            {local.item_count} item{local.item_count === 1 ? "" : "s"} ·{" "}
+            {formatMinorCurrency(local.total_minor_units)} · placed{" "}
+            {shortAgo(local.placed_at, now)}
+          </>
+        ) : order.first_seen_at ? (
+          <>arrived {shortAgo(order.first_seen_at, now)}</>
+        ) : null
+      }
+      alerts={
+        clock.urgency !== "none" ||
+        placement.pipelineWarning ||
+        blockingCount > 0 ||
+        cancelLabel ? (
+          <>
+            {clock.urgency !== "none" ? (
               <div
-                key={row.rowId}
-                className={`rounded-[var(--admin-radius-lg)] border px-3 py-2 text-xs ${
-                  blocking
-                    ? "border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]"
-                    : "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)]"
-                }`}
+                className={`flex items-start gap-2 rounded-[var(--admin-radius-lg)] border px-3 py-1.5 text-xs font-bold ${URGENCY_STYLES[clock.urgency]}`}
               >
-                <p className="font-bold">
-                  <span aria-hidden>{blocking ? "🛑" : "📋"}</span>{" "}
-                  {summary.headline}
-                </p>
-                <p className="mt-1 font-normal">{summary.reason}</p>
-                {summary.decision ? (
-                  <p className="mt-1 font-normal">
-                    <span className="font-bold">{summary.decision.label}:</span>{" "}
-                    {summary.decision.detail}
-                    {row.resolvedByEmployee ? ` — ${row.resolvedByEmployee}` : ""}
-                  </p>
-                ) : null}
-                {/* Stated rather than hidden. A resolved row whose recorded
-                    decision is not one this software recognises is a real
-                    reconciliation problem, and showing whichever option
-                    happened to be first would be a guess. */}
-                {summary.needsAttention && !blocking ? (
-                  <p className="mt-1 font-bold text-[var(--admin-gold)]">
-                    Needs a look — no recognised decision was recorded for this one.
-                  </p>
-                ) : null}
+                <span aria-hidden>{URGENCY_ICONS[clock.urgency]}</span>
+                <span>{clock.label}</span>
               </div>
-            );
-          })}
-        </div>
-      ) : null}
-
-      {/* ── The single next action ─────────────────────────────────
-          Imperative and singular, from the core. The buttons above say what
-          the software CAN do; this says what the person should do next. On a
-          tablet held by somebody four orders behind, that distinction is the
-          difference between a screen that helps and a screen to interpret. */}
-      <p className="mt-2 text-xs font-bold text-[var(--admin-text-muted)]">
-        {placement.action}
-      </p>
-
-      {/* Why there is nothing to do, when there is nothing to do.
-          An order with no buttons and no explanation reads as a
-          broken screen. */}
-      {plan.actions.length === 0 && plan.blockedReason ? (
-        <p className="mt-3 text-xs text-[var(--admin-text-faint)]">
-          {plan.blockedReason}
-        </p>
-      ) : null}
-
-      {/* The hint for each offered action, listed under the buttons
-          rather than as tooltips: a tooltip is invisible on the
-          tablet at the counter, which is the device this screen is
-          actually used on. */}
-      {plan.actions.length > 0 ? (
-        <ul className="mt-2 space-y-0.5">
-          {plan.actions.map((a) => (
-            <li
-              key={`${a.kind}:${a.status ?? "ack"}`}
-              className="text-[0.7rem] leading-relaxed text-[var(--admin-text-faint)]"
-            >
-              <span className="font-bold">{a.label}:</span> {a.hint}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </Card>
+            ) : null}
+            {/* The pipeline warning: the one failure nobody can see. Full
+                explanation and the announcer link are on the details page. */}
+            {placement.pipelineWarning ? (
+              <p className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] px-3 py-1.5 text-xs font-bold text-[var(--admin-danger)]">
+                ⚠️ {placement.pipelineWarning}
+              </p>
+            ) : null}
+            {blockingCount > 0 ? (
+              <p className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] px-3 py-1.5 text-xs font-bold text-[var(--admin-danger)]">
+                🛑 A register is waiting on this cancelled order — open Details.
+              </p>
+            ) : null}
+            {cancelLabel ? (
+              <p className="text-xs font-bold text-[var(--admin-danger)]">{cancelLabel}</p>
+            ) : null}
+          </>
+        ) : null
+      }
+      footer={
+        local ? (
+          <OrderStatusFlow status={local.status} />
+        ) : (
+          <p className="text-xs font-bold text-[var(--admin-text-muted)]">{placement.action}</p>
+        )
+      }
+    />
   );
+}
+
+/** "5m ago" — the same coarse clock the website rows use. */
+function shortAgo(iso: string | null | undefined, now: Date): string {
+  const t = iso ? Date.parse(iso) : NaN;
+  if (!Number.isFinite(t)) return "—";
+  const mins = Math.floor((now.getTime() - t) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }

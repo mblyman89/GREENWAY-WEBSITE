@@ -5,11 +5,11 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Card } from "@/components/admin/ui/Card";
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
 import { formatMinorCurrency } from "@/lib/leafly/format";
-import { listOrdersPaged, getOrderStatusCounts, registerPickedUpOrderIds } from "@/lib/orders/orders-store";
+import { listOrdersPaged, getOrderStatusCounts, registerPickedUpOrderIds, listOrdersByIds } from "@/lib/orders/orders-store";
+import { BOARD_EXCLUDED_ORIGINS } from "@/lib/orders/order-board-split-core";
 import { REGISTER_PICKED_UP_LABEL } from "@/lib/pos/pickup-progress-core";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
 import {
@@ -22,14 +22,14 @@ import {
 import { ListPager } from "@/components/admin/ux/ListPager";
 import {
   ORDER_STATUS_LABELS,
-  ORDER_FORWARD_TRANSITIONS,
   type OrderStatus,
 } from "@/lib/orders/types";
 import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 import { OrderOriginBadge } from "@/components/admin/orders/OrderOriginBadge";
 import { listPoolNamesStatus } from "@/lib/orders/order-name-pool-store";
 import { getPrinterSettings, isPrinterOnline } from "@/lib/printing/printer-store";
-import { setOrderStatusAction, testPrintFromOrdersAction } from "./actions";
+import { testPrintFromOrdersAction } from "./actions";
+import { OrderBoardRow } from "@/components/admin/orders/OrderBoardRow";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
 import { OrderNamePoolManager } from "@/components/admin/orders/OrderNamePoolManager";
 import { NewOrderAlert } from "@/components/admin/orders/NewOrderAlert";
@@ -250,6 +250,11 @@ export default async function OrdersAdminPage({
     placedTo,
     totalMin,
     totalMax,
+    // SLICE L-38 — Leafly (every marketplace origin) has its own panel below,
+    // so it is left out of this table in EVERY view: open, closed, filtered
+    // and searched. Carried in queryFilter so both reads (first page and the
+    // clamped refetch) exclude it — one place, no drift.
+    excludeOrigins: BOARD_EXCLUDED_ORIGINS,
   };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
   const [
@@ -263,7 +268,9 @@ export default async function OrdersAdminPage({
     announcerData,
   ] = await Promise.all([
     listOrdersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
-    getOrderStatusCounts(),
+    // SLICE L-38 — count only what the table shows, so the stat cards and the
+    // rows under them agree. Leafly keeps its own badge on its own panel.
+    getOrderStatusCounts({ excludeOrigins: BOARD_EXCLUDED_ORIGINS }),
     // SLICE 113: order-NAME pool + printer heartbeat, both fallback-safe (empty
     // pool / null settings when 0147 isn't applied or the printer isn't set up).
     //
@@ -385,6 +392,23 @@ export default async function OrdersAdminPage({
           "leafly register interrupts",
         )
       : { byOrderId: new Map(), degraded: false, problem: "" };
+  // SLICE L-38 — the Greenway copies of the linked Leafly orders, so each
+  // Leafly row shows the same customer / items / total line as a website row
+  // and its search box can find a name or an order number. Sequential for the
+  // same reason as the interrupts read above (it takes the ids the board
+  // actually returned), budgeted, and skipped when nothing is linked. On
+  // timeout the rows fall back to Leafly's own fields — degraded, not wrong.
+  const leaflyLinkedIds = leaflyBoard.orders
+    .map((o) => o.local_order_id ?? "")
+    .filter((id) => id.length > 0);
+  const leaflyLinkedOrders =
+    leaflyLinkedIds.length > 0
+      ? await withRenderBudget(
+          listOrdersByIds(leaflyLinkedIds),
+          new Map(),
+          "leafly linked orders",
+        )
+      : new Map();
   let { rows: orders, total } = firstPage;
   const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
   if (win.page !== rawPage && total > 0) {
@@ -598,6 +622,10 @@ export default async function OrdersAdminPage({
       sort={parseBoardSort(sp.lsort)}
       search={parseBoardSearch(sp.lq)}
       interrupts={leaflyInterrupts}
+      // SLICE L-38 — linked Greenway copies (row details + search) and the
+      // current view, carried to each Details page as `back`.
+      linkedOrders={leaflyLinkedOrders}
+      searchParams={sp}
       // The clock is read ONCE here and injected, so every countdown on the
       // page is measured from the same instant. Reading the time inside the
       // component per order would let two rows disagree about what time it
@@ -730,74 +758,58 @@ export default async function OrdersAdminPage({
     ) : (
       <div className="mt-5 grid gap-3">
         {orders.map((order) => {
-          const next = ORDER_FORWARD_TRANSITIONS[order.status];
+          // SLICE L-38 — no step button on the dashboard any more. The owner:
+          // "Instead of progressing through the steps in the dashboard, it
+          // should be done in the details page only." The row is the shared
+          // OrderBoardRow shell, so the Leafly rows below look identical.
           return (
-            <Card key={order.id} padding="sm" className="sm:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href={detailHref(order.id)}
-                      className="text-lg font-black text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
-                    >
-                      {resolveOrderDisplay(order.display_name, order.order_number)}
-                    </Link>
-                    <span
-                      className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${
-                        pickedUpAtRegister.has(order.id) ? STATUS_STYLES.completed : STATUS_STYLES[order.status]
-                      }`}
-                      title={pickedUpAtRegister.has(order.id) ? "Collected at the register — the register sale holds the payment and the books." : undefined}
-                    >
-                      {pickedUpAtRegister.has(order.id) ? `${REGISTER_PICKED_UP_LABEL} (register)` : ORDER_STATUS_LABELS[order.status]}
-                    </span>
-                    {/* SLICE L-12 hid the "Website" badge unconditionally,
-                        because badging all forty rows trains the eye to
-                        skip the column and takes the Leafly badge with
-                        it. SLICE L-22 keeps that for a shop that has
-                        never had a Leafly order, and drops it for one
-                        that has: in a genuinely mixed list, an unbadged
-                        row is identified only by the ABSENCE of a badge,
-                        which is indistinguishable from a badge that
-                        failed to render. Label everything, or label
-                        nothing — never half. The core decides, once, for
-                        the whole list. */}
-                    <OrderOriginBadge origin={order.origin} hideWebsite={!labelWebsiteRows} />
-                  </div>
-                  {order.display_name && order.display_name.trim() ? (
-                    <p className="mt-0.5 font-mono text-xs text-[var(--admin-text-faint)]">
-                      #{order.order_number}
-                    </p>
-                  ) : null}
-                  <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-                    {order.customer_first_name}
-                    {order.customer_last_name ? ` ${order.customer_last_name}` : ""}
-                    {order.customer_phone ? ` · ${order.customer_phone}` : ""}
-                  </p>
-                  <p className="mt-0.5 text-xs text-[var(--admin-text-faint)]">
-                    {order.item_count} item{order.item_count === 1 ? "" : "s"} ·{" "}
-                    {formatMinorCurrency(order.total_minor_units)} · placed {timeAgo(order.placed_at)}
-                  </p>
-                  <div className="mt-3">
-                    <OrderStatusFlow status={order.status} />
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {next ? (
-                    <form action={setOrderStatusAction}>
-                      <input type="hidden" name="id" value={order.id} />
-                      <input type="hidden" name="status" value={next} />
-                      <Button type="submit" variant="primary" size="sm">
-                        Mark {ORDER_STATUS_LABELS[next]}
-                      </Button>
-                    </form>
-                  ) : null}
-                  <Button href={detailHref(order.id)} variant="neutral" size="sm">
-                    Details
-                  </Button>
-                </div>
-              </div>
-            </Card>
+            <OrderBoardRow
+              key={order.id}
+              href={detailHref(order.id)}
+              title={resolveOrderDisplay(order.display_name, order.order_number)}
+              badges={
+                <>
+                  <span
+                    className={`rounded-full border px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] ${
+                      pickedUpAtRegister.has(order.id) ? STATUS_STYLES.completed : STATUS_STYLES[order.status]
+                    }`}
+                    title={pickedUpAtRegister.has(order.id) ? "Collected at the register — the register sale holds the payment and the books." : undefined}
+                  >
+                    {pickedUpAtRegister.has(order.id) ? `${REGISTER_PICKED_UP_LABEL} (register)` : ORDER_STATUS_LABELS[order.status]}
+                  </span>
+                  {/* SLICE L-12 hid the "Website" badge unconditionally,
+                      because badging all forty rows trains the eye to
+                      skip the column and takes the Leafly badge with
+                      it. SLICE L-22 keeps that for a shop that has
+                      never had a Leafly order, and drops it for one
+                      that has: in a genuinely mixed list, an unbadged
+                      row is identified only by the ABSENCE of a badge,
+                      which is indistinguishable from a badge that
+                      failed to render. Label everything, or label
+                      nothing — never half. The core decides, once, for
+                      the whole list. (L-38: Leafly rows no longer land
+                      here, but a register-origin row still can.) */}
+                  <OrderOriginBadge origin={order.origin} hideWebsite={!labelWebsiteRows} />
+                </>
+              }
+              reference={
+                order.display_name && order.display_name.trim() ? `#${order.order_number}` : null
+              }
+              customer={
+                <>
+                  {order.customer_first_name}
+                  {order.customer_last_name ? ` ${order.customer_last_name}` : ""}
+                  {order.customer_phone ? ` · ${order.customer_phone}` : ""}
+                </>
+              }
+              meta={
+                <>
+                  {order.item_count} item{order.item_count === 1 ? "" : "s"} ·{" "}
+                  {formatMinorCurrency(order.total_minor_units)} · placed {timeAgo(order.placed_at)}
+                </>
+              }
+              footer={<OrderStatusFlow status={order.status} />}
+            />
           );
         })}
       </div>

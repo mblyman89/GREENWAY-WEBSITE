@@ -46,6 +46,7 @@ const PAGE = read("src/app/admin/orders/page.tsx");
 const ACTIONS = read("src/app/admin/orders/actions.ts");
 const ANNOUNCER = read("src/components/admin/orders/AnnouncerPanel.tsx");
 const LEAFLY_BOARD = read("src/components/admin/orders/LeaflyOrdersPanel.tsx");
+const LEAFLY_WORKFLOW = read("src/components/admin/orders/LeaflyOrderWorkflow.tsx");
 const HARNESS = read("scripts/compliance/run-pure-selftests.ts");
 
 /**
@@ -405,11 +406,16 @@ describe("L-21 — the panel moves, the ALARM does not", () => {
 });
 
 describe("L-21 — nothing links to a place that no longer exists", () => {
-  it("the Leafly board's announcer jump crosses the tab boundary", () => {
-    const code = codeOnly(LEAFLY_BOARD);
+  it("the Leafly workflow's announcer jump crosses the tab boundary", () => {
+    // SLICE L-38 — the silent-arrival warning's full text + fix-it link moved
+    // with the rest of the per-order workflow to the details pages, which are
+    // NOT the orders page at all: a bare fragment there would scroll nowhere.
+    const code = codeOnly(LEAFLY_WORKFLOW);
     expect(code).toContain("setupAnchorHref(ANNOUNCER_PANEL_ANCHOR)");
     // The old bare fragment would now scroll nowhere at all.
-    expect(code).not.toContain("href={`#${ANNOUNCER_PANEL_ANCHOR}`}");
+    for (const src of [code, codeOnly(LEAFLY_BOARD)]) {
+      expect(src).not.toContain("href={`#${ANNOUNCER_PANEL_ANCHOR}`}");
+    }
   });
 
   it("the cross-tab href actually names the setup tab", () => {

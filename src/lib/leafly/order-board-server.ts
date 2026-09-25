@@ -619,3 +619,45 @@ export async function getLeaflyBoardOrder(
     return null;
   }
 }
+
+/**
+ * SLICE L-38 — which Leafly order (if any) a Greenway order came from.
+ *
+ * The Greenway order page needs this to show the Leafly steps for a
+ * marketplace order, because since L-38 those steps live on the details page
+ * and nowhere else. It reads ONE narrow column pair (`leafly_order_id` by
+ * `local_order_id`, both present since the table's first migration), so it
+ * needs no missing-column fallback; the full row is then read through
+ * getLeaflyBoardOrder(), which already owns that walk. Keeping this narrow is
+ * deliberate: a fifth fallback walk would be a fifth thing to keep in step
+ * with every future column (a test pins exactly four).
+ *
+ * Returns null when the order has no Leafly row, and on any failure (logged).
+ * Never throws.
+ */
+export async function getLeaflyOrderIdForLocalOrder(
+  localOrderId: string,
+): Promise<string | null> {
+  const id = localOrderId.trim();
+  if (!id) return null;
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("leafly_orders")
+      .select("leafly_order_id")
+      .eq("local_order_id", id)
+      .abortSignal(dbDeadline("order_read"))
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      console.error("[leafly/board] local→leafly link read failed:", error.message);
+      return null;
+    }
+    const leaflyId = (data as { leafly_order_id?: string | null } | null)?.leafly_order_id;
+    return typeof leaflyId === "string" && leaflyId.trim() ? leaflyId.trim() : null;
+  } catch (err) {
+    console.error("[leafly/board] local→leafly link read threw:", err);
+    return null;
+  }
+}

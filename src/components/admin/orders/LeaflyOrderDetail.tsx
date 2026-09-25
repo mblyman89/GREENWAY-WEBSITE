@@ -61,7 +61,7 @@
  * only job that field has here.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Badge, Button } from "@/components/admin/ui";
 import {
@@ -257,10 +257,14 @@ function UncollectedOrder({
   leaflyOrderId,
   unreadable,
   collect,
+  returnTo,
+  back,
 }: {
   leaflyOrderId: string;
   unreadable: boolean;
   collect: (formData: FormData) => void | Promise<void>;
+  returnTo?: string;
+  back?: string;
 }) {
   return (
     <div className="space-y-3">
@@ -288,6 +292,9 @@ function UncollectedOrder({
 
       <form action={collect}>
         <input type="hidden" name="leaflyOrderId" value={leaflyOrderId} />
+        {/* SLICE L-38 — land back on the details page after collecting. */}
+        {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
+        {returnTo && back ? <input type="hidden" name="back" value={back} /> : null}
         <Button type="submit" variant="primary" size="sm">
           Get the order details from Leafly
         </Button>
@@ -300,6 +307,9 @@ export function LeaflyOrderDetailPanel({
   leaflyOrderId,
   load,
   collect,
+  returnTo,
+  back,
+  defaultOpen = false,
 }: {
   leaflyOrderId: string;
   /** The server action. Injected so this component never imports server code. */
@@ -310,6 +320,14 @@ export function LeaflyOrderDetailPanel({
    * code.
    */
   collect: (formData: FormData) => void | Promise<void>;
+  /** SLICE L-38 — post-collect landing (see LeaflyOrderActions). */
+  returnTo?: string;
+  back?: string;
+  /**
+   * SLICE L-38 — on the details page the order IS the point of the page, so
+   * it opens itself instead of hiding behind a second click.
+   */
+  defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -340,6 +358,15 @@ export function LeaflyOrderDetailPanel({
       setBusy(false);
     }
   }, [open, result, load, leaflyOrderId]);
+
+  // SLICE L-38 — open once on arrival when asked to. A ref, not state, so a
+  // later manual close is respected instead of being re-opened by a render.
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (!defaultOpen || autoOpened.current) return;
+    autoOpened.current = true;
+    void toggle();
+  }, [defaultOpen, toggle]);
 
   const detail = result?.detail ?? null;
   const access = result?.mediaAccess ?? null;
@@ -391,6 +418,8 @@ export function LeaflyOrderDetailPanel({
               leaflyOrderId={leaflyOrderId}
               unreadable={result.payloadState === "unreadable"}
               collect={collect}
+              returnTo={returnTo}
+              back={back}
             />
           ) : (
             <>

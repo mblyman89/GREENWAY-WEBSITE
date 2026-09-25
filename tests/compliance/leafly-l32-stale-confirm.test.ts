@@ -77,7 +77,11 @@ const ORDER_ID = "11111111-2222-3333-4444-555555555555";
 const ACK_AT = "2025-09-24T04:00:00.000Z";
 
 const ACTIONS_SRC = "src/components/admin/orders/LeaflyOrderActions.tsx";
-const PANEL_SRC = "src/components/admin/orders/LeaflyOrdersPanel.tsx";
+// SLICE L-38 — the per-order Leafly workflow (step buttons, which-step strip,
+// the order itself) moved off the dashboard row into LeaflyOrderWorkflow,
+// which the details pages render. The name is kept so the history reads; the
+// file it points at is where the element now lives.
+const PANEL_SRC = "src/components/admin/orders/LeaflyOrderWorkflow.tsx";
 const FETCH_SRC = "src/lib/leafly/order-fetch-server.ts";
 const ACK_SERVER_SRC = "src/lib/leafly/order-ack-server.ts";
 const SPEC_SRC = "docs/leafly-specs/order-api-v1.openapi.json";
@@ -463,7 +467,7 @@ describe("L-32 §6 — the repair button posts to the repair action", () => {
     expect(hidden).toMatch(/action\.kind === "status"/);
   });
 
-  it("the panel wires it to the existing, deadline-bounded collect action", () => {
+  it("the workflow wires it to the existing, deadline-bounded collect action", () => {
     expect(panelCode).toMatch(/reconcileAction=\{collectLeaflyOrderAction\}/);
   });
 

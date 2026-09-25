@@ -266,6 +266,8 @@ function ActionForm({
   reconcileAction,
   /** Shown inside the cancel confirmation so the reason is no surprise. */
   defaultCancelReasonLabel,
+  returnTo,
+  back,
 }: {
   action: PlannedAction;
   leaflyOrderId: string;
@@ -279,6 +281,9 @@ function ActionForm({
    */
   reconcileAction: (formData: FormData) => void | Promise<void>;
   defaultCancelReasonLabel: string;
+  /** SLICE L-38 — see LeaflyOrderActions. */
+  returnTo?: string;
+  back?: string;
 }) {
   const [confirming, setConfirming] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -341,6 +346,11 @@ function ActionForm({
   const hiddenFields = (
     <>
       <input type="hidden" name="leaflyOrderId" value={leaflyOrderId} />
+      {/* SLICE L-38 — where to land afterwards. The server builds the path
+          itself (leaflyActionReturnHref); these only choose "the detail page"
+          and carry the dashboard's view along, never a URL. */}
+      {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
+      {returnTo && back ? <input type="hidden" name="back" value={back} /> : null}
       {/* SLICE L-32: `!isAck` alone used to be the guard. It is now
           `action.kind === "status"`, stated positively, because the reconcile
           action is also "not an acknowledge" and must NOT post a nextStatus —
@@ -447,6 +457,8 @@ export function LeaflyOrderActions({
   reconcileAction,
   irreversibleWarning,
   defaultCancelReasonLabel,
+  returnTo,
+  back,
 }: {
   actions: PlannedAction[];
   leaflyOrderId: string;
@@ -456,6 +468,14 @@ export function LeaflyOrderActions({
   reconcileAction: (formData: FormData) => void | Promise<void>;
   irreversibleWarning: string;
   defaultCancelReasonLabel: string;
+  /**
+   * SLICE L-38 — the steps now live on the order's details page, so after a
+   * press the operator must land back THERE, not on the dashboard. "detail"
+   * asks the server for that; absent keeps the old dashboard redirect.
+   */
+  returnTo?: string;
+  /** The dashboard view to restore from "Back to orders" (a query string). */
+  back?: string;
 }) {
   if (actions.length === 0) return null;
 
@@ -527,6 +547,8 @@ export function LeaflyOrderActions({
             statusAction={statusAction}
             reconcileAction={reconcileAction}
             defaultCancelReasonLabel={defaultCancelReasonLabel}
+            returnTo={returnTo}
+            back={back}
           />
         ))}
       </div>

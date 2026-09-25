@@ -71,6 +71,16 @@ export const TRANSIENT_QUERY_KEYS: ReadonlySet<string> = new Set([
   "kbnew",
   "kberr",
   "service",
+  // SLICE L-38 — the Leafly action outcome banners. Leafly steps are now
+  // pressed on the order's details page and carry the dashboard view along in
+  // `back`; restoring these would re-show "Order confirmed" on the dashboard.
+  "leaflyMsg",
+  "leaflyWarn",
+  "leaflyErr",
+  "leaflyFix",
+  "leaflyCode",
+  // Greenway order-page one-shots (the page already never restores them).
+  "blocked",
 ]);
 
 /**

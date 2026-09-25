@@ -23,6 +23,22 @@ import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 import { OrderOriginBadge } from "@/components/admin/orders/OrderOriginBadge";
 import { formatDateTime } from "@/lib/pos/format";
 import { REGISTER_PICKED_UP_LABEL, isRegisterPickedUpNote } from "@/lib/pos/pickup-progress-core";
+// SLICE L-38 — a Leafly order's steps live HERE (and only here) now.
+import {
+  stepsBelongToMarketplace,
+  MARKETPLACE_STEPS_REFUSAL,
+} from "@/lib/orders/order-board-split-core";
+import {
+  getLeaflyBoardOrder,
+  getLeaflyOrderIdForLocalOrder,
+} from "@/lib/leafly/order-board-server";
+import { loadLeaflyOrderIntegrationKey } from "@/lib/leafly/webhook-server";
+import { listInterruptsForOrders } from "@/lib/leafly/register-claim-server";
+import { withRenderBudget } from "@/lib/supabase/render-budget";
+import {
+  LeaflyOrderWorkflow,
+  LeaflyOutcomeBanners,
+} from "@/components/admin/orders/LeaflyOrderWorkflow";
 import {
   setOrderStatusAction,
   updateOrderNoteAction,
@@ -30,6 +46,11 @@ import {
 } from "../actions";
 
 export const dynamic = "force-dynamic";
+// SLICE L-38 — this page now hosts the Leafly step actions (acknowledge,
+// confirm, ready, picked up, collect), which inherit the page's budget. The
+// board already sets 300 for the same reason; a Leafly round trip that
+// outlives the default would otherwise be cut off mid-step.
+export const maxDuration = 300;
 
 const STATUS_STYLES: Record<OrderStatus, string> = {
   new: "border-[var(--admin-orange)]/50 bg-[var(--admin-orange)]/10 text-[var(--admin-orange)]",
@@ -46,7 +67,19 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ blocked?: string; medq?: string; loyq?: string; ok?: string; back?: string }>;
+  searchParams?: Promise<{
+    blocked?: string;
+    medq?: string;
+    loyq?: string;
+    ok?: string;
+    back?: string;
+    // SLICE L-38 — the Leafly step outcome, set by leafly-actions.ts.
+    leaflyMsg?: string;
+    leaflyWarn?: string;
+    leaflyErr?: string;
+    leaflyCode?: string;
+    leaflyFix?: string;
+  }>;
 }) {
   const session = await requirePermission("orders.view");
   const { id } = await params;
@@ -78,6 +111,38 @@ export default async function OrderDetailPage({
   const limitFlagged = order.limit_flag === true;
   const limitReasons = Array.isArray(order.limit_reasons) ? order.limit_reasons : [];
   const canOverrideLimit = can(session.profile.role, "sales_limit.override");
+
+  // ── SLICE L-38: LEAFLY STEPS ON THE DETAILS PAGE ──────────────────────────
+  // A Leafly order is moved along with the Leafly steps (they push to Leafly
+  // and then mirror onto this order), never with the Greenway status buttons
+  // — the server refuses those too (actions.ts). Once it is closed, the
+  // normal logged Reopen below applies to it like any other order.
+  const leaflySteps = stepsBelongToMarketplace(order.origin) && !isClosed;
+  let leaflyRow: Awaited<ReturnType<typeof getLeaflyBoardOrder>> = null;
+  let leaflyKeyPresent = false;
+  let leaflyInterrupts: Awaited<ReturnType<typeof listInterruptsForOrders>>["byOrderId"] =
+    new Map();
+  if (leaflySteps) {
+    const leaflyId = await withRenderBudget(
+      getLeaflyOrderIdForLocalOrder(order.id),
+      null,
+      "leafly link for order",
+    );
+    if (leaflyId) {
+      const [row, key, interrupts] = await Promise.all([
+        withRenderBudget(getLeaflyBoardOrder(leaflyId), null, "leafly order"),
+        loadLeaflyOrderIntegrationKey(),
+        withRenderBudget(
+          listInterruptsForOrders([order.id]),
+          { byOrderId: new Map(), degraded: true, problem: "" },
+          "leafly interrupts for order",
+        ),
+      ]);
+      leaflyRow = row;
+      leaflyKeyPresent = Boolean(key && key.trim());
+      leaflyInterrupts = interrupts.byOrderId;
+    }
+  }
 
   return (
     <div>
@@ -120,11 +185,19 @@ export default async function OrderDetailPage({
         {blockedMessage ? (
           <div className="mb-5 rounded-2xl border border-red-500/40 bg-red-500/10 p-5">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-red-300">
-              Completion blocked — compliance gate
+              {blockedMessage === MARKETPLACE_STEPS_REFUSAL
+                ? "Use the Leafly steps on this page"
+                : "Completion blocked — compliance gate"}
             </p>
             <p className="mt-2 text-sm leading-6 text-red-200">{blockedMessage}</p>
           </div>
         ) : null}
+        <LeaflyOutcomeBanners
+          message={sp.leaflyMsg ?? null}
+          warning={sp.leaflyWarn ?? null}
+          error={sp.leaflyErr ?? null}
+          errorCode={sp.leaflyFix ?? sp.leaflyCode ?? null}
+        />
         {okMessage ? (
           <div className="mb-5 rounded-2xl border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 p-5">
             <p className="text-sm leading-6 text-[var(--admin-accent)]">{okMessage}</p>
@@ -207,7 +280,38 @@ export default async function OrderDetailPage({
           </div>
 
           {/* Workflow */}
-          {!isClosed ? (
+          {leaflySteps ? (
+            <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-5">
+              <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/70">
+                Leafly steps
+              </h2>
+              <p className="mt-2 text-xs leading-5 text-white/40">
+                This order came from Leafly. Each step below is sent to Leafly first (so the
+                customer&rsquo;s Leafly app stays in step) and then copied onto this order.
+              </p>
+              {leaflyRow ? (
+                <div className="mt-4">
+                  <LeaflyOrderWorkflow
+                    order={leaflyRow}
+                    orderIntegrationKeyPresent={leaflyKeyPresent}
+                    now={new Date()}
+                    interrupts={leaflyInterrupts.get(order.id)}
+                    back={sp.back}
+                  />
+                </div>
+              ) : (
+                <p
+                  role="alert"
+                  className="mt-4 rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/10 px-3 py-2.5 text-sm text-[var(--admin-gold)]"
+                >
+                  The Leafly side of this order couldn&rsquo;t be loaded just now, so its steps
+                  aren&rsquo;t shown. Refresh to try again. The status buttons stay off on
+                  purpose: changing only our copy would leave the customer&rsquo;s Leafly app
+                  showing the wrong step.
+                </p>
+              )}
+            </div>
+          ) : !isClosed ? (
             <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-5">
               <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/70">
                 Update status
