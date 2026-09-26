@@ -122,6 +122,15 @@ import type {
 } from "@/lib/leafly/order-detail-core";
 import { loadLeaflyOrderDetail } from "@/lib/leafly/order-detail-server";
 import { collectLeaflyOrder } from "@/lib/leafly/order-fetch-server";
+// SLICE L-48 — "Update Order's Cart" (Change items).
+import {
+  loadLeaflyCartEditor,
+  previewLeaflyOrderCart,
+  updateLeaflyOrderCart,
+  type LeaflyCartEditorData,
+  type LeaflyCartPreview,
+} from "@/lib/leafly/order-cart-server";
+import { parseDesiredCart } from "@/lib/leafly/order-cart-core";
 
 /**
  * Where to send the operator afterwards, carrying the outcome.
@@ -638,3 +647,119 @@ export async function collectLeaflyOrderAction(
     }, formData),
   );
 }
+
+/* ------------------------------------------------------------------------- *
+ * SLICE L-48 — CHANGE ITEMS ("Update Order's Cart")
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Load what the "Change items" editor needs: Leafly's current cart, the
+ * signature that proves the editor saw THIS version of it, whether the order
+ * may be edited (and why not), and the sellable sizes for the add/swap
+ * picker. A read, so it returns rather than redirects — exactly like
+ * `loadLeaflyOrderDetailAction` above, and for the same reason.
+ */
+export async function loadLeaflyCartEditorAction(
+  leaflyOrderId: string,
+): Promise<LeaflyCartEditorData | null> {
+  await requirePermission("orders.manage");
+  const id = typeof leaflyOrderId === "string" ? leaflyOrderId.trim() : "";
+  if (id === "") return null;
+  const raced = await withActionDeadline(loadLeaflyCartEditor(id));
+  return raced.timedOut ? null : raced.value;
+}
+
+/**
+ * The confirmation step: run the SAME decision the send will run, against
+ * fresh reads, and send nothing. So the screen says exactly what will happen
+ * (including "that price is an override" and "this row is out of stock")
+ * before anything leaves the building.
+ */
+export async function previewLeaflyCartAction(input: {
+  leaflyOrderId: string;
+  lines: unknown;
+  signature: string;
+}): Promise<LeaflyCartPreview | null> {
+  await requirePermission("orders.manage");
+  const id = typeof input?.leaflyOrderId === "string" ? input.leaflyOrderId.trim() : "";
+  if (id === "") return null;
+  const raced = await withActionDeadline(
+    previewLeaflyOrderCart({
+      leaflyOrderId: id,
+      desired: parseDesiredCart(input.lines),
+      expectedSignature: typeof input.signature === "string" ? input.signature : null,
+    }),
+  );
+  return raced.timedOut ? null : raced.value;
+}
+
+/**
+ * Send the change to Leafly. A real `<form>` post, so it follows every other
+ * mutation in this file: permission, re-read (inside the server layer), send,
+ * audit, revalidate, redirect back to the order with the outcome banner.
+ *
+ * `priceOverridesApproved: true` — the dashboard is behind `orders.manage`
+ * (owner, admin, manager, staff), the same right that may cancel the order
+ * outright. The register, which any budtender can reach, asks for a manager
+ * PIN instead (api/pos/pickup `cart` mode).
+ */
+export async function updateLeaflyOrderCartAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const leaflyOrderId = String(formData.get("leaflyOrderId") ?? "").trim();
+  const signature = String(formData.get("cartSignature") ?? "");
+  const desired = parseDesiredCart(String(formData.get("cartLines") ?? ""));
+
+  if (!leaflyOrderId) {
+    redirect(
+      backTo({ leaflyErr: "No Leafly order was identified, so nothing was sent.", leaflyCode: "missing_order_id" }, formData),
+    );
+  }
+
+  const raced = await withActionDeadline(
+    updateLeaflyOrderCart({
+      leaflyOrderId,
+      desired,
+      expectedSignature: signature,
+      priceOverridesApproved: true,
+      staffId: session.profile.id,
+      actorLabel: session.email ?? "Back office",
+    }),
+  );
+
+  if (raced.timedOut) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "leafly.order_cart_timeout",
+      entityType: "leafly_order",
+      entityId: leaflyOrderId,
+      after: { code: "action_timeout", message: raced.message },
+    }).catch(() => undefined);
+    redirect(backTo({ leaflyErr: raced.message.slice(0, 500), leaflyCode: "action_timeout" }, formData));
+  }
+
+  const result = raced.value;
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: result.ok ? "leafly.order_cart_updated" : "leafly.order_cart_failed",
+    entityType: "leafly_order",
+    entityId: leaflyOrderId,
+    after: {
+      code: result.code,
+      httpStatus: result.httpStatus,
+      refused: result.refused,
+      disposition: result.assessment?.disposition ?? null,
+      summary: result.summary,
+      changes: result.changes.filter((c) => c.kind !== "unchanged").map((c) => c.sentence),
+      priceOverrides: result.summary.priceOverrides,
+      verified: result.verified,
+      sent: result.sentBody,
+      message: result.message,
+    },
+  }).catch(() => undefined);
+
+  revalidateLeaflyViews(result.localOrderId);
+  redirect(backTo(resultParams(result), formData));
+}
+

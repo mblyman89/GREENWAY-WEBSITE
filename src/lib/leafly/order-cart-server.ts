@@ -289,6 +289,74 @@ export async function loadLeaflyCartEditor(leaflyOrderId: string): Promise<Leafl
 }
 
 // ---------------------------------------------------------------------------
+// Preview (dry run)
+// ---------------------------------------------------------------------------
+
+export type LeaflyCartPreview = {
+  allowed: boolean;
+  code: string;
+  reason: string;
+  changes: CartChange[];
+  summary: CartUpdateDecision["summary"];
+  estimatedTopLineMinor: number | null;
+  needsManagerApproval: boolean;
+};
+
+/**
+ * Run the EXACT decision the send will run, against fresh reads, and send
+ * nothing and record nothing. This is what the confirmation screen shows, so
+ * "what you are about to send" is computed by the same rules as the send
+ * itself rather than by a second copy in the browser.
+ *
+ * `priceOverridesApproved` is passed as undefined (the core's permissive
+ * default) so an override is REPORTED (needsManagerApproval) rather than
+ * refused — the register uses that flag to decide whether to ask for a PIN.
+ */
+export async function previewLeaflyOrderCart(input: {
+  leaflyOrderId: string;
+  desired: readonly DesiredCartLine[] | null;
+  expectedSignature: string | null;
+}): Promise<LeaflyCartPreview> {
+  const id = (input.leaflyOrderId ?? "").trim();
+  const row = await readCartOrderRow(id);
+  const none = { changes: [], summary: { ...EMPTY_SUMMARY }, estimatedTopLineMinor: null, needsManagerApproval: false };
+  if (!row) {
+    return { allowed: false, code: "not_found_locally", reason: "That Leafly order is not in our records.", ...none };
+  }
+  if (input.desired === null) {
+    return { allowed: false, code: "bad_request", reason: "The list of items could not be read. Reload and try again.", ...none };
+  }
+  const [{ orderIntegrationKey }, hold, menu] = await Promise.all([
+    resolveLeaflyOrderApiContext(),
+    readHold(row.leafly_order_id),
+    loadCartMenu(),
+  ]);
+  const d = decideCartUpdate({
+    leaflyOrderId: row.leafly_order_id,
+    orderIntegrationKey,
+    acknowledgedAt: row.acknowledged_at,
+    leaflyStatus: row.leafly_status,
+    fulfillmentMechanism: row.fulfillment_mechanism,
+    current: readEditableLeaflyCart(row.raw_order),
+    desired: input.desired,
+    lookup: menu.lookup,
+    menuLoaded: menu.loaded,
+    registerHolds: hold.holds,
+    registerWhere: hold.where,
+    expectedSignature: input.expectedSignature,
+  });
+  return {
+    allowed: d.allowed,
+    code: d.code,
+    reason: d.reason,
+    changes: d.changes,
+    summary: d.summary,
+    estimatedTopLineMinor: d.estimatedTopLineMinor,
+    needsManagerApproval: d.needsManagerApproval,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The update
 // ---------------------------------------------------------------------------
 
