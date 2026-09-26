@@ -22,7 +22,7 @@ CI and both Vercel checks pass and production reports success.
 | L-45 | `orderIntegrationKey` = Dispensary Menu Key cross-check | **Done** (see "L-45: what shipped" below) |
 | L-46 | 9-second inbound response budget | **Done** (see "L-46: what shipped" below) |
 | L-47 | Certification "prove every action" evidence panel | **Done** (see "L-47: what shipped" below). **Needs migration 0231.** |
-| L-48 | Optional "Update Order's Cart" (change an order's items) on the dashboard and the register | Next |
+| L-48 | Optional "Update Order's Cart" (change an order's items) on the dashboard and the register | **Done** (see "L-48: what shipped" below). No migration. |
 
 ---
 
@@ -548,3 +548,40 @@ null plus a `[auto-acknowledge]` message prefix. No schema change.
 | 10 | Nothing to clear for manual tools | L-47 done: manual button runs count as proof |
 | 11 | Certification window; 2-week sandbox logs | L-47 done (14-day expiry, window suggestion, email draft) |
 | 12 | Separate production credentials | Already supported (environment-scoped keys) |
+
+---
+
+## L-48: what shipped
+
+The Leafly **Update Order's Cart** feature: `POST /{key}/orders/{id}/cart`
+(`updateCartItems`). It is Optional for certification. It is wired on both
+the dashboard and the front register.
+
+- **Core.** `src/lib/leafly/order-cart-core.ts` is pure. It has 128
+  self-tests (floor 125) and is registered in `run-pure-selftests.ts` and
+  `pure-selftests.test.ts`.
+  - It builds the all-or-nothing body: a removal is an omission, an
+    addition has `id: null`, and a substitution keeps the same id with a new
+    variant. Every body has `taxes: []` and `deliveryFee: 0`.
+  - Gates: the order must be acknowledged and pending, confirmed or ready.
+    It must not be a delivery order, have a register hold, or have an
+    unreadable cart. A cart signature catches stale screens. Stock and
+    orderability are checked, and price overrides need approval.
+- **Server.** `src/lib/leafly/order-cart-server.ts` does the load, the
+  preview (a dry run) and the update.
+  - Transport is `postLeaflyCartUpdate` → `orderApiPost(..., "cart_update")`
+    (15s, 2 attempts).
+  - Every dialled attempt is logged in the ledger as operation `cart`.
+  - On a 200 it verifies the answer, stores it, and rebuilds the local
+    order INSERT-THEN-DELETE, with totals and a timeline note.
+  - With no answer, it reconciles by re-reading the order.
+- **Dashboard.** `LeaflyCartEditor` inside `LeaflyOrderWorkflow`, with
+  actions in `leafly-actions.ts`: `orders.manage`, audited.
+- **Register.** `/api/pos/pickup` `cartLoad` and `cart`, with the review
+  always run first. `RegisterCartEditor` sits in `RegisterShell`. A
+  manager or lead PIN is needed only for a hand-set price.
+- **Tests.**
+  - `leafly-l48-cart-server.test.ts` (23)
+  - `leafly-l48-cart-register.test.ts` (26)
+  - `scripts/recon/l48-mutation-check.sh`: all 32 mutations killed
+

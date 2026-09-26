@@ -96,4 +96,140 @@ logged with an empty staff column and the message starts with
 
 ## Part 2: L-48, changing an order's items
 
-*(Added when L-48 ships. See below.)*
+Leafly calls this **"Update Order's Cart"**. It is **Optional** for
+certification, but you asked for it, so it is built. It works on
+**both the dashboard and the front register**.
+
+**No migration is needed for this part.** The log table already accepts
+cart changes (migration 0226). Migration 0231 is only needed for Part 1.
+
+### What you can do
+
+On a Leafly order you can:
+
+- **Change a quantity** with the − and + buttons.
+- **Swap** an item for a different product or size.
+- **Remove** an item.
+- **Add** an item from your menu.
+- **Set a price by hand** ("Price each $"). Leave it empty for the normal
+  menu price.
+
+You can make several changes at once. Leafly applies them **all together
+or not at all**. It never applies half of a change.
+
+### On the dashboard (Orders)
+
+1. Open the Leafly order. You'll see **"✏️ Change items"**. It only shows
+   once the order is acknowledged and Leafly has it as pending, confirmed
+   or ready.
+2. Make your changes. The item picker only shows products that are on the
+   menu you publish to Leafly and in stock.
+3. Press **Review changes**. Nothing is sent yet. The screen lists every
+   change in plain words, for example "Remove 1 x OG Kush (1g)" or "Swap
+   Blue Dream 3.5g for Gelato 3.5g". It also shows an estimate before
+   deals.
+4. Press **Send these changes to Leafly**. If you touch anything after
+   reviewing, the review is thrown away and you must review again. That
+   way you can never send something you didn't see.
+
+A hand-set price is allowed on the dashboard without a PIN, because only
+staff with the "manage orders" permission can use it. It is still marked in
+the review and in the audit log.
+
+### At the front register
+
+1. Open the Leafly order in the pickup queue. Press **"✏️ Change items
+   (swap, add, remove, quantity)…"**.
+2. It works the same way: make the change, **Review changes**, then
+   **Send these changes to Leafly**.
+3. **The PIN rule:**
+   - Ordinary changes (quantity, swap, add, remove at the menu price)
+     need **no PIN**.
+   - A **hand-set price** needs a **manager or lead PIN**. The PIN box only
+     appears when the review says so.
+   - A budtender's PIN is refused. Wrong PINs count toward the same lockout
+     as the other register PINs.
+4. **Start handover** is greyed out while the editor is open, so you can't
+   hand over a bag that is mid-change.
+5. Website orders don't get this button. Change those the usual way, by
+   loading them into a sale.
+
+### What happens when you send
+
+- **Leafly says yes.** We check that the order Leafly sends back really has
+  what we asked for. We save it, then rebuild the register's copy of the
+  order: new items, new totals and new item count. A note goes on the
+  order's timeline saying who changed what. **Leafly tells the customer.**
+  - We add the new lines *before* removing the old ones, so the register
+    never shows an empty bag, even if something fails halfway.
+  - If Leafly's answer doesn't match what we sent, you get a warning
+    instead of a green tick.
+- **Leafly says no** (for example, an item went out of stock at Leafly):
+  nothing changes. We re-read the order from Leafly so the next attempt
+  starts from Leafly's real items.
+- **No answer** (network timeout): we re-read the order from Leafly and
+  tell you which of these happened:
+  - "it went through";
+  - "it did not, safe to try again";
+  - "we can't tell, do NOT send again, use *Check this order with Leafly*
+    first".
+
+  It is only shown as a success when the re-read proves it.
+
+### When we refuse to send, with the reason shown
+
+We refuse, and show the reason, when:
+
+- the order isn't acknowledged yet;
+- the order is picked up, canceled or expired, or in any status other than
+  pending, confirmed or ready;
+- it is a delivery order (Greenway is pickup-only);
+- a register sale is holding the order;
+- we can't read every line of the order (Leafly removes any line we leave
+  out, so we won't risk it);
+- someone else changed the order since you opened the editor ("reload and
+  make your change again");
+- the change would leave no items (cancel the order instead);
+- an item is not on your Leafly menu, not orderable, out of stock, or you
+  asked for more than is on hand.
+
+### Every attempt is recorded
+
+- Each send is logged in the Leafly call log as a **cart** call. The
+  **"Change the order's items"** row on the certification proof card (Part
+  1) turns green after the first success.
+- The dashboard audit log records `leafly.order_cart_updated`, `_failed` or
+  `_timeout`.
+- The register records `order.cart_updated_at_register` or
+  `order.register_cart_failed`. Each record includes the employee, the
+  device, the approving manager (if any) and the list of changes.
+
+### How to test it (sandbox)
+
+1. Place a sandbox test order on Leafly with two items. Wait for it to be
+   acknowledged, which happens automatically.
+2. Dashboard: open it, press **Change items**, remove one item, then
+   **Review** and **Send**.
+   - Check the order on Leafly: the item should be gone.
+   - Check the proof card: "Change the order's items" should be green.
+3. Register: open the same order and press + on the remaining item, then
+   Review and Send. No PIN should be asked for.
+4. Register: set a hand-set price. The PIN box should appear.
+   - A budtender PIN should be refused.
+   - A manager PIN should go through.
+5. Try **Change items** on a picked-up order. It should be refused with the
+   reason.
+
+### How it was tested
+
+- 128 rule checks in the core, which is also counted in the main test
+  suite.
+- 23 tests that run the real server code against a fake Leafly and a fake
+  database.
+- 26 tests of the register route: the PIN gates, the dry run, the refusals,
+  the real register store, the audit names, the wiring, and the Leafly spec
+  file itself.
+- A **mutation check** (`scripts/recon/l48-mutation-check.sh`) breaks 32
+  important rules one at a time on purpose. The tests must catch every one,
+  and they do. The first run found one gap: nothing checked the "no answer,
+  but it went through" rebuild. I fixed the test before shipping.
