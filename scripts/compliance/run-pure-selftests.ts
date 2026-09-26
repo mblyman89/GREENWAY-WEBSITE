@@ -220,6 +220,7 @@ import { __runLeaflyReplaceMenuTests } from "../../src/lib/leafly/replace-menu-c
 import { __runLeaflyRetailerKeyTests } from "../../src/lib/leafly/retailer-key-core";
 import { __runLeaflyInboundBudgetTests } from "../../src/lib/leafly/inbound-budget-core";
 import { __runLeaflyCertificationProofTests } from "../../src/lib/leafly/certification-proof-core";
+import { __runLeaflyOrderCartTests } from "../../src/lib/leafly/order-cart-core";
 // The owner asked what "stage 2 changes how your menu looks to shoppers"
 // actually means. This core is the answer: it names the listings a shopper
 // would see instead of reporting a count. Registered here because the WORDING
@@ -1010,7 +1011,9 @@ __runLiquidVolumeTests();
   // operation pushed the measured count 667 -> 737, because every invariant
   // loop in that core iterates LEAFLY_OPERATIONS. Leaving the floor at 640
   // would have let the entire ninth operation be deleted without CI noticing.
-  assertRan("leafly-deadline-core", __runLeaflyDeadlineTests(), 700);
+  // SLICE L-48 raised 700 -> 760: `cart_update` is the tenth operation, and
+  // every invariant loop above iterates LEAFLY_OPERATIONS.
+  assertRan("leafly-deadline-core", __runLeaflyDeadlineTests(), 760);
   // SLICE L-18. The cache policy behind the settings-save hang. The live menu's
   // real tag and TTL are INJECTED rather than copied, so the claim "we share
   // the live menu's invalidation" is checked against the actual constants and
@@ -1736,6 +1739,10 @@ __runLiquidVolumeTests();
   // row; unreadable is "unknown", never "none"; >14 days is "may be gone".
   // Floor just under the measured 178.
   assertRan("leafly-certification-proof-core", __runLeaflyCertificationProofTests(), 205);
+  // SLICE L-48 — "Update Order's Cart". Removal is by OMISSION at Leafly, so
+  // the reader/decision assertions here are what stop a half-read cart from
+  // silently deleting a customer's items. Floor just under the measured count.
+  assertRan("leafly-order-cart-core", __runLeaflyOrderCartTests(), 118);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

@@ -167,6 +167,8 @@ export const LEAFLY_OPERATIONS = [
   "integration_status",
   "token_mint",
   "media_fetch",
+  // SLICE L-48 — POST /{key}/orders/{id}/cart ("Update Order's Cart").
+  "cart_update",
 ] as const;
 
 export type LeaflyOperation = (typeof LEAFLY_OPERATIONS)[number];
@@ -235,6 +237,22 @@ export const LEAFLY_AUTO_CANCEL_MS = 15 * 60 * 1000;
  * Two attempts, not six, for the same reason acknowledge gets two: the
  * window is shared with the human, and backoff spends the thing we are
  * short of.
+ *
+ * ── WHY THE CART UPDATE GETS FIFTEEN SECONDS (SLICE L-48) ────────────────────
+ * A person is waiting (dashboard or register), so it is attended. But unlike
+ * the acknowledge, Leafly does real work before answering: the spec says it
+ * re-validates every referenced variant against the menu, checks stock,
+ * recalculates discounts and totals, and answers 200 with the whole revised
+ * Order. That is the order-fetch's profile (a full Order body back), so it
+ * gets the order-fetch's number rather than the acknowledge's. It is NOT
+ * clock-bound by the auto-cancel window: the spec only allows a cart update
+ * AFTER acknowledgement, and acknowledgement is what stops that clock.
+ *
+ * It is not irreversible either. The body is the COMPLETE desired cart, so
+ * sending the same body twice lands on the same cart; there is no "second
+ * press" hazard of the acknowledge kind. It is still re-read after an
+ * unknowable outcome (order-ack-server.ts), because "we cannot tell" is
+ * cheaper to resolve by asking than by guessing.
  */
 export const LEAFLY_TIMEOUT_MS: Readonly<Record<LeaflyOperation, number>> = {
   acknowledge: 12_000,
@@ -246,6 +264,7 @@ export const LEAFLY_TIMEOUT_MS: Readonly<Record<LeaflyOperation, number>> = {
   integration_status: 12_000,
   token_mint: 8_000,
   media_fetch: 12_000,
+  cart_update: 15_000,
 };
 
 /**
@@ -299,6 +318,9 @@ export const LEAFLY_MAX_ATTEMPTS: Readonly<Record<LeaflyOperation, number>> = {
   integration_status: 3,
   token_mint: 1,
   media_fetch: 2,
+  // SLICE L-48 — same transport as acknowledge/status_push (orderApiPost),
+  // which retries a 401 exactly once and nothing else.
+  cart_update: 2,
 };
 
 /** The budget for one attempt. Unknown operations get the tightest budget. */
@@ -715,7 +737,30 @@ export function __runLeaflyDeadlineTests(): { passed: number; failed: number } {
   // somebody adds an operation and forgets to give it a budget, an attempt
   // count, and a reason. The loops above cover the new one automatically;
   // this line is what makes the ADDITION itself a conscious act.
-  eq("there are nine operations", LEAFLY_OPERATIONS.length, 9);
+  // SLICE L-48 — ten. `cart_update` joined for "Update Order's Cart".
+  eq("there are ten operations", LEAFLY_OPERATIONS.length, 10);
+  ok("cart_update is a known operation", isLeaflyOperation("cart_update"));
+  eq("cart_update gets the order-fetch budget", LEAFLY_TIMEOUT_MS.cart_update, 15_000);
+  eq(
+    "cart_update matches the order fetch (both return a whole Order)",
+    LEAFLY_TIMEOUT_MS.cart_update,
+    LEAFLY_TIMEOUT_MS.order_fetch,
+  );
+  eq("cart_update attempts exactly twice (one 401 retry)", LEAFLY_MAX_ATTEMPTS.cart_update, 2);
+  ok(
+    "cart_update is NOT irreversible (the body is the whole desired cart)",
+    !isIrreversibleOperation("cart_update"),
+  );
+  ok(
+    "a cart_update timeout states its own 15s budget",
+    describeDeadlineFailure({ operation: "cart_update", fault: "timeout" }).message.includes(
+      "15 seconds",
+    ),
+  );
+  ok(
+    "cart_update worst case is under a minute (2 x (15s + 8s mint))",
+    worstCaseMs("cart_update") === 46_000,
+  );
   ok("media_fetch is a known operation", isLeaflyOperation("media_fetch"));
   eq("media_fetch gets the attended budget", LEAFLY_TIMEOUT_MS.media_fetch, 12_000);
   eq("media_fetch attempts exactly twice", LEAFLY_MAX_ATTEMPTS.media_fetch, 2);
