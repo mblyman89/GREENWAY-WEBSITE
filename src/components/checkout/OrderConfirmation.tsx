@@ -8,6 +8,14 @@ import { formatMinorCurrency } from "@/lib/leafly/format";
 import { displayVariantLabel } from "@/lib/menu/weight-display-core";
 import { readCompletedOrder, type CompletedOrder } from "@/lib/checkout/order";
 import { useHydratedValue } from "@/lib/hooks/useHydratedValue";
+import {
+  CONFIRMATION_POLL_MS,
+  confirmationPollState,
+  isDocumentVisible,
+  nextPollDelayMs,
+  shouldPollOnVisible,
+  type PollState,
+} from "@/lib/ui/poll-gate-core";
 
 export function OrderConfirmation() {
   const searchParams = useSearchParams();
@@ -28,10 +36,31 @@ export function OrderConfirmation() {
   // from sessionStorage — and refresh it every 30s while the tab is open, so
   // "Ready for pickup" shows up without a manual reload. Best-effort: any
   // failure just leaves the last known label.
+  //
+  // USAGE-3: the refresh now (a) pauses while the tab is hidden and polls
+  // once, immediately, when it is seen again, and (b) stops for good once the
+  // order reaches a terminal status (completed / cancelled / no-show) — there
+  // is nothing further to learn, and a confirmation tab left open all day was
+  // one Vercel invocation + two Supabase reads every 30 s for nothing. Rules
+  // live in poll-gate-core (pure, self-tested).
   useEffect(() => {
     if (!hydrated || !tokenFromUrl) return;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let state: PollState = "idle";
     const needOrder = !localOrder;
+
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      const delay = nextPollDelayMs({
+        visible: isDocumentVisible(typeof document === "undefined" ? undefined : document),
+        state,
+        activeMs: CONFIRMATION_POLL_MS,
+        idleMs: CONFIRMATION_POLL_MS,
+      });
+      if (delay !== null) timer = setTimeout(() => void load(), delay);
+    };
 
     async function load() {
       try {
@@ -39,6 +68,7 @@ export function OrderConfirmation() {
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
+        state = confirmationPollState(typeof data.status === "string" ? data.status : null);
         setStatusLabel(data.statusLabel ?? null);
         if (needOrder) {
           setFetchedOrder({
@@ -55,14 +85,28 @@ export function OrderConfirmation() {
         }
       } catch {
         /* offline / not found — fall back to the URL order number */
+      } finally {
+        // Always re-arm (a transient error retries on the same cadence);
+        // schedule() itself decides to stop when hidden or terminal.
+        if (!cancelled) schedule();
       }
     }
 
+    const onVisibility = () => {
+      if (cancelled) return;
+      if (shouldPollOnVisible({ visible: isDocumentVisible(document), state })) {
+        void load();
+      } else {
+        schedule();
+      }
+    };
+
     void load();
-    const timer = window.setInterval(() => void load(), 30_000);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [hydrated, localOrder, tokenFromUrl]);
 

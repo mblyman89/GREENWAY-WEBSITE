@@ -12,6 +12,7 @@
  * with an "updating paused" note.
  */
 import { useEffect, useState } from "react";
+import { isDocumentVisible, nextPollDelayMs, shouldPollOnVisible, type PollState } from "@/lib/ui/poll-gate-core";
 import Link from "next/link";
 import { CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { chipGlowFor, targetVendorId, type ChipGlow } from "@/lib/kb/vendor-crawl-status-core";
@@ -92,7 +93,12 @@ type Job = {
 };
 
 const ACTIVE_POLL_MS = 5_000;
-const IDLE_POLL_MS = 30_000;
+// USAGE-3: a harvest page with no job in flight is a status board nobody is
+// waiting on. 30 s idle was 2,880 authenticated round-trips a day (staff
+// session + crawler call each) for a list that only changes when someone
+// clicks "Start". 2 min idle keeps it fresh enough; the poll also pauses while
+// the tab is hidden and fires once, immediately, when the tab is seen again.
+const IDLE_POLL_MS = 120_000;
 
 const STATUS_STYLE: Record<Job["status"], string> = {
   queued: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-[var(--admin-gold)]",
@@ -130,9 +136,22 @@ export function HarvestJobsLive({
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let state: PollState = "idle";
+
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      const delay = nextPollDelayMs({
+        visible: isDocumentVisible(document),
+        state,
+        activeMs: ACTIVE_POLL_MS,
+        idleMs: IDLE_POLL_MS,
+      });
+      if (delay !== null) timer = setTimeout(() => void poll(), delay);
+    };
 
     async function poll() {
-      let next = IDLE_POLL_MS;
+      state = "idle";
       try {
         const res = await fetch("/api/admin/harvest", { cache: "no-store" });
         if (res.ok) {
@@ -143,7 +162,7 @@ export function HarvestJobsLive({
             setStale(false);
           }
           if (list.some((j) => j.status === "queued" || j.status === "running")) {
-            next = ACTIVE_POLL_MS;
+            state = "active";
           }
         } else if (!cancelled) {
           setStale(true);
@@ -151,15 +170,21 @@ export function HarvestJobsLive({
       } catch {
         if (!cancelled) setStale(true);
       }
-      if (!cancelled) {
-        timer = setTimeout(() => void poll(), next);
-      }
+      if (!cancelled) schedule();
     }
 
+    const onVisibility = () => {
+      if (cancelled) return;
+      if (shouldPollOnVisible({ visible: isDocumentVisible(document), state })) void poll();
+      else schedule();
+    };
+
     void poll();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 

@@ -20,9 +20,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { CrawlJob, VendorCrawlSummary } from "@/lib/kb/vendor-crawl-status-core";
 import { summarizeVendorCrawl } from "@/lib/kb/vendor-crawl-status-core";
+import { isDocumentVisible, nextPollDelayMs, shouldPollOnVisible, type PollState } from "@/lib/ui/poll-gate-core";
 
 const ACTIVE_POLL_MS = 4_000;
-const IDLE_POLL_MS = 30_000;
+// USAGE-3: "idle" here means no job has ever targeted this vendor (the chip
+// renders nothing). Checking for one every 30 s on every open vendor page was
+// pure cost; 2 min is plenty, and the poll pauses while the tab is hidden.
+// A finished crawl still stops polling for good.
+const IDLE_POLL_MS = 120_000;
 
 const GLOW_STYLE: Record<VendorCrawlSummary["glow"], string> = {
   waiting: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-[var(--admin-gold)]",
@@ -44,32 +49,49 @@ export function VendorCrawlStatusChip({ vendorId }: { vendorId: string }) {
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let state: PollState = "idle";
+
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      const delay = nextPollDelayMs({
+        visible: isDocumentVisible(document),
+        state,
+        activeMs: ACTIVE_POLL_MS,
+        idleMs: IDLE_POLL_MS,
+      });
+      if (delay !== null) timer = setTimeout(() => void poll(), delay);
+    };
 
     async function poll() {
-      let next = IDLE_POLL_MS;
-      let finished = false;
       try {
         const res = await fetch("/api/admin/harvest", { cache: "no-store" });
         if (res.ok) {
           const data = (await res.json()) as { jobs?: CrawlJob[] };
           const s = summarizeVendorCrawl(data.jobs ?? [], vendorId);
           if (!cancelled) setSummary(s);
-          if (s?.active) next = ACTIVE_POLL_MS;
           // Once the crawl has finished (lit/failed) the state is stable —
           // one more render is all we need; stop polling.
-          finished = s !== null && !s.active;
+          if (s === null) state = "idle";
+          else state = s.active ? "active" : "done";
         }
       } catch {
         /* keep the last known state; try again on the idle cadence */
       }
-      if (!cancelled && !finished) {
-        timer = setTimeout(() => void poll(), next);
-      }
+      if (!cancelled) schedule();
     }
 
+    const onVisibility = () => {
+      if (cancelled) return;
+      if (shouldPollOnVisible({ visible: isDocumentVisible(document), state })) void poll();
+      else schedule();
+    };
+
     void poll();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
       if (timer) clearTimeout(timer);
     };
   }, [vendorId]);
