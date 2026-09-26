@@ -50,12 +50,17 @@ import { RETURN_TO_DETAIL } from "@/lib/orders/order-board-split-core";
 import { LeaflyOrderActions } from "./LeaflyOrderActions";
 import { LeaflyLifecycleStrip } from "./LeaflyLifecycleStrip";
 import { LeaflyOrderDetailPanel } from "./LeaflyOrderDetail";
+import { LeaflyCartEditor } from "./LeaflyCartEditor";
+import { LEAFLY_CART_EDITABLE_STATUSES } from "@/lib/leafly/order-cart-core";
 import { toWorkflowRow } from "./leafly-workflow-row";
 import {
   acknowledgeLeaflyOrderAction,
   collectLeaflyOrderAction,
   loadLeaflyOrderDetailAction,
   setLeaflyOrderStatusAction,
+  loadLeaflyCartEditorAction,
+  previewLeaflyCartAction,
+  updateLeaflyOrderCartAction,
 } from "@/app/admin/orders/leafly-actions";
 
 /**
@@ -222,6 +227,16 @@ export function LeaflyOrderWorkflow({
   const cancelLabel = leaflyCancelReasonLabel(order.cancelation_reason_code);
   const fullId = (order.leafly_order_id ?? "").trim();
   const handle = fullId ? fullId.slice(-6).toUpperCase() : "unknown";
+  // SLICE L-48 — "Change items" is OFFERED only where Leafly allows it:
+  // acknowledged (the spec's precondition) and pending/confirmed/ready. The
+  // server re-decides everything on open, review and send; this only keeps
+  // the button off orders where it could never work.
+  const cartEditable =
+    !!fullId &&
+    !!order.acknowledged_at &&
+    (LEAFLY_CART_EDITABLE_STATUSES as readonly string[]).includes(
+      (order.leafly_status ?? "").trim().toLowerCase(),
+    );
 
   return (
     <Card padding="sm" accent="green" className="sm:p-5">
@@ -300,6 +315,20 @@ export function LeaflyOrderWorkflow({
           leaflyStatus={order.leafly_status}
           fulfillmentMechanism={order.fulfillment_mechanism}
           canceledAt={order.canceled_at}
+        />
+      ) : null}
+
+      {/* ── SLICE L-48: CHANGE ITEMS (Leafly "Update Order's Cart") ───────────
+          Directly under the step strip: changing what the customer gets is a
+          step in moving the order along. Edit → Review (dry run) → Send. */}
+      {cartEditable ? (
+        <LeaflyCartEditor
+          leaflyOrderId={fullId}
+          load={loadLeaflyCartEditorAction}
+          preview={previewLeaflyCartAction}
+          update={updateLeaflyOrderCartAction}
+          returnTo={RETURN_TO_DETAIL}
+          back={back}
         />
       ) : null}
 
