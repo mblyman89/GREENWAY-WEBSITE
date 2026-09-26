@@ -166,12 +166,75 @@ sub-kilobyte queries. Every remaining full-menu read is smaller by the size
 of `fact_provenance` across ≈ 4,500 rows. Storage image egress falls as the
 CDN starts holding new uploads for a year.
 
-## Slice 3 — remaining pollers and cadence
+## Slice 3 — remaining pollers and cadence (PR: USAGE-3)
 
-Orders board: one grouped-count RPC instead of seven `count(*)` queries, keep
-the visible poll ≤ 15 s (pinned by `new-order-watch.test.ts`), lengthen the
-hidden-tab poll. Register/cockpit refresh cadence review. Consider a shorter
-announcer hold with a longer rest once Slice 1's effect is measured.
+Recon (`grep` of every `setInterval` / `setTimeout` chain / `EventSource` /
+`.channel(` under `src/`) found five recurring network pollers still running
+regardless of whether anyone could see or use their answer, plus one hidden
+write that rode on every register call. Everything below is measured from the
+code, not estimated; the per-day figures assume one device or tab left open
+24 h.
+
+**a. `pos_devices.last_seen_at` — one UPDATE per register API call.**
+`authenticateDevice` (used by all 22 `/api/pos/*` routes) followed every
+successful credential check with an unconditional
+`update({ last_seen_at })`. The 15 s interrupt poll alone made that ≈ 5,760
+writes/day/register; the 45 s pickup badge and every flush added more.
+Nothing reads the column below minute resolution (the Devices page shows
+`last_synced_at`; no SQL consumes it). New pure
+`src/lib/pos/device-heartbeat-core.ts` (60 s throttle, same shape as Slice 1's
+printer throttle); the auth SELECT now also returns `last_seen_at` so no
+extra read is needed. ≈ 5,760 → ≈ 1,440 writes/day/register from the poll,
+and zero once the register is locked (see d).
+
+**b. Orders dashboard poll — ten PostgREST requests every 15 s → one.**
+`/api/admin/orders/count` ran seven `count(*) … head:true` (one per status),
+one arrivals list and two `max(updated_at)` reads per poll: 10 requests ×
+5,760 polls/day = 57,600 requests/day per open Orders tab. Migration
+`0233_orders_board_snapshot.sql` adds a read-only, `service_role`-only jsonb
+function that answers all four questions in one call (counts come from a
+single `group by status` over `orders_status_idx`); the count keys are
+derived from the `order_status` enum so every status is always present.
+`getOrdersBoardSnapshot()` (orders-store) calls it and falls back to the exact
+legacy readers on PostgREST's "function not found" (`rpc-fallback-core`) or a
+malformed payload — the JSON the client sees is byte-for-byte the same. The
+board page's stat cards and the owner cockpit also go 7 → 1. The visible
+cadence stays 15 s (owner's chime requirement, pinned); the hidden-tab
+cadence goes 60 s → 120 s (`HIDDEN_POLL_MS`) because a covered tab cannot
+show the board and the Pi announcer is the floor alert. Proven on Postgres 15
+with all 233 migrations applied plus a committed scenario script
+(`scripts/recon/orders-board-snapshot-pg-check.sql`). **The owner must run
+0233** (`docs/MIGRATIONS_TO_RUN.md`); until then the code silently uses the
+old path.
+
+**c. Client pollers that ran forever.** New pure `src/lib/ui/poll-gate-core.ts`
+gives one rule — *done → stop; hidden → pause and poll once on return; else
+active/idle cadence* — to three components:
+- `OrderConfirmation` (public checkout page): was `/api/orders/<token>` every
+  30 s for as long as the tab existed, each one an `orders` + `order_lines`
+  read. Now pauses while hidden and **stops for good** once the order is
+  completed / cancelled / no-show (terminal set pinned to
+  `CLOSED_ORDER_STATUSES`). A transient error still retries.
+- `HarvestJobsLive` (KB harvest pages): idle 30 s → 120 s, paused while
+  hidden; the 5 s cadence while a job is actually running is unchanged.
+- `VendorCrawlStatusChip` (every vendor detail page): idle 30 s → 120 s,
+  paused while hidden; still stops outright when the crawl finishes.
+Each of those admin polls also paid `requirePermission` (auth `getUser` +
+`staff_profiles` read) and an external crawler call.
+
+**d. Register interrupt poll paused while LOCKED.** The L-14 Leafly-cancel
+channel polls `/api/pos/interrupts` every 15 s whenever the register has
+credentials and is online — including all night on the lock screen, where
+`lock()` has already parked any sale and the modal is not rendered at all.
+Gate is `screen === "locked"` only; `home`/`saleActive` gating is still
+forbidden by test (mutation-checked: removing the gate fails the suite).
+Unlocking re-arms with an immediate poll, so an overnight cancel is on
+screen sooner than before. Mid-sale behaviour is untouched.
+
+**Left alone, with reasons.** `/api/pos/version` (60 s while locked) is
+`force-static` and never touches the database — it is a CDN hit. The 15 s
+background flush only POSTs when the queue is non-empty. The 45 s pickup
+badge is already gated on the home screen. The announcer cadence is Slice 4.
 
 ## Slice 4 — push instead of poll for the announcer
 
@@ -202,6 +265,19 @@ down within a day of the Pis being reinstalled; Reports → Query Performance �
 `receipt_printer_settings` upsert near the top; Logs Explorer → Top Paths
 shows `/rest/v1/receipt_printer_settings` and `/rest/v1/rpc/announcer_claim_work`
 counts an order of magnitude lower.
+
+**Slice 3.** Supabase → Reports → Query Performance → *Most frequent*: the
+`update pos_devices set last_seen_at` statement and the seven
+`select count(*) from orders where status = $1` statements should drop out of
+the top of the list (the counts vanish entirely once 0233 is applied — look
+for `orders_board_snapshot` instead, at ≈ 4/min per open Orders tab). Logs
+Explorer → Top Paths: `/rest/v1/orders` request count falls roughly ten-fold
+during shop hours; `/rest/v1/pos_devices` PATCH count falls by ≈ 75 % and to
+zero overnight. Vercel → Observability → Functions: `/api/admin/orders/count`
+p50 duration drops (one awaited call instead of ten in parallel);
+`/api/pos/interrupts` invocations fall to zero outside opening hours;
+`/api/admin/harvest` and `/api/orders/[token]` invocations fall to a
+fraction. Nothing on the register or the board should look different.
 
 **Slice 2.** Vercel → Observability → Functions → `/api/pos/product-image`:
 p50 duration should drop from seconds to well under one second, and its
