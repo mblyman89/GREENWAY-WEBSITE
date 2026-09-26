@@ -431,22 +431,50 @@ describe("L-14 · the register actually polls for interrupts", () => {
     expect(code(shell)).toContain("/api/pos/interrupts");
   });
 
-  it("does NOT gate the poll on the home screen", () => {
+  it("does NOT gate the poll on the home screen or on an active sale", () => {
     // The cancellation that matters most arrives MID-SALE. A poll that only
     // runs on the idle screen would reach the one cashier who does not need
     // it and miss the one who does.
     //
-    // Asserts the absence of ANY mention of `screen`, not of one particular
-    // spelling. The first version of this test looked for `screen === "home"`
-    // and was defeated by `screen !== "home"` -- the identical defect written
-    // the other way round. Mutation testing caught that; hence the widening.
+    // The first version of this test looked for `screen === "home"` and was
+    // defeated by `screen !== "home"` -- the identical defect written the
+    // other way round. Mutation testing caught that; the widened version then
+    // forbade ANY mention of `screen`.
+    //
+    // USAGE-3 narrowed that once more, deliberately: the poll may pause while
+    // the register is LOCKED, because lock() parks the sale first (nobody can
+    // be mid-sale) and the interrupt modal is not rendered on the lock screen
+    // at all -- see the render-order assertion below. So the rule is now:
+    // the effect may mention `registerLocked` and nothing else about the
+    // screen. Any spelling of "home" or of the sale flag is still a defect.
     const c = code(shell);
     const i = c.indexOf("/api/pos/interrupts");
     expect(i).toBeGreaterThan(-1);
+    const effectStart = c.lastIndexOf("useEffect(", i);
     const start = c.lastIndexOf("const pollInterrupts", i);
     expect(start).toBeGreaterThan(-1);
-    const effect = c.slice(start, i + 500);
-    expect(effect).not.toMatch(/\bscreen\b/);
+    expect(effectStart).toBeGreaterThan(-1);
+    const depsMarker = "}, [creds, online, registerLocked]);";
+    const depsAt = c.indexOf(depsMarker, i);
+    expect(depsAt).toBeGreaterThan(-1);
+    const effect = c.slice(effectStart, depsAt + depsMarker.length);
+    expect(effect).not.toMatch(/"home"|'home'|saleActive|screen\s*[!=]==?\s*"home"/);
+    // The ONLY screen-derived gate permitted, spelled exactly one way.
+    expect(effect).toMatch(/if \(!creds \|\| !online \|\| registerLocked\) return;/);
+    expect(c).toContain('const registerLocked = screen === "locked";');
+    // Re-arm on unlock: the effect depends on the gate and polls immediately.
+    expect(effect).toMatch(/setTimeout\(\(\) => void pollInterrupts\(\), 0\)/);
+  });
+
+  it("the lock screen returns before the interrupt modal can render (so polling there is dead work)", () => {
+    const c = code(shell);
+    const lockReturn = c.indexOf('if (screen === "locked") {');
+    const modal = c.indexOf("<RegisterInterruptModal");
+    expect(lockReturn).toBeGreaterThan(-1);
+    expect(modal).toBeGreaterThan(lockReturn);
+    // lock() parks the sale before switching screens.
+    const lockFn = c.slice(c.indexOf("const lock = useCallback("), c.indexOf('setScreen("locked");', c.indexOf("const lock = useCallback(")));
+    expect(lockFn).toContain("parkActiveSale");
   });
 
   it("never swaps a modal out from under a finger", () => {

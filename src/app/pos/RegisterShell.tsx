@@ -898,10 +898,20 @@ export function RegisterShell({
   // Faster than the 45s pickup poll (15s) because this one is racing a
   // handover: every extra second is a second in which regulated product can
   // cross the counter for an order that no longer exists.
+  //
+  // USAGE-3: paused while LOCKED (and only then). lock() parks any sale
+  // before showing the lock screen, so nobody can be mid-sale, and the
+  // interrupt modal is not even rendered on that screen (the component
+  // returns <LockScreen> first) — every poll there was an authenticated
+  // round-trip whose answer could not be shown. Unlocking re-arms the effect
+  // with an IMMEDIATE poll (i0), so a cancel that landed overnight is on
+  // screen faster than before, not slower. The gate is `locked`, deliberately
+  // NOT `home`/`saleActive`: the test below forbids those.
   const [interrupt, setInterrupt] = useState<RegisterInterruptView | null>(null);
+  const registerLocked = screen === "locked";
 
   useEffect(() => {
-    if (!creds || !online) return;
+    if (!creds || !online || registerLocked) return;
     let cancelled = false;
     const pollInterrupts = async () => {
       try {
@@ -932,7 +942,7 @@ export function RegisterShell({
       clearTimeout(i0);
       clearInterval(i1);
     };
-  }, [creds, online]);
+  }, [creds, online, registerLocked]);
 
   // SLICE 14 — release the "already completed" latch whenever a NEW sale
   // begins. Done centrally here rather than at each of the four
