@@ -31,6 +31,7 @@ import { recordAudit } from "@/lib/auth/audit";
 import { runCompletionGate } from "@/lib/orders/completion-gate";
 import { setOrderStatus, getOrder } from "@/lib/orders/orders-store";
 import { registerPickedUpNote } from "@/lib/pos/pickup-progress-core";
+import { shouldWriteDeviceHeartbeat } from "@/lib/pos/device-heartbeat-core";
 import { pushLeaflyPickedUp, scheduleAfterResponse } from "@/lib/pos/pickup-leafly-close";
 import { isMarketplaceOrigin, toOrderOrigin } from "@/lib/orders/order-origin-core";
 import { openWorkPunch, toggleClock } from "@/lib/staffing/store";
@@ -112,6 +113,9 @@ export type PosDevice = {
   provision_hash: string | null;
 };
 
+/** Auth row: PosDevice plus the heartbeat stamp used by the write throttle. */
+type PosDeviceAuthRow = PosDevice & { last_seen_at: string | null };
+
 export type DeviceAuthResult =
   | { ok: true; device: PosDevice }
   | { ok: false; status: 401 | 503; error: string };
@@ -129,9 +133,9 @@ export async function authenticateDevice(deviceId: string, deviceKey: string): P
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("pos_devices")
-    .select("id, name, register_id, status, provision_hash")
+    .select("id, name, register_id, status, provision_hash, last_seen_at")
     .eq("id", deviceId)
-    .maybeSingle<PosDevice>();
+    .maybeSingle<PosDeviceAuthRow>();
   if (error) {
     return { ok: false, status: 503, error: isMissingSchemaError(error) ? MIGRATION_HINT : error.message };
   }
@@ -141,13 +145,19 @@ export async function authenticateDevice(deviceId: string, deviceKey: string): P
   if (!data.provision_hash || !verifyPin(deviceKey, data.provision_hash)) {
     return { ok: false, status: 401, error: "Device key rejected." };
   }
-  // Best-effort heartbeat; never blocks ingest.
-  await admin
-    .from("pos_devices")
-    .update({ last_seen_at: new Date().toISOString() })
-    .eq("id", data.id)
-    .then(() => {}, () => {});
-  return { ok: true, device: data };
+  // Best-effort heartbeat; never blocks ingest. USAGE-3: throttled by
+  // device-heartbeat-core so an idle register's 15 s interrupt poll no longer
+  // issues one UPDATE per call (the stamp is only ever read at minute
+  // resolution).
+  const { last_seen_at, ...device } = data;
+  if (shouldWriteDeviceHeartbeat({ lastSeenAt: last_seen_at, nowMs: Date.now() })) {
+    await admin
+      .from("pos_devices")
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq("id", device.id)
+      .then(() => {}, () => {});
+  }
+  return { ok: true, device };
 }
 
 /**
