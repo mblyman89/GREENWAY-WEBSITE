@@ -181,9 +181,10 @@ export const MENU_READ_SURFACES: readonly MenuReadSurface[] = [
   },
   {
     name: "Register product image lookup",
-    anchor: "src/app/api/pos/product-image/route.ts:39",
+    anchor: "src/app/api/pos/product-image/route.ts:43",
     cacheable: false,
-    reason: "Register-facing endpoint; kept on the read-through path with the rest of the register.",
+    reason:
+      "Register-facing endpoint; kept on the read-through path with the rest of the register. USAGE-2: reads ONE row (getLiveMenuItemByIdDirect) instead of the whole menu — still uncached.",
   },
   {
     name: "Admin DOH product registry",

@@ -20,6 +20,8 @@ import { probeImageDimensions } from "./image-dimensions";
 
 /** Public bucket for site imagery (public = true after migration 0012). */
 const MEDIA_BUCKET = "media";
+/** USAGE-2: content-hashed keys are immutable → cache for one year (seconds, as storage-js expects a string). */
+export const MEDIA_UPLOAD_CACHE_CONTROL_SECONDS = "31536000";
 /** Private bucket for restricted documents (newsletter PDFs, etc.). */
 export const MEDIA_PRIVATE_BUCKET = "media-private";
 
@@ -79,9 +81,15 @@ export async function uploadMedia(input: UploadMediaInput): Promise<MediaAsset> 
   const folder = input.usageType ? input.usageType.replace(/[^a-z0-9-]/gi, "-") : "uploads";
   const storageKey = `${folder}/${hash.slice(0, 16)}-${sanitize(input.filename)}${ext && !input.filename.toLowerCase().endsWith(ext) ? ext : ""}`;
 
+  // USAGE-2: the storage key embeds the content hash, so the bytes behind a
+  // given URL never change — a new image always gets a new key. Tell the
+  // Storage CDN (and browsers) to hold it for a year instead of storage-js's
+  // default 1 hour, so repeat views of menu/brand photos are served from the
+  // CDN edge rather than re-egressing from the bucket every hour.
   const { error: upErr } = await admin.storage.from(MEDIA_BUCKET).upload(storageKey, input.buffer, {
     contentType: input.mimeType,
     upsert: true,
+    cacheControl: MEDIA_UPLOAD_CACHE_CONTROL_SECONDS,
   });
   if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
 

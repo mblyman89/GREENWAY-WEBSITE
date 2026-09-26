@@ -105,16 +105,66 @@ v1.2.0 / printer v1.1.0 (`docs/announcer/06-copy-paste-quickstart.md`,
 `docs/receipt-printer-setup.md`). Until then the old agents keep working
 against the new server — they simply do not rest between polls.
 
-## Slice 2 — full-menu egress
+## Slice 2 — full-menu egress (PR: USAGE-2)
 
 The published menu is ≈ 5.9 MB across ≈ 4,500 items and is the largest single
-Supabase egress line. Planned: explicit column lists on `menu_items`,
-`menu_variants`, `menu_versions` in `src/lib/pos/menu-version.ts` (dropping
-wide columns nobody renders); `/api/pos/product-image` looks up its single row
-by id instead of loading the whole menu; cached, tag-invalidated menu reads
-where `MENU_READ_SURFACES` policy allows (edited deliberately, with the reason
-recorded in the table); `images.minimumCacheTTL` in `next.config.ts` so
-optimised images are not re-fetched from Supabase storage on every request.
+Supabase egress line. Every full-menu read used `select("*")`, so two jsonb
+columns nobody renders rode along on every read: `menu_items.fact_provenance`
+(per-fact audit trail, admin-only) and `menu_versions.summary_json`
+(the import's diff summary, admin-only). Recon (recorded in the PR)
+listed every caller of `loadLiveMenuAll` / `getVersionItems`: the public
+site's cached path (hits the DB only on a cache miss, once a minute at most),
+`/api/pos/menu` (boot-only register download, no timer), order repricing
+(the money — deliberately unchanged), the opt-in Leafly cron (off by default,
+skips when the menu is unchanged), the admin pages, and — the real leak —
+`/api/pos/product-image`, which loaded the WHOLE menu on every info-card
+open and `.find()`ed one item.
+
+**What changed.**
+
+`src/lib/pos/menu-columns-core.ts` (new, pure, self-tested and mirrored in
+`tests/compliance/menu-columns-core.test.ts`) renders explicit column lists
+typed against `MenuItemRow` / `MenuVariantRow` / `MenuVersion`, so adding a
+column to the type without adding it to the list is a compile error, and
+records exactly which columns are dropped (`fact_provenance`,
+`summary_json`). `src/lib/pos/menu-version.ts` uses them in
+`getPublishedVersion` (`MENU_VERSION_LIGHT_COLUMNS`, returning
+`summary_json: null` — every caller reads only `id` and the count/date
+columns), `getVersionItems` and `getItemBySourceKey` (`MENU_ITEM_COLUMNS`,
+`MENU_VARIANT_COLUMNS`). The admin-only reads that DO render `summary_json`
+(`getVersion`, `listVersions`, `listIntakeStagedVersions`, `pos_imports`,
+`pos_import_diagnostics`) are untouched.
+
+`src/lib/pos/live-menu.ts` gains `getLiveMenuItemByIdDirect(id)`: published
+version → one `menu_items` row → its variants → `menuRowToGreenwayItem` →
+`withCardIdentity`, i.e. the same conversion the list path applies, so the
+result is field-for-field identical. Hidden rows resolve to `undefined`
+exactly as before. `/api/pos/product-image` now calls it; the endpoint stays
+read-through (`MENU_READ_SURFACES` entry updated with the reason). The old
+`getLiveMenuItemById` stays for the public path.
+
+`src/lib/media/store.ts` `uploadMedia` now uploads with
+`cacheControl: "31536000"` (one year) instead of storage-js's default one
+hour. Storage keys embed the first 16 hex of the content sha256, so a URL
+never changes its bytes; a new image is a new key. This applies to NEW
+uploads only — existing objects keep their 1 h header until re-uploaded.
+
+**Deliberately not changed, and why.** `MENU_CACHE_TTL_SECONDS` stays 60 —
+the owner pinned it (`slice-d-menu-performance.test.ts`) and the cached path
+is already gzip-enveloped (≈ 204 KB per miss), so the remaining cost is one
+DB read a minute, not a leak. `images.minimumCacheTTL` in `next.config.ts` is
+skipped because the public cards render raw `<img>` tags straight from
+Supabase Storage, so `next/image` optimisation is not on the egress path —
+the storage Cache-Control above is the lever that matters. The Leafly cron
+cadence is pinned by rule 12 and already short-circuits when the menu hash is
+unchanged. `/api/pos/menu` is a boot-only download by design (the register
+caches the bundle on-device) and is not a recurring cost.
+
+**Expected effect.** Each `/api/pos/product-image` call falls from a ≈ 6 MB
+Supabase read (plus ≈ 1–2 s of Vercel function time spent parsing it) to two
+sub-kilobyte queries. Every remaining full-menu read is smaller by the size
+of `fact_provenance` across ≈ 4,500 rows. Storage image egress falls as the
+CDN starts holding new uploads for a year.
 
 ## Slice 3 — remaining pollers and cadence
 
@@ -152,3 +202,17 @@ down within a day of the Pis being reinstalled; Reports → Query Performance �
 `receipt_printer_settings` upsert near the top; Logs Explorer → Top Paths
 shows `/rest/v1/receipt_printer_settings` and `/rest/v1/rpc/announcer_claim_work`
 counts an order of magnitude lower.
+
+**Slice 2.** Vercel → Observability → Functions → `/api/pos/product-image`:
+p50 duration should drop from seconds to well under one second, and its
+share of *Function Duration* on the Usage page should fall accordingly.
+Supabase → Reports → Query Performance → *Most time consuming* / *Most
+frequent*: the `menu_items` `select` with `menu_version_id = … ` filter
+returning thousands of rows should disappear from the frequent list (only
+cache-miss reads remain, at most one a minute); Logs Explorer → Top Paths:
+`/rest/v1/menu_items` request count falls and, per request, the response
+size shrinks (check `Content-Length` in a sampled log line — it should no
+longer be in the megabytes for the product-image path). Storage: Reports →
+Storage → egress bends down over the following weeks as newly uploaded
+photos are served from the CDN edge (existing objects keep 1 h until they are
+re-uploaded).

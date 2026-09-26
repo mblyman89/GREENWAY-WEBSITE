@@ -12,10 +12,14 @@
  * against the PUBLISHED menu item, so the register can never show an image
  * the back office didn't approve. Best-effort: any failure returns
  * { image: null } with 200 — the card renders factless-photo, never errors.
+ *
+ * USAGE-2: the item is fetched as ONE row (getLiveMenuItemByIdDirect), not by
+ * loading the whole ≈6 MB published menu and `.find()`ing it — this endpoint
+ * fires on every info-card open and was a top Supabase egress source.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
-import { getLiveMenuItemById } from "@/lib/pos/live-menu";
+import { getLiveMenuItemByIdDirect } from "@/lib/pos/live-menu";
 import { resolveProductImage } from "@/lib/enrichment/image-resolver";
 import { posPreflightResponse, withPosCors } from "@/lib/pos/cors";
 
@@ -36,7 +40,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const item = await getLiveMenuItemById(productId);
+    const item = await getLiveMenuItemByIdDirect(productId); // USAGE-2: one row, not the whole menu
     if (!item) return NextResponse.json({ image: null });
     const resolved = await resolveProductImage({
       posKey: item.id,
