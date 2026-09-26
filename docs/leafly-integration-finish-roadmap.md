@@ -585,3 +585,37 @@ the dashboard and the front register.
   - `leafly-l48-cart-register.test.ts` (26)
   - `scripts/recon/l48-mutation-check.sh`: all 32 mutations killed
 
+
+## Fix: Leafly orders loaded an EMPTY register cart
+
+- **Symptom (owner).** Loading a Leafly order into the register cart gave
+  an empty cart, and the items were reported as "no longer on the menu".
+  The items were on the menu. Website orders loaded fine.
+- **Cause.** `order-to-cart-core.rebuildOrderCart` matches each line by
+  `variantId` (or `${productId}-default`). The bridge insert
+  (`bridge-server`) and the L-48 rebuild (`order-cart-server`) saved Leafly
+  lines with no `product_id` / `variant_id`, so every line was dropped.
+- **Id proof.** Leafly's `CartItemOutgoing.integratorVariantId` is the id
+  we push:
+  - `payload-core.toLeaflyVariant` uses `String(v.id)`, which is
+    `menu_variants.source_variant_id`.
+  - A variant-less item is pushed as `${item.id}-default`.
+  - The register bundle (`api/pos/menu`) builds `variantId` from the same
+    published version with the same two shapes.
+  - Collision-split items keep their original variant ids.
+- **Fix.**
+  - `pos/leafly-register-lines-core.ts` (pure, 35 self-tests) reads the
+    register lines from `leafly_orders.raw_order`.
+  - `loadOrderIntoRegister` uses them for marketplace orders. This repairs
+    existing orders with no backfill. It falls back to the local lines when
+    the Leafly copy is missing, unreadable or has no ids.
+  - The bridge draft carries `variantId` / `productId` (`leaflyLineIds`),
+    and both inserts now write them.
+  - An id-less line now says "not linked to a menu item - add it by hand",
+    not "no longer on the menu".
+- **Tests.**
+  - `leafly-register-load.test.ts` (13, runs the real load and rebuild)
+  - the L-48 server insert-shape assertions
+  - `scripts/recon/leafly-register-load-mutation-check.sh`
+- No migration: `order_lines.product_id` and `variant_id` have existed
+  since 0007.
