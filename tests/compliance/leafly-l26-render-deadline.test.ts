@@ -419,7 +419,9 @@ describe("the /admin/orders render is bounded where it should be", () => {
   it("does NOT wrap the primary readers, which must never be faked", () => {
     const src = stripComments(read(PAGE));
     expect(src).not.toMatch(/withRenderBudget\(\s*listOrdersPaged\(/);
-    expect(src).not.toMatch(/withRenderBudget\(\s*getOrderStatusCounts\(/);
+    // USAGE-3 renamed the counts reader to the grouped snapshot; still primary.
+    expect(src).not.toMatch(/withRenderBudget\(\s*getOrdersBoardSnapshot\(/);
+    expect(src).toMatch(/getOrdersBoardSnapshot\(/);
   });
 
   /**

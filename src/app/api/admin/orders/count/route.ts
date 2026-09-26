@@ -20,10 +20,16 @@
  *
  * SLICE L-37 — also returns `fingerprint` (see changeFingerprint): the board
  * refreshes itself when it moves, so register activity shows up on its own.
+ *
+ * USAGE-3 — the three readers (7 counts + arrivals + 2 latest-change stamps
+ * = 10 PostgREST requests per poll) are now ONE database call,
+ * getOrdersBoardSnapshot() → orders_board_snapshot() (migration 0233), with
+ * the ten-query path kept as the fallback until the migration is applied.
+ * The JSON shape returned here is unchanged.
  */
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/session";
-import { getOrderStatusCounts, getRecentOrderArrivals, getLatestOrderChange } from "@/lib/orders/orders-store";
+import { getOrdersBoardSnapshot } from "@/lib/orders/orders-store";
 import { changeFingerprint } from "@/lib/orders/new-order-watch-core";
 
 export const dynamic = "force-dynamic";
@@ -35,11 +41,7 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const [counts, arrivals, latest] = await Promise.all([
-    getOrderStatusCounts(),
-    getRecentOrderArrivals(20),
-    getLatestOrderChange(),
-  ]);
+  const { counts, arrivals, latest } = await getOrdersBoardSnapshot({ arrivalsLimit: 20 });
   const active = counts.new + counts.acknowledged + counts.preparing + counts.ready;
   // SLICE L-37 — moves whenever any order changes anywhere (register, Leafly,
   // back office), so the dashboard can refresh itself instead of going stale.

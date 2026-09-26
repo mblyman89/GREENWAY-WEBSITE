@@ -1010,3 +1010,33 @@
   calculate them straight from orders and display a note saying 0232 is pending —
   but sorting the customer list by visits / spend / recent visit uses the old
   (empty) columns.
+
+## USAGE-3 — 0233 — one round-trip for the Orders board poll
+
+- [ ] `0233_orders_board_snapshot.sql` — adds the read-only function
+  `orders_board_snapshot(p_arrivals_limit, p_exclude_origins)` returning one
+  small jsonb document: per-status counts (every status present, zero when
+  empty), the newest arrivals, and the latest `orders` / `leafly_orders`
+  change stamps.
+
+  **Why:** the Orders dashboard polls `/api/admin/orders/count` every 15 s
+  while the tab is open (that cadence is pinned — the chime must land within
+  15 s). Each poll used to cost **ten** PostgREST requests (seven
+  `count(*)`, one arrivals list, two `max(updated_at)`), i.e. ~2,400
+  requests an hour per open tab, all counted against Supabase egress and
+  Vercel function time. After this migration it is **one**. The board page's
+  stat cards and the owner cockpit also drop from seven count queries to one.
+
+  **Until it is run** everything works exactly as before — the code calls the
+  function, sees PostgREST's "function not found", and runs the old ten
+  queries. Only the saving waits.
+
+  Safe to re-run (drop + create; verified: all 233 migrations apply on a
+  clean Postgres 15 and 0233 re-applies cleanly; scenario script
+  `scripts/recon/orders-board-snapshot-pg-check.sql` passed).
+
+  **Run it, then check:**
+
+  ```sql
+  select public.orders_board_snapshot();   -- one jsonb row with counts / arrivals / stamps
+  ```

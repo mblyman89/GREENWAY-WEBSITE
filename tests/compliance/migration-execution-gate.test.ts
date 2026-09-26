@@ -1197,7 +1197,17 @@ describe("the migration list is ordered the way the database will see it", () =>
     // cleanly, and the committed scenario script
     // scripts/recon/customer-rollups-pg-check.sql (20 trigger scenarios in a
     // rolled-back transaction) passed.
-    expect(listed[listed.length - 1]).toMatch(/^0232_/);
+    //
+    // USAGE-3 added 0233_orders_board_snapshot.sql (one read-only jsonb
+    // function replacing the ten PostgREST requests the Orders dashboard
+    // made every 15 s). Verified in the build sandbox against Postgres 15
+    // bootstrapped exactly as CI does: all 233 migrations executed via
+    // scripts/compliance/verify-migrations-execute.ts, 0233 applied twice
+    // cleanly, and the committed scenario script
+    // scripts/recon/orders-board-snapshot-pg-check.sql (counts per status,
+    // arrivals order/limit clamp, origin exclusion, empty-table shape, in a
+    // rolled-back transaction) passed.
+    expect(listed[listed.length - 1]).toMatch(/^0233_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
