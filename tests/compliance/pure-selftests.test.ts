@@ -73,6 +73,7 @@ import { __runApplySettingsTests } from "@/lib/syndication/apply-settings-core";
 import { __runSyndicationPlaybookTests } from "@/lib/integrations/syndication-playbook";
 import { __runLeaflyOrderCartTests } from "@/lib/leafly/order-cart-core";
 import { __runLeaflyBadgeTests } from "@/lib/inventory/leafly-badge-core";
+import { __runLeaflyRegisterLinesTests } from "@/lib/pos/leafly-register-lines-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -539,5 +540,12 @@ describe("embedded pure self-test suites", () => {
     const r = __runLeaflyBadgeTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(28);
+  });
+  it("leafly-register-lines-core (Leafly order -> register cart ids)", () => {
+    // Floor 31 from a measured 33. The empty-cart bug: Leafly lines reached
+    // the register with no variant id and were all dropped.
+    const r = __runLeaflyRegisterLinesTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(31);
   });
 });

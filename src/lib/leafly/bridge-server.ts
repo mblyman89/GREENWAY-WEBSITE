@@ -498,6 +498,11 @@ async function insertLocalOrder(
         .insert(
           draft.lines.map((l) => ({
             order_id: orderId,
+            // The ids the register cart matches on (Leafly integratorVariantId =
+            // our POS variant id). Without them the register dropped every line
+            // as "no longer on the menu" and opened an empty cart.
+            product_id: l.productId,
+            variant_id: l.variantId,
             product_name: l.productName,
             variant_label: l.variantLabel,
             quantity: l.quantity,

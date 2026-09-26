@@ -836,6 +836,15 @@ export type LeaflyLocalOrderDraft = {
     variantLabel: string | null;
     quantity: number;
     priceMinorUnits: number;
+    /**
+     * Leafly's `integratorVariantId` - the id WE gave the variant in the menu
+     * push, which is the register bundle's `variantId`. Stored in
+     * `order_lines.variant_id` so the register can rebuild the cart (the
+     * empty-cart bug: without it every line was "no longer on the menu").
+     */
+    variantId: string | null;
+    /** POS product key, only when the variant id proves it (`<key>-default`). */
+    productId: string | null;
   }[];
   /** Goes in `orders.staff_note` so the floor knows where this came from. */
   staffNote: string;
@@ -858,6 +867,20 @@ export function leaflyDisplayLabel(leaflyOrderId: string): string {
   if (clean === "") return "LF-????";
   const tail = clean.split("-").pop() ?? clean;
   return `LF-${tail.slice(-6).toUpperCase()}`;
+}
+
+/**
+ * The register ids for one Leafly line. `variantId` is Leafly's
+ * integratorVariantId as given (trimmed); `productId` is derived ONLY from a
+ * synthesized `<key>-default` id, which payload-core and api/pos/menu both
+ * mint for a variant-less item. Mirrors pos/leafly-register-lines-core
+ * `leaflyProductIdFromVariantId` (kept import-free, so restated here).
+ */
+export function leaflyLineIds(variantId: unknown): { variantId: string | null; productId: string | null } {
+  const v = typeof variantId === "string" && variantId.trim() !== "" ? variantId.trim() : null;
+  if (v === null) return { variantId: null, productId: null };
+  const key = v.endsWith("-default") ? v.slice(0, -"-default".length).trim() : "";
+  return { variantId: v, productId: key === "" ? null : key };
 }
 
 /**
@@ -884,6 +907,7 @@ export function buildLeaflyLocalOrderDraft(input: {
     variantLabel?: string | null;
     quantity: number;
     priceMinorUnits: number;
+    variantId?: string | null;
   }[];
 }): LeaflyDraftResult {
   const id = typeof input.leaflyOrderId === "string" ? input.leaflyOrderId.trim() : "";
@@ -919,6 +943,7 @@ export function buildLeaflyLocalOrderDraft(input: {
       Number.isInteger(l.priceMinorUnits) && l.priceMinorUnits >= 0
         ? l.priceMinorUnits
         : 0,
+    ...leaflyLineIds(l.variantId),
   }));
 
   return {
@@ -1021,6 +1046,7 @@ export function readLeaflyOrderPayload(raw: unknown): LeaflyDraftResult {
     variantLabel: string | null;
     quantity: number;
     priceMinorUnits: number;
+    variantId: string | null;
   }[] = [];
 
   for (const item of rawItems) {
@@ -1056,19 +1082,25 @@ export function readLeaflyOrderPayload(raw: unknown): LeaflyDraftResult {
         ? ci.packageUnit.trim()
         : "";
     const variantLabel = `${size}${unit}`.trim() === "" ? null : `${size}${unit}`.trim();
+    // The id the register matches on (spec: CartItemOutgoing.integratorVariantId).
+    const variantId =
+      typeof ci.integratorVariantId === "string" && ci.integratorVariantId.trim() !== ""
+        ? ci.integratorVariantId.trim()
+        : null;
 
     if (remainder === 0) {
-      lines.push({ productName: name, variantLabel, quantity, priceMinorUnits: base });
+      lines.push({ productName: name, variantLabel, quantity, priceMinorUnits: base, variantId });
     } else {
       // The odd cents ride on a single unit so the line total still adds up
       // exactly to what Leafly charged.
-      lines.push({ productName: name, variantLabel, quantity: 1, priceMinorUnits: base + remainder });
+      lines.push({ productName: name, variantLabel, quantity: 1, priceMinorUnits: base + remainder, variantId });
       if (quantity - 1 > 0) {
         lines.push({
           productName: name,
           variantLabel,
           quantity: quantity - 1,
           priceMinorUnits: base,
+          variantId,
         });
       }
     }
@@ -1945,7 +1977,47 @@ export function __runLeaflyBridgeTests(): { passed: number; failed: number } {
     // PRIVACY: this label is printed on paper that sits on a shelf.
     eq("the customer is a first name and an initial", read.draft.customerLabel, "Jamie R.");
     ok("the surname is not printed in full", !String(read.draft.customerLabel).includes("Rodriguez"));
+    // No integratorVariantId in this fixture -> no ids, never an invented one.
+    eq("no integratorVariantId -> variant id null", read.draft.lines[0].variantId, null);
+    eq("no integratorVariantId -> product id null", read.draft.lines[0].productId, null);
   }
+
+  // ---- REGISTER LOAD: the ids the register cart matches on ----------------
+  // The empty-cart bug: lines were saved with no variant id, so the register
+  // dropped every one as "no longer on the menu".
+  const withIds = readLeaflyOrderPayload({
+    ...payload,
+    subtotal: 1000,
+    total: 1000,
+    taxes: [],
+    cartItems: [
+      { name: "Blue Dream", quantity: 2, integratorVariantId: " pos-1-onboarded ", priceCents: 600, discountedPriceCents: 600 },
+      { name: "Pre-roll", quantity: 1, integratorVariantId: "pos-9-default", priceCents: 400, discountedPriceCents: 400 },
+    ],
+  });
+  ok("a payload with variant ids is readable", withIds.ok);
+  if (withIds.ok) {
+    eq("integratorVariantId becomes the line's variant id", withIds.draft.lines[0].variantId, "pos-1-onboarded");
+    eq("a real variant id implies no product key", withIds.draft.lines[0].productId, null);
+    eq("a default variant id is carried", withIds.draft.lines[1].variantId, "pos-9-default");
+    eq("a default variant id implies its product key", withIds.draft.lines[1].productId, "pos-9");
+  }
+  const splitIds = readLeaflyOrderPayload({
+    ...payload,
+    subtotal: 1000,
+    total: 1000,
+    taxes: [],
+    cartItems: [{ name: "Pre-roll", quantity: 3, integratorVariantId: "v-3", priceCents: 1000, discountedPriceCents: 1000 }],
+  });
+  ok(
+    "BOTH halves of a remainder-split line keep the variant id",
+    splitIds.ok && splitIds.draft.lines.length === 2 && splitIds.draft.lines.every((l) => l.variantId === "v-3"),
+  );
+  eq("leaflyLineIds: blank -> nulls", JSON.stringify(leaflyLineIds("  ")), JSON.stringify({ variantId: null, productId: null }));
+  eq("leaflyLineIds: non-string -> nulls", leaflyLineIds(7).variantId, null);
+  eq("leaflyLineIds: bare -default -> no key", leaflyLineIds("-default").productId, null);
+  eq("leaflyLineIds: onboarded -> no key", leaflyLineIds("k-onboarded").productId, null);
+  eq("leaflyLineIds: default -> key", leaflyLineIds("k-default").productId, "k");
 
   // MONEY CONSERVATION -- the assertion that matters most in this whole file.
   // A line of 1000 across 3 units does not divide evenly. Dropping the
