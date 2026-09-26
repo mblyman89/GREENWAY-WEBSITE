@@ -222,6 +222,7 @@ import { __runLeaflyInboundBudgetTests } from "../../src/lib/leafly/inbound-budg
 import { __runLeaflyCertificationProofTests } from "../../src/lib/leafly/certification-proof-core";
 import { __runLeaflyOrderCartTests } from "../../src/lib/leafly/order-cart-core";
 import { __runLeaflyBadgeTests } from "../../src/lib/inventory/leafly-badge-core";
+import { __runLeaflyRegisterLinesTests } from "../../src/lib/pos/leafly-register-lines-core";
 // The owner asked what "stage 2 changes how your menu looks to shoppers"
 // actually means. This core is the answer: it names the listings a shopper
 // would see instead of reporting a count. Registered here because the WORDING
@@ -1748,6 +1749,7 @@ __runLiquidVolumeTests();
   // Inventory LEAFLY badge: which lots show it (split products count for
   // their parent; unlinked lots never do). Floor just under the measured count.
   assertRan("leafly-badge-core", __runLeaflyBadgeTests(), 28);
+  assertRan("leafly-register-lines-core", __runLeaflyRegisterLinesTests(), 31);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

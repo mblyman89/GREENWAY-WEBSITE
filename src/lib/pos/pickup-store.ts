@@ -63,6 +63,7 @@ import {
   type RegisterAdvanceTarget,
 } from "@/lib/pos/pickup-progress-core";
 import { type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
+import { chooseRegisterLines, readLeaflyRegisterLines } from "@/lib/pos/leafly-register-lines-core";
 import { getAccountByCustomer, listTiers } from "@/lib/loyalty/loyalty-store";
 import { tierForPoints } from "@/lib/loyalty/engine";
 
@@ -290,20 +291,31 @@ async function buildRichDetail(
   };
 }
 
-/** Leafly's stored cart for the local order it became, or null. */
-async function readLeaflyCartForLocalOrder(localOrderId: string): Promise<ReturnType<typeof readLeaflyCart> | null> {
+/**
+ * Leafly's stored order payload (`leafly_orders.raw_order`) for the local
+ * order it became. `undefined` = no linked Leafly row / unreadable, so the
+ * callers fall back to the local lines rather than inventing anything.
+ */
+async function readLeaflyRawOrderForLocalOrder(localOrderId: string): Promise<{ raw: unknown } | null> {
   try {
     const admin = createSupabaseAdminClient();
-    const { data } = await admin
+    const { data, error } = await admin
       .from("leafly_orders")
       .select("raw_order")
       .eq("local_order_id", localOrderId)
       .limit(1)
       .maybeSingle<{ raw_order: unknown }>();
-    return data ? readLeaflyCart(data.raw_order) : null;
+    if (error || !data) return null;
+    return { raw: data.raw_order };
   } catch {
     return null;
   }
+}
+
+/** Leafly's stored cart for the local order it became, or null. */
+async function readLeaflyCartForLocalOrder(localOrderId: string): Promise<ReturnType<typeof readLeaflyCart> | null> {
+  const stored = await readLeaflyRawOrderForLocalOrder(localOrderId);
+  return stored ? readLeaflyCart(stored.raw) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -870,6 +882,32 @@ export async function loadOrderIntoRegister(input: {
   // row that was just validated above, not re-fetched, so the sale cannot
   // disagree with the queue tile the budtender tapped a second earlier.
   const loadedOrigin = toOrderOrigin(order.origin);
+  const loadedIsMarketplace = isMarketplaceOrigin(loadedOrigin);
+
+  // ── Which lines the register rebuilds from ───────────────────────────────
+  // A website order's lines carry product_id + variant_id. A LEAFLY order's
+  // local lines were saved without them (the empty-cart bug: every line was
+  // dropped as "no longer on the menu"), so a marketplace order is rebuilt
+  // from Leafly's own stored copy, whose integratorVariantId IS our POS
+  // variant id (see leafly-register-lines-core for the proof). This repairs
+  // every Leafly order already in the database, with no backfill, and is the
+  // same copy the register's order detail already lists. If that copy is
+  // missing or has no ids, the local lines are used exactly as before.
+  const storedLines: LoadedOrderLine[] = order.lines.map((l) => ({
+    productId: l.product_id,
+    variantId: l.variant_id,
+    productName: l.variant_label ? `${l.product_name} (${l.variant_label})` : l.product_name,
+    quantity: l.quantity,
+  }));
+  const leaflyReading = loadedIsMarketplace
+    ? await readLeaflyRawOrderForLocalOrder(order.id).then((r) => (r ? readLeaflyRegisterLines(r.raw) : null))
+    : null;
+  const chosen = chooseRegisterLines({ isMarketplace: loadedIsMarketplace, leafly: leaflyReading, stored: storedLines });
+  if (loadedIsMarketplace && chosen.source === "stored") {
+    console.warn(
+      `[pos/pickup] ${order.order_number}: Leafly's stored order had no usable variant ids, so the register used the local lines.`,
+    );
+  }
 
   return {
     ok: true,
@@ -877,15 +915,10 @@ export async function loadOrderIntoRegister(input: {
     orderNumber: order.order_number,
     customerLabel: customerPickupLabel(order.customer_first_name, order.customer_last_name),
     customerNote: (order.customer_note ?? "").trim() || null,
-    lines: order.lines.map((l) => ({
-      productId: l.product_id,
-      variantId: l.variant_id,
-      productName: l.variant_label ? `${l.product_name} (${l.variant_label})` : l.product_name,
-      quantity: l.quantity,
-    })),
+    lines: chosen.lines,
     member,
     origin: loadedOrigin,
     originLabel: orderOriginLabel(loadedOrigin),
-    isMarketplace: isMarketplaceOrigin(loadedOrigin),
+    isMarketplace: loadedIsMarketplace,
   };
 }

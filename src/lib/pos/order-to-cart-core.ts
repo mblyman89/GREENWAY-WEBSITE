@@ -40,6 +40,9 @@ export type LoadedOrderLine = {
   quantity: number;
 };
 
+/** Why a line with NO product/variant id was dropped (shown to staff). */
+export const UNMATCHED_LINE_REASON = "not linked to a menu item - add it by hand";
+
 export type RebuiltOrderCart = {
   /** Lines matched to the CURRENT bundle (fresh prices/promotions apply). */
   cart: PosCartEntry[];
@@ -67,7 +70,14 @@ export function rebuildOrderCart(lines: LoadedOrderLine[], products: PosMenuProd
     // key both the website cart and the POS bundle derive for single-price
     // items.
     const key = line.variantId ?? (line.productId ? `${line.productId}-default` : null);
-    const product = key ? byVariant.get(key) : undefined;
+    if (!key) {
+      // No id at all: the line cannot be looked up, which is NOT the same as
+      // "no longer on the menu" - saying so sent the owner checking a menu
+      // that was fine (Leafly empty-cart bug). Say what is actually true.
+      dropped.push(`${line.productName} (${UNMATCHED_LINE_REASON})`);
+      continue;
+    }
+    const product = byVariant.get(key);
     if (!product) {
       dropped.push(`${line.productName} (no longer on the menu)`);
       continue;
@@ -174,6 +184,8 @@ export function __runOrderToCartCoreTests(): void {
   // -- null productId AND null variantId can never match ---------------------
   const r4 = rebuildOrderCart([{ productId: null, variantId: null, productName: "Mystery", quantity: 1 }], menu);
   ok(r4.cart.length === 0 && r4.dropped.length === 1, "no ids → dropped, never a guess");
+  ok(r4.dropped[0] === `Mystery (${UNMATCHED_LINE_REASON})`, "no ids → honest reason, not 'no longer on the menu'");
+  ok(!r4.dropped[0].includes("no longer on the menu"), "no ids never claims the item left the menu");
 
   // -- duplicate lines merge; quantities clamp -------------------------------
   const r5 = rebuildOrderCart(
