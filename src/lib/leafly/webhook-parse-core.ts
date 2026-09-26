@@ -388,6 +388,37 @@ export function describeParsedWebhook(parsed: ParsedLeaflyWebhook): string {
 // Self-tests (house rule 5)
 // ---------------------------------------------------------------------------
 
+/**
+ * May this webhook write its body into `leafly_orders.raw_order`?
+ *
+ * ONLY `order_submit`. Found by the Online Orders report audit: 14 of 23
+ * Leafly orders had no readable total.
+ *
+ * `raw_order` is the ONLY copy of the real Order we will ever have — the spec
+ * says Leafly serves an order "only ... while live, or within twenty four
+ * hours of reaching a terminal state". It reaches us in two steps: the
+ * `order_submit` envelope is stored first, then `collectLeaflyOrder()`
+ * replaces it with the full Order (cart, totals, customer).
+ *
+ * The upsert used to store EVERY order webhook's body. An `order_status` or
+ * `order_cancel` envelope is four or five fields (eventTime, eventType,
+ * orderId, orderIntegrationKey, + status / cancelReason) and nothing re-collects
+ * after it, so the first status change after collection silently replaced the
+ * full Order with the envelope. Every figure that reads the payload then went
+ * blank: the report's order value, the detail view, the receipt reprint, the
+ * register's Leafly line rebuild.
+ *
+ * The facts those envelopes DO carry (status, cancel reason, canceled_at) are
+ * still written to their own columns, so nothing a status webhook knows is
+ * lost by not storing its body. `order_submit` keeps writing, because on the
+ * first delivery `raw_order` is empty and the envelope is the placeholder
+ * `collectLeaflyOrder` then replaces (and `classifyDetailPayload` recognises it
+ * as "never fetched" so the Collect button still appears).
+ */
+export function webhookMayWriteRawOrder(eventType: string | null | undefined): boolean {
+  return eventType === "order_submit";
+}
+
 export function __runLeaflyWebhookParseTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -836,6 +867,14 @@ export function __runLeaflyWebhookParseTests(): { passed: number; failed: number
     deepThrew = true;
   }
   ok(!deepThrew, "a deeply nested body does not throw");
+
+  // -- raw_order is written only by order_submit (Online Orders audit) -----
+  ok(webhookMayWriteRawOrder("order_submit"), "order_submit may store its body (placeholder until collected)");
+  ok(!webhookMayWriteRawOrder("order_status"), "order_status must NOT overwrite the collected Order");
+  ok(!webhookMayWriteRawOrder("order_cancel"), "order_cancel must NOT overwrite the collected Order");
+  ok(!webhookMayWriteRawOrder("order_preview"), "order_preview must NOT write raw_order");
+  ok(!webhookMayWriteRawOrder(null), "an unknown event must NOT write raw_order");
+  ok(!webhookMayWriteRawOrder("ORDER_SUBMIT"), "the match is exact (Leafly's enum is lower-case)");
 
   return { passed, failed };
 }

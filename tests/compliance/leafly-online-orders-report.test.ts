@@ -129,7 +129,7 @@ function randomOrders(count: number, seed: number): ReportOrderRow[] {
       firstSeenAt: iso(firstSeenMs),
       announcedAt: rnd() > 0.2 ? iso(firstSeenMs + 2_000) : null,
       printedAt: rnd() > 0.25 ? iso(firstSeenMs + 3_000) : null,
-      totalRaw: rnd() > 0.1 ? (rnd() * 300).toFixed(2) : null,
+      totalMinorUnits: rnd() > 0.1 ? Math.round(rnd() * 30000) : null,
     });
   }
   return rows;
@@ -467,7 +467,7 @@ describe("Slice 8 — the whole report holds together on random input", () => {
     // obliged to answer 200. A report that throws on one goes blank at exactly
     // the moment it is needed.
     const r = buildOnlineOrdersReport({
-      orders: [{}, {}, { leaflyStatus: null, totalRaw: undefined }],
+      orders: [{}, {}, { leaflyStatus: null, totalMinorUnits: undefined }],
       attempts: [{}, { disposition: null }],
     });
     expect(r.totalOrders).toBe(3);
@@ -561,7 +561,9 @@ describe("Slice 8 — the whole report holds together on random input", () => {
 
   it("sums money only over rows that carried a readable total", () => {
     const r = buildOnlineOrdersReport({
-      orders: [{ totalRaw: "10.00" }, { totalRaw: "5.005" }, { totalRaw: null }, { totalRaw: "abc" }],
+      // Leafly money is integer minor units (cents). A fractional number is not
+      // cents and is refused rather than rounded into a plausible-looking total.
+      orders: [{ totalMinorUnits: 1000 }, { totalMinorUnits: 501 }, { totalMinorUnits: null }, { totalMinorUnits: 33.7 }],
     });
     expect(r.ordersWithTotal).toBe(2);
     expect(r.grossMinorUnits).toBe(1000 + 501);
@@ -686,7 +688,7 @@ describe("Slice 8 — the headline only speaks when there is something to say", 
       firstSeenAt: "2026-02-01T00:00:00Z",
       acknowledgeBy: "2026-02-01T00:15:00Z",
       acknowledgedAt: "2026-02-01T00:02:00Z",
-      totalRaw: "25.00",
+      totalMinorUnits: 2500,
     }));
     const r = buildOnlineOrdersReport({ orders });
     expect(r.autoCanceledOrders).toBe(0);
