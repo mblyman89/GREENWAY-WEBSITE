@@ -221,6 +221,7 @@ import { __runLeaflyRetailerKeyTests } from "../../src/lib/leafly/retailer-key-c
 import { __runLeaflyInboundBudgetTests } from "../../src/lib/leafly/inbound-budget-core";
 import { __runLeaflyCertificationProofTests } from "../../src/lib/leafly/certification-proof-core";
 import { __runLeaflyOrderCartTests } from "../../src/lib/leafly/order-cart-core";
+import { __runLeaflyBadgeTests } from "../../src/lib/inventory/leafly-badge-core";
 // The owner asked what "stage 2 changes how your menu looks to shoppers"
 // actually means. This core is the answer: it names the listings a shopper
 // would see instead of reporting a count. Registered here because the WORDING
@@ -1743,6 +1744,10 @@ __runLiquidVolumeTests();
   // the reader/decision assertions here are what stop a half-read cart from
   // silently deleting a customer's items. Floor just under the measured count.
   assertRan("leafly-order-cart-core", __runLeaflyOrderCartTests(), 125);
+
+  // Inventory LEAFLY badge: which lots show it (split products count for
+  // their parent; unlinked lots never do). Floor just under the measured count.
+  assertRan("leafly-badge-core", __runLeaflyBadgeTests(), 28);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
