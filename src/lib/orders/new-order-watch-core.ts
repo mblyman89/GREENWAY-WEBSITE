@@ -338,8 +338,17 @@ export const VISIBLE_POLL_MS = 15000;
  * often on purpose: the browser would throttle us anyway, and asking for
  * something we cannot have just burns the server's time. The visibility
  * handler covers the gap by polling on the way back in.
+ *
+ * USAGE-3: 60 s → 120 s. The hidden poll exists ONLY so the chime can still
+ * sound for a tab covered by another tab (a board on a second monitor is
+ * VISIBLE and keeps the 15 s cadence). Each hidden poll is a full
+ * authenticated round-trip, all day, for a screen nobody is looking at; the
+ * order announcer on the Pi speaker is the alert for that case. Halving the
+ * hidden cadence halves that cost; the chime still sounds, at most two
+ * minutes late on a covered tab and instantly on the way back in
+ * (POLL_ON_VISIBLE). Owner-tunable here in one place.
  */
-export const HIDDEN_POLL_MS = 60000;
+export const HIDDEN_POLL_MS = 120000;
 
 export function pollIntervalMs(visible: boolean): number {
   return visible ? VISIBLE_POLL_MS : HIDDEN_POLL_MS;
