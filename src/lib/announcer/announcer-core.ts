@@ -528,6 +528,70 @@ export function isClaimable(row: QueueRowState, nowIso: string): boolean {
 export const POLL_HOLD_SECONDS = 25;
 
 /**
+ * How often the server looks for work while it holds a poll open (USAGE-1).
+ *
+ * This used to be one second, which is 25 `announcer_claim_work` calls per
+ * 25-second hold, about 86,000 database round trips a day per idle speaker,
+ * around the clock. The shop closes; the Pi does not. At five seconds an
+ * order is heard at worst five seconds after it lands — still faster than a
+ * person walks to the counter — for one fifth of the database traffic.
+ *
+ * Kept well under the hold so every poll still checks several times, and the
+ * first check is immediate (see the route), so a queued announcement never
+ * waits for a tick.
+ */
+export const POLL_CHECK_INTERVAL_SECONDS = 5;
+
+/**
+ * How long the Pi rests between polls when the last one found nothing (USAGE-1).
+ *
+ * Every poll is one Vercel function invocation held open for the whole hold,
+ * and Vercel bills the instance's memory for as long as a request is in
+ * flight — including while it is asleep waiting on the database (Fluid
+ * compute pricing, read 2026-09-26: "Memory is reserved for your function
+ * even when it's waiting for I/O"). A Pi that reconnects the instant a hold
+ * ends keeps one 2 GB instance alive 24 hours a day, whether or not the shop
+ * is open. A short rest between empty polls turns that into a fraction.
+ *
+ * Bounded by DEVICE_ONLINE_GRACE_SECONDS: hold + rest + a slow request must
+ * still land a heartbeat inside the grace window, or a perfectly healthy
+ * speaker would flicker amber. The self-tests below prove that inequality.
+ */
+export const POLL_IDLE_REST_SECONDS = 10;
+
+/**
+ * How often the poll route stamps `last_seen_at` (USAGE-1).
+ *
+ * The heartbeat used to be an UPDATE on every poll. The dot only needs to be
+ * green, and green is "seen inside DEVICE_ONLINE_GRACE_SECONDS"; writing more
+ * often than that buys nothing visible. The route reads the device row anyway
+ * to authenticate, so it already knows `last_seen_at` and can skip the write
+ * when it is fresh. Set to less than half the grace so one skipped write (a
+ * failed poll) still cannot push a healthy device past the window.
+ */
+export const HEARTBEAT_WRITE_INTERVAL_SECONDS = 40;
+
+/**
+ * Does `last_seen_at` need rewriting?
+ *
+ * Pure. `null` (never seen) and an unparseable value both say yes, because
+ * the write is what fixes them. A timestamp in the future (clock skew) is
+ * treated as fresh rather than as an error, matching deviceHealth().
+ */
+export function shouldWriteHeartbeat(input: {
+  lastSeenIso: string | null | undefined;
+  nowIso: string;
+}): boolean {
+  if (typeof input.lastSeenIso !== "string" || input.lastSeenIso.trim() === "") return true;
+  const last = Date.parse(input.lastSeenIso);
+  const now = Date.parse(input.nowIso);
+  if (!Number.isFinite(last) || !Number.isFinite(now)) return true;
+  const ageSeconds = (now - last) / 1000;
+  if (ageSeconds < 0) return false;
+  return ageSeconds >= HEARTBEAT_WRITE_INTERVAL_SECONDS;
+}
+
+/**
  * How long to wait after a FAILED poll, by consecutive failure count.
  *
  * Gentle at first, because most failures are a one-second blip. It tops out at
@@ -1044,6 +1108,58 @@ export function __runAnnouncerCoreTests(): { passed: number; failed: number } {
   );
   check("poll: lease outlasts any real playback", CLAIM_LEASE_SECONDS >= 30);
   check("poll: TTL is long enough to survive a short outage", ANNOUNCEMENT_TTL_SECONDS >= 300);
+
+  // ---- 9b. USAGE-1: the idle cost of a speaker ---------------------------
+  check("usage: check interval is a whole number of seconds", Number.isInteger(POLL_CHECK_INTERVAL_SECONDS));
+  check("usage: check interval is slower than the old one-second loop", POLL_CHECK_INTERVAL_SECONDS >= 2);
+  check(
+    "usage: a hold still checks for work several times",
+    Math.floor(POLL_HOLD_SECONDS / POLL_CHECK_INTERVAL_SECONDS) >= 3,
+  );
+  check("usage: an order is heard within ten seconds of landing", POLL_CHECK_INTERVAL_SECONDS <= 10);
+  check("usage: idle rest is a whole number of seconds", Number.isInteger(POLL_IDLE_REST_SECONDS));
+  check("usage: idle rest is long enough to matter", POLL_IDLE_REST_SECONDS >= 5);
+  check(
+    "usage: hold + rest + a slow request still heartbeats inside the online grace",
+    POLL_HOLD_SECONDS + POLL_IDLE_REST_SECONDS + 15 < DEVICE_ONLINE_GRACE_SECONDS,
+  );
+  check(
+    "usage: the heartbeat write interval is under half the grace, so one skipped write cannot flicker the dot",
+    HEARTBEAT_WRITE_INTERVAL_SECONDS * 2 < DEVICE_ONLINE_GRACE_SECONDS,
+  );
+  check(
+    "usage: the heartbeat write interval is longer than one poll cycle, so most polls skip the write",
+    HEARTBEAT_WRITE_INTERVAL_SECONDS > POLL_HOLD_SECONDS + POLL_IDLE_REST_SECONDS,
+  );
+  check("heartbeat: never-seen must be written", shouldWriteHeartbeat({ lastSeenIso: null, nowIso: NOW }));
+  check("heartbeat: empty string must be written", shouldWriteHeartbeat({ lastSeenIso: "", nowIso: NOW }));
+  check("heartbeat: garbage must be written", shouldWriteHeartbeat({ lastSeenIso: "yesterday", nowIso: NOW }));
+  check(
+    "heartbeat: a 5-second-old stamp is skipped",
+    !shouldWriteHeartbeat({ lastSeenIso: "2026-03-10T11:59:55.000Z", nowIso: NOW }),
+  );
+  check(
+    "heartbeat: a stamp exactly at the interval is written",
+    shouldWriteHeartbeat({
+      lastSeenIso: new Date(Date.parse(NOW) - HEARTBEAT_WRITE_INTERVAL_SECONDS * 1000).toISOString(),
+      nowIso: NOW,
+    }),
+  );
+  check(
+    "heartbeat: a stamp one second short of the interval is skipped",
+    !shouldWriteHeartbeat({
+      lastSeenIso: new Date(Date.parse(NOW) - (HEARTBEAT_WRITE_INTERVAL_SECONDS - 1) * 1000).toISOString(),
+      nowIso: NOW,
+    }),
+  );
+  check(
+    "heartbeat: a two-minute-old stamp is written",
+    shouldWriteHeartbeat({ lastSeenIso: "2026-03-10T11:58:00.000Z", nowIso: NOW }),
+  );
+  check(
+    "heartbeat: a future stamp (clock skew) is not rewritten",
+    !shouldWriteHeartbeat({ lastSeenIso: "2026-03-10T12:00:30.000Z", nowIso: NOW }),
+  );
 
   // ---- 10. spoken text -------------------------------------------------
   eq("text: test line identifies itself", announcementText({ orderNumber: "A-101", isTest: true }), "Announcer test. This speaker is working.");

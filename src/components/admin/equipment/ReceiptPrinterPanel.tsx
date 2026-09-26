@@ -132,7 +132,7 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
       )}
       {banners.test && (
         <Card className="border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] p-4 text-sm text-[var(--admin-accent)]">
-          Test print queued. It will print at the printer&rsquo;s next poll (usually within a few seconds).
+          Test print queued. It will print at the printer&rsquo;s next poll (within about 15 seconds).
         </Card>
       )}
       {banners.error && (
@@ -146,7 +146,7 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
         title="How the receipt printer works"
         steps={[
           "Your printer is a vretti 80mm USB thermal printer. It plugs into the Raspberry Pi by USB \u2014 it has no network port, no web page and no setup app of its own.",
-          "The Pi runs a small service that checks this website every few seconds and prints whatever is waiting. The printer only ever hears from the Pi.",
+          "The Pi runs a small service that checks this website every 15 seconds (and again at once after each receipt) and prints whatever is waiting. The printer only ever hears from the Pi.",
           "Generate a Poll token below, then run the one installer command on the Pi (full step-by-step guide is on this page).",
           "Press \u2018Send test print\u2019. After that every online pickup order prints automatically, laid out exactly like a receipt from the register.",
         ]}
@@ -309,7 +309,7 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
             <summary className={summaryCls}>What actually talks to what</summary>
             <ol className={olCls}>
               <li>An online order is placed, and a receipt is queued here on the website.</li>
-              <li>The <strong>Raspberry Pi</strong> checks <code className={inlineCode}>/api/cloudprnt</code> every few seconds. That check is the &ldquo;Last poll&rdquo; heartbeat on the status card above.</li>
+              <li>The <strong>Raspberry Pi</strong> checks <code className={inlineCode}>/api/cloudprnt</code> every 15 seconds. That check is the &ldquo;Last poll&rdquo; heartbeat on the status card above.</li>
               <li>When a receipt is waiting, the Pi downloads it as plain text, converts it to ESC/POS (the language this printer speaks) and writes it to <code className={inlineCode}>/dev/usb/lp0</code> &mdash; the printer on the end of the USB cable.</li>
               <li>The Pi then confirms the job, which is what moves it to &ldquo;printed&rdquo; in the queue below.</li>
             </ol>

@@ -99,8 +99,11 @@ guarantee this feature must not have.
 **Chosen: outbound long-poll against a database claim queue.** The Pi opens an
 ordinary HTTPS request to the site and the server holds it for up to
 twenty-five seconds waiting for work. If work appears, the server answers
-immediately; if nothing appears, the server answers "nothing" and the Pi asks
-again at once. Twenty-five seconds sits at better than a two-times margin under
+immediately and the Pi asks again at once in case more is queued; if nothing
+appears, the server answers "nothing" and the Pi rests for a short server-chosen
+interval (ten seconds today, sent as `idleRestSeconds`) before asking again, so
+the site is not paying for a permanently open request while the shop is quiet.
+Twenty-five seconds sits at better than a two-times margin under
 the sixty-second ceiling, so the request finishes well before anything upstream
 would cut it. The connection is always initiated from inside the shop, which
 means it traverses the router the same way a browser does — no inbound rule, no

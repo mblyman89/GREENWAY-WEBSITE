@@ -665,6 +665,7 @@ import { __runBackLinkTests } from "../../src/lib/admin/back-link-core";
 import { __runPostgrestEscapeTests } from "../../src/lib/supabase/postgrest-escape";
 import { __runPgBigintTests } from "../../src/lib/supabase/pg-bigint";
 import { __runPrintRetryCoreTests } from "../../src/lib/printing/print-retry-core";
+import { __runPrinterHeartbeatCoreTests } from "../../src/lib/printing/printer-heartbeat-core";
 // D-68 -- the ONE place that decides which secret a CloudPRNT request carries.
 // Registered here because /api/cloudprnt passes BOTH the shared poll token and
 // the per-receipt job token on the same `?token=` parameter: reading the query
@@ -1334,6 +1335,7 @@ __runLiquidVolumeTests();
   __runConstantTimeTests();
   __runGramsPerOunceTests();
   __runPrintRetryCoreTests();
+  __runPrinterHeartbeatCoreTests();
   __runCloudPrntAuthCoreTests();
   __runRevenueBasisTests();
   __runRejectedReportTests();

@@ -37,6 +37,7 @@ import {
   getJobByToken,
   confirmJob,
   recordHeartbeat,
+  type PrinterSettings,
 } from "@/lib/printing/printer-store";
 
 export const runtime = "nodejs";
@@ -68,24 +69,43 @@ function extractToken(req: NextRequest, use: CloudPrntTokenUse): string | null {
  * initial printer setup is painless.
  */
 async function authFail(req: NextRequest): Promise<NextResponse | null> {
+  const { denied } = await authorize(req);
+  return denied;
+}
+
+/**
+ * USAGE-1: the poll handler needs BOTH the auth verdict and the settings row
+ * (to throttle the heartbeat write against the stored `last_poll_at`), so the
+ * single settings read is returned alongside the verdict instead of being
+ * repeated. `authFail` stays as the thin wrapper the GET/DELETE handlers use.
+ */
+async function authorize(
+  req: NextRequest,
+): Promise<{ denied: NextResponse | null; settings: PrinterSettings | null }> {
   const settings = await getPrinterSettings();
   const expected = settings?.poll_token ?? "";
   if (!expected) {
     if (shouldRefuseWhenSecretMissing(expected)) {
-      return NextResponse.json(
-        { error: "printer poll token not configured (set it in Admin → Equipment → Receipt printer)" },
-        { status: 503 },
-      );
+      return {
+        settings,
+        denied: NextResponse.json(
+          { error: "printer poll token not configured (set it in Admin → Equipment → Receipt printer)" },
+          { status: 503 },
+        ),
+      };
     }
-    return null; // dev only: no token configured yet — allow (initial setup)
+    return { settings, denied: null }; // dev only: no token configured yet — allow (initial setup)
   }
   const provided = extractToken(req, "auth");
   // GW-022: constant-time compare so response timing can't leak token prefixes.
-  if (timingSafeEqualStr(provided, expected)) return null;
-  return NextResponse.json(
-    { error: "unauthorized" },
-    { status: 401, headers: { "WWW-Authenticate": 'Basic realm="cloudprnt"' } },
-  );
+  if (timingSafeEqualStr(provided, expected)) return { settings, denied: null };
+  return {
+    settings,
+    denied: NextResponse.json(
+      { error: "unauthorized" },
+      { status: 401, headers: { "WWW-Authenticate": 'Basic realm="cloudprnt"' } },
+    ),
+  };
 }
 
 /**
@@ -93,7 +113,7 @@ async function authFail(req: NextRequest): Promise<NextResponse | null> {
  * heartbeat and tell the printer whether a job is ready.
  */
 export async function POST(req: NextRequest) {
-  const denied = await authFail(req);
+  const { denied, settings } = await authorize(req);
   if (denied) return denied;
 
   let printerMac: string | null = null;
@@ -106,7 +126,9 @@ export async function POST(req: NextRequest) {
     // Some firmware posts an empty body; ignore parse errors.
   }
 
-  await recordHeartbeat({ printerMac, statusCode });
+  // USAGE-1: throttled against the row we already read for auth, so a quiet
+  // printer costs one read per poll instead of one read plus one write.
+  await recordHeartbeat({ printerMac, statusCode, current: settings });
 
   const job = await claimNextJob();
   if (!job) {

@@ -174,7 +174,7 @@ HARDWARE
 
 HOW IT WORKS
 - Our website exposes ONE endpoint: /api/cloudprnt (the "Poll URL").
-- The printer POLLs (HTTP POST) that URL every few seconds with its status; we record the check-in ("Last poll" / heartbeat) and reply jobReady true/false.
+- The printer POLLs (HTTP POST) that URL every 15 seconds with its status; we record the check-in ("Last poll" / heartbeat) and reply jobReady true/false.
 - When a job is ready the printer GETs the receipt body (served as text/plain; the printer prints and auto-cuts), then DELETEs to confirm; we mark it printed.
 - The Poll TOKEN is checked on every request (sent as the CloudPRNT password, or ?token= on the URL). Wrong/missing token when one is configured => 401 Unauthorized, nothing prints. If no token configured yet, requests are allowed (first-time setup).
 - The endpoint is PUBLIC (not behind the admin login) so the printer needs no staff account; the token is the protection.

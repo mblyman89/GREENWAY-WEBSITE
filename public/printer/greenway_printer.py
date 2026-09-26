@@ -82,7 +82,7 @@ except ImportError:  # pragma: no cover - guidance path, not logic
     )
     raise SystemExit(2)
 
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.1.0"
 
 # Where the pairing result lives. Root-owned, mode 600: it holds the poll token.
 DEFAULT_CONFIG_PATH = Path("/etc/greenway-printer/config.json")
@@ -100,11 +100,16 @@ DEVICE_CANDIDATES = [f"/dev/usb/lp{n}" for n in range(10)] + [
 # agents behave identically on the same Pi during an outage.
 POLL_BACKOFF_SECONDS = [1, 2, 5, 10, 20, 30]
 
-# How long to wait between polls when everything is healthy. The CloudPRNT
-# endpoint answers immediately (it does not long-poll), so this is the real
-# knob for "how fast does a receipt appear". Three seconds is imperceptible to
-# a customer and is 20 requests a minute -- nothing.
-IDLE_POLL_SECONDS = 3
+# How long to wait between polls when everything is healthy and the last poll
+# found NOTHING to print. The CloudPRNT endpoint answers immediately (it does
+# not long-poll), so this is the real knob for "how fast does a receipt appear"
+# when the queue was empty. USAGE-1: this was 3 seconds (28,800 polls a day,
+# each costing the site a function invocation and three database calls). At
+# 15 seconds a receipt still appears within a quarter of a minute of the order
+# being placed -- well before anyone walks to the counter -- while the site
+# does a fifth of the work. A poll that DID find a job is followed by another
+# poll at once (see idle_delay_for), so a burst of receipts prints back to back.
+IDLE_POLL_SECONDS = 15
 
 # Hard ceilings on single HTTP calls.
 POLL_TIMEOUT_SECONDS = 20
@@ -167,6 +172,22 @@ def backoff_for(consecutive_failures: int) -> int:
         return 0
     idx = min(consecutive_failures, len(POLL_BACKOFF_SECONDS)) - 1
     return POLL_BACKOFF_SECONDS[idx]
+
+
+def idle_delay_for(ok: bool, had_job: bool, consecutive_failures: int) -> int:
+    """
+    How long the run loop waits before the next poll.
+
+    Failed poll: the backoff ladder. Good poll that printed a receipt: no wait,
+    ask again straight away in case more receipts are queued behind it (a busy
+    register can create several in a minute). Good poll with nothing to do:
+    IDLE_POLL_SECONDS.
+    """
+    if not ok:
+        return backoff_for(consecutive_failures)
+    if had_job:
+        return 0
+    return IDLE_POLL_SECONDS
 
 
 def normalize_site_url(raw: Any) -> Optional[str]:
@@ -674,6 +695,9 @@ class ReceiptPrinter:
         self.consecutive_failures = 0
         self.printed_count = 0
         self.last_ok_at: Optional[float] = None
+        # USAGE-1: did the most recent successful poll hand us a receipt? The
+        # run loop polls again at once when it did, and rests when it did not.
+        self.last_poll_had_job = False
 
     @property
     def endpoint(self) -> str:
@@ -847,8 +871,10 @@ class ReceiptPrinter:
         self.last_ok_at = time.time()
 
         if not ready or not token:
+            self.last_poll_had_job = False
             return True
 
+        self.last_poll_had_job = True
         self.handle_one_job(token)
         return True
 
@@ -875,7 +901,7 @@ class ReceiptPrinter:
 
             if not self.running:
                 break
-            delay = backoff_for(self.consecutive_failures) if not ok else IDLE_POLL_SECONDS
+            delay = idle_delay_for(ok, self.last_poll_had_job, self.consecutive_failures)
             waited = 0.0
             while waited < delay and self.running:
                 time.sleep(min(0.5, delay - waited))
@@ -1140,6 +1166,15 @@ def selftest() -> int:
     eq("backoff: caps at 30s, never longer", backoff_for(999), 30)
     ok("backoff: never negative", all(backoff_for(n) >= 0 for n in range(-5, 50)))
     ok("backoff: recovery stays possible", backoff_for(100000) <= 30)
+
+    # -- idle delay (USAGE-1) ---------------------------------------------
+    eq("idle: nothing to print rests the full interval", idle_delay_for(True, False, 0), IDLE_POLL_SECONDS)
+    eq("idle: a printed receipt is followed by an immediate poll", idle_delay_for(True, True, 0), 0)
+    eq("idle: a failed poll uses the backoff ladder", idle_delay_for(False, False, 1), 1)
+    eq("idle: a failed poll ignores had_job", idle_delay_for(False, True, 3), 5)
+    ok("idle: interval is a sane integer", isinstance(IDLE_POLL_SECONDS, int) and 5 <= IDLE_POLL_SECONDS <= 30)
+    ok("idle: interval keeps the printer inside the 90s online window with margin",
+       IDLE_POLL_SECONDS * 3 < 90)
 
     # -- site url ---------------------------------------------------------
     eq("url: adds https", normalize_site_url("example.com"), "https://example.com")

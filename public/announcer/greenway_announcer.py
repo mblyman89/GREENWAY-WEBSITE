@@ -71,7 +71,7 @@ except ImportError:  # pragma: no cover - guidance path, not logic
     )
     raise SystemExit(2)
 
-AGENT_VERSION = "1.1.0"
+AGENT_VERSION = "1.2.0"
 
 # Where the pairing result lives. Root-owned, mode 600: it holds the device key.
 DEFAULT_CONFIG_PATH = Path("/etc/greenway-announcer/config.json")
@@ -86,6 +86,17 @@ POLL_BACKOFF_SECONDS = [1, 2, 5, 10, 20, 30]
 # must be comfortably longer or we would abandon good requests.
 POLL_TIMEOUT_SECONDS = 45
 SHORT_TIMEOUT_SECONDS = 15
+
+# USAGE-1: how long to rest between two EMPTY polls. The server tells us its
+# preferred value in the poll response (`idleRestSeconds`); this is the default
+# when it does not, and the clamp range we trust it within. Resting between
+# empty polls is what keeps the server from being billed for an always-open
+# request; a rest of 10s plus the 25s hold still keeps us far inside the 90s
+# online grace, so the dot stays green. A poll that DID return jobs is never
+# followed by a rest: the next poll goes out at once in case more are queued.
+DEFAULT_IDLE_REST_SECONDS = 10
+MIN_IDLE_REST_SECONDS = 0
+MAX_IDLE_REST_SECONDS = 30
 
 # How many played ids to remember. Generous: the server expires jobs long
 # before this fills, and it costs a few kilobytes.
@@ -111,6 +122,27 @@ def backoff_for(consecutive_failures: int) -> int:
         return 0
     index = min(consecutive_failures - 1, len(POLL_BACKOFF_SECONDS) - 1)
     return POLL_BACKOFF_SECONDS[index]
+
+
+def idle_rest_for(payload: Any, jobs_returned: int) -> int:
+    """
+    How long to rest after a SUCCESSFUL poll before asking again.
+
+    Zero when the poll carried jobs (there may be more queued right behind
+    them, and a customer is waiting). Otherwise the server's `idleRestSeconds`
+    if it is a sane number, else DEFAULT_IDLE_REST_SECONDS. Clamped so a bad
+    or hostile response can neither hammer the site nor park the speaker.
+    """
+    if jobs_returned > 0:
+        return 0
+    value: Any = None
+    if isinstance(payload, dict):
+        value = payload.get("idleRestSeconds")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return DEFAULT_IDLE_REST_SECONDS
+    if value != value:  # NaN
+        return DEFAULT_IDLE_REST_SECONDS
+    return int(max(MIN_IDLE_REST_SECONDS, min(MAX_IDLE_REST_SECONDS, int(value))))
 
 
 def normalize_volume(raw: Any) -> int:
@@ -1421,6 +1453,8 @@ class Announcer:
         self.consecutive_failures = 0
         self.running = True
         self.last_ok_at: Optional[float] = None
+        # USAGE-1: seconds to rest before the next poll, set by poll_once().
+        self.next_rest_seconds = 0
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -1560,6 +1594,7 @@ class Announcer:
         return played, detail
 
     def poll_once(self) -> bool:
+        self.next_rest_seconds = 0
         payload, error = self.post("poll", {}, POLL_TIMEOUT_SECONDS)
         if error is not None:
             self.consecutive_failures += 1
@@ -1578,6 +1613,7 @@ class Announcer:
         self.last_ok_at = time.time()
 
         jobs = parse_jobs(payload)
+        self.next_rest_seconds = idle_rest_for(payload, len(jobs))
         if not jobs:
             return True
 
@@ -1623,8 +1659,14 @@ class Announcer:
                 log.exception("Unexpected problem while polling (%s). Continuing.", exc)
                 ok = False
 
-            if not ok and self.running:
-                delay = backoff_for(self.consecutive_failures)
+            # Failure: back off. Success with no jobs: rest for the server's
+            # requested idle interval (USAGE-1). Success with jobs: go again
+            # at once, since more may be queued behind them.
+            if not ok:
+                delay: float = backoff_for(self.consecutive_failures)
+            else:
+                delay = float(self.next_rest_seconds)
+            if delay > 0 and self.running:
                 # Sleep in short slices so a stop request is honoured promptly.
                 waited = 0.0
                 while waited < delay and self.running:
@@ -2332,6 +2374,27 @@ def selftest() -> int:
     eq("backoff: caps at 30s, never longer", backoff_for(999), 30)
     ok("backoff: never negative", all(backoff_for(n) >= 0 for n in range(-5, 50)))
     ok("backoff: recovery stays possible", backoff_for(100000) <= 30)
+
+    # -- idle rest (USAGE-1) ----------------------------------------------
+    eq("rest: server value honoured", idle_rest_for({"jobs": [], "idleRestSeconds": 10}, 0), 10)
+    eq("rest: jobs returned means no rest", idle_rest_for({"jobs": [{}], "idleRestSeconds": 10}, 1), 0)
+    eq("rest: old server (no field) uses default",
+       idle_rest_for({"jobs": []}, 0), DEFAULT_IDLE_REST_SECONDS)
+    eq("rest: non-dict payload uses default", idle_rest_for(None, 0), DEFAULT_IDLE_REST_SECONDS)
+    eq("rest: string value uses default",
+       idle_rest_for({"idleRestSeconds": "10"}, 0), DEFAULT_IDLE_REST_SECONDS)
+    eq("rest: bool value uses default",
+       idle_rest_for({"idleRestSeconds": True}, 0), DEFAULT_IDLE_REST_SECONDS)
+    eq("rest: NaN uses default",
+       idle_rest_for({"idleRestSeconds": float("nan")}, 0), DEFAULT_IDLE_REST_SECONDS)
+    eq("rest: huge value is clamped", idle_rest_for({"idleRestSeconds": 9999}, 0), MAX_IDLE_REST_SECONDS)
+    eq("rest: negative value is clamped", idle_rest_for({"idleRestSeconds": -5}, 0), MIN_IDLE_REST_SECONDS)
+    eq("rest: zero is allowed (server may ask for no rest)", idle_rest_for({"idleRestSeconds": 0}, 0), 0)
+    eq("rest: fractional value truncates", idle_rest_for({"idleRestSeconds": 7.9}, 0), 7)
+    ok("rest: default is a sane integer",
+       isinstance(DEFAULT_IDLE_REST_SECONDS, int) and 5 <= DEFAULT_IDLE_REST_SECONDS <= 30)
+    ok("rest: hold + max rest stays well inside the 90s online grace",
+       25 + MAX_IDLE_REST_SECONDS + 15 < 90)
 
     # -- volume: the silent-speaker guard ---------------------------------
     eq("volume: 50 stays 50", normalize_volume(50), 50)

@@ -7,7 +7,7 @@ assistant is grounded on — every fact below is true of our actual integration.
 
 > **What this printer does:** when an online pickup order comes in, the back
 > office automatically queues a receipt. The printer checks in with our website
-> every few seconds ("polling"), grabs any waiting receipt, prints it, and cuts
+> every 15 seconds ("polling"), grabs any waiting receipt, prints it, and cuts
 > the paper. You can also send a manual **test print** at any time.
 
 ---
@@ -87,7 +87,7 @@ There are two ways to enter these into the printer. Either works.
 1. Back on the **Receipt Printer** settings page, watch the **Printer status**
    card. Within a poll interval or two it should flip to **Online** and show a
    **Last poll** time and the printer's **MAC** address.
-2. Click **Send test print**. A test receipt should print within a few seconds
+2. Click **Send test print**. A test receipt should print within about 15 seconds
    (at the printer's next poll). The job appears in **Recent print jobs** and
    moves from *queued* → *printed*.
 3. Make sure **Auto-print online orders** is checked (Settings section). From
@@ -102,7 +102,7 @@ That's it. Day-to-day, staff do nothing — receipts just print.
 Our website exposes **one** endpoint, `/api/cloudprnt`, that speaks the classic
 Star CloudPRNT HTTP protocol:
 
-- The printer **POSTs** its status to that URL every few seconds. We record the
+- The printer **POSTs** its status to that URL every 15 seconds. We record the
   check-in ("heartbeat" → that's the *Last poll* time) and reply whether a job
   is waiting (`jobReady: true/false`).
 - When a job is ready, the printer **GETs** the receipt body (we send it as

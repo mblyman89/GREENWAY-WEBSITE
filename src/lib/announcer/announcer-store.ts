@@ -30,6 +30,7 @@ import {
   PAIRING_ALPHABET,
   PAIRING_CODE_LENGTH,
   pairingCodeValidity,
+  shouldWriteHeartbeat,
 } from "./announcer-core";
 import { toJob, type AnnouncerJob } from "./announcer-protocol-core";
 import { randomInt } from "node:crypto";
@@ -111,12 +112,29 @@ export async function authenticateAnnouncerDevice(
 /**
  * Stamp last_seen_at. Best-effort: a failed heartbeat must never break a poll
  * that is otherwise about to deliver an announcement.
+ *
+ * USAGE-1: pass `lastSeenIso` (the value already read by
+ * authenticateAnnouncerDevice) and the write is SKIPPED while the stamp is
+ * fresher than HEARTBEAT_WRITE_INTERVAL_SECONDS. The dot only needs a stamp
+ * inside DEVICE_ONLINE_GRACE_SECONDS; rewriting it on every 25-second poll
+ * was one UPDATE per poll, all day, for no visible change. Callers that carry
+ * new agentInfo (the explicit heartbeat route) always write, because that
+ * payload is the point of the call.
  */
 export async function touchDevice(
   deviceId: string,
   agentInfo?: Record<string, unknown>,
+  lastSeenIso?: string | null,
 ): Promise<void> {
   if (!isSupabaseServiceConfigured) return;
+  const hasAgentInfo = !!agentInfo && Object.keys(agentInfo).length > 0;
+  if (
+    !hasAgentInfo &&
+    lastSeenIso !== undefined &&
+    !shouldWriteHeartbeat({ lastSeenIso, nowIso: new Date().toISOString() })
+  ) {
+    return;
+  }
   const admin = createSupabaseAdminClient();
   const patch: Record<string, unknown> = { last_seen_at: new Date().toISOString() };
   if (agentInfo && Object.keys(agentInfo).length > 0) patch.agent_info = agentInfo;
