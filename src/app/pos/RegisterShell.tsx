@@ -95,6 +95,8 @@ import {
 // in the browser PWA (relative, same-origin) and in the packaged iPad app
 // (absolute, pointed at the real server). See lib/pos/api-base-core.
 import { configurePosApiBase, posFetch } from "@/lib/pos/pos-fetch";
+// SLICE L-48 - "Change items" on a Leafly order, from the pickup queue.
+import { RegisterCartEditor } from "./RegisterCartEditor";
 // Phase 1.1 — every register read/write goes through the storage seam instead
 // of window.localStorage, so the SAME code runs on the browser PWA (localStorage
 // backend, byte-identical behavior) and in the packaged iPad app (durable
@@ -4122,6 +4124,8 @@ function PickupQueueModal({
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState<string>("");
   const [cancelPin, setCancelPin] = useState("");
+  // SLICE L-48 - the Change items editor is open for the selected order.
+  const [cartOpen, setCartOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const headers = useMemo(
@@ -4173,6 +4177,7 @@ function PickupQueueModal({
     setErrors([]);
     setNotice(null);
     setCancelOpen(false);
+    setCartOpen(false);
     setCancelPin("");
     setCancelReason("");
     try {
@@ -4522,6 +4527,7 @@ function PickupQueueModal({
                     onClick={() => {
                       setDetail(null);
                       setCancelOpen(false);
+                      setCartOpen(false);
                       setErrors([]);
                       searchRef.current?.focus();
                     }}
@@ -4711,6 +4717,53 @@ function PickupQueueModal({
                   </p>
                 </div>
 
+                {/* SLICE L-48 — Change items (Leafly "Update Order's Cart").
+                    Leafly orders only: a website order is changed by loading
+                    it into a sale. The server decides whether the order can
+                    be changed and says why not; this only opens the editor. */}
+                {detail.isMarketplace ? (
+                  cartOpen ? (
+                    <RegisterCartEditor
+                      key={detail.orderId}
+                      orderId={detail.orderId}
+                      headers={headers}
+                      employeeName={employee.fullName}
+                      onClose={() => setCartOpen(false)}
+                      onUpdated={(message) => {
+                        setCartOpen(false);
+                        setErrors([]);
+                        setNotice(message);
+                        const orderId = detail.orderId;
+                        // Re-read the order and the queue: our copy was rebuilt
+                        // from Leafly's answer, so the lines and total changed.
+                        void Promise.all([
+                          posFetch("/api/pos/pickup", { method: "POST", headers, body: JSON.stringify({ orderId }) })
+                            .then((r) => (r.ok ? r.json() : null))
+                            .catch(() => null) as Promise<{ order?: PickupDetail } | null>,
+                          loadQueue(),
+                        ]).then(([fresh, next]) => {
+                          if (fresh?.order) setDetail(fresh.order);
+                          onCancelled(next ? next.length : null);
+                        });
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCartOpen(true);
+                        setCancelOpen(false);
+                        setErrors([]);
+                        setNotice(null);
+                      }}
+                      disabled={busy || cancelOpen}
+                      className="mt-3 pos-tile w-full rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] py-2.5 text-sm font-semibold text-[var(--pos-info)] disabled:opacity-40"
+                    >
+                      ✏️ Change items (swap, add, remove, quantity)…
+                    </button>
+                  )
+                ) : null}
+
                 {/* SLICE 17 — ONE DOOR. Completion only through the register
                     sale and its REAL ID gate (id-scan-core). */}
                 <div className="mt-3 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-3">
@@ -4724,7 +4777,7 @@ function PickupQueueModal({
                 <button
                   type="button"
                   onClick={() => void loadIntoSale()}
-                  disabled={busy || cancelOpen}
+                  disabled={busy || cancelOpen || cartOpen}
                   className="mt-3 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
                 >
                   {busy && !cancelOpen ? "Opening…" : `Start handover — scan ID · ${formatCents(detail.totalMinor)}`}
@@ -4740,6 +4793,7 @@ function PickupQueueModal({
                     type="button"
                     onClick={() => {
                       setCancelOpen(true);
+                      setCartOpen(false);
                       setErrors([]);
                     }}
                     disabled={busy}
