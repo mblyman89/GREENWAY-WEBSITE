@@ -42,6 +42,12 @@ import {
 } from "./reservation-expiry-core";
 import { assignNextPoolName } from "./order-name-pool-store";
 import { resolveOrderDisplay } from "./order-name-pool-core";
+import { isMissingDbFunctionError } from "@/lib/db/rpc-fallback-core";
+import {
+  ORDERS_BOARD_SNAPSHOT_RPC,
+  clampArrivalsLimit,
+  parseOrdersBoardSnapshot,
+} from "./orders-board-snapshot-core";
 
 // ---------------------------------------------------------------------------
 // Placement (guest, no auth) — input is SERVER-PRICED (see order-pricing.ts)
@@ -672,6 +678,67 @@ export async function getOrderStatusCounts(
     empty[status] = counts[i];
   });
   return empty;
+}
+
+/**
+ * USAGE-3 — the Orders dashboard poll (and the board page's stat cards) in
+ * ONE database round-trip.
+ *
+ * Before: getOrderStatusCounts (7 exact counts) + getRecentOrderArrivals (1)
+ * + getLatestOrderChange (2) = 10 PostgREST requests every 15 s per open
+ * Orders tab. After: one call to `orders_board_snapshot()` (migration 0233)
+ * returning a small jsonb document, parsed by the pure
+ * orders-board-snapshot-core.
+ *
+ * Degrades honestly: when the function is not installed yet (the owner
+ * applies migrations by hand) or the payload is not the shape 0233 produces,
+ * it runs the three legacy readers and returns exactly what they return, so
+ * the dashboard never changes behaviour — only cost. `usedRpc` tells the
+ * caller (and the tests) which path answered.
+ */
+export type OrdersBoardSnapshot = {
+  counts: Record<OrderStatus, number>;
+  arrivals: OrderArrivalRow[];
+  latest: { ordersUpdatedAt: string | null; leaflyUpdatedAt: string | null };
+  usedRpc: boolean;
+};
+
+export async function getOrdersBoardSnapshot(
+  opts: { arrivalsLimit?: number; excludeOrigins?: readonly string[] } = {},
+): Promise<OrdersBoardSnapshot> {
+  const limit = clampArrivalsLimit(opts.arrivalsLimit);
+  const legacy = async (): Promise<OrdersBoardSnapshot> => {
+    const [counts, arrivals, latest] = await Promise.all([
+      getOrderStatusCounts(opts.excludeOrigins ? { excludeOrigins: opts.excludeOrigins } : {}),
+      limit > 0 ? getRecentOrderArrivals(limit) : Promise.resolve([] as OrderArrivalRow[]),
+      getLatestOrderChange(),
+    ]);
+    return { counts, arrivals, latest, usedRpc: false };
+  };
+  if (!isSupabaseServiceConfigured) return legacy();
+
+  try {
+    const admin = createSupabaseAdminClient();
+    const exclude = (opts.excludeOrigins ?? []).filter((o) => /^[a-z_]+$/.test(o));
+    const { data, error } = await admin.rpc(ORDERS_BOARD_SNAPSHOT_RPC, {
+      p_arrivals_limit: limit,
+      p_exclude_origins: exclude.length > 0 ? exclude : null,
+    });
+    if (error) {
+      if (!isMissingDbFunctionError(error)) {
+        console.warn(`[orders] ${ORDERS_BOARD_SNAPSHOT_RPC} failed; using legacy readers: ${error.message}`);
+      }
+      return legacy();
+    }
+    const parsed = parseOrdersBoardSnapshot(data);
+    if (!parsed) {
+      console.warn(`[orders] ${ORDERS_BOARD_SNAPSHOT_RPC} returned an unexpected shape; using legacy readers`);
+      return legacy();
+    }
+    return { counts: parsed.counts, arrivals: parsed.arrivals, latest: parsed.latest, usedRpc: true };
+  } catch {
+    return legacy();
+  }
 }
 
 // ---------------------------------------------------------------------------

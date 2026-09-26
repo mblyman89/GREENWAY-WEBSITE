@@ -154,7 +154,9 @@ describe("L-38 · Leafly orders are off the online-orders table (every view)", (
   it("the dashboard query and its counts both pass the exclusion", () => {
     const filter = between(PAGE, "const queryFilter", ";\n");
     expect(filter).toContain("excludeOrigins: BOARD_EXCLUDED_ORIGINS");
-    expect(PAGE).toContain("getOrderStatusCounts({ excludeOrigins: BOARD_EXCLUDED_ORIGINS })");
+    // USAGE-3 routed the counts through the grouped snapshot RPC; the L-38
+    // exclusion must still ride along.
+    expect(PAGE).toContain("getOrdersBoardSnapshot({ arrivalsLimit: 0, excludeOrigins: BOARD_EXCLUDED_ORIGINS })");
     // Every listOrdersPaged call on the page spreads that one filter, so the
     // re-fetch for an out-of-range page cannot drop it.
     const calls = PAGE.match(/listOrdersPaged\(\{[^}]*\}/g) ?? [];
@@ -170,8 +172,14 @@ describe("L-38 · Leafly orders are off the online-orders table (every view)", (
   });
 
   it("other readers (the nav count, the cockpit) are unchanged", () => {
-    expect(code(read("src/app/api/admin/orders/count/route.ts"))).toContain("getOrderStatusCounts()");
-    expect(code(read("src/lib/admin/cockpit-data.ts"))).toContain("getOrderStatusCounts()");
+    // USAGE-3: both go through the grouped snapshot with NO excludeOrigins,
+    // so they still count every origin.
+    const nav = code(read("src/app/api/admin/orders/count/route.ts"));
+    expect(nav).toContain("getOrdersBoardSnapshot({ arrivalsLimit: 20 })");
+    expect(nav).not.toContain("excludeOrigins");
+    const cockpit = code(read("src/lib/admin/cockpit-data.ts"));
+    expect(cockpit).toContain("getOrdersBoardSnapshot({ arrivalsLimit: 0 })");
+    expect(cockpit).not.toContain("excludeOrigins");
   });
 });
 

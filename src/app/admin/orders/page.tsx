@@ -5,7 +5,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui/Button";
 import { formatMinorCurrency } from "@/lib/leafly/format";
-import { listOrdersPaged, getOrderStatusCounts, registerPickedUpOrderIds, listOrdersByIds } from "@/lib/orders/orders-store";
+import { listOrdersPaged, getOrdersBoardSnapshot, registerPickedUpOrderIds, listOrdersByIds } from "@/lib/orders/orders-store";
 import { BOARD_EXCLUDED_ORIGINS } from "@/lib/orders/order-board-split-core";
 import { REGISTER_PICKED_UP_LABEL } from "@/lib/pos/pickup-progress-core";
 import { listWindow, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
@@ -232,7 +232,9 @@ export default async function OrdersAdminPage({
     listOrdersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
     // SLICE L-38 — count only what the table shows, so the stat cards and the
     // rows under them agree. Leafly keeps its own badge on its own panel.
-    getOrderStatusCounts({ excludeOrigins: BOARD_EXCLUDED_ORIGINS }),
+    // USAGE-3 — one grouped RPC (0233) instead of seven exact counts; falls
+    // back to the seven until the migration is applied.
+    getOrdersBoardSnapshot({ arrivalsLimit: 0, excludeOrigins: BOARD_EXCLUDED_ORIGINS }).then((s) => s.counts),
     // SLICE 113: order-NAME pool + printer heartbeat, both fallback-safe (empty
     // pool / null settings when 0147 isn't applied or the printer isn't set up).
     //

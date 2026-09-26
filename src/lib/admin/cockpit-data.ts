@@ -3,7 +3,7 @@
  *
  * Assembles a single, real-data snapshot from EXISTING helpers:
  *   - today vs yesterday sales (getSalesReport over Pacific-day boundaries)
- *   - open orders by status (getOrderStatusCounts + ACTIVE_ORDER_STATUSES)
+ *   - open orders by status (getOrdersBoardSnapshot + ACTIVE_ORDER_STATUSES)
  *   - live registers + drawers (liveRegisters)
  *   - low-stock count (buildReorderSuggestions, onlyNeeded)
  *   - live menu size (getPublishedVersion) + loyalty signups (getLoyaltyStatusCounts)
@@ -16,7 +16,7 @@ import "server-only";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { safeData } from "@/lib/safe-data";
 import { getSalesReport, EMPTY_SALES_REPORT, type SalesReport } from "@/lib/reports/sales";
-import { getOrderStatusCounts } from "@/lib/orders/orders-store";
+import { getOrdersBoardSnapshot } from "@/lib/orders/orders-store";
 import { ACTIVE_ORDER_STATUSES, ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/orders/types";
 import { liveRegisters, type RegisterLive } from "@/lib/registers/store";
 import { buildReorderSuggestions } from "@/lib/purchasing/po-store";
@@ -148,8 +148,9 @@ export async function getCockpitSnapshot(
   ] = await Promise.all([
     safeData(() => getSalesReport(todayStart, nowISO), EMPTY_SALES_REPORT).then((r) => r.data),
     safeData(() => getSalesReport(yestStart, yestEnd), EMPTY_SALES_REPORT).then((r) => r.data),
+    // USAGE-3: one grouped RPC (0233) instead of seven exact counts.
     safeData(
-      () => getOrderStatusCounts(),
+      () => getOrdersBoardSnapshot({ arrivalsLimit: 0 }).then((s) => s.counts),
       {} as Record<OrderStatus, number>,
     ).then((r) => r.data),
     safeData(() => liveRegisters(), [] as RegisterLive[]).then((r) => r.data),
