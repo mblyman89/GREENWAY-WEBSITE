@@ -90,6 +90,7 @@ export const LEAFLY_CART_REFUSAL_CODES = [
   "variant_not_orderable",
   "variant_out_of_stock",
   "not_enough_stock",
+  "price_override_not_approved",
 ] as const;
 export type LeaflyCartRefusalCode = (typeof LEAFLY_CART_REFUSAL_CODES)[number];
 
@@ -274,6 +275,8 @@ export type CartVariantFacts = {
   inventoryLevel: number;
   priceMinorUnits: number;
   orderable: boolean;
+  /** Optional human name for the variant ("Blue Dream 3.5g"), for sentences only. */
+  label?: string | null;
 };
 
 export type CartVariantLookup = (integratorVariantId: string) => CartVariantFacts | null;
@@ -362,6 +365,12 @@ export function decideCartUpdate(input: {
   registerWhere?: string | null;
   /** The signature the editor rendered from, or null to skip the stale-form check. */
   expectedSignature: string | null;
+  /**
+   * Whether a price different from the default may be sent. The dashboard
+   * (orders.manage) passes true; the register passes true only after a
+   * manager/lead PIN. Absent means true, so a caller must opt IN to the gate.
+   */
+  priceOverridesApproved?: boolean;
 }): CartUpdateDecision {
   const id = (input.leaflyOrderId ?? "").trim();
   const key = (input.orderIntegrationKey ?? "").trim();
@@ -511,7 +520,10 @@ export function decideCartUpdate(input: {
     const menuPrice = facts ? Math.round(facts.priceMinorUnits) : null;
     const priceOverride = d.packagePriceMinor !== null && d.packagePriceMinor !== undefined && d.packagePriceMinor !== defaultPrice;
     const name = existing?.name ?? variant;
-    const sentence = describeChange({ kind, name, variant, existing, quantity: d.quantity, price, priceOverride, menuPrice });
+    // What the row will BE, named for a person: the menu label when the lookup
+    // carries one, never invented. Falls back to the variant id.
+    const toLabel = sameVariant ? name : (typeof facts?.label === "string" && facts.label.trim() !== "" ? facts.label.trim() : variant);
+    const sentence = describeChange({ kind, name, variant: toLabel, existing, quantity: d.quantity, price, priceOverride, menuPrice });
     changes.push({
       kind,
       cartItemId: existing?.cartItemId ?? null,
@@ -557,6 +569,17 @@ export function decideCartUpdate(input: {
   };
   if (summary.added + summary.removed + summary.changed + summary.substituted === 0) {
     return refuse("no_change", "Nothing was changed, so nothing was sent to Leafly.", changes);
+  }
+
+  if (summary.priceOverrides > 0 && input.priceOverridesApproved === false) {
+    return {
+      ...refuse(
+        "price_override_not_approved",
+        "This change sets a price different from the menu price. A manager or lead must approve it with their PIN.",
+        changes,
+      ),
+      needsManagerApproval: true,
+    };
   }
 
   const estimatedTopLineMinor = body.cartItems.reduce((a, c) => a + c.quantity * c.packagePrice, 0);
@@ -800,6 +823,7 @@ export function __runLeaflyOrderCartTests(): { passed: number; failed: number } 
     lookup,
     menuLoaded: true,
     registerHolds: false,
+    registerWhere: null as string | null,
     expectedSignature: sig as string | null,
   };
   const keepAll: DesiredCartLine[] = [
@@ -881,6 +905,11 @@ export function __runLeaflyOrderCartTests(): { passed: number; failed: number } 
   ok(ovr.needsManagerApproval && ovr.summary.priceOverrides === 1, "override needs manager");
   ok(ovr.changes[0]?.sentence.includes("price changed by staff"), "override sentence says so");
   ok(!d([{ ...keepAll[0]!, packagePriceMinor: 3000 }, keepAll[1]!]).allowed, "restating the same price is not a change");
+  const unapproved = decideCartUpdate({ ...baseInput, desired: [{ ...keepAll[0]!, packagePriceMinor: 2500 }, keepAll[1]!], priceOverridesApproved: false });
+  ok(unapproved.code === "price_override_not_approved" && unapproved.needsManagerApproval && unapproved.body === null, "unapproved override refused, flagged, no body");
+  ok(unapproved.changes.length === 2, "unapproved refusal still lists the changes for the PIN prompt");
+  ok(decideCartUpdate({ ...baseInput, desired: [{ ...keepAll[0]!, packagePriceMinor: 2500 }, keepAll[1]!], priceOverridesApproved: true }).allowed, "approved override allowed");
+  ok(decideCartUpdate({ ...baseInput, desired: [keepAll[0]!], priceOverridesApproved: false }).allowed, "no override -> approval irrelevant");
   const both = d([{ ...keepAll[0]!, quantity: 1, packagePriceMinor: 2000 }, keepAll[1]!]);
   ok(both.changes[0]?.kind === "quantity_and_price", "quantity and price");
   const addOvr = d([...keepAll, { cartItemId: null, integratorVariantId: "v3", quantity: 1, packagePriceMinor: 2000 }]);
@@ -893,6 +922,13 @@ export function __runLeaflyOrderCartTests(): { passed: number; failed: number } 
   ok(sub.body?.cartItems[0]?.packagePrice === 2500, "substitution uses the new variant's menu price");
   ok(d([{ cartItemId: "ci-1", integratorVariantId: "v3", quantity: 4, packagePriceMinor: null }, keepAll[1]!]).code === "not_enough_stock", "substitution checks stock of new variant");
   ok(d([{ cartItemId: "ci-1", integratorVariantId: "v2", quantity: 2, packagePriceMinor: null }, { cartItemId: "ci-2", integratorVariantId: "v1", quantity: 1, packagePriceMinor: null }]).allowed, "swapping two lines' variants is allowed (no duplicate)");
+  // labels from the lookup name added / swapped rows for a person
+  const labelled: CartVariantLookup = (v) => (menu[v] ? { ...menu[v]!, label: v === "v3" ? "Sour Diesel 1g" : null } : null);
+  const addL = d([...keepAll, { cartItemId: null, integratorVariantId: "v3", quantity: 2, packagePriceMinor: null }], { lookup: labelled });
+  ok(addL.changes[2]?.sentence.startsWith("Add 2 x Sour Diesel 1g at $25.00 each"), "addition sentence uses the menu label");
+  const subL = d([{ cartItemId: "ci-1", integratorVariantId: "v3", quantity: 2, packagePriceMinor: null }, keepAll[1]!], { lookup: labelled });
+  ok(subL.changes[0]?.sentence.includes("for 2 x Sour Diesel 1g"), "swap sentence uses the menu label");
+  ok(add.changes[2]?.sentence.startsWith("Add 2 x v3 "), "no label -> falls back to the variant id, never invented");
   // body key set exactly the spec's
   ok(JSON.stringify(Object.keys(add.body ?? {}).sort()) === JSON.stringify(["cartItems", "deliveryFee", "taxes"]), "body keys = OrderCartUpdate required");
   ok(JSON.stringify(Object.keys(add.body?.cartItems[0] ?? {}).sort()) === JSON.stringify(["id", "integratorVariantId", "packagePrice", "quantity"]), "item keys = CartItemIncoming required");

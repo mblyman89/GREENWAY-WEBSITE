@@ -159,6 +159,17 @@ export const LEAFLY_LOOKUP_SURFACES: readonly LeaflyLookupSurface[] = [
     reason:
       "Prices a real shopper's real cart inline during cart update, and Leafly never retries it. A cached price is a wrong price, and a cached stock level oversells product that is physically gone.",
   },
+  {
+    // SLICE L-48 — "Update Order's Cart". Staff add, swap or re-quantity items
+    // on a live Leafly order; the menu read supplies the default unit price
+    // sent to Leafly and the stock check that stops an oversell.
+    name: "Order cart update (Change items)",
+    anchor: "src/lib/leafly/order-cart-server.ts:205",
+    cacheable: false,
+    touchesMoney: true,
+    reason:
+      "Sets the unit price Leafly bills a real customer for an added or swapped item, and checks stock before the change is sent. A cached menu would bill a stale price and add product that is already sold.",
+  },
 ];
 
 /**
@@ -741,7 +752,12 @@ export function __runLeaflySetupCacheTests(opts?: {
   );
 
   // ── The surface table ─────────────────────────────────────────────────────
-  eq("exactly two surfaces are classified", LEAFLY_LOOKUP_SURFACES.length, 2);
+  // SLICE L-48 — three: the cart update joined as a second money surface.
+  eq("exactly three surfaces are classified", LEAFLY_LOOKUP_SURFACES.length, 3);
+  ok(
+    "THE SECOND MONEY PATH: the cart update MUST NOT be cacheable",
+    isLeaflyLookupCacheable("Order cart update (Change items)") === false,
+  );
   ok(
     "THE MONEY PATH: the order preview webhook MUST NOT be cacheable",
     isLeaflyLookupCacheable("Order preview webhook") === false,
@@ -770,8 +786,9 @@ export function __runLeaflySetupCacheTests(opts?: {
   const money = LEAFLY_LOOKUP_SURFACES.filter((s) => s.touchesMoney);
   ok("at least one surface is known to touch money", money.length > 0);
   ok("NO surface that touches money is cacheable", money.every((s) => !s.cacheable));
-  eq("exactly one money surface, and it is the preview webhook", money.length, 1);
-  eq("the money surface is named", money[0]?.name, "Order preview webhook");
+  eq("exactly two money surfaces: the preview webhook and the cart update", money.length, 2);
+  eq("the first money surface is named", money[0]?.name, "Order preview webhook");
+  eq("the second money surface is named", money[1]?.name, "Order cart update (Change items)");
   ok(
     "every cacheable surface is explicitly money-free",
     LEAFLY_LOOKUP_SURFACES.filter((s) => s.cacheable).every((s) => !s.touchesMoney),

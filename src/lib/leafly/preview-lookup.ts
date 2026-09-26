@@ -47,7 +47,47 @@ export async function buildLeaflyVariantLookup(): Promise<{
   variantCount: number;
   loaded: boolean;
 }> {
+  const built = await buildVariantIndex();
+  return { lookup: built.lookup, variantCount: built.variantCount, loaded: built.loaded };
+}
+
+/**
+ * SLICE L-48 — one sellable size, named, for the "Change items" picker.
+ *
+ * Built in the SAME loop as the lookup above, from the SAME feed and the SAME
+ * `decideOrderability()` call, so the picker can never offer a size the cart
+ * decision would then refuse (or the reverse). Not cached, for the same
+ * reason the lookup is not: it carries price and stock.
+ */
+export type LeaflyCatalogOption = {
+  integratorVariantId: string;
+  productName: string;
+  brand: string | null;
+  variantLabel: string | null;
+  category: string;
+  /** Tax-inclusive shelf price in minor units (Ben 8). */
+  priceMinorUnits: number;
+  inventoryLevel: number;
+  orderable: boolean;
+};
+
+export async function buildLeaflyVariantCatalog(): Promise<{
+  lookup: VariantLookup;
+  options: LeaflyCatalogOption[];
+  variantCount: number;
+  loaded: boolean;
+}> {
+  return buildVariantIndex();
+}
+
+async function buildVariantIndex(): Promise<{
+  lookup: VariantLookup;
+  options: LeaflyCatalogOption[];
+  variantCount: number;
+  loaded: boolean;
+}> {
   const byId = new Map<string, VariantFacts>();
+  const options: LeaflyCatalogOption[] = [];
 
   // The owner's ordering toggle. `sendPickupAvailability` is the SAME field the
   // menu push threads into `decideOrderability()` (push.ts:412), so the preview
@@ -75,32 +115,55 @@ export async function buildLeaflyVariantLookup(): Promise<{
 
       if (item.variants.length > 0) {
         for (const v of item.variants) {
-          byId.set(String(v.id), {
+          const facts: VariantFacts = {
             // `inStock: false` means zero, regardless of what the count says —
             // the same rule `variantInventoryLevel()` applies on the way out.
             inventoryLevel: v.inStock ? Math.max(0, Math.round(v.inventoryLevel)) : 0,
             priceMinorUnits: Math.round(v.priceMinorUnits),
             category: item.category,
             orderable: decision.availableForPickup,
+          };
+          byId.set(String(v.id), facts);
+          options.push({
+            integratorVariantId: String(v.id),
+            productName: item.name,
+            brand: item.brand ?? null,
+            variantLabel: v.label ?? null,
+            category: item.category,
+            priceMinorUnits: facts.priceMinorUnits,
+            inventoryLevel: facts.inventoryLevel,
+            orderable: facts.orderable,
           });
         }
       } else {
         // Mirrors the synthesized default variant in `variantsFor()`.
-        byId.set(`${item.id}-default`, {
+        const facts: VariantFacts = {
           inventoryLevel: item.inStock ? 1 : 0,
           priceMinorUnits: Math.round(item.priceMinorUnits),
           category: item.category,
           orderable: decision.availableForPickup,
+        };
+        byId.set(`${item.id}-default`, facts);
+        options.push({
+          integratorVariantId: `${item.id}-default`,
+          productName: item.name,
+          brand: item.brand ?? null,
+          variantLabel: null,
+          category: item.category,
+          priceMinorUnits: facts.priceMinorUnits,
+          inventoryLevel: facts.inventoryLevel,
+          orderable: facts.orderable,
         });
       }
     }
 
     return {
       lookup: (id: string) => byId.get(id) ?? null,
+      options,
       variantCount: byId.size,
       loaded: true,
     };
   } catch {
-    return { lookup: () => null, variantCount: 0, loaded: false };
+    return { lookup: () => null, options: [], variantCount: 0, loaded: false };
   }
 }
