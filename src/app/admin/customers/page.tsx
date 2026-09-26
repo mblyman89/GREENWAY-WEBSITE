@@ -9,11 +9,20 @@ import { listCustomersPaged, countCustomers } from "@/lib/customers/store";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
 import { CUSTOMER_SORTS, parseYesNo, resolveSort } from "@/lib/admin/list-filter-core";
 import { ListPager } from "@/components/admin/ux/ListPager";
+import { Badge } from "@/components/admin/ui";
+import { loadSegmentMap } from "@/lib/customers/customer-insights-server";
 
 export const dynamic = "force-dynamic";
 
 function fmtMoney(minor: number): string {
   return `$${(minor / 100).toFixed(2)}`;
+}
+
+function fmtDay(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", year: "numeric" });
 }
 
 export default async function CustomersPage({
@@ -58,10 +67,21 @@ export default async function CustomersPage({
   // last page so the screen is never empty while rows exist.
   const queryFilter = { q, sort: sort.columns, isMedical, marketingConsent, doNotContact };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
-  const [firstPage, counts] = await Promise.all([
+  const [firstPage, counts, segMap] = await Promise.all([
     listCustomersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
     countCustomers(),
+    loadSegmentMap(),
   ]);
+  // Slice 3: visits / spend / last visit come from the population read —
+  // the trigger-maintained columns after migration 0232, or computed from
+  // orders before it (the old columns were never maintained).
+  const computedMode = segMap?.source === "computed";
+  const figuresFor = (c: { id: string; visit_count: number; lifetime_spend_minor_units: number; last_visit_at: string | null }) => {
+    const r = segMap?.rollups.get(c.id);
+    if (r) return { visits: r.visits, spend: r.netSpendMinor, last: r.lastVisitAt };
+    if (computedMode) return { visits: 0, spend: 0, last: null };
+    return { visits: c.visit_count, spend: c.lifetime_spend_minor_units, last: c.last_visit_at };
+  };
   let { rows: customers, total } = firstPage;
   const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
   if (win.page !== rawPage && total > 0) {
@@ -97,6 +117,9 @@ export default async function CustomersPage({
         breadcrumbs={<Breadcrumbs items={[{ label: "Customers" }]} />}
         action={
           <div className="flex gap-2">
+            <Button href="/admin/customers/insights" variant="confirm" size="sm">
+              📊 Customer insights
+            </Button>
             <Button href="/admin/customers/import" variant="neutral" size="sm">
               ⬆ Import
             </Button>
@@ -130,6 +153,19 @@ export default async function CustomersPage({
           <StatCard label="Medical patients" value={counts.medical} accent="green" />
           <StatCard label="Marketing consent" value={counts.consented} accent="gold" />
         </div>
+
+        {computedMode && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
+            Visits and spend below are calculated straight from orders because database migration 0232 has not been run yet. Sorting by
+            visits, spend or recent visit starts working once it runs (see docs/MIGRATIONS_TO_RUN.md).
+          </div>
+        )}
+        {segMap && segMap.partial.length > 0 && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
+            Some records could not be read completely ({segMap.partial.join(", ")}); visits, spend and groups may be slightly low. Refresh to
+            try again.
+          </div>
+        )}
 
         {/* SLICE 26: full control — search, medical / consent / do-not-contact
             tri-states, and sort, all URL-driven and combinable. */}
@@ -214,12 +250,17 @@ export default async function CustomersPage({
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Contact</th>
                   <th className="px-4 py-3 text-center">Medical</th>
+                  <th className="px-4 py-3">Group</th>
                   <th className="px-4 py-3 text-right">Visits</th>
-                  <th className="px-4 py-3 text-right">Lifetime spend</th>
+                  <th className="px-4 py-3 text-right">Net spend</th>
+                  <th className="px-4 py-3 text-right">Last visit</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--admin-border)]">
-                {customers.map((c) => (
+                {customers.map((c) => {
+                  const f = figuresFor(c);
+                  const seg = segMap?.segments.get(c.id);
+                  return (
                   <tr key={c.id} className="bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]">
                     <td className="px-4 py-3">
                       <Link
@@ -238,12 +279,13 @@ export default async function CustomersPage({
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">{c.is_medical_patient ? "🩺" : "—"}</td>
-                    <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{c.visit_count}</td>
-                    <td className="px-4 py-3 text-right font-medium text-[var(--admin-text)]">
-                      {fmtMoney(c.lifetime_spend_minor_units)}
-                    </td>
+                    <td className="px-4 py-3">{seg ? <Badge tone={seg.tone}>{seg.label}</Badge> : <span className="text-[var(--admin-text-faint)]">—</span>}</td>
+                    <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{f.visits}</td>
+                    <td className="px-4 py-3 text-right font-medium text-[var(--admin-text)]">{fmtMoney(f.spend)}</td>
+                    <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtDay(f.last)}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

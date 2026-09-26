@@ -16,6 +16,15 @@ export type Customer = {
   visit_count: number;
   lifetime_spend_minor_units: number;
   last_visit_at: string | null;
+  /** 0232: earliest completed linked order (trigger-maintained). Absent before 0232. */
+  first_visit_at?: string | null;
+  /** 0232: lifetime spend from the old POS (Cultivera import). Absent before 0232. */
+  imported_spend_minor_units?: number | null;
+  /** 0029: import bookkeeping. */
+  import_source?: string | null;
+  last_purchase_at?: string | null;
+  external_id?: string | null;
+  email_normalized?: string | null;
   staff_note: string | null;
   created_by: string | null;
   updated_by: string | null;
