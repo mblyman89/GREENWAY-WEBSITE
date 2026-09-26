@@ -10,7 +10,12 @@ import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listAllLotsForFiltering, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
 // SLICE 13 — enterprise filtering, sorting and smart search. All pure cores.
-import { buildInventoryPage, type PageLot } from "@/lib/inventory/inventory-page-core";
+import {
+  buildInventoryPage,
+  countLeaflyLots,
+  LEAFLY_STATUS_TAB,
+  type PageLot,
+} from "@/lib/inventory/inventory-page-core";
 import { InventoryFilterPanel } from "@/components/admin/inventory/InventoryFilterPanel";
 import { SortableHeader } from "@/components/admin/inventory/SortableHeader";
 import { paramsFrom, clearAllFiltersHref, type RawParams } from "@/lib/inventory/inventory-url-core";
@@ -50,6 +55,9 @@ const STATUS_TABS: { key: string; label: string }[] = [
   { key: "recalled", label: "Recalled" },
   { key: "sold_out", label: "Sold out" },
   { key: "destroyed", label: "Destroyed" },
+  // Owner request: filter by the LEAFLY badge. Not a lot status; matched by
+  // the badge's own rule in inventory-page-core (LEAFLY_STATUS_TAB).
+  { key: LEAFLY_STATUS_TAB, label: "Leafly" },
 ];
 
 /**
@@ -202,7 +210,10 @@ export default async function InventoryPage({
     page: rawPage,
     pageSize: DEFAULT_PAGE_SIZE,
     now: new Date(),
+    leaflyKeys: leafly.keys,
   });
+  // Count on the Leafly tab: the same rule the badge and the tab use.
+  const leaflyLotCount = countLeaflyLots(allLots as PageLot[], leafly.keys);
   const lots = view.rows;
   const total = view.total;
   const win = listWindow(total, view.page, DEFAULT_PAGE_SIZE);
@@ -453,17 +464,23 @@ export default async function InventoryPage({
         <div className="flex flex-wrap items-center gap-2">
           {STATUS_TABS.map((t) => {
             const isActive = activeStatus === t.key;
+            const isLeaflyTab = t.key === LEAFLY_STATUS_TAB;
             return (
               <Link
                 key={t.key}
                 href={statusHref(t.key)}
+                title={isLeaflyTab ? `${leafly.title} Lists every lot with the LEAFLY badge.` : undefined}
+                data-testid={isLeaflyTab ? "inventory-leafly-tab" : undefined}
                 className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                   isActive
-                    ? "bg-[var(--admin-accent)] text-black"
+                    ? isLeaflyTab
+                      ? "bg-[var(--admin-purple)] text-black"
+                      : "bg-[var(--admin-accent)] text-black"
                     : "bg-white/5 text-[var(--admin-text-muted)] hover:bg-white/10"
                 }`}
               >
                 {t.label}
+                {isLeaflyTab && <span className="ml-1 tabular-nums opacity-80">({leaflyLotCount})</span>}
               </Link>
             );
           })}
@@ -665,7 +682,9 @@ export default async function InventoryPage({
           */
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-5 text-center">
             <p className="text-sm text-[var(--admin-text-muted)]">
-              No lots match {view.activeFilterCount > 0 || sp.q ? "these filters" : "your filter"}.
+              {activeStatus === LEAFLY_STATUS_TAB && leafly.keys.size === 0
+                ? "We have no record of sending any products to Leafly yet, so no lot carries the LEAFLY badge."
+                : <>No lots match {view.activeFilterCount > 0 || sp.q ? "these filters" : "your filter"}.</>}
             </p>
             {(view.activeFilterCount > 0 || sp.q) && (
               <p className="mt-2 text-xs text-[var(--admin-text-faint)]">
