@@ -28,6 +28,9 @@ import { RegisterSellabilityBanner, RestoreToSalePanel } from "@/components/admi
 import { getRegisterSellabilityReport } from "@/lib/inventory/register-sellability-store";
 // SLICE 8 — bulk fill of the fields the one-time Cultivera import never carried.
 import BulkFillPanel from "@/components/admin/inventory/BulkFillPanel";
+// Owner request: a LEAFLY badge in the Status column for products on Leafly.
+import { isLotOnLeafly } from "@/lib/inventory/leafly-badge-core";
+import { loadLeaflyBadgeData } from "@/lib/inventory/leafly-badge-server";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +51,22 @@ const STATUS_TABS: { key: string; label: string }[] = [
   { key: "sold_out", label: "Sold out" },
   { key: "destroyed", label: "Destroyed" },
 ];
+
+/**
+ * Same shape as StatusBadge (rounded, 10px, bold, uppercase, soft fill), in
+ * the purple token. Shown only when our record of what Leafly accepted holds
+ * this lot's product. See src/lib/inventory/leafly-badge-core.ts.
+ */
+function LeaflyBadge({ title }: { title: string }) {
+  return (
+    <span
+      title={title}
+      className="rounded bg-[var(--admin-purple-soft)] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-purple)]"
+    >
+      leafly
+    </span>
+  );
+}
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -168,11 +187,12 @@ export default async function InventoryPage({
    * degraded read can never invent a verdict. See
    * docs/slice-16-register-inventory-parity.md.
    */
-  const [allLots, stats, intel, sellability] = await Promise.all([
+  const [allLots, stats, intel, sellability, leafly] = await Promise.all([
     listAllLotsForFiltering(),
     computeInventoryStats(),
     getInventoryCommandCenter(),
     getRegisterSellabilityReport(),
+    loadLeaflyBadgeData(),
   ]);
 
   // Every knob — legacy and new — is parsed and applied by pure, tested code.
@@ -621,7 +641,10 @@ export default async function InventoryPage({
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <StatusBadge status={l.status} />
+                        <div className="flex flex-col items-center gap-1">
+                          <StatusBadge status={l.status} />
+                          {isLotOnLeafly(l.pos_product_key, leafly.keys) && <LeaflyBadge title={leafly.title} />}
+                        </div>
                       </td>
                     </tr>
                   );
