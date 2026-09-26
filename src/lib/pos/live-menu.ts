@@ -32,7 +32,7 @@ import type {
   GreenwayStrainType,
 } from "@/lib/leafly/types";
 import type { MenuItemRow, MenuVariantRow } from "@/lib/pos/db-types";
-import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
+import { getPublishedVersion, getVersionItems, getItemBySourceKey } from "@/lib/pos/menu-version";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { withCardIdentity } from "@/lib/menu/card-identity";
 // SLICE A (performance): the cache policy lives in a pure module so the tag
@@ -166,6 +166,34 @@ export async function getLiveMenuItemById(id: string): Promise<GreenwayMenuItem 
   // []), so the lookup naturally resolves to undefined — no stale snapshot.
   const items = await loadLiveMenuItems();
   return items.find((item) => item.id === id);
+}
+
+/**
+ * USAGE-2: single-row lookup of ONE visible item by its stable source_item_id.
+ *
+ * `getLiveMenuItemById` above loads the WHOLE published menu (≈6 MB of
+ * PostgREST egress, every row + every variant) and then `.find()`s one item.
+ * That is fine for the cached public path, but the register's product-image
+ * endpoint called it read-through on EVERY info-card open — a full-menu read
+ * per tap. This helper asks the DB for exactly one menu_items row and its
+ * variants (two tiny queries) and applies the same conversion + DISPLAY
+ * identity overlay (SLICE 66) as the list loader, so the result is
+ * field-for-field identical to what `getLiveMenuItemById` would return.
+ *
+ * Still read-through (no unstable_cache): the register policy is
+ * "never cache the money", and this stays on that side of the line.
+ * Unconfigured builds → undefined (same as the list path, which is []).
+ */
+export async function getLiveMenuItemByIdDirect(
+  id: string,
+): Promise<GreenwayMenuItem | undefined> {
+  if (!isSupabaseServiceConfigured) return undefined;
+  const version = await getPublishedVersion();
+  if (!version) return undefined;
+  const row = await getItemBySourceKey(version.id, id);
+  if (!row || row.hidden) return undefined;
+  const [item] = await withCardIdentity([menuRowToGreenwayItem(row)]);
+  return item;
 }
 
 // ── Cached read path (SLICE A — performance) ─────────────────────────────────

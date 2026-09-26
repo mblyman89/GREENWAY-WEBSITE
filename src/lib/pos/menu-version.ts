@@ -19,15 +19,29 @@ import type {
   PosImport,
   PosImportDiagnostic,
 } from "@/lib/pos/db-types";
+// USAGE-2: explicit column lists. Supabase bills the uncompressed response
+// body, and `select("*")` on the full menu carried `fact_provenance` (jsonb)
+// and `doh_compliant`, which no loader consumer reads. The lists are typed
+// against db-types.ts so they cannot fall behind the row types.
+import {
+  MENU_ITEM_COLUMNS,
+  MENU_VARIANT_COLUMNS,
+  MENU_VERSION_LIGHT_COLUMNS,
+} from "@/lib/pos/menu-columns-core";
 
 export type MenuItemWithVariants = MenuItemRow & { variants: MenuVariantRow[] };
 
 export async function getPublishedVersion(): Promise<MenuVersion | null> {
   try {
     const admin = createSupabaseAdminClient();
+    // USAGE-2: no `summary_json`. This is the most-called version read in the
+    // app (every menu load, every order, every register bundle) and every one
+    // of its callers reads `.id` and the count columns. The import
+    // diagnostics blob belongs to the review pages, which use getVersion /
+    // listVersions and still get it.
     const { data, error } = await admin
       .from("menu_versions")
-      .select("*")
+      .select(MENU_VERSION_LIGHT_COLUMNS)
       .eq("status", "published")
       .limit(1)
       .maybeSingle();
@@ -35,7 +49,10 @@ export async function getPublishedVersion(): Promise<MenuVersion | null> {
       console.error("[menu-version] getPublishedVersion error:", error.message);
       return null;
     }
-    return (data as MenuVersion | null) ?? null;
+    if (!data) return null;
+    // Cast via unknown: the column list is a runtime string (menu-columns-core),
+    // so postgrest-js cannot infer the row shape from a literal here.
+    return { ...(data as unknown as Omit<MenuVersion, "summary_json">), summary_json: null };
   } catch (err) {
     console.error("[menu-version] getPublishedVersion exception:", err);
     return null;
@@ -388,7 +405,7 @@ export async function getVersionItems(versionId: string): Promise<MenuItemWithVa
     const itemRows = await pagedAll<MenuItemRow>(async (from, to) => {
       const { data, error } = await admin
         .from("menu_items")
-        .select("*")
+        .select(MENU_ITEM_COLUMNS)
         .eq("menu_version_id", versionId)
         .order("sort_order", { ascending: true })
         .order("id", { ascending: true })
@@ -398,7 +415,7 @@ export async function getVersionItems(versionId: string): Promise<MenuItemWithVa
         itemsFailed = true;
         return [];
       }
-      return (data as MenuItemRow[] | null) ?? [];
+      return (data as unknown as MenuItemRow[] | null) ?? [];
     });
     // A failed page must not masquerade as "the catalog ended here". Returning
     // a partial menu is exactly the silent truncation this slice exists to
@@ -417,7 +434,7 @@ export async function getVersionItems(versionId: string): Promise<MenuItemWithVa
       async (chunk, from, to) => {
         const { data, error } = await admin
           .from("menu_variants")
-          .select("*")
+          .select(MENU_VARIANT_COLUMNS)
           .in("menu_item_id", chunk)
           .order("sort_order", { ascending: true })
           .order("id", { ascending: true })
@@ -427,7 +444,7 @@ export async function getVersionItems(versionId: string): Promise<MenuItemWithVa
           variantsFailed = true;
           return [];
         }
-        return (data as MenuVariantRow[] | null) ?? [];
+        return (data as unknown as MenuVariantRow[] | null) ?? [];
       },
       // SLICE D (performance): 23 serial round trips at 4,500 items, inside
       // the cached menu load, so every cache miss paid all of them in a row.
@@ -622,7 +639,7 @@ export async function getItemBySourceKey(
     const admin = createSupabaseAdminClient();
     const { data: item, error: itemError } = await admin
       .from("menu_items")
-      .select("*")
+      .select(MENU_ITEM_COLUMNS)
       .eq("menu_version_id", versionId)
       .eq("source_item_id", sourceItemId)
       .maybeSingle();
@@ -631,10 +648,10 @@ export async function getItemBySourceKey(
       return null;
     }
     if (!item) return null;
-    const row = item as MenuItemRow;
+    const row = item as unknown as MenuItemRow;
     const { data: variants, error: variantsError } = await admin
       .from("menu_variants")
-      .select("*")
+      .select(MENU_VARIANT_COLUMNS)
       .eq("menu_item_id", row.id)
       .order("sort_order", { ascending: true });
     if (variantsError) {

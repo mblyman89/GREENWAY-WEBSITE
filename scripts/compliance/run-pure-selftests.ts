@@ -666,6 +666,8 @@ import { __runPostgrestEscapeTests } from "../../src/lib/supabase/postgrest-esca
 import { __runPgBigintTests } from "../../src/lib/supabase/pg-bigint";
 import { __runPrintRetryCoreTests } from "../../src/lib/printing/print-retry-core";
 import { __runPrinterHeartbeatCoreTests } from "../../src/lib/printing/printer-heartbeat-core";
+// USAGE-2 -- explicit menu column lists (no select("*") on the 6 MB menu read path).
+import { __runMenuColumnsCoreTests } from "../../src/lib/pos/menu-columns-core";
 // D-68 -- the ONE place that decides which secret a CloudPRNT request carries.
 // Registered here because /api/cloudprnt passes BOTH the shared poll token and
 // the per-receipt job token on the same `?token=` parameter: reading the query
@@ -1336,6 +1338,7 @@ __runLiquidVolumeTests();
   __runGramsPerOunceTests();
   __runPrintRetryCoreTests();
   __runPrinterHeartbeatCoreTests();
+  __runMenuColumnsCoreTests();
   __runCloudPrntAuthCoreTests();
   __runRevenueBasisTests();
   __runRejectedReportTests();
