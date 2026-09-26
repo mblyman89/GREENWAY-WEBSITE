@@ -96,6 +96,9 @@ import { __runAnnouncerCoreTests } from "../../src/lib/announcer/announcer-core"
 // parsing and shaping; the Pi is the one client nobody can open a browser to
 // debug, so every refusal it can receive is proven here.
 import { __runAnnouncerProtocolTests } from "../../src/lib/announcer/announcer-protocol-core";
+// USAGE-4 — per-request poll shape: no server-side hold for an agent that
+// rests on its own, the classic hold for anything older or unknown.
+import { __runAnnouncerPollShapeTests } from "../../src/lib/announcer/announcer-poll-shape-core";
 // SLICE 29 — deciding which speakers get told about a new order. Pure: takes the
 // device list and the clock as arguments so it can be tested at 3am in July.
 import { __runAnnouncerFanoutTests } from "../../src/lib/announcer/announcer-fanout-core";
@@ -1683,6 +1686,7 @@ __runLiquidVolumeTests();
   // assertions be deleted without CI noticing.
   assertRan("announcer-core", __runAnnouncerCoreTests(), 181);
   assertNoFailures("announcer-protocol-core", __runAnnouncerProtocolTests());
+  assertRan("announcer-poll-shape-core", __runAnnouncerPollShapeTests(), 40);
   assertRan("announcer-fanout-core", __runAnnouncerFanoutTests(), 85);
   assertNoFailures("announcer-admin-core", __runAnnouncerAdminTests());
   assertNoFailures("announcer-sounds-core", __runAnnouncerSoundsTests());
