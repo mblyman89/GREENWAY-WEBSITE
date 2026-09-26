@@ -336,7 +336,7 @@ describe("L-48 updateLeaflyOrderCart — the 200 path", () => {
     expect(del).toBeGreaterThan(ins);
     expect(w[del]!.filters).toContainEqual(["in", "id", ["old-a", "old-b"]]);
     const lines = w[ins]!.payload as Record<string, unknown>[];
-    expect(lines).toEqual([{ order_id: "local-1", product_name: "Blue Dream", variant_label: "3.5g", quantity: 2, price_minor_units: 3000 }]);
+    expect(lines).toEqual([{ order_id: "local-1", product_id: null, variant_id: "v1", product_name: "Blue Dream", variant_label: "3.5g", quantity: 2, price_minor_units: 3000 }]);
     const tot = w.find((o) => o.table === "orders" && o.op === "update")!;
     expect(tot.payload).toMatchObject({ subtotal_minor_units: 6000, total_minor_units: 5400, item_count: 2 });
     const note = w.find((o) => o.table === "order_events")!;
@@ -409,7 +409,7 @@ describe("L-48 updateLeaflyOrderCart — Leafly refuses or does not answer", () 
     expect(ledger()[0]!.disposition).toBe("retry");
     // ...and the register copy is rebuilt from what Leafly has.
     const ins = ops.find((o) => o.table === "order_lines" && o.op === "insert");
-    expect(ins?.payload).toEqual([{ order_id: "local-1", product_name: "Blue Dream", variant_label: "3.5g", quantity: 2, price_minor_units: 3000 }]);
+    expect(ins?.payload).toEqual([{ order_id: "local-1", product_id: null, variant_id: "v1", product_name: "Blue Dream", variant_label: "3.5g", quantity: 2, price_minor_units: 3000 }]);
     expect(ops.some((o) => o.table === "order_lines" && o.op === "delete")).toBe(true);
   });
 

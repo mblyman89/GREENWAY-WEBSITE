@@ -542,10 +542,10 @@ describe("embedded pure self-test suites", () => {
     expect(r.passed).toBeGreaterThanOrEqual(28);
   });
   it("leafly-register-lines-core (Leafly order -> register cart ids)", () => {
-    // Floor 31 from a measured 33. The empty-cart bug: Leafly lines reached
+    // Floor 33 from a measured 35. The empty-cart bug: Leafly lines reached
     // the register with no variant id and were all dropped.
     const r = __runLeaflyRegisterLinesTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(31);
+    expect(r.passed).toBeGreaterThanOrEqual(33);
   });
 });
