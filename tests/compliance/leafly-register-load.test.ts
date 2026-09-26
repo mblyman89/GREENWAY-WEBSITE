@@ -42,7 +42,9 @@ vi.mock("@/lib/supabase/admin", () => ({
       q.maybeSingle = async () => {
         if (table === "leafly_orders") {
           leaflyReads.push(filters);
-          if (leaflyReadError) return { data: null, error: { message: leaflyReadError } };
+          // A read ERROR still hands back the payload, so a caller that ignored
+          // the error (and trusted a half-read row) would be caught.
+          if (leaflyReadError) return { data: { raw_order: rawOrder }, error: { message: leaflyReadError } };
           return { data: rawOrder === undefined ? null : { raw_order: rawOrder }, error: null };
         }
         // orders.customer_id lookup -> no linked customer.
@@ -190,10 +192,11 @@ describe("loadOrderIntoRegister — Leafly orders", () => {
     expect(r.ok && r.lines.every((l) => l.variantId === null)).toBe(true);
   });
 
-  it("a Leafly read error -> falls back to the local lines", async () => {
+  it("a Leafly read error -> falls back to the local lines (the errored row is not trusted)", async () => {
     leaflyReadError = "boom";
     const r = await load();
     expect(r.ok && r.lines.map((l) => l.productName)).toEqual(["Blue Dream (3.5g)", "House Pre-roll"]);
+    expect(r.ok && r.lines.every((l) => l.variantId === null)).toBe(true);
   });
 
   it("a NEW Leafly order (ids now saved on its lines) loads even with no stored copy", async () => {
