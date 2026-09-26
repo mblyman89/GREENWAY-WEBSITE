@@ -742,7 +742,7 @@ export function __runLeaflyDeadlineTests(): { passed: number; failed: number } {
   ok("cart_update is a known operation", isLeaflyOperation("cart_update"));
   eq("cart_update gets the order-fetch budget", LEAFLY_TIMEOUT_MS.cart_update, 15_000);
   eq(
-    "cart_update matches the order fetch (both return a whole Order)",
+    "cart_update matches order_fetch: both return a whole Order",
     LEAFLY_TIMEOUT_MS.cart_update,
     LEAFLY_TIMEOUT_MS.order_fetch,
   );

@@ -1742,7 +1742,7 @@ __runLiquidVolumeTests();
   // SLICE L-48 — "Update Order's Cart". Removal is by OMISSION at Leafly, so
   // the reader/decision assertions here are what stop a half-read cart from
   // silently deleting a customer's items. Floor just under the measured count.
-  assertRan("leafly-order-cart-core", __runLeaflyOrderCartTests(), 118);
+  assertRan("leafly-order-cart-core", __runLeaflyOrderCartTests(), 125);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

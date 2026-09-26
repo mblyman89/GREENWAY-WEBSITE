@@ -280,7 +280,7 @@ async function orderApiPost(
    * so it can decide whether a timeout is safe to retry. Passing the
    * operation is what lets one transport serve two different safety answers.
    */
-  operation: "acknowledge" | "status_push",
+  operation: "acknowledge" | "status_push" | "cart_update",
 ): Promise<RawResponse> {
   let didRetryAuth = false;
 
@@ -387,6 +387,28 @@ async function resolveOrderApiContext(): Promise<{
     environment: config.environment === "production" ? "production" : "sandbox",
     orderIntegrationKey,
   };
+}
+
+/**
+ * SLICE L-48 — the cart update's door into the ONE authorized transport.
+ *
+ * `order-cart-server.ts` owns the cart workflow, but it must not grow a second
+ * copy of the bearer/401-retry/deadline logic above (house rule 11). So this
+ * file lends it exactly two things: the context resolver and a POST that is
+ * pinned to the `cart_update` budget. The operation cannot be chosen by the
+ * caller, so the cart path can never borrow acknowledge's semantics.
+ */
+export async function resolveLeaflyOrderApiContext(): Promise<{
+  environment: "sandbox" | "production";
+  orderIntegrationKey: string | null;
+}> {
+  return resolveOrderApiContext();
+}
+
+export type LeaflyOrderApiRawResponse = RawResponse;
+
+export async function postLeaflyCartUpdate(url: string, body: unknown): Promise<RawResponse> {
+  return orderApiPost(url, body, "cart_update");
 }
 
 // ---------------------------------------------------------------------------
