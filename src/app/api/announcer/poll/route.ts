@@ -48,6 +48,28 @@
  * announcer-core.ts and are self-tested there. Older agents (v1.1.0) ignore
  * the new field and keep working — they just do not get the saving until the
  * installer is re-run.
+ *
+ * WHAT USAGE-4 CHANGED, AND WHY
+ * -----------------------------
+ * Even with USAGE-1, the 25-second hold kept one instance in flight ~72% of
+ * every day per speaker (≈ $11/mo each). The hold only ever existed to stop
+ * the Pi hammering the site; an agent that honours `idleRestSeconds` does
+ * its own waiting. So the hold is now decided per request by
+ * `resolvePollShape` (announcer-poll-shape-core.ts, pure, self-tested):
+ *
+ *   • agent ≥ 1.2.0 (from its `user-agent: greenway-announcer/<v>` header):
+ *     ONE immediate claim, answer at once, agent rests 10 s. Worst-case
+ *     order→chime is unchanged (≈ 11 s); the instance is in flight ~5% of
+ *     the day instead of ~72%.
+ *   • anything else (v1.1.0, missing or foreign user-agent): the classic
+ *     25-second hold, exactly as before, because that agent does NOT rest
+ *     and answering it at once would make it poll twice a second.
+ *   • a DISABLED speaker: no hold, and it is asked to rest 30 s (the most
+ *     the agent accepts). Still well inside the 90 s online grace.
+ *
+ * `pollHoldSeconds` in the response keeps reporting POLL_HOLD_SECONDS — it
+ * is the protocol CEILING the agent sizes its timeout from, not this poll's
+ * actual hold, and the admin "listen for up to N seconds" copy also reads it.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import {
@@ -57,7 +79,6 @@ import {
 } from "@/lib/announcer/announcer-store";
 import {
   parseCredentials,
-  resolveHoldSeconds,
   resolveJobLimit,
   unauthorized,
   unavailable,
@@ -66,8 +87,8 @@ import {
 import {
   POLL_CHECK_INTERVAL_SECONDS,
   POLL_HOLD_SECONDS,
-  POLL_IDLE_REST_SECONDS,
 } from "@/lib/announcer/announcer-core";
+import { resolvePollShape } from "@/lib/announcer/announcer-poll-shape-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -111,8 +132,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     body = {};
   }
   const b = (body ?? {}) as Record<string, unknown>;
-  const holdSeconds = resolveHoldSeconds(b.holdSeconds);
   const limit = resolveJobLimit(b.limit);
+  const shape = resolvePollShape({
+    userAgent: req.headers.get("user-agent"),
+    requestedHold: b.holdSeconds,
+    enabled: device.enabled,
+  });
+  const holdSeconds = shape.holdSeconds;
 
   // The heartbeat is CONSIDERED on every poll, before any work is looked for,
   // and WRITTEN only when the stamp we just read during authentication is old
@@ -124,13 +150,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // A DISABLED speaker still gets a clean, successful, immediate answer rather
   // than being held for 25 seconds for work it will never be given. It stays
   // green in the back office, which is correct: it is healthy, just muted.
+  // USAGE-4: it is also asked to rest the longest the agent allows.
   if (!device.enabled) {
     return NextResponse.json(
       {
         jobs: [],
         serverTime: new Date().toISOString(),
         pollHoldSeconds: POLL_HOLD_SECONDS,
-        idleRestSeconds: POLL_IDLE_REST_SECONDS,
+        idleRestSeconds: shape.idleRestSeconds,
         deviceName: device.name,
         enabled: false,
       },
@@ -143,7 +170,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let lastError: string | null = null;
 
   // Check once immediately, so a queued announcement is not made to wait for
-  // the first tick.
+  // the first tick. With a zero hold (USAGE-4 quick shape) this is the only
+  // check: the loop body runs once and the deadline test below ends it.
   for (;;) {
     const claim = await claimWork(device.id, limit);
     if (claim.ok) {
@@ -174,7 +202,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       pollHoldSeconds: POLL_HOLD_SECONDS,
       // A poll that found work should be followed at once (there may be
       // more); an empty one should rest. The agent decides which, from `jobs`.
-      idleRestSeconds: POLL_IDLE_REST_SECONDS,
+      idleRestSeconds: shape.idleRestSeconds,
       deviceName: device.name,
       enabled: true,
     },
