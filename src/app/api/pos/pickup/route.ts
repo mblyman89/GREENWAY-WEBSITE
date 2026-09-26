@@ -44,6 +44,22 @@
  *                              when the ID-gated register sale completes (the
  *                              sync closes the order then). The Online Orders
  *                              dashboard auto-refreshes on the change.
+ *   POST { orderId, cartLoad: {} }   (SLICE L-48)
+ *                            → the Leafly order's current items, whether they
+ *                              can be changed (and if not, why, in words), the
+ *                              cart signature, and the in-stock menu to swap
+ *                              or add from. Reads only.
+ *   POST { orderId, cart: { lines, signature, employeeName, pin?, review? } }
+ *                            → Leafly "Update Order's Cart". `review: true`
+ *                              is a dry run (nothing sent, nothing recorded).
+ *                              Otherwise the change is re-checked and SENT.
+ *                              Changes at the menu price: any budtender. A
+ *                              price set by hand: a MANAGER or LEAD PIN (same
+ *                              verify + throttle as cancel); without one the
+ *                              answer is 403 { needsManagerApproval: true } and
+ *                              NOTHING is sent. Leafly re-prices the order and
+ *                              tells the customer; our copy is rebuilt from
+ *                              Leafly's answer.
  *
  * Device-authenticated (x-pos-device-id/-key) like every register endpoint.
  * ONLINE-ONLY by design: the queue lives on the server and completion
@@ -110,6 +126,8 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
     load?: { employeeName?: unknown };
     cancel?: { pin?: unknown; reason?: unknown; employeeName?: unknown };
     advance?: { to?: unknown; employeeName?: unknown };
+    cartLoad?: unknown;
+    cart?: { lines?: unknown; signature?: unknown; employeeName?: unknown; pin?: unknown; review?: unknown };
   };
   try {
     body = (await req.json()) as typeof body;
@@ -273,6 +291,119 @@ async function handlePost(req: NextRequest): Promise<NextResponse> {
         displayName: advanced.displayName,
         status: advanced.status,
         message: advanced.message,
+      },
+    });
+  }
+
+  // ── Change items (SLICE L-48): read the editor ─────────────────────────
+  if (body.cartLoad) {
+    const { resolvePickupCartTarget } = await import("@/lib/pos/pickup-store");
+    const target = await resolvePickupCartTarget(body.orderId);
+    if (!target.ok) return NextResponse.json({ error: target.error }, { status: 422 });
+    const { loadLeaflyCartEditor } = await import("@/lib/leafly/order-cart-server");
+    const editor = await loadLeaflyCartEditor(target.leaflyOrderId);
+    return NextResponse.json({
+      cartEditor: {
+        orderNumber: target.orderNumber,
+        displayName: target.displayName,
+        editable: editor.editable,
+        blockedReason: editor.blockedReason,
+        signature: editor.signature,
+        menuLoaded: editor.menuLoaded,
+        lines: editor.reading.lines,
+        totalMinor: editor.reading.totalMinor,
+        options: editor.options,
+      },
+    });
+  }
+
+  // ── Change items (SLICE L-48): review, then send ───────────────────────
+  if (body.cart) {
+    const employeeName = String(body.cart.employeeName ?? "").trim();
+    if (!employeeName) {
+      return NextResponse.json({ error: "cart.employeeName is required." }, { status: 400 });
+    }
+    const signature = typeof body.cart.signature === "string" ? body.cart.signature : "";
+    if (!signature) {
+      return NextResponse.json({ error: "cart.signature is required - reopen Change items." }, { status: 400 });
+    }
+    const { resolvePickupCartTarget, updatePickupCartAtRegister } = await import("@/lib/pos/pickup-store");
+    const target = await resolvePickupCartTarget(body.orderId);
+    if (!target.ok) return NextResponse.json({ error: target.error }, { status: 422 });
+    const { previewLeaflyOrderCart } = await import("@/lib/leafly/order-cart-server");
+    const { parseDesiredCart } = await import("@/lib/leafly/order-cart-core");
+    // The dry run: the SAME decision the send makes, against fresh reads.
+    const review = await previewLeaflyOrderCart({
+      leaflyOrderId: target.leaflyOrderId,
+      desired: parseDesiredCart(body.cart.lines),
+      expectedSignature: signature,
+    });
+    if (!review.allowed) {
+      return NextResponse.json({ error: review.reason, code: review.code, changes: review.changes }, { status: 422 });
+    }
+    if (body.cart.review === true) {
+      return NextResponse.json({ cartReview: review });
+    }
+
+    // A hand-set price needs a manager/lead PIN. Asked for ONLY when the
+    // review says so, so ordinary changes stay one tap for a budtender.
+    let approverName: string | null = null;
+    if (review.needsManagerApproval) {
+      const pinRaw = body.cart.pin;
+      if (pinRaw === undefined || pinRaw === null || String(pinRaw) === "") {
+        return NextResponse.json(
+          { error: "A price was set by hand. A manager or lead must enter their PIN.", needsManagerApproval: true },
+          { status: 403 },
+        );
+      }
+      const throttleScope = deviceThrottleScope(auth.device.id);
+      const locked = await pinPadBlocked(throttleScope);
+      if (locked) return NextResponse.json({ error: locked }, { status: 429 });
+      const pin = String(pinRaw);
+      if (!isValidPin(pin)) {
+        return NextResponse.json({ error: "Enter a valid 4–6 digit manager PIN.", needsManagerApproval: true }, { status: 400 });
+      }
+      const approver = await getEmployeeByPin(pin);
+      if (!approver) {
+        await notePinFailure(throttleScope);
+        return NextResponse.json({ error: "No active employee for that PIN.", needsManagerApproval: true }, { status: 401 });
+      }
+      await notePinSuccess(throttleScope);
+      if (!CANCEL_APPROVER_ROLES.has(approver.job_role)) {
+        return NextResponse.json(
+          {
+            error: `${approver.full_name} is not a manager or lead - a hand-set price needs a manager PIN.`,
+            needsManagerApproval: true,
+          },
+          { status: 403 },
+        );
+      }
+      approverName = approver.full_name;
+    }
+
+    const updated = await updatePickupCartAtRegister({
+      orderId: body.orderId,
+      desired: body.cart.lines,
+      signature,
+      // True ONLY when a manager/lead PIN was verified above. The core
+      // refuses an override when this is false.
+      priceOverridesApproved: approverName !== null,
+      approverName,
+      deviceName: auth.device.name,
+      employeeName,
+    });
+    if (!updated.ok) {
+      return NextResponse.json(
+        { error: updated.error, code: updated.code, needsManagerApproval: updated.needsManagerApproval },
+        { status: 422 },
+      );
+    }
+    return NextResponse.json({
+      cartUpdated: {
+        orderNumber: updated.orderNumber,
+        displayName: updated.displayName,
+        message: updated.message,
+        summary: updated.summary,
       },
     });
   }

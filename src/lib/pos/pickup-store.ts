@@ -607,6 +607,118 @@ export async function advancePickupAtRegister(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Change items from the register (SLICE L-48)
+// ---------------------------------------------------------------------------
+//
+// Leafly's "Update Order's Cart" (POST /orders/{id}/cart), from the pickup
+// queue. The register gets the SAME editor data, the SAME dry-run review and
+// the SAME send as the back office - every judgement is made by
+// order-cart-core through order-cart-server; this layer only resolves the
+// register's order id to the Leafly order, names the actor, and audits.
+//
+// Who may do it: any budtender, for changes at the menu price (the same
+// people who may Confirm / Mark ready). A price set by hand needs a manager or
+// lead PIN - the route verifies it and passes `priceOverridesApproved`; the
+// core REFUSES an override when that is false, so skipping the PIN cannot
+// smuggle a price through.
+
+export type PickupCartTarget =
+  | { ok: true; leaflyOrderId: string; orderNumber: string; displayName: string }
+  | { ok: false; error: string };
+
+/** Resolve a register order id to its Leafly order, refusing anything that is not one. */
+export async function resolvePickupCartTarget(orderId: string): Promise<PickupCartTarget> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const order = await getOrder(orderId);
+  if (!order) return { ok: false, error: "Order not found." };
+  if (isPosMaterializedOrder(order.staff_note)) {
+    return { ok: false, error: "That order is a register sale, not an online order." };
+  }
+  const displayName = resolveOrderDisplay(order.display_name ?? null, order.order_number);
+  if (!isMarketplaceOrigin(toOrderOrigin(order.origin))) {
+    return {
+      ok: false,
+      error: "Changing items is for Leafly orders. A website order can be changed by loading it into a sale.",
+    };
+  }
+  const { leaflyOrderIdForLocalOrder } = await import("@/lib/leafly/order-cart-server");
+  const leaflyOrderId = await leaflyOrderIdForLocalOrder(order.id);
+  if (!leaflyOrderId) {
+    return {
+      ok: false,
+      error: "This Leafly order has no Leafly record linked to it, so its items cannot be changed here. Use the back-office Orders board.",
+    };
+  }
+  return { ok: true, leaflyOrderId, orderNumber: order.order_number, displayName };
+}
+
+export type PickupCartUpdateResult =
+  | { ok: true; orderNumber: string; displayName: string; message: string; summary: Record<string, number> }
+  | { ok: false; error: string; code: string; needsManagerApproval: boolean };
+
+export async function updatePickupCartAtRegister(input: {
+  orderId: string;
+  desired: unknown;
+  signature: string;
+  /** True only when the route verified a manager/lead PIN. */
+  priceOverridesApproved: boolean;
+  approverName: string | null;
+  deviceName: string;
+  employeeName: string;
+}): Promise<PickupCartUpdateResult> {
+  const target = await resolvePickupCartTarget(input.orderId);
+  if (!target.ok) return { ok: false, error: target.error, code: "not_a_leafly_order", needsManagerApproval: false };
+
+  const { updateLeaflyOrderCart } = await import("@/lib/leafly/order-cart-server");
+  const { parseDesiredCart } = await import("@/lib/leafly/order-cart-core");
+  const actorLabel = input.approverName
+    ? `${input.employeeName} at ${input.deviceName} (price approved by ${input.approverName})`
+    : `${input.employeeName} at ${input.deviceName}`;
+  const result = await updateLeaflyOrderCart({
+    leaflyOrderId: target.leaflyOrderId,
+    desired: parseDesiredCart(input.desired),
+    expectedSignature: input.signature,
+    priceOverridesApproved: input.priceOverridesApproved,
+    staffId: null,
+    actorLabel,
+  });
+
+  await recordAudit({
+    actorId: null,
+    actorEmail: `pos-cart:${input.deviceName}`,
+    action: result.ok ? "order.cart_updated_at_register" : "order.register_cart_failed",
+    entityType: "order",
+    entityId: input.orderId,
+    after: {
+      orderNumber: target.orderNumber,
+      displayName: target.displayName,
+      leaflyOrderId: target.leaflyOrderId,
+      employee: input.employeeName,
+      approver: input.approverName,
+      code: result.code,
+      httpStatus: result.httpStatus,
+      refused: result.refused,
+      summary: result.summary,
+      changes: result.changes.filter((c) => c.kind !== "unchanged").map((c) => c.sentence),
+      priceOverrides: result.summary.priceOverrides,
+      verified: result.verified,
+      message: result.message,
+    },
+  });
+
+  if (!result.ok) {
+    return { ok: false, error: result.message, code: result.code, needsManagerApproval: result.needsManagerApproval };
+  }
+  return {
+    ok: true,
+    orderNumber: target.orderNumber,
+    displayName: target.displayName,
+    message: `${target.displayName}: ${result.message}`,
+    summary: { ...result.summary },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Handover completion - REMOVED (SLICE 17)
 // ---------------------------------------------------------------------------
 //
