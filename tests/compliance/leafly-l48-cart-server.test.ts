@@ -95,7 +95,12 @@ const stored: unknown[] = [];
 let collectResult: { ok: boolean; order: unknown } = { ok: false, order: null };
 vi.mock("@/lib/leafly/order-fetch-server", () => ({
   storeFetchedLeaflyOrder: async (i: { order: unknown }) => { stored.push(i.order); return { ok: true }; },
-  collectLeaflyOrder: async () => collectResult,
+  // Like the real one: a successful re-read is STORED, so our copy of the
+  // Leafly row now carries what Leafly has.
+  collectLeaflyOrder: async () => {
+    if (collectResult.ok && collectResult.order && tables.leaflyRow) tables.leaflyRow = { ...tables.leaflyRow, raw_order: collectResult.order };
+    return collectResult;
+  },
 }));
 let claim = { registerSaleOpen: false, whereItIs: "" };
 vi.mock("@/lib/leafly/register-claim-server", () => ({ readRegisterClaim: async () => claim }));
@@ -402,6 +407,10 @@ describe("L-48 updateLeaflyOrderCart — Leafly refuses or does not answer", () 
     expect(r.verified).toBe(true);
     expect(r.message).toMatch(/HAS the new items/);
     expect(ledger()[0]!.disposition).toBe("retry");
+    // ...and the register copy is rebuilt from what Leafly has.
+    const ins = ops.find((o) => o.table === "order_lines" && o.op === "insert");
+    expect(ins?.payload).toEqual([{ order_id: "local-1", product_name: "Blue Dream", variant_label: "3.5g", quantity: 2, price_minor_units: 3000 }]);
+    expect(ops.some((o) => o.table === "order_lines" && o.op === "delete")).toBe(true);
   });
 
   it("no answer + the re-read shows the OLD cart → not ok, safe to retry", async () => {
@@ -412,6 +421,7 @@ describe("L-48 updateLeaflyOrderCart — Leafly refuses or does not answer", () 
     expect(r.code).toBe("network_error");
     expect(r.verified).toBe(false);
     expect(r.message).toMatch(/safe to try again/);
+    expect(ops.some((o) => o.table === "order_lines" && o.op !== "select")).toBe(false);
   });
 
   it("no answer + no re-read → not ok, and says do NOT send again", async () => {
