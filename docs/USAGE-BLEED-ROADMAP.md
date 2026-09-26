@@ -236,13 +236,73 @@ screen sooner than before. Mid-sale behaviour is untouched.
 background flush only POSTs when the queue is non-empty. The 45 s pickup
 badge is already gated on the home screen. The announcer cadence is Slice 4.
 
-## Slice 4 — push instead of poll for the announcer
+## Slice 4 — the announcer stops holding a Vercel instance open (PR: USAGE-4)
 
-Replace the long-poll with Supabase Realtime (Postgres Changes on the
-announcer jobs table) from the Pi, keeping the poll as a fallback. This
-removes the always-open Vercel function entirely; the Pi holds one WebSocket to
-Supabase instead. Requires a Realtime-capable client on the Pi and careful
-reconnection logic; do this after the cheaper wins are measured.
+**What was measured first.** `scripts/recon/announcer-poll-cost-model.mjs`
+(read-only, no network) prices one paired speaker per month under each poll
+shape from the Fluid pricing above. After Slice 1 the shape was a 25 s hold
+followed by a 10 s rest: one 2 GB instance in flight 72 % of every day,
+≈ 2,400 polls/day, **≈ $11.06/mo per Pi**, mean order→chime ≈ 3.5 s, worst
+≈ 11 s. The roadmap's earlier idea (10 s hold, 25 s rest) models at ≈ $4.61
+but triples the mean latency to ≈ 10 s. The hold exists for exactly one
+reason: to stop a Pi that reconnects instantly from hammering the site. Agent
+v1.2.0 (Slice 1) rests on its own for `idleRestSeconds`, so for that agent the
+hold is pure cost — the server is paying to wait for a Pi that would happily
+wait by itself.
+
+**Why not Realtime.** The roadmap originally planned Supabase Realtime from
+the Pi. Recon against `docs/announcer/00-strategy-and-roadmap.md` §2 found the
+design explicitly rejected any second always-on connection to a second system
+(MQTT, FCM) as a new failure domain; a Realtime WebSocket from the Pi is the
+same trade. It also needs a websocket library the Pi does not have (the agent
+uses only `requests`), a reinstall on every speaker, and new reconnection
+logic on the one device nobody can open a browser on. The change below gets
+≈ 93 % of the saving with zero new dependencies and no reinstall.
+
+**What changed.** `src/lib/announcer/announcer-poll-shape-core.ts` (new,
+pure, 47 self-tests, registered in `run-pure-selftests.ts` with a floor of 40,
+mirrored in `tests/compliance/announcer-poll-shape.test.ts` including a
+route-wiring test that was proven to fail when the route was mutated back to
+the constant). `resolvePollShape({ userAgent, requestedHold, enabled })`
+decides the shape of each poll from facts the request already carries:
+
+* **agent ≥ 1.2.0** (every agent has sent `user-agent:
+  greenway-announcer/<version>` since the first release — verified with
+  `git show 1328fa57:pi-agent/greenway_announcer.py`) → **hold 0**: one
+  immediate `announcer_claim_work`, answer, agent rests 10 s.
+* **agent 1.1.0, or no / foreign user-agent** → the classic 25 s hold,
+  unchanged, because that agent does not rest and an instant answer would
+  make it poll twice a second (≈ 170,000 requests/day — worse than the
+  memory it saved). The safe default is the slow one.
+* **disabled speaker** → hold 0 and `idleRestSeconds: 30`, the most the
+  agent's clamp (`MAX_IDLE_REST_SECONDS`, pinned by test) accepts. Still
+  green: 0 + 30 + 15 < 90 s grace, asserted in the self-tests.
+
+`src/app/api/announcer/poll/route.ts` calls it and uses `shape.holdSeconds`
+and `shape.idleRestSeconds`; the claim loop is unchanged (its first check is
+at t = 0, so a zero hold is one look, not none). `pollHoldSeconds` in the
+response still reports `POLL_HOLD_SECONDS` — it is the protocol ceiling the
+agent sizes its 45 s timeout from and the admin "listen for up to 25
+seconds" copy reads it; both stay true. `docs/announcer/00-strategy-and-roadmap.md`
+§2 now describes the hold as the legacy-agent path.
+
+**Left alone, with reasons.** `POLL_HOLD_SECONDS`, `resolveHoldSeconds` and
+every test that pins them: they are still the live path for v1.1.0 and the
+ceiling for everyone. `POLL_IDLE_REST_SECONDS = 10`: raising it to 30 would
+cut another ≈ $0.50/mo per Pi but triple the mean order→chime to ≈ 16 s,
+which the owner did not ask for. The Pi agent (`pi-agent/greenway_announcer.py`
+and its byte-identical served copy): no change, no reinstall — a v1.2.0 Pi
+simply starts getting instant answers on the next deploy. The 15 s admin
+panel refresh (`ADMIN_REFRESH_SECONDS`): one cached read per open Announcer
+panel, not always-on.
+
+**Expected effect (from the model).** Per paired v1.2.0 speaker: in-flight
+duty 72 % → 5 %, Vercel memory ≈ $10.96 → ≈ $0.73/mo, total Vercel
+≈ $11.06 → ≈ $1.05/mo; Supabase calls ≈ 14,600 → ≈ 16,500/day (one claim per
+poll instead of five, but more polls — a wash; egress ≈ 0.22 → 0.35 GB/mo,
+still under 0.4 GB, and disabled speakers fall to ≈ 5,700/day). Mean
+order→chime 3.5 s → ≈ 6 s; worst case unchanged at ≈ 11 s. A speaker still
+on v1.1.0 sees no change at all until the installer is re-run.
 
 ## Slice 5 — Vercel project settings (owner, in the dashboard)
 
@@ -265,6 +325,21 @@ down within a day of the Pis being reinstalled; Reports → Query Performance �
 `receipt_printer_settings` upsert near the top; Logs Explorer → Top Paths
 shows `/rest/v1/receipt_printer_settings` and `/rest/v1/rpc/announcer_claim_work`
 counts an order of magnitude lower.
+
+**Slice 4.** Vercel → Observability → Functions → `/api/announcer/poll`:
+p50 duration should fall from ≈ 25 s to well under one second within minutes
+of the deploy (v1.2.0 Pis; a v1.1.0 Pi keeps ≈ 25 s until reinstalled), and
+invocations per hour rise from ≈ 100 to ≈ 340 per speaker — that is expected
+and cheap ($0.60 per million). Team → Usage → *Provisioned Memory* /
+*Function Duration* is the line that should bend hardest, since the speaker
+was the largest single contributor. Back office → Orders → Announcer panel:
+every speaker's dot stays green; a Test press still chimes well inside the
+25 seconds the panel promises (worst case ≈ 11 s). Supabase → Logs Explorer →
+Top Paths: `/rest/v1/rpc/announcer_claim_work` count roughly unchanged (one
+per poll instead of five per hold); `/rest/v1/announcer_devices` PATCH count
+unchanged (the Slice 1 heartbeat throttle still applies). To confirm which
+path a Pi is on, `journalctl -u greenway-announcer -n 5` prints
+"Greenway announcer v1.2.0 starting" on the first line after a restart.
 
 **Slice 3.** Supabase → Reports → Query Performance → *Most frequent*: the
 `update pos_devices set last_seen_at` statement and the seven

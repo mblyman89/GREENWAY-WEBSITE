@@ -96,16 +96,22 @@ new way to fail silently. The value is not worth the new failure domain.
 is designed for phones, plus it is best-effort by contract, which is exactly the
 guarantee this feature must not have.
 
-**Chosen: outbound long-poll against a database claim queue.** The Pi opens an
-ordinary HTTPS request to the site and the server holds it for up to
-twenty-five seconds waiting for work. If work appears, the server answers
-immediately and the Pi asks again at once in case more is queued; if nothing
-appears, the server answers "nothing" and the Pi rests for a short server-chosen
-interval (ten seconds today, sent as `idleRestSeconds`) before asking again, so
-the site is not paying for a permanently open request while the shop is quiet.
-Twenty-five seconds sits at better than a two-times margin under
-the sixty-second ceiling, so the request finishes well before anything upstream
-would cut it. The connection is always initiated from inside the shop, which
+**Chosen: outbound poll against a database claim queue.** The Pi opens an
+ordinary HTTPS request to the site asking for work. If work is queued, the
+server answers immediately and the Pi asks again at once in case more is
+queued; if nothing is queued, the server answers "nothing" and the Pi rests for
+a short server-chosen interval (ten seconds today, sent as `idleRestSeconds`)
+before asking again, so the site is not paying for an open request while the
+shop is quiet. The protocol allows the server to *hold* a poll open for up to
+twenty-five seconds waiting for work, and it still does so for the original
+agent (v1.1.0), which reconnects the instant a poll returns and would otherwise
+poll twice a second. For agent v1.2.0 and later, which rest on their own, the
+server answers at once (USAGE-4, `announcer-poll-shape-core.ts`): the Pi does
+the waiting on its own CPU instead of a billed Vercel instance, and the
+worst-case time from order to chime is unchanged at about eleven seconds.
+Twenty-five seconds sits at better than a two-times margin under the
+sixty-second ceiling, so even a held request finishes well before anything
+upstream would cut it. The connection is always initiated from inside the shop, which
 means it traverses the router the same way a browser does — no inbound rule, no
 static address, no dependence on the ISP. If the internet drops, the Pi retries
 on a backoff and heals itself the moment service returns; nobody has to touch
