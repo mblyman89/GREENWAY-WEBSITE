@@ -903,9 +903,11 @@ export async function loadOrderIntoRegister(input: {
     ? await readLeaflyRawOrderForLocalOrder(order.id).then((r) => (r ? readLeaflyRegisterLines(r.raw) : null))
     : null;
   const chosen = chooseRegisterLines({ isMarketplace: loadedIsMarketplace, leafly: leaflyReading, stored: storedLines });
-  if (loadedIsMarketplace && chosen.source === "stored") {
+  if (loadedIsMarketplace && chosen.source === "stored" && storedLines.some((l) => !l.variantId && !l.productId)) {
+    // Loud in the logs: these lines will be dropped at the register as "not
+    // linked to a menu item", and whoever looks next must not have to guess why.
     console.warn(
-      `[pos/pickup] ${order.order_number}: Leafly's stored order had no usable variant ids, so the register used the local lines.`,
+      `[pos/pickup] ${order.order_number}: Leafly's stored order could not be read or had no variant ids, and the local lines carry none either - the register cannot match those items.`,
     );
   }
 

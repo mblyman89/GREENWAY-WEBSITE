@@ -1749,7 +1749,7 @@ __runLiquidVolumeTests();
   // Inventory LEAFLY badge: which lots show it (split products count for
   // their parent; unlinked lots never do). Floor just under the measured count.
   assertRan("leafly-badge-core", __runLeaflyBadgeTests(), 28);
-  assertRan("leafly-register-lines-core", __runLeaflyRegisterLinesTests(), 31);
+  assertRan("leafly-register-lines-core", __runLeaflyRegisterLinesTests(), 33);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
