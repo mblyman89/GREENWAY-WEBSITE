@@ -50,6 +50,7 @@ export const adminNav: AdminNavItem[] = [
 
   // CRM: customer relationship management (customers + loyalty program).
   { label: "Customers", href: "/admin/customers", permission: "customers.manage", icon: "\ud83d\udc65", group: "CRM" }, // 👥 people
+  { label: "Customer Insights", href: "/admin/customers/insights", permission: "customers.manage", icon: "\ud83d\udcca", group: "CRM" }, // 📊 bar chart — Slice 3 intelligence dashboard
   { label: "Loyalty Program", href: "/admin/loyalty", permission: "loyalty.view", icon: "\ud83c\udfc5", group: "CRM" }, // 🏅 medal / rewards
 
   // Product Intake: the end-to-end product workflow. W1 — ordered to mirror

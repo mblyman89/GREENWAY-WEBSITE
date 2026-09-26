@@ -824,6 +824,8 @@ import { __runAccountClassificationTests } from "../../src/lib/plaid/account-cla
 import { __runPlaidLiabilitiesCoreTests } from "../../src/lib/plaid/liabilities-core";
 import { __runPlaidInvestmentsCoreTests } from "../../src/lib/plaid/investments-core";
 import { __runLoanCoreTests } from "../../src/lib/loans/loan-core";
+import { __runCustomerInsightsCoreTests } from "../../src/lib/customers/customer-insights-core";
+import { __runCustomerSegmentsCoreTests } from "../../src/lib/customers/customer-segments-core";
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -1758,6 +1760,13 @@ __runLiquidVolumeTests();
   // their parent; unlinked lots never do). Floor just under the measured count.
   assertRan("leafly-badge-core", __runLeaflyBadgeTests(), 28);
   assertRan("leafly-register-lines-core", __runLeaflyRegisterLinesTests(), 33);
+
+  // Slice 3 customer intelligence: one customer's profile (favourites,
+  // cadence, staples, recommendations, next best action) and the whole-base
+  // cores (RFM segments, stock watch, preference lift, due/overdue).
+  // Floors just under the measured counts (130 / 109).
+  assertRan("customer-insights-core", __runCustomerInsightsCoreTests(), 125);
+  assertRan("customer-segments-core", __runCustomerSegmentsCoreTests(), 105);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

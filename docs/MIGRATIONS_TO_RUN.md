@@ -969,3 +969,44 @@
   retention period was **three years**. WAC 314-55-087(1) has said **five years**
   since 10/12/2024 (WSR 24-19-040). The stale number was in the exact sentence
   shown to you at the moment of destruction. 0209 says five.
+
+## SLICE 3 (customers) — 0232 — live customer visits and spend
+
+- **`0232_customer_rollups.sql`** — fixes customers showing **0 visits / $0 spend**
+  even though they have purchases. Nothing ever kept `visit_count`,
+  `lifetime_spend_minor_units` or `last_visit_at` up to date, and the Cultivera
+  import had written the OLD POS's lifetime spend into `lifetime_spend_minor_units`.
+
+  What it does:
+
+  1. Adds `customers.imported_spend_minor_units` and — **only in the run that
+     creates the column** — copies the Cultivera figure into it for imported
+     customers. A re-run never copies again, so the old-POS number is preserved
+     exactly once and never overwritten by live figures.
+  2. Adds `customers.first_visit_at`.
+  3. Installs `customer_rollup_compute(uuid)` / `customer_rollup_recompute(uuid)`
+     and triggers on `orders` (insert, delete, and updates of status /
+     customer_id / total / completed_at / placed_at) and on `customer_returns`.
+     A visit is a **completed** order linked to the customer (the same revenue
+     basis as every report); spend is what they paid **less refunds**, never
+     below zero. Voids, cancellations and online orders collected at the
+     register (the register sale is the sale of record) are never double counted.
+  4. Back-fills every customer once.
+  5. Adds `customer_rollup_audit()` — returns only customers whose stored
+     figures disagree with a fresh recompute. **Zero rows is the all-clear.**
+  6. Locks the functions to `service_role`, adds three indexes, reloads the API schema.
+
+  Safe to re-run (verified: all 232 migrations apply on a clean database and
+  0232 re-applies cleanly; 20 trigger scenarios checked in
+  `scripts/recon/customer-rollups-pg-check.sql`).
+
+  **Run it, then check:**
+
+  ```sql
+  select * from customer_rollup_audit();   -- expect ZERO ROWS
+  ```
+
+  **Until it is run**, the customer pages still show correct numbers — they
+  calculate them straight from orders and display a note saying 0232 is pending —
+  but sorting the customer list by visits / spend / recent visit uses the old
+  (empty) columns.

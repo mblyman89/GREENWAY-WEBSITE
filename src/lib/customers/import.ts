@@ -236,7 +236,11 @@ export async function importCustomers(
       email_normalized: row.email_normalized,
       birthdate: row.birthdate,
       is_medical_patient: row.is_medical_patient,
-      lifetime_spend_minor_units: row.lifetime_spend_minor_units,
+      // 0232: the old POS's lifetime total is history, kept in its own
+      // column. lifetime_spend_minor_units is LIVE (maintained by the
+      // customer_rollup trigger from our completed orders) and must never be
+      // overwritten by an import.
+      imported_spend_minor_units: row.lifetime_spend_minor_units,
       city: row.city,
       state: row.state,
       zip: row.zip,
@@ -245,14 +249,35 @@ export async function importCustomers(
       updated_by: actorId,
     };
 
+    // Before migration 0232 is applied the imported_spend column does not
+    // exist; fall back to the legacy column so an import still works (the
+    // migration then moves that value into imported_spend on first run).
+    const legacyPayload = (() => {
+      const { imported_spend_minor_units, ...rest } = payload;
+      return { ...rest, lifetime_spend_minor_units: imported_spend_minor_units };
+    })();
     if (existingId) {
-      await admin.from("customers").update(payload).eq("id", existingId);
+      const res = await admin.from("customers").update(payload).eq("id", existingId);
+      if (res.error && isMissingImportedSpendColumn(res.error)) {
+        await admin.from("customers").update(legacyPayload).eq("id", existingId);
+      }
       updated++;
     } else {
-      await admin.from("customers").insert({ ...payload, created_by: actorId });
+      const res = await admin.from("customers").insert({ ...payload, created_by: actorId });
+      if (res.error && isMissingImportedSpendColumn(res.error)) {
+        await admin.from("customers").insert({ ...legacyPayload, created_by: actorId });
+      }
       inserted++;
     }
   }
 
   return { ok: true, inserted, updated, skipped: parsed.skipped };
+}
+
+/** True when a write failed only because migration 0232 has not added
+ *  customers.imported_spend_minor_units yet (PostgREST PGRST204 / PG 42703). */
+export function isMissingImportedSpendColumn(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false;
+  const msg = String(err.message ?? "");
+  return (err.code === "PGRST204" || err.code === "42703") && msg.includes("imported_spend_minor_units");
 }

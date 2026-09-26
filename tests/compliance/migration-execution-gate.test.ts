@@ -1187,7 +1187,17 @@ describe("the migration list is ordered the way the database will see it", () =>
     // the CHECK. Again a one-off run, recorded plainly, not a committed
     // harness; tests/compliance/leafly-l47-certification-proof.test.ts pins
     // the CHECK's list to the code's.
-    expect(listed[listed.length - 1]).toMatch(/^0231_/);
+    //
+    // SLICE 3 (customers) added 0232_customer_rollups.sql (trigger-maintained
+    // visit_count / lifetime spend / last + first visit from completed orders
+    // less refunds; old-POS spend preserved once in imported_spend_minor_units;
+    // customer_rollup_audit()). Verified in the build sandbox against Postgres
+    // 15 bootstrapped exactly as CI does: all 232 migrations executed via
+    // scripts/compliance/verify-migrations-execute.ts, 0232 applied twice
+    // cleanly, and the committed scenario script
+    // scripts/recon/customer-rollups-pg-check.sql (20 trigger scenarios in a
+    // rolled-back transaction) passed.
+    expect(listed[listed.length - 1]).toMatch(/^0232_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
