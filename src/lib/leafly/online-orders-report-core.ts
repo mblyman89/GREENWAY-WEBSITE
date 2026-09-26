@@ -92,8 +92,19 @@ export type ReportOrderRow = {
   firstSeenAt?: string | null;
   announcedAt?: string | null;
   printedAt?: string | null;
-  /** Total in MAJOR units as Leafly sends it (e.g. "42.50"), or a number. */
-  totalRaw?: unknown;
+  /**
+   * The order total in INTEGER MINOR UNITS, exactly as Leafly's spec sends
+   * `Order.total` ("order grand total in minor units ... Tip is not
+   * included"). Anything that is not a whole number is refused, not
+   * converted.
+   *
+   * This field used to be `totalRaw`, documented as MAJOR units ("42.50") and
+   * run through the decimal-dollar parser `reportMoneyToMinor`. Leafly never
+   * sends decimals, so a $33.70 order (3370) was read as $3,370.00 and the
+   * Order value card showed $33,700.00 for about $337 of orders. Renamed so
+   * no caller can keep passing the old shape by accident.
+   */
+  totalMinorUnits?: number | null;
 };
 
 /** The write calls the outbound-health block reports on (SLICE L-47). */
@@ -213,6 +224,18 @@ export function reportMoneyToMinor(value: unknown): number | null {
   const third = frac.length > 2 ? Number(frac[2]) : 0;
   if (Number.isFinite(third) && third >= 5) minor += 1;
   return sign === "-" ? -minor : minor;
+}
+
+/**
+ * Leafly order money: a whole, finite integer of minor units, or null.
+ *
+ * Deliberately NOT a converter. The spec says every Order money field is
+ * already minor units, so the only honest reading of `3370` is 3370 cents,
+ * and the only honest reading of `"33.70"` or `33.7` is "not what Leafly
+ * sends — unknown". Mirrors `readMinorUnits` in order-detail-core.ts.
+ */
+export function reportIntegerMinor(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) ? value : null;
 }
 
 /** Milliseconds between two ISO instants, or null if either is unusable. */
@@ -469,7 +492,9 @@ export function buildOnlineOrdersReport(input: {
     if (typeof r.announcedAt === "string" && r.announcedAt.trim() !== "") announced += 1;
     if (typeof r.printedAt === "string" && r.printedAt.trim() !== "") printed += 1;
 
-    const minor = reportMoneyToMinor(r.totalRaw);
+    // INTEGER MINOR UNITS ONLY. Never `reportMoneyToMinor` here: that is a
+    // decimal-dollar parser and multiplies Leafly's cents by 100.
+    const minor = reportIntegerMinor(r.totalMinorUnits);
     if (minor !== null) {
       grossMinorUnits += minor;
       ordersWithTotal += 1;
@@ -806,6 +831,22 @@ export function __runOnlineOrdersReportTests(): {
   eq("19.99 survives", reportMoneyToMinor("19.99"), 1999);
   eq("exponent notation", reportMoneyToMinor("1e2"), 10000);
 
+  // -- Leafly order money is INTEGER minor units (the 100x defect) ----------
+  eq("integer minor passes through", reportIntegerMinor(3370), 3370);
+  eq("zero is a real zero", reportIntegerMinor(0), 0);
+  eq("NOT multiplied by 100", reportIntegerMinor(3370) === 337000, false);
+  eq("decimal number refused", reportIntegerMinor(33.7), null);
+  eq("decimal text refused", reportIntegerMinor("33.70"), null);
+  eq("integer text refused", reportIntegerMinor("3370"), null);
+  eq("null refused", reportIntegerMinor(null), null);
+  eq("NaN refused", reportIntegerMinor(NaN), null);
+  eq("Infinity refused", reportIntegerMinor(Infinity), null);
+  const screenshot = buildOnlineOrdersReport({
+    orders: [3370, 4803, 2500].map((t) => ({ totalMinorUnits: t })),
+  });
+  eq("owner screenshot class: gross is cents summed", screenshot.grossMinorUnits, 3370 + 4803 + 2500);
+  eq("owner screenshot class: formatted", formatReportMoney(screenshot.grossMinorUnits), "$106.73");
+
   // -- msBetween ------------------------------------------------------------
   eq(
     "elapsed ms",
@@ -900,7 +941,7 @@ export function __runOnlineOrdersReportTests(): {
         localOrderId: "local-1",
         announcedAt: "2025-03-01T10:00:05.000Z",
         printedAt: "2025-03-01T10:00:06.000Z",
-        totalRaw: "42.50",
+        totalMinorUnits: 4250,
       },
       {
         // acknowledged, then stalled at confirmed — the notification gap
@@ -911,7 +952,7 @@ export function __runOnlineOrdersReportTests(): {
         firstSeenAt: "2025-03-01T11:00:00.000Z",
         acknowledgedAt: "2025-03-01T11:05:00.000Z",
         acknowledgeBy: "2025-03-01T11:15:00.000Z",
-        totalRaw: "20.00",
+        totalMinorUnits: 2000,
       },
       {
         // LOST to the fifteen-minute clock
@@ -922,7 +963,7 @@ export function __runOnlineOrdersReportTests(): {
         firstSeenAt: "2025-03-02T09:00:00.000Z",
         canceledAt: "2025-03-02T09:15:00.000Z",
         cancelationReasonCode: AUTO_CANCEL_REASON_CODE,
-        totalRaw: "31.00",
+        totalMinorUnits: 3100,
       },
       {
         // cancelled by the customer — NOT our fault, must not be conflated
@@ -941,7 +982,7 @@ export function __runOnlineOrdersReportTests(): {
         firstSeenAt: "2025-03-03T08:00:00.000Z",
         acknowledgedAt: "2025-03-03T08:20:00.000Z",
         acknowledgeBy: "2025-03-03T08:15:00.000Z",
-        totalRaw: "10.25",
+        totalMinorUnits: 1025,
       },
     ],
     attempts: [

@@ -39,6 +39,7 @@ import {
 } from "./hmac-core";
 import {
   parseLeaflyWebhook,
+  webhookMayWriteRawOrder,
   type LeaflyWebhookEventType,
   type ParsedLeaflyWebhook,
 } from "./webhook-parse-core";
@@ -301,7 +302,10 @@ export async function upsertLeaflyOrderFromWebhook(
     if (parsed.cancelationReasonCode) {
       patch.cancelation_reason_code = parsed.cancelationReasonCode;
     }
-    if (parsed.body) patch.raw_order = parsed.body;
+    // ONLY order_submit may write raw_order (webhookMayWriteRawOrder). A
+    // status/cancel envelope used to land here too and replace the collected
+    // Order — the only copy after Leafly's 24-hour window — with five fields.
+    if (parsed.body && webhookMayWriteRawOrder(parsed.eventType)) patch.raw_order = parsed.body;
 
     // A cancellation stamps canceled_at, from Leafly's own eventTime when we
     // have it. Using their timestamp rather than ours keeps the record honest

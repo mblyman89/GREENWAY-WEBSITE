@@ -1,58 +1,81 @@
 /**
  * src/lib/leafly/online-orders-report-server.ts
  *
- * SLICE 8 (round L-24) — the DATA half of the Online Orders report.
+ * The DATA half of the Online Orders report. Reads rows and hands them to
+ * the two pure cores:
  *
- * This module does exactly two things: read rows, and hand them to the pure
- * core. Every judgement — what counts as a lost order, what "lifecycle reach"
- * means, how a rate behaves over an empty denominator — lives in
- * `online-orders-report-core.ts`, where it can be tested without a database.
+ *   - `online-orders-report-core.ts`  the Leafly CONTRACT (15-minute clock,
+ *                                     lifecycle reach, outbound calls).
+ *   - `reports/online-orders-channels-core.ts`
+ *                                     the ALL-CHANNELS comparison, website
+ *                                     vs Leafly (ONLINE ORDERS ALL-CHANNELS).
  *
- *
- * WHY THE PACIFIC CONVERSION HAPPENS HERE AND NOT IN THE CORE
- * -----------------------------------------------------------
- * The core buckets daily volume by slicing the first ten characters off a
- * timestamp. That is only correct if the timestamp it receives is already
- * Pacific wall time. Postgres hands back UTC, and Port Orchard is 7–8 hours
- * behind it, so a 5pm Tuesday order arrives as Wednesday 00:00Z and would land
- * on the wrong day of the owner's week — every single evening order, silently.
- *
- * House rule 9: business-day logic uses the store's clock. So this module
- * converts to a Pacific day key BEFORE the core sees it, using the same
- * `pacificDayKey` helper the rest of the reporting suite uses. Keeping the
- * conversion here also keeps the core import-free, which is what lets it run
- * in the self-test harness with no module graph.
+ * Every judgement lives in those cores, where it is tested without a
+ * database.
  *
  *
- * WHY THE QUERY NAMES ITS COLUMNS
- * -------------------------------
- * `select("*")` would work today and break quietly later: `raw_order` is a
- * jsonb blob containing the shopper's name, date of birth, email, phone and
- * medical card number. A report has no use for any of it, and pulling PII into
- * a page that renders aggregate counts is how PII ends up somewhere it was
- * never meant to be. The column list is explicit and deliberately excludes it.
- * (`order-board-server.ts` makes the same choice for the same reason.)
+ * WHAT CHANGED IN THE ALL-CHANNELS SLICE, AND WHY
+ * -----------------------------------------------
+ * The owner saw "23 online orders" and "$33,700.00 order value, avg
+ * $3,744.44 over 9" and said the ratio was way off. It was, for three
+ * reasons, all fixed here:
+ *
+ *   1. MONEY WAS 100x. Leafly's `Order.total` is already minor units; the old
+ *      `readOrderTotal` handed it to a decimal-dollar parser. It now goes
+ *      through the channels core's integer-only reader, and only from a
+ *      payload that IS the real Order (has `id`), never a webhook envelope.
+ *      `total` is used, not `totalWithTip`: the register collects `total`
+ *      (bridge-core: "the tip is not ours"); tip is reported on its own.
+ *   2. WEBSITE ORDERS WERE MISSING. This file now also reads `orders`, keeping
+ *      only real website orders (not register sales, not Leafly copies).
+ *   3. 14 OF 23 LEAFLY ROWS HAD NO VALUE. Their `raw_order` held a webhook
+ *      envelope. When the payload is missing, the order's local register copy
+ *      (built from that same `total` when the order was accepted) is used and
+ *      labelled as such; otherwise the order is counted as "value unknown",
+ *      on screen, never as $0. The cause is fixed at source in
+ *      `webhookMayWriteRawOrder` (webhook-parse-core.ts).
+ *
+ *
+ * PACIFIC TIME
+ * ------------
+ * House rule 9. Day, hour and weekday buckets are Pacific and computed HERE,
+ * so the cores stay import-free. Durations stay true UTC instants.
+ *
+ *
+ * PII
+ * ---
+ * `raw_order` and customer contact fields are read into this function only.
+ * What leaves it is an opaque SHA-256 prefix for "same customer?" and the
+ * cart lines' product names. No name, phone, email or birth date reaches the
+ * page.
  */
 import "server-only";
+import { createHash } from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { describeIncompleteness } from "@/lib/supabase/complete-read-plan-core";
-import { pacificDayKey } from "@/lib/reports/timezone";
+import { addPacificDays, pacificDayKey, pacificHour, storeWeekday } from "@/lib/reports/timezone";
+import { REGISTER_PICKED_UP_NOTE_PREFIX } from "@/lib/pos/pickup-progress-core";
 import {
   buildOnlineOrdersReport,
   type OnlineOrdersReport,
   type ReportAttemptRow,
   type ReportOrderRow,
 } from "./online-orders-report-core";
+import {
+  buildOnlineChannelsReport,
+  contactIdentity,
+  intMinorOrNull,
+  isWebsiteOrderRow,
+  leaflyOutcome,
+  readLeaflyPayloadFacts,
+  websiteOutcome,
+  type ChannelLine,
+  type ChannelOrderRow,
+  type OnlineChannelsReport,
+} from "@/lib/reports/online-orders-channels-core";
 
-/**
- * Named, and deliberately NOT `*`. See the header note on PII.
- *
- * `raw_order` is excluded on purpose. The only field a report would want from
- * it is the order total, and that is read separately below through a narrow
- * accessor rather than by dragging the whole customer record into memory.
- */
 const REPORT_ORDER_COLUMNS = [
   "leafly_order_id",
   "leafly_status",
@@ -68,6 +91,8 @@ const REPORT_ORDER_COLUMNS = [
   "first_seen_at",
   "announced_at",
   "printed_at",
+  // Read ONLY to extract totals, cart lines and a hashed identity inside
+  // this function. See the PII note above.
   "raw_order",
 ].join(", ");
 
@@ -79,6 +104,30 @@ const REPORT_ATTEMPT_COLUMNS = [
   "disposition",
   "refusal_code",
   "attempted_at",
+].join(", ");
+
+/**
+ * Website orders. Named columns only. `customer_email`/`customer_phone` are
+ * read solely to derive the hashed identity and never leave this file.
+ */
+const WEBSITE_ORDER_COLUMNS = [
+  "id",
+  "status",
+  "origin",
+  "staff_note",
+  "pos_client_uuid",
+  "placed_at",
+  "acknowledged_at",
+  "ready_at",
+  "completed_at",
+  "total_minor_units",
+  "estimated_tax_minor_units",
+  "savings_minor_units",
+  "loyalty_discount_minor_units",
+  "item_count",
+  "customer_id",
+  "customer_email",
+  "customer_phone",
 ].join(", ");
 
 type RawOrderRow = {
@@ -109,83 +158,100 @@ type RawAttemptRow = {
   attempted_at: string | null;
 };
 
-/**
- * Pull ONLY the total out of the stored payload.
- *
- * Narrow on purpose: `raw_order` holds the shopper's name, date of birth,
- * email, phone and medical card number, and none of that should travel any
- * further than this function. Returns the raw value rather than a number so
- * the core's decimal-text money parser can do the rounding — converting here
- * with `Number()` would reintroduce exactly the IEEE 754 half-cent defect the
- * core exists to avoid.
- *
- * `totalWithTip` is preferred over `total` when present because it is what the
- * shopper actually agreed to pay, and it is the figure that reconciles against
- * the register.
- */
-function readOrderTotal(raw: unknown): unknown {
-  if (raw === null || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  if (o.totalWithTip !== undefined && o.totalWithTip !== null) return o.totalWithTip;
-  if (o.total !== undefined && o.total !== null) return o.total;
-  return null;
-}
+type WebsiteRow = {
+  id: string;
+  status: string | null;
+  origin: string | null;
+  staff_note: string | null;
+  pos_client_uuid: string | null;
+  placed_at: string | null;
+  acknowledged_at: string | null;
+  ready_at: string | null;
+  completed_at: string | null;
+  total_minor_units: number | null;
+  estimated_tax_minor_units: number | null;
+  savings_minor_units: number | null;
+  loyalty_discount_minor_units: number | null;
+  item_count: number | null;
+  customer_id: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+};
 
-/**
- * Convert a UTC timestamp to a Pacific day key, preserving a usable time part.
- *
- * The core only reads the first ten characters (the date), but returning a
- * full ISO-shaped string keeps `msBetween` working for the acknowledgement
- * timings, which must stay in true UTC instants — a duration is a duration in
- * any zone, and converting those would be wrong.
- */
+type LocalCopyRow = {
+  id: string;
+  status: string | null;
+  total_minor_units: number | null;
+  item_count: number | null;
+  completed_at: string | null;
+};
+
+type PickupEventRow = { order_id: string; created_at: string | null };
+type LineRow = { order_id: string; product_name: string | null; brand: string | null; quantity: number | null; price_minor_units: number | null };
+
 function toPacificDayStamp(iso: string | null): string | null {
   if (typeof iso !== "string" || iso.trim() === "") return null;
-  const parsed = Date.parse(iso);
-  if (!Number.isFinite(parsed)) return null;
+  if (!Number.isFinite(Date.parse(iso))) return null;
   return pacificDayKey(iso);
+}
+
+function pacificBuckets(iso: string | null): { dayKey: string | null; hour: number | null; weekday: number | null } {
+  if (typeof iso !== "string" || !Number.isFinite(Date.parse(iso))) return { dayKey: null, hour: null, weekday: null };
+  return { dayKey: pacificDayKey(iso), hour: pacificHour(iso), weekday: storeWeekday(iso) };
+}
+
+/** Opaque "same customer?" key. A SHA-256 prefix, never the contact itself. */
+function hashKey(identity: string | null): string | null {
+  if (identity === null) return null;
+  return createHash("sha256").update(identity, "utf8").digest("hex").slice(0, 24);
+}
+
+/** Every Pacific day in the window, oldest first, capped at 400 days. */
+export function windowDayKeys(fromDate: string | null | undefined, toDate: string | null | undefined): string[] {
+  if (typeof fromDate !== "string" || typeof toDate !== "string") return [];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate) || fromDate > toDate) return [];
+  const out: string[] = [];
+  let d = fromDate;
+  while (d <= toDate && out.length < 400) {
+    out.push(d);
+    d = addPacificDays(d, 1);
+  }
+  return out;
 }
 
 export type OnlineOrdersReportResult = {
   ok: boolean;
   report: OnlineOrdersReport;
-  /** Human-readable explanation when something prevented a full read. */
+  channels: OnlineChannelsReport;
   notice: string | null;
 };
 
 const EMPTY_REPORT: OnlineOrdersReport = buildOnlineOrdersReport({ orders: [] });
+const EMPTY_CHANNELS: OnlineChannelsReport = buildOnlineChannelsReport({ orders: [] });
 
-/**
- * One page per round trip. Kept BELOW PostgREST's db.max_rows of 1,000 so a
- * short page always means "end of data" and never "the server clamped you" —
- * the two are indistinguishable at exactly 1,000, which is the ambiguity that
- * made the original `.limit(5000)` silently wrong.
- */
+/** Below PostgREST's db.max_rows of 1,000, so a short page means end of data. */
 const REPORT_PAGE_SIZE = 500;
-
-/**
- * A ceiling, so a mis-typed date range cannot try to pull the entire table
- * into a web request. Reaching it is reported as an incomplete read rather
- * than silently truncated — `pagedAllChecked` sets `hitCeiling` and the
- * verdict turns into an on-screen caveat.
- */
+/** A ceiling; reaching it is reported on screen, never silently truncated. */
 const REPORT_MAX_ROWS = 20_000;
+/** `.in()` chunk size for the id-keyed follow-up reads. */
+const ID_CHUNK = 200;
 
 /**
- * Load and build the Online Orders report for a window.
+ * Load both halves of the report for a window.
  *
- * NEVER THROWS. A report page that 500s tells the owner nothing; a report page
- * that renders zeroes with an explanation tells him the database is
- * unreachable, which is a different and more useful fact.
+ * NEVER THROWS. A report page that 500s tells the owner nothing.
  */
 export async function getOnlineOrdersReport(input: {
   fromISO: string;
   toISO: string;
+  fromDate?: string;
+  toDate?: string;
 }): Promise<OnlineOrdersReportResult> {
   if (!isSupabaseServiceConfigured) {
     return {
       ok: false,
       report: EMPTY_REPORT,
+      channels: EMPTY_CHANNELS,
       notice:
         "The database is not connected, so no online-order history could be read. " +
         "This is a configuration problem, not an empty week.",
@@ -194,24 +260,9 @@ export async function getOnlineOrdersReport(input: {
 
   try {
     const admin = createSupabaseAdminClient();
+    const partial: string[] = [];
 
-    // Orders in the window, by FIRST SEEN — the moment Leafly told us. Not by
-    // acknowledgement, which would drop the orders we never acknowledged, and
-    // those are precisely the ones this report exists to count.
-    // PAGED, NOT `.limit(5000)`. PostgREST clamps any single response at
-    // db.max_rows (1,000 here) and raises NO error when it does — the caller
-    // simply receives fewer rows and believes it has them all. On this
-    // particular report that failure mode is especially nasty: the rows it
-    // would silently drop are the OLDEST in the window, so a busy month would
-    // quietly under-report exactly the auto-cancelled orders the tab exists to
-    // count, and the headline would read "0 orders lost" while orders were
-    // being lost. `pagedAllChecked` walks the window in full and, crucially,
-    // returns a VERDICT saying whether it managed to — so a partial read is
-    // labelled on screen instead of being mistaken for a quiet week.
-    //
-    // This is the SLICE 5C rule, enforced mechanically by
-    // tests/compliance/slice5c-cap-relevant-reads.test.ts. It caught this
-    // exact line when the full suite ran.
+    // Leafly orders, by FIRST SEEN. Paged (SLICE 5C rule).
     const orderPage = await pagedAllChecked<RawOrderRow>(
       async (from, to) => {
         const res = await admin
@@ -220,11 +271,9 @@ export async function getOnlineOrdersReport(input: {
           .gte("first_seen_at", input.fromISO)
           .lte("first_seen_at", input.toISO)
           .order("first_seen_at", { ascending: true })
+          .order("leafly_order_id", { ascending: true })
           .range(from, to);
-        return {
-          rows: ((res.data ?? []) as unknown as RawOrderRow[]) ?? [],
-          ok: !res.error,
-        };
+        return { rows: ((res.data ?? []) as unknown as RawOrderRow[]) ?? [], ok: !res.error };
       },
       { pageSize: REPORT_PAGE_SIZE, maxRows: REPORT_MAX_ROWS },
     );
@@ -238,60 +287,211 @@ export async function getOnlineOrdersReport(input: {
           .lte("attempted_at", input.toISO)
           .order("attempted_at", { ascending: true })
           .range(from, to);
-        return {
-          rows: ((res.data ?? []) as unknown as RawAttemptRow[]) ?? [],
-          ok: !res.error,
-        };
+        return { rows: ((res.data ?? []) as unknown as RawAttemptRow[]) ?? [], ok: !res.error };
       },
       { pageSize: REPORT_PAGE_SIZE, maxRows: REPORT_MAX_ROWS },
     );
 
-    // A read that failed on its very FIRST page produced nothing, and
-    // rendering zeroes for that is indistinguishable from a genuinely empty
-    // week. Say so instead.
-    if (!orderPage.verdict.complete && orderPage.rows.length === 0) {
+    // Website orders, by PLACED AT. The server-side filter drops the bulk of
+    // register sales (origin 'greenway' + pos_client_uuid set); the pure
+    // `isWebsiteOrderRow` then drops pre-0128 sales by their staff note.
+    const websitePage = await pagedAllChecked<WebsiteRow>(
+      async (from, to) => {
+        const res = await admin
+          .from("orders")
+          .select(WEBSITE_ORDER_COLUMNS)
+          .eq("origin", "greenway")
+          .is("pos_client_uuid", null)
+          .gte("placed_at", input.fromISO)
+          .lte("placed_at", input.toISO)
+          .order("placed_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to);
+        return { rows: ((res.data ?? []) as unknown as WebsiteRow[]) ?? [], ok: !res.error };
+      },
+      { pageSize: REPORT_PAGE_SIZE, maxRows: REPORT_MAX_ROWS },
+    );
+
+    if (!orderPage.verdict.complete && orderPage.rows.length === 0 && !websitePage.verdict.complete && websitePage.rows.length === 0) {
       return {
         ok: false,
         report: EMPTY_REPORT,
+        channels: EMPTY_CHANNELS,
         notice:
           "Could not read online orders — the database read failed. This is a " +
           "connection problem, not an empty week. Refresh to try again.",
       };
     }
 
+    const websiteRows = websitePage.rows.filter((r) =>
+      isWebsiteOrderRow({ origin: r.origin, staffNote: r.staff_note, posClientUuid: r.pos_client_uuid }),
+    );
     const rawOrders = orderPage.rows;
-    const orders: ReportOrderRow[] = rawOrders.map((r) => ({
-      leaflyOrderId: r.leafly_order_id,
-      leaflyStatus: r.leafly_status,
-      fulfillmentMechanism: r.fulfillment_mechanism,
-      marketplace: r.marketplace,
-      medicalStatus: r.medical_status,
-      paymentPreference: r.payment_preference,
-      // Durations stay in TRUE UTC instants — see toPacificDayStamp's note.
-      acknowledgeBy: r.acknowledge_by,
-      acknowledgedAt: r.acknowledged_at,
-      canceledAt: r.canceled_at,
-      cancelationReasonCode: r.cancelation_reason_code,
-      localOrderId: r.local_order_id,
-      // ...but the DAY BUCKET is Pacific, or every evening order lands on
-      // tomorrow in the owner's own weekly view.
-      firstSeenAt: toPacificDayStamp(r.first_seen_at),
-      announcedAt: r.announced_at,
-      printedAt: r.printed_at,
-      totalRaw: readOrderTotal(r.raw_order),
-    }));
+    const localIds = rawOrders.map((r) => r.local_order_id).filter((x): x is string => typeof x === "string" && x !== "");
 
-    // The acknowledgement timings need the real UTC instants, which the
-    // Pacific day key above has thrown away. Rather than carry two fields
-    // through the core's row type, the timing sample is built from a second,
-    // parallel row set that keeps the instants intact. Same rows, different
-    // projection — no second query.
-    const timingRows: ReportOrderRow[] = rawOrders.map((r) => ({
-      acknowledgeBy: r.acknowledge_by,
-      acknowledgedAt: r.acknowledged_at,
-      firstSeenAt: r.first_seen_at,
-    }));
+    // ── id-keyed follow-up reads (each chunk paged; failures flagged) ──────
+    const readChunked = async <Row,>(
+      ids: readonly string[],
+      label: string,
+      page: (chunk: string[], from: number, to: number) => Promise<{ rows: Row[]; ok: boolean }>,
+    ): Promise<Row[]> => {
+      const out: Row[] = [];
+      const unique = [...new Set(ids)];
+      for (let i = 0; i < unique.length; i += ID_CHUNK) {
+        const chunk = unique.slice(i, i + ID_CHUNK);
+        const res = await pagedAllChecked<Row>((from, to) => page(chunk, from, to), {
+          pageSize: REPORT_PAGE_SIZE,
+          maxRows: REPORT_MAX_ROWS,
+        });
+        out.push(...res.rows);
+        if (!res.verdict.complete) {
+          partial.push(label);
+          break;
+        }
+      }
+      return out;
+    };
 
+    // Online orders closed by a register sale (SLICE L-37): "cancelled" in the
+    // database, "picked up" in truth.
+    const pickupEvents = await readChunked<PickupEventRow>(
+      [...websiteRows.map((r) => r.id), ...localIds],
+      "register pickups",
+      async (chunk, from, to) => {
+        const res = await admin
+          .from("order_events")
+          .select("order_id, created_at")
+          .in("order_id", chunk)
+          .eq("event_type", "status_changed")
+          .eq("to_status", "cancelled")
+          .like("note", `${REGISTER_PICKED_UP_NOTE_PREFIX}%`)
+          .order("id", { ascending: true })
+          .range(from, to);
+        return { rows: ((res.data ?? []) as unknown as PickupEventRow[]) ?? [], ok: !res.error };
+      },
+    );
+    const pickedUpAt = new Map<string, string | null>();
+    for (const e of pickupEvents) if (!pickedUpAt.has(e.order_id)) pickedUpAt.set(e.order_id, e.created_at);
+
+    const localCopies = await readChunked<LocalCopyRow>(localIds, "Leafly register copies", async (chunk, from, to) => {
+      const res = await admin
+        .from("orders")
+        .select("id, status, total_minor_units, item_count, completed_at")
+        .in("id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return { rows: ((res.data ?? []) as unknown as LocalCopyRow[]) ?? [], ok: !res.error };
+    });
+    const localById = new Map(localCopies.map((c) => [c.id, c]));
+
+    const lineRows = await readChunked<LineRow>(
+      websiteRows.map((r) => r.id),
+      "website order lines",
+      async (chunk, from, to) => {
+        const res = await admin
+          .from("order_lines")
+          .select("order_id, product_name, brand, quantity, price_minor_units")
+          .in("order_id", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+        return { rows: ((res.data ?? []) as unknown as LineRow[]) ?? [], ok: !res.error };
+      },
+    );
+    const linesByOrder = new Map<string, ChannelLine[]>();
+    for (const l of lineRows) {
+      const q = typeof l.quantity === "number" && Number.isInteger(l.quantity) && l.quantity > 0 ? l.quantity : 1;
+      const unit = intMinorOrNull(l.price_minor_units);
+      const list = linesByOrder.get(l.order_id) ?? [];
+      list.push({ name: l.product_name ?? "Unnamed item", brand: l.brand, category: null, quantity: q, lineMinor: unit === null ? null : unit * q });
+      linesByOrder.set(l.order_id, list);
+    }
+
+    // ── the unified rows ──────────────────────────────────────────────────
+    const channelRows: ChannelOrderRow[] = [];
+
+    for (const w of websiteRows) {
+      const pickup = pickedUpAt.has(w.id);
+      const outcome = websiteOutcome(w.status, pickup);
+      const identity =
+        contactIdentity(w.customer_email, w.customer_phone) ??
+        (typeof w.customer_id === "string" && w.customer_id !== "" ? `c:${w.customer_id}` : null);
+      channelRows.push({
+        channel: "website",
+        id: w.id,
+        placedAt: w.placed_at,
+        ...pacificBuckets(w.placed_at),
+        outcome,
+        totalMinor: intMinorOrNull(w.total_minor_units),
+        totalSource: intMinorOrNull(w.total_minor_units) === null ? null : "order",
+        taxMinor: intMinorOrNull(w.estimated_tax_minor_units),
+        discountMinor: intMinorOrNull(w.savings_minor_units),
+        loyaltyDiscountMinor: intMinorOrNull(w.loyalty_discount_minor_units),
+        itemCount: intMinorOrNull(w.item_count),
+        acknowledgedAt: w.acknowledged_at,
+        readyAt: w.ready_at,
+        fulfilledAt: pickup ? (pickedUpAt.get(w.id) ?? null) : outcome === "fulfilled" ? w.completed_at : null,
+        customerKey: hashKey(identity),
+        lines: linesByOrder.get(w.id) ?? [],
+      });
+    }
+
+    const leaflyContractRows: ReportOrderRow[] = [];
+    for (const r of rawOrders) {
+      const facts = readLeaflyPayloadFacts(r.raw_order);
+      const local = r.local_order_id ? localById.get(r.local_order_id) : undefined;
+      const localPickedUp = r.local_order_id ? pickedUpAt.has(r.local_order_id) : false;
+      const localFulfilled = localPickedUp || local?.status === "completed";
+      const localTotal = local ? intMinorOrNull(local.total_minor_units) : null;
+      const totalMinor = facts.totalMinor ?? localTotal;
+      const totalSource = facts.totalMinor !== null ? "leafly_payload" : localTotal !== null ? "register_copy" : null;
+
+      leaflyContractRows.push({
+        leaflyOrderId: r.leafly_order_id,
+        leaflyStatus: r.leafly_status,
+        fulfillmentMechanism: r.fulfillment_mechanism,
+        marketplace: r.marketplace,
+        medicalStatus: r.medical_status,
+        paymentPreference: r.payment_preference,
+        acknowledgeBy: r.acknowledge_by,
+        acknowledgedAt: r.acknowledged_at,
+        canceledAt: r.canceled_at,
+        cancelationReasonCode: r.cancelation_reason_code,
+        localOrderId: r.local_order_id,
+        firstSeenAt: toPacificDayStamp(r.first_seen_at),
+        announcedAt: r.announced_at,
+        printedAt: r.printed_at,
+        totalMinorUnits: totalMinor,
+      });
+
+      channelRows.push({
+        channel: "leafly",
+        id: r.leafly_order_id ?? "",
+        placedAt: r.first_seen_at,
+        ...pacificBuckets(r.first_seen_at),
+        outcome: leaflyOutcome({
+          leaflyStatus: r.leafly_status,
+          cancelationReasonCode: r.cancelation_reason_code,
+          canceledAt: r.canceled_at,
+          localFulfilled,
+        }),
+        totalMinor,
+        totalSource,
+        taxMinor: facts.taxMinor,
+        discountMinor: facts.discountMinor,
+        tipMinor: facts.tipMinor,
+        itemCount: facts.itemCount ?? (local ? intMinorOrNull(local.item_count) : null),
+        acknowledgedAt: r.acknowledged_at,
+        readyAt: facts.readyAt,
+        fulfilledAt:
+          facts.pickedUpAt ??
+          (localPickedUp ? (pickedUpAt.get(r.local_order_id as string) ?? null) : local?.status === "completed" ? local.completed_at : null),
+        customerKey: hashKey(contactIdentity(facts.email, facts.phone)),
+        lines: facts.lines,
+      });
+    }
+
+    // The Leafly contract report. Day buckets are Pacific; the timing overlay
+    // below uses the true UTC instants.
     const attempts: ReportAttemptRow[] = attemptPage.rows.map((a) => ({
       leaflyOrderId: a.leafly_order_id,
       operation: a.operation,
@@ -301,35 +501,39 @@ export async function getOnlineOrdersReport(input: {
       refusalCode: a.refusal_code,
       attemptedAt: a.attempted_at,
     }));
-
-    const report = buildOnlineOrdersReport({ orders, attempts });
-
-    // Overlay the UTC-accurate acknowledgement timings.
-    const timing = buildOnlineOrdersReport({ orders: timingRows });
+    const report = buildOnlineOrdersReport({ orders: leaflyContractRows, attempts });
+    const timing = buildOnlineOrdersReport({
+      orders: rawOrders.map((r) => ({
+        acknowledgeBy: r.acknowledge_by,
+        acknowledgedAt: r.acknowledged_at,
+        firstSeenAt: r.first_seen_at,
+      })),
+    });
     report.acknowledgement = timing.acknowledgement;
 
-    // An INCOMPLETE read must be labelled, never presented as fact. This
-    // report is advisory (nobody acts on it automatically), so partial data is
-    // allowed on screen — but only with the caveat attached, because every
-    // number below is then a floor rather than a count.
-    const ordersNotice = describeIncompleteness(orderPage.verdict, "online orders");
-    const attemptsNotice = attemptPage.verdict.complete
-      ? null
-      : "Order history loaded, but the outbound call log could not be read in " +
-        "full, so the delivery-health counts below are a floor, not a total.";
+    const channels = buildOnlineChannelsReport({
+      orders: channelRows,
+      dayKeys: windowDayKeys(input.fromDate, input.toDate),
+    });
 
-    const notice =
-      [ordersNotice, attemptsNotice].filter((n): n is string => typeof n === "string").join(" ") ||
-      null;
+    const notices = [
+      describeIncompleteness(orderPage.verdict, "Leafly orders"),
+      describeIncompleteness(websitePage.verdict, "website orders"),
+      attemptPage.verdict.complete
+        ? null
+        : "The outbound call log could not be read in full, so the delivery-health counts are a floor, not a total.",
+      partial.length > 0
+        ? `Some detail could not be read in full (${[...new Set(partial)].join(", ")}), so figures that depend on it are a floor.`
+        : null,
+    ].filter((n): n is string => typeof n === "string" && n !== "");
 
-    return { ok: true, report, notice };
+    return { ok: true, report, channels, notice: notices.join(" ") || null };
   } catch (err) {
     return {
       ok: false,
       report: EMPTY_REPORT,
-      notice: `Could not build the report: ${
-        err instanceof Error ? err.message : "unknown error"
-      }`,
+      channels: EMPTY_CHANNELS,
+      notice: `Could not build the report: ${err instanceof Error ? err.message : "unknown error"}`,
     };
   }
 }

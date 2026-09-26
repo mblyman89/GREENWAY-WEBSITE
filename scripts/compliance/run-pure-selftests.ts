@@ -317,6 +317,8 @@ import { __runLeaflyOrderDetailTests } from "../../src/lib/leafly/order-detail-c
 // instead of being killed mid-render.
 import { __selfTestDbDeadlineCore } from "../../src/lib/leafly/db-deadline-core";
 import { __runOnlineOrdersReportTests } from "../../src/lib/leafly/online-orders-report-core";
+// ONLINE ORDERS ALL-CHANNELS -- website vs Leafly comparison core.
+import { __runOnlineChannelsReportTests } from "../../src/lib/reports/online-orders-channels-core";
 import { __runLeaflyStaffAlertTests } from "../../src/lib/leafly/staff-alert-core";
 import { __runLeaflyOrderFetchTests } from "../../src/lib/leafly/order-fetch-core";
 // SLICE M-2 -- readiness. An order can be silent for reasons that are not
@@ -1083,7 +1085,13 @@ __runLiquidVolumeTests();
   // facing communications" and only speaks when we report a transition.
   // Every rate is null-on-empty-denominator, never 0: "0% on time" and "no
   // orders yet" demand opposite reactions. Measured at 154.
-  assertRan("leafly-online-orders-report-core", __runOnlineOrdersReportTests(), 145);
+  // ONLINE ORDERS ALL-CHANNELS raised 145 -> 169: Leafly money is now read as
+  // INTEGER minor units (the $33,700-for-$337 defect), 13 new assertions.
+  assertRan("leafly-online-orders-report-core", __runOnlineOrdersReportTests(), 169);
+  // ONLINE ORDERS ALL-CHANNELS. Website vs Leafly: classification (register
+  // sales and Leafly copies are NOT website orders), one outcome vocabulary,
+  // integer-only Leafly money from collected payloads only. Measured at 96.
+  assertRan("online-orders-channels-core", __runOnlineChannelsReportTests(), 96);
   // STANDING OFFER 2 (round L-24). The staff alert, deliberately built to fire
   // ONLY when the speaker/printer/register channels the owner relies on have
   // failed -- he said plainly "I don't need an email sent to us". An alert on
