@@ -71,6 +71,7 @@ import { __runRichnessTests } from "@/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "@/lib/syndication/sync-settings-core";
 import { __runApplySettingsTests } from "@/lib/syndication/apply-settings-core";
 import { __runSyndicationPlaybookTests } from "@/lib/integrations/syndication-playbook";
+import { __runLeaflyOrderCartTests } from "@/lib/leafly/order-cart-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -523,5 +524,14 @@ describe("embedded pure self-test suites", () => {
   });
   it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {
     expect(() => __runSyndicationPlaybookTests()).not.toThrow();
+  });
+  it("leafly-order-cart-core (SLICE L-48: changing a Leafly order's items)", () => {
+    // Floor 125 from a measured 128. Leafly's cart update is all-or-nothing
+    // and REMOVES any item left out of the body, so the refusals (unreadable
+    // line, stale screen, delivery, register hold, out of stock, unapproved
+    // price) matter as much as the happy paths.
+    const r = __runLeaflyOrderCartTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(125);
   });
 });

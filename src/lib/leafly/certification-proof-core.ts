@@ -326,7 +326,7 @@ export const LEAFLY_PROOF_ACTIONS: readonly ProofActionDef[] = [
     endpoint: "POST /{order_integration_key}/orders/{id}/cart",
     requirement: "optional",
     source: `${ORDER_TABLE}: Update Order's Cart \u2014 \u201cSuccessful updates of cart contents, taxes, delivery fees\u201d \u2014 Optional`,
-    howToProve: "Change a line on a sandbox test order and send the change to Leafly.",
+    howToProve: "On a sandbox test order that has been acknowledged, open it on Orders (or at the register), press \u201cChange items\u201d, change one line, review and send it.",
     provenBy: "A cart update Leafly answered with 200.",
   },
   // ── Lifecycle (spec: "both terminal states") ─────────────────────────────
