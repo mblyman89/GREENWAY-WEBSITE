@@ -1,5 +1,5 @@
 /**
- * POST /api/announcer/poll  (SLICE 28)
+ * POST /api/announcer/poll  (SLICE 28, cost-shaped in USAGE-1)
  *
  * The long-poll a Raspberry Pi lives inside.
  *
@@ -7,7 +7,8 @@
  * ------------------
  * The Pi opens this request and the server holds it for up to
  * POLL_HOLD_SECONDS (25) waiting for work. If work appears, it answers
- * immediately; otherwise it answers "nothing" and the Pi asks again at once.
+ * immediately; otherwise it answers "nothing" and the Pi rests for
+ * `idleRestSeconds` (POLL_IDLE_REST_SECONDS) before asking again.
  *
  * 25 seconds is not arbitrary. The longest maxDuration anywhere in this
  * repository is 60 (src/app/api/pos/sync/route.ts), and a request that
@@ -25,6 +26,28 @@
  * this route is NOT behind the admin middleware (its matcher is /admin/:path*)
  * so a headless Pi can reach it without a Supabase session. The device key IS
  * the credential and the route fails closed without a valid one.
+ *
+ * WHAT USAGE-1 CHANGED, AND WHY (2026-09-26)
+ * ------------------------------------------
+ * The owner received usage warnings from Vercel and from Supabase (egress).
+ * This route was the single largest always-on consumer of both:
+ *
+ *   • It looked for work every ONE second while holding — 25 RPC calls per
+ *     hold, ~86,000 per idle speaker per day, at every hour of the night.
+ *   • It rewrote `last_seen_at` on EVERY poll — one UPDATE per 25 seconds
+ *     that changed nothing anybody could see.
+ *   • The Pi reconnected the instant a hold ended, so one Vercel instance was
+ *     alive 24 hours a day. Fluid compute bills provisioned memory for the
+ *     whole time a request is in flight, including while it sleeps.
+ *
+ * Now: the check interval is POLL_CHECK_INTERVAL_SECONDS (5); the heartbeat
+ * write is skipped while the stamp is fresher than
+ * HEARTBEAT_WRITE_INTERVAL_SECONDS; and the response carries
+ * `idleRestSeconds` so a current agent rests between empty polls. The
+ * constants and the inequality that keeps the dot green live in
+ * announcer-core.ts and are self-tested there. Older agents (v1.1.0) ignore
+ * the new field and keep working — they just do not get the saving until the
+ * installer is re-run.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import {
@@ -40,7 +63,11 @@ import {
   unavailable,
   type AnnouncerJob,
 } from "@/lib/announcer/announcer-protocol-core";
-import { POLL_HOLD_SECONDS } from "@/lib/announcer/announcer-core";
+import {
+  POLL_CHECK_INTERVAL_SECONDS,
+  POLL_HOLD_SECONDS,
+  POLL_IDLE_REST_SECONDS,
+} from "@/lib/announcer/announcer-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,14 +76,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * How often we look for work while holding the connection.
- *
- * One second is the whole latency budget the shop actually feels: an order
- * lands, and at worst a second later the speaker starts. Polling the database
- * more often than that would buy nothing a human can perceive and would cost
- * 25 pointless queries per device per cycle.
+ * How often we look for work while holding the connection. See
+ * POLL_CHECK_INTERVAL_SECONDS for the reasoning; the first check is immediate.
  */
-const CHECK_INTERVAL_MS = 1000;
+const CHECK_INTERVAL_MS = POLL_CHECK_INTERVAL_SECONDS * 1000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -91,12 +114,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const holdSeconds = resolveHoldSeconds(b.holdSeconds);
   const limit = resolveJobLimit(b.limit);
 
-  // The heartbeat happens on EVERY poll, before any work is looked for. This
-  // is what keeps the dot green, and it must not depend on there being work or
-  // on the claim succeeding — a device that is healthy but idle is the normal
-  // state, and a device that is healthy but hitting a claim error still needs
-  // to show as alive so the owner debugs the right thing.
-  await touchDevice(device.id, undefined);
+  // The heartbeat is CONSIDERED on every poll, before any work is looked for,
+  // and WRITTEN only when the stamp we just read during authentication is old
+  // enough to matter (HEARTBEAT_WRITE_INTERVAL_SECONDS). This is what keeps
+  // the dot green, and it must not depend on there being work or on the claim
+  // succeeding — a device that is healthy but idle is the normal state.
+  await touchDevice(device.id, undefined, device.last_seen_at);
 
   // A DISABLED speaker still gets a clean, successful, immediate answer rather
   // than being held for 25 seconds for work it will never be given. It stays
@@ -107,6 +130,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         jobs: [],
         serverTime: new Date().toISOString(),
         pollHoldSeconds: POLL_HOLD_SECONDS,
+        idleRestSeconds: POLL_IDLE_REST_SECONDS,
         deviceName: device.name,
         enabled: false,
       },
@@ -118,8 +142,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let jobs: AnnouncerJob[] = [];
   let lastError: string | null = null;
 
-  // Check once immediately, so a queued announcement is not made to wait a
-  // second for the first tick.
+  // Check once immediately, so a queued announcement is not made to wait for
+  // the first tick.
   for (;;) {
     const claim = await claimWork(device.id, limit);
     if (claim.ok) {
@@ -148,6 +172,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       jobs,
       serverTime: new Date().toISOString(),
       pollHoldSeconds: POLL_HOLD_SECONDS,
+      // A poll that found work should be followed at once (there may be
+      // more); an empty one should rest. The agent decides which, from `jobs`.
+      idleRestSeconds: POLL_IDLE_REST_SECONDS,
       deviceName: device.name,
       enabled: true,
     },

@@ -25,6 +25,10 @@ import {
   type EscposReceiptLine,
 } from "@/lib/printing/receipt-escpos-core";
 import { type OrderOrigin } from "@/lib/orders/order-origin-core";
+import {
+  PRINTER_ONLINE_WINDOW_MS,
+  shouldWritePrinterHeartbeat,
+} from "@/lib/printing/printer-heartbeat-core";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import {
   MAX_FAILS_PER_CLAIM,
@@ -73,17 +77,35 @@ export type ReceiptJob = {
   updated_at: string;
 };
 
+/**
+ * USAGE-1: explicit column lists instead of `select("*")`.
+ *
+ * The CloudPRNT poll reads the settings row and a job candidate on EVERY poll,
+ * so these two selects are the hottest reads in the printing path. Naming the
+ * columns (which mirror the `PrinterSettings` / `ReceiptJob` types and
+ * migration 0047 exactly) keeps a future wide column -- a logo blob, a long
+ * note -- from silently riding along on every poll and inflating egress. The
+ * claim candidate query additionally omits `body_text`, the one wide column on
+ * the jobs table, because the claim step never reads it; the printer fetches
+ * the body separately by token in the GET step.
+ */
+const PRINTER_SETTINGS_COLUMNS =
+  "id, poll_token, printer_mac, printer_label, auto_print_orders, paper_columns, header_text, footer_text, last_poll_at, last_status_code, created_at, updated_at";
+const RECEIPT_JOB_COLUMNS =
+  "id, order_id, order_number, body_text, title, status, job_token, attempts, error_note, queued_at, claimed_at, printed_at, created_at, updated_at";
+const RECEIPT_JOB_CLAIM_CANDIDATE_COLUMNS = "id, status, job_token, attempts, queued_at, claimed_at";
+
 /** Read the singleton printer settings row (or null if unconfigured). */
 export async function getPrinterSettings(): Promise<PrinterSettings | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("receipt_printer_settings")
-    .select("*")
+    .select(PRINTER_SETTINGS_COLUMNS)
     .eq("id", 1)
     .maybeSingle();
   if (error || !data) return null;
-  return data as PrinterSettings;
+  return data as unknown as PrinterSettings;
 }
 
 export type PrinterSettingsUpdate = Partial<{
@@ -310,12 +332,15 @@ export async function claimNextJob(): Promise<ReceiptJob | null> {
     const staleCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
     const { data: candidates } = await admin
       .from("receipt_print_jobs")
-      .select("*")
+      .select(RECEIPT_JOB_CLAIM_CANDIDATE_COLUMNS)
       .or(`status.eq.queued,and(status.eq.printing,claimed_at.lt.${staleCutoff})`)
       .order("queued_at", { ascending: true })
       .limit(1);
 
-    const job = (candidates?.[0] as ReceiptJob | undefined) ?? null;
+    const job =
+      (candidates?.[0] as
+        | Pick<ReceiptJob, "id" | "status" | "job_token" | "attempts" | "queued_at" | "claimed_at">
+        | undefined) ?? null;
     if (!job) return null;
 
     if (hasExhaustedPrintAttempts(job.attempts)) {
@@ -339,10 +364,10 @@ export async function claimNextJob(): Promise<ReceiptJob | null> {
         attempts: job.attempts + 1,
       })
       .eq("id", job.id)
-      .select("*")
+      .select(RECEIPT_JOB_COLUMNS)
       .maybeSingle();
     if (error || !data) return null;
-    return data as ReceiptJob;
+    return data as unknown as ReceiptJob;
   }
   return null;
 }
@@ -413,14 +438,38 @@ export function isPrinterOnline(lastPollAt: string | null): boolean {
   if (!lastPollAt) return false;
   const t = new Date(lastPollAt).getTime();
   if (Number.isNaN(t)) return false;
-  return Date.now() - t < 90 * 1000;
+  return Date.now() - t < PRINTER_ONLINE_WINDOW_MS;
 }
 
+/**
+ * USAGE-1: the printer polls forever, and every poll used to UPSERT the
+ * settings row just to move `last_poll_at`. The online indicator only needs
+ * the stamp to be fresher than 90s (`isPrinterOnline`), so a write every ~40s
+ * carries exactly the same information. Policy lives in
+ * printer-heartbeat-core (pure, self-tested).
+ */
 export async function recordHeartbeat(params: {
   printerMac?: string | null;
   statusCode?: string | null;
+  /**
+   * The settings row the caller already read for auth. When provided, the
+   * write is throttled (see shouldWritePrinterHeartbeat). When omitted the
+   * heartbeat always writes, exactly as before.
+   */
+  current?: PrinterSettings | null;
 }): Promise<void> {
   if (!isSupabaseServiceConfigured) return;
+  if (
+    params.current !== undefined &&
+    !shouldWritePrinterHeartbeat({
+      current: params.current,
+      printerMac: params.printerMac ?? null,
+      statusCode: params.statusCode ?? null,
+      nowMs: Date.now(),
+    })
+  ) {
+    return;
+  }
   const admin = createSupabaseAdminClient();
   const patch: Record<string, unknown> = {
     id: 1,
