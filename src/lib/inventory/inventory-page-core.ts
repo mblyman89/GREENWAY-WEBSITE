@@ -57,6 +57,23 @@ import {
   type SortDirection,
 } from "@/lib/inventory/inventory-sort-core";
 import { currentSort, type RawParams } from "@/lib/inventory/inventory-url-core";
+import { isLotOnLeafly } from "@/lib/inventory/leafly-badge-core";
+
+/**
+ * Owner request: a "Leafly" tab beside Active / Sold out.
+ *
+ * "Leafly" is NOT a lot status (inventory_lots.status is only ever active,
+ * quarantine, recalled, sold_out or destroyed). It is the same fact the
+ * LEAFLY badge shows: the lot's product key is in our record of what Leafly
+ * accepted (leafly-badge-core.ts). So the tab rides on the `status` URL key,
+ * like every other tab, but it is matched with `isLotOnLeafly`, never against
+ * `lot.status`. One definition drives the badge and the tab, so the tab can
+ * never list a lot without the badge, or hide a lot that has it.
+ *
+ * FAILS CLOSED, like the badge. With no Leafly record, the tab lists nothing
+ * rather than guessing.
+ */
+export const LEAFLY_STATUS_TAB = "leafly";
 
 /**
  * A lot as this page sees it: everything the filters read, plus the raw
@@ -128,6 +145,18 @@ function gapRow(lot: PageLot): LotGapRow {
   };
 }
 
+const EMPTY_KEYS: ReadonlySet<string> = new Set<string>();
+
+/** How many lots the Leafly tab would list with no other knob engaged. */
+export function countLeaflyLots(
+  lots: readonly Pick<PageLot, "pos_product_key">[],
+  leaflyKeys: ReadonlySet<string>,
+): number {
+  let n = 0;
+  for (const l of lots) if (isLotOnLeafly(l.pos_product_key, leaflyKeys)) n += 1;
+  return n;
+}
+
 /**
  * Apply the legacy knobs. Each clause mirrors the PostgREST expression quoted
  * beside it (store.ts `listLotsPaged`).
@@ -136,9 +165,15 @@ export function matchesLegacyFilters(
   lot: PageLot,
   state: LegacyFilterState,
   now: Date,
+  leaflyKeys: ReadonlySet<string> = EMPTY_KEYS,
 ): boolean {
-  // .eq("status", opts.status) — skipped entirely when status is "all"
-  if (state.status && state.status !== "all" && lot.status !== state.status) return false;
+  if (state.status === LEAFLY_STATUS_TAB) {
+    // The Leafly tab: the badge's own rule, across every lifecycle status.
+    if (!isLotOnLeafly(lot.pos_product_key, leaflyKeys)) return false;
+  } else if (state.status && state.status !== "all" && lot.status !== state.status) {
+    // .eq("status", opts.status) — skipped entirely when status is "all"
+    return false;
+  }
 
   // .eq("vendor_id", opts.vendorId)
   if (state.vendorId && lot.vendor_id !== state.vendorId) return false;
@@ -243,6 +278,8 @@ export type InventoryPageInput = {
   page: number;
   pageSize: number;
   now: Date;
+  /** Product keys recorded as on Leafly. Absent = none (the tab lists nothing). */
+  leaflyKeys?: ReadonlySet<string>;
 };
 
 export type InventoryPageResult = InventoryListResult<PageLot> & {
@@ -270,7 +307,9 @@ export function buildInventoryPage(input: InventoryPageInput): InventoryPageResu
   const legacy = parseLegacyFilters(input.params);
   const filters = parseInventoryFilters(input.params);
 
-  const facetSource = input.lots.filter((l) => matchesLegacyFilters(l, legacy, input.now));
+  const facetSource = input.lots.filter((l) =>
+    matchesLegacyFilters(l, legacy, input.now, input.leaflyKeys ?? EMPTY_KEYS),
+  );
 
   const cur = currentSort(input.params);
   const column = cur ? columnSortDef(cur.key) ?? null : null;
@@ -614,6 +653,47 @@ export function __runInventoryPageCoreTests(): void {
     "the badge counts each engaged filter",
   );
   ok(all.activeFilterCount === 0, "no filters means no badge");
+
+  // ---- Leafly tab (owner request): the badge rule, not lot.status
+  {
+    const keys = new Set(["POS-L1", "POS-L3"]);
+    const lf = [
+      __testPageLot({ id: "l1", pos_product_key: "POS-L1", status: "active" }),
+      __testPageLot({ id: "l2", pos_product_key: "POS-L2", status: "active" }),
+      __testPageLot({ id: "l3", pos_product_key: " POS-L3 ", status: "sold_out" }),
+      __testPageLot({ id: "l4", pos_product_key: null as unknown as string, status: "active" }),
+      __testPageLot({ id: "l5", pos_product_key: "", status: "active" }),
+    ];
+    const tab = buildInventoryPage({ lots: lf, params: { status: "leafly" }, page: 1, pageSize: 50, now: NOW, leaflyKeys: keys });
+    ok(tab.total === 2, "leafly tab lists exactly the lots with the badge");
+    ok(tab.rows.map((r) => r.id).sort().join(",") === "l1,l3", "leafly tab picks l1 and l3");
+    ok(tab.rows.some((r) => r.status === "sold_out"), "leafly tab spans lifecycle statuses");
+    ok(tab.facetSource.length === 2, "facets are built inside the leafly tab");
+    const noKeys = buildInventoryPage({ lots: lf, params: { status: "leafly" }, page: 1, pageSize: 50, now: NOW });
+    ok(noKeys.total === 0, "no Leafly record: the tab fails closed");
+    const emptyKeys = buildInventoryPage({ lots: lf, params: { status: "leafly" }, page: 1, pageSize: 50, now: NOW, leaflyKeys: new Set() });
+    ok(emptyKeys.total === 0, "empty Leafly record: the tab lists nothing");
+    const act = buildInventoryPage({ lots: lf, params: { status: "active" }, page: 1, pageSize: 50, now: NOW, leaflyKeys: keys });
+    ok(act.total === 4, "keys do not change the active tab");
+    const allTab = buildInventoryPage({ lots: lf, params: {}, page: 1, pageSize: 50, now: NOW, leaflyKeys: keys });
+    ok(allTab.total === 5, "keys do not change the all tab");
+    const stacked = buildInventoryPage({ lots: lf, params: { status: "leafly", q: "zzzz-nothing" }, page: 1, pageSize: 50, now: NOW, leaflyKeys: keys });
+    ok(stacked.rows.every((r) => r.id === "l1" || r.id === "l3"), "search runs inside the leafly tab");
+    const paged = buildInventoryPage({ lots: lf, params: { status: "leafly" }, page: 2, pageSize: 1, now: NOW, leaflyKeys: keys });
+    ok(paged.total === 2 && paged.totalPages === 2 && paged.rows.length === 1, "leafly tab pages honestly");
+    ok(countLeaflyLots(lf, keys) === 2, "tab count equals the tab's list");
+    ok(countLeaflyLots(lf, new Set()) === 0, "tab count is 0 with no record");
+    ok(countLeaflyLots([], keys) === 0, "tab count is 0 with no lots");
+    ok(LEAFLY_STATUS_TAB === "leafly", "tab key is leafly");
+    ok(
+      matchesLegacyFilters(lf[0]!, parseLegacyFilters({ status: "leafly", sample: "yes" }), NOW, keys) === false,
+      "other legacy knobs still apply inside the leafly tab",
+    );
+    ok(
+      matchesLegacyFilters(__testPageLot({ status: "leafly" as string, pos_product_key: "X" }), parseLegacyFilters({ status: "leafly" }), NOW, keys) === false,
+      "a lot is never matched by a literal 'leafly' status",
+    );
+  }
 
   console.log(`inventory-page-core: ${n} assertions passed`);
 }
