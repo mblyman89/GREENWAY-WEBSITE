@@ -266,8 +266,20 @@ async function relatedItemsFor(
 }
 
 // The menu is dynamic (published DB version), so product pages are NOT
-// pre-generated from a frozen snapshot: no generateStaticParams, and an
-// unknown id still 404s through getMenuItemById → notFound().
+// pre-generated from a frozen snapshot at build time: generateStaticParams
+// returns an EMPTY list, every product renders the first time it is visited,
+// and an unknown id still 404s through getMenuItemById → notFound()
+// (dynamicParams stays at its default, true).
+//
+// USAGE-5f — WHY THE EMPTY generateStaticParams IS REQUIRED.
+// `revalidate = 60` alone did nothing here. After the USAGE-5 merge the build
+// output still listed this route as "ƒ (Dynamic) server-rendered on demand" and
+// production still answered `x-vercel-cache: MISS` for every product URL,
+// while /specials, /loyalty and /medical (no dynamic segment) went to HIT.
+// Next.js docs, generateStaticParams → "All paths at runtime": "To statically
+// render all paths the first time they're visited, return an empty array …
+// You must always return an array from generateStaticParams, even if it's
+// empty. Otherwise, the route will be dynamically rendered."
 //
 // USAGE-5 — WHY THIS IS NO LONGER `force-dynamic`.
 // Measured on production (greenwaywebsite1.vercel.app, 2026-09-27): all 811
@@ -285,6 +297,17 @@ async function relatedItemsFor(
 // repriceOrderLines at order placement (menu-cache-policy-core.ts, "Product
 // detail" surface), which is the same argument that made the shop cacheable.
 export const revalidate = 60;
+
+/**
+ * Empty on purpose: nothing is rendered at build time (a build must never pull
+ * the menu, and 811+ product renders per deploy would be its own bleed), but
+ * returning an array is what switches this dynamic segment from "server-render
+ * every request" to "render once, serve from the cache for `revalidate`
+ * seconds". See the USAGE-5f note above.
+ */
+export function generateStaticParams(): Array<{ id: string }> {
+  return [];
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;

@@ -84,9 +84,16 @@ describe("USAGE-5 · the product page (dynamic segment) is cleared by every menu
     expect(helper).toContain("PUBLIC_MENU_PAGE_PATTERNS");
   });
 
-  it("the product page is not pre-generated (no generateStaticParams) and still 404s unknown ids", () => {
+  it("the product page renders at runtime, not at build: generateStaticParams returns an EMPTY array (USAGE-5f)", () => {
+    // Measured after the USAGE-5 merge: `revalidate = 60` alone left this
+    // dynamic-segment route "ƒ (Dynamic)" in the build output and MISS on every
+    // production hit. Next.js: "You must always return an array from
+    // generateStaticParams, even if it's empty. Otherwise, the route will be
+    // dynamically rendered." An empty array = no build-time menu pull.
     const code = stripComments(read("src/app/menu/products/[id]/page.tsx"));
-    expect(code).not.toContain("generateStaticParams");
+    expect(code).toMatch(/export function generateStaticParams\(\): Array<\{ id: string \}> \{\s*return \[\];\s*\}/);
+    // Unknown ids must still reach the page and 404 there — never a frozen list.
+    expect(code).not.toMatch(/export const dynamicParams\s*=\s*false/);
     expect(code).toContain("if (!baseItem) notFound();");
   });
 
