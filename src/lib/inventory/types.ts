@@ -173,6 +173,14 @@ export type InventoryLot = {
   otherwise_taken: boolean | null;
   /** Units inside one sellable package; the 10-unit limit counts in units. */
   units_per_package: number | null;
+  /**
+   * S04 (migration 0234): the S03 product identity of this lot and its link
+   * to the knowledge-base product. Optional - absent on databases where 0234
+   * hasn't run, and on reads whose named column list does not include them.
+   * ADDITIVE evidence only: pos_product_key stays the matching key.
+   */
+  identity_key?: string | null;
+  kb_product_id?: string | null;
   status: string; // active | quarantine | recalled | sold_out | destroyed
   notes: string | null;
   created_by: string | null;

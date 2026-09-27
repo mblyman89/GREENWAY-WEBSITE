@@ -1721,6 +1721,10 @@ export type KbProductRow = {
   total_thc_pct?: number | null;
   total_cbd_pct?: number | null;
   potency_source?: string | null;
+  // S04 identity (migration 0234). Optional so the type is valid
+  // pre-migration; NOT in KB_PRODUCT_BASE_COLS/FULL_COLS, so no existing
+  // read names a column that may not exist yet.
+  identity_key?: string | null;
 };
 
 const KB_PRODUCT_BASE_COLS =

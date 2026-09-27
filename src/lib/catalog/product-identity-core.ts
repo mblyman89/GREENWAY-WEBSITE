@@ -306,7 +306,9 @@ export type IdentityShadowSummary = {
  * Pure summary for the console-only shadow log. Inputs are data the drafts
  * page ALREADY holds (drafts, approved history, live keys) — zero queries.
  * The "vice-versa" half (pos key live but identity differs) needs the live
- * card's identity and is deferred to S04, when identity_key is stamped.
+ * card's identity. S04 (migration 0234) created menu_items.identity_key to
+ * hold it; the half stays deferred until a later slice stamps that column,
+ * because computing it here would mean reading the whole live menu.
  */
 export function summarizeIdentityShadow(input: {
   drafts: Array<{ posProductKey: string | null; identity: IdentityInput }>;
