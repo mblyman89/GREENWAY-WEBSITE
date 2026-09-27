@@ -3,8 +3,10 @@
 /**
  * Server actions for the AI Product/Strain Lookup on Product Onboarding (T-314).
  *
- *  - productLookupAction:  runs the manual lookup (GPT-4o + live web search,
- *    graceful fallback to built-in knowledge). Returns the sanitized, compliance-
+ *  - productLookupAction:  runs the manual lookup (the AI_MODEL_HEAVY model +
+ *    live web search: Gemini google_search grounding when the id starts with
+ *    "gemini", else the OpenAI web_search tool; graceful fallback to built-in
+ *    knowledge). Returns the sanitized, compliance-
  *    gated result. A plain "not found" is a NORMAL success (found:false), never
  *    an error. Autofill eligibility is decided by the pure core's >= 90% bar.
  *  - saveLookupToKbAction:  saves what the AI found as a kb_strains DRAFT

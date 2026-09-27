@@ -1,5 +1,25 @@
 # Roadmap — Intake auto-carry to the menu (Option B, NOT auto-published)
 
+> **⚠️ SUPERSEDED (noted 2026-09-27, slice S00).** The "NOT auto-published"
+> design below is **historical**. PR #550 (`df261041`, committed 2026-07-16)
+> shipped the owner-approved **Option 1**: approving a received product **with a
+> price** publishes it to the website and the register automatically, through
+> the same gated `publish_menu_version` RPC the manual button uses. An update
+> waits instead only when (a) the extraction engine could not verify a fact on
+> an mg-dosed product (`fact_extraction_review` → held for a human), or (b) the
+> automatic publish did not finish. Either way it waits in the Publish command
+> center (Admin → Publish Menu, `/admin/publish`).
+>
+> **Runtime truth:** `src/lib/pos/intake-menu-staging.ts`
+> (`stageIntakeMenuVersionForManifest` → fact-review hold → `autoPublishIntakeVersion`),
+> called from `approveDraftWithPrice` in `src/lib/inventory/catalog-drafts.ts`
+> and from `finalizeManifestDispositions` in `src/lib/inventory/intake-store.ts`.
+> **Shared on-screen wording:** `src/lib/catalog/publish-story-core.ts`.
+>
+> The owner quotes below are kept **verbatim and unedited** (standing rule 1);
+> only this banner was added. The merge-method line at the bottom ("squash-merge")
+> also predates AGENTS.md rule 6 — merges are rebase-only now.
+
 Owner enhancement: products received via the **new receiving/intake system** must
 reach the customer-facing website menu **and** be sellable in the front-side POS
 **without** relying on the one-time Cultivera "Menu Imports" (POS-export) upload.

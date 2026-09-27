@@ -8,15 +8,17 @@
  *   1. KB FIRST (free, instant): if we already know this strain, return it with
  *      full confidence — no spend, no network. (Handled by the caller via the
  *      SLICE 93 suggestion; this module focuses on the AI hop.)
- *   2. LIVE WEB SEARCH: GPT-4o + the OpenAI web_search tool (provider.generate\u2011
- *      WebSearch) reads the real internet and returns an answer + source URLs.
- *      If the web_search tool is unavailable it gracefully falls back to GPT-4o
- *      built-in knowledge (usedWebSearch=false, no live sources).
+ *   2. LIVE WEB SEARCH: provider.generateWebSearch reads the real internet and
+ *      returns an answer + source URLs, using the AI_MODEL_HEAVY model (default
+ *      gpt-4o): Gemini `google_search` grounding when the id starts with
+ *      "gemini", otherwise the OpenAI `web_search` tool. If live search is
+ *      unavailable it gracefully falls back to the same model's built-in
+ *      knowledge (usedWebSearch=false, no live sources).
  *   3. SANITIZE via the pure core (postProcessLookup): compliance gate +
  *      >= 90% autofill bar. Medical/curative copy dropped; never guesses.
  *
  * Standing rules honored: no guessing (low confidence → honest miss), full
- * gpt-4o pinned by the provider's web-search path (not router-downshifted),
+ * AI_MODEL_HEAVY pinned by the provider's web-search path (not router-downshifted),
  * budget-guarded + usage-logged by the provider, compliance-baked.
  *
  * Server-only. Never import into a client component.
