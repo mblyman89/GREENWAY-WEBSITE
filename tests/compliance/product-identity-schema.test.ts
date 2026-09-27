@@ -252,9 +252,11 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
     expect(full).not.toContain("identity_key");
   });
 
-  it("no src/ file names an identity column in a select yet (S04 is schema only)", () => {
-    // S05 will be the first writer; it must go through the guard. Until then
-    // a select naming identity_key would break pre-migration.
+  it("no src/ file names an identity column in a select (S05 writes through the guard, never reads)", () => {
+    // S05 is the first WRITER and every write goes through the 0234 retry
+    // guard. Reads are a different risk: a select naming identity_key fails
+    // outright pre-migration, so none may exist until a slice adds a guarded
+    // reader (and updates this test on purpose).
     const offenders: string[] = [];
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -270,6 +272,26 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
     };
     walk(path.join(ROOT, "src"));
     expect(offenders).toEqual([]);
+  });
+
+  it("S05's named select-column constants (invisible to the .select( regex) name no 0234 column", () => {
+    const SEED_LOT_COLUMNS = /export const SEED_LOT_COLUMNS =\s*"([^"]+)"/.exec(
+      readFileSync(path.join(ROOT, "src/lib/inventory/catalog-drafts.ts"), "utf8"),
+    )?.[1];
+    const kbLink = /export const KB_LINK_COLUMNS = "([^"]+)"/.exec(
+      readFileSync(path.join(ROOT, "src/lib/inventory/kb-link-store.ts"), "utf8"),
+    )?.[1];
+    const live = /export const LIVE_MENU_IDENTITY_COLUMNS =\s*"([^"]+)"/.exec(
+      readFileSync(path.join(ROOT, "src/lib/inventory/identity-stamp-core.ts"), "utf8"),
+    )?.[1];
+    for (const [name, cols] of [
+      ["SEED_LOT_COLUMNS", SEED_LOT_COLUMNS],
+      ["KB_LINK_COLUMNS", kbLink],
+      ["LIVE_MENU_IDENTITY_COLUMNS", live],
+    ] as const) {
+      expect(cols, name).toBeTruthy();
+      expect(String(cols), name).not.toMatch(/\b(identity_key|kb_product_id|restock_of_card_key)\b/);
+    }
   });
 });
 
