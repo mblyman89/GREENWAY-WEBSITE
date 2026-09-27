@@ -506,6 +506,12 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "product_masters", disposition: "KEEP", because: "Your curated product groupings — hand-authored work that survives a wipe." },
   { table: "product_master_members", disposition: "KEEP", because: "Which products belong to which curated grouping." },
   { table: "product_enrichments", disposition: "KEEP", because: "Descriptions and images you approved." },
+  // product_fact_provenance (0235, bible S08) is the append-only trail of who
+  // or what set each product fact, keyed by product identity. It is knowledge
+  // about PRODUCTS, like kb_* and product_enrichments, and it is what S09
+  // recalls instead of paying for another Gemini call. It has no foreign keys
+  // (draft_id / lot_id are stamps), so keeping it never leaves a dangling link.
+  { table: "product_fact_provenance", disposition: "KEEP", because: "The history of who (or what) set each product fact — description, effects, terpenes — and how sure they were. It is product knowledge, not test activity, and it is how the store remembers a product the next time it arrives." },
   { table: "product_classification_overrides", disposition: "KEEP", because: "Your manual corrections to how a product is classified — decisions, and they must keep applying after the wipe." },
   { table: "noncannabis_products", disposition: "KEEP", because: "Your curated non-cannabis catalogue." },
   { table: "noncannabis_sku_sequences", disposition: "KEEP", because: "SKU counters. Resetting them would re-issue SKUs you have already printed on labels." },

@@ -1115,3 +1115,68 @@ select event_type, note, created_at
  order by created_at desc
  limit 5;
 ```
+
+## S06 — no new migration — field-by-field AI lookup
+
+S06 adds **no SQL**. The AI Lookup panels (Product Onboarding and Enrichment)
+now show a "Field-by-field evidence" table and, when Gemini answered, Google
+Search Suggestions. Rollback without a migration: set `LOOKUP_SCHEMA_V2=off`
+in Vercel.
+
+## S08 — 0235 — attached facts + append-only fact history
+
+- [ ] `0235_attached_facts.sql` — **Run 0234 first** (the file refuses with
+  `MIGRATION_OUT_OF_ORDER` if 0234 is missing). Adds two empty jsonb columns
+  to `catalog_product_drafts`, `attached_facts` and `attached_facts_provenance`,
+  to hold the facts married to a draft (description, effects, terpenes…) and
+  who or what supplied each one. It also adds one new table,
+  `product_fact_provenance`: a permanent, **append-only** history of every
+  product fact written, with its source, its confidence (0 to 1) and the
+  links it came from.
+
+  **Why:** today a draft has nowhere to keep what Gemini, the knowledge base
+  or you said about a product, and nothing records who set a fact or when.
+  This is the storage the next slices build on: S07 (one write door with a
+  receipt), S09 (remember a product before paying for a Gemini call) and S11
+  (source chips per field on the onboarding row).
+
+  **Until it is run** nothing changes. No code reads or writes these yet (a
+  test enforces that), so running it early is safe, and so is running it
+  late.
+
+  **Rules the database now enforces for you:**
+
+  - A fact's source must be one of: manifest, coa, kb_published, kb_draft,
+    gemini, human, remembered, cultivera. Anything else is refused.
+  - A history row can never be edited, deleted or truncated. A correction is
+    a new row, and the newest one wins.
+  - A confidence of 95 is refused, because the scale is 0 to 1, so it must be
+    0.95.
+  - Only the server can read the table (row-level security on, no policy).
+  - The factory reset **keeps** this history, like the knowledge base.
+
+  Safe to re-run (`add column if not exists`, `create table/index if not
+  exists`, `create or replace function`, `drop trigger if exists` before each
+  `create trigger`). Verified: all 235 migrations apply on a clean Postgres 15,
+  0235 re-applies cleanly, and the scenario script
+  `scripts/recon/attached-facts-pg-check.sql` passed.
+
+  **Run it, then check:**
+
+  ```sql
+  select column_name, data_type
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'catalog_product_drafts'
+     and column_name in ('attached_facts', 'attached_facts_provenance');
+  -- expect 2 rows, both jsonb
+
+  select count(*) as columns
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'product_fact_provenance';
+  -- expect 13
+
+  select tgname from pg_trigger
+   where tgrelid = 'public.product_fact_provenance'::regclass and not tgisinternal
+   order by tgname;
+  -- expect 2 rows: trg_pfp_append_only, trg_pfp_no_truncate
+  ```
