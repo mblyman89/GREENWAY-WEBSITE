@@ -619,6 +619,7 @@ import { __runIntakeVersionCopyCoreTests } from "../../src/lib/pos/intake-versio
 import { __runDraftDeepLinkCoreTests } from "../../src/lib/catalog/draft-deep-link-core";
 import { __runProductIdentityCoreTests } from "../../src/lib/catalog/product-identity-core";
 import { __runIdentityColumnsCoreTests } from "../../src/lib/catalog/identity-columns-core";
+import { __runAttachFactsCoreTests } from "../../src/lib/catalog/attach-facts-core";
 import { __runIdentityStampCoreTests } from "../../src/lib/inventory/identity-stamp-core";
 import { __runGroundingCoreTests } from "../../src/lib/ai/grounding-core";
 import { __runLookupFactsCoreTests } from "../../src/lib/inventory/lookup-facts-core";
@@ -1822,8 +1823,13 @@ __runLiquidVolumeTests();
   // S06 structured lookup: per-field value/confidence/sources, 89->review,
   // 90->auto, missing->unknown, invalid values never auto, citations mapped
   // to a field only when unambiguous, v1 bridge, display + F-018 kept-confidence.
-  // Measured 113.
+  // Measured 115.
   assertRan("lookup-facts-core", __runLookupFactsCoreTests(), 113);
+  // S08 attached facts: FACT_SOURCES mirrors the 0235 CHECK, 0-100 -> 0..1
+  // with no clamping, the provenance row builder mirrors every 0235 CHECK,
+  // latest-per-field recall, and the "0235 not applied" detector is narrow.
+  // Measured 76.
+  assertRan("attach-facts-core", __runAttachFactsCoreTests(), 74);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

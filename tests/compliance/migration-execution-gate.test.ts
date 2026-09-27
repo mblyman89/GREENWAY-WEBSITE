@@ -1220,7 +1220,27 @@ describe("the migration list is ordered the way the database will see it", () =>
     // rules, index predicates, catalog comments, identity lookups, the 0026
     // open-draft unique index still in force, and EXPLAIN using each new
     // index, in a rolled-back transaction) passed.
-    expect(listed[listed.length - 1]).toMatch(/^0234_/);
+    //
+    // S08 added 0235_attached_facts.sql (nullable jsonb attached_facts /
+    // attached_facts_provenance on catalog_product_drafts, plus the
+    // append-only product_fact_provenance table: source CHECK, identity /
+    // field-key / 0..1 confidence CHECKs, idx_pfp_identity, UPDATE / DELETE /
+    // TRUNCATE refused by trigger, RLS on with no policy, no foreign keys).
+    // Verified in the build sandbox against Postgres 15 bootstrapped exactly
+    // as CI does: all 235 migrations executed via
+    // scripts/compliance/verify-migrations-execute.ts, 0235 applied twice
+    // cleanly, the precheck refuses when 0234 is missing, and the committed
+    // scenario script scripts/recon/attached-facts-pg-check.sql (every
+    // allowed source accepted, 7 invalid sources + NULL rejected by
+    // pfp_source_known, blank identity / bad field / 0-100 confidence
+    // rejected by their named constraints, append-only refusals, draft
+    // round-trip, history surviving a deleted draft, EXPLAIN using
+    // idx_pfp_identity with no sort, in a rolled-back transaction) passed and
+    // failed on each of 11 deliberate schema sabotages.
+    expect(listed[listed.length - 1]).toMatch(/^0235_/);
+    // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
+    // regex such as /^023[45]_/ still passed while 0235 was last).
+    expect(listed[listed.length - 1]).toBe("0235_attached_facts.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
