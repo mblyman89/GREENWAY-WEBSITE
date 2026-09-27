@@ -67,6 +67,7 @@ const statusCalls: { id: string; to: string; opts: Record<string, unknown> }[] =
 let statusRefusal: string | null = null;
 vi.mock("@/lib/orders/orders-store", () => ({
   listOrders: async () => [],
+  listOrdersColumns: async () => [],
   getOrder: async () => order,
   setOrderStatus: async (id: string, to: string, opts: Record<string, unknown>) => {
     statusCalls.push({ id, to, opts });

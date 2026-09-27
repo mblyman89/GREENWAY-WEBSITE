@@ -28,7 +28,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { listOrders, getOrder, setOrderStatus } from "@/lib/orders/orders-store";
+import { listOrdersColumns, getOrder, setOrderStatus } from "@/lib/orders/orders-store";
 import { resolveOrderDisplay } from "@/lib/orders/order-name-pool-core";
 import {
   buildPickupDetailBreakdown,
@@ -41,11 +41,13 @@ import {
 import { exciseTaxLabel, salesTaxLabel } from "@/lib/pos/receipt-tax-core";
 import { loadMenuFactsByProductId, loadMenuFactsByLeaflyVariantId } from "@/lib/pos/pickup-menu-facts";
 import {
+  PICKUP_QUEUE_ORDER_SELECT,
   isPosMaterializedOrder,
   sortPickupQueue,
   toPickupQueueEntry,
   customerPickupLabel,
   type PickupQueueEntry,
+  type PickupQueueSourceRow,
 } from "@/lib/pos/pickup-core";
 import {
   toOrderOrigin,
@@ -83,7 +85,15 @@ export type PickupQueueResult = { ok: true; queue: PickupQueueEntry[] } | { ok: 
  */
 export async function listRegisterPickupQueue(): Promise<PickupQueueResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
-  const orders = await listOrders({ status: "active", limit: QUEUE_LIMIT * 4 });
+  // USAGE-5: twelve named columns, not `*`. This read runs every 45 s on every
+  // unlocked register for up to 200 rows; the wide row (loyalty_*, limit
+  // reasons JSON, customer email/phone/birthday …) was egress the queue never
+  // displayed. The list lives beside toPickupQueueEntry and is type-pinned to
+  // its parameter, so it cannot fall behind the fields the entry reads.
+  const orders = (await listOrdersColumns(PICKUP_QUEUE_ORDER_SELECT, {
+    status: "active",
+    limit: QUEUE_LIMIT * 4,
+  })) as (PickupQueueSourceRow & { staff_note: string | null })[];
   const nowIso = new Date().toISOString();
   const entries = orders
     .filter((o) => !isPosMaterializedOrder(o.staff_note))
