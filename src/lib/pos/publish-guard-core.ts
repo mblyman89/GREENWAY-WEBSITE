@@ -24,6 +24,8 @@
  * registered in scripts/compliance/run-pure-selftests.ts.
  */
 
+import { approvedFromPhrase, draftsHref, isUuid } from "@/lib/catalog/draft-deep-link-core";
+
 /** One sentence, used verbatim on every publish surface so the story never drifts. */
 export const PUBLISH_SEMANTICS_COPY =
   "Your live menu is a snapshot. Publishing a draft REPLACES the whole menu with that draft — it never adds to it. Always publish the NEWEST draft; older drafts are missing products added after them.";
@@ -201,7 +203,7 @@ const EXPLANATIONS: Record<string, ExplanationRule> = {
     meaning:
       "The system wasn't confident about one of this product's facts (name, potency, size), so it flagged it instead of guessing.",
     fix: "Review the product under Product Onboarding and confirm or correct the flagged fact.",
-    fixHref: "/admin/inventory/drafts",
+    fixHref: "/admin/inventory/drafts?status=approved",
     fixLabel: "Open onboarding",
     informational: false,
   },
@@ -292,10 +294,84 @@ const EXPLANATIONS: Record<string, ExplanationRule> = {
 };
 
 /**
+ * S02 — codes whose fix happens on ONE approved onboarding draft. Only the
+ * receiving pipeline emits them, and it only ever reads APPROVED drafts
+ * (intake-menu-staging.ts: `.eq("status", "approved")`), so the product is
+ * always on the Approved tab by the time the warning exists (F-060).
+ */
+export const DRAFT_LINKED_CODES: ReadonlySet<string> = new Set([
+  "draft_inject_no_pos_key",
+  "draft_inject_no_price",
+  "fact_extraction_review",
+  "intake_master_ambiguous_name",
+]);
+
+/**
+ * S02 — what the page knows about a diagnostic beyond its code + message:
+ * the diagnostic's own persisted `context` (draft-injection-core puts
+ * `draft_id`, `productName` there) and the delivery the version came from
+ * (summary_json.manifest, written by S01). Every field is optional and
+ * untrusted: anything missing or malformed degrades to today's list link.
+ */
+export type DiagnosticLinkContext = {
+  /** The diagnostic's persisted `context` object (unknown shape). */
+  context?: unknown;
+  /** summary_json.manifest.id / manifest_id of the version. */
+  manifestId?: string | null;
+  /** summary_json.manifest.vendor. */
+  vendor?: string | null;
+  /** summary_json.manifest.number. */
+  manifestNumber?: string | null;
+};
+
+function ctxString(ctx: unknown, key: string): string | null {
+  if (!ctx || typeof ctx !== "object" || Array.isArray(ctx)) return null;
+  const v = (ctx as Record<string, unknown>)[key];
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+/**
  * Explain a diagnostic in plain English. Unknown codes fall back to the raw
  * message (never hidden, never guessed).
+ *
+ * S02: pass `link` and the draft-linked codes point at the exact product —
+ * `/admin/inventory/drafts?status=approved&draft=<id>#draft-<id>` when the
+ * diagnostic names its draft, else that delivery's approved products when
+ * the manifest is known, else the list URL (backward compatible).
  */
-export function explainDiagnostic(code: string, message: string): DiagnosticExplanation {
+export function explainDiagnostic(
+  code: string,
+  message: string,
+  link?: DiagnosticLinkContext,
+): DiagnosticExplanation {
+  const base = explainDiagnosticBase(code, message);
+  if (!link || !DRAFT_LINKED_CODES.has(code)) return base;
+  const draftId = ctxString(link.context, "draft_id");
+  const manifestId = link.manifestId ?? null;
+  const pinned = draftId && isUuid(draftId) ? draftId : null;
+  const scoped = !pinned && manifestId && isUuid(manifestId) ? manifestId : null;
+  if (!pinned && !scoped) return base;
+  const fixHref = draftsHref({ status: "approved", draftId: pinned, manifestId: pinned ? null : scoped });
+  const name = ctxString(link.context, "displayName") ?? ctxString(link.context, "productName");
+  if (code === "fact_extraction_review" && pinned && name) {
+    return {
+      ...base,
+      fix:
+        `Open ${name}${approvedFromPhrase(link.vendor, link.manifestNumber)} \u2014 it is highlighted on ` +
+        "Product Onboarding with its THC and price on the row. Check the flagged fact against the package or " +
+        "COA; if it's right, press Publish on this page and the update goes live.",
+      fixHref,
+      fixLabel: `Open ${name}`,
+    };
+  }
+  return {
+    ...base,
+    fixHref,
+    fixLabel: pinned ? (name ? `Open ${name}` : "Open this product") : "Open this delivery's products",
+  };
+}
+
+function explainDiagnosticBase(code: string, message: string): DiagnosticExplanation {
   const rule = EXPLANATIONS[code];
   if (!rule) {
     return {
@@ -410,7 +486,46 @@ export function __runPublishGuardTests(): { passed: number } {
   const ambig = explainDiagnostic("intake_master_merge_ambiguous", "raw msg");
   ok(ambig.fixHref === "/admin/products/masters", "merge ambiguous → mastering");
   const factRev = explainDiagnostic("fact_extraction_review", "raw msg");
-  ok(factRev.fixHref === "/admin/inventory/drafts", "fact review → onboarding");
+  // S02 (F-060): the held product is APPROVED, so even without context the
+  // link opens the Approved tab — the review queue could never show it.
+  ok(factRev.fixHref === "/admin/inventory/drafts?status=approved", "fact review → approved tab");
+
+  // S02: context-aware deep links.
+  const DID = "0b6f3c1e-2d4a-4f5b-9c8d-1a2b3c4d5e6f";
+  const MID = "9f8e7d6c-5b4a-4321-8fed-cba987654321";
+  const deep = explainDiagnostic("fact_extraction_review", "raw msg", {
+    context: { draft_id: DID, productName: "Kiva Gummies 100mg", displayName: "Kiva Gummies 100mg" },
+    manifestId: MID,
+    vendor: "Acme Farms",
+    manifestNumber: "0042",
+  });
+  ok(deep.fixHref === `/admin/inventory/drafts?status=approved&draft=${DID}#draft-${DID}`,
+    "fact review with draft_id → the exact approved draft, anchored");
+  ok(deep.fixHref !== null && deep.fixHref.includes(DID), "fixHref contains the draft id");
+  ok(deep.fix.includes("Kiva Gummies 100mg (approved from Acme Farms manifest 0042)"), "fix names product + delivery");
+  ok(deep.fix.includes("press Publish"), "fix states the real next step (manual Publish until S30)");
+  ok(!/publishes itself/i.test(deep.fix), "no promise of auto-publish the code does not keep");
+  ok(deep.fixLabel === "Open Kiva Gummies 100mg", "button names the product");
+  ok(deep.title === factRev.title, "title unchanged");
+  const noDraft = explainDiagnostic("fact_extraction_review", "raw msg", { context: { productName: "X" } });
+  ok(noDraft.fixHref === factRev.fixHref && noDraft.fix === factRev.fix, "no draft id, no manifest → list fallback");
+  const byManifest = explainDiagnostic("intake_master_ambiguous_name", "raw msg", {
+    context: { pos_product_key: "K" },
+    manifestId: MID,
+  });
+  ok(byManifest.fixHref === `/admin/inventory/drafts?status=approved&manifest=${MID}`,
+    "no draft id but manifest known → that delivery's approved products");
+  ok(byManifest.fixLabel === "Open this delivery's products", "manifest-scoped label");
+  const badId = explainDiagnostic("draft_inject_no_price", "raw msg", { context: { draft_id: "nope" } });
+  ok(badId.fixHref === "/admin/inventory/drafts", "malformed draft id → list fallback, never a broken query");
+  const noPriceDeep = explainDiagnostic("draft_inject_no_price", "raw msg", { context: { draft_id: DID } });
+  ok(noPriceDeep.fixHref === `/admin/inventory/drafts?status=approved&draft=${DID}#draft-${DID}`, "no price → exact draft");
+  ok(noPriceDeep.fixLabel === "Open this product", "nameless draft label");
+  const notDraftCode = explainDiagnostic("draft_inject_unmapped_category", "raw", { context: { draft_id: DID } });
+  ok(notDraftCode.fixHref === "/admin/settings/types", "non-draft codes keep their own link");
+  const junkCtx = explainDiagnostic("fact_extraction_review", "raw msg", { context: ["x"] });
+  ok(junkCtx.fixHref === factRev.fixHref, "array context tolerated");
+  ok(DRAFT_LINKED_CODES.size === 4, "exactly four draft-linked codes");
   const grouped = explainDiagnostic("intake_master_grouped", "raw msg");
   ok(grouped.informational && grouped.fixHref === null, "grouped is FYI-only");
   ok(grouped.meaning === "raw msg", "FYI without meaning falls back to the raw message");

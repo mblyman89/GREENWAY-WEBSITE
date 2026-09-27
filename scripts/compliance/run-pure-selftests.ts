@@ -616,6 +616,7 @@ import { __runVariantGramsCoreTests } from "../../src/lib/pos/variant-grams-core
 import { __runMenuLiveStepCoreTests } from "../../src/lib/inventory/menu-live-step-core";
 import { __runPublishStoryCoreTests } from "../../src/lib/catalog/publish-story-core";
 import { __runIntakeVersionCopyCoreTests } from "../../src/lib/pos/intake-version-copy-core";
+import { __runDraftDeepLinkCoreTests } from "../../src/lib/catalog/draft-deep-link-core";
 import { __runVendorResolveCoreTests } from "../../src/lib/inventory/vendor-resolve-core";
 import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultivera-invoice-core";
 import { __runGenericPdfTransportTests } from "../../src/lib/inventory/pdf-generic-transport-core";
@@ -1793,6 +1794,11 @@ __runLiquidVolumeTests();
   // outcome, humanised notes, legacy-row degradation. Floor just under the
   // measured count (51).
   assertRan("intake-version-copy-core", __runIntakeVersionCopyCoreTests(), 48);
+
+  // S02 deep links: UUID-validated ?draft= / ?manifest= onboarding URLs, the
+  // pinned-row tab rule (F-060), Enrich-now by key only when live (F-008).
+  // Floor just under the measured count (36).
+  assertRan("draft-deep-link-core", __runDraftDeepLinkCoreTests(), 34);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

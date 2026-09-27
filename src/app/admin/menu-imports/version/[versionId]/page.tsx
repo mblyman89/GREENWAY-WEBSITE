@@ -34,7 +34,11 @@ type IntakeSummary = {
   carried?: number;
   added?: number;
   merged?: number;
-  diagnostics?: { severity: "info" | "warning" | "error"; code: string; message: string }[];
+  // S02: `context` is the planner's own per-diagnostic context (draft_id,
+  // productName, ...) — already persisted, now used to deep-link the fix.
+  diagnostics?: { severity: "info" | "warning" | "error"; code: string; message: string; context?: unknown }[];
+  // S01: the delivery header (id, number, vendor) written at insert.
+  manifest?: { id?: unknown; number?: unknown; vendor?: unknown };
 };
 
 /**
@@ -78,6 +82,13 @@ export default async function IntakeVersionReviewPage({
   }
 
   const diagnostics = Array.isArray(summary.diagnostics) ? summary.diagnostics : [];
+  // S02: what every fix link knows about this delivery (pure, no I/O).
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const linkBase = {
+    manifestId: str(summary.manifest?.id) ?? str(summary.manifest_id),
+    vendor: str(summary.manifest?.vendor),
+    manifestNumber: str(summary.manifest?.number),
+  };
   const warnings = diagnostics.filter((d) => d.severity === "warning");
   const info = diagnostics.filter((d) => d.severity === "info");
   const hiddenItems = items.filter((i) => i.hidden).slice(0, 100);
@@ -267,7 +278,7 @@ export default async function IntakeVersionReviewPage({
             </p>
             <div className="mt-3 space-y-2">
               {warnings.slice(0, 100).map((d, i) => {
-                const x = explainDiagnostic(d.code, d.message);
+                const x = explainDiagnostic(d.code, d.message, { ...linkBase, context: d.context });
                 return (
                   <div
                     key={`w-${i}`}

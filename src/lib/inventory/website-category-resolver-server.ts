@@ -96,14 +96,26 @@ export async function loadMenuCategoriesForKeys(
 export async function resolveWebsiteCategories<T extends ResolvableLot>(
   lots: T[],
 ): Promise<WebsiteCategoryResolution[]> {
-  if (lots.length === 0) return [];
+  return (await resolveWebsiteCategoriesWithLiveKeys(lots)).resolutions;
+}
+
+/**
+ * S02 — the same resolution, plus WHICH of the keys are a card on the
+ * published menu. The published-menu read already happens inside (step (a)
+ * above), so this answers "is it live?" at zero extra queries. menu_items.
+ * category is NOT NULL (0002), so every live key has an entry.
+ */
+export async function resolveWebsiteCategoriesWithLiveKeys<T extends ResolvableLot>(
+  lots: T[],
+): Promise<{ resolutions: WebsiteCategoryResolution[]; liveKeys: Set<string> }> {
+  if (lots.length === 0) return { resolutions: [], liveKeys: new Set() };
   const keys = lots.map((l) => l.posProductKey);
   const [inventoryTypeMap, menuCategories, overrides] = await Promise.all([
     loadInventoryTypeMap(),
     loadMenuCategoriesForKeys(keys),
     getOverridesForKeys(keys),
   ]);
-  return lots.map((lot) =>
+  const resolutions = lots.map((lot) =>
     resolveWebsiteCategory(lot, {
       overrideCategory: lot.posProductKey
         ? overrides.get(lot.posProductKey)?.website_category ?? null
@@ -112,6 +124,7 @@ export async function resolveWebsiteCategories<T extends ResolvableLot>(
       inventoryTypeMap,
     }),
   );
+  return { resolutions, liveKeys: new Set(menuCategories.keys()) };
 }
 
 /** Resolve a single lot (loads DB inputs; prefer the batch version for lists). */

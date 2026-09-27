@@ -8,6 +8,8 @@ import { Button, Field, Input, Textarea, Select } from "@/components/admin/ui";
 import { getManifestById } from "@/lib/inventory/store";
 import { getParseStatusForManifestNumber } from "@/lib/inbound-email/llamaparse-status-server";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
+// S02 (F-080): the accept/finalize banners open THIS delivery's drafts.
+import { draftsForManifestHref } from "@/lib/catalog/draft-deep-link-core";
 import { matchIntakeLinesToKb } from "@/lib/ai/kb/intake-strain-match-server";
 import { getVendorById } from "@/lib/vendors/store";
 import { listManifestLots, listManifestEvents, listLabFactsByIds } from "@/lib/inventory/intake-store";
@@ -309,7 +311,7 @@ export default async function ManifestReviewPage({
               <>
                 {" "}
                 {drafts} product{drafts === "1" ? "" : "s"} weren&apos;t on the live menu —{" "}
-                <Link href="/admin/inventory/drafts" className="font-semibold underline">
+                <Link href={draftsForManifestHref(id)} className="font-semibold underline">
                   review {drafts === "1" ? "it" : "them"} as draft{drafts === "1" ? "" : "s"}
                 </Link>
                 .
@@ -331,7 +333,7 @@ export default async function ManifestReviewPage({
               <>
                 {" "}
                 {drafts} new product{drafts === "1" ? "" : "s"} →{" "}
-                <Link href="/admin/inventory/drafts" className="font-semibold underline">
+                <Link href={draftsForManifestHref(id)} className="font-semibold underline">
                   review draft{drafts === "1" ? "" : "s"}
                 </Link>
                 .
