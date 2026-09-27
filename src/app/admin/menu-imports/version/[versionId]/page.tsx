@@ -9,6 +9,16 @@ import { getVersion, getPublishedVersion, diffVersions, getVersionItems } from "
 import { buildPublishVerdict, explainDiagnostic, type PublishVerdict } from "@/lib/pos/publish-guard-core";
 import { formatDateTime, formatMoney } from "@/lib/pos/format";
 import { publishVersion } from "../../actions";
+import { describeIntakeVersion, type IntakeVersionTone } from "@/lib/pos/intake-version-copy-core";
+
+// S01: the outcome banner's colour follows the described tone.
+const OUTCOME_STYLE: Record<IntakeVersionTone, string> = {
+  live: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
+  waiting: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-[var(--admin-gold)]",
+  failed: "border-red-500/40 bg-red-500/10 text-red-300",
+  archived: "border-white/15 bg-white/[0.03] text-white/60",
+  unknown: "border-white/15 bg-white/[0.03] text-white/60",
+};
 
 const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
   safe: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
@@ -52,6 +62,9 @@ export default async function IntakeVersionReviewPage({
   if (!version || version.import_id !== null) notFound();
 
   const summary = (version.summary_json ?? {}) as IntakeSummary;
+  // S01: what happened to this version, in plain English (status columns are
+  // the truth for "live"; summary_json explains why it waited / failed).
+  const story = describeIntakeVersion(version);
 
   let published: Awaited<ReturnType<typeof getPublishedVersion>> = null;
   let diff: Awaited<ReturnType<typeof diffVersions>> | null = null;
@@ -88,7 +101,7 @@ export default async function IntakeVersionReviewPage({
     <div>
       <AdminPageHeader
         title="Menu draft from receiving"
-        subtitle={`Auto-carried ${formatDateTime(version.created_at)} \u00b7 ${summary.added ?? 0} new card(s)${(summary.merged ?? 0) > 0 ? ` + ${summary.merged} restock option(s)` : ""} on top of ${summary.carried ?? 0} live item(s)`}
+        subtitle={`${story.source ?? `Staged ${formatDateTime(version.created_at)}`} \u00b7 ${story.counts}`}
         action={
           <BackLink
             fallback="/admin/menu-imports"
@@ -111,6 +124,23 @@ export default async function IntakeVersionReviewPage({
             Published. The public menu now reflects this version and these products are sellable in the POS.
           </div>
         )}
+
+        {/* S01: the one-line outcome + (when waiting) the one thing to do. */}
+        <div className={`rounded-xl border p-4 text-sm ${OUTCOME_STYLE[story.tone]}`}>
+          <p className="font-semibold">{story.headline}</p>
+          {story.detail && <p className="mt-1 opacity-90">{story.detail}</p>}
+          {story.action && (
+            <p className="mt-1">
+              <strong>Next:</strong> {story.action}
+            </p>
+          )}
+          {story.superseded > 0 && (
+            <p className="mt-1 text-xs opacity-80">
+              {story.superseded} approved product(s) were already on the live menu under the same product
+              key, so the existing card was kept instead of adding a duplicate.
+            </p>
+          )}
+        </div>
 
         <div className="rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-4 text-sm text-white/70">
           These products came in through <strong>receiving</strong> and were approved with a price.{" "}

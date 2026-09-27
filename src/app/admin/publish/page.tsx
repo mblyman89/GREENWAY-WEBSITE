@@ -20,6 +20,7 @@ import {
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
 import { formatDateTime } from "@/lib/pos/format";
+import { describeIntakeVersion, type IntakeVersionDescription } from "@/lib/pos/intake-version-copy-core";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,8 @@ type DraftRow = {
   /** Where "Review & publish" goes — the intake or POS-import review page. */
   reviewHref: string;
   origin: "receiving" | "pos-import";
+  /** S01: why a receiving draft is waiting, in plain English (null for POS uploads). */
+  story: IntakeVersionDescription | null;
 };
 
 export default async function PublishCommandCenterPage({
@@ -99,7 +102,9 @@ export default async function PublishCommandCenterPage({
         origin === "receiving"
           ? `/admin/menu-imports/version/${v.id}?back=${encodeURIComponent("/admin/publish")}`
           : `/admin/menu-imports/${v.import_id}?back=${encodeURIComponent("/admin/publish")}`;
-      return { version: v, verdict, reviewHref, origin };
+      // S01: pure, no I/O — reads the summary_json this row already carries.
+      const story = origin === "receiving" ? describeIntakeVersion(v) : null;
+      return { version: v, verdict, reviewHref, origin, story };
     }),
   );
   const overflow = Math.max(0, flagged.length - VERDICT_CAP);
@@ -196,7 +201,7 @@ export default async function PublishCommandCenterPage({
             </p>
           ) : (
             <div className="mt-4 space-y-3">
-              {rows.map(({ version: v, verdict, reviewHref, origin }) => (
+              {rows.map(({ version: v, verdict, reviewHref, origin, story }) => (
                 <div
                   key={v.id}
                   className={`rounded-lg border p-4 ${
@@ -218,6 +223,24 @@ export default async function PublishCommandCenterPage({
                     </span>
                     <span className="text-xs text-white/40">{formatDateTime(v.created_at)}</span>
                   </div>
+                  {story && (
+                    <div className="mt-2 text-sm">
+                      {story.source && <p className="text-xs text-white/50">{story.source}</p>}
+                      <p
+                        className={`mt-0.5 font-medium ${
+                          story.tone === "failed" ? "text-red-300" : "text-[var(--admin-gold)]"
+                        }`}
+                      >
+                        {story.headline}
+                      </p>
+                      {story.detail && <p className="mt-0.5 text-xs text-white/60">{story.detail}</p>}
+                      {story.action && (
+                        <p className="mt-0.5 text-xs text-white/70">
+                          <strong>Next:</strong> {story.action}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-white/80">
                       {v.item_count} items · {v.variant_count} variants

@@ -47,6 +47,14 @@ import {
   type CarryForwardItem,
 } from "@/lib/pos/intake-menu-staging-core";
 import type { ApprovedDraftForInjection, DraftEnrichment } from "@/lib/pos/draft-injection-core";
+// S01: self-describing intake versions (manifest header + publish outcome +
+// humanised notes). Pure; see the file header for where the truth lives.
+import {
+  buildIntakeVersionNotes,
+  buildManifestHeader,
+  failedPublishOutcome,
+  initialPublishOutcome,
+} from "@/lib/pos/intake-version-copy-core";
 import type { MenuItemRow, MenuVariantRow, MenuVersion } from "@/lib/pos/db-types";
 
 export type IntakeStagingOutcome = {
@@ -290,6 +298,34 @@ export async function stageIntakeMenuVersionForManifest(
     // via the timeline note in the caller.
     if (!plan.hasChanges) return skip("no-new-items");
 
+    // S01: the manifest header (who / which invoice / when) so every surface
+    //    can say "From Acme Farms · manifest 1234 · received Sep 26" instead
+    //    of a UUID. ONE primary-key read of four named columns, only on the
+    //    path that actually creates a version. Best-effort: a failed read
+    //    persists nulls and the copy says "an unnamed vendor" (never guess).
+    let manifestRow: {
+      manifest_number: string | null;
+      vendor_label: string | null;
+      received_at: string | null;
+      transfer_date: string | null;
+    } | null = null;
+    try {
+      const { data: mRow, error: mErr } = await admin
+        .from("inbound_manifests")
+        .select("manifest_number, vendor_label, received_at, transfer_date")
+        .eq("id", manifestId)
+        .maybeSingle();
+      if (mErr) console.error("[intake-menu-staging] manifest header read failed:", mErr.message);
+      else manifestRow = mRow as typeof manifestRow;
+    } catch (err) {
+      console.error("[intake-menu-staging] manifest header read exception:", err);
+    }
+    const manifestHeader = buildManifestHeader(manifestId, manifestRow);
+
+    // SLICE 62 review gate input, computed BEFORE the insert so the row is
+    // born knowing whether it will be held (S01: no follow-up write needed).
+    const factFlags = plan.diagnostics.filter((d) => d.code === "fact_extraction_review");
+
     // 5) Create the STAGED intake-origin version (import_id NULL). Counts +
     //    diagnostics live in summary_json so the review surface needs no
     //    pos_imports/pos_import_diagnostics rows.
@@ -314,8 +350,18 @@ export async function stageIntakeMenuVersionForManifest(
           added: plan.addedCount,
           merged: plan.mergedCount,
           diagnostics: plan.diagnostics,
+          // S01: who/which invoice/when + what the staging module decided.
+          // "auto_publish_attempted" + status "published" = published
+          // automatically, so the success path needs ZERO extra writes.
+          manifest: manifestHeader,
+          publish_outcome: initialPublishOutcome(factFlags.length, new Date().toISOString()),
         },
-        notes: `Auto-carried from accepted manifest ${manifestId}: ${plan.addedCount} new product card(s) and ${plan.mergedCount} restock option(s) staged on top of ${plan.carriedCount} live item(s).`,
+        notes: buildIntakeVersionNotes({
+          manifest: manifestHeader,
+          added: plan.addedCount,
+          merged: plan.mergedCount,
+          carried: plan.carriedCount,
+        }),
         created_by: actorId,
       })
       .select("*")
@@ -338,8 +384,8 @@ export async function stageIntakeMenuVersionForManifest(
     // customers): when the word-by-word extraction engine could NOT verify
     // every fact on an mg-dosed line, the fresh snapshot stays STAGED — the
     // human reviews the flagged reasons on Menu Imports and presses Publish
-    // there. Same principle as the SLICE 58 import commit gate.
-    const factFlags = plan.diagnostics.filter((d) => d.code === "fact_extraction_review");
+    // there. Same principle as the SLICE 58 import commit gate. (factFlags
+    // is computed above the insert so the row records the hold at birth.)
     if (factFlags.length > 0) {
       try {
         await admin.from("manifest_events").insert({
@@ -362,7 +408,12 @@ export async function stageIntakeMenuVersionForManifest(
       };
     }
 
-    const publishedOk = await autoPublishIntakeVersion(version.id, actorId, manifestId);
+    const publishedOk = await autoPublishIntakeVersion(
+      version.id,
+      actorId,
+      manifestId,
+      version.summary_json,
+    );
 
     return {
       staged: true,
@@ -392,8 +443,35 @@ async function autoPublishIntakeVersion(
   versionId: string,
   actorId: string | null,
   manifestId: string,
+  summaryJson: unknown,
 ): Promise<boolean> {
   const admin = createSupabaseAdminClient();
+
+  // S01: on the RARE failure path, record WHY on the row so the Publish page
+  // can explain it ("The system said: …") instead of a generic warning. One
+  // update, guarded to rows still staged (a concurrent manual publish wins).
+  // Never throws, never changes the publish result.
+  const recordFailure = async (error: unknown): Promise<void> => {
+    try {
+      const base =
+        summaryJson && typeof summaryJson === "object" && !Array.isArray(summaryJson)
+          ? (summaryJson as Record<string, unknown>)
+          : {};
+      const { error: uErr } = await admin
+        .from("menu_versions")
+        .update({
+          summary_json: {
+            ...base,
+            publish_outcome: failedPublishOutcome(error, new Date().toISOString()),
+          },
+        })
+        .eq("id", versionId)
+        .eq("status", "staged");
+      if (uErr) console.error("[intake-menu-staging] failure outcome write failed:", uErr.message);
+    } catch (err) {
+      console.error("[intake-menu-staging] failure outcome write exception:", err);
+    }
+  };
 
   const logEvent = async (eventType: string, note: string): Promise<void> => {
     try {
@@ -415,6 +493,7 @@ async function autoPublishIntakeVersion(
     });
     if (error) {
       console.error("[intake-menu-staging] auto-publish failed:", error.message);
+      await recordFailure(error.message);
       await logEvent(
         "menu_auto_publish_failed",
         "Automatic publish didn't finish — the menu update is STAGED in the Publish command center (Admin → Publish Menu). Press Publish there to put it live.",
@@ -423,6 +502,7 @@ async function autoPublishIntakeVersion(
     }
   } catch (err) {
     console.error("[intake-menu-staging] auto-publish exception:", err);
+    await recordFailure(err);
     await logEvent(
       "menu_auto_publish_failed",
       "Automatic publish didn't finish — the menu update is STAGED in the Publish command center (Admin → Publish Menu). Press Publish there to put it live.",
