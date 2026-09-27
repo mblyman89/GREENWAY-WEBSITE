@@ -762,10 +762,31 @@ export async function setCatalogDraftStatus(
 export async function loadStrainTypeSuggestions(
   drafts: Pick<CatalogDraft, "id" | "name" | "strain_name" | "lot_id">[],
 ): Promise<Map<string, ReturnType<typeof suggestStrainType>>> {
+  return (await loadStrainTypeSignals(drafts)).suggestions;
+}
+
+/**
+ * S10: the raw readings behind each suggestion, from the SAME two reads (no
+ * extra query). The fact-attach policy corroborates a looked-up strain type
+ * against the strain library AND the manifest separately. The folded
+ * suggestion alone would hide a manifest that disagrees with the library.
+ */
+export type StrainTypeEvidence = { kb: string | null; manifest: string | null };
+
+export async function loadStrainTypeSignals(
+  drafts: Pick<CatalogDraft, "id" | "name" | "strain_name" | "lot_id">[],
+): Promise<{
+  suggestions: Map<string, ReturnType<typeof suggestStrainType>>;
+  evidence: Map<string, StrainTypeEvidence>;
+}> {
   const out = new Map<string, ReturnType<typeof suggestStrainType>>();
+  const evidence = new Map<string, StrainTypeEvidence>();
   if (!isSupabaseServiceConfigured || drafts.length === 0) {
-    for (const d of drafts) out.set(d.id, suggestStrainType({ productName: d.name }));
-    return out;
+    for (const d of drafts) {
+      out.set(d.id, suggestStrainType({ productName: d.name }));
+      evidence.set(d.id, { kb: null, manifest: null });
+    }
+    return { suggestions: out, evidence };
   }
   const admin = createSupabaseAdminClient();
 
@@ -795,16 +816,19 @@ export async function loadStrainTypeSuggestions(
 
   for (const d of drafts) {
     const slug = d.strain_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+    const kb = slug ? kbTypeBySlug.get(slug) ?? null : null;
+    const manifest = d.lot_id ? lotTypeById.get(d.lot_id) ?? null : null;
     out.set(
       d.id,
       suggestStrainType({
-        kbStrainType: slug ? kbTypeBySlug.get(slug) ?? null : null,
-        lotStrainType: d.lot_id ? lotTypeById.get(d.lot_id) ?? null : null,
+        kbStrainType: kb,
+        lotStrainType: manifest,
         productName: d.name,
       }),
     );
+    evidence.set(d.id, { kb, manifest });
   }
-  return out;
+  return { suggestions: out, evidence };
 }
 
 /**
