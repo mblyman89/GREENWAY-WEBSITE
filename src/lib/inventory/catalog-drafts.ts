@@ -11,6 +11,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { usableCount } from "@/lib/supabase/read-completeness-core";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
+import { isUuid, normalizeDraftView } from "@/lib/catalog/draft-deep-link-core";
 import {
   classifyInsertError,
   planDraftSeeding,
@@ -381,16 +382,43 @@ export async function seedDraftsForManifest(
   };
 }
 
-/** List drafts, optionally filtered by status. */
-export async function listCatalogDrafts(status = "draft"): Promise<CatalogDraft[]> {
+/**
+ * List drafts in one tab, optionally narrowed to one delivery.
+ *
+ * S02 filters (both optional, both validated as UUIDs here — never trusted
+ * from the URL — and silently ignored when malformed):
+ *   - manifestId: only that manifest's drafts (the finalize/accept banner
+ *     target, F-080). Served by catalog_drafts_manifest_idx (0026).
+ *   - draftId: the pinned row is ALWAYS included, whatever its status or
+ *     manifest, so a deep link cannot dead-end (F-060). Still ONE round trip:
+ *     `(status [and manifest]) OR id = draftId`. The caller compares the
+ *     pinned row's real status with the tab it asked for.
+ *
+ * `select("*")` is deliberate and unchanged: CatalogDraft carries columns
+ * that exist only after optional migrations (0141/0146/0218), and a named
+ * list would error on databases that have not run them.
+ */
+export async function listCatalogDrafts(
+  status = "draft",
+  filters: { manifestId?: string | null; draftId?: string | null } = {},
+): Promise<CatalogDraft[]> {
   if (!isSupabaseServiceConfigured) return [];
+  const view = normalizeDraftView(status);
+  const manifestId = isUuid(filters.manifestId) ? filters.manifestId.trim().toLowerCase() : null;
+  const draftId = isUuid(filters.draftId) ? filters.draftId.trim().toLowerCase() : null;
   const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("catalog_product_drafts")
-    .select("*")
-    .eq("status", status)
-    .order("created_at", { ascending: false })
-    .limit(500);
+  let q = admin.from("catalog_product_drafts").select("*");
+  if (draftId) {
+    // Values are a closed enum and validated UUIDs, so the filter string
+    // cannot be injected into.
+    const inTab = manifestId ? `and(status.eq.${view},manifest_id.eq.${manifestId})` : `status.eq.${view}`;
+    q = q.or(`${inTab},id.eq.${draftId}`);
+  } else {
+    q = q.eq("status", view);
+    if (manifestId) q = q.eq("manifest_id", manifestId);
+  }
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(500);
+  if (error) console.error("[catalog-drafts] listCatalogDrafts failed:", error.message);
   return (data as CatalogDraft[] | null) ?? [];
 }
 

@@ -26,7 +26,16 @@ import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { approveDraftAction, dismissDraftAction, restoreDraftAction } from "./actions";
 import { draftsWhatDoIDoHere } from "@/lib/catalog/next-action-core";
 import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
-import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
+import { resolveWebsiteCategoriesWithLiveKeys } from "@/lib/inventory/website-category-resolver-server";
+// S02: deep links — ?draft=<id> pins + highlights one product, ?manifest=<id>
+// narrows to one delivery; Enrich now opens the product itself when live.
+import {
+  draftRowAnchorId,
+  draftsHref,
+  effectiveDraftView,
+  enrichHrefForDraft,
+  parseDraftFocus,
+} from "@/lib/catalog/draft-deep-link-core";
 import {
   assessDraftClassification,
   websiteCategoryLabel,
@@ -97,11 +106,13 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string }>;
 }) {
   await requirePermission("inventory.manage");
-  const { status, approved, dismissed, restored, error, msg, back } = await searchParams;
-  const view = status === "approved" || status === "dismissed" ? status : "draft";
+  const sp = await searchParams;
+  const { approved, dismissed, restored, error, msg, back } = sp;
+  // S02: validated focus (bad ids are dropped, never queried).
+  const focus = parseDraftFocus(sp);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -116,12 +127,24 @@ export default async function CatalogDraftsPage({
     );
   }
 
-  const [drafts, counts, categoryLabelMap, ownerTypes] = await Promise.all([
-    listCatalogDrafts(view),
+  const [listed, counts, categoryLabelMap, ownerTypes] = await Promise.all([
+    // ONE read: the tab (optionally one delivery) plus the pinned row.
+    listCatalogDrafts(focus.view, { manifestId: focus.manifestId, draftId: focus.draftId }),
     countCatalogDrafts(),
     loadCategoryLabelMap(),
     listInventoryTypes({ includeInactive: false }),
   ]);
+  // S02 (F-060): the pinned product decides the tab from its REAL status, so a
+  // link to an approved product can never land on an empty review queue. Rows
+  // from another tab are dropped so each tab only ever shows its own rows.
+  const pinned = focus.draftId ? listed.find((d) => d.id === focus.draftId) ?? null : null;
+  const view = effectiveDraftView(focus, pinned);
+  const drafts = listed.filter((d) => d.status === view);
+  const pinnedMissing = Boolean(focus.draftId) && !pinned;
+  const pinnedMovedTab = Boolean(pinned) && view !== focus.view;
+  const filterVendors = focus.manifestId
+    ? Array.from(new Set(drafts.map((d) => (d.vendor_name ?? "").trim()).filter(Boolean)))
+    : [];
   // SLICE 78: [value, label] pairs for the "Pick a category" select — the
   // owner's live registry, sorted by the same order the settings page uses.
   const categoryChoices = Object.entries(categoryLabelMap);
@@ -133,7 +156,9 @@ export default async function CatalogDraftsPage({
   // CCRS blob) and the approval card KNOWS what the human must pick. One
   // batched resolver call; the raw LCB values stay visible in fine print so
   // the approver can decide with full information.
-  const resolutions = await resolveWebsiteCategories(
+  // S02: the same published-menu read also says which keys are LIVE cards,
+  // so Enrich now can open the product itself (no extra query).
+  const { resolutions, liveKeys } = await resolveWebsiteCategoriesWithLiveKeys(
     drafts.map((d) => ({
       posProductKey: d.pos_product_key,
       productName: d.name,
@@ -312,12 +337,39 @@ export default async function CatalogDraftsPage({
           </div>
         )}
 
+        {/* S02: where a deep link landed you, and one click back to everything. */}
+        {focus.manifestId && (
+          <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            <span>
+              Showing only the products from one delivery
+              {filterVendors.length > 0 ? ` (${filterVendors.join(", ")})` : ""}.
+            </span>
+            <Link href={draftsHref({ status: view })} className="font-semibold underline">
+              Show every delivery
+            </Link>
+          </div>
+        )}
+        {pinned && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
+            The product you came here for is highlighted below
+            {pinnedMovedTab ? ` \u2014 it's on the ${view === "draft" ? "Needs review" : view} tab now` : ""}.{" "}
+            <a href={`#${draftRowAnchorId(pinned.id)}`} className="font-semibold underline">
+              Jump to it
+            </a>
+          </div>
+        )}
+        {pinnedMissing && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm text-[var(--admin-text-muted)]">
+            That link pointed at a product draft that no longer exists, so the full list is shown instead.
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-2 text-sm">
           {(["draft", "approved", "dismissed"] as const).map((s) => (
             <Link
               key={s}
-              href={`/admin/inventory/drafts?status=${s}`}
+              href={draftsHref({ status: s, manifestId: focus.manifestId })}
               className={`rounded-full px-3 py-1 font-medium capitalize ${
                 view === s
                   ? "bg-[var(--admin-accent)] text-black"
@@ -332,7 +384,13 @@ export default async function CatalogDraftsPage({
         {drafts.length === 0 ? (
           <EmptyState
             icon="📝"
-            title={view === "draft" ? "No drafts to review" : `No ${view} drafts`}
+            title={
+              focus.manifestId
+                ? `No ${view === "draft" ? "drafts to review" : `${view} drafts`} from this delivery`
+                : view === "draft"
+                  ? "No drafts to review"
+                  : `No ${view} drafts`
+            }
             description={
               view === "draft"
                 ? "When you accept a manifest with products that aren't on the live menu, they'll show up here."
@@ -395,7 +453,16 @@ export default async function CatalogDraftsPage({
                       })
                     : null;
                   return (
-                    <tr key={d.id} className="bg-[var(--admin-surface)] align-top">
+                    <tr
+                      key={d.id}
+                      id={draftRowAnchorId(d.id)}
+                      aria-current={pinned?.id === d.id ? "true" : undefined}
+                      className={`scroll-mt-24 align-top ${
+                        pinned?.id === d.id
+                          ? "bg-[var(--admin-gold-soft)] outline outline-2 -outline-offset-2 outline-[var(--admin-gold)]"
+                          : "bg-[var(--admin-surface)]"
+                      }`}
+                    >
                       <td className="px-4 py-3">
                         <div className="font-medium text-[var(--admin-text)]">{builtName ?? (d.name || "(unnamed)")}</div>
                         <div className="text-xs text-[var(--admin-text-faint)]">
@@ -459,6 +526,7 @@ export default async function CatalogDraftsPage({
                           {view === "draft" && (
                             <>
                               <form action={approve} className="flex flex-col items-end gap-2">
+                                {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
                                 {/* SLICE 64: required picks when we couldn't
                                     classify at >=90% confidence. The server
                                     re-checks — this is UX, not the gate.
@@ -748,6 +816,7 @@ export default async function CatalogDraftsPage({
                                 </div>
                               </form>
                               <form action={dismiss}>
+                                {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
                                 <Button type="submit" variant="neutral" size="sm">Dismiss</Button>
                               </form>
                             </>
@@ -761,7 +830,11 @@ export default async function CatalogDraftsPage({
                               )}
                               {view === "approved" && (
                                 <Button
-                                  href={`/admin/products?q=${encodeURIComponent(d.name || "")}`}
+                                  href={enrichHrefForDraft({
+                                    posProductKey: d.pos_product_key,
+                                    isOnLiveMenu: Boolean(d.pos_product_key && liveKeys.has(d.pos_product_key)),
+                                    name: d.name,
+                                  })}
                                   variant="save"
                                   size="sm"
                                 >
@@ -769,6 +842,7 @@ export default async function CatalogDraftsPage({
                                 </Button>
                               )}
                               <form action={restore}>
+                                {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
                                 <Button type="submit" variant="neutral" size="sm">↩ Restore</Button>
                               </form>
                             </>

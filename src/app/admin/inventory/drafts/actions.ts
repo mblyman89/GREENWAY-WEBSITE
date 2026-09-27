@@ -12,6 +12,15 @@ import { validateCategoryDraft } from "@/lib/pos/category-registry-core";
 // SLICE 92: create a product TYPE during onboarding ("__new_type__" pick) -
 // same registry (inventory_types) the Types & Categories settings page manages.
 import { validateInventoryTypeDraft } from "@/lib/pos/type-registry-core";
+// S02: after an action, return to the SAME delivery filter the approver was
+// working in (hidden `return_manifest` field, re-validated as a UUID by
+// draftsHref — the form is never trusted).
+import { draftsHref } from "@/lib/catalog/draft-deep-link-core";
+
+function backTo(formData: FormData | undefined, extra: Record<string, string>): string {
+  const raw = formData?.get("return_manifest");
+  return draftsHref({ manifestId: typeof raw === "string" ? raw : null, extra });
+}
 
 export async function approveDraftAction(draftId: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
@@ -19,7 +28,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   const raw = (formData.get("price") as string | null)?.trim() ?? "";
   const dollars = Number(raw);
   if (!raw || Number.isNaN(dollars) || dollars <= 0) {
-    redirect("/admin/inventory/drafts?error=price");
+    redirect(backTo(formData, { error: "price" }));
   }
   const priceMinor = Math.round(dollars * 100);
   // SLICE 64: the approver's classification picks. The server re-derives what
@@ -57,7 +66,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       existingValues: registry.map((r) => r.value),
     });
     if (!parsed.ok) {
-      redirect(`/admin/inventory/drafts?error=floor&msg=${encodeURIComponent(parsed.error)}`);
+      redirect(backTo(formData, { error: "floor", msg: parsed.error }));
     }
     const admin = createSupabaseAdminClient();
     const { error } = await admin.from("website_category_types").insert({
@@ -69,7 +78,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       is_system: false,
     });
     if (error) {
-      redirect(`/admin/inventory/drafts?error=floor&msg=${encodeURIComponent(error.message)}`);
+      redirect(backTo(formData, { error: "floor", msg: error.message }));
     }
     await recordAudit({
       actorId: session.userId,
@@ -97,7 +106,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       existingKeys: existing.map((t) => t.key),
     });
     if (!parsed.ok) {
-      redirect(`/admin/inventory/drafts?error=floor&msg=${encodeURIComponent(parsed.error)}`);
+      redirect(backTo(formData, { error: "floor", msg: parsed.error }));
     }
     const admin = createSupabaseAdminClient();
     // Map the new type to the category this approval files under: the human's
@@ -140,7 +149,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       is_system: false,
     });
     if (error) {
-      redirect(`/admin/inventory/drafts?error=floor&msg=${encodeURIComponent(error.message)}`);
+      redirect(backTo(formData, { error: "floor", msg: error.message }));
     }
     await recordAudit({
       actorId: session.userId,
@@ -171,27 +180,27 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
     // Surface the floor-violation / classification-gate message.
-    redirect(`/admin/inventory/drafts?error=floor&msg=${encodeURIComponent(result.error ?? "")}`);
+    redirect(backTo(formData, { error: "floor", msg: result.error ?? "" }));
   }
-  redirect("/admin/inventory/drafts?approved=1");
+  redirect(backTo(formData, { approved: "1" }));
 }
 
-export async function dismissDraftAction(draftId: string) {
+export async function dismissDraftAction(draftId: string, formData?: FormData) {
   const session = await requirePermission("inventory.manage");
   const result = await setCatalogDraftStatus(draftId, "dismissed", session.userId);
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
-    redirect("/admin/inventory/drafts?error=update");
+    redirect(backTo(formData, { error: "update" }));
   }
-  redirect("/admin/inventory/drafts?dismissed=1");
+  redirect(backTo(formData, { dismissed: "1" }));
 }
 
-export async function restoreDraftAction(draftId: string) {
+export async function restoreDraftAction(draftId: string, formData?: FormData) {
   const session = await requirePermission("inventory.manage");
   const result = await setCatalogDraftStatus(draftId, "draft", session.userId);
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
-    redirect("/admin/inventory/drafts?error=update");
+    redirect(backTo(formData, { error: "update" }));
   }
-  redirect("/admin/inventory/drafts?restored=1");
+  redirect(backTo(formData, { restored: "1" }));
 }
