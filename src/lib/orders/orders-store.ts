@@ -421,6 +421,31 @@ export async function listOrdersPaged(
 }
 
 export async function listOrders(filter: ListOrdersFilter = {}): Promise<OrderRow[]> {
+  return listOrdersSelecting("*", filter) as Promise<OrderRow[]>;
+}
+
+/**
+ * USAGE-5: the same read as `listOrders`, with an explicit PostgREST column
+ * list, for callers that need a few fields from many rows. The register
+ * pickup queue polls up to 200 rows every 45 s per unlocked register and reads
+ * twelve of the ~35 `orders` columns; `select("*")` shipped the other ~23 —
+ * including customer_email / customer_phone / customer_birthday — to a device
+ * that never displays them. Rows come back as `Partial<OrderRow>`: the caller
+ * asked for a subset and the type says so, instead of lying with `OrderRow`.
+ *
+ * Every other caller keeps `listOrders` and the full row.
+ */
+export async function listOrdersColumns(
+  columns: string,
+  filter: ListOrdersFilter = {},
+): Promise<Partial<OrderRow>[]> {
+  return listOrdersSelecting(columns, filter);
+}
+
+async function listOrdersSelecting(
+  columns: string,
+  filter: ListOrdersFilter,
+): Promise<Partial<OrderRow>[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
 
@@ -428,7 +453,7 @@ export async function listOrders(filter: ListOrdersFilter = {}): Promise<OrderRo
 
   // Fresh query each attempt so a display_name retry starts clean.
   const runQuery = async (withDisplayName: boolean) => {
-    let q = admin.from("orders").select("*");
+    let q = admin.from("orders").select(columns);
     if (filter.status && filter.status !== "all") {
       if (filter.status === "active") {
         q = q.in("status", ["new", "acknowledged", "preparing", "ready"]);
@@ -447,7 +472,7 @@ export async function listOrders(filter: ListOrdersFilter = {}): Promise<OrderRo
     displayNameSearchable = false;
     ({ data } = await runQuery(false));
   }
-  return (data as OrderRow[]) ?? [];
+  return (data as unknown as Partial<OrderRow>[]) ?? [];
 }
 
 /**

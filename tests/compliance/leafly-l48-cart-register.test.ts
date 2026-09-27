@@ -240,7 +240,7 @@ describe("L-48 updatePickupCartAtRegister (real store)", () => {
     vi.doMock("@/lib/supabase/env", () => ({ isSupabaseServiceConfigured: true }));
     vi.doMock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: () => ({}) }));
     let order: Record<string, unknown> | null = { id: ORDER_ID, order_number: "GWY-000042", display_name: "Purple Rain", status: "acknowledged", origin: "leafly", staff_note: null };
-    vi.doMock("@/lib/orders/orders-store", () => ({ listOrders: async () => [], getOrder: async () => order, setOrderStatus: async () => ({ ok: true }) }));
+    vi.doMock("@/lib/orders/orders-store", () => ({ listOrders: async () => [], listOrdersColumns: async () => [], getOrder: async () => order, setOrderStatus: async () => ({ ok: true }) }));
     const store = await import("@/lib/pos/pickup-store");
 
     updateResult = {

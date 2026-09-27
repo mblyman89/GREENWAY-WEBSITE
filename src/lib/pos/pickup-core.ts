@@ -49,6 +49,38 @@ export function isPosMaterializedOrder(staffNote: string | null | undefined): bo
   return typeof staffNote === "string" && staffNote.startsWith(POS_SALE_STAFF_NOTE_PREFIX);
 }
 
+/**
+ * USAGE-5 — the ONLY `orders` columns the register pickup QUEUE needs.
+ *
+ * The queue is polled every 45 s by every unlocked register and reads up to
+ * QUEUE_LIMIT × 4 rows. `orders` has ~35 columns (loyalty_*, limit_reasons
+ * JSON, customer_email / phone / birthday, pos_client_uuid …), and the queue
+ * uses twelve: the eleven `toPickupQueueEntry` reads plus `staff_note`, which
+ * `isPosMaterializedOrder` needs to drop register-materialised sales. Every
+ * other column was Supabase egress paid for nothing — and PII (email, phone,
+ * birthday) crossing the wire to a device that never shows it.
+ *
+ * `satisfies` pins the list to the parameter type of `toPickupQueueEntry`, so
+ * adding a field there without adding it here fails to compile.
+ */
+export const PICKUP_QUEUE_ORDER_COLUMNS = [
+  "id",
+  "order_number",
+  "customer_first_name",
+  "customer_last_name",
+  "status",
+  "item_count",
+  "total_minor_units",
+  "placed_at",
+  "customer_note",
+  "display_name",
+  "origin",
+  "staff_note",
+] as const satisfies readonly (keyof PickupQueueSourceRow | "staff_note")[];
+
+/** The comma-joined PostgREST select list for the queue read. */
+export const PICKUP_QUEUE_ORDER_SELECT: string = PICKUP_QUEUE_ORDER_COLUMNS.join(", ");
+
 // ---------------------------------------------------------------------------
 // Queue shaping
 // ---------------------------------------------------------------------------
@@ -149,30 +181,33 @@ export function sortPickupQueue<T extends { placedAtIso: string }>(entries: T[])
   });
 }
 
+/** The order columns `toPickupQueueEntry` reads — see PICKUP_QUEUE_ORDER_COLUMNS. */
+export type PickupQueueSourceRow = {
+  id: string;
+  order_number: string;
+  customer_first_name: string;
+  customer_last_name: string | null;
+  status: OrderStatus;
+  item_count: number;
+  total_minor_units: number;
+  placed_at: string;
+  customer_note: string | null;
+  /** SLICE L-36 - `orders.display_name` (fun overlay name / LF- label). Optional: older rows lack it. */
+  display_name?: string | null;
+  /**
+   * `orders.origin` (migration 0226). OPTIONAL on purpose: this function is
+   * called with rows that may predate the column, and a required field here
+   * would force every caller to invent a value - which is precisely how a
+   * Leafly order gets labelled "Website" by a `?? "greenway"` written in a
+   * hurry at a call site. Undefined means "not tracked", and `toOrderOrigin`
+   * owns that decision in one place.
+   */
+  origin?: string | null;
+};
+
 /** Shape one order row (already store-filtered) into a queue entry. */
 export function toPickupQueueEntry(
-  order: {
-    id: string;
-    order_number: string;
-    customer_first_name: string;
-    customer_last_name: string | null;
-    status: OrderStatus;
-    item_count: number;
-    total_minor_units: number;
-    placed_at: string;
-    customer_note: string | null;
-    /** SLICE L-36 - `orders.display_name` (fun overlay name / LF- label). Optional: older rows lack it. */
-    display_name?: string | null;
-    /**
-     * `orders.origin` (migration 0226). OPTIONAL on purpose: this function is
-     * called with rows that may predate the column, and a required field here
-     * would force every caller to invent a value - which is precisely how a
-     * Leafly order gets labelled "Website" by a `?? "greenway"` written in a
-     * hurry at a call site. Undefined means "not tracked", and `toOrderOrigin`
-     * owns that decision in one place.
-     */
-    origin?: string | null;
-  },
+  order: PickupQueueSourceRow,
   nowIso: string,
 ): PickupQueueEntry {
   const origin = toOrderOrigin(order.origin);
@@ -263,6 +298,40 @@ export function __runPickupCoreTests(): void {
   ok(!isPosMaterializedOrder("Customer called ahead"), "ordinary staff note is not POS");
   ok(!isPosMaterializedOrder(null) && !isPosMaterializedOrder(undefined), "null/undefined note is not POS");
   ok(!isPosMaterializedOrder("POS sale - hyphen"), "ASCII hyphen does NOT match (the sync writes an em-dash)");
+
+  // USAGE-5: the queue's column list is complete, minimal and PII-free.
+  {
+    const cols: readonly string[] = PICKUP_QUEUE_ORDER_COLUMNS;
+    ok(new Set(cols).size === cols.length, "queue column list has no duplicates");
+    ok(cols.includes("staff_note"), "queue selects staff_note (the POS-materialised filter needs it)");
+    // Every field toPickupQueueEntry reads must be selected, else the entry
+    // would silently render blanks. Exercised by building an entry from an
+    // object that has ONLY the selected columns.
+    const onlySelected = Object.fromEntries(cols.map((c) => [c, null])) as Record<string, unknown>;
+    const row = {
+      ...onlySelected,
+      id: "o1",
+      order_number: "GW-1",
+      customer_first_name: "Ada",
+      customer_last_name: "L",
+      status: "new",
+      item_count: 2,
+      total_minor_units: 1234,
+      placed_at: "2026-09-27T00:00:00.000Z",
+      customer_note: null,
+      display_name: null,
+      origin: "greenway",
+    } as PickupQueueSourceRow;
+    const entry = toPickupQueueEntry(row, "2026-09-27T00:05:00.000Z");
+    ok(entry.orderId === "o1" && entry.orderNumber === "GW-1", "an entry builds from ONLY the selected columns");
+    for (const pii of ["customer_email", "customer_phone", "customer_birthday", "limit_reasons", "pos_client_uuid"]) {
+      ok(!cols.includes(pii), `queue never selects ${pii}`);
+    }
+    ok(
+      PICKUP_QUEUE_ORDER_SELECT === cols.join(", "),
+      "the PostgREST select string is the joined column list",
+    );
+  }
 
   // Labels + waiting time.
   ok(customerPickupLabel("Jordan", "Taylor") === "Jordan T.", "first + last initial");

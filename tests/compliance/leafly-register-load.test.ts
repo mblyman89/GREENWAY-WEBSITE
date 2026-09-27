@@ -59,6 +59,7 @@ type Line = { product_id: string | null; variant_id: string | null; product_name
 let order: Record<string, unknown> | null = null;
 vi.mock("@/lib/orders/orders-store", () => ({
   listOrders: async () => [],
+  listOrdersColumns: async () => [],
   getOrder: async () => order,
   setOrderStatus: async () => ({ ok: true }),
 }));
