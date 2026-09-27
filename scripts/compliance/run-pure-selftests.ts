@@ -617,6 +617,7 @@ import { __runMenuLiveStepCoreTests } from "../../src/lib/inventory/menu-live-st
 import { __runPublishStoryCoreTests } from "../../src/lib/catalog/publish-story-core";
 import { __runIntakeVersionCopyCoreTests } from "../../src/lib/pos/intake-version-copy-core";
 import { __runDraftDeepLinkCoreTests } from "../../src/lib/catalog/draft-deep-link-core";
+import { __runProductIdentityCoreTests } from "../../src/lib/catalog/product-identity-core";
 import { __runVendorResolveCoreTests } from "../../src/lib/inventory/vendor-resolve-core";
 import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultivera-invoice-core";
 import { __runGenericPdfTransportTests } from "../../src/lib/inventory/pdf-generic-transport-core";
@@ -1799,6 +1800,12 @@ __runLiquidVolumeTests();
   // pinned-row tab rule (F-060), Enrich-now by key only when live (F-008).
   // Floor just under the measured count (36).
   assertRan("draft-deep-link-core", __runDraftDeepLinkCoreTests(), 34);
+
+  // S03 product identity: ONE key for writer and reader (parity with
+  // classificationMemoryKey), the dashed KB slug vs the spaced strain slug,
+  // canonical variant labels, and the shadow summary. Floor just under the
+  // measured count (44).
+  assertRan("product-identity-core", __runProductIdentityCoreTests(), 42);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

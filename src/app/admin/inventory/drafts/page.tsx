@@ -36,6 +36,8 @@ import {
   enrichHrefForDraft,
   parseDraftFocus,
 } from "@/lib/catalog/draft-deep-link-core";
+// S03: shadow measurement of the product-identity key (console only).
+import { identityShadowLogLine, summarizeIdentityShadow } from "@/lib/catalog/product-identity-core";
 import {
   assessDraftClassification,
   websiteCategoryLabel,
@@ -237,6 +239,33 @@ export default async function CatalogDraftsPage({
       }),
     );
   });
+
+  // S03 SHADOW RING (console only, zero behaviour change, ZERO queries): how
+  // many open drafts are re-deliveries of an already-approved product whose
+  // new lot key restock merge could not match? Uses only what this page has
+  // already loaded (drafts, approved history, live keys). Never throws.
+  if (view === "draft") {
+    try {
+      const shadowLine = identityShadowLogLine(
+        summarizeIdentityShadow({
+          drafts: drafts.map((d, i) => ({
+            posProductKey: d.pos_product_key,
+            identity: {
+              vendorName: d.vendor_name,
+              brandName: d.brand_name,
+              productName: d.name,
+              category: resolutions[i]?.websiteCategory ?? d.category,
+            },
+          })),
+          approvedHistory: priorClassifications,
+          liveKeys,
+        }),
+      );
+      if (shadowLine) console.info(shadowLine);
+    } catch (err) {
+      console.error("[identity-shadow] summary failed (display unaffected):", err);
+    }
+  }
 
   // SLICE 92: the type picker = hardcoded catalog ∪ the owner's registry
   // (listInventoryTypes returns DB rows + catalog fillers; the merge skips
