@@ -17,6 +17,22 @@ import {
   planDraftSeeding,
   type SeedLotInput,
 } from "@/lib/inventory/draft-seed-core";
+// S05 - stamp identity at the door (see identity-stamp-core.ts).
+import { identityForLot } from "@/lib/catalog/product-identity-core";
+import {
+  identityKeyForStorage,
+  isMissingIdentityColumnError,
+  withoutIdentityColumns,
+} from "@/lib/catalog/identity-columns-core";
+import {
+  IDENTITY_STAMP_ENV,
+  LIVE_MENU_IDENTITY_COLUMNS,
+  buildLiveIdentityIndex,
+  identityStampEnabled,
+  type LiveMenuRow,
+  type LotIdentityStamp,
+} from "@/lib/inventory/identity-stamp-core";
+import { isPromotableLot } from "@/lib/inventory/manifest-kb-bridge-core";
 import {
   assessDraftClassification,
   validateClassificationChoice,
@@ -44,7 +60,10 @@ import {
 // provenance. Pure policy; the write below obeys it. See migration 0219 - this
 // is a paper trail, never enforcement.
 import { planClassificationMirror } from "@/lib/inventory/classification-mirror-core";
-import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
+import {
+  resolveWebsiteCategories,
+  resolveWebsiteCategoryForLot,
+} from "@/lib/inventory/website-category-resolver-server";
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 // SLICE 92: owner-created product types (inventory_types) are legal picks too.
 import { listInventoryTypes } from "@/lib/pos/types-store";
@@ -149,7 +168,24 @@ type LotForMatch = {
   strain_name: string | null;
   lab_result_id: string | null;
   unit_cost_minor_units: number | null;
+  // S05: pre-0234 columns (0024 / 0138 / base), read by name.
+  lot_code: string | null;
+  strain_type: string | null;
+  unit_weight: number | null;
+  unit_weight_uom: string | null;
+  status: string | null;
+  disposition: string | null;
 };
+
+/**
+ * S05 - the lot read, as a named list (usage rule: never `*`). Every column
+ * predates 0234, so this read is safe before the owner applies it.
+ */
+export const SEED_LOT_COLUMNS =
+  "id, pos_product_key, product_name, brand_id, vendor_id, category, inventory_type, strain_name, lab_result_id, unit_cost_minor_units, lot_code, strain_type, unit_weight, unit_weight_uom, status, disposition";
+
+/** Live-menu rows read for the restock hint are capped; a full page = skip. */
+const LIVE_IDENTITY_READ_CAP = 1000;
 
 /**
  * Result of checking a manifest's lots against the published catalog.
@@ -165,6 +201,17 @@ export type CatalogMatchResult = {
   draftsFailed: number;
   /** First real insert error message, for the timeline/UI. */
   firstError: string | null;
+  /**
+   * S05: every non-destroyed lot's identity (computed, never read from a 0234
+   * column) for the finalize link step. Absent when the stamp is switched off.
+   */
+  lotIdentities?: LotIdentityStamp[];
+  /** S05: drafts written with a single-card restock hint. */
+  restockHints?: number;
+  /** S05: seeded lots whose identity matched 2+ live cards (no hint set). */
+  restockAmbiguous?: number;
+  /** S05: true when a draft insert proved migration 0234 is not applied. */
+  identityColumnsMissing?: boolean;
 };
 
 /**
@@ -203,9 +250,7 @@ export async function seedDraftsForManifest(
 
   const { data: lotsData, error: lotsError } = await admin
     .from("inventory_lots")
-    .select(
-      "id, pos_product_key, product_name, brand_id, vendor_id, category, inventory_type, strain_name, lab_result_id, unit_cost_minor_units",
-    )
+    .select(SEED_LOT_COLUMNS)
     .eq("manifest_id", manifestId)
     .neq("status", "destroyed");
   if (lotsError) {
@@ -251,16 +296,71 @@ export async function seedDraftsForManifest(
     }
   }
 
+  // Vendor/brand display names. S05: prefetched in ONE .in() read per table
+  // (it used to be one read per distinct id inside the loop). Same columns,
+  // same source of truth (the display name the draft stores), so the draft
+  // payload is unchanged. Best-effort, exactly as before: a failed read
+  // leaves the name null.
+  const vendorNames = new Map<string, string | null>();
+  const brandNames = new Map<string, string | null>();
+  await prefetchDisplayNames(admin, "vendors", lots.map((l) => l.vendor_id), vendorNames);
+  await prefetchDisplayNames(admin, "brands", lots.map((l) => l.brand_id), brandNames);
+
+  // S05: the product identity of every lot (INTAKE_IDENTITY_STAMP=off -> skip).
+  const stampOn = identityStampEnabled(process.env[IDENTITY_STAMP_ENV]);
+  const identityByLot = new Map<string, LotIdentityStamp>();
+  if (stampOn) {
+    try {
+      const resolutions = await resolveWebsiteCategories(
+        lots.map((l) => ({
+          posProductKey: l.pos_product_key,
+          productName: l.product_name,
+          inventoryType: l.inventory_type,
+          category: l.category,
+        })),
+      );
+      lots.forEach((l, i) => {
+        const id = identityForLot(l, {
+          vendorName: l.vendor_id ? vendorNames.get(l.vendor_id) ?? null : null,
+          brandName: l.brand_id ? brandNames.get(l.brand_id) ?? null : null,
+          websiteCategory: resolutions[i]?.websiteCategory ?? null,
+        });
+        identityByLot.set(l.id, {
+          lotId: l.id,
+          identityKey: identityKeyForStorage(id.identityKey),
+          kb: id.kb,
+          promotable: isPromotableLot(l.status, l.disposition),
+        });
+      });
+    } catch (err) {
+      // Identity is additive evidence: never let it block onboarding drafts.
+      console.error("[catalog-drafts] identity computation failed (drafts unaffected):", err);
+      identityByLot.clear();
+    }
+  }
+
   const seedInputs: SeedLotInput[] = lots.map((l) => ({
     lotId: l.id,
     posProductKey: l.pos_product_key,
+    identityKey: identityByLot.get(l.id)?.identityKey ?? null,
   }));
-  const plan = planDraftSeeding({ lots: seedInputs, publishedKeys, openDraftKeys });
+  const liveIdentityToCardKeys =
+    stampOn && published && identityByLot.size > 0
+      ? await loadLiveIdentityIndex(
+          admin,
+          published.id,
+          lots
+            .filter((l) => !(l.pos_product_key && publishedKeys.has(l.pos_product_key)))
+            .map((l) => (l.vendor_id ? vendorNames.get(l.vendor_id) ?? null : null)),
+        )
+      : undefined;
+  const plan = planDraftSeeding({
+    lots: seedInputs,
+    publishedKeys,
+    openDraftKeys,
+    liveIdentityToCardKeys,
+  });
   const lotById = new Map(lots.map((l) => [l.id, l] as const));
-
-  // Cache vendor/brand name lookups so we don't refetch per lot.
-  const vendorNames = new Map<string, string | null>();
-  const brandNames = new Map<string, string | null>();
   const labCache = new Map<
     string,
     {
@@ -277,36 +377,18 @@ export async function seedDraftsForManifest(
   let draftsCreated = 0;
   let draftsFailed = 0;
   let firstError: string | null = null;
+  // S05: once a draft insert proves 0234 is missing, stop sending its columns
+  // (one wasted round trip per finalize, not one per lot).
+  let identityColumnsMissing = false;
+  let restockHints = 0;
 
   for (const seed of plan.toSeed) {
     const lot = lotById.get(seed.lotId);
     if (!lot) continue;
 
-    // Resolve display names (best-effort).
-    let vendorName: string | null = null;
-    if (lot.vendor_id) {
-      if (!vendorNames.has(lot.vendor_id)) {
-        const { data } = await admin
-          .from("vendors")
-          .select("display_name")
-          .eq("id", lot.vendor_id)
-          .maybeSingle();
-        vendorNames.set(lot.vendor_id, (data as { display_name: string } | null)?.display_name ?? null);
-      }
-      vendorName = vendorNames.get(lot.vendor_id) ?? null;
-    }
-    let brandName: string | null = null;
-    if (lot.brand_id) {
-      if (!brandNames.has(lot.brand_id)) {
-        const { data } = await admin
-          .from("brands")
-          .select("display_name")
-          .eq("id", lot.brand_id)
-          .maybeSingle();
-        brandNames.set(lot.brand_id, (data as { display_name: string } | null)?.display_name ?? null);
-      }
-      brandName = brandNames.get(lot.brand_id) ?? null;
-    }
+    // Display names (prefetched above; best-effort).
+    const vendorName: string | null = lot.vendor_id ? vendorNames.get(lot.vendor_id) ?? null : null;
+    const brandName: string | null = lot.brand_id ? brandNames.get(lot.brand_id) ?? null : null;
 
     // Carry potency from the lab result.
     let lab = {
@@ -345,7 +427,7 @@ export async function seedDraftsForManifest(
     // PostgREST → 42P10) and never read the error, so drafts silently never
     // existed. A 23505 here is the partial index catching a race (the draft
     // already exists — benign); anything else is a real failure we surface.
-    const { error: insertError } = await admin.from("catalog_product_drafts").insert({
+    const baseRow = {
       pos_product_key: lot.pos_product_key,
       source_item_id: lot.pos_product_key,
       name: lot.product_name ?? "",
@@ -369,9 +451,39 @@ export async function seedDraftsForManifest(
       status: "draft",
       created_by: actorId,
       updated_by: actorId,
-    });
+    };
+    // S05 (0234 columns). sku is deliberately NOT written: inventory_lots has
+    // no sku column - the parser folds a manifest sku into pos_product_key
+    // (intake-parser.ts), which the draft already carries. kb_product_id is
+    // set by the finalize link step, after the KB write-back has settled.
+    const identityRow =
+      stampOn && !identityColumnsMissing
+        ? {
+            identity_key: identityByLot.get(lot.id)?.identityKey ?? null,
+            brand_id: lot.brand_id,
+            vendor_id: lot.vendor_id,
+            lot_code: lot.lot_code,
+            strain_type: lot.strain_type,
+            restock_of_card_key: seed.restockOfCardKey ?? null,
+          }
+        : {};
+    let { error: insertError } = await admin
+      .from("catalog_product_drafts")
+      .insert({ ...baseRow, ...identityRow });
+    if (insertError && isMissingIdentityColumnError("catalog_product_drafts", insertError)) {
+      // Pre-0234 database: the owner has not applied the migration yet. Retry
+      // ONCE without exactly the 0234 columns; any other error still surfaces.
+      identityColumnsMissing = true;
+      console.warn(
+        "[catalog-drafts] migration 0234 not applied - drafts written without identity columns",
+      );
+      ({ error: insertError } = await admin
+        .from("catalog_product_drafts")
+        .insert(withoutIdentityColumns("catalog_product_drafts", { ...baseRow, ...identityRow })));
+    }
     if (!insertError) {
       draftsCreated += 1;
+      if (seed.restockOfCardKey && !identityColumnsMissing) restockHints += 1;
     } else if (classifyInsertError(insertError.code) === "duplicate") {
       // Race backstop: another finalize seeded this key between our planning
       // read and this write. The draft exists — that's the desired end state.
@@ -395,7 +507,76 @@ export async function seedDraftsForManifest(
     draftsCreated,
     draftsFailed,
     firstError,
+    ...(stampOn
+      ? {
+          lotIdentities: Array.from(identityByLot.values()),
+          restockHints,
+          restockAmbiguous: plan.restockAmbiguous,
+          identityColumnsMissing,
+        }
+      : {}),
   };
+}
+
+/** S05: one `.in()` read of display names for a set of ids (chunked). */
+async function prefetchDisplayNames(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  table: "vendors" | "brands",
+  ids: Array<string | null>,
+  into: Map<string, string | null>,
+): Promise<void> {
+  const unique = Array.from(new Set(ids.filter((v): v is string => Boolean(v))));
+  const CHUNK = 200;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const slice = unique.slice(i, i + CHUNK);
+    const { data, error } = await admin.from(table).select("id, display_name").in("id", slice);
+    if (error) {
+      console.error(`[catalog-drafts] ${table} name read failed:`, error.message);
+      continue;
+    }
+    for (const r of (data as { id: string; display_name: string | null }[] | null) ?? []) {
+      into.set(r.id, r.display_name ?? null);
+    }
+  }
+  for (const id of unique) if (!into.has(id)) into.set(id, null);
+}
+
+/**
+ * S05: live cards grouped by identity, for the restock hint. Reads ONLY the
+ * published cards of the vendors on this manifest (named 0002 columns), so
+ * egress is bounded by one vendor's menu, not the whole store's.
+ *
+ * Why vendor_name equality is safe: a live card's vendor_name is the draft's
+ * vendor_name, which is vendors.display_name - the same string this manifest
+ * resolved. A card spelled differently (e.g. an old import) simply yields no
+ * hint - the pre-S05 behaviour - never a wrong one.
+ *
+ * NEVER GUESS: a failed read or a full page (possible truncation, which
+ * could make an ambiguous identity look single) returns undefined = no hints.
+ */
+async function loadLiveIdentityIndex(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  publishedVersionId: string,
+  vendorNames: Array<string | null>,
+): Promise<Map<string, string[]> | undefined> {
+  const names = Array.from(new Set(vendorNames.filter((v): v is string => Boolean(v && v.trim()))));
+  if (names.length === 0) return undefined;
+  const { data, error } = await admin
+    .from("menu_items")
+    .select(LIVE_MENU_IDENTITY_COLUMNS)
+    .eq("menu_version_id", publishedVersionId)
+    .in("vendor_name", names)
+    .range(0, LIVE_IDENTITY_READ_CAP - 1);
+  if (error) {
+    console.error("[catalog-drafts] live identity read failed (no restock hints):", error.message);
+    return undefined;
+  }
+  const rows = (data as unknown as LiveMenuRow[] | null) ?? [];
+  if (rows.length >= LIVE_IDENTITY_READ_CAP) {
+    console.warn("[catalog-drafts] live identity read hit its cap - restock hints skipped (never a guess)");
+    return undefined;
+  }
+  return buildLiveIdentityIndex(rows);
 }
 
 /**

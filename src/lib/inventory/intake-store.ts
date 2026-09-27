@@ -93,6 +93,21 @@ import {
 } from "@/lib/inventory/manifest-dedupe-core";
 import { autoReceiveManifestPo } from "@/lib/inventory/po-receive-store";
 import { stageIntakeMenuVersionForManifest } from "@/lib/pos/intake-menu-staging";
+// S05 - stamp identity at the door.
+import { identityForLot } from "@/lib/catalog/product-identity-core";
+import {
+  identityKeyForStorage,
+  isMissingIdentityColumnError,
+  withoutIdentityColumns,
+} from "@/lib/catalog/identity-columns-core";
+import {
+  IDENTITY_STAMP_ENV,
+  KB_WRITEBACK_ERROR_EVENT,
+  identityStampEnabled,
+  kbWritebackErrorNote,
+} from "@/lib/inventory/identity-stamp-core";
+import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
+import { linkKbProductsToDrafts } from "@/lib/inventory/kb-link-store";
 import {
   deriveManifestStatus,
   normalizePartialNote,
@@ -600,8 +615,43 @@ export async function stageManifest(
   // one lab_result_id across multiple lots — items 17/18, 27/28 in the example).
   const labIdCache = new Map<string, string>();
 
+  // S05 - identity inputs, fetched ONCE per manifest (not per line): the
+  // vendor's display name (the same string the onboarding draft stores) and
+  // every line's website category in one batched resolve. Best-effort: any
+  // failure just leaves identity_key NULL - it never blocks staging.
+  const stampOn = identityStampEnabled(process.env[IDENTITY_STAMP_ENV]);
+  let stampVendorName: string | null = null;
+  let stampCategories: Array<string | null> = [];
+  if (stampOn) {
+    try {
+      if (vendorId) {
+        const { data: v } = await admin
+          .from("vendors")
+          .select("display_name")
+          .eq("id", vendorId)
+          .maybeSingle();
+        stampVendorName = (v as { display_name: string | null } | null)?.display_name ?? null;
+      }
+      stampCategories = (
+        await resolveWebsiteCategories(
+          parsed.lines.map((l) => ({
+            posProductKey: l.pos_product_key,
+            productName: l.product_name,
+            inventoryType: l.inventory_type,
+            category: l.category,
+          })),
+        )
+      ).map((r) => r.websiteCategory);
+    } catch (err) {
+      console.error("[intake-store] identity inputs failed (staging unaffected):", err);
+      stampCategories = [];
+    }
+  }
+  // Set once a lot insert proves 0234 is not applied: stop sending the column.
+  let identityColumnsMissing = false;
+
   // 2) per line: lab_result (if any) + quarantine lot
-  for (const line of parsed.lines) {
+  for (const [lineIndex, line] of parsed.lines.entries()) {
     let labId: string | null = null;
     if (line.lab) {
       const extId = line.lab.labtest_external_identifier;
@@ -645,9 +695,26 @@ export async function stageManifest(
       }
     }
 
-    const brandId = await resolveBrandId(admin, line.brand_name, vendorId);
+    // S05: the detailed resolve (same queries as resolveBrandId) also hands
+    // back the brand's display name for the identity - no extra read.
+    const brandRes = await resolveBrandIdDetailed(admin, line.brand_name, vendorId);
+    const brandId = brandRes.brandId;
+    const matchedBrand =
+      brandRes.outcome.kind === "exact" || brandRes.outcome.kind === "squeezed"
+        ? brandRes.outcome.matched
+        : null;
+    const identityKey =
+      stampOn && !identityColumnsMissing
+        ? identityKeyForStorage(
+            identityForLot(line, {
+              vendorName: stampVendorName,
+              brandName: matchedBrand,
+              websiteCategory: stampCategories[lineIndex] ?? null,
+            }).identityKey,
+          )
+        : undefined;
 
-    await admin.from("inventory_lots").insert({
+    const lotRow = {
       lot_code: line.lot_code,
       vendor_id: vendorId,
       brand_id: brandId,
@@ -692,7 +759,22 @@ export async function stageManifest(
       status: "quarantine", // held until the manifest is accepted
       created_by: actorId,
       updated_by: actorId,
-    });
+      // S05 (0234): omitted entirely when the stamp is off or 0234 is missing.
+      ...(identityKey === undefined ? {} : { identity_key: identityKey }),
+    };
+    const { error: lotErr } = await admin.from("inventory_lots").insert(lotRow);
+    if (lotErr && isMissingIdentityColumnError("inventory_lots", lotErr)) {
+      identityColumnsMissing = true;
+      console.warn("[intake-store] migration 0234 not applied - lots staged without identity_key");
+      const { error: retryErr } = await admin
+        .from("inventory_lots")
+        .insert(withoutIdentityColumns("inventory_lots", lotRow));
+      if (retryErr) console.error("[intake-store] lot insert failed:", retryErr.message);
+    } else if (lotErr) {
+      // Previously unread. Still non-blocking (unchanged behaviour), but no
+      // longer silent.
+      console.error("[intake-store] lot insert failed:", lotErr.message);
+    }
   }
 
   return { ok: true, manifestId };
@@ -1356,8 +1438,22 @@ export async function finalizeManifestDispositions(
     }
     // Slice H11a: KB write-back (name/strain/category/vendor + COA potency)
     // as DRAFTS via the non-destructive merge. Best-effort.
+    // S05 / F-077: a KB write-back failure was console-only; it now lands on
+    // the manifest timeline so the owner can see it and re-run the promote.
     if (kbRes.status === "rejected") {
       console.error("[intake-store] promoteManifestToKb failed:", kbRes.reason);
+      await logManifestEvent(manifestId, KB_WRITEBACK_ERROR_EVENT, kbWritebackErrorNote(kbRes.reason), actorId);
+    } else if (!kbRes.value.ok) {
+      await logManifestEvent(manifestId, KB_WRITEBACK_ERROR_EVENT, kbWritebackErrorNote(kbRes.value.error), actorId);
+    }
+    // S05: link lots + drafts to kb_products. Runs AFTER both the draft seed
+    // and the KB write-back have settled (the write-back creates the rows we
+    // link to), so it is deliberately OUTSIDE the concurrent fan-out. Never
+    // throws; skipped when the stamp is switched off or seeding failed.
+    if (draftsRes.status === "fulfilled" && draftsRes.value.lotIdentities) {
+      await linkKbProductsToDrafts(manifestId, draftsRes.value.lotIdentities, actorId, {
+        restockHints: draftsRes.value.restockHints ?? 0,
+      });
     }
     // Slice H15e: remember this vendor's usual carrier/driver/vehicle.
     if (transportRes.status === "rejected") {

@@ -33,7 +33,15 @@
 export type SeedLotInput = {
   lotId: string;
   posProductKey: string | null;
+  /**
+   * S05: the lot's product identity (product-identity-core, storage form:
+   * null = not enough identity). Optional - absent means "no hint".
+   */
+  identityKey?: string | null;
 };
+
+/** A lot the plan seeds, with its S05 restock hint when there is one. */
+export type SeededLot = SeedLotInput & { restockOfCardKey?: string | null };
 
 export type SeedAction =
   /** The key is already on the PUBLISHED menu — nothing to onboard. */
@@ -49,6 +57,12 @@ export type SeedDecision = {
   lotId: string;
   posProductKey: string | null;
   action: SeedAction;
+  /**
+   * S05: set ONLY on a "seed" decision whose identity matches exactly ONE
+   * visible live card under a DIFFERENT key - the draft is still seeded
+   * (annotate, never suppress) and carries this as restock_of_card_key.
+   */
+  restockOfCardKey?: string | null;
 };
 
 export type DraftSeedPlanInputs = {
@@ -58,12 +72,17 @@ export type DraftSeedPlanInputs = {
   publishedKeys: Set<string>;
   /** pos_product_keys of EXISTING open drafts (status = 'draft'). */
   openDraftKeys: Set<string>;
+  /**
+   * S05: identity -> live card keys (identity-stamp-core
+   * buildLiveIdentityIndex). Optional; absent = byte-identical old plan.
+   */
+  liveIdentityToCardKeys?: Map<string, string[]>;
 };
 
 export type DraftSeedPlan = {
   decisions: SeedDecision[];
   /** Lots that need a draft INSERT, in input order. */
-  toSeed: SeedLotInput[];
+  toSeed: SeededLot[];
   /** Lots whose key is already on the published menu. */
   matched: number;
   /**
@@ -72,6 +91,14 @@ export type DraftSeedPlan = {
    * the live menu — matching the historical CatalogMatchResult semantics.
    */
   unmatched: number;
+  /** S05: seeded lots annotated with a single-card restock hint. */
+  restockHints: number;
+  /**
+   * S05: seeded lots whose identity matches 2+ live cards. No hint is set -
+   * picking one would be a guess (S19 owns that decision); counted so the
+   * ambiguity is visible instead of silent.
+   */
+  restockAmbiguous: number;
 };
 
 /**
@@ -82,10 +109,12 @@ export type DraftSeedPlan = {
  */
 export function planDraftSeeding(inputs: DraftSeedPlanInputs): DraftSeedPlan {
   const decisions: SeedDecision[] = [];
-  const toSeed: SeedLotInput[] = [];
+  const toSeed: SeededLot[] = [];
   const seenInRun = new Set<string>();
   let matched = 0;
   let unmatched = 0;
+  let restockHints = 0;
+  let restockAmbiguous = 0;
 
   for (const lot of inputs.lots) {
     const key = lot.posProductKey;
@@ -106,11 +135,40 @@ export function planDraftSeeding(inputs: DraftSeedPlanInputs): DraftSeedPlan {
       continue;
     }
     if (key) seenInRun.add(key);
-    decisions.push({ lotId: lot.lotId, posProductKey: key, action: "seed" });
-    toSeed.push(lot);
+    const hint = restockHintFor(lot, inputs.liveIdentityToCardKeys);
+    if (hint.kind === "single") restockHints += 1;
+    if (hint.kind === "ambiguous") restockAmbiguous += 1;
+    const decision: SeedDecision = { lotId: lot.lotId, posProductKey: key, action: "seed" };
+    if (hint.kind === "single") decision.restockOfCardKey = hint.cardKey;
+    decisions.push(decision);
+    toSeed.push(hint.kind === "single" ? { ...lot, restockOfCardKey: hint.cardKey } : lot);
   }
 
-  return { decisions, toSeed, matched, unmatched };
+  return { decisions, toSeed, matched, unmatched, restockHints, restockAmbiguous };
+}
+
+type RestockHint =
+  | { kind: "none" }
+  | { kind: "single"; cardKey: string }
+  | { kind: "ambiguous" };
+
+/**
+ * The restock hint for one lot. "" / null identity never matches (unknown is
+ * never a wildcard); a live card under the lot's OWN key is not a restock
+ * hint (that path is a plain "match" and never reaches here); 2+ candidate
+ * cards is ambiguous, never a coin flip.
+ */
+function restockHintFor(
+  lot: SeedLotInput,
+  index: Map<string, string[]> | undefined,
+): RestockHint {
+  if (!index) return { kind: "none" };
+  const id = (lot.identityKey ?? "").trim();
+  if (!id) return { kind: "none" };
+  const cards = (index.get(id) ?? []).filter((c) => c && c !== lot.posProductKey);
+  if (cards.length === 0) return { kind: "none" };
+  if (cards.length > 1) return { kind: "ambiguous" };
+  return { kind: "single", cardKey: cards[0] };
 }
 
 /**
@@ -127,7 +185,7 @@ export function classifyInsertError(code: string | null | undefined): "duplicate
 
 // ─── Self-tests ───────────────────────────────────────────────────────────────
 
-export function __runDraftSeedCoreTests(): { passed: number } {
+export function __runDraftSeedCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   const assert = (cond: boolean, msg: string) => {
     if (!cond) throw new Error("FAIL draft-seed-core: " + msg);
@@ -200,6 +258,85 @@ export function __runDraftSeedCoreTests(): { passed: number } {
   assert(classifyInsertError(null) === "failure", "null code → failure");
   assert(classifyInsertError(undefined) === "failure", "undefined code → failure");
 
+  // ── S05 restock hint (identity match against a live card) ──────────────
+  const idLot = (lotId: string, key: string | null, identityKey: string | null): SeedLotInput => ({
+    lotId,
+    posProductKey: key,
+    identityKey,
+  });
+  const live = new Map<string, string[]>([
+    ["acme|flower|blue dream", ["CARD-BD"]],
+    ["acme|flower|gelato", ["CARD-G1", "CARD-G2"]],
+  ]);
+  const withLive = (lots: SeedLotInput[], published: string[] = [], openDrafts: string[] = []) =>
+    planDraftSeeding({
+      lots,
+      publishedKeys: new Set(published),
+      openDraftKeys: new Set(openDrafts),
+      liveIdentityToCardKeys: live,
+    });
+
+  // The roadmap test: identity matches a live card while pos_product_key
+  // differs -> exactly ONE draft, annotated with the card (no duplicate, no
+  // suppression).
+  const h1 = withLive([idLot("l1", "LOT-NEW-KEY", "acme|flower|blue dream")]);
+  assert(h1.toSeed.length === 1, "restock: still seeds exactly one draft (annotate, never suppress)");
+  assert(h1.decisions[0].action === "seed", "restock: action stays seed");
+  assert(h1.decisions[0].restockOfCardKey === "CARD-BD", "restock: decision carries the live card key");
+  assert(h1.toSeed[0].restockOfCardKey === "CARD-BD", "restock: seeded lot carries the hint to the insert");
+  assert(h1.restockHints === 1 && h1.restockAmbiguous === 0, "restock: counted once");
+  assert(h1.unmatched === 1 && h1.matched === 0, "restock: counts unchanged (not on menu by key)");
+
+  // Two live cards share the identity -> ambiguous, NO hint (never a guess).
+  const h2 = withLive([idLot("l1", "K9", "acme|flower|gelato")]);
+  assert(h2.toSeed.length === 1 && !h2.toSeed[0].restockOfCardKey, "ambiguous: seeds, no hint");
+  assert(h2.restockAmbiguous === 1 && h2.restockHints === 0, "ambiguous: counted as ambiguous");
+  assert(!("restockOfCardKey" in h2.decisions[0]), "ambiguous: decision has no hint key at all");
+
+  // Unknown identity never matches anything.
+  const h3 = withLive([idLot("l1", "K1", null), idLot("l2", "K2", ""), idLot("l3", "K3", "  ")]);
+  assert(h3.restockHints === 0 && h3.toSeed.every((t) => !t.restockOfCardKey), "null/''/blank identity -> no hint");
+
+  // Published key match wins before any hint (no draft at all).
+  const h4 = withLive([idLot("l1", "CARD-BD", "acme|flower|blue dream")], ["CARD-BD"]);
+  assert(h4.decisions[0].action === "match" && h4.toSeed.length === 0, "key on menu -> match, no hint");
+  assert(h4.restockHints === 0, "match is not a restock hint");
+
+  // A live card under the lot's OWN key is not a restock hint.
+  const h5 = withLive([idLot("l1", "CARD-BD", "acme|flower|blue dream")]);
+  assert(!h5.toSeed[0].restockOfCardKey, "own key is never its own restock hint");
+
+  // Open-draft / in-run skips never produce hints (no draft is written).
+  const h6 = withLive(
+    [idLot("l1", "K1", "acme|flower|blue dream"), idLot("l2", "K1", "acme|flower|blue dream")],
+    [],
+    [],
+  );
+  assert(h6.toSeed.length === 1 && h6.restockHints === 1, "in-run duplicate: one draft, one hint");
+  const h7 = withLive([idLot("l1", "K1", "acme|flower|blue dream")], [], ["K1"]);
+  assert(h7.toSeed.length === 0 && h7.restockHints === 0, "open draft skip: no hint counted");
+
+  // Two different new keys with the same identity: BOTH still seed, both hinted.
+  const h8 = withLive([idLot("l1", "K1", "acme|flower|blue dream"), idLot("l2", "K2", "acme|flower|blue dream")]);
+  assert(h8.toSeed.length === 2 && h8.restockHints === 2, "distinct keys, same identity: both seed + hinted");
+
+  // No index -> byte-identical to the pre-S05 planner.
+  const h9 = plan([idLot("l1", "K1", "acme|flower|blue dream")]);
+  assert(!("restockOfCardKey" in h9.decisions[0]) && h9.restockHints === 0, "no index -> no hint fields");
+  assert(!("restockOfCardKey" in h9.toSeed[0]), "no index -> seeded lot not decorated");
+
+  // Defence in depth: even a hand-built index carrying a blank key never
+  // hints a lot whose identity is null / blank / whitespace.
+  const blankIdx = new Map<string, string[]>([["", ["CARD-BLANK"]]]);
+  const h10 = planDraftSeeding({
+    lots: [idLot("l1", "K1", null), idLot("l2", "K2", ""), idLot("l3", "K3", "   ")],
+    publishedKeys: new Set(),
+    openDraftKeys: new Set(),
+    liveIdentityToCardKeys: blankIdx,
+  });
+  assert(h10.toSeed.length === 3 && h10.restockHints === 0, "blank identity never matches a blank index key");
+  assert(h10.toSeed.every((l) => !l.restockOfCardKey), "blank identity: no seeded lot decorated");
+
   console.log(`draft-seed-core: ${passed} passed, 0 failed`);
-  return { passed };
+  return { passed, failed: 0 };
 }

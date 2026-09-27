@@ -319,10 +319,20 @@ describe("S03 — shadow ring (console only, zero queries, zero behaviour change
     expect(src).not.toMatch(/server-only|supabase|node:fs/);
   });
 
-  it("no caller has been switched onto the new key yet (zero behaviour change)", () => {
-    // Only the shadow hook on the drafts page may import it in S03.
-    const callers = ["src/lib/inventory/catalog-drafts.ts", "src/lib/pos/intake-mastering-core.ts", "src/lib/ai/kb/intake.ts", "src/lib/ai/kb/writeback.ts", "src/lib/inventory/manifest-kb-bridge-core.ts", "src/lib/inventory/draft-seed-core.ts"];
-    for (const f of callers) expect(read(f), f).not.toContain("product-identity-core");
+  it("no MATCHING path has been switched onto the new key (merge/KB lookups unchanged)", () => {
+    // S03 shipped the key with zero callers. S05 (stamp identity at the door)
+    // is the planned first writer: catalog-drafts.ts, intake-store.ts and
+    // identity-stamp-core.ts now import it to STAMP identity_key and to
+    // annotate (never suppress) a restock hint. Every path that DECIDES a
+    // match - restock merge, KB lookup/write-back, the bridge, the seed
+    // planner's dedupe - must still not import it until its own slice.
+    const matchers = ["src/lib/pos/intake-mastering-core.ts", "src/lib/ai/kb/intake.ts", "src/lib/ai/kb/writeback.ts", "src/lib/inventory/manifest-kb-bridge-core.ts", "src/lib/inventory/draft-seed-core.ts"];
+    // Import statements only - a prose mention in a comment is not a caller.
+    for (const f of matchers) expect(read(f), f).not.toMatch(/from\s+["'][^"']*product-identity-core["']/);
+    // The S05 writers are the only new importers (pinned so a new one is deliberate).
+    for (const f of ["src/lib/inventory/catalog-drafts.ts", "src/lib/inventory/intake-store.ts", "src/lib/inventory/identity-stamp-core.ts"]) {
+      expect(read(f), f).toContain('from "@/lib/catalog/product-identity-core"');
+    }
   });
 });
 

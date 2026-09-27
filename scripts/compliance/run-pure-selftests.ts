@@ -619,6 +619,7 @@ import { __runIntakeVersionCopyCoreTests } from "../../src/lib/pos/intake-versio
 import { __runDraftDeepLinkCoreTests } from "../../src/lib/catalog/draft-deep-link-core";
 import { __runProductIdentityCoreTests } from "../../src/lib/catalog/product-identity-core";
 import { __runIdentityColumnsCoreTests } from "../../src/lib/catalog/identity-columns-core";
+import { __runIdentityStampCoreTests } from "../../src/lib/inventory/identity-stamp-core";
 import { __runVendorResolveCoreTests } from "../../src/lib/inventory/vendor-resolve-core";
 import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultivera-invoice-core";
 import { __runGenericPdfTransportTests } from "../../src/lib/inventory/pdf-generic-transport-core";
@@ -1293,7 +1294,7 @@ __runLiquidVolumeTests();
   __runProductInfoCoreTests();
   __runStockFlagCoreTests();
   __runThemeCoreTests();
-  __runDraftSeedCoreTests();
+  assertRan("draft-seed-core", __runDraftSeedCoreTests(), 37);
   __runWedgeScanCoreTests();
   __runSocketScanCoreTests();
   __runSocketResilienceCoreTests();
@@ -1811,6 +1812,7 @@ __runLiquidVolumeTests();
   // detector is narrow (code or wording AND a column of THAT table), the
   // strip helper never mutates. Floor just under the measured count (33).
   assertRan("identity-columns-core", __runIdentityColumnsCoreTests(), 32);
+  assertRan("identity-stamp-core", __runIdentityStampCoreTests(), 47);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

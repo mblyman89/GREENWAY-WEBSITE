@@ -1085,3 +1085,33 @@
    order by table_name, column_name;
   -- expect 10 rows: identity_key on 5 tables, kb_product_id on 4, restock_of_card_key on drafts
   ```
+
+## S05 — no new migration — identity stamped at receiving (uses 0234)
+
+S05 adds **no SQL**. It starts FILLING the 0234 columns: each received lot
+gets `identity_key`, each onboarding draft copies `identity_key`, `brand_id`,
+`vendor_id`, `lot_code`, `strain_type` (plus `restock_of_card_key` when the
+product matches exactly one live menu card), and after finalize the lots and
+drafts get `kb_product_id` when a knowledge-base product exists.
+
+**Before 0234 is run** nothing breaks: every writer notices the missing column,
+writes the row without it once, and stops sending it for the rest of that
+manifest. The manifest timeline says the knowledge-base link was skipped
+because 0234 is not applied yet.
+
+**Rollback without a deploy:** set `INTAKE_IDENTITY_STAMP=off` in Vercel.
+
+**After 0234 is run and the next manifest is finalized, check:**
+
+```sql
+select count(*) filter (where identity_key is not null)   as lots_with_identity,
+       count(*) filter (where kb_product_id is not null)  as lots_linked_to_kb
+  from public.inventory_lots
+ where created_at > now() - interval '1 day';
+
+select event_type, note, created_at
+  from public.manifest_events
+ where event_type in ('kb_link', 'kb_writeback_error')
+ order by created_at desc
+ limit 5;
+```
