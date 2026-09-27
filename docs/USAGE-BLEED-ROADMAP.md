@@ -27,7 +27,8 @@ the read-only recon report).**
 | Speaker Pi long-poll (`/api/announcer/poll`) | 25 s hold, 1 s claim loop (≈86,000 DB calls/day), heartbeat UPDATE on every poll, instant reconnect | ≈ $15 Vercel memory per paired Pi, 24/7 |
 | Receipt printer Pi (`/api/cloudprnt`) | 3 s idle poll (≈28,800 polls/day), `select("*")` ×2 + settings UPSERT per poll | ≈ $1.90 Vercel, ≈ 0.3 GB egress |
 | Full published menu reads (~5.9 MB, ~4,500 items) | `select("*")` on menu tables; product-image route loads the whole menu for one row; 60 s cache TTL | Largest Supabase egress line |
-| Rebuilds (Preview + Production, two projects) | ~162 builds in 5 days | Largest Vercel line historically; staging now paused (rule 13) |
+| Rebuilds (Preview + Production, two projects) | ~162 builds in 5 days; still 10–24 Preview builds/day on `greenway_website` after staging was paused | Largest Vercel line historically; staging paused (rule 13), previews off for non-`main` (Slice 5) |
+| Uncached public pages (`/specials`, `/loyalty`, `/medical`, 811 product pages) | `force-dynamic`: one full render + 1–6 DB reads per visitor and crawler | Vercel function time + Supabase reads scale with traffic (Slice 5) |
 | Admin orders board poll | 10 queries every 15 s per open tab | ≈ $0.29 + 0.24 GB per tab |
 | Leafly crons (`*/2`, `*/15`) | idle ticks | ≈ $0.05 total |
 
@@ -304,12 +305,96 @@ still under 0.4 GB, and disabled speakers fall to ≈ 5,700/day). Mean
 order→chime 3.5 s → ≈ 6 s; worst case unchanged at ≈ 11 s. A speaker still
 on v1.1.0 sees no change at all until the installer is re-run.
 
-## Slice 5 — Vercel project settings (owner, in the dashboard)
+## Slice 5 — whole-system audit: builds, uncached public pages, wide reads (PR: USAGE-5)
 
-Spend Management with a hard cap; disable Preview deployments (or Ignored
-Build Step for non-`main`); on-demand concurrent builds off; remove Speed
-Insights if not used; confirm staging stays paused (rule 13). Build-time
-database reads audited so a deploy does not itself pull the menu.
+After Slices 1–4 the standing instruction was to go back through everything
+not yet looked at and account for the rest of the bleeding. This slice is
+that audit. Every number below was measured on 2026-09-27 against the live
+production alias `https://greenwaywebsite1.vercel.app` (the same build as the
+production deployment; `www.greenwaymarijuana.com` resolves to WP Engine and
+is **not** this Vercel project) or read from the GitHub deployments API.
+Nothing here was inferred.
+
+**a. Preview builds on every PR push — the largest remaining Vercel line.**
+The GitHub deployments API showed Preview builds on `greenway_website` of
+12 (9/23), 10 (9/24), 20 (9/25) and 24 (9/26) a day: one per push to any
+branch, plus a Production build per merge. Vercel bills builds per
+CPU-minute. Fix: `vercel.json` now carries
+`"git": {"deploymentEnabled": {"main": true, "**": false}}`. This was
+**tested before it was adopted**: a throwaway branch carrying the block
+(`2bf9afd8`) produced zero deployments and zero commit statuses, while a
+control branch pushed 12 s later with the old file (`4bc60b12`) produced a
+Preview deployment within 4 minutes. Both probe branches were deleted.
+Consequence, written into AGENTS.md rule 13: there is no `Vercel –
+greenway_website` PR check any more; the merge gate is CI
+`build`/`compliance`/`migrations`, and the post-merge production status read
+is mandatory. `tests/compliance/usage-5-preview-builds-off.test.ts` pins the
+block (object form, `main` the only `true`, `**` false) and the rule text.
+
+**b. Four public pages were `force-dynamic` — a full server render per
+visitor and per crawler.** Every hit to `/specials`, `/loyalty`, `/medical`
+and `/menu/products/[id]` answered `x-vercel-cache: MISS` with
+`cache-control: private, no-cache, no-store`: `/specials` 0.43 s (1.3 MB
+HTML, four promotions reads + content blocks + banners + the whole live
+menu), `/loyalty` 0.37 s (content, banners, `loyalty_config`,
+`loyalty_tiers`), `/medical` 0.45 s (content blocks), and all **811**
+product URLs in the sitemap at 0.5–0.8 s and 268–314 KB each. `/`, `/menu`,
+`/menu/[category]`, `/vendor-delivery` and `/about` were already
+PRERENDER/HIT/STALE from SLICE D/E. Fix: the four routes now export
+`revalidate = 60` (= `MENU_CACHE_TTL_SECONDS`) so visitors in the same minute
+share one render. Freshness is kept by revalidation, not the TTL — the same
+argument that made the home page cacheable: `/specials` is in
+`PUBLIC_MENU_SURFACES` and is cleared by promotion status / never-discount
+actions and the Specials editor; `/medical` is cleared by the hide-flag
+publish; `/loyalty` is cleared by the Loyalty-page editor and — **new in this
+slice** — by the program editors (`saveLoyaltyConfigAction`,
+`saveLoyaltyTierAction`, `deleteLoyaltyTierAction`), which previously only
+cleared `/admin/loyalty`. Product pages have a dynamic segment, so
+`revalidatePublicMenuSurfaces()` gained `PUBLIC_MENU_PAGE_PATTERNS =
+["/menu/products/[id]"]` and calls `revalidatePath(pattern, "page")` (the
+form the Next.js docs require for dynamic segments). Draft Mode bypasses the
+route cache, so staff preview still sees drafts on demand; unknown product
+ids still 404 (`notFound()`, no `generateStaticParams`); the price on a
+product page was never trusted — `repriceOrderLines` re-verifies at order
+placement. Tests: `usage-5-public-page-revalidate.test.ts` pins the exports
+and every writer path; the public-surfaces test pins the pattern list.
+
+**c. Register pickup queue selected every `orders` column.** The register's
+45 s home-screen poll (`/api/pos/pickup`) ran `listOrders({status:
+"active", limit: 200})` → `select("*")` on `orders` (28 columns, including
+`limit_reasons` jsonb, customer email/phone/birthday, loyalty fields) to
+build a queue entry that reads 12 of them. Fix: `PICKUP_QUEUE_ORDER_COLUMNS`
+/ `PICKUP_QUEUE_ORDER_SELECT` in the pure `pickup-core.ts` (self-tested), a
+new `listOrdersColumns(columns, filter)` in `orders-store.ts`, and
+`pickup-store.ts` uses it. `listOrders()` itself is unchanged (`select("*")`)
+so the Orders board and oversight paths and their pinned tests are
+untouched. `usage-5-pickup-queue-columns.test.ts` pins that the column list
+covers exactly what `toPickupQueueEntry` and the `staff_note` filter read.
+
+**Audited and deliberately left alone (with the reason).**
+*Root layout* (`src/app/layout.tsx`) still does 4–5 uncached PostgREST reads
+per render (`getContentValues` for fonts, `loadPublishedRuleSnapshots`):
+`getContentValues` calls `draftMode()`, which cannot run inside
+`unstable_cache`, so caching it needs a redesign; with every public page now
+cached the layout renders once per minute per page instead of per visitor,
+so it is a much smaller number than it was. *`/unsubscribe`* is
+`force-dynamic` legitimately (per-token). *`/api/estimator`* POSTs only when
+the cart is expanded. *The `crawler/` Python worker* deploys on Railway on
+each merge (`giving-sparkle / production`) — a separate service, not a
+Vercel or Supabase cost, and it only writes `ai_suggestions`. *Register
+polls* were handled in Slice 3 (45 s pickup gated to the home screen; 15 s
+interrupt poll paused while locked; version check locked-only; flush only
+when the queue is non-empty). *NewOrderAlert* is 15 s visible / 120 s hidden
+(owner-pinned chime cadence). *Not bleeds:* `staff_profiles select("*")` (8
+small columns), Speed Insights (free tier), GA4 (env-gated), `sitemap.xml`
+and `robots.txt` (HIT), Supabase storage URLs (none in public menu HTML),
+the Leafly crons (`*/15`, `*/2`, rule 12 — not touched).
+
+**Owner, in the Vercel dashboard (not codeable).** Spend Management with a
+hard cap; on-demand concurrent builds off; remove Speed Insights only if it
+is not being read; confirm `greenway-staging` stays paused (rule 13). The
+"disable Preview deployments" item from the earlier version of this section
+is now done in code (item a) and needs no dashboard change.
 
 ## How to verify each slice
 
@@ -325,6 +410,30 @@ down within a day of the Pis being reinstalled; Reports → Query Performance �
 `receipt_printer_settings` upsert near the top; Logs Explorer → Top Paths
 shows `/rest/v1/receipt_printer_settings` and `/rest/v1/rpc/announcer_claim_work`
 counts an order of magnitude lower.
+
+**Slice 5.** Builds: Vercel → Project → Deployments — from the USAGE-5 merge
+onward, pushing to any PR branch creates **no** Preview entry; only merges to
+`main` appear (as Production). From a terminal, a PR head commit shows no
+Vercel status at all:
+`gh api repos/mblyman89/GREENWAY-WEBSITE/commits/<pr-head-sha>/status --jq '.statuses[].context'`
+prints nothing for Vercel, while the merged `main` commit prints
+`Vercel – greenway_website` with state `success`. Team → Usage → *Build
+Minutes* / *Build Execution* should fall from 10–24 builds a day to roughly
+the number of merges. Pages: `curl -sI https://greenwaywebsite1.vercel.app/specials`
+(and `/loyalty`, `/medical`, any `/menu/products/<id>` from the sitemap) —
+the first hit after a deploy is `x-vercel-cache: MISS`, the second within a
+minute is `HIT` (or `STALE` past 60 s), and `cache-control` no longer says
+`private, no-cache, no-store`. Vercel → Observability → Functions: the
+`/specials`, `/loyalty`, `/medical` and `/menu/products/[id]` rows drop to at
+most one invocation a minute each regardless of traffic. Freshness check:
+publish a Specials/Loyalty-page edit or change a loyalty tier in the back
+office, then reload the public page once — the change is there without
+waiting for the TTL. Supabase → Logs Explorer → Top Paths:
+`/rest/v1/promotions`, `/rest/v1/content_blocks`, `/rest/v1/loyalty_config`
+counts fall to about one per minute per page during traffic;
+`/rest/v1/orders` GET from the register shows `select=id,order_number,…`
+(twelve named columns) rather than `select=*`, and its per-request
+`Content-Length` shrinks accordingly.
 
 **Slice 4.** Vercel → Observability → Functions → `/api/announcer/poll`:
 p50 duration should fall from ≈ 25 s to well under one second within minutes
