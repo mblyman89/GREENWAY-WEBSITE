@@ -620,6 +620,7 @@ import { __runDraftDeepLinkCoreTests } from "../../src/lib/catalog/draft-deep-li
 import { __runProductIdentityCoreTests } from "../../src/lib/catalog/product-identity-core";
 import { __runIdentityColumnsCoreTests } from "../../src/lib/catalog/identity-columns-core";
 import { __runAttachFactsCoreTests } from "../../src/lib/catalog/attach-facts-core";
+import { __runFactAttachPolicyCoreTests } from "../../src/lib/catalog/fact-attach-policy-core";
 import { __runIdentityStampCoreTests } from "../../src/lib/inventory/identity-stamp-core";
 import { __runGroundingCoreTests } from "../../src/lib/ai/grounding-core";
 import { __runLookupFactsCoreTests } from "../../src/lib/inventory/lookup-facts-core";
@@ -1830,6 +1831,10 @@ __runLiquidVolumeTests();
   // latest-per-field recall, and the "0235 not applied" detector is narrow.
   // Measured 76.
   assertRan("attach-facts-core", __runAttachFactsCoreTests(), 74);
+  // S10 fact-attach policy: FIELD_POLICY covers every lookup field, the
+  // bible S10.5 cases, §5.5 bands, ring parse (default shadow), the bible
+  // receipt copy byte for byte, and the audit fold. Measured 102.
+  assertRan("fact-attach-policy-core", __runFactAttachPolicyCoreTests(), 100);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

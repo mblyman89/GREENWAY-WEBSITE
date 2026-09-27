@@ -10,9 +10,12 @@ import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip"
 import {
   listCatalogDrafts,
   countCatalogDrafts,
-  loadStrainTypeSuggestions,
+  loadStrainTypeSignals,
   listPriorClassifications,
 } from "@/lib/inventory/catalog-drafts";
+// S10: the fact-attach policy's shadow counters (one bounded audit read; no writes).
+import { shadowFooterCopy } from "@/lib/catalog/fact-attach-policy-core";
+import { currentAttachPolicyRing, loadShadowSummary } from "@/lib/catalog/fact-attach-policy-server";
 // SLICE 93: strain-type intelligence - the picker's honest placeholder + the
 // canonical dropdown choices (strain-taxonomy, the single source of truth).
 import { strainTypePickerPlaceholder } from "@/lib/inventory/strain-type-intel-core";
@@ -282,7 +285,15 @@ export default async function CatalogDraftsPage({
   // folded into a per-draft strain-type suggestion (kb > manifest > name
   // parse). >=90% shows as "Keep auto" and submits no override; below the bar
   // it's an honest hint the approver can confirm or correct.
-  const strainSuggestions = await loadStrainTypeSuggestions(drafts);
+  // S10: the same two reads also return the raw library/manifest readings,
+  // which the lookup panel forwards so the policy can corroborate strain type.
+  // The footer's shadow counters are read in parallel (skipped at ring 0).
+  const attachRing = currentAttachPolicyRing();
+  const [{ suggestions: strainSuggestions, evidence: strainEvidence }, shadowSummary] = await Promise.all([
+    loadStrainTypeSignals(drafts),
+    attachRing === 0 ? Promise.resolve(null) : loadShadowSummary(),
+  ]);
+  const shadowFooter = shadowFooterCopy(shadowSummary, attachRing);
 
   // T-314: is the AI lookup available? (soft-disables the panel when no key.)
   const aiLookupEnabled = isAiConfigured;
@@ -828,6 +839,8 @@ export default async function CatalogDraftsPage({
                                   strainSelectId={`strain-type-${d.id}`}
                                   posProductKey={d.pos_product_key ?? ""}
                                   aiEnabled={aiLookupEnabled}
+                                  kbStrainType={strainEvidence.get(d.id)?.kb ?? null}
+                                  manifestStrainType={strainEvidence.get(d.id)?.manifest ?? null}
                                 />
                                 <div className="flex items-center gap-2">
                                   <div className="flex items-center gap-1">
@@ -884,6 +897,17 @@ export default async function CatalogDraftsPage({
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* S10 SHADOW RING: what the 90% rule WOULD have attached, from the
+            lookups already run. Visible before any write is switched on. */}
+        {shadowFooter && (
+          <p
+            className="border-t border-[var(--admin-border)] pt-3 text-xs text-[var(--admin-text-faint)]"
+            data-testid="attach-policy-shadow-footer"
+          >
+            {shadowFooter}
+          </p>
         )}
       </div>
     </div>

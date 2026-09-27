@@ -43,6 +43,18 @@ import {
 } from "@/lib/inventory/lookup-facts-core";
 import type { WebCitation } from "@/lib/ai/grounding-core";
 import type { GreenwayStrainType } from "@/lib/leafly/types";
+// S10: the per-field consequence bands, computed in the SHADOW ring (no writes).
+import {
+  attachPolicyMode,
+  decideLookupFacts,
+  policyAuditPayload,
+  receiptSentence,
+  type AttachDecision,
+  type AttachPolicyMode,
+  type AttachPolicyRing,
+  type PolicyAuditPayload,
+} from "@/lib/catalog/fact-attach-policy-core";
+import { currentAttachPolicyRing } from "@/lib/catalog/fact-attach-policy-server";
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "").trim();
@@ -116,8 +128,22 @@ export type ProductLookupActionResult =
       searchSuggestions: string[];
       /** The draft payload the client can send back to saveLookupToKbAction. */
       draft: LookupKbDraft;
+      /**
+       * S10: what the fact-attach policy decided per field. Null when the ring
+       * is 0 (off) or the reply was v1-shaped (no per-field confidence, so no
+       * per-field decision is possible - never guessed).
+       */
+      policy: LookupPolicyView | null;
     }
   | { ok: false; error: string };
+
+/** S10: the policy verdicts the panel shows (reasons only - no new writes). */
+export type LookupPolicyView = {
+  ring: AttachPolicyRing;
+  mode: AttachPolicyMode;
+  receipt: string;
+  verdicts: { field: string; decision: AttachDecision; reason: string; chip: boolean }[];
+};
 
 export async function productLookupAction(
   formData: FormData,
@@ -137,6 +163,14 @@ export async function productLookupAction(
   const productName = str(formData, "product_name");
   const vendorOrBrand = str(formData, "vendor_or_brand");
   const posProductKey = str(formData, "pos_product_key");
+  // S10 corroborators, already loaded by the drafts page (loadStrainTypeSignals),
+  // so no extra query. They are client-supplied, so they are canonicalised in
+  // the pure core (junk -> null) and used ONLY for the shadow decision. S07's
+  // write door must re-read them server-side before anything is written.
+  const kbStrainType = str(formData, "kb_strain_type") || null;
+  const manifestStrainType = str(formData, "manifest_strain_type") || null;
+  // The approve form's strain pick at search time: a PERSON's value (wins).
+  const humanStrainType = str(formData, "human_strain_type") || null;
   if (!query) return { ok: false, error: "Type something to search for first." };
 
   try {
@@ -155,6 +189,26 @@ export async function productLookupAction(
     });
 
     const r = outcome.result;
+
+    // S10 SHADOW RING: decide every field, write nothing, log counts only.
+    const ring = currentAttachPolicyRing();
+    let policy: LookupPolicyView | null = null;
+    let policyAudit: PolicyAuditPayload | undefined;
+    if (ring !== 0 && outcome.facts) {
+      const verdicts = decideLookupFacts(outcome.facts, {
+        human: humanStrainType ? { strain_type: humanStrainType } : {},
+        kbStrainType,
+        manifestStrainType,
+      });
+      const mode = attachPolicyMode(ring);
+      policyAudit = policyAuditPayload(ring, verdicts);
+      policy = {
+        ring,
+        mode,
+        receipt: receiptSentence(verdicts, mode, { strain_type: outcome.facts.fields.strain_type.value }),
+        verdicts: verdicts.map((v) => ({ field: v.field, decision: v.decision, reason: v.reason, chip: v.chip })),
+      };
+    }
 
     await recordAudit({
       actorId: session.userId,
@@ -177,6 +231,9 @@ export async function productLookupAction(
         // S06: counts only (no values, no suggestion HTML -- never stored).
         schema: outcome.schema,
         bands: outcome.facts?.counts,
+        // S10: decision counts + field -> decision (no values). Feeds the
+        // drafts-footer shadow counters. Absent when the ring is 0.
+        policy: policyAudit,
       },
     });
 
@@ -229,6 +286,7 @@ export async function productLookupAction(
         imageCandidates: r.imageCandidates,
         fieldConfidence: fieldConfidenceForSave(outcome.facts),
       },
+      policy,
     };
   } catch (err) {
     // Operator-actionable failures (took too long, out of AI credits, bad key)

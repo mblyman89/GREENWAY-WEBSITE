@@ -35,7 +35,8 @@ import {
   type LookupKbDraft,
 } from "./ai-lookup-actions";
 import { GoogleSearchSuggestions, LookupFactsView } from "@/components/admin/LookupFactsView";
-import { keptFieldConfidence } from "@/lib/inventory/lookup-facts-core";
+import { keptFieldConfidence, LOOKUP_FIELD_LABELS, type LookupFieldKey } from "@/lib/inventory/lookup-facts-core";
+import type { LookupPolicyView } from "./ai-lookup-actions";
 
 type Props = {
   draftId: string;
@@ -48,6 +49,13 @@ type Props = {
   posProductKey: string;
   /** False when no AI key is set — the panel soft-disables. */
   aiEnabled: boolean;
+  /**
+   * S10: what the strain library and the manifest say about this product's
+   * strain type (already loaded by the page), so the fact-attach policy can
+   * corroborate a looked-up strain type. Null = no reading.
+   */
+  kbStrainType?: string | null;
+  manifestStrainType?: string | null;
 };
 
 type Ok = Extract<ProductLookupActionResult, { ok: true }>;
@@ -140,6 +148,8 @@ export function AiLookupPanel({
   strainSelectId,
   posProductKey,
   aiEnabled,
+  kbStrainType = null,
+  manifestStrainType = null,
 }: Props) {
   const initialQuery = [productName, vendorOrBrand].filter(Boolean).join(" ").trim();
   const [query, setQuery] = useState(initialQuery);
@@ -171,6 +181,12 @@ export function AiLookupPanel({
       fd.set("product_name", productName);
       fd.set("vendor_or_brand", vendorOrBrand);
       fd.set("pos_product_key", posProductKey);
+      // S10: corroborators + the approver's current strain pick (a person's
+      // value always wins in the policy). Shadow only: nothing is written.
+      if (kbStrainType) fd.set("kb_strain_type", kbStrainType);
+      if (manifestStrainType) fd.set("manifest_strain_type", manifestStrainType);
+      const pick = (document.getElementById(strainSelectId) as HTMLSelectElement | null)?.value ?? "";
+      if (pick) fd.set("human_strain_type", pick);
       const res = await productLookupAction(fd);
       if (!res.ok) {
         setError(res.error);
@@ -597,6 +613,12 @@ export function AiLookupPanel({
                   {/* S06: every structured field with its own band, % and sources. */}
                   {data.facts && <LookupFactsView facts={data.facts} />}
 
+                  {/* S10: the fact-attach policy's verdict, per field. In the
+                      shadow ring this is a PREVIEW: nothing is saved. */}
+                  {data.policy && data.policy.verdicts.length > 0 && (
+                    <PolicyReceipt policy={data.policy} />
+                  )}
+
                   {data.rejectedEffects.length > 0 && (
                     <p className="text-[10px] text-[var(--admin-text-faint)]">
                       Filtered for compliance: {data.rejectedEffects.map((r) => r.effect).join(", ")}
@@ -686,6 +708,46 @@ function FieldRow({
         {hint && <span className="text-[9px] font-normal text-[var(--admin-text-faint)]">({hint})</span>}
       </label>
       {children}
+    </div>
+  );
+}
+
+/** S10: plain-English label for each policy decision. */
+const DECISION_LABEL: Record<LookupPolicyView["verdicts"][number]["decision"], string> = {
+  attach: "Auto-attach",
+  prefill: "Pre-fill to confirm",
+  suggest: "Suggestion",
+  ignore: "Left alone",
+};
+
+/**
+ * S10: the policy receipt ("We found a description at 94% — attached …") and
+ * one line per field saying what the 90% rule decided and why. In the shadow
+ * ring the heading says "preview", because nothing has been attached.
+ */
+export function PolicyReceipt({ policy }: { policy: LookupPolicyView }) {
+  const shadow = policy.mode !== "act";
+  return (
+    <div
+      className="rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-1.5"
+      data-testid="attach-policy-receipt"
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+        {shadow ? "Auto-attach preview (nothing saved)" : "Auto-attach"}
+      </div>
+      {policy.receipt && <p className="mt-0.5 text-[var(--admin-text)]">{policy.receipt}</p>}
+      <ul className="mt-1 space-y-0.5 text-[10px] text-[var(--admin-text-muted)]">
+        {policy.verdicts.map((v) => (
+          <li key={v.field}>
+            <span className="font-semibold text-[var(--admin-text)]">
+              {LOOKUP_FIELD_LABELS[v.field as LookupFieldKey] ?? v.field}
+            </span>
+            {": "}
+            {DECISION_LABEL[v.decision]}
+            {v.chip ? " (chip)" : ""} {"\u2014"} {v.reason}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -1,0 +1,129 @@
+/**
+ * tests/compliance/intake-env-ledger.test.ts  (owner request, Round 5)
+ *
+ * "Will you add to the roadmap strategy to provide for me all of the vercel
+ *  env variables to add to vercel at the very end of this whole pipeline
+ *  build."
+ *
+ * docs/INTAKE_PIPELINE_ENV_LEDGER.md is that list. This guard keeps it true
+ * while the build continues:
+ *   1. every pipeline flag constant in src/ (`export const X_ENV = "NAME"`
+ *      under src/lib/inventory and src/lib/catalog) is in the ledger's
+ *      "Shipped" table AND in .env.example;
+ *   2. every variable in the ledger's "Shipped" table is really read by the
+ *      code (no stale rows);
+ *   3. every AI_* variable provider.ts / router.ts read is in the ledger's AI
+ *      table (the same derivation the S00 .env.example guard uses);
+ *   4. the "Planned" names are the bible's, and are NOT yet read by code
+ *      (a planned name that ships must move to "Shipped");
+ *   5. the final checklist exists and mentions every shipped flag.
+ */
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+const ROOT = path.resolve(__dirname, "../..");
+const read = (p: string) => readFileSync(path.join(ROOT, p), "utf8");
+const LEDGER = "docs/INTAKE_PIPELINE_ENV_LEDGER.md";
+
+function walk(dir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const p = path.join(dir, name);
+    if (statSync(p).isDirectory()) out.push(...walk(p));
+    else if (/\.(ts|tsx)$/.test(name)) out.push(p);
+  }
+  return out;
+}
+
+/** `export const FOO_ENV = "NAME"` in the pipeline modules. */
+function pipelineFlagNames(): string[] {
+  const files = [...walk(path.join(ROOT, "src/lib/inventory")), ...walk(path.join(ROOT, "src/lib/catalog"))];
+  const names = new Set<string>();
+  for (const f of files) {
+    for (const m of readFileSync(f, "utf8").matchAll(/export const [A-Z0-9_]+_ENV = "([A-Z0-9_]+)"/g)) names.add(m[1]);
+  }
+  return [...names].sort();
+}
+
+/** Backticked names in the first column of a markdown table under `## <heading>`. */
+function tableNames(doc: string, heading: string): string[] {
+  const start = doc.indexOf(heading);
+  if (start < 0) return [];
+  const rest = doc.slice(start + heading.length);
+  const end = rest.search(/\n## /);
+  const section = end < 0 ? rest : rest.slice(0, end);
+  const names: string[] = [];
+  for (const line of section.split("\n")) {
+    const m = line.match(/^\| `([A-Z0-9_]+)` \|/);
+    if (m) names.push(m[1]);
+  }
+  return names;
+}
+
+const ledger = read(LEDGER);
+const envExample = read(".env.example");
+const inExample = (v: string) => new RegExp(`^#?\\s*${v}=`, "m").test(envExample);
+
+describe("intake env ledger", () => {
+  it("derives the pipeline flags from the code (proves the derivation works)", () => {
+    const flags = pipelineFlagNames();
+    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING"]) expect(flags).toContain(v);
+  });
+
+  it("every pipeline flag is in the Shipped table AND .env.example", () => {
+    const shipped = tableNames(ledger, "## 1. Shipped pipeline flags");
+    for (const v of pipelineFlagNames()) {
+      expect(shipped, `${v} missing from ${LEDGER} §1`).toContain(v);
+      expect(inExample(v), `${v} missing from .env.example`).toBe(true);
+    }
+  });
+
+  it("no stale Shipped rows: each is read via process.env[<CONST>] somewhere in src", () => {
+    const shipped = tableNames(ledger, "## 1. Shipped pipeline flags");
+    expect(shipped.length).toBeGreaterThanOrEqual(3);
+    const all = walk(path.join(ROOT, "src")).map((f) => readFileSync(f, "utf8")).join("\n");
+    for (const v of shipped) {
+      const constDecl = all.match(new RegExp(`export const ([A-Z0-9_]+) = "${v}"`));
+      expect(constDecl, `${v} has no exported constant`).not.toBeNull();
+      expect(all.includes(`process.env[${constDecl![1]}]`), `${v} is never read`).toBe(true);
+    }
+  });
+
+  it("every AI_* var provider/router read is in the AI table", () => {
+    const src = read("src/lib/ai/provider.ts") + read("src/lib/ai/router.ts");
+    const vars = new Set([
+      ...[...src.matchAll(/process\.env\.(AI_[A-Z0-9_]+)/g)].map((m) => m[1]),
+      ...[...src.matchAll(/num\("(AI_[A-Z0-9_]+)"/g)].map((m) => m[1]),
+    ]);
+    expect(vars.size).toBeGreaterThanOrEqual(15);
+    const table = tableNames(ledger, "## 2. AI provider variables");
+    for (const v of vars) expect(table, `${v} missing from ledger §2`).toContain(v);
+  });
+
+  it("the platform table lists the three Supabase variables", () => {
+    expect(tableNames(ledger, "## 3. Platform variables")).toEqual([
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+    ]);
+  });
+
+  it("planned names are the bible's, and none is read by code yet", () => {
+    const planned = ["ATTACH_FACTS_V2", "KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW"];
+    const sec = ledger.slice(ledger.indexOf("## 4. Planned flags"));
+    const all = walk(path.join(ROOT, "src")).map((f) => readFileSync(f, "utf8")).join("\n");
+    for (const v of planned) {
+      expect(sec).toContain(`\`${v}\``);
+      expect(all.includes(`"${v}"`), `${v} now ships: move it to §1`).toBe(false);
+    }
+  });
+
+  it("the final Vercel checklist exists, is the owner's request, and names each shipped flag", () => {
+    expect(ledger).toContain("Will you add to the roadmap strategy to provide for me all of the vercel env variables");
+    const final = ledger.slice(ledger.indexOf("## Final Vercel checklist"));
+    expect(final.length).toBeGreaterThan(100);
+    for (const v of tableNames(ledger, "## 1. Shipped pipeline flags")) expect(final).toContain(`\`${v}\``);
+    expect(final).toContain("`ATTACH_POLICY_RING` = `1`");
+  });
+});
