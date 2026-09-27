@@ -44,6 +44,19 @@ export const PUBLIC_MENU_SURFACES = [
 ] as const;
 
 /**
+ * USAGE-5 — public menu-derived pages with a DYNAMIC segment.
+ *
+ * `revalidatePath` needs the route PATTERN plus `type: "page"` for these
+ * (Next.js docs: "If `path` contains a dynamic segment ... this parameter is
+ * required"), so they cannot live in the literal list above. The product
+ * detail page joined the cached surfaces in this slice (it was `force-dynamic`
+ * and answered `x-vercel-cache: MISS` for all 811 sitemap URLs on production);
+ * a publish or reset must clear every product page the same instant it clears
+ * `/menu`, and this is the list that guarantees it.
+ */
+export const PUBLIC_MENU_PAGE_PATTERNS = ["/menu/products/[id]"] as const;
+
+/**
  * Refresh every public menu-derived page so the next visit re-reads the
  * database instead of serving a cached copy. Never throws: a revalidation
  * hiccup must not abort the publish/reset that already succeeded — the pages
@@ -71,6 +84,15 @@ export function revalidatePublicMenuSurfaces(): void {
       revalidatePath(path);
     } catch (err) {
       console.error(`[public-surfaces] revalidate ${path} failed:`, err);
+    }
+  }
+  // 3. The dynamic-segment pages (USAGE-5): one call per PATTERN clears every
+  //    product page at once, on its next visit.
+  for (const pattern of PUBLIC_MENU_PAGE_PATTERNS) {
+    try {
+      revalidatePath(pattern, "page");
+    } catch (err) {
+      console.error(`[public-surfaces] revalidate ${pattern} (page) failed:`, err);
     }
   }
 }

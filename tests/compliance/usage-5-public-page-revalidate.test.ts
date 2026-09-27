@@ -26,7 +26,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { MENU_CACHE_TTL_SECONDS } from "@/lib/menu/menu-cache-policy-core";
-import { PUBLIC_MENU_SURFACES } from "@/lib/site/public-surfaces";
+import { PUBLIC_MENU_PAGE_PATTERNS, PUBLIC_MENU_SURFACES } from "@/lib/site/public-surfaces";
 
 const read = (rel: string) => readFileSync(path.resolve(__dirname, "../..", rel), "utf8");
 const stripComments = (s: string) =>
@@ -44,6 +44,7 @@ const ROUTES = [
   "src/app/specials/page.tsx",
   "src/app/loyalty/page.tsx",
   "src/app/medical/page.tsx",
+  "src/app/menu/products/[id]/page.tsx",
 ] as const;
 
 describe("USAGE-5 · the three public pages share one render per minute", () => {
@@ -68,6 +69,31 @@ describe("USAGE-5 · the three public pages share one render per minute", () => 
     expect(stripComments(read("src/app/specials/page.tsx"))).toContain("isPreviewActive()");
     expect(stripComments(read("src/app/loyalty/page.tsx"))).toContain("isPreviewActive()");
     expect(stripComments(read("src/app/medical/page.tsx"))).toContain("getContentForRender(");
+  });
+});
+
+describe("USAGE-5 · the product page (dynamic segment) is cleared by every menu publish", () => {
+  it("the product route pattern is registered and the helper revalidates it with type 'page'", () => {
+    expect(PUBLIC_MENU_PAGE_PATTERNS).toContain("/menu/products/[id]");
+    const src = stripComments(read("src/lib/site/public-surfaces.ts"));
+    // Next.js: a path with a dynamic segment REQUIRES the `type` argument.
+    expect(src).toMatch(/for \(const pattern of PUBLIC_MENU_PAGE_PATTERNS\)/);
+    expect(src).toContain('revalidatePath(pattern, "page")');
+    // And it must run inside the same never-throw helper the publish paths call.
+    const helper = src.slice(src.indexOf("export function revalidatePublicMenuSurfaces"));
+    expect(helper).toContain("PUBLIC_MENU_PAGE_PATTERNS");
+  });
+
+  it("the product page is not pre-generated (no generateStaticParams) and still 404s unknown ids", () => {
+    const code = stripComments(read("src/app/menu/products/[id]/page.tsx"));
+    expect(code).not.toContain("generateStaticParams");
+    expect(code).toContain("if (!baseItem) notFound();");
+  });
+
+  it("the product page is a classified cacheable surface (menu-cache-policy)", () => {
+    const core = read("src/lib/menu/menu-cache-policy-core.ts");
+    expect(core).toContain('name: "Product detail (/menu/products/[id])"');
+    expect(core).toMatch(/Product detail \(\/menu\/products\/\[id\]\)",\s*anchor: "[^"]+",\s*cacheable: true/);
   });
 });
 
