@@ -34,6 +34,8 @@ import {
   type ProductLookupActionResult,
   type LookupKbDraft,
 } from "./ai-lookup-actions";
+import { GoogleSearchSuggestions, LookupFactsView } from "@/components/admin/LookupFactsView";
+import { keptFieldConfidence } from "@/lib/inventory/lookup-facts-core";
 
 type Props = {
   draftId: string;
@@ -207,6 +209,16 @@ export function AiLookupPanel({
       potencyRatio: draft.keepPotencyRatio ? draft.potencyRatio.trim() : "",
       size: draft.keepSize ? draft.size.trim() : "",
       imageCandidates: draft.images,
+      // S06 (F-018): a field's own confidence only while its text is untouched.
+      fieldConfidence: keptFieldConfidence(
+        data.draft.fieldConfidence,
+        { description: data.description, shortDescription: data.shortDescription },
+        {
+          description: draft.keepDescription ? draft.description.trim() : "",
+          shortDescription: draft.keepShortDescription ? draft.shortDescription.trim() : "",
+          imagesKept: draft.images.length,
+        },
+      ),
     };
   }, [data, draft, productName, query, posProductKey]);
 
@@ -332,6 +344,10 @@ export function AiLookupPanel({
                   {data.usedWebSearch ? "🌐 Live web search" : "⚠️ AI knowledge (no live search)"}
                 </span>
               </div>
+
+              {/* S06: Google Search Suggestions travel WITH the grounded result
+                  (Google grounding terms). Display only -- never saved. */}
+              <GoogleSearchSuggestions html={data.searchSuggestions} />
 
               {!data.hasAnyFindings ? (
                 <p className="text-[var(--admin-gold)]">{data.honestMiss}</p>
@@ -577,6 +593,9 @@ export function AiLookupPanel({
                       ))}
                     </div>
                   )}
+
+                  {/* S06: every structured field with its own band, % and sources. */}
+                  {data.facts && <LookupFactsView facts={data.facts} />}
 
                   {data.rejectedEffects.length > 0 && (
                     <p className="text-[10px] text-[var(--admin-text-faint)]">

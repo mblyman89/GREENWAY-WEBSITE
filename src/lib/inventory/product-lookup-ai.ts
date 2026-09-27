@@ -34,10 +34,24 @@ import { looseParseLookupJson } from "@/lib/inventory/product-lookup-parse";
 import {
   PRODUCT_LOOKUP_SYSTEM,
   buildLookupUserPrompt,
+  gateLookupFacts,
   postProcessLookup,
   type ProductLookupResult,
   type RawProductLookup,
 } from "@/lib/inventory/product-lookup-core";
+import {
+  LOOKUP_SCHEMA_V2_ENV,
+  LOOKUP_V2_MAX_TOKENS,
+  LOOKUP_V2_SHAPE_HINT,
+  PRODUCT_LOOKUP_SYSTEM_V2,
+  buildLookupUserPromptV2,
+  factsToV1Raw,
+  lookupSchemaV2Enabled,
+  normalizeLookup,
+  parseLookupV2,
+  type LookupFacts,
+} from "@/lib/inventory/lookup-facts-core";
+import type { WebCitation } from "@/lib/ai/grounding-core";
 import type { ExtraBannedPhrase } from "@/lib/ai/compliance";
 
 export { isAiConfigured };
@@ -55,6 +69,22 @@ export type ProductLookupOutcome = {
   model: string;
   /** True when the live web_search tool ran; false on built-in-knowledge fallback. */
   usedWebSearch: boolean;
+  /**
+   * SLICE S06 -- the structured, per-field record (value + own confidence +
+   * band + sources + grounded citations), compliance-gated. null when the
+   * reply was v1-shaped (flag off, or the model ignored the v2 shape).
+   */
+  facts: LookupFacts | null;
+  /** SLICE S06 -- which shape the reply was parsed as. */
+  schema: "v2" | "v1";
+  /** SLICE S06 -- url_citation detail from the provider ([] on fallback). */
+  citations: WebCitation[];
+  /**
+   * SLICE S06 -- Google Search Suggestions HTML, verbatim. Shown to the person
+   * who asked, alongside the grounded result (Google grounding terms). NEVER
+   * persisted: not saved, not audited, not cached.
+   */
+  searchSuggestions: string[];
 };
 
 /** JSON shape hint appended to the user prompt (the web_search path has no
@@ -93,15 +123,20 @@ export async function lookupProduct(input: {
   extraBanned?: ExtraBannedPhrase[];
   context?: AiContext;
 }): Promise<ProductLookupOutcome> {
-  const user = buildLookupUserPrompt({
+  // SLICE S06 rollback switch (Vercel env). Default ON. With it off, the call
+  // below is byte-identical to pre-S06 (same system, user, shape, maxTokens).
+  const v2On = lookupSchemaV2Enabled(process.env[LOOKUP_SCHEMA_V2_ENV]);
+  const promptInput = {
     query: input.query,
     productName: input.productName,
     vendorOrBrand: input.vendorOrBrand,
-  });
+  };
 
   const ws = await generateWebSearch({
-    system: PRODUCT_LOOKUP_SYSTEM,
-    user: `${user}${SHAPE_HINT}`,
+    system: v2On ? PRODUCT_LOOKUP_SYSTEM_V2 : PRODUCT_LOOKUP_SYSTEM,
+    user: v2On
+      ? `${buildLookupUserPromptV2(promptInput)}${LOOKUP_V2_SHAPE_HINT}`
+      : `${buildLookupUserPrompt(promptInput)}${SHAPE_HINT}`,
     // T-321: do NOT force a low temperature here. This call runs on Gemini 3's
     // google_search grounding path, and Google's official Gemini 3 docs warn
     // that setting temperature below the default (1.0) "may lead to unexpected
@@ -112,14 +147,32 @@ export async function lookupProduct(input: {
     // the output well-formed, so we do not need a low temperature for stability.
     // Web-search + full T-315 JSON needs headroom: 900 truncated longer answers
     // (a truncated reply loses `found`/`confidence` and looked like a miss).
-    maxTokens: 2000,
+    // S06: the per-field v2 record is roughly twice the v1 JSON, so it gets
+    // LOOKUP_V2_MAX_TOKENS (a ceiling -- billing is per token produced).
+    maxTokens: v2On ? LOOKUP_V2_MAX_TOKENS : 2000,
     context: {
       feature: "inventory.product_lookup",
       ...input.context,
     },
   });
 
-  const raw = coerceRaw(looseParseLookupJson(ws.text));
+  const citations = ws.citations ?? [];
+  const searchSuggestions = ws.searchSuggestions ?? [];
+  const parsed = looseParseLookupJson(ws.text);
+
+  // S06: a v2-shaped reply becomes structured facts, compliance-gated FIRST,
+  // then bridged to the v1 record so every existing consumer keeps working.
+  // Anything else (flag off, or the model answered in the old shape) takes
+  // the unchanged v1 path -- the lookup never dies on a shape change.
+  const rawV2 = v2On ? parseLookupV2(parsed) : null;
+  let facts: LookupFacts | null = null;
+  let raw: RawProductLookup;
+  if (rawV2) {
+    facts = gateLookupFacts(normalizeLookup(rawV2, { text: ws.text, citations }), input.extraBanned ?? []);
+    raw = factsToV1Raw(facts);
+  } else {
+    raw = coerceRaw(parsed);
+  }
 
   // Extra value: also mine the real web_search source URLs for anything that
   // looks like a product image, and offer them as ADDITIONAL candidates. This
@@ -136,6 +189,10 @@ export async function lookupProduct(input: {
     sources: ws.sources,
     model: ws.model,
     usedWebSearch: ws.usedWebSearch,
+    facts,
+    schema: facts ? "v2" : "v1",
+    citations,
+    searchSuggestions,
   };
 }
 
