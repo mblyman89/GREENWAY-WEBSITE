@@ -28,8 +28,15 @@ import {
 import {
   checkEffects,
   lintCopy,
+  lintTerms,
   type ExtraBannedPhrase,
 } from "@/lib/ai/compliance";
+import {
+  countBands,
+  type LookupFact,
+  type LookupFacts,
+  type LookupFactsFields,
+} from "@/lib/inventory/lookup-facts-core";
 import type { GreenwayStrainType } from "@/lib/leafly/types";
 
 /** Canonical strain-type values the picker + KB understand. */
@@ -507,6 +514,78 @@ export function postProcessLookup(
     imageCandidates,
     hasEnrichmentDraft,
   };
+}
+
+// ---------------------------------------------------------------------------
+// SLICE S06 -- the compliance gate for structured (v2) facts.
+// ---------------------------------------------------------------------------
+
+/** Free-text v2 fields that pass through lintCopy (a block withholds the field). */
+export const GATED_TEXT_FIELDS = [
+  "strain_name",
+  "lineage",
+  "summary",
+  "description",
+  "short_description",
+  "producer",
+  "brand_description",
+] as const;
+
+/** Term-list v2 fields that pass through lintTerms (blocked terms dropped). */
+export const GATED_TERM_FIELDS = ["aroma", "flavor", "ingredients", "allergens", "awards"] as const;
+
+function withheldFact<T>(fact: LookupFact<T>): LookupFact<T> {
+  return { ...fact, value: null, band: "unknown", withheld: "compliance" };
+}
+
+/**
+ * Run every structured field through the SAME compliance engine the v1 path
+ * uses, before anything reaches the worksheet. A true medical/curative claim
+ * in a free-text field withholds the WHOLE field (value null, band unknown,
+ * withheld "compliance") -- same rule as v1's summary/description. Term
+ * lists drop only the blocked terms. Effects go through the experiential
+ * allow-list; rejected ones are reported. Bands are recounted afterwards.
+ * Pure given its inputs; never mutates `facts`.
+ */
+export function gateLookupFacts(facts: LookupFacts, extraBanned: ExtraBannedPhrase[] = []): LookupFacts {
+  const fields = { ...facts.fields } as LookupFactsFields;
+  const put = <K extends keyof LookupFactsFields>(k: K, v: LookupFactsFields[K]) => {
+    fields[k] = v;
+  };
+
+  for (const k of GATED_TEXT_FIELDS) {
+    const fact = fields[k];
+    if (fact.value === null) continue;
+    const lint = lintCopy(fact.value, extraBanned);
+    if (lint.disposition === "block") put(k, withheldFact(fact));
+  }
+
+  for (const k of GATED_TERM_FIELDS) {
+    const fact = fields[k];
+    if (fact.value === null) continue;
+    const { safe } = lintTerms(fact.value, extraBanned);
+    if (safe.length === 0) put(k, withheldFact(fact));
+    else if (safe.length !== fact.value.length) put(k, { ...fact, value: safe });
+  }
+
+  // Terpene names are descriptors too.
+  const terp = fields.terpenes;
+  if (terp.value !== null) {
+    const kept = terp.value.filter((t) => lintCopy(t.name, extraBanned).disposition !== "block");
+    if (kept.length === 0) put("terpenes", withheldFact(terp));
+    else if (kept.length !== terp.value.length) put("terpenes", { ...terp, value: kept });
+  }
+
+  let rejectedEffects = facts.rejectedEffects;
+  const eff = fields.effects;
+  if (eff.value !== null) {
+    const check = checkEffects(eff.value, extraBanned);
+    rejectedEffects = [...rejectedEffects, ...check.rejected];
+    if (check.allowed.length === 0) put("effects", withheldFact(eff));
+    else put("effects", { ...eff, value: check.allowed });
+  }
+
+  return { ...facts, fields, counts: countBands(fields), rejectedEffects };
 }
 
 /** Trim + de-dupe a string[] of short descriptors, dropping empties. */

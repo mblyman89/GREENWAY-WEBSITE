@@ -620,6 +620,8 @@ import { __runDraftDeepLinkCoreTests } from "../../src/lib/catalog/draft-deep-li
 import { __runProductIdentityCoreTests } from "../../src/lib/catalog/product-identity-core";
 import { __runIdentityColumnsCoreTests } from "../../src/lib/catalog/identity-columns-core";
 import { __runIdentityStampCoreTests } from "../../src/lib/inventory/identity-stamp-core";
+import { __runGroundingCoreTests } from "../../src/lib/ai/grounding-core";
+import { __runLookupFactsCoreTests } from "../../src/lib/inventory/lookup-facts-core";
 import { __runVendorResolveCoreTests } from "../../src/lib/inventory/vendor-resolve-core";
 import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultivera-invoice-core";
 import { __runGenericPdfTransportTests } from "../../src/lib/inventory/pdf-generic-transport-core";
@@ -1813,6 +1815,15 @@ __runLiquidVolumeTests();
   // strip helper never mutates. Floor just under the measured count (33).
   assertRan("identity-columns-core", __runIdentityColumnsCoreTests(), 32);
   assertRan("identity-stamp-core", __runIdentityStampCoreTests(), 47);
+  // S06 grounding: url_citation extraction (Gemini Interactions + OpenAI
+  // Responses), offsets sliced from their OWN text block, http(s) only,
+  // Google Search Suggestions kept verbatim (ToS). Measured 18.
+  assertRan("grounding-core", __runGroundingCoreTests(), 17);
+  // S06 structured lookup: per-field value/confidence/sources, 89->review,
+  // 90->auto, missing->unknown, invalid values never auto, citations mapped
+  // to a field only when unambiguous, v1 bridge, display + F-018 kept-confidence.
+  // Measured 113.
+  assertRan("lookup-facts-core", __runLookupFactsCoreTests(), 113);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

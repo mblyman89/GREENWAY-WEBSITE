@@ -35,6 +35,13 @@ import {
   LOOKUP_HONEST_MISS,
   type RawProductLookup,
 } from "@/lib/inventory/product-lookup-core";
+import {
+  fieldConfidenceForSave,
+  suggestionConfidence,
+  type LookupFacts,
+  type LookupFieldConfidence,
+} from "@/lib/inventory/lookup-facts-core";
+import type { WebCitation } from "@/lib/ai/grounding-core";
 import type { GreenwayStrainType } from "@/lib/leafly/types";
 
 function str(fd: FormData, key: string): string {
@@ -61,6 +68,11 @@ export type LookupKbDraft = {
   potencyRatio: string;
   size: string;
   imageCandidates: string[];
+  /**
+   * SLICE S06 (F-018): each staged field's OWN confidence (0-100), when the
+   * v2 lookup gave one. Optional: absent -> the legacy rule, unchanged.
+   */
+  fieldConfidence?: LookupFieldConfidence;
 };
 
 export type ProductLookupActionResult =
@@ -94,6 +106,14 @@ export type ProductLookupActionResult =
       size: string;
       imageCandidates: string[];
       hasEnrichmentDraft: boolean;
+      /** SLICE S06: structured per-field facts (null on a v1-shaped reply). */
+      facts: LookupFacts | null;
+      /** SLICE S06: which shape the reply was parsed as. */
+      schema: "v2" | "v1";
+      /** SLICE S06: grounded url_citation detail. */
+      citations: WebCitation[];
+      /** SLICE S06: Google Search Suggestions HTML (display only, never stored). */
+      searchSuggestions: string[];
       /** The draft payload the client can send back to saveLookupToKbAction. */
       draft: LookupKbDraft;
     }
@@ -154,6 +174,9 @@ export async function productLookupAction(
         category: r.category || undefined,
         hasEnrichmentDraft: r.hasEnrichmentDraft,
         imageCandidates: r.imageCandidates.length,
+        // S06: counts only (no values, no suggestion HTML -- never stored).
+        schema: outcome.schema,
+        bands: outcome.facts?.counts,
       },
     });
 
@@ -183,6 +206,10 @@ export async function productLookupAction(
       size: r.size,
       imageCandidates: r.imageCandidates,
       hasEnrichmentDraft: r.hasEnrichmentDraft,
+      facts: outcome.facts,
+      schema: outcome.schema,
+      citations: outcome.citations,
+      searchSuggestions: outcome.searchSuggestions,
       draft: {
         name: productName || query,
         strainType: r.strainType,
@@ -200,6 +227,7 @@ export async function productLookupAction(
         potencyRatio: r.potencyRatio,
         size: r.size,
         imageCandidates: r.imageCandidates,
+        fieldConfidence: fieldConfidenceForSave(outcome.facts),
       },
     };
   } catch (err) {
@@ -322,7 +350,13 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
       const alreadyHas = (fieldKey: string, value: string) =>
         existing.some((s) => s.field_key === fieldKey && (s.suggested_value ?? "") === value);
       const src = `model:onboarding-lookup`;
-      const conf = safe.strainTypeConfidence > 0 ? safe.strainTypeConfidence / 100 : 0.75;
+      // SLICE S06 (F-018): each suggestion carries ITS OWN field confidence when
+      // the v2 lookup gave one. Without it, the legacy rule applies unchanged
+      // (strain-type confidence, else 0.75). suggestionConfidence re-parses
+      // the client value (0-100 only), so a junk number falls back too.
+      const fc = (payload.fieldConfidence ?? {}) as Record<string, unknown>;
+      const confFor = (k: "description" | "short_description" | "images") =>
+        suggestionConfidence(fc[k], safe.strainTypeConfidence);
 
       if (safe.description && !alreadyHas("description", safe.description)) {
         await persistSuggestion({
@@ -332,7 +366,7 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
           suggested_value: safe.description,
           input_summary: `AI onboarding lookup for ${name}`,
           generated_by: session.userId,
-          confidence: conf,
+          confidence: confFor("description"),
           source: src,
         });
         wrote.push("description");
@@ -345,7 +379,7 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
           suggested_value: safe.shortDescription,
           input_summary: `AI onboarding lookup for ${name}`,
           generated_by: session.userId,
-          confidence: conf,
+          confidence: confFor("short_description"),
           source: src,
         });
         wrote.push("short_description");
@@ -359,7 +393,7 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
           suggested_value: packedImages,
           input_summary: `AI onboarding lookup · ${packedImages.split("\n").length} image candidate(s) for ${name}`,
           generated_by: session.userId,
-          confidence: conf,
+          confidence: confFor("images"),
           source: src,
         });
         wrote.push("images");

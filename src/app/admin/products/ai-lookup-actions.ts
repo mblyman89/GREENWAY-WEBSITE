@@ -44,6 +44,13 @@ import {
   LOOKUP_HONEST_MISS,
   type RawProductLookup,
 } from "@/lib/inventory/product-lookup-core";
+import {
+  fieldConfidenceForSave,
+  suggestionConfidence,
+  type LookupFacts,
+  type LookupFieldConfidence,
+} from "@/lib/inventory/lookup-facts-core";
+import type { WebCitation } from "@/lib/ai/grounding-core";
 import type { GreenwayStrainType } from "@/lib/leafly/types";
 
 function str(fd: FormData, key: string): string {
@@ -69,6 +76,8 @@ export type EnrichmentLookupDraft = {
   potencyRatio: string;
   size: string;
   imageCandidates: string[];
+  /** SLICE S06 (F-018): each staged field's OWN confidence (0-100), when known. */
+  fieldConfidence?: LookupFieldConfidence;
 };
 
 export type EnrichmentLookupActionResult =
@@ -98,6 +107,14 @@ export type EnrichmentLookupActionResult =
       potencyRatio: string;
       size: string;
       imageCandidates: string[];
+      /** SLICE S06: structured per-field facts (null on a v1-shaped reply). */
+      facts: LookupFacts | null;
+      /** SLICE S06: which shape the reply was parsed as. */
+      schema: "v2" | "v1";
+      /** SLICE S06: grounded url_citation detail. */
+      citations: WebCitation[];
+      /** SLICE S06: Google Search Suggestions HTML (display only, never stored). */
+      searchSuggestions: string[];
       /** The curated payload the client can send back to save. */
       draft: EnrichmentLookupDraft;
     }
@@ -162,6 +179,9 @@ export async function enrichmentLookupAction(
         sources: outcome.sources.length,
         category: r.category || undefined,
         imageCandidates: r.imageCandidates.length,
+        // S06: counts only (no values, no suggestion HTML -- never stored).
+        schema: outcome.schema,
+        bands: outcome.facts?.counts,
       },
     });
 
@@ -188,6 +208,10 @@ export async function enrichmentLookupAction(
       potencyRatio: r.potencyRatio,
       size: r.size,
       imageCandidates: r.imageCandidates,
+      facts: outcome.facts,
+      schema: outcome.schema,
+      citations: outcome.citations,
+      searchSuggestions: outcome.searchSuggestions,
       draft: {
         name: productName || query,
         strainType: r.strainType,
@@ -205,6 +229,7 @@ export async function enrichmentLookupAction(
         potencyRatio: r.potencyRatio,
         size: r.size,
         imageCandidates: r.imageCandidates,
+        fieldConfidence: fieldConfidenceForSave(outcome.facts),
       },
     };
   } catch (err) {
@@ -290,7 +315,11 @@ export async function enrichmentSaveLookupAction(formData: FormData): Promise<En
     const alreadyHas = (fieldKey: string, value: string) =>
       existing.some((s) => s.field_key === fieldKey && (s.suggested_value ?? "") === value);
     const src = "model:enrichment-lookup";
-    const conf = safe.strainTypeConfidence > 0 ? safe.strainTypeConfidence / 100 : 0.75;
+    // SLICE S06 (F-018): each suggestion carries ITS OWN field confidence when
+    // the v2 lookup gave one; otherwise the legacy rule, unchanged.
+    const fc = (payload.fieldConfidence ?? {}) as Record<string, unknown>;
+    const confFor = (k: "description" | "short_description" | "images") =>
+      suggestionConfidence(fc[k], safe.strainTypeConfidence);
 
     if (safe.description && !alreadyHas("description", safe.description)) {
       await persistSuggestion({
@@ -300,7 +329,7 @@ export async function enrichmentSaveLookupAction(formData: FormData): Promise<En
         suggested_value: safe.description,
         input_summary: `AI enrichment look-up for ${name}`,
         generated_by: session.userId,
-        confidence: conf,
+        confidence: confFor("description"),
         source: src,
       });
       staged.push("description");
@@ -313,7 +342,7 @@ export async function enrichmentSaveLookupAction(formData: FormData): Promise<En
         suggested_value: safe.shortDescription,
         input_summary: `AI enrichment look-up for ${name}`,
         generated_by: session.userId,
-        confidence: conf,
+        confidence: confFor("short_description"),
         source: src,
       });
       staged.push("short_description");
@@ -327,7 +356,7 @@ export async function enrichmentSaveLookupAction(formData: FormData): Promise<En
         suggested_value: packedImages,
         input_summary: `AI enrichment look-up · ${packedImages.split("\n").length} image candidate(s) for ${name}`,
         generated_by: session.userId,
-        confidence: conf,
+        confidence: confFor("images"),
         source: src,
       });
       staged.push("images");

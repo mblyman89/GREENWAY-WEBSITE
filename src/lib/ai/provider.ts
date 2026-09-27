@@ -22,6 +22,7 @@
  */
 import "server-only";
 import { logAiUsage, estimateTokens } from "./usage";
+import { extractCitations, extractSearchSuggestions, type WebCitation } from "./grounding-core";
 import {
   modelForTask,
   getBudgetStatus,
@@ -634,6 +635,19 @@ export type WebSearchResult = {
   model: string;
   /** True when the live web_search tool actually ran; false on fallback. */
   usedWebSearch: boolean;
+  /**
+   * SLICE S06 -- per-citation detail (url + title + the exact answer text it
+   * backs, sliced from its OWN text block). Additive and optional: absent on
+   * every fallback path, so older callers are unaffected.
+   */
+  citations?: WebCitation[];
+  /**
+   * SLICE S06 -- Google Search Suggestions HTML, verbatim, from Gemini
+   * grounding. Google's grounding terms require it be shown with grounded
+   * results to the person who asked -- and NEVER stored. Render it in a
+   * sandboxed iframe; never persist it.
+   */
+  searchSuggestions?: string[];
 };
 
 /**
@@ -904,7 +918,14 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
           usage,
           true,
         );
-        return { text, sources, model, usedWebSearch: true };
+        return {
+          text,
+          sources,
+          model,
+          usedWebSearch: true,
+          citations: extractCitations(payload),
+          searchSuggestions: extractSearchSuggestions(payload),
+        };
       }
 
       // Non-OK. For operator-actionable statuses (bad key, out of credits,
@@ -1031,7 +1052,7 @@ export async function generateWebSearch(opts: WebSearchOptions): Promise<WebSear
         usage,
         true,
       );
-      return { text, sources, model, usedWebSearch: true };
+      return { text, sources, model, usedWebSearch: true, citations: extractCitations(payload) };
     }
 
     // Non-OK: log and fall through to the built-in-knowledge fallback.
