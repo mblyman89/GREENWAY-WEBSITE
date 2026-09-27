@@ -169,8 +169,11 @@ describe("public wiring is in place", () => {
     expect(mobile).toContain("hideMedical = false");
   });
 
-  it("the /medical route guards with notFound() and is force-dynamic", () => {
-    expect(route).toMatch(/export const dynamic = "force-dynamic"/);
+  it("the /medical route guards with notFound() and revalidates every 60 s (USAGE-5)", () => {
+    // USAGE-5: the hide flag is honoured through revalidatePath("/medical") in
+    // the editor's publish action, not by re-rendering for every visitor.
+    expect(route).not.toMatch(/export const dynamic = "force-dynamic"/);
+    expect(route).toMatch(/export const revalidate = 60;/);
     expect(route).toContain("notFound()");
     expect(route).toContain("isMedicalPageHidden");
     expect(route).toMatch(/export default async function MedicalPage/);

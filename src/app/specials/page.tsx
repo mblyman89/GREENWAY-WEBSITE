@@ -12,8 +12,27 @@ import { resolveSpecialsPresentation } from "@/lib/specials/specials-presentatio
 import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 
-// Menu is dynamic (published DB version), so specials render on demand.
-export const dynamic = "force-dynamic";
+// USAGE-5 — WHY THIS IS NO LONGER `force-dynamic` (same reasoning as SLICE D
+// on the home page, src/app/page.tsx).
+//
+// Measured on the production deployment 2026-09-27: every hit to /specials was
+// `x-vercel-cache: MISS` with `cache-control: private, no-cache, no-store`,
+// 0.4–0.7 s warm and up to 9 s cold, and each render ran getThursdayBrands +
+// loadPublishedRuleSnapshots (four promotions PostgREST reads), the content
+// blocks, the banners and the full live menu — for every visitor and every
+// crawler, for an identical 1.3 MB page.
+//
+// `revalidate = 60` lets visitors in the same minute share one render. The TTL
+// is the floor, not the mechanism: publishing already clears this route —
+//   * revalidatePublicMenuSurfaces() lists "/specials" (menu publish),
+//   * setPromotionStatusAction and both never-discount actions call
+//     revalidatePath("/specials") / revalidatePath("/", "layout"),
+//   * the Specials editor and every content publish call
+//     revalidatePath("/specials") or revalidatePath("/", "layout").
+// Draft Mode bypasses the route cache by design, so isPreviewActive() below
+// still sees drafts on demand. 60 s = MENU_CACHE_TTL_SECONDS, one number for
+// both layers.
+export const revalidate = 60;
 
 export const metadata = pageMetadata({
   title: "Cannabis Specials & Daily Deals — Port Orchard",

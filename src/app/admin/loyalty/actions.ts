@@ -129,6 +129,9 @@ export async function saveLoyaltyConfigAction(fd: FormData): Promise<LoyaltyActi
     after: parsed.value,
   });
   revalidatePath("/admin/loyalty");
+  // USAGE-5: the public /loyalty page (revalidate = 60) advertises THESE
+  // numbers, so a saved change must clear it too — the TTL is only the floor.
+  revalidatePath("/loyalty");
   return { ok: true };
 }
 
@@ -153,6 +156,9 @@ export async function saveLoyaltyTierAction(fd: FormData): Promise<LoyaltyAction
     after: parsed.value,
   });
   revalidatePath("/admin/loyalty");
+  // USAGE-5: the public /loyalty page (revalidate = 60) advertises THESE
+  // numbers, so a saved change must clear it too — the TTL is only the floor.
+  revalidatePath("/loyalty");
   return { ok: true };
 }
 
@@ -171,6 +177,9 @@ export async function deleteLoyaltyTierAction(fd: FormData): Promise<LoyaltyActi
     entityId: id,
   });
   revalidatePath("/admin/loyalty");
+  // USAGE-5: the public /loyalty page (revalidate = 60) advertises THESE
+  // numbers, so a saved change must clear it too — the TTL is only the floor.
+  revalidatePath("/loyalty");
   return { ok: true };
 }
 
