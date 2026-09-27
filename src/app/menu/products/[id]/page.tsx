@@ -265,9 +265,26 @@ async function relatedItemsFor(
   return { items: selection.items, scope: selection.scope };
 }
 
-// The menu is dynamic (published DB version), so product pages render on demand
-// rather than being statically pre-generated from a frozen snapshot.
-export const dynamic = "force-dynamic";
+// The menu is dynamic (published DB version), so product pages are NOT
+// pre-generated from a frozen snapshot: no generateStaticParams, and an
+// unknown id still 404s through getMenuItemById → notFound().
+//
+// USAGE-5 — WHY THIS IS NO LONGER `force-dynamic`.
+// Measured on production (greenwaywebsite1.vercel.app, 2026-09-27): all 811
+// product URLs in the sitemap answered `x-vercel-cache: MISS` with
+// `cache-control: private, no-cache, no-store`, 0.5–0.8 s each, ~270–315 KB of
+// HTML — and each render did the image resolution, KB knowledge, DOH registry
+// and related-items work again for a page that is identical to every other
+// visitor's (and every crawler's) copy of it.
+//
+// `revalidate = 60` renders a product once per minute at most, on demand, and
+// the TTL is only the floor: `revalidatePublicMenuSurfaces()` (publish, reset,
+// intake auto-publish) now also calls `revalidatePath("/menu/products/[id]",
+// "page")`, so a publish is visible on the very next visit to any product
+// page. The money is never cached: the price on this page is re-verified by
+// repriceOrderLines at order placement (menu-cache-policy-core.ts, "Product
+// detail" surface), which is the same argument that made the shop cacheable.
+export const revalidate = 60;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
