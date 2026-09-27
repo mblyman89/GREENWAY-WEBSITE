@@ -113,10 +113,17 @@ export default async function IntakeVersionReviewPage({
         )}
 
         <div className="rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-4 text-sm text-white/70">
-          These products came in through <strong>receiving</strong> and were approved with a price.
-          They&apos;ve been carried onto a copy of your current live menu so you can review and publish
-          them &mdash; <strong>no Menu Imports upload needed</strong>. Publishing makes them show on the
-          website and become sellable at the register.
+          These products came in through <strong>receiving</strong> and were approved with a price.{" "}
+          {isPublished ? (
+            <>This menu version is live &mdash; its products are on the website and sellable at the register.</>
+          ) : (
+            <>
+              Normally that approval publishes them automatically &mdash; a draft only waits here when a
+              product has a fact that needs a second look or the automatic publish didn&apos;t finish.
+              Check what it names below, then press <strong>Publish</strong> to put them on the website
+              and make them sellable at the register. <strong>No Menu Imports upload needed.</strong>
+            </>
+          )}
         </div>
 
         {/* Summary cards */}

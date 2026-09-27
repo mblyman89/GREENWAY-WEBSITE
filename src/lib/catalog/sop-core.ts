@@ -25,6 +25,9 @@ import {
   journeyStage,
   type JourneyStageKey,
 } from "@/lib/catalog/journey-core";
+// S00: the post-approve story is shared with the on-screen HelpPanels so paper
+// and screen literally cannot disagree (the header's content rule, enforced).
+import { APPROVE_PUBLISHES_COPY, HELD_EXCEPTION_COPY } from "@/lib/catalog/publish-story-core";
 
 export type SopDoc = {
   /** URL segment under /admin/sop/. Stage key or "truck-day". */
@@ -78,8 +81,8 @@ export const SOP_DOCS: readonly SopDoc[] = [
       "Count the physical boxes against the manifest lines. Verify every count before going further.",
       "Accept the manifest to activate the lots — or reject it to discard. Accepting is the human sign-off.",
       "Open Product Onboarding (Inventory → Drafts): lots that didn't match the published menu got a DRAFT product, pre-filled from the JSON + COA potency. Review each one, then Approve or Dismiss.",
-      "Open the Publish command center (Admin → Publish Menu): approving with a price staged a menu draft (usually it publishes itself). Review the draft marked Latest.",
-      "Publish the latest draft when it looks right. The public menu updates and the new product is sellable.",
+      "Approving with a price publishes the product to the website and the register automatically — there is no separate publish step on a normal day.",
+      "Only if an update was held (a fact needs a second look, or the automatic publish didn't finish): open the Publish command center (Admin → Publish Menu), check what the draft marked Latest names, and press Publish.",
       "Later, Accounts Payable pays the invoice (the accepted manifest) — the linked purchase order is stamped Paid automatically once payments cover what's owed.",
     ],
     doneWhen:
@@ -176,10 +179,11 @@ export const SOP_DOCS: readonly SopDoc[] = [
       "On accepting a manifest, each lot is matched to the published menu by its POS key.",
       "Lots that don't match get a DRAFT product, pre-filled from the JSON + COA potency.",
       "Review the details, then Approve (validated) or Dismiss (not a new product).",
-      "Approved drafts are added automatically to the next menu import you stage — the import review screen lists each one, and they go live when you publish that version.",
+      APPROVE_PUBLISHES_COPY,
+      HELD_EXCEPTION_COPY,
     ],
     doneWhen:
-      "No pending drafts remain — each is approved (waiting for the next menu publish) or dismissed.",
+      "No pending drafts remain — each is approved (and live on the website + register) or dismissed.",
     ifStuck: [
       "This keeps the live menu clean: machine-suggested products always wait for a human to confirm them before customers ever see them.",
     ],
@@ -193,7 +197,7 @@ export const SOP_DOCS: readonly SopDoc[] = [
     purpose: "Review the newest menu draft and put it live — the menu is a snapshot, so always publish the newest draft.",
     where: journeyStage("publish").href,
     before: [
-      "A menu draft — receiving creates one automatically when you approve a product with a price (POS-export uploads live under Menu Imports).",
+      "A menu draft that is WAITING — approving a product with a price normally publishes by itself, so a draft only waits here when a fact needs a second look or the automatic publish didn't finish (one-time POS-export uploads live under Menu Imports).",
     ],
     steps: [
       "Open the Publish command center. The live-menu card shows what customers see right now; the drafts list marks ONE draft as Latest.",

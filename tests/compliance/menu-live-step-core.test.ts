@@ -17,7 +17,7 @@ import {
   menuStep,
   MENU_STEP_LABEL,
   DRAFTS_PATH,
-  MENU_IMPORTS_PATH,
+  PUBLISH_CENTER_PATH,
   __runMenuLiveStepCoreTests,
   type MenuStepInput,
 } from "@/lib/inventory/menu-live-step-core";
@@ -65,12 +65,16 @@ describe("menu-live-step-core: work remaining", () => {
     expect(menuStep("accepted", counts(1, 0, true)).href).toBe(DRAFTS_PATH);
   });
 
-  it("stuck staged version (publish fallback) → current, deep-links to Menu Imports", () => {
+  it("stuck staged version (held or failed) → current, deep-links to the Publish command center", () => {
     const v = menuStep("accepted", counts(0, 2, true));
     expect(v.state).toBe("current");
-    expect(v.line).toContain("Publish");
-    expect(v.href).toBe(MENU_IMPORTS_PATH);
-    expect(v.linkLabel).toBe("Publish now");
+    expect(v.line).toContain("Publish command center");
+    expect(v.line).toContain("second look");
+    // S00: the one-time Cultivera page is never where a held update is handled.
+    expect(v.line).not.toMatch(/menu imports/i);
+    expect(v.href).toBe(PUBLISH_CENTER_PATH);
+    expect(v.href).toBe("/admin/publish");
+    expect(v.linkLabel).toBe("Review & publish");
   });
 });
 

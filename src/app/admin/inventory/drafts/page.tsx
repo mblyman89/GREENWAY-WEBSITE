@@ -16,7 +16,10 @@ import {
 // SLICE 93: strain-type intelligence - the picker's honest placeholder + the
 // canonical dropdown choices (strain-taxonomy, the single source of truth).
 import { strainTypePickerPlaceholder } from "@/lib/inventory/strain-type-intel-core";
-// T-314: manual GPT-4o + live web search product/strain lookup on each row.
+// T-314: manual, web-grounded product/strain lookup on each row. The model is
+// whatever AI_MODEL_HEAVY names (Gemini google_search grounding when it starts
+// with "gemini", otherwise the OpenAI web_search tool) - see
+// src/lib/ai/provider.ts generateWebSearch.
 import { AiLookupPanel } from "./AiLookupPanel";
 import { isAiConfigured } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
@@ -68,12 +71,17 @@ import { listInventoryTypes } from "@/lib/pos/types-store";
 import { mergeOwnerTypesIntoGroups } from "@/lib/pos/type-registry-core";
 import { labelForCategory } from "@/lib/pos/category-registry-core";
 import { intakeDisplayName } from "@/lib/pos/intake-mastering-core";
+// S00: the one shared sentence about what Approve does (never retyped here).
+import { APPROVE_PUBLISHES_COPY, HELD_EXCEPTION_COPY } from "@/lib/catalog/publish-story-core";
 
 export const dynamic = "force-dynamic";
-// T-318: the AI product lookup (a server action invoked on this route) runs a
-// live Gemini google_search grounding call that can take a while. Give the
-// function the full Vercel Hobby ceiling (300s) so it isn't cut short before
-// our own ~55s in-code fetch timeout can return a clean, friendly message.
+// T-318 / T-323: the AI product lookup (a server action invoked on this route)
+// runs a live web-grounded call that can take a while. provider.ts aborts its
+// own fetch at AI_WEBSEARCH_TIMEOUT_MS (default 290s), so the function gets
+// 300s - just above that - and can still return the clean "took too long"
+// message instead of being killed mid-flight. (The project is on Vercel Pro,
+// AGENTS.md rule 12; raise both numbers together if a longer lookup is ever
+// needed.)
 export const maxDuration = 300;
 
 function fmtPct(n: number | null): string {
@@ -239,7 +247,7 @@ export default async function CatalogDraftsPage({
     <div>
       <AdminPageHeader
         title="Product Onboarding"
-        subtitle="When a received lot isn't on the live menu, we draft the product from the transfer + COA so you can validate it before it goes live. Nothing here is customer-facing until you approve it."
+        subtitle="When a received lot isn't on the live menu, we draft the product from the transfer + COA so you can check it. Nothing here is customer-facing until you approve it — and approving with a price is what puts it live."
         breadcrumbs={
           <Breadcrumbs
             items={[
@@ -257,12 +265,14 @@ export default async function CatalogDraftsPage({
               "Lots that don't match get a DRAFT product, pre-filled from the JSON + COA potency.",
               "Review the details, then Approve (validated) or Dismiss (not a new product).",
               "If we couldn't classify a product at 90% confidence or better, the approve form asks you to pick its category or type from our own list — no product is ever guessed onto the menu.",
-              "Approved drafts are added automatically to the next menu import you stage — the import review screen lists each one, and they go live when you publish that version.",
+              APPROVE_PUBLISHES_COPY,
+              HELD_EXCEPTION_COPY,
             ]}
           >
             <p>
               This keeps the live menu clean: machine-suggested products always wait for a human to
-              confirm them before customers ever see them.
+              confirm them before customers ever see them. Your Approve click is the go-live
+              decision, so there is no second publish step to remember.
             </p>
             <SopSheetLink slug="onboard" />
           </HelpPanel>
@@ -708,7 +718,7 @@ export default async function CatalogDraftsPage({
                                     </span>
                                   </div>
                                 ) : null}
-                                {/* T-314: manual GPT-4o + live web search lookup.
+                                {/* T-314: manual web-grounded lookup (AI_MODEL_HEAVY).
                                     Prefilled with this row's name + brand; the
                                     operator presses Search (never auto-run). A
                                     >=90% result autofills the strain-type select

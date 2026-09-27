@@ -13,6 +13,8 @@ import { formatDateTime } from "@/lib/pos/format";
 import { flagOutdatedDrafts } from "@/lib/pos/publish-guard-core";
 import type { PosImportStatus, MenuVersionStatus } from "@/lib/pos/db-types";
 import { withBackParam } from "@/lib/admin/back-link-core";
+// S00: shared post-approve story (Menu Imports is the one-time Cultivera door).
+import { MENU_IMPORTS_PURPOSE_COPY } from "@/lib/catalog/publish-story-core";
 import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -82,17 +84,17 @@ export default async function MenuImportsPage({
     <div>
       <AdminPageHeader
         title="Menu Imports"
-        subtitle="Upload PRODUCTS.xlsx + INVENTORIES.xlsx, review the staged menu, then publish it live."
+        subtitle={MENU_IMPORTS_PURPOSE_COPY}
         breadcrumbs={<Breadcrumbs items={[{ label: "Menu Imports" }]} />}
         help={
           <HelpPanel
             id="menu-imports"
             title="How your menu gets published"
             steps={[
-              "Day to day: receive products, approve each one with a price, and it is carried onto a menu draft here automatically — no upload.",
-              "Open the draft under 'Menu drafts from receiving' and review what is new vs. your live menu.",
-              "Click Publish when it looks right — those products show on the website and become sellable at the register.",
-              "One time only: the PRODUCTS + INVENTORIES upload below is for your initial Cultivera import; you will not need it after that.",
+              "Day to day: receive products and approve each one with a price on Product Onboarding. That approval publishes it to the website and the register automatically — no upload, no Publish click.",
+              "Rarely, an update waits instead: a product has a fact that needs a second look, or the automatic publish didn't finish. It shows under 'Menu drafts from receiving' below (and under Admin → Publish Menu) with exactly what to check.",
+              "Open a waiting draft, fix what it names, then press Publish there.",
+              "One time only: the PRODUCTS.xlsx + INVENTORIES.xlsx upload below is for your initial Cultivera import; you will not need it after that.",
             ]}
           >
             <p>

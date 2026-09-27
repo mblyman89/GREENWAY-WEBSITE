@@ -22,8 +22,17 @@
  * and they fail if anyone re-centres the product pipeline on Cultivera.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+
+import {
+  APPROVE_PUBLISHES_COPY,
+  HELD_EXCEPTION_COPY,
+  MENU_IMPORTS_PURPOSE_COPY,
+  findStalePublishPhrases,
+  __runPublishStoryCoreTests,
+} from "@/lib/catalog/publish-story-core";
+import { SOP_DOCS } from "@/lib/catalog/sop-core";
 
 import { brandKey, brandInList } from "@/lib/promotions/brand-match-core";
 import {
@@ -40,6 +49,25 @@ import { resolveBrandId, resolveBrandIdDetailed } from "@/lib/inventory/intake-s
 
 const ROOT = join(__dirname, "..", "..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
+
+/** Every .ts/.tsx under `dir` (recursive). Used by the S00 stale-story scan. */
+function walkSource(dir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) out.push(...walkSource(p));
+    else if (/\.tsx?$/.test(name)) out.push(p);
+  }
+  return out;
+}
+
+describe("S00 publish-story-core self-tests", () => {
+  it("bundled self-tests pass with a real assertion count", () => {
+    const r = __runPublishStoryCoreTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(30);
+  });
+});
 
 const B = (id: string, display_name: string | null, vendor_id: string | null = null): BrandCandidate => ({
   id,
@@ -357,6 +385,102 @@ describe("standing rule 11 — receiving intake is the real pipeline", () => {
       expect(src, rel).toContain("NOT HOW PRODUCTS ENTER GREENWAY");
       expect(src, rel).toContain("RECEIVING INTAKE");
     }
+  });
+
+  /* ---------------------------------------------------------------------- */
+  /* S00 — ONE TRUTHFUL STORY: "Approve with a price = published".          */
+  /* ---------------------------------------------------------------------- */
+
+  it("S00: no admin surface tells the superseded 'stage then publish' story", () => {
+    // Every file an owner or a new hire reads about the post-approve moment:
+    // the admin pages, the printable SOP sheets, the intake timeline notes and
+    // the ribbon core. Walked, not listed, so a NEW page is covered too.
+    const roots = ["src/app/admin", "src/lib/catalog", "src/lib/inventory", "src/lib/pos", "src/components/admin"];
+    const files = roots.flatMap((r) => walkSource(join(ROOT, r)));
+    // Sanity: the walk really found the tree (a broken walk would pass vacuously).
+    expect(files.length).toBeGreaterThan(200);
+    const rels = files.map((f) => f.slice(ROOT.length + 1));
+    expect(rels).toContain("src/app/admin/inventory/drafts/page.tsx");
+    expect(rels).toContain("src/lib/catalog/sop-core.ts");
+
+    const offenders: string[] = [];
+    for (const f of files) {
+      // The detector's own phrase list is the one legitimate home of the phrases.
+      if (f.endsWith("publish-story-core.ts")) continue;
+      const hits = findStalePublishPhrases(readFileSync(f, "utf8"));
+      for (const h of hits) offenders.push(`${f.slice(ROOT.length + 1)}: "${h}"`);
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+
+  it("S00: the drafts help, the SOP sheet and Menu Imports use the ONE shared sentence", () => {
+    const drafts = read("src/app/admin/inventory/drafts/page.tsx");
+    expect(drafts).toContain("APPROVE_PUBLISHES_COPY");
+    expect(drafts).toContain("HELD_EXCEPTION_COPY");
+    const sop = read("src/lib/catalog/sop-core.ts");
+    expect(sop).toContain("APPROVE_PUBLISHES_COPY");
+    expect(sop).toContain("HELD_EXCEPTION_COPY");
+    expect(read("src/app/admin/menu-imports/page.tsx")).toContain("MENU_IMPORTS_PURPOSE_COPY");
+    // And what they render says the true thing.
+    expect(APPROVE_PUBLISHES_COPY).toMatch(/automatically/);
+    expect(HELD_EXCEPTION_COPY).toMatch(/Publish Menu/);
+    expect(MENU_IMPORTS_PURPOSE_COPY).toMatch(/one-time Cultivera import/);
+    // The runtime really does what the copy claims (so the copy is not just
+    // consistent, it is TRUE): approval triggers staging, staging publishes
+    // through the gated RPC, and the only hold is the fact-review gate.
+    expect(read("src/lib/inventory/catalog-drafts.ts")).toContain(
+      "stageIntakeMenuVersionForManifest(row.manifest_id, actorId)",
+    );
+    const staging = read("src/lib/pos/intake-menu-staging.ts");
+    expect(staging).toContain('admin.rpc("publish_menu_version"');
+    expect(staging).toContain('d.code === "fact_extraction_review"');
+  });
+
+  it("S00: every SOP sheet line is free of the stale story (rendered data, not source text)", () => {
+    const all = SOP_DOCS.flatMap((d) => [d.purpose, d.doneWhen, ...d.before, ...d.steps, ...d.ifStuck]);
+    expect(all.length).toBeGreaterThan(40);
+    for (const line of all) expect(findStalePublishPhrases(line), line).toEqual([]);
+    const onboard = SOP_DOCS.find((d) => d.slug === "onboard");
+    expect(onboard?.steps).toContain(APPROVE_PUBLISHES_COPY);
+    expect(onboard?.steps).toContain(HELD_EXCEPTION_COPY);
+  });
+
+  it("S00: Product Onboarding no longer names GPT-4o as the lookup model", () => {
+    for (const rel of [
+      "src/app/admin/inventory/drafts/page.tsx",
+      "src/app/admin/inventory/drafts/AiLookupPanel.tsx",
+      "src/app/admin/inventory/drafts/ai-lookup-actions.ts",
+      "src/lib/inventory/product-lookup-ai.ts",
+    ]) {
+      expect(read(rel), rel).not.toMatch(/GPT-4o/);
+    }
+  });
+
+  it("S00: .env.example documents every AI_* variable the AI provider and router read", () => {
+    // Derived from the source, not hand-listed: a new process.env.AI_X read in
+    // either module without a matching .env.example line fails here.
+    const src = read("src/lib/ai/provider.ts") + read("src/lib/ai/router.ts");
+    const direct = [...src.matchAll(/process\.env\.(AI_[A-Z0-9_]+)/g)].map((m) => m[1]);
+    const viaNum = [...src.matchAll(/num\("(AI_[A-Z0-9_]+)"/g)].map((m) => m[1]);
+    const vars = [...new Set([...direct, ...viaNum])].sort();
+    // The ones the S00 audit found undocumented must be in the derived set
+    // (proves the derivation itself works).
+    for (const v of ["AI_MODEL_HEAVY", "AI_GEMINI_API_KEY", "AI_GEMINI_BASE_URL", "AI_WEBSEARCH_TIMEOUT_MS", "AI_MONTHLY_USD_BUDGET"]) {
+      expect(vars).toContain(v);
+    }
+    const env = read(".env.example");
+    const missing = vars.filter((v) => !new RegExp(`^#?\\s*${v}=`, "m").test(env));
+    expect(missing, `undocumented in .env.example: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("S00: the old Option-B roadmap carries a SUPERSEDED banner and keeps the owner's words", () => {
+    const doc = read("docs/ROADMAP_INTAKE_AUTO_CARRY.md");
+    const head = doc.split("\n").slice(0, 30).join("\n");
+    expect(head).toContain("SUPERSEDED");
+    expect(head).toContain("src/lib/pos/intake-menu-staging.ts");
+    expect(head).toContain("df261041");
+    // Owner verbatims survive untouched (rule 1).
+    expect(doc).toContain("I like option b better, but not auto published, just auto carry on accept.");
   });
 
   it("the receiving door and the migration importer both say which one is real", () => {

@@ -135,13 +135,13 @@ export default async function ProductsPage({
             </p>
           </HelpPanel>
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6 text-sm text-[var(--admin-text-muted)]">
-            No published menu yet. Products you receive and approve with a price are carried onto a
-            menu draft automatically &mdash; review and publish it under{" "}
-            <Link href="/admin/menu-imports" className="text-[var(--admin-accent)] hover:underline">
-              Menu Imports &rarr; Menu drafts from receiving
+            No published menu yet. Products you receive and approve with a price publish to the
+            website and register automatically, then appear here for enrichment. If an update is
+            ever held for a second look, it waits under{" "}
+            <Link href="/admin/publish" className="text-[var(--admin-accent)] hover:underline">
+              Admin &rarr; Publish Menu
             </Link>
-            , then products will appear here for enrichment. (The one-time POS upload on that page is
-            only for the initial Cultivera import.)
+            . (The one-time POS upload under Menu Imports is only for the initial Cultivera import.)
           </div>
         </div>
       </div>

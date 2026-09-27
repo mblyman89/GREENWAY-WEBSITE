@@ -1380,8 +1380,8 @@ export async function finalizeManifestDispositions(
     // drafts, stage an intake-origin menu version (current live menu carried
     // forward + the new approved products) and publish it immediately — the
     // item-by-item human review already happened at draft approval. On a
-    // publish hiccup the staged version lands on Menu Imports as the manual
-    // fallback. No-op when there are no approved drafts yet (the usual case at
+    // publish hiccup (or a fact-review hold) the staged version waits in the
+    // Publish command center (Admin → Publish Menu) as the manual fallback. No-op when there are no approved drafts yet (the usual case at
     // first finalize — the owner approves prices afterward and the approval
     // flow triggers this). Best-effort: a staging/publish hiccup must never
     // break intake finalization.
@@ -1399,7 +1399,9 @@ export async function finalizeManifestDispositions(
           "menu_auto_carry",
           carry.published
             ? `Menu updated automatically: ${what} on top of ${carry.carried} live item(s) — live on the website + sellable at the register.`
-            : `Staged a menu version for review: ${what} on top of ${carry.carried} live item(s). Publish it on Admin → Menu Imports to make them sellable on the website + POS.`,
+            : carry.reason === "held-for-fact-review"
+              ? `Staged a menu version but held it for a second look: ${what} on top of ${carry.carried} live item(s). A product has a fact the extraction engine could not verify — check it under Admin → Publish Menu and press Publish there.`
+              : `Staged a menu version for review: ${what} on top of ${carry.carried} live item(s). The automatic publish didn't finish — press Publish under Admin → Publish Menu to make them sellable on the website + POS.`,
           actorId,
         );
       }

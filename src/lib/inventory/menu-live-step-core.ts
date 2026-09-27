@@ -12,12 +12,15 @@
  *   • Manifest not accepted yet         → todo (greyed; nothing menu-side yet)
  *   • Counts unavailable (read failed)  → todo (we never claim "done" blind)
  *   • Drafts still unpriced             → current → "price & approve" (deep-link)
- *   • Staged version stuck unpublished  → current → "publish now" fallback
- *     (the auto-publish is best-effort; if it hiccups the staged draft lands
- *     on Menu Imports and this step points straight at it)
+ *   • Staged version stuck unpublished  → current → "review & publish"
+ *     (held for a fact check, or the best-effort auto-publish hiccuped; the
+ *     staged draft waits in the Publish command center and this step points
+ *     straight at it — S00: never at the one-time Menu Imports page)
  *   • Approved products live            → done ("on the menu")
  *   • No new products from the delivery → done (nothing was needed)
  */
+
+import { PUBLISH_CENTER_PATH } from "@/lib/catalog/publish-story-core";
 
 /** Mirrors guided-accept-core's GuidedStepState minus "failed" (step ④ never fails). */
 export type MenuStepState = "done" | "current" | "todo";
@@ -28,7 +31,8 @@ export type MenuStepInput = {
   /** catalog_product_drafts rows for the manifest in status "approved". */
   approvedDrafts: number;
   /** An intake-origin STAGED menu version for this manifest still exists
-   *  (auto-publish didn't finish — the Menu Imports fallback has it). */
+   *  (held for a fact check, or auto-publish didn't finish — it waits in the
+   *  Publish command center). */
   stagedWaiting: boolean;
 };
 
@@ -37,7 +41,7 @@ export type MenuStepView = {
   /** Plain-English "what do I do here?" override for the ribbon when the
    *  menu step is the story — null falls back to the accept-stage copy. */
   line: string | null;
-  /** Deep-link that advances the step (drafts page / Menu Imports), or null. */
+  /** Deep-link that advances the step (drafts page / Publish command center), or null. */
   href: string | null;
   /** Label for the deep-link button, or null. */
   linkLabel: string | null;
@@ -45,7 +49,9 @@ export type MenuStepView = {
 
 export const MENU_STEP_LABEL = "On menu";
 export const DRAFTS_PATH = "/admin/inventory/drafts";
-export const MENU_IMPORTS_PATH = "/admin/menu-imports";
+/** S00: held / failed intake updates are handled in the Publish command center
+ *  (admin nav "Publish Menu"). Re-exported from the ONE shared definition. */
+export { PUBLISH_CENTER_PATH };
 
 /** Manifest statuses whose lots have entered inventory (menu work can exist). */
 const ACCEPTED_STATUSES = new Set(["accepted", "partially_accepted"]);
@@ -91,9 +97,9 @@ export function menuStep(manifestStatus: string, input: MenuStepInput | null): M
   if (input.stagedWaiting) {
     return {
       state: "current",
-      line: "A menu update from this delivery is staged but hasn't gone live — the automatic publish didn't finish. Open Menu Imports and press Publish to put it live.",
-      href: MENU_IMPORTS_PATH,
-      linkLabel: "Publish now",
+      line: "A menu update from this delivery is waiting instead of going live — either a product has a fact that needs a second look, or the automatic publish didn't finish. Open the Publish command center, check what it names, and press Publish.",
+      href: PUBLISH_CENTER_PATH,
+      linkLabel: "Review & publish",
     };
   }
 
@@ -156,11 +162,14 @@ export function __runMenuLiveStepCoreTests(): void {
   const both = menuStep("accepted", counts(1, 0, true));
   ok(both.href === DRAFTS_PATH, "pending outranks stagedWaiting");
 
-  // Staged-but-unpublished fallback → current, deep-links to Menu Imports.
+  // Staged-but-unpublished (held or failed) → current, deep-links to the
+  // Publish command center — never the one-time Menu Imports page (S00).
   const stuck = menuStep("accepted", counts(0, 2, true));
   ok(stuck.state === "current", "stagedWaiting → current");
-  ok(stuck.line !== null && stuck.line.includes("Publish"), "stagedWaiting line names Publish");
-  ok(stuck.href === MENU_IMPORTS_PATH && stuck.linkLabel === "Publish now", "stagedWaiting → menu-imports deep-link");
+  ok(stuck.line !== null && stuck.line.includes("Publish command center"), "stagedWaiting line names the command center");
+  ok(stuck.line !== null && stuck.line.includes("second look"), "stagedWaiting line covers the fact-review hold");
+  ok(stuck.line !== null && !/menu imports/i.test(stuck.line), "stagedWaiting line never says Menu Imports");
+  ok(stuck.href === PUBLISH_CENTER_PATH && stuck.linkLabel === "Review & publish", "stagedWaiting → publish-center deep-link");
 
   // Approved and nothing waiting → done ("on the menu").
   const live = menuStep("accepted", counts(0, 3));

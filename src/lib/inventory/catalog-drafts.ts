@@ -987,8 +987,9 @@ export async function approveDraftWithPrice(
   // version (current live menu carried forward + this newly approved product)
   // and publish it immediately — pressing "Approve" IS the go-live decision,
   // so the product reaches the customer menu + front POS with no further
-  // clicks. On a publish hiccup the staged version lands on Menu Imports as
-  // the manual fallback. Best-effort + dynamic import to avoid pulling
+  // clicks. On a publish hiccup (or a fact-review hold) the staged version
+  // waits in the Publish command center (Admin → Publish Menu) as the manual
+  // fallback. Best-effort + dynamic import to avoid pulling
   // server-only menu code into every caller of this module; a staging/publish
   // hiccup must never fail the approval itself.
   if (row?.manifest_id) {

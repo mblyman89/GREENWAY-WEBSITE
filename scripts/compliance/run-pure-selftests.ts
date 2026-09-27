@@ -614,6 +614,7 @@ import { __runThemeCoreTests } from "../../src/lib/pos/theme-core";
 import { __runSwCoreTests } from "../../src/lib/pos/sw-core";
 import { __runVariantGramsCoreTests } from "../../src/lib/pos/variant-grams-core";
 import { __runMenuLiveStepCoreTests } from "../../src/lib/inventory/menu-live-step-core";
+import { __runPublishStoryCoreTests } from "../../src/lib/catalog/publish-story-core";
 import { __runVendorResolveCoreTests } from "../../src/lib/inventory/vendor-resolve-core";
 import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultivera-invoice-core";
 import { __runGenericPdfTransportTests } from "../../src/lib/inventory/pdf-generic-transport-core";
@@ -1782,6 +1783,10 @@ __runLiquidVolumeTests();
   // Floors just under the measured counts (130 / 109).
   assertRan("customer-insights-core", __runCustomerInsightsCoreTests(), 125);
   assertRan("customer-segments-core", __runCustomerSegmentsCoreTests(), 105);
+
+  // S00 one truthful story: shared "Approve = auto-publish" copy + the
+  // stale-phrase detector. Floor just under the measured count (30).
+  assertRan("publish-story-core", __runPublishStoryCoreTests(), 28);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

@@ -11,7 +11,8 @@
  * delivery's approved products made it onto the live menu — approving a
  * price on Product Onboarding publishes automatically, so this step needs no
  * button of its own; while work remains it deep-links to the ONE page that
- * advances it (Product Onboarding, or Menu Imports on a publish hiccup).
+ * advances it (Product Onboarding, or the Publish command center when an
+ * update is held or the automatic publish hiccuped).
  *
  * Pure presentation server component — all logic lives in
  * guided-accept-core.ts and menu-live-step-core.ts (both tested). Zero
