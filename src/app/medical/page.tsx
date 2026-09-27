@@ -10,10 +10,18 @@ import {
 } from "@/lib/medical/medical-content-core";
 import { pageMetadata } from "@/lib/seo/seo";
 
-// SLICE 107: the page reads a CMS visibility flag at request time, so it must
-// not be statically cached — otherwise hiding the page wouldn't take effect
-// until a redeploy.
-export const dynamic = "force-dynamic";
+// SLICE 107: the page reads a CMS visibility flag, so it must not be frozen at
+// build time — otherwise hiding the page wouldn't take effect until a redeploy.
+//
+// USAGE-5: that requirement is met by `revalidate = 60`, not by `force-dynamic`.
+// Measured on production 2026-09-27: every /medical hit was `x-vercel-cache:
+// MISS`, re-reading content_blocks (this flag + header + footer blocks) for a
+// page whose body is static copy. The hide flag is published through
+// src/app/admin/medical-page/actions.ts, which calls revalidatePath("/medical")
+// and revalidatePath("/", "layout"), so hiding still takes effect on the next
+// non-preview load; 60 s is only the floor for anything that bypasses that
+// path. Draft Mode bypasses the route cache, so staff preview is unaffected.
+export const revalidate = 60;
 
 export const metadata = pageMetadata({
   title: "Medical Cannabis Program — Cards, Tax Savings & Limits",

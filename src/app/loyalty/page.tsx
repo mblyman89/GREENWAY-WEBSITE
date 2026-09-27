@@ -25,10 +25,21 @@ export const metadata = pageMetadata({
   image: "/og/loyalty.png",
 });
 
-// SLICE 108: the page now surfaces editable content blocks + the LIVE loyalty
-// config/tiers, so render on demand (matching /specials and /medical) — a
-// published edit or a program-number change shows on the very next load.
-export const dynamic = "force-dynamic";
+// SLICE 108: the page surfaces editable content blocks + the LIVE loyalty
+// config/tiers — a published edit or a program-number change must show on the
+// very next load.
+//
+// USAGE-5: that promise is now kept by revalidation, not by `force-dynamic`.
+// Measured on production 2026-09-27: every /loyalty hit was `x-vercel-cache:
+// MISS`, re-reading content_blocks, page banners, loyalty_config and
+// loyalty_tiers for an identical page. Every writer that changes what this
+// page shows already clears it: the Loyalty-page editor
+// (src/app/admin/loyalty-page/actions.ts) calls revalidatePath("/loyalty"), and
+// the program editors (saveLoyaltyConfigAction, saveLoyaltyTierAction,
+// deleteLoyaltyTierAction in src/app/admin/loyalty/actions.ts) do the same as of
+// this slice. 60 s is only the floor. Draft Mode bypasses the route cache, so
+// staff preview still sees drafts on demand.
+export const revalidate = 60;
 
 export default async function LoyaltyPage() {
   const [copy, preview, banners, loyaltyConfig, loyaltyTiers] = await Promise.all([

@@ -148,9 +148,12 @@ describe("public wiring is in place", () => {
   it("the /loyalty page fetches all editable keys and passes copy down", () => {
     expect(route).toContain("LOYALTY_CONTENT_KEYS");
     expect(route).toContain("resolveLoyaltyValue");
-    // Rendered on demand (like /specials and /medical) so a published edit or a
-    // program-number change shows on the next load.
-    expect(route).toMatch(/export const dynamic = "force-dynamic"/);
+    // USAGE-5: no longer `force-dynamic` (every visitor re-ran four reads for an
+    // identical page). A published edit or a program-number change still shows
+    // on the next load because the writers revalidate "/loyalty" — pinned in
+    // tests/compliance/usage-5-public-page-revalidate.test.ts.
+    expect(route).not.toMatch(/export const dynamic = "force-dynamic"/);
+    expect(route).toMatch(/export const revalidate = 60;/);
     expect(route).toContain("birthdayHelp:");
     expect(route).toContain("submitLabel:");
     expect(route).toContain("successTitle:");
