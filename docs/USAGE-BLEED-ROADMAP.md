@@ -359,6 +359,25 @@ product page was never trusted — `repriceOrderLines` re-verifies at order
 placement. Tests: `usage-5-public-page-revalidate.test.ts` pins the exports
 and every writer path; the public-surfaces test pins the pattern list.
 
+**b′. Follow-up (USAGE-5f): the product page needed one more line.** The
+mandatory post-merge check of the USAGE-5 production build (`4578b5d`) showed
+`/specials`, `/loyalty` and `/medical` at `x-vercel-cache: HIT` with
+`cache-control: public, max-age=0, must-revalidate` — but `/menu/products/<id>`
+was still `MISS` / `private, no-cache, no-store`, and the CI build route table
+still listed `/menu/products/[id]` as `ƒ (Dynamic) server-rendered on demand`
+while the other three showed `1m 1y`. `revalidate = 60` alone does not switch
+a **dynamic-segment** route to ISR. The Next.js `generateStaticParams`
+reference ("All paths at runtime") is explicit: "You must always return an
+array from `generateStaticParams`, even if it's empty. Otherwise, the route
+will be dynamically rendered." Fix: `export function generateStaticParams()
+{ return []; }` — nothing is rendered at build time (a build never pulls the
+menu), each product renders on first visit and is then served from the cache
+for 60 s or until a publish clears the `[id]` pattern; `dynamicParams` stays
+at its default so unknown ids still reach `notFound()`. The compliance test
+now pins the empty array and forbids `dynamicParams = false`. Verified in the
+local `next build` route table and on production after merge (see "How to
+verify", Slice 5).
+
 **c. Register pickup queue selected every `orders` column.** The register's
 45 s home-screen poll (`/api/pos/pickup`) ran `listOrders({status:
 "active", limit: 200})` → `select("*")` on `orders` (28 columns, including
