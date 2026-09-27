@@ -40,6 +40,17 @@ export type ProductEnrichment = {
   seo_title: string | null;
   seo_description: string | null;
   status: AssetStatus;
+  /**
+   * S04 (migration 0234): identity + manifest provenance. Optional - absent
+   * on databases where 0234 hasn't run. No FKs by design: enrichments are
+   * KEPT by factory reset while manifests are WIPED, so these are plain
+   * provenance values, never joins that could dangle or cascade.
+   */
+  identity_key?: string | null;
+  kb_product_id?: string | null;
+  first_manifest_id?: string | null;
+  last_manifest_id?: string | null;
+  last_received_at?: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;

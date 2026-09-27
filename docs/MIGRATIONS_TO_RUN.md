@@ -1040,3 +1040,48 @@
   ```sql
   select public.orders_board_snapshot();   -- one jsonb row with counts / arrivals / stamps
   ```
+
+## S04 — 0234 — product identity columns (one key per product)
+
+- [ ] `0234_product_identity.sql` — adds nullable `identity_key` (the S03
+  product identity: vendor + brand + product + canonical size + website
+  category) and `kb_product_id` (link to the knowledge-base product) to
+  `catalog_product_drafts`, `inventory_lots`, `menu_items`,
+  `product_enrichments`, and `identity_key` to `kb_products`. Drafts also gain
+  `brand_id`, `vendor_id`, `lot_code`, `sku`, `strain_type` and
+  `restock_of_card_key` (a restock hint for the approval card). Enrichments gain
+  `first_manifest_id`, `last_manifest_id`, `last_received_at`. Every new column
+  is empty until later slices fill it; each lookup column gets a small partial
+  index that only covers filled rows.
+
+  **Why:** today the same product is recognized by four different keys in four
+  places (POS key on drafts, lowercase name string in the KB bridge, spaced
+  slugs in classification memory, dashed slugs in the KB). S03 built ONE key in
+  code; this migration gives it a home in the database so S05 can stamp it the
+  moment a manifest is received and the approval card can say "this looks like
+  a restock of X" and "linked to a known product". The identity key is extra
+  evidence only — the POS product key is still what matches a draft to a menu
+  card, so nothing can be merged or hidden by this.
+
+  **Until it is run** everything works exactly as before. The menu does not ask
+  for the new columns, and every writer that uses them (S05 onward) notices the
+  column is missing and writes the row without them.
+
+  Safe to re-run (`add column if not exists` / `create index if not exists`;
+  the foreign keys are declared inline with their column, so a re-run adds
+  nothing; verified: all 234 migrations apply on a
+  clean Postgres 15 and 0234 re-applies cleanly; scenario script
+  `scripts/recon/product-identity-pg-check.sql` passed). Deleting a knowledge
+  base product clears the link (`on delete set null`), it never deletes a lot
+  or draft.
+
+  **Run it, then check:**
+
+  ```sql
+  select table_name, column_name, data_type
+    from information_schema.columns
+   where table_schema = 'public'
+     and column_name in ('identity_key', 'kb_product_id', 'restock_of_card_key')
+   order by table_name, column_name;
+  -- expect 10 rows: identity_key on 5 tables, kb_product_id on 4, restock_of_card_key on drafts
+  ```

@@ -156,6 +156,16 @@ export type MenuItemRow = {
   hidden_reason: string | null;
   sort_order: number;
   created_at: string;
+  /**
+   * S04 (migration 0234): the S03 product identity of this card and its link
+   * to the knowledge-base product. OPTIONAL on purpose: before the owner runs
+   * 0234 the columns do not exist, and the full-menu loaders deliberately do
+   * NOT fetch them (see MENU_ITEM_DROPPED_COLUMNS in menu-columns-core.ts), so
+   * every reader must treat them as possibly undefined. Written/read only by
+   * the identity paths that opt in (S05+). ADDITIVE, never a match wildcard.
+   */
+  identity_key?: string | null;
+  kb_product_id?: string | null;
 };
 
 export type MenuVariantRow = {

@@ -32,7 +32,15 @@
  * behind the type. The self-test below additionally proves the rendered
  * string is well-formed and that the dropped columns are really absent.
  *
- * `getVersionItems` still returns `MenuItemRow`; the two dropped fields are
+ * S04 (migration 0234) added `identity_key` and `kb_product_id` to
+ * `MenuItemRow` as OPTIONAL fields and they are dropped here too: the owner
+ * applies migrations by hand, and naming a column that does not exist yet in
+ * a PostgREST select fails the WHOLE menu read (42703). Not fetching them
+ * keeps the public menu working before and after 0234, and adds zero bytes of
+ * egress to every menu load. The identity paths that need them (S05+) select
+ * them explicitly behind a missing-column guard.
+ *
+ * `getVersionItems` still returns `MenuItemRow`; the dropped fields are
  * typed as present but arrive `undefined`. Every reader already treats them as
  * optional (`?? null`), and the self-test pins the exact dropped set so a
  * future reader of either column has a single place to restore it.
@@ -40,7 +48,7 @@
 import type { MenuItemRow, MenuVariantRow, MenuVersion } from "@/lib/pos/db-types";
 
 /** Columns on `menu_items` deliberately NOT fetched by the full-menu loaders. */
-export const MENU_ITEM_DROPPED_COLUMNS = ["fact_provenance"] as const;
+export const MENU_ITEM_DROPPED_COLUMNS = ["fact_provenance", "identity_key", "kb_product_id"] as const;
 export type MenuItemDroppedColumn = (typeof MENU_ITEM_DROPPED_COLUMNS)[number];
 
 /**
@@ -174,6 +182,13 @@ export function __runMenuColumnsCoreTests(): void {
   }
   for (const c of MENU_VERSION_DROPPED_COLUMNS) {
     check(!MENU_VERSION_LIGHT_COLUMN_LIST.includes(c), `menu_versions.${c} is not fetched`);
+  }
+  // S04: the identity columns (0234) must never ride the full-menu select,
+  // or the menu breaks for everyone until the owner runs the migration.
+  check(MENU_ITEM_DROPPED_COLUMNS.length === 3, "exactly three menu_items columns are dropped");
+  for (const c of ["identity_key", "kb_product_id"]) {
+    check((MENU_ITEM_DROPPED_COLUMNS as readonly string[]).includes(c), `${c} is in the dropped set`);
+    check(!isMenuItemColumnFetched(c), `menu_items.${c} is not fetched (pre-0234 safety)`);
   }
 
   // The columns the money/limits/website paths depend on are ALL present.

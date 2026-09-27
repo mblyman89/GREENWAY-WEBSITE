@@ -118,6 +118,22 @@ export type CatalogDraft = {
   chosen_unit_thc_mg?: number | null;
   /** How each value came to exist - see receiving-classification-core.ts. */
   chosen_classification_provenance?: Record<string, string> | null;
+  /**
+   * S04 (migration 0234): product identity + known-product links, copied from
+   * the lot at seeding time (S05). Optional - absent on databases where 0234
+   * hasn't run. identity_key is ADDITIVE evidence, never a match wildcard:
+   * pos_product_key stays the draft's matching key. restock_of_card_key is a
+   * HINT for the approval card ("this looks like a restock of ...") and never
+   * suppresses a draft.
+   */
+  identity_key?: string | null;
+  kb_product_id?: string | null;
+  brand_id?: string | null;
+  vendor_id?: string | null;
+  lot_code?: string | null;
+  sku?: string | null;
+  strain_type?: string | null;
+  restock_of_card_key?: string | null;
   created_at: string;
   updated_at: string;
 };

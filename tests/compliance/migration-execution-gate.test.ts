@@ -1207,7 +1207,20 @@ describe("the migration list is ordered the way the database will see it", () =>
     // scripts/recon/orders-board-snapshot-pg-check.sql (counts per status,
     // arrivals order/limit clamp, origin exclusion, empty-table shape, in a
     // rolled-back transaction) passed.
-    expect(listed[listed.length - 1]).toMatch(/^0233_/);
+    //
+    // S04 added 0234_product_identity.sql (additive, nullable identity_key /
+    // kb_product_id columns on catalog_product_drafts, inventory_lots,
+    // menu_items, product_enrichments and kb_products, plus drafts provenance
+    // columns and partial non-unique indexes; no data rewritten). Verified in
+    // the build sandbox against Postgres 15 bootstrapped exactly as CI does:
+    // all 234 migrations executed via
+    // scripts/compliance/verify-migrations-execute.ts, 0234 applied twice
+    // cleanly, and the committed scenario script
+    // scripts/recon/product-identity-pg-check.sql (column shapes, FK delete
+    // rules, index predicates, catalog comments, identity lookups, the 0026
+    // open-draft unique index still in force, and EXPLAIN using each new
+    // index, in a rolled-back transaction) passed.
+    expect(listed[listed.length - 1]).toMatch(/^0234_/);
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
