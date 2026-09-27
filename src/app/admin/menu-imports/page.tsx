@@ -10,6 +10,7 @@ import { Button } from "@/components/admin/ui";
 import { listImports, listVersions, getPublishedVersion, listIntakeStagedVersions } from "@/lib/pos/menu-version";
 import { countTestData } from "@/lib/pos/import-service";
 import { formatDateTime } from "@/lib/pos/format";
+import { describeIntakeVersion } from "@/lib/pos/intake-version-copy-core";
 import { flagOutdatedDrafts } from "@/lib/pos/publish-guard-core";
 import type { PosImportStatus, MenuVersionStatus } from "@/lib/pos/db-types";
 import { withBackParam } from "@/lib/admin/back-link-core";
@@ -185,22 +186,28 @@ export default async function MenuImportsPage({
           ) : (
             <div className="mt-4 divide-y divide-white/10 overflow-hidden rounded-lg border border-white/10">
               {flagOutdatedDrafts(intakeStaged).map((v) => {
-                const s = (v.summary_json ?? {}) as {
-                  added?: number;
-                  carried?: number;
-                  merged?: number;
-                };
+                // S01: pure, no I/O — reads the summary_json this row carries.
+                const story = describeIntakeVersion(v);
                 return (
                   <div
                     key={v.id}
                     className="grid items-center gap-3 px-4 py-3 sm:grid-cols-[1.4fr_1fr_auto]"
                   >
                     <div>
-                      <p className="text-sm font-medium text-white">{formatDateTime(v.created_at)}</p>
+                      <p className="text-sm font-medium text-white">
+                        {story.source ?? formatDateTime(v.created_at)}
+                      </p>
                       <p className="text-xs text-white/40">
-                        {s.added ?? 0} new from receiving
-                        {(s.merged ?? 0) > 0 ? <> &middot; {s.merged} restock option(s) merged</> : null} &middot;{" "}
-                        {s.carried ?? 0} carried from live menu
+                        {story.source ? <>{formatDateTime(v.created_at)} &middot; </> : null}
+                        {story.counts}
+                      </p>
+                      <p
+                        className={`mt-0.5 text-xs ${
+                          story.tone === "failed" ? "text-red-300" : "text-[var(--admin-gold)]"
+                        }`}
+                      >
+                        {story.headline}
+                        {story.action ? <> &mdash; {story.action}</> : null}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">

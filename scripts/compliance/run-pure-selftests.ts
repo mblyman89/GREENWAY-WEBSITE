@@ -615,6 +615,7 @@ import { __runSwCoreTests } from "../../src/lib/pos/sw-core";
 import { __runVariantGramsCoreTests } from "../../src/lib/pos/variant-grams-core";
 import { __runMenuLiveStepCoreTests } from "../../src/lib/inventory/menu-live-step-core";
 import { __runPublishStoryCoreTests } from "../../src/lib/catalog/publish-story-core";
+import { __runIntakeVersionCopyCoreTests } from "../../src/lib/pos/intake-version-copy-core";
 import { __runVendorResolveCoreTests } from "../../src/lib/inventory/vendor-resolve-core";
 import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultivera-invoice-core";
 import { __runGenericPdfTransportTests } from "../../src/lib/inventory/pdf-generic-transport-core";
@@ -1787,6 +1788,11 @@ __runLiquidVolumeTests();
   // S00 one truthful story: shared "Approve = auto-publish" copy + the
   // stale-phrase detector. Floor just under the measured count (30).
   assertRan("publish-story-core", __runPublishStoryCoreTests(), 28);
+
+  // S01 self-describing intake versions: manifest header, persisted publish
+  // outcome, humanised notes, legacy-row degradation. Floor just under the
+  // measured count (51).
+  assertRan("intake-version-copy-core", __runIntakeVersionCopyCoreTests(), 48);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
