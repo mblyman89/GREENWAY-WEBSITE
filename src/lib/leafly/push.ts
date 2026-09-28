@@ -75,6 +75,7 @@ import {
 import {
   assessReadbackTiming,
   describeReconcileResult,
+  normalizeReadbackId,
   parseLeaflyMenuReadback,
   reconcileLeaflyMenu,
   type LeaflyReadbackParse,
@@ -820,6 +821,55 @@ export type LeaflyMenuReadbackResult = {
  * is required, not incidental: Leafly disqualifies retailers whose "request signatures"
  * look like manual tools such as Postman or curl (§7, Risk 3).
  */
+/**
+ * SLICE L-49 — a LIGHT read of Leafly's catalog for the cart pre-flight.
+ *
+ * Same client (`authedFetch`), same URL and same sandbox-only rule as
+ * `getLeaflyMenu`, but none of its reconcile/preview/log work, no retries,
+ * and a hard `timeoutMs` race so the "Change items" send stays responsive.
+ * Returns null on ANY failure (not configured, production, timeout, non-200,
+ * unparseable) — the caller treats null as "could not check" and proceeds.
+ *
+ * `complete` is only true when Leafly's own `metadata.totalCount` equals the
+ * items returned; the pre-flight never refuses on a partial answer.
+ */
+export async function readLeaflyCatalogSnapshot(timeoutMs = 6000): Promise<{
+  complete: boolean;
+  variantIds: Set<string>;
+  inventory: Map<string, number>;
+} | null> {
+  try {
+    await refreshLeaflyConfig();
+    if (!isLeaflyConfigured()) return null;
+    if (getLeaflyConfig().environment !== "sandbox") return null;
+    const read = authedFetch(menuReadbackUrl(), "GET", "menu_readback", undefined, { maxRetries: 0 });
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), Math.max(500, timeoutMs)));
+    const result = await Promise.race([read.catch(() => null), timeout]);
+    if (result === null || !result.ok) return null;
+    const parsed = parseLeaflyMenuReadback(result.body);
+    if (!parsed.ok) return null;
+    const variantIds = new Set<string>();
+    const inventory = new Map<string, number>();
+    for (const item of parsed.items) {
+      for (const v of item.variants) {
+        const id = normalizeReadbackId(v.id);
+        if (id === null) continue;
+        variantIds.add(id);
+        if (typeof v.inventoryLevel === "number" && Number.isFinite(v.inventoryLevel)) {
+          inventory.set(id, v.inventoryLevel);
+        }
+      }
+    }
+    return {
+      complete: parsed.totalCount !== null && parsed.totalCount === parsed.items.length,
+      variantIds,
+      inventory,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getLeaflyMenu(): Promise<LeaflyMenuReadbackResult> {
   await refreshLeaflyConfig();
   if (!isLeaflyConfigured()) {

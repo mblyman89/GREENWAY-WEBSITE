@@ -91,6 +91,9 @@ export const LEAFLY_CART_REFUSAL_CODES = [
   "variant_out_of_stock",
   "not_enough_stock",
   "price_override_not_approved",
+  // SLICE L-49 — the sandbox pre-flight against Leafly's OWN catalog.
+  "variant_not_at_leafly",
+  "variant_out_of_stock_at_leafly",
 ] as const;
 export type LeaflyCartRefusalCode = (typeof LEAFLY_CART_REFUSAL_CODES)[number];
 
@@ -728,6 +731,100 @@ export function verifyCartResponse(sent: CartUpdateBody, returned: EditableCartR
 // 7. SELF-TESTS
 // ============================================================================
 
+// ============================================================================
+// SLICE L-49 — PRE-FLIGHT AGAINST LEAFLY'S CATALOG (not just ours)
+// ============================================================================
+
+/**
+ * What Leafly's menu readback (sandbox `GET /{key}/menu`) told us.
+ *
+ * `complete` is true only when the readback's own `metadata.totalCount`
+ * equals the number of items it returned. A partial page proves nothing
+ * about an absent id, so an incomplete readback never refuses anything.
+ * `inventory` holds Leafly's `inventoryLevel` per variant id where it was a
+ * number. Prices are deliberately NOT carried: the readback price unit is an
+ * open question with Leafly (readback-core LEAFLY_READBACK_UNVERIFIED_...).
+ */
+export type LeaflyCatalogSnapshot = {
+  complete: boolean;
+  variantIds: ReadonlySet<string>;
+  inventory: ReadonlyMap<string, number>;
+};
+
+export type CatalogPreflight =
+  | { ok: true; checked: number }
+  | { ok: false; code: "variant_not_at_leafly" | "variant_out_of_stock_at_leafly"; reason: string; variantIds: string[] };
+
+/** Kinds Leafly validates against its catalog (spec: edits manifest as substitutions). */
+const CATALOG_CHECKED_KINDS: ReadonlySet<CartChangeKind> = new Set<CartChangeKind>([
+  "added",
+  "substituted",
+  "quantity",
+  "price",
+  "quantity_and_price",
+]);
+
+export const LEAFLY_CATALOG_REFRESH_ADVICE =
+  "Send your menu to Leafly (Leafly page → Send now), wait about 3 minutes for Leafly to take it in, then try again — or choose a different product.";
+
+/**
+ * Best-effort: `catalog === null` (read failed, timed out, production where
+ * the readback is not offered, or not configured) ALWAYS passes, so a failed
+ * diagnostic can never stop a legitimate change.
+ *
+ * Stock is checked only for lines that bring a NEW variant onto the order
+ * (added / substituted), and only when Leafly reports a number of 0. A
+ * quantity edit on a line already on the order is not stock-checked here,
+ * because whether Leafly's number already nets out this order's own units is
+ * not documented, and refusing on a guess would block a legitimate edit.
+ */
+export function checkCartAgainstLeaflyCatalog(
+  changes: readonly CartChange[],
+  catalog: LeaflyCatalogSnapshot | null,
+): CatalogPreflight {
+  if (catalog === null || !catalog.complete) return { ok: true, checked: 0 };
+  const missing: CartChange[] = [];
+  const empty: CartChange[] = [];
+  let checked = 0;
+  for (const c of changes) {
+    if (!CATALOG_CHECKED_KINDS.has(c.kind)) continue;
+    const v = (c.toVariantId ?? "").trim();
+    if (v === "") continue;
+    checked += 1;
+    if (!catalog.variantIds.has(v)) {
+      missing.push(c);
+      continue;
+    }
+    if (c.kind === "added" || c.kind === "substituted") {
+      const inv = catalog.inventory.get(v);
+      if (typeof inv === "number" && inv <= 0) empty.push(c);
+    }
+  }
+  if (missing.length > 0) {
+    const names = missing.map((c) => `"${c.name}" (${c.toVariantId})`).join(", ");
+    return {
+      ok: false,
+      code: "variant_not_at_leafly",
+      reason:
+        `Nothing was sent. Leafly's copy of your menu does not have ${names}. ` +
+        `Leafly refuses a cart change that points at a product it does not have. ${LEAFLY_CATALOG_REFRESH_ADVICE}`,
+      variantIds: missing.map((c) => c.toVariantId ?? ""),
+    };
+  }
+  if (empty.length > 0) {
+    const names = empty.map((c) => `"${c.name}" (${c.toVariantId})`).join(", ");
+    return {
+      ok: false,
+      code: "variant_out_of_stock_at_leafly",
+      reason:
+        `Nothing was sent. Leafly's copy of your menu shows ${names} as out of stock (inventory 0). ` +
+        `Leafly refuses a cart change to an out-of-stock product. ${LEAFLY_CATALOG_REFRESH_ADVICE}`,
+      variantIds: empty.map((c) => c.toVariantId ?? ""),
+    };
+  }
+  return { ok: true, checked };
+}
+
 export function __runLeaflyOrderCartTests(): { passed: number; failed: number } {
   let passed = 0;
   const failures: string[] = [];
@@ -977,6 +1074,29 @@ export function __runLeaflyOrderCartTests(): { passed: number; failed: number } 
   ok(verifyCartResponse({ cartItems: [{ id: "ci-1", integratorVariantId: "v1", quantity: 2, packagePrice: 3000 }], taxes: [], deliveryFee: 0 }, wrongQty).problems.some((p) => p.includes("Leafly has 5")), "qty mismatch detected");
   const wrongPrice = readEditableLeaflyCart(order([item({ id: "n1", packagePrice: 2900 })]));
   ok(!verifyCartResponse({ cartItems: [{ id: "ci-1", integratorVariantId: "v1", quantity: 2, packagePrice: 3000 }], taxes: [], deliveryFee: 0 }, wrongPrice).matches, "price mismatch detected");
+
+  // ── SLICE L-49: catalog pre-flight ──
+  const ch = (kind: CartChangeKind, to: string | null, name = "P"): CartChange => ({
+    kind, cartItemId: "c", name, fromVariantId: "a", toVariantId: to, fromQuantity: 1, toQuantity: 1,
+    fromPriceMinor: 1, toPriceMinor: 1, priceOverride: false, sentence: "",
+  });
+  const cat = (ids: string[], inv: [string, number][] = [], complete = true): LeaflyCatalogSnapshot => ({
+    complete, variantIds: new Set(ids), inventory: new Map(inv),
+  });
+  ok(checkCartAgainstLeaflyCatalog([ch("substituted", "pos-x")], null).ok, "null catalog passes (best-effort)");
+  ok(checkCartAgainstLeaflyCatalog([ch("substituted", "pos-x")], cat([], [], false)).ok, "incomplete readback never refuses");
+  const miss = checkCartAgainstLeaflyCatalog([ch("substituted", "pos-x", "Gummies")], cat(["v1"]));
+  ok(!miss.ok && miss.code === "variant_not_at_leafly" && miss.reason.includes("Gummies") && miss.reason.includes("Send now"), "missing variant refused, named, with advice");
+  ok(checkCartAgainstLeaflyCatalog([ch("unchanged", "pos-x")], cat([])).ok, "unchanged lines are not checked");
+  ok(checkCartAgainstLeaflyCatalog([ch("removed", null)], cat([])).ok, "removals are not checked");
+  ok(!checkCartAgainstLeaflyCatalog([ch("quantity", "pos-x")], cat([])).ok, "a quantity edit IS checked (it manifests as a substitution)");
+  const oos = checkCartAgainstLeaflyCatalog([ch("added", "v1")], cat(["v1"], [["v1", 0]]));
+  ok(!oos.ok && oos.code === "variant_out_of_stock_at_leafly", "added variant at inventory 0 refused");
+  ok(checkCartAgainstLeaflyCatalog([ch("quantity", "v1")], cat(["v1"], [["v1", 0]])).ok, "quantity edits are not stock-checked");
+  ok(checkCartAgainstLeaflyCatalog([ch("substituted", "v1")], cat(["v1"])).ok, "present variant, no inventory number: passes");
+  const pass = checkCartAgainstLeaflyCatalog([ch("substituted", "v1"), ch("unchanged", "v2")], cat(["v1"], [["v1", 3]]));
+  ok(pass.ok && pass.checked === 1, "in-catalog, in-stock passes and counts only changed lines");
+  ok(LEAFLY_CART_REFUSAL_CODES.includes("variant_not_at_leafly"), "refusal code registered");
 
   if (failures.length > 0) {
     throw new Error(`leafly-order-cart-core self-test failed:\n  - ${failures.join("\n  - ")}`);

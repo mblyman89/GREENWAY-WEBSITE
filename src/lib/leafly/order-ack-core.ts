@@ -612,9 +612,16 @@ export type OutboundAssessment = {
  * knows whether it has already refreshed. So the message says so explicitly
  * rather than pretending the distinction does not exist.
  */
+export type OutboundMessageOperation = "acknowledge" | "status" | "cart";
+
 export function assessOutboundResponse(
   httpStatus: number,
   expectedSuccess: number,
+  // SLICE L-49: optional so every existing caller keeps its exact wording.
+  // Only the cart caller passes "cart", because the old 400 sentence talks
+  // about status transitions and cancellation reasons, which cannot apply to
+  // a cart update and sent the owner looking in the wrong place.
+  operation: OutboundMessageOperation = "status",
 ): OutboundAssessment {
   if (httpStatus === expectedSuccess) {
     return {
@@ -669,9 +676,19 @@ export function assessOutboundResponse(
       // through `explainLeaflyErrorBody()` and prefer what Leafly actually
       // said. See the long note on that function for why.
       message:
-        "Bad request (400): Leafly rejected the body. Usually an illegal status " +
-        "transition, or a cancellation reason Leafly does not accept on this endpoint. " +
-        "Retrying sends the same rejected request.",
+        operation === "cart"
+          ? // SLICE L-49: the documented reasons Leafly gives for refusing a
+            // cart update (spec: "non-existent or out-of-stock variant"), plus
+            // the schema limits on each line. Stated as the documented
+            // possibilities, not as a diagnosis.
+            "Bad request (400): Leafly refused the cart change. Its specification says a " +
+            "cart update is refused when a line points at a product/variant Leafly does not " +
+            "have in its catalog for this store, or has as out of stock, or when a line " +
+            "breaks the schema (quantity and package price must each be at least 1). " +
+            "Retrying sends the same refused cart."
+          : "Bad request (400): Leafly rejected the body. Usually an illegal status " +
+            "transition, or a cancellation reason Leafly does not accept on this endpoint. " +
+            "Retrying sends the same rejected request.",
       documented: true,
     };
   }
@@ -775,7 +792,17 @@ export function explainLeaflyErrorBody(body: unknown): string | null {
     return s.length > 400 ? `${s.slice(0, 400)}…` : s;
   }
 
-  if (typeof body !== "object" || Array.isArray(body)) return null;
+  // SLICE L-49: a top-level array of messages/objects. Not a documented
+  // shape, read defensively rather than dropped.
+  if (Array.isArray(body)) {
+    const bits = body
+      .map((v) => readErrorItem(v))
+      .filter((v): v is string => v !== null);
+    if (bits.length === 0) return null;
+    const j = Array.from(new Set(bits)).join(" — ");
+    return j.length > 400 ? `${j.slice(0, 400)}…` : j;
+  }
+  if (typeof body !== "object") return null;
   const rec = body as Record<string, unknown>;
 
   const parts: string[] = [];
@@ -786,9 +813,11 @@ export function explainLeaflyErrorBody(body: unknown): string | null {
   }
 
   if (Array.isArray(rec.validation_result)) {
+    // SLICE L-49: items may be objects ({message|path|detail}) as well as
+    // strings; both are read.
     const details = rec.validation_result
-      .filter((v): v is string => typeof v === "string" && v.trim() !== "")
-      .map((v) => v.trim());
+      .map((v) => readErrorItem(v))
+      .filter((v): v is string => v !== null);
     if (details.length > 0) {
       // Joined with "; " rather than newlines: this string is shown in a
       // single-line banner and is also carried in a redirect parameter.
@@ -812,6 +841,32 @@ export function explainLeaflyErrorBody(body: unknown): string | null {
     }
   }
 
+  // SLICE L-49: `detail` at the top level (RFC 7807 style).
+  if (typeof rec.detail === "string" && rec.detail.trim() !== "") {
+    parts.push(rec.detail.trim());
+  }
+
+  // SLICE L-49: `errors` as a map of field -> message(s).
+  if (rec.errors !== null && typeof rec.errors === "object" && !Array.isArray(rec.errors)) {
+    for (const [field, v] of Object.entries(rec.errors as Record<string, unknown>)) {
+      const msgs = (Array.isArray(v) ? v : [v])
+        .map((x) => readErrorItem(x))
+        .filter((x): x is string => x !== null);
+      if (msgs.length > 0) parts.push(`${field}: ${msgs.join("; ")}`);
+    }
+  }
+
+  // SLICE L-49: the generic gateway shape Leafly actually returned to the
+  // owner's five cart attempts: {"error":"Bad Request","status":400}. It
+  // carries no reason, only the HTTP phrase. It is reported as exactly that
+  // so the owner can SEE Leafly gave no reason, rather than wondering why
+  // there is no quote at all.
+  if (parts.length === 0 && typeof rec.error === "string" && rec.error.trim() !== "") {
+    const phrase = rec.error.trim();
+    const st = typeof rec.status === "number" ? ` ${rec.status}` : "";
+    return `${phrase}${st} (Leafly returned only its generic error phrase and no reason)`;
+  }
+
   if (parts.length === 0) return null;
 
   // De-duplicate. Leafly sometimes repeats the summary message inside
@@ -829,6 +884,19 @@ export function explainLeaflyErrorBody(body: unknown): string | null {
   return joined.length > 400 ? `${joined.slice(0, 400)}…` : joined;
 }
 
+/** SLICE L-49: read one error item (string or {message|detail|title|path}). */
+function readErrorItem(v: unknown): string | null {
+  if (typeof v === "string") return v.trim() === "" ? null : v.trim();
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return null;
+  const r = v as Record<string, unknown>;
+  const pick = (k: string) => (typeof r[k] === "string" && (r[k] as string).trim() !== "" ? (r[k] as string).trim() : "");
+  const msg = pick("message") || pick("detail") || pick("title") || pick("error");
+  const path = pick("path") || pick("field") || pick("pointer");
+  if (msg === "" && path === "") return null;
+  if (msg !== "" && path !== "") return `${path}: ${msg}`;
+  return msg || path;
+}
+
 /**
  * Combine our classification with Leafly's own words, preferring Leafly's.
  *
@@ -842,7 +910,21 @@ export function describeOutboundFailure(
   body: unknown,
 ): string {
   const theirs = explainLeaflyErrorBody(body);
-  if (theirs === null) return assessment.message;
+  if (theirs === null) {
+    // null/undefined = no body captured at all: keep the long-standing
+    // behaviour (our message only), which L-32's tests pin.
+    if (assessment.disposition === "success" || body === null || body === undefined) {
+      return assessment.message;
+    }
+    // SLICE L-49: say plainly whether Leafly sent nothing or sent something
+    // we could not read, so "no quote" is never ambiguous.
+    const empty =
+      (typeof body === "string" && body.trim() === "") ||
+      (typeof body === "object" && !Array.isArray(body) && Object.keys(body as object).length === 0);
+    return empty
+      ? `Leafly sent no reason (empty response body). ${assessment.message}`
+      : `Leafly sent a response we could not read as a reason (saved in call history). ${assessment.message}`;
+  }
   return `Leafly said: “${theirs}” — ${assessment.message}`;
 }
 
@@ -2110,6 +2192,24 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
   const r400 = assessOutboundResponse(400, 200);
   ok(r400.disposition === "fix_request", "400 means the request was wrong");
   ok(!r400.retryable, "…and retrying would send the identical bad request");
+
+  // SLICE L-49: the cart 400 speaks about catalog/stock, never status transitions.
+  const r400cart = assessOutboundResponse(400, 200, "cart");
+  ok(r400cart.disposition === "fix_request", "cart 400 is fix_request");
+  ok(!/status transition/i.test(r400cart.message), "cart 400 does not blame a status transition");
+  ok(/catalog/i.test(r400cart.message), "cart 400 names the catalog/stock reason from the spec");
+  ok(assessOutboundResponse(400, 200).message === r400.message, "default operation keeps the old 400 text");
+  const gw = explainLeaflyErrorBody({ error: "Bad Request", status: 400 });
+  ok(gw !== null && gw.includes("Bad Request") && /no reason/.test(gw), "the {error,status} gateway shape is reported, flagged as reasonless");
+  ok(explainLeaflyErrorBody({ detail: "variant missing" }) === "variant missing", "top-level detail is read");
+  const emap = explainLeaflyErrorBody({ errors: { "cartItems[0].integratorVariantId": ["not found"] } });
+  ok(emap !== null && emap.includes("not found") && emap.includes("integratorVariantId"), "errors map is read with its field");
+  const vobj = explainLeaflyErrorBody({ message: "Invalid", validation_result: [{ path: "cartItems.0", message: "bad" }] });
+  ok(vobj !== null && vobj.includes("cartItems.0: bad"), "object validation_result items are read");
+  ok(explainLeaflyErrorBody(["a", { message: "b" }]) === "a \u2014 b", "top-level arrays are read");
+  ok(/no reason \(empty/.test(describeOutboundFailure(r400cart, {})), "empty object body is called out as empty");
+  ok(/could not read/.test(describeOutboundFailure(r400cart, { foo: 1 })), "unreadable body is called out");
+  ok(describeOutboundFailure(r400cart, null) === r400cart.message, "null body keeps our message only");
 
   const r429 = assessOutboundResponse(429, 200);
   ok(r429.disposition === "retry", "429 is retryable");

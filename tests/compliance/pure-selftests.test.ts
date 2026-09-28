@@ -74,6 +74,7 @@ import { __runSyndicationPlaybookTests } from "@/lib/integrations/syndication-pl
 import { __runLeaflyOrderCartTests } from "@/lib/leafly/order-cart-core";
 import { __runLeaflyBadgeTests } from "@/lib/inventory/leafly-badge-core";
 import { __runLeaflyRegisterLinesTests } from "@/lib/pos/leafly-register-lines-core";
+import { __runOutboundHistoryTests } from "@/lib/leafly/outbound-history-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -547,5 +548,10 @@ describe("embedded pure self-test suites", () => {
     const r = __runLeaflyRegisterLinesTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(33);
+  });
+  it("outbound-history-core (L-49: Order-API call history, PII-safe display/export)", () => {
+    const r = __runOutboundHistoryTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(20);
   });
 });
