@@ -740,6 +740,13 @@ export function summarizeRunHistory(rowsNewestFirst: readonly RunHistoryRow[]): 
  * the check ran and proved Leafly already holds exactly what a POST would
  * send. A skipped row from any other decision is NOT (an intraday skip says
  * nothing about the full menu). The server query mirrors this predicate.
+ *
+ * SLICE AS-1: since AS-1 the daily run no longer skips because "nothing
+ * changed" -- `planAutomaticTransmission` (A7) always re-sends the whole
+ * passing menu on the daily run. A skipped daily_full can now only mean the
+ * menu had NOTHING passing to send, and that still counts here so an empty
+ * menu does not rebuild on every fifteen-minute tick. A failed daily is not
+ * evidence; the existing consecutive-failure backoff slows its retries.
  */
 export function isFullSyncEvidence(row: {
   method: string | null | undefined;
@@ -1335,6 +1342,55 @@ export function assessCadenceAgainstLeafly(s: LeaflyScheduleSettings): CadenceVe
 // ---------------------------------------------------------------------------
 // 8. Self-tests (house rule 5)
 // ---------------------------------------------------------------------------
+
+/**
+ * SLICE AS-1 -- HONEST SYNC LABELS.
+ *
+ * The Connection health card used to say "Last successful sync" while the
+ * Automatic syncing card said "success" for a quiet day on which nothing was
+ * actually sent, so the two cards appeared to disagree. The health card now
+ * says "Last menu sent to Leafly" (a real send) beside "Last automatic check"
+ * (the newest scheduled run, whatever it decided), and warns when the last
+ * real send is older than `STALE_SEND_WARN_HOURS` while automation is on.
+ *
+ * 26 hours = one daily full sync (24h) plus a two-hour allowance for the
+ * fifteen-minute tick and the owner's chosen hour moving across DST.
+ */
+export const STALE_SEND_WARN_HOURS = 26;
+
+export const STALE_SEND_WARNING =
+  "Leafly hasn\u2019t received your menu in over a day. The daily full send should reach Leafly every day; check Automatic syncing below for the reason.";
+
+/** The newest SCHEDULED run's start time from newest-first rows, or null. */
+export function lastAutomaticCheckIso(
+  runs: ReadonlyArray<{ triggerSource: string; startedAt: string }>,
+): string | null {
+  for (const r of runs) {
+    if (r.triggerSource === "schedule" && typeof r.startedAt === "string" && r.startedAt.length > 0) {
+      return r.startedAt;
+    }
+  }
+  return null;
+}
+
+/**
+ * The amber warning, or null. Silent when automation is off (a manual-only
+ * store is not expected to send daily) and when the send time is unreadable
+ * (never guess a staleness we cannot measure). "Never sent" with automation
+ * on IS stale.
+ */
+export function staleSendWarning(input: {
+  nowIso: string;
+  lastSentIso: string | null | undefined;
+  automationEnabled: boolean;
+}): string | null {
+  if (!input.automationEnabled) return null;
+  if (!input.lastSentIso) return STALE_SEND_WARNING;
+  const sent = Date.parse(input.lastSentIso);
+  const now = Date.parse(input.nowIso);
+  if (!Number.isFinite(sent) || !Number.isFinite(now)) return null;
+  return now - sent > STALE_SEND_WARN_HOURS * 3_600_000 ? STALE_SEND_WARNING : null;
+}
 
 export function __runLeaflyScheduleTests(): { passed: number; failed: number } {
   let passed = 0;
@@ -2813,6 +2869,27 @@ export function __runLeaflyScheduleTests(): { passed: number; failed: number } {
       LEAFLY_CADENCE_RECOMMENDATION ===
         "daily full POST + PUT/DELETE for intraday changes, or full POST several times per hour",
     );
+  }
+
+  // --- SLICE AS-1: honest labels ---------------------------------------------
+  {
+    const now = "2026-09-29T19:00:00Z";
+    ok("AS-1: automation off -> no stale warning", staleSendWarning({ nowIso: now, lastSentIso: null, automationEnabled: false }) === null);
+    ok("AS-1: never sent with automation on -> warning", staleSendWarning({ nowIso: now, lastSentIso: null, automationEnabled: true }) === STALE_SEND_WARNING);
+    ok("AS-1: sent 25h ago -> no warning", staleSendWarning({ nowIso: now, lastSentIso: "2026-09-28T18:00:00Z", automationEnabled: true }) === null);
+    ok("AS-1: sent 27h ago -> warning", staleSendWarning({ nowIso: now, lastSentIso: "2026-09-28T16:00:00Z", automationEnabled: true }) === STALE_SEND_WARNING);
+    ok("AS-1: unreadable send time -> no guessed warning", staleSendWarning({ nowIso: now, lastSentIso: "not a date", automationEnabled: true }) === null);
+    ok("AS-1: warning text names the problem plainly", /over a day/.test(STALE_SEND_WARNING));
+    ok(
+      "AS-1: last automatic check = newest scheduled row, manual rows ignored",
+      lastAutomaticCheckIso([
+        { triggerSource: "manual", startedAt: "2026-09-29T18:59:00Z" },
+        { triggerSource: "schedule", startedAt: "2026-09-29T18:45:00Z" },
+        { triggerSource: "schedule", startedAt: "2026-09-29T18:30:00Z" },
+      ]) === "2026-09-29T18:45:00Z",
+    );
+    ok("AS-1: no scheduled rows -> null", lastAutomaticCheckIso([{ triggerSource: "manual", startedAt: "x" }]) === null);
+    ok("AS-1: a skipped daily_full still counts (only an empty menu can skip now)", isFullSyncEvidence({ method: null, disposition: "skipped", decisionCode: "daily_full" }));
   }
 
   return { passed, failed };

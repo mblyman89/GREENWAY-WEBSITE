@@ -177,6 +177,8 @@ function plural(n: number, one: string, many: string): string {
  *       whatever it omits, so a delta POST would wipe the unchanged items).
  *   A6  "Nothing changed" skips only when there is truly nothing to create,
  *       update or delete, and never when the owner forced a resend.
+ *   A7  (AS-1) The daily full run never skips while anything passes: it
+ *       always re-sends the whole passing menu. Only the intraday run skips.
  */
 export function planAutomaticTransmission(input: AutoSyncInput): AutoSyncPlan {
   const withheld = clean(input.withheldIds);
@@ -262,8 +264,14 @@ export function planAutomaticTransmission(input: AutoSyncInput): AutoSyncPlan {
 
   const nothingChanged = creates.length === 0 && updates.length === 0 && deletes.length === 0;
 
-  // A6.
-  if (nothingChanged && !input.forceResend) {
+  // A6 (AS-1). The daily full sync is the once-a-day "Leafly's menu matches
+  // ours exactly" guarantee, so it never skips just because our own record
+  // says nothing changed: our record can be right while Leafly's copy is not
+  // (and a skipped day left "Last successful sync" days stale). Only the
+  // between-times delta run skips, and only a menu with nothing passing at all
+  // (nothing to send) skips on the daily run.
+  const dailyMustSend = input.kind === "daily_full" && sendIds.length > 0;
+  if (nothingChanged && !input.forceResend && !dailyMustSend) {
     return {
       action: "skip",
       postIds: [],
@@ -466,7 +474,22 @@ export function __runLeaflyAutoSyncTests(): { passed: number; failed: number } {
         ["c", "h3"],
       ]),
     };
-    const p = planAutomaticTransmission(same);
+    const daily = planAutomaticTransmission(same);
+    ok("A7: daily with nothing changed still sends (no skip)", daily.action === "post");
+    ok("A7: that daily send is the ENTIRE passing menu", daily.postIds.join() === "a,b,c");
+    ok("A7: daily no-change reason is the full-replacement sentence", /matches yours exactly/.test(daily.reason));
+    const dailyHeld = planAutomaticTransmission({
+      ...same,
+      send: [
+        { id: "a", hash: "h1" },
+        { id: "c", hash: "h3" },
+      ],
+      withheldIds: ["b"],
+    });
+    ok("A7: daily no-change with a held-back product still sends (as PUT)", dailyHeld.action === "put" && dailyHeld.putIds.join() === "a,c");
+    const dailyEmpty = planAutomaticTransmission({ ...same, send: [], previous: new Map() });
+    ok("A7: daily with nothing passing at all still skips (never POST an empty menu)", dailyEmpty.action === "skip");
+    const p = planAutomaticTransmission({ ...same, kind: "intraday_delta" });
     ok("A6: nothing changed -> skip", p.action === "skip");
     ok("A6: a skip transmits nothing", p.postIds.length + p.putIds.length + p.deleteIds.length === 0);
     ok("A6: skip method is null", autoSyncMethod(p) === null);
