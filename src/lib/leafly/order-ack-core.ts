@@ -681,11 +681,9 @@ export function assessOutboundResponse(
             // cart update (spec: "non-existent or out-of-stock variant"), plus
             // the schema limits on each line. Stated as the documented
             // possibilities, not as a diagnosis.
-            "Bad request (400): Leafly refused the cart change. Its specification says a " +
-            "cart update is refused when a line points at a product/variant Leafly does not " +
-            "have in its catalog for this store, or has as out of stock, or when a line " +
-            "breaks the schema (quantity and package price must each be at least 1). " +
-            "Retrying sends the same refused cart."
+            // SLICE L-51: shortened to plain English.
+            "Leafly refused the change (400). Usually one item is not in Leafly's catalog " +
+            "for this store or is out of stock there. Trying again sends the same change."
           : "Bad request (400): Leafly rejected the body. Usually an illegal status " +
             "transition, or a cancellation reason Leafly does not accept on this endpoint. " +
             "Retrying sends the same rejected request.",
@@ -882,6 +880,45 @@ export function explainLeaflyErrorBody(body: unknown): string | null {
 
   const joined = unique.join(" — ");
   return joined.length > 400 ? `${joined.slice(0, 400)}…` : joined;
+}
+
+/**
+ * SLICE L-51: a cart refusal (400) in ONE plain sentence a person can act on,
+ * from the shapes Leafly was PROVEN (live, sandbox, Sep 28 2026) to return on
+ * the cart endpoint. Returns null for anything else, so the caller falls back
+ * to Leafly's own words. Leafly's exact words are always kept alongside by the
+ * caller; this only adds the meaning.
+ *
+ *   {"errors":[{"title":"ActionController::BadRequest","detail":"could not find variant X"}]}
+ *   {"message":"Invalid JSON Payload","validation_result":["...required property of 'taxes'..."]}
+ *   {"message":"Invalid JSON Payload","validation_result":["'#/taxes/0/amountCents' did not have a minimum value of 1..."]}
+ *   {"status":400,"error":"Bad Request"}   (what `taxes: []` produced)
+ */
+export function explainCartRefusalPlainly(body: unknown, nameFor?: (variantId: string) => string | null): string | null {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return null;
+  const rec = body as Record<string, unknown>;
+  if (Array.isArray(rec.errors)) {
+    for (const e of rec.errors) {
+      const detail = e && typeof e === "object" && typeof (e as Record<string, unknown>).detail === "string" ? ((e as Record<string, unknown>).detail as string) : "";
+      const m = /could not find variant\s+(.+)$/i.exec(detail.trim());
+      if (m) {
+        const id = m[1]!.trim();
+        const name = nameFor?.(id) ?? null;
+        return `Leafly does not have ${name ? `"${name}" (${id})` : `the size ${id}`} on its copy of our menu, so it cannot be put on the order. Leafly only gets our menu from the menu sync; if this item was added or changed recently, send the menu to Leafly and try again.`;
+      }
+    }
+  }
+  const details = Array.isArray(rec.validation_result) ? rec.validation_result.filter((v): v is string => typeof v === "string").join(" ") : "";
+  if (details !== "") {
+    if (/taxes/.test(details)) return "Our request to Leafly was missing a valid tax line, which Leafly requires. This is a problem on our side, not with the product. Please report it.";
+    if (/packagePrice/.test(details)) return "One item's price was not a whole number of cents of at least 1 cent. Fix the price and try again.";
+    if (/quantity/.test(details)) return "One item's quantity was not a whole number of at least 1. Fix the quantity and try again.";
+    return "Leafly said our request was not in the shape it expects. This is a problem on our side. Please report it.";
+  }
+  if (Object.keys(rec).every((k) => k === "error" || k === "status") && typeof rec.error === "string") {
+    return "Leafly refused the change without giving a reason.";
+  }
+  return null;
 }
 
 /** SLICE L-49: read one error item (string or {message|detail|title|path}). */
@@ -2210,6 +2247,14 @@ export function __runLeaflyOrderAckTests(): { passed: number; failed: number } {
   ok(/no reason \(empty/.test(describeOutboundFailure(r400cart, {})), "empty object body is called out as empty");
   ok(/could not read/.test(describeOutboundFailure(r400cart, { foo: 1 })), "unreadable body is called out");
   ok(describeOutboundFailure(r400cart, null) === r400cart.message, "null body keeps our message only");
+  // SLICE L-51: the plain-English cart refusal, from shapes proven live.
+  const nf = explainCartRefusalPlainly({ errors: [{ title: "ActionController::BadRequest", detail: "could not find variant pos-x" }] }, (id) => (id === "pos-x" ? "Gelato 3.5g" : null));
+  ok(nf !== null && nf.includes("Gelato 3.5g") && nf.includes("pos-x") && /menu sync/.test(nf), "unknown variant named plainly");
+  ok((explainCartRefusalPlainly({ errors: [{ detail: "could not find variant v9" }] }) ?? "").includes("v9"), "unknown variant without a name falls back to the id");
+  ok(/tax line/.test(explainCartRefusalPlainly({ message: "Invalid JSON Payload", validation_result: ["The property '#/' did not contain a required property of 'taxes'"] }) ?? ""), "missing taxes is called our bug");
+  ok(/price/.test(explainCartRefusalPlainly({ message: "Invalid JSON Payload", validation_result: ["The property '#/cartItems/0/packagePrice' of type number did not match the following type: integer"] }) ?? ""), "bad price explained");
+  ok(explainCartRefusalPlainly({ status: 400, error: "Bad Request" }) === "Leafly refused the change without giving a reason.", "reasonless 400 said plainly");
+  ok(explainCartRefusalPlainly(null) === null && explainCartRefusalPlainly({ foo: 1 }) === null, "unknown shapes -> null (caller uses Leafly's words)");
 
   const r429 = assessOutboundResponse(429, 200);
   ok(r429.disposition === "retry", "429 is retryable");

@@ -164,7 +164,7 @@ export const LEAFLY_LOOKUP_SURFACES: readonly LeaflyLookupSurface[] = [
     // on a live Leafly order; the menu read supplies the default unit price
     // sent to Leafly and the stock check that stops an oversell.
     name: "Order cart update (Change items)",
-    anchor: "src/lib/leafly/order-cart-server.ts:224",
+    anchor: "src/lib/leafly/order-cart-server.ts:227",
     cacheable: false,
     touchesMoney: true,
     reason:

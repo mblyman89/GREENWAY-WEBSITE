@@ -3,7 +3,9 @@
  *
  * SLICE L-48 — "Update Order's Cart": changing a Leafly order after it arrived.
  *
- * PURE. No imports, no database, no network, no clock. Every decision about
+ * PURE. No database, no network, no clock. The only imports are the pure tax
+ * helpers in preview-core (SLICE L-51), so the tax lines sent here are computed
+ * exactly the way the preview webhook computes them. Every decision about
  * whether a cart change may be sent, and exactly what is sent, is made here so
  * it can be proven without a Leafly account. The server file
  * (order-ack-server.ts `updateLeaflyOrderCart`) only fetches inputs, sends the
@@ -21,6 +23,12 @@
  *   - Addition     = a new entry with `id: null`.
  *   - Removal      = LEAVE THE ITEM OUT.
  *   - Substitution = same `id`, different `integratorVariantId`.
+ *     SLICE L-51: we do NOT send substitutions this way. Proven live in the
+ *     sandbox (Sep 28 2026): a same-id substitution is accepted, but Leafly
+ *     stores the new line's packagePrice multiplied by 100 (2500 -> 250000,
+ *     101 -> 10100). The same swap expressed as remove + add (old line left
+ *     out, new line with `id: null`) stored the price exactly as sent. So a
+ *     swap is sent as remove + add. See `decideCartUpdate`.
  *   - Edit         = change `quantity` / `packagePrice` (manifests as a substitution).
  *   - "all-succeed or all-fail". Leafly recalculates discounts and totals.
  *   - "Any specific variant id can only appear on one cart item."
@@ -34,7 +42,21 @@
  * ── WHAT BEN (LEAFLY) TOLD US
  *   Answer 7: Greenway is pickup-only.            -> deliveryFee: 0, always.
  *   Answer 8: send the tax-INCLUSIVE packagePrice with an EMPTY taxes array.
- *                                                  -> taxes: [], always.
+ *             That answer was about the PREVIEW webhook response (L-44), and
+ *             it is still right THERE. L-48 wrongly applied it to cart
+ *             updates too.
+ *
+ * ── SLICE L-51: WHY EVERY CART CHANGE WAS REFUSED (proven live, Sep 28 2026)
+ *   The cart endpoint rejects `taxes: []` with a bare
+ *   {"status":400,"error":"Bad Request"} and no reason. Sending the order's
+ *   CURRENT cart back unchanged with `taxes: []` -> 400. The identical body
+ *   with one tax line -> 200. Leaving `taxes` out -> 400 "did not contain a
+ *   required property of 'taxes'". A tax line of 0 -> 400 "minimum value of
+ *   1". So the cart body must carry at least one tax line of at least 1 cent.
+ *   Leafly stores the lines as given and does NOT add them to the total
+ *   (subtotal and total stayed equal to the items), so for our tax-inclusive
+ *   prices the lines are informational: the WA tax already INSIDE the prices,
+ *   labelled "(included in price)". See `buildCartTaxLines`.
  *
  * ── THE ONE RULE THAT MATTERS MOST
  * Because a removal is expressed by OMISSION, any cart line we cannot read
@@ -45,6 +67,8 @@
  * with `cart_unreadable`. There is no "skip the bad line" path, on purpose.
  */
 
+import { splitInclusiveTax, buildTaxComponents, LEAFLY_TAX_LABEL_EXCISE, LEAFLY_TAX_LABEL_SALES } from "./preview-core";
+
 // ============================================================================
 // 1. CONSTANTS
 // ============================================================================
@@ -52,8 +76,46 @@
 /** The spec's documented success status for updateCartItems. NOT 204. */
 export const LEAFLY_CART_SUCCESS_STATUS = 200;
 
-/** Ben's answer 8: tax-inclusive packagePrice, and no tax lines. */
-export const LEAFLY_CART_TAXES: readonly never[] = Object.freeze([]) as readonly never[];
+/**
+ * SLICE L-51: labels for the tax lines on a cart update. Same wording as the
+ * preview webhook's lines plus "(included in price)", because our prices are
+ * tax-inclusive and Leafly does not add these lines to the total.
+ */
+export const LEAFLY_CART_TAX_LABEL_EXCISE = `${LEAFLY_TAX_LABEL_EXCISE} (included in price)`;
+export const LEAFLY_CART_TAX_LABEL_SALES = `${LEAFLY_TAX_LABEL_SALES} (included in price)`;
+
+/** One tax line on a cart update (spec TaxComponent: label, amountCents >= 1). */
+export type LeaflyCartTaxLine = { label: string; amountCents: number };
+
+/**
+ * SLICE L-51: the WA tax included in the new cart's prices, as Leafly tax lines.
+ *
+ * Per line: quantity x packagePrice is the tax-inclusive line total. It is
+ * split with preview-core's `splitInclusiveTax` (the same split the preview
+ * webhook uses; merch/accessories carry no excise). Lines are summed into at
+ * most two tax lines, and zero lines are dropped (Leafly's minimum is 1).
+ * An EMPTY result means the cart is too small to contain a whole cent of tax;
+ * the caller must refuse, because Leafly rejects an empty taxes array.
+ * A line with no known category is treated as cannabis (excise applies),
+ * which is what our register does for every non-merch item.
+ */
+export function buildCartTaxLines(
+  items: readonly { quantity: number; packagePrice: number; category?: string | null }[],
+): LeaflyCartTaxLine[] {
+  let excise = 0;
+  let sales = 0;
+  for (const it of items) {
+    const total = it.quantity * it.packagePrice;
+    if (!(Number.isInteger(total) && total > 0)) continue;
+    const split = splitInclusiveTax(total, it.category ?? null);
+    excise += split.exciseMinor;
+    sales += split.salesMinor;
+  }
+  return buildTaxComponents({ exciseMinor: excise, salesMinor: sales }).map((t) => ({
+    label: t.label === LEAFLY_TAX_LABEL_EXCISE ? LEAFLY_CART_TAX_LABEL_EXCISE : LEAFLY_CART_TAX_LABEL_SALES,
+    amountCents: t.amountCents,
+  }));
+}
 
 /** Ben's answer 7 + the spec: pickup orders carry a zero delivery fee. */
 export const LEAFLY_CART_DELIVERY_FEE = 0;
@@ -94,6 +156,9 @@ export const LEAFLY_CART_REFUSAL_CODES = [
   // SLICE L-49 — the sandbox pre-flight against Leafly's OWN catalog.
   "variant_not_at_leafly",
   "variant_out_of_stock_at_leafly",
+  // SLICE L-51 — the cart is too small to contain a whole cent of tax, and
+  // Leafly rejects a cart update with no tax line.
+  "no_tax_lines",
 ] as const;
 export type LeaflyCartRefusalCode = (typeof LEAFLY_CART_REFUSAL_CODES)[number];
 
@@ -129,6 +194,8 @@ export type EditableCartLine = {
   /** Whole line after Leafly's deals, when present (display only). */
   discountedLineMinor: number | null;
   dealTitle: string | null;
+  /** SLICE L-51: Leafly's category for the line ("Flower", "Accessories"), for the tax split. */
+  category?: string | null;
 };
 
 export type UnreadableCartLine = {
@@ -234,6 +301,7 @@ export function readEditableLeaflyCart(raw: unknown): EditableCartReading {
       packagePriceMinor: price as number,
       discountedLineMinor: wholeMinor(ci.discountedPriceCents),
       dealTitle: text(ci.dealTitle),
+      category: text(ci.category),
     });
   });
 
@@ -280,6 +348,8 @@ export type CartVariantFacts = {
   orderable: boolean;
   /** Optional human name for the variant ("Blue Dream 3.5g"), for sentences only. */
   label?: string | null;
+  /** SLICE L-51: product category, for the tax split (merch carries no excise). */
+  category?: string | null;
 };
 
 export type CartVariantLookup = (integratorVariantId: string) => CartVariantFacts | null;
@@ -304,7 +374,8 @@ export type CartChange = {
 
 export type CartUpdateBody = {
   cartItems: { id: string | null; integratorVariantId: string; quantity: number; packagePrice: number }[];
-  taxes: never[];
+  /** SLICE L-51: never empty (Leafly 400s on []). See buildCartTaxLines. */
+  taxes: LeaflyCartTaxLine[];
   deliveryFee: number;
 };
 
@@ -447,6 +518,7 @@ export function decideCartUpdate(input: {
   const seenVariants = new Set<string>();
   const changes: CartChange[] = [];
   const body: CartUpdateBody = { cartItems: [], taxes: [], deliveryFee: LEAFLY_CART_DELIVERY_FEE };
+  const lineCategories: (string | null)[] = [];
 
   for (const [i, d] of desired.entries()) {
     const n = i + 1;
@@ -540,7 +612,14 @@ export function decideCartUpdate(input: {
       priceOverride,
       sentence,
     });
-    body.cartItems.push({ id: existing?.cartItemId ?? null, integratorVariantId: variant, quantity: d.quantity, packagePrice: price });
+    // SLICE L-51: a swap is sent as REMOVE + ADD (old line left out, new line
+    // with id null), never as a same-id substitution. Proven live: Leafly
+    // stores a same-id substitution's price x100; remove + add stores it as
+    // sent. Edits on the SAME variant keep their id (those store correctly).
+    const sendId = kind === "substituted" ? null : existing?.cartItemId ?? null;
+    body.cartItems.push({ id: sendId, integratorVariantId: variant, quantity: d.quantity, packagePrice: price });
+    const cat = sameVariant ? existing?.category ?? facts?.category ?? null : (facts ?? input.lookup(variant))?.category ?? null;
+    lineCategories.push(typeof cat === "string" && cat.trim() !== "" ? cat.trim() : null);
   }
 
   // Everything on the order that no row kept is a REMOVAL. Listed explicitly
@@ -583,6 +662,17 @@ export function decideCartUpdate(input: {
       ),
       needsManagerApproval: true,
     };
+  }
+
+  // SLICE L-51: the tax lines. Leafly rejects an empty taxes array, so a cart
+  // too small to hold a whole cent of tax cannot be sent at all.
+  body.taxes = buildCartTaxLines(body.cartItems.map((c, i) => ({ ...c, category: lineCategories[i] ?? null })));
+  if (body.taxes.length === 0) {
+    return refuse(
+      "no_tax_lines",
+      "Leafly requires at least one tax line of 1 cent or more on every cart change, and this cart is too small to contain a whole cent of tax. Nothing was sent. Raise the price or add an item.",
+      changes,
+    );
   }
 
   const estimatedTopLineMinor = body.cartItems.reduce((a, c) => a + c.quantity * c.packagePrice, 0);
@@ -727,6 +817,39 @@ export function verifyCartResponse(sent: CartUpdateBody, returned: EditableCartR
   return { matches: problems.length === 0, problems };
 }
 
+/**
+ * SLICE L-51: Leafly's x100 price bug, detected and planned for repair.
+ *
+ * Proven live in the sandbox: on a same-id substitution (and, for some
+ * variants, an addition) Leafly stored packagePrice multiplied by 100. We now
+ * send swaps as remove + add, which stored correctly, but a 200 is still
+ * checked: if any returned line's unit price is EXACTLY 100x what we sent for
+ * that variant (same quantity), this returns a follow-up body that sets the
+ * sent price again on Leafly's NEW cart item id. A same-variant price edit was
+ * proven to store the price as sent. Every other returned line is carried
+ * unchanged, so nothing is removed. Returns null when there is nothing to fix,
+ * or when the returned cart cannot be read completely (a follow-up built from
+ * a partial read would delete the unread lines).
+ */
+export function planCartPriceCorrection(
+  sent: CartUpdateBody,
+  returned: EditableCartReading,
+): { body: CartUpdateBody; fixed: { name: string; storedMinor: number; sentMinor: number }[] } | null {
+  if (!returned.editable || returned.unreadable.length > 0) return null;
+  const sentBy = new Map(sent.cartItems.map((c) => [c.integratorVariantId, c]));
+  const fixed: { name: string; storedMinor: number; sentMinor: number }[] = [];
+  const cartItems = returned.lines.map((l) => {
+    const s = sentBy.get(l.integratorVariantId);
+    if (s && l.quantity === s.quantity && l.packagePriceMinor === s.packagePrice * 100 && s.packagePrice >= 1) {
+      fixed.push({ name: l.name, storedMinor: l.packagePriceMinor, sentMinor: s.packagePrice });
+      return { id: l.cartItemId, integratorVariantId: l.integratorVariantId, quantity: l.quantity, packagePrice: s.packagePrice };
+    }
+    return { id: l.cartItemId, integratorVariantId: l.integratorVariantId, quantity: l.quantity, packagePrice: l.packagePriceMinor };
+  });
+  if (fixed.length === 0) return null;
+  return { body: { cartItems, taxes: sent.taxes.map((t) => ({ ...t })), deliveryFee: sent.deliveryFee }, fixed };
+}
+
 // ============================================================================
 // 7. SELF-TESTS
 // ============================================================================
@@ -835,8 +958,20 @@ export function __runLeaflyOrderCartTests(): { passed: number; failed: number } 
 
   // ── constants pinned to the spec and Ben ──
   ok(LEAFLY_CART_SUCCESS_STATUS === 200, "cart success is 200, not 204");
-  ok(LEAFLY_CART_TAXES.length === 0, "taxes are empty (Ben 8)");
-  ok(Object.isFrozen(LEAFLY_CART_TAXES), "taxes constant cannot be pushed to");
+  // SLICE L-51: Leafly 400s on taxes: [] (proven live). Tax lines are built.
+  ok(LEAFLY_CART_TAX_LABEL_EXCISE.includes("included in price") && LEAFLY_CART_TAX_LABEL_SALES.includes("included in price"), "cart tax labels say included in price");
+  ok(LEAFLY_CART_TAX_LABEL_EXCISE !== LEAFLY_CART_TAX_LABEL_SALES, "cart tax labels differ");
+  {
+    // $25.00 flower: pre-tax round(2500/1.463)=1709, excise round(1709*.37)=632, sales residual 159.
+    const t = buildCartTaxLines([{ quantity: 1, packagePrice: 2500, category: "Flower" }]);
+    ok(t.length === 2 && t.every((x) => Number.isInteger(x.amountCents) && x.amountCents >= 1), "flower -> two whole-cent lines >= 1");
+    ok(t.reduce((a, x) => a + x.amountCents, 0) === 2500 - Math.round(2500 / 1.463), "tax lines sum to the tax inside the price");
+    const m = buildCartTaxLines([{ quantity: 2, packagePrice: 1093, category: "Accessories" }]);
+    ok(m.length === 1 && m[0]?.label === LEAFLY_CART_TAX_LABEL_SALES && m[0]?.amountCents === 2186 - Math.round(2186 / 1.093), "merch -> sales tax only, no excise");
+    ok(buildCartTaxLines([{ quantity: 1, packagePrice: 1 }]).length === 0, "a 1-cent cart holds no whole cent of tax -> empty (caller refuses)");
+    const u = buildCartTaxLines([{ quantity: 1, packagePrice: 2500 }]);
+    ok(u.length === 2, "unknown category treated as cannabis (excise applies)");
+  }
   ok(LEAFLY_CART_DELIVERY_FEE === 0, "delivery fee is zero (pickup)");
   ok(LEAFLY_CART_EDITABLE_STATUSES.join(",") === "pending,confirmed,ready", "editable statuses");
   ok(new Set(LEAFLY_CART_REFUSAL_CODES).size === LEAFLY_CART_REFUSAL_CODES.length, "refusal codes unique");
@@ -954,7 +1089,8 @@ export function __runLeaflyOrderCartTests(): { passed: number; failed: number } 
   const rem = d([keepAll[0]!]);
   ok(rem.allowed && rem.summary.removed === 1 && rem.summary.unchanged === 1, "removal by omission");
   ok(rem.body?.cartItems.length === 1 && rem.body?.cartItems[0]?.id === "ci-1", "removal body keeps the other line with its id");
-  ok(rem.body?.taxes.length === 0 && rem.body?.deliveryFee === 0, "body taxes [] and fee 0");
+  ok((rem.body?.taxes.length ?? 0) >= 1 && rem.body?.deliveryFee === 0, "body carries tax lines (never []) and fee 0");
+  ok((rem.body?.taxes ?? []).every((t) => Number.isInteger(t.amountCents) && t.amountCents >= 1), "every tax line is a whole cent >= 1");
   ok(rem.changes.some((c) => c.kind === "removed" && c.sentence.startsWith("Remove 1 x")), "removal sentence");
   ok(rem.estimatedTopLineMinor === 6000, "estimate = qty x price");
   ok(!rem.needsManagerApproval, "removal needs no manager");
@@ -1015,7 +1151,11 @@ export function __runLeaflyOrderCartTests(): { passed: number; failed: number } 
   // substitution
   const sub = d([{ cartItemId: "ci-1", integratorVariantId: "v3", quantity: 2, packagePriceMinor: null }, keepAll[1]!]);
   ok(sub.allowed && sub.summary.substituted === 1 && sub.changes[0]?.kind === "substituted", "substitution");
-  ok(sub.body?.cartItems[0]?.id === "ci-1" && sub.body?.cartItems[0]?.integratorVariantId === "v3", "substitution keeps id, new variant");
+  ok(sub.body?.cartItems[0]?.id === null && sub.body?.cartItems[0]?.integratorVariantId === "v3", "L-51: a swap is sent as remove + add (id null, new variant)");
+  ok(!(sub.body?.cartItems ?? []).some((c) => c.id === "ci-1"), "L-51: the swapped-out line is left out (removed)");
+  ok(sub.changes[0]?.cartItemId === "ci-1", "the change record still names the line that was swapped");
+  const tiny = d([{ cartItemId: "ci-1", integratorVariantId: "v1", quantity: 1, packagePriceMinor: 1 }]);
+  ok(tiny.code === "no_tax_lines" && !tiny.allowed && tiny.body === null, "L-51: a cart with no whole cent of tax is refused, never sent with taxes []");
   ok(sub.body?.cartItems[0]?.packagePrice === 2500, "substitution uses the new variant's menu price");
   ok(d([{ cartItemId: "ci-1", integratorVariantId: "v3", quantity: 4, packagePriceMinor: null }, keepAll[1]!]).code === "not_enough_stock", "substitution checks stock of new variant");
   ok(d([{ cartItemId: "ci-1", integratorVariantId: "v2", quantity: 2, packagePriceMinor: null }, { cartItemId: "ci-2", integratorVariantId: "v1", quantity: 1, packagePriceMinor: null }]).allowed, "swapping two lines' variants is allowed (no duplicate)");
@@ -1074,6 +1214,22 @@ export function __runLeaflyOrderCartTests(): { passed: number; failed: number } 
   ok(verifyCartResponse({ cartItems: [{ id: "ci-1", integratorVariantId: "v1", quantity: 2, packagePrice: 3000 }], taxes: [], deliveryFee: 0 }, wrongQty).problems.some((p) => p.includes("Leafly has 5")), "qty mismatch detected");
   const wrongPrice = readEditableLeaflyCart(order([item({ id: "n1", packagePrice: 2900 })]));
   ok(!verifyCartResponse({ cartItems: [{ id: "ci-1", integratorVariantId: "v1", quantity: 2, packagePrice: 3000 }], taxes: [], deliveryFee: 0 }, wrongPrice).matches, "price mismatch detected");
+
+  // ── SLICE L-51: Leafly's x100 price bug, planned for repair ──
+  {
+    const tx = [{ label: LEAFLY_CART_TAX_LABEL_SALES, amountCents: 159 }];
+    const sentB: CartUpdateBody = { cartItems: [{ id: null, integratorVariantId: "v1", quantity: 2, packagePrice: 3000 }, { id: "ci-2", integratorVariantId: "v2", quantity: 1, packagePrice: 1500 }], taxes: tx, deliveryFee: 0 };
+    const x100 = readEditableLeaflyCart(order([item({ id: "n1", packagePrice: 300000 }), item({ id: "n2", integratorVariantId: "v2", quantity: 1, packagePrice: 1500 })]));
+    const plan = planCartPriceCorrection(sentB, x100);
+    ok(plan !== null && plan.fixed.length === 1 && plan.fixed[0]?.storedMinor === 300000 && plan.fixed[0]?.sentMinor === 3000, "x100 price detected");
+    ok(plan?.body.cartItems.length === 2, "the follow-up carries EVERY returned line (nothing removed)");
+    ok(plan?.body.cartItems[0]?.id === "n1" && plan?.body.cartItems[0]?.packagePrice === 3000, "follow-up edits Leafly's NEW line id back to the sent price");
+    ok(plan?.body.cartItems[1]?.id === "n2" && plan?.body.cartItems[1]?.packagePrice === 1500, "other lines carried unchanged");
+    ok((plan?.body.taxes.length ?? 0) === 1 && plan?.body.deliveryFee === 0, "follow-up keeps the tax lines and zero fee");
+    ok(planCartPriceCorrection(sentB, readEditableLeaflyCart(order([item({ id: "n1" }), item({ id: "n2", integratorVariantId: "v2", quantity: 1, packagePrice: 1500 })]))) === null, "correct prices -> no follow-up");
+    ok(planCartPriceCorrection(sentB, readEditableLeaflyCart(order([item({ id: "n1", packagePrice: 2900 })]))) === null, "a different (non-x100) mismatch is not 'repaired'");
+    ok(planCartPriceCorrection(sentB, readEditableLeaflyCart(order([item({ id: "n1", packagePrice: 300000 }), item({ id: null })]))) === null, "a partly unreadable answer is never used to build a follow-up");
+  }
 
   // ── SLICE L-49: catalog pre-flight ──
   const ch = (kind: CartChangeKind, to: string | null, name = "P"): CartChange => ({
