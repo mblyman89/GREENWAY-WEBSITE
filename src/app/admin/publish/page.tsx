@@ -89,7 +89,7 @@ type DraftRow = {
 export default async function PublishCommandCenterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; published?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; notice?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const sp = await searchParams;
@@ -179,6 +179,12 @@ export default async function PublishCommandCenterPage({
         {sp.error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             {decodeURIComponent(sp.error)}
+          </div>
+        )}
+        {/* S18: the cutover release / rebuild outcome, told plainly. */}
+        {sp.notice && (
+          <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-3 text-sm text-[var(--admin-gold)]">
+            {decodeURIComponent(sp.notice)}
           </div>
         )}
         {sp.published && (

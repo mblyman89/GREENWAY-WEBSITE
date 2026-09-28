@@ -38,6 +38,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
 import { archiveSupersededStaged } from "@/lib/pos/menu-version";
+import { shouldHoldForCutover } from "@/lib/pos/cutover-guard";
+import { CUTOVER_EVENT, CUTOVER_HOLD_COPY, CUTOVER_REASON } from "@/lib/inventory/cutover-guard-core";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 // SLICE 93: kb > manifest fact > confident name parse - one folded verdict.
 import {
@@ -345,6 +347,13 @@ export async function stageIntakeMenuVersionForManifest(
     // SLICE 62 review gate input, computed BEFORE the insert so the row is
     // born knowing whether it will be held (S01: no follow-up write needed).
     const factFlags = plan.diagnostics.filter((d) => d.code === "fact_extraction_review");
+    // S18 cutover guard, also decided BEFORE the insert so the row is born
+    // "held_for_cutover": while a REAL one-time Cultivera upload sits staged,
+    // this update is built on a menu that lacks the Cultivera products, so it
+    // must not go live (bible 7.2 "Order-dependent", F-041). One bounded read,
+    // skipped when INTAKE_CUTOVER_GUARD is off or a fact hold already applies;
+    // a failed read never holds (cutover-guard.ts).
+    const cutoverHold = factFlags.length === 0 && (await shouldHoldForCutover());
 
     // 5) Create the STAGED intake-origin version (import_id NULL). Counts +
     //    diagnostics live in summary_json so the review surface needs no
@@ -374,7 +383,7 @@ export async function stageIntakeMenuVersionForManifest(
           // "auto_publish_attempted" + status "published" = published
           // automatically, so the success path needs ZERO extra writes.
           manifest: manifestHeader,
-          publish_outcome: initialPublishOutcome(factFlags.length, new Date().toISOString()),
+          publish_outcome: initialPublishOutcome(factFlags.length, new Date().toISOString(), { cutover: cutoverHold }),
           // S17: which approved drafts this snapshot was built from, so a
           // later snapshot may replace it ONLY when it provably contains all
           // of them (planRestageReplace). Plus the batch size, when batched.
@@ -438,6 +447,31 @@ export async function stageIntakeMenuVersionForManifest(
         added: plan.addedCount,
         merged: plan.mergedCount,
         reason: "held-for-fact-review",
+      };
+    }
+
+    // S18: held for cutover. Staged (nothing lost), NOT published; the owner
+    // publishes the Cultivera upload and this delivery is rebuilt on top of
+    // it (cutover-guard.ts releaseHeldAfterCutover). Outcome already on the row.
+    if (cutoverHold) {
+      try {
+        await admin.from("manifest_events").insert({
+          manifest_id: manifestId,
+          event_type: CUTOVER_EVENT,
+          note: CUTOVER_HOLD_COPY,
+          actor_id: actorId,
+        });
+      } catch (err) {
+        console.error("[intake-menu-staging] cutover hold event insert failed:", err);
+      }
+      return {
+        staged: true,
+        published: false,
+        versionId: version.id,
+        carried: plan.carriedCount,
+        added: plan.addedCount,
+        merged: plan.mergedCount,
+        reason: CUTOVER_REASON,
       };
     }
 

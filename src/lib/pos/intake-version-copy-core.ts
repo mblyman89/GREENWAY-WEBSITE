@@ -19,6 +19,9 @@
  *      CANNOT: the staging module's intent and, if it failed, why.
  *        - "held_for_fact_review"   written at insert (Rule 3.1 hold)
  *        - "auto_publish_attempted" written at insert (normal path)
+ *        - "held_for_cutover"       written at insert (S18): a real one-time
+ *                                   Cultivera upload was staged-but-unpublished,
+ *                                   so this update waits (cutover-guard-core)
  *        - "auto_publish_failed"    one update, ONLY on the rare RPC failure,
  *                                   carrying the error message
  *      The success path therefore costs ZERO extra writes: a row whose
@@ -49,6 +52,7 @@ export const PUBLISH_OUTCOMES = [
   "held_for_fact_review",
   "auto_publish_attempted",
   "auto_publish_failed",
+  "held_for_cutover",
 ] as const;
 export type PublishOutcomeState = (typeof PUBLISH_OUTCOMES)[number];
 
@@ -112,11 +116,19 @@ export function buildManifestHeader(
   };
 }
 
-/** The outcome written at insert time. */
-export function initialPublishOutcome(heldCount: number, atIso: string): PersistedPublishOutcome {
-  return heldCount > 0
-    ? { state: "held_for_fact_review", at: atIso, held_count: heldCount }
-    : { state: "auto_publish_attempted", at: atIso };
+/**
+ * The outcome written at insert time. A fact hold wins over a cutover hold
+ * (the facts need a human either way, and the S15/S16 queue already routes
+ * that); a cutover hold (S18) wins over an auto-publish attempt.
+ */
+export function initialPublishOutcome(
+  heldCount: number,
+  atIso: string,
+  opts: { cutover?: boolean } = {},
+): PersistedPublishOutcome {
+  if (heldCount > 0) return { state: "held_for_fact_review", at: atIso, held_count: heldCount };
+  if (opts.cutover === true) return { state: "held_for_cutover", at: atIso };
+  return { state: "auto_publish_attempted", at: atIso };
 }
 
 /** The outcome written after an RPC failure (message trimmed, never empty). */
@@ -373,6 +385,15 @@ export function describeIntakeVersion(v: IntakeVersionInput): IntakeVersionDescr
         action: null,
       };
     }
+    if (state === "held_for_cutover") {
+      return {
+        ...base,
+        tone: "live",
+        headline: `Published by hand${whenPart}`,
+        detail: "It waited for the one-time Cultivera menu to go live first.",
+        action: null,
+      };
+    }
     if (state === "auto_publish_failed") {
       return {
         ...base,
@@ -405,6 +426,16 @@ export function describeIntakeVersion(v: IntakeVersionInput): IntakeVersionDescr
         headline: `Waiting: ${plural(heldCount, "fact needs", "facts need")} a second look`,
         detail: heldDetail(held, heldCount),
         action: "Check the flagged facts, then press Publish.",
+      };
+    }
+    if (state === "held_for_cutover") {
+      return {
+        ...base,
+        tone: "waiting",
+        headline: "Waiting: publish the Cultivera menu first",
+        detail:
+          "Your one-time Cultivera menu is uploaded but not published yet. Publish it under Menu Imports first \u2014 then every receiving update publishes itself on top of it.",
+        action: "Publish the Cultivera upload under Menu Imports; this update rebuilds itself on top of it.",
       };
     }
     if (state === "auto_publish_failed") {
@@ -598,6 +629,17 @@ export function __runIntakeVersionCopyCoreTests(): { passed: number; failed: num
   const many = Array.from({ length: 5 }, (_, i) => flag(`P${i}`, [`r${i}`]));
   const d8 = describeIntakeVersion({ status: "staged", published_at: null, created_at: t, summary_json: { diagnostics: many, publish_outcome: initialPublishOutcome(5, t) } });
   ok((d8.detail ?? "").endsWith("; and 2 more") && !(d8.detail ?? "").includes("P3"), "caps named held");
+
+  // S18: cutover hold.
+  const cut = initialPublishOutcome(0, t, { cutover: true });
+  ok(cut.state === "held_for_cutover" && cut.held_count === undefined, "cutover -> held_for_cutover");
+  ok(initialPublishOutcome(2, t, { cutover: true }).state === "held_for_fact_review", "fact hold wins over cutover");
+  ok(initialPublishOutcome(0, t, {}).state === "auto_publish_attempted", "no cutover -> attempted");
+  ok(parseIntakeSummary({ publish_outcome: cut }).outcome?.state === "held_for_cutover", "cutover parses");
+  const c1 = describeIntakeVersion(row("staged", cut));
+  ok(c1.tone === "waiting" && c1.headline === "Waiting: publish the Cultivera menu first", "cutover staged copy");
+  ok((c1.detail ?? "").startsWith("Your one-time Cultivera menu is uploaded but not published yet."), "S18.4 copy on the card");
+  ok(describeIntakeVersion(row("published", cut, t)).headline.startsWith("Published by hand"), "cutover published copy");
 
   return { passed, failed };
 }

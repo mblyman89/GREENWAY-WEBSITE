@@ -17,6 +17,22 @@ import { recordFactReview, listFactReviews, factReviewsToResolutions } from "@/l
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { removalRefusedCopy } from "@/lib/pos/publish-guard-core";
 import {
+  decideHandPublish,
+  readCutoverDone,
+  readHeldBeforeRelease,
+  rebuildDelivery,
+  releaseHeldAfterCutover,
+  readCultiveraBlocker,
+  readCutoverStatus,
+} from "@/lib/pos/cutover-guard";
+import {
+  CUTOVER_PUBLISH_REFUSED_COPY,
+  CUTOVER_REUPLOAD_REFUSED_COPY,
+  CUTOVER_STILL_BLOCKED_COPY,
+  rebuildNote,
+  refuseUpload,
+} from "@/lib/inventory/cutover-guard-core";
+import {
   parseLowThcClassification,
   parseOtherwiseTakenClassification,
   buildFactReviewBuckets,
@@ -80,6 +96,15 @@ export async function uploadAndStageImport(formData: FormData): Promise<void> {
 
     const isTest = String(formData.get("test_mode") ?? "") === "on";
 
+    // S18 one-time guard (bible 7.4 "Do not run the Cultivera import a second
+    // time after cutover"): once a real Cultivera menu went live AND receiving
+    // published on top of it, a second REAL upload would replace the menu with
+    // an old POS export. Test-mode rehearsals stay allowed. Flag-gated, and a
+    // failed read never refuses (readCutoverDone returns false).
+    if (refuseUpload(isTest, await readCutoverDone())) {
+      throw new Error(CUTOVER_REUPLOAD_REFUSED_COPY);
+    }
+
     const result = await runImport({
       productsBuffer,
       inventoriesBuffer,
@@ -134,6 +159,32 @@ export async function publishVersion(formData: FormData): Promise<void> {
     redirect(dest + "?error=" + encodeURIComponent("Missing version id."));
   }
 
+  // S18 cutover guard (flag INTAKE_CUTOVER_GUARD; one pure verdict,
+  // cutover-guard-core decidePublish). Fail-open: an unknown read allows.
+  //   refuse  - a real Cultivera upload is staged and this is not it;
+  //   rebuild - this is a receiving update held for cutover: it was built
+  //             before Cultivera went live, so it is never published itself;
+  //             its delivery is rebuilt on the live menu instead;
+  //   allow   - as before; release=true when this IS the Cultivera upload.
+  // Decided BEFORE the removal gate: a held snapshot predates Cultivera, so
+  // the gate would ask to "take off" the Cultivera products - a question
+  // whose right answer is never yes.
+  const decision = await decideHandPublish(versionId);
+  if (decision.kind === "refuse") {
+    redirect(dest + "?error=" + encodeURIComponent(CUTOVER_PUBLISH_REFUSED_COPY));
+  }
+  if (decision.kind === "rebuild") {
+    const outcome = await rebuildDelivery(decision.manifestId, [versionId], session.userId);
+    const note = rebuildNote(outcome);
+    revalidatePath("/admin/menu-imports");
+    revalidatePath("/admin/publish");
+    redirect(dest + (note.ok ? "?published=1&notice=" : "?notice=") + encodeURIComponent(note.text));
+  }
+  const release = decision.kind === "allow" && decision.release;
+  // Read the waiting receiving updates BEFORE the publish: the RPC archives
+  // the ones created before the Cultivera upload.
+  const held = release ? await readHeldBeforeRelease() : null;
+
   // SLICE 76 safety gate (copy softened in S16, logic unchanged): publishing
   // makes this update the live menu. If it would take off products that are live right now,
   // refuse unless the manager explicitly ticked the removal confirmation.
@@ -179,6 +230,18 @@ export async function publishVersion(formData: FormData): Promise<void> {
   // rule as migration 0236; a zero-write no-op once 0236 is applied.
   await archiveSupersededStaged({ id: versionId });
 
+  // S18 release: Cultivera is live, so every delivery that waited is rebuilt
+  // on top of it and publishes itself. If ANOTHER real upload is still staged
+  // (a newer one), the rebuilds would only be held again, so say so instead.
+  let notice = "";
+  if (held && (held.manifests.length > 0 || held.overflow > 0)) {
+    const still = await readCultiveraBlocker();
+    notice =
+      still !== null && still !== "unknown"
+        ? CUTOVER_STILL_BLOCKED_COPY
+        : await releaseHeldAfterCutover(held, session.userId, session.email ?? null, versionId);
+  }
+
   // Refresh public menu surfaces so they read the new published snapshot.
   // SLICE 59: ONE canonical list (public-surfaces.ts) covers "/", "/menu",
   // "/specials", AND "/vendor-delivery" — the vendor directory is derived
@@ -188,7 +251,43 @@ export async function publishVersion(formData: FormData): Promise<void> {
   revalidatePath("/admin/publish");
   revalidatePublicMenuSurfaces();
 
-  redirect(dest + "?published=1");
+  redirect(dest + "?published=1" + (notice ? "&notice=" + encodeURIComponent(notice) : ""));
+}
+
+/**
+ * S18: rebuild ONE delivery that is still waiting after cutover (listed on
+ * /admin/menu-imports/cutover: past the release cap, or a rebuild that did
+ * not finish). The pair (manifest, version) must be on the freshly read
+ * pending list - never trust the form. Refused while a real Cultivera upload
+ * is still staged (the rebuild would only be held again).
+ */
+export async function rebuildCutoverDeliveryAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("menu.publish");
+  const manifestId = String(formData.get("manifestId") ?? "").toLowerCase();
+  const versionId = String(formData.get("versionId") ?? "");
+  const dest = "/admin/menu-imports/cutover";
+  const status = await readCutoverStatus();
+  if (status.blocking !== null && status.blocking !== "unknown") {
+    redirect(dest + "?error=" + encodeURIComponent(CUTOVER_PUBLISH_REFUSED_COPY));
+  }
+  const listed = status.pending.some((p) => p.manifestId === manifestId && p.versionId === versionId);
+  if (!listed) {
+    redirect(dest + "?error=" + encodeURIComponent("That delivery is no longer waiting. The list below is up to date."));
+  }
+  const outcome = await rebuildDelivery(manifestId, [versionId], session.userId);
+  const note = rebuildNote(outcome);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "menu_version.cutover_rebuilt",
+    entityType: "inbound_manifest",
+    entityId: manifestId,
+    after: { heldVersionId: versionId, staged: outcome.staged, published: outcome.published, newVersionId: outcome.versionId },
+  });
+  revalidatePath(dest);
+  revalidatePath("/admin/publish");
+  revalidatePath("/admin/menu-imports");
+  redirect(dest + "?notice=" + encodeURIComponent(note.text));
 }
 
 /**

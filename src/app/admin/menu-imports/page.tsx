@@ -17,6 +17,8 @@ import type { PosImportStatus, MenuVersionStatus } from "@/lib/pos/db-types";
 import { withBackParam } from "@/lib/admin/back-link-core";
 // S00: shared post-approve story (Menu Imports is the one-time Cultivera door).
 import { MENU_IMPORTS_PURPOSE_COPY } from "@/lib/catalog/publish-story-core";
+// S18: the cutover runbook (publish Cultivera first, then receive).
+import { CUTOVER_RUNBOOK_HREF } from "@/lib/inventory/cutover-guard-core";
 import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +40,7 @@ const VERSION_STATUS_STYLE: Record<MenuVersionStatus, string> = {
 export default async function MenuImportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; published?: string; staged?: string; cleaned?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; staged?: string; cleaned?: string; notice?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const params = await searchParams;
@@ -105,6 +107,13 @@ export default async function MenuImportsPage({
               your invoices, manifests, and COAs at approval, and stock comes from
               the quantity you received.
             </p>
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              Doing the one-time Cultivera upload?{" "}
+              <Link href={CUTOVER_RUNBOOK_HREF} className="text-[var(--admin-accent)] hover:underline">
+                Follow the Cultivera cutover runbook
+              </Link>{" "}
+              &mdash; publish Cultivera first, then receive.
+            </p>
             <SopSheetLink slug="publish" />
           </HelpPanel>
         }
@@ -123,6 +132,12 @@ export default async function MenuImportsPage({
         {params.error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             {decodeURIComponent(params.error)}
+          </div>
+        )}
+        {/* S18: the cutover release / rebuild outcome, told plainly. */}
+        {params.notice && (
+          <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-3 text-sm text-[var(--admin-gold)]">
+            {decodeURIComponent(params.notice)}
           </div>
         )}
         {params.published && (
@@ -253,6 +268,13 @@ export default async function MenuImportsPage({
           <p className="mt-1 text-xs text-white/40">
             Select the two spreadsheets exported from your POS. We&apos;ll transform them into a
             staged menu you can review before anything goes live. Nothing publishes automatically.
+          </p>
+          <p className="mt-2 text-xs text-[var(--admin-gold)]">
+            One time only.{" "}
+            <Link href={CUTOVER_RUNBOOK_HREF} className="font-semibold underline">
+              Read the Cultivera cutover runbook
+            </Link>{" "}
+            first: publish the Cultivera upload before approving anything in receiving.
           </p>
           <form action={uploadAndStageImport} className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5">

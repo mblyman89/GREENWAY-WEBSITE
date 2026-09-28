@@ -708,6 +708,7 @@ import { __runPublishGuardTests } from "../../src/lib/pos/publish-guard-core";
 import { __runPublishArchiveRuleTests } from "../../src/lib/pos/publish-archive-rule-core";
 import { __runPublishQueueTests } from "../../src/lib/pos/publish-queue-core";
 import { __runBatchStagingTests } from "../../src/lib/inventory/batch-staging-core";
+import { __runCutoverGuardTests } from "../../src/lib/inventory/cutover-guard-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
 import { __runSageExportsCoreTests } from "../../src/lib/accounting/sage-exports-core";
@@ -1380,6 +1381,7 @@ __runLiquidVolumeTests();
   // S16: the Publish page exception queue (throws on failure).
   __runPublishQueueTests();
   __runBatchStagingTests();
+  __runCutoverGuardTests();
   // SLICE 39 connectivity audit: previously-dark suites. Suites that throw
   // internally on assertion failure are bare calls; suites that only return
   // { passed, failed } are wrapped so a failure still fails this runner.

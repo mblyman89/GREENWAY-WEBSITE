@@ -68,7 +68,7 @@ const inExample = (v: string) => new RegExp(`^#?\\s*${v}=`, "m").test(envExample
 describe("intake env ledger", () => {
   it("derives the pipeline flags from the code (proves the derivation works)", () => {
     const flags = pipelineFlagNames();
-    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "INTAKE_BATCH_STAGING"]) expect(flags).toContain(v);
+    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD"]) expect(flags).toContain(v);
   });
 
   it("every pipeline flag is in the Shipped table AND .env.example", () => {
@@ -161,6 +161,12 @@ describe("intake env ledger", () => {
     // the added list and NOT in the none list.
     expect(none).not.toContain("S17");
     expect(added.get("S17")).toBe("INTAKE_BATCH_STAGING");
-    expect(ledger).toContain("As of **S17**");
+    // S18 (cutover guard) ADDED a flag - bible S18.7 "Flag." - and its planned
+    // row left section 4 (a planned row for a shipped slice would be stale).
+    expect(none).not.toContain("S18");
+    expect(added.get("S18")).toBe("INTAKE_CUTOVER_GUARD");
+    expect(ledger.slice(ledger.indexOf("## 4. Planned flags"))).not.toMatch(/^\| S18 \|/m);
+    expect(ledger).toContain("As of **S18**");
+    expect(ledger).not.toContain("As of **S17**");
   });
 });
