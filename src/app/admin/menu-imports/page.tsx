@@ -12,6 +12,7 @@ import { countTestData } from "@/lib/pos/import-service";
 import { formatDateTime } from "@/lib/pos/format";
 import { describeIntakeVersion } from "@/lib/pos/intake-version-copy-core";
 import { flagDraftFreshness, FRESHNESS_CHIP } from "@/lib/pos/publish-guard-core";
+import { QUEUE_EMPTY_COPY } from "@/lib/pos/publish-queue-core";
 import type { PosImportStatus, MenuVersionStatus } from "@/lib/pos/db-types";
 import { withBackParam } from "@/lib/admin/back-link-core";
 // S00: shared post-approve story (Menu Imports is the one-time Cultivera door).
@@ -181,7 +182,7 @@ export default async function MenuImportsPage({
           </p>
           {intakeStaged.length === 0 ? (
             <p className="mt-3 text-xs text-white/40">
-              Nothing waiting &mdash; every menu update from receiving has published automatically.
+              {QUEUE_EMPTY_COPY}
             </p>
           ) : (
             <div className="mt-4 divide-y divide-white/10 overflow-hidden rounded-lg border border-white/10">

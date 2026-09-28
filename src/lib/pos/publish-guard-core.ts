@@ -3,11 +3,11 @@
  *
  * SLICE 76 — plain-English publish safety for the menu.
  *
- * The live menu is a SNAPSHOT: the `publish_menu_version` RPC atomically
- * swaps the whole published version for the draft you publish. Publishing an
- * OLDER draft therefore silently REMOVES every product added since it was
- * staged — exactly the trap the owner hit (published an 18-item draft, then a
- * stale 3-item draft, and the live menu shrank to 3).
+ * The `publish_menu_version` RPC atomically makes the published update the
+ * live menu. Publishing an older update would therefore take off every product
+ * added since it was staged - the trap the owner once hit (an 18-item menu
+ * shrank to 3). S16 keeps every guard and rewrites the words: the normal path
+ * reads as normal, and a removal is a named list plus a tick box.
  *
  * This PURE module (no DB, no React, no server-only) turns raw diff numbers
  * and diagnostics into owner-readable language:
@@ -26,9 +26,78 @@
 
 import { approvedFromPhrase, draftsHref, isUuid } from "@/lib/catalog/draft-deep-link-core";
 
-/** One sentence, used verbatim on every publish surface so the story never drifts. */
+/**
+ * S16 (bible S16.4, F-056): the one sentence at the top of the Publish page.
+ * The old copy explained snapshot theory ("REPLACES the whole menu ... never
+ * adds to it") and so framed the NORMAL path - approving a product, which
+ * publishes itself and keeps everything live - as a threat. The page now only
+ * lists the updates that need a person, so that is what it says.
+ */
 export const PUBLISH_SEMANTICS_COPY =
-  "Your live menu is a snapshot. Publishing a draft REPLACES the whole menu with that draft — it never adds to it. Always publish the NEWEST draft; older drafts are missing products added after them.";
+  "Products you approve go live by themselves. This page lists the few updates that need a human first.";
+
+/**
+ * S16: "How publishing works", collapsed by default on the Publish page. Every
+ * sentence is something the code does today:
+ *   1. approve with a price -> auto-publish (intake-menu-staging.ts, S00 copy),
+ *   2. an update waits only when held for a fact or the auto-publish failed
+ *      (publish_outcome states, S01),
+ *   3. publishing makes the update the live menu and archives the old one
+ *      (publish_menu_version),
+ *   4. older waiting updates are archived automatically (S15 rule),
+ *   5. anything that would come off needs a tick (actions.ts removal gate).
+ */
+export const PUBLISH_HELP_STEPS: readonly string[] = [
+  "When you approve a received product with a price, it goes live on the website and the register by itself. No Publish click.",
+  "An update only waits here when a product fact needs a second look, or the automatic publish didn't finish. Each one says why and has one button.",
+  "Publishing makes that update your live menu. The menu it replaces is archived, never deleted.",
+  "When a newer menu goes live, older waiting updates are archived automatically, so you never have to pick between them.",
+  "If publishing would take any product off the menu, the page names them and asks you to tick a box first.",
+  "POS-export uploads and import history stay under Menu Imports (Settings).",
+];
+
+/** S16: the short note above every Publish button (was "replaces the WHOLE live menu"). */
+export const PUBLISH_SWAP_NOTE =
+  "Publishing makes this update your live menu and refreshes the public site. The menu it replaces is archived, not deleted.";
+
+/** How many product names a verdict spells out before summarising the rest. */
+export const REMOVED_NAMES_MAX = 5;
+
+function products(n: number): string {
+  return `${n} product${n === 1 ? "" : "s"}`;
+}
+
+/** "A, B and 3 more" - names are trimmed, blanks dropped, never invented. */
+export function nameList(names: readonly string[] | null | undefined, total: number): string | null {
+  const clean = (names ?? []).map((x) => (typeof x === "string" ? x.trim() : "")).filter((x) => x.length > 0);
+  if (clean.length === 0) return null;
+  const shown = clean.slice(0, REMOVED_NAMES_MAX);
+  const rest = Math.max(0, Math.max(total, clean.length) - shown.length);
+  if (rest > 0) return `${shown.join(", ")} and ${rest} more`;
+  if (shown.length === 1) return shown[0];
+  return `${shown.slice(0, -1).join(", ")} and ${shown[shown.length - 1]}`;
+}
+
+/** "a", "a and b", "a, b and c". */
+function joinAnd(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/** S16: title of the list of products that would come off (was "Will be REMOVED"). */
+export function removalListTitle(n: number): string {
+  return `Would come off the live menu (${n})`;
+}
+
+/** S16: the confirmation checkbox label. The server gate is unchanged. */
+export function removalConfirmCopy(n: number): string {
+  return `I understand ${products(n)} will come off the live menu (listed above), and that's what I want.`;
+}
+
+/** S16: the message when Publish is pressed without ticking the box. */
+export function removalRefusedCopy(n: number): string {
+  return `Not published yet: ${products(n)} would come off the live menu. Tick the box if that's what you want. Otherwise nothing changes and the live menu stays as it is.`;
+}
 
 export type PublishVerdictLevel = "safe" | "caution" | "danger";
 
@@ -41,7 +110,7 @@ export type PublishVerdict = {
   addedCount: number;
   removedCount: number;
   priceChangedCount: number;
-  /** True whenever publishing would remove products — the server refuses without an explicit confirmation. */
+  /** True whenever publishing would remove products - the server refuses without an explicit confirmation. */
   requiresRemovalConfirm: boolean;
 };
 
@@ -52,20 +121,26 @@ export type PublishVerdictInput = {
   unchanged: number;
   /** Is there a published menu at all? */
   hasLiveMenu: boolean;
-  /** ISO timestamps used to detect "this draft is OLDER than the live menu". */
+  /** ISO timestamps used to detect "this update is older than the live menu". */
   stagedCreatedAt?: string | null;
   publishedCreatedAt?: string | null;
+  /** S16: names of the products that would come off (from the same diff). */
+  removedNames?: readonly string[] | null;
 };
 
 function olderThanLive(input: PublishVerdictInput): boolean {
   if (!input.stagedCreatedAt || !input.publishedCreatedAt) return false;
   const staged = Date.parse(input.stagedCreatedAt);
   const published = Date.parse(input.publishedCreatedAt);
-  if (Number.isNaN(staged) || Number.isNaN(published)) return false;
+  // An unparseable time is NaN, and NaN < x is false: never "older".
   return staged < published;
 }
 
-/** Turn diff counts into a plain-English safety verdict for one draft. */
+/**
+ * Turn diff counts into a plain-English verdict for one update (S16 copy).
+ * Leads with what stays and what is added; a removal count appears only when
+ * it is above zero, with the names and the reason.
+ */
 export function buildPublishVerdict(input: PublishVerdictInput): PublishVerdict {
   const base = {
     addedCount: input.added,
@@ -73,43 +148,51 @@ export function buildPublishVerdict(input: PublishVerdictInput): PublishVerdict 
     priceChangedCount: input.priceChanged,
     requiresRemovalConfirm: input.removed > 0,
   };
+  // Products that stay on the menu = in both versions (same or new price).
+  const kept = input.unchanged + input.priceChanged;
+  const keptLive = `${products(kept)} that ${kept === 1 ? "is" : "are"} live now`;
 
   if (!input.hasLiveMenu) {
     return {
       ...base,
       level: "safe",
-      headline: "Safe to publish — this becomes your first live menu.",
-      detail: `There is no live menu yet, so nothing can be removed. Publishing puts ${input.added} product(s) on your public menu.`,
+      headline: "Safe to publish \u2014 this becomes your first live menu.",
+      detail: `There is no live menu yet, so nothing comes off. Publishing puts ${products(input.added)} on your public menu.`,
     };
   }
 
   if (input.removed === 0) {
     const changes: string[] = [];
-    if (input.added > 0) changes.push(`adds ${input.added} product(s)`);
-    if (input.priceChanged > 0) changes.push(`updates ${input.priceChanged} price(s)`);
-    if (changes.length === 0) changes.push("makes no product changes");
-    return {
-      ...base,
-      level: "safe",
-      headline: "Safe to publish — nothing gets removed.",
-      detail: `Publishing ${changes.join(" and ")} and keeps all ${input.unchanged} other live product(s) exactly as they are.`,
-    };
+    if (input.added > 0) changes.push(`Adds ${products(input.added)}`);
+    if (input.priceChanged > 0) changes.push(`${changes.length ? "updates" : "Updates"} ${input.priceChanged} price${input.priceChanged === 1 ? "" : "s"}`);
+    const detail =
+      changes.length === 0
+        ? `No product changes. Keeps all ${products(kept)} exactly as they are.`
+        : `${changes.join(" and ")}. Keeps all ${keptLive}.`;
+    return { ...base, level: "safe", headline: "Safe to publish \u2014 nothing comes off.", detail };
   }
+
+  const names = nameList(input.removedNames, input.removed);
+  const offList = names ? `: ${names}` : "";
 
   if (olderThanLive(input)) {
     return {
       ...base,
       level: "danger",
-      headline: `Careful — this draft is OLDER than your live menu and would REMOVE ${input.removed} product(s).`,
-      detail: `This draft was staged BEFORE the menu that's live right now, so it doesn't know about the newer products. Publishing it would take ${input.removed} product(s) OFF your public menu. Almost always you want the newest draft instead.`,
+      headline: `This update is older than your live menu, so it doesn't include ${products(input.removed)} that ${input.removed === 1 ? "is" : "are"} live now.`,
+      detail: `Publishing it would take them off the menu${offList}. You rarely want this: the live menu is newer. If a newer update is waiting, publish that one instead.`,
     };
   }
 
   return {
     ...base,
     level: "caution",
-    headline: `Heads up — publishing removes ${input.removed} product(s) from the live menu.`,
-    detail: `This draft doesn't include ${input.removed} product(s) that are live right now, so publishing takes them off the public menu. If that's intentional (sold out, discontinued), confirm below; if not, pick a newer draft.`,
+    headline: `Publishing ${joinAnd([
+      `keeps ${products(kept)}`,
+      `adds ${input.added}`,
+      ...(input.priceChanged > 0 ? [`updates ${input.priceChanged} price${input.priceChanged === 1 ? "" : "s"}`] : []),
+    ])}.`,
+    detail: `${products(input.removed)} would come off the menu${offList}. Continue only if that's intended (sold out or discontinued).`,
   };
 }
 
@@ -481,51 +564,106 @@ export function __runPublishGuardTests(): { passed: number } {
   });
   ok(first.level === "safe", "first publish is safe");
   ok(!first.requiresRemovalConfirm, "first publish needs no confirm");
-  ok(first.detail.includes("18"), "first publish counts the adds");
+  ok(first.detail === "There is no live menu yet, so nothing comes off. Publishing puts 18 products on your public menu.", "first publish copy");
 
-  // Pure adds: safe.
+  // Pure adds: safe, leads with adds (S16.2 "Adds 3 products, keeps all 412").
   const adds = buildPublishVerdict({
-    added: 3, removed: 0, priceChanged: 2, unchanged: 15, hasLiveMenu: true,
+    added: 3, removed: 0, priceChanged: 2, unchanged: 410, hasLiveMenu: true,
   });
   ok(adds.level === "safe", "adds-only is safe");
   ok(!adds.requiresRemovalConfirm, "adds-only needs no confirm");
-  ok(adds.detail.includes("adds 3") && adds.detail.includes("updates 2"), "adds-only detail lists both changes");
+  ok(adds.headline === "Safe to publish \u2014 nothing comes off.", "safe headline");
+  ok(adds.detail === "Adds 3 products and updates 2 prices. Keeps all 412 products that are live now.", "adds lead, kept = unchanged + repriced");
+  const one = buildPublishVerdict({ added: 1, removed: 0, priceChanged: 1, unchanged: 0, hasLiveMenu: true });
+  ok(one.detail === "Adds 1 product and updates 1 price. Keeps all 1 product that is live now.", "singulars");
 
   // No changes at all: still safe, says so.
   const same = buildPublishVerdict({
     added: 0, removed: 0, priceChanged: 0, unchanged: 18, hasLiveMenu: true,
   });
-  ok(same.level === "safe" && same.detail.includes("no product changes"), "no-op publish reads as no changes");
+  ok(same.level === "safe" && same.detail === "No product changes. Keeps all 18 products exactly as they are.", "no-op publish reads as no changes");
+  const priceOnly = buildPublishVerdict({ added: 0, removed: 0, priceChanged: 2, unchanged: 3, hasLiveMenu: true });
+  ok(priceOnly.detail === "Updates 2 prices. Keeps all 5 products that are live now.", "price-only never says Adds 0");
+  const addOnly = buildPublishVerdict({ added: 2, removed: 0, priceChanged: 0, unchanged: 5, hasLiveMenu: true });
+  ok(addOnly.detail === "Adds 2 products. Keeps all 5 products that are live now.", "adds only");
 
-  // Removals + staged OLDER than live = the owner's exact trap → danger.
+  // Removals + staged older than live = the owner's exact trap -> danger (S16.4 row 2).
   const trap = buildPublishVerdict({
     added: 0, removed: 15, priceChanged: 0, unchanged: 3, hasLiveMenu: true,
     stagedCreatedAt: "2026-02-01T10:00:00Z",
     publishedCreatedAt: "2026-02-02T10:00:00Z",
+    removedNames: ["Alpha", "Bravo"],
   });
-  ok(trap.level === "danger", "older draft with removals is DANGER");
+  ok(trap.level === "danger", "older update with removals is danger");
   ok(trap.requiresRemovalConfirm, "danger requires confirm");
-  ok(trap.headline.includes("OLDER") && trap.headline.includes("15"), "danger headline names the count");
+  ok(trap.headline === "This update is older than your live menu, so it doesn't include 15 products that are live now.", "danger headline (bible S16.4)");
+  ok(trap.detail.startsWith("Publishing it would take them off the menu: Alpha, Bravo and 13 more."), "danger names them, then counts the rest");
+  const trap1 = buildPublishVerdict({
+    added: 0, removed: 1, priceChanged: 0, unchanged: 3, hasLiveMenu: true,
+    stagedCreatedAt: "2026-02-01T10:00:00Z", publishedCreatedAt: "2026-02-02T10:00:00Z",
+  });
+  ok(trap1.headline.endsWith("doesn't include 1 product that is live now."), "danger singular");
+  ok(trap1.detail.startsWith("Publishing it would take them off the menu. "), "no names -> no invented list");
 
-  // Removals but staged is newer: caution (maybe intentional).
+  // Removals but newer: caution, leads with keeps + adds (S16.4 row 3).
   const newer = buildPublishVerdict({
-    added: 1, removed: 2, priceChanged: 0, unchanged: 16, hasLiveMenu: true,
+    added: 3, removed: 2, priceChanged: 0, unchanged: 412, hasLiveMenu: true,
     stagedCreatedAt: "2026-02-03T10:00:00Z",
     publishedCreatedAt: "2026-02-02T10:00:00Z",
+    removedNames: ["Gelato 1g", "  ", "OG 3.5g"],
   });
-  ok(newer.level === "caution", "newer draft with removals is caution");
+  ok(newer.level === "caution", "newer update with removals is caution");
   ok(newer.requiresRemovalConfirm, "caution requires confirm");
+  ok(newer.headline === "Publishing keeps 412 products and adds 3.", "caution leads with keeps + adds");
+  const newerP = buildPublishVerdict({
+    added: 0, removed: 1, priceChanged: 2, unchanged: 10, hasLiveMenu: true,
+    stagedCreatedAt: "2026-02-03T10:00:00Z", publishedCreatedAt: "2026-02-02T10:00:00Z",
+  });
+  ok(newerP.headline === "Publishing keeps 12 products, adds 0 and updates 2 prices.", "caution with prices joins cleanly");
+  ok(newerP.detail.startsWith("1 product would come off the menu. "), "caution singular, no names");
+  ok(newer.detail === "2 products would come off the menu: Gelato 1g and OG 3.5g. Continue only if that's intended (sold out or discontinued).", "caution names what comes off");
 
   // Missing timestamps degrade to caution, never crash.
   const noTs = buildPublishVerdict({
     added: 0, removed: 1, priceChanged: 0, unchanged: 5, hasLiveMenu: true,
   });
-  ok(noTs.level === "caution", "missing timestamps → caution not danger");
+  ok(noTs.level === "caution", "missing timestamps -> caution not danger");
   const badTs = buildPublishVerdict({
     added: 0, removed: 1, priceChanged: 0, unchanged: 5, hasLiveMenu: true,
     stagedCreatedAt: "garbage", publishedCreatedAt: "2026-02-02T10:00:00Z",
   });
-  ok(badTs.level === "caution", "unparseable timestamps → caution not crash");
+  ok(badTs.level === "caution", "unparseable timestamps -> caution not crash");
+  const tieTs = buildPublishVerdict({
+    added: 0, removed: 1, priceChanged: 0, unchanged: 5, hasLiveMenu: true,
+    stagedCreatedAt: "2026-02-02T10:00:00Z", publishedCreatedAt: "2026-02-02T10:00:00Z",
+  });
+  ok(tieTs.level === "caution", "same timestamp is not older");
+
+  // nameList.
+  ok(nameList(null, 3) === null && nameList([" ", ""], 2) === null, "no usable names -> null");
+  ok(nameList(["A"], 1) === "A", "one name");
+  ok(nameList(["A", "B"], 2) === "A and B", "two names");
+  ok(nameList(["A", "B", "C"], 3) === "A, B and C", "three names");
+  ok(nameList(["A", "B", "C", "D", "E", "F", "G"], 7) === "A, B, C, D, E and 2 more", "capped at five");
+  ok(nameList(["A"], 4) === "A and 3 more", "total beyond the names given");
+  ok(REMOVED_NAMES_MAX === 5, "five names max");
+
+  // Removal copy used by the pages and the server action.
+  ok(removalListTitle(4) === "Would come off the live menu (4)", "list title");
+  ok(removalConfirmCopy(1) === "I understand 1 product will come off the live menu (listed above), and that's what I want.", "confirm singular");
+  ok(removalConfirmCopy(3).startsWith("I understand 3 products will come off"), "confirm plural");
+  ok(removalRefusedCopy(2).startsWith("Not published yet: 2 products would come off the live menu."), "refusal copy");
+
+  // S16.6: no capitalised REMOVE, no "replaces the WHOLE menu", anywhere in the copy.
+  const allCopy = [
+    PUBLISH_SEMANTICS_COPY, PUBLISH_SWAP_NOTE, ...PUBLISH_HELP_STEPS,
+    first.headline, first.detail, adds.headline, adds.detail, same.detail,
+    trap.headline, trap.detail, newer.headline, newer.detail,
+    removalListTitle(2), removalConfirmCopy(2), removalRefusedCopy(2),
+  ].join("\n");
+  ok(!/REMOVE/.test(allCopy), "no capitalised REMOVE");
+  ok(!/replaces the whole/i.test(allCopy), "no 'replaces the whole menu'");
+  ok(!/OLDER|NEWEST|WHOLE|REPLACES/.test(allCopy), "no shouting");
 
   // flagDraftFreshness (S15): by item SET, not timestamp.
   const LIVE = "2026-02-02T00:00:00Z";
@@ -657,9 +795,9 @@ export function __runPublishGuardTests(): { passed: number } {
   ok(unknown.meaning === "the raw message", "unknown code keeps the raw message");
   ok(unknown.fixHref === null, "unknown code invents no link");
 
-  // Shared copy pins the swap semantics in one place.
-  ok(PUBLISH_SEMANTICS_COPY.includes("REPLACES the whole menu"), "semantics copy states the swap");
-  ok(PUBLISH_SEMANTICS_COPY.includes("NEWEST draft"), "semantics copy says publish the newest");
+  // S16.4: the shared sentence, verbatim from the bible.
+  ok(PUBLISH_SEMANTICS_COPY === "Products you approve go live by themselves. This page lists the few updates that need a human first.", "semantics copy is the bible's");
+  ok(PUBLISH_HELP_STEPS.length === 6, "six help steps");
 
   return { passed };
 }

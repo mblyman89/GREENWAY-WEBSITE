@@ -24,7 +24,13 @@ import {
   posDiagnosticToFactReviewDiagnostic,
 } from "@/lib/pos/fact-review-core";
 import { evaluateCommitGate } from "@/lib/pos/import-commit-core";
-import { buildPublishVerdict, type PublishVerdict } from "@/lib/pos/publish-guard-core";
+import {
+  buildPublishVerdict,
+  PUBLISH_SWAP_NOTE,
+  removalConfirmCopy,
+  removalListTitle,
+  type PublishVerdict,
+} from "@/lib/pos/publish-guard-core";
 import { publishVersion, backfillLotsAction } from "../actions";
 
 const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
@@ -139,6 +145,7 @@ export default async function ImportReviewPage({
           hasLiveMenu: Boolean(published),
           stagedCreatedAt: version.created_at,
           publishedCreatedAt: published?.created_at ?? null,
+          removedNames: diff.removed.map((r) => r.name),
         })
       : null;
 
@@ -284,7 +291,7 @@ export default async function ImportReviewPage({
             {diff.removed.length > 0 && (
               <details className="mt-3">
                 <summary className="cursor-pointer text-xs font-semibold text-red-400">
-                  Removed products ({diff.removed.length})
+                  {removalListTitle(diff.removed.length)}
                 </summary>
                 <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-white/10">
                   {diff.removed.slice(0, 200).map((d) => (
@@ -482,17 +489,11 @@ export default async function ImportReviewPage({
               <input type="hidden" name="versionId" value={version?.id ?? ""} />
               <input type="hidden" name="importId" value={imp.id} />
               <p className="mb-1 text-xs text-[var(--admin-accent)]">{gate.message}</p>
-              <p className="mb-3 text-xs text-white/50">
-                Publishing replaces the WHOLE live menu with this version and refreshes the public
-                site. The previous version is archived (not deleted).
-              </p>
+              <p className="mb-3 text-xs text-white/50">{PUBLISH_SWAP_NOTE}</p>
               {verdict?.requiresRemovalConfirm && (
                 <label className="mb-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2.5 text-xs text-red-300">
                   <input type="checkbox" name="confirm_removals" value="yes" className="mt-0.5" />
-                  <span>
-                    I understand publishing this version will <strong>REMOVE {verdict.removedCount} product(s)</strong>{" "}
-                    from the live menu (see the &ldquo;Removed products&rdquo; list above), and that&apos;s what I want.
-                  </span>
+                  <span>{removalConfirmCopy(verdict.removedCount)}</span>
                 </label>
               )}
               <Button type="submit" disabled={!version} variant="confirm">

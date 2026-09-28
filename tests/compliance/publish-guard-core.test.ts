@@ -34,8 +34,10 @@ describe("publish-guard-core (SLICE 76)", () => {
     });
     expect(v.level).toBe("danger");
     expect(v.requiresRemovalConfirm).toBe(true);
-    expect(v.headline).toContain("OLDER");
-    expect(v.headline).toContain("15");
+    // S16 (bible S16.4): the trap is named in plain words, not capitals.
+    expect(v.headline).toContain("older than your live menu");
+    expect(v.headline).toContain("15 products");
+    expect(v.detail).toContain("take them off the menu");
   });
 
   it("adds-only publishes are SAFE and need no confirmation", () => {
@@ -95,8 +97,10 @@ describe("publish-guard-core (SLICE 76)", () => {
     expect(x.fixHref).toBeNull();
   });
 
-  it("the shared semantics copy states the snapshot swap in plain English", () => {
-    expect(PUBLISH_SEMANTICS_COPY).toContain("REPLACES the whole menu");
-    expect(PUBLISH_SEMANTICS_COPY).toContain("NEWEST draft");
+  it("the shared semantics copy describes the normal path, not snapshot theory (S16.4)", () => {
+    expect(PUBLISH_SEMANTICS_COPY).toBe(
+      "Products you approve go live by themselves. This page lists the few updates that need a human first.",
+    );
+    expect(PUBLISH_SEMANTICS_COPY).not.toMatch(/REPLACES|WHOLE|NEWEST|REMOVE/);
   });
 });
