@@ -1237,10 +1237,25 @@ describe("the migration list is ordered the way the database will see it", () =>
     // round-trip, history surviving a deleted draft, EXPLAIN using
     // idx_pfp_identity with no sort, in a rolled-back transaction) passed and
     // failed on each of 11 deliberate schema sabotages.
-    expect(listed[listed.length - 1]).toMatch(/^0235_/);
+    //
+    // S15 added 0236_publish_archive_rule.sql (create or replace of
+    // publish_menu_version with ONE archival rule for both origins - every
+    // staged version created before the published one is archived with
+    // summary_json.archived_reason - plus a not-found guard, and
+    // clean_slate_test_data restoring only a version that really was live;
+    // both narrowed to service_role). Verified in the build sandbox against
+    // Postgres 15 bootstrapped exactly as CI does: all 236 migrations executed
+    // via scripts/compliance/verify-migrations-execute.ts, 0236 applied twice
+    // cleanly, and the committed scenario script
+    // scripts/recon/publish-archive-rule-pg-check.sql (mixed-origin sequence,
+    // tie kept, unknown id raises P0002, clean-slate restore, grants, the
+    // rollback file proving the old bug, re-apply twice, in a rolled-back
+    // transaction) passed and failed on each of 12 deliberate sabotages.
+    expect(listed[listed.length - 1]).toMatch(/^0236_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
-    // regex such as /^023[45]_/ still passed while 0235 was last).
-    expect(listed[listed.length - 1]).toBe("0235_attached_facts.sql");
+    // regex such as /^023[56]_/ still passed while the file was last).
+    expect(listed[listed.length - 1]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 2]).toBe("0235_attached_facts.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

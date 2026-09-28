@@ -12,6 +12,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 // page proves the end of the data.
 import { pagedAll, pagedAllChecked, chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import type { ReadCompletenessVerdict } from "@/lib/supabase/read-completeness-core";
+import {
+  mergeArchivedSummary,
+  planSupersededArchive,
+  type ArchiveCandidate,
+} from "@/lib/pos/publish-archive-rule-core";
 import type {
   MenuItemRow,
   MenuVariantRow,
@@ -492,9 +497,21 @@ type VersionIndexRow = {
   hidden: boolean;
 };
 
-async function versionItemIndex(versionId: string) {
+type VersionIndex = Map<
+  string,
+  { name: string; brand: string; category: string; price: number; hidden: boolean }
+>;
+
+/**
+ * S15: the index plus an honest completeness flag (pagedAllChecked). A failed
+ * or ceiling-stopped read is reported, so a freshness chip can say "couldn't
+ * compare" instead of treating a half-read menu as "removes nothing".
+ */
+async function versionItemIndexChecked(
+  versionId: string,
+): Promise<{ index: VersionIndex; complete: boolean }> {
   const admin = createSupabaseAdminClient();
-  const data = await pagedAll<VersionIndexRow>(async (from, to) => {
+  const { rows, verdict } = await pagedAllChecked<VersionIndexRow>(async (from, to) => {
     const { data: page, error } = await admin
       .from("menu_items")
       .select("source_item_id, name, brand_name, category, price_minor_units, hidden")
@@ -503,16 +520,13 @@ async function versionItemIndex(versionId: string) {
       .range(from, to);
     if (error) {
       console.error("[menu-version] versionItemIndex error:", error.message);
-      return [];
+      return { rows: [], ok: false };
     }
-    return (page as VersionIndexRow[] | null) ?? [];
+    return { rows: (page as VersionIndexRow[] | null) ?? [], ok: true };
   });
-  const map = new Map<
-    string,
-    { name: string; brand: string; category: string; price: number; hidden: boolean }
-  >();
-  for (const r of data) {
-    map.set(r.source_item_id, {
+  const index: VersionIndex = new Map();
+  for (const r of rows) {
+    index.set(r.source_item_id, {
       name: r.name,
       brand: r.brand_name,
       category: r.category,
@@ -520,43 +534,100 @@ async function versionItemIndex(versionId: string) {
       hidden: r.hidden,
     });
   }
-  return map;
+  return { index, complete: verdict.complete };
+}
+
+async function versionItemIndex(versionId: string): Promise<VersionIndex> {
+  return (await versionItemIndexChecked(versionId)).index;
 }
 
 /**
- * SLICE 76 housekeeping — after a MANUAL publish succeeds, archive
- * intake-origin staged drafts that are OLDER than the version just published.
- * Each was built from an older live snapshot, so publishing one later would
- * silently DROP newer products (the exact trap the owner hit). Newer drafts
- * are left alone. Best-effort: failures log and never break the publish.
+ * S15 - the ONE archival rule, app side (bible S15, F-057/F-058/F-042).
+ *
+ * After ANY publish (the Menu Imports button AND the automatic publish after
+ * an approval), every staged version of ANY origin created before the
+ * published one is archived, and its summary_json records
+ * archived_reason = "superseded_by_publish:<id>" + archived_at. The rule is
+ * defined once in publish-archive-rule-core.ts and is the same rule that
+ * migration 0236 puts in the publish_menu_version RPC.
+ *
+ * Before 0236 is applied this is what makes the rule true. After 0236 the
+ * RPC has already archived those rows, so the read finds none and this does
+ * ZERO writes. Replaces the old Menu Imports helper (intake-only, older) and the
+ * intake-menu-staging sweep (intake-only, any age), which disagreed.
+ *
+ * Reads name their columns. Each write is guarded by status = staged so a
+ * version published concurrently is never archived. Best-effort: failures
+ * log and never break the publish (the publish already happened).
+ *
+ * @param published  the version that just went live. Pass created_at when the
+ *                   caller already has it (the automatic publish does) to save
+ *                   the lookup read.
+ * @returns how many versions were archived (0 on any failure).
  */
-export async function archiveStaleIntakeDrafts(publishedVersionId: string): Promise<number> {
+export async function archiveSupersededStaged(
+  published: { id: string; created_at?: string | null },
+  nowIso: string = new Date().toISOString(),
+): Promise<number> {
   try {
     const admin = createSupabaseAdminClient();
-    const { data: pub } = await admin
+    let createdAt = published.created_at ?? null;
+    if (!createdAt) {
+      const { data: pub, error: pubErr } = await admin
+        .from("menu_versions")
+        .select("id, created_at")
+        .eq("id", published.id)
+        .maybeSingle();
+      // On an error data is null too, so both cases stop here: no sweep.
+      if (pubErr) console.error("[menu-version] archiveSupersededStaged lookup error:", pubErr.message);
+      if (!pub) return 0;
+      createdAt = (pub as { created_at: string }).created_at;
+    }
+    const { data: rows, error } = await admin
       .from("menu_versions")
-      .select("id, created_at")
-      .eq("id", publishedVersionId)
-      .single();
-    if (!pub) return 0;
-    const { data, error } = await admin
-      .from("menu_versions")
-      .update({ status: "archived", updated_at: new Date().toISOString() })
-      .is("import_id", null)
+      .select("id, status, created_at, summary_json")
       .eq("status", "staged")
-      .neq("id", publishedVersionId)
-      .lt("created_at", (pub as { created_at: string }).created_at)
-      .select("id");
+      .neq("id", published.id)
+      .lt("created_at", createdAt)
+      .order("created_at", { ascending: true })
+      .limit(ARCHIVE_SWEEP_MAX);
     if (error) {
-      console.error("[menu-version] archiveStaleIntakeDrafts error:", error.message);
+      console.error("[menu-version] archiveSupersededStaged read error:", error.message);
       return 0;
     }
-    return (data ?? []).length;
+    const candidates = (rows as Array<ArchiveCandidate & { summary_json: unknown }> | null) ?? [];
+    const plan = new Set(planSupersededArchive({ id: published.id, created_at: createdAt }, candidates));
+    let archived = 0;
+    for (const row of candidates) {
+      if (!plan.has(row.id)) continue;
+      const { data: done, error: uErr } = await admin
+        .from("menu_versions")
+        .update({
+          status: "archived",
+          updated_at: nowIso,
+          summary_json: mergeArchivedSummary(row.summary_json, published.id, nowIso),
+        })
+        .eq("id", row.id)
+        .eq("status", "staged")
+        .select("id");
+      if (uErr) {
+        console.error("[menu-version] archiveSupersededStaged write error:", uErr.message);
+        continue;
+      }
+      archived += (done ?? []).length;
+    }
+    return archived;
   } catch (err) {
-    console.error("[menu-version] archiveStaleIntakeDrafts exception:", err);
+    console.error("[menu-version] archiveSupersededStaged exception:", err);
     return 0;
   }
 }
+
+/**
+ * Memory ceiling for one sweep. At 15-20 manifests a week (owner, Round 6)
+ * the real number is 0-3; a larger backlog is swept over the next publishes.
+ */
+export const ARCHIVE_SWEEP_MAX = 200;
 
 export type MenuDiffEntry = {
   sourceId: string;
@@ -591,7 +662,10 @@ export async function diffVersions(stagedId: string, baseId: string | null): Pro
 async function diffVersionsInner(stagedId: string, baseId: string | null): Promise<MenuDiff> {
   const staged = await versionItemIndex(stagedId);
   const base = baseId ? await versionItemIndex(baseId) : new Map<string, never>();
+  return computeMenuDiff(staged, base);
+}
 
+function computeMenuDiff(staged: VersionIndex, base: VersionIndex): MenuDiff {
   const added: MenuDiffEntry[] = [];
   const removed: MenuDiffEntry[] = [];
   const priceChanged: MenuDiffEntry[] = [];
@@ -625,6 +699,45 @@ async function diffVersionsInner(stagedId: string, baseId: string | null): Promi
   priceChanged.sort((a, z) => a.name.localeCompare(z.name));
 
   return { added, removed, priceChanged, unchangedCount };
+}
+
+/**
+ * S15: diff several waiting drafts against ONE base, reading the base index
+ * once (the Publish page used to re-read the live menu for every row). Each
+ * result says whether BOTH sides were read in full. When a read failed the
+ * diff is still returned for display, but `complete` is false so the caller
+ * can refuse to call the draft safe. Never throws.
+ */
+export async function diffDraftsAgainstBase(
+  stagedIds: readonly string[],
+  baseId: string | null,
+): Promise<Map<string, { diff: MenuDiff; complete: boolean }>> {
+  const out = new Map<string, { diff: MenuDiff; complete: boolean }>();
+  const empty = (): MenuDiff => ({ added: [], removed: [], priceChanged: [], unchangedCount: 0 });
+  if (stagedIds.length === 0) return out;
+  let base: { index: VersionIndex; complete: boolean };
+  try {
+    base = baseId ? await versionItemIndexChecked(baseId) : { index: new Map(), complete: true };
+  } catch (err) {
+    console.error("[menu-version] diffDraftsAgainstBase base exception:", err);
+    for (const id of stagedIds) out.set(id, { diff: empty(), complete: false });
+    return out;
+  }
+  // Same parallelism the Publish page already had (one read per row, the
+  // caller caps rows at 10), minus the repeated base read.
+  const results = await Promise.all(
+    [...new Set(stagedIds)].map(async (id): Promise<[string, { diff: MenuDiff; complete: boolean }]> => {
+      try {
+        const staged = await versionItemIndexChecked(id);
+        return [id, { diff: computeMenuDiff(staged.index, base.index), complete: staged.complete && base.complete }];
+      } catch (err) {
+        console.error("[menu-version] diffDraftsAgainstBase exception:", err);
+        return [id, { diff: empty(), complete: false }];
+      }
+    }),
+  );
+  for (const [id, r] of results) out.set(id, r);
+  return out;
 }
 
 /**

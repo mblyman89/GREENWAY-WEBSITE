@@ -305,10 +305,12 @@ describe("S08 migration 0235 - re-runnable (spec test) and ordered", () => {
     expect(CODE.indexOf("$precheck$")).toBeLessThan(CODE.indexOf("alter table"));
   });
 
-  it("is the last migration, numbered right after 0234", () => {
+  it("is numbered right after 0234 (S15 0236 now follows it)", () => {
     const files = readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();
-    expect(files.at(-1)).toBe(ATTACHED_FACTS_MIGRATION);
-    expect(files.at(-2)).toBe("0234_product_identity.sql");
+    const at = files.indexOf(ATTACHED_FACTS_MIGRATION);
+    expect(at).toBeGreaterThan(0);
+    expect(files[at - 1]).toBe("0234_product_identity.sql");
+    expect(files[at + 1]).toBe("0236_publish_archive_rule.sql");
   });
 });
 

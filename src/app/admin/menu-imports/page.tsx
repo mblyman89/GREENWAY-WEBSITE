@@ -11,7 +11,7 @@ import { listImports, listVersions, getPublishedVersion, listIntakeStagedVersion
 import { countTestData } from "@/lib/pos/import-service";
 import { formatDateTime } from "@/lib/pos/format";
 import { describeIntakeVersion } from "@/lib/pos/intake-version-copy-core";
-import { flagOutdatedDrafts } from "@/lib/pos/publish-guard-core";
+import { flagDraftFreshness, FRESHNESS_CHIP } from "@/lib/pos/publish-guard-core";
 import type { PosImportStatus, MenuVersionStatus } from "@/lib/pos/db-types";
 import { withBackParam } from "@/lib/admin/back-link-core";
 // S00: shared post-approve story (Menu Imports is the one-time Cultivera door).
@@ -176,8 +176,8 @@ export default async function MenuImportsPage({
             <Link href="/admin/publish" className="text-[var(--admin-accent)] hover:underline">
               Publish command center
             </Link>{" "}
-            &mdash; it marks which draft is the LATEST (each draft is a full menu snapshot; publishing
-            an older one removes newer products).
+            &mdash; it compares each draft with the live menu and marks the one that keeps everything.
+            Drafts created before the live menu are archived automatically.
           </p>
           {intakeStaged.length === 0 ? (
             <p className="mt-3 text-xs text-white/40">
@@ -185,7 +185,13 @@ export default async function MenuImportsPage({
             </p>
           ) : (
             <div className="mt-4 divide-y divide-white/10 overflow-hidden rounded-lg border border-white/10">
-              {flagOutdatedDrafts(intakeStaged).map((v) => {
+              {/* S15: no diff is read on this page (zero extra reads), so the
+                  only fact shown is the time-derived one - superseded. The
+                  item comparison lives on the Publish command center. */}
+              {flagDraftFreshness(intakeStaged, {
+                liveCreatedAt: published?.created_at ?? null,
+                removedById: new Map(),
+              }).map((v) => {
                 // S01: pure, no I/O — reads the summary_json this row carries.
                 const story = describeIntakeVersion(v);
                 return (
@@ -211,16 +217,12 @@ export default async function MenuImportsPage({
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">
-                      {v.freshness === "latest" ? (
-                        <span className="rounded bg-[var(--admin-accent)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-accent)]">
-                          latest
-                        </span>
-                      ) : (
+                      {v.freshness === "superseded" && (
                         <span
-                          className="rounded bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-300"
-                          title="Staged before a newer draft — publishing this would remove newer products"
+                          className="rounded bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-white/50"
+                          title="Created before the live menu. It is archived automatically the next time a menu goes live."
                         >
-                          outdated
+                          {FRESHNESS_CHIP.superseded}
                         </span>
                       )}
                       <span className="rounded bg-[var(--admin-orange)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-orange)]">

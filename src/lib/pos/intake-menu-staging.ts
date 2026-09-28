@@ -21,8 +21,9 @@
  * page uses (atomic swap; archives the previously-published version). On a
  * publish hiccup the STAGED version remains and lands on Menu Imports as the
  * manual fallback — nothing can be silently lost. After a successful publish,
- * stale intake-origin staged siblings (built from an older live snapshot —
- * publishing one would DROP newer products) are archived as housekeeping.
+ * every OLDER staged version of any origin (built from an older live snapshot
+ * — publishing one would DROP newer products) is archived with a reason by
+ * the one S15 rule (archiveSupersededStaged, same rule as migration 0236).
  *
  * BEST-EFFORT: called from finalizeManifestDispositions AFTER lots activate and
  * drafts are seeded, and from approveDraftWithPrice after each approval. Any
@@ -36,6 +37,7 @@ import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
+import { archiveSupersededStaged } from "@/lib/pos/menu-version";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 // SLICE 93: kb > manifest fact > confident name parse - one folded verdict.
 import {
@@ -413,6 +415,7 @@ export async function stageIntakeMenuVersionForManifest(
       actorId,
       manifestId,
       version.summary_json,
+      version.created_at ?? null,
     );
 
     return {
@@ -444,6 +447,7 @@ async function autoPublishIntakeVersion(
   actorId: string | null,
   manifestId: string,
   summaryJson: unknown,
+  createdAt: string | null,
 ): Promise<boolean> {
   const admin = createSupabaseAdminClient();
 
@@ -510,21 +514,14 @@ async function autoPublishIntakeVersion(
     return false;
   }
 
-  // Housekeeping: archive STALE intake-origin staged siblings. Each was built
-  // from an OLDER live snapshot — publishing one later would silently DROP the
-  // products this publish just added, so they must not linger as landmines.
-  // (The RPC only archives staged siblings that belong to a pos_import; for
-  // intake-origin versions import_id is NULL, so we sweep them here.)
-  try {
-    await admin
-      .from("menu_versions")
-      .update({ status: "archived", updated_at: new Date().toISOString() })
-      .is("import_id", null)
-      .eq("status", "staged")
-      .neq("id", versionId);
-  } catch (err) {
-    console.error("[intake-menu-staging] stale staged sweep failed:", err);
-  }
+  // Housekeeping (S15): the ONE archival rule - every staged version of ANY
+  // origin created before this one is superseded and archived with a reason
+  // (publish-archive-rule-core.ts, same rule as migration 0236). Before S15
+  // this swept intake-origin rows of ANY age and never a POS-import row, so a
+  // Cultivera upload left staged sat on the Publish page forever (F-042).
+  // Never throws. After 0236 the RPC has already done it and this writes
+  // nothing.
+  await archiveSupersededStaged({ id: versionId, created_at: createdAt });
 
   // Audit trail — same action name as the manual Menu Imports publish, with
   // the intake origin recorded (recordAudit never throws).

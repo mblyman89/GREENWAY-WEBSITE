@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import {
   __runPublishGuardTests,
   buildPublishVerdict,
-  flagOutdatedDrafts,
+  flagDraftFreshness,
   explainDiagnostic,
   PUBLISH_SEMANTICS_COPY,
 } from "@/lib/pos/publish-guard-core";
@@ -62,14 +62,24 @@ describe("publish-guard-core (SLICE 76)", () => {
     expect(v.detail).toContain("18");
   });
 
-  it("flags exactly one draft as latest, everything else outdated", () => {
-    const flagged = flagOutdatedDrafts([
-      { id: "c", created_at: "2026-02-03T00:00:00Z" },
-      { id: "b", created_at: "2026-02-02T00:00:00Z" },
-      { id: "a", created_at: "2026-02-01T00:00:00Z" },
+  it("S15: freshness is by item SET - the superset is latest even with an older timestamp", () => {
+    const flagged = flagDraftFreshness(
+      [
+        { id: "c", created_at: "2026-02-03T00:00:00Z" },
+        { id: "b", created_at: "2026-02-02T12:00:00Z" },
+        { id: "a", created_at: "2026-02-01T00:00:00Z" },
+      ],
+      {
+        liveCreatedAt: "2026-02-02T00:00:00Z",
+        removedById: new Map<string, number | null>([["c", 4], ["b", 0], ["a", 0]]),
+      },
+    );
+    expect(flagged.map((d) => [d.id, d.freshness])).toEqual([
+      ["c", "would_remove"],
+      ["b", "latest"],
+      ["a", "superseded"],
     ]);
-    expect(flagged.filter((d) => d.freshness === "latest").map((d) => d.id)).toEqual(["c"]);
-    expect(flagged.filter((d) => d.freshness === "outdated").map((d) => d.id)).toEqual(["b", "a"]);
+    expect(flagged[0].removedCount).toBe(4);
   });
 
   it("explains the unmapped-category warning with a Types & Categories fix link", () => {
