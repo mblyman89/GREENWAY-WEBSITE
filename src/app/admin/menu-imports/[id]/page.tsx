@@ -52,7 +52,7 @@ export default async function ImportReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string; backfilled?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string; backfilled?: string; notice?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const { id } = await params;
@@ -211,6 +211,12 @@ export default async function ImportReviewPage({
         {sp.error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             {decodeURIComponent(sp.error)}
+          </div>
+        )}
+        {/* S18: the cutover release / rebuild outcome, told plainly. */}
+        {sp.notice && (
+          <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-3 text-sm text-[var(--admin-gold)]">
+            {decodeURIComponent(sp.notice)}
           </div>
         )}
         {sp.published && (

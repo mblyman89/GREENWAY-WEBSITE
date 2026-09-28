@@ -60,7 +60,8 @@ const outcome = (state: string, extra: Record<string, unknown> = {}) => ({
 // === 1. Queue core ============================================================
 describe("S16 queue core", () => {
   it("self-tests pass with an exact count (a deleted check turns this red)", () => {
-    expect(__runPublishQueueTests().passed).toBe(22);
+    // S18 added five cutover checks (22 -> 27).
+    expect(__runPublishQueueTests().passed).toBe(27);
   });
   it("the reason comes only from the recorded outcome", () => {
     expect(queueReason({ import_id: null, summary_json: outcome("held_for_fact_review", { held_count: 1 }) })).toBe("fact_review");
@@ -78,12 +79,14 @@ describe("S16 queue core", () => {
       publish_failed: "Try publishing again \u2192",
       needs_publish: "Review & publish \u2192",
       pos_upload: "Review this upload \u2192",
+      cutover: "Open the Cultivera cutover step \u2192",
     });
     expect(QUEUE_REASON_TAG).toEqual({
       fact_review: "Fact check",
       publish_failed: "Publish didn't finish",
       needs_publish: "Needs a Publish click",
       pos_upload: "POS upload",
+      cutover: "Waiting for Cultivera",
     });
     const reasons: QueueReason[] = ["fact_review", "publish_failed", "needs_publish", "pos_upload"];
     for (const r of reasons) {

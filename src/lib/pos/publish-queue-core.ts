@@ -36,8 +36,20 @@ import { parseIntakeSummary } from "@/lib/pos/intake-version-copy-core";
  *                  S01 recorded one). Say only what is certain.
  *   pos_upload     a POS export upload (Cultivera). These never publish by
  *                  themselves.
+ *   cutover        (S18) a receiving update held because the one-time
+ *                  Cultivera upload is staged but not published. Its one
+ *                  action goes to the cutover page: publishing Cultivera
+ *                  rebuilds this update on top of it (cutover-guard-core).
  */
-export type QueueReason = "fact_review" | "publish_failed" | "needs_publish" | "pos_upload";
+export type QueueReason = "fact_review" | "publish_failed" | "needs_publish" | "pos_upload" | "cutover";
+
+/**
+ * Where the cutover action points: the cutover page (S18). It says which
+ * Cultivera upload to publish while one waits, and after cutover lists every
+ * delivery still to rebuild with a Rebuild button - so the one link stays
+ * true before AND after the Cultivera publish.
+ */
+export const CUTOVER_ACTION_HREF = "/admin/menu-imports/cutover";
 
 export type QueueRowInput = {
   import_id: string | null;
@@ -48,6 +60,7 @@ export function queueReason(v: QueueRowInput): QueueReason {
   if (v.import_id !== null) return "pos_upload";
   const state = parseIntakeSummary(v.summary_json).outcome?.state ?? null;
   if (state === "held_for_fact_review") return "fact_review";
+  if (state === "held_for_cutover") return "cutover";
   if (state === "auto_publish_failed" || state === "auto_publish_attempted") return "publish_failed";
   return "needs_publish";
 }
@@ -58,6 +71,7 @@ export const QUEUE_ACTION_LABEL: Record<QueueReason, string> = {
   publish_failed: "Try publishing again \u2192",
   needs_publish: "Review & publish \u2192",
   pos_upload: "Review this upload \u2192",
+  cutover: "Open the Cultivera cutover step \u2192",
 };
 
 /** A short tag naming the reason, shown next to the row. */
@@ -66,14 +80,18 @@ export const QUEUE_REASON_TAG: Record<QueueReason, string> = {
   publish_failed: "Publish didn't finish",
   needs_publish: "Needs a Publish click",
   pos_upload: "POS upload",
+  cutover: "Waiting for Cultivera",
 };
 
 /**
  * The one primary action for a waiting row. Every reason resolves on the
  * row's review page: it shows the flagged facts with fix-it links (S02) and
- * the Publish button with its removal guard.
+ * the Publish button with its removal guard. The one exception (S18) is a
+ * cutover hold: the fix is on the cutover page (publish the Cultivera upload,
+ * or rebuild afterwards); the held snapshot itself is never published.
  */
 export function primaryAction(reason: QueueReason, reviewHref: string): { label: string; href: string } {
+  if (reason === "cutover") return { label: QUEUE_ACTION_LABEL.cutover, href: CUTOVER_ACTION_HREF };
   return { label: QUEUE_ACTION_LABEL[reason], href: reviewHref };
 }
 
@@ -198,6 +216,14 @@ export function __runPublishQueueTests(): { passed: number } {
     v("a", "2026-01-01T00:00:00Z", "auto_publish_attempted"),
   ]);
   ok(tie.map((r) => r.id).join() === "a,b", "equal times break by id (stable)");
+
+  // S18: cutover hold.
+  ok(queueReason({ import_id: null, summary_json: out("held_for_cutover") }) === "cutover", "cutover hold -> cutover");
+  ok(queueReason({ import_id: "imp", summary_json: out("held_for_cutover") }) === "pos_upload", "import row stays a POS upload");
+  const all: QueueReason[] = ["fact_review", "publish_failed", "needs_publish", "pos_upload", "cutover"];
+  ok(new Set(all.map((r) => QUEUE_ACTION_LABEL[r])).size === 5 && new Set(all.map((r) => QUEUE_REASON_TAG[r])).size === 5, "five distinct labels and tags");
+  ok(primaryAction("cutover", "/v").href === "/admin/menu-imports/cutover" && primaryAction("cutover", "/v").label === "Open the Cultivera cutover step \u2192", "cutover action goes to the cutover page");
+  ok(recentAutoPublished([v("c", "2026-01-01T00:00:00Z", "held_for_cutover")]).length === 0, "a cutover-held update is not 'automatic'");
 
   return { passed };
 }
