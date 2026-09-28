@@ -37,7 +37,7 @@ import { loadLeaflySyncHealth } from "@/lib/leafly/schedule-server";
 import { loadLeaflyEvidence } from "@/lib/leafly/evidence-server";
 import { loadLeaflyCertificationProof } from "@/lib/leafly/certification-proof-server";
 import { LeaflyCertificationProofPanel } from "@/components/admin/syndication/LeaflyCertificationProofPanel";
-import { MIN_RUN_GAP_MINUTES } from "@/lib/leafly/schedule-core";
+import { MIN_RUN_GAP_MINUTES, lastAutomaticCheckIso, staleSendWarning } from "@/lib/leafly/schedule-core";
 import {
   saveLeaflySettingsAction,
   resetLeaflySyncStateAction,
@@ -338,7 +338,17 @@ export default async function LeaflyIntegrationPage() {
         configured={preview.readiness.configured}
       />
 
-      <ConnectionHealthPanel health={health} lastSyncedAt={syncState.lastSyncedAt} />
+      <ConnectionHealthPanel
+        health={health}
+        lastSyncedAt={syncState.lastSyncedAt}
+        lastSentLabel="Last menu sent to Leafly"
+        lastAutomaticCheckAt={lastAutomaticCheckIso(scheduleHealth.runs)}
+        staleWarning={staleSendWarning({
+          nowIso: new Date().toISOString(),
+          lastSentIso: syncState.lastSyncedAt ?? health.lastSuccessAt,
+          automationEnabled: scheduleHealth.settings.enabled && scheduleHealth.configured,
+        })}
+      />
 
       <DataQualityPanel
         richness={richness}

@@ -47,10 +47,22 @@ function fmtWhen(iso: string | null): string {
 export function ConnectionHealthPanel({
   health,
   lastSyncedAt,
+  lastSentLabel = "Last successful sync",
+  lastAutomaticCheckAt,
+  staleWarning = null,
 }: {
   health: HealthReport;
   /** From syndication_sync_state (may differ from log history pre-migration). */
   lastSyncedAt?: string | null;
+  /**
+   * SLICE AS-1. Leafly passes "Last menu sent to Leafly": the value is the
+   * last REAL send, which a quiet "nothing to send" check never moved.
+   */
+  lastSentLabel?: string;
+  /** SLICE AS-1. Newest scheduled check (any outcome). Omitted = row hidden. */
+  lastAutomaticCheckAt?: string | null;
+  /** SLICE AS-1. Amber "not sent in over a day" sentence, or null. */
+  staleWarning?: string | null;
 }) {
   return (
     <Card>
@@ -61,11 +73,17 @@ export function ConnectionHealthPanel({
       <p className="text-xs text-[var(--admin-text-muted)]">{health.summary}</p>
       <dl className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
         <div>
-          <dt className="text-[var(--admin-text-faint)]">Last successful sync</dt>
+          <dt className="text-[var(--admin-text-faint)]">{lastSentLabel}</dt>
           <dd className="font-medium text-[var(--admin-text)]">
             {fmtWhen(lastSyncedAt ?? health.lastSuccessAt)}
           </dd>
         </div>
+        {lastAutomaticCheckAt !== undefined ? (
+          <div>
+            <dt className="text-[var(--admin-text-faint)]">Last automatic check</dt>
+            <dd className="font-medium text-[var(--admin-text)]">{fmtWhen(lastAutomaticCheckAt)}</dd>
+          </div>
+        ) : null}
         <div>
           <dt className="text-[var(--admin-text-faint)]">Last attempt</dt>
           <dd className="font-medium text-[var(--admin-text)]">{fmtWhen(health.lastAttemptAt)}</dd>
@@ -75,6 +93,11 @@ export function ConnectionHealthPanel({
           <dd className="font-medium text-[var(--admin-text)]">{health.consecutiveFailures}</dd>
         </div>
       </dl>
+      {staleWarning ? (
+        <p className="mt-3 rounded-md border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] p-2 text-[11px] font-bold text-[var(--admin-gold)]">
+          {staleWarning}
+        </p>
+      ) : null}
       {health.status === "degraded" || health.status === "down" ? (
         <p className="mt-3 rounded-md border border-[var(--admin-orange)]/30 bg-[var(--admin-orange-soft)] p-2 text-[11px] text-[var(--admin-orange)]">
           Check the most recent error in Recent sync activity below, then match it in the
