@@ -324,7 +324,16 @@ export async function buildLeaflyEvidenceExport(
     const events = ((eventsRes.data as RawEventRow[] | null) ?? []).map(mapEventRow);
     const orders = ((ordersRes.data as RawOrderRow[] | null) ?? []).map(mapOrderRow);
 
-    const bundle = buildEvidenceBundle({ events, orders, nowIso });
+    // SLICE L-49 — the Order-API call log. Best-effort: a failure here keeps
+    // the rest of the bundle and is written into the Summary sheet.
+    const { loadOutboundAttemptsForExport } = await import("./outbound-history-server");
+    const calls = await loadOutboundAttemptsForExport(500);
+    const bundle = buildEvidenceBundle({
+      events,
+      orders,
+      nowIso,
+      outboundCalls: calls.ok ? calls.rows : [],
+    });
     const truncated = events.length >= limit;
 
     // Record the window inside the file itself.
@@ -345,6 +354,12 @@ export async function buildLeaflyEvidenceExport(
         value:
           "No. This file carries no name, email, phone, date of birth, medical card or address. " +
           "Deliveries are identified by a SHA-256 hash of the request body.",
+      });
+      summarySheet.rows.push({
+        item: "Order API calls in this file",
+        value: calls.ok
+          ? `${calls.rows.length} (newest first, capped at 500; replies shown only for errors)`
+          : `Could not be read: ${calls.problem}`,
       });
     }
 

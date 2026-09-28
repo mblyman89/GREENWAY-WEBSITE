@@ -301,6 +301,9 @@ export function LeaflyCartEditor({
               The menu could not be loaded, so items cannot be swapped or added right now. Quantities can still be lowered or items removed.
             </p>
           ) : null}
+          {data.sourceNote ? (
+            <p className="mt-2 text-xs font-bold text-[var(--admin-gold)]">{data.sourceNote}</p>
+          ) : null}
 
           <ul className="mt-2 space-y-2">
             {rows.map((r) => {

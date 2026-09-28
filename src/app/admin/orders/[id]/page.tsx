@@ -39,6 +39,7 @@ import {
   LeaflyOrderWorkflow,
   LeaflyOutcomeBanners,
 } from "@/components/admin/orders/LeaflyOrderWorkflow";
+import { LeaflyCallHistory } from "@/components/admin/orders/LeaflyCallHistory";
 import {
   setOrderStatusAction,
   updateOrderNoteAction,
@@ -309,6 +310,10 @@ export default async function OrderDetailPage({
                     interrupts={leaflyInterrupts.get(order.id)}
                     back={sp.back}
                   />
+                  {/* SLICE L-49 — the Order-API call history for this order. */}
+                  {leaflyRow.leafly_order_id ? (
+                    <LeaflyCallHistory leaflyOrderId={leaflyRow.leafly_order_id} />
+                  ) : null}
                 </div>
               ) : (
                 <p

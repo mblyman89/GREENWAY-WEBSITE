@@ -26,6 +26,7 @@ import {
   LeaflyOrderWorkflow,
   LeaflyOutcomeBanners,
 } from "@/components/admin/orders/LeaflyOrderWorkflow";
+import { LeaflyCallHistory } from "@/components/admin/orders/LeaflyCallHistory";
 
 export const dynamic = "force-dynamic";
 // The Leafly step actions posted from this page inherit its budget; the
@@ -112,6 +113,8 @@ export default async function LeaflyOrderDetailsPage({
               now={new Date()}
               back={sp.back}
             />
+            {/* SLICE L-49 — the Order-API call history for this order. */}
+            <LeaflyCallHistory leaflyOrderId={order.leafly_order_id ?? leaflyOrderId} />
           </div>
         </div>
       </div>

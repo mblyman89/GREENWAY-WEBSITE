@@ -85,6 +85,11 @@
  */
 
 import {
+  findPiiKeysInJsonText,
+  toOutboundExportRow,
+  type OutboundHistoryRow,
+} from "./outbound-history-core";
+import {
   LEAFLY_WEBHOOK_EVENT_TYPES,
   isLeaflyWebhookEventType,
   leaflyEventCarriesAnOrder,
@@ -1072,8 +1077,45 @@ export function auditEvidenceSheets(sheets: readonly EvidenceSheet[]): string[] 
     for (const bad of auditEvidenceKeys(sheet.columns.map((c) => c.key))) {
       violations.push(`${sheet.name}.${bad}`);
     }
+    // SLICE L-49 — JSON cells. The "Order API calls" sheet carries request and
+    // (>= 400 only) reply bodies as JSON text; a column-key audit cannot see
+    // inside them, so every string cell is scanned for customer-data KEY names.
+    for (const row of sheet.rows) {
+      for (const [col, cell] of Object.entries(row)) {
+        if (typeof cell !== "string" || !cell.includes("\":")) continue;
+        for (const bad of findPiiKeysInJsonText(cell)) {
+          violations.push(`${sheet.name}.${col}[json:${bad}]`);
+        }
+      }
+    }
   }
   return violations;
+}
+
+/**
+ * SLICE L-49 — "Order API calls we made": every row of
+ * leafly_outbound_attempts passed in, flattened by `toOutboundExportRow`
+ * (reply bodies only for >= 400; request bodies only for cart/status).
+ */
+export function buildOutboundCallsSheet(rows: readonly OutboundHistoryRow[]): EvidenceSheet {
+  return {
+    name: "Order API calls",
+    caption: "Every Order-API call we made to Leafly (no customer data; replies shown only for errors)",
+    columns: [
+      { key: "attemptedAt", header: "When (UTC)" },
+      { key: "operation", header: "Operation" },
+      { key: "leaflyOrderId", header: "Leafly order id" },
+      { key: "requestedStatus", header: "Requested status" },
+      { key: "cancelationReasonCode", header: "Cancel reason" },
+      { key: "responseStatus", header: "HTTP", type: "integer" },
+      { key: "disposition", header: "Outcome" },
+      { key: "refusalCode", header: "Refused by us (code)" },
+      { key: "message", header: "Message" },
+      { key: "requestJson", header: "What we sent (cart/status)" },
+      { key: "responseJson", header: "What Leafly replied (errors only)" },
+    ],
+    rows: rows.map((r) => ({ ...toOutboundExportRow(r) })),
+  };
 }
 
 export type EvidenceBundle = {
@@ -1111,6 +1153,8 @@ export function buildEvidenceBundle(input: {
   events: readonly EvidenceEventRow[];
   orders: readonly EvidenceOrderRow[];
   nowIso: string;
+  /** SLICE L-49 — optional; when present a fifth sheet is added. */
+  outboundCalls?: readonly OutboundHistoryRow[];
 }): EvidenceBundle {
   const summary = summarizeEvidence(input.events);
   const verdict = assessEvidence(summary);
@@ -1260,6 +1304,7 @@ export function buildEvidenceBundle(input: {
   };
 
   const sheets = [summarySheet, criteriaSheet, deliveriesSheet, ordersSheet];
+  if (input.outboundCalls !== undefined) sheets.push(buildOutboundCallsSheet(input.outboundCalls));
 
   // Audit EVERY column key of EVERY sheet. Cheap, total, and the thing that
   // turns "we don't export PII" from a claim into a checked invariant.
@@ -2095,6 +2140,36 @@ export function __runLeaflyEvidenceTests(): { passed: number; failed: number } {
     auditEvidenceKeys([...bundle.sheets[2].columns.map((c) => c.key), "phoneNumber"]).length === 1,
     "the column audit would catch a PII column if one were added",
   );
+
+  // SLICE L-49 — the Order API calls sheet and the JSON-cell scan.
+  const callRow = {
+    attempted_at: "2026-09-28T19:59:00Z",
+    leafly_order_id: "o1",
+    operation: "cart",
+    requested_status: null,
+    cancelation_reason_code: null,
+    response_status: 400,
+    disposition: "fix_request",
+    refusal_code: null,
+    message: "refused",
+    request_body: { cartItems: [{ id: "c1", integratorVariantId: "v1", quantity: 1, packagePrice: 2500 }], taxes: [], deliveryFee: 0 },
+    response_body: { error: "Bad Request", status: 400 },
+  };
+  const withCalls = buildEvidenceBundle({ events: [], orders: [], nowIso: NOW, outboundCalls: [callRow] });
+  ok(withCalls.sheets.some((s) => s.name === "Order API calls"), "calls sheet present when rows are given");
+  ok(withCalls.privacyViolations.length === 0, "a cart 400 row is PII-free");
+  ok(!buildEvidenceBundle({ events: [], orders: [], nowIso: NOW }).sheets.some((s) => s.name === "Order API calls"), "no calls sheet when not given");
+  const withOrder = buildEvidenceBundle({
+    events: [],
+    orders: [],
+    nowIso: NOW,
+    outboundCalls: [{ ...callRow, response_status: 200, response_body: { firstName: "Ann" } }],
+  });
+  ok(withOrder.privacyViolations.length === 0, "a 2xx order reply is dropped, not exported");
+  const poisoned = auditEvidenceSheets([
+    { name: "X", columns: [{ key: "requestJson", header: "r" }], rows: [{ requestJson: '{"emailAddress":"a@b"}' }] },
+  ]);
+  ok(poisoned.length === 1 && poisoned[0]!.includes("emailAddress"), "the JSON-cell scan catches a PII key inside a cell");
 
   const summarySheetOut = bundle.sheets.find((s) => s.name === "Summary")!;
   ok(summarySheetOut.rows.length >= 20, "summary sheet is substantive");

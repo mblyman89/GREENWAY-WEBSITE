@@ -54,6 +54,7 @@ import {
 import {
   LEAFLY_CART_SUCCESS_STATUS,
   cartSignature,
+  checkCartAgainstLeaflyCatalog,
   decideCartUpdate,
   formatCartMoney,
   leaflyCartUrl,
@@ -102,6 +103,14 @@ export type LeaflyCartEditorData = {
   /** Sizes that may be added or swapped in: orderable and in stock, name-sorted. */
   options: LeaflyCatalogOption[];
   menuLoaded: boolean;
+  /**
+   * SLICE L-49 — where the cart shown came from. "leafly_live" = re-read from
+   * Leafly as the editor opened (so cart item ids are Leafly's current ones);
+   * "stored_copy" = Leafly could not be reached and our last copy is shown.
+   */
+  source: "leafly_live" | "stored_copy";
+  /** Plain-English note to show when `source` is "stored_copy". Null otherwise. */
+  sourceNote: string | null;
 };
 
 export type LeaflyCartUpdateResult = OutboundResult & {
@@ -224,7 +233,22 @@ async function loadCartMenu(): Promise<{
  */
 export async function loadLeaflyCartEditor(leaflyOrderId: string): Promise<LeaflyCartEditorData> {
   const id = (leaflyOrderId ?? "").trim();
-  const row = await readCartOrderRow(id);
+  // SLICE L-49 — refresh from Leafly FIRST, so the editor opens on Leafly's
+  // live cart (after a substitution Leafly issues NEW cart item ids, and a
+  // stale id is a refused change). Bounded; on any failure we fall back to
+  // our stored copy and say so. Only attempted for an order we already hold.
+  let source: LeaflyCartEditorData["source"] = "stored_copy";
+  let sourceNote: string | null = null;
+  const known = id === "" ? null : await readCartOrderRow(id);
+  if (known) {
+    const refreshed = await refreshFromLeaflyBounded(known.leafly_order_id);
+    if (refreshed) {
+      source = "leafly_live";
+    } else {
+      sourceNote = "Showing our last copy of this order; Leafly could not be reached to refresh it just now.";
+    }
+  }
+  const row = known ? await readCartOrderRow(id) : null;
   const reading = readEditableLeaflyCart(row?.raw_order ?? null);
   const empty: LeaflyCartEditorData = {
     found: false,
@@ -238,6 +262,8 @@ export async function loadLeaflyCartEditor(leaflyOrderId: string): Promise<Leafl
     blockedCode: "not_found_locally",
     options: [],
     menuLoaded: false,
+    source,
+    sourceNote,
   };
   if (!row) return empty;
 
@@ -285,7 +311,28 @@ export async function loadLeaflyCartEditor(leaflyOrderId: string): Promise<Leafl
     blockedCode: editable ? null : gate.code,
     options,
     menuLoaded: menu.loaded,
+    source,
+    sourceNote,
   };
+}
+
+/**
+ * SLICE L-49 — collect the order from Leafly (GET + store), raced against a
+ * short budget. True only when Leafly answered and the copy was stored. The
+ * fetch is also a logged Fetch Order call (certification evidence).
+ */
+async function refreshFromLeaflyBounded(leaflyOrderId: string, budgetMs = 8000): Promise<boolean> {
+  try {
+    const { collectLeaflyOrder } = await import("./order-fetch-server");
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), budgetMs));
+    const r = await Promise.race([
+      collectLeaflyOrder({ leaflyOrderId, knownLocally: true }).catch(() => null),
+      timeout,
+    ]);
+    return r !== null && r.ok === true && r.order !== null && !/STORE FAILED/.test(r.summary ?? "");
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -459,6 +506,43 @@ export async function updateLeaflyOrderCart(input: {
     return refusedResult(decision, row.local_order_id);
   }
 
+  // SLICE L-49 — pre-flight against LEAFLY'S catalog (sandbox; best-effort).
+  // Our gate above checked OUR menu. Leafly refuses a change to a variant its
+  // own catalog lacks (spec), e.g. a size held back from the menu push or not
+  // yet sent. A null snapshot (production, timeout, read failure, partial
+  // page) never blocks.
+  if (environment === "sandbox") {
+    let snapshot: Awaited<ReturnType<typeof import("./push").readLeaflyCatalogSnapshot>> = null;
+    try {
+      const { readLeaflyCatalogSnapshot } = await import("./push");
+      snapshot = await readLeaflyCatalogSnapshot(6000);
+    } catch {
+      snapshot = null;
+    }
+    const pre = checkCartAgainstLeaflyCatalog(decision.changes, snapshot);
+    if (!pre.ok) {
+      await recordLeaflyOutboundAttempt({
+        leaflyOrderId: row.leafly_order_id,
+        orderIntegrationKey,
+        operation: "cart",
+        requestBody: decision.body,
+        refusalCode: pre.code,
+        message: pre.reason,
+        createdBy: input.staffId,
+      });
+      return refusedResult(
+        {
+          code: pre.code,
+          reason: pre.reason,
+          changes: decision.changes,
+          summary: decision.summary,
+          needsManagerApproval: decision.needsManagerApproval,
+        },
+        row.local_order_id,
+      );
+    }
+  }
+
   const key = (orderIntegrationKey ?? "").trim();
   const url = leaflyCartUrl(leaflyOrderApiBaseUrl(environment), key, row.leafly_order_id);
   const body = decision.body;
@@ -504,7 +588,7 @@ export async function updateLeaflyOrderCart(input: {
     };
   }
 
-  const assessment = assessOutboundResponse(raw.status, LEAFLY_CART_SUCCESS_STATUS);
+  const assessment = assessOutboundResponse(raw.status, LEAFLY_CART_SUCCESS_STATUS, "cart");
 
   // The forensic record, written before anything else can fail.
   await recordLeaflyOutboundAttempt({
