@@ -32,6 +32,8 @@ import { loadSyndicationFeed } from "@/lib/syndication/feed-source";
 import { getLeaflySyncSettings } from "@/lib/syndication/engine-store";
 import { decideOrderability } from "./orderability-core";
 import type { VariantFacts, VariantLookup } from "./preview-core";
+import type { SyndicationItem } from "@/lib/syndication/menu-feed-core";
+import { isSentToLeafly, sentVariantIdsFromPayload } from "./cart-picker-core";
 
 /**
  * Build a lookup over the currently published menu.
@@ -76,8 +78,74 @@ export async function buildLeaflyVariantCatalog(): Promise<{
   options: LeaflyCatalogOption[];
   variantCount: number;
   loaded: boolean;
+  /** SLICE L-50: sizes left out because our menu builder never sends them. */
+  notSentCount: number;
 }> {
-  return buildVariantIndex();
+  const built = await buildVariantIndex();
+  if (!built.loaded) return { lookup: built.lookup, options: built.options, variantCount: 0, loaded: false, notSentCount: 0 };
+
+  // SLICE L-50. Offer (and accept) only sizes that the payload we send to
+  // Leafly actually contains. Built with the SAME builder and the SAME store
+  // options as the menu push (full-menu-server.ts: pickupEnabled +
+  // medicallyEndorsed), so the picker cannot offer a size the builder refuses
+  // (for example no weight readable from the label), which Leafly therefore
+  // never received and rejects with a bare 400.
+  //
+  // First choice: the SAME full-menu build the automatic sync and "Send my
+  // whole menu, hold back only the bad ones" send, with the owner's stored
+  // automatic repair choice. It also drops products the validator holds back
+  // (plan.sendIds), which Leafly also never receives. The size repair keeps
+  // variant ids unchanged (collision-apply), so ids read from the wire are the
+  // ids Leafly holds. If that build cannot run (e.g. the feed preflight blocks
+  // it), fall back to the plain payload builder the menu push also shares.
+  let sent: Set<string> | null = null;
+  try {
+    const [{ __internals: fullMenuInternals }, { getLeaflyScheduleSettings }] = await Promise.all([
+      import("./full-menu-server"),
+      import("./schedule-server"),
+    ]);
+    const schedule = await getLeaflyScheduleSettings();
+    const fm = await fullMenuInternals.buildFullMenuDecision({ repair: schedule.repairSizes === true });
+    // A refusing plan has an empty sendIds by design (it sends nothing). That
+    // says nothing about which sizes Leafly holds from earlier sends, so it
+    // falls through to the plain builder instead of emptying the picker.
+    if (fm.plan.proceed) {
+      const sendSet = new Set(fm.plan.sendIds);
+      sent = sentVariantIdsFromPayload(fm.items.filter((i) => sendSet.has(i.id)));
+    }
+  } catch {
+    sent = null;
+  }
+  if (sent === null) {
+    try {
+      const [{ buildLeaflyItemsResult }, { getMedTaxSettings }] = await Promise.all([
+        import("./payload-core"),
+        import("@/lib/medical/store"),
+      ]);
+      const medSettings = await getMedTaxSettings();
+      const payload = buildLeaflyItemsResult(built.items, {
+        pickupEnabled: built.pickupEnabled,
+        medicallyEndorsed: medSettings.medicallyEndorsed,
+      });
+      sent = sentVariantIdsFromPayload(payload.payload.items);
+    } catch {
+      sent = null;
+    }
+  }
+  if (sent === null) {
+    // Cannot vouch for any size: report the menu as not loaded, which the
+    // editor already explains (swaps/additions off; removals still allowed).
+    return { lookup: () => null, options: [], variantCount: 0, loaded: false, notSentCount: 0 };
+  }
+  const sentSet = sent;
+  const options = built.options.filter((o) => isSentToLeafly(sentSet, o.integratorVariantId));
+  return {
+    lookup: (id: string) => (isSentToLeafly(sentSet, id) ? built.lookup(id) : null),
+    options,
+    variantCount: options.length,
+    loaded: true,
+    notSentCount: built.options.length - options.length,
+  };
 }
 
 async function buildVariantIndex(): Promise<{
@@ -85,6 +153,9 @@ async function buildVariantIndex(): Promise<{
   options: LeaflyCatalogOption[];
   variantCount: number;
   loaded: boolean;
+  /** SLICE L-50: the feed items and the pickup toggle, for the payload build. */
+  items: SyndicationItem[];
+  pickupEnabled: boolean;
 }> {
   const byId = new Map<string, VariantFacts>();
   const options: LeaflyCatalogOption[] = [];
@@ -162,8 +233,10 @@ async function buildVariantIndex(): Promise<{
       options,
       variantCount: byId.size,
       loaded: true,
+      items,
+      pickupEnabled,
     };
   } catch {
-    return { lookup: () => null, options: [], variantCount: 0, loaded: false };
+    return { lookup: () => null, options: [], variantCount: 0, loaded: false, items: [], pickupEnabled };
   }
 }
