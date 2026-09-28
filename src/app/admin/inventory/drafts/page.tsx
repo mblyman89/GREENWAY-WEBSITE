@@ -8,7 +8,8 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Button, Input, Select } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import {
-  listCatalogDrafts,
+  listCatalogDraftsPage,
+  loadOnboardingPicker,
   countCatalogDrafts,
   loadStrainTypeSignals,
   listPriorClassifications,
@@ -40,6 +41,18 @@ import {
   parseDraftFocus,
 } from "@/lib/catalog/draft-deep-link-core";
 // S03: shadow measurement of the product-identity key (console only).
+// S14: filters, paging, the delivery picker + header, condensed rows (pure).
+import {
+  DRAFT_PAGE_SIZES,
+  manifestPickerLabel,
+  onboardingHeaderTitle,
+  onboardingListHref,
+  pageWindow,
+  parseOnboardingListParams,
+  pickerVendors,
+  rowAttention,
+  rowStartsOpen,
+} from "@/lib/catalog/onboarding-list-core";
 import { identityShadowLogLine, summarizeIdentityShadow } from "@/lib/catalog/product-identity-core";
 import {
   assessDraftClassification,
@@ -111,13 +124,15 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
   const { approved, dismissed, restored, error, msg, back } = sp;
   // S02: validated focus (bad ids are dropped, never queried).
   const focus = parseDraftFocus(sp);
+  // S14: search / delivery vendor / page / size / condensed-or-expanded rows.
+  const list = parseOnboardingListParams(sp);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -132,13 +147,26 @@ export default async function CatalogDraftsPage({
     );
   }
 
-  const [listed, counts, categoryLabelMap, ownerTypes] = await Promise.all([
-    // ONE read: the tab (optionally one delivery) plus the pinned row.
-    listCatalogDrafts(focus.view, { manifestId: focus.manifestId, draftId: focus.draftId }),
+  const now = new Date();
+  const [listPage, counts, categoryLabelMap, ownerTypes, picker] = await Promise.all([
+    // ONE read: the page of the tab (optionally one delivery / vendor /
+    // search) WITH its total; a pinned row keeps S02's unpaged query.
+    listCatalogDraftsPage({
+      status: focus.view,
+      manifestId: focus.manifestId,
+      draftId: focus.draftId,
+      vendorId: list.vendorId,
+      q: list.q,
+      page: list.page,
+      pageSize: list.pageSize,
+    }),
     countCatalogDrafts(),
     loadCategoryLabelMap(),
     listInventoryTypes({ includeInactive: false }),
+    // S14: the delivery picker + header (recent accepted deliveries + counts).
+    loadOnboardingPicker(focus.manifestId, now),
   ]);
+  const listed = listPage.rows;
   // S02 (F-060): the pinned product decides the tab from its REAL status, so a
   // link to an approved product can never land on an empty review queue. Rows
   // from another tab are dropped so each tab only ever shows its own rows.
@@ -147,6 +175,18 @@ export default async function CatalogDraftsPage({
   const drafts = listed.filter((d) => d.status === view);
   const pinnedMissing = Boolean(focus.draftId) && !pinned;
   const pinnedMovedTab = Boolean(pinned) && view !== focus.view;
+  // S14: paging copy, the focused delivery's header, the picker's choices.
+  const paged = listPage.plan.mode === "paged";
+  const pager = pageWindow(listPage.total, list.page, list.pageSize, drafts.length, listPage.pastEnd);
+  const focusManifest = focus.manifestId ? picker?.manifests.find((m) => m.id === focus.manifestId) ?? null : null;
+  const headerTitle = onboardingHeaderTitle(
+    focusManifest,
+    focusManifest && picker?.countsComplete ? picker.counts.get(focusManifest.id) ?? null : null,
+    now,
+  );
+  const vendorChoices = picker ? pickerVendors(picker.manifests) : [];
+  const listFilters = { status: view, manifestId: focus.manifestId, q: list.q, vendorId: list.vendorId, pageSize: list.pageSize, rows: list.rows };
+  const filtered = Boolean(list.q || list.vendorId);
   const filterVendors = focus.manifestId
     ? Array.from(new Set(drafts.map((d) => (d.vendor_name ?? "").trim()).filter(Boolean)))
     : [];
@@ -311,7 +351,7 @@ export default async function CatalogDraftsPage({
   return (
     <div>
       <AdminPageHeader
-        title="Product Onboarding"
+        title={headerTitle}
         subtitle="When a received lot isn't on the live menu, we draft the product from the transfer + COA so you can check it. Nothing here is customer-facing until you approve it — and approving with a price is what puts it live."
         breadcrumbs={
           <Breadcrumbs
@@ -421,18 +461,103 @@ export default async function CatalogDraftsPage({
           ))}
         </div>
 
+        {/* S14 (F-001, F-034): find one delivery's products in one click. A
+            plain GET form - no client JS, and every choice is a shareable URL. */}
+        {!focus.draftId && (
+          <form
+            method="get"
+            action="/admin/inventory/drafts"
+            className="flex flex-wrap items-end gap-2 text-xs"
+            data-testid="onboarding-filter-bar"
+          >
+            {view !== "draft" && <input type="hidden" name="status" value={view} />}
+            {list.rows === "expanded" && <input type="hidden" name="rows" value="expanded" />}
+            {picker && picker.manifests.length > 0 && (
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold text-[var(--admin-text-faint)]">Delivery (last 30 days)</span>
+                <Select name="manifest" defaultValue={focus.manifestId ?? ""} className="w-72 text-xs" aria-label="Delivery">
+                  <option value="">Every delivery</option>
+                  {picker.manifests.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {manifestPickerLabel(m, picker.countsComplete ? picker.counts.get(m.id) ?? { total: 0, inReview: 0, needsPrice: 0 } : null, now)}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )}
+            {vendorChoices.length > 0 && (
+              <label className="flex flex-col gap-1">
+                <span className="font-semibold text-[var(--admin-text-faint)]">Vendor</span>
+                <Select name="vendor" defaultValue={list.vendorId ?? ""} className="w-48 text-xs" aria-label="Vendor">
+                  <option value="">Every vendor</option>
+                  {vendorChoices.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )}
+            <label className="flex flex-col gap-1">
+              <span className="font-semibold text-[var(--admin-text-faint)]">Search</span>
+              <Input
+                name="q"
+                defaultValue={list.q}
+                placeholder="Name, brand, vendor, strain or POS key"
+                className="w-64 text-xs"
+                aria-label="Search products"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-semibold text-[var(--admin-text-faint)]">Per page</span>
+              <Select name="size" defaultValue={String(list.pageSize)} className="w-20 text-xs" aria-label="Products per page">
+                {DRAFT_PAGE_SIZES.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <Button type="submit" variant="neutral" size="sm">Apply</Button>
+            {filtered && (
+              <Link href={onboardingListHref({ ...listFilters, q: null, vendorId: null })} className="pb-1 font-semibold underline">
+                Clear search
+              </Link>
+            )}
+            <Link
+              href={onboardingListHref({ ...listFilters, page: list.page, rows: list.rows === "expanded" ? "condensed" : "expanded" })}
+              className="ml-auto pb-1 font-semibold text-[var(--admin-text-muted)] underline"
+            >
+              {list.rows === "expanded" ? "Collapse every row" : "Expand every row"}
+            </Link>
+          </form>
+        )}
+        {listPage.plan.ignored.length > 0 && (
+          <p className="text-xs text-[var(--admin-text-faint)]">
+            Search, vendor and page are set aside while one product is pinned, so the link always lands on it.
+          </p>
+        )}
+
         {drafts.length === 0 ? (
           <EmptyState
             icon="📝"
             title={
-              focus.manifestId
+              pager.pastEnd
+                ? "That page is past the end of the list"
+                : filtered
+                ? "Nothing matches that search"
+                : focus.manifestId
                 ? `No ${view === "draft" ? "drafts to review" : `${view} drafts`} from this delivery`
                 : view === "draft"
                   ? "No drafts to review"
                   : `No ${view} drafts`
             }
             description={
-              view === "draft"
+              pager.pastEnd
+                ? pager.label
+                : filtered
+                ? "Try fewer words, or clear the search to see this tab again."
+                : view === "draft"
                 ? "When you accept a manifest with products that aren't on the live menu, they'll show up here."
                 : "Nothing here yet."
             }
@@ -476,6 +601,16 @@ export default async function CatalogDraftsPage({
                   const displayType = d.chosen_house_type ?? autoType;
                   const needsCategoryPick = view === "draft" && Boolean(a?.needsCategoryPick);
                   const needsTypePick = view === "draft" && Boolean(a?.needsTypePick);
+                  // S14: the collapsed row's "what this one still needs" chips -
+                  // the SAME flags that render the pickers below.
+                  const rowChips = rowAttention({
+                    needsCategoryPick,
+                    needsTypePick,
+                    needsOtherwiseTakenPick: Boolean(ca?.needsOtherwiseTakenPick),
+                    promptsLowThcLiquid: Boolean(ca?.promptsLowThcLiquid),
+                    needsVolumePick: Boolean(va?.needsVolumePick),
+                    suggestedPriceMinor: d.suggested_price_minor_units,
+                  });
                   // SLICE 65 (A1/A3/A4): the name shown here is the BUILT
                   // customer name — the same family derivation the menu card
                   // will use (size/pack noise stripped, mg dose kept for
@@ -565,7 +700,38 @@ export default async function CatalogDraftsPage({
                         <div className="flex flex-col items-end gap-2">
                           {view === "draft" && (
                             <>
-                              <form action={approve} className="flex flex-col items-end gap-2">
+                              {/* S14 (F-006): condensed by default. The summary says what
+                                  this product still needs; opening it shows the full form.
+                                  Approve lives INSIDE, so a closed row can never submit
+                                  past a hidden required pick. */}
+                              <details
+                                open={rowStartsOpen({ rows: list.rows, pinned: pinned?.id === d.id })}
+                                className="group flex flex-col items-end"
+                                data-testid="draft-row-details"
+                              >
+                                <summary className="flex cursor-pointer list-none flex-wrap items-center justify-end gap-1 text-xs">
+                                  {rowChips.length === 0 ? (
+                                    <span className="rounded-full bg-[var(--admin-accent-soft)] px-2 py-0.5 font-semibold text-[var(--admin-accent)]">
+                                      Ready to approve
+                                    </span>
+                                  ) : (
+                                    rowChips.map((chip) => (
+                                      <span
+                                        key={chip.key}
+                                        className={`rounded-full px-2 py-0.5 font-semibold ${
+                                          chip.blocking
+                                            ? "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]"
+                                            : "bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]"
+                                        }`}
+                                      >
+                                        {chip.label}
+                                      </span>
+                                    ))
+                                  )}
+                                  <span className="font-semibold text-[var(--admin-accent)] underline group-open:hidden">Review & approve{" \u25be"}</span>
+                                  <span className="hidden font-semibold text-[var(--admin-text-muted)] underline group-open:inline">Collapse{" \u25b4"}</span>
+                                </summary>
+                              <form action={approve} className="mt-2 flex flex-col items-end gap-2">
                                 {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
                                 {/* SLICE 64: required picks when we couldn't
                                     classify at >=90% confidence. The server
@@ -857,6 +1023,7 @@ export default async function CatalogDraftsPage({
                                   <Button type="submit" variant="save" size="sm">✓ Approve</Button>
                                 </div>
                               </form>
+                              </details>
                               <form action={dismiss}>
                                 {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
                                 <Button type="submit" variant="neutral" size="sm">Dismiss</Button>
@@ -897,6 +1064,30 @@ export default async function CatalogDraftsPage({
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* S14: one page at a time, with the true total from the same read. */}
+        {paged && (pager.hasPrev || pager.hasNext || pager.label) && !pager.pastEnd && (
+          <nav className="flex items-center justify-between gap-3 text-xs text-[var(--admin-text-muted)]" aria-label="Pages" data-testid="onboarding-pager">
+            <span>{pager.label}</span>
+            <span className="flex gap-3">
+              {pager.hasPrev && (
+                <Link href={onboardingListHref({ ...listFilters, page: list.page - 1 })} className="font-semibold underline">
+                  {"\u2190 Previous"}
+                </Link>
+              )}
+              {pager.hasNext && (
+                <Link href={onboardingListHref({ ...listFilters, page: list.page + 1 })} className="font-semibold underline">
+                  {"Next \u2192"}
+                </Link>
+              )}
+            </span>
+          </nav>
+        )}
+        {pager.pastEnd && (
+          <Link href={onboardingListHref({ ...listFilters, page: 1 })} className="text-xs font-semibold underline">
+            Back to the first page
+          </Link>
         )}
 
         {/* S10 SHADOW RING: what the 90% rule WOULD have attached, from the

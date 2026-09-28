@@ -11,7 +11,20 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { usableCount } from "@/lib/supabase/read-completeness-core";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
-import { isUuid, normalizeDraftView } from "@/lib/catalog/draft-deep-link-core";
+// S14: the onboarding list's query plan, picker filter and counts (pure).
+import {
+  DRAFT_LEGACY_LIMIT,
+  PICKER_MAX_MANIFESTS,
+  buildDraftListPlan,
+  isPastEndError,
+  pickerManifestFilter,
+  pickerSinceIso,
+  summarizeManifestDrafts,
+  type DraftListInput,
+  type DraftListPlan,
+  type ManifestDraftCounts,
+  type PickerManifestRow,
+} from "@/lib/catalog/onboarding-list-core";
 import {
   classifyInsertError,
   planDraftSeeding,
@@ -599,24 +612,120 @@ export async function listCatalogDrafts(
   status = "draft",
   filters: { manifestId?: string | null; draftId?: string | null } = {},
 ): Promise<CatalogDraft[]> {
-  if (!isSupabaseServiceConfigured) return [];
-  const view = normalizeDraftView(status);
-  const manifestId = isUuid(filters.manifestId) ? filters.manifestId.trim().toLowerCase() : null;
-  const draftId = isUuid(filters.draftId) ? filters.draftId.trim().toLowerCase() : null;
+  // S14: the same query, now built by the pure plan (legacy mode = the S02
+  // shape, byte for byte: status [+ manifest] | pinned OR, newest first, 500).
+  const res = await runDraftListPlan(buildDraftListPlan({ status, manifestId: filters.manifestId, draftId: filters.draftId }));
+  return res.rows;
+}
+
+/**
+ * S14 - one page of the onboarding list plus its total, in ONE round trip
+ * (`count: "exact"` rides on the same select). Filters: tab, delivery,
+ * delivery vendor (joined through the only FK, drafts.manifest_id ->
+ * inbound_manifests), and a GW-021-escaped search. A pinned draft (S02
+ * `?draft=`) keeps S02's unpaged query so a deep link always lands on its
+ * product. `total: null` means "could not count" - never shown as 0.
+ */
+export type DraftListPage = {
+  rows: CatalogDraft[];
+  total: number | null;
+  plan: DraftListPlan;
+  /** True when the page asked for is past the end (PostgREST 416). */
+  pastEnd: boolean;
+  error: string | null;
+};
+
+export async function listCatalogDraftsPage(input: DraftListInput): Promise<DraftListPage> {
+  return runDraftListPlan(buildDraftListPlan(input));
+}
+
+async function runDraftListPlan(plan: DraftListPlan): Promise<DraftListPage> {
+  if (!isSupabaseServiceConfigured) return { rows: [], total: null, plan, pastEnd: false, error: null };
   const admin = createSupabaseAdminClient();
-  let q = admin.from("catalog_product_drafts").select("*");
-  if (draftId) {
-    // Values are a closed enum and validated UUIDs, so the filter string
-    // cannot be injected into.
-    const inTab = manifestId ? `and(status.eq.${view},manifest_id.eq.${manifestId})` : `status.eq.${view}`;
-    q = q.or(`${inTab},id.eq.${draftId}`);
-  } else {
-    q = q.eq("status", view);
-    if (manifestId) q = q.eq("manifest_id", manifestId);
+  // Values in the plan's filter strings are a closed enum, validated UUIDs or
+  // an escaped term (onboarding-list-core.ts), so the grammar cannot be broken.
+  let q = plan.count
+    ? admin.from("catalog_product_drafts").select(plan.select, { count: "exact" })
+    : admin.from("catalog_product_drafts").select(plan.select);
+  for (const f of plan.filters) {
+    q = f.op === "eq" ? q.eq(f.column, f.value) : q.or(f.filter);
   }
-  const { data, error } = await q.order("created_at", { ascending: false }).limit(500);
-  if (error) console.error("[catalog-drafts] listCatalogDrafts failed:", error.message);
-  return (data as CatalogDraft[] | null) ?? [];
+  for (const o of plan.order) q = q.order(o.column, { ascending: o.ascending });
+  const { data, error, count } = await (plan.range ? q.range(plan.range.from, plan.range.to) : q.limit(plan.limit ?? DRAFT_LEGACY_LIMIT));
+  if (error) {
+    if (isPastEndError(error)) return { rows: [], total: null, plan, pastEnd: true, error: null };
+    console.error("[catalog-drafts] listCatalogDrafts failed:", error.message);
+  }
+  const rows = ((data as unknown as (CatalogDraft & { inbound_manifests?: unknown })[] | null) ?? []).map((r) => {
+    if (!r || typeof r !== "object" || !("inbound_manifests" in r)) return r as CatalogDraft;
+    // The vendor join adds an embedded object; the draft row stays a draft.
+    const { inbound_manifests: _join, ...draft } = r;
+    void _join;
+    return draft as CatalogDraft;
+  });
+  return {
+    rows,
+    total: plan.count && usableCount(count) ? count : null,
+    plan,
+    pastEnd: false,
+    error: error ? error.message : null,
+  };
+}
+
+/**
+ * S14 - the manifest picker + header, in TWO parallel named-column reads:
+ *   1. inbound_manifests accepted in the last 30 days (accepted |
+ *      partially_accepted, accepted_at >= since) OR the focused delivery,
+ *      newest first, capped at PICKER_MAX_MANIFESTS;
+ *   2. those deliveries' drafts (manifest_id, status, suggested price only)
+ *      for "n drafts" and "(9 need a price)".
+ * Read 2 needs read 1's ids, so it runs after it; both are bounded. Any error
+ * returns null (the picker hides; the list still works).
+ */
+export type OnboardingPicker = {
+  manifests: PickerManifestRow[];
+  counts: Map<string, ManifestDraftCounts>;
+  /** False when the draft-count read failed or hit its cap (counts hidden). */
+  countsComplete: boolean;
+};
+
+const PICKER_DRAFT_COUNT_CAP = 5000;
+
+export async function loadOnboardingPicker(
+  focusManifestId: string | null,
+  now: Date = new Date(),
+): Promise<OnboardingPicker | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("inbound_manifests")
+      .select("id, manifest_number, vendor_id, vendor_label, transfer_date, received_at, accepted_at, status")
+      .or(pickerManifestFilter(pickerSinceIso(now), focusManifestId))
+      .order("accepted_at", { ascending: false, nullsFirst: false })
+      .limit(PICKER_MAX_MANIFESTS);
+    if (error) {
+      console.error("[catalog-drafts] onboarding picker read failed:", error.message);
+      return null;
+    }
+    const manifests = (data as PickerManifestRow[] | null) ?? [];
+    if (manifests.length === 0) return { manifests, counts: new Map(), countsComplete: true };
+    const ids = manifests.map((m) => m.id);
+    const { data: drafts, error: draftErr } = await admin
+      .from("catalog_product_drafts")
+      .select("manifest_id, status, suggested_price_minor_units")
+      .in("manifest_id", ids)
+      .limit(PICKER_DRAFT_COUNT_CAP);
+    const rows = (drafts as { manifest_id: string | null; status: string; suggested_price_minor_units: number | null }[] | null) ?? [];
+    if (draftErr) console.error("[catalog-drafts] onboarding picker counts failed:", draftErr.message);
+    // NEVER GUESS: a failed or capped read hides the counts instead of
+    // printing a number that could be short.
+    const countsComplete = !draftErr && rows.length < PICKER_DRAFT_COUNT_CAP;
+    return { manifests, counts: countsComplete ? summarizeManifestDrafts(rows) : new Map(), countsComplete };
+  } catch (err) {
+    console.error("[catalog-drafts] onboarding picker threw:", err);
+    return null;
+  }
 }
 
 /**
