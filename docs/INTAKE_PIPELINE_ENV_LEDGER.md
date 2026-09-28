@@ -19,8 +19,9 @@ Every flag here is safe unset. Anything **not** listed as an off-word keeps the 
 | `INTAKE_IDENTITY_STAMP` | S05 | on | `on` · off-words `off` `0` `false` `no` `disabled` | Stamps `identity_key` / `kb_product_id` on new lots and drafts at the receiving door. Needs migration 0234. | Set `off` |
 | `LOOKUP_SCHEMA_V2` | S06 | on | `on` · same off-words | The AI lookup asks for every fact in its own field with its own confidence and sources. | Set `off` (v1 prompt, byte-identical) |
 | `ATTACH_POLICY_RING` | S10 | `1` (shadow) | `0`/`off` · `1` · `2` · `3` (junk → `1`) | The per-field 90% auto-attach policy. `1` computes and previews, writes nothing, and fills the Product Onboarding footer counters. `2`/`3` write, but only once S07 (the single write door) ships. Until then they behave like `1`. | Set `0` |
+| `INTAKE_BATCH_STAGING` | S17 | on | `on` · same off-words | One menu update per approve batch: the "Approve all N priced" button on a focused delivery, and a single Approve within 20 s of the last one replaces that still-unpublished update instead of adding another (only when the new one provably contains every product of the old). | Set `off` (no button; every Approve adds its own update, as before S17) |
 
-Source of truth for the names: `IDENTITY_STAMP_ENV` (`src/lib/inventory/identity-stamp-core.ts`), `LOOKUP_SCHEMA_V2_ENV` (`src/lib/inventory/lookup-facts-core.ts`), `ATTACH_POLICY_RING_ENV` (`src/lib/catalog/fact-attach-policy-core.ts`).
+Source of truth for the names: `IDENTITY_STAMP_ENV` (`src/lib/inventory/identity-stamp-core.ts`), `LOOKUP_SCHEMA_V2_ENV` (`src/lib/inventory/lookup-facts-core.ts`), `ATTACH_POLICY_RING_ENV` (`src/lib/catalog/fact-attach-policy-core.ts`), `BATCH_STAGING_ENV` (`src/lib/inventory/batch-staging-core.ts`).
 
 ## 2. AI provider variables the pipeline's lookup uses
 
@@ -65,14 +66,13 @@ When the slice ships, its row moves to §1 with the real constant. Names are the
 | S11 | "Flag ONBOARDING_V2_ROW=off renders today's row" | `ONBOARDING_V2_ROW` |
 | S12 | "Flag; boilerplate path retained" | named in S12 |
 | S13 | "Feature flag; per-row lookup remains" | named in S13 |
-| S17 | "Flag" | named in S17 |
 | S18 | "Flag" | named in S18 |
 | S19 | "Flag" | named in S19 |
 | S20 | "Flag" | named in S20 |
 
 **Which shipped slice added which variable** (checked against `git show` of each merged commit):
 
-- Slices that **added** a variable: S05 (`INTAKE_IDENTITY_STAMP`), S06 (`LOOKUP_SCHEMA_V2`), S10 (`ATTACH_POLICY_RING`).
+- Slices that **added** a variable: S05 (`INTAKE_IDENTITY_STAMP`), S06 (`LOOKUP_SCHEMA_V2`), S10 (`ATTACH_POLICY_RING`), S17 (`INTAKE_BATCH_STAGING`).
 - Slices that added **no** variable: S00, S01, S02, S03, S04, S08, S14, S15, S16. Their bible rollback lines are "Revert…" (S00, S01, S02, S14) or "Revert." (S16), "Delete module" (S03), leave or drop the schema (S04, S08), or "Re-apply previous RPC body" (S15, shipped as `supabase/rollbacks/0236_publish_archive_rule.rollback.sql`). None of those rollbacks names a flag.
 
 `tests/compliance/intake-env-ledger.test.ts` checks these two lists against the Slice column of §1. So a slice that quietly adds a flag, or a §1 row whose slice is filed under "no variable", fails the build.
@@ -83,11 +83,12 @@ When S07 ships, it must also flip `ATTACH_WRITER_SHIPPED` in `fact-attach-policy
 
 ## Final Vercel checklist (the end-of-build handoff)
 
-The final PR of the build rewrites this block with the complete list. As of **S16** it reads (S14, S15 and S16 added no variable):
+The final PR of the build rewrites this block with the complete list. As of **S17** it reads (S14, S15 and S16 added no variable; S17 added `INTAKE_BATCH_STAGING`):
 
 **Set on purpose (recommended values):**
 - `INTAKE_IDENTITY_STAMP` = `on` (same as unset. Setting it makes the choice visible in Vercel.)
 - `LOOKUP_SCHEMA_V2` = `on` (same as unset)
+- `INTAKE_BATCH_STAGING` = `on` (same as unset)
 - `ATTACH_POLICY_RING` = `1` for now. Change it to `2` only after S07 ships **and** you have read about a week of footer counters on Product Onboarding (bible §0.5: "run in shadow for a week").
 
 **Must already be set (secrets, so there is no recommended value):** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AI_API_KEY` (or `OPENAI_API_KEY`), and `AI_GEMINI_API_KEY` if `AI_MODEL_HEAVY` is a Gemini model.

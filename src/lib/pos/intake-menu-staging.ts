@@ -57,6 +57,17 @@ import {
   failedPublishOutcome,
   initialPublishOutcome,
 } from "@/lib/pos/intake-version-copy-core";
+// S17: one menu version per approve batch (coalesce + batch notes). Pure.
+import {
+  BATCH_STAGING_ENV,
+  batchNotesSuffix,
+  batchStagingEnabled,
+  draftIdList,
+  planRestageReplace,
+  replacedSummary,
+  restageWindowStartIso,
+  type RestageCandidate,
+} from "@/lib/inventory/batch-staging-core";
 import type { MenuItemRow, MenuVariantRow, MenuVersion } from "@/lib/pos/db-types";
 
 export type IntakeStagingOutcome = {
@@ -74,6 +85,12 @@ export type IntakeStagingOutcome = {
   reason?: string;
 };
 
+/**
+ * S17: `batchCount` = how many drafts one "Approve all priced" click just
+ * approved, so the version notes count the batch. Absent for a single approve.
+ */
+export type IntakeStagingOptions = { batchCount?: number };
+
 const ITEM_BATCH = 250;
 const VARIANT_BATCH = 500;
 
@@ -85,6 +102,7 @@ const VARIANT_BATCH = 500;
 export async function stageIntakeMenuVersionForManifest(
   manifestId: string,
   actorId: string | null,
+  opts: IntakeStagingOptions = {},
 ): Promise<IntakeStagingOutcome> {
   const skip = (reason: string): IntakeStagingOutcome => ({
     staged: false,
@@ -357,13 +375,19 @@ export async function stageIntakeMenuVersionForManifest(
           // automatically, so the success path needs ZERO extra writes.
           manifest: manifestHeader,
           publish_outcome: initialPublishOutcome(factFlags.length, new Date().toISOString()),
+          // S17: which approved drafts this snapshot was built from, so a
+          // later snapshot may replace it ONLY when it provably contains all
+          // of them (planRestageReplace). Plus the batch size, when batched.
+          approved_draft_ids: draftIdList(drafts.map((d) => d.id)),
+          ...(opts.batchCount && opts.batchCount > 1 ? { batch_count: opts.batchCount } : {}),
         },
-        notes: buildIntakeVersionNotes({
-          manifest: manifestHeader,
-          added: plan.addedCount,
-          merged: plan.mergedCount,
-          carried: plan.carriedCount,
-        }),
+        notes:
+          buildIntakeVersionNotes({
+            manifest: manifestHeader,
+            added: plan.addedCount,
+            merged: plan.mergedCount,
+            carried: plan.carriedCount,
+          }) + batchNotesSuffix(opts.batchCount),
         created_by: actorId,
       })
       .select("*")
@@ -376,6 +400,13 @@ export async function stageIntakeMenuVersionForManifest(
 
     // 6) Persist items + variants in batches (same shape as persistMenuItems).
     await persistSnapshotItems(version.id, plan.items);
+
+    // 6b) S17 coalesce: this snapshot now safely exists (items included), so
+    //     a recent UNPUBLISHED update of this delivery that it provably
+    //     contains is retired instead of piling up. Never skips staging.
+    if (batchStagingEnabled(process.env[BATCH_STAGING_ENV])) {
+      await replaceRecentRestages(version, manifestId, draftIdList(drafts.map((d) => d.id)));
+    }
 
     // 7) AUTO-PUBLISH (owner-approved Option 1): the item-by-item human review
     //    already happened at draft approval, so promote the fresh snapshot to
@@ -603,6 +634,68 @@ export async function intakeMenuStepSnapshot(
     return null;
   }
 }
+
+/**
+ * S17: retire recent unpublished receiving updates of the same delivery that
+ * the fresh snapshot replaces (bible S17.2 debounce, trailing-edge: the last
+ * approve's version always survives). One bounded read of NAMED columns; each
+ * write is guarded to rows still staged, so a row published or archived in
+ * the meantime is never touched. Best-effort: failures log, never throw,
+ * never affect the fresh version.
+ * @returns how many rows were replaced.
+ */
+export async function replaceRecentRestages(
+  fresh: { id: string; created_at?: string | null },
+  manifestId: string,
+  draftIds: string[],
+  nowIso: string = new Date().toISOString(),
+): Promise<number> {
+  try {
+    const since = restageWindowStartIso(fresh.created_at ?? null);
+    if (!since || !fresh.created_at) return 0;
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("menu_versions")
+      .select("id, status, created_at, import_id, summary_json")
+      .is("import_id", null)
+      .eq("status", "staged")
+      .eq("summary_json->>manifest_id", manifestId)
+      .gte("created_at", since)
+      .lt("created_at", fresh.created_at)
+      .neq("id", fresh.id)
+      .limit(RESTAGE_READ_MAX);
+    if (error) {
+      console.error("[intake-menu-staging] restage read failed:", error.message);
+      return 0;
+    }
+    const candidates = (data as RestageCandidate[] | null) ?? [];
+    const plan = new Set(
+      planRestageReplace({ id: fresh.id, created_at: fresh.created_at, manifest_id: manifestId, draft_ids: draftIds }, candidates),
+    );
+    let replaced = 0;
+    for (const row of candidates) {
+      if (!plan.has(row.id)) continue;
+      const { data: done, error: uErr } = await admin
+        .from("menu_versions")
+        .update({ status: "archived", updated_at: nowIso, summary_json: replacedSummary(row.summary_json, fresh.id, nowIso) })
+        .eq("id", row.id)
+        .eq("status", "staged")
+        .select("id");
+      if (uErr) {
+        console.error("[intake-menu-staging] restage replace failed:", uErr.message);
+        continue;
+      }
+      replaced += (done ?? []).length;
+    }
+    return replaced;
+  } catch (err) {
+    console.error("[intake-menu-staging] restage replace exception:", err);
+    return 0;
+  }
+}
+
+/** Candidate ceiling for one coalesce read (a 20 s window holds a handful). */
+const RESTAGE_READ_MAX = 25;
 
 /** Load a published version's items (with variants) as carry-forward rows. */
 async function loadCarryForwardItems(versionId: string): Promise<CarryForwardItem[]> {

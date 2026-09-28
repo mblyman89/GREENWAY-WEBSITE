@@ -68,7 +68,7 @@ const inExample = (v: string) => new RegExp(`^#?\\s*${v}=`, "m").test(envExample
 describe("intake env ledger", () => {
   it("derives the pipeline flags from the code (proves the derivation works)", () => {
     const flags = pipelineFlagNames();
-    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING"]) expect(flags).toContain(v);
+    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "INTAKE_BATCH_STAGING"]) expect(flags).toContain(v);
   });
 
   it("every pipeline flag is in the Shipped table AND .env.example", () => {
@@ -157,6 +157,10 @@ describe("intake env ledger", () => {
     for (const f of ["src/lib/pos/publish-queue-core.ts", "src/app/admin/publish/page.tsx"]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }
-    expect(ledger).toContain("As of **S16**");
+    // S17 (batch staging) ADDED a flag - bible S17.7 "Flag." - so it must be in
+    // the added list and NOT in the none list.
+    expect(none).not.toContain("S17");
+    expect(added.get("S17")).toBe("INTAKE_BATCH_STAGING");
+    expect(ledger).toContain("As of **S17**");
   });
 });

@@ -154,6 +154,15 @@ describe("S01 writer: intake-menu-staging.ts persists a self-describing row", ()
   const stage = bodyAfter(src, "export async function stageIntakeMenuVersionForManifest");
   const auto = bodyAfter(src, "async function autoPublishIntakeVersion");
 
+  it("testing the test: both slices are the real function BODIES (never a parameter type)", () => {
+    // S17 found this helper scoping to an inline parameter type when a comment
+    // with a ")" sat in the parameter list: every pin below then fails (or,
+    // worse, passes vacuously). Pin that each slice is a real body.
+    expect(stage).toContain("createSupabaseAdminClient()");
+    expect(stage).toContain("persistSnapshotItems(");
+    expect(auto).toContain('admin.rpc("publish_menu_version"');
+  });
+
   it("reads the manifest header once, by id, with NAMED columns (usage rule)", () => {
     const reads = stage.match(/\.from\("inbound_manifests"\)/g) ?? [];
     expect(reads.length).toBe(1);

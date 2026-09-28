@@ -27,7 +27,17 @@ import { strainTypePickerPlaceholder } from "@/lib/inventory/strain-type-intel-c
 import { AiLookupPanel } from "./AiLookupPanel";
 import { isAiConfigured } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
-import { approveDraftAction, dismissDraftAction, restoreDraftAction } from "./actions";
+import { approveAllPricedAction, approveDraftAction, dismissDraftAction, restoreDraftAction } from "./actions";
+// S17: "Approve all N priced" for one delivery (one menu update per batch).
+import {
+  BATCH_BUTTON_HELP,
+  BATCH_STAGING_ENV,
+  batchButtonLabel,
+  batchResultCopy,
+  batchStagingEnabled,
+  parseBatchResult,
+  pricedInReview,
+} from "@/lib/inventory/batch-staging-core";
 import { draftsWhatDoIDoHere } from "@/lib/catalog/next-action-core";
 import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
 import { resolveWebsiteCategoriesWithLiveKeys } from "@/lib/inventory/website-category-resolver-server";
@@ -124,7 +134,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -179,6 +189,12 @@ export default async function CatalogDraftsPage({
   const paged = listPage.plan.mode === "paged";
   const pager = pageWindow(listPage.total, list.page, list.pageSize, drafts.length, listPage.pastEnd);
   const focusManifest = focus.manifestId ? picker?.manifests.find((m) => m.id === focus.manifestId) ?? null : null;
+  // S17: the batch button - focused delivery, review tab, flag on, and an
+  // EXACT priced count (unknown counts hide the button: never guess a number).
+  const batchPriced =
+    focusManifest && picker?.countsComplete ? pricedInReview(picker.counts.get(focusManifest.id) ?? null) : null;
+  const batchOn = batchStagingEnabled(process.env[BATCH_STAGING_ENV]);
+  const batchDone = parseBatchResult(sp);
   const headerTitle = onboardingHeaderTitle(
     focusManifest,
     focusManifest && picker?.countsComplete ? picker.counts.get(focusManifest.id) ?? null : null,
@@ -339,7 +355,8 @@ export default async function CatalogDraftsPage({
   const aiLookupEnabled = isAiConfigured;
 
   const banner =
-    approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
+    batchDone ? batchResultCopy(batchDone)
+    : approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
       : dismissed ? "Draft dismissed."
         : restored ? "Draft restored to the review queue."
           : error === "floor" ? (msg || "Price is below the cost floor.")
@@ -428,6 +445,18 @@ export default async function CatalogDraftsPage({
               Show every delivery
             </Link>
           </div>
+        )}
+        {/* S17: approve the whole delivery's priced products at once, then
+            update the menu ONCE (bible S17.2 / S17.4). */}
+        {focus.manifestId && view === "draft" && batchOn && batchPriced !== null && batchPriced > 0 && (
+          <form
+            action={approveAllPricedAction.bind(null, focus.manifestId)}
+            className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm"
+          >
+            <input type="hidden" name="return_manifest" value={focus.manifestId} />
+            <Button type="submit" variant="save" size="sm">✓ {batchButtonLabel(batchPriced)}</Button>
+            <span className="text-xs text-[var(--admin-text-muted)]">{BATCH_BUTTON_HELP}</span>
+          </form>
         )}
         {pinned && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">

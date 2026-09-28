@@ -90,6 +90,18 @@ import {
   STRAIN_TYPE_AUTO_MIN_CONFIDENCE,
 } from "@/lib/inventory/strain-type-intel-core";
 import { recordAudit } from "@/lib/auth/audit";
+// S17: "Approve all priced" - one menu version per approve batch.
+import {
+  BATCH_APPROVE_MAX,
+  BATCH_STAGING_ENV,
+  batchAuditAfter,
+  batchStagingEnabled,
+  planBatchApprove,
+  runBatchApprove,
+  type BatchDraftRow,
+  type BatchResult,
+} from "@/lib/inventory/batch-staging-core";
+import { isUuid } from "@/lib/catalog/draft-deep-link-core";
 // SLICE 18F: the onboarding memory. This module only SUPPLIES rows to it.
 import {
   recallClassification,
@@ -974,6 +986,12 @@ export async function approveDraftWithPrice(
     volumeQuantity?: string | null;
     volumeUnit?: string | null;
   },
+  /**
+   * S17: `skipStaging` = the caller ("Approve all priced") approves several
+   * drafts and stages ONCE itself afterwards. Every gate above still runs;
+   * only the per-approval menu staging is deferred to that single call.
+   */
+  opts: { skipStaging?: boolean } = {},
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured." };
   const admin = createSupabaseAdminClient();
@@ -1350,7 +1368,7 @@ export async function approveDraftWithPrice(
   // fallback. Best-effort + dynamic import to avoid pulling
   // server-only menu code into every caller of this module; a staging/publish
   // hiccup must never fail the approval itself.
-  if (row?.manifest_id) {
+  if (row?.manifest_id && !opts.skipStaging) {
     try {
       const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
       await stageIntakeMenuVersionForManifest(row.manifest_id, actorId);
@@ -1360,6 +1378,61 @@ export async function approveDraftWithPrice(
   }
 
   return { ok: true };
+}
+
+/**
+ * S17 (bible S17.2 bullet 1): "Approve all priced" for ONE delivery.
+ *
+ * Reads the delivery's in-review drafts that have an automatic price (named
+ * columns, oldest first, capped at BATCH_APPROVE_MAX with an exact count so
+ * the rest is reported, never silently dropped), approves each one AT that
+ * price through approveDraftWithPrice - so every server gate (price floor,
+ * classification, compliance, volume) still runs, and a refused row is
+ * skipped and reported - and then stages the menu ONCE for the whole batch
+ * (one version, one publish: bible S17.6).
+ */
+export async function approveAllPricedForManifest(
+  manifestId: string,
+  actorId: string | null,
+): Promise<{ ok: boolean; error?: string; result?: BatchResult; versionId?: string | null }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured." };
+  if (!batchStagingEnabled(process.env[BATCH_STAGING_ENV])) {
+    return { ok: false, error: "Approving a whole delivery at once is switched off (INTAKE_BATCH_STAGING)." };
+  }
+  if (!isUuid(manifestId)) return { ok: false, error: "That delivery link is not valid." };
+  const admin = createSupabaseAdminClient();
+  const { data, error, count } = await admin
+    .from("catalog_product_drafts")
+    .select("id, status, suggested_price_minor_units", { count: "exact" })
+    .eq("manifest_id", manifestId)
+    .eq("status", "draft")
+    .not("suggested_price_minor_units", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(BATCH_APPROVE_MAX);
+  if (error) return { ok: false, error: error.message };
+  const rows = (data as BatchDraftRow[] | null) ?? [];
+  const plan = planBatchApprove(rows);
+  // Rows beyond this read (exact count) are reported for another click.
+  const overflow = Math.max(0, (count ?? rows.length) - rows.length) + plan.overflow;
+  const { result, versionId } = await runBatchApprove(
+    { approve: plan.approve, overflow, refused: rows.length - plan.approve.length - plan.overflow },
+    // Every gate runs; only the per-approval staging is deferred ...
+    (id, priceMinor) => approveDraftWithPrice(id, priceMinor, actorId, undefined, { skipStaging: true }),
+    // ... to this ONE staging for the whole batch (bible S17.6).
+    async (batchCount) => {
+      const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
+      const staged = await stageIntakeMenuVersionForManifest(manifestId, actorId, { batchCount });
+      return { versionId: staged.versionId };
+    },
+  );
+  await recordAudit({
+    actorId,
+    action: "catalog_draft.batch_approved",
+    entityType: "inbound_manifest",
+    entityId: manifestId,
+    after: batchAuditAfter(manifestId, result, versionId),
+  });
+  return { ok: true, result, versionId };
 }
 
 /**
