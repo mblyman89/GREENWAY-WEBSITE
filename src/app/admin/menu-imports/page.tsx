@@ -19,6 +19,11 @@ import { withBackParam } from "@/lib/admin/back-link-core";
 import { MENU_IMPORTS_PURPOSE_COPY } from "@/lib/catalog/publish-story-core";
 // S18: the cutover runbook (publish Cultivera first, then receive).
 import { CUTOVER_RUNBOOK_HREF } from "@/lib/inventory/cutover-guard-core";
+// S21: once the one-time import went live, say when and collapse the upload.
+import { completedSubtitle, storeDate, type MenuImportsCutover } from "@/lib/inventory/menu-imports-cutover-core";
+import { readMenuImportsCutover } from "@/lib/pos/menu-imports-cutover";
+import { readCutoverDone } from "@/lib/pos/cutover-guard";
+import { OneTimeImportTools } from "@/components/admin/catalog/OneTimeImportTools";
 import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -84,11 +89,18 @@ export default async function MenuImportsPage({
     console.error("[menu-imports] page load error:", err);
   }
 
+  // S21: separate bounded reads (listVersions(30) loses the import after ~30
+  // auto-publishes). Both fail safe on their own: unknown -> the pre-S21 page.
+  const [cutover, uploadRefused]: [MenuImportsCutover, boolean] = await Promise.all([
+    readMenuImportsCutover(),
+    readCutoverDone(),
+  ]);
+
   return (
     <div>
       <AdminPageHeader
         title="Menu Imports"
-        subtitle={MENU_IMPORTS_PURPOSE_COPY}
+        subtitle={cutover.done ? completedSubtitle(storeDate(cutover.first.publishedAt)) : MENU_IMPORTS_PURPOSE_COPY}
         breadcrumbs={<Breadcrumbs items={[{ label: "Menu Imports" }]} />}
         help={
           <HelpPanel
@@ -262,7 +274,8 @@ export default async function MenuImportsPage({
           )}
         </section>
 
-        {/* Upload */}
+        {/* Upload (S21: behind "Show one-time import tools" once the import went live) */}
+        <OneTimeImportTools cutover={cutover} refused={uploadRefused}>
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
           <h2 className="text-sm font-semibold text-white">Upload a new POS export</h2>
           <p className="mt-1 text-xs text-white/40">
@@ -313,6 +326,7 @@ export default async function MenuImportsPage({
             </div>
           </form>
         </section>
+        </OneTimeImportTools>
 
         {/* Clean Slate — remove only test data */}
         {canPublish && (

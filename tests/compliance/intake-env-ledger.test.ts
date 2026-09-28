@@ -172,7 +172,20 @@ describe("intake env ledger", () => {
     expect(added.get("S19")).toBe("INTAKE_VENDOR_ID_IDENTITY");
     expect(ledger.slice(ledger.indexOf("## 4. Planned flags"))).not.toMatch(/^\| S19 \|/m);
     expect(read("src/lib/inventory/vendor-identity-core.ts")).toContain('export const VENDOR_ID_IDENTITY_ENV = "INTAKE_VENDOR_ID_IDENTITY"');
-    expect(ledger).toContain("As of **S19**");
+    // S21 (Menu Imports after cutover) is copy + reads; bible S21.7 "Revert.".
+    // Its new code reads no environment; the page's "refused" wording follows
+    // the S18 flag through readCutoverDone, which the ledger row says.
+    expect(none).toContain("S21");
+    for (const f of [
+      "src/lib/inventory/menu-imports-cutover-core.ts",
+      "src/lib/pos/menu-imports-cutover.ts",
+      "src/components/admin/catalog/OneTimeImportTools.tsx",
+    ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    expect(ledger).toContain('S21: the Menu Imports page says "refused" only when this guard would refuse');
+    expect(ledger).toContain("As of **S21**");
+    expect(ledger).not.toContain("As of **S19**");
     expect(ledger).not.toContain("As of **S18**");
   });
 });
