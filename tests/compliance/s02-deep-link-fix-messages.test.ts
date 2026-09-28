@@ -196,7 +196,11 @@ describe("S02 structural pins — the pages use the core", () => {
 
   it("drafts page: validated focus, one read, pinned row decides the tab", () => {
     expect(page).toContain("parseDraftFocus(sp)");
-    expect(page).toContain("listCatalogDrafts(focus.view, { manifestId: focus.manifestId, draftId: focus.draftId })");
+    // S14 moved the ONE read to listCatalogDraftsPage (same S02 query when a
+    // draft is pinned); the validated focus must still drive it.
+    const read1 = page.slice(page.indexOf("listCatalogDraftsPage({"), page.indexOf("}),", page.indexOf("listCatalogDraftsPage({")));
+    for (const k of ["status: focus.view,", "manifestId: focus.manifestId,", "draftId: focus.draftId,"]) expect(read1, k).toContain(k);
+    expect(page.match(/listCatalogDraftsPage\(\{/g) ?? []).toHaveLength(1);
     expect(page).toContain("effectiveDraftView(focus, pinned)");
     expect(page).toContain("listed.filter((d) => d.status === view)");
     expect(page).not.toMatch(/listCatalogDrafts\(view\)/);

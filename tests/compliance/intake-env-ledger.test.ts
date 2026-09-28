@@ -126,4 +126,24 @@ describe("intake env ledger", () => {
     for (const v of tableNames(ledger, "## 1. Shipped pipeline flags")) expect(final).toContain(`\`${v}\``);
     expect(final).toContain("`ATTACH_POLICY_RING` = `1`");
   });
+
+  it("the per-slice 'added / added no variable' lists match the Slice column of section 1", () => {
+    const sec1 = ledger.slice(ledger.indexOf("## 1. Shipped pipeline flags"), ledger.indexOf("## 2."));
+    const bySlice = new Map<string, string>();
+    for (const m of sec1.matchAll(/^\| `([A-Z0-9_]+)` \| (S\d\d) \|/gm)) bySlice.set(m[2], m[1]);
+    expect(bySlice.size).toBeGreaterThanOrEqual(3);
+    const addedLine = ledger.match(/Slices that \*\*added\*\* a variable: ([^\n]+)/);
+    const noneLine = ledger.match(/Slices that added \*\*no\*\* variable: ([^\n]+?)\. /);
+    expect(addedLine).not.toBeNull();
+    expect(noneLine).not.toBeNull();
+    const added = new Map([...addedLine![1].matchAll(/(S\d\d) \(`([A-Z0-9_]+)`\)/g)].map((m) => [m[1], m[2]] as [string, string]));
+    // Every section-1 row appears in the "added" list with the same name, and vice versa.
+    expect([...added.entries()].sort()).toEqual([...bySlice.entries()].sort());
+    const none = [...noneLine![1].matchAll(/S\d\d/g)].map((m) => m[0]);
+    expect(none.length).toBeGreaterThanOrEqual(7);
+    for (const s of none) expect(bySlice.has(s), `${s} is filed as "no variable" but owns a section-1 row`).toBe(false);
+    // S14 (onboarding list) is pure URL/query/UI: it reads no environment.
+    expect(none).toContain("S14");
+    expect(read("src/lib/catalog/onboarding-list-core.ts")).not.toMatch(/process\.env/);
+  });
 });
