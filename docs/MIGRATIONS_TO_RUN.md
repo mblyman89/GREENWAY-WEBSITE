@@ -1180,3 +1180,62 @@ in Vercel.
    order by tgname;
   -- expect 2 rows: trg_pfp_append_only, trg_pfp_no_truncate
   ```
+
+## S15 — 0236 — one archival rule for every publish
+
+- [ ] `0236_publish_archive_rule.sql` — replaces two database functions,
+  `publish_menu_version` and `clean_slate_test_data`. No tables or columns
+  change. It does not depend on 0234 or 0235, but running them in number
+  order (0234, 0235, 0236) is the simplest habit.
+
+  **Why:** until now there were three different rules for which waiting menu
+  updates get archived when a menu goes live (bible S15, findings F-057,
+  F-058, F-042). The database only archived after a POS spreadsheet publish,
+  and never touched updates built from receiving (a `NULL <> x` test is never
+  true in SQL). The two app paths each covered a different half. So a
+  Cultivera upload that was not published, followed by an approval that
+  published itself, stayed on the Publish page forever with a red "Outdated"
+  chip, and publishing it by mistake would have taken every received product
+  off the menu.
+
+  **What it does:** one rule for every publish. Every *staged* update of any
+  origin created **before** the one just published is archived, and the row
+  records why in `summary_json` (`archived_reason` =
+  `superseded_by_publish:<id>`, `archived_at`). Newer staged updates are left
+  alone. Publishing an id that does not exist now fails loudly
+  (`PUBLISH_VERSION_NOT_FOUND`) instead of silently taking the live menu
+  down. The factory reset (`clean_slate_test_data`) now restores the most
+  recently **live** menu, never an update that was only ever staged.
+  Execute rights are narrowed to the server (`service_role`) only.
+
+  **Until it is run** nothing breaks. The app already applies exactly the
+  same rule right after every publish (S15 `archiveSupersededStaged`), so
+  you get the fix today. Once 0236 is in, the app pass simply finds nothing
+  left to archive.
+
+  Safe to re-run (`create or replace function`, grants are idempotent).
+  Verified: all 236 migrations apply on a clean Postgres 15, 0236 re-applies
+  cleanly, and the scenario script
+  `scripts/recon/publish-archive-rule-pg-check.sql` passed (including a proof
+  that the old functions had the bug, via the rollback file). 12 deliberate
+  sabotages of the SQL were each caught by that script.
+
+  **Run it, then check:**
+
+  ```sql
+  select obj_description('public.publish_menu_version(uuid,uuid)'::regprocedure, 'pg_proc')
+         like '0236 / S15%' as publish_ok,
+         obj_description('public.clean_slate_test_data()'::regprocedure, 'pg_proc')
+         like '0236 / S15%' as clean_slate_ok;
+  -- expect true, true
+
+  select has_function_privilege('anon', 'public.publish_menu_version(uuid,uuid)', 'execute') as anon_can_publish,
+         has_function_privilege('authenticated', 'public.publish_menu_version(uuid,uuid)', 'execute') as users_can_publish;
+  -- expect false, false
+  ```
+
+  **Rollback (only if needed):** paste
+  `supabase/rollbacks/0236_publish_archive_rule.rollback.sql` into the SQL
+  editor. It restores the previous function bodies (0002 and 0152) word for
+  word, with their previous grants. The app keeps applying the one rule
+  either way.

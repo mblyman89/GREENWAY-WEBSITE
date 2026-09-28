@@ -198,8 +198,10 @@ describe("S01 writer: intake-menu-staging.ts persists a self-describing row", ()
     expect(rfEnd).toBeGreaterThan(rfStart);
     const outside = auto.slice(0, rfStart) + auto.slice(rfEnd);
     expect(outside).not.toContain("summary_json");
-    // Exactly two menu_versions writes: the failure record + the stale sweep.
-    expect((auto.match(/\.from\("menu_versions"\)/g) ?? []).length).toBe(2);
+    // S15: exactly ONE direct menu_versions write left here, the failure
+    // record. The old stale sweep moved to archiveSupersededStaged
+    // (menu-version.ts), the one archival rule shared with 0236.
+    expect((auto.match(/\.from\("menu_versions"\)/g) ?? []).length).toBe(1);
     const success = auto.slice(auto.indexOf("// Housekeeping"));
     expect(success).not.toContain("recordFailure");
   });

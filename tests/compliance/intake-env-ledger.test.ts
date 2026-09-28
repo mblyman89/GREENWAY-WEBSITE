@@ -145,5 +145,12 @@ describe("intake env ledger", () => {
     // S14 (onboarding list) is pure URL/query/UI: it reads no environment.
     expect(none).toContain("S14");
     expect(read("src/lib/catalog/onboarding-list-core.ts")).not.toMatch(/process\.env/);
+    // S15 (one archival rule) rolls back by re-applying the previous RPC body,
+    // not by a flag. Its new code reads no environment.
+    expect(none).toContain("S15");
+    for (const f of ["src/lib/pos/publish-archive-rule-core.ts", "src/lib/pos/publish-guard-core.ts"]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    expect(ledger).toContain("supabase/rollbacks/0236_publish_archive_rule.rollback.sql");
   });
 });

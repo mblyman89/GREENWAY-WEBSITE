@@ -10,13 +10,15 @@ import {
   getPublishedVersion,
   listVersions,
   listIntakeStagedVersions,
-  diffVersions,
+  diffDraftsAgainstBase,
 } from "@/lib/pos/menu-version";
 import type { MenuVersion } from "@/lib/pos/db-types";
 import {
   buildPublishVerdict,
-  flagOutdatedDrafts,
+  flagDraftFreshness,
+  freshnessChip,
   PUBLISH_SEMANTICS_COPY,
+  type DraftFreshness,
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
 import { formatDateTime } from "@/lib/pos/format";
@@ -33,13 +35,24 @@ export const dynamic = "force-dynamic";
  *
  * This page is the journey's Publish stage (journey-core href). It shows:
  *   - what's live right now,
- *   - every waiting draft with ONE clearly marked "Latest" (the safe one) and
- *     the rest marked "Outdated" with a plain-English removal warning,
+ *   - every waiting draft, judged by what it CONTAINS (S15: item-set diff vs
+ *     the live menu, not its timestamp) - "Latest" keeps everything live, a
+ *     draft that would take products off says how many, and drafts created
+ *     before the live menu read "Superseded (archived automatically)",
  *   - a safety verdict per draft built from a real diff vs. the live menu.
  *
  * Menu Imports stays where it is (uploads + import history) — this page links
  * to it but does NOT absorb it.
  */
+
+/** S15 chip colours: only "would take products off" is warm; nothing is red. */
+const FRESHNESS_STYLE: Record<DraftFreshness, string> = {
+  latest: "bg-[var(--admin-accent)]/20 text-[var(--admin-accent)]",
+  complete: "bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]/80",
+  would_remove: "bg-[var(--admin-gold)]/15 text-[var(--admin-gold)]",
+  superseded: "bg-white/10 text-white/50",
+  unknown: "bg-white/10 text-white/60",
+};
 
 const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
   safe: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
@@ -48,7 +61,7 @@ const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
 };
 
 type DraftRow = {
-  version: MenuVersion & { freshness: "latest" | "outdated" };
+  version: MenuVersion & { freshness: DraftFreshness; removedCount: number | null };
   verdict: PublishVerdict | null;
   /** Where "Review & publish" goes — the intake or POS-import review page. */
   reviewHref: string;
@@ -75,39 +88,53 @@ export default async function PublishCommandCenterPage({
   // Staged POS-import versions reviewed on the Menu Imports review page.
   const posStaged = allVersions.filter((v) => v.status === "staged" && v.import_id !== null);
 
-  // ONE freshness ranking across every waiting draft, newest first.
-  const flagged = flagOutdatedDrafts([...intakeStaged, ...posStaged]);
-
-  // Real diff-based verdict per draft (capped to keep the page snappy).
+  // S15: freshness by item SET, not timestamp. Newest first, capped, then ONE
+  // read of the live menu shared by every diff (was one per row). A diff that
+  // could not be read in full is "unknown" - never shown as safe.
   const VERDICT_CAP = 10;
-  const rows: DraftRow[] = await Promise.all(
-    flagged.slice(0, VERDICT_CAP).map(async (v): Promise<DraftRow> => {
-      let verdict: PublishVerdict | null = null;
-      try {
-        const diff = await diffVersions(v.id, published?.id ?? null);
-        verdict = buildPublishVerdict({
-          added: diff.added.length,
-          removed: diff.removed.length,
-          priceChanged: diff.priceChanged.length,
-          unchanged: diff.unchangedCount,
-          hasLiveMenu: Boolean(published),
-          stagedCreatedAt: v.created_at,
-          publishedCreatedAt: published?.created_at ?? null,
-        });
-      } catch (err) {
-        console.error("[admin/publish] verdict diff failed:", err);
-      }
-      const origin = v.import_id === null ? ("receiving" as const) : ("pos-import" as const);
-      const reviewHref =
-        origin === "receiving"
-          ? `/admin/menu-imports/version/${v.id}?back=${encodeURIComponent("/admin/publish")}`
-          : `/admin/menu-imports/${v.import_id}?back=${encodeURIComponent("/admin/publish")}`;
-      // S01: pure, no I/O — reads the summary_json this row already carries.
-      const story = origin === "receiving" ? describeIntakeVersion(v) : null;
-      return { version: v, verdict, reviewHref, origin, story };
+  const waiting = [...intakeStaged, ...posStaged].sort(
+    (a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0),
+  );
+  const shown = waiting.slice(0, VERDICT_CAP);
+  const diffs = await diffDraftsAgainstBase(
+    shown.map((v) => v.id),
+    published?.id ?? null,
+  );
+  const removedById = new Map<string, number | null>(
+    shown.map((v) => {
+      const d = diffs.get(v.id);
+      return [v.id, d && d.complete ? d.diff.removed.length : null];
     }),
   );
-  const overflow = Math.max(0, flagged.length - VERDICT_CAP);
+  const flagged = flagDraftFreshness(shown, {
+    liveCreatedAt: published?.created_at ?? null,
+    removedById,
+  });
+
+  const rows: DraftRow[] = flagged.map((v): DraftRow => {
+    const d = diffs.get(v.id);
+    const verdict: PublishVerdict | null =
+      d && d.complete
+        ? buildPublishVerdict({
+            added: d.diff.added.length,
+            removed: d.diff.removed.length,
+            priceChanged: d.diff.priceChanged.length,
+            unchanged: d.diff.unchangedCount,
+            hasLiveMenu: Boolean(published),
+            stagedCreatedAt: v.created_at,
+            publishedCreatedAt: published?.created_at ?? null,
+          })
+        : null;
+    const origin = v.import_id === null ? ("receiving" as const) : ("pos-import" as const);
+    const reviewHref =
+      origin === "receiving"
+        ? `/admin/menu-imports/version/${v.id}?back=${encodeURIComponent("/admin/publish")}`
+        : `/admin/menu-imports/${v.import_id}?back=${encodeURIComponent("/admin/publish")}`;
+    // S01: pure, no I/O — reads the summary_json this row already carries.
+    const story = origin === "receiving" ? describeIntakeVersion(v) : null;
+    return { version: v, verdict, reviewHref, origin, story };
+  });
+  const overflow = Math.max(0, waiting.length - VERDICT_CAP);
   const latest = rows.find((r) => r.version.freshness === "latest") ?? null;
 
   return (
@@ -166,9 +193,9 @@ export default async function PublishCommandCenterPage({
           />
           <StatCard
             label="Drafts waiting"
-            value={`${flagged.length}`}
-            hint={flagged.length > 0 ? "Only the LATEST is safe by default" : "All caught up"}
-            accent={flagged.length > 0 ? "orange" : "green"}
+            value={`${waiting.length}`}
+            hint={waiting.length > 0 ? "The one marked Latest keeps everything live" : "All caught up"}
+            accent={waiting.length > 0 ? "orange" : "green"}
           />
           <StatCard
             label="Newest draft"
@@ -189,9 +216,9 @@ export default async function PublishCommandCenterPage({
             )}
           </div>
           <p className="mt-1 text-xs text-white/50">
-            Each draft is a complete menu snapshot. The one marked <strong>Latest</strong> carries
-            everything; drafts marked <strong>Outdated</strong> were staged earlier and are missing
-            newer products — publishing one would take those products off your live menu.
+            Each draft is judged by what it contains. <strong>Latest</strong> keeps every live product
+            and adds the new ones. A draft that would take products off says how many. Older drafts
+            are archived automatically once a newer menu goes live.
           </p>
 
           {rows.length === 0 ? (
@@ -209,15 +236,9 @@ export default async function PublishCommandCenterPage({
                   }`}
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    {v.freshness === "latest" ? (
-                      <span className="rounded bg-[var(--admin-accent)]/20 px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--admin-accent)]">
-                        Latest — publish this one
-                      </span>
-                    ) : (
-                      <span className="rounded bg-red-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-red-300">
-                        Outdated — missing newer products
-                      </span>
-                    )}
+                    <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${FRESHNESS_STYLE[v.freshness]}`}>
+                      {freshnessChip(v)}
+                    </span>
                     <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
                       {origin === "receiving" ? "from receiving" : "from POS upload"}
                     </span>

@@ -705,6 +705,7 @@ import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 import { __runEnrichmentMatchCoreTests } from "../../src/lib/enrichment/match-core";
 import { __runPublishGuardTests } from "../../src/lib/pos/publish-guard-core";
+import { __runPublishArchiveRuleTests } from "../../src/lib/pos/publish-archive-rule-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
 import { __runSageExportsCoreTests } from "../../src/lib/accounting/sage-exports-core";
@@ -1372,6 +1373,8 @@ __runLiquidVolumeTests();
   __runEodCoreTests();
   __runEnrichmentMatchCoreTests();
   __runPublishGuardTests();
+  // S15: the one archival rule (throws on failure, returns { passed }).
+  __runPublishArchiveRuleTests();
   // SLICE 39 connectivity audit: previously-dark suites. Suites that throw
   // internally on assertion failure are bare calls; suites that only return
   // { passed, failed } are wrapped so a failure still fails this runner.

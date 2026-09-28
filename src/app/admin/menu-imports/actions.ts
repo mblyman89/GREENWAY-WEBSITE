@@ -8,7 +8,7 @@ import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateT
 import {
   getPublishedVersion,
   diffVersions,
-  archiveStaleIntakeDrafts,
+  archiveSupersededStaged,
   getImportDiagnosticsChecked,
   listVersions,
   getVersionItems,
@@ -172,10 +172,11 @@ export async function publishVersion(formData: FormData): Promise<void> {
     redirect(dest + "?error=" + encodeURIComponent(message));
   }
 
-  // SLICE 76 housekeeping: with this snapshot live, intake drafts staged
-  // BEFORE it are landmines (publishing one would drop newer products) —
-  // archive them so they can't be published by mistake. Best-effort.
-  await archiveStaleIntakeDrafts(versionId);
+  // S15 housekeeping: the ONE archival rule. With this snapshot live, every
+  // staged version of ANY origin created before it is a landmine (publishing
+  // one would drop newer products), so it is archived with a reason. Same
+  // rule as migration 0236; a zero-write no-op once 0236 is applied.
+  await archiveSupersededStaged({ id: versionId });
 
   // Refresh public menu surfaces so they read the new published snapshot.
   // SLICE 59: ONE canonical list (public-surfaces.ts) covers "/", "/menu",

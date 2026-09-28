@@ -15,8 +15,8 @@
  *   - buildPublishVerdict: safe / caution / danger verdict for a draft, with
  *     a headline and detail sentence. Any removal requires an explicit
  *     confirmation (the server action enforces it; the UI shows a checkbox).
- *   - flagOutdatedDrafts: newest intake draft = "latest", the rest are
- *     "outdated" (publishing one would drop newer products).
+ *   - flagDraftFreshness (S15): what each waiting draft would do to the live
+ *     menu, decided by its item SET (the diff), not its timestamp.
  *   - explainDiagnostic: translates every known "to fix" diagnostic code into
  *     what it means, how to fix it, and WHERE (a fix-it link).
  *
@@ -114,27 +114,99 @@ export function buildPublishVerdict(input: PublishVerdictInput): PublishVerdict 
 }
 
 // ---------------------------------------------------------------------------
-// Outdated-draft flagging
+// Draft freshness - by item SET, not by timestamp (S15, bible F-057)
 // ---------------------------------------------------------------------------
 
-export type DraftFreshness = "latest" | "outdated";
+/**
+ * What a waiting draft would do to the live menu, decided from what it
+ * CONTAINS (the diff against live), with age used only to spot drafts the
+ * S15 archival rule supersedes.
+ *
+ *   latest       keeps every live product (removes 0) and is the NEWEST such
+ *                draft - the recommended one.
+ *   complete     also keeps every live product, but a newer complete draft
+ *                exists.
+ *   would_remove newer than the live menu but missing N live products (a
+ *                number to read, not a threat - maybe intentional).
+ *   superseded   created BEFORE the live menu. The S15 rule archives these
+ *                on every publish; one still waiting means the sweep has not
+ *                run on it yet.
+ *   unknown      the comparison with the live menu could not be read in full.
+ *                Never shown as safe (never guess).
+ *
+ * Before S15 the newest draft by timestamp was "latest" and every other one
+ * "outdated": a Cultivera upload minutes old ranked Latest with ZERO received
+ * products in it, and every receiving draft read Outdated.
+ */
+export type DraftFreshness = "latest" | "complete" | "would_remove" | "superseded" | "unknown";
 
-export type FlaggedDraft<T> = T & { freshness: DraftFreshness };
+export type FlaggedDraft<T> = T & {
+  freshness: DraftFreshness;
+  /** Live products this draft would take off the menu; null when unknown. */
+  removedCount: number | null;
+};
+
+export type DraftFreshnessInput = {
+  /** created_at of the live (published) version; null when nothing is live. */
+  liveCreatedAt: string | null;
+  /**
+   * Per draft id: how many live products its diff removes, or null when the
+   * diff read was incomplete. A draft missing from the map is unknown.
+   */
+  removedById: ReadonlyMap<string, number | null>;
+};
+
+function timeOrNegInf(iso: string): number {
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
+}
+
+function usableRemoved(n: number | null | undefined): n is number {
+  return typeof n === "number" && Number.isInteger(n) && n >= 0;
+}
 
 /**
- * Flag which intake drafts are safe to look at. Input is the staged-draft list
- * ordered newest-first (how listIntakeStagedVersions returns it); the first is
- * "latest", everything after is "outdated" — an older snapshot whose publish
- * would DROP products added since. Order is verified, not assumed.
+ * Flag every waiting draft by what it contains. Output is newest-first
+ * (order verified, not assumed; an unparseable created_at sorts last).
  */
-export function flagOutdatedDrafts<T extends { id: string; created_at: string }>(
-  draftsNewestFirst: readonly T[],
+export function flagDraftFreshness<T extends { id: string; created_at: string }>(
+  drafts: readonly T[],
+  input: DraftFreshnessInput,
 ): FlaggedDraft<T>[] {
-  // Verify newest-first ordering instead of trusting the caller (never guess).
-  const sorted = [...draftsNewestFirst].sort(
-    (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
-  );
-  return sorted.map((d, i) => ({ ...d, freshness: i === 0 ? "latest" : "outdated" }));
+  const sorted = [...drafts].sort((a, b) => timeOrNegInf(b.created_at) - timeOrNegInf(a.created_at));
+  const live = input.liveCreatedAt ? Date.parse(input.liveCreatedAt) : Number.NaN;
+  let latestTaken = false;
+  return sorted.map((d) => {
+    const raw = input.removedById.get(d.id);
+    const removedCount = usableRemoved(raw) ? raw : null;
+    const created = Date.parse(d.created_at);
+    let freshness: DraftFreshness;
+    if (!Number.isNaN(live) && !Number.isNaN(created) && created < live) freshness = "superseded";
+    else if (removedCount === null) freshness = "unknown";
+    else if (removedCount > 0) freshness = "would_remove";
+    else if (!latestTaken) {
+      freshness = "latest";
+      latestTaken = true;
+    } else freshness = "complete";
+    return { ...d, freshness, removedCount };
+  });
+}
+
+/** Chip copy per freshness, used verbatim by every page that shows it. */
+export const FRESHNESS_CHIP: Record<DraftFreshness, string> = {
+  latest: "Latest \u2014 publish this one",
+  complete: "Keeps everything live",
+  would_remove: "Would take products off",
+  superseded: "Superseded (archived automatically)",
+  unknown: "Couldn't compare \u2014 open to check",
+};
+
+/** Chip copy for a waiting draft, with the removal count when there is one. */
+export function freshnessChip(f: { freshness: DraftFreshness; removedCount: number | null }): string {
+  if (f.freshness === "would_remove" && f.removedCount !== null) {
+    return `Would take ${f.removedCount} product${f.removedCount === 1 ? "" : "s"} off`;
+  }
+  return FRESHNESS_CHIP[f.freshness];
 }
 
 // ---------------------------------------------------------------------------
@@ -455,21 +527,71 @@ export function __runPublishGuardTests(): { passed: number } {
   });
   ok(badTs.level === "caution", "unparseable timestamps → caution not crash");
 
-  // flagOutdatedDrafts: newest = latest, rest outdated; re-sorts if needed.
-  const flagged = flagOutdatedDrafts([
-    { id: "b", created_at: "2026-02-02T00:00:00Z" },
-    { id: "a", created_at: "2026-02-01T00:00:00Z" },
-  ]);
-  ok(flagged[0].id === "b" && flagged[0].freshness === "latest", "newest flagged latest");
-  ok(flagged[1].id === "a" && flagged[1].freshness === "outdated", "older flagged outdated");
-  const resorted = flagOutdatedDrafts([
-    { id: "old", created_at: "2026-01-01T00:00:00Z" },
-    { id: "new", created_at: "2026-03-01T00:00:00Z" },
-  ]);
-  ok(resorted[0].id === "new", "mis-ordered input is re-sorted, order verified not assumed");
-  ok(flagOutdatedDrafts([]).length === 0, "empty draft list is fine");
-  const solo = flagOutdatedDrafts([{ id: "x", created_at: "2026-02-02T00:00:00Z" }]);
-  ok(solo[0].freshness === "latest", "single draft is latest");
+  // flagDraftFreshness (S15): by item SET, not timestamp.
+  const LIVE = "2026-02-02T00:00:00Z";
+  const fr = (
+    drafts: { id: string; created_at: string }[],
+    removed: Record<string, number | null>,
+    liveAt: string | null = LIVE,
+  ) => flagDraftFreshness(drafts, { liveCreatedAt: liveAt, removedById: new Map(Object.entries(removed)) });
+  // The F-057 case: a Cultivera upload minutes old with ZERO received cards
+  // (removes 5) must NOT be latest; the older receiving superset must be.
+  const f57 = fr(
+    [
+      { id: "cultivera", created_at: "2026-02-03T10:05:00Z" },
+      { id: "receiving", created_at: "2026-02-03T10:00:00Z" },
+    ],
+    { cultivera: 5, receiving: 0 },
+  );
+  ok(f57[0].id === "cultivera" && f57[0].freshness === "would_remove", "newest-by-time that removes products is NOT latest");
+  ok(f57[0].removedCount === 5, "removal count carried");
+  ok(f57[1].id === "receiving" && f57[1].freshness === "latest", "superset is latest even with an older timestamp");
+  // Two supersets: the newer is latest, the older is complete.
+  const two = fr(
+    [
+      { id: "old", created_at: "2026-02-03T00:00:00Z" },
+      { id: "new", created_at: "2026-02-04T00:00:00Z" },
+    ],
+    { old: 0, new: 0 },
+  );
+  ok(two[0].id === "new" && two[0].freshness === "latest", "newest superset is latest (input re-sorted)");
+  ok(two[1].freshness === "complete", "older superset is complete, not outdated");
+  // Created before the live menu: superseded, whatever it contains.
+  const sup = fr([{ id: "s", created_at: "2026-02-01T00:00:00Z" }], { s: 0 });
+  ok(sup[0].freshness === "superseded", "created before live -> superseded even if a superset");
+  const eq = fr([{ id: "e", created_at: LIVE }], { e: 0 });
+  ok(eq[0].freshness === "latest", "same instant as live is not older (strict, like 0236)");
+  // Unknown: a failed read is never safe.
+  const unk = fr([{ id: "u", created_at: "2026-02-03T00:00:00Z" }, { id: "m", created_at: "2026-02-03T01:00:00Z" }], { u: null });
+  ok(unk.every((d) => d.freshness === "unknown" && d.removedCount === null), "null or missing diff -> unknown, never latest");
+  const junk = fr([{ id: "j", created_at: "2026-02-03T00:00:00Z" }], { j: -1 });
+  ok(junk[0].freshness === "unknown", "negative count -> unknown");
+  const frac = fr([{ id: "k", created_at: "2026-02-03T00:00:00Z" }], { k: 1.5 });
+  ok(frac[0].freshness === "unknown", "non-integer count -> unknown");
+  // Unknown does not take the latest slot from a later superset.
+  const mix = fr(
+    [{ id: "u", created_at: "2026-02-05T00:00:00Z" }, { id: "g", created_at: "2026-02-04T00:00:00Z" }],
+    { u: null, g: 0 },
+  );
+  ok(mix[1].freshness === "latest", "an unknown newer draft does not steal latest");
+  // Nothing live: every draft is compared with an empty menu.
+  const none = fr([{ id: "a", created_at: "2026-01-01T00:00:00Z" }], { a: 0 }, null);
+  ok(none[0].freshness === "latest", "no live menu -> nothing superseded");
+  const badLive = fr([{ id: "a", created_at: "2026-01-01T00:00:00Z" }], { a: 0 }, "garbage");
+  ok(badLive[0].freshness === "latest", "unparseable live time -> no superseded guess");
+  const badDraft = fr(
+    [{ id: "x", created_at: "garbage" }, { id: "y", created_at: "2026-02-03T00:00:00Z" }],
+    { x: 0, y: 0 },
+  );
+  ok(badDraft[0].id === "y" && badDraft[1].id === "x", "unparseable draft time sorts last");
+  ok(badDraft[0].freshness === "latest" && badDraft[1].freshness === "complete", "and is never superseded by a guess");
+  ok(fr([], {}).length === 0, "empty list is fine");
+  // Chip copy.
+  ok(FRESHNESS_CHIP.superseded === "Superseded (archived automatically)", "bible S15.4 chip copy");
+  ok(freshnessChip({ freshness: "would_remove", removedCount: 1 }) === "Would take 1 product off", "singular chip");
+  ok(freshnessChip({ freshness: "would_remove", removedCount: 4 }) === "Would take 4 products off", "plural chip");
+  ok(freshnessChip({ freshness: "latest", removedCount: 0 }) === FRESHNESS_CHIP.latest, "latest chip");
+  ok(Object.values(FRESHNESS_CHIP).every((c) => !/outdated/i.test(c)), "no chip says Outdated any more");
 
   // explainDiagnostic: every actionable code has a fix link; FYIs don't.
   const unmapped = explainDiagnostic("draft_inject_unmapped_category", "raw msg");
