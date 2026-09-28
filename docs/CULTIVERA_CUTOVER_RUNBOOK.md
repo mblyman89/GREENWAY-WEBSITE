@@ -66,6 +66,15 @@ Each step says **where**, **what to check**, and **why it matters**.
    - **Compliance inventory lots** on the upload's page: one lot per Barcode
      (F-074). If the page offers *Backfill lots*, press it (safe to repeat).
    - The public `/menu` shows the Cultivera cards.
+   - **Admin → Menu Imports** now opens with *"Initial Cultivera import
+     completed <date> (N products, N lots planned)"* and the subtitle *"Menu
+     updates from receiving publish automatically. Your one-time Cultivera
+     import was completed on <date>."* (S21). The upload form is folded
+     behind **Show one-time import tools** (closed by default; Test-mode
+     rehearsals are still in there). The date is the store's calendar date
+     (Pacific). "Lots planned" is the lot plan saved with the upload, so it
+     should match the lots you checked above; a count the upload did not
+     record is shown as *not recorded*, never as 0.
 5. **Check nothing is waiting.** Open **Admin → Publish Menu**. There should
    be no waiting update of either kind. Open the cutover page: "Still to
    rebuild" should say *none*. If a delivery is listed, press **Rebuild** on
