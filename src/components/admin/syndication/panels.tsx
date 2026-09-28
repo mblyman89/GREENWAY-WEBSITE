@@ -50,6 +50,7 @@ export function ConnectionHealthPanel({
   lastSentLabel = "Last successful sync",
   lastAutomaticCheckAt,
   staleWarning = null,
+  verdict = null,
 }: {
   health: HealthReport;
   /** From syndication_sync_state (may differ from log history pre-migration). */
@@ -63,19 +64,46 @@ export function ConnectionHealthPanel({
   lastAutomaticCheckAt?: string | null;
   /** SLICE AS-1. Amber "not sent in over a day" sentence, or null. */
   staleWarning?: string | null;
+  /**
+   * SLICE AS-2. One plain-English verdict shared with the Automatic syncing
+   * card (schedule-core `describeLeaflyConnection`). When given it REPLACES
+   * the badge, the summary, the "last sent" value and the amber warning, and
+   * the orange runbook box shows only when a send actually failed. Omitted
+   * (Weedmaps) = the long-standing behaviour.
+   */
+  verdict?: {
+    tone: "good" | "waiting" | "bad" | "off";
+    headline: string;
+    sentence: string;
+    lastSentIso: string | null;
+    showRunbook: boolean;
+  } | null;
 }) {
+  const VERDICT_TONE: Record<"good" | "waiting" | "bad" | "off", BadgeTone> = {
+    good: "green",
+    waiting: "gold",
+    bad: "danger",
+    off: "neutral",
+  };
+  const showRunbook = verdict ? verdict.showRunbook : health.status === "degraded" || health.status === "down";
+  const shownWarning = verdict ? null : staleWarning;
+  const lastSent = verdict ? verdict.lastSentIso : lastSyncedAt ?? health.lastSuccessAt;
   return (
     <Card>
       <div className="mb-2 flex items-center gap-2">
         <h2 className="text-sm font-bold text-[var(--admin-text)]">Connection health</h2>
-        <Badge tone={HEALTH_TONE[health.status]}>{HEALTH_LABEL[health.status]}</Badge>
+        {verdict ? (
+          <Badge tone={VERDICT_TONE[verdict.tone]}>{verdict.headline}</Badge>
+        ) : (
+          <Badge tone={HEALTH_TONE[health.status]}>{HEALTH_LABEL[health.status]}</Badge>
+        )}
       </div>
-      <p className="text-xs text-[var(--admin-text-muted)]">{health.summary}</p>
+      <p className="text-xs text-[var(--admin-text-muted)]">{verdict ? verdict.sentence : health.summary}</p>
       <dl className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
         <div>
           <dt className="text-[var(--admin-text-faint)]">{lastSentLabel}</dt>
           <dd className="font-medium text-[var(--admin-text)]">
-            {fmtWhen(lastSyncedAt ?? health.lastSuccessAt)}
+            {fmtWhen(lastSent)}
           </dd>
         </div>
         {lastAutomaticCheckAt !== undefined ? (
@@ -85,20 +113,20 @@ export function ConnectionHealthPanel({
           </div>
         ) : null}
         <div>
-          <dt className="text-[var(--admin-text-faint)]">Last attempt</dt>
+          <dt className="text-[var(--admin-text-faint)]">{verdict ? "Last send attempt" : "Last attempt"}</dt>
           <dd className="font-medium text-[var(--admin-text)]">{fmtWhen(health.lastAttemptAt)}</dd>
         </div>
         <div>
-          <dt className="text-[var(--admin-text-faint)]">Consecutive failures</dt>
+          <dt className="text-[var(--admin-text-faint)]">{verdict ? "Failed sends in a row" : "Consecutive failures"}</dt>
           <dd className="font-medium text-[var(--admin-text)]">{health.consecutiveFailures}</dd>
         </div>
       </dl>
-      {staleWarning ? (
+      {shownWarning ? (
         <p className="mt-3 rounded-md border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] p-2 text-[11px] font-bold text-[var(--admin-gold)]">
-          {staleWarning}
+          {shownWarning}
         </p>
       ) : null}
-      {health.status === "degraded" || health.status === "down" ? (
+      {showRunbook ? (
         <p className="mt-3 rounded-md border border-[var(--admin-orange)]/30 bg-[var(--admin-orange-soft)] p-2 text-[11px] text-[var(--admin-orange)]">
           Check the most recent error in Recent sync activity below, then match it in the
           &lsquo;Get reconnected&rsquo; runbook — or ask the integrations assistant on the

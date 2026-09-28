@@ -1267,7 +1267,10 @@ export function summarizeAutomation(input: {
     tone: "good",
     headline: "Running",
     detail:
-      `Last full sync ${describeElapsed(input.lastFullSyncIso, input.nowIso)}. ` +
+      // SLICE AS-2: "daily run", not "full sync". This time includes a daily
+      // run that CHECKED and found nothing to send, so calling it a sync made
+      // this card look green while Leafly had received nothing.
+      `Last daily run ${describeElapsed(input.lastFullSyncIso, input.nowIso)}. ` +
       `${describeSchedule(input.settings)} ${nextSentence}`.trim(),
     needsAttention: false,
   };
@@ -1390,6 +1393,149 @@ export function staleSendWarning(input: {
   const now = Date.parse(input.nowIso);
   if (!Number.isFinite(sent) || !Number.isFinite(now)) return null;
   return now - sent > STALE_SEND_WARN_HOURS * 3_600_000 ? STALE_SEND_WARNING : null;
+}
+
+/**
+ * SLICE AS-2 -- ONE PLAIN-ENGLISH ANSWER FOR BOTH CARDS.
+ *
+ * The owner saw "Connection health: Degraded -- no successful sync in 51h"
+ * directly above "Automatic syncing: Running -- last full sync 11 hours ago",
+ * plus an orange "check the most recent error" box with zero failures. All
+ * true, and useless together: the green card counted a daily run that
+ * CHECKED and sent nothing (before AS-1 a quiet daily run skipped), the
+ * health card counted only real sends, and the orange box fires on any
+ * non-green status even when nothing has failed.
+ *
+ * This is the one verdict both cards now show. Its inputs are facts, never
+ * guesses:
+ *   - lastSentIso: the NEWEST real send to Leafly from every record we keep
+ *     (sync state, the send log, a successful scheduled run that sent).
+ *   - lastCheckIso: the newest scheduled check (any outcome).
+ *   - sendFailuresInARow: failed real sends at the head of the send log.
+ * The orange runbook box is shown ONLY when a send actually failed.
+ */
+export type LeaflyConnectionVerdict = {
+  tone: "good" | "waiting" | "bad" | "off";
+  headline: string;
+  sentence: string;
+  /** The newest real send we know of (for the "Last menu sent" row). */
+  lastSentIso: string | null;
+  /** True only when a real send failed: then the error/runbook box is useful. */
+  showRunbook: boolean;
+};
+
+/** A scheduled check older than this means the cron is not reaching us. */
+export const CHECKS_STOPPED_AFTER_MINUTES = 90;
+
+function newestIso(list: ReadonlyArray<string | null | undefined>): string | null {
+  let best: string | null = null;
+  let bestMs = -Infinity;
+  for (const v of list) {
+    if (typeof v !== "string" || v === "") continue;
+    const ms = Date.parse(v);
+    if (Number.isFinite(ms) && ms > bestMs) {
+      best = v;
+      bestMs = ms;
+    }
+  }
+  return best;
+}
+
+export function describeLeaflyConnection(input: {
+  nowIso: string;
+  configured: boolean;
+  automationEnabled: boolean;
+  dailyFullHour: number;
+  lastSentCandidates: ReadonlyArray<string | null | undefined>;
+  lastCheckIso: string | null;
+  sendFailuresInARow: number;
+  /** Non-null when the run history could not be read. */
+  problem?: string | null;
+}): LeaflyConnectionVerdict {
+  const lastSentIso = newestIso(input.lastSentCandidates);
+  const sentAgo = describeElapsed(lastSentIso, input.nowIso);
+  const now = Date.parse(input.nowIso);
+  const sentMs = lastSentIso ? Date.parse(lastSentIso) : NaN;
+  const fresh = Number.isFinite(sentMs) && Number.isFinite(now) && now - sentMs <= STALE_SEND_WARN_HOURS * 3_600_000;
+  const daily = formatPacificHour(input.dailyFullHour);
+  const sentPart = lastSentIso ? `Leafly last received your menu ${sentAgo}.` : "Leafly has not received your menu from this system yet.";
+
+  if (!input.configured) {
+    return { tone: "bad", headline: "Not connected", sentence: "Leafly credentials are not set, so nothing can be sent. Add them in the setup steps above.", lastSentIso, showRunbook: false };
+  }
+  if (input.sendFailuresInARow > 0) {
+    return {
+      tone: "bad",
+      headline: input.sendFailuresInARow === 1 ? "Last send failed" : `Last ${input.sendFailuresInARow} sends failed`,
+      sentence: `${sentPart} The most recent attempt to send was refused or failed. Read the newest error in Recent sync activity below.`,
+      lastSentIso,
+      showRunbook: true,
+    };
+  }
+  if (input.problem) {
+    return { tone: "bad", headline: "Cannot check", sentence: `${sentPart} The automatic sync history could not be read (${input.problem}).`, lastSentIso, showRunbook: false };
+  }
+  if (!input.automationEnabled) {
+    return {
+      tone: fresh ? "good" : "off",
+      headline: fresh ? "Connected (sending by hand)" : "Automatic syncing is off",
+      sentence: `${sentPart} Automatic syncing is off, so Leafly only gets your menu when someone sends it. Turn it on in Automatic syncing below to stop worrying about it.`,
+      lastSentIso,
+      showRunbook: false,
+    };
+  }
+  const checkMs = input.lastCheckIso ? Date.parse(input.lastCheckIso) : NaN;
+  const checksRunning = Number.isFinite(checkMs) && Number.isFinite(now) && now - checkMs <= CHECKS_STOPPED_AFTER_MINUTES * 60_000;
+  const checkPart = input.lastCheckIso ? `The last automatic check was ${describeElapsed(input.lastCheckIso, input.nowIso)}.` : "No automatic check has run yet.";
+  if (!checksRunning) {
+    return {
+      tone: "bad",
+      headline: "Automatic checks have stopped",
+      sentence: `${sentPart} ${checkPart} Checks should run every 15 minutes, so the scheduler is not reaching the site. Press "Run the check now" below and read what it says.`,
+      lastSentIso,
+      showRunbook: false,
+    };
+  }
+  if (fresh) {
+    return {
+      tone: "good",
+      headline: "Connected and syncing",
+      sentence: `${sentPart} ${checkPart} Nothing needs your attention: the whole menu is sent every day at ${daily} Pacific, and changes go in between.`,
+      lastSentIso,
+      showRunbook: false,
+    };
+  }
+  return {
+    tone: "waiting",
+    headline: "Connected, waiting for the daily send",
+    sentence:
+      `${sentPart} ${checkPart} Nothing has failed. The checks run on time, but on quiet days the older daily run only checked and did not send. ` +
+      `That has been fixed: the daily run at ${daily} Pacific now always sends your whole menu, so this turns green after it runs. ` +
+      `To send right now instead, use "Send my whole menu, hold back only the bad ones" above.`,
+    lastSentIso,
+    showRunbook: false,
+  };
+}
+
+/**
+ * SLICE AS-2: the Automatic syncing card's badge and sentence, made to agree
+ * with the Connection health card. When the schedule looks fine but the
+ * connection verdict is not green, the badge says "Checks running" (true)
+ * rather than "Running" (which read as "Leafly is up to date"), and the
+ * sentence points at the connection verdict. Otherwise the summary is
+ * returned unchanged.
+ */
+export function reconcileAutomationWithConnection(
+  summary: AutomationSummary,
+  connection: LeaflyConnectionVerdict | null | undefined,
+): AutomationSummary {
+  if (!connection || summary.tone !== "good" || connection.tone === "good") return summary;
+  return {
+    ...summary,
+    tone: connection.tone === "bad" ? "bad" : "waiting",
+    headline: "Checks running",
+    detail: `${connection.headline}: ${connection.sentence} ${summary.detail}`.trim(),
+  };
 }
 
 export function __runLeaflyScheduleTests(): { passed: number; failed: number } {
@@ -2890,6 +3036,29 @@ export function __runLeaflyScheduleTests(): { passed: number; failed: number } {
     );
     ok("AS-1: no scheduled rows -> null", lastAutomaticCheckIso([{ triggerSource: "manual", startedAt: "x" }]) === null);
     ok("AS-1: a skipped daily_full still counts (only an empty menu can skip now)", isFullSyncEvidence({ method: null, disposition: "skipped", decisionCode: "daily_full" }));
+  }
+
+  // SLICE AS-2 -- one verdict for both cards.
+  {
+    const NOW = "2026-09-28T23:36:00.000Z";
+    const base = { nowIso: NOW, configured: true, automationEnabled: true, dailyFullHour: 4, lastCheckIso: "2026-09-28T23:30:00.000Z", sendFailuresInARow: 0 };
+    const owner = describeLeaflyConnection({ ...base, lastSentCandidates: ["2026-09-27T03:00:00.000Z", null] });
+    ok("AS-2: the owner's case (51h, checks on time, 0 failures) is 'waiting', not a failure", owner.tone === "waiting" && !owner.showRunbook);
+    ok("AS-2: it says nothing failed and when it turns green", /Nothing has failed/.test(owner.sentence) && /4am Pacific/.test(owner.sentence));
+    const good = describeLeaflyConnection({ ...base, lastSentCandidates: ["2026-09-28T11:00:00.000Z"] });
+    ok("AS-2: a send within a day and running checks is green", good.tone === "good" && good.headline === "Connected and syncing");
+    ok("AS-2: the newest of every send record wins", describeLeaflyConnection({ ...base, lastSentCandidates: ["2026-09-26T03:00:00.000Z", "2026-09-28T11:00:00.000Z", "junk"] }).lastSentIso === "2026-09-28T11:00:00.000Z");
+    const failed = describeLeaflyConnection({ ...base, lastSentCandidates: ["2026-09-28T11:00:00.000Z"], sendFailuresInARow: 2 });
+    ok("AS-2: the runbook box shows only when a send failed", failed.tone === "bad" && failed.showRunbook && !good.showRunbook && !owner.showRunbook);
+    const stopped = describeLeaflyConnection({ ...base, lastCheckIso: "2026-09-28T20:00:00.000Z", lastSentCandidates: ["2026-09-28T11:00:00.000Z"] });
+    ok("AS-2: checks older than 90 minutes = checks stopped", stopped.tone === "bad" && /stopped/.test(stopped.headline));
+    ok("AS-2: automation off is never red for staleness", describeLeaflyConnection({ ...base, automationEnabled: false, lastSentCandidates: [] }).tone === "off");
+    ok("AS-2: no credentials is 'Not connected'", describeLeaflyConnection({ ...base, configured: false, lastSentCandidates: [] }).headline === "Not connected");
+    const sum = { tone: "good" as const, headline: "Running", detail: "Last daily run 11 hours ago.", needsAttention: false };
+    const rec = reconcileAutomationWithConnection(sum, owner);
+    ok("AS-2: the schedule card no longer says 'Running' while Leafly is waiting for a send", rec.headline === "Checks running" && rec.tone === "waiting" && rec.detail.startsWith(owner.headline));
+    ok("AS-2: when the connection is green the schedule card is unchanged", reconcileAutomationWithConnection(sum, good) === sum);
+    ok("AS-2: never sent says so", /has not received/.test(describeLeaflyConnection({ ...base, lastSentCandidates: [] }).sentence));
   }
 
   return { passed, failed };

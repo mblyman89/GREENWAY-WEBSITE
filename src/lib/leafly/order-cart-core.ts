@@ -960,7 +960,7 @@ export function __runLeaflyOrderCartTests(): { passed: number; failed: number } 
   ok(LEAFLY_CART_SUCCESS_STATUS === 200, "cart success is 200, not 204");
   // SLICE L-51: Leafly 400s on taxes: [] (proven live). Tax lines are built.
   ok(LEAFLY_CART_TAX_LABEL_EXCISE.includes("included in price") && LEAFLY_CART_TAX_LABEL_SALES.includes("included in price"), "cart tax labels say included in price");
-  ok(LEAFLY_CART_TAX_LABEL_EXCISE !== LEAFLY_CART_TAX_LABEL_SALES, "cart tax labels differ");
+  ok((LEAFLY_CART_TAX_LABEL_EXCISE as string) !== (LEAFLY_CART_TAX_LABEL_SALES as string), "cart tax labels differ");
   {
     // $25.00 flower: pre-tax round(2500/1.463)=1709, excise round(1709*.37)=632, sales residual 159.
     const t = buildCartTaxLines([{ quantity: 1, packagePrice: 2500, category: "Flower" }]);
