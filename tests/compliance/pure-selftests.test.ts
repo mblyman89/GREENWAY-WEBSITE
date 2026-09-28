@@ -75,6 +75,7 @@ import { __runLeaflyOrderCartTests } from "@/lib/leafly/order-cart-core";
 import { __runLeaflyBadgeTests } from "@/lib/inventory/leafly-badge-core";
 import { __runLeaflyRegisterLinesTests } from "@/lib/pos/leafly-register-lines-core";
 import { __runOutboundHistoryTests } from "@/lib/leafly/outbound-history-core";
+import { __runCartPickerTests } from "@/lib/leafly/cart-picker-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -553,5 +554,10 @@ describe("embedded pure self-test suites", () => {
     const r = __runOutboundHistoryTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThanOrEqual(20);
+  });
+  it("cart-picker-core (L-50: picker offers only sizes the Leafly payload sends)", () => {
+    const r = __runCartPickerTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(12);
   });
 });

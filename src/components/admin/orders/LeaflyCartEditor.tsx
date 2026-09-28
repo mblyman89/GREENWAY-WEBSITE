@@ -304,6 +304,11 @@ export function LeaflyCartEditor({
           {data.sourceNote ? (
             <p className="mt-2 text-xs font-bold text-[var(--admin-gold)]">{data.sourceNote}</p>
           ) : null}
+          {data.menuLoaded && data.notSentCount > 0 ? (
+            <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+              {data.notSentCount === 1 ? "1 size is" : `${data.notSentCount} sizes are`} not offered here because the menu we send to Leafly does not include {data.notSentCount === 1 ? "it" : "them"} (Leafly would refuse the change). A size added to the shop recently reaches Leafly on the next menu send.
+            </p>
+          ) : null}
 
           <ul className="mt-2 space-y-2">
             {rows.map((r) => {

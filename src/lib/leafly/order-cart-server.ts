@@ -111,6 +111,11 @@ export type LeaflyCartEditorData = {
   source: "leafly_live" | "stored_copy";
   /** Plain-English note to show when `source` is "stored_copy". Null otherwise. */
   sourceNote: string | null;
+  /**
+   * SLICE L-50. Sizes left out of the picker because the menu we send to
+   * Leafly does not contain them (so Leafly would refuse them). 0 = none.
+   */
+  notSentCount: number;
 };
 
 export type LeaflyCartUpdateResult = OutboundResult & {
@@ -210,7 +215,12 @@ async function loadCartMenu(): Promise<{
   lookup: CartVariantLookup;
   options: LeaflyCatalogOption[];
   loaded: boolean;
+  notSentCount: number;
 }> {
+  // SLICE L-50: `buildLeaflyVariantCatalog` now offers and resolves ONLY
+  // sizes present in the payload we send to Leafly. A size our menu builder
+  // refuses is "not on the menu we publish to Leafly" (variant_not_on_menu),
+  // named, before anything is sent, instead of a bare 400 from Leafly.
   const built = await buildLeaflyVariantCatalog();
   const labels = new Map(built.options.map((o) => [o.integratorVariantId, optionLabel(o)]));
   const lookup: CartVariantLookup = (variantId) => {
@@ -223,7 +233,7 @@ async function loadCartMenu(): Promise<{
       label: labels.get(variantId) ?? null,
     };
   };
-  return { lookup, options: built.options, loaded: built.loaded };
+  return { lookup, options: built.options, loaded: built.loaded, notSentCount: typeof built.notSentCount === "number" ? built.notSentCount : 0 };
 }
 
 /**
@@ -264,6 +274,7 @@ export async function loadLeaflyCartEditor(leaflyOrderId: string): Promise<Leafl
     menuLoaded: false,
     source,
     sourceNote,
+    notSentCount: 0,
   };
   if (!row) return empty;
 
@@ -313,6 +324,7 @@ export async function loadLeaflyCartEditor(leaflyOrderId: string): Promise<Leafl
     menuLoaded: menu.loaded,
     source,
     sourceNote,
+    notSentCount: menu.notSentCount,
   };
 }
 
