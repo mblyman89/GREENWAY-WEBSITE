@@ -50,6 +50,8 @@ import {
   enrichHrefForDraft,
   parseDraftFocus,
 } from "@/lib/catalog/draft-deep-link-core";
+// S22: "Enrich this delivery's products" (filtered enrichment list).
+import { enrichDeliveryHref } from "@/lib/enrichment/enrichment-manifest-core";
 // S03: shadow measurement of the product-identity key (console only).
 // S14: filters, paging, the delivery picker + header, condensed rows (pure).
 import {
@@ -474,6 +476,11 @@ export default async function CatalogDraftsPage({
             </span>
             <Link href={draftsHref({ status: view })} className="font-semibold underline">
               Show every delivery
+            </Link>
+            {/* S22 (F-008): the enrichment list filtered to THIS delivery,
+                newest first - by manifest, not by a name search. */}
+            <Link href={enrichDeliveryHref(focus.manifestId)} className="font-semibold underline" data-testid="enrich-this-delivery">
+              ✨ Enrich this delivery&apos;s products →
             </Link>
           </div>
         )}

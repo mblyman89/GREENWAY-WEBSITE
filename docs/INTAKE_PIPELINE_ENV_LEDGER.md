@@ -73,7 +73,7 @@ When the slice ships, its row moves to §1 with the real constant. Names are the
 **Which shipped slice added which variable** (checked against `git show` of each merged commit):
 
 - Slices that **added** a variable: S05 (`INTAKE_IDENTITY_STAMP`), S06 (`LOOKUP_SCHEMA_V2`), S10 (`ATTACH_POLICY_RING`), S17 (`INTAKE_BATCH_STAGING`), S18 (`INTAKE_CUTOVER_GUARD`), S19 (`INTAKE_VENDOR_ID_IDENTITY`).
-- Slices that added **no** variable: S00, S01, S02, S03, S04, S08, S14, S15, S16, S21. Their bible rollback lines are "Revert…" (S00, S01, S02, S14) or "Revert." (S16, S21), "Delete module" (S03), leave or drop the schema (S04, S08), or "Re-apply previous RPC body" (S15, shipped as `supabase/rollbacks/0236_publish_archive_rule.rollback.sql`). None of those rollbacks names a flag.
+- Slices that added **no** variable: S00, S01, S02, S03, S04, S08, S14, S15, S16, S21, S22. Their bible rollback lines are "Revert…" (S00, S01, S02, S14) or "Revert." (S16, S21, S22), "Delete module" (S03), leave or drop the schema (S04, S08), or "Re-apply previous RPC body" (S15, shipped as `supabase/rollbacks/0236_publish_archive_rule.rollback.sql`). None of those rollbacks names a flag.
 
 `tests/compliance/intake-env-ledger.test.ts` checks these two lists against the Slice column of §1. So a slice that quietly adds a flag, or a §1 row whose slice is filed under "no variable", fails the build.
 
@@ -83,13 +83,14 @@ When S07 ships, it must also flip `ATTACH_WRITER_SHIPPED` in `fact-attach-policy
 
 ## Final Vercel checklist (the end-of-build handoff)
 
-The final PR of the build rewrites this block with the complete list. As of **S21** it reads (S14, S15, S16 and S21 added no variable; S17 added `INTAKE_BATCH_STAGING`; S18 added `INTAKE_CUTOVER_GUARD`; S19 added `INTAKE_VENDOR_ID_IDENTITY`):
+The final PR of the build rewrites this block with the complete list. As of **S22** it reads (S14, S15, S16, S21 and S22 added no variable; S17 added `INTAKE_BATCH_STAGING`; S18 added `INTAKE_CUTOVER_GUARD`; S19 added `INTAKE_VENDOR_ID_IDENTITY`):
 
 **Set on purpose (recommended values):**
 - `INTAKE_IDENTITY_STAMP` = `on` (same as unset. Setting it makes the choice visible in Vercel.)
 - `LOOKUP_SCHEMA_V2` = `on` (same as unset)
 - `INTAKE_BATCH_STAGING` = `on` (same as unset)
 - `INTAKE_CUTOVER_GUARD` = `on` (same as unset). Keep it on through the Cultivera cutover and after; it costs one small read per approval and nothing when no Cultivera upload is waiting. Opening Menu Imports also runs its two-read cutover check (S21), only to pick the upload-note wording.
+- (S22 needs nothing set. Opening Product Enrichment now also makes two bounded, named-column reads, the cards' lots and their deliveries, to power the "From invoice/manifest:" filter and the "newest from receiving" sort. If either read fails, those filters switch off and the page says so.)
 - `INTAKE_VENDOR_ID_IDENTITY` = `on` (same as unset). It costs a few bounded reads per menu update (only the lots that could change a match) and per Onboarding view of one delivery.
 - `ATTACH_POLICY_RING` = `1` for now. Change it to `2` only after S07 ships **and** you have read about a week of footer counters on Product Onboarding (bible §0.5: "run in shadow for a week").
 
