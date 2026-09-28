@@ -56,6 +56,7 @@ import type {
   DraftEnrichment,
   InjectionDiagnostic,
 } from "@/lib/pos/draft-injection-core";
+import type { VendorIdInputs } from "@/lib/inventory/vendor-identity-core";
 import {
   buildIntakeMasteringPlan,
   type LotFactBundle,
@@ -207,7 +208,55 @@ export type IntakeStagingInputs = {
   approvedDrafts: ApprovedDraftForInjection[];
   /** Per-draft enrichment (website category / strain type / on-hand / label). */
   enrichmentByDraftId: Map<string, DraftEnrichment>;
+  /**
+   * S19: vendor ids for the restock match (flag on + complete reads only).
+   * Absent = the name rule, byte for byte.
+   */
+  vendorIds?: VendorIdInputs;
 };
+
+/**
+ * S19 (latent defect found while wiring vendor ids, fixed fail-closed): is the
+ * carried-forward live menu COMPLETE? The staged snapshot REPLACES the live
+ * menu when it auto-publishes, so a short carry-forward read would publish a
+ * menu missing every product past the short point. PostgREST caps an
+ * un-ranged read at db.max_rows (1,000) with NO error, and the live menu is
+ * ~4,500 items (docs/USAGE-BLEED-ROADMAP.md) - so the read pages, and this
+ * verdict compares what was read against an INDEPENDENT server-side COUNT
+ * (the SLICE 4A witness pattern, menu-version.ts countVersionItems).
+ *   readFailed        any page or the variant read errored   -> incomplete
+ *   expectedTotal     null (count unavailable)               -> incomplete
+ *   rowsRead < total                                          -> incomplete
+ *   otherwise                                                 -> complete
+ * Unknown is NEVER treated as complete: skipping staging leaves the approved
+ * products approved and the live menu untouched (nothing lost), and the next
+ * approve - or the Publish page - retries.
+ */
+export function carryForwardVerdict(input: {
+  readFailed: boolean;
+  rowsRead: number;
+  expectedTotal: number | null;
+}): { complete: boolean; missing: number | null } {
+  if (input.readFailed) {
+    return { complete: false, missing: input.expectedTotal != null ? Math.max(0, input.expectedTotal - input.rowsRead) : null };
+  }
+  if (input.expectedTotal == null || !Number.isInteger(input.expectedTotal) || input.expectedTotal < 0) {
+    return { complete: false, missing: null };
+  }
+  if (input.rowsRead < input.expectedTotal) return { complete: false, missing: input.expectedTotal - input.rowsRead };
+  return { complete: true, missing: 0 };
+}
+
+/** The skip reason + timeline note when the carry-forward is not provably whole. */
+export const CARRY_FORWARD_INCOMPLETE_REASON = "carry-forward-incomplete";
+export const CARRY_FORWARD_INCOMPLETE_EVENT = "menu_carry_forward_incomplete";
+export function carryForwardIncompleteNote(v: { missing: number | null }): string {
+  const how =
+    v.missing != null && v.missing > 0
+      ? `${v.missing} live product(s) could not be read`
+      : "the live menu could not be read completely";
+  return `Menu update NOT built: ${how}, and publishing a partial menu would take those products off the website. Your approvals are saved and nothing changed on the live menu \u2014 approve again or rebuild from Admin \u2192 Publish Menu in a minute.`;
+}
 
 export type IntakeStagingPlan = {
   /** The full item set for the new staged version (carried + intake). */
@@ -409,6 +458,7 @@ export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): Intak
     drafts: inputs.approvedDrafts,
     existingKeys,
     enrichmentByDraftId: inputs.enrichmentByDraftId,
+    vendorIds: inputs.vendorIds,
     liveCards: items
       .filter((it) => it.origin === "carried")
       .map((it) => ({
@@ -786,6 +836,59 @@ export function __runIntakeMenuStagingCoreTests(): { passed: number } {
       card.filter_categories.includes("preroll") && card.filter_categories.includes("preroll-pack"),
       "pack-axis restock: filter_categories covers both browse sections",
     );
+  }
+
+  // --- S19: vendor ids pass through to mastering ------------------------------
+  {
+    const liveCult = published({
+      source_item_id: "pos-0123456789ab",
+      name: "Wax",
+      product_name: "Wax",
+      vendor_name: "Greenleaf Manufacturing",
+      brand_name: "Greenleaf",
+      category: "concentrate",
+      strain_name: "GG4",
+      variants: [{ source_variant_id: "pos-0123456789ab-v1", label: "1g", price_minor_units: 3000, inventory_level: 1, medical: false }],
+    });
+    const base = {
+      publishedItems: [liveCult],
+      approvedDrafts: [draft({})],
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+    };
+    const off = buildIntakeStagedVersionPlan(base);
+    const on = buildIntakeStagedVersionPlan({
+      ...base,
+      vendorIds: {
+        vendorIdByLotKey: new Map([["LOT-NEW-1", "v-gl"]]),
+        lotVendorIdsByKey: new Map([["pos-0123456789ab", new Set(["v-gl"])]]),
+      },
+    });
+    assert(off.addedCount === 1 && off.mergedCount === 0, "S19 staging: no ids -> name rule (new card)");
+    assert(on.addedCount === 0 && on.mergedCount === 1 && on.items.length === 1, "S19 staging: ids -> merged onto the Cultivera card, no duplicate");
+    assert(on.items[0].variants.length === 2, "S19 staging: carried card gained the restock variant");
+  }
+
+  // --- S19: carry-forward completeness (fail closed) ----------------------------
+  {
+    assert(carryForwardVerdict({ readFailed: false, rowsRead: 4500, expectedTotal: 4500 }).complete, "cf: whole");
+    assert(carryForwardVerdict({ readFailed: false, rowsRead: 4501, expectedTotal: 4500 }).complete, "cf: extra rows benign");
+    assert(carryForwardVerdict({ readFailed: false, rowsRead: 0, expectedTotal: 0 }).complete, "cf: empty live menu is whole");
+    const short = carryForwardVerdict({ readFailed: false, rowsRead: 1000, expectedTotal: 4500 });
+    assert(!short.complete && short.missing === 3500, "cf: the 1,000-row cap is caught");
+    const failed = carryForwardVerdict({ readFailed: true, rowsRead: 4500, expectedTotal: 4500 });
+    assert(!failed.complete && failed.missing === 0, "cf: a failed page outranks a matching count");
+    const failedNoCount = carryForwardVerdict({ readFailed: true, rowsRead: 10, expectedTotal: null });
+    assert(!failedNoCount.complete && failedNoCount.missing === null, "cf: failed + no count");
+    const unknown = carryForwardVerdict({ readFailed: false, rowsRead: 10, expectedTotal: null });
+    assert(!unknown.complete && unknown.missing === null, "cf: no witness -> never complete");
+    assert(!carryForwardVerdict({ readFailed: false, rowsRead: 10, expectedTotal: -1 }).complete, "cf: negative count unusable");
+    assert(!carryForwardVerdict({ readFailed: false, rowsRead: 10, expectedTotal: 1.5 }).complete, "cf: fractional count unusable");
+    assert(carryForwardVerdict({ readFailed: true, rowsRead: 20, expectedTotal: 10 }).missing === 0, "cf: missing never negative");
+    assert(CARRY_FORWARD_INCOMPLETE_REASON === "carry-forward-incomplete" && CARRY_FORWARD_INCOMPLETE_EVENT === "menu_carry_forward_incomplete", "cf: reason + event names");
+    assert(carryForwardIncompleteNote({ missing: 3500 }).startsWith("Menu update NOT built: 3500 live product(s) could not be read"), "cf note: counts the missing");
+    assert(carryForwardIncompleteNote({ missing: null }).includes("could not be read completely"), "cf note: unknown");
+    assert(carryForwardIncompleteNote({ missing: 0 }).includes("could not be read completely"), "cf note: zero missing reads as unknown");
+    assert(carryForwardIncompleteNote({ missing: 1 }).includes("approvals are saved") && carryForwardIncompleteNote({ missing: 1 }).includes("Publish Menu"), "cf note: reassures + names the fix");
   }
 
   return { passed };

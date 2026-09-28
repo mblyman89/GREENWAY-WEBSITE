@@ -68,7 +68,7 @@ const inExample = (v: string) => new RegExp(`^#?\\s*${v}=`, "m").test(envExample
 describe("intake env ledger", () => {
   it("derives the pipeline flags from the code (proves the derivation works)", () => {
     const flags = pipelineFlagNames();
-    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD"]) expect(flags).toContain(v);
+    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY"]) expect(flags).toContain(v);
   });
 
   it("every pipeline flag is in the Shipped table AND .env.example", () => {
@@ -166,7 +166,13 @@ describe("intake env ledger", () => {
     expect(none).not.toContain("S18");
     expect(added.get("S18")).toBe("INTAKE_CUTOVER_GUARD");
     expect(ledger.slice(ledger.indexOf("## 4. Planned flags"))).not.toMatch(/^\| S18 \|/m);
-    expect(ledger).toContain("As of **S18**");
-    expect(ledger).not.toContain("As of **S17**");
+    // S19 (vendor-id identity) ADDED a flag - bible S19.7 "Flag." - and its
+    // planned "named in S19" row left section 4.
+    expect(none).not.toContain("S19");
+    expect(added.get("S19")).toBe("INTAKE_VENDOR_ID_IDENTITY");
+    expect(ledger.slice(ledger.indexOf("## 4. Planned flags"))).not.toMatch(/^\| S19 \|/m);
+    expect(read("src/lib/inventory/vendor-identity-core.ts")).toContain('export const VENDOR_ID_IDENTITY_ENV = "INTAKE_VENDOR_ID_IDENTITY"');
+    expect(ledger).toContain("As of **S19**");
+    expect(ledger).not.toContain("As of **S18**");
   });
 });
