@@ -68,6 +68,8 @@ import {
   scheduleCodeLabel,
   scheduleToneForCode,
   summarizeAutomation,
+  reconcileAutomationWithConnection,
+  type LeaflyConnectionVerdict,
   type LeaflyScheduleSettings,
   type ScheduleTone,
 } from "@/lib/leafly/schedule-core";
@@ -106,8 +108,15 @@ export function LeaflySchedulePanel({
   nowIso,
   saveAction,
   checkNowAction,
+  connection = null,
 }: {
   health: SyncHealth;
+  /**
+   * SLICE AS-2. The same verdict the Connection health card shows, so this
+   * card never says "Running" in green while that card says Leafly is waiting
+   * for a send. Pure rule: schedule-core `reconcileAutomationWithConnection`.
+   */
+  connection?: LeaflyConnectionVerdict | null;
   /** The SERVER's clock at render time. See the header note on hydration. */
   nowIso: string;
   saveAction: (formData: FormData) => Promise<SaveResult>;
@@ -143,7 +152,7 @@ export function LeaflySchedulePanel({
     repairSizes,
   };
 
-  const summary = summarizeAutomation({
+  const summary = reconcileAutomationWithConnection(summarizeAutomation({
     nowIso,
     settings: s,
     configured: health.configured,
@@ -152,7 +161,7 @@ export function LeaflySchedulePanel({
     lastRunIso: health.facts.lastRunIso,
     consecutiveFailures: health.facts.consecutiveFailures,
     problem: health.problem,
-  });
+  }), connection);
 
   const cadence = assessCadenceAgainstLeafly(s);
   const savedDescription = describeSchedule(s);

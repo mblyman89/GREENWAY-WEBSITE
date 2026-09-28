@@ -37,7 +37,7 @@ import { loadLeaflySyncHealth } from "@/lib/leafly/schedule-server";
 import { loadLeaflyEvidence } from "@/lib/leafly/evidence-server";
 import { loadLeaflyCertificationProof } from "@/lib/leafly/certification-proof-server";
 import { LeaflyCertificationProofPanel } from "@/components/admin/syndication/LeaflyCertificationProofPanel";
-import { MIN_RUN_GAP_MINUTES, lastAutomaticCheckIso, staleSendWarning } from "@/lib/leafly/schedule-core";
+import { MIN_RUN_GAP_MINUTES, describeLeaflyConnection, lastAutomaticCheckIso, staleSendWarning } from "@/lib/leafly/schedule-core";
 import {
   saveLeaflySettingsAction,
   resetLeaflySyncStateAction,
@@ -133,6 +133,25 @@ export default async function LeaflyIntegrationPage() {
       at: log.created_at,
     }));
   const health = classifyHealth(healthEntries, new Date());
+
+  // SLICE AS-2 -- ONE verdict for the Connection health card AND the
+  // Automatic syncing card, so they can no longer contradict each other.
+  // "Last menu sent" is the newest REAL send from every record we keep:
+  // sync state, the send log, and a scheduled run that actually sent.
+  const lastScheduledSend =
+    scheduleHealth.runs.find((r) => r.pushed && r.disposition === "success")?.finishedAt ??
+    scheduleHealth.runs.find((r) => r.pushed && r.disposition === "success")?.startedAt ??
+    null;
+  const connection = describeLeaflyConnection({
+    nowIso,
+    configured: preview.readiness.configured && scheduleHealth.configured,
+    automationEnabled: scheduleHealth.settings.enabled,
+    dailyFullHour: scheduleHealth.settings.dailyFullHour,
+    lastSentCandidates: [syncState.lastSyncedAt, health.lastSuccessAt, lastScheduledSend],
+    lastCheckIso: lastAutomaticCheckIso(scheduleHealth.runs),
+    sendFailuresInARow: health.consecutiveFailures,
+    problem: scheduleHealth.problem,
+  });
 
   const preflight = runPreflight(preview.items);
   const richness = scoreRichness(preview.items);
@@ -348,6 +367,7 @@ export default async function LeaflyIntegrationPage() {
           lastSentIso: syncState.lastSyncedAt ?? health.lastSuccessAt,
           automationEnabled: scheduleHealth.settings.enabled && scheduleHealth.configured,
         })}
+        verdict={connection}
       />
 
       <DataQualityPanel
@@ -403,6 +423,7 @@ export default async function LeaflyIntegrationPage() {
         nowIso={nowIso}
         saveAction={saveLeaflyScheduleAction}
         checkNowAction={checkLeaflyScheduleNowAction}
+        connection={connection}
       />
 
       {/*
