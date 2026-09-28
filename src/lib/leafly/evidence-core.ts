@@ -2166,10 +2166,10 @@ export function __runLeaflyEvidenceTests(): { passed: number; failed: number } {
     outboundCalls: [{ ...callRow, response_status: 200, response_body: { firstName: "Ann" } }],
   });
   ok(withOrder.privacyViolations.length === 0, "a 2xx order reply is dropped, not exported");
-  const poisoned = auditEvidenceSheets([
+  const jsonPoisoned = auditEvidenceSheets([
     { name: "X", columns: [{ key: "requestJson", header: "r" }], rows: [{ requestJson: '{"emailAddress":"a@b"}' }] },
   ]);
-  ok(poisoned.length === 1 && poisoned[0]!.includes("emailAddress"), "the JSON-cell scan catches a PII key inside a cell");
+  ok(jsonPoisoned.length === 1 && jsonPoisoned[0]!.includes("emailAddress"), "the JSON-cell scan catches a PII key inside a cell");
 
   const summarySheetOut = bundle.sheets.find((s) => s.name === "Summary")!;
   ok(summarySheetOut.rows.length >= 20, "summary sheet is substantive");
