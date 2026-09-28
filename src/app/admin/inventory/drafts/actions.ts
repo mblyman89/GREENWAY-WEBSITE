@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
-import { setCatalogDraftStatus, approveDraftWithPrice } from "@/lib/inventory/catalog-drafts";
+import {
+  setCatalogDraftStatus,
+  approveDraftWithPrice,
+  approveAllPricedForManifest,
+} from "@/lib/inventory/catalog-drafts";
+// S17: the batch result travels back in the redirect (pure encode/decode).
+import { batchResultParams } from "@/lib/inventory/batch-staging-core";
 // SLICE 78: create a website category during onboarding ("__new__" pick).
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -183,6 +189,22 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
     redirect(backTo(formData, { error: "floor", msg: result.error ?? "" }));
   }
   redirect(backTo(formData, { approved: "1" }));
+}
+
+/**
+ * S17 (bible S17.2): "Approve all N priced" for the focused delivery. The
+ * manifest id is bound server-side from the validated page focus; every draft
+ * still passes every approval gate inside approveDraftWithPrice, and the menu
+ * is staged ONCE for the batch. Refused rows stay in the list and are counted.
+ */
+export async function approveAllPricedAction(manifestId: string, formData?: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const result = await approveAllPricedForManifest(manifestId, session.userId);
+  revalidatePath("/admin/inventory/drafts");
+  if (!result.ok || !result.result) {
+    redirect(backTo(formData, { error: "floor", msg: result.error ?? "" }));
+  }
+  redirect(backTo(formData, batchResultParams(result.result)));
 }
 
 export async function dismissDraftAction(draftId: string, formData?: FormData) {
