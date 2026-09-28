@@ -1090,8 +1090,8 @@ export function __runLeaflyOrderCartTests(): { passed: number; failed: number } 
   ok(checkCartAgainstLeaflyCatalog([ch("unchanged", "pos-x")], cat([])).ok, "unchanged lines are not checked");
   ok(checkCartAgainstLeaflyCatalog([ch("removed", null)], cat([])).ok, "removals are not checked");
   ok(!checkCartAgainstLeaflyCatalog([ch("quantity", "pos-x")], cat([])).ok, "a quantity edit IS checked (it manifests as a substitution)");
-  const oos = checkCartAgainstLeaflyCatalog([ch("added", "v1")], cat(["v1"], [["v1", 0]]));
-  ok(!oos.ok && oos.code === "variant_out_of_stock_at_leafly", "added variant at inventory 0 refused");
+  const catOos = checkCartAgainstLeaflyCatalog([ch("added", "v1")], cat(["v1"], [["v1", 0]]));
+  ok(!catOos.ok && catOos.code === "variant_out_of_stock_at_leafly", "added variant at inventory 0 refused");
   ok(checkCartAgainstLeaflyCatalog([ch("quantity", "v1")], cat(["v1"], [["v1", 0]])).ok, "quantity edits are not stock-checked");
   ok(checkCartAgainstLeaflyCatalog([ch("substituted", "v1")], cat(["v1"])).ok, "present variant, no inventory number: passes");
   const pass = checkCartAgainstLeaflyCatalog([ch("substituted", "v1"), ch("unchanged", "v2")], cat(["v1"], [["v1", 3]]));
