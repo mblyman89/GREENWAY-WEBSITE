@@ -51,6 +51,13 @@
 
 import type { KbProductMatch } from "@/lib/ai/kb/intake";
 import type { ProductKnowledge } from "@/lib/ai/kb/product-lookup";
+// S24 - read with the SAME identity the writer used (both pure cores).
+import {
+  identityForLot,
+  kbNaturalKeyString,
+  variantLabelFromMenuLabel,
+} from "@/lib/catalog/product-identity-core";
+import { isPromotableLot } from "@/lib/inventory/manifest-kb-bridge-core";
 
 /**
  * Slugify exactly as `checkProductKnown` does (`intake.ts:25-31`).
@@ -83,6 +90,17 @@ export type KnowledgeQuery = {
   variantLabel?: string | null;
   posProductKey?: string | null;
   strainName?: string | null;
+  /**
+   * S24 - the card's FIRST menu variant label, raw as published ("3.5g").
+   * Canonicalised to the writer's form ("3.5 g") by variantLabelFromMenuLabel
+   * for the "menu-variant" rung. Never replaces `variantLabel` (legacy rung).
+   */
+  menuVariantLabel?: string | null;
+  /**
+   * S24 - the card's lot keys (vendor-identity-core cardLotKeys: its own key
+   * plus each `<lotKey>-onboarded` variant's lot), for the lot rungs.
+   */
+  lotKeys?: readonly string[] | null;
 };
 
 /**
@@ -141,6 +159,32 @@ export type KnowledgeIndexes = {
   enrichments: Map<string, EnrichmentRow>;
   /** keyed by strain slug */
   strains: Map<string, StrainRow>;
+  // S24 (optional so every pre-S24 caller and fixture stays valid):
+  /** inventory_lots keyed by pos_product_key, each list sorted by lot id. */
+  lotsByKey?: Map<string, LotKnowledgeRow[]>;
+  /** brands.id -> brands.display_name (what the bridge passes as brandName). */
+  brandNames?: Map<string, string>;
+  /** kb_products keyed by id (targets of inventory_lots.kb_product_id). */
+  kbById?: Map<string, KbProductMatch>;
+};
+
+/**
+ * S24 - the inventory_lots columns the lot rungs read. These are exactly
+ * the inputs the manifest bridge hands the writer (lotToWritebackFacts):
+ * the RAW product_name, the unit weight + uom (deriveVariantLabel) and the
+ * brand, plus the S05 link (kb_product_id, 0234) and the promotable gate.
+ */
+export type LotKnowledgeRow = {
+  id: string;
+  pos_product_key: string | null;
+  product_name: string | null;
+  unit_weight: number | null;
+  unit_weight_uom: string | null;
+  brand_id: string | null;
+  /** 0234; null before the migration or when S05 found no KB row. */
+  kb_product_id: string | null;
+  status: string | null;
+  disposition: string | null;
 };
 
 /** The empty result — rung 5. Mirrors `product-lookup.ts:78-92`. */
@@ -244,14 +288,10 @@ export function resolveKnowledgeFromIndexes(
   query: KnowledgeQuery,
   indexes: KnowledgeIndexes,
 ): ProductKnowledge {
-  // ── Rungs 1 & 2: kb_products by composite identity ────────────────────────
-  const kbMatch = indexes.kbProducts.get(kbIdentityKey(query));
-  if (kbMatch) {
-    // `checkProductKnown` calls it "exact" ONLY when published AND active.
-    // Anything else present is a draft — staged, usable, flagged.
-    const isExact = kbMatch.status === "published" && kbMatch.active;
-    return fromKbMatchPure(kbMatch, isExact ? "kb-exact" : "kb-draft");
-  }
+  // ── Rungs 1 & 2: kb_products (S24: writer identity first, then the legacy
+  //    display-name key - see resolveKbFromIndexes) ───────────────────────
+  const kb = resolveKbFromIndexes(query, indexes);
+  if (kb) return kb;
 
   // ── Rung 3: product_enrichments by POS key ────────────────────────────────
   if (query.posProductKey) {
@@ -283,8 +323,11 @@ export function collectLookupKeys(queries: readonly KnowledgeQuery[]): {
   identityParts: { brandSlug: string; productSlug: string; variantLabel: string }[];
   posKeys: string[];
   strainSlugs: string[];
+  /** S24: every distinct lot key (trimmed, non-empty) across the batch. */
+  lotKeys: string[];
 } {
   const seenIdentity = new Set<string>();
+  const lotKeys = new Set<string>();
   const identityParts: { brandSlug: string; productSlug: string; variantLabel: string }[] = [];
   const posKeys = new Set<string>();
   const strainSlugs = new Set<string>();
@@ -298,12 +341,17 @@ export function collectLookupKeys(queries: readonly KnowledgeQuery[]): {
     if (query.posProductKey) posKeys.add(query.posProductKey);
     const slug = strainSlugOf(query.strainName);
     if (slug) strainSlugs.add(slug);
+    for (const k of query.lotKeys ?? []) {
+      const t = typeof k === "string" ? k.trim() : "";
+      if (t) lotKeys.add(t);
+    }
   }
 
   return {
     identityParts,
     posKeys: [...posKeys],
     strainSlugs: [...strainSlugs],
+    lotKeys: [...lotKeys],
   };
 }
 
@@ -350,6 +398,223 @@ export function indexStrains(rows: readonly StrainRow[]): Map<string, StrainRow>
     if (row.slug) map.set(row.slug, row);
   }
   return map;
+}
+
+// ── S24: the KB rungs read with the identity the writer used ──────────────
+//
+// F-065: the menu asked kb_products for (brand, DISPLAY name, variant "")
+// while the manifest bridge wrote (brand, RAW manifest name, "3.5 g"), so the
+// rows it created were unreachable. The candidates, in rung order:
+//
+//   lot-link      inventory_lots.kb_product_id - the S05 link stamped at
+//                 finalize (kb-link-store.ts), for the card's own lots.
+//   lot-identity  the natural key rebuilt from the card's lots with S03's
+//                 identityForLot - byte-for-byte the key the bridge wrote
+//                 (raw product_name, brands.display_name, deriveVariantLabel).
+//   menu-variant  the display name + brand + the FIRST menu variant label in
+//                 the writer's form (variantLabelFromMenuLabel "3.5g"->"3.5 g").
+//   menu          the legacy key (display name, brand, query.variantLabel) -
+//                 the ONLY rung before S24, unchanged.
+//
+// kb_products.identity_key (0234) is NOT a rung: nothing writes it yet, and
+// it carries no size, so it could not pick a variant anyway.
+//
+// NEVER A REGRESSION: a new-rung candidate must be published+active OR carry
+// real copy to be eligible. A blank draft the bridge created (name, strain,
+// potency - no prose) therefore can never mask the enrichment or strain copy
+// a card shows today. The legacy "menu" candidate keeps its old power
+// exactly (a blank legacy row still wins, as it always did). Among eligible
+// candidates: published+active first, then with-copy, then rung order.
+
+export type KbRung = "lot-link" | "lot-identity" | "menu-variant" | "menu";
+export const KB_RUNGS: readonly KbRung[] = ["lot-link", "lot-identity", "menu-variant", "menu"];
+
+export type KbCandidate = { match: KbProductMatch; rung: KbRung };
+
+/** `checkProductKnown` calls it "exact" ONLY when published AND active. */
+export function isExactKb(m: KbProductMatch): boolean {
+  return m.status === "published" && Boolean(m.active);
+}
+
+const nonEmpty = (a: readonly unknown[] | null | undefined) => (a?.length ?? 0) > 0;
+const hasText = (v: string | null | undefined) => typeof v === "string" && v.trim().length > 0;
+
+/** Real copy a shopper would see: prose, sensory/effects terms or a photo. */
+export function kbMatchHasContent(m: KbProductMatch): boolean {
+  return (
+    hasText(m.description) ||
+    hasText(m.short_description) ||
+    nonEmpty(m.aroma_notes) ||
+    nonEmpty(m.flavor_notes) ||
+    nonEmpty(m.terpenes) ||
+    nonEmpty(m.effects) ||
+    nonEmpty(m.image_media_ids) ||
+    hasText(m.primary_media_id)
+  );
+}
+
+/**
+ * The writer-form variant for the "menu-variant" rung, or null when there is
+ * none to try: an uncanonicalisable label ("10pk"), the base variant ("" /
+ * "each"), or the same label the legacy rung already asks for.
+ */
+export function menuVariantIdentityLabel(query: KnowledgeQuery): string | null {
+  const c = variantLabelFromMenuLabel(query.menuVariantLabel);
+  if (!c || c === (query.variantLabel ?? "").trim()) return null;
+  return c;
+}
+
+/**
+ * The kb_products natural key the manifest bridge wrote for this lot, or
+ * null. Mirrors promoteManifestToKb: refused/destroyed lots were never
+ * written (isPromotableLot); the brand is brands.display_name when the lot
+ * has a brand_id, else "unknown-brand". NEVER GUESS: a lot whose brand_id
+ * could not be resolved to a name is skipped - treating it as unbranded
+ * would ask for a different product's row.
+ */
+export function lotKbKey(lot: LotKnowledgeRow, brandNames: ReadonlyMap<string, string>): string | null {
+  if (!isPromotableLot(lot.status, lot.disposition)) return null;
+  const brandId = typeof lot.brand_id === "string" && lot.brand_id.trim() ? lot.brand_id.trim() : null;
+  let brandName: string | null = null;
+  if (brandId) {
+    const name = brandNames.get(brandId);
+    if (name === undefined) return null;
+    brandName = name;
+  }
+  const { kb } = identityForLot(lot, { vendorName: null, brandName, websiteCategory: null });
+  return kb ? kbNaturalKeyString(kb) : null;
+}
+
+/**
+ * The card's lots, in lotKeys order, each key's lots by id (as indexed). A
+ * repeated key repeats its lots; kbCandidates dedupes by kb row, so that is
+ * harmless and needs no second guard here.
+ */
+function cardLots(query: KnowledgeQuery, indexes: KnowledgeIndexes): LotKnowledgeRow[] {
+  const out: LotKnowledgeRow[] = [];
+  if (!indexes.lotsByKey) return out;
+  for (const k of query.lotKeys ?? []) {
+    // A blank key finds nothing: indexLots never indexes one.
+    const key = typeof k === "string" ? k.trim() : "";
+    out.push(...(indexes.lotsByKey.get(key) ?? []));
+  }
+  return out;
+}
+
+/** Every kb_products row this card could mean, in rung order, deduped by row. */
+export function kbCandidates(query: KnowledgeQuery, indexes: KnowledgeIndexes): KbCandidate[] {
+  const out: KbCandidate[] = [];
+  const seen = new Set<string>();
+  const push = (m: KbProductMatch | undefined, rung: KbRung) => {
+    if (!m) return;
+    const id = m.id || kbNaturalKeyString({ brand_slug: m.brand_slug, product_slug: m.product_slug, variant_label: m.variant_label ?? "" });
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push({ match: m, rung });
+  };
+  const lots = cardLots(query, indexes);
+  for (const lot of lots) {
+    if (!isPromotableLot(lot.status, lot.disposition)) continue;
+    const kbId = typeof lot.kb_product_id === "string" ? lot.kb_product_id.trim() : "";
+    if (kbId) push(indexes.kbById?.get(kbId), "lot-link");
+  }
+  const brandNames = indexes.brandNames ?? new Map<string, string>();
+  for (const lot of lots) {
+    const k = lotKbKey(lot, brandNames);
+    if (k) push(indexes.kbProducts.get(k), "lot-identity");
+  }
+  const mv = menuVariantIdentityLabel(query);
+  if (mv !== null) push(indexes.kbProducts.get(kbIdentityKey({ ...query, variantLabel: mv })), "menu-variant");
+  push(indexes.kbProducts.get(kbIdentityKey(query)), "menu");
+  return out;
+}
+
+/** Pick one candidate (rules in the section header), or null. */
+export function pickKbCandidate(cands: readonly KbCandidate[]): KbCandidate | null {
+  let best: KbCandidate | null = null;
+  for (const c of cands) {
+    const eligible = c.rung === "menu" || isExactKb(c.match) || kbMatchHasContent(c.match);
+    if (!eligible) continue;
+    if (!best) {
+      best = c;
+      continue;
+    }
+    const ce = isExactKb(c.match);
+    const be = isExactKb(best.match);
+    if (ce !== be) {
+      if (ce) best = c;
+      continue;
+    }
+    if (kbMatchHasContent(c.match) && !kbMatchHasContent(best.match)) best = c;
+  }
+  return best;
+}
+
+/** Rungs 1 & 2 as one pure step: the picked row as knowledge, or null. */
+export function resolveKbFromIndexes(query: KnowledgeQuery, indexes: KnowledgeIndexes): ProductKnowledge | null {
+  const picked = pickKbCandidate(kbCandidates(query, indexes));
+  if (!picked) return null;
+  return fromKbMatchPure(picked.match, isExactKb(picked.match) ? "kb-exact" : "kb-draft");
+}
+
+/** Index lots by pos_product_key, each list sorted by id (stable rung order). */
+export function indexLots(rows: readonly LotKnowledgeRow[]): Map<string, LotKnowledgeRow[]> {
+  const map = new Map<string, LotKnowledgeRow[]>();
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const key = typeof row.pos_product_key === "string" ? row.pos_product_key.trim() : "";
+    if (!key || !row.id || seen.has(row.id)) continue;
+    seen.add(row.id);
+    const list = map.get(key) ?? [];
+    list.push(row);
+    map.set(key, list);
+  }
+  for (const list of map.values()) list.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return map;
+}
+
+/** Index kb_products rows by id. */
+export function indexKbById(rows: readonly KbProductMatch[]): Map<string, KbProductMatch> {
+  const map = new Map<string, KbProductMatch>();
+  for (const row of rows) if (row.id) map.set(row.id, row);
+  return map;
+}
+
+/** brands rows -> id => display_name (blank names are not indexed). */
+export function indexBrandNames(rows: readonly { id: string; display_name: string | null }[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    const name = typeof r.display_name === "string" ? r.display_name.trim() : "";
+    if (r.id && name) map.set(r.id, name);
+  }
+  return map;
+}
+
+/**
+ * What the second KB read needs once the lots are in: the linked kb ids, the
+ * brand ids to resolve, and the RAW-name product slugs not already loaded
+ * (the bridge slugs the raw manifest name, which differs from a mastered
+ * display name - F-065 (b)). Only promotable lots count, as for the writer.
+ */
+export function lotKbReadPlan(
+  lotsByKey: ReadonlyMap<string, readonly LotKnowledgeRow[]>,
+  loadedProductSlugs: ReadonlySet<string>,
+): { kbIds: string[]; brandIds: string[]; productSlugs: string[] } {
+  const kbIds = new Set<string>();
+  const brandIds = new Set<string>();
+  const slugs = new Set<string>();
+  for (const list of lotsByKey.values()) {
+    for (const lot of list) {
+      if (!isPromotableLot(lot.status, lot.disposition)) continue;
+      const kbId = typeof lot.kb_product_id === "string" ? lot.kb_product_id.trim() : "";
+      if (kbId) kbIds.add(kbId);
+      const brandId = typeof lot.brand_id === "string" ? lot.brand_id.trim() : "";
+      if (brandId) brandIds.add(brandId);
+      const { kb } = identityForLot(lot, { vendorName: null, brandName: null, websiteCategory: null });
+      if (kb && !loadedProductSlugs.has(kb.product_slug)) slugs.add(kb.product_slug);
+    }
+  }
+  return { kbIds: [...kbIds], brandIds: [...brandIds], productSlugs: [...slugs] };
 }
 
 // ── Self-test ────────────────────────────────────────────────────────────────
@@ -720,6 +985,298 @@ export function __runProductKnowledgeBatchTests(): { passed: number; failed: num
       ),
     );
   }
+
+
+  // ── S24: the KB rungs read with the identity the writer used ──────────
+  const lot = (over: Partial<LotKnowledgeRow> = {}): LotKnowledgeRow => ({
+    id: "lot-1",
+    pos_product_key: "pos-1",
+    product_name: "GW - Blue Dream Flower 3.5g",
+    unit_weight: 3.5,
+    unit_weight_uom: "g",
+    brand_id: "brand-1",
+    kb_product_id: null,
+    status: "received",
+    disposition: null,
+    ...over,
+  });
+  const blankDraft = (over: Partial<KbProductMatch> = {}): KbProductMatch =>
+    kbRow({
+      aroma_notes: [],
+      flavor_notes: [],
+      terpenes: [],
+      effects: [],
+      description: null,
+      short_description: null,
+      image_media_ids: [],
+      primary_media_id: null,
+      status: "draft",
+      active: true,
+      ...over,
+    });
+  const enrich = (): EnrichmentRow => ({
+    pos_product_key: "pos-1",
+    display_name: "Enrich",
+    description: "Enrichment copy",
+    short_description: null,
+    image_media_ids: null,
+    primary_media_id: null,
+  });
+  // The mastered display name differs from the raw manifest name (F-065 b).
+  const mastered: KnowledgeQuery = {
+    productName: "Blue Dream",
+    brandName: "Greenway",
+    posProductKey: "pos-1",
+    menuVariantLabel: "3.5g",
+    lotKeys: ["pos-1"],
+  };
+  // The key promoteManifestToKb -> writeBackProductFacts wrote for lot().
+  const bridgedKey = `greenway\u001fgw-blue-dream-flower-3-5g\u001f3.5 g`;
+  const s24Idx = (): KnowledgeIndexes => ({
+    ...emptyIdx(),
+    lotsByKey: indexLots([lot()]),
+    brandNames: indexBrandNames([{ id: "brand-1", display_name: "Greenway" }]),
+    kbById: new Map(),
+  });
+
+  // Writer parity: lotKbKey is byte-for-byte the bridge's natural key.
+  eq("lotKbKey = the bridge's key (raw name, display brand, '3.5 g')", lotKbKey(lot(), s24Idx().brandNames!), bridgedKey);
+  eq("lotKbKey: no brand_id -> unknown-brand", lotKbKey(lot({ brand_id: null }), new Map()), `unknown-brand\u001fgw-blue-dream-flower-3-5g\u001f3.5 g`);
+  eq("lotKbKey: blank brand_id -> unknown-brand", lotKbKey(lot({ brand_id: "  " }), new Map()), `unknown-brand\u001fgw-blue-dream-flower-3-5g\u001f3.5 g`);
+  eq("lotKbKey: unresolved brand_id is skipped (never guess)", lotKbKey(lot(), new Map()), null);
+  eq("lotKbKey: brand_id trimmed before lookup", lotKbKey(lot({ brand_id: " brand-1 " }), s24Idx().brandNames!), bridgedKey);
+  eq("lotKbKey: rejected lot never written", lotKbKey(lot({ status: "rejected" }), s24Idx().brandNames!), null);
+  eq("lotKbKey: destroyed lot never written", lotKbKey(lot({ status: "Destroyed" }), s24Idx().brandNames!), null);
+  eq("lotKbKey: rejected_at_dock never written", lotKbKey(lot({ disposition: "rejected_at_dock" }), s24Idx().brandNames!), null);
+  eq("lotKbKey: nameless lot has no KB key", lotKbKey(lot({ product_name: "  " }), s24Idx().brandNames!), null);
+  eq("lotKbKey: no weight -> base variant ''", lotKbKey(lot({ unit_weight: null }), s24Idx().brandNames!), `greenway\u001fgw-blue-dream-flower-3-5g\u001f`);
+
+  // THE BIBLE FIXTURE: a bridged row (variant '3.5 g', raw-name slug) is
+  // found for a mastered display-name item.
+  {
+    const idx = s24Idx();
+    idx.kbProducts.set(bridgedKey, kbRow({ id: "kb-bridged", product_slug: "gw-blue-dream-flower-3-5g", variant_label: "3.5 g", status: "draft", description: "Bridged copy." }));
+    const out = resolveKnowledgeFromIndexes(mastered, idx);
+    eq("bible fixture: bridged row found via lot-identity", out.description, "Bridged copy.");
+    eq("bible fixture: a draft stays kb-draft", out.source, "kb-draft");
+    eq("bible fixture: rung is lot-identity", pickKbCandidate(kbCandidates(mastered, idx))?.rung, "lot-identity");
+    // Pre-S24 (no lot keys, no menu variant) the same index misses it.
+    eq("pre-S24 query still misses it (legacy key unchanged)", resolveKnowledgeFromIndexes({ productName: "Blue Dream", brandName: "Greenway" }, idx).source, "none");
+  }
+
+  // lot-link: the S05 kb_product_id wins the rung order.
+  {
+    const idx = s24Idx();
+    idx.lotsByKey = indexLots([lot({ kb_product_id: " kb-linked " })]);
+    idx.kbById = indexKbById([kbRow({ id: "kb-linked", description: "Linked copy." })]);
+    idx.kbProducts.set(bridgedKey, kbRow({ id: "kb-bridged", description: "Bridged copy." }));
+    const c = kbCandidates(mastered, idx);
+    eq("lot-link is first candidate", c[0]?.rung, "lot-link");
+    eq("lot-link id trimmed", c[0]?.match.id, "kb-linked");
+    eq("lot-link then lot-identity", c[1]?.rung, "lot-identity");
+    eq("lot-link wins a tie", resolveKnowledgeFromIndexes(mastered, idx).description, "Linked copy.");
+  }
+  // lot-link of a refused lot is ignored.
+  {
+    const idx = s24Idx();
+    idx.lotsByKey = indexLots([lot({ kb_product_id: "kb-linked", status: "rejected" })]);
+    idx.kbById = indexKbById([kbRow({ id: "kb-linked" })]);
+    eq("refused lot's link ignored", kbCandidates(mastered, idx).length, 0);
+  }
+  // Duplicate row across rungs is listed once, at its earliest rung.
+  {
+    const idx = s24Idx();
+    const row = kbRow({ id: "kb-same" });
+    idx.lotsByKey = indexLots([lot({ kb_product_id: "kb-same" })]);
+    idx.kbById = indexKbById([row]);
+    idx.kbProducts.set(bridgedKey, row);
+    const c = kbCandidates(mastered, idx);
+    eq("dedupe by id: one candidate", c.length, 1);
+    eq("dedupe keeps earliest rung", c[0]?.rung, "lot-link");
+  }
+
+  // menu-variant: "3.5g" asks for the writer's "3.5 g".
+  {
+    const idx = emptyIdx();
+    idx.kbProducts.set(kbIdentityKey({ productName: "Blue Dream", brandName: "Greenway", variantLabel: "3.5 g" }), kbRow({ id: "kb-mv", description: "MV copy." }));
+    const q: KnowledgeQuery = { productName: "Blue Dream", brandName: "Greenway", menuVariantLabel: "3.5g" };
+    eq("menu-variant rung finds '3.5 g'", resolveKnowledgeFromIndexes(q, idx).description, "MV copy.");
+    eq("menu-variant rung name", kbCandidates(q, idx)[0]?.rung, "menu-variant");
+  }
+  eq("menuVariantIdentityLabel canonicalises", menuVariantIdentityLabel({ productName: "x", menuVariantLabel: "3.5g" }), "3.5 g");
+  eq("menuVariantIdentityLabel: base '' -> null", menuVariantIdentityLabel({ productName: "x", menuVariantLabel: "" }), null);
+  eq("menuVariantIdentityLabel: each -> null", menuVariantIdentityLabel({ productName: "x", menuVariantLabel: "each" }), null);
+  eq("menuVariantIdentityLabel: 10pk -> null", menuVariantIdentityLabel({ productName: "x", menuVariantLabel: "10pk" }), null);
+  eq("menuVariantIdentityLabel: absent -> null", menuVariantIdentityLabel({ productName: "x" }), null);
+  eq("menuVariantIdentityLabel: same as legacy -> null", menuVariantIdentityLabel({ productName: "x", variantLabel: " 3.5 g ", menuVariantLabel: "3.5g" }), null);
+  eq("menuVariantIdentityLabel: base vs other legacy -> null", menuVariantIdentityLabel({ productName: "x", variantLabel: "1 g", menuVariantLabel: "each" }), null);
+  eq("menuVariantIdentityLabel: 10pk vs other legacy -> null", menuVariantIdentityLabel({ productName: "x", variantLabel: "1 g", menuVariantLabel: "10pk" }), null);
+  eq("menuVariantIdentityLabel: differs from legacy", menuVariantIdentityLabel({ productName: "x", variantLabel: "1 g", menuVariantLabel: "3.5g" }), "3.5 g");
+
+  // NEVER A REGRESSION: a blank bridged draft cannot mask enrichment copy.
+  {
+    const idx = s24Idx();
+    idx.kbProducts.set(bridgedKey, blankDraft({ id: "kb-blank" }));
+    idx.enrichments.set("pos-1", enrich());
+    const out = resolveKnowledgeFromIndexes(mastered, idx);
+    eq("blank bridged draft does not mask enrichment", out.source, "enrichment");
+    eq("blank draft from new rung is not eligible", pickKbCandidate(kbCandidates(mastered, idx)), null);
+  }
+  // ...but a blank PUBLISHED+active new-rung row is exact and eligible.
+  {
+    const idx = s24Idx();
+    idx.kbProducts.set(bridgedKey, blankDraft({ id: "kb-pub", status: "published" }));
+    idx.enrichments.set("pos-1", enrich());
+    eq("published+active new-rung row eligible", resolveKnowledgeFromIndexes(mastered, idx).source, "kb-exact");
+  }
+  // A published-but-inactive blank row is NOT exact and has no copy.
+  {
+    const idx = s24Idx();
+    idx.kbProducts.set(bridgedKey, blankDraft({ id: "kb-off", status: "published", active: false }));
+    idx.enrichments.set("pos-1", enrich());
+    eq("inactive blank new-rung row not eligible", resolveKnowledgeFromIndexes(mastered, idx).source, "enrichment");
+  }
+  // The legacy rung keeps its old power: a blank legacy draft still wins.
+  {
+    const idx = emptyIdx();
+    idx.kbProducts.set(kbIdentityKey({ productName: "P", brandName: "B" }), blankDraft());
+    idx.enrichments.set("pos-1", enrich());
+    eq("blank legacy draft still wins (unchanged)", resolveKnowledgeFromIndexes({ productName: "P", brandName: "B", posProductKey: "pos-1" }, idx).source, "kb-draft");
+  }
+  // Published beats draft, whatever the rung order.
+  {
+    const idx = s24Idx();
+    idx.kbProducts.set(bridgedKey, kbRow({ id: "kb-draft", status: "draft", description: "Draft copy." }));
+    idx.kbProducts.set(kbIdentityKey({ productName: "Blue Dream", brandName: "Greenway" }), kbRow({ id: "kb-pub", description: "Published copy." }));
+    const out = resolveKnowledgeFromIndexes(mastered, idx);
+    eq("published legacy beats earlier draft", out.description, "Published copy.");
+    eq("published is kb-exact", out.source, "kb-exact");
+  }
+  // Earlier exact is not displaced by a later exact.
+  {
+    const idx = s24Idx();
+    idx.kbProducts.set(bridgedKey, kbRow({ id: "kb-a", description: "A." }));
+    idx.kbProducts.set(kbIdentityKey({ productName: "Blue Dream", brandName: "Greenway" }), kbRow({ id: "kb-b", description: "B." }));
+    eq("two exact: rung order decides", resolveKnowledgeFromIndexes(mastered, idx).description, "A.");
+  }
+  // Earlier draft-with-copy beats a later blank legacy draft.
+  {
+    const idx = s24Idx();
+    idx.kbProducts.set(bridgedKey, kbRow({ id: "kb-a", status: "draft", description: "Copy." }));
+    idx.kbProducts.set(kbIdentityKey({ productName: "Blue Dream", brandName: "Greenway" }), blankDraft({ id: "kb-b" }));
+    eq("draft with copy beats blank legacy draft", resolveKnowledgeFromIndexes(mastered, idx).description, "Copy.");
+  }
+  // A later draft-with-copy displaces an earlier blank (legacy) draft.
+  {
+    const cands: KbCandidate[] = [
+      { match: blankDraft({ id: "x" }), rung: "menu" },
+      { match: kbRow({ id: "y", status: "draft" }), rung: "menu" },
+    ];
+    eq("later copy displaces earlier blank", pickKbCandidate(cands)?.match.id, "y");
+    const cands2: KbCandidate[] = [
+      { match: kbRow({ id: "x", status: "draft", description: "1" }), rung: "menu" },
+      { match: kbRow({ id: "y", status: "draft", description: "2" }), rung: "menu" },
+    ];
+    eq("two drafts with copy: earlier kept", pickKbCandidate(cands2)?.match.id, "x");
+    const cands3: KbCandidate[] = [
+      { match: kbRow({ id: "x" }), rung: "lot-link" },
+      { match: kbRow({ id: "y", status: "draft" }), rung: "menu" },
+    ];
+    eq("exact then draft: exact kept", pickKbCandidate(cands3)?.match.id, "x");
+    eq("no candidates -> null", pickKbCandidate([]), null);
+  }
+  // kbMatchHasContent: every copy field counts; whitespace does not.
+  {
+    const b = blankDraft();
+    check("blank draft has no content", !kbMatchHasContent(b));
+    check("whitespace description is not content", !kbMatchHasContent({ ...b, description: "  ", short_description: " " }));
+    check("description counts", kbMatchHasContent({ ...b, description: "d" }));
+    check("short_description counts", kbMatchHasContent({ ...b, short_description: "s" }));
+    check("aroma counts", kbMatchHasContent({ ...b, aroma_notes: ["a"] }));
+    check("flavor counts", kbMatchHasContent({ ...b, flavor_notes: ["f"] }));
+    check("terpenes count", kbMatchHasContent({ ...b, terpenes: ["t"] }));
+    check("effects count", kbMatchHasContent({ ...b, effects: ["e"] }));
+    check("images count", kbMatchHasContent({ ...b, image_media_ids: ["m"] }));
+    check("primary media counts", kbMatchHasContent({ ...b, primary_media_id: "m" }));
+    check("null arrays tolerated", !kbMatchHasContent({ ...b, aroma_notes: null as unknown as string[] }));
+    check("isExactKb needs published", !isExactKb(kbRow({ status: "draft" })));
+    check("isExactKb needs active", !isExactKb(kbRow({ active: false })));
+    check("isExactKb published+active", isExactKb(kbRow()));
+  }
+  // Lot keys: onboarded variant lots count; blanks and dupes ignored.
+  {
+    const idx = s24Idx();
+    idx.lotsByKey = indexLots([lot({ id: "lot-2", pos_product_key: "pos-1-onboarded-x" })]);
+    idx.kbProducts.set(bridgedKey, kbRow({ id: "kb-bridged", description: "Bridged copy." }));
+    const q = { ...mastered, lotKeys: [" ", "pos-1", " pos-1-onboarded-x ", "pos-1-onboarded-x"] };
+    eq("onboarded variant lot resolves", resolveKnowledgeFromIndexes(q, idx).description, "Bridged copy.");
+    eq("no lotsByKey -> no lot candidates", kbCandidates(mastered, { ...emptyIdx(), kbProducts: idx.kbProducts }).length, 0);
+    eq("padded lot key alone resolves", resolveKnowledgeFromIndexes({ ...mastered, lotKeys: [" pos-1-onboarded-x "] }, idx).description, "Bridged copy.");
+    eq("lotKeys null tolerated", kbCandidates({ ...mastered, lotKeys: null }, idx).length, 0);
+  }
+  // Two lots of one card, one refused: only the promotable one reads.
+  {
+    const idx = s24Idx();
+    idx.lotsByKey = indexLots([
+      lot({ id: "lot-a", status: "rejected", product_name: "Other Name" }),
+      lot({ id: "lot-b" }),
+    ]);
+    idx.kbProducts.set(`greenway\u001fother-name\u001f3.5 g`, kbRow({ id: "kb-other", description: "Wrong." }));
+    idx.kbProducts.set(bridgedKey, kbRow({ id: "kb-bridged", description: "Right." }));
+    eq("refused lot's identity skipped", resolveKnowledgeFromIndexes(mastered, idx).description, "Right.");
+  }
+  // indexLots: keyed by trimmed pos key, sorted by id, deduped, blanks out.
+  {
+    const m = indexLots([
+      lot({ id: "b" }),
+      lot({ id: "a", pos_product_key: " pos-1 " }),
+      lot({ id: "b" }),
+      lot({ id: "c", pos_product_key: null }),
+      lot({ id: "", pos_product_key: "pos-9" }),
+      lot({ id: "d", pos_product_key: "  " }),
+    ]);
+    eq("indexLots: one key", m.size, 1);
+    eq("indexLots: sorted + deduped", (m.get("pos-1") ?? []).map((l) => l.id).join(","), "a,b");
+    const m2 = indexLots([lot({ id: "a" }), lot({ id: "c" }), lot({ id: "b" })]);
+    eq("indexLots: sort is total", (m2.get("pos-1") ?? []).map((l) => l.id).join(","), "a,b,c");
+  }
+  eq("indexKbById skips blank id", indexKbById([kbRow({ id: "" }), kbRow({ id: "k" })]).size, 1);
+  {
+    const m = indexBrandNames([
+      { id: "a", display_name: " Greenway " },
+      { id: "b", display_name: "  " },
+      { id: "c", display_name: null },
+      { id: "", display_name: "X" },
+    ]);
+    eq("indexBrandNames trims", m.get("a"), "Greenway");
+    eq("indexBrandNames skips blank/null/idless", m.size, 1);
+  }
+  // lotKbReadPlan: what the second read must fetch.
+  {
+    const plan = lotKbReadPlan(
+      indexLots([
+        lot({ id: "1", kb_product_id: " kb-9 " }),
+        lot({ id: "2", brand_id: null, product_name: "Blue Dream" }),
+        lot({ id: "3", status: "destroyed", kb_product_id: "kb-x", brand_id: "brand-x", product_name: "Nope" }),
+        lot({ id: "4", product_name: null, brand_id: " brand-2 " }),
+      ]),
+      new Set(["blue-dream"]),
+    );
+    eq("plan kbIds (trimmed, promotable only)", plan.kbIds.join(","), "kb-9");
+    eq("plan brandIds (trimmed, promotable only)", plan.brandIds.join(","), "brand-1,brand-2");
+    eq("plan productSlugs (raw name, not already loaded)", plan.productSlugs.join(","), "gw-blue-dream-flower-3-5g");
+  }
+  // collectLookupKeys gathers lot keys (trimmed, deduped).
+  eq(
+    "collectLookupKeys lotKeys",
+    collectLookupKeys([
+      { productName: "a", lotKeys: [" k1 ", "k2"] },
+      { productName: "b", lotKeys: ["k1", "", null as unknown as string] },
+      { productName: "c" },
+    ]).lotKeys.join(","),
+    "k1,k2",
+  );
+  eq("KB_RUNGS order", KB_RUNGS.join(","), "lot-link,lot-identity,menu-variant,menu");
 
   return { passed, failed };
 }

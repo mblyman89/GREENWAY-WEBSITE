@@ -37,6 +37,8 @@ import { lintCopy, lintTerms, type ExtraBannedPhrase } from "@/lib/ai/compliance
 // Slice C — batched replacement for the per-item ladder on the menu grid path.
 // The single-item detail path below still uses `lookupProductKnowledge`.
 import { loadKnowledgeIndexes } from "@/lib/ai/kb/product-knowledge-batch";
+// S24: the card's lots, exactly as S22's attribution and S19 compute them.
+import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
 import {
   resolveKnowledgeFromIndexes,
   type KnowledgeIndexes,
@@ -70,7 +72,8 @@ function isNonCannabis(item: GreenwayMenuItem): boolean {
 }
 
 /** Build the KB-first lookup query from a rendered menu item. */
-function queryFor(item: GreenwayMenuItem) {
+export function queryFor(item: GreenwayMenuItem) {
+  const variants = item.variants ?? [];
   return {
     productName: item.productName?.trim() || item.name,
     brandName: item.brand || null,
@@ -78,6 +81,14 @@ function queryFor(item: GreenwayMenuItem) {
     // product_enrichments rung of the ladder by pos_product_key.
     posProductKey: item.id || null,
     strainName: item.strainName || null,
+    // S24 (F-065): the writer-identity rungs. `variants[].id` is the
+    // source_variant_id (live-menu.ts), so cardLotKeys yields the card's own
+    // key plus each `<lotKey>-onboarded` lot - the lots the bridge promoted.
+    menuVariantLabel: variants[0]?.label ?? null,
+    lotKeys: cardLotKeys({
+      source_item_id: item.id ?? "",
+      variants: variants.map((v) => ({ source_variant_id: v.id })),
+    }),
   };
 }
 
