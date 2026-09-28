@@ -81,13 +81,16 @@ vi.mock("@/lib/leafly/webhook-server", () => ({
 // ── The network fake: what Leafly answers, and what we sent ────────────────
 type Reply = { status: number; body: unknown } | { network: string };
 let reply: Reply;
+/** SLICE L-51: answers used in order before falling back to `reply`. */
+const replyQueue: Reply[] = [];
 const sent: { op: string; url: string; body: unknown; auth: string | null }[] = [];
 vi.mock("@/lib/leafly/deadline-fetch", () => ({
   leaflyFetchWithDeadline: async (op: string, url: string, init: { body?: string; headers?: Record<string, string> }) => {
     sent.push({ op, url, body: init.body ? JSON.parse(init.body) : null, auth: init.headers?.Authorization ?? null });
-    if ("network" in reply) return { ok: false, verdict: { message: reply.network } };
-    const text = reply.body === null ? "" : JSON.stringify(reply.body);
-    return { ok: true, response: new Response(text, { status: reply.status }) };
+    const cur = replyQueue.length > 0 ? replyQueue.shift()! : reply;
+    if ("network" in cur) return { ok: false, verdict: { message: cur.network } };
+    const text = cur.body === null ? "" : JSON.stringify(cur.body);
+    return { ok: true, response: new Response(text, { status: cur.status }) };
   },
 }));
 
@@ -114,7 +117,7 @@ vi.mock("@/lib/leafly/preview-lookup", () => ({
     return {
       lookup: (id: string) => {
         const o = m.get(id);
-        return o ? { inventoryLevel: o.inventoryLevel, priceMinorUnits: o.priceMinorUnits, orderable: o.orderable } : null;
+        return o ? { inventoryLevel: o.inventoryLevel, priceMinorUnits: o.priceMinorUnits, orderable: o.orderable, category: o.category } : null;
       },
       options: menu,
       variantCount: menu.length,
@@ -159,6 +162,7 @@ const update = (desired: unknown, over: Record<string, unknown> = {}) =>
 beforeEach(() => {
   ops.length = 0;
   sent.length = 0;
+  replyQueue.length = 0;
   stored.length = 0;
   tables = { leaflyRow: row(), localOrder: { id: "local-1", status: "acknowledged" }, oldLineIds: ["old-a", "old-b"], failInsertLines: null, failDeleteLines: null };
   integrationKey = "key-1";
@@ -298,11 +302,14 @@ describe("L-48 updateLeaflyOrderCart — the 200 path", () => {
     expect(sent[0]!.url).toMatch(/\/key-1\/orders\/ord-1\/cart$/);
     expect(sent[0]!.auth).toBe("Bearer tok");
     // Spec: {cartItems (min 1), taxes, deliveryFee}. Removal = omission.
-    expect(sent[0]!.body).toEqual({
-      cartItems: [{ id: "ci-1", integratorVariantId: "v1", quantity: 2, packagePrice: 3000 }],
-      taxes: [],
-      deliveryFee: 0,
-    });
+    // SLICE L-51: taxes is NEVER [] (Leafly 400s on it, proven live). The
+    // lines are the WA tax included in 2 x $30.00 of cannabis.
+    const b = sent[0]!.body as { cartItems: unknown[]; taxes: { label: string; amountCents: number }[]; deliveryFee: number };
+    expect(b.cartItems).toEqual([{ id: "ci-1", integratorVariantId: "v1", quantity: 2, packagePrice: 3000 }]);
+    expect(b.deliveryFee).toBe(0);
+    expect(b.taxes.length).toBeGreaterThanOrEqual(1);
+    expect(b.taxes.every((t) => Number.isInteger(t.amountCents) && t.amountCents >= 1 && /included in price/.test(t.label))).toBe(true);
+    expect(b.taxes.reduce((a, t) => a + t.amountCents, 0)).toBe(6000 - Math.round(6000 / 1.463));
   });
 
   it("records the exchange as a SUCCESSFUL 'cart' attempt (the proof card turns green)", async () => {
@@ -370,7 +377,7 @@ describe("L-48 updateLeaflyOrderCart — the 200 path", () => {
     expect(r.warning).toMatch(/differs from what we asked for/);
   });
 
-  it("an addition is sent with id null at the menu price; a substitution keeps the id with the new variant", async () => {
+  it("an addition is sent with id null at the menu price; a swap is sent as remove + add (L-51)", async () => {
     reply = { status: 200, body: leaflyOrder([item({ integratorVariantId: "v3", packagePrice: 3500 }), twoItems()[1], item({ id: "ci-9", integratorVariantId: "v1", quantity: 1 })]) };
     await update([
       { cartItemId: "ci-1", integratorVariantId: "v3", quantity: 2, packagePriceMinor: null },
@@ -378,12 +385,43 @@ describe("L-48 updateLeaflyOrderCart — the 200 path", () => {
       { cartItemId: null, integratorVariantId: "v1", quantity: 1, packagePriceMinor: null },
     ]);
     const body = sent[0]!.body as { cartItems: Record<string, unknown>[] };
-    expect(body.cartItems).toContainEqual({ id: "ci-1", integratorVariantId: "v3", quantity: 2, packagePrice: 3500 });
+    expect(body.cartItems).toContainEqual({ id: null, integratorVariantId: "v3", quantity: 2, packagePrice: 3500 });
+    expect(body.cartItems.some((c) => c.id === "ci-1")).toBe(false);
     expect(body.cartItems).toContainEqual({ id: null, integratorVariantId: "v1", quantity: 1, packagePrice: 3000 });
   });
 });
 
+describe("L-51 Leafly's x100 price bug is corrected automatically", () => {
+  it("a 200 with a price exactly 100x what we sent triggers ONE follow-up that sets it back on Leafly's new line id", async () => {
+    const bad = leaflyOrder([item({ id: "n-3", integratorVariantId: "v3", packagePrice: 350000 }), twoItems()[1]]);
+    const good = leaflyOrder([item({ id: "n-4", integratorVariantId: "v3", packagePrice: 3500 }), twoItems()[1]]);
+    replyQueue.push({ status: 200, body: bad }, { status: 200, body: good });
+    const r = await update([{ cartItemId: "ci-1", integratorVariantId: "v3", quantity: 2, packagePriceMinor: null }, keepAll()[1]]);
+    expect(sent).toHaveLength(2);
+    const fix = sent[1]!.body as { cartItems: Record<string, unknown>[]; taxes: unknown[] };
+    expect(fix.cartItems).toContainEqual({ id: "n-3", integratorVariantId: "v3", quantity: 2, packagePrice: 3500 });
+    expect(fix.cartItems).toHaveLength(2);
+    expect(fix.taxes.length).toBeGreaterThanOrEqual(1);
+    expect(r.ok).toBe(true);
+    expect(r.verified).toBe(true);
+    expect(r.warning).toMatch(/100 times too high/);
+    expect(r.warning).toMatch(/corrected it automatically/);
+    expect(stored[stored.length - 1]).toEqual(good);
+    expect(ledger()).toHaveLength(2);
+  });
+});
+
 describe("L-48 updateLeaflyOrderCart — Leafly refuses or does not answer", () => {
+  it("L-51: Leafly's 'could not find variant' 400 is explained in plain English, naming the item", async () => {
+    reply = { status: 400, body: { errors: [{ title: "ActionController::BadRequest", detail: "could not find variant v3" }] } };
+    collectResult = { ok: true, order: leaflyOrder(twoItems()) };
+    const r = await update([{ ...keepAll()[0], integratorVariantId: "v3" }, keepAll()[1]]);
+    expect(r.ok).toBe(false);
+    expect(r.message).toMatch(/Gelato/);
+    expect(r.message).toMatch(/copy of our menu/);
+    expect(r.message).toMatch(/Nothing on the order was changed/);
+  });
+
   it("a 400 is a failure that says nothing changed, re-reads the order, and is recorded", async () => {
     reply = { status: 400, body: { message: "variant out of stock" } };
     collectResult = { ok: true, order: leaflyOrder(twoItems()) };

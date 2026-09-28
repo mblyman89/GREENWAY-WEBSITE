@@ -49,6 +49,8 @@ import {
 import {
   assessOutboundResponse,
   describeOutboundFailure,
+  explainCartRefusalPlainly,
+  explainLeaflyErrorBody,
   leaflyOrderApiBaseUrl,
 } from "./order-ack-core";
 import {
@@ -58,6 +60,7 @@ import {
   decideCartUpdate,
   formatCartMoney,
   leaflyCartUrl,
+  planCartPriceCorrection,
   readEditableLeaflyCart,
   verifyCartResponse,
   type CartChange,
@@ -231,6 +234,8 @@ async function loadCartMenu(): Promise<{
       priceMinorUnits: facts.priceMinorUnits,
       orderable: facts.orderable,
       label: labels.get(variantId) ?? null,
+      // SLICE L-51: for the tax lines (merch carries no excise).
+      category: typeof (facts as { category?: unknown }).category === "string" ? ((facts as { category: string }).category) : null,
     };
   };
   return { lookup, options: built.options, loaded: built.loaded, notSentCount: typeof built.notSentCount === "number" ? built.notSentCount : 0 };
@@ -627,8 +632,13 @@ export async function updateLeaflyOrderCart(input: {
           ? "We tried to re-read the order from Leafly and could not; reload before trying again."
           : "We re-read the order from Leafly, so the editor will now open on Leafly's current items.";
     }
+    // SLICE L-51: lead with ONE plain sentence when Leafly's answer is a
+    // shape we have proven the meaning of; keep Leafly's exact words after it
+    // (short) for support. Otherwise the long-standing wording.
+    const plain = raw.status === 400 ? explainCartRefusalPlainly(raw.body, (v) => menu.lookup(v)?.label ?? null) : null;
+    const theirs = plain ? explainLeaflyErrorBody(raw.body) : null;
     const message = [
-      describeOutboundFailure(assessment, raw.body),
+      plain ? `${plain}${theirs ? ` (Leafly's words: "${theirs.slice(0, 160)}")` : ""}` : describeOutboundFailure(assessment, raw.body),
       "Nothing on the order was changed.",
       note,
     ]
@@ -649,8 +659,51 @@ export async function updateLeaflyOrderCart(input: {
 
   // ── 200: Leafly applied the whole transaction ──────────────────────────
   const warnings: string[] = [];
-  const returned = readEditableLeaflyCart(raw.body);
-  const check = verifyCartResponse(body, returned);
+  let finalBody: unknown = raw.body;
+  let returned = readEditableLeaflyCart(raw.body);
+
+  // SLICE L-51: Leafly's x100 price bug. Proven live in the sandbox: on a
+  // same-id substitution Leafly stored the new line's price multiplied by
+  // 100. Swaps are now sent as remove + add (which stored correctly), but if
+  // Leafly's answer still shows a price EXACTLY 100x what we sent, we send one
+  // follow-up that sets the price again on Leafly's new line id (a same-line
+  // price edit was proven to store as sent). Every other line is carried
+  // unchanged, so nothing is removed. One attempt only, never a loop.
+  const correction = planCartPriceCorrection(body, returned);
+  if (correction) {
+    const names = correction.fixed
+      .map((f) => `${f.name}: Leafly stored ${formatCartMoney(f.storedMinor)}, we sent ${formatCartMoney(f.sentMinor)}`)
+      .join("; ");
+    const fix = await postLeaflyCartUpdate(url, correction.body);
+    const fixAssessment = fix.status === null ? null : assessOutboundResponse(fix.status, LEAFLY_CART_SUCCESS_STATUS, "cart");
+    await recordLeaflyOutboundAttempt({
+      leaflyOrderId: row.leafly_order_id,
+      orderIntegrationKey: key,
+      operation: "cart",
+      requestBody: correction.body,
+      responseStatus: fix.status ?? undefined,
+      responseBody: fix.body,
+      disposition: fixAssessment?.disposition ?? "retry",
+      message: `Automatic price correction after Leafly's x100 price bug (${names}). ${fixAssessment?.message ?? fix.networkError ?? "no answer"}`,
+      createdBy: input.staffId,
+    });
+    if (fixAssessment?.disposition === "success") {
+      finalBody = fix.body;
+      returned = readEditableLeaflyCart(fix.body);
+      const again = verifyCartResponse(correction.body, returned);
+      warnings.push(
+        again.matches
+          ? `Leafly saved a price 100 times too high (${names}). We corrected it automatically and Leafly confirmed the right price.`
+          : `Leafly saved a price 100 times too high (${names}). We sent a correction, but Leafly's answer still differs (${again.problems.slice(0, 2).join("; ")}). Check the order before handing it over.`,
+      );
+    } else {
+      warnings.push(
+        `Leafly saved a price 100 times too high (${names}) and our automatic correction did not go through. Open "Change items" and set the price again, or check the order before handing it over.`,
+      );
+    }
+  }
+
+  const check = correction && finalBody !== raw.body ? verifyCartResponse(correction.body, returned) : verifyCartResponse(body, returned);
   if (!check.matches) {
     warnings.push(
       `Leafly accepted the change, but the order it sent back differs from what we asked for (${check.problems
@@ -659,10 +712,10 @@ export async function updateLeaflyOrderCart(input: {
     );
   }
 
-  const stored = await storeReturnedOrder(row.leafly_order_id, raw.body);
+  const stored = await storeReturnedOrder(row.leafly_order_id, finalBody);
   if (stored) warnings.push(stored);
 
-  const rebuilt = await rebuildLocalOrder(row.local_order_id, raw.body, input.actorLabel, decision.changes);
+  const rebuilt = await rebuildLocalOrder(row.local_order_id, finalBody, input.actorLabel, decision.changes);
   if (rebuilt) warnings.push(rebuilt);
 
   const totalNow =
