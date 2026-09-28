@@ -110,6 +110,10 @@ import { labelForCategory } from "@/lib/pos/category-registry-core";
 import { intakeDisplayName } from "@/lib/pos/intake-mastering-core";
 // S00: the one shared sentence about what Approve does (never retyped here).
 import { APPROVE_PUBLISHES_COPY, HELD_EXCEPTION_COPY } from "@/lib/catalog/publish-story-core";
+import { loadRestockPreview } from "@/lib/inventory/restock-preview-server";
+import { previewUnavailableCopy } from "@/lib/inventory/vendor-identity-core";
+import { restockPreviewPlan } from "@/lib/inventory/restock-preview-view-core";
+import { RestockPreviewChip, RestockPreviewUnavailable } from "@/components/admin/catalog/RestockPreviewChip";
 
 export const dynamic = "force-dynamic";
 // T-318 / T-323: the AI product lookup (a server action invoked on this route)
@@ -298,6 +302,33 @@ export default async function CatalogDraftsPage({
       }),
     );
   });
+
+  // S19.2 PREVIEW: what Approve WILL do for each row of the focused delivery
+  // ("Restock -> joins live card ..."). Same pure planner as the staging
+  // (previewRestockVerdicts), same category rule (chosen ?? resolved). Only
+  // on the review tab of ONE delivery - the question is per delivery, and
+  // it keeps the reads bounded. Any incomplete read says so on screen.
+  const previewPlan = restockPreviewPlan({ view, manifestId: focus.manifestId, rows: drafts.length });
+  const restockPreview = previewPlan.load
+    ? await loadRestockPreview(
+        drafts.map((d, i) => ({
+          id: d.id,
+          pos_product_key: d.pos_product_key,
+          name: d.name,
+          brand_name: d.brand_name,
+          vendor_name: d.vendor_name,
+          strain_name: d.strain_name,
+          category: d.chosen_website_category?.trim() || resolutions[i]?.websiteCategory || null,
+        })),
+      )
+    : null;
+  const previewNote =
+    previewPlan.unavailable !== null
+      ? previewUnavailableCopy(previewPlan.unavailable)
+      : restockPreview && !restockPreview.ok
+        ? previewUnavailableCopy(restockPreview.reason)
+        : null;
+  const previewVerdicts = restockPreview && restockPreview.ok ? restockPreview.verdicts : null;
 
   // S03 SHADOW RING (console only, zero behaviour change, ZERO queries): how
   // many open drafts are re-deliveries of an already-approved product whose
@@ -567,6 +598,7 @@ export default async function CatalogDraftsPage({
           </p>
         )}
 
+        {previewNote && drafts.length > 0 ? <RestockPreviewUnavailable text={previewNote} /> : null}
         {drafts.length === 0 ? (
           <EmptyState
             icon="📝"
@@ -674,6 +706,9 @@ export default async function CatalogDraftsPage({
                         </div>
                         {builtName && builtName !== d.name ? (
                           <div className="text-[10px] text-[var(--admin-text-faint)]">Manifest: {d.name}</div>
+                        ) : null}
+                        {previewVerdicts?.get(d.id) ? (
+                          <RestockPreviewChip verdict={previewVerdicts.get(d.id)!} />
                         ) : null}
                       </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">

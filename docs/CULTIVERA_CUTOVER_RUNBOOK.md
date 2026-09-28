@@ -75,9 +75,21 @@ Each step says **where**, **what to check**, and **why it matters**.
 7. **First approval after cutover.** *Expect:* a new menu update that carries
    every Cultivera item plus the new product, published automatically; the
    Publish page shows nothing waiting.
-8. **A restock of something Cultivera already had** joins the existing card
-   only when the vendor names match (F-072; S19 improves this with vendor
-   identity and a "will join live card" preview).
+8. **A restock of something Cultivera already had** joins the existing card.
+   With S19 (`INTAKE_VENDOR_ID_IDENTITY`, on by default) a different spelling
+   of the vendor name still joins when both lots point at the same vendor
+   record, and each row on Product Onboarding (one delivery picked) says what
+   Approve will do *before* you press it: `Restock → joins live card '…'
+   (from Cultivera import)`, `New card`, `Ambiguous: 2 live cards match — adds a new
+   card` (with a link to each matching live card so you can compare them — Product
+   Mastering is not read by the merge, so it is not linked; a remembered "join this
+   card" decision is slice S32) or `Already on the live menu`.
+   *Known limit (bible S19.8):* a Cultivera card with a **blank vendor**
+   never merges. In the import code those are the Products-workbook items
+   with no inventory row (`transform.ts` "no-inventory" group: vendor `""`,
+   hidden, reason `no_inventory`), so they are hidden and hold no lots. A
+   receiving delivery of that product becomes its own new card, and the
+   preview says `New card` for it (it never claims a join it will not make).
 
 ## If products were approved before the Cultivera publish
 

@@ -75,6 +75,18 @@ import {
   type PlannedInjectedItem,
 } from "@/lib/pos/draft-injection-core";
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
+import {
+  cardLotKeys,
+  cardVendorIds,
+  cleanVendorId,
+  groupVendorId,
+  mergeCandidates,
+  vendorIdKey,
+  isCultiveraCardKey,
+  type MatchedBy,
+  type RestockVerdict,
+  type VendorIdInputs,
+} from "@/lib/inventory/vendor-identity-core";
 import { formatMoney } from "@/lib/pos/format";
 
 /** A live (carried-forward) card the planner may merge a restock into. */
@@ -110,6 +122,12 @@ export type IntakeMasteringInputs = {
   enrichmentByDraftId: Map<string, DraftEnrichment>;
   /** The carried-forward live cards (deduped), for restock-merge matching. */
   liveCards: LiveCardCandidate[];
+  /**
+   * S19 (F-066, F-072): vendor-id identity. Absent = the name-only rule,
+   * byte-for-byte as before (flag off, or a vendor read that was not
+   * complete). See vendor-identity-core.ts for the rule and its grounding.
+   */
+  vendorIds?: VendorIdInputs;
 };
 
 /** SLICE 62: per-lot verified facts (for inventory_lots persistence). */
@@ -360,6 +378,276 @@ function sortVariants(variants: MasteredVariant[]): MasteredVariant[] {
 }
 
 /**
+ * S19: the live-card index the restock merge matches against - built ONCE
+ * and shared by buildIntakeMasteringPlan and previewRestockVerdicts (the
+ * Product Onboarding preview from the same inputs, so the "will join" chip
+ * and the real merge can never disagree).
+ *
+ *   variantLotKeys  lot key -> card key, for lots already selling on a card.
+ *   byName          vendor-name|categoryAxis|family -> cards (pre-S19 rule,
+ *                   unchanged: hidden, all-medical, blank-vendor and
+ *                   unconfident-family cards are never merge targets).
+ *   byVendorId      vid:<uuid>|categoryAxis|family -> cards, from the vendor
+ *                   ids of each card's own lots (empty without vendorIds).
+ *   vidsByCard      card key -> the vendor ids its lots carry.
+ */
+export type LiveMergeIndex = {
+  variantLotKeys: Map<string, string>;
+  byName: Map<string, LiveCardCandidate[]>;
+  byVendorId: Map<string, LiveCardCandidate[]>;
+  vidsByCard: Map<string, Set<string>>;
+};
+
+export function buildLiveMergeIndex(
+  liveCards: LiveCardCandidate[],
+  vendorIds?: VendorIdInputs,
+): LiveMergeIndex {
+  const variantLotKeys = new Map<string, string>(); // lotKey -> card key
+  for (const card of liveCards) {
+    for (const v of card.variants) {
+      const lotKey = lotKeyFromVariantId(v.source_variant_id);
+      if (lotKey) variantLotKeys.set(lotKey, card.source_item_id);
+    }
+  }
+
+  // Hidden cards and medical-only cards are never merge targets (merging
+  // sellable adult stock into them would hide it or mis-shelve it).
+  const byName = new Map<string, LiveCardCandidate[]>();
+  const byVendorId = new Map<string, LiveCardCandidate[]>();
+  const vidsByCard = new Map<string, Set<string>>();
+  for (const card of liveCards) {
+    if (card.hidden) continue;
+    if (card.variants.length > 0 && card.variants.every((v) => v.medical)) continue;
+    // Blank vendor NAME is still never a target (S19.8: by design), even when
+    // its lots carry an id - the name is what the owner sees and fixes.
+    const vendor = normalizeWhitespace(card.vendor_name);
+    if (!vendor) continue;
+    const fam = deriveFamily({
+      category: card.category,
+      vendor,
+      brand: card.brand_name,
+      name: card.name,
+      strainName: card.strain_name,
+    });
+    if (!fam) continue;
+    const key = identityKey(vendor, card.category, fam.family);
+    const list = byName.get(key) ?? [];
+    list.push(card);
+    byName.set(key, list);
+    if (vendorIds) {
+      const vids = cardVendorIds(card, vendorIds.lotVendorIdsByKey);
+      vidsByCard.set(card.source_item_id, vids);
+      for (const vid of vids) {
+        const vkey = vendorIdKey(vid, card.category, fam.family);
+        const vlist = byVendorId.get(vkey) ?? [];
+        vlist.push(card);
+        byVendorId.set(vkey, vlist);
+      }
+    }
+  }
+  return { variantLotKeys, byName, byVendorId, vidsByCard };
+}
+
+/**
+ * S19: which live cards a group of same-identity lots matches. Without ids
+ * (or with mixed ids): the name rule. With ONE shared vendor id: the name
+ * matches PLUS live cards of that id under any spelling - additive only, so
+ * S19 can remove a duplicate card but never create one (see
+ * vendor-identity-core mergeCandidates).
+ */
+export function matchLiveCards(
+  live: LiveMergeIndex,
+  group: { identity: string; category: string; family: string; vendorIds: Array<string | null | undefined> },
+): { cards: LiveCardCandidate[]; matchedBy: MatchedBy; conflicts: LiveCardCandidate[] } {
+  const groupVid = groupVendorId(group.vendorIds);
+  return mergeCandidates({
+    groupVid,
+    byVendorId: groupVid ? live.byVendorId.get(vendorIdKey(groupVid, group.category, group.family)) ?? [] : [],
+    byName: live.byName.get(group.identity) ?? [],
+    vidsByCard: live.vidsByCard,
+  });
+}
+
+/** One Onboarding row, as the preview needs it (review OR approved). */
+export type RestockPreviewDraft = {
+  id: string;
+  pos_product_key: string | null;
+  name: string;
+  brand_name: string | null;
+  vendor_name: string | null;
+  strain_name: string | null;
+  /** The website category the row will be filed under (chosen ?? resolved); null = unmapped. */
+  category: string | null;
+};
+
+/**
+ * S19.2 "Preview": the mastering decision run DRY for one delivery's rows,
+ * so the Onboarding row can say what Approve will do. Same steps, same
+ * order, same derivation as buildIntakeMasteringPlan (and the same
+ * LiveMergeIndex), minus the parts that need a price:
+ *   1. its POS key is already a live card      -> already_live (F-068: the
+ *      draft_superseded_by_pos case, said out loud instead of a silent drop)
+ *   2. its lot already sells as a size          -> already_live (as a size)
+ *   3. no vendor                                -> no_vendor
+ *   4. name too vague                           -> vague_name
+ *   5. group same-identity rows, match live     -> joins / ambiguous / new
+ * Rows with no POS key or no category get NO verdict (their own chips on the
+ * row already say what is missing - never a guessed chip).
+ */
+export function previewRestockVerdicts(input: {
+  drafts: RestockPreviewDraft[];
+  liveCards: LiveCardCandidate[];
+  vendorIds?: VendorIdInputs;
+}): Map<string, RestockVerdict> {
+  const out = new Map<string, RestockVerdict>();
+  const live = buildLiveMergeIndex(input.liveCards, input.vendorIds);
+  const liveCardKeys = new Set(input.liveCards.map((c) => c.source_item_id));
+
+  type PreviewGroup = { identity: string; category: string; family: string; rows: RestockPreviewDraft[] };
+  const groups = new Map<string, PreviewGroup>();
+  for (const d of input.drafts) {
+    const key = d.pos_product_key?.trim() || null;
+    const category = d.category?.trim() || null;
+    if (!key || !category) continue;
+    if (liveCardKeys.has(key)) {
+      out.set(d.id, { kind: "already_live", cardKey: key, asSize: false });
+      continue;
+    }
+    const sizeOf = live.variantLotKeys.get(key);
+    if (sizeOf) {
+      out.set(d.id, { kind: "already_live", cardKey: sizeOf, asSize: true });
+      continue;
+    }
+    const vendor = normalizeWhitespace(d.vendor_name);
+    if (!vendor) {
+      out.set(d.id, { kind: "no_vendor" });
+      continue;
+    }
+    const fam = deriveFamily({
+      category,
+      vendor,
+      brand: d.brand_name?.trim() || "",
+      name: d.name,
+      strainName: d.strain_name,
+    });
+    if (!fam) {
+      out.set(d.id, { kind: "vague_name" });
+      continue;
+    }
+    const identity = identityKey(vendor, category, fam.family);
+    const g = groups.get(identity);
+    if (g) g.rows.push(d);
+    else groups.set(identity, { identity, category, family: fam.family, rows: [d] });
+  }
+
+  for (const g of groups.values()) {
+    const m = matchLiveCards(live, {
+      identity: g.identity,
+      category: g.category,
+      family: g.family,
+      vendorIds: g.rows.map((r) => input.vendorIds?.vendorIdByLotKey.get(r.pos_product_key?.trim() ?? "")),
+    });
+    let verdict: RestockVerdict;
+    if (m.cards.length === 1) {
+      const card = m.cards[0];
+      verdict = {
+        kind: "joins",
+        cardKey: card.source_item_id,
+        cardName: card.name,
+        fromCultivera: isCultiveraCardKey(card.source_item_id),
+        matchedBy: m.matchedBy,
+        vendorRecordDiffers: m.conflicts.some((c) => c.source_item_id === card.source_item_id),
+      };
+    } else if (m.cards.length > 1) {
+      verdict = { kind: "ambiguous", cardKeys: m.cards.map((c) => c.source_item_id) };
+    } else {
+      verdict = { kind: "new" };
+    }
+    for (const r of g.rows) out.set(r.id, verdict);
+  }
+  return out;
+}
+
+/** Ceiling on live lot keys one vendor-id read may ask about (never paged past). */
+export const VENDOR_ID_LIVE_KEY_CAP = 2000;
+
+/**
+ * S19: WHICH lot keys to read vendor ids for - so the server reads the few
+ * lots that can matter, never the whole store. Pure.
+ *   draftLotKeys  the rows' own POS keys (their lot's vendor_id).
+ *   liveLotKeys   the lot keys of live cards whose category axis + family
+ *                 equal SOME row's (the only cards an id could add as a
+ *                 match - an id never changes the family or the axis).
+ *   overCap       more live keys than VENDOR_ID_LIVE_KEY_CAP: the caller
+ *                 skips ids (the name rule), never reads a partial set.
+ */
+export function planVendorIdLookup(input: {
+  drafts: RestockPreviewDraft[];
+  liveCards: LiveCardCandidate[];
+}): { draftLotKeys: string[]; liveLotKeys: string[]; overCap: boolean } {
+  const wanted = new Set<string>();
+  const draftLotKeys: string[] = [];
+  for (const d of input.drafts) {
+    const key = d.pos_product_key?.trim() || null;
+    const category = d.category?.trim() || null;
+    const vendor = normalizeWhitespace(d.vendor_name);
+    if (!key || !category || !vendor) continue;
+    const fam = deriveFamily({ category, vendor, brand: d.brand_name?.trim() || "", name: d.name, strainName: d.strain_name });
+    if (!fam) continue;
+    if (!draftLotKeys.includes(key)) draftLotKeys.push(key);
+    wanted.add(`${groupingCategoryAxis(category)}|${fam.family}`);
+  }
+  const live = new Set<string>();
+  if (wanted.size > 0) {
+    for (const card of input.liveCards) {
+      if (card.hidden) continue;
+      if (card.variants.length > 0 && card.variants.every((v) => v.medical)) continue;
+      const vendor = normalizeWhitespace(card.vendor_name);
+      if (!vendor) continue;
+      const fam = deriveFamily({ category: card.category, vendor, brand: card.brand_name, name: card.name, strainName: card.strain_name });
+      if (!fam || !wanted.has(`${groupingCategoryAxis(card.category)}|${fam.family}`)) continue;
+      for (const k of cardLotKeys(card)) live.add(k);
+    }
+  }
+  const liveLotKeys = [...live];
+  return { draftLotKeys, liveLotKeys, overCap: liveLotKeys.length > VENDOR_ID_LIVE_KEY_CAP };
+}
+
+/**
+ * S19: fold the two bounded lot reads into the planner's VendorIdInputs.
+ * draftLots: the rows' own lots (key -> vendor_id); liveLots: rows of
+ * inventory_lots (pos_product_key, vendor_id). Blank ids are dropped. A draft
+ * key whose lots DISAGREE on the vendor id gets NO id (never pick one - the
+ * group then falls back to the name rule).
+ */
+export function buildVendorIdInputs(input: {
+  draftLots: Array<{ pos_product_key: string | null; vendor_id: unknown }>;
+  liveLots: Array<{ pos_product_key: string | null; vendor_id: unknown }>;
+}): VendorIdInputs {
+  const vendorIdByLotKey = new Map<string, string>();
+  const disagreeing = new Set<string>();
+  for (const l of input.draftLots) {
+    const k = l.pos_product_key?.trim();
+    const v = cleanVendorId(l.vendor_id);
+    if (!k || !v) continue;
+    const had = vendorIdByLotKey.get(k);
+    if (had === undefined) vendorIdByLotKey.set(k, v);
+    else if (had !== v) disagreeing.add(k);
+  }
+  for (const k of disagreeing) vendorIdByLotKey.delete(k);
+  const lotVendorIdsByKey = new Map<string, Set<string>>();
+  for (const l of input.liveLots) {
+    const k = l.pos_product_key?.trim();
+    const v = cleanVendorId(l.vendor_id);
+    if (!k || !v) continue;
+    const set = lotVendorIdsByKey.get(k) ?? new Set<string>();
+    set.add(v);
+    lotVendorIdsByKey.set(k, set);
+  }
+  return { vendorIdByLotKey, lotVendorIdsByKey };
+}
+
+/**
  * Plan the mastering pass. Deterministic and pure:
  *  1. `buildDraftInjectionPlan` decides eligibility exactly as before (its
  *     diagnostics pass through untouched).
@@ -407,39 +695,11 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
     }
   }
 
-  // Lot keys already selling as a variant on some live card (restocked lot
-  // that was ALREADY merged in a previous run, or a Slice-1-era card).
-  const liveVariantLotKeys = new Map<string, string>(); // lotKey -> card key
-  for (const card of inputs.liveCards) {
-    for (const v of card.variants) {
-      const lotKey = lotKeyFromVariantId(v.source_variant_id);
-      if (lotKey) liveVariantLotKeys.set(lotKey, card.source_item_id);
-    }
-  }
-
-  // Live merge candidates by identity. Hidden cards and medical-only cards
-  // are never merge targets (merging sellable adult stock into them would
-  // hide it or mis-shelve it).
-  const liveByIdentity = new Map<string, LiveCardCandidate[]>();
-  for (const card of inputs.liveCards) {
-    if (card.hidden) continue;
-    if (card.variants.length > 0 && card.variants.every((v) => v.medical)) continue;
-    const vendor = normalizeWhitespace(card.vendor_name);
-    if (!vendor) continue;
-    const fam = deriveFamily({
-      category: card.category,
-      vendor,
-      brand: card.brand_name,
-      name: card.name,
-      strainName: card.strain_name,
-    });
-    if (!fam) continue;
-    const key = identityKey(vendor, card.category, fam.family);
-    const list = liveByIdentity.get(key) ?? [];
-    list.push(card);
-    liveByIdentity.set(key, list);
-  }
-
+  // Lot keys already selling as a variant on some live card, and the live
+  // merge candidates by identity (S19: plus by vendor id) - ONE index, shared
+  // with the Product Onboarding preview so the chip and the merge agree.
+  const live = buildLiveMergeIndex(inputs.liveCards, inputs.vendorIds);
+  const liveVariantLotKeys = live.variantLotKeys;
   const newCards: MasteredNewCard[] = [];
   const mergesByCardKey = new Map<string, MasteredVariant[]>();
   const mergeCategoriesByCardKey = new Map<string, string[]>();
@@ -450,6 +710,9 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
     identity: string;
     display: string;
     vendor: string;
+    /** S19: the category + family the vendor-id key is built from. */
+    category: string;
+    family: string;
     items: PlannedInjectedItem[];
   };
   const groups = new Map<string, Group>();
@@ -501,7 +764,15 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
     const key = identityKey(vendor, it.category, fam.family);
     const group = groups.get(key);
     if (group) group.items.push(it);
-    else groups.set(key, { identity: key, display: fam.display, vendor, items: [it] });
+    else
+      groups.set(key, {
+        identity: key,
+        display: fam.display,
+        vendor,
+        category: it.category,
+        family: fam.family,
+        items: [it],
+      });
   }
 
   for (const group of groups.values()) {
@@ -518,7 +789,13 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
     }
     if (variants.length === 0) continue;
 
-    const liveMatches = liveByIdentity.get(group.identity) ?? [];
+    // S19: vendor id when both sides have one, else the normalized name.
+    const { cards: liveMatches, matchedBy, conflicts } = matchLiveCards(live, {
+      identity: group.identity,
+      category: group.category,
+      family: group.family,
+      vendorIds: group.items.map((gi) => inputs.vendorIds?.vendorIdByLotKey.get(gi.source_item_id)),
+    });
 
     if (liveMatches.length === 1) {
       // RESTOCK MERGE — append this group's lots to the one matching live card.
@@ -541,6 +818,11 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
         context: {
           card_key: target.source_item_id,
           lots: group.items.map((i) => i.source_item_id),
+          matched_by: matchedBy,
+          // S19: the card's lots sit under a different vendor row of the
+          // same name (merged by name exactly as before; worth merging the
+          // vendor rows so future matches are exact).
+          vendor_record_differs: conflicts.some((c) => c.source_item_id === target.source_item_id),
         },
       });
       continue;
@@ -1202,6 +1484,237 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
   {
     const p = plan([draft({})], [["d1", enrich({})]]);
     assert(!p.lotFactsByKey.has("LOT-A"), "lot facts: flower has no mg bundle");
+  }
+
+  // --- S19: vendor-id identity (bible S19.5) ---------------------------------
+  {
+    const vid = (lotToVid: [string, string][], liveLots: [string, string[]][]): VendorIdInputs => ({
+      vendorIdByLotKey: new Map(lotToVid),
+      lotVendorIdsByKey: new Map(liveLots.map(([k, v]) => [k, new Set(v)])),
+    });
+    // Cultivera card: vendor spelled from INVENTORIES `Vendor`; its lots carry
+    // pos_product_key = the card key and the vendor row the import resolved.
+    const cult = live({
+      source_item_id: "pos-0123456789ab",
+      vendor_name: "Fairwinds Manufacturing",
+      variants: [{ source_variant_id: "pos-0123456789ab-aa11", medical: false }],
+    });
+    const ids = vid([["LOT-A", "V-FW"]], [["pos-0123456789ab", ["V-FW"]]]);
+
+    // S19.5 #1: different vendor spelling, same vendor_id -> MERGE.
+    const withIds = buildIntakeMasteringPlan({
+      drafts: [draft({})],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      liveCards: [cult],
+      vendorIds: ids,
+    });
+    assert(withIds.newCards.length === 0, "S19.5 same id: no new card");
+    assert(withIds.mergedVariantCount === 1, "S19.5 same id: merged one variant");
+    assert(withIds.mergesByCardKey.get("pos-0123456789ab")?.[0]?.source_variant_id === "LOT-A-onboarded", "S19.5 same id: onto the Cultivera card, own lot key");
+    const rd = withIds.diagnostics.find((d) => d.code === "intake_master_restock");
+    assert(rd?.context?.matched_by === "vendor_id", "S19.5 same id: diagnostic says matched_by vendor_id");
+    assert(rd?.context?.vendor_record_differs === false, "S19.5 same id: vendor record does not differ");
+
+    // Same input WITHOUT ids (flag off / read incomplete): pre-S19 duplicate.
+    const noIds = plan([draft({})], [["d1", enrich({})]], [cult]);
+    assert(noIds.newCards.length === 1 && noIds.mergedVariantCount === 0, "S19 flag off: name rule byte-for-byte (duplicate card)");
+
+    // Different ids with different spellings -> still a new card (never guessed).
+    const otherVid = buildIntakeMasteringPlan({
+      drafts: [draft({})],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      liveCards: [cult],
+      vendorIds: vid([["LOT-A", "V-OTHER"]], [["pos-0123456789ab", ["V-FW"]]]),
+    });
+    assert(otherVid.newCards.length === 1 && otherVid.mergedVariantCount === 0, "S19 different id + different name: new card");
+
+    // Same NAME, different vendor row -> still merged (additive, never
+    // subtractive) and flagged vendor_record_differs.
+    const sameName = buildIntakeMasteringPlan({
+      drafts: [draft({})],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      liveCards: [live({})],
+      vendorIds: vid([["LOT-A", "V-NEW"]], [["LOT-OLD", ["V-OLD"]]]),
+    });
+    assert(sameName.mergedVariantCount === 1 && sameName.newCards.length === 0, "S19 same name, other vendor row: still merged (never subtract)");
+    const sd = sameName.diagnostics.find((d) => d.code === "intake_master_restock");
+    assert(sd?.context?.matched_by === "name" && sd?.context?.vendor_record_differs === true, "S19 same name other row: flagged");
+
+    // Mixed ids inside one group -> name rule (groupVendorId null).
+    const mixed = buildIntakeMasteringPlan({
+      drafts: [draft({}), draft({ id: "d2", pos_product_key: "LOT-B", name: "Blue Dream 3.5g", price_minor_units: 3500 })],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})], ["d2", enrich({ packageLabel: "3.5g" })]]),
+      liveCards: [cult],
+      vendorIds: vid([["LOT-A", "V-FW"], ["LOT-B", "V-X"]], [["pos-0123456789ab", ["V-FW"]]]),
+    });
+    assert(mixed.newCards.length === 1 && mixed.mergedVariantCount === 0, "S19 mixed ids in group: name rule");
+
+    // S19.5 #2: ambiguous -> new card + diagnostic (unchanged), incl. via id.
+    const amb = buildIntakeMasteringPlan({
+      drafts: [draft({})],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      liveCards: [cult, live({ source_item_id: "pos-0123456789cd", vendor_name: "Fairwinds Mfg", variants: [] })],
+      vendorIds: vid([["LOT-A", "V-FW"]], [["pos-0123456789ab", ["V-FW"]], ["pos-0123456789cd", ["V-FW"]]]),
+    });
+    assert(amb.newCards.length === 1 && amb.mergedVariantCount === 0, "S19.5 ambiguous: new card");
+    const ad = amb.diagnostics.find((d) => d.code === "intake_master_merge_ambiguous");
+    assert(ad?.severity === "warning", "S19.5 ambiguous: warning diagnostic unchanged");
+    assert(JSON.stringify(ad?.context?.live_card_keys) === JSON.stringify(["pos-0123456789ab", "pos-0123456789cd"]), "S19.5 ambiguous: both id cards listed");
+    // Name ambiguity is untouched by ids (pre-S19 decision stands).
+    const nameAmb = buildIntakeMasteringPlan({
+      drafts: [draft({})],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      liveCards: [live({}), live({ source_item_id: "card-2", variants: [] }), cult],
+      vendorIds: ids,
+    });
+    assert(nameAmb.newCards.length === 1 && nameAmb.diagnostics.some((d) => d.code === "intake_master_merge_ambiguous"), "S19.5 name-ambiguous stays ambiguous");
+    // NEVER WORSE: a same-name card + an id-only card -> still merges onto the name card.
+    const nameStands = buildIntakeMasteringPlan({
+      drafts: [draft({})],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      liveCards: [live({}), cult],
+      vendorIds: ids,
+    });
+    assert(nameStands.mergedVariantCount === 1 && nameStands.mergesByCardKey.has("card-1") && nameStands.newCards.length === 0, "S19 never worse: the name match still merges");
+
+    // Blank-vendor Cultivera card never a target, even when its lot has the id (S19.8).
+    const blank = buildIntakeMasteringPlan({
+      drafts: [draft({})],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      liveCards: [live({ source_item_id: "pos-0123456789ab", vendor_name: "", variants: [] })],
+      vendorIds: ids,
+    });
+    assert(blank.newCards.length === 1 && blank.mergedVariantCount === 0, "S19.8 blank-vendor card never a merge target");
+
+    // Hidden card with the id is never a target either.
+    const hid = buildIntakeMasteringPlan({
+      drafts: [draft({})],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      liveCards: [{ ...cult, hidden: true }],
+      vendorIds: ids,
+    });
+    assert(hid.newCards.length === 1, "S19 hidden id card never a target");
+
+    // Receiving card (-onboarded variants): its variant lots carry the id.
+    const recv = buildIntakeMasteringPlan({
+      drafts: [draft({})],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([["d1", enrich({})]]),
+      liveCards: [live({ source_item_id: "LOT-OLD", vendor_name: "Fairwinds Mfg", variants: [{ source_variant_id: "LOT-OLD2-onboarded", medical: false }] })],
+      vendorIds: vid([["LOT-A", "V-FW"]], [["LOT-OLD2", ["V-FW"]]]),
+    });
+    assert(recv.mergedVariantCount === 1 && recv.mergesByCardKey.has("LOT-OLD"), "S19 receiving card via variant lot id");
+
+    // S19.6 ACCEPTANCE FIXTURE: known restocks of Cultivera-born cards whose
+    // vendor strings differ from the manifest licensee. Duplicate cards
+    // (a new card for a product that is already live) with the name rule vs
+    // with vendor ids: must drop to ZERO.
+    const liveFx = [
+      live({ source_item_id: "pos-aaaaaaaaaaa1", name: "Blue Dream", vendor_name: "Fairwinds Manufacturing", variants: [] }),
+      live({ source_item_id: "pos-aaaaaaaaaaa2", name: "Sour Diesel", strain_name: "Sour Diesel", vendor_name: "Seattles Private Reserve", brand_name: "SPR", variants: [] }),
+      live({ source_item_id: "pos-aaaaaaaaaaa3", name: "Gelato", strain_name: "Gelato", vendor_name: "Ceres Garden LLC", brand_name: "Ceres", variants: [] }),
+    ];
+    const draftsFx = [
+      draft({ id: "x1", pos_product_key: "LOT-X1", vendor_name: "Fairwinds LLC" }),
+      draft({ id: "x2", pos_product_key: "LOT-X2", name: "Sour Diesel 1g", strain_name: "Sour Diesel", brand_name: "SPR", vendor_name: "Seattle's Private Reserve" }),
+      draft({ id: "x3", pos_product_key: "LOT-X3", name: "Gelato 1g", strain_name: "Gelato", brand_name: "Ceres", vendor_name: "CERES" }),
+    ];
+    const enrFx = new Map(draftsFx.map((d) => [d.id, enrich({})] as [string, DraftEnrichment]));
+    const idsFx = vid(
+      [["LOT-X1", "V1"], ["LOT-X2", "V2"], ["LOT-X3", "V3"]],
+      [["pos-aaaaaaaaaaa1", ["V1"]], ["pos-aaaaaaaaaaa2", ["V2"]], ["pos-aaaaaaaaaaa3", ["V3"]]],
+    );
+    const before = buildIntakeMasteringPlan({ drafts: draftsFx, existingKeys: new Set(), enrichmentByDraftId: enrFx, liveCards: liveFx });
+    const after = buildIntakeMasteringPlan({ drafts: draftsFx, existingKeys: new Set(), enrichmentByDraftId: enrFx, liveCards: liveFx, vendorIds: idsFx });
+    assert(before.newCards.length === 3, "S19.6 fixture: name rule mints 3 duplicate cards");
+    assert(after.newCards.length === 0 && after.mergedVariantCount === 3, "S19.6 fixture: vendor ids -> ZERO duplicate cards");
+
+    // --- Preview (S19.2) agrees with the real plan ---
+    const pv = (drafts: RestockPreviewDraft[], cards: LiveCardCandidate[], v?: VendorIdInputs) =>
+      previewRestockVerdicts({ drafts, liveCards: cards, vendorIds: v });
+    const row = (over: Partial<RestockPreviewDraft>): RestockPreviewDraft => ({
+      id: "d1",
+      pos_product_key: "LOT-A",
+      name: "Blue Dream 1g",
+      brand_name: "Fairwinds",
+      vendor_name: "Fairwinds LLC",
+      strain_name: "Blue Dream",
+      category: "flower",
+      ...over,
+    });
+    const j = pv([row({})], [cult], ids).get("d1");
+    assert(j?.kind === "joins" && j.cardKey === "pos-0123456789ab" && j.fromCultivera && j.matchedBy === "vendor_id" && !j.vendorRecordDiffers, "preview: joins Cultivera card via id");
+    assert(j?.kind === "joins" && j.cardName === "Blue Dream", "preview: card name carried");
+    const jr = pv([row({})], [live({})]).get("d1");
+    assert(jr?.kind === "joins" && !jr.fromCultivera && jr.matchedBy === "name", "preview: joins receiving card by name");
+    const jd = pv([row({})], [live({})], vid([["LOT-A", "V-NEW"]], [["LOT-OLD", ["V-OLD"]]])).get("d1");
+    assert(jd?.kind === "joins" && jd.vendorRecordDiffers === true, "preview: vendor record differs flagged");
+    assert(pv([row({})], [cult]).get("d1")?.kind === "new", "preview: no ids -> new (matches the plan)");
+    const a2 = pv([row({})], [live({}), live({ source_item_id: "card-2", variants: [] })], ids).get("d1");
+    assert(a2?.kind === "ambiguous" && a2.cardKeys.join() === "card-1,card-2", "preview: ambiguous 2");
+    const al = pv([row({ pos_product_key: "pos-0123456789ab" })], [cult], ids).get("d1");
+    assert(al?.kind === "already_live" && !al.asSize && al.cardKey === "pos-0123456789ab", "preview F-068: POS key already a live card");
+    const as = pv([row({ pos_product_key: "LOT-OLD" })], [live({})]).get("d1");
+    assert(as?.kind === "already_live" && as.asSize && as.cardKey === "card-1", "preview: lot already a size");
+    assert(pv([row({ vendor_name: "  " })], [cult]).get("d1")?.kind === "no_vendor", "preview: no vendor");
+    assert(pv([row({ name: "Flower", strain_name: null })], [cult]).get("d1")?.kind === "vague_name", "preview: vague name");
+    assert(!pv([row({ pos_product_key: null })], [cult]).has("d1") && !pv([row({ pos_product_key: " " })], [cult]).has("d1"), "preview: keyless -> no verdict");
+    assert(!pv([row({ category: null })], [cult]).has("d1") && !pv([row({ category: "  " })], [cult]).has("d1"), "preview: unmapped -> no verdict");
+    // Group verdict: two rows of the same product share one verdict.
+    const ids2 = vid([["LOT-A", "V-FW"], ["LOT-B", "v-fw "]], [["pos-0123456789ab", ["V-FW"]]]);
+    const g2 = pv([row({}), row({ id: "d2", pos_product_key: "LOT-B", name: "Blue Dream 3.5g" })], [cult], ids2);
+    assert(g2.size === 2 && g2.get("d1") === g2.get("d2") && g2.get("d1")?.kind === "joins", "preview: grouped rows share ONE verdict");
+    // One row missing its id -> whole group on the name rule -> new.
+    const g4 = pv([row({}), row({ id: "d2", pos_product_key: "LOT-Z", name: "Blue Dream 3.5g" })], [cult], vid([["LOT-A", "V-FW"]], [["pos-0123456789ab", ["V-FW"]]]));
+    assert(g4.get("d1")?.kind === "new" && g4.get("d2")?.kind === "new", "preview: group with a missing id -> name rule");
+    // Preview == plan on the acceptance fixture.
+    const pf = pv(draftsFx.map((d) => row({ id: d.id, pos_product_key: d.pos_product_key, name: d.name, brand_name: d.brand_name, vendor_name: d.vendor_name, strain_name: d.strain_name })), liveFx, idsFx);
+    assert([...pf.values()].every((v) => v.kind === "joins") && pf.size === 3, "preview == plan on the S19.6 fixture");
+    // buildLiveMergeIndex / matchLiveCards surface.
+    const idx = buildLiveMergeIndex([cult], ids);
+    assert(idx.byVendorId.size === 1 && idx.vidsByCard.get("pos-0123456789ab")?.has("v-fw") === true, "index: vendor-id keyed (lowercased)");
+    assert(buildLiveMergeIndex([cult]).byVendorId.size === 0 && buildLiveMergeIndex([cult]).vidsByCard.size === 0, "index: no ids -> empty id maps");
+    assert(buildLiveMergeIndex([cult]).variantLotKeys.size === 0, "index: pos- variant ids are not lots");
+    assert(buildLiveMergeIndex([live({})]).variantLotKeys.get("LOT-OLD") === "card-1", "index: onboarded variant lot mapped");
+
+    // planVendorIdLookup: only the lots that could matter.
+    const other = live({ source_item_id: "card-9", name: "Gelato", strain_name: "Gelato", variants: [{ source_variant_id: "LOT-G-onboarded", medical: false }] });
+    const edible = live({ source_item_id: "card-8", category: "edible-solid", name: "Blue Dream Gummies 100mg", variants: [] });
+    const lk = planVendorIdLookup({ drafts: [row({}), row({ id: "d2", pos_product_key: "LOT-A" })], liveCards: [cult, live({}), other, edible] });
+    assert(lk.draftLotKeys.join() === "LOT-A", "lookup: draft keys deduped");
+    assert(lk.liveLotKeys.join() === "pos-0123456789ab,card-1,LOT-OLD", "lookup: only same axis+family cards' lots");
+    assert(!lk.overCap, "lookup: under the cap");
+    assert(planVendorIdLookup({ drafts: [row({ vendor_name: "" }), row({ id: "x", category: null }), row({ id: "y", pos_product_key: null }), row({ id: "z", name: "Flower", strain_name: null })], liveCards: [cult] }).liveLotKeys.length === 0, "lookup: unusable rows ask nothing");
+    assert(planVendorIdLookup({ drafts: [row({})], liveCards: [{ ...cult, hidden: true }, live({ source_item_id: "m", variants: [{ source_variant_id: "M-onboarded", medical: true }] }), live({ source_item_id: "b", vendor_name: " " })] }).liveLotKeys.length === 0, "lookup: hidden / medical-only / blank-vendor cards skipped");
+    assert(planVendorIdLookup({ drafts: [row({ category: "preroll-pack", name: "Blue Dream 5pk" })], liveCards: [live({ category: "preroll", variants: [] })] }).liveLotKeys.join() === "card-1", "lookup: pack axis folds");
+    const many = Array.from({ length: VENDOR_ID_LIVE_KEY_CAP + 1 }, (_, i) => live({ source_item_id: `c${i}`, variants: [] }));
+    assert(planVendorIdLookup({ drafts: [row({})], liveCards: many }).overCap, "lookup: over the cap is reported");
+    assert(!planVendorIdLookup({ drafts: [row({})], liveCards: many.slice(0, VENDOR_ID_LIVE_KEY_CAP) }).overCap, "lookup: exactly the cap is fine");
+    assert(VENDOR_ID_LIVE_KEY_CAP === 2000, "lookup: cap pinned");
+    // buildVendorIdInputs
+    const vi2 = buildVendorIdInputs({
+      draftLots: [
+        { pos_product_key: " LOT-A ", vendor_id: " V1 " },
+        { pos_product_key: "LOT-A", vendor_id: "v1" },
+        { pos_product_key: "LOT-C", vendor_id: "v1" },
+        { pos_product_key: "LOT-C", vendor_id: "v2" },
+        { pos_product_key: "LOT-B", vendor_id: null },
+        { pos_product_key: null, vendor_id: "v3" },
+      ],
+      liveLots: [{ pos_product_key: "K", vendor_id: "V1" }, { pos_product_key: "K", vendor_id: "v4" }, { pos_product_key: "K", vendor_id: "" }, { pos_product_key: " ", vendor_id: "v5" }],
+    });
+    assert(vi2.vendorIdByLotKey.size === 1 && vi2.vendorIdByLotKey.get("LOT-A") === "v1", "inputs: draft ids trimmed+lowercased, agreeing repeats kept, blanks dropped");
+    assert(!vi2.vendorIdByLotKey.has("LOT-C"), "inputs: a draft key whose lots disagree gets NO id (never pick one)");
+    assert([...(vi2.lotVendorIdsByKey.get("K") ?? [])].join() === "v1,v4" && vi2.lotVendorIdsByKey.size === 1, "inputs: live ids unioned, blanks dropped");
   }
 
   return { passed };

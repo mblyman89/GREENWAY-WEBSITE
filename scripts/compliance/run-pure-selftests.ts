@@ -709,6 +709,8 @@ import { __runPublishArchiveRuleTests } from "../../src/lib/pos/publish-archive-
 import { __runPublishQueueTests } from "../../src/lib/pos/publish-queue-core";
 import { __runBatchStagingTests } from "../../src/lib/inventory/batch-staging-core";
 import { __runCutoverGuardTests } from "../../src/lib/inventory/cutover-guard-core";
+import { __runVendorIdentityCoreTests } from "../../src/lib/inventory/vendor-identity-core";
+import { __runRestockPreviewViewTests } from "../../src/lib/inventory/restock-preview-view-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
 import { __runSageExportsCoreTests } from "../../src/lib/accounting/sage-exports-core";
@@ -1382,6 +1384,8 @@ __runLiquidVolumeTests();
   __runPublishQueueTests();
   __runBatchStagingTests();
   __runCutoverGuardTests();
+  __runVendorIdentityCoreTests();
+  __runRestockPreviewViewTests();
   // SLICE 39 connectivity audit: previously-dark suites. Suites that throw
   // internally on assertion failure are bare calls; suites that only return
   // { passed, failed } are wrapped so a failure still fails this runner.

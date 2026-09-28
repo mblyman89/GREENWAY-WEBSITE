@@ -48,8 +48,16 @@ import {
 } from "@/lib/inventory/strain-type-intel-core";
 import {
   buildIntakeStagedVersionPlan,
+  carryForwardIncompleteNote,
+  carryForwardVerdict,
+  CARRY_FORWARD_INCOMPLETE_EVENT,
+  CARRY_FORWARD_INCOMPLETE_REASON,
   type CarryForwardItem,
 } from "@/lib/pos/intake-menu-staging-core";
+// S19: vendor-id identity for the restock match (bounded reads, flag).
+import { VENDOR_ID_IDENTITY_ENV, vendorIdIdentityEnabled } from "@/lib/inventory/vendor-identity-core";
+import { loadVendorIdInputs } from "@/lib/inventory/restock-preview-server";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import type { ApprovedDraftForInjection, DraftEnrichment } from "@/lib/pos/draft-injection-core";
 // S01: self-describing intake versions (manifest header + publish outcome +
 // humanised notes). Pure; see the file header for where the truth lives.
@@ -119,6 +127,22 @@ export async function stageIntakeMenuVersionForManifest(
   if (!isSupabaseServiceConfigured) return skip("supabase-not-configured");
   const admin = createSupabaseAdminClient();
 
+  // S19: the live menu could not be read whole -> build nothing, say why on
+  // the delivery's timeline (approvals stay saved; the live menu is untouched).
+  const carryForwardIncomplete = async (missing: number | null): Promise<IntakeStagingOutcome> => {
+    try {
+      await admin.from("manifest_events").insert({
+        manifest_id: manifestId,
+        event_type: CARRY_FORWARD_INCOMPLETE_EVENT,
+        note: carryForwardIncompleteNote({ missing }),
+        actor_id: actorId,
+      });
+    } catch (err) {
+      console.error("[intake-menu-staging] carry-forward note insert failed:", err);
+    }
+    return skip(CARRY_FORWARD_INCOMPLETE_REASON);
+  };
+
   try {
     // 1) APPROVED onboarding drafts for THIS manifest. Only human-approved,
     //    priced products are eligible (price set at approval from intake data);
@@ -184,14 +208,33 @@ export async function stageIntakeMenuVersionForManifest(
 
     // 2) Currently-published version + its items (carry-forward snapshot). When
     //    nothing is live yet, the staged version is just the intake products.
-    const { data: publishedRow } = await admin
+    const { data: publishedRow, error: pubErr } = await admin
       .from("menu_versions")
       .select("*")
       .eq("status", "published")
       .limit(1)
       .maybeSingle();
+    // S19: a FAILED read is not "nothing is live" - treating it so would stage
+    // (and auto-publish) a menu of only this delivery. Fail closed instead.
+    if (pubErr) {
+      console.error("[intake-menu-staging] published version read failed:", pubErr.message);
+      return await carryForwardIncomplete(null);
+    }
     const published = (publishedRow as MenuVersion | null) ?? null;
-    const publishedItems = published ? await loadCarryForwardItems(published.id) : [];
+    let publishedItems: CarryForwardItem[] = [];
+    if (published) {
+      // S19 (latent defect, fixed fail-closed): the carry-forward must be the
+      // WHOLE live menu - the staged snapshot replaces it on auto-publish.
+      const carry = await loadCarryForwardItems(published.id);
+      const verdict = carryForwardVerdict(carry);
+      if (!verdict.complete) {
+        console.error(
+          `[intake-menu-staging] carry-forward incomplete (read ${carry.rowsRead} of ${carry.expectedTotal ?? "?"}; failed=${carry.readFailed}) - not staging.`,
+        );
+        return await carryForwardIncomplete(verdict.missing);
+      }
+      publishedItems = carry.items;
+    }
 
     // 3) Enrichment (same sources as draft-injection.ts): website category via
     //    the house resolver, curated strain type from kb_strains, and the
@@ -276,11 +319,40 @@ export async function stageIntakeMenuVersionForManifest(
       });
     });
 
+    // S19: vendor ids for the restock match - only when the flag is on and
+    // something is live; ONLY the lots that could change a match are read
+    // (planVendorIdLookup); any failed read = no ids = the name rule.
+    const vendorIds =
+      publishedItems.length > 0 && vendorIdIdentityEnabled(process.env[VENDOR_ID_IDENTITY_ENV])
+        ? await loadVendorIdInputs(admin, {
+            drafts: drafts.map((d, i) => ({
+              id: d.id,
+              pos_product_key: d.pos_product_key,
+              name: d.name,
+              brand_name: d.brand_name,
+              vendor_name: d.vendor_name,
+              strain_name: d.strain_name,
+              category: d.chosen_website_category?.trim() || resolutions[i]?.websiteCategory || null,
+            })),
+            liveCards: publishedItems.map((it) => ({
+              source_item_id: it.source_item_id,
+              name: it.name,
+              brand_name: it.brand_name,
+              vendor_name: it.vendor_name,
+              category: it.category,
+              strain_name: it.strain_name,
+              hidden: it.hidden,
+              variants: it.variants.map((v) => ({ source_variant_id: v.source_variant_id, medical: v.medical })),
+            })),
+          })
+        : undefined;
+
     // 4) Pure plan.
     const plan = buildIntakeStagedVersionPlan({
       publishedItems,
       approvedDrafts: drafts,
       enrichmentByDraftId,
+      vendorIds,
     });
 
     // SLICE 62: persist the VERIFIED extraction facts on the source lots —
@@ -731,93 +803,149 @@ export async function replaceRecentRestages(
 /** Candidate ceiling for one coalesce read (a 20 s window holds a handful). */
 const RESTAGE_READ_MAX = 25;
 
-/** Load a published version's items (with variants) as carry-forward rows. */
-async function loadCarryForwardItems(versionId: string): Promise<CarryForwardItem[]> {
+/**
+ * S19: what loadCarryForwardItems returns - the rows plus the evidence
+ * (read failure, rows read, independent COUNT) carryForwardVerdict judges.
+ * A named type (not an inline object) so the function's first brace is its
+ * body - restage-plumbing extracts the body by brace matching.
+ */
+type CarryForwardRead = {
+  items: CarryForwardItem[];
+  readFailed: boolean;
+  rowsRead: number;
+  expectedTotal: number | null;
+};
+
+/**
+ * Load a published version's items (with variants) as carry-forward rows.
+ *
+ * S19: the carried-forward live menu, PAGED, with the evidence to prove it is
+ * whole. Before S19 this was one un-ranged read (PostgREST silently caps it
+ * at db.max_rows = 1,000 on a ~4,500-item menu) that returned [] on error -
+ * either way the staged snapshot, which REPLACES the live menu on
+ * auto-publish, could silently drop live products. Now: items page by
+ * sort_order + id (the getVersionItems pattern), variants page per chunk,
+ * and a server-side COUNT is the independent witness. The caller refuses to
+ * stage unless carryForwardVerdict says the read is complete.
+ */
+async function loadCarryForwardItems(versionId: string): Promise<CarryForwardRead> {
   const admin = createSupabaseAdminClient();
-  const { data: itemRows, error } = await admin
+  let readFailed = false;
+  const items = await pagedAll<MenuItemRow>(async (from, to) => {
+    const { data: itemRows, error } = await admin
+      .from("menu_items")
+      .select("*")
+      .eq("menu_version_id", versionId)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) {
+      console.error("[intake-menu-staging] carry-forward items read failed:", error.message);
+      readFailed = true;
+      return [];
+    }
+    return (itemRows as MenuItemRow[] | null) ?? [];
+  });
+
+  // The independent witness (SLICE 4A pattern, menu-version countVersionItems).
+  let expectedTotal: number | null = null;
+  const { count, error: countErr } = await admin
     .from("menu_items")
-    .select("*")
-    .eq("menu_version_id", versionId)
-    .order("sort_order", { ascending: true });
-  if (error) {
-    console.error("[intake-menu-staging] carry-forward items read failed:", error.message);
-    return [];
-  }
-  const items = (itemRows as MenuItemRow[] | null) ?? [];
-  if (items.length === 0) return [];
+    .select("id", { count: "exact", head: true })
+    .eq("menu_version_id", versionId);
+  if (countErr) console.error("[intake-menu-staging] carry-forward count failed:", countErr.message);
+  else if (typeof count === "number") expectedTotal = count;
 
   const variantsByItem = new Map<string, MenuVariantRow[]>();
-  const ids = items.map((i) => i.id);
-  const CHUNK = 200;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const slice = ids.slice(i, i + CHUNK);
-    const { data: variants } = await admin
-      .from("menu_variants")
-      .select("*")
-      .in("menu_item_id", slice)
-      .order("sort_order", { ascending: true });
-    for (const v of (variants as MenuVariantRow[] | null) ?? []) {
+  if (!readFailed && items.length > 0) {
+    const variants = await chunkedIn<string, MenuVariantRow>(
+      items.map((i) => i.id),
+      async (chunk, from, to) => {
+        const { data, error } = await admin
+          .from("menu_variants")
+          .select("*")
+          .in("menu_item_id", chunk)
+          .order("sort_order", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) {
+          console.error("[intake-menu-staging] carry-forward variants read failed:", error.message);
+          readFailed = true;
+          return [];
+        }
+        return (data as MenuVariantRow[] | null) ?? [];
+      },
+    );
+    for (const v of variants) {
       const list = variantsByItem.get(v.menu_item_id) ?? [];
       list.push(v);
       variantsByItem.set(v.menu_item_id, list);
     }
   }
 
-  return items.map((it) => ({
-    source_item_id: it.source_item_id,
-    name: it.name,
-    product_name: it.product_name,
-    brand_name: it.brand_name,
-    vendor_name: it.vendor_name,
-    category: it.category,
-    filter_categories: it.filter_categories,
-    pos_inventory_type: it.pos_inventory_type,
-    pos_inventory_category: it.pos_inventory_category,
-    strain_type: it.strain_type,
-    strain_name: it.strain_name,
-    thc: it.thc,
-    cbd: it.cbd,
-    total_thc_json: it.total_thc_json,
-    total_cbd_json: it.total_cbd_json,
-    compounds_json: it.compounds_json,
-    // SLICE 62: carry the structured facts (migration 0138) forward so a new
-    // intake snapshot never wipes facts an earlier import/intake run earned.
-    servings_per_pack: it.servings_per_pack,
-    mg_per_serving: it.mg_per_serving,
-    package_thc_mg: it.package_thc_mg,
-    package_cbd_mg: it.package_cbd_mg,
-    ratio_label: it.ratio_label,
-    net_weight_grams: it.net_weight_grams,
-    net_volume_ml: it.net_volume_ml,
-    fact_provenance: (it.fact_provenance ?? {}) as Record<string, string>,
-    // SLICE 18G (DEFECT 3): read the sales-limit classification off the
-    // published row so it can be carried forward.
-    //
-    // The query above is `select("*")`, so these four values were ALWAYS
-    // present in `it` — the loss was purely in this hand-written mapping.
-    // That is why the fix is four lines and no query change: nothing had to be
-    // fetched, only stopped from being thrown away.
-    //
-    // MenuItemRow already declares all four (src/lib/pos/db-types.ts), so
-    // these are typed reads, not casts.
-    low_thc_liquid: it.low_thc_liquid,
-    unit_thc_mg: it.unit_thc_mg,
-    otherwise_taken: it.otherwise_taken,
-    units_per_package: it.units_per_package,
-    description: it.description,
-    price_label: it.price_label,
-    price_minor_units: it.price_minor_units,
-    inventory_status: it.inventory_status,
-    hidden: it.hidden,
-    hidden_reason: it.hidden_reason,
-    variants: (variantsByItem.get(it.id) ?? []).map((v) => ({
-      source_variant_id: v.source_variant_id,
-      label: v.label,
-      price_minor_units: v.price_minor_units,
-      inventory_level: v.inventory_level,
-      medical: v.medical,
+  return {
+    readFailed,
+    rowsRead: items.length,
+    expectedTotal,
+    // The mapping stays INSIDE this function on purpose: restage-plumbing
+    // (SLICE 18G) scopes its guard to this body, so the limit columns are
+    // proven to be assigned from the very rows this read returned.
+    items: items.map((it) => ({
+      source_item_id: it.source_item_id,
+      name: it.name,
+      product_name: it.product_name,
+      brand_name: it.brand_name,
+      vendor_name: it.vendor_name,
+      category: it.category,
+      filter_categories: it.filter_categories,
+      pos_inventory_type: it.pos_inventory_type,
+      pos_inventory_category: it.pos_inventory_category,
+      strain_type: it.strain_type,
+      strain_name: it.strain_name,
+      thc: it.thc,
+      cbd: it.cbd,
+      total_thc_json: it.total_thc_json,
+      total_cbd_json: it.total_cbd_json,
+      compounds_json: it.compounds_json,
+      // SLICE 62: carry the structured facts (migration 0138) forward so a new
+      // intake snapshot never wipes facts an earlier import/intake run earned.
+      servings_per_pack: it.servings_per_pack,
+      mg_per_serving: it.mg_per_serving,
+      package_thc_mg: it.package_thc_mg,
+      package_cbd_mg: it.package_cbd_mg,
+      ratio_label: it.ratio_label,
+      net_weight_grams: it.net_weight_grams,
+      net_volume_ml: it.net_volume_ml,
+      fact_provenance: (it.fact_provenance ?? {}) as Record<string, string>,
+      // SLICE 18G (DEFECT 3): read the sales-limit classification off the
+      // published row so it can be carried forward.
+      //
+      // The query above is `select("*")`, so these four values were ALWAYS
+      // present in `it` — the loss was purely in this hand-written mapping.
+      // That is why the fix is four lines and no query change: nothing had to be
+      // fetched, only stopped from being thrown away.
+      //
+      // MenuItemRow already declares all four (src/lib/pos/db-types.ts), so
+      // these are typed reads, not casts.
+      low_thc_liquid: it.low_thc_liquid,
+      unit_thc_mg: it.unit_thc_mg,
+      otherwise_taken: it.otherwise_taken,
+      units_per_package: it.units_per_package,
+      description: it.description,
+      price_label: it.price_label,
+      price_minor_units: it.price_minor_units,
+      inventory_status: it.inventory_status,
+      hidden: it.hidden,
+      hidden_reason: it.hidden_reason,
+      variants: (variantsByItem.get(it.id) ?? []).map((v) => ({
+        source_variant_id: v.source_variant_id,
+        label: v.label,
+        price_minor_units: v.price_minor_units,
+        inventory_level: v.inventory_level,
+        medical: v.medical,
+      })),
     })),
-  }));
+  };
 }
 
 /** Distinct non-empty vendor names among the staged items. */
