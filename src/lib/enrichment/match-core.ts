@@ -440,9 +440,11 @@ export type EnrichmentSortKey =
   // SLICE 72 — worklist intelligence.
   | "priority"
   | "priceHigh"
-  | "priceLow";
+  | "priceLow"
+  // S22 - newest from receiving first (R-ENRICH-FILTER, F-081).
+  | "newest";
 export const ENRICHMENT_SORT_KEYS: readonly EnrichmentSortKey[] = [
-  "gaps", "name", "brand", "category", "status", "priority", "priceHigh", "priceLow",
+  "gaps", "name", "brand", "category", "status", "priority", "priceHigh", "priceLow", "newest",
 ];
 
 export function parseEnrichmentSort(raw: string | null | undefined): EnrichmentSortKey {
@@ -478,7 +480,20 @@ export type SortableGapRow = {
   hasTags?: boolean;
   priceMinorUnits?: number;
   inventoryStatus?: string;
+  /**
+   * S22 - when the card's newest lot was received (ISO), from the lot ->
+   * delivery join (enrichment-manifest-core.ts attributeCards). null/absent
+   * = unknown (a Cultivera card with no Received date): sorts LAST.
+   */
+  lastReceivedAt?: string | null;
 };
+
+/** S22: ms of lastReceivedAt, or null when absent/unparseable. */
+function receivedMs(g: SortableGapRow): number | null {
+  if (typeof g.lastReceivedAt !== "string") return null;
+  const ms = Date.parse(g.lastReceivedAt);
+  return Number.isNaN(ms) ? null : ms;
+}
 
 /** How many enrichment gaps a row has (image weighted first for ties). */
 export function gapCount(g: SortableGapRow): number {
@@ -542,6 +557,18 @@ export function sortEnrichmentList<T extends SortableGapRow>(rows: T[], sort: En
       return copy.sort((a, b) => (b.priceMinorUnits ?? 0) - (a.priceMinorUnits ?? 0) || byName(a, b));
     case "priceLow":
       return copy.sort((a, b) => (a.priceMinorUnits ?? 0) - (b.priceMinorUnits ?? 0) || byName(a, b));
+    case "newest":
+      // S22: newest receipt first; unknown dates last; ties by name.
+      return copy.sort((a, b) => {
+        const ra = receivedMs(a);
+        const rb = receivedMs(b);
+        if (ra !== rb) {
+          if (ra === null) return 1;
+          if (rb === null) return -1;
+          return rb - ra;
+        }
+        return byName(a, b);
+      });
     case "gaps":
     default:
       return copy.sort((a, b) => gapCount(b) - gapCount(a) || Number(a.hasImage) - Number(b.hasImage) || byName(a, b));
@@ -775,6 +802,22 @@ export function __runEnrichmentMatchCoreTests(): void {
   const listLegacy = buildEnrichmentChecklist({ hasDescription: true, hasImage: false });
   ok(listLegacy.length === 2, "checklist: brand/tags omitted → rows hidden (legacy callers safe)");
   ok(!checklistComplete(listLegacy) && checklistComplete([]), "checklist: one open row blocks complete; empty list is trivially complete");
+
+  // S22 - newest from receiving.
+  ok(parseEnrichmentSort("newest") === "newest", "sort parser accepts S22 newest");
+  ok(parseEnrichmentSort(undefined) === "gaps", "default sort stays gaps (S22 adds, never changes the default)");
+  const fresh: SortableGapRow[] = [
+    { name: "Old", brand: "B", category: "flower", hasDescription: true, hasImage: true, hasBrandLink: true, enrichmentStatus: null, lastReceivedAt: "2024-01-01T12:00:00.000Z" },
+    { name: "Unknown B", brand: "B", category: "flower", hasDescription: true, hasImage: true, hasBrandLink: true, enrichmentStatus: null, lastReceivedAt: null },
+    { name: "New", brand: "B", category: "flower", hasDescription: true, hasImage: true, hasBrandLink: true, enrichmentStatus: null, lastReceivedAt: "2025-03-19T17:00:00.000Z" },
+    { name: "Unknown A", brand: "B", category: "flower", hasDescription: true, hasImage: true, hasBrandLink: true, enrichmentStatus: null },
+    { name: "Junk", brand: "B", category: "flower", hasDescription: true, hasImage: true, hasBrandLink: true, enrichmentStatus: null, lastReceivedAt: "not a date" },
+    { name: "Also New", brand: "B", category: "flower", hasDescription: true, hasImage: true, hasBrandLink: true, enrichmentStatus: null, lastReceivedAt: "2025-03-19T17:00:00.000Z" },
+  ];
+  ok(sortEnrichmentList(fresh, "newest").map((r) => r.name).join("|") === "Also New|New|Old|Junk|Unknown A|Unknown B",
+    "newest: newest receipt first, ties by name, unknown/unparseable last by name");
+  ok(sortEnrichmentList([...fresh].reverse(), "newest").map((r) => r.name).join("|") === "Also New|New|Old|Junk|Unknown A|Unknown B",
+    "newest: input order never matters");
 
   if (fail > 0) throw new Error(`enrichment-match-core: ${fail} failure(s)`);
   console.log(`enrichment-match-core: ${pass} checks passed`);

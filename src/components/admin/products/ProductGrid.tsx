@@ -19,6 +19,8 @@ export type ProductGridCard = {
   hasBrandLink: boolean;
   enrichmentStatus: string | null;
   thumbnailUrl: string | null;
+  /** S22: "0421 · Phat Panda · Mar 12" / "Cultivera import"; null/absent = not shown. */
+  receivedFrom?: string | null;
 };
 
 function StatusPill({ status }: { status: string | null }) {
@@ -93,6 +95,11 @@ export function ProductGrid({
               <p className="mt-0.5 text-[0.7rem] text-white/45">
                 {c.brand || "No brand"} · {c.category}
               </p>
+              {c.receivedFrom && (
+                <p className="mt-0.5 truncate text-[0.65rem] text-white/35" title={`From ${c.receivedFrom}`}>
+                  From {c.receivedFrom}
+                </p>
+              )}
             </div>
             <div className="mt-auto flex flex-wrap gap-1">
               <GapBadge ok={c.hasImage} label="Photo" />

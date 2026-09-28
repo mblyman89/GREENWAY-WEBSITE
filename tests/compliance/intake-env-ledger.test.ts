@@ -184,7 +184,17 @@ describe("intake env ledger", () => {
       expect(read(f)).not.toMatch(/process\.env/);
     }
     expect(ledger).toContain('S21: the Menu Imports page says "refused" only when this guard would refuse');
-    expect(ledger).toContain("As of **S21**");
+    expect(ledger).not.toContain("As of **S21**");
+    // S22 (Enrichment manifest filter) is reads + a pure core; bible S22.7
+    // "Revert.". Its new code reads no environment.
+    expect(none).toContain("S22");
+    for (const f of [
+      "src/lib/enrichment/enrichment-manifest-core.ts",
+      "src/lib/enrichment/enrichment-manifest.ts",
+    ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    expect(ledger).toContain("As of **S22**");
     expect(ledger).not.toContain("As of **S19**");
     expect(ledger).not.toContain("As of **S18**");
   });

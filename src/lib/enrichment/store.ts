@@ -10,6 +10,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import type { ProductEnrichment, EnrichedMenuItem } from "./types";
 import type { MenuItemRow } from "@/lib/pos/db-types";
+import type { CardAttribution, LastManifest } from "./enrichment-manifest-core";
 
 const MEDIA_BUCKET = "media";
 
@@ -133,13 +134,25 @@ export type GapFlags = {
   priceMinorUnits: number;
   /** POS stock status (in-stock / low-stock / unavailable) for worklist filtering. */
   inventoryStatus: string;
+  // S22 (bible S22.2) - where the card came from. null = not attributed
+  // (the lot/manifest read was not made or failed), never a guess.
+  /** The card's newest delivery, or the 'Cultivera import' pseudo-manifest. */
+  lastManifest: LastManifest | null;
+  /** When the card's newest lot was received (ISO); null = unknown. */
+  lastReceivedAt: string | null;
 };
 
 /**
  * Compute gap flags for a set of menu items merged with their enrichment.
  * Used by the products list + gap dashboard.
  */
-export function computeGaps(item: MenuItemRow, enrichment: ProductEnrichment | null): GapFlags {
+export function computeGaps(
+  item: MenuItemRow,
+  enrichment: ProductEnrichment | null,
+  // S22: the lot -> delivery attribution (enrichment-manifest-core.ts
+  // attributeCards). Omitted by callers that don't need it.
+  attribution?: CardAttribution | null,
+): GapFlags {
   const hasDescription = Boolean(enrichment?.description || (item.description && item.description.trim().length > 0));
   const hasImage = Boolean(enrichment && (enrichment.primary_media_id || enrichment.image_media_ids.length > 0));
   const hasBrandLink = Boolean(enrichment?.brand_id);
@@ -156,6 +169,8 @@ export function computeGaps(item: MenuItemRow, enrichment: ProductEnrichment | n
     hasTags: (enrichment?.tags?.length ?? 0) > 0,
     priceMinorUnits: item.price_minor_units,
     inventoryStatus: item.inventory_status,
+    lastManifest: attribution?.lastManifest ?? null,
+    lastReceivedAt: attribution?.lastReceivedAt ?? null,
   };
 }
 

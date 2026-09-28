@@ -26,6 +26,22 @@ import {
   filterByEnrichmentStatus,
   filterByStock,
 } from "@/lib/enrichment/match-core";
+// S22 (R-ENRICH-FILTER, F-081, F-079): which delivery each card came from.
+import { readEnrichmentAttribution } from "@/lib/enrichment/enrichment-manifest";
+import {
+  ATTRIBUTION_UNAVAILABLE_NOTE,
+  MANIFEST_FILTER_LABEL,
+  SINCE_DAY_CHOICES,
+  applyManifestFilters,
+  deliveryVendorChoices,
+  hasManifestFilters,
+  manifestFocusSentence,
+  manifestParamValue,
+  manifestPickerOptions,
+  parseEnrichmentManifestParams,
+  receivedFromLabel,
+  sinceLabel,
+} from "@/lib/enrichment/enrichment-manifest-core";
 
 function fmtMoney(minor: number | null): string {
   if (minor == null) return "—";
@@ -37,7 +53,7 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; back?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; back?: string; manifest?: string; since?: string; vendor?: string }>;
 }) {
   await requirePermission("products.enrich");
   const sp = await searchParams;
@@ -46,6 +62,9 @@ export default async function ProductsPage({
   const sort = parseEnrichmentSort(sp.sort);
   const statusFilter = parseEnrichmentStatusFilter(sp.status);
   const stockFilter = parseEnrichmentStockFilter(sp.stock);
+  // S22: ?manifest= (a delivery uuid or "cultivera"), ?since= (days), ?vendor= (uuid).
+  const mf = parseEnrichmentManifestParams(sp);
+  const manifestValue = manifestParamValue(mf.manifest);
   const isTable = view === "table";
   // GW-029: carry the current filters into detail links for BackLink restore.
   const detailHref = (posKey: string) =>
@@ -150,9 +169,18 @@ export default async function ProductsPage({
 
   const items = await getVersionItems(published.id);
   const keys = items.map((i) => i.source_item_id);
-  const enrichments = await getEnrichmentsForKeys(keys);
+  // S22: the lot -> delivery attribution runs beside the enrichment read
+  // (two bounded, named-column reads; null = unavailable, filters off).
+  const [enrichments, attribution] = await Promise.all([
+    getEnrichmentsForKeys(keys),
+    readEnrichmentAttribution(items),
+  ]);
+  const attrs = attribution?.attrs ?? null;
+  const now = new Date();
 
-  const gaps: GapFlags[] = items.map((i) => computeGaps(i, enrichments.get(i.source_item_id) ?? null));
+  const gaps: GapFlags[] = items.map((i) =>
+    computeGaps(i, enrichments.get(i.source_item_id) ?? null, attrs?.get(i.source_item_id) ?? null),
+  );
 
   // Filter
   let filtered = gaps;
@@ -169,7 +197,14 @@ export default async function ProductsPage({
   else if (gap === "any") filtered = filtered.filter((g) => !g.hasDescription || !g.hasImage || !g.hasBrandLink || !g.hasTags);
   filtered = filterByEnrichmentStatus(filtered, statusFilter);
   filtered = filterByStock(filtered, stockFilter);
+  // S22: invoice/manifest, received-since and vendor filters (pure).
+  const manifestFiltered = applyManifestFilters(filtered, mf, attrs, now);
+  filtered = manifestFiltered.rows;
   filtered = sortEnrichmentList(filtered, sort);
+  const pickerOptions = attrs && attribution ? manifestPickerOptions(attribution.manifests, attrs, now, mf.manifest) : [];
+  const focusSentence = manifestFiltered.applied ? manifestFocusSentence(mf.manifest, pickerOptions) : null;
+  // Vendor choices: every vendor on a delivery with live cards (no extra read).
+  const vendorChoices = attribution ? deliveryVendorChoices(attribution.manifests, pickerOptions) : [];
 
   const missingDesc = gaps.filter((g) => !g.hasDescription).length;
   const missingImg = gaps.filter((g) => !g.hasImage).length;
@@ -204,6 +239,8 @@ export default async function ProductsPage({
       hasBrandLink: g.hasBrandLink,
       enrichmentStatus: g.enrichmentStatus,
       thumbnailUrl: id ? thumbMap.get(id) ?? null : null,
+      // S22: "From <delivery>" line (only when attribution was read).
+      receivedFrom: attrs ? receivedFromLabel(attrs.get(g.posKey) ?? null, now) : null,
     };
   });
 
@@ -215,6 +252,9 @@ export default async function ProductsPage({
   if (sp.sort) baseQs.set("sort", sort);
   if (statusFilter) baseQs.set("status", statusFilter);
   if (stockFilter) baseQs.set("stock", stockFilter);
+  if (manifestValue) baseQs.set("manifest", manifestValue);
+  if (mf.sinceDays !== null) baseQs.set("since", String(mf.sinceDays));
+  if (mf.vendorId) baseQs.set("vendor", mf.vendorId);
   const gridHref = `/admin/products?${baseQs.toString()}`;
   const tableQs = new URLSearchParams(baseQs);
   tableQs.set("view", "table");
@@ -371,10 +411,44 @@ export default async function ProductsPage({
             filter a link just applied. */}
         <form
           id="worklist"
-          key={`${q ?? ""}|${category ?? ""}|${brandFilter}|${gap ?? ""}|${statusFilter}|${stockFilter}|${sort}`}
+          key={`${q ?? ""}|${category ?? ""}|${brandFilter}|${gap ?? ""}|${statusFilter}|${stockFilter}|${sort}|${manifestValue}|${mf.sinceDays ?? ""}|${mf.vendorId ?? ""}`}
           className="scroll-mt-24 flex flex-wrap items-center gap-3"
           method="get"
         >
+          {/* S22 (bible S22.4): the invoice/manifest picker, S14's label. */}
+          {pickerOptions.length > 0 && (
+            <label className="flex items-center gap-2 text-xs font-semibold text-[var(--admin-text-faint)]">
+              <span>{MANIFEST_FILTER_LABEL}</span>
+              <Select name="manifest" defaultValue={manifestValue} className="w-72 text-xs" aria-label="From invoice/manifest">
+                <option value="">Every invoice/manifest</option>
+                {pickerOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
+          {attrs && (
+            <Select name="since" defaultValue={mf.sinceDays !== null ? String(mf.sinceDays) : ""} className="w-auto" aria-label="Received">
+              <option value="">Received any time</option>
+              {SINCE_DAY_CHOICES.map((d) => (
+                <option key={d} value={String(d)}>
+                  {sinceLabel(d)}
+                </option>
+              ))}
+            </Select>
+          )}
+          {vendorChoices.length > 0 && (
+            <Select name="vendor" defaultValue={mf.vendorId ?? ""} className="w-auto" aria-label="Delivery vendor">
+              <option value="">Any delivery vendor</option>
+              {vendorChoices.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
+            </Select>
+          )}
           <Input
             name="q"
             defaultValue={q ?? ""}
@@ -429,11 +503,12 @@ export default async function ProductsPage({
             <option value="status">Sort: enrichment status</option>
             <option value="priceHigh">Sort: price high → low</option>
             <option value="priceLow">Sort: price low → high</option>
+            <option value="newest">Sort: newest from receiving</option>
           </Select>
           <Button type="submit" variant="neutral">
             Filter
           </Button>
-          {(q || category || brandFilter || gap || statusFilter || stockFilter) && (
+          {(q || category || brandFilter || gap || statusFilter || stockFilter || hasManifestFilters(mf)) && (
             <Link
               href={view ? `/admin/products?view=${view}` : "/admin/products"}
               className="text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
@@ -472,6 +547,27 @@ export default async function ProductsPage({
           </div>
         )}
 
+        {/* S22: which delivery you're looking at, or why the filter is off. */}
+        {focusSentence && (
+          <div
+            className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+            data-testid="enrich-manifest-focus"
+          >
+            <span>{focusSentence}</span>
+            <Link href={view ? `/admin/products?view=${view}` : "/admin/products"} className="font-semibold underline">
+              Show every product
+            </Link>
+          </div>
+        )}
+        {!manifestFiltered.applied && (
+          <div
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]"
+            data-testid="enrich-manifest-unavailable"
+          >
+            {ATTRIBUTION_UNAVAILABLE_NOTE}
+          </div>
+        )}
+
         {/* SLICE 72 — honest result count so filtering feels responsive. */}
         <p className="text-xs text-[var(--admin-text-faint)]">
           Showing <span className="font-semibold text-[var(--admin-text-muted)]">{Math.min(filtered.length, 300)}</span> of{" "}
@@ -498,6 +594,7 @@ export default async function ProductsPage({
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Brand</th>
                 <th className="px-4 py-3">Category</th>
+                <th className="px-4 py-3">From delivery</th>
                 <th className="px-4 py-3 text-right">Price</th>
                 <th className="px-4 py-3 text-center">Stock</th>
                 <th className="px-4 py-3 text-center">Desc</th>
@@ -517,6 +614,9 @@ export default async function ProductsPage({
                   </td>
                   <td className="px-4 py-3 text-[var(--admin-text-muted)]">{g.brand || "—"}</td>
                   <td className="px-4 py-3 text-[var(--admin-text-faint)]">{g.category}</td>
+                  <td className="px-4 py-3 text-xs text-[var(--admin-text-faint)]">
+                    {receivedFromLabel(attrs?.get(g.posKey) ?? null, now)}
+                  </td>
                   <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtMoney(g.priceMinorUnits)}</td>
                   <td className="px-4 py-3 text-center">
                     {g.inventoryStatus === "in-stock" ? (
