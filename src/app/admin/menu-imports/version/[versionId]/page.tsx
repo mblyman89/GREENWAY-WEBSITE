@@ -6,7 +6,14 @@ import { BackLink } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import { getVersion, getPublishedVersion, diffVersions, getVersionItems } from "@/lib/pos/menu-version";
-import { buildPublishVerdict, explainDiagnostic, type PublishVerdict } from "@/lib/pos/publish-guard-core";
+import {
+  buildPublishVerdict,
+  explainDiagnostic,
+  PUBLISH_SWAP_NOTE,
+  removalConfirmCopy,
+  removalListTitle,
+  type PublishVerdict,
+} from "@/lib/pos/publish-guard-core";
 import { formatDateTime, formatMoney } from "@/lib/pos/format";
 import { publishVersion } from "../../actions";
 import { describeIntakeVersion, type IntakeVersionTone } from "@/lib/pos/intake-version-copy-core";
@@ -105,6 +112,7 @@ export default async function IntakeVersionReviewPage({
         hasLiveMenu: Boolean(published),
         stagedCreatedAt: version.created_at,
         publishedCreatedAt: published?.created_at ?? null,
+        removedNames: diff.removed.map((r) => r.name),
       })
     : null;
 
@@ -223,7 +231,7 @@ export default async function IntakeVersionReviewPage({
             {diff.removed.length > 0 && (
               <details className="mt-3" open>
                 <summary className="cursor-pointer text-xs font-semibold text-red-400">
-                  Will be REMOVED from the live menu ({diff.removed.length})
+                  {removalListTitle(diff.removed.length)}
                 </summary>
                 <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-red-500/20">
                   {diff.removed.slice(0, 200).map((d) => (
@@ -364,17 +372,11 @@ export default async function IntakeVersionReviewPage({
             <form action={publishVersion} className="mt-3">
               <input type="hidden" name="versionId" value={version.id} />
               <input type="hidden" name="from" value="publish-draft" />
-              <p className="mb-3 text-xs text-white/50">
-                Publishing replaces the WHOLE live menu with this draft and refreshes the public
-                site. The previous version is archived (not deleted).
-              </p>
+              <p className="mb-3 text-xs text-white/50">{PUBLISH_SWAP_NOTE}</p>
               {verdict?.requiresRemovalConfirm && (
                 <label className="mb-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2.5 text-xs text-red-300">
                   <input type="checkbox" name="confirm_removals" value="yes" className="mt-0.5" />
-                  <span>
-                    I understand publishing this draft will <strong>REMOVE {verdict.removedCount} product(s)</strong>{" "}
-                    from the live menu (see the &ldquo;Will be REMOVED&rdquo; list above), and that&apos;s what I want.
-                  </span>
+                  <span>{removalConfirmCopy(verdict.removedCount)}</span>
                 </label>
               )}
               <Button type="submit" variant="confirm">

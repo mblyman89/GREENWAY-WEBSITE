@@ -73,7 +73,7 @@ When the slice ships, its row moves to §1 with the real constant. Names are the
 **Which shipped slice added which variable** (checked against `git show` of each merged commit):
 
 - Slices that **added** a variable: S05 (`INTAKE_IDENTITY_STAMP`), S06 (`LOOKUP_SCHEMA_V2`), S10 (`ATTACH_POLICY_RING`).
-- Slices that added **no** variable: S00, S01, S02, S03, S04, S08, S14, S15. Their bible rollback lines are "Revert…" (S00, S01, S02, S14), "Delete module" (S03), leave or drop the schema (S04, S08), or "Re-apply previous RPC body" (S15, shipped as `supabase/rollbacks/0236_publish_archive_rule.rollback.sql`). None of those rollbacks names a flag.
+- Slices that added **no** variable: S00, S01, S02, S03, S04, S08, S14, S15, S16. Their bible rollback lines are "Revert…" (S00, S01, S02, S14) or "Revert." (S16), "Delete module" (S03), leave or drop the schema (S04, S08), or "Re-apply previous RPC body" (S15, shipped as `supabase/rollbacks/0236_publish_archive_rule.rollback.sql`). None of those rollbacks names a flag.
 
 `tests/compliance/intake-env-ledger.test.ts` checks these two lists against the Slice column of §1. So a slice that quietly adds a flag, or a §1 row whose slice is filed under "no variable", fails the build.
 
@@ -83,7 +83,7 @@ When S07 ships, it must also flip `ATTACH_WRITER_SHIPPED` in `fact-attach-policy
 
 ## Final Vercel checklist (the end-of-build handoff)
 
-The final PR of the build rewrites this block with the complete list. As of **S15** it reads (S14 and S15 added no variable):
+The final PR of the build rewrites this block with the complete list. As of **S16** it reads (S14, S15 and S16 added no variable):
 
 **Set on purpose (recommended values):**
 - `INTAKE_IDENTITY_STAMP` = `on` (same as unset. Setting it makes the choice visible in Vercel.)

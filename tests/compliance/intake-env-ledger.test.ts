@@ -152,5 +152,11 @@ describe("intake env ledger", () => {
       expect(read(f)).not.toMatch(/process\.env/);
     }
     expect(ledger).toContain("supabase/rollbacks/0236_publish_archive_rule.rollback.sql");
+    // S16 (Publish exception queue) is copy + pure logic; bible S16.7 "Revert.".
+    expect(none).toContain("S16");
+    for (const f of ["src/lib/pos/publish-queue-core.ts", "src/app/admin/publish/page.tsx"]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    expect(ledger).toContain("As of **S16**");
   });
 });

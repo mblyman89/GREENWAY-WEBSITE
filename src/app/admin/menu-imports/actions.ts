@@ -15,6 +15,7 @@ import {
 } from "@/lib/pos/menu-version";
 import { recordFactReview, listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
+import { removalRefusedCopy } from "@/lib/pos/publish-guard-core";
 import {
   parseLowThcClassification,
   parseOtherwiseTakenClassification,
@@ -133,8 +134,8 @@ export async function publishVersion(formData: FormData): Promise<void> {
     redirect(dest + "?error=" + encodeURIComponent("Missing version id."));
   }
 
-  // SLICE 76 safety gate: the live menu is a SNAPSHOT — publishing REPLACES it
-  // wholesale. If this draft would REMOVE products that are live right now,
+  // SLICE 76 safety gate (copy softened in S16, logic unchanged): publishing
+  // makes this update the live menu. If it would take off products that are live right now,
   // refuse unless the manager explicitly ticked the removal confirmation.
   // (This is what let an old 3-item draft silently wipe an 18-item menu.)
   try {
@@ -147,7 +148,7 @@ export async function publishVersion(formData: FormData): Promise<void> {
           dest +
             "?error=" +
             encodeURIComponent(
-              `Not published: this draft would REMOVE ${diff.removed.length} product(s) from the live menu. Review the "will be removed" list and tick the confirmation box if that's really what you want — or publish the newest draft instead.`,
+              removalRefusedCopy(diff.removed.length),
             ),
         );
       }

@@ -87,7 +87,7 @@ describe("S15 pure rule core", () => {
     expect(__runPublishArchiveRuleTests().passed).toBe(42);
   });
   it("publish-guard self-tests (with the new freshness block) pass", () => {
-    expect(__runPublishGuardTests().passed).toBe(65);
+    expect(__runPublishGuardTests().passed).toBe(91); // S16 added 26 copy checks
   });
   it("the owner's sequence: Cultivera staged -> approval auto-publishes -> zero staged, reason recorded", () => {
     let t: SimVersion[] = [

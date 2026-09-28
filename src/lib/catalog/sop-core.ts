@@ -28,6 +28,7 @@ import {
 // S00: the post-approve story is shared with the on-screen HelpPanels so paper
 // and screen literally cannot disagree (the header's content rule, enforced).
 import { APPROVE_PUBLISHES_COPY, HELD_EXCEPTION_COPY } from "@/lib/catalog/publish-story-core";
+import { PUBLISH_SEMANTICS_COPY } from "@/lib/pos/publish-guard-core";
 
 export type SopDoc = {
   /** URL segment under /admin/sop/. Stage key or "truck-day". */
@@ -194,20 +195,22 @@ export const SOP_DOCS: readonly SopDoc[] = [
     slug: "publish",
     stageKey: "publish",
     title: "SOP — Publish Menu (command center)",
-    purpose: "Review the newest menu draft and put it live — the menu is a snapshot, so always publish the newest draft.",
+    // S16: the page is an exception queue now; the sheet says what it does.
+    purpose: PUBLISH_SEMANTICS_COPY,
     where: journeyStage("publish").href,
     before: [
-      "A menu draft that is WAITING — approving a product with a price normally publishes by itself, so a draft only waits here when a fact needs a second look or the automatic publish didn't finish (one-time POS-export uploads live under Menu Imports).",
+      "A menu draft that is WAITING \u2014 approving a product with a price normally publishes by itself, so a draft only waits here when a fact needs a second look or the automatic publish didn't finish (one-time POS-export uploads live under Menu Imports).",
     ],
     steps: [
-      "Open the Publish command center. The live-menu card shows what customers see right now; the drafts list marks ONE draft as Latest.",
-      "Open the Latest draft and read the safety verdict: green means nothing gets removed; red or gold means publishing would take products OFF the live menu.",
-      "Work the 'to fix' list — every item says what it means and has a button to the page that fixes it.",
-      "Click Publish when the verdict reads safe. Publishing REPLACES the whole live menu with this draft; older drafts would drop newer products.",
+      "Open the Publish command center. 'Waiting for you' lists only the updates that need a person; each one says why it is waiting and has one button.",
+      "Press that button. It opens the update: every flagged fact or 'to fix' item says what it means and has a button to the page that fixes it.",
+      "Read the verdict: it says how many products stay, how many are added and which prices change, and names any product that would come off.",
+      "Click Publish. If any product would come off the menu, the page lists them and asks you to tick a box first.",
     ],
-    doneWhen: "The latest draft is published and the public menu shows the changes.",
+    doneWhen: "'Waiting for you' is empty and the public menu shows the changes.",
     ifStuck: [
-      "If the verdict warns about removals you didn't intend, don't publish — open the newest draft instead.",
+      "If the verdict names products you didn't mean to take off, don't tick the box \u2014 nothing changes until you do.",
+      "Updates older than your live menu are listed apart with nothing to do; they are archived automatically.",
       "One-time POS-export uploads and import history live under Menu Imports (Settings), unchanged.",
     ],
   },

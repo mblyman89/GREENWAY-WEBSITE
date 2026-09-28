@@ -17,12 +17,22 @@ import {
   buildPublishVerdict,
   flagDraftFreshness,
   freshnessChip,
+  PUBLISH_HELP_STEPS,
   PUBLISH_SEMANTICS_COPY,
   type DraftFreshness,
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
 import { formatDateTime } from "@/lib/pos/format";
 import { describeIntakeVersion, type IntakeVersionDescription } from "@/lib/pos/intake-version-copy-core";
+import {
+  primaryAction,
+  QUEUE_EMPTY_COPY,
+  QUEUE_REASON_TAG,
+  queueReason,
+  recentAutoPublished,
+  splitQueue,
+  type QueueReason,
+} from "@/lib/pos/publish-queue-core";
 
 export const dynamic = "force-dynamic";
 
@@ -33,13 +43,17 @@ export const dynamic = "force-dynamic";
  * multiple "Review & publish" cards with different counts were confusing, and
  * publishing an OLD draft silently shrank the live menu from 18 products to 3.
  *
- * This page is the journey's Publish stage (journey-core href). It shows:
- *   - what's live right now,
- *   - every waiting draft, judged by what it CONTAINS (S15: item-set diff vs
- *     the live menu, not its timestamp) - "Latest" keeps everything live, a
- *     draft that would take products off says how many, and drafts created
- *     before the live menu read "Superseded (archived automatically)",
- *   - a safety verdict per draft built from a real diff vs. the live menu.
+ * S16: an EXCEPTION QUEUE. Approved products publish themselves, so this
+ * page lists only what needs a person (bible S16.2):
+ *   1. "Waiting for you" - each update with WHY it waits (the outcome S01
+ *      recorded on the row, never guessed), a plain-English verdict from a
+ *      real diff vs the live menu (lead with what stays and what is added),
+ *      and exactly ONE primary button that resolves it.
+ *   2. "Recently published automatically" - the last 10, read-only.
+ *   3. "How publishing works" - collapsed help.
+ * Updates older than the live menu are not work for a person: the S15 rule
+ * archives them on the next publish, so they are listed apart, no button.
+ * Every read is one the page already made (no new query).
  *
  * Menu Imports stays where it is (uploads + import history) — this page links
  * to it but does NOT absorb it.
@@ -61,6 +75,8 @@ const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
 };
 
 type DraftRow = {
+  /** S16: why this update waits for a person. */
+  reason: QueueReason;
   version: MenuVersion & { freshness: DraftFreshness; removedCount: number | null };
   verdict: PublishVerdict | null;
   /** Where "Review & publish" goes — the intake or POS-import review page. */
@@ -123,6 +139,7 @@ export default async function PublishCommandCenterPage({
             hasLiveMenu: Boolean(published),
             stagedCreatedAt: v.created_at,
             publishedCreatedAt: published?.created_at ?? null,
+            removedNames: d.diff.removed.map((r) => r.name),
           })
         : null;
     const origin = v.import_id === null ? ("receiving" as const) : ("pos-import" as const);
@@ -132,28 +149,26 @@ export default async function PublishCommandCenterPage({
         : `/admin/menu-imports/${v.import_id}?back=${encodeURIComponent("/admin/publish")}`;
     // S01: pure, no I/O — reads the summary_json this row already carries.
     const story = origin === "receiving" ? describeIntakeVersion(v) : null;
-    return { version: v, verdict, reviewHref, origin, story };
+    return { version: v, verdict, reviewHref, origin, story, reason: queueReason(v) };
   });
   const overflow = Math.max(0, waiting.length - VERDICT_CAP);
   const latest = rows.find((r) => r.version.freshness === "latest") ?? null;
+  // S16: superseded rows are not work for a person (S15 archives them).
+  const queue = splitQueue(rows.map((r) => ({ ...r, freshness: r.version.freshness })));
+  // S16: last 10 that went live by themselves, from the list already loaded.
+  const recent = recentAutoPublished(allVersions);
 
   return (
     <div>
       <AdminPageHeader
         title="Publish Menu"
-        subtitle="One place to see what's live, review the newest menu draft, and put it live safely."
+        subtitle="Approved products go live by themselves. This page shows the few updates that need you."
         breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Publish Menu" }]} />}
         help={
           <HelpPanel
             id="publish-command-center"
             title="How publishing works"
-            steps={[
-              "Your live menu is a snapshot — publishing a draft replaces the WHOLE menu with that draft. It never adds to it.",
-              "Receiving creates a draft automatically when you approve a product with a price, and usually publishes it for you too. Drafts only wait here when a publish needs your click.",
-              "Always publish the draft marked LATEST. Older drafts are missing products added after them — publishing one takes those products off your menu.",
-              "Each draft's review page explains every 'to fix' item in plain English with a button to the page that fixes it.",
-              "POS-export uploads and import history stay under Menu Imports (Settings) — this page just puts publishing front and center.",
-            ]}
+            steps={[...PUBLISH_HELP_STEPS]}
           />
         }
       />
@@ -174,7 +189,7 @@ export default async function PublishCommandCenterPage({
 
         {/* The one-sentence mental model, verbatim from publish-guard-core. */}
         <div className="rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-4 text-sm text-white/70">
-          <strong className="text-white">How this works:</strong> {PUBLISH_SEMANTICS_COPY}
+          <strong className="text-white">In short:</strong> {PUBLISH_SEMANTICS_COPY}
         </div>
 
         {/* What's live right now */}
@@ -192,10 +207,10 @@ export default async function PublishCommandCenterPage({
             accent="muted"
           />
           <StatCard
-            label="Drafts waiting"
-            value={`${waiting.length}`}
-            hint={waiting.length > 0 ? "The one marked Latest keeps everything live" : "All caught up"}
-            accent={waiting.length > 0 ? "orange" : "green"}
+            label="Waiting for you"
+            value={`${queue.waiting.length}${overflow > 0 ? "+" : ""}`}
+            hint={queue.waiting.length > 0 ? "Each one says why, with one button" : "All caught up"}
+            accent={queue.waiting.length > 0 ? "orange" : "green"}
           />
           <StatCard
             label="Newest draft"
@@ -205,85 +220,87 @@ export default async function PublishCommandCenterPage({
           />
         </div>
 
-        {/* Drafts */}
+        {/* S16 (1): Waiting for you - one reason and one button per row. */}
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-white">Menu drafts waiting for review</h2>
-            {latest && canPublish && (
-              <Button href={latest.reviewHref} size="sm" variant="confirm">
-                Review &amp; publish the latest draft →
-              </Button>
-            )}
-          </div>
+          <h2 className="text-sm font-semibold text-white">Waiting for you</h2>
           <p className="mt-1 text-xs text-white/50">
-            Each draft is judged by what it contains. <strong>Latest</strong> keeps every live product
-            and adds the new ones. A draft that would take products off says how many. Older drafts
-            are archived automatically once a newer menu goes live.
+            Each update says why it is waiting and has one button that sorts it out. If more than
+            one is waiting, the one marked <strong>Latest</strong> keeps every live product.
           </p>
 
-          {rows.length === 0 ? (
+          {queue.waiting.length === 0 ? (
             <p className="mt-4 text-sm text-white/40">
-              Nothing waiting — every menu update has published. Approve a received product with a
-              price (or upload a POS export under Menu Imports) to create a new draft.
+              {QUEUE_EMPTY_COPY} Approve a received product with a price and it goes live by itself.
             </p>
           ) : (
             <div className="mt-4 space-y-3">
-              {rows.map(({ version: v, verdict, reviewHref, origin, story }) => (
-                <div
-                  key={v.id}
-                  className={`rounded-lg border p-4 ${
-                    v.freshness === "latest" ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/[0.04]" : "border-white/10 bg-white/[0.02]"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${FRESHNESS_STYLE[v.freshness]}`}>
-                      {freshnessChip(v)}
-                    </span>
-                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
-                      {origin === "receiving" ? "from receiving" : "from POS upload"}
-                    </span>
-                    <span className="text-xs text-white/40">{formatDateTime(v.created_at)}</span>
-                  </div>
-                  {story && (
-                    <div className="mt-2 text-sm">
-                      {story.source && <p className="text-xs text-white/50">{story.source}</p>}
-                      <p
-                        className={`mt-0.5 font-medium ${
-                          story.tone === "failed" ? "text-red-300" : "text-[var(--admin-gold)]"
-                        }`}
-                      >
-                        {story.headline}
-                      </p>
-                      {story.detail && <p className="mt-0.5 text-xs text-white/60">{story.detail}</p>}
-                      {story.action && (
-                        <p className="mt-0.5 text-xs text-white/70">
-                          <strong>Next:</strong> {story.action}
+              {queue.waiting.map(({ version: v, verdict, reviewHref, origin, story, reason }) => {
+                const action = primaryAction(reason, reviewHref);
+                return (
+                  <div
+                    key={v.id}
+                    data-queue-row={reason}
+                    className={`rounded-lg border p-4 ${
+                      v.freshness === "latest" ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/[0.04]" : "border-white/10 bg-white/[0.02]"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-[var(--admin-gold)]/15 px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--admin-gold)]">
+                        {QUEUE_REASON_TAG[reason]}
+                      </span>
+                      <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${FRESHNESS_STYLE[v.freshness]}`}>
+                        {freshnessChip(v)}
+                      </span>
+                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
+                        {origin === "receiving" ? "from receiving" : "from POS upload"}
+                      </span>
+                      <span className="text-xs text-white/40">{formatDateTime(v.created_at)}</span>
+                    </div>
+                    {story && (
+                      <div className="mt-2 text-sm">
+                        {story.source && <p className="text-xs text-white/50">{story.source}</p>}
+                        <p
+                          className={`mt-0.5 font-medium ${
+                            story.tone === "failed" ? "text-red-300" : "text-[var(--admin-gold)]"
+                          }`}
+                        >
+                          {story.headline}
                         </p>
+                        {story.detail && <p className="mt-0.5 text-xs text-white/60">{story.detail}</p>}
+                        {story.action && (
+                          <p className="mt-0.5 text-xs text-white/70">
+                            <strong>Next:</strong> {story.action}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {verdict && (
+                      <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${VERDICT_STYLE[verdict.level]}`}>
+                        <p className="font-semibold">{verdict.headline}</p>
+                        <p className="mt-0.5 opacity-90">{verdict.detail}</p>
+                      </div>
+                    )}
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm text-white/80">
+                        {v.item_count} items · {v.variant_count} variants
+                        {v.warning_count > 0 && (
+                          <span className="text-[var(--admin-gold)]"> · {v.warning_count} to fix</span>
+                        )}
+                      </p>
+                      {canPublish ? (
+                        <Button href={action.href} size="sm" variant={v.freshness === "latest" ? "confirm" : "primary"}>
+                          {action.label}
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-white/40">A manager or admin publishes this.</span>
                       )}
                     </div>
-                  )}
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm text-white/80">
-                      {v.item_count} items · {v.variant_count} variants
-                      {v.warning_count > 0 && (
-                        <span className="text-[var(--admin-gold)]"> · {v.warning_count} to fix</span>
-                      )}
-                    </p>
-                    <Button href={reviewHref} size="sm" variant={v.freshness === "latest" ? "primary" : "neutral"}>
-                      Review &amp; publish →
-                    </Button>
                   </div>
-                  {verdict && (
-                    <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${VERDICT_STYLE[verdict.level]}`}>
-                      <p className="font-semibold">{verdict.headline}</p>
-                      <p className="mt-0.5 opacity-90">{verdict.detail}</p>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
               {overflow > 0 && (
                 <p className="text-xs text-white/40">
-                  …and {overflow} older draft(s) — see the full list under{" "}
+                  …and {overflow} more waiting — see the full list under{" "}
                   <Link href="/admin/menu-imports" className="text-[var(--admin-accent)] hover:underline">
                     Menu Imports
                   </Link>
@@ -291,6 +308,60 @@ export default async function PublishCommandCenterPage({
                 </p>
               )}
             </div>
+          )}
+
+          {queue.superseded.length > 0 && (
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <p className="text-xs font-semibold text-white/60">
+                Older than your live menu ({queue.superseded.length}) — nothing to do
+              </p>
+              <p className="mt-0.5 text-xs text-white/40">
+                These were overtaken by a newer menu and are archived automatically the next time a
+                menu goes live.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {queue.superseded.map(({ version: v, reviewHref, origin }) => (
+                  <li key={v.id} className="flex flex-wrap items-center gap-2 text-xs text-white/50">
+                    <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${FRESHNESS_STYLE[v.freshness]}`}>
+                      {freshnessChip(v)}
+                    </span>
+                    <span>{origin === "receiving" ? "from receiving" : "from POS upload"}</span>
+                    <span>· {formatDateTime(v.created_at)}</span>
+                    <Link href={reviewHref} className="text-white/50 underline hover:text-white">
+                      view
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+
+        {/* S16 (2): Recently published automatically - read-only. */}
+        <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+          <h2 className="text-sm font-semibold text-white">Recently published automatically</h2>
+          <p className="mt-1 text-xs text-white/50">
+            Updates that went live by themselves after an approval. Nothing to do here.
+          </p>
+          {recent.length === 0 ? (
+            <p className="mt-3 text-sm text-white/40">None in the latest menu history.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-white/5">
+              {recent.map((v) => {
+                const story = describeIntakeVersion(v);
+                return (
+                  <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
+                    <span className="text-white/70">
+                      {story.source ?? "From receiving"}
+                      <span className="text-white/40"> · {story.counts}</span>
+                    </span>
+                    <span className="text-white/40">
+                      {v.status === "published" ? "Live now" : "Since replaced"} · {formatDateTime(v.published_at)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </section>
 
