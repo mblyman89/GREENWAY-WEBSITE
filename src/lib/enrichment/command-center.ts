@@ -26,7 +26,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import { getEnrichment, computeGaps, type GapFlags } from "@/lib/enrichment/store";
-import type { MenuItemRow } from "@/lib/pos/db-types";
+import type { MenuItemRow, MenuVariantRow } from "@/lib/pos/db-types";
+import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
 import type { ProductEnrichment } from "@/lib/enrichment/types";
 import { resolveProductImage, type ResolvedImage } from "@/lib/enrichment/image-resolver";
 import { lookupProductKnowledge, type ProductKnowledge } from "@/lib/ai/kb/product-lookup";
@@ -57,7 +58,12 @@ import {
 
 export type CommandCenterQuery = {
   /** The published menu item being enriched (source of the POS facts). */
-  item: MenuItemRow;
+  /**
+   * S24: optionally with its variants (the page passes getItemBySourceKey's
+   * MenuItemWithVariants) so the KB ladder can use the card's lots and
+   * first variant label. Absent -> the pre-S24 query, unchanged.
+   */
+  item: MenuItemRow & { variants?: readonly Pick<MenuVariantRow, "label" | "source_variant_id">[] };
 };
 
 /** A ranked KB suggestion with its gallery preview resolved. */
@@ -186,6 +192,12 @@ export async function getEnrichmentCommandCenter(
         brandName: pos.brand,
         posProductKey: posKey,
         strainName: item.strain_name ?? null,
+        // S24 (F-083): same writer-identity inputs the public menu passes.
+        menuVariantLabel: item.variants?.[0]?.label ?? null,
+        lotKeys: cardLotKeys({
+          source_item_id: posKey ?? "",
+          variants: (item.variants ?? []).map((v) => ({ source_variant_id: v.source_variant_id })),
+        }),
       }).catch(
         (): ProductKnowledge => ({
           source: "none",

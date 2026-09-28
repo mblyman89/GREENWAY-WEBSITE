@@ -194,7 +194,18 @@ describe("intake env ledger", () => {
     ]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }
-    expect(ledger).toContain("As of **S22**");
+    expect(ledger).not.toContain("As of **S22**");
+    // S24 (KB ladder writer identity) is reads + a pure core; bible S24.7
+    // "Revert.". Its new code reads no environment.
+    expect(none).toContain("S24");
+    for (const f of [
+      "src/lib/ai/kb/product-knowledge-batch-core.ts",
+      "src/lib/ai/kb/product-knowledge-batch.ts",
+      "src/lib/ai/kb/product-lookup.ts",
+    ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    expect(ledger).toContain("As of **S24**");
     expect(ledger).not.toContain("As of **S19**");
     expect(ledger).not.toContain("As of **S18**");
   });

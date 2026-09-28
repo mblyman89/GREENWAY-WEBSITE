@@ -405,7 +405,9 @@ describe("S22 wiring", () => {
   });
   it("the env ledger lists S22 as adding no variable", () => {
     const ledger = read("docs/INTAKE_PIPELINE_ENV_LEDGER.md");
-    expect(ledger).toMatch(/Slices that added \*\*no\*\* variable: [^\n]*S21, S22\./);
-    expect(ledger).toContain("As of **S22**");
+    // Durable facts, not the ledger's moving "latest slice" marker (S24 moved it).
+    expect(ledger).toMatch(/Slices that added \*\*no\*\* variable: [^\n]*\bS21, S22\b/);
+    expect(ledger).toMatch(/As of \*\*S\d+\*\* it reads \([^)]*\bS22\b[^)]*added no variable/);
+    expect(ledger).toMatch(/"Revert\." \([^)]*\bS22\b[^)]*\)/);
   });
 });

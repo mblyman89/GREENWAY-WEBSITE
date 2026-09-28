@@ -24,6 +24,8 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { checkProductKnown, type KbProductMatch } from "@/lib/ai/kb/intake";
+import { loadKbKnowledgeIndexes } from "@/lib/ai/kb/product-knowledge-batch";
+import { resolveKbFromIndexes } from "@/lib/ai/kb/product-knowledge-batch-core";
 
 export type ProductKnowledgeSource = "kb-exact" | "kb-draft" | "enrichment" | "strain" | "none";
 
@@ -68,7 +70,16 @@ export type ProductLookupQuery = {
   variantLabel?: string | null;
   posProductKey?: string | null;
   strainName?: string | null;
+  /** S24: the card's first menu variant label, raw ("3.5g"). */
+  menuVariantLabel?: string | null;
+  /** S24: the card's lot keys (cardLotKeys), for the writer-identity rungs. */
+  lotKeys?: readonly string[] | null;
 };
+
+/** S24: does this query carry anything the writer-identity rungs can use? */
+export function hasWriterIdentityInputs(query: ProductLookupQuery): boolean {
+  return (query.lotKeys?.length ?? 0) > 0 || Boolean(query.menuVariantLabel?.trim());
+}
 
 /**
  * KB-first lookup for a product's descriptive knowledge. Returns the best
@@ -92,13 +103,33 @@ export async function lookupProductKnowledge(query: ProductLookupQuery): Promise
   if (!isSupabaseServiceConfigured) return empty;
 
   // 1 & 2 — KB per-SKU (published preferred; draft usable as suggestion).
-  const verdict = await checkProductKnown({
-    productName: query.productName,
-    brandName: query.brandName,
-    variantLabel: query.variantLabel,
-  });
-  if (verdict.known === "exact") return fromKbMatch(verdict.match, "kb-exact");
-  if (verdict.known === "draft") return fromKbMatch(verdict.match, "kb-draft");
+  // S24 (F-065/F-083): with lot keys / a menu variant, resolve rungs 1 & 2
+  // from the SAME indexes and pure picker the batched menu uses, so the
+  // detail page and command center find the rows the manifest bridge wrote
+  // (raw name + "3.5 g"). The legacy display-name key is one of its
+  // candidates, so nothing the old read found can be lost.
+  if (hasWriterIdentityInputs(query)) {
+    const kbIndexes = await loadKbKnowledgeIndexes(query);
+    const kb = kbIndexes ? resolveKbFromIndexes(query, kbIndexes) : null;
+    if (kb) return kb;
+    if (!kbIndexes) {
+      const legacy = await checkProductKnown({
+        productName: query.productName,
+        brandName: query.brandName,
+        variantLabel: query.variantLabel,
+      });
+      if (legacy.known === "exact") return fromKbMatch(legacy.match, "kb-exact");
+      if (legacy.known === "draft") return fromKbMatch(legacy.match, "kb-draft");
+    }
+  } else {
+    const verdict = await checkProductKnown({
+      productName: query.productName,
+      brandName: query.brandName,
+      variantLabel: query.variantLabel,
+    });
+    if (verdict.known === "exact") return fromKbMatch(verdict.match, "kb-exact");
+    if (verdict.known === "draft") return fromKbMatch(verdict.match, "kb-draft");
+  }
 
   const admin = createSupabaseAdminClient();
 

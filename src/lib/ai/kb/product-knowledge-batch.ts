@@ -56,14 +56,20 @@ import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import type { KbProductMatch } from "@/lib/ai/kb/intake";
 import {
   collectLookupKeys,
+  indexBrandNames,
   indexEnrichments,
+  indexKbById,
   indexKbProducts,
+  indexLots,
   indexStrains,
+  lotKbReadPlan,
   type EnrichmentRow,
   type KnowledgeIndexes,
   type KnowledgeQuery,
+  type LotKnowledgeRow,
   type StrainRow,
 } from "@/lib/ai/kb/product-knowledge-batch-core";
+import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
 
 /**
  * The exact column list `checkProductKnown()` selects (`intake.ts:77-79`).
@@ -92,14 +98,14 @@ const CHUNK_SIZE = 300;
 
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
-/** Rungs 1 & 2 — every `kb_products` row whose product_slug we care about. */
-async function loadKbProducts(
-  admin: AdminClient,
-  productSlugs: string[],
-): Promise<Map<string, KbProductMatch>> {
-  if (productSlugs.length === 0) return new Map();
+/**
+ * Rungs 1 & 2 — every `kb_products` row whose product_slug we care about
+ * (raw rows, [] on any failure; indexed by loadKbSide).
+ */
+async function loadKbProductRows(admin: AdminClient, productSlugs: string[]): Promise<KbProductMatch[]> {
+  if (productSlugs.length === 0) return [];
   try {
-    const rows = await chunkedIn<string, KbProductMatch>(
+    return await chunkedIn<string, KbProductMatch>(
       productSlugs,
       async (chunk, from, to) => {
         const { data, error } = await admin
@@ -117,12 +123,178 @@ async function loadKbProducts(
       // index* helper, so overlapping them cannot change the result.
       { chunkSize: CHUNK_SIZE, concurrency: MENU_READ_CONCURRENCY },
     );
-    return indexKbProducts(rows);
   } catch {
     // Table missing / not migrated / read failed → behave like
     // `checkProductKnown()` returning "not-ready": fall through to rung 3.
+    return [];
+  }
+}
+
+// ── S24: the lot rungs (read with the identity the writer used) ────────────
+//
+// The manifest bridge wrote kb_products under the lot's RAW product_name,
+// brands.display_name and the "3.5 g" weight label (F-065); S05 stamped the
+// row's id on inventory_lots.kb_product_id. The menu card only knows its lot
+// keys, so: lots by pos_product_key (0023 inventory_lots_poskey_idx) ->
+// then, concurrently, the brands they name, the kb rows they link, and the
+// kb rows under their raw-name slugs. Every read is chunked + paged, ordered
+// by id, and fails soft to "no lot rungs" - never worse than before S24.
+
+/** inventory_lots columns for the lot rungs (all of LotKnowledgeRow). */
+const LOT_COLUMNS =
+  "id, pos_product_key, product_name, unit_weight, unit_weight_uom, brand_id, kb_product_id, status, disposition";
+
+/** The same, before 0234 added inventory_lots.kb_product_id. */
+const LOT_COLUMNS_PRE_0234 =
+  "id, pos_product_key, product_name, unit_weight, unit_weight_uom, brand_id, status, disposition";
+
+type DbError = { code?: string | null; message?: string | null } | null;
+
+async function readLotRows(
+  admin: AdminClient,
+  lotKeys: string[],
+  columns: string,
+): Promise<{ rows: LotKnowledgeRow[]; error: DbError }> {
+  let firstError: DbError = null;
+  const rows = await chunkedIn<string, LotKnowledgeRow>(
+    lotKeys,
+    async (chunk, from, to) => {
+      if (firstError) return [];
+      const { data, error } = await admin
+        .from("inventory_lots")
+        .select(columns)
+        .in("pos_product_key", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        firstError = error;
+        return [];
+      }
+      return (data as unknown as LotKnowledgeRow[] | null) ?? [];
+    },
+    { chunkSize: CHUNK_SIZE, concurrency: MENU_READ_CONCURRENCY },
+  );
+  return { rows, error: firstError };
+}
+
+/**
+ * The card lots. Pre-0234 (kb_product_id absent, 42703/PGRST204 naming it)
+ * retries without the column - the lot-identity rung still works. Any other
+ * error: no lots (rungs skipped). Exported for the S24 wiring test.
+ */
+export async function loadLotsForKnowledge(admin: AdminClient, lotKeys: string[]): Promise<LotKnowledgeRow[]> {
+  // No keys -> chunkedIn makes zero requests (chunked-in.ts), so no guard.
+  try {
+    let res = await readLotRows(admin, lotKeys, LOT_COLUMNS);
+    if (res.error && isMissingIdentityColumnError("inventory_lots", res.error)) {
+      res = await readLotRows(admin, lotKeys, LOT_COLUMNS_PRE_0234);
+      res.rows = res.rows.map((r) => ({ ...r, kb_product_id: null }));
+    }
+    if (res.error) return [];
+    return res.rows;
+  } catch {
+    return [];
+  }
+}
+
+/** brands.display_name by id - the name the bridge handed the writer. */
+async function loadBrandNames(admin: AdminClient, brandIds: string[]): Promise<Map<string, string>> {
+  if (brandIds.length === 0) return new Map();
+  try {
+    const rows = await chunkedIn<string, { id: string; display_name: string | null }>(
+      brandIds,
+      async (chunk, from, to) => {
+        const { data, error } = await admin
+          .from("brands")
+          .select("id, display_name")
+          .in("id", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(error.message);
+        return (data as unknown as { id: string; display_name: string | null }[] | null) ?? [];
+      },
+      { chunkSize: CHUNK_SIZE, concurrency: MENU_READ_CONCURRENCY },
+    );
+    return indexBrandNames(rows);
+  } catch {
+    // No names -> lotKbKey skips every branded lot (never guesses unbranded).
     return new Map();
   }
+}
+
+/** kb_products by id (the S05 inventory_lots.kb_product_id targets). */
+async function loadKbByIdRows(admin: AdminClient, ids: string[]): Promise<KbProductMatch[]> {
+  if (ids.length === 0) return [];
+  try {
+    return await chunkedIn<string, KbProductMatch>(
+      ids,
+      async (chunk, from, to) => {
+        const { data, error } = await admin
+          .from("kb_products")
+          .select(KB_PRODUCT_COLUMNS)
+          .in("id", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(error.message);
+        return (data as unknown as KbProductMatch[] | null) ?? [];
+      },
+      { chunkSize: CHUNK_SIZE, concurrency: MENU_READ_CONCURRENCY },
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The kb_products side of the indexes (rungs 1 & 2, all four S24 candidates).
+ * Lots are read concurrently with the display-name slugs; the second wave
+ * (brands, linked ids, raw-name slugs) depends on the lots. Never throws.
+ */
+async function loadKbSide(
+  admin: AdminClient,
+  productSlugs: string[],
+  lotKeys: string[],
+): Promise<Pick<KnowledgeIndexes, "kbProducts" | "lotsByKey" | "brandNames" | "kbById">> {
+  const [slugRows, lots] = await Promise.all([
+    loadKbProductRows(admin, productSlugs),
+    loadLotsForKnowledge(admin, lotKeys),
+  ]);
+  // No lots -> an empty plan, and every second-wave loader below returns
+  // before any request on an empty list: exactly the pre-S24 single read.
+  const lotsByKey = indexLots(lots);
+  const plan = lotKbReadPlan(lotsByKey, new Set(productSlugs));
+  const loadedIds = new Set(slugRows.map((r) => r.id));
+  const [brandNames, rawSlugRows, linkedRows] = await Promise.all([
+    loadBrandNames(admin, plan.brandIds),
+    loadKbProductRows(admin, plan.productSlugs),
+    loadKbByIdRows(admin, plan.kbIds.filter((id) => !loadedIds.has(id))),
+  ]);
+  const allRows = [...slugRows, ...rawSlugRows, ...linkedRows];
+  return {
+    kbProducts: indexKbProducts(allRows),
+    lotsByKey,
+    brandNames,
+    kbById: indexKbById(allRows),
+  };
+}
+
+/**
+ * S24 per-item entry (lookupProductKnowledge): ONLY the kb_products side, so
+ * the detail page resolves rungs 1 & 2 exactly as the batched menu does.
+ * Returns null when Supabase is unavailable (caller keeps its old path).
+ */
+export async function loadKbKnowledgeIndexes(query: KnowledgeQuery): Promise<KnowledgeIndexes | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  let admin: AdminClient;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch {
+    return null;
+  }
+  const { identityParts, lotKeys } = collectLookupKeys([query]);
+  const productSlugs = [...new Set(identityParts.map((p) => p.productSlug))];
+  const kb = await loadKbSide(admin, productSlugs, lotKeys);
+  return { ...kb, enrichments: new Map(), strains: new Map() };
 }
 
 /** Rung 3 — the live marketing layer, keyed by POS product key. */
@@ -226,14 +398,16 @@ export async function loadKnowledgeIndexes(
     return empty;
   }
 
-  const { identityParts, posKeys, strainSlugs } = collectLookupKeys(queries);
+  const { identityParts, posKeys, strainSlugs, lotKeys } = collectLookupKeys(queries);
   const productSlugs = [...new Set(identityParts.map((p) => p.productSlug))];
 
-  const [kbProducts, enrichments, strains] = await Promise.all([
-    loadKbProducts(admin, productSlugs),
+  const [kb, enrichments, strains] = await Promise.all([
+    // S24: with no lot keys loadKbSide makes exactly the pre-S24 single
+    // kb_products read (loadLotsForKnowledge short-circuits on []).
+    loadKbSide(admin, productSlugs, lotKeys),
     loadEnrichments(admin, posKeys),
     loadStrains(admin, strainSlugs),
   ]);
 
-  return { kbProducts, enrichments, strains };
+  return { ...kb, enrichments, strains };
 }
