@@ -36,6 +36,7 @@ import { LeaflyEvidencePanel } from "@/components/admin/syndication/LeaflyEviden
 import { loadLeaflySyncHealth } from "@/lib/leafly/schedule-server";
 import { loadLeaflyEvidence } from "@/lib/leafly/evidence-server";
 import { loadLeaflyCertificationProof } from "@/lib/leafly/certification-proof-server";
+import { loadLeaflyReadbackProof } from "@/lib/leafly/readback-proof-server";
 import { LeaflyCertificationProofPanel } from "@/components/admin/syndication/LeaflyCertificationProofPanel";
 import { MIN_RUN_GAP_MINUTES, describeLeaflyConnection, lastAutomaticCheckIso, staleSendWarning } from "@/lib/leafly/schedule-core";
 import {
@@ -122,6 +123,13 @@ export default async function LeaflyIntegrationPage() {
     nowIso,
     environment: preview.readiness.environment === "production" ? "production" : "sandbox",
   });
+
+  // SLICE L-52 -- the newest stored read-back verdict, for criterion 5 ("Data
+  // quality"). Looked up by its marker rather than taken from the 40 rows
+  // above, because automatic syncs write a row every run and would push a
+  // morning read-back out of that window by the afternoon. Never throws; on a
+  // read failure it falls back to judging the rows already loaded.
+  const readbackProof = await loadLeaflyReadbackProof(logs);
 
   // Health is classified from LIVE attempts that actually contacted Leafly.
   // "skipped" logs (no changes to send / preflight-blocked) transmit nothing,
@@ -221,11 +229,16 @@ export default async function LeaflyIntegrationPage() {
     environment: preview.readiness.environment,
     authSucceeded,
     recentPushStatuses,
-    // The reconcile result lives in the read-back button's client state, not on the
-    // server. Passing null is the truthful value for a page render: nobody has
-    // reconciled *as of this page load*, and the gate correctly refuses to call data
-    // quality proven until they do.
+    // SLICE L-52 -- the live reconcile result still lives in the read-back
+    // button's client state, so `reconcile` stays null on a page render. What
+    // used to be missing is the RECORD: before L-52 the read-back logged
+    // `payload: null`, so this gate could never learn a read-back had happened
+    // and criterion 5 read "never been read back" forever. The read-back now
+    // stores a small verdict on its log row, and `readbackProof` is that
+    // verdict judged by readback-proof-core (premature, live-preview-baseline,
+    // targeted and failed read-backs never count as proof).
     reconcile: null,
+    readbackProof,
     itemCount: preview.itemCount,
     variantCount,
     inStockVariantCount,

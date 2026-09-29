@@ -52,6 +52,9 @@ import { __runLeaflyPayloadValidateTests } from "@/lib/leafly/payload-validate-c
 import { __runLeaflyOrderabilityTests } from "@/lib/leafly/orderability-core";
 import { __runLeaflyReadbackTests } from "@/lib/leafly/readback-core";
 import { __runLeaflyCertificationTests } from "@/lib/leafly/certification-core";
+import { __runLeaflyReadbackProofTests } from "@/lib/leafly/readback-proof-core";
+import { __runStrainPlaceholderTests } from "@/lib/syndication/strain-placeholder-core";
+import { __runLeaflyReadbackBaselineTests } from "@/lib/leafly/readback-baseline-core";
 import { __runLeaflyHmacTests } from "@/lib/leafly/hmac-core";
 import { __runLeaflyOrderMapTests } from "@/lib/leafly/order-map-core";
 import { __runLeaflyWebhookParseTests } from "@/lib/leafly/webhook-parse-core";
@@ -248,12 +251,27 @@ describe("embedded pure self-test suites", () => {
   it("leafly-readback-core (SLICE L-4: GET /menu parse + reconcile, fails soft)", () => {
     const r = __runLeaflyReadbackTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThan(82);
+    expect(r.passed).toBeGreaterThanOrEqual(130);
   });
   it("leafly-certification-core (SLICE L-4: Leafly's five criteria, fails closed)", () => {
     const r = __runLeaflyCertificationTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(60);
+  });
+  it("leafly-readback-proof-core (SLICE L-52: stored read-back verdict proves criterion 5)", () => {
+    const r = __runLeaflyReadbackProofTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(38);
+  });
+  it("strain-placeholder-core (SLICE L-52: placeholder strains become null)", () => {
+    const r = __runStrainPlaceholderTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(40);
+  });
+  it("leafly-readback-baseline-core (SLICE L-52: sync-state rebuild baseline)", () => {
+    const r = __runLeaflyReadbackBaselineTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThanOrEqual(54);
   });
   it("leafly-hmac-core (SLICE L-5: raw-body HMAC, timing-safe, fails closed)", () => {
     const r = __runLeaflyHmacTests();

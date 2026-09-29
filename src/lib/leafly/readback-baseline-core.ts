@@ -38,8 +38,9 @@
  * pure means every branch below is provable from a plain object literal.
  */
 
-import type { LeaflyItemsPayload } from "./payload-core";
+import type { LeaflyItem, LeaflyItemsPayload } from "./payload-core";
 import type { LeaflyReconcileScope } from "./readback-core";
+import { hashPayload } from "../syndication/sync-plan-core";
 
 /**
  * The fields of a syndication log row this decision depends on. Deliberately a
@@ -70,9 +71,43 @@ export type ReadbackBaseline = {
    * only as trustworthy as the thing it compares against, and he should never
    * have to read source code to find out which one he is looking at.
    */
-  source: "targeted-push-log" | "full-sync-log" | "live-preview" | "none";
+  source: "targeted-push-log" | "full-sync-log" | "sync-state-rebuild" | "live-preview" | "none";
   /** One sentence a non-engineer can act on. Always present. */
   explanation: string;
+  /**
+   * SLICE L-52. Ids we have on record as being AT Leafly, but whose exact sent
+   * copy cannot be reconstructed any more (the product changed since it was
+   * last sent, or it is no longer in the feed). Only the `sync-state-rebuild`
+   * source fills this. The reconciler counts these ids as "held at Leafly, not
+   * checked" rather than flagging them as unexpected extras, because our own
+   * records say Leafly SHOULD hold them. Absent/empty for every other source.
+   */
+  unverifiableIds?: readonly string[];
+};
+
+/**
+ * SLICE L-52 -- the input for the `sync-state-rebuild` baseline.
+ *
+ * `items` is the menu as the automatic sync would build it right now (the
+ * same builder, settings and size repair it sends with). `storedHashes` is the
+ * sync-state map (item id -> hash of the exact item last sent), which every
+ * full/automatic/replace/legacy writer records and every delete prunes.
+ */
+export type SyncStateRebuildInput = {
+  items: readonly LeaflyItem[];
+  storedHashes: ReadonlyMap<string, string>;
+};
+
+/** What `rebuildFromSyncState` could and could not prove. */
+export type SyncStateRebuild = {
+  /** Rebuilt items whose hash is IDENTICAL to what was recorded as sent. */
+  proven: LeaflyItem[];
+  /** On record at Leafly, but the product has changed since it was sent. */
+  changedSinceSent: string[];
+  /** On record at Leafly, but no longer in the menu we would build. */
+  notInCurrentMenu: string[];
+  /** In the menu we would build, but not on record as ever sent. */
+  notYetSent: string[];
 };
 
 /**
@@ -101,6 +136,108 @@ export function readPayloadItems(payload: unknown): LeaflyItemsPayload | null {
   return { items } as LeaflyItemsPayload;
 }
 
+/**
+ * SLICE L-52 -- the prefix the menu-browser delete writes into its log line
+ * (actions.ts). That writer stores NO payload, so the message is the only way
+ * to recognise the row.
+ */
+export const MENU_BROWSER_DELETE_LOG_PREFIX = "Leafly delete (from menu browser)";
+
+/**
+ * SLICE L-52 -- is this successful live row a transmission whose items are
+ * deliberately NOT stored in the log?
+ *
+ * FIELD-REPORTED. The owner's read-back said "No record of a previous push was
+ * available" although automatic syncs had been running for days. The reason:
+ * the automatic sync (auto-sync-server.ts) logs a COMPACT payload on purpose --
+ * `{ automatic, method, sentIds, deleteIds, ... }` -- because a full menu body
+ * every fifteen minutes would bloat the log. The old chooser saw "no items",
+ * treated the row as corrupt, and dropped to the live preview, which is built
+ * a different way (no settings, no size repair, nothing held back) and so
+ * reported 811 items against Leafly's 753.
+ *
+ * The same is true of the two delete writers: `{ ids }` (the delete tool) and
+ * no payload at all (the menu browser). A delete changes what Leafly holds, so
+ * an older full-sync payload is no longer an exact description either.
+ *
+ * None of these rows is corrupt. They are real, successful changes whose exact
+ * result is recorded somewhere else: the sync-state hash map. Recognising them
+ * is what lets the chooser go there instead of guessing.
+ */
+export function isCompactTransmissionLog(row: ReadbackLogRow): boolean {
+  const p = row.payload;
+  if (p && typeof p === "object" && !Array.isArray(p)) {
+    const o = p as Record<string, unknown>;
+    if (typeof o.automatic === "string" && Array.isArray(o.sentIds)) return true;
+    if (Array.isArray(o.ids) && !("items" in o)) return true;
+  }
+  return typeof row.message === "string" && row.message.startsWith(MENU_BROWSER_DELETE_LOG_PREFIX);
+}
+
+/**
+ * SLICE L-52 -- rebuild "what Leafly should hold" from the sync-state record.
+ *
+ * Every writer that changes the whole menu stores `hashPayload(item)` of the
+ * EXACT item it transmitted, keyed by id, and every delete removes the id. So
+ * for any item we can rebuild today, an identical hash is proof -- not a
+ * likelihood -- that the rebuilt item is byte-for-byte what Leafly was sent.
+ *
+ * Items that cannot be proven are NOT compared and NOT reported as problems;
+ * they are counted, so the owner can see how much was checked. Pretending a
+ * changed product is "what we sent" would manufacture differences that are
+ * simply the next sync's work.
+ */
+export function rebuildFromSyncState(input: SyncStateRebuildInput): SyncStateRebuild {
+  const proven: LeaflyItem[] = [];
+  const changedSinceSent: string[] = [];
+  const notYetSent: string[] = [];
+  const builtIds = new Set<string>();
+  for (const item of input.items) {
+    const id = String(item.id);
+    builtIds.add(id);
+    const stored = input.storedHashes.get(id);
+    if (stored === undefined) {
+      notYetSent.push(id);
+    } else if (stored === hashPayload(item)) {
+      proven.push(item);
+    } else {
+      changedSinceSent.push(id);
+    }
+  }
+  const notInCurrentMenu: string[] = [];
+  for (const id of input.storedHashes.keys()) {
+    if (!builtIds.has(id)) notInCurrentMenu.push(id);
+  }
+  return { proven, changedSinceSent, notInCurrentMenu, notYetSent };
+}
+
+function syncStateBaseline(input: SyncStateRebuildInput | null | undefined): ReadbackBaseline | null {
+  if (!input || input.storedHashes.size === 0) return null;
+  const r = rebuildFromSyncState(input);
+  if (r.proven.length === 0) return null;
+  const unverifiable = [...r.changedSinceSent, ...r.notInCurrentMenu];
+  const skipped =
+    unverifiable.length === 0
+      ? ""
+      : ` ${unverifiable.length} other product(s) on your Leafly menu have changed here since ` +
+        "they were last sent (usually just a stock count), so they are left for the next " +
+        "automatic sync and not checked this time.";
+  const pending =
+    r.notYetSent.length === 0
+      ? ""
+      : ` ${r.notYetSent.length} product(s) have not been sent yet and were not expected on Leafly.`;
+  return {
+    payload: { items: r.proven } as LeaflyItemsPayload,
+    scope: "full",
+    source: "sync-state-rebuild",
+    explanation:
+      `Compared against the ${r.proven.length} product(s) our sync records prove were sent ` +
+      "to Leafly exactly as they are today (your automatic syncs do not store a full copy " +
+      `of the menu, so it was rebuilt and matched against the sync fingerprints).${skipped}${pending}`,
+    unverifiableIds: unverifiable,
+  };
+}
+
 /** Did this log row come from the targeted item picker? */
 export function isTargetedPushLog(row: ReadbackLogRow): boolean {
   return typeof row.message === "string" && row.message.startsWith(TARGETED_PUSH_LOG_PREFIX);
@@ -119,21 +256,38 @@ export function isTargetedPushLog(row: ReadbackLogRow): boolean {
  * @param rows        Recent syndication log rows, newest first.
  * @param livePreview The whole-feed payload we would send right now. Used only
  *                    as a last resort, and labelled as such.
+ * @param syncState   SLICE L-52. The current build plus the sync-state hashes.
+ *                    Used when the newest transmission did not store its
+ *                    items (automatic syncs, deletes), or when no transmission
+ *                    is in the recent log at all.
  */
 export function chooseReadbackBaseline(
   rows: readonly ReadbackLogRow[],
   livePreview: LeaflyItemsPayload | null,
+  syncState?: SyncStateRebuildInput | null,
 ): ReadbackBaseline {
+  let sawCorrupt = false;
   for (const row of rows) {
     // Only a successful live transmission describes what Leafly holds.
     if (row.mode !== "live" || row.status !== "ok") continue;
+
+    // SLICE L-52. An automatic sync or a delete is a real, successful change
+    // whose items are recorded in the sync state rather than the log. Go there.
+    if (isCompactTransmissionLog(row)) {
+      const rebuilt = syncStateBaseline(syncState);
+      if (rebuilt) return rebuilt;
+      break;
+    }
 
     const payload = readPayloadItems(row.payload);
     // A successful push whose payload we cannot read is a dead end rather than
     // a reason to keep searching: an OLDER push is not a safer baseline, it is
     // a staler one, and silently reaching past the most recent push would
     // compare against a menu that has since been replaced.
-    if (!payload) break;
+    if (!payload) {
+      sawCorrupt = true;
+      break;
+    }
 
     if (isTargetedPushLog(row)) {
       return {
@@ -155,6 +309,15 @@ export function chooseReadbackBaseline(
         `Compared against the ${payload.items.length} item(s) your last full sync actually ` +
         "sent.",
     };
+  }
+
+  // No usable transmission in the recent log (or the newest one did not store
+  // its items). The sync-state rebuild is PROVEN where it matches, so it beats
+  // the live preview -- except after an unreadable row, where we keep the old,
+  // conservative behaviour rather than trust anything newer we cannot read.
+  if (!sawCorrupt) {
+    const rebuilt = syncStateBaseline(syncState);
+    if (rebuilt) return rebuilt;
   }
 
   if (livePreview) {
@@ -327,6 +490,110 @@ export function __runLeaflyReadbackBaselineTests(): { passed: number; failed: nu
     "every baseline carries a real explanation",
     [t, f, none, nothing].every((b) => b.explanation.trim().length > 20),
   );
+
+  // --- SLICE L-52: compact automatic rows, deletes, sync-state rebuild -------
+  // The live field state: automatic syncs log `{ automatic, sentIds, ... }`
+  // with no items, so the old chooser fell to the live preview and reported
+  // "No record of a previous push" after days of successful syncs.
+  const mk = (id: string, inv: number): LeaflyItem =>
+    ({
+      id,
+      type: "Cartridge",
+      name: `Item ${id}`,
+      variants: [{ id: `${id}-v`, amount: 1, unit: "g", price: 1000, inventoryLevel: inv, medical: false }],
+    }) as unknown as LeaflyItem;
+  const a = mk("A", 5);
+  const b = mk("B", 5);
+  const c = mk("C", 5);
+  const bNow = mk("B", 3); // B's stock changed since it was sent
+  const stored = new Map<string, string>([
+    ["A", hashPayload(a)],
+    ["B", hashPayload(b)],
+    ["GONE", "deadbeef"], // at Leafly, no longer in the feed
+  ]);
+  const syncInput: SyncStateRebuildInput = { items: [a, bNow, c], storedHashes: stored };
+
+  const rb = rebuildFromSyncState(syncInput);
+  check("rebuild: an identical hash is proven", rb.proven.length === 1 && rb.proven[0].id === "A");
+  check("rebuild: a changed product is not treated as sent", rb.changedSinceSent.join() === "B");
+  check("rebuild: an id no longer in the feed is counted", rb.notInCurrentMenu.join() === "GONE");
+  check("rebuild: a never-sent product is counted separately", rb.notYetSent.join() === "C");
+  check(
+    "rebuild: the hash is key-order independent (stable stringify)",
+    rebuildFromSyncState({
+      items: [{ variants: a.variants, name: a.name, type: a.type, id: "A" } as LeaflyItem],
+      storedHashes: stored,
+    }).proven.length === 1,
+  );
+
+  const autoRow: ReadbackLogRow = {
+    mode: "live",
+    status: "ok",
+    payload: { automatic: "intraday_delta", method: "PUT", sentIds: ["B"], deleteIds: [] },
+    message: "Automatic in-between update: sent 1 (1 changed).",
+  };
+  check("a compact automatic row is recognised", isCompactTransmissionLog(autoRow));
+  check(
+    "a delete-tool row is recognised",
+    isCompactTransmissionLog({ mode: "live", status: "ok", payload: { ids: ["X"] } }),
+  );
+  check(
+    "a menu-browser delete row (no payload) is recognised",
+    isCompactTransmissionLog({
+      mode: "live",
+      status: "ok",
+      payload: null,
+      message: `${MENU_BROWSER_DELETE_LOG_PREFIX} \u2014 removed 1: X`,
+    }),
+  );
+  check("a full sync row is NOT compact", !isCompactTransmissionLog(fullRow));
+  check("a corrupt row is NOT compact", !isCompactTransmissionLog({ mode: "live", status: "ok", payload: "x" }));
+
+  const afterAuto = chooseReadbackBaseline([autoRow, fullRow], preview, syncInput);
+  check("after an automatic sync the sync-state rebuild is used", afterAuto.source === "sync-state-rebuild");
+  check("the rebuild compares only the proven items", afterAuto.payload?.items.length === 1);
+  check("the rebuild is full scope", afterAuto.scope === "full");
+  check(
+    "the rebuild lists the unprovable ids for the reconciler",
+    (afterAuto.unverifiableIds ?? []).slice().sort().join() === "B,GONE",
+  );
+  check("the rebuild does NOT reach past to the older full sync", afterAuto.payload?.items.length !== 1876);
+  check("the rebuild does NOT use the live preview", afterAuto.payload?.items.length !== 2562);
+  check(
+    "the rebuild explanation is plain English",
+    afterAuto.explanation.length > 30 && !/payload|reconcile|scope/i.test(afterAuto.explanation),
+  );
+
+  // A full sync NEWER than the automatic row keeps its exact stored body.
+  const fullFirst = chooseReadbackBaseline([fullRow, autoRow], preview, syncInput);
+  check("a newer full sync still wins over the rebuild", fullFirst.source === "full-sync-log");
+
+  // Without sync-state input the compact row falls to the (labelled) preview.
+  const noState = chooseReadbackBaseline([autoRow], preview);
+  check("a compact row with no sync state falls back honestly", noState.source === "live-preview");
+
+  // An empty sync-state map proves nothing.
+  const emptyState = chooseReadbackBaseline([autoRow], preview, { items: [a], storedHashes: new Map() });
+  check("an empty sync state is not a baseline", emptyState.source === "live-preview");
+
+  // No log history at all, but a sync state: the rebuild beats the preview.
+  const noLogs = chooseReadbackBaseline([], preview, syncInput);
+  check("with no log history the proven rebuild beats the preview", noLogs.source === "sync-state-rebuild");
+
+  // The corrupt-newest rule is preserved: nothing newer we cannot read is trusted.
+  const corruptWithState = chooseReadbackBaseline(
+    [{ mode: "live", status: "ok", payload: "corrupt" }, fullRow],
+    preview,
+    syncInput,
+  );
+  check("a corrupt newest row still refuses the rebuild", corruptWithState.source === "live-preview");
+
+  // Previews (read-backs) and failures between do not interfere.
+  const withNoise = chooseReadbackBaseline([previewRow, errorRow, autoRow], preview, syncInput);
+  check("read-backs and failures are skipped before the compact row", withNoise.source === "sync-state-rebuild");
+
+  // Other sources carry no unverifiable ids.
+  check("a full sync carries no unverifiable ids", (f.unverifiableIds ?? []).length === 0);
 
   return { passed, failed };
 }

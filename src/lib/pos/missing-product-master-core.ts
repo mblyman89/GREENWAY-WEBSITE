@@ -54,6 +54,8 @@
  * Pure: plain data in, plain data out. No fs, no network, no Supabase.
  */
 
+import { isPlaceholderStrain } from "@/lib/syndication/strain-placeholder-core";
+
 // ---------------------------------------------------------------------------
 // Input shape — deliberately structural, so this module never imports the DB
 // row type and can be unit-tested with plain object literals.
@@ -230,11 +232,14 @@ function clean(value: string | null | undefined): string {
  * (docs/CULTIVERA_PRODUCT_UPLOAD.md: "generic placeholders (`No Strain`,
  * `Mixed`, `Assorted`, `Paraphernalia`) are stripped").
  */
-const PLACEHOLDER_STRAINS = new Set(["", "n/a", "na", "none", "no strain", "mixed", "assorted", "paraphernalia", "unknown"]);
-
+//
+// SLICE L-52: the list itself now lives in `@/lib/syndication/strain-placeholder-core`
+// so the Leafly payload builder uses the SAME words. It used to be a private
+// copy here, and the Leafly builder, which never saw it, sent "No Strain" and
+// "Paraphernalia" to Leafly as real strains.
 function meaningfulStrain(value: string | null | undefined): string {
   const s = clean(value);
-  return PLACEHOLDER_STRAINS.has(s.toLowerCase()) ? "" : s;
+  return isPlaceholderStrain(s) ? "" : s;
 }
 
 /** "unknown" strain TYPE is the transformer's explicit not-determined value. */

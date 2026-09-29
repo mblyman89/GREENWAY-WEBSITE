@@ -147,9 +147,21 @@ describe("TASK I — the 1000% THC bug", () => {
   it("does NOT refuse legitimate percentages — the fix must not cost real data", () => {
     // The failure mode of an over-eager fix is a menu with no potency on it at
     // all, which is worse than the bug for every product that was fine.
-    for (const [raw, expected] of [["22%", 22], ["22", 22], ["0%", 0], ["0", 0], ["30.5%", 30.5], ["100%", 100]] as const) {
+    for (const [raw, expected] of [["22%", 22], ["22", 22], ["0.1%", 0.1], ["30.5%", 30.5], ["100%", 100]] as const) {
       const c = toCompound("thc", raw, "Flower");
       expect(c?.content, `${raw} must survive`).toBe(expected);
+      expect(c?.unit).toBe("percent");
+    }
+  });
+
+  it("SLICE L-52: sends a zero reading as null (unknown), per Leafly's spec", () => {
+    // "If cannabinoid information is absent the value `null` should be
+    //  submitted rather than `0`. Transmitting `0` results in a display of
+    //  "0mg" to shoppers" -- menu-integration-v2.openapi.json. This case used
+    // to assert "0%" -> 0, i.e. it pinned the behaviour Leafly grades against.
+    for (const raw of ["0%", "0", 0, "0.0"] as const) {
+      const c = toCompound("thc", raw, "Flower");
+      expect(c?.content, `${String(raw)} must be sent as unknown`).toBeNull();
       expect(c?.unit).toBe("percent");
     }
   });
