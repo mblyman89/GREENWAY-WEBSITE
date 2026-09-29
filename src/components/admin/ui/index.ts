@@ -20,3 +20,4 @@ export {
 } from "./Field";
 export { Section } from "./Section";
 export { Badge, type BadgeTone } from "./Badge";
+export { PageTabs, type PageTabsProps } from "./PageTabs";

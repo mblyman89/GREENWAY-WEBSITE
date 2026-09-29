@@ -141,7 +141,8 @@ describe("S26 — each destination receives its param and has the control", () =
 
   it("types page: ?tab=inventory&type=<name> opens the row whose id is the link's anchor, next to the mapping Select", () => {
     const page = code("src/app/admin/settings/types/page.tsx");
-    expect(page).toContain('sp.tab === "inventory"');
+    // S27: the tab is resolved by the shared primitive; a bare ?type= opens Inventory Types.
+    expect(page).toContain('resolveTab(TYPES_PAGE_TABS, { tab: sp.tab, type: sp.type }, "website")');
     expect(page).toContain("type?: string");
     expect(page).toContain("focusType={focusType}");
     expect(page).toContain("id={isFocus(t) && focusType ? typeRowAnchorId(focusType) : undefined}");

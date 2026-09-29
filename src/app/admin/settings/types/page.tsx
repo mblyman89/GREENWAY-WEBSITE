@@ -23,6 +23,9 @@ import type { ReassignCounts } from "@/lib/pos/category-registry-core";
 import { loadUnmappedCcrsReview } from "@/lib/ai/kb/unmapped-ccrs-server";
 import { UnmappedCcrsPanel } from "@/app/admin/knowledge-base/UnmappedCcrsPanel";
 import { typeMatchesFocus, typeRowAnchorId } from "@/lib/pos/issue-fix-link-core";
+import { PageTabs } from "@/components/admin/ui/PageTabs";
+import { resolveTab } from "@/lib/admin/page-tabs-core";
+import { TYPES_PAGE_TABS } from "@/lib/admin/page-tab-sets";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +67,8 @@ export default async function TypesPage({
 }) {
   await requirePermission("settings.manage");
   const sp = await searchParams;
-  const tab = sp.tab === "inventory" ? "inventory" : "website";
+  // S27: explicit ?tab= wins; a bare ?type= (the S26 "Map …" link) opens Inventory Types.
+  const tab = resolveTab(TYPES_PAGE_TABS, { tab: sp.tab, type: sp.type }, "website");
   // S26: `?type=<name>` (from a menu-draft "Map …" fix link) opens and
   // highlights that inventory type's row so the mapping Select is in view.
   const focusType = typeof sp.type === "string" && sp.type.trim() ? sp.type.trim().slice(0, 120) : null;
@@ -150,29 +154,8 @@ export default async function TypesPage({
           <StatCard label="Hidden inventory types" value={inventoryTypes.length - activeInv} accent="muted" />
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 border-b border-[var(--admin-border)]">
-          <a
-            href={`${BASE}?tab=website`}
-            className={`px-4 py-2 text-sm font-semibold ${
-              tab === "website"
-                ? "border-b-2 border-[var(--admin-accent)] text-white"
-                : "text-white/50 hover:text-white/80"
-            }`}
-          >
-            Website Categories
-          </a>
-          <a
-            href={`${BASE}?tab=inventory`}
-            className={`px-4 py-2 text-sm font-semibold ${
-              tab === "inventory"
-                ? "border-b-2 border-[var(--admin-accent)] text-white"
-                : "text-white/50 hover:text-white/80"
-            }`}
-          >
-            Inventory Types
-          </a>
-        </div>
+        {/* Tabs (S27: the shared PageTabs primitive) */}
+        <PageTabs base={BASE} tabs={TYPES_PAGE_TABS} active={tab} ariaLabel="Types and categories views" />
 
         {tab === "website" ? (
           <WebsiteCategoriesTab categories={categories} usage={usage} menuOrphans={menuOrphans} />

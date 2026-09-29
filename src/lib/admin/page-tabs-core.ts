@@ -1,0 +1,189 @@
+/**
+ * src/lib/admin/page-tabs-core.ts  (S27 — one query-param tab primitive)
+ *
+ * PURE. No React, no next/*, no I/O. Embedded self-tests run in
+ * scripts/compliance/run-pure-selftests.ts; tests/compliance/page-tabs.test.ts
+ * renders the component.
+ *
+ * Generalises receiving-tabs-core (F-107): tabs are plain `?tab=` links on ONE
+ * route, the active tab is resolved on the SERVER, an explicit `?tab=` always
+ * wins, and a tab can auto-open when the URL carries one of its error codes or
+ * result params (so a failure banner is never hidden behind another tab). S28
+ * (Issues tabs), S29 and S30 build on this with no further primitive work.
+ *
+ * Deliberately NOT folded in: ReportTabs (client, route-per-tab, F-108/F-122).
+ * Two tab primitives, each documented, never a third.
+ *
+ * Research: GOV.UK Design System "Tabs" — tabs are links to sections, the
+ * current tab is marked (aria-current), and content must still work without
+ * JavaScript (https://design-system.service.gov.uk/components/tabs/). A zero-
+ * JS server component is that pattern by construction.
+ */
+
+export type TabSpec<K extends string = string> = {
+  key: K;
+  label: string;
+  icon?: string;
+  /** Tooltip / one-line description. */
+  blurb?: string;
+  /** `?error=` codes that auto-open this tab (no explicit `?tab=`). */
+  autoOpenOn?: ReadonlySet<string>;
+  /** Result-banner params whose PRESENCE auto-opens this tab (e.g. kbdone). */
+  autoOpenParams?: readonly string[];
+  /** Optional count pill (e.g. S28's issue count). Hidden when null/undefined. */
+  count?: number | null;
+};
+
+export type TabParams = { tab?: string; error?: string; [k: string]: string | undefined };
+
+function present(v: string | undefined): boolean {
+  return typeof v === "string" && v.length > 0;
+}
+
+/**
+ * Which tab to render.
+ *   1. explicit `?tab=<known key>` — the user clicked a tab; honour it;
+ *   2. the first tab (display order) whose autoOpenOn holds `?error=`;
+ *   3. the first tab (display order) with one of its autoOpenParams present;
+ *   4. `fallback`.
+ * Unknown `?tab=` / `?error=` values fall through (never guess).
+ */
+export function resolveTab<K extends string>(tabs: readonly TabSpec<K>[], params: TabParams, fallback: K): K {
+  const explicit = tabs.find((t) => t.key === params.tab);
+  if (explicit) return explicit.key;
+  const err = params.error;
+  if (present(err)) {
+    const byError = tabs.find((t) => t.autoOpenOn?.has(err as string));
+    if (byError) return byError.key;
+  }
+  const byParam = tabs.find((t) => (t.autoOpenParams ?? []).some((p) => present(params[p])));
+  if (byParam) return byParam.key;
+  return fallback;
+}
+
+/** Params a tab switch keeps by default: the worklist state (search, filter, way back). */
+export const DEFAULT_KEEP_PARAMS: readonly string[] = ["q", "status", "back"];
+
+/**
+ * The href for one tab. Keeps the listed params that carry a value (so
+ * switching tabs never loses the worklist), drops any `tab` in `keep`, and
+ * puts `tab=` first. Result banners (error, saved, …) are NOT kept unless the
+ * caller lists them — they belong to the tab that produced them.
+ */
+export function tabHref(
+  base: string,
+  key: string,
+  keep: Readonly<Record<string, string | undefined>> = {},
+  allow: readonly string[] = DEFAULT_KEEP_PARAMS,
+): string {
+  const qs = new URLSearchParams();
+  qs.set("tab", key);
+  for (const name of allow) {
+    if (name === "tab") continue;
+    const v = keep[name];
+    if (present(v)) qs.set(name, v as string);
+  }
+  return `${base}?${qs.toString()}`;
+}
+
+/** The count pill text: null when hidden; "99+" past 99 (keeps the tab row calm). */
+export function tabCountLabel(count: number | null | undefined): string | null {
+  if (typeof count !== "number" || !Number.isFinite(count) || count <= 0) return null;
+  return count > 99 ? "99+" : String(Math.floor(count));
+}
+
+/** Accessible name for a tab with a count ("Issues, 3 items"). */
+export function tabAriaLabel(label: string, count: number | null | undefined): string {
+  const c = tabCountLabel(count);
+  return c ? `${label}, ${c} item${c === "1" ? "" : "s"}` : label;
+}
+
+/**
+ * Attach live counts to a static tab list (e.g. the Suggestions pill). Keys
+ * not in `counts` keep whatever count they had; the input is never mutated.
+ */
+export function withTabCounts<K extends string>(
+  tabs: readonly TabSpec<K>[],
+  counts: Partial<Record<K, number | null | undefined>>,
+): TabSpec<K>[] {
+  return tabs.map((t) => (Object.prototype.hasOwnProperty.call(counts, t.key) ? { ...t, count: counts[t.key] } : { ...t }));
+}
+
+// ---------------------------------------------------------------------------
+// Self-tests (house pattern)
+// ---------------------------------------------------------------------------
+
+export function __runPageTabsCoreTests(): { passed: number; failed: number } {
+  let passed = 0;
+  let failed = 0;
+  const ok = (cond: unknown, what: string) => {
+    if (cond) passed += 1;
+    else {
+      failed += 1;
+      console.error("FAIL page-tabs-core:", what);
+    }
+  };
+  type K = "main" | "manual" | "issues";
+  const tabs: TabSpec<K>[] = [
+    { key: "main", label: "Main" },
+    { key: "manual", label: "Manual", autoOpenOn: new Set(["parse", "shared"]), autoOpenParams: ["kbdone"] },
+    { key: "issues", label: "Issues", autoOpenOn: new Set(["shared", "held"]), autoOpenParams: ["kbdone", "flag"] },
+  ];
+
+  // resolveTab
+  ok(resolveTab(tabs, {}, "main") === "main", "no params → fallback");
+  ok(resolveTab(tabs, { tab: "issues" }, "main") === "issues", "explicit tab");
+  ok(resolveTab(tabs, { tab: "main", error: "parse" }, "issues") === "main", "explicit tab wins over error");
+  ok(resolveTab(tabs, { tab: "main", kbdone: "3" }, "issues") === "main", "explicit tab wins over param");
+  ok(resolveTab(tabs, { error: "parse" }, "main") === "manual", "error auto-opens its tab");
+  ok(resolveTab(tabs, { error: "held" }, "main") === "issues", "error auto-opens a later tab");
+  ok(resolveTab(tabs, { error: "shared" }, "main") === "manual", "two tabs claim a code → first in display order");
+  ok(resolveTab(tabs, { kbdone: "1" }, "main") === "manual", "param auto-opens (first claimant)");
+  ok(resolveTab(tabs, { flag: "x" }, "main") === "issues", "param auto-opens a later tab");
+  ok(resolveTab(tabs, { flag: "" }, "main") === "main", "empty param is not present");
+  ok(resolveTab(tabs, { error: "held", kbdone: "1" }, "main") === "issues", "error outranks a result param");
+  ok(resolveTab(tabs, { error: "" }, "issues") === "issues", "empty error → fallback");
+  ok(resolveTab(tabs, { tab: "bogus" }, "main") === "main", "unknown tab → fallback");
+  ok(resolveTab(tabs, { tab: "bogus", error: "parse" }, "main") === "manual", "unknown tab does not block auto-open");
+  ok(resolveTab(tabs, { error: "nope" }, "main") === "main", "unknown error → fallback");
+  ok(resolveTab(tabs, { tab: "Issues" }, "main") === "main", "tab keys are exact (case-sensitive)");
+  ok(resolveTab([], { tab: "x" }, "main") === "main", "no tabs → fallback");
+
+  // tabHref
+  ok(tabHref("/admin/x", "issues") === "/admin/x?tab=issues", "bare href");
+  ok(
+    tabHref("/admin/x", "issues", { q: "blue dream", status: "approved", back: "/admin/y?z=1", tab: "main", error: "e" }) ===
+      "/admin/x?tab=issues&q=blue+dream&status=approved&back=%2Fadmin%2Fy%3Fz%3D1",
+    "keeps q/status/back (encoded), drops tab and banners",
+  );
+  ok(tabHref("/admin/x", "a", { q: "", status: undefined }) === "/admin/x?tab=a", "blank keep values dropped");
+  ok(tabHref("/admin/x", "a", { vendor: "v1", q: "k" }, ["vendor"]) === "/admin/x?tab=a&vendor=v1", "custom allow-list replaces the default");
+  ok(tabHref("/admin/x", "a", { tab: "b" }, ["tab"]) === "/admin/x?tab=a", "tab can never be kept");
+  ok(tabHref("/admin/x", "a b") === "/admin/x?tab=a+b", "key encoded");
+  ok(DEFAULT_KEEP_PARAMS.join(",") === "q,status,back", "default keep list");
+
+  // count pill
+  ok(tabCountLabel(undefined) === null && tabCountLabel(null) === null, "no count → hidden");
+  ok(tabCountLabel(0) === null && tabCountLabel(-2) === null, "zero/negative hidden");
+  ok(tabCountLabel(Number.NaN) === null && tabCountLabel(Infinity) === null, "non-finite hidden");
+  ok(tabCountLabel(1) === "1" && tabCountLabel(99) === "99", "1..99 shown as-is");
+  ok(tabCountLabel(100) === "99+", "100 → 99+");
+  ok(tabCountLabel(2.7) === "2", "fractions floored");
+  ok(tabAriaLabel("Issues", 3) === "Issues, 3 items", "aria plural");
+  ok(tabAriaLabel("Issues", 1) === "Issues, 1 item", "aria singular");
+  ok(tabAriaLabel("Issues", 0) === "Issues", "aria no count");
+  ok(tabAriaLabel("Issues", 500) === "Issues, 99+ items", "aria capped");
+
+  // withTabCounts
+  const counted = withTabCounts(tabs, { issues: 4 });
+  ok(counted[2].count === 4, "count attached to its key");
+  ok(counted[0].count === undefined && counted[1].count === undefined, "other tabs untouched");
+  ok(tabs[2].count === undefined, "input not mutated");
+  ok(counted[0] !== tabs[0], "returns fresh objects");
+  ok(counted.map((t) => t.key).join(",") === "main,manual,issues", "order kept");
+  const pre: TabSpec<K>[] = [{ key: "main", label: "Main", count: 7 }];
+  ok(withTabCounts(pre, {})[0].count === 7, "absent key keeps its existing count");
+  ok(withTabCounts(pre, { main: null })[0].count === null, "explicit null clears the pill");
+
+  return { passed, failed };
+}
