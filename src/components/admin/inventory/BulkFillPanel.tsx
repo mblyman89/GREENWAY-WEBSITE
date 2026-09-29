@@ -30,6 +30,7 @@ import {
   fieldLabel,
   type BulkFillField,
 } from "@/lib/inventory/bulk-fill-core";
+import { bulkReturnParams } from "@/lib/inventory/inventory-url-core";
 import { bulkFillLotsAction } from "@/app/admin/inventory/actions";
 
 export type BulkFillPanelProps = {
@@ -44,6 +45,11 @@ export type BulkFillPanelProps = {
   doneCount?: string;
   failedCount?: string;
   error?: string;
+  /**
+   * Round 12: the list's current filters (no page, no bulk*), so Preview /
+   * Save / Cancel / Exit all return to the SAME filtered worklist.
+   */
+  returnQs?: string;
 };
 
 function isField(v: string | undefined): v is BulkFillField {
@@ -85,7 +91,13 @@ export default function BulkFillPanel(props: BulkFillPanelProps) {
     doneCount,
     failedCount,
     error,
+    returnQs,
   } = props;
+  // Round 12: every exit keeps the owner's filters (sanitised the same way the
+  // action does, so the links and the redirect can never disagree).
+  const keep = bulkReturnParams(returnQs).toString();
+  const cancelHref = `/admin/inventory?${keep ? `${keep}&` : ""}bulk=1`;
+  const exitHref = keep ? `/admin/inventory?${keep}` : "/admin/inventory";
 
   const selectedField = isField(field) ? field : null;
   const nPreview = Number(previewCount ?? "");
@@ -170,6 +182,7 @@ export default function BulkFillPanel(props: BulkFillPanelProps) {
             {nPreview > 0 && (
               <form action={bulkFillLotsAction}>
                 <input type="hidden" name="mode" value="apply" />
+                <input type="hidden" name="return_qs" value={keep} />
                 <input type="hidden" name="field" value={selectedField} />
                 <input type="hidden" name="value" value={value ?? ""} />
                 {confirmIds.map((id) => (
@@ -184,7 +197,8 @@ export default function BulkFillPanel(props: BulkFillPanelProps) {
               </form>
             )}
             <Link
-              href="/admin/inventory?bulk=1"
+              data-testid="bulk-cancel"
+              href={cancelHref}
               className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-4 py-2 text-sm text-[var(--admin-text-muted)]"
             >
               Cancel
@@ -195,6 +209,7 @@ export default function BulkFillPanel(props: BulkFillPanelProps) {
         /* ---- STEP 1: choose field + value, preview -------------------- */
         <form action={bulkFillLotsAction} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="mode" value="preview" />
+          <input type="hidden" name="return_qs" value={keep} />
           {/* The selection. Defaults to every lot the current filters show, so
               the owner can pair this with the SLICE 7 gap worklists: filter to
               "missing expiry", then fill them all. */}
@@ -241,7 +256,8 @@ export default function BulkFillPanel(props: BulkFillPanelProps) {
           </button>
 
           <Link
-            href="/admin/inventory"
+            data-testid="bulk-exit"
+            href={exitHref}
             className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-4 py-2 text-sm text-[var(--admin-text-muted)]"
           >
             Exit bulk fill

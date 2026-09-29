@@ -18,6 +18,7 @@ import { NO_PRODUCT_MASTER } from "@/lib/pos/missing-product-master-core";
 import type { ReadCompletenessVerdict } from "@/lib/supabase/read-completeness-core";
 import { formatDateTime } from "@/lib/pos/format";
 import { resolveFactReview, resolveFactReviewGroup } from "../../actions";
+import { posStateOf } from "@/lib/enrichment/product-visibility-core";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +88,12 @@ export default async function FactReviewPage({
   // products file" case. Counted from the SAME staged rows the buckets were
   // built from, so this can never disagree with the Rejected count above it.
   const missingMasterCount = items.filter(
-    (i) => i.hidden && i.hidden_reason === NO_PRODUCT_MASTER,
+    (i) => {
+      // Round 12: the importer's state (an owner Visibility override does not
+      // create a Products-file row) -- same rule as the worklist builder.
+      const pos = posStateOf({ hidden: i.hidden, hidden_reason: i.hidden_reason });
+      return pos.hidden && pos.hidden_reason === NO_PRODUCT_MASTER;
+    },
   ).length;
 
   return (

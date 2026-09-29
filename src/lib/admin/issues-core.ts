@@ -284,6 +284,28 @@ const BLOCKED_CAUSE_COPY: Record<"no_product_link" | "no_menu_card" | "hidden_ca
   recall_hold: "under a recall hold",
 };
 
+/**
+ * Round 12 (owner: "make sure that the products from the Cultivera upload
+ * specifically can reach the fix pages"). Three lot gaps are exactly the
+ * fields the one-time Cultivera import leaves blank and Bulk fill can fill
+ * (bulk-fill-core BULK_FILLABLE_FIELDS; eligibility = migration lots only).
+ * The gap row used to offer only "Show these lots"; it now ALSO offers the
+ * same filtered list opened straight into Bulk fill with the field chosen.
+ * Keys are the lot-gap params (lot-gap-core LOT_GAP_DEFINITIONS).
+ */
+export const GAP_BULK_FILL_FIELD: Readonly<Record<string, "expires_on" | "unit_cost_minor_units" | "pos_product_key">> = {
+  missingExpiry: "expires_on",
+  unknownCost: "unit_cost_minor_units",
+  missingProductLink: "pos_product_key",
+};
+
+/** The gap's own filtered list, opened in Bulk fill mode with its field preselected. */
+export function gapBulkFillHref(key: string, href: string | undefined | null): string | null {
+  const field = GAP_BULK_FILL_FIELD[key];
+  if (!field || !href) return null;
+  return `${href}${href.includes("?") ? "&" : "?"}bulk=1&bulkField=${field}`;
+}
+
 /** Gap keys that mean "product that must not be sold may be on the floor" (stop-sale). */
 const BLOCKING_GAPS = new Set(["recalled", "expired"]);
 
@@ -324,6 +346,7 @@ export function buildInventoryIssues(input: InventoryIssueInput): Issue[] {
     // Expired lots are listed one per lot by buildIntelIssues; the stats row
     // stays only as the fallback when the intel read produced none.
     if (g.key === "expired" && input.intelExpiredRows > 0) continue;
+    const bulkHref = gapBulkFillHref(g.key, g.href);
     out.push({
       severity: BLOCKING_GAPS.has(g.key) ? "blocking" : "warning",
       code: `gap_${g.key}`,
@@ -331,6 +354,9 @@ export function buildInventoryIssues(input: InventoryIssueInput): Issue[] {
       meaning: GAP_MEANING[g.key] ?? "Open the list to see exactly which lots.",
       fixText: g.href ? "Open the filtered list; every lot on it has this gap." : null,
       fix: g.href ? { href: g.href, label: "Show these lots" } : null,
+      ...(bulkHref
+        ? { extra: [{ href: bulkHref, label: "Bulk fill the Cultivera-import lots" }] }
+        : {}),
     });
   }
 
@@ -354,7 +380,7 @@ const GAP_MEANING: Record<string, string> = {
   expired: "These active lots are past their expiry date. Expired product may not be sold; pull it and record the destruction.",
   quarantine: "Held out of sale, waiting for a decision (release, return or destroy).",
   missingCoa:
-    "No lab result is linked to these lots in the system. The COA may exist on paper; the link is what CCRS reporting reads.",
+    "No lab result is linked to these lots in the system. The COA may exist on paper; the link is what CCRS reporting reads. Lots from the one-time Cultivera import never had one linked \u2014 a COA spreadsheet import for them is on the roadmap.",
   expiringSoon: "These lots expire soon. Sell them first (First-Expired, First-Out) or plan a markdown.",
   missingProductLink: "These lots are not tied to a product, so they cannot be sold at the register.",
   emptyActive: "Marked active with nothing on hand \u2014 usually a lot that should be sold out.",
@@ -703,6 +729,25 @@ export function __runIssuesCoreTests(): { passed: number; failed: number } {
   ok(gaps.find((i) => i.code === "gap_recalled")?.title === "2 lots flagged RECALLED", "gap title count + label");
   ok(gaps.find((i) => i.code === "gap_missingCoa")?.title === "1 lot active without COA", "gap title singular");
   ok(gaps.find((i) => i.code === "gap_nohref")?.fix === null, "no href → no invented fix");
+  // Round 12: Cultivera bulk-fill extras on exactly the three fillable gaps.
+  ok(gaps.every((i) => i.extra === undefined), "non-fillable gaps get no bulk extra");
+  const fillable = buildInventoryIssues({
+    ...empty,
+    gaps: [
+      { key: "missingExpiry", label: "no expiry", count: 5, href: "/admin/inventory?status=active&missingExpiry=1", weight: 2 },
+      { key: "unknownCost", label: "no cost", count: 2, href: "/admin/inventory?status=active&unknownCost=1", weight: 2 },
+      { key: "missingProductLink", label: "no link", count: 1, href: "/admin/inventory?status=active&missingProductLink=1", weight: 1 },
+      { key: "emptyActive", label: "empty", count: 1, href: "/admin/inventory?status=active&emptyActive=1", weight: 1 },
+    ],
+  });
+  ok(fillable.find((i) => i.code === "gap_missingExpiry")?.extra?.[0]?.href === "/admin/inventory?status=active&missingExpiry=1&bulk=1&bulkField=expires_on", "expiry bulk href");
+  ok(fillable.find((i) => i.code === "gap_unknownCost")?.extra?.[0]?.href === "/admin/inventory?status=active&unknownCost=1&bulk=1&bulkField=unit_cost_minor_units", "cost bulk href");
+  ok(fillable.find((i) => i.code === "gap_missingProductLink")?.extra?.[0]?.href === "/admin/inventory?status=active&missingProductLink=1&bulk=1&bulkField=pos_product_key", "link bulk href");
+  ok(fillable.find((i) => i.code === "gap_emptyActive")?.extra === undefined, "empty-active gets no bulk extra");
+  ok(fillable.find((i) => i.code === "gap_missingExpiry")?.extra?.[0]?.label === "Bulk fill the Cultivera-import lots", "bulk label");
+  ok(gapBulkFillHref("missingExpiry", null) === null, "no href, no bulk link");
+  ok(gapBulkFillHref("missingExpiry", "/x") === "/x?bulk=1&bulkField=expires_on", "bulk href without query");
+  ok(gapBulkFillHref("expired", "/x?a=1") === null, "expired is not bulk-fillable");
   ok(
     !buildInventoryIssues({ ...empty, intelExpiredRows: 3, gaps: [{ key: "expired", label: "x", count: 3, href: "/h", weight: 3 }] }).some(
       (i) => i.code === "gap_expired",

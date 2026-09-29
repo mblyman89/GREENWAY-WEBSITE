@@ -445,6 +445,14 @@ const HIDDEN_REASON_TEXT: Record<string, string> = {
 
 export function hiddenReasonText(reason: string | null): string {
   if (!reason) return "Hidden from the public menu (no reason recorded).";
+  // Round 12: the owner's Visibility override on the product page
+  // (product-visibility-core.ts). The suffix is the importer's own reason.
+  if (reason.startsWith("owner_override_hide:")) {
+    const prior = reason.slice("owner_override_hide:".length);
+    return prior && prior !== "~"
+      ? `Hidden by the owner on the product page (the import had: ${HIDDEN_REASON_TEXT[prior] ?? prior}).`
+      : "Hidden by the owner on the product page.";
+  }
   return HIDDEN_REASON_TEXT[reason] ?? `Hidden from the public menu (reason: ${reason}).`;
 }
 

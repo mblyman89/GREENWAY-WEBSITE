@@ -20,6 +20,7 @@ import {
   RESEARCH_IMAGES_FIELD,
 } from "@/lib/enrichment/research-core";
 import { buildEnrichmentLookupQuery } from "@/lib/enrichment/lookup-query-core";
+import { liveVisibilityText } from "@/lib/enrichment/product-visibility-core";
 import { EnrichmentAiLookupPanel } from "./EnrichmentAiLookupPanel";
 import {
   updateProductEnrichment,
@@ -855,6 +856,16 @@ export default async function ProductEditorPage({
                 <option value="hide">Always hide</option>
               </select>
               <input name="hidden_reason" defaultValue={enrichment?.hidden_reason ?? ""} placeholder="Reason if hidden" className={field} />
+              {/* Round 12: the live state, read from menu_items (what the website and register use). */}
+              <p data-testid="visibility-live-state" className="text-xs text-white/60">
+                {liveVisibilityText({ hidden: item.hidden === true, hidden_reason: item.hidden_reason ?? null })}
+              </p>
+              <p className="text-xs text-white/40">
+                Saving applies this to the live menu and any staged menu drafts. {"\u201C"}Inherit POS{"\u201D"} puts back exactly what the import set.
+                {item.hidden_reason === "no_product_master" || (item.hidden_reason ?? "").endsWith(":no_product_master")
+                  ? " This product came from the Cultivera upload without a Products-file row, so check its name, brand, category and price before showing it."
+                  : ""}
+              </p>
             </div>
 
             <Button type="submit" variant="confirm" fullWidth>
