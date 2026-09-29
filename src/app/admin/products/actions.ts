@@ -34,6 +34,9 @@ import {
   researchOutcomeMessage,
   RESEARCH_IMAGES_FIELD,
 } from "@/lib/enrichment/research-core";
+import { parseVisibilityChoice, hiddenOverrideFor } from "@/lib/enrichment/product-visibility-core";
+import { applyProductVisibility } from "@/lib/enrichment/product-visibility-store";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 
 const ALLOWED_TAGS = new Set([
   "new-arrival",
@@ -92,8 +95,11 @@ export async function updateProductEnrichment(formData: FormData): Promise<void>
   };
 
   // Visibility override: "inherit" | "show" | "hide"
-  const vis = String(formData.get("visibility") ?? "inherit");
-  update.hidden_override = vis === "inherit" ? null : vis === "hide";
+  // Round 12: parsed by the pure core; the SAME choice is applied to the live
+  // menu below (menu_items.hidden), which is what the website, the register
+  // and the sellability report actually read.
+  const vis = parseVisibilityChoice(formData.get("visibility"));
+  update.hidden_override = hiddenOverrideFor(vis);
   update.hidden_reason = vis === "hide" ? orNull(formData.get("hidden_reason")) : null;
 
   // Optional image upload → media library (published) → add to gallery.
@@ -132,6 +138,28 @@ export async function updateProductEnrichment(formData: FormData): Promise<void>
     entityType: "product",
     entityId: key,
   });
+
+  // Round 12 — make Visibility REAL. Before this, the choice lived only in
+  // product_enrichments.hidden_override, which nothing on the live path reads
+  // (mergeForDisplay has no callers), so "Always show" never un-hid a card —
+  // including the Cultivera-upload cards the importer hid (no_product_master /
+  // no_inventory). Write the live rows, audit each change, refresh the site.
+  const visResult = await applyProductVisibility(key, vis);
+  if (!visResult.ok) {
+    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent(visResult.error));
+  }
+  if (visResult.changed.length > 0) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "product.visibility_changed",
+      entityType: "product",
+      entityId: key,
+      before: { rows: visResult.changed.map((r) => ({ versionId: r.versionId, versionStatus: r.versionStatus, ...r.before })) },
+      after: { choice: vis, rows: visResult.changed.map((r) => ({ versionId: r.versionId, versionStatus: r.versionStatus, ...r.after })) },
+    });
+    revalidatePublicMenuSurfaces();
+  }
 
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);

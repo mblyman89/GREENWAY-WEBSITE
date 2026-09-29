@@ -186,3 +186,66 @@ text shape was in front of us.
 **Placement:** added after S33 as **S34 (R-LLAMA)**. It does not depend on
 Phases 3–7, so it can move earlier if invoice numbers hurt more than the
 publish work.
+
+---
+
+## R-COA-CSV: a possible upload for Cultivera's COA spreadsheet (Round 12)
+
+**Owner, verbatim:** "I will ask Cultivera if they can send me the coa data in a
+spreadsheet for us to add to the database. Add that to the roadmap that a
+possible new uploadable csv might be needed to be built to handle this."
+
+**Why it's needed (verified in code):**
+- The one-time Cultivera import only gets a Y/N COA flag from the POS export.
+  When the flag is N it logs `import_lot_coa_missing`
+  (`src/lib/pos/import-lot-core.ts:410-418`).
+- It never creates a lab result. The only insert into `lab_results` is intake
+  finalize (`src/lib/inventory/intake-store.ts:663`).
+- So every Cultivera-import lot has `inventory_lots.lab_result_id` NULL and
+  stays on the missingCoa gap.
+- Since R12a, the Issues row and the lot-page callout say honestly that this
+  import is on the roadmap. They no longer pretend a fix exists.
+
+**Plan: slice S38 in the bible (finding F-135).** It is waiting on one sample
+file from Cultivera. The importer detects which file shape it got rather than
+assuming one:
+
+1. **CCRS LabTest.csv (long format, one row per test).** Fields per the LCB
+   CCRS Data Model File Specifications Manual:
+   - `LabLicenseNumber` (10 digits)
+   - `LabTestStatus` (Pass / Fail / FailRetestAllowed / … / InProcess)
+   - `InventoryExternalIdentifier` (= Inventory.ExternalIdentifier)
+   - `TestName` (for example `Potency - delta-9-THCA (mg/g)`)
+   - `TestDate` (mm/dd/yyyy)
+   - `TestValue` (text 25)
+
+   The CCRS Lab Upload Guide (11-27-24) adds three rules. Values are never
+   zero, negative or in scientific notation. A non-detect is `<LOQ`.
+   `TestValue` is blank for InProcess.
+2. **A wide per-lot sheet** (lot/barcode, THC %, CBD %, lab, date, COA link).
+   It reuses `parseGenericLab` (`intake-parser.ts` L518-547) and the
+   `ccrs-manifest-csv-core` header mapper. No third CSV parser.
+
+**Rules:**
+- **Matching.** Match on `ccrs_inventory_external_id` first
+  (`import-lot-core.ts:420`, indexed in `0034`), then exact `lot_code`. Never
+  fuzzy-match.
+- **Which lots it can fill.** Only Cultivera-import lots (`MIGRATION_MARKER`)
+  that have no COA. The update is guarded with `.is("lab_result_id", null)`.
+- **Review.** Preview first, then confirm. Each attached lot gets one audit
+  event.
+- **Data kept.** mg/g ÷ 10 = %. Every raw row is kept in `analytes_json` /
+  `raw_payload`. Rows are tagged `source = 'cultivera-coa-csv'`.
+- **Scope.** Intake lots are never touched.
+- **Schema.** None expected; `lab_results` and `lab_result_id` already exist
+  (0023/0024). A unique index for re-upload idempotency would be an
+  owner-applied migration, and the code stays no-op-safe until it is applied.
+
+**Sources:**
+- https://lcb.wa.gov/sites/default/files/publications/Cannabis/CCRS/CCRS%20Data%20Model%20File%20Specifications%20Manual.pdf
+- https://lcb.wa.gov/sites/default/files/2024-12/CCRS%20Lab%20Guide%2011-27-24.pdf
+
+**Numbering note:** R-LLAMA above was called "S34" before Round 11 took S34
+for the mastering preview. In the bible, S34 = mastering preview and S38 = this
+COA import. R-LLAMA keeps its request code and gets a slice number when it is
+scheduled.

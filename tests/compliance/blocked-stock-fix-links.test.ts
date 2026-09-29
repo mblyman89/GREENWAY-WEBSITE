@@ -91,8 +91,14 @@ describe("SLICE 20 — the links land on the control that performs the fix", () 
     expect(page).toContain('value="show"');
 
     // And the action behind it really writes the field the diagnosis reads.
+    // Round 12: hidden_override alone was a dead end (nothing on the live path
+    // reads it). The save must also write menu_items.hidden on the live
+    // versions -- behaviour proven in r12-cultivera-fix-reachability.test.ts.
     const actions = read("src/app/admin/products/actions.ts");
     expect(actions).toContain("hidden_override");
+    expect(actions).toContain("await applyProductVisibility(key, vis)");
+    const store = read("src/lib/enrichment/product-visibility-store.ts");
+    expect(store).toContain('.update({ hidden: after.hidden, hidden_reason: after.hidden_reason })');
   });
 
   it("does NOT send a hidden product to the lot page, which has no such control", () => {

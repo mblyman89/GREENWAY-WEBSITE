@@ -55,6 +55,7 @@
  */
 
 import { isPlaceholderStrain } from "@/lib/syndication/strain-placeholder-core";
+import { posStateOf } from "@/lib/enrichment/product-visibility-core";
 
 // ---------------------------------------------------------------------------
 // Input shape — deliberately structural, so this module never imports the DB
@@ -266,8 +267,12 @@ export function buildMissingProductMasterWorklist(
   const rows: MissingMasterRow[] = [];
 
   for (const item of items) {
-    if (!item.hidden) continue;
-    if (item.hiddenReason !== NO_PRODUCT_MASTER) continue;
+    // Round 12: judge by the IMPORTER's state, not an owner's Visibility
+    // override. "Always show"/"Always hide" on the product page does not give
+    // the product a Products-file row, so it must stay on the rep sheet.
+    const pos = posStateOf({ hidden: item.hidden, hidden_reason: item.hiddenReason });
+    if (!pos.hidden) continue;
+    if (pos.hidden_reason !== NO_PRODUCT_MASTER) continue;
 
     let units = 0;
     let retailValueMinorUnits = 0;
@@ -741,6 +746,23 @@ export function __runMissingProductMasterCoreTests(): string {
     buildMissingProductMasterWorklist([adaptedVisible]).rows.length === 0,
     "a visible row never enters the worklist via the adapter",
   );
+
+  // Round 12: an owner Visibility override never removes a row from the list.
+  const overridden = (reason: string, hidden: boolean) =>
+    buildMissingProductMasterWorklist([
+      menuItemRowToMissingMasterItem(
+        {
+          source_item_id: "pos-ov", name: "Ov", product_name: null, brand_name: "B", category: "flower",
+          pos_inventory_type: null, pos_inventory_category: null, strain_name: null, strain_type: "hybrid",
+          hidden, hidden_reason: reason,
+        },
+        [],
+      ),
+    ]).rows.length;
+  ok(overridden("owner_override_show:no_product_master", false) === 1, "owner-shown master-less row stays on the rep sheet");
+  ok(overridden("owner_override_hide:no_product_master", true) === 1, "owner-hidden master-less row stays on the rep sheet");
+  ok(overridden("owner_override_hide:", true) === 0, "owner-hidden VISIBLE product is not a missing-master row");
+  ok(overridden("owner_override_show:no_inventory", false) === 0, "owner-shown no_inventory row is not a missing-master row");
 
   return "missing-product-master-core: all assertions passed";
 }

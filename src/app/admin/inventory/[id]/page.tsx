@@ -59,6 +59,7 @@ import {
   receivedOnSourceLabel,
 } from "@/lib/inventory/received-date-core";
 import { pacificToday } from "@/lib/reports/timezone";
+import { migrationLotCallout, lotManifestHref } from "@/lib/inventory/migration-lot-fix-core";
 
 export const dynamic = "force-dynamic";
 
@@ -137,6 +138,8 @@ export default async function LotDetailPage({
       // on the published menu — null until the product has been published.
       getLotAfterTaxPrice(lot.pos_product_key),
     ]);
+  // Round 12: Cultivera-upload lots get a callout pointing at Bulk fill.
+  const migrationCallout = migrationLotCallout(lot);
   // S26 (F-101): is this product's card on the PUBLISHED menu? The product
   // page 404s otherwise, so the enrichment button falls back to a search.
   const isLive = lot.pos_product_key
@@ -451,9 +454,53 @@ export default async function LotDetailPage({
                 }
                 danger={expired}
               />
-              <Row label="Manifest" value={manifest?.manifest_number ?? lot.manifest_id ?? "—"} />
+              {lotManifestHref(lot.manifest_id) ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--admin-text-faint)]">Manifest</dt>
+                  <dd className="text-right">
+                    <Link
+                      data-testid="lot-manifest-link"
+                      href={lotManifestHref(lot.manifest_id)!}
+                      className="text-[var(--admin-accent)] underline"
+                    >
+                      {manifest?.manifest_number ?? lot.manifest_id}
+                    </Link>
+                  </dd>
+                </div>
+              ) : (
+                <Row label="Manifest" value={"—"} />
+              )}
               {lot.notes && <Row label="Notes" value={lot.notes} />}
             </dl>
+            {/* Round 12 — Cultivera-upload lots: the blank fields here are
+                filled with Bulk fill on the Inventory list (migration lots
+                only), not on this page. Point at it, narrowed to this lot. */}
+            {migrationCallout ? (
+              <div
+                data-testid="migration-lot-callout"
+                className="mt-4 rounded-[var(--admin-radius)] border border-[var(--admin-gold)] bg-[var(--admin-gold-soft)] px-3 py-3 text-xs text-[var(--admin-gold)]"
+              >
+                <p className="font-semibold">From the one-time Cultivera import</p>
+                <p className="mt-1">{migrationCallout.summary}</p>
+                {migrationCallout.links.length > 0 ? (
+                  <ul className="mt-2 space-y-1">
+                    {migrationCallout.links.map((l) => (
+                      <li key={l.field}>
+                        <Link data-testid="migration-lot-fix" href={l.href} className="underline">
+                          {l.label} {"→"}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {migrationCallout.coaMissing ? (
+                  <p className="mt-2">
+                    The import brought no lab results. A COA spreadsheet import for these lots is on the
+                    roadmap; until then the COA link is added when the lab result is imported.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {/* COA panel (S26: #coa is the potency_capped fix-link target) */}

@@ -719,6 +719,11 @@ import { __runEnrichmentManifestCoreTests } from "../../src/lib/enrichment/enric
 import { __runIssueFixLinkCoreTests } from "../../src/lib/pos/issue-fix-link-core";
 import { __runPageTabsCoreTests } from "../../src/lib/admin/page-tabs-core";
 import { __runIssuesCoreTests } from "../../src/lib/admin/issues-core";
+// Round 12 -- Cultivera fix reachability: the product Visibility control now
+// writes the live menu (planner is pure), and the lot page points Cultivera-
+// import lots at Bulk fill for their blank fields.
+import { __runProductVisibilityCoreTests } from "../../src/lib/enrichment/product-visibility-core";
+import { __runMigrationLotFixCoreTests } from "../../src/lib/inventory/migration-lot-fix-core";
 import { __runManifestEventLabelsCoreTests } from "../../src/lib/inventory/manifest-event-labels-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
@@ -1404,6 +1409,8 @@ __runLiquidVolumeTests();
   { const r = __runIssueFixLinkCoreTests(); if (r.failed > 0 || r.passed < 1) throw new Error(`issue-fix-link-core: ${r.failed} failed, ${r.passed} passed`); console.log(`issue-fix-link-core: ${r.passed} assertions passed`); }
   { const r = __runPageTabsCoreTests(); if (r.failed > 0 || r.passed < 1) throw new Error(`page-tabs-core: ${r.failed} failed, ${r.passed} passed`); console.log(`page-tabs-core: ${r.passed} assertions passed`); }
   { const r = __runIssuesCoreTests(); if (r.failed > 0 || r.passed < 1) throw new Error(`issues-core: ${r.failed} failed, ${r.passed} passed`); console.log(`issues-core: ${r.passed} assertions passed`); }
+  { const r = __runProductVisibilityCoreTests(); if (r.failed > 0 || r.passed < 1) throw new Error(`product-visibility-core: ${r.failed} failed, ${r.passed} passed`); console.log(`product-visibility-core: ${r.passed} assertions passed`); }
+  { const r = __runMigrationLotFixCoreTests(); if (r.failed > 0 || r.passed < 1) throw new Error(`migration-lot-fix-core: ${r.failed} failed, ${r.passed} passed`); console.log(`migration-lot-fix-core: ${r.passed} assertions passed`); }
   { const r = __runManifestEventLabelsCoreTests(); if (r.failed > 0 || r.passed < 1) throw new Error(`manifest-event-labels-core: ${r.failed} failed, ${r.passed} passed`); console.log(`manifest-event-labels-core: ${r.passed} assertions passed`); }
   // SLICE 39 connectivity audit: previously-dark suites. Suites that throw
   // internally on assertion failure are bare calls; suites that only return

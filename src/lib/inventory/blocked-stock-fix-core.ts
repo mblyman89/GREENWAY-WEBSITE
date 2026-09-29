@@ -111,14 +111,20 @@ export function fixLinkForLot(cause: BlockedCause, lotId: string, productKey: st
 
     /**
      * Published but hidden. The Visibility control on the product page is the
-     * only thing that writes `hidden_override`.
+     * control that un-hides it. Round 12: saving it now writes
+     * `menu_items.hidden` on the published + staged versions
+     * (product-visibility-store.ts) — before that it wrote only
+     * `hidden_override`, which nothing on the live path read, so this link
+     * led to a control that changed nothing. The cards this matters for are
+     * the Cultivera-upload cards the importer hid (no_product_master /
+     * no_inventory, transform.ts).
      */
     case "hidden_card":
       return key
         ? {
             href: `/admin/products/${encKey(key)}`,
             label: "Un-hide on the product page",
-            why: "Set Visibility to “Always show” on the product page, then save. That is the control that un-hides it.",
+            why: "Set Visibility to “Always show” on the product page, then save. It un-hides the card on the live menu and the register right away.",
           }
         : {
             href: `/admin/inventory/${lotId}`,

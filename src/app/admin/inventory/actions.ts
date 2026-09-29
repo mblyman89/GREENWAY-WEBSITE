@@ -21,6 +21,7 @@ import {
   type BulkFillField,
 } from "@/lib/inventory/bulk-fill-core";
 import { pacificToday } from "@/lib/reports/timezone";
+import { bulkReturnParams } from "@/lib/inventory/inventory-url-core";
 // SLICE 18 - the back-office undo for the register's "86" button.
 import { restoreProductToSale } from "@/lib/inventory/restore-to-sale-store";
 import { parseLotEditInput, brandMatchesVendor, buildLotEditSummary } from "@/lib/inventory/lot-edit-core";
@@ -591,8 +592,13 @@ export async function bulkFillLotsAction(formData: FormData) {
     .map((v) => String(v).trim())
     .filter(Boolean);
 
+  // Round 12: return to the SAME filtered list (e.g. the Cultivera gap
+  // worklist) instead of dropping every filter. Sanitised by the pure core.
+  const returnQs = bulkReturnParams(formData.get("return_qs") as string | null);
   const back = (params: Record<string, string>) => {
-    const q = new URLSearchParams({ bulk: "1", ...params });
+    const q = new URLSearchParams(returnQs);
+    q.set("bulk", "1");
+    for (const [k, v] of Object.entries(params)) q.set(k, v);
     redirect(`/admin/inventory?${q.toString()}`);
   };
 

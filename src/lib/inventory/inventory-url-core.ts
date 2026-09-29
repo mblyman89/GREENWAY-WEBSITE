@@ -84,6 +84,29 @@ export const PRESERVED_PARAMS: readonly string[] = [
   "bulkError",
 ];
 
+/**
+ * Round 12 — Bulk fill keeps the owner's filters.
+ *
+ * `bulkFillLotsAction` redirected to `/admin/inventory?bulk=1&…result…` and
+ * DROPPED every filter, so an owner who opened "Bulk fill the Cultivera-import
+ * lots" from a gap row (…&missingExpiry=1&bulk=1) filled the first 100 and
+ * landed on the UNFILTERED list — the worklist, and the next 100 lots, gone.
+ * The panel now posts the current filters as `return_qs`; this sanitises it:
+ * only plain param names, never the bulk-flow's own state (bulk*), never the
+ * page (the list shrinks as blanks are filled, so page 1 is always right).
+ * The path is fixed by the caller, so this cannot become an open redirect.
+ */
+export function bulkReturnParams(raw: string | null | undefined): URLSearchParams {
+  const out = new URLSearchParams();
+  const src = new URLSearchParams(String(raw ?? "").slice(0, 2000));
+  for (const [k, v] of src) {
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(k)) continue;
+    if (k === "page" || k.startsWith("bulk")) continue;
+    out.append(k, v.slice(0, 200));
+  }
+  return out;
+}
+
 /** A bag of raw URL params (the shape Next.js hands a server component). */
 export type RawParams = Record<string, string | string[] | undefined>;
 
@@ -537,6 +560,13 @@ export function __runInventoryUrlCoreTests(): void {
   // ---- href shape
   ok(hrefFrom(new URLSearchParams()) === INVENTORY_PATH, "empty params means a bare path");
   ok(sortHref({}, product).startsWith(`${INVENTORY_PATH}?`), "links point at the page");
+
+  // ---- Round 12: bulk fill return params
+  const br = bulkReturnParams("status=active&missingExpiry=1&q=A%26B&page=3&bulk=1&bulkField=expires_on&bulkPreview=4&fVendor=X&fVendor=Y");
+  ok(br.toString() === "status=active&missingExpiry=1&q=A%26B&fVendor=X&fVendor=Y", "bulk return keeps filters, drops page + bulk*");
+  ok(bulkReturnParams(null).toString() === "", "bulk return null is empty");
+  ok(bulkReturnParams("1bad=x&ok=1&a-b=2").toString() === "ok=1", "bulk return drops odd keys");
+  ok(bulkReturnParams("q=" + "x".repeat(300)).get("q")!.length === 200, "bulk return caps value length");
 
   console.log(`inventory-url-core: ${n} assertions passed`);
 }

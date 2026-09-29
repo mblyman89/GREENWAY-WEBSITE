@@ -570,6 +570,7 @@ export default async function InventoryPage({
         {bulkMode ? (
           <BulkFillPanel
             visibleLotIds={lots.map((l) => l.id)}
+            returnQs={filterParams().toString()}
             field={sp.bulkField}
             value={sp.bulkValue}
             previewCount={sp.bulkPreview}
