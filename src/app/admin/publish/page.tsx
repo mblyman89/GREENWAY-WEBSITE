@@ -4,7 +4,7 @@ import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button } from "@/components/admin/ui";
+import { Button, IssuesList, IssuesSummaryLine, PageTabs } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import {
   getPublishedVersion,
@@ -23,7 +23,22 @@ import {
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
 import { formatDateTime } from "@/lib/pos/format";
-import { describeIntakeVersion, type IntakeVersionDescription } from "@/lib/pos/intake-version-copy-core";
+import {
+  describeIntakeVersion,
+  parseIntakeSummary,
+  type IntakeVersionDescription,
+} from "@/lib/pos/intake-version-copy-core";
+import {
+  buildPublishIssuesForVersion,
+  issueChipLabel,
+  issuesTabBadge,
+  publishChipCount,
+  sortIssues,
+  summarizeIssues,
+  type Issue,
+} from "@/lib/admin/issues-core";
+import { resolveTab, tabHref } from "@/lib/admin/page-tabs-core";
+import { PUBLISH_PAGE_BASE, PUBLISH_PAGE_TABS } from "@/lib/admin/page-tab-sets";
 import {
   primaryAction,
   QUEUE_EMPTY_COPY,
@@ -71,7 +86,7 @@ const FRESHNESS_STYLE: Record<DraftFreshness, string> = {
 const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
   safe: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
   caution: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-[var(--admin-gold)]",
-  danger: "border-red-500/40 bg-red-500/10 text-red-300",
+  danger: "border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 text-[var(--admin-danger)]",
 };
 
 type DraftRow = {
@@ -89,7 +104,7 @@ type DraftRow = {
 export default async function PublishCommandCenterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; published?: string; notice?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; notice?: string; tab?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const sp = await searchParams;
@@ -158,6 +173,42 @@ export default async function PublishCommandCenterPage({
   // S16: last 10 that went live by themselves, from the list already loaded.
   const recent = recentAutoPublished(allVersions);
 
+  // S28: one Issues model for the waiting rows, built ONLY from stored state
+  // (summary_json.diagnostics + warning_count, F-117) — pure, no new read.
+  // A row disappears when its cause is fixed and the page reloads.
+  const issuesByVersion = new Map<string, Issue[]>();
+  for (const { version: v, reviewHref, origin, story, reason } of queue.waiting) {
+    const parsed = parseIntakeSummary(v.summary_json);
+    const subject =
+      origin === "receiving"
+        ? `${story?.source ?? "From receiving"} \u00b7 ${formatDateTime(v.created_at)}`
+        : `POS upload \u00b7 ${formatDateTime(v.created_at)}`;
+    issuesByVersion.set(
+      v.id,
+      buildPublishIssuesForVersion({
+        versionId: v.id,
+        subject,
+        diagnostics: parsed.diagnostics,
+        link: {
+          manifestId: parsed.manifest?.id ?? parsed.manifestId,
+          vendor: parsed.manifest?.vendor ?? null,
+          manifestNumber: parsed.manifest?.number ?? null,
+        },
+        warningCount: v.warning_count,
+        reviewHref,
+        reason,
+        action: primaryAction(reason, reviewHref),
+      }),
+    );
+  }
+  const issues = sortIssues([...issuesByVersion.values()].flat());
+  const issueSummary = summarizeIssues(issues);
+  const tabs = PUBLISH_PAGE_TABS.map((t) =>
+    t.key === "issues" ? { ...t, ...issuesTabBadge(issueSummary) } : t,
+  );
+  const active = resolveTab(PUBLISH_PAGE_TABS, { tab: sp.tab }, "overview");
+  const issuesHref = tabHref(PUBLISH_PAGE_BASE, "issues");
+
   return (
     <div>
       <AdminPageHeader
@@ -177,7 +228,10 @@ export default async function PublishCommandCenterPage({
         <CatalogStageStrip current="publish" />
 
         {sp.error && (
-          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <div
+            role="alert"
+            className="rounded-lg border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-danger)]"
+          >
             {decodeURIComponent(sp.error)}
           </div>
         )}
@@ -192,6 +246,21 @@ export default async function PublishCommandCenterPage({
             Published. The public menu now shows this version and its products are sellable at the register.
           </div>
         )}
+
+        {/* S28: Overview | Issues | History. Result banners above stay on every tab. */}
+        <PageTabs base={PUBLISH_PAGE_BASE} tabs={tabs} active={active} ariaLabel="Publish views" />
+
+        {active === "issues" && (
+          <IssuesList
+            issues={issues}
+            emptyText="Nothing waiting has a warning. Anything that needs you is on Overview with its one button."
+          />
+        )}
+
+        {active === "overview" && (
+          <>
+        {/* S28 (D-R2-2): at most ONE line, only when an update is held or failed. */}
+        <IssuesSummaryLine summary={issueSummary} href={issuesHref} />
 
         {/* The one-sentence mental model, verbatim from publish-guard-core. */}
         <div className="rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-4 text-sm text-white/70">
@@ -267,7 +336,7 @@ export default async function PublishCommandCenterPage({
                         {story.source && <p className="text-xs text-white/50">{story.source}</p>}
                         <p
                           className={`mt-0.5 font-medium ${
-                            story.tone === "failed" ? "text-red-300" : "text-[var(--admin-gold)]"
+                            story.tone === "failed" ? "text-[var(--admin-danger)]" : "text-[var(--admin-gold)]"
                           }`}
                         >
                           {story.headline}
@@ -289,9 +358,21 @@ export default async function PublishCommandCenterPage({
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                       <p className="text-sm text-white/80">
                         {v.item_count} items · {v.variant_count} variants
-                        {v.warning_count > 0 && (
-                          <span className="text-[var(--admin-gold)]"> · {v.warning_count} to fix</span>
-                        )}
+                        {(() => {
+                          const chip = issueChipLabel(publishChipCount(issuesByVersion.get(v.id) ?? []));
+                          return chip ? (
+                            <>
+                              {" \u00b7 "}
+                              <Link
+                                href={issuesHref}
+                                data-testid="publish-issue-chip"
+                                className="text-xs text-[var(--admin-gold)] underline-offset-2 hover:underline"
+                              >
+                                {chip}
+                              </Link>
+                            </>
+                          ) : null;
+                        })()}
                       </p>
                       {canPublish ? (
                         <Button href={action.href} size="sm" variant={v.freshness === "latest" ? "confirm" : "primary"}>
@@ -342,8 +423,11 @@ export default async function PublishCommandCenterPage({
             </div>
           )}
         </section>
+          </>
+        )}
 
-        {/* S16 (2): Recently published automatically - read-only. */}
+        {/* S16 (2): Recently published automatically - read-only (S28: the History tab). */}
+        {active === "history" && (
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
           <h2 className="text-sm font-semibold text-white">Recently published automatically</h2>
           <p className="mt-1 text-xs text-white/50">
@@ -370,6 +454,7 @@ export default async function PublishCommandCenterPage({
             </ul>
           )}
         </section>
+        )}
 
         {/* Where the other pieces live */}
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">

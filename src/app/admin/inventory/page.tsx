@@ -5,10 +5,22 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button } from "@/components/admin/ui";
-import { MissingInsight } from "@/components/admin/insight/MissingInsight";
+import { Button, IssuesList, IssuesSummaryLine, PageTabs } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listAllLotsForFiltering, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
+// S28 — one Issues tab: every attention surface, built from stored state.
+import {
+  buildInventoryIssues,
+  buildIntelIssues,
+  countExpiredLotRows,
+  issuesTabBadge,
+  sortIssues,
+  summarizeIssues,
+} from "@/lib/admin/issues-core";
+import { resolveTab, tabHrefCarry } from "@/lib/admin/page-tabs-core";
+import { INVENTORY_PAGE_BASE, INVENTORY_PAGE_TABS } from "@/lib/admin/page-tab-sets";
+import { pacificToday } from "@/lib/reports/timezone";
+import { getTaxSettings } from "@/lib/reports/tax";
 // SLICE 13 — enterprise filtering, sorting and smart search. All pure cores.
 import {
   buildInventoryPage,
@@ -140,6 +152,8 @@ export default async function InventoryPage({
     // SLICE 18 - restore-to-sale result messages from the server action.
     restored?: string;
     restoreError?: string;
+    /** S28: Lots | Issues | Insights. */
+    tab?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -195,6 +209,10 @@ export default async function InventoryPage({
    * degraded read can never invent a verdict. See
    * docs/slice-16-register-inventory-parity.md.
    */
+  // S28: the medical-endorsement flag decides whether the WAC 314-55-080
+  // stock rule applies (read, never assumed). Started before the parallel
+  // reads so it costs no extra round-trip; getTaxSettings never throws.
+  const taxSettingsPromise = getTaxSettings();
   const [allLots, stats, intel, sellability, leafly] = await Promise.all([
     listAllLotsForFiltering(),
     computeInventoryStats(),
@@ -276,7 +294,39 @@ export default async function InventoryPage({
     : null;
   const gaps = inventoryGapInsights(stats);
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Rule 8: the store's business day (Pacific), the same clock the stats and
+  // the intel command center use — a UTC slice flips "expired" at 5pm.
+  const today = pacificToday();
+
+  // S28: the Issues tab. Every row is computed from what this page already
+  // read (lot stats, the sellability report, the intel command center), so a
+  // row disappears as soon as its cause is fixed — never because a banner
+  // was dismissed.
+  const taxSettings = await taxSettingsPromise;
+  const intelIssues = buildIntelIssues(intel.center, {
+    today,
+    lots: intel.lots,
+    medicalEndorsement: taxSettings.medicalEndorsement,
+  });
+  const issues = sortIssues([
+    ...intelIssues,
+    ...buildInventoryIssues({
+      receivedDateFlag,
+      receivedMissingWithStock: stats.missingReceivedDateWithStock,
+      gaps,
+      blockedByCause: sellability.summary ? sellability.summary.byCode : null,
+      restorableCount: sellability.restorable.length,
+      intelExpiredRows: countExpiredLotRows(intelIssues),
+    }),
+  ]);
+  const issueSummary = summarizeIssues(issues);
+  const tabs = INVENTORY_PAGE_TABS.map((t) => (t.key === "issues" ? { ...t, ...issuesTabBadge(issueSummary) } : t));
+  const activeTab = resolveTab(INVENTORY_PAGE_TABS, { tab: sp.tab, restored: sp.restored, restoreError: sp.restoreError }, "lots");
+  // Tabs carry the WHOLE filter state (repeated keys included) — the same
+  // doctrine as filterParams() — but not paging or one-shot results.
+  const tabCarry = paramsFrom(sp as RawParams).toString();
+  const TAB_CARRY_DROP = ["page", "restored", "restoreError", "bulkDone", "bulkFailed", "bulkError"] as const;
+  const issuesTabHref = tabHrefCarry(INVENTORY_PAGE_BASE, "issues", tabCarry, TAB_CARRY_DROP);
 
   return (
     <div>
@@ -301,8 +351,9 @@ export default async function InventoryPage({
             ]}
           >
             <p>
-              The &quot;Needs attention&quot; panel surfaces recalls, expiring product, and lots missing a
-              COA — the compliance + safety risks that matter most.
+              The Issues tab lists recalls, expired and undated stock, lots the register cannot sell and
+              crossed compliance limits — each with the one button that fixes it. The Insights tab holds
+              months of supply, shrink, ABC and aging.
             </p>
             <SopSheetLink slug="publish" />
           </HelpPanel>
@@ -372,68 +423,71 @@ export default async function InventoryPage({
           />
         </div>
 
-        {/*
-          SLICE 2 — THE RECEIVED-DATE FLAG (owner-mandated).
-
-          Lots whose POS export had a blank Received date have NO evidenced
-          receipt day. While that is unknown, CCRS Inventory.CreatedDate falls
-          back to the import instant, so the LCB would be told the lot was
-          created on migration day. NULL is never quietly filled in; it is
-          raised here for the owner to resolve (standing rule 3).
-        */}
-        {receivedDateFlag && (
-          <div className="rounded-lg border border-orange-500/40 bg-orange-500/10 p-4 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-semibold text-orange-200">Received dates missing</div>
-                <p className="mt-1 text-neutral-300">{receivedDateFlag}</p>
-              </div>
-              <Link
-                href="/admin/inventory?needsReceivedDate=1"
-                className="shrink-0 rounded-md border border-orange-400/50 px-3 py-1.5 font-medium text-orange-100 hover:bg-orange-500/20"
-              >
-                Show these lots
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {/* Needs-attention insight */}
-        <MissingInsight
-          title="Needs attention"
-          subtitle={`Expiry window: ${EXPIRING_SOON_DAYS} days`}
-          noun="lot"
-          gaps={gaps}
-        />
-
-        {/* Task L — professional inventory intelligence (ABC, FEFO, aging,
-            months-of-supply vs the WAC 4-month ceiling, shrink telemetry). */}
-        <InventoryIntelPanel center={intel.center} sellFirst={intel.sellFirst} />
-
-        {/* SLICE 16 — lots with real stock that the register still cannot
-            sell, each with the one action that fixes it. Silent when clean. */}
-        <RegisterSellabilityBanner
-          summary={sellability.summary}
-          blocked={sellability.blocked}
-        />
-
         {/* SLICE 18 — the result of a restore, said plainly. `restored` is a
             success, `restoreError` is the honest refusal (no stock, recall
-            hold, hidden card). Both come straight from the server action. */}
+            hold, hidden card). Both come straight from the server action and
+            show on whichever tab is active (S28: the action lands on Issues). */}
         {typeof sp.restored === "string" && sp.restored && (
           <p className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
             {sp.restored}
           </p>
         )}
         {typeof sp.restoreError === "string" && sp.restoreError && (
-          <p className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
+          <p
+            role="alert"
+            className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-text)]"
+          >
             {sp.restoreError}
           </p>
         )}
 
-        {/* SLICE 18 — the undo the register's "86" button never had. Silent
-            unless something is flagged unavailable while stock sits behind it. */}
-        <RestoreToSalePanel restorable={sellability.restorable} />
+        {/* S28: Lots | Issues | Insights. Filters survive a tab switch. */}
+        <PageTabs
+          base={INVENTORY_PAGE_BASE}
+          tabs={tabs}
+          active={activeTab}
+          ariaLabel="Inventory views"
+          carry={tabCarry}
+          carryDrop={TAB_CARRY_DROP}
+        />
+
+        {activeTab === "issues" && (
+          <div className="space-y-6">
+            {/*
+              SLICE 2 — THE RECEIVED-DATE FLAG (owner-mandated) is now an
+              Issues row ("Received dates missing" → Show these lots), blocking
+              while any undated lot still holds stock. NULL is never quietly
+              filled in (standing rule 3); the row stays until the dates exist.
+              Expiry window for the "expiring soon" row: EXPIRING_SOON_DAYS.
+            */}
+            <IssuesList
+              issues={issues}
+              emptyText={`Nothing needs attention. No recalls, expired or undated stock, no blocked lots, and no crossed compliance limits (expiry window: ${EXPIRING_SOON_DAYS} days).`}
+            />
+
+            {/* SLICE 16 — lots with real stock that the register still cannot
+                sell, each with the one action that fixes it. Silent when clean. */}
+            <RegisterSellabilityBanner
+              summary={sellability.summary}
+              blocked={sellability.blocked}
+            />
+
+            {/* SLICE 18 — the undo the register's "86" button never had. Silent
+                unless something is flagged unavailable while stock sits behind it. */}
+            <RestoreToSalePanel restorable={sellability.restorable} />
+          </div>
+        )}
+
+        {/* Task L — professional inventory intelligence (ABC, FEFO, aging,
+            months-of-supply vs the WAC 4-month ceiling, shrink telemetry).
+            S28 (D-R2-7): the whole panel lives on Insights; a crossed
+            threshold is ALSO an Issues row with its fix link. */}
+        {activeTab === "insights" && <InventoryIntelPanel center={intel.center} sellFirst={intel.sellFirst} />}
+
+        {activeTab === "lots" && (
+          <>
+        {/* S28 (D-R2-2): at most ONE line, only when something blocks. */}
+        <IssuesSummaryLine summary={issueSummary} href={issuesTabHref} />
 
         {/* SLICE 77: vendors ⇄ inventory cross-link banner. When the list is
             filtered to one vendor's lots, say so in plain English and offer a
@@ -704,6 +758,8 @@ export default async function InventoryPage({
               </p>
             )}
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

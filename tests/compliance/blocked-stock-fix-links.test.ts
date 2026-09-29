@@ -31,7 +31,7 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
 /** Map an emitted href to the Next.js route file that must serve it. */
 function routeFileFor(href: string): string | null {
-  const path = href.split("?")[0];
+  const path = href.split(/[?#]/)[0];
   if (path === "/admin/inventory/drafts") return "src/app/admin/inventory/drafts/page.tsx";
   if (path === "/admin/inventory") return "src/app/admin/inventory/page.tsx";
   if (path === "/admin/products") return "src/app/admin/products/page.tsx";
@@ -106,7 +106,9 @@ describe("SLICE 20 — the links land on the control that performs the fix", () 
 
   it("sends an UNAPPROVED product to Product Onboarding", () => {
     const link = fixLinkForLot("no_menu_card", "lot-2", "SKU-9");
-    expect(link.href).toBe("/admin/inventory/drafts?status=draft");
+    // Round 11: narrowed to the product (Onboarding searches pos_product_key).
+    expect(link.href).toBe("/admin/inventory/drafts?status=draft&q=SKU-9");
+    expect(read("src/lib/catalog/onboarding-list-core.ts")).toMatch(/DRAFT_SEARCH_COLUMNS[\s\S]{0,400}pos_product_key/);
 
     const page = read("src/app/admin/inventory/drafts/page.tsx");
     expect(page).toContain("Product Onboarding");
@@ -131,7 +133,10 @@ describe("SLICE 20 — the links land on the control that performs the fix", () 
 
   it("uses a filter the inventory page actually parses for the bulk unlinked link", () => {
     const link = bulkFixLinkForCause("no_product_link", 12);
-    expect(link!.href).toBe("/admin/inventory?missingProductLink=1");
+    expect(link!.href).toBe("/admin/inventory?status=active&missingProductLink=1&bulk=1&bulkField=pos_product_key");
+    // Bulk fill really preselects the field from ?bulkField= and can write it.
+    expect(read("src/app/admin/inventory/page.tsx")).toContain("field={sp.bulkField}");
+    expect(read("src/lib/inventory/bulk-fill-core.ts")).toContain("pos_product_key");
 
     // The knob must be a real, parsed search param — not a hopeful string.
     expect(read("src/app/admin/inventory/page.tsx")).toContain("missingProductLink");
@@ -145,6 +150,40 @@ describe("SLICE 20 — the links land on the control that performs the fix", () 
     const matchCore = read("src/lib/enrichment/match-core.ts");
     expect(matchCore).toContain("parseEnrichmentStatusFilter");
     expect(matchCore).not.toContain('raw === "hidden"');
+  });
+});
+
+describe("Round 11 — every inventory fix button lands on the control that fixes it", () => {
+  const lotPage = () => read("src/app/admin/inventory/[id]/page.tsx");
+
+  it("inactive lots open the Lifecycle status form (#lifecycle anchor exists)", () => {
+    const link = fixLinkForLot("lot_not_active", "lot-9", "K");
+    expect(link.href).toBe("/admin/inventory/lot-9#lifecycle");
+    expect(lotPage()).toMatch(/id="lifecycle"[\s\S]{0,400}Lifecycle status[\s\S]{0,200}action=\{statusAction\}/);
+  });
+
+  it("empty lots open the Adjust quantity form (#adjust anchor exists)", () => {
+    const link = fixLinkForLot("lot_empty", "lot-9", "K");
+    expect(link.href).toBe("/admin/inventory/lot-9#adjust");
+    expect(lotPage()).toMatch(/id="adjust"[\s\S]{0,400}Adjust quantity[\s\S]{0,200}action=\{adjustAction\}/);
+  });
+
+  it("recall holds open the RECALLED lots of the key, on real list knobs", () => {
+    const link = fixLinkForLot("recall_hold", "lot-9", "A B");
+    expect(link.href).toBe(`/admin/inventory?status=recalled&q=${encodeURIComponent("A B")}`);
+    const page = read("src/app/admin/inventory/page.tsx");
+    expect(page).toContain('{ key: "recalled", label: "Recalled" }');
+    // The hold really is card-level: any recalled lot of the key holds it.
+    expect(read("src/lib/pos/recall-hold-core.ts")).toContain("recalled");
+    // Without a key, fall back to that lot's Lifecycle form.
+    expect(fixLinkForLot("recall_hold", "lot-9", null).href).toBe("/admin/inventory/lot-9#lifecycle");
+  });
+
+  it("the unlinked-lot link is honest: the key is read-only on the lot page", () => {
+    const link = fixLinkForLot("no_product_link", "lot-9", null);
+    expect(link.why).toMatch(/read-only/i);
+    expect(link.label).not.toMatch(/link a product/i);
+    expect(read("src/lib/inventory/lot-edit-core.ts")).toContain("pos_product_key");
   });
 });
 

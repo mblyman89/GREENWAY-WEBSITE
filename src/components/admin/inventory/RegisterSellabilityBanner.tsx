@@ -27,6 +27,7 @@ import {
   CAUSE_ORDER,
   type BlockedCause,
 } from "@/lib/inventory/blocked-stock-fix-core";
+import { REGISTER_BLOCKED_ANCHOR, RESTORE_TO_SALE_ANCHOR } from "@/lib/admin/issues-core";
 
 export function RegisterSellabilityBanner({
   summary,
@@ -44,7 +45,10 @@ export function RegisterSellabilityBanner({
   })).filter((g) => g.lots.length > 0);
 
   return (
-    <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 p-5">
+    <section
+      id={REGISTER_BLOCKED_ANCHOR}
+      className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 p-5"
+    >
       <h2 className="text-sm font-semibold text-[var(--admin-orange)]">
         Stock on hand that the register cannot sell
       </h2>
@@ -140,7 +144,10 @@ export function RestoreToSalePanel({ restorable }: { restorable: RestorableProdu
   if (restorable.length === 0) return null;
 
   return (
-    <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 p-5">
+    <section
+      id={RESTORE_TO_SALE_ANCHOR}
+      className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 p-5"
+    >
       <h2 className="text-sm font-semibold text-[var(--admin-accent)]">
         Marked unavailable, but you have stock
       </h2>

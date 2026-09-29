@@ -1116,7 +1116,7 @@ export default async function LotDetailPage({
 
         {/* Adjustment + status controls */}
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <div id="adjust" className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
             <h2 className="mb-4 text-sm font-bold text-[var(--admin-text)]">Adjust quantity</h2>
             <form action={adjustAction} className="space-y-4">
               <Field label="Quantity change" help="Use a negative number to remove stock." htmlFor="qty_delta" required>
@@ -1140,7 +1140,7 @@ export default async function LotDetailPage({
             </form>
           </div>
 
-          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <div id="lifecycle" className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
             <h2 className="mb-4 text-sm font-bold text-[var(--admin-text)]">Lifecycle status</h2>
             <form action={statusAction} className="space-y-4">
               <Field label="Set status" help="Recalled / destroyed lots are excluded from sale." htmlFor="status">

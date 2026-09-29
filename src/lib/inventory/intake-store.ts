@@ -1694,7 +1694,10 @@ export async function listManifestLots(manifestId: string) {
       // has classified this suppository yet" apart from "somebody already
       // answered". Without it the dock would nag about every lot forever,
       // which is how a compliance checklist becomes noise people scroll past.
-      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, strain_type, category, inventory_type, disposition, reject_reason, reject_reason_code, unit_cost_minor_units, otherwise_taken",
+      // S28: + ccrs_inventory_external_id so the manifest page's Issues tab
+      // can say, per held lot, exactly what the activation gate is missing
+      // (the same evaluateLotActivation the finalize uses — never a guess).
+      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, strain_type, category, inventory_type, disposition, reject_reason, reject_reason_code, unit_cost_minor_units, otherwise_taken, ccrs_inventory_external_id",
     )
     .eq("manifest_id", manifestId)
     .order("product_name", { ascending: true });
@@ -1726,6 +1729,8 @@ export async function listManifestLots(manifestId: string) {
           // "answered, stop nagging". Keep it nullable: collapsing null into
           // false would silently mark every unasked lot as ordinary.
           otherwise_taken: boolean | null;
+          /** S28: the CCRS InventoryExternalIdentifier (null until assigned). */
+          ccrs_inventory_external_id: string | null;
         }[]
       | null) ?? []
   );
