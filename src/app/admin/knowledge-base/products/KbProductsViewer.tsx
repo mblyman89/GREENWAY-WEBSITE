@@ -71,14 +71,17 @@ export function KbProductsViewer({
   products,
   imageUrls,
   readiness,
+  initialQuery = "",
 }: {
   products: KbProductRow[];
   /** media_asset id → public URL (resolved server-side for thumbnails). */
   imageUrls: Record<string, string>;
   /** Precomputed menu-readiness per product row (from the pure core). */
   readiness: KbProductReadinessRow[];
+  /** S26 (F-100): the page's `?q=` — pre-fills the search box. */
+  initialQuery?: string;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [filter, setFilter] = useState<Filter>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 

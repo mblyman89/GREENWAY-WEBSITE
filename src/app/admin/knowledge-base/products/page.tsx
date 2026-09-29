@@ -23,7 +23,15 @@ import { KbProductsViewer, type KbProductReadinessRow } from "./KbProductsViewer
 
 export const dynamic = "force-dynamic";
 
-export default async function KbProductsPage() {
+// S26 (F-100): `?q=` pre-fills the search so "View in KB Product records"
+// on a lot lands on that product instead of the whole library.
+export default async function KbProductsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ q?: string }>;
+}) {
+  const sp = (await searchParams) ?? {};
+  const initialQuery = typeof sp.q === "string" ? sp.q.trim().slice(0, 200) : "";
   await requirePermission("products.enrich");
 
   if (!isSupabaseServiceConfigured) {
@@ -132,7 +140,7 @@ export default async function KbProductsPage() {
           />
         </div>
 
-        <KbProductsViewer products={products} imageUrls={imageUrls} readiness={readiness} />
+        <KbProductsViewer products={products} imageUrls={imageUrls} readiness={readiness} initialQuery={initialQuery} />
       </div>
     </div>
   );

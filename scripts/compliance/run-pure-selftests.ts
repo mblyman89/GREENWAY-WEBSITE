@@ -716,6 +716,7 @@ import { __runRestockPreviewViewTests } from "../../src/lib/inventory/restock-pr
 import { __runMenuImportsCutoverTests } from "../../src/lib/inventory/menu-imports-cutover-core";
 // S22 - Enrichment list: filter by manifest/invoice, sort by newest from receiving.
 import { __runEnrichmentManifestCoreTests } from "../../src/lib/enrichment/enrichment-manifest-core";
+import { __runIssueFixLinkCoreTests } from "../../src/lib/pos/issue-fix-link-core";
 // SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
 import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
 import { __runSageExportsCoreTests } from "../../src/lib/accounting/sage-exports-core";
@@ -1397,6 +1398,7 @@ __runLiquidVolumeTests();
   // S21: Menu Imports after cutover (throws on failure).
   __runMenuImportsCutoverTests();
   { const r = __runEnrichmentManifestCoreTests(); if (r.failed > 0 || r.passed < 1) throw new Error(`enrichment-manifest-core: ${r.failed} failed, ${r.passed} passed`); console.log(`enrichment-manifest-core: ${r.passed} assertions passed`); }
+  { const r = __runIssueFixLinkCoreTests(); if (r.failed > 0 || r.passed < 1) throw new Error(`issue-fix-link-core: ${r.failed} failed, ${r.passed} passed`); console.log(`issue-fix-link-core: ${r.passed} assertions passed`); }
   // SLICE 39 connectivity audit: previously-dark suites. Suites that throw
   // internally on assertion failure are bare calls; suites that only return
   // { passed, failed } are wrapped so a failure still fails this runner.

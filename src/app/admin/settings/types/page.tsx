@@ -22,6 +22,7 @@ import { countAllCategoryUsage, findMenuOrphans } from "@/lib/pos/category-regis
 import type { ReassignCounts } from "@/lib/pos/category-registry-core";
 import { loadUnmappedCcrsReview } from "@/lib/ai/kb/unmapped-ccrs-server";
 import { UnmappedCcrsPanel } from "@/app/admin/knowledge-base/UnmappedCcrsPanel";
+import { typeMatchesFocus, typeRowAnchorId } from "@/lib/pos/issue-fix-link-core";
 
 export const dynamic = "force-dynamic";
 
@@ -59,11 +60,14 @@ function flashMessage(saved?: string, reason?: string): { tone: "ok" | "warn"; t
 export default async function TypesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; reason?: string; tab?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; reason?: string; tab?: string; type?: string }>;
 }) {
   await requirePermission("settings.manage");
   const sp = await searchParams;
   const tab = sp.tab === "inventory" ? "inventory" : "website";
+  // S26: `?type=<name>` (from a menu-draft "Map …" fix link) opens and
+  // highlights that inventory type's row so the mapping Select is in view.
+  const focusType = typeof sp.type === "string" && sp.type.trim() ? sp.type.trim().slice(0, 120) : null;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -177,6 +181,7 @@ export default async function TypesPage({
             inventoryTypes={inventoryTypes}
             categories={categories}
             unmappedCcrs={unmappedCcrs}
+            focusType={focusType}
           />
         )}
       </div>
@@ -374,11 +379,18 @@ function InventoryTypesTab({
   inventoryTypes,
   categories,
   unmappedCcrs,
+  focusType = null,
 }: {
   inventoryTypes: Awaited<ReturnType<typeof listInventoryTypes>>;
   categories: Awaited<ReturnType<typeof listWebsiteCategoryTypes>>;
   unmappedCcrs: Awaited<ReturnType<typeof loadUnmappedCcrsReview>>;
+  focusType?: string | null;
 }) {
+  // S26: the row a fix link asked for (matched on key OR label, the same
+  // normalisation the resolver's type map uses).
+  const isFocus = (t: { key: string; label: string }) =>
+    typeMatchesFocus(t.key, focusType) || typeMatchesFocus(t.label, focusType);
+  const focusFound = focusType ? inventoryTypes.some(isFocus) : false;
   const activeCategories = categories.filter((c) => c.is_active);
   const categoryLabel = (value: string | null) =>
     (value && categories.find((c) => c.value === value)?.label) || null;
@@ -422,6 +434,25 @@ function InventoryTypesTab({
         your own copy), or add a brand-new type below. Imported stock also lands
         here automatically.
       </div>
+
+      {focusType && (
+        <div
+          data-testid="type-focus-notice"
+          className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-3 text-xs text-[var(--admin-gold)]"
+        >
+          {focusFound ? (
+            <>
+              <strong>&ldquo;{focusType}&rdquo;</strong> is opened below. Pick its website category and press Save
+              &mdash; the next menu update includes every product of this type.
+            </>
+          ) : (
+            <>
+              <strong>&ldquo;{focusType}&rdquo;</strong> isn&apos;t in your list yet. Add it with the form below (use
+              that exact label) and choose its website category.
+            </>
+          )}
+        </div>
+      )}
 
       {/* Add new */}
       <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
@@ -478,7 +509,12 @@ function InventoryTypesTab({
                 </header>
                 <div className="divide-y divide-[var(--admin-border)]">
                   {rows.map((t) => (
-                    <details key={t.id} className="group">
+                    <details
+                      key={t.id}
+                      id={isFocus(t) && focusType ? typeRowAnchorId(focusType) : undefined}
+                      open={isFocus(t) || undefined}
+                      className={`group scroll-mt-24${isFocus(t) ? " ring-2 ring-inset ring-[var(--admin-gold)]/60" : ""}`}
+                    >
                       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02]">
                         <span className="flex-1 text-sm font-medium text-white">{t.label}</span>
                         <span className="hidden font-mono text-[11px] text-white/25 sm:inline">{t.key}</span>

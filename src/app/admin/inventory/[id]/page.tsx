@@ -10,7 +10,7 @@ import {
   listLotAdjustments,
   getManifestById,
 } from "@/lib/inventory/store";
-import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
+import { loadMenuCategoriesForKeys, resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
 import { lotPotencyLabel, lotTypeLabel } from "@/lib/inventory/lot-table-core";
 import { STRAIN_TYPE_OPTIONS } from "@/lib/inventory/lot-edit-core";
 import { listVendors, listAllBrands } from "@/lib/vendors/store";
@@ -23,6 +23,9 @@ import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-st
 import { getOverrideForKey } from "@/lib/pos/product-classification-overrides";
 // T-324: after-tax price correction (current price read + pure formula math).
 import { getLotAfterTaxPrice } from "@/lib/inventory/price-write-store";
+// S26: fix links land here (#coa, #website-category); KB + enrichment buttons
+// are pre-searched / live-guarded (F-100, F-101).
+import { kbProductsHref, lotEnrichmentHref } from "@/lib/pos/issue-fix-link-core";
 import {
   priceFormulaLabel,
   afterTaxFloorMinor,
@@ -134,6 +137,13 @@ export default async function LotDetailPage({
       // on the published menu — null until the product has been published.
       getLotAfterTaxPrice(lot.pos_product_key),
     ]);
+  // S26 (F-101): is this product's card on the PUBLISHED menu? The product
+  // page 404s otherwise, so the enrichment button falls back to a search.
+  const isLive = lot.pos_product_key
+    ? (await loadMenuCategoriesForKeys([lot.pos_product_key])).has(lot.pos_product_key)
+    : false;
+  const enrichHref = lotEnrichmentHref(lot.pos_product_key, isLive, enrichment?.display_name || lot.product_name, lot.id);
+  const kbHref = kbProductsHref(kbProduct?.display_name || lot.product_name);
   const enrichImageId = enrichment?.primary_media_id ?? enrichment?.image_media_ids?.[0] ?? null;
   // PR-D1b: the KB record's saved image (primary, else first in its gallery).
   const kbImageId = kbProduct?.primary_media_id ?? kbProduct?.image_media_ids?.[0] ?? null;
@@ -446,8 +456,8 @@ export default async function LotDetailPage({
             </dl>
           </div>
 
-          {/* COA panel */}
-          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          {/* COA panel (S26: #coa is the potency_capped fix-link target) */}
+          <div id="coa" className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
             <h2 className="mb-4 text-sm font-bold text-[var(--admin-text)]">
               COA / lab result
             </h2>
@@ -632,7 +642,7 @@ export default async function LotDetailPage({
                       </p>
                     </div>
                   </div>
-                  <Button href={`/admin/knowledge-base/products`} variant="neutral" size="sm">
+                  <Button href={kbHref} variant="neutral" size="sm">
                     View in KB Product records →
                   </Button>
                 </div>
@@ -642,7 +652,7 @@ export default async function LotDetailPage({
                     Nothing saved to the Knowledge Base for this product yet — save a
                     photo &amp; description from a vendor menu and it will appear here.
                   </p>
-                  <Button href={`/admin/knowledge-base/products`} variant="neutral" size="sm">
+                  <Button href={kbHref} variant="neutral" size="sm">
                     Open KB Product records →
                   </Button>
                 </div>
@@ -686,9 +696,14 @@ export default async function LotDetailPage({
                       )}
                     </div>
                   </div>
-                  <Button href={`/admin/products/${encodeURIComponent(lot.pos_product_key)}?back=/admin/inventory/${lot.id}`} variant="neutral" size="sm">
-                    Open in Product Enrichment →
+                  <Button href={enrichHref} variant="neutral" size="sm">
+                    {isLive ? "Open in Product Enrichment \u2192" : "Find it in Product Enrichment \u2192"}
                   </Button>
+                  {!isLive && (
+                    <p className="text-[11px] text-[var(--admin-text-faint)]">
+                      Not on the live menu yet {"\u2014"} its own enrichment page opens once it{"\u2019"}s published.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3 text-sm text-[var(--admin-text-muted)]">
@@ -696,9 +711,14 @@ export default async function LotDetailPage({
                     This product hasn&apos;t been enriched yet — no photo or description
                     for the customer menu.
                   </p>
-                  <Button href={`/admin/products/${encodeURIComponent(lot.pos_product_key)}?back=/admin/inventory/${lot.id}`} variant="neutral" size="sm">
-                    Start enriching →
+                  <Button href={enrichHref} variant="neutral" size="sm">
+                    {isLive ? "Start enriching \u2192" : "Find it in Product Enrichment \u2192"}
                   </Button>
+                  {!isLive && (
+                    <p className="text-[11px] text-[var(--admin-text-faint)]">
+                      Not on the live menu yet {"\u2014"} its own enrichment page opens once it{"\u2019"}s published.
+                    </p>
+                  )}
                 </div>
               )
             ) : (
@@ -798,7 +818,7 @@ export default async function LotDetailPage({
             existing value, or create a new one on the fly (saved into the same
             Types & Categories registries). NEVER touches the LCB classification
             (that stays locked as the WA traceability source of truth). */}
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+        <div id="website-category" className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
           <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">Website type &amp; category (menu)</h2>
           <p className="mb-4 text-xs text-[var(--admin-text-faint)]">
             These are the Type and Category <strong>our website</strong> uses to

@@ -86,7 +86,8 @@ describe("publish-guard-core (SLICE 76)", () => {
 
   it("explains the unmapped-category warning with a Types & Categories fix link", () => {
     const x = explainDiagnostic("draft_inject_unmapped_category", "raw");
-    expect(x.fixHref).toBe("/admin/settings/types");
+    // S26: the mapping <Select> lives on the Inventory types tab.
+    expect(x.fixHref).toBe("/admin/settings/types?tab=inventory");
     expect(x.informational).toBe(false);
     expect(x.fix.length).toBeGreaterThan(0);
   });

@@ -205,7 +205,19 @@ describe("intake env ledger", () => {
     ]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }
-    expect(ledger).toContain("As of **S24**");
+    expect(ledger).not.toContain("As of **S24**");
+    // S26 (issue fix links) is reads + a pure core; bible S26.7 "Delete the
+    // new core + test; revert the optional ctx param." Its new code reads no
+    // environment.
+    expect(none).toContain("S26");
+    expect(ledger).toContain('"Delete the new core + test; revert the optional ctx param." (S26)');
+    expect(ledger).toContain("S26 needs nothing set.");
+    for (const f of [
+      "src/lib/pos/issue-fix-link-core.ts",
+      "src/lib/pos/issue-fix-link-server.ts",
+    ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
     expect(ledger).not.toContain("As of **S19**");
     expect(ledger).not.toContain("As of **S18**");
   });

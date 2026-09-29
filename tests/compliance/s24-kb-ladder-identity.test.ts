@@ -440,7 +440,8 @@ describe("S24 wiring", () => {
 
   it("env ledger records S24 as no-variable, 'Revert.'", () => {
     const ledger = read("docs/INTAKE_PIPELINE_ENV_LEDGER.md");
-    expect(ledger).toContain("As of **S24**");
+    // Later slices move the "As of" marker forward; S24 must stay in its no-variable list.
+    expect(ledger).toMatch(/As of \*\*S\d+\*\* it reads \([^)]*\bS24\b[^)]*added no variable/);
     expect(ledger).toMatch(/Slices that added \*\*no\*\* variable:[^\n]*\bS24\b/);
     expect(ledger).toMatch(/"Revert\." \(S16, S21, S22, S24\)/);
     expect(ledger).toContain("S24 needs nothing set");

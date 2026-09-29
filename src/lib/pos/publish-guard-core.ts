@@ -24,7 +24,16 @@
  * registered in scripts/compliance/run-pure-selftests.ts.
  */
 
-import { approvedFromPhrase, draftsHref, isUuid } from "@/lib/catalog/draft-deep-link-core";
+import { approvedFromPhrase } from "@/lib/catalog/draft-deep-link-core";
+import {
+  EMPTY_ISSUE_LOOKUPS,
+  ISSUE_COPY,
+  ISSUE_LINKED_CODES,
+  fixLinkForDiagnostic,
+  issueContextFor,
+  type IssueExtraLink,
+  type IssueLookups,
+} from "@/lib/pos/issue-fix-link-core";
 
 /**
  * S16 (bible S16.4, F-056): the one sentence at the top of the Publish page.
@@ -309,6 +318,10 @@ export type DiagnosticExplanation = {
   fixLabel: string | null;
   /** True for FYI-only entries that need no action. */
   informational: boolean;
+  /** S26: secondary destinations (e.g. "Re-file just this product"). */
+  extra?: IssueExtraLink[];
+  /** S26: optional "Why did this happen?" sentence (merge_ambiguous). */
+  why?: string | null;
 };
 
 type ExplanationRule = Omit<DiagnosticExplanation, "meaning"> & { meaning?: string };
@@ -331,8 +344,8 @@ const EXPLANATIONS: Record<string, ExplanationRule> = {
     title: "No website category yet",
     meaning:
       "This product's inventory type isn't mapped to a website category, so it was left OFF the menu rather than guessed.",
-    fix: "Map the type to a website category under Types & Categories, then the next menu update will include the product.",
-    fixHref: "/admin/settings/types",
+    fix: "Map the type to a website category under Types & Categories (Inventory types tab), then the next menu update will include the product.",
+    fixHref: "/admin/settings/types?tab=inventory",
     fixLabel: "Open Types & Categories",
     informational: false,
   },
@@ -348,9 +361,11 @@ const EXPLANATIONS: Record<string, ExplanationRule> = {
     title: "Potency looked wrong and was capped",
     meaning:
       "The source THC/CBD number was impossibly high, so it was capped at a sane value instead of shown as-is.",
-    fix: "Check the real potency on the COA and correct it on the product's enrichment page.",
-    fixHref: "/admin/products",
-    fixLabel: "Open enrichment",
+    // S26: the enrichment page has no potency field (F-101); lab numbers come
+    // from the COA on the lot page.
+    fix: ISSUE_COPY.potencyFix,
+    fixHref: "/admin/inventory",
+    fixLabel: "Open inventory",
     informational: false,
   },
   fact_extraction_review: {
@@ -366,7 +381,7 @@ const EXPLANATIONS: Record<string, ExplanationRule> = {
     title: "No vendor on the manifest",
     meaning:
       "This product arrived without a vendor, so it was added as its own menu card (products are only grouped per vendor).",
-    fix: "Fix the manifest's vendor under Receiving if this product should group with others.",
+    fix: ISSUE_COPY.noVendorFix,
     fixHref: "/admin/inventory/intake",
     fixLabel: "Open receiving",
     informational: false,
@@ -375,7 +390,8 @@ const EXPLANATIONS: Record<string, ExplanationRule> = {
     title: "Name too ambiguous to group",
     meaning:
       "The product's name was too vague to safely group with others, so it became its own card.",
-    fix: "Rename it under Product Onboarding if it should roll up with its siblings.",
+    // S26: there is no rename control; never promise one.
+    fix: ISSUE_COPY.ambiguousNameFix,
     fixHref: "/admin/inventory/drafts",
     fixLabel: "Open onboarding",
     informational: false,
@@ -384,9 +400,11 @@ const EXPLANATIONS: Record<string, ExplanationRule> = {
     title: "Matched more than one live card",
     meaning:
       "This product looked like it belonged to several live menu cards, so it was added as a NEW card instead of merging on a guess.",
-    fix: "Consolidate the duplicate live cards under Product Mastering.",
-    fixHref: "/admin/products/masters",
-    fixLabel: "Open mastering",
+    // S26 (F-096): Product Mastering is never read by the merge. Compare the
+    // live cards instead; the remembered choice is S32.
+    fix: ISSUE_COPY.mergeFix,
+    fixHref: "/admin/products",
+    fixLabel: "Compare the cards",
     informational: false,
   },
   // FYI-only codes — no action needed.
@@ -477,6 +495,13 @@ export type DiagnosticLinkContext = {
   vendor?: string | null;
   /** summary_json.manifest.number. */
   manifestNumber?: string | null;
+  /**
+   * S26: what the page read (draft rows by id / by key, live keys). Missing =
+   * nothing read; every link degrades to the best one the context alone gives.
+   */
+  lookups?: IssueLookups;
+  /** S26: the in-admin page the product-page links should come back to. */
+  back?: string | null;
 };
 
 function ctxString(ctx: unknown, key: string): string | null {
@@ -500,30 +525,34 @@ export function explainDiagnostic(
   link?: DiagnosticLinkContext,
 ): DiagnosticExplanation {
   const base = explainDiagnosticBase(code, message);
-  if (!link || !DRAFT_LINKED_CODES.has(code)) return base;
-  const draftId = ctxString(link.context, "draft_id");
-  const manifestId = link.manifestId ?? null;
-  const pinned = draftId && isUuid(draftId) ? draftId : null;
-  const scoped = !pinned && manifestId && isUuid(manifestId) ? manifestId : null;
-  if (!pinned && !scoped) return base;
-  const fixHref = draftsHref({ status: "approved", draftId: pinned, manifestId: pinned ? null : scoped });
-  const name = ctxString(link.context, "displayName") ?? ctxString(link.context, "productName");
-  if (code === "fact_extraction_review" && pinned && name) {
-    return {
-      ...base,
-      fix:
-        `Open ${name}${approvedFromPhrase(link.vendor, link.manifestNumber)} \u2014 it is highlighted on ` +
-        "Product Onboarding with its THC and price on the row. Check the flagged fact against the package or " +
-        "COA; if it's right, press Publish on this page and the update goes live.",
-      fixHref,
-      fixLabel: `Open ${name}`,
-    };
-  }
-  return {
+  // S26: every actionable receiving code resolves through ONE registry
+  // (issue-fix-link-core). FYI + unknown codes keep their static entry.
+  if (!ISSUE_LINKED_CODES.includes(code)) return base;
+  const issue = link
+    ? issueContextFor(
+        { code, context: link.context },
+        { manifestId: link.manifestId ?? null, back: link.back ?? null },
+        link.lookups ?? EMPTY_ISSUE_LOOKUPS,
+      )
+    : {};
+  const f = fixLinkForDiagnostic(code, issue);
+  if (!f) return base;
+  const out: DiagnosticExplanation = {
     ...base,
-    fixHref,
-    fixLabel: pinned ? (name ? `Open ${name}` : "Open this product") : "Open this delivery's products",
+    fix: f.fix ?? base.fix,
+    fixHref: f.href,
+    fixLabel: f.label,
+    extra: f.extra,
+    why: f.why,
   };
+  const name = ctxString(link?.context, "displayName") ?? ctxString(link?.context, "productName");
+  if (code === "fact_extraction_review" && f.kind === "item" && name) {
+    out.fix =
+      `Open ${name}${approvedFromPhrase(link?.vendor, link?.manifestNumber)} \u2014 it is highlighted on ` +
+      "Product Onboarding with its THC and price on the row. Check the flagged fact against the package or " +
+      "COA; if it's right, press Publish on this page and the update goes live.";
+  }
+  return out;
 }
 
 function explainDiagnosticBase(code: string, message: string): DiagnosticExplanation {
@@ -733,18 +762,23 @@ export function __runPublishGuardTests(): { passed: number } {
 
   // explainDiagnostic: every actionable code has a fix link; FYIs don't.
   const unmapped = explainDiagnostic("draft_inject_unmapped_category", "raw msg");
-  ok(unmapped.fixHref === "/admin/settings/types", "unmapped category → Types & Categories");
+  ok(unmapped.fixHref === "/admin/settings/types?tab=inventory", "unmapped category → Types & Categories, Inventory tab (S26)");
   ok(!unmapped.informational, "unmapped category is actionable");
   const noPrice = explainDiagnostic("draft_inject_no_price", "raw msg");
   ok(noPrice.fixHref === "/admin/inventory/drafts", "no price → onboarding");
   const noKey = explainDiagnostic("draft_inject_no_pos_key", "raw msg");
   ok(noKey.fixHref === "/admin/inventory/drafts", "no POS key → onboarding");
   const potency = explainDiagnostic("draft_inject_potency_capped", "raw msg");
-  ok(potency.fixHref === "/admin/products", "potency capped → enrichment");
+  ok(potency.fixHref === "/admin/inventory", "potency capped → inventory (no potency field on enrichment, S26)");
+  ok(!/enrichment page/.test(potency.fix), "potency copy no longer promises an enrichment edit");
   const noVendor = explainDiagnostic("intake_master_no_vendor", "raw msg");
   ok(noVendor.fixHref === "/admin/inventory/intake", "no vendor → receiving");
   const ambig = explainDiagnostic("intake_master_merge_ambiguous", "raw msg");
-  ok(ambig.fixHref === "/admin/products/masters", "merge ambiguous → mastering");
+  ok(ambig.fixHref === "/admin/products", "merge ambiguous → compare cards, never Mastering (F-096)");
+  ok(ambig.why === ISSUE_COPY.mergeWhy, "merge ambiguous carries the why");
+  ok(!/remember/i.test(ambig.fix.replace("having that choice remembered) arrives", "")), "no remembered-choice promise before S32");
+  const ambName = explainDiagnostic("intake_master_ambiguous_name", "raw msg");
+  ok(!/Rename it/.test(ambName.fix), "ambiguous name makes no rename promise");
   const factRev = explainDiagnostic("fact_extraction_review", "raw msg");
   // S02 (F-060): the held product is APPROVED, so even without context the
   // link opens the Approved tab — the review queue could never show it.
@@ -781,8 +815,33 @@ export function __runPublishGuardTests(): { passed: number } {
   const noPriceDeep = explainDiagnostic("draft_inject_no_price", "raw msg", { context: { draft_id: DID } });
   ok(noPriceDeep.fixHref === `/admin/inventory/drafts?status=approved&draft=${DID}#draft-${DID}`, "no price → exact draft");
   ok(noPriceDeep.fixLabel === "Open this product", "nameless draft label");
+  // S26: non-draft codes resolve through the issue registry.
+  const LID = "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d";
+  const lk: IssueLookups = {
+    draftsById: new Map([[DID, { id: DID, lot_id: LID, inventory_type: "Solid Edible", pos_product_key: "K1", name: "Gummies" }]]),
+    draftsByKey: new Map(),
+    liveKeys: new Set(["K1"]),
+  };
   const notDraftCode = explainDiagnostic("draft_inject_unmapped_category", "raw", { context: { draft_id: DID } });
-  ok(notDraftCode.fixHref === "/admin/settings/types", "non-draft codes keep their own link");
+  ok(notDraftCode.fixHref === "/admin/settings/types?tab=inventory", "unmapped with no lookups → inventory tab list");
+  const typed = explainDiagnostic("draft_inject_unmapped_category", "raw", { context: { draft_id: DID, pos_product_key: "K1" }, lookups: lk });
+  ok(typed.fixHref === "/admin/settings/types?tab=inventory&type=Solid%20Edible#type-solid-edible", "unmapped + draft row → that type row");
+  ok(typed.fixLabel === "Map \u201cSolid Edible\u201d", "typed label names the type");
+  ok(typed.extra?.[0]?.href === `/admin/inventory/${LID}#website-category`, "re-file-just-this-product extra");
+  const pot = explainDiagnostic("draft_inject_potency_capped", "raw", { context: { draft_id: DID, pos_product_key: "K1" }, lookups: lk, back: "/admin/menu-imports/version/v1" });
+  ok(pot.fixHref === `/admin/inventory/${LID}#coa`, "potency → the lot's COA panel");
+  ok(pot.extra?.[0]?.href === "/admin/products/K1?back=%2Fadmin%2Fmenu-imports%2Fversion%2Fv1", "live card extra with back");
+  const nv = explainDiagnostic("intake_master_no_vendor", "raw", { context: { pos_product_key: "K1" }, manifestId: MID });
+  ok(nv.fixHref === `/admin/inventory/intake/${MID}#manifest-vendor`, "no vendor → the manifest's vendor block");
+  // S26: the static entry of every linked code IS the registry's no-context
+  // link, so the two can never drift (the static one is what an unknown
+  // caller would see if the registry ever returned null).
+  for (const c of ISSUE_LINKED_CODES) {
+    const r = fixLinkForDiagnostic(c, {})!;
+    ok(EXPLANATIONS[c].fixHref === r.href && EXPLANATIONS[c].fixLabel === r.label, `static link = registry link (${c})`);
+  }
+  const base0 = explainDiagnostic("draft_inject_superseded_by_pos_fake", "m", { context: { draft_id: DID }, lookups: lk });
+  ok(base0.fixHref === null && base0.extra === undefined, "unknown code gets no registry link even with lookups");
   const junkCtx = explainDiagnostic("fact_extraction_review", "raw msg", { context: ["x"] });
   ok(junkCtx.fixHref === factRev.fixHref, "array context tolerated");
   ok(DRAFT_LINKED_CODES.size === 4, "exactly four draft-linked codes");

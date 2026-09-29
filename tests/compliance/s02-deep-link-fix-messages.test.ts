@@ -117,10 +117,19 @@ describe("S02 explainDiagnostic deep links", () => {
     expect(x.fixHref).toBe(`/admin/inventory/drafts?status=approved&manifest=${M}`);
   });
 
-  it("never deep-links a code whose fix is not on a draft", () => {
-    for (const code of ["draft_inject_unmapped_category", "intake_master_no_vendor", "intake_master_merge_ambiguous", "draft_inject_potency_capped"]) {
-      expect(explainDiagnostic(code, "m", { context: ctx, manifestId: M }).fixHref).toBe(explainDiagnostic(code, "m").fixHref);
+  it("never sends a code whose fix is not on a draft to the onboarding LIST (S26 routes them to their own control)", () => {
+    // S02 kept these on their static list links; S26 (issue-fix-link-core)
+    // gives each its own destination. None of them lands on the drafts list.
+    for (const code of ["draft_inject_unmapped_category", "intake_master_no_vendor", "intake_master_merge_ambiguous"]) {
+      const href = explainDiagnostic(code, "m", { context: ctx, manifestId: M }).fixHref ?? "";
+      expect(href.startsWith("/admin/inventory/drafts"), code).toBe(false);
     }
+    expect(explainDiagnostic("intake_master_no_vendor", "m", { context: ctx, manifestId: M }).fixHref).toBe(
+      `/admin/inventory/intake/${M}#manifest-vendor`,
+    );
+    expect(explainDiagnostic("draft_inject_unmapped_category", "m", { context: ctx, manifestId: M }).fixHref).toBe(
+      "/admin/settings/types?tab=inventory",
+    );
   });
 
   it("every draft-linked code is emitted by the receiving planners WITH the draft id where the draft is known", () => {
@@ -248,7 +257,9 @@ describe("S02 structural pins — the pages use the core", () => {
   });
 
   it("version page passes the diagnostic context + delivery to explainDiagnostic", () => {
-    expect(version).toContain("explainDiagnostic(d.code, d.message, { ...linkBase, context: d.context })");
+    // S26 spreads linkBase into issueLinks (adds lookups + back).
+    expect(version).toContain("const issueLinks = {\n    ...linkBase,");
+    expect(version).toContain("explainDiagnostic(d.code, d.message, { ...issueLinks, context: d.context })");
     expect(version).toContain("str(summary.manifest?.id) ?? str(summary.manifest_id)");
   });
 });
