@@ -16,6 +16,7 @@ import {
 } from "@/lib/inventory/intake-store";
 import { sendSampleCapVendorNotice } from "@/lib/compliance/sample-cap-notify";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
+import { receiptEventFor } from "@/lib/inventory/manifest-event-labels-core";
 import {
   parseCcrsManifestCsv,
   ccrsToParsedManifest,
@@ -234,12 +235,20 @@ export async function setManifestLifecycleAction(manifestId: string, status: "in
       booksNote = booked.ok
         ? `&books=${encodeURIComponent(booked.code)}`
         : `&booksError=${encodeURIComponent(booked.message.slice(0, 300))}`;
+      // S29: the answer also lands on the delivery's permanent timeline, so a
+      // refusal is still visible on the Accounting tab after a reload (the
+      // URL param only covers the immediate redirect, F-120).
+      // logManifestEvent never throws, so the timeline write cannot cost the
+      // operator the receipt.
+      const ev = receiptEventFor(booked);
+      await logManifestEvent(manifestId, ev.eventType, ev.note, session.userId);
     } catch (err) {
+      const thrown = err instanceof Error ? err.message : String(err);
       booksNote = `&booksError=${encodeURIComponent(
-        `The delivery was marked received, but the books could not be updated: ${
-          err instanceof Error ? err.message : String(err)
-        }`.slice(0, 300),
+        `The delivery was marked received, but the books could not be updated: ${thrown}`.slice(0, 300),
       )}`;
+      const ev = receiptEventFor({ thrown });
+      await logManifestEvent(manifestId, ev.eventType, ev.note, session.userId);
     }
   }
 

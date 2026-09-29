@@ -79,7 +79,7 @@ export const INVENTORY_PAGE_TABS: readonly TabSpec<InventoryPageTab>[] = [
   { key: "insights", label: "Insights", blurb: "Months of supply, shrink, ABC and aging (WAC 314-55-079(10))." },
 ];
 
-export type ManifestPageTab = "delivery" | "issues";
+export type ManifestPageTab = "delivery" | "issues" | "accounting";
 
 /** The manifest page's route for one manifest. */
 export function manifestPageBase(manifestId: string): string {
@@ -89,8 +89,14 @@ export function manifestPageBase(manifestId: string): string {
 /**
  * `held` is set by finalize when lots were held in quarantine; landing on
  * Issues shows each held lot with its own fix link (bible S28.2).
+ * `booksError` is set by the receiving / vendor-bill wires when the books
+ * refused; it opens Accounting (bible S29.2), never the Delivery tab.
  */
 export const MANIFEST_PAGE_TABS: readonly TabSpec<ManifestPageTab>[] = [
   { key: "delivery", label: "Delivery", blurb: "The delivery itself: lines, receiving and finalize." },
   { key: "issues", label: "Issues", blurb: "Held lots, missing COAs and unmapped categories — each with its fix.", autoOpenParams: ["held"] },
+  // S29: only a books REFUSAL auto-opens Accounting; a success (`books=`) stays
+  // on Delivery. Placed after Issues so a finalize with held lots AND a books
+  // refusal lands on Issues first (resolveTab takes the first tab in order).
+  { key: "accounting", label: "Accounting", blurb: "What the books recorded for this delivery, and where to follow it up.", autoOpenParams: ["booksError"] },
 ];

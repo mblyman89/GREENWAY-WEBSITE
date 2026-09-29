@@ -183,9 +183,18 @@ export default async function PurchasingPage({
             )}
             {exceptions.length > 0 && (
               <Section
-                title="Received but not paid"
-                description="Goods arrived, bill still open — the classic three-way-match exception. Settle these in Accounts Payable."
+                title={`Received but not paid (${exceptions.length})`}
+                description="Goods arrived, bill still open."
               >
+                {/* S29: the count and the AP link stay (purchasing truth); the long AP explanation folds away. */}
+                <details className="mb-2 text-xs text-[var(--admin-text-muted)]">
+                  <summary className="cursor-pointer">What does this mean?</summary>
+                  <p className="mt-1">
+                    This is the classic three-way-match exception: the purchase order says what was
+                    ordered, receiving says it arrived, and the vendor bill is still open. Settle these in
+                    Accounts Payable.
+                  </p>
+                </details>
                 <ul className="divide-y divide-[var(--admin-border)] text-sm">
                   {exceptions.slice(0, 5).map((p) => (
                     <li key={p.id} className="flex items-center justify-between gap-3 py-2">

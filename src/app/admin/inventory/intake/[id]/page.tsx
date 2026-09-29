@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, StickyActionBar } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
@@ -21,6 +22,8 @@ import { listManifestLots, listManifestEvents, listLabFactsByIds } from "@/lib/i
 import { summarizeStagedIntake } from "@/lib/inventory/intake-review-adapter";
 import { IntakeReviewFlagsPanel } from "@/components/admin/inventory/IntakeReviewFlagsPanel";
 import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline";
+import { ManifestAccountingPanel } from "@/components/admin/inventory/ManifestAccountingPanel";
+import { accountingStatus, booksRefusalNextStep, booksResultText } from "@/lib/inventory/manifest-event-labels-core";
 import { ManifestLotDisposition } from "@/components/admin/inventory/ManifestLotDisposition";
 import { manifestStatusBadge } from "@/lib/inventory/intake-disposition-core";
 import {
@@ -100,11 +103,14 @@ export default async function ManifestReviewPage({
     /** books-81/books-83: the ledger's own answer, surfaced not swallowed. */
     books?: string;
     booksError?: string;
-    /** S28: Delivery | Issues. */
+    /** S28: Delivery | Issues; S29 adds Accounting. */
     tab?: string;
   }>;
 }) {
-  await requirePermission("inventory.manage");
+  // S29: the session is kept so owner-only books links render only for a
+  // viewer who can open them (a manager sees this page via inventory.manage).
+  const session = await requirePermission("inventory.manage");
+  const canBooks = can(session.profile.role, "books.view");
   const { id } = await params;
   const {
     staged,
@@ -313,9 +319,19 @@ export default async function ManifestReviewPage({
   });
   const issueSummary = summarizeIssues(issues);
   const pageBase = manifestPageBase(id);
-  const tabs = MANIFEST_PAGE_TABS.map((t) => (t.key === "issues" ? { ...t, ...issuesTabBadge(issueSummary) } : t));
+  // S29: the Accounting tab reads the durable timeline, not the URL, so a
+  // receiving-time refusal is still there after a reload (F-120).
+  const booksState = accountingStatus(events);
+  const tabs = MANIFEST_PAGE_TABS.map((t) =>
+    t.key === "issues"
+      ? { ...t, ...issuesTabBadge(issueSummary) }
+      : t.key === "accounting" && booksState.open > 0
+        ? { ...t, count: booksState.open, countTone: "neutral" as const }
+        : t,
+  );
   // `held=0` is a clean finalize and must NOT auto-open Issues (manifestHeldAutoOpen).
-  const activeTab = resolveTab(MANIFEST_PAGE_TABS, { tab, held: manifestHeldAutoOpen(held) }, "delivery");
+  // A books refusal (`booksError`) opens Accounting, never Delivery (S29).
+  const activeTab = resolveTab(MANIFEST_PAGE_TABS, { tab, held: manifestHeldAutoOpen(held), booksError }, "delivery");
 
   return (
     <div>
@@ -433,27 +449,9 @@ export default async function ManifestReviewPage({
             )}
           </div>
         )}
-        {/*
-          books-83. The receiving wire (books-81) and the vendor-bill wire both
-          push their result onto this URL. Until now nothing READ it, so a
-          refusal by the books was computed carefully and then shown to nobody
-          — a wire that looks connected and reports nothing. These two banners
-          are the other half of "never swallow a refusal".
-        */}
-        {booksError && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-danger)]">
-            <strong>The delivery stands, but the books were not updated.</strong>{" "}
-            {booksError} Nothing was posted, so no number is wrong — this is a
-            to-do, not a loss. Fix the reason above and finalize again; the entry
-            is keyed to this manifest, so re-running it cannot post twice.
-          </div>
-        )}
-        {books && !booksError && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
-            Recorded in the books — the vendor payable for this delivery is on
-            the ledger, and the product was capitalised exactly once.
-          </div>
-        )}
+        {/* S29: the books/booksError banners moved to the Accounting tab below
+            (neutral styling, bible S19.4). Finalizing never shows an
+            accounting banner on the Delivery tab. */}
         {/* S28: the old red "held in quarantine" banner is now one Issues row
             PER held lot (what it is missing + Open lot), computed from the lot
             rows themselves, so it stays until each lot is fixed. `?held=N`
@@ -586,7 +584,7 @@ export default async function ManifestReviewPage({
           </div>
         )}
 
-        {/* S28: Delivery | Issues. Result banners above show on every tab. */}
+        {/* S28: Delivery | Issues; S29: Accounting. Result banners above show on every tab. */}
         <PageTabs base={pageBase} tabs={tabs} active={activeTab} ariaLabel="Manifest views" allow={[]} />
 
         {activeTab === "issues" && (
@@ -594,6 +592,37 @@ export default async function ManifestReviewPage({
             issues={issues}
             emptyText="Nothing needs attention on this delivery. Every accepted lot passed the go-live check."
           />
+        )}
+
+        {activeTab === "accounting" && (
+          <section id="manifest-accounting" aria-label="Accounting" className="space-y-4">
+            {/*
+              books-83 / S29. The receiving wire (books-81) and the vendor-bill
+              wire both push their result onto this URL; these two banners are
+              the other half of "never swallow a refusal". S29 moved them here
+              in NEUTRAL styling: the delivery itself is fine, so this is a
+              to-do, not an alarm.
+            */}
+            {booksError && (
+              <div
+                data-testid="books-refusal"
+                className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3 text-sm text-[var(--admin-text)]"
+              >
+                <strong>Books: not recorded yet</strong> {"\u2014"} {booksError} The delivery itself
+                is fine. {booksRefusalNextStep(inProgress)}
+              </div>
+            )}
+            {books && !booksError && (
+              <div
+                data-testid="books-recorded"
+                className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm text-[var(--admin-text-muted)]"
+              >
+                {booksResultText(books)}
+              </div>
+            )}
+
+            <ManifestAccountingPanel events={events} canBooks={canBooks} />
+          </section>
         )}
 
         {activeTab === "delivery" && (

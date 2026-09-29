@@ -169,7 +169,8 @@ describe("S28 tab resolution", () => {
     expect(resolveTab(MANIFEST_PAGE_TABS, { held: manifestHeldAutoOpen("2") }, "delivery")).toBe("issues");
     expect(resolveTab(MANIFEST_PAGE_TABS, { held: manifestHeldAutoOpen("0") }, "delivery")).toBe("delivery");
     expect(resolveTab(MANIFEST_PAGE_TABS, {}, "delivery")).toBe("delivery");
-    expect(MANIFEST_PAGE_TABS.map((t) => t.key)).toEqual(["delivery", "issues"]);
+    // S29 appended Accounting after Issues (held lots still land on Issues first).
+    expect(MANIFEST_PAGE_TABS.map((t) => t.key)).toEqual(["delivery", "issues", "accounting"]);
     expect(manifestPageBase("abc")).toBe("/admin/inventory/intake/abc");
   });
   it("finalize really does always append held= (why the guard exists)", () => {
