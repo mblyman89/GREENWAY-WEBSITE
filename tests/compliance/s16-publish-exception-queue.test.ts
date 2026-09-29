@@ -139,7 +139,7 @@ describe("S16 queue core", () => {
 // === 2. Verdict copy, every shape (bible S16.4 / S16.5) ======================
 describe("S16 verdict copy for each shape", () => {
   it("publish-guard self-tests pass with an exact count", () => {
-    expect(__runPublishGuardTests().passed).toBe(91);
+    expect(__runPublishGuardTests().passed).toBe(110); // S26 +19 issue-link checks
   });
   it("first menu: safe, nothing comes off", () => {
     const v = buildPublishVerdict({ added: 4, removed: 0, priceChanged: 0, unchanged: 0, hasLiveMenu: false });

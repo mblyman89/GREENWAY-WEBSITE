@@ -17,6 +17,7 @@ import {
 import { formatDateTime, formatMoney } from "@/lib/pos/format";
 import { publishVersion } from "../../actions";
 import { describeIntakeVersion, type IntakeVersionTone } from "@/lib/pos/intake-version-copy-core";
+import { loadIssueLookups } from "@/lib/pos/issue-fix-link-server";
 
 // S01: the outcome banner's colour follows the described tone.
 const OUTCOME_STYLE: Record<IntakeVersionTone, string> = {
@@ -97,6 +98,13 @@ export default async function IntakeVersionReviewPage({
     manifestNumber: str(summary.manifest?.number),
   };
   const warnings = diagnostics.filter((d) => d.severity === "warning");
+  // S26: read what each fix link needs to land on its control (draft rows,
+  // live keys). Never throws; an empty result gives the S02 list links.
+  const issueLinks = {
+    ...linkBase,
+    lookups: await loadIssueLookups(warnings, linkBase.manifestId),
+    back: `/admin/menu-imports/version/${version.id}`,
+  };
   const info = diagnostics.filter((d) => d.severity === "info");
   const hiddenItems = items.filter((i) => i.hidden).slice(0, 100);
   const hiddenTotal = items.filter((i) => i.hidden).length;
@@ -286,7 +294,7 @@ export default async function IntakeVersionReviewPage({
             </p>
             <div className="mt-3 space-y-2">
               {warnings.slice(0, 100).map((d, i) => {
-                const x = explainDiagnostic(d.code, d.message, { ...linkBase, context: d.context });
+                const x = explainDiagnostic(d.code, d.message, { ...issueLinks, context: d.context });
                 return (
                   <div
                     key={`w-${i}`}
@@ -299,11 +307,26 @@ export default async function IntakeVersionReviewPage({
                         <strong className="text-white/70">How to fix it:</strong> {x.fix}
                       </p>
                       {x.fixHref && x.fixLabel && (
-                        <Button href={x.fixHref} size="sm" variant="neutral">
+                        <Button href={x.fixHref} size="sm" variant="neutral" data-testid="issue-fix-link">
                           {x.fixLabel} &rarr;
                         </Button>
                       )}
                     </div>
+                    {x.extra && x.extra.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-3 text-xs" data-testid="issue-fix-extra">
+                        {x.extra.map((e) => (
+                          <a key={e.href} href={e.href} className="text-[var(--admin-accent)] underline-offset-2 hover:underline">
+                            {e.label} &rarr;
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {x.why && (
+                      <details className="mt-1.5 text-xs text-white/50">
+                        <summary className="cursor-pointer">Why did this happen?</summary>
+                        <p className="mt-1">{x.why}</p>
+                      </details>
+                    )}
                   </div>
                 );
               })}

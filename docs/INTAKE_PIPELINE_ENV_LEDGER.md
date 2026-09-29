@@ -73,7 +73,7 @@ When the slice ships, its row moves to §1 with the real constant. Names are the
 **Which shipped slice added which variable** (checked against `git show` of each merged commit):
 
 - Slices that **added** a variable: S05 (`INTAKE_IDENTITY_STAMP`), S06 (`LOOKUP_SCHEMA_V2`), S10 (`ATTACH_POLICY_RING`), S17 (`INTAKE_BATCH_STAGING`), S18 (`INTAKE_CUTOVER_GUARD`), S19 (`INTAKE_VENDOR_ID_IDENTITY`).
-- Slices that added **no** variable: S00, S01, S02, S03, S04, S08, S14, S15, S16, S21, S22, S24. Their bible rollback lines are "Revert…" (S00, S01, S02, S14) or "Revert." (S16, S21, S22, S24), "Delete module" (S03), leave or drop the schema (S04, S08), or "Re-apply previous RPC body" (S15, shipped as `supabase/rollbacks/0236_publish_archive_rule.rollback.sql`). None of those rollbacks names a flag.
+- Slices that added **no** variable: S00, S01, S02, S03, S04, S08, S14, S15, S16, S21, S22, S24, S26. Their bible rollback lines are "Revert…" (S00, S01, S02, S14) or "Revert." (S16, S21, S22, S24), "Delete the new core + test; revert the optional ctx param." (S26), "Delete module" (S03), leave or drop the schema (S04, S08), or "Re-apply previous RPC body" (S15, shipped as `supabase/rollbacks/0236_publish_archive_rule.rollback.sql`). None of those rollbacks names a flag.
 
 `tests/compliance/intake-env-ledger.test.ts` checks these two lists against the Slice column of §1. So a slice that quietly adds a flag, or a §1 row whose slice is filed under "no variable", fails the build.
 
@@ -83,7 +83,7 @@ When S07 ships, it must also flip `ATTACH_WRITER_SHIPPED` in `fact-attach-policy
 
 ## Final Vercel checklist (the end-of-build handoff)
 
-The final PR of the build rewrites this block with the complete list. As of **S24** it reads (S14, S15, S16, S21, S22 and S24 added no variable; S17 added `INTAKE_BATCH_STAGING`; S18 added `INTAKE_CUTOVER_GUARD`; S19 added `INTAKE_VENDOR_ID_IDENTITY`):
+The final PR of the build rewrites this block with the complete list. As of **S26** it reads (S14, S15, S16, S21, S22, S24 and S26 added no variable; S17 added `INTAKE_BATCH_STAGING`; S18 added `INTAKE_CUTOVER_GUARD`; S19 added `INTAKE_VENDOR_ID_IDENTITY`):
 
 **Set on purpose (recommended values):**
 - `INTAKE_IDENTITY_STAMP` = `on` (same as unset. Setting it makes the choice visible in Vercel.)
@@ -92,6 +92,7 @@ The final PR of the build rewrites this block with the complete list. As of **S2
 - `INTAKE_CUTOVER_GUARD` = `on` (same as unset). Keep it on through the Cultivera cutover and after; it costs one small read per approval and nothing when no Cultivera upload is waiting. Opening Menu Imports also runs its two-read cutover check (S21), only to pick the upload-note wording.
 - (S22 needs nothing set. Opening Product Enrichment now also makes two bounded, named-column reads, the cards' lots and their deliveries, to power the "From invoice/manifest:" filter and the "newest from receiving" sort. If either read fails, those filters switch off and the page says so.)
 - (S24 needs nothing set. The menu, the product page and the enrichment command center now also look up kb_products the way the manifest bridge wrote them, through the card's own lots: a bounded, named-column read of those lots, then their brands and KB rows. When a card has no lots, it makes exactly the reads it made before. If a read fails, the page falls back to the copy it showed before S24.)
+- (S26 needs nothing set. The menu-draft page's "How to fix it" buttons now land on the exact control: a bounded, named-column read of the warned drafts (by id, and by key inside that delivery's approved drafts) plus the published-menu check for the keys a link points at. Opening a lot page also makes one published-menu check for its own key, so the enrichment button never opens a 404. If a read fails, every button falls back to the list link it showed before.)
 - `INTAKE_VENDOR_ID_IDENTITY` = `on` (same as unset). It costs a few bounded reads per menu update (only the lots that could change a match) and per Onboarding view of one delivery.
 - `ATTACH_POLICY_RING` = `1` for now. Change it to `2` only after S07 ships **and** you have read about a week of footer counters on Product Onboarding (bible §0.5: "run in shadow for a week").
 

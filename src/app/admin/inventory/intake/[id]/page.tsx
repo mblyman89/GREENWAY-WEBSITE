@@ -299,6 +299,57 @@ export default async function ManifestReviewPage({
             next stage (Onboard) one click away after accepting. */}
         <CatalogStageStrip current="intake" />
 
+        {/* S26: #manifest-vendor is where the menu draft's "No vendor on the
+            manifest" fix link lands. Products are grouped per vendor, so this
+            says which vendor the manifest named and whether it is linked. */}
+        <div
+          id="manifest-vendor"
+          data-testid="manifest-vendor"
+          className="scroll-mt-24 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">Vendor</p>
+          {linkedVendor ? (
+            <p className="mt-1 text-[var(--admin-text)]">
+              <Link href={`/admin/vendors/${linkedVendor.id}`} className="font-medium underline-offset-2 hover:underline">
+                {linkedVendor.display_name}
+              </Link>
+              {manifest.vendor_label && manifest.vendor_label !== linkedVendor.display_name && (
+                <span className="text-[var(--admin-text-muted)]">{` (manifest says \u201c${manifest.vendor_label}\u201d)`}</span>
+              )}
+              <span className="block text-xs text-[var(--admin-text-faint)]">
+                Linked {"\u2014"} this delivery&apos;s products group with that vendor&apos;s other cards.
+              </span>
+            </p>
+          ) : (
+            <div className="mt-1 space-y-1.5">
+              <p className="text-[var(--admin-gold)]">
+                {manifest.vendor_label
+                  ? `The manifest names \u201c${manifest.vendor_label}\u201d, but it isn\u2019t linked to a vendor record yet.`
+                  : "The manifest names no vendor."}
+              </p>
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                Nothing is lost {"\u2014"} these products sell as their own menu cards, because cards are only
+                grouped per vendor. Accepting a delivery links the vendor the manifest names automatically; if that
+                name is spelled differently from your vendor record, find it or combine the duplicates so the next
+                delivery groups correctly.
+              </p>
+              <div className="flex flex-wrap gap-3 text-xs">
+                {manifest.vendor_label && (
+                  <Link
+                    href={`/admin/vendors?q=${encodeURIComponent(manifest.vendor_label)}`}
+                    className="text-[var(--admin-accent)] underline-offset-2 hover:underline"
+                  >
+                    Find this vendor {"\u2192"}
+                  </Link>
+                )}
+                <Link href="/admin/vendors/merge" className="text-[var(--admin-accent)] underline-offset-2 hover:underline">
+                  Combine duplicate vendors {"\u2192"}
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+
         {staged && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
             Manifest staged as a draft. Review the lines below, then accept to activate the lots.
