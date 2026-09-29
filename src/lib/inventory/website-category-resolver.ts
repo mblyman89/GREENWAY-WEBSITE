@@ -793,10 +793,7 @@ export function __runWebsiteCategoryResolverTests(): void {
   console.log(`website-category-resolver: ${pass} assertions passed`);
 }
 
-// Allow direct execution via tsx for quick verification.
-declare const require: undefined | { main?: unknown };
-// eslint-disable-next-line @next/next/no-assign-module-variable
-declare const module: unknown;
-if (typeof require !== "undefined" && (require as { main?: unknown }).main === (module as unknown)) {
-  __runWebsiteCategoryResolverTests();
-}
+// Entry guard removed (admin crash fix): turbopack compiles `require.main === module`
+// into client chunks where `require` is shimmed but `module` is not defined, which
+// threw "ReferenceError: module is not defined" on every admin page once this file
+// became reachable from a client component. Self-tests run via tests/compliance/website-category-resolver.test.ts.

@@ -250,10 +250,7 @@ export function __runNonCannabisTests(): void {
 
   console.log("naming/noncannabis-core: all tests passed");
 }
-
-declare const require: { main?: unknown } | undefined;
-// eslint-disable-next-line @next/next/no-assign-module-variable
-declare const module: unknown;
-if (typeof require !== "undefined" && typeof module !== "undefined" && require.main === module) {
-  __runNonCannabisTests();
-}
+// Entry guard removed (admin crash fix): turbopack compiles `require.main === module`
+// into client chunks where `require` is shimmed but `module` is not defined, which
+// threw "ReferenceError: module is not defined" on every admin page once this file
+// became reachable from a client component. Self-tests run via scripts/compliance/run-pure-selftests.ts.

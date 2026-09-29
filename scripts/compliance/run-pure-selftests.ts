@@ -799,6 +799,7 @@ import { __runLotActivationGateTests } from "../../src/lib/inventory/lot-activat
 import { __runManifestPipelineTests } from "../../src/lib/inventory/manifest-pipeline-core";
 import { __runSampleGuardrailTests } from "../../src/lib/inventory/sample-guardrails";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
+import { __runCycleCountSheetTests } from "../../src/lib/inventory/cycle-count-sheet-core";
 import { __runCardIdentityCoreTests } from "../../src/lib/menu/card-identity-core";
 import { __runReprocessCoreTests } from "../../src/lib/inventory/reprocess-core";
 import { __runTransformCoreTests } from "../../src/lib/pos/transform";
@@ -1475,6 +1476,7 @@ __runLiquidVolumeTests();
   assertNoFailures("manifest-pipeline-core", __runManifestPipelineTests());
   __runSampleGuardrailTests();
   __runCardCannabinoidTests();
+  __runCycleCountSheetTests();
   __runCardIdentityCoreTests();
   __runReprocessCoreTests();
   __runTransformCoreTests();
