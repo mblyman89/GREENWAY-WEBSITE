@@ -549,8 +549,9 @@ export function explainDiagnostic(
   if (code === "fact_extraction_review" && f.kind === "item" && name) {
     out.fix =
       `Open ${name}${approvedFromPhrase(link?.vendor, link?.manifestNumber)} \u2014 it is highlighted on ` +
-      "Product Onboarding with its THC and price on the row. Check the flagged fact against the package or " +
-      "COA; if it's right, press Publish on this page and the update goes live.";
+      "Product Onboarding with the flagged fact and Approve / Fix / Keep-off controls on its row. Check it " +
+      "against the package or COA and settle it there (the update is rebuilt with your answer), or, if it's " +
+      "right, press Publish on this page and the update goes live.";
   }
   return out;
 }
@@ -798,6 +799,7 @@ export function __runPublishGuardTests(): { passed: number } {
   ok(deep.fixHref !== null && deep.fixHref.includes(DID), "fixHref contains the draft id");
   ok(deep.fix.includes("Kiva Gummies 100mg (approved from Acme Farms manifest 0042)"), "fix names product + delivery");
   ok(deep.fix.includes("press Publish"), "fix states the real next step (manual Publish until S30)");
+  ok(deep.fix.includes("settle it there"), "S30: fix points at the inline controls on the row");
   ok(!/publishes itself/i.test(deep.fix), "no promise of auto-publish the code does not keep");
   ok(deep.fixLabel === "Open Kiva Gummies 100mg", "button names the product");
   ok(deep.title === factRev.title, "title unchanged");

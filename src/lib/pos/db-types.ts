@@ -49,7 +49,18 @@ export type PosImportDiagnostic = {
 // exception queue (migration 0139). action 'fix' carries the corrected facts.
 export type PosFactReview = {
   id: string;
-  import_id: string;
+  /**
+   * The POS import this decision belongs to. NULL on a receiving decision
+   * (S30 / migration 0237), which is scoped by manifest_id instead; exactly
+   * one of the two is set (CHECK pos_fact_reviews_one_scope).
+   */
+  import_id: string | null;
+  /** S30 (0237): the delivery a receiving decision belongs to. */
+  manifest_id?: string | null;
+  /** S30 (0237): the Product Onboarding draft the decision was made on. */
+  draft_id?: string | null;
+  /** S30 (0237): which flag the decision answered (intake-fact-review-core flagSignature). */
+  flag_signature?: string | null;
   source_item_id: string;
   action: "approve" | "fix" | "reject";
   note: string | null;

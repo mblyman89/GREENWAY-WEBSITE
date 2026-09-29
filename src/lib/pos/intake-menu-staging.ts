@@ -38,6 +38,20 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
 import { archiveSupersededStaged } from "@/lib/pos/menu-version";
+// S30: receiving fact review - saved decisions resolve (and are applied to)
+// the flags that would otherwise hold this update.
+import { listIntakeFactReviewsResult } from "@/lib/pos/fact-review-store";
+import {
+  FACT_FLAG_CODE,
+  RETIRED_REASON_PREFIX,
+  applyFactDecisions,
+  factHoldNote,
+  partitionFactFlags,
+  planHeldRetire,
+  type FactPartition,
+  type HeldCandidate,
+} from "@/lib/pos/intake-fact-review-core";
+import { mergeArchivedSummary } from "@/lib/pos/publish-archive-rule-core";
 import { shouldHoldForCutover } from "@/lib/pos/cutover-guard";
 import { CUTOVER_EVENT, CUTOVER_HOLD_COPY, CUTOVER_REASON } from "@/lib/inventory/cutover-guard-core";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
@@ -355,6 +369,21 @@ export async function stageIntakeMenuVersionForManifest(
       vendorIds,
     });
 
+    // S30: settle the fact flags against the decisions a human saved for this
+    // delivery (Product Onboarding -> Approved). ONE paged read, and only
+    // when the plan raised a flag at all. A resolved flag stops holding the
+    // update and is APPLIED to the snapshot (fix -> corrected facts with
+    // "reviewer" provenance; reject -> the size is withheld) before anything
+    // is persisted, so what publishes is what the human decided. A failed
+    // read (or 0237 not applied) resolves nothing: the update holds exactly
+    // as before (fail closed - never publish an unverified fact).
+    const factPartition: FactPartition = plan.diagnostics.some((d) => d.code === FACT_FLAG_CODE)
+      ? partitionFactFlags(plan.diagnostics, (await listIntakeFactReviewsResult(manifestId)).reviews)
+      : { unresolved: [], resolved: [], diagnostics: plan.diagnostics };
+    if (factPartition.resolved.length > 0) {
+      applyFactDecisions(plan.items, plan.lotFactsByKey, factPartition.resolved);
+    }
+
     // SLICE 62: persist the VERIFIED extraction facts on the source lots —
     // the golden record lives on inventory_lots (migration 0138 columns), so
     // COAs, audits, and future re-processing see the same facts the menu
@@ -418,7 +447,8 @@ export async function stageIntakeMenuVersionForManifest(
 
     // SLICE 62 review gate input, computed BEFORE the insert so the row is
     // born knowing whether it will be held (S01: no follow-up write needed).
-    const factFlags = plan.diagnostics.filter((d) => d.code === "fact_extraction_review");
+    // S30: only the flags no human has answered still hold the update.
+    const factFlags = factPartition.unresolved;
     // S18 cutover guard, also decided BEFORE the insert so the row is born
     // "held_for_cutover": while a REAL one-time Cultivera upload sits staged,
     // this update is built on a menu that lacks the Cultivera products, so it
@@ -431,7 +461,7 @@ export async function stageIntakeMenuVersionForManifest(
     //    diagnostics live in summary_json so the review surface needs no
     //    pos_imports/pos_import_diagnostics rows.
     const variantCount = plan.items.reduce((s, it) => s + it.variants.length, 0);
-    const warningCount = plan.diagnostics.filter((d) => d.severity === "warning").length;
+    const warningCount = factPartition.diagnostics.filter((d) => d.severity === "warning").length;
     const { data: versionRow, error: vErr } = await admin
       .from("menu_versions")
       .insert({
@@ -450,7 +480,9 @@ export async function stageIntakeMenuVersionForManifest(
           carried: plan.carriedCount,
           added: plan.addedCount,
           merged: plan.mergedCount,
-          diagnostics: plan.diagnostics,
+          // S30: the planner's diagnostics with every human-settled flag
+          // recorded as an FYI (fact_review_resolved) - the audit trail stays.
+          diagnostics: factPartition.diagnostics,
           // S01: who/which invoice/when + what the staging module decided.
           // "auto_publish_attempted" + status "published" = published
           // automatically, so the success path needs ZERO extra writes.
@@ -497,19 +529,27 @@ export async function stageIntakeMenuVersionForManifest(
     // SLICE 62 review gate (Rule 3.1: uncertain facts go to a human, never to
     // customers): when the word-by-word extraction engine could NOT verify
     // every fact on an mg-dosed line, the fresh snapshot stays STAGED — the
-    // human reviews the flagged reasons on Menu Imports and presses Publish
-    // there. Same principle as the SLICE 58 import commit gate. (factFlags
+    // human settles each flag inline on Product Onboarding -> Approved (S30,
+    // resolveIntakeFactReview) or presses Publish on Admin -> Publish Menu.
+    // Same principle as the SLICE 58 import commit gate. (factFlags
     // is computed above the insert so the row records the hold at birth.)
     if (factFlags.length > 0) {
       try {
         await admin.from("manifest_events").insert({
           manifest_id: manifestId,
           event_type: "menu_publish_held_for_fact_review",
-          note: `Menu update staged but NOT auto-published: the extraction engine could not verify every fact on ${factFlags.length} product(s). Review the flagged reasons in the Publish command center and publish from there.`,
+          // S30.4: point at the control that actually settles the flag.
+          note: factHoldNote(factFlags.length),
           actor_id: actorId,
         });
       } catch (err) {
         console.error("[intake-menu-staging] fact-review hold event insert failed:", err);
+      }
+      // S30: a reviewer decision re-staged this delivery and it is STILL held
+      // (another product is flagged): the previous held copies it provably
+      // contains are obsolete - retire them so the Publish page shows one.
+      if (factPartition.resolved.length > 0) {
+        await retireOlderHeldCopies(version, manifestId, draftIdList(drafts.map((d) => d.id)));
       }
       return {
         staged: true,
@@ -796,6 +836,68 @@ export async function replaceRecentRestages(
     return replaced;
   } catch (err) {
     console.error("[intake-menu-staging] restage replace exception:", err);
+    return 0;
+  }
+}
+
+/**
+ * S30: archive the OLDER held-for-fact-review copies of one delivery that the
+ * fresh (still held) copy provably contains (intake-fact-review-core
+ * planHeldRetire). Guarded to rows still staged; never throws; returns the
+ * number archived. A failed read archives nothing (they stay visible).
+ */
+export async function retireOlderHeldCopies(
+  fresh: { id: string; created_at?: string | null },
+  manifestId: string,
+  draftIds: string[],
+  nowIso: string = new Date().toISOString(),
+): Promise<number> {
+  try {
+    if (!fresh.created_at) return 0;
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("menu_versions")
+      .select("id, status, created_at, import_id, summary_json")
+      .is("import_id", null)
+      .eq("status", "staged")
+      .eq("summary_json->>manifest_id", manifestId)
+      .lt("created_at", fresh.created_at)
+      .neq("id", fresh.id)
+      .order("created_at", { ascending: true })
+      .limit(RESTAGE_READ_MAX);
+    if (error) {
+      console.error("[intake-menu-staging] held-copy read failed:", error.message);
+      return 0;
+    }
+    const candidates = (data as HeldCandidate[] | null) ?? [];
+    const plan = new Set(
+      planHeldRetire({ id: fresh.id, created_at: fresh.created_at, manifest_id: manifestId, draft_ids: draftIds }, candidates),
+    );
+    let retired = 0;
+    for (const row of candidates) {
+      if (!plan.has(row.id)) continue;
+      const { data: done, error: uErr } = await admin
+        .from("menu_versions")
+        .update({
+          status: "archived",
+          updated_at: nowIso,
+          summary_json: {
+            ...mergeArchivedSummary(row.summary_json, fresh.id, nowIso),
+            archived_reason: RETIRED_REASON_PREFIX + fresh.id,
+          },
+        })
+        .eq("id", row.id)
+        .eq("status", "staged")
+        .select("id");
+      if (uErr) {
+        console.error("[intake-menu-staging] held-copy retire failed:", uErr.message);
+        continue;
+      }
+      retired += (done ?? []).length;
+    }
+    return retired;
+  } catch (err) {
+    console.error("[intake-menu-staging] held-copy retire exception:", err);
     return 0;
   }
 }

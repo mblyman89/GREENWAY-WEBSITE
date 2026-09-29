@@ -249,3 +249,111 @@ assuming one:
 for the mastering preview. In the bible, S34 = mastering preview and S38 = this
 COA import. R-LLAMA keeps its request code and gets a slice number when it is
 scheduled.
+
+## R-COA-ZIP: Cultivera's COA PDFs as one ZIP (Round 12)
+
+**Owner, verbatim:** "i have confirmed from my cultivera back office, that pdfs
+exist for all the inventory in our back office, which means cultivera can send
+me all of them, hopefully in one big zip file. so update the roadmap to include
+this."
+
+**Why it's needed (verified in code):**
+- Both COA archivers are keyed by an intake manifest and write onto an
+  existing `lab_results` row:
+  - `archiveCoasForManifest`, `src/lib/inventory/coa-archive.ts:109`
+  - `archiveEmailedCoaForManifest`, `:174`
+- A Cultivera-import lot has neither a manifest nor a lab row
+  (`import-lot-core.ts:410-420`). So even with every PDF in hand, there is no
+  way today to store one against it.
+- No ZIP reader is installed. `package.json` has `unpdf` only.
+
+**Plan: slice S39 in the bible (finding F-136).** It shares the page and the
+matcher with S38.
+
+1. **Upload.** A Vercel Function body is capped at 4.5 MB
+   (vercel.com/docs/functions/limitations). So the browser uploads the ZIP
+   straight to a Supabase Storage signed upload URL in the private `coa`
+   bucket, and a server action then processes it in resumable batches. There
+   is no poll or cron: the manager presses Process / Continue.
+2. **Safe ZIP reading** (OWASP File Upload Cheat Sheet):
+   - Stream the entries.
+   - Keep only the base name (zip-slip).
+   - Enforce limits on entry count, per-PDF size (reuse the 25 MB
+     `MAX_BYTES`), total size and compression ratio (zip bomb).
+   - Accept only files that start with the `%PDF-` magic bytes.
+   - Reject nested ZIPs.
+3. **Matching (never fuzzy).** In order:
+   1. the CCRS inventory id in the file name → `ccrs_inventory_external_id`;
+   2. then the exact lot code;
+   3. then a lot id found in the PDF's text layer.
+
+   Anything ambiguous goes to a review list.
+4. **Which lots it can fill.** Only Cultivera-import lots that have
+   `lab_result_id IS NULL` (guarded update). Intake lots are never touched.
+5. **Writes.** Store the PDF at `coa/<lab_id>/<name>.pdf` (the existing
+   convention) and insert `lab_results` with `source='cultivera-coa-zip'`.
+   A SHA-256 makes a re-upload idempotent. One audit event per import and one
+   per lot.
+6. **Schema.** Probably a small owner-applied `coa_imports` table (counts and a
+   cursor). The code stays no-op-safe until it is applied.
+
+## R-COA-EXTRACT: read the terpene profile (and everything else) off every COA (Round 12)
+
+**Owner, verbatim:** "a lot of the coa pdfs have the terpene profile in the
+analysis, and in the json that gets used by intake, has a link to the coa pdf
+that has the terpene profile. a lot of times, the email we get with manifest
+and invoice docs, will have a coa doc with it, so we have the coa saved in the
+system. i want either llama parse to extract the terpene data, or if easier, to
+use the provided url.pdf file in the json file and have llama parse extract it
+from there. there is good information in these coa docs and we shouldn't be
+throwing them in storage somewhere without extracting their useful data."
+
+**Why it's needed (verified in code):**
+- `lab_results.terpenes_json` and `analytes_json` exist (`0023:64-65`), but they
+  are filled only when the vendor JSON itself carries `terpenes`
+  (`intake-parser.ts:354`).
+- The emailed-COA parser hard-codes both to null (`pdf-coa-core.ts:194-195`).
+- The PDFs are archived, both from the JSON `coa` URL (`intake-parser.ts:357`
+  → `coa-archive.ts:109`) and from the email attachment (`:174`), and then
+  never read.
+- The menu's terpenes come only from the curated strain KB
+  (`strain-terpenes.ts:84`).
+- LlamaParse is already wired (`llamaparse-provider.ts`).
+
+**Plan: slice S40 in the bible (finding F-137).**
+
+1. **Which source.** The owner's two options converge. Once archived, the JSON
+   URL's PDF *is* the stored object at `coa_storage_path`.
+   - S40 reads the archived PDF first: it is already ours and survives the lab
+     removing the link.
+   - Only if nothing is archived does it fetch the JSON `coa` URL, through the
+     existing `archiveOneCoa` guard (20 s timeout, 25 MB).
+2. **Extractor.** LlamaExtract (same LlamaCloud key) with a pinned schema
+   version, `cite_sources` and `confidence_scores`.
+   - Endpoint: `POST /api/v2/extract` with `extraction_target: "per_doc"`
+     (developers.llamaindex.ai/llamaparse/extract/guides/configuring-extract).
+   - The fallback is LlamaParse markdown plus a pure table reader, via the
+     existing `parsePdfWithFallback`.
+   - Following LlamaIndex's guidance, the extractor returns clean values and
+     the app computes the rest (% ↔ mg/g, totals).
+3. **Never guess.**
+   - Terpene testing is optional for WA labs (WAC 314-55-102), so a missing
+     panel is stored as "not tested", never as zeros.
+   - `<LOQ`/`ND` are kept as text.
+   - A value is only accepted if its unit is recognised.
+   - The lot/sample id must match before anything is written.
+   - A low-confidence result goes to review.
+   - Vendor-JSON terpenes stay authoritative.
+   - Every value carries provenance (source, storage path, sha256, page,
+     confidence, extractor version).
+4. **Menu.** A lab-measured terpene overlay runs before `attachTerpenes`, which
+   already skips items that have terpenes. The KB remains the labelled
+   "typical for this strain" fallback.
+5. **When it runs.** Inline, best-effort, after the existing archive step at
+   intake finalize (intake-store.ts:1415) and after an S39 attach. For the COAs
+   already stored, the owner presses a backfill that shows a credit estimate
+   first. Every call is logged to `ai_usage` (feature `coa-extract`). No crons
+   or polls.
+6. **Schema.** No new columns are needed for the values. `coa_extracted_at` /
+   `coa_extract_status` would be owner-applied, and the code stays no-op-safe
+   until then.

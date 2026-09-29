@@ -94,6 +94,8 @@ import {
 import { autoReceiveManifestPo } from "@/lib/inventory/po-receive-store";
 import { stageIntakeMenuVersionForManifest } from "@/lib/pos/intake-menu-staging";
 import { CUTOVER_HOLD_COPY, CUTOVER_REASON } from "@/lib/inventory/cutover-guard-core";
+// S30: the fact-hold copy points at the control that settles it.
+import { FACT_HOLD_CARRY_COPY } from "@/lib/pos/intake-fact-review-core";
 // S05 - stamp identity at the door.
 import { identityForLot } from "@/lib/catalog/product-identity-core";
 import {
@@ -1499,7 +1501,7 @@ export async function finalizeManifestDispositions(
             : carry.reason === CUTOVER_REASON
               ? `Staged a menu version but held it: ${what} on top of ${carry.carried} live item(s). ${CUTOVER_HOLD_COPY}`
             : carry.reason === "held-for-fact-review"
-              ? `Staged a menu version but held it for a second look: ${what} on top of ${carry.carried} live item(s). A product has a fact the extraction engine could not verify — check it under Admin → Publish Menu and press Publish there.`
+              ? `Staged a menu version but held it for a second look: ${what} on top of ${carry.carried} live item(s). ${FACT_HOLD_CARRY_COPY}`
               : `Staged a menu version for review: ${what} on top of ${carry.carried} live item(s). The automatic publish didn't finish — press Publish under Admin → Publish Menu to make them sellable on the website + POS.`,
           actorId,
         );

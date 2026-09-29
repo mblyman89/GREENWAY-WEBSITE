@@ -1251,11 +1251,24 @@ describe("the migration list is ordered the way the database will see it", () =>
     // tie kept, unknown id raises P0002, clean-slate restore, grants, the
     // rollback file proving the old bug, re-apply twice, in a rolled-back
     // transaction) passed and failed on each of 12 deliberate sabotages.
-    expect(listed[listed.length - 1]).toMatch(/^0236_/);
+    //
+    // S30 added 0237_fact_review_for_versions.sql (pos_fact_reviews gains a
+    // receiving scope: import_id nullable, manifest_id -> inbound_manifests
+    // on delete cascade, draft_id -> catalog_product_drafts on delete set
+    // null, flag_signature, CHECK exactly one of import_id / manifest_id, and
+    // UNIQUE (manifest_id, source_item_id) for the decision upsert). Verified
+    // in the build sandbox against Postgres 15: 0237 applied twice cleanly on
+    // top of 0001-0236, and scripts/recon/fact-review-for-versions-pg-check.sql
+    // (import rows unchanged, receiving rows accepted, both/neither scope
+    // refused, duplicate refused, cascade + set null, rollback + re-apply, in
+    // a rolled-back transaction) passed and failed on each of 3 deliberate
+    // sabotages.
+    expect(listed[listed.length - 1]).toMatch(/^0237_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0236_publish_archive_rule.sql");
-    expect(listed[listed.length - 2]).toBe("0235_attached_facts.sql");
+    expect(listed[listed.length - 1]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 2]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 3]).toBe("0235_attached_facts.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

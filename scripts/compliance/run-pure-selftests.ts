@@ -867,6 +867,7 @@ import { __runPlaidInvestmentsCoreTests } from "../../src/lib/plaid/investments-
 import { __runLoanCoreTests } from "../../src/lib/loans/loan-core";
 import { __runCustomerInsightsCoreTests } from "../../src/lib/customers/customer-insights-core";
 import { __runCustomerSegmentsCoreTests } from "../../src/lib/customers/customer-segments-core";
+import { __runIntakeFactReviewCoreTests } from "../../src/lib/pos/intake-fact-review-core";
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -1879,6 +1880,11 @@ __runLiquidVolumeTests();
   // receipt copy byte for byte, and the audit fold. Measured 102.
   assertRan("fact-attach-policy-core", __runFactAttachPolicyCoreTests(), 100);
   assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 64);
+  // S30 receiving fact review: flag signature, decision partition (stale
+  // signature re-asks), fix/reject applied to the snapshot, the shared form
+  // parsers, open-flag lookup, the narrow 0237 detector, held-copy retire.
+  // Measured 136.
+  assertRan("intake-fact-review-core", __runIntakeFactReviewCoreTests(), 136);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
