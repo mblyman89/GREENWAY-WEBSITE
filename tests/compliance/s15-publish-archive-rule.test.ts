@@ -87,7 +87,7 @@ describe("S15 pure rule core", () => {
     expect(__runPublishArchiveRuleTests().passed).toBe(42);
   });
   it("publish-guard self-tests (with the new freshness block) pass", () => {
-    expect(__runPublishGuardTests().passed).toBe(110); // S16 added 26 copy checks; S26 +19 issue-link checks
+    expect(__runPublishGuardTests().passed).toBe(111); // S16 added 26 copy checks; S26 +19 issue-link checks; S30 +1 inline-controls copy
   });
   it("the owner's sequence: Cultivera staged -> approval auto-publishes -> zero staged, reason recorded", () => {
     let t: SimVersion[] = [
@@ -153,8 +153,11 @@ describe("S15 migration 0236", () => {
 
   it("is the next migration after 0235", () => {
     const files = readdirSync(resolve(__dirname, "../../supabase/migrations")).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();
-    expect(files.at(-1)).toBe("0236_publish_archive_rule.sql");
-    expect(files.at(-2)).toBe("0235_attached_facts.sql");
+    // S30: 0237 now follows it - pin the position, not "last".
+    const at = files.indexOf("0236_publish_archive_rule.sql");
+    expect(at).toBeGreaterThan(0);
+    expect(files[at - 1]).toBe("0235_attached_facts.sql");
+    expect(files[at + 1]).toBe("0237_fact_review_for_versions.sql");
   });
   it("has zero Supabase-editor transit hazards", () => {
     expect(transitHazards(sql)).toEqual({

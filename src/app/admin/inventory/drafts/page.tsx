@@ -74,8 +74,10 @@ import {
   type DraftClassificationAssessment,
 } from "@/lib/inventory/draft-approval-gate-core";
 // SLICE 18-0: the compliance classification gate. Product Onboarding is the
-// only classification step a RECEIVED lot can reach - fact review is scoped to
-// an import_id, which a manifest-sourced lot never has.
+// classification step a RECEIVED lot reaches. S30: a received lot's
+// fact_extraction_review flag is now answered HERE too (Approved tab, inline
+// IntakeFactReviewPanel -> resolveIntakeFactReview, scoped by delivery + lot
+// key, migration 0237) - no pos_imports row is needed.
 import { extractNameFacts } from "@/lib/inventory/fact-extraction-core";
 import {
   deriveNetVolumeMl,
@@ -116,6 +118,14 @@ import { loadRestockPreview } from "@/lib/inventory/restock-preview-server";
 import { previewUnavailableCopy } from "@/lib/inventory/vendor-identity-core";
 import { restockPreviewPlan } from "@/lib/inventory/restock-preview-view-core";
 import { RestockPreviewChip, RestockPreviewUnavailable } from "@/components/admin/catalog/RestockPreviewChip";
+// S30: inline fact review for received products (Approved tab).
+import { loadOpenIntakeFactFlags } from "@/lib/pos/intake-fact-review-server";
+import {
+  FACT_REVIEW_MIGRATION_COPY,
+  factResultCopy,
+  parseFactResult,
+} from "@/lib/pos/intake-fact-review-core";
+import { IntakeFactReviewPanel } from "./IntakeFactReviewPanel";
 
 export const dynamic = "force-dynamic";
 // T-318 / T-323: the AI product lookup (a server action invoked on this route)
@@ -140,7 +150,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -387,8 +397,14 @@ export default async function CatalogDraftsPage({
   // T-314: is the AI lookup available? (soft-disables the panel when no key.)
   const aiLookupEnabled = isAiConfigured;
 
+  // S30: which approved rows have an open fact flag on their delivery's
+  // newest held update. Approved tab only; bounded reads; never writes.
+  const factFlags = view === "approved" ? await loadOpenIntakeFactFlags(drafts) : null;
+  const factResult = parseFactResult(sp.fact);
+
   const banner =
-    batchDone ? batchResultCopy(batchDone)
+    factResult ? factResultCopy(factResult, sp.fact_msg)
+    : batchDone ? batchResultCopy(batchDone)
     : approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
       : dismissed ? "Draft dismissed."
         : restored ? "Draft restored to the review queue."
@@ -396,7 +412,7 @@ export default async function CatalogDraftsPage({
             : error === "price" ? "Enter a valid price before approving."
               : error ? "Something went wrong updating that draft."
                 : null;
-  const bannerTone = error ? "danger" : "accent";
+  const bannerTone = error || factResult === "error" ? "danger" : "accent";
 
   return (
     <div>
@@ -465,6 +481,18 @@ export default async function CatalogDraftsPage({
           >
             {banner}
           </div>
+        )}
+
+        {/* S30: fact review cannot be saved until migration 0237 is applied. */}
+        {factFlags && factFlags.flags.size > 0 && !factFlags.migrated && (
+          <p className="text-xs text-[var(--admin-text-muted)]" data-testid="fact-review-migration">
+            {FACT_REVIEW_MIGRATION_COPY}
+          </p>
+        )}
+        {factFlags && !factFlags.ok && factFlags.migrated && (
+          <p className="text-xs text-[var(--admin-text-muted)]" data-testid="fact-review-partial">
+            Some deliveries could not be checked for flagged facts just now. Reload to try again, or open Admin → Publish Menu.
+          </p>
         )}
 
         {/* S02: where a deep link landed you, and one click back to everything. */}
@@ -1125,6 +1153,13 @@ export default async function CatalogDraftsPage({
                                 {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
                                 <Button type="submit" variant="neutral" size="sm">↩ Restore</Button>
                               </form>
+                              {view === "approved" && factFlags?.flags.get(d.id) && (
+                                <IntakeFactReviewPanel
+                                  flag={factFlags.flags.get(d.id)!}
+                                  draftId={d.id}
+                                  returnManifest={focus.manifestId}
+                                />
+                              )}
                             </>
                           )}
                         </div>

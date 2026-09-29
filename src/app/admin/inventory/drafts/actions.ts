@@ -22,6 +22,13 @@ import { validateInventoryTypeDraft } from "@/lib/pos/type-registry-core";
 // working in (hidden `return_manifest` field, re-validated as a UUID by
 // draftsHref — the form is never trusted).
 import { draftsHref } from "@/lib/catalog/draft-deep-link-core";
+// S30: inline fact review for receiving-origin products (bible S30.2).
+import {
+  factResultCode,
+  parseIntakeFactForm,
+  type FactResultCode,
+} from "@/lib/pos/intake-fact-review-core";
+import { recordIntakeFactReview } from "@/lib/pos/fact-review-store";
 
 function backTo(formData: FormData | undefined, extra: Record<string, string>): string {
   const raw = formData?.get("return_manifest");
@@ -225,4 +232,77 @@ export async function restoreDraftAction(draftId: string, formData?: FormData) {
     redirect(backTo(formData, { error: "update" }));
   }
   redirect(backTo(formData, { restored: "1" }));
+}
+
+/**
+ * S30 (bible S30.2): the receiving-origin exit for a `fact_extraction_review`
+ * hold. The owner approves, fixes or rejects the flagged fact INLINE on the
+ * approved product (the drafts page, same `inventory.manage` gate as that
+ * page - page.tsx requirePermission), no pos_imports row involved. The
+ * decision is a recorded human act (pos_fact_reviews row with reviewed_by +
+ * an audit row, bible S30.8), then the delivery's menu update is re-staged:
+ * staging applies the decision and auto-publishes when nothing else is
+ * flagged. Before migration 0237 the decision cannot be saved: say so, and
+ * nothing else changes (the held update stays publishable by hand).
+ */
+export async function resolveIntakeFactReview(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const get = (name: string): string => {
+    const v = formData.get(name);
+    return typeof v === "string" ? v : "";
+  };
+  const back = (manifestId: string | null, draftId: string | null, extra: Record<string, string>) =>
+    draftsHref({ status: "approved", manifestId, draftId, extra });
+
+  const parsed = parseIntakeFactForm(get);
+  if (!parsed.ok) {
+    const m = get("manifestId").trim();
+    const d = get("draftId").trim();
+    redirect(back(m || null, d || null, { fact: "error", fact_msg: parsed.error }));
+  }
+  const form = parsed.form;
+
+  let code: FactResultCode;
+  let message = "";
+  try {
+    const saved = await recordIntakeFactReview({
+      manifestId: form.manifestId,
+      draftId: form.draftId,
+      sourceItemId: form.sourceItemId,
+      flagSignature: form.flagSignature,
+      action: form.action,
+      note: form.note,
+      correctedFacts: form.correctedFacts,
+      reviewedBy: session.userId,
+    });
+    if (!saved.applied) {
+      code = "migration";
+    } else {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: `fact_review.${form.action}`,
+        entityType: "pos_fact_review",
+        entityId: `${form.manifestId}:${form.sourceItemId}`,
+        after: {
+          note: form.note,
+          correctedFacts: form.correctedFacts,
+          flagSignature: form.flagSignature,
+          draftId: form.draftId,
+        },
+      });
+      const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
+      const outcome = await stageIntakeMenuVersionForManifest(form.manifestId, session.userId);
+      code = factResultCode(outcome);
+    }
+  } catch (err) {
+    console.error("[drafts] resolveIntakeFactReview failed:", err);
+    code = "error";
+    message = err instanceof Error ? err.message : "Saving the fact decision failed.";
+  }
+  revalidatePath("/admin/inventory/drafts");
+  revalidatePath("/admin/publish");
+  const extra: Record<string, string> = { fact: code };
+  if (code === "error" && message) extra.fact_msg = message.slice(0, 300);
+  redirect(back(form.manifestId, form.draftId, extra));
 }

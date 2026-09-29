@@ -22,6 +22,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { pagedAll } from "@/lib/supabase/chunked-in";
 import type { PosFactReview } from "@/lib/pos/db-types";
 import type { FactResolutionAction, FactResolutionInput, FactReviewFacts } from "@/lib/pos/fact-review-core";
+import { isFactReviewMigrationMissing, type IntakeFactAction } from "@/lib/pos/intake-fact-review-core";
 
 /**
  * SLICE 4B: read every saved decision for an import, reporting whether the
@@ -211,4 +212,112 @@ export async function recordFactReview(input: RecordFactReviewInput): Promise<vo
       .eq("hidden_reason", "reviewer_rejected");
     if (unErr) throw new Error(`Failed to restore the previously rejected item: ${unErr.message}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// S30: receiving-origin decisions (scoped by manifest, migration 0237)
+// ---------------------------------------------------------------------------
+//
+// A received delivery never has a pos_imports row, so its fact flags could
+// not be decided anywhere (bible S30, F-094/F-095). These two functions store
+// and read decisions keyed by (manifest_id, source_item_id) instead. They do
+// NOT mirror onto menu_items: the receiving staging module re-plans the
+// delivery and APPLIES the decision to the snapshot it builds
+// (intake-fact-review-core applyFactDecisions), so the decision reaches the
+// menu through the same single door every other receiving change uses.
+//
+// Before 0237 is applied both are no-ops that say so (never throw for that).
+
+export type IntakeFactReviewRow = PosFactReview & {
+  manifest_id: string | null;
+  draft_id: string | null;
+  flag_signature: string | null;
+};
+
+/** The named columns a receiving decision read needs (no select *). */
+export const INTAKE_FACT_REVIEW_COLUMNS =
+  "id, manifest_id, draft_id, source_item_id, flag_signature, action, note, corrected_facts_json, reviewed_by, updated_at";
+
+/**
+ * Every saved decision for one delivery, paged with a unique tiebreaker.
+ * `ok` false = the read failed (callers MUST fail closed: keep the hold).
+ * `migrated` false = 0237 is not applied (ok is false too: nothing can be
+ * trusted as "decided").
+ */
+export async function listIntakeFactReviewsResult(
+  manifestId: string,
+): Promise<{ reviews: IntakeFactReviewRow[]; ok: boolean; migrated: boolean }> {
+  try {
+    const admin = createSupabaseAdminClient();
+    let failed = false;
+    let missing = false;
+    const rows = await pagedAll<IntakeFactReviewRow>(async (from, to) => {
+      const { data, error } = await admin
+        .from("pos_fact_reviews")
+        .select(INTAKE_FACT_REVIEW_COLUMNS)
+        .eq("manifest_id", manifestId)
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        if (isFactReviewMigrationMissing(error)) missing = true;
+        else console.error("[fact-review-store] listIntakeFactReviews error:", error.message);
+        failed = true;
+        return [];
+      }
+      return (data as IntakeFactReviewRow[] | null) ?? [];
+    });
+    if (failed) return { reviews: [], ok: false, migrated: !missing };
+    return { reviews: rows, ok: true, migrated: true };
+  } catch (err) {
+    console.error("[fact-review-store] listIntakeFactReviews exception:", err);
+    return { reviews: [], ok: false, migrated: true };
+  }
+}
+
+export type RecordIntakeFactReviewInput = {
+  manifestId: string;
+  draftId: string | null;
+  /** The lot key the flag is about (the flag's context.pos_product_key). */
+  sourceItemId: string;
+  /** Which flag this answers (intake-fact-review-core flagSignature). */
+  flagSignature: string;
+  action: IntakeFactAction;
+  note: string | null;
+  correctedFacts: Partial<FactReviewFacts> | null;
+  reviewedBy: string | null;
+};
+
+/**
+ * Upsert one receiving decision (latest wins per delivery + lot key, the
+ * 0237 UNIQUE constraint). import_id is written as NULL explicitly: the 0237
+ * CHECK requires exactly one scope. Returns applied:false with the reason
+ * "migration-0237-not-applied" before the migration; throws on a real error.
+ */
+export async function recordIntakeFactReview(
+  input: RecordIntakeFactReviewInput,
+): Promise<{ applied: true } | { applied: false; reason: "migration-0237-not-applied" }> {
+  if (!input.manifestId || !input.sourceItemId || !input.flagSignature) {
+    throw new Error("A receiving fact decision needs a delivery, a product key and the flag it answers.");
+  }
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("pos_fact_reviews").upsert(
+    {
+      import_id: null,
+      manifest_id: input.manifestId,
+      draft_id: input.draftId,
+      source_item_id: input.sourceItemId,
+      flag_signature: input.flagSignature,
+      action: input.action,
+      note: input.note,
+      corrected_facts_json: input.action === "fix" ? input.correctedFacts ?? {} : null,
+      reviewed_by: input.reviewedBy,
+    },
+    { onConflict: "manifest_id,source_item_id" },
+  );
+  if (error) {
+    if (isFactReviewMigrationMissing(error)) return { applied: false, reason: "migration-0237-not-applied" };
+    throw new Error(`Failed to save the review decision: ${error.message}`);
+  }
+  return { applied: true };
 }

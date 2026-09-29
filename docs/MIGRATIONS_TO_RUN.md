@@ -1239,3 +1239,74 @@ in Vercel.
   editor. It restores the previous function bodies (0002 and 0152) word for
   word, with their previous grants. The app keeps applying the one rule
   either way.
+
+## S30 — 0237 — fact review for products that arrive by receiving
+
+- [ ] `0237_fact_review_for_versions.sql` — changes one table,
+  `pos_fact_reviews` (the fact-review decision log from 0139). Additive
+  only: existing rows are untouched. Depends on 0139, 0023 and 0026 (all long
+  applied); the file refuses to run, by name, if any is missing.
+
+  **Why:** when the extraction engine could not verify a fact on an
+  mg-dosed product that came in on a delivery (for example a name that says
+  "100mg THC" with empty potency columns), the menu update was held. The only
+  place to answer a flagged fact was the Menu Imports review page, and that
+  page needs a POS spreadsheet import (`import_id` was NOT NULL). A received
+  product never has one, so the hold had no exit except publishing by hand
+  (bible S30, findings F-094, F-095, F-118).
+
+  **What it does:** `import_id` becomes nullable. Three columns are added:
+  `manifest_id` (the delivery; the decision is deleted with it),
+  `draft_id` (the Product Onboarding row it was made on; set null if that
+  draft is ever deleted) and `flag_signature` (which flagged facts you looked
+  at). If the facts change later, the old answer no longer counts and you are
+  asked again. Every row must have exactly one scope, an import or a delivery
+  (`pos_fact_reviews_one_scope`). There is one decision per delivery + lot
+  (`pos_fact_reviews_manifest_item_key`), so pressing a button twice updates
+  the same row.
+
+  **What you will see after it is run:** on Product Onboarding → Approved,
+  a product whose delivery is held shows "A fact on this product needs your
+  eyes" with three buttons: **The facts are right**, **Fix the facts…** (the
+  same fields and compliance questions as the Menu Imports review) and
+  **Keep it off the menu**. One click saves your answer (with your name, in
+  the audit log) and rebuilds the delivery's menu update. When nothing else is
+  flagged, the update publishes itself.
+
+  **Until it is run** nothing breaks. A held update stays held, exactly as
+  today, and can still be published by hand under Admin → Publish Menu.
+  Product Onboarding says this migration is what turns the buttons on, and a
+  click reports "needs database migration 0237" instead of failing.
+
+  Safe to re-run (`if not exists`, constraints dropped and re-added by name).
+  Verified: all 237 migrations apply on a clean Postgres 15, 0237 re-applies
+  cleanly, and the scenario script
+  `scripts/recon/fact-review-for-versions-pg-check.sql` passed. It covers
+  receiving rows accepted, latest-wins upsert, both/neither scope refused by
+  name, import rows unchanged, cascade + set null, idempotence, and rollback
+  then re-apply. 3 deliberate sabotages of the SQL were each caught by that
+  script.
+
+  **Run it, then check:**
+
+  ```sql
+  select count(*) filter (where column_name in ('manifest_id', 'draft_id', 'flag_signature')) as new_columns,
+         bool_or(column_name = 'import_id' and is_nullable = 'YES') as import_id_nullable
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'pos_fact_reviews';
+  -- expect 3, true
+
+  select conname
+    from pg_constraint
+   where conrelid = 'public.pos_fact_reviews'::regclass
+     and conname in ('pos_fact_reviews_one_scope', 'pos_fact_reviews_manifest_item_key')
+   order by conname;
+  -- expect both names
+  ```
+
+  **Rollback (only if needed):** paste
+  `supabase/rollbacks/0237_fact_review_for_versions.rollback.sql` into the SQL
+  editor. It deletes the receiving-scoped decisions (they cannot exist without
+  a delivery), drops the two constraints and three columns, and restores
+  `import_id NOT NULL`. Held receiving updates then go back to
+  publish-by-hand.

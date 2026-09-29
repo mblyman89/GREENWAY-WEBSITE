@@ -433,7 +433,10 @@ describe("standing rule 11 — receiving intake is the real pipeline", () => {
     );
     const staging = read("src/lib/pos/intake-menu-staging.ts");
     expect(staging).toContain('admin.rpc("publish_menu_version"');
-    expect(staging).toContain('d.code === "fact_extraction_review"');
+    // S30: the gate compares against the shared constant (intake-fact-review-core),
+    // whose value is pinned here so the code cannot drift from the diagnostic.
+    expect(staging).toContain("d.code === FACT_FLAG_CODE");
+    expect(read("src/lib/pos/intake-fact-review-core.ts")).toContain('export const FACT_FLAG_CODE = "fact_extraction_review";');
   });
 
   it("S00: every SOP sheet line is free of the stale story (rendered data, not source text)", () => {

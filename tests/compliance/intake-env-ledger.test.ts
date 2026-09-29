@@ -251,13 +251,29 @@ describe("intake env ledger", () => {
     }
     // S29 (Accounting tab) is a pure label core + server components; bible S29.7.
     expect(none).toContain("S29");
-    expect(ledger).toContain("As of **S29**");
+    expect(ledger).not.toContain("As of **S29**");
     expect(ledger).toContain('"Revert page/nav files; the pure label core is additive." (S29)');
     expect(ledger).toContain("S29 needs nothing set.");
     for (const f of [
       "src/lib/inventory/manifest-event-labels-core.ts",
       "src/components/admin/inventory/ManifestAccountingPanel.tsx",
       "src/components/admin/inventory/ManifestTimeline.tsx",
+    ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    // S30 (receiving fact review) adds migration 0237 and no variable; its
+    // bible rollback line is S30.7, word for word.
+    expect(none).toContain("S30");
+    expect(ledger).toContain("As of **S30**");
+    expect(ledger).toContain(
+      '"Migration is additive (nullable column + partial index): leave it; revert code." (S30, shipped as `supabase/rollbacks/0237_fact_review_for_versions.rollback.sql`)',
+    );
+    expect(ledger).toContain("S30 needs nothing set, only migration 0237 applied by hand.");
+    for (const f of [
+      "src/lib/pos/intake-fact-review-core.ts",
+      "src/lib/pos/intake-fact-review-server.ts",
+      "src/app/admin/inventory/drafts/IntakeFactReviewPanel.tsx",
+      "src/app/admin/inventory/drafts/actions.ts",
     ]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }
