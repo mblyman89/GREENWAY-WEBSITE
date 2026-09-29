@@ -430,6 +430,7 @@ export function __runCardCannabinoidTests(): void {
   console.log(`\nAll ${results.length} card-cannabinoid tests passed.`);
 }
 
-if (typeof require !== "undefined" && typeof module !== "undefined" && require.main === module) {
-  __runCardCannabinoidTests();
-}
+// Entry guard removed (admin crash fix): turbopack compiles `require.main === module`
+// into client chunks where `require` is shimmed but `module` is not defined, which
+// threw "ReferenceError: module is not defined" on every admin page once this file
+// became reachable from a client component. Self-tests run via scripts/compliance/run-pure-selftests.ts.

@@ -403,7 +403,7 @@ function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`ASSERT: ${msg}`);
 }
 
-function runSelfTests(): void {
+export function __runCycleCountSheetTests(): void {
   const lines: SheetLine[] = [
     {
       lineId: "L1", lotId: "lot1", lotCode: "ABC123", posProductKey: "SKU-1", productName: "Blue Dream 3.5g",
@@ -483,6 +483,7 @@ function runSelfTests(): void {
   console.log("cycle-count-sheet-core: all self-tests passed.");
 }
 
-if (typeof require !== "undefined" && require.main === module) {
-  runSelfTests();
-}
+// Entry guard removed (admin crash fix): turbopack compiles `require.main === module`
+// into client chunks where `require` is shimmed but `module` is not defined, which
+// threw "ReferenceError: module is not defined" on every admin page once this file
+// became reachable from a client component. Self-tests (__runCycleCountSheetTests) run via scripts/compliance/run-pure-selftests.ts.
