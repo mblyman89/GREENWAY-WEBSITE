@@ -66,6 +66,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Publish Menu", href: "/admin/publish", permission: "menu.import", icon: "\ud83d\udce2", group: "Product Intake" }, // 📢 4 · Publish (SLICE 76 command center)
   { label: "Product Enrichment", href: "/admin/products", permission: "products.enrich", icon: "\u2728", group: "Product Intake" }, // ✨ 5 · Enrich
   { label: "Product Mastering", href: "/admin/products/masters", permission: "inventory.manage", icon: "\ud83e\uddec", group: "Product Intake" }, // 🧬 6 · Master
+  // Stays in Product Intake: owner decision D-R2-3 (manager runs AP)
   { label: "Accounts Payable", href: "/admin/vendor-payments", permission: "payables.manage", icon: "\ud83d\udcb3", group: "Product Intake" }, // 💳 8 · Pay (W10: scoped — purchase manager runs AP)
   { label: "CCRS Benchmarks", href: "/admin/discovery/benchmarks", permission: "inventory.manage", icon: "\ud83d\udcca", group: "Product Intake" }, // 📊 reference — fuel, not a stage
   { label: "Knowledge Base", href: "/admin/knowledge-base", permission: "products.enrich", icon: "\ud83d\udcda", group: "Product Intake" }, // 📚 reference — fuel, not a stage

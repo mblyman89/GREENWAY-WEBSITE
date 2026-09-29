@@ -236,7 +236,7 @@ describe("intake env ledger", () => {
     }
     // S28 (Issues tabs) is pure cores + server components; bible S28.7.
     expect(none).toContain("S28");
-    expect(ledger).toContain("As of **S28**");
+    expect(ledger).not.toContain("As of **S28**");
     expect(ledger).toContain(
       '"Revert the three page files + delete issues-core/IssuesList/IssuesSummaryLine; PageTabs (S27) and fix-link core (S26) stand alone." (S28)',
     );
@@ -246,6 +246,18 @@ describe("intake env ledger", () => {
       "src/components/admin/ui/IssuesList.tsx",
       "src/components/admin/ui/IssuesSummaryLine.tsx",
       "src/components/admin/inventory/RegisterSellabilityBanner.tsx",
+    ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    // S29 (Accounting tab) is a pure label core + server components; bible S29.7.
+    expect(none).toContain("S29");
+    expect(ledger).toContain("As of **S29**");
+    expect(ledger).toContain('"Revert page/nav files; the pure label core is additive." (S29)');
+    expect(ledger).toContain("S29 needs nothing set.");
+    for (const f of [
+      "src/lib/inventory/manifest-event-labels-core.ts",
+      "src/components/admin/inventory/ManifestAccountingPanel.tsx",
+      "src/components/admin/inventory/ManifestTimeline.tsx",
     ]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }

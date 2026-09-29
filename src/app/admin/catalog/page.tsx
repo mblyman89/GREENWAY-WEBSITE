@@ -400,23 +400,17 @@ export default async function CatalogHubPage() {
             </Card>
             ) : null}
 
-            {/* 8 — Accounts Payable */}
+            {/* 8 — Accounts Payable. S29: kept (the manager runs AP, owner
+                decision D-R2-3) but shrunk to one compact row. */}
             {canSee("pay") ? (
-            <Card accent="green">
-              <CardHeader title={stageTitle("pay")} subtitle="Pay the vendor" />
-              <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-                Once a delivery is accepted, pick the invoice and pay it — the
-                amount box auto-fills with what you owe, and deliveries linked to
-                a PO are compared against the order before you pay. Every payment
-                is a draft you review first.
-              </p>
-              <div className="mt-3">
-                <Badge tone="neutral">ACH &amp; manual payments</Badge>
-              </div>
-              <div className="mt-4">
-                <Button href="/admin/vendor-payments" size="sm">Open accounts payable →</Button>
-              </div>
-            </Card>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-2 text-sm col-span-full">
+              <span className="text-[var(--admin-text-muted)]">
+                <strong className="text-[var(--admin-text)]">{stageTitle("pay")}</strong> {"\u00b7"} pay the vendor once a delivery is accepted (every payment is a draft you review first).
+              </span>
+              <Link href="/admin/vendor-payments" className="font-bold text-[var(--admin-accent)] hover:underline">
+                Accounts Payable {"\u2192"}
+              </Link>
+            </div>
             ) : null}
           </div>
         </Section>
