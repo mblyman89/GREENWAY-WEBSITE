@@ -18,7 +18,14 @@
  */
 
 import Link from "next/link";
-import { DEFAULT_KEEP_PARAMS, tabAriaLabel, tabCountLabel, tabHref, type TabSpec } from "@/lib/admin/page-tabs-core";
+import {
+  DEFAULT_KEEP_PARAMS,
+  tabAriaLabel,
+  tabCountLabel,
+  tabHref,
+  tabHrefCarry,
+  type TabSpec,
+} from "@/lib/admin/page-tabs-core";
 
 export type PageTabsProps<K extends string> = {
   /** Route the tabs live on, e.g. "/admin/inventory/intake". */
@@ -31,6 +38,13 @@ export type PageTabsProps<K extends string> = {
   allow?: readonly string[];
   /** Accessible name for the nav landmark, e.g. "Receiving views". */
   ariaLabel: string;
+  /**
+   * S28: carry the page's WHOLE serialized query instead of an allow-list
+   * (Inventory's facet filters). When set, `keep`/`allow` are ignored.
+   */
+  carry?: string;
+  /** S28: param names `carry` must not keep (result banners, paging). */
+  carryDrop?: readonly string[];
 };
 
 export function PageTabs<K extends string>({
@@ -40,6 +54,8 @@ export function PageTabs<K extends string>({
   keep = {},
   allow = DEFAULT_KEEP_PARAMS,
   ariaLabel,
+  carry,
+  carryDrop,
 }: PageTabsProps<K>) {
   return (
     <nav aria-label={ariaLabel} className="flex flex-wrap gap-1.5 border-b border-[var(--admin-border)] pb-3">
@@ -49,7 +65,7 @@ export function PageTabs<K extends string>({
         return (
           <Link
             key={tab.key}
-            href={tabHref(base, tab.key, keep, allow)}
+            href={carry !== undefined ? tabHrefCarry(base, tab.key, carry, carryDrop) : tabHref(base, tab.key, keep, allow)}
             aria-current={isActive ? "page" : undefined}
             aria-label={pill ? tabAriaLabel(tab.label, tab.count) : undefined}
             title={tab.blurb}
@@ -64,7 +80,12 @@ export function PageTabs<K extends string>({
             {pill ? (
               <span
                 data-testid="page-tab-count"
-                className="ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full bg-[var(--admin-surface-hover)] px-1.5 text-[10px] font-bold tabular-nums"
+                data-tone={tab.countTone === "danger" ? "danger" : undefined}
+                className={`ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums ${
+                  tab.countTone === "danger"
+                    ? "bg-[var(--admin-danger)]/20 text-[var(--admin-danger)]"
+                    : "bg-[var(--admin-surface-hover)]"
+                }`}
               >
                 {pill}
               </span>

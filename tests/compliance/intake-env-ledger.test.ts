@@ -223,7 +223,7 @@ describe("intake env ledger", () => {
     // "Delete page-tabs-core + PageTabs; ReceivingTabs restored from git (it
     // was only wrapped)." Its new code reads no environment.
     expect(none).toContain("S27");
-    expect(ledger).toContain("As of **S27**");
+    expect(ledger).not.toContain("As of **S27**");
     expect(ledger).toContain('"Delete page-tabs-core + PageTabs; ReceivingTabs restored from git (it was only wrapped)." (S27)');
     expect(ledger).toContain("S27 needs nothing set.");
     for (const f of [
@@ -231,6 +231,21 @@ describe("intake env ledger", () => {
       "src/lib/admin/page-tab-sets.ts",
       "src/components/admin/ui/PageTabs.tsx",
       "src/components/admin/inventory/ReceivingTabs.tsx",
+    ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    // S28 (Issues tabs) is pure cores + server components; bible S28.7.
+    expect(none).toContain("S28");
+    expect(ledger).toContain("As of **S28**");
+    expect(ledger).toContain(
+      '"Revert the three page files + delete issues-core/IssuesList/IssuesSummaryLine; PageTabs (S27) and fix-link core (S26) stand alone." (S28)',
+    );
+    expect(ledger).toContain("S28 needs nothing set.");
+    for (const f of [
+      "src/lib/admin/issues-core.ts",
+      "src/components/admin/ui/IssuesList.tsx",
+      "src/components/admin/ui/IssuesSummaryLine.tsx",
+      "src/components/admin/inventory/RegisterSellabilityBanner.tsx",
     ]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }

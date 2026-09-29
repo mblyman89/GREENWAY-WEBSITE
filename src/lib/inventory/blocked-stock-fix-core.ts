@@ -83,10 +83,17 @@ export function fixLinkForLot(cause: BlockedCause, lotId: string, productKey: st
      * right.
      */
     case "no_product_link":
+      /**
+       * Round 11 audit (honest): the lot page shows the POS product key READ-
+       * ONLY (lot-edit-core LOCKED_LOT_FIELDS). The only writer today is Bulk
+       * fill (applyBulkFill), which fills lots from the one-time Cultivera
+       * import. So the per-lot link says exactly that instead of promising a
+       * control the lot page does not have; per-lot linking is S37.
+       */
       return {
         href: `/admin/inventory/${lotId}`,
-        label: "Open lot to link a product",
-        why: "A lot with no POS product key has nothing for the register to ring up. The link is made on the lot.",
+        label: "Open lot (see its product details)",
+        why: "The POS product key is read-only on the lot page. Lots from the one-time Cultivera import can be linked with Bulk fill on the Inventory list; other lots are linked when they are received through Product Intake.",
       };
 
     /**
@@ -95,7 +102,9 @@ export function fixLinkForLot(cause: BlockedCause, lotId: string, productKey: st
      */
     case "no_menu_card":
       return {
-        href: "/admin/inventory/drafts?status=draft",
+        // Round 11: narrow Onboarding to THIS product (DRAFT_SEARCH_COLUMNS
+        // includes pos_product_key, onboarding-list-core.ts).
+        href: key ? `/admin/inventory/drafts?status=draft&q=${encKey(key)}` : "/admin/inventory/drafts?status=draft",
         label: "Approve in Product Onboarding",
         why: "No published menu card uses this product key yet. Approve it in Product Onboarding, then publish the menu.",
       };
@@ -117,23 +126,36 @@ export function fixLinkForLot(cause: BlockedCause, lotId: string, productKey: st
             why: "This lot is hidden on the menu but carries no product key to follow, so start at the lot.",
           };
 
+    /**
+     * Round 11 audit: a recall hold is card-level — buildRecallHoldIndex
+     * (recall-hold-core.ts) holds a product KEY when ANY lot with that key is
+     * "recalled". The blocked lot is usually a DIFFERENT, active lot, so its
+     * own page has nothing to clear. Go to the recalled lots for this key
+     * (the list's `q` matches pos_product_key) and change their status there.
+     */
     case "recall_hold":
-      return {
-        href: `/admin/inventory/${lotId}`,
-        label: "Open lot to review the recall",
-        why: "A recall hold is cleared against the lot once the product is cleared for sale.",
-      };
+      return key
+        ? {
+            href: `/admin/inventory?status=recalled&q=${encKey(key)}`,
+            label: "Open the recalled lots for this product",
+            why: "Another lot of this product is marked recalled, which holds every lot of it. Clear that lot's status (Lifecycle status on its page) once the recall is resolved.",
+          }
+        : {
+            href: `/admin/inventory/${lotId}#lifecycle`,
+            label: "Open lot to review the recall",
+            why: "A recall hold is cleared against the lot once the product is cleared for sale.",
+          };
 
     case "lot_not_active":
       return {
-        href: `/admin/inventory/${lotId}`,
+        href: `/admin/inventory/${lotId}#lifecycle`,
         label: "Open lot to set it active",
         why: "The lot's status is not active, so its stock is not sellable.",
       };
 
     case "lot_empty":
       return {
-        href: `/admin/inventory/${lotId}`,
+        href: `/admin/inventory/${lotId}#adjust`,
         label: "Open lot to receive stock",
         why: "The lot is active but has no units on hand.",
       };
@@ -181,9 +203,11 @@ export function bulkFixLinkForCause(cause: BlockedCause, count: number): FixLink
      */
     case "no_product_link":
       return {
-        href: "/admin/inventory?missingProductLink=1",
-        label: `Review all ${count} unlinked lots`,
-        why: "The inventory worklist filtered to lots with no POS product link, so they can be linked one after another.",
+        // Round 11: open Bulk fill already set to the POS product key field
+        // (BulkFillPanel preselects `bulkField`), on exactly these lots.
+        href: "/admin/inventory?status=active&missingProductLink=1&bulk=1&bulkField=pos_product_key",
+        label: `Link all ${count} unlinked lots (Bulk fill)`,
+        why: "Opens Bulk fill on the lots with no POS product link, with the product key field chosen. Bulk fill can only write lots from the one-time Cultivera import; any others are listed there as not fillable.",
       };
 
     // Recalls and lot states are handled lot by lot on purpose: each one is a
@@ -238,8 +262,32 @@ export function __runBlockedStockFixCoreTests(): void {
 
   const notOnMenu = fixLinkForLot("no_menu_card", "lot-2", "SKU-43");
   ok(
-    notOnMenu.href === "/admin/inventory/drafts?status=draft",
-    "not-on-menu goes to Product Onboarding",
+    notOnMenu.href === "/admin/inventory/drafts?status=draft&q=SKU-43",
+    "not-on-menu goes to Product Onboarding, narrowed to the key",
+  );
+  ok(
+    fixLinkForLot("no_menu_card", "lot-2", "  ").href === "/admin/inventory/drafts?status=draft",
+    "not-on-menu without a key opens the whole Onboarding list",
+  );
+  ok(
+    fixLinkForLot("no_menu_card", "lot-2", "A&B").href === "/admin/inventory/drafts?status=draft&q=A%26B",
+    "onboarding q is encoded",
+  );
+
+  // Round 11: recall is card-level; send to the RECALLED lots of the key.
+  ok(
+    fixLinkForLot("recall_hold", "lot-r", "SKU-R").href === "/admin/inventory?status=recalled&q=SKU-R",
+    "recall hold goes to the recalled lots for the key",
+  );
+  ok(
+    fixLinkForLot("recall_hold", "lot-r", null).href === "/admin/inventory/lot-r#lifecycle",
+    "recall hold without a key falls back to the lot's Lifecycle form",
+  );
+  ok(fixLinkForLot("lot_not_active", "lot-s", "K").href === "/admin/inventory/lot-s#lifecycle", "inactive -> #lifecycle");
+  ok(fixLinkForLot("lot_empty", "lot-e", "K").href === "/admin/inventory/lot-e#adjust", "empty -> #adjust");
+  ok(
+    /read-only/i.test(fixLinkForLot("no_product_link", "lot-u", null).why),
+    "unlinked lot link is honest that the key is read-only on the lot page",
   );
   // THE TRAP: products/[key] calls notFound() for unpublished keys.
   ok(
@@ -250,7 +298,7 @@ export function __runBlockedStockFixCoreTests(): void {
   // ── The one cause the old blanket link got right stays right ─────────────
   ok(
     fixLinkForLot("no_product_link", "lot-3", null).href === "/admin/inventory/lot-3",
-    "an unlinked lot is fixed on the lot",
+    "an unlinked lot opens the lot",
   );
 
   // ── Never emit a link that cannot resolve ────────────────────────────────
@@ -292,9 +340,11 @@ export function __runBlockedStockFixCoreTests(): void {
 
   const bulkUnlinked = bulkFixLinkForCause("no_product_link", 5);
   ok(
-    bulkUnlinked !== null && bulkUnlinked.href === "/admin/inventory?missingProductLink=1",
-    "bulk unlinked link uses the REAL existing worklist knob",
+    bulkUnlinked !== null &&
+      bulkUnlinked.href === "/admin/inventory?status=active&missingProductLink=1&bulk=1&bulkField=pos_product_key",
+    "bulk unlinked link opens Bulk fill on the REAL worklist knob with the key field chosen",
   );
+  ok(bulkUnlinked !== null && bulkUnlinked.label.includes("5"), "bulk unlinked states the count");
 
   // Proven absent rather than guessed: /admin/products has no visibility
   // filter, so no bulk button is offered for hidden products.

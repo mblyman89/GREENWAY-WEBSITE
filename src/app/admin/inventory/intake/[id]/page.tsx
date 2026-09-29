@@ -4,7 +4,12 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, StickyActionBar } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button, Field, Input, Textarea, Select } from "@/components/admin/ui";
+import { Button, Field, Input, Textarea, Select, IssuesList, IssuesSummaryLine, PageTabs } from "@/components/admin/ui";
+// S28: the Issues tab (held lots, missing COAs, unmapped categories, waiting drafts).
+import { buildManifestIssues, manifestHeldAutoOpen, issuesTabBadge, summarizeIssues } from "@/lib/admin/issues-core";
+import { resolveTab, tabHref } from "@/lib/admin/page-tabs-core";
+import { MANIFEST_PAGE_TABS, manifestPageBase } from "@/lib/admin/page-tab-sets";
+import { evaluateLotActivation } from "@/lib/inventory/lot-activation-gate-core";
 import { getManifestById } from "@/lib/inventory/store";
 import { getParseStatusForManifestNumber } from "@/lib/inbound-email/llamaparse-status-server";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
@@ -95,6 +100,8 @@ export default async function ManifestReviewPage({
     /** books-81/books-83: the ledger's own answer, surfaced not swallowed. */
     books?: string;
     booksError?: string;
+    /** S28: Delivery | Issues. */
+    tab?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -122,6 +129,7 @@ export default async function ManifestReviewPage({
     inv,
     books,
     booksError,
+    tab,
   } = await searchParams;
 
   const manifest = await getManifestById(id);
@@ -232,7 +240,6 @@ export default async function ManifestReviewPage({
   const kbMatchByLotId = new Map(
     lots.map((l, i) => [l.id, kbMatches[i]] as const),
   );
-  const isPending = manifest.status === "pending";
   const inProgress = manifest.status === "pending" || manifest.status === "in_transit" || manifest.status === "received";
 
   const withCoa = lots.filter((l) => l.lab_result_id).length;
@@ -275,6 +282,40 @@ export default async function ManifestReviewPage({
     hasTransport,
     events,
   });
+
+  // S28: the Issues tab, from STORED state only. A lot finalize held back is
+  // still `quarantine` with disposition `accepted` (intake-store finalize:
+  // "Keep it OUT of sellable inventory. Record the accept intent"); its
+  // reasons come from the SAME gate the finalize ran, on today's facts, so a
+  // row disappears as soon as the lot is fixed — no `?held=` needed.
+  const heldLots = inProgress
+    ? []
+    : lots
+        .filter((l) => l.status === "quarantine" && l.disposition === "accepted")
+        .map((l) => {
+          const label = l.product_name || l.lot_code || "Unnamed lot";
+          const verdict = evaluateLotActivation({
+            id: l.id,
+            label,
+            ccrsExternalId: l.ccrs_inventory_external_id,
+            hasLabResult: l.lab_result_id != null,
+            labPassed: l.lab_result_id ? (labFacts.get(l.lab_result_id)?.passed ?? null) : null,
+          });
+          return { id: l.id, label, reasons: verdict.reasons };
+        });
+  const issues = buildManifestIssues({
+    manifestId: id,
+    inProgress,
+    heldLots,
+    missingCoaLines: missingCoa,
+    unmappedCategoryLines: lots.filter((l) => categoryByLotId.get(l.id)?.unmapped).length,
+    menu: menuSnapshot ? { pendingDrafts: menuSnapshot.pendingDrafts, stagedWaiting: menuSnapshot.stagedWaiting } : null,
+  });
+  const issueSummary = summarizeIssues(issues);
+  const pageBase = manifestPageBase(id);
+  const tabs = MANIFEST_PAGE_TABS.map((t) => (t.key === "issues" ? { ...t, ...issuesTabBadge(issueSummary) } : t));
+  // `held=0` is a clean finalize and must NOT auto-open Issues (manifestHeldAutoOpen).
+  const activeTab = resolveTab(MANIFEST_PAGE_TABS, { tab, held: manifestHeldAutoOpen(held) }, "delivery");
 
   return (
     <div>
@@ -413,14 +454,10 @@ export default async function ManifestReviewPage({
             the ledger, and the product was capitalised exactly once.
           </div>
         )}
-        {held && held !== "0" && (
-          <div className="rounded-[var(--admin-radius)] border border-red-500/45 bg-red-500/[0.08] px-4 py-2 text-sm text-red-200">
-            ⛔ <strong>{held}</strong> accepted lot{held === "1" ? " was" : "s were"} <strong>held in
-            quarantine</strong> and could NOT go live — each is missing a CCRS identifier, missing a COA/lab
-            result, or has a FAILED lab result. Fix the flagged lots (add the identifier / attach the passing
-            COA) and finalize again. Nothing dirty was placed on the sales floor.
-          </div>
-        )}
+        {/* S28: the old red "held in quarantine" banner is now one Issues row
+            PER held lot (what it is missing + Open lot), computed from the lot
+            rows themselves, so it stays until each lot is fixed. `?held=N`
+            only decides which tab opens first. */}
         {lot && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm text-[var(--admin-text-muted)]">
             Line marked <strong>{lot === "accepted" ? "accepted" : "rejected at dock"}</strong>. When
@@ -549,6 +586,21 @@ export default async function ManifestReviewPage({
           </div>
         )}
 
+        {/* S28: Delivery | Issues. Result banners above show on every tab. */}
+        <PageTabs base={pageBase} tabs={tabs} active={activeTab} ariaLabel="Manifest views" allow={[]} />
+
+        {activeTab === "issues" && (
+          <IssuesList
+            issues={issues}
+            emptyText="Nothing needs attention on this delivery. Every accepted lot passed the go-live check."
+          />
+        )}
+
+        {activeTab === "delivery" && (
+          <>
+        {/* S28 (D-R2-2): at most ONE line, only when something blocks. */}
+        <IssuesSummaryLine summary={issueSummary} href={tabHref(pageBase, "issues", {}, [])} />
+
         {/* H15f — guided accept: ① Arrived → ② Verify counts → ③ Accept → ④ On menu,
             plain-English stage guidance + green "from the manifest" chips. */}
         <GuidedAcceptRibbon
@@ -609,12 +661,8 @@ export default async function ManifestReviewPage({
           />
         </div>
 
-        {missingCoa > 0 && isPending && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/30 bg-[var(--admin-orange-soft)] px-4 py-3 text-sm text-[var(--admin-orange)]">
-            ⚠️ {missingCoa} line{missingCoa === 1 ? "" : "s"} have no COA / lab result. WA CCRS manifest
-            reporting needs the COA&apos;s LabtestexternalIdentifier — add it on the lot before selling.
-          </div>
-        )}
+        {/* S28: "N lines have no COA" is an Issues row while receiving is open
+            (Review the lines → #manifest-lines), not a banner. */}
 
         {/* Parsed lines */}
         <div id="manifest-lines" className="scroll-mt-24 overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
@@ -1132,6 +1180,8 @@ export default async function ManifestReviewPage({
             This manifest has been {manifestStatusBadge(manifest.status).label.toLowerCase()}. Lots
             are managed from the inventory list.
           </p>
+        )}
+          </>
         )}
       </div>
     </div>

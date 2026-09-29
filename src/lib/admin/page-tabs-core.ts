@@ -32,6 +32,11 @@ export type TabSpec<K extends string = string> = {
   autoOpenParams?: readonly string[];
   /** Optional count pill (e.g. S28's issue count). Hidden when null/undefined. */
   count?: number | null;
+  /**
+   * S28 (D-R2-2): the pill's tone. "danger" only when something BLOCKS
+   * (Needs action); warnings alone keep the neutral pill.
+   */
+  countTone?: "neutral" | "danger";
 };
 
 export type TabParams = { tab?: string; error?: string; [k: string]: string | undefined };
@@ -82,6 +87,30 @@ export function tabHref(
     if (name === "tab") continue;
     const v = keep[name];
     if (present(v)) qs.set(name, v as string);
+  }
+  return `${base}?${qs.toString()}`;
+}
+
+/**
+ * S28: the href for one tab on a page whose worklist state is too rich for an
+ * allow-list (the Inventory page carries ~30 facet/flag/range params, some
+ * repeated). `carry` is the page's own serialized query; every pair survives
+ * in order (repeated keys included) except `tab`, which is set first, and the
+ * names in `drop` (result banners, paging). Never guesses a param.
+ */
+export function tabHrefCarry(
+  base: string,
+  key: string,
+  carry: string,
+  drop: readonly string[] = [],
+): string {
+  const src = new URLSearchParams(carry);
+  const qs = new URLSearchParams();
+  qs.set("tab", key);
+  const dropped = new Set(["tab", ...drop]);
+  for (const [name, value] of src) {
+    if (dropped.has(name) || value === "") continue;
+    qs.append(name, value);
   }
   return `${base}?${qs.toString()}`;
 }
@@ -184,6 +213,20 @@ export function __runPageTabsCoreTests(): { passed: number; failed: number } {
   const pre: TabSpec<K>[] = [{ key: "main", label: "Main", count: 7 }];
   ok(withTabCounts(pre, {})[0].count === 7, "absent key keeps its existing count");
   ok(withTabCounts(pre, { main: null })[0].count === null, "explicit null clears the pill");
+
+  // tabHrefCarry (S28)
+  ok(tabHrefCarry("/admin/x", "issues", "") === "/admin/x?tab=issues", "carry: empty query");
+  ok(
+    tabHrefCarry("/admin/x", "lots", "tab=issues&fVendor=A&fVendor=B%2C+C&q=blue") ===
+      "/admin/x?tab=lots&fVendor=A&fVendor=B%2C+C&q=blue",
+    "carry: repeated keys kept in order, old tab replaced",
+  );
+  ok(
+    tabHrefCarry("/admin/x", "lots", "page=3&restored=ok&q=k", ["page", "restored"]) === "/admin/x?tab=lots&q=k",
+    "carry: dropped names removed",
+  );
+  ok(tabHrefCarry("/admin/x", "a", "q=&status=active") === "/admin/x?tab=a&status=active", "carry: blank values dropped");
+  ok(tabHrefCarry("/admin/x", "a", "?q=z") === "/admin/x?tab=a&q=z", "carry: a leading ? is tolerated");
 
   return { passed, failed };
 }

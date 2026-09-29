@@ -21,3 +21,5 @@ export {
 export { Section } from "./Section";
 export { Badge, type BadgeTone } from "./Badge";
 export { PageTabs, type PageTabsProps } from "./PageTabs";
+export { IssuesList, type IssuesListProps } from "./IssuesList";
+export { IssuesSummaryLine, type IssuesSummaryLineProps } from "./IssuesSummaryLine";

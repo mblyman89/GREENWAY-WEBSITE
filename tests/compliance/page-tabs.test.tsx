@@ -43,7 +43,7 @@ describe("S27 · page-tabs-core (pure)", () => {
   it("embedded self-tests pass, and the count is pinned (41)", () => {
     const r = __runPageTabsCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(41);
+    expect(r.passed).toBe(46);
   });
 
   it("is registered in the pure self-test runner", () => {
@@ -131,7 +131,7 @@ describe("S27 · PageTabs component", () => {
     const src = code("src/components/admin/ui/PageTabs.tsx");
     expect(src).not.toContain('"use client"');
     expect(src).not.toMatch(/usePathname|useRouter|useState|useEffect/);
-    expect(src).toContain("href={tabHref(base, tab.key, keep, allow)}");
+    expect(src).toContain("href={carry !== undefined ? tabHrefCarry(base, tab.key, carry, carryDrop) : tabHref(base, tab.key, keep, allow)}");
     expect(read("src/components/admin/ui/index.ts")).toContain('export { PageTabs, type PageTabsProps } from "./PageTabs";');
   });
 
