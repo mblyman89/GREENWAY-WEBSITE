@@ -218,6 +218,22 @@ describe("intake env ledger", () => {
     ]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }
+    expect(ledger).not.toContain("As of **S26**");
+    // S27 (PageTabs) is a pure core + a server component; bible S27.7
+    // "Delete page-tabs-core + PageTabs; ReceivingTabs restored from git (it
+    // was only wrapped)." Its new code reads no environment.
+    expect(none).toContain("S27");
+    expect(ledger).toContain("As of **S27**");
+    expect(ledger).toContain('"Delete page-tabs-core + PageTabs; ReceivingTabs restored from git (it was only wrapped)." (S27)');
+    expect(ledger).toContain("S27 needs nothing set.");
+    for (const f of [
+      "src/lib/admin/page-tabs-core.ts",
+      "src/lib/admin/page-tab-sets.ts",
+      "src/components/admin/ui/PageTabs.tsx",
+      "src/components/admin/inventory/ReceivingTabs.tsx",
+    ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
     expect(ledger).not.toContain("As of **S19**");
     expect(ledger).not.toContain("As of **S18**");
   });

@@ -5,6 +5,9 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { withBackParam } from "@/lib/admin/back-link-core";
+import { PageTabs } from "@/components/admin/ui/PageTabs";
+import { resolveTab, withTabCounts } from "@/lib/admin/page-tabs-core";
+import { MASTERS_PAGE_TABS } from "@/lib/admin/page-tab-sets";
 import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button, Badge } from "@/components/admin/ui";
 import {
@@ -38,7 +41,7 @@ export default async function MastersPage({
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
-  const tab = sp.tab === "suggestions" ? "suggestions" : "masters";
+  const tab = resolveTab(MASTERS_PAGE_TABS, { tab: sp.tab }, "masters");
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -128,10 +131,13 @@ export default async function MastersPage({
           <StatCard label="AI grouping" value={isAiConfigured ? "On" : "Off"} hint={isAiConfigured ? "smarter matches enabled" : "exact-name only"} accent={isAiConfigured ? "green" : "muted"} />
         </div>
 
-        <div className="flex gap-2 border-b border-[var(--admin-border)]">
-          <a href={`${BASE}?tab=masters`} className={tabCls(tab === "masters")}>Product Masters ({masters.length})</a>
-          <a href={`${BASE}?tab=suggestions`} className={tabCls(tab === "suggestions")}>Suggestions ({suggestions.length})</a>
-        </div>
+        <PageTabs
+          base={BASE}
+          tabs={withTabCounts(MASTERS_PAGE_TABS, { masters: masters.length, suggestions: suggestions.length })}
+          active={tab}
+          keep={{ back: sp.back }}
+          ariaLabel="Product mastering views"
+        />
 
         {tab === "masters" ? (
           <MastersTab masters={masters} sp={sp} />
@@ -141,12 +147,6 @@ export default async function MastersPage({
       </div>
     </div>
   );
-}
-
-function tabCls(active: boolean) {
-  return `px-4 py-2 text-sm font-semibold ${
-    active ? "border-b-2 border-[var(--admin-accent)] text-white" : "text-white/50 hover:text-white/80"
-  }`;
 }
 
 function MastersTab({

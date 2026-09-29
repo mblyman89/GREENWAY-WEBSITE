@@ -5,41 +5,17 @@
  * "Incoming (email)" (the hero, default) vs "Manual tools" (the drawer with
  * the four import forms + KB backfill).
  *
- * Unlike ReportTabs (route-per-tab via usePathname), Receiving is a single
- * route, so tabs are plain `?tab=` links and the ACTIVE tab is resolved on
- * the server (resolveReceivingTab) and passed down as a prop. That keeps
- * this a zero-JS server component and lets the server auto-select the
- * Manual tab when a manual-form error redirect lands.
+ * S27: now a thin wrapper over the shared PageTabs primitive. The markup is
+ * byte-identical (pinned by tests/compliance/page-tabs.test.tsx), RECEIVING_TABS
+ * is unchanged, and the active tab is still resolved on the server
+ * (resolveReceivingTab) so a manual-form error redirect auto-opens Manual tools.
  */
 
-import Link from "next/link";
+import { PageTabs } from "@/components/admin/ui/PageTabs";
 import { RECEIVING_TABS, type ReceivingTab } from "@/lib/inventory/receiving-tabs-core";
 
+export const RECEIVING_TABS_BASE = "/admin/inventory/intake";
+
 export function ReceivingTabs({ active }: { active: ReceivingTab }) {
-  return (
-    <nav
-      aria-label="Receiving views"
-      className="flex flex-wrap gap-1.5 border-b border-[var(--admin-border)] pb-3"
-    >
-      {RECEIVING_TABS.map((tab) => {
-        const isActive = tab.key === active;
-        return (
-          <Link
-            key={tab.key}
-            href={tab.href}
-            aria-current={isActive ? "page" : undefined}
-            title={tab.blurb}
-            className={`rounded-lg px-3.5 py-2 text-xs font-bold transition ${
-              isActive
-                ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
-                : "text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] hover:text-[var(--admin-text)]"
-            }`}
-          >
-            <span className="mr-1.5">{tab.icon}</span>
-            {tab.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
+  return <PageTabs base={RECEIVING_TABS_BASE} tabs={RECEIVING_TABS} active={active} ariaLabel="Receiving views" />;
 }
