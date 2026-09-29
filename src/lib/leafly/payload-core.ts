@@ -48,6 +48,7 @@
 
 import type { SyndicationItem, SyndicationVariant } from "../syndication/menu-feed-core";
 import { parseWeightFromLabel } from "../weedmaps/payload-core";
+import { meaningfulStrainOrNull } from "../syndication/strain-placeholder-core";
 import {
   decideOrderability,
   resolveVariantMedical,
@@ -330,6 +331,34 @@ export function toCompound(
   // The refusal is not swallowed — collectPotencyRefusals() below surfaces
   // every one of them so the owner gets a worklist instead of a silent gap.
   const reading = readPotency(asString, unit);
+
+  // SLICE L-52 -- ZERO IS SENT AS "UNKNOWN", NOT AS "0".
+  //
+  // Leafly, verbatim (menu-integration-v2.openapi.json, info.description):
+  //
+  //   "Cannabinoids: If cannabinoid information is absent the value `null`
+  //    should be submitted rather than `0`. Transmitting `0` results in a
+  //    display of "0mg" to shoppers rather than the preferable "unknown""
+  //
+  // and the certification checklist grades "Cannabinoid values are set to
+  // `null` when absent". FIELD EVIDENCE: the owner's sandbox menu, read back
+  // on 2026-09-29, held twelve DOHC gummies with `cbdContent: 0.0 mg` -- a
+  // shopper-visible "0mg CBD" on products whose saved data simply had no CBD
+  // figure. They came in through the intake path, which keeps a raw 0; the
+  // main POS transform (`resolveCannabinoid`, transform.ts) already treats a
+  // raw 0 as "no value" (`primaryRaw > 0`). So "0 means absent" is this
+  // repo's own convention too, and the Leafly builder was the odd one out.
+  //
+  // This is applied HERE, after readPotency, rather than inside readPotency:
+  // readPotency is a shared reader whose job is "is this number trustworthy",
+  // and 0 IS a well-formed number. Whether 0 should be PUBLISHED is a Leafly
+  // wire rule, so it lives in the Leafly wire builder. No refusal is recorded:
+  // nothing was wrong with the reading, it simply said "none".
+  //
+  // Negative zero is caught by the same comparison (-0 === 0).
+  if (reading.content === 0) {
+    return { type, content: null, unit: reading.unit };
+  }
   return { type, content: reading.content, unit: reading.unit };
 }
 
@@ -760,8 +789,13 @@ export function toLeaflyItemResult(
 
   // strain: nullable in the schema, and Leafly's certification checklist explicitly wants
   // null when absent rather than a placeholder. "NA" would become a strain page.
-  const strain = item.strainName?.trim();
-  out.strain = strain && strain.length > 0 ? strain : null;
+  //
+  // SLICE L-52. This used to test only "is the string non-empty", and a placeholder IS
+  // non-empty. The owner's live sandbox menu held "No Strain" (7 products),
+  // "Paraphernalia" (5) and "Mixed" (1) as strains -- exactly the "placeholder value" the
+  // spec says to send as null. The placeholder list is SHARED with the POS master
+  // builder (strain-placeholder-core) so the two can never disagree.
+  out.strain = meaningfulStrainOrNull(item.strainName);
 
   // brand: NOT nullable -- `type: "string"` with no null. NEW DEFECT (1 of 3): the old code
   // emitted `brandName: null`, which is both the wrong key AND an illegal value. Omit it.
@@ -1642,6 +1676,49 @@ export function __runLeaflyPayloadTests(): { passed: number; failed: number } {
       "an out-of-stock size is not credited to the low-stock rule",
       buildLeaflyItemsResult([oos], { visibility: vis("withhold", 3) }).withheld.length === 0,
     );
+  }
+
+  // ---- SLICE L-52: zero is "unknown", placeholders are not strains ---------
+  {
+    // The live field case: DOHC gummies saved with CBD 0 were shown as "0mg".
+    const zeroMg = toCompound("cbd", 0, "Edible");
+    ok("L-52: numeric 0 mg is sent as null content", zeroMg !== null && zeroMg.content === null);
+    ok("L-52: ...keeping the type's unit", zeroMg?.unit === "mg");
+    ok("L-52: '0.0' is null", toCompound("cbd", "0.0", "Edible")?.content === null);
+    ok("L-52: '0%' on flower is null", toCompound("thc", "0%", "Flower")?.content === null);
+    ok("L-52: negative zero is null", toCompound("thc", -0, "Flower")?.content === null);
+    // Negative controls: real small values survive. A fix that ate 0.24mg
+    // would erase genuine trace CBD from the menu.
+    ok("L-52: 0.24 mg survives", toCompound("cbd", 0.24, "Edible")?.content === 0.24);
+    ok("L-52: 0.01% survives", toCompound("thc", "0.01%", "Flower")?.content === 0.01);
+    ok("L-52: 100 mg survives", toCompound("thc", 100, "Edible")?.content === 100);
+
+    const zeroCbdGummy: SyndicationItem = {
+      ...bare,
+      id: "l52-gummy",
+      // SyndicationItem carries potency as the POS string (menu-feed-core).
+      thc: "100",
+      cbd: "0",
+    };
+    const zg = toLeaflyItem(zeroCbdGummy);
+    ok("L-52: a 0 CBD item sends total_cbd content null", zg?.total_cbd?.content === null);
+    ok(
+      "L-52: ...and its cbd compound content null",
+      zg?.compounds?.find((c) => c.type === "cbd")?.content === null,
+    );
+    ok("L-52: ...while THC is untouched", zg?.total_thc?.content === 100);
+    ok(
+      "L-52: a 0 reading is NOT a potency refusal (nothing was wrong with it)",
+      collectPotencyRefusals(zeroCbdGummy).length === 0,
+    );
+
+    // Placeholder strains -- the exact live values.
+    for (const placeholder of ["No Strain", "Paraphernalia", "Mixed", "N/A", "none"]) {
+      const it = toLeaflyItem({ ...bare, id: `l52-${placeholder}`, strainName: placeholder });
+      ok(`L-52: strain '${placeholder}' is sent as null`, it !== null && it.strain === null);
+    }
+    const real = toLeaflyItem({ ...bare, id: "l52-real", strainName: "  Watermelon Yuzu Dragon fruit " });
+    ok("L-52: a real strain is sent, trimmed", real?.strain === "Watermelon Yuzu Dragon fruit");
   }
 
   console.log(`leafly-payload: ${passed} passed, ${failed} failed`);

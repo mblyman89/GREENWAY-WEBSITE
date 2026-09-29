@@ -66,6 +66,7 @@
 // PURE module — no network, no DB. Everything is passed in.
 
 import type { LeaflyReconcileResult } from "./readback-core";
+import type { ReadbackProof } from "./readback-proof-core";
 
 /**
  * `pass`  — satisfied, with evidence.
@@ -132,6 +133,14 @@ export type MenuCertificationInputs = {
   recentPushStatuses: readonly number[];
   /** Result of reconciling the last push against GET /menu. null = never reconciled. */
   reconcile: LeaflyReconcileResult | null;
+  /**
+   * SLICE L-52. The newest STORED read-back verdict, read from the log by
+   * `readReadbackProof`. When supplied it is the evidence for the read-back
+   * half of criterion 5 (and `reconcile` is ignored), because it survives a
+   * page load -- the in-memory `reconcile` never did, which is why the page
+   * used to pass null and the criterion could never be met.
+   */
+  readbackProof?: ReadbackProof | null;
   /** Items in the last payload, and how many variants were in stock. */
   itemCount: number;
   variantCount: number;
@@ -417,7 +426,21 @@ export function assessMenuCertificationReadiness(
       );
     }
   }
-  if (inputs.reconcile === null) {
+  // SLICE L-52: the remedy is chosen by WHY the criterion is not met, so the
+  // owner is told the one thing that will move it, not a generic sentence.
+  let qualityRemedy =
+    "Work through the differences on this page until a read-back comparison comes " +
+    "back clean, then re-check here.";
+  let readbackFinding = "a read-back comparison found no differences.";
+  if (inputs.readbackProof) {
+    const proof = inputs.readbackProof;
+    if (proof.status === "clean") {
+      readbackFinding = proof.finding;
+    } else {
+      qualityProblems.push(proof.finding.replace(/\.$/, ""));
+      qualityRemedy = proof.remedy;
+    }
+  } else if (inputs.reconcile === null) {
     qualityProblems.push(
       "the pushed menu has never been read back from Leafly and compared, so nobody has " +
         "checked that what Leafly stored matches what we sent",
@@ -440,8 +463,7 @@ export function assessMenuCertificationReadiness(
       finding:
         `${inputs.itemCount} item(s) pushed, ${inputs.inStockItemCount} of ` +
         `${inputs.itemCount} products in stock (${inputs.inStockVariantCount} of ` +
-        `${inputs.variantCount} individual sizes), and a read-back comparison found no ` +
-        "differences.",
+        `${inputs.variantCount} individual sizes), and ${readbackFinding}`,
       remedy: "",
     });
   } else {
@@ -452,9 +474,7 @@ export function assessMenuCertificationReadiness(
         "cannabinoids null when absent, sensible values",
       status: "fail",
       finding: `Data quality is not demonstrated yet: ${qualityProblems.join("; ")}.`,
-      remedy:
-        "Work through the differences on this page until a read-back comparison comes " +
-        "back clean, then re-check here.",
+      remedy: qualityRemedy,
     });
   }
 
@@ -701,6 +721,57 @@ export function __runLeaflyCertificationTests(): { passed: number; failed: numbe
     "the count of real differences is reported, not the count of all issues",
     dirtyReconcile.criteria.find((c) => c.id === "data_quality")?.finding.includes("2 difference") === true,
   );
+  // --- SLICE L-52: the stored read-back verdict ----------------------------
+  const proofClean: ReadbackProof = {
+    status: "clean",
+    verdict: null,
+    pushesSince: 1,
+    finding: "a read-back compared 740 product(s) against exactly what was sent and found no differences.",
+    remedy: "",
+  };
+  const withProof = assessMenuCertificationReadiness({ ...ready, reconcile: null, readbackProof: proofClean });
+  check(
+    "L-52: a clean stored verdict passes data quality even with no in-memory reconcile",
+    withProof.criteria.find((c) => c.id === "data_quality")?.status === "pass",
+  );
+  check(
+    "L-52: the pass finding carries the verdict's own words",
+    withProof.criteria.find((c) => c.id === "data_quality")?.finding.includes("740 product") === true,
+  );
+  check("L-52: a clean verdict makes a ready store ready", withProof.readyToRequest === true);
+  const proofNone: ReadbackProof = {
+    status: "none",
+    verdict: null,
+    pushesSince: 0,
+    finding: "the pushed menu has not been read back from Leafly and compared",
+    remedy: "Press \u201cRead the menu back from Leafly and check it\u201d on this page.",
+  };
+  const noProof = assessMenuCertificationReadiness({ ...ready, readbackProof: proofNone });
+  const dq = noProof.criteria.find((c) => c.id === "data_quality");
+  check("L-52: no verdict fails data quality", dq?.status === "fail");
+  check("L-52: the verdict's remedy replaces the generic one", dq?.remedy.includes("Read the menu back") === true);
+  check("L-52: the proof outranks a clean in-memory reconcile", dq?.status === "fail");
+  const proofDirty: ReadbackProof = {
+    status: "dirty",
+    verdict: null,
+    pushesSince: 0,
+    finding: "the last read-back found 4 difference(s) (sizes missing at Leafly).",
+    remedy: "Remove the products Leafly holds with no sizes, then read back again.",
+  };
+  const dirtyProof = assessMenuCertificationReadiness({ ...ready, readbackProof: proofDirty });
+  check(
+    "L-52: a dirty verdict fails and names the difference",
+    dirtyProof.criteria.find((c) => c.id === "data_quality")?.finding.includes("sizes missing") === true,
+  );
+  check(
+    "L-52: no doubled full stop in the finding",
+    !(dirtyProof.criteria.find((c) => c.id === "data_quality")?.finding ?? "").includes(".."),
+  );
+  check(
+    "L-52: omitting the proof keeps the old behaviour",
+    assessMenuCertificationReadiness({ ...ready }).criteria.find((c) => c.id === "data_quality")?.status === "pass",
+  );
+
   const emptyMenu = assessMenuCertificationReadiness({
     ...ready,
     itemCount: 0,

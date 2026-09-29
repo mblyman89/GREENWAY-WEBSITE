@@ -32,6 +32,7 @@ import type {
 } from "@/lib/leafly/readback-core";
 import type { ReadbackBaseline } from "@/lib/leafly/readback-baseline-core";
 import { recordSyndicationLog } from "@/lib/syndication/store";
+import { buildReadbackVerdict } from "@/lib/leafly/readback-proof-core";
 import { PreflightBlockedError } from "@/lib/syndication/preflight-core";
 import {
   resolveLeaflySettings,
@@ -860,6 +861,8 @@ export async function fetchLeaflyMenuReadbackAction(): Promise<MenuReadbackActio
         baselineSource: result.baseline?.source ?? null,
         baselineScope: result.baseline?.scope ?? null,
         baselineItemCount: result.baseline?.payload?.items.length ?? null,
+        // L-52: items that changed here since last sent and were not checked.
+        heldNotChecked: result.reconcile?.heldNotChecked ?? null,
       },
     });
     // Recorded to syndication_logs as a "preview" mode entry: it contacted Leafly, but it
@@ -870,11 +873,30 @@ export async function fetchLeaflyMenuReadbackAction(): Promise<MenuReadbackActio
       mode: "preview",
       status: result.ok ? "ok" : "error",
       itemCount: result.parse.ok ? result.parse.items.length : 0,
-      payload: null,
+      // L-52: the read-back's VERDICT is stored on its own log row. Before this the
+      // payload was null, so the certification page (which hard-coded
+      // `reconcile: null`) could never learn that a read-back had happened and
+      // criterion 5 said "never been read back" forever. The verdict is a small,
+      // versioned summary (counts + codes + baseline source + timing), NOT menu
+      // data -- the row stays a "preview" row and still never counts as a push.
+      payload: buildReadbackVerdict({
+        ok: result.ok,
+        httpStatus: result.httpStatus,
+        parseOk: result.parse.ok,
+        readbackItemCount: result.parse.ok ? result.parse.items.length : 0,
+        reconcile: result.reconcile,
+        baseline: result.baseline
+          ? { source: result.baseline.source, scope: result.baseline.scope }
+          : null,
+        premature: result.timing.tooSoon,
+        at: new Date().toISOString(),
+      }),
       response: result.body,
       message: result.summary,
       createdBy: session.userId,
     });
+    // L-52: the certification panel reads the verdict just stored; refresh it.
+    revalidatePath(BASE);
     return {
       ok: true,
       httpStatus: result.httpStatus,

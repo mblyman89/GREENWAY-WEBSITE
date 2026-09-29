@@ -484,6 +484,13 @@ export type LeaflyReconcileResult = {
    * where the same items are genuinely unexpected and appear in `extraAtLeafly`.
    */
   untouchedAtLeafly: number | null;
+  /**
+   * SLICE L-52. In `full` scope with a sync-state baseline: how many items
+   * Leafly holds that our records say it SHOULD hold, but whose exact sent copy
+   * could not be proven (the product changed since it was last sent). Counted,
+   * not flagged. Absent when the caller supplied no such list.
+   */
+  heldNotChecked?: number;
   issues: LeaflyReconcileIssue[];
   /** Correspondences we declined to check, carried through so the UI can say why. */
   unverifiable: readonly LeaflyUnverifiedCorrespondence[];
@@ -506,6 +513,129 @@ function firstCompoundContent(
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// SLICE L-52 -- differences Leafly makes on purpose, proven mechanically
+// ---------------------------------------------------------------------------
+
+function nameTokens(value: string): string[] {
+  return value.split(/[\s\-\u2013\u2014_,/|]+/).filter((t) => t.length > 0);
+}
+
+function normToken(token: string): string {
+  return token.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Did Leafly rewrite the STRAIN words inside our product name, and nothing else?
+ *
+ * FIELD-REPORTED (the owner's read-back, 2026-09). Leafly's copy of our menu
+ * holds names we never sent:
+ *
+ *     sent   "Slab Hash Rosin - GG4 - 1g (H)"
+ *     Leafly "Slab Hash Rosin - Original Glue - 1g (H)"     strainName "Original Glue"
+ *     sent   "Slab Hash Rosin - Royal Girl Scout Cookies - 1g (I)"
+ *     Leafly "Slab Hash Rosin - Royal GSC - 1g (I)"          strainName "Royal GSC"
+ *     sent   "Fugu - T1 - Hash Rosin - Sunset Sherbet - (DOH) - 1g"
+ *     Leafly "Fugu - T1 - Hash Rosin - Sherbet - (DOH) - 1g" strainName "Sunset Shebert"
+ *
+ * Our code contains no such mapping (grepped: the only "Original Glue" text is
+ * in the AI knowledge base, which the Leafly builder never imports). Leafly's
+ * spec says why: "A post-ingestion job will attempt to match items to strains
+ * based on product name and descriptive content." That job evidently also
+ * rewrites the strain words in the displayed name.
+ *
+ * THE RULE -- mechanical, no strain dictionary, no guessing:
+ *   1. Strip the words both names share at the start and at the end.
+ *   2. What is left of OUR name must be non-empty (something was changed).
+ *   3. Every word left in LEAFLY's name must be a word of Leafly's own
+ *      `strainName` (or of the strain we sent).
+ *   4. If Leafly's remainder is empty (words were only removed), every removed
+ *      word must itself be a strain word.
+ *   5. Leafly must actually hold a strain for the item -- evidence its strain
+ *      matcher ran.
+ * Anything else -- a changed size, brand, weight or product type -- fails the
+ * rule and stays an ERROR. Returns the two differing fragments when the rule
+ * holds, so the message can say exactly what Leafly changed.
+ */
+export function detectLeaflyStrainRewrite(input: {
+  sentName: string | null;
+  backName: string | null;
+  backStrain: string | null;
+  sentStrain: string | null;
+}): { ours: string; leaflys: string } | null {
+  const { sentName, backName, backStrain, sentStrain } = input;
+  if (!sentName || !backName || !backStrain) return null;
+  const a = nameTokens(sentName);
+  const b = nameTokens(backName);
+  let pre = 0;
+  while (pre < a.length && pre < b.length && normToken(a[pre]) === normToken(b[pre])) pre += 1;
+  let suf = 0;
+  while (
+    suf < a.length - pre &&
+    suf < b.length - pre &&
+    normToken(a[a.length - 1 - suf]) === normToken(b[b.length - 1 - suf])
+  ) {
+    suf += 1;
+  }
+  const ours = a.slice(pre, a.length - suf);
+  const theirs = b.slice(pre, b.length - suf);
+  const oursN = ours.map(normToken).filter((t) => t.length > 0);
+  const theirsN = theirs.map(normToken).filter((t) => t.length > 0);
+  if (oursN.length === 0) return null;
+  const strainWords = new Set(
+    [...nameTokens(backStrain), ...(sentStrain ? nameTokens(sentStrain) : [])]
+      .map(normToken)
+      .filter((t) => t.length > 0),
+  );
+  if (!theirsN.every((t) => strainWords.has(t))) return null;
+  if (theirsN.length === 0 && !oursN.every((t) => strainWords.has(t))) return null;
+  return { ours: ours.join(" "), leaflys: theirs.join(" ") };
+}
+
+/**
+ * Is this an image Leafly supplies itself when we send none?
+ *
+ * Proven from the live read-back: 728 of 753 items carry
+ * `https://leafly-public-integration.imgix.net/shared-web-images/product-type-icons/...`
+ * (a generic type icon) and the other 25 carry a logo from Leafly's own brand
+ * catalogue (`https://leafly-public.s3-us-west-2.amazonaws.com/brands/logos/...`).
+ * We host neither. When we sent no photo, Leafly showing one of these is its
+ * normal stand-in, not a photo that "should have been deleted".
+ */
+export function isLeaflySuppliedImage(url: string | null): "type-icon" | "brand-logo" | null {
+  if (!url) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (
+    parsed.hostname === "leafly-public-integration.imgix.net" &&
+    parsed.pathname.includes("/product-type-icons/")
+  ) {
+    return "type-icon";
+  }
+  if (
+    parsed.hostname === "leafly-public.s3-us-west-2.amazonaws.com" &&
+    parsed.pathname.startsWith("/brands/logos/")
+  ) {
+    return "brand-logo";
+  }
+  return null;
+}
+
+/** Options for `reconcileLeaflyMenu`. */
+export type LeaflyReconcileOptions = {
+  /**
+   * SLICE L-52. Ids our records say Leafly SHOULD hold but whose exact sent
+   * copy cannot be proven (see readback-baseline-core `unverifiableIds`). In
+   * full scope these are counted as `heldNotChecked` instead of being called
+   * unexpected extras.
+   */
+  heldNotChecked?: readonly string[];
+};
+
 /**
  * Compare the payload we sent against the menu Leafly says it has.
  *
@@ -525,6 +655,7 @@ export function reconcileLeaflyMenu(
   sentPayload: LeaflyItemsPayload | null | undefined,
   readback: LeaflyReadbackParse,
   scope: LeaflyReconcileScope = "full",
+  options: LeaflyReconcileOptions = {},
 ): LeaflyReconcileResult {
   const issues: LeaflyReconcileIssue[] = [];
   const perCode = new Map<string, number>();
@@ -613,12 +744,34 @@ export function reconcileLeaflyMenu(
 
     // --- name -------------------------------------------------------------
     if (str(sent.name) !== back.name) {
-      add(
-        "error",
-        "name_mismatch",
-        id,
-        `Name differs: we sent "${sent.name}" and Leafly has "${back.name ?? "(none)"}".`,
-      );
+      // SLICE L-52. Leafly's strain matcher rewrites the strain words in a
+      // name ("GG4" -> "Original Glue"). Proven mechanically by
+      // detectLeaflyStrainRewrite; anything it cannot prove stays an error.
+      const rewrite = detectLeaflyStrainRewrite({
+        sentName: str(sent.name),
+        backName: back.name,
+        backStrain: back.strainName,
+        sentStrain: str(sent.strain ?? null),
+      });
+      if (rewrite) {
+        add(
+          "warning",
+          "name_strain_rewritten_by_leafly",
+          id,
+          `Leafly renamed the strain in "${sent.name}": it shows "${back.name}". Only the ` +
+            `strain words changed ("${rewrite.ours}" became "${rewrite.leaflys || "(removed)"}"), ` +
+            `matching Leafly's own strain listing "${back.strainName}". Leafly's automatic ` +
+            "strain matching does this after it receives the menu; everything else in the " +
+            "name is exactly what we sent.",
+        );
+      } else {
+        add(
+          "error",
+          "name_mismatch",
+          id,
+          `Name differs: we sent "${sent.name}" and Leafly has "${back.name ?? "(none)"}".`,
+        );
+      }
     }
 
     // --- brand: `brand` out, `brandName` back (L-06's field) --------------
@@ -655,6 +808,19 @@ export function reconcileLeaflyMenu(
         "image_dropped",
         id,
         `We sent a photo for "${sent.name}" but Leafly has none. The photo did not take.`,
+      );
+    } else if (sentImage === null && back.imageUrl !== null && isLeaflySuppliedImage(back.imageUrl)) {
+      // SLICE L-52. Leafly's own stand-in (a product-type icon or its brand
+      // logo). Informational: it is how Leafly displays an item with no photo.
+      add(
+        "info",
+        "image_leafly_standin",
+        id,
+        `We sent no photo for "${sent.name}", so Leafly shows its own ` +
+          (isLeaflySuppliedImage(back.imageUrl) === "brand-logo"
+            ? "brand logo"
+            : "generic product-type icon") +
+          " instead. That is normal; add a product photo if you want a real picture.",
       );
     } else if (sentImage === null && back.imageUrl !== null) {
       add(
@@ -705,6 +871,14 @@ export function reconcileLeaflyMenu(
 
     // --- variants ---------------------------------------------------------
     const backVariants = new Map(back.variants.map((v) => [v.id, v]));
+    // SLICE L-52 -- FIELD-REPORTED. Four products in the owner's read-back sit
+    // on Leafly with NO sizes at all and hidden:true (BFF WYD, 2727 Lemon
+    // Meringue, Pure Vape Carbon Fiber, 2727 Guava; all created 2026-09-22
+    // 06:26-06:29 UTC and never modified since). Leafly's v2 contract requires
+    // at least one variant, and we DO send one for each, so the defect lives
+    // in Leafly's stored copy rather than in what we send. The plain "size is
+    // missing" sentence sent the owner looking in the wrong place.
+    const leaflyHoldsNoSizes = back.variants.length === 0 && sent.variants.length > 0;
     for (const sv of sent.variants) {
       const svid = normalizeReadbackId(sv.id);
       if (svid === null) continue;
@@ -732,12 +906,20 @@ export function reconcileLeaflyMenu(
             unit: v.unit,
           })),
         });
+        const emptyShell = leaflyHoldsNoSizes
+          ? ` Leafly holds "${sent.name}" with no sizes at all` +
+            (back.hidden === true ? " and has hidden it from shoppers" : "") +
+            ". We do send a size for it, so the fault is in Leafly's stored copy, not in " +
+            "your data. Fix: remove this product from Leafly with \u201cRemove products " +
+            `from Leafly\u201d (id ${id}), then let the next sync send it again whole.`
+          : "";
         add(
           "error",
           "variant_missing",
           id,
           `Size/variant "${svid}" of "${sent.name}" is missing from Leafly's menu.` +
-            (why === null ? "" : ` ${why}`),
+            (why === null ? "" : ` ${why}`) +
+            emptyShell,
         );
         continue;
       }
@@ -792,13 +974,20 @@ export function reconcileLeaflyMenu(
   // rest of the menu, deliberately left alone, which is the whole point of a
   // targeted push. Counting it is useful; flagging it would be false.
   let untouchedAtLeafly: number | null = null;
+  let heldNotChecked = 0;
   if (scope === "targeted") {
     let untouched = 0;
     for (const id of backById.keys()) if (!sentById.has(id)) untouched += 1;
     untouchedAtLeafly = untouched;
   } else {
+    const held = new Set((options.heldNotChecked ?? []).map((x) => String(x)));
     for (const id of backById.keys()) {
       if (!sentById.has(id)) {
+        // SLICE L-52. On record as sent, just not provable today: not extra.
+        if (held.has(id)) {
+          heldNotChecked += 1;
+          continue;
+        }
         extraAtLeafly.push(id);
         add(
           "info",
@@ -820,6 +1009,7 @@ export function reconcileLeaflyMenu(
     missingFromLeafly,
     extraAtLeafly,
     untouchedAtLeafly,
+    ...(options.heldNotChecked !== undefined ? { heldNotChecked } : {}),
     issues,
     unverifiable: LEAFLY_READBACK_UNVERIFIED_CORRESPONDENCES,
   };
@@ -988,7 +1178,13 @@ export function describeReconcileResult(result: LeaflyReconcileResult): string {
     return `Checked the ${result.sentItemCount} item(s) you sent: ${result.comparedItemCount} matched up ${tail}${rest}`;
   }
 
-  return `${head} ${tail}`;
+  // SLICE L-52. Say how much of the menu was on record but not checked, so a
+  // partial comparison can never be mistaken for a whole-menu one.
+  const held =
+    result.heldNotChecked && result.heldNotChecked > 0
+      ? ` ${result.heldNotChecked} other item(s) on Leafly have changed here since they were last sent and were not checked this time.`
+      : "";
+  return `${head} ${tail}${held}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -1614,6 +1810,149 @@ export function __runLeaflyReadbackTests(): { passed: number; failed: number } {
   check("targeted summary names what was sent", targetedText.includes("1 item(s) you sent"));
   check("targeted summary explains the remainder", targetedText.includes("left alone"));
   check("targeted summary does not claim a 1-of-2562 style ratio", !targetedText.startsWith("1 of 3"));
+
+  // --- SLICE L-52: the owner's live read-back, case by case -----------------
+  const rw = (sentName: string, backName: string, backStrain: string | null, sentStrain: string | null = null) =>
+    detectLeaflyStrainRewrite({ sentName, backName, backStrain, sentStrain });
+  // The three rewrites observed in the field, verbatim.
+  check(
+    "L-52 rewrite: GG4 -> Original Glue is recognised",
+    rw("Slab Hash Rosin - GG4 - 1g (H)", "Slab Hash Rosin - Original Glue - 1g (H)", "Original Glue")?.ours === "GG4",
+  );
+  check(
+    "L-52 rewrite: Royal Girl Scout Cookies -> Royal GSC is recognised",
+    rw(
+      "Slab Hash Rosin - Royal Girl Scout Cookies - 1g (I)",
+      "Slab Hash Rosin - Royal GSC - 1g (I)",
+      "Royal GSC",
+    )?.leaflys === "GSC",
+  );
+  check(
+    "L-52 rewrite: Sunset Sherbet -> Sherbet (strainName 'Sunset Shebert') is recognised",
+    rw(
+      "Fugu - T1 - Hash Rosin - Sunset Sherbet - (DOH) - 1g",
+      "Fugu - T1 - Hash Rosin - Sherbet - (DOH) - 1g",
+      "Sunset Shebert",
+    ) !== null,
+  );
+  check(
+    "L-52 rewrite: the Mindmelt GG4 case is recognised",
+    rw(
+      "Mindmelt Live Resin Vape Cart - GG4 - 1g - (H) - DOH",
+      "Mindmelt Live Resin Vape Cart - Original Glue - 1g - (H) - DOH",
+      "Original Glue",
+    ) !== null,
+  );
+  // Negative controls: anything beyond strain words stays an error.
+  check("L-52 rewrite: a changed weight is NOT a rewrite", rw("X - Blue Dream - 1g", "X - Blue Dream - 2g", "Blue Dream") === null);
+  check(
+    "L-52 rewrite: a changed brand is NOT a rewrite",
+    rw("Acme - GG4 - 1g", "Other - Original Glue - 1g", "Original Glue") === null,
+  );
+  check("L-52 rewrite: no strain at Leafly means no rewrite", rw("X - GG4 - 1g", "X - Original Glue - 1g", null) === null);
+  check(
+    "L-52 rewrite: a word dropped that is not a strain word is NOT a rewrite",
+    rw("X - Live Resin - Sherbet - 1g", "X - Sherbet - 1g", "Sunset Shebert") === null,
+  );
+  check("L-52 rewrite: identical names are not a rewrite", rw("X - 1g", "X - 1g", "Y") === null);
+  check("L-52 rewrite: empty inputs are not a rewrite", rw("", "X", "Y") === null);
+
+  // Stand-in images, proven hosts only.
+  check(
+    "L-52 image: Leafly type icon recognised",
+    isLeaflySuppliedImage(
+      "https://leafly-public-integration.imgix.net/shared-web-images/product-type-icons/menu_cartridge.png",
+    ) === "type-icon",
+  );
+  check(
+    "L-52 image: Leafly brand logo recognised",
+    isLeaflySuppliedImage("https://leafly-public.s3-us-west-2.amazonaws.com/brands/logos/abc_Asset.png") ===
+      "brand-logo",
+  );
+  check("L-52 image: our own photo is not a stand-in", isLeaflySuppliedImage("https://cdn.example.com/p.jpg") === null);
+  check(
+    "L-52 image: a look-alike host is not a stand-in",
+    isLeaflySuppliedImage("https://leafly-public-integration.imgix.net.evil.com/product-type-icons/x.png") === null,
+  );
+  check("L-52 image: garbage is not a stand-in", isLeaflySuppliedImage("not a url") === null);
+  check("L-52 image: null is not a stand-in", isLeaflySuppliedImage(null) === null);
+
+  // End-to-end through the reconciler with realistic shapes.
+  const l52Sent: LeaflyItemsPayload = {
+    items: [
+      {
+        id: "pos-c442be0ddd70",
+        type: "Concentrate" as LeaflyItem["type"],
+        name: "Slab Hash Rosin - GG4 - 1g (H)",
+        strain: "GG4",
+        variants: [{ id: "pos-c442be0ddd70-a", medical: false, price: 4000, amount: 1, unit: "g", inventoryLevel: 5 }],
+      },
+      {
+        id: "pos-8d9b834230f3",
+        type: "Cartridge" as LeaflyItem["type"],
+        name: "2727 - Vape Cart - 2727 - Guava - 1g",
+        variants: [{ id: "pos-8d9b834230f3-9272f0a55656", medical: false, price: 2000, amount: 1, unit: "g", inventoryLevel: 3 }],
+      },
+    ],
+  };
+  const l52Back = parseLeaflyMenuReadback({
+    result: [
+      {
+        id: "pos-c442be0ddd70",
+        name: "Slab Hash Rosin - Original Glue - 1g (H)",
+        strainName: "Original Glue",
+        imageUrl:
+          "https://leafly-public-integration.imgix.net/shared-web-images/product-type-icons/menu_concentrate_2.png",
+        hidden: false,
+        variants: [
+          { id: "pos-c442be0ddd70-a", inventoryLevel: 5, medical: false, packagePrice: 4000, packageSize: 1, packageUnit: "g", packageWeightGrams: 1 },
+        ],
+      },
+      {
+        id: "pos-8d9b834230f3",
+        name: "2727 - Vape Cart - 2727 - Guava - 1g",
+        hidden: true,
+        variants: [],
+      },
+      { id: "pos-HELD", name: "On record, changed since", variants: [] },
+      { id: "pos-STRAY", name: "Nobody sent this", variants: [] },
+    ],
+    metadata: { totalCount: 4 },
+  });
+  const l52 = reconcileLeaflyMenu(l52Sent, l52Back, "full", { heldNotChecked: ["pos-HELD"] });
+  check(
+    "L-52 reconcile: the strain rewrite is a warning, not an error",
+    l52.issues.some((i) => i.code === "name_strain_rewritten_by_leafly" && i.severity === "warning") &&
+      !l52.issues.some((i) => i.code === "name_mismatch"),
+  );
+  check(
+    "L-52 reconcile: a Leafly icon is info, not a warning",
+    l52.issues.some((i) => i.code === "image_leafly_standin" && i.severity === "info") &&
+      !l52.issues.some((i) => i.code === "image_unexpected"),
+  );
+  const shell = l52.issues.find((i) => i.code === "variant_missing");
+  check("L-52 reconcile: the empty shell is still an ERROR", shell?.severity === "error");
+  check(
+    "L-52 reconcile: the empty shell names the fix and the id",
+    (shell?.message ?? "").includes("no sizes at all") && (shell?.message ?? "").includes("pos-8d9b834230f3"),
+  );
+  check("L-52 reconcile: the empty shell says it is hidden", (shell?.message ?? "").includes("hidden"));
+  check("L-52 reconcile: a held-not-checked id is counted", l52.heldNotChecked === 1);
+  check("L-52 reconcile: a held-not-checked id is not extra", !l52.extraAtLeafly.includes("pos-HELD"));
+  check("L-52 reconcile: a genuine stray is still extra", l52.extraAtLeafly.includes("pos-STRAY"));
+  check(
+    "L-52 summary: the unchecked remainder is disclosed",
+    describeReconcileResult(l52).includes("were not checked this time"),
+  );
+  check(
+    "L-52 reconcile: without the option the field is absent (old shape)",
+    reconcileLeaflyMenu(l52Sent, l52Back).heldNotChecked === undefined,
+  );
+  // A sent item whose Leafly copy HAS its size gets no empty-shell text.
+  check(
+    "L-52 reconcile: no empty-shell text is invented for a normal miss",
+    !reconcileLeaflyMenu(twoSent, oneBack).issues.some((i) => i.message.includes("no sizes at all")),
+  );
 
   return { passed, failed };
 }

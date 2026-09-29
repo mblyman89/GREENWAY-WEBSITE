@@ -438,6 +438,19 @@ function ReadbackReport({ report }: { report: MenuReadbackActionResult }) {
         </p>
       ) : null}
 
+      {/*
+        SLICE L-52 -- products left unchecked because they changed here after
+        they were last sent. Stated on the face of the report so a clean result
+        never implies more than it checked.
+      */}
+      {report.reconcile && typeof report.reconcile.heldNotChecked === "number" && report.reconcile.heldNotChecked > 0 ? (
+        <p className="mb-2 text-xs text-[var(--admin-text-muted)]">
+          <strong>Not checked this time:</strong> {report.reconcile.heldNotChecked} product(s) on
+          Leafly have changed here since they were last sent. The next sync sends the new version;
+          read back again after it to check them.
+        </p>
+      ) : null}
+
       {errors.length > 0 ? (
         <ul className="mb-2 space-y-1">
           {errors.map((issue, i) => (

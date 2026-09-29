@@ -899,10 +899,17 @@ export async function getLeaflyMenu(): Promise<LeaflyMenuReadbackResult> {
   // Read defensively: a sync-state read failure must not turn a successful readback into
   // an exception, and "unknown timing" is a verdict assessReadbackTiming handles safely.
   let lastSyncedAt: string | null = null;
+  // SLICE L-52: the same read also yields the id -> hash map of exactly what
+  // Leafly was last sent, which the baseline chooser needs after an automatic
+  // sync (whose log row deliberately stores ids, not items).
+  let storedHashes: ReadonlyMap<string, string> = new Map();
   try {
-    lastSyncedAt = (await getSyncState("leafly")).lastSyncedAt;
+    const state = await getSyncState("leafly");
+    lastSyncedAt = state.lastSyncedAt;
+    storedHashes = state.hashes;
   } catch {
     lastSyncedAt = null;
+    storedHashes = new Map();
   }
   const timing = assessReadbackTiming(lastSyncedAt, new Date(), config.environment);
 
@@ -936,17 +943,51 @@ export async function getLeaflyMenu(): Promise<LeaflyMenuReadbackResult> {
       rows = [];
     }
 
-    let livePreview: LeaflyItemsPayload | null = null;
+    // SLICE L-52 -- FIELD-REPORTED. The owner's read-back said "No record of
+    // a previous push was available" after days of automatic syncs, then
+    // compared against `previewLeaflyPush()`: 811 items against Leafly's 753.
+    // That preview is not what the sync sends -- it skips the sync settings,
+    // the size repair and the held-back products. The automatic sync, "send my
+    // whole menu" and "replace whole menu" all send the FULL-MENU build, so
+    // that build (with the owner's stored automatic repair choice, exactly as
+    // schedule-server passes it) is what we rebuild from.
+    //
+    // Dynamic import: full-menu-server imports `isLeaflyConfigured` from this
+    // file, so a static import would be a cycle. preview-lookup.ts uses the
+    // same pattern for the same reason.
+    let fullMenuItems: LeaflyItem[] | null = null;
     try {
-      const preview = await previewLeaflyPush();
-      livePreview = (preview.payload as LeaflyItemsPayload | undefined) ?? null;
+      const [{ previewFullMenuPassingOnly }, { getLeaflyScheduleSettings }] = await Promise.all([
+        import("./full-menu-server"),
+        import("./schedule-server"),
+      ]);
+      const schedule = await getLeaflyScheduleSettings();
+      const built = await previewFullMenuPassingOnly({ repair: schedule.repairSizes === true });
+      // A refusing plan sends nothing, so it describes nothing Leafly holds.
+      fullMenuItems = built.plan.proceed ? built.payload.items : null;
     } catch {
-      livePreview = null;
+      fullMenuItems = null;
     }
 
-    baseline = chooseReadbackBaseline(rows, livePreview);
+    let livePreview: LeaflyItemsPayload | null = fullMenuItems ? { items: fullMenuItems } : null;
+    if (livePreview === null) {
+      try {
+        const preview = await previewLeaflyPush();
+        livePreview = (preview.payload as LeaflyItemsPayload | undefined) ?? null;
+      } catch {
+        livePreview = null;
+      }
+    }
+
+    baseline = chooseReadbackBaseline(
+      rows,
+      livePreview,
+      fullMenuItems ? { items: fullMenuItems, storedHashes } : null,
+    );
     reconcile = baseline.payload
-      ? reconcileLeaflyMenu(baseline.payload, parse, baseline.scope)
+      ? reconcileLeaflyMenu(baseline.payload, parse, baseline.scope, {
+          ...(baseline.unverifiableIds ? { heldNotChecked: baseline.unverifiableIds } : {}),
+        })
       : null;
   } catch {
     // Neither source was usable. The readback body is still worth showing on
