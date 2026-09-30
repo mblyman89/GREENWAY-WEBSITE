@@ -21,6 +21,15 @@ import { resolveFactReview, resolveFactReviewGroup } from "../../actions";
 import { posStateOf } from "@/lib/enrichment/product-visibility-core";
 import { hiddenItemFix } from "@/lib/pos/pos-import-fix-core";
 import { liveWithOpenReviewsCopy } from "@/lib/pos/publish-now-core";
+import {
+  parseFactFocus,
+  filterByFocus,
+  factsGroupHref,
+  suggestFactsFromName,
+  suggestionNote,
+  ONE_AT_A_TIME_ANCHOR,
+  type FactFocus,
+} from "@/lib/pos/fact-review-focus-core";
 
 /** fact-review-store.ts writes exactly this reason on a reviewer reject. */
 const REVIEWER_REJECTED_REASON = "reviewer_rejected";
@@ -40,7 +49,7 @@ export default async function FactReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; back?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; back?: string; group?: string; q?: string }>;
 }) {
   await requirePermission("menu.import");
   const { id } = await params;
@@ -89,6 +98,16 @@ export default async function FactReviewPage({
   // the machine's own verbatim reason so ONE named human decision can cover a
   // whole reason at once -- still written as one audit row per product.
   const groups = groupPendingReviews(pending);
+  // R14b: the one-at-a-time list can be narrowed to ONE reason (?group=) and
+  // searched (?q=); a save returns here with the same focus.
+  const focus = parseFactFocus({ group: sp.group, q: sp.q });
+  const groupOfRow = new Map<string, string>();
+  for (const g of groups) for (const sid of g.sourceItemIds) groupOfRow.set(sid, g.key);
+  const focusedPending = filterByFocus(pending, focus, (sid) => groupOfRow.get(sid));
+  const focusGroup = focus.group ? groups.find((g) => g.key === focus.group) ?? null : null;
+  const focused = Boolean(focus.group || focus.q);
+  // The full product name (the card shows the display name) for name reading.
+  const productNameById = new Map(items.map((i) => [i.source_item_id, i.product_name || i.name] as const));
   // SLICE 6B: how many of the rejected rows are the "in inventory, not in the
   // products file" case. Counted from the SAME staged rows the buckets were
   // built from, so this can never disagree with the Rejected count above it.
@@ -210,6 +229,9 @@ export default async function FactReviewPage({
                       </p>
                     </div>
                     <p className="mt-1 text-xs text-white/70">{g.reason}</p>
+                    <Link href={factsGroupHref(id, g.key)} className={`${CHIP_ACTION} mt-2`} data-testid="facts-group-one-at-a-time">
+                      Fix these {g.count} one at a time →
+                    </Link>
                     <p className="mt-1 text-[11px] text-white/40">
                       e.g. {g.sampleNames.join(", ")}
                       {g.count > g.sampleNames.length ? ` … and ${g.count - g.sampleNames.length} more` : ""}
@@ -245,13 +267,47 @@ export default async function FactReviewPage({
               </div>
 
               {/* Per-product decisions (including inline fix) remain available. */}
-              <details className="mt-5">
+              <details className="mt-5 scroll-mt-24" id={ONE_AT_A_TIME_ANCHOR} open={focused}>
                 <summary className="cursor-pointer text-xs font-semibold text-[var(--admin-accent)]">
-                  Decide products one at a time ({pending.length}) — the only way to enter corrected values
+                  Decide products one at a time ({focused ? `${focusedPending.length} of ${pending.length}` : pending.length}) — the only way to enter corrected values
                 </summary>
+                {/* R14b: narrow to one reason and/or search by name or brand. */}
+                <form method="get" className="mt-3 flex flex-wrap items-center gap-2" data-testid="facts-focus-form">
+                  {focus.group && <input type="hidden" name="group" value={focus.group} />}
+                  <input
+                    type="search"
+                    name="q"
+                    defaultValue={focus.q ?? ""}
+                    placeholder="Find a product by name or brand"
+                    className="min-w-56 flex-1 rounded-md border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-white placeholder:text-white/30"
+                  />
+                  <button type="submit" className={CHIP_ACTION}>Find</button>
+                  {focused && (
+                    <Link href={`/admin/menu-imports/${id}/facts#${ONE_AT_A_TIME_ANCHOR}`} className="text-xs text-white/60 hover:underline" data-testid="facts-focus-clear">
+                      Show all {pending.length}
+                    </Link>
+                  )}
+                </form>
+                {focusGroup && (
+                  <p className="mt-2 text-xs text-white/60" data-testid="facts-focus-reason">
+                    Showing the products that share: <span className="text-white/80">{focusGroup.reason}</span>
+                  </p>
+                )}
+                {focus.group && !focusGroup && (
+                  <p className="mt-2 text-xs text-[var(--admin-accent)]">That reason has no products left to decide.</p>
+                )}
                 <div className="mt-3 space-y-4">
-                  {pending.map((row) => (
-                    <ReviewCard key={row.sourceItemId} importId={id} row={row} />
+                  {focusedPending.length === 0 && focused && (
+                    <p className="text-xs text-white/50">No pending product matches.</p>
+                  )}
+                  {focusedPending.map((row) => (
+                    <ReviewCard
+                      key={row.sourceItemId}
+                      importId={id}
+                      row={row}
+                      focus={focus}
+                      productName={productNameById.get(row.sourceItemId) ?? row.name}
+                    />
                   ))}
                 </div>
               </details>
@@ -424,7 +480,25 @@ function FactLine({ row }: { row: FactReviewRow }) {
 }
 
 /** One pending exception: facts, reasons, and the three decisions. */
-function ReviewCard({ importId, row }: { importId: string; row: FactReviewRow }) {
+function ReviewCard({
+  importId,
+  row,
+  focus,
+  productName,
+}: {
+  importId: string;
+  row: FactReviewRow;
+  focus: FactFocus;
+  productName: string;
+}) {
+  // R14b: values the product NAME states literally (never auto-saved).
+  const named = suggestFactsFromName(productName);
+  const focusFields = (
+    <>
+      {focus.group && <input type="hidden" name="focusGroup" value={focus.group} />}
+      {focus.q && <input type="hidden" name="focusQ" value={focus.q} />}
+    </>
+  );
   return (
     <div className="rounded-lg border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/[0.03] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -448,6 +522,7 @@ function ReviewCard({ importId, row }: { importId: string; row: FactReviewRow })
           <input type="hidden" name="importId" value={importId} />
           <input type="hidden" name="sourceItemId" value={row.sourceItemId} />
           <input type="hidden" name="action" value="approve" />
+          {focusFields}
           <button type="submit" className={CHIP_ACTION}>Approve as-is</button>
         </form>
         {/* Reject from the menu */}
@@ -455,6 +530,7 @@ function ReviewCard({ importId, row }: { importId: string; row: FactReviewRow })
           <input type="hidden" name="importId" value={importId} />
           <input type="hidden" name="sourceItemId" value={row.sourceItemId} />
           <input type="hidden" name="action" value="reject" />
+          {focusFields}
           <button
             type="submit"
             className="admin-focus inline-flex items-center rounded-full bg-[var(--admin-danger-soft)] px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-[var(--admin-danger)] ring-1 ring-[var(--admin-danger)]/40 transition hover:bg-[var(--admin-danger)] hover:text-black"
@@ -463,6 +539,40 @@ function ReviewCard({ importId, row }: { importId: string; row: FactReviewRow })
           </button>
         </form>
       </div>
+
+      {/* R14b: what the name states, one press to use it (still a named human fix). */}
+      {(named.suggestions.length > 0 || named.conflicts.length > 0) && (
+        <div className="mt-3 rounded-lg border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.04] p-3 text-xs" data-testid="facts-name-suggestions">
+          <p className="font-semibold text-[var(--admin-accent)]">The product name says</p>
+          {named.suggestions.length > 0 && (
+            <ul className="mt-1 space-y-0.5 text-white/70">
+              {named.suggestions.map((x) => (
+                <li key={x.field}>
+                  {x.label}: <strong className="text-white">{x.value}</strong> <span className="text-white/40">— {x.why}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {named.conflicts.map((c) => (
+            <p key={c} className="mt-1 text-[var(--admin-gold)]">{c}</p>
+          ))}
+          {named.suggestions.length > 0 && (
+            <form action={resolveFactReview} className="mt-2">
+              <input type="hidden" name="importId" value={importId} />
+              <input type="hidden" name="sourceItemId" value={row.sourceItemId} />
+              <input type="hidden" name="action" value="fix" />
+              {named.suggestions.map((x) => (
+                <input key={x.field} type="hidden" name={x.field} value={x.value} />
+              ))}
+              <input type="hidden" name="note" value={suggestionNote(named.suggestions)} />
+              {focusFields}
+              <button type="submit" className={CHIP_ACTION} data-testid="facts-use-name-values">
+                Use these values
+              </button>
+            </form>
+          )}
+        </div>
+      )}
 
       {/* Inline fix */}
       <details className="mt-3">
@@ -473,6 +583,7 @@ function ReviewCard({ importId, row }: { importId: string; row: FactReviewRow })
           <input type="hidden" name="importId" value={importId} />
           <input type="hidden" name="sourceItemId" value={row.sourceItemId} />
           <input type="hidden" name="action" value="fix" />
+          {focusFields}
           <div className="grid gap-3 sm:grid-cols-3">
             <FixField label="THC (display)" name="thc" placeholder={row.facts.thc ?? "e.g. 100mg"} />
             <FixField label="CBD (display)" name="cbd" placeholder={row.facts.cbd ?? "e.g. 100mg"} />

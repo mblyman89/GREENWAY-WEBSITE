@@ -32,7 +32,7 @@ import {
   removalListTitle,
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
-import { publishVersion, backfillLotsAction } from "../actions";
+import { publishVersion, backfillLotsAction, refileFromTypeCheck } from "../actions";
 import Link from "next/link";
 import {
   posImportFixFor,
@@ -41,8 +41,17 @@ import {
   IMPORT_PAGE_ANCHORS,
   MISSING_COA_HREF,
   MISSING_EXPIRY_BULK_HREF,
+  typeFocusHref,
+  lotSearchHref,
+  productSearchHref,
   type PosFixContext,
 } from "@/lib/pos/pos-import-fix-core";
+import {
+  buildTypeCheckReport,
+  typeCheckAdvice,
+  TYPE_CHECK_ANCHOR,
+  type TypeCheckGroup,
+} from "@/lib/pos/cultivera-type-from-category-core";
 
 const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
   safe: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
@@ -63,7 +72,7 @@ export default async function ImportReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string; backfilled?: string; notice?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string; backfilled?: string; notice?: string; refiled?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const { id } = await params;
@@ -202,9 +211,23 @@ export default async function ImportReviewPage({
     const link = posDiagnosticRowLink(d.code, d.context_json, fixCtx);
     if (!link) return null;
     const c = (d.context_json ?? {}) as Record<string, unknown>;
-    const name = [c.product, c.displayName, c.productName, c.barcode].find((v) => typeof v === "string" && v.trim());
+    const name = [c.product, c.displayName, c.productName, c.barcode, c.category].find((v) => typeof v === "string" && v.trim());
     return { ...link, name: typeof name === "string" ? name : d.message };
   });
+  // R14b: Cultivera's Category is OUR type; its InventoryType is the CCRS type.
+  // Read every staged row against the category's measured CCRS type
+  // (cultivera-type-from-category-core) -- computed from the rows already
+  // loaded above, no extra read.
+  const typeCheck = buildTypeCheckReport(
+    items.map((i) => ({
+      sourceItemId: i.source_item_id,
+      name: i.name,
+      productName: i.product_name,
+      category: i.pos_inventory_category,
+      inventoryType: i.pos_inventory_type,
+    })),
+  );
+  const canRefile = can(session.profile.role, "inventory.manage");
   const canBackfillLots =
     canPublish &&
     version?.status === "published" &&
@@ -231,6 +254,14 @@ export default async function ImportReviewPage({
         {sp.backfilled && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             {decodeURIComponent(sp.backfilled)}
+          </div>
+        )}
+        {sp.refiled && (
+          <div
+            className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]"
+            data-testid="type-check-refiled"
+          >
+            {decodeURIComponent(sp.refiled)}
           </div>
         )}
         {sp.error && (
@@ -460,6 +491,33 @@ export default async function ImportReviewPage({
             <p className="mt-3 text-sm text-white/50">No diagnostics — clean import.</p>
           )}
         </section>
+
+        {/* R14b — Type & category check (Cultivera's type column vs its category). */}
+        {typeCheck.checked > 0 && (
+          <section id={TYPE_CHECK_ANCHOR} className="scroll-mt-24 rounded-xl border border-white/10 bg-[#0a0a0a] p-5" data-testid="type-check">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-sm font-semibold text-white">Type & category check</h2>
+              <span className="text-xs text-white/50">
+                {typeCheck.agree} agree · {typeCheck.flagged} to look at
+                {typeCheck.noCategory > 0 ? ` · ${typeCheck.noCategory} with no category` : ""}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-white/45">
+              Cultivera&apos;s <strong>Category</strong> is our type; its <strong>Inventory Type</strong> is the
+              CCRS type. Every category has one CCRS type (measured on your own export), so each row is read
+              against it. Nothing here changes by itself &mdash; every change is a button you press.
+            </p>
+            {typeCheck.groups.length === 0 ? (
+              <p className="mt-3 text-sm text-[var(--admin-accent)]">Every category and CCRS type agree.</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {typeCheck.groups.map((g) => (
+                  <TypeCheckCard key={g.key} g={g} importId={id} canRefile={canRefile} lotsCreated={hasCreatedLots} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Hidden items */}
         {hiddenTotal > 0 && (
@@ -705,3 +763,86 @@ function summarizeByCode<D extends { severity: DiagnosticSeverity; code: string;
     (a, b) => rank[a.severity] - rank[b.severity] || b.count - a.count,
   );
 }
+
+const TYPE_CHECK_TITLE: Record<TypeCheckGroup["verdict"], string> = {
+  category_suspect: "Filed under the wrong category",
+  unknown_category: "Category we don't know yet",
+  type_mismatch: "CCRS type doesn't match the category",
+};
+
+/** R14b: one Type & category check group, with its per-product fix. */
+function TypeCheckCard({
+  g,
+  importId,
+  canRefile,
+  lotsCreated,
+}: {
+  g: TypeCheckGroup;
+  importId: string;
+  canRefile: boolean;
+  lotsCreated: boolean;
+}) {
+  const tone = g.verdict === "type_mismatch" ? SEVERITY_STYLE.info : SEVERITY_STYLE.warning;
+  return (
+    <div className={`rounded-lg border px-3 py-2 text-xs ${tone}`} data-testid="type-check-group" data-verdict={g.verdict}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <span className="font-semibold">{TYPE_CHECK_TITLE[g.verdict]}</span>
+          <span className="ml-2 opacity-80">
+            &ldquo;{g.category}&rdquo;{g.actualCcrsType ? ` · CCRS type ${g.actualCcrsType}` : " · CCRS type blank"}
+            {g.expectedCcrsType ? ` · expected ${g.expectedCcrsType}` : ""}
+          </span>
+        </div>
+        <span className="shrink-0 rounded bg-black/30 px-2 py-0.5 font-semibold">×{g.count}</span>
+      </div>
+      <p className="mt-1.5 text-white/65">{typeCheckAdvice(g)}</p>
+      {g.verdict === "unknown_category" && (
+        <Link
+          href={typeFocusHref(g.category, g.suggestion?.websiteCategory)}
+          className={`${CHIP_ACTION} mt-2`}
+          data-testid="type-check-add-type"
+        >
+          Add &ldquo;{g.category}&rdquo; as a type{g.suggestion ? ` (suggested: ${g.suggestion.websiteCategory})` : ""} →
+        </Link>
+      )}
+      {g.verdict === "unknown_category" && g.suggestion && <p className="mt-1 text-white/45">{g.suggestion.why}</p>}
+      <details className="mt-2">
+        <summary className="cursor-pointer text-white/60">
+          One at a time ({g.rows.length}
+          {g.count > g.rows.length ? ` of ${g.count}` : ""})
+        </summary>
+        <ul className="mt-1 max-h-72 space-y-1.5 overflow-auto">
+          {g.rows.map((r) => (
+            <li key={r.sourceItemId} className="flex flex-wrap items-center justify-between gap-2">
+              <span className="min-w-0 flex-1 truncate text-white/75">
+                {r.name}
+                {r.suggestion && <span className="ml-2 text-white/40">{r.suggestion.why}</span>}
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                {g.verdict === "category_suspect" && r.suggestion && canRefile && (
+                  <form action={refileFromTypeCheck}>
+                    <input type="hidden" name="importId" value={importId} />
+                    <input type="hidden" name="sourceItemId" value={r.sourceItemId} />
+                    <input type="hidden" name="website_category" value={r.suggestion.websiteCategory} />
+                    <input type="hidden" name="house_type" value={r.suggestion.houseType ?? ""} />
+                    <button type="submit" className={CHIP_ACTION} data-testid="type-check-refile">
+                      Re-file as {r.suggestion.houseType ?? r.suggestion.websiteCategory}
+                    </button>
+                  </form>
+                )}
+                <Link
+                  href={lotsCreated ? lotSearchHref(r.name) : productSearchHref(r.name)}
+                  data-testid="type-check-open"
+                  className="font-semibold text-[var(--admin-accent)] hover:underline"
+                >
+                  {lotsCreated ? "Open its lot" : "Open the product"} →
+                </Link>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
+}
+

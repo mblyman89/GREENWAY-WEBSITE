@@ -619,6 +619,9 @@ import { __runVariantGramsCoreTests } from "../../src/lib/pos/variant-grams-core
 import { __runMenuLiveStepCoreTests } from "../../src/lib/inventory/menu-live-step-core";
 import { __runMenuWaitingLinkCoreTests } from "../../src/lib/pos/menu-waiting-link-core";
 import { __runPosImportFixCoreTests } from "../../src/lib/pos/pos-import-fix-core";
+import { __runFlaggedCountScopeCoreTests } from "../../src/lib/inventory/flagged-count-scope-core";
+import { __runCultiveraTypeFromCategoryCoreTests } from "../../src/lib/pos/cultivera-type-from-category-core";
+import { __runFactReviewFocusCoreTests } from "../../src/lib/pos/fact-review-focus-core";
 import { __runCostFillCoreTests } from "../../src/lib/noncannabis/cost-fill-core";
 import { __runMergeReviewCoreTests } from "../../src/lib/pos/merge-review-core";
 import { __runPublishStoryCoreTests } from "../../src/lib/catalog/publish-story-core";
@@ -1901,7 +1904,10 @@ __runLiquidVolumeTests();
   // update's page), superseded rows are never "waiting", and the flagged
   // worklist reaches every flag on a paged view.
   { const r = __runMenuWaitingLinkCoreTests(); if (r.failed > 0 || r.passed < 60) throw new Error(`menu-waiting-link-core: ${r.failed} failed, ${r.passed} passed`); }
-  { const r = __runPosImportFixCoreTests(); if (r.failed > 0 || r.passed < 140) throw new Error(`pos-import-fix-core: ${r.failed} failed, ${r.passed} passed`); }
+  { const r = __runPosImportFixCoreTests(); if (r.failed > 0 || r.passed < 158) throw new Error(`pos-import-fix-core: ${r.failed} failed, ${r.passed} passed`); }
+  { const r = __runFlaggedCountScopeCoreTests(); if (r.failed > 0 || r.passed < 18) throw new Error(`flagged-count-scope-core: ${r.failed} failed, ${r.passed} passed`); }
+  { const r = __runCultiveraTypeFromCategoryCoreTests(); if (r.failed > 0 || r.passed < 132) throw new Error(`cultivera-type-from-category-core: ${r.failed} failed, ${r.passed} passed`); }
+  { const r = __runFactReviewFocusCoreTests(); if (r.failed > 0 || r.passed < 33) throw new Error(`fact-review-focus-core: ${r.failed} failed, ${r.passed} passed`); }
 
   { const r = __runCostFillCoreTests(); if (r.failed > 0 || r.passed < 24) throw new Error(`cost-fill-core: ${r.failed} failed, ${r.passed} passed`); }
   // S32: the match review (merge-review-core). Floor = the exact count.

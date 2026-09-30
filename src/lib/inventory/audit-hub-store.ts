@@ -51,6 +51,8 @@
 import "server-only";
 
 import { createBooksClient } from "@/lib/supabase/books-client";
+import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { mixedSizeKeysFromDiagnostics, scopeFromProductKeys } from "./flagged-count-scope-core";
 import {
   AUDIT_LOT_COLUMNS,
   asLotFetcher,
@@ -420,6 +422,81 @@ export async function proposeScope(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 2b) R14b — A COUNT PRELOADED WITH THE PRODUCTS AN IMPORT FLAGGED
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type FlaggedScope = ProposedScope & {
+  /** How many product keys the import flagged (the diagnostic's `keys`). */
+  flaggedKeys: number;
+  /** Flagged keys with NO active lot right now (sold through / archived). */
+  keysWithoutActiveLots: number;
+  /** False when the import carries no mixed-size warning with keys. */
+  found: boolean;
+};
+
+/**
+ * Owner, Round 14: "Make sure the cycle counts redirect fix it feature
+ * actually loads in the product it says needs fixed."
+ *
+ * The Cultivera import's `import_lots_mixed_size_cards` warning stores EVERY
+ * flagged card's pos_product_key in its context (import-lot-core.ts). This
+ * reads that warning for one import, then reads the ACTIVE lots of exactly
+ * those cards and hands them to the same planner — every lot of every flagged
+ * card, due or not, no budget trim (flagged-count-scope-core.ts). Nothing is
+ * written; the owner still names the count and writes the reason.
+ *
+ * Reads go through the owner's own session (RLS: pos_diag_staff_read and
+ * inventory_lots_staff_all), chunked and paged so 211 cards / hundreds of lots
+ * are never cut at PostgREST's 1,000-row cap.
+ */
+export async function proposeFlaggedScope(importId: string): Promise<AuditStoreResult<FlaggedScope>> {
+  const supabase = await createBooksClient();
+  const { data: diagRows, error: dErr } = await supabase
+    .from("pos_import_diagnostics")
+    .select("code, context_json")
+    .eq("import_id", importId)
+    .eq("code", "import_lots_mixed_size_cards")
+    .order("id", { ascending: true })
+    .range(0, 99);
+  if (dErr) return refused(dErr);
+  const keys = mixedSizeKeysFromDiagnostics((diagRows ?? []) as Array<{ code: string; context_json: unknown }>);
+
+  let failure: unknown = null;
+  const rows = keys.length === 0
+    ? []
+    : await chunkedIn<string, AuditLotRow>(keys, async (chunk, from, to) => {
+        const { data, error } = await supabase
+          .from("inventory_lots")
+          .select(HUB_LOT_COLUMNS.join(","))
+          .eq("status", "active")
+          .in("pos_product_key", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) {
+          failure = error;
+          return [];
+        }
+        return (data ?? []) as unknown as AuditLotRow[];
+      });
+  // A failed page must not become a silently smaller count.
+  if (failure) return refused(failure);
+
+  const lots = await enrichAuditLots(rows, asLotFetcher(supabase));
+  const asOf = new Date();
+  const scope = scopeFromProductKeys(keys, lots);
+  return {
+    ok: true,
+    data: {
+      plan: buildAuditPlan(lots, asOf, scope.planOptions),
+      coverage: buildCoverageReport(lots, asOf),
+      flaggedKeys: keys.length,
+      keysWithoutActiveLots: scope.keysWithoutActiveLots,
+      found: keys.length > 0,
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 3) CREATE — a session plus its lines, in one call
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -463,13 +540,26 @@ export async function createAuditSession(input: {
 
   const supabase = await createBooksClient();
 
-  const { data: lotRows, error: lotErr } = await supabase
-    .from("inventory_lots")
-    .select(HUB_LOT_COLUMNS.join(","))
-    .in("id", [...input.lotIds]);
+  // R14b: chunked and paged. A flagged-products count can carry hundreds of
+  // lot ids; one unchunked `.in("id", …)` overruns the URL and the 1,000-row
+  // cap, and a short read would trip LOT_NOT_FOUND below for lots that exist.
+  let lotErr: unknown = null;
+  const lotRows = await chunkedIn<string, AuditLotRow>([...input.lotIds], async (chunk, from, to) => {
+    const { data, error } = await supabase
+      .from("inventory_lots")
+      .select(HUB_LOT_COLUMNS.join(","))
+      .in("id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) {
+      lotErr = error;
+      return [];
+    }
+    return (data ?? []) as unknown as AuditLotRow[];
+  });
   if (lotErr) return refused(lotErr);
 
-  const lots = await enrichAuditLots((lotRows ?? []) as unknown as AuditLotRow[], asLotFetcher(supabase));
+  const lots = await enrichAuditLots(lotRows, asLotFetcher(supabase));
 
   // A lot that was asked for and did not come back is REFUSED, not skipped.
   // Silently counting 9 of the 10 lots someone selected is how a scope shrinks
