@@ -968,3 +968,150 @@ export async function notifyVendorSampleCapAction(manifestId: string) {
         : "failed";
   redirect(`/admin/inventory/intake/${manifestId}?notified=${flag}`);
 }
+
+// ---------------------------------------------------------------------------
+// S32 (bible S32.2, D-R2-4): the match review - remember where a look-alike
+// product belongs. The answer is validated against the delivery's CURRENT
+// merge_ambiguous warning (never trusts the hidden inputs past that), saved
+// to intake_merge_decisions (0239), put on the delivery's timeline + audit
+// log, then the delivery's menu update is rebuilt so the choice takes effect
+// now (the same re-stage call S30's fact review uses).
+// ---------------------------------------------------------------------------
+
+function matchPageHref(manifestId: string, identity: string, extra: Record<string, string>, back?: string | null): string {
+  const qs = new URLSearchParams({ identity, ...extra });
+  const b = typeof back === "string" ? back.trim() : "";
+  if (b.startsWith("/admin/") && !b.startsWith("//")) qs.set("back", b);
+  return `/admin/inventory/intake/${manifestId}/match?${qs.toString()}`;
+}
+
+export async function saveMergeDecisionAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const { parseMergeDecisionForm, validateMergeDecision, mergeDecisionEventNote, mergeSaveResultCode } = await import(
+    "@/lib/pos/merge-review-core"
+  );
+  const get = (n: string) => {
+    const v = formData.get(n);
+    return typeof v === "string" ? v : "";
+  };
+  const back = get("back");
+  const form = parseMergeDecisionForm(get);
+  if (!form.ok) {
+    const m = get("manifestId").trim().toLowerCase();
+    if (/^[0-9a-f-]{36}$/.test(m)) {
+      redirect(matchPageHref(m, get("identity").trim(), { merge: "error", merge_msg: form.error }, back));
+    }
+    redirect("/admin/inventory/intake?error=save");
+  }
+  let code = "error";
+  let message: string | null = null;
+  try {
+    const { loadMatchReview } = await import("@/lib/pos/merge-review-server");
+    const review = await loadMatchReview(form.manifestId, form.identity);
+    if (!review.ok) {
+      message = "This delivery's menu update could not be read. Nothing was saved.";
+    } else {
+      const checked = validateMergeDecision(
+        {
+          manifestId: form.manifestId,
+          identity: form.identity,
+          decision: form.decision,
+          targetCardKey: form.targetCardKey,
+          candidateCardKeys: form.candidateCardKeys,
+          note: form.note,
+        },
+        review.warning,
+      );
+      if (!checked.ok) {
+        message = checked.error;
+      } else {
+        const { saveMergeDecision } = await import("@/lib/pos/merge-decision-store");
+        const saved = await saveMergeDecision(checked.value, session.userId);
+        if (!saved.migrated) {
+          code = "migration";
+        } else if (!saved.ok) {
+          message = saved.error ?? "Saving failed.";
+        } else {
+          const { recordAudit } = await import("@/lib/auth/audit");
+          await recordAudit({
+            actorId: session.userId,
+            actorEmail: session.email,
+            action: `intake_merge_decision.${checked.value.decision}`,
+            entityType: "intake_merge_decision",
+            entityId: checked.value.identity,
+            after: {
+              manifestId: checked.value.manifestId,
+              decision: checked.value.decision,
+              targetCardKey: checked.value.targetCardKey,
+              candidateCardKeys: checked.value.candidateCardKeys,
+              ownCardKey: checked.value.ownCardKey,
+              note: checked.value.note,
+            },
+          });
+          await logManifestEvent(
+            checked.value.manifestId,
+            "merge_decision_saved",
+            mergeDecisionEventNote(checked.value),
+            session.userId,
+          );
+          const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
+          const outcome = await stageIntakeMenuVersionForManifest(checked.value.manifestId, session.userId);
+          code = mergeSaveResultCode(checked.value.decision, outcome);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[intake] saveMergeDecisionAction failed:", err);
+    code = "error";
+    message = err instanceof Error ? err.message : "Saving the choice failed.";
+  }
+  revalidatePath(`/admin/inventory/intake/${form.manifestId}`);
+  revalidatePath("/admin/publish");
+  revalidatePath("/admin/menu-imports");
+  const extra: Record<string, string> = { merge: code };
+  if (code === "error" && message) extra.merge_msg = message.slice(0, 300);
+  redirect(matchPageHref(form.manifestId, form.identity, extra, back));
+}
+
+export async function forgetMergeDecisionAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const { isMergeIdentity } = await import("@/lib/pos/merge-review-core");
+  const manifestId = String(formData.get("manifestId") ?? "").trim().toLowerCase();
+  const identity = String(formData.get("identity") ?? "").trim();
+  const back = String(formData.get("back") ?? "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(manifestId) || !isMergeIdentity(identity)) {
+    redirect("/admin/inventory/intake?error=save");
+  }
+  let code = "error";
+  let message: string | null = null;
+  try {
+    const { forgetMergeDecision } = await import("@/lib/pos/merge-decision-store");
+    const r = await forgetMergeDecision(identity);
+    if (!r.migrated) code = "migration";
+    else if (!r.ok) message = r.error ?? "Forgetting failed.";
+    else {
+      code = "forgotten";
+      if (r.deleted) {
+        const { recordAudit } = await import("@/lib/auth/audit");
+        await recordAudit({
+          actorId: session.userId,
+          actorEmail: session.email,
+          action: "intake_merge_decision.forget",
+          entityType: "intake_merge_decision",
+          entityId: identity,
+          after: { manifestId },
+        });
+        await logManifestEvent(manifestId, "merge_decision_forgotten", `${identity} \u2192 choice forgotten`, session.userId);
+      }
+    }
+  } catch (err) {
+    console.error("[intake] forgetMergeDecisionAction failed:", err);
+    code = "error";
+    message = err instanceof Error ? err.message : "Forgetting the choice failed.";
+  }
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  revalidatePath("/admin/publish");
+  const extra: Record<string, string> = { merge: code };
+  if (code === "error" && message) extra.merge_msg = message.slice(0, 300);
+  redirect(matchPageHref(manifestId, identity, extra, back));
+}

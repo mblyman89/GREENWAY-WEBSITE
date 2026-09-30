@@ -92,6 +92,25 @@ so a settings save can never touch it.
 
 ---
 
+## S32 as built — a remembered choice must survive the product's own card (Round 13)
+
+**Found in the code, not assumed.** Before the owner answers, the planner
+adds a look-alike product as its **own new card**, keyed by its smallest lot
+key (`ownCardKeyOf`, `src/lib/pos/intake-mastering-core.ts`), and the update
+auto-publishes. The next delivery then matches the old cards **plus that own
+card**, so a choice saved against the old cards alone would go stale on the
+very next delivery. So the warning carries `own_card_key`, migration 0239
+stores it, and `mergeDecisionVerdict` accepts exactly two matched sets: the
+saved candidates, or the saved candidates plus the own card. Any other set
+is stale and is never applied. A join can never target the own card. Two old
+live cards are never merged here (D-R3-2); a duplicate is hidden from its
+product page's Visibility control.
+
+After a save, the match page reports what the rebuild actually did
+(`mergeSaveResultCode`), and never claims the menu changed when it did not.
+
+---
+
 ## Q-02 — How many manifests per week?
 
 **Owner answer:** 15–20 manifests per week, about 65–87 per month.

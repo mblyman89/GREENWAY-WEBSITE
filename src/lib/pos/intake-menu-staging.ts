@@ -79,6 +79,10 @@ import {
 import { VENDOR_ID_IDENTITY_ENV, vendorIdIdentityEnabled } from "@/lib/inventory/vendor-identity-core";
 import { loadVendorIdInputs } from "@/lib/inventory/restock-preview-server";
 import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+// S32: remembered answers for products that matched 2+ live cards.
+import { loadMergeDecisions } from "@/lib/pos/merge-decision-store";
+import { mergeAmbiguousIdentities } from "@/lib/pos/merge-review-core";
+import type { MergeDecision } from "@/lib/pos/intake-mastering-core";
 import type { ApprovedDraftForInjection, DraftEnrichment } from "@/lib/pos/draft-injection-core";
 // S01: self-describing intake versions (manifest header + publish outcome +
 // humanised notes). Pure; see the file header for where the truth lives.
@@ -369,12 +373,31 @@ export async function stageIntakeMenuVersionForManifest(
         : undefined;
 
     // 4) Pure plan.
-    const plan = buildIntakeStagedVersionPlan({
+    const firstPlan = buildIntakeStagedVersionPlan({
       publishedItems,
       approvedDrafts: drafts,
       enrichmentByDraftId,
       vendorIds,
     });
+    // S32: a remembered "join card X" / "keep separate" answer can only apply
+    // where the planner raised merge_ambiguous (2+ live matches), so read the
+    // saved answers for exactly those identities - zero reads otherwise - and
+    // plan again with them. Any failed read (or 0239 not applied) = no
+    // answers = the first plan, byte for byte. A stale answer is never
+    // applied (intake-mastering-core mergeDecisionVerdict).
+    const ambiguousIdentities = mergeAmbiguousIdentities(firstPlan.diagnostics);
+    const mergeDecisions =
+      ambiguousIdentities.length > 0 ? await loadMergeDecisions(ambiguousIdentities) : new Map<string, MergeDecision>();
+    const plan =
+      mergeDecisions.size > 0
+        ? buildIntakeStagedVersionPlan({
+            publishedItems,
+            approvedDrafts: drafts,
+            enrichmentByDraftId,
+            vendorIds,
+            mergeDecisions,
+          })
+        : firstPlan;
 
     // S30: settle the fact flags against the decisions a human saved for this
     // delivery (Product Onboarding -> Approved). ONE paged read, and only

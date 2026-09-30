@@ -400,9 +400,10 @@ const EXPLANATIONS: Record<string, ExplanationRule> = {
     title: "Matched more than one live card",
     meaning:
       "This product looked like it belonged to several live menu cards, so it was added as a NEW card instead of merging on a guess.",
-    // S26 (F-096): Product Mastering is never read by the merge. Compare the
-    // live cards instead; the remembered choice is S32.
-    fix: ISSUE_COPY.mergeFix,
+    // S26 (F-096): Product Mastering is never read by the merge. S32: with
+    // the delivery known the registry opens the match review (remembered
+    // choice); this static entry is the no-delivery fallback.
+    fix: ISSUE_COPY.mergeFixNoDelivery,
     fixHref: "/admin/products",
     fixLabel: "Compare the cards",
     informational: false,

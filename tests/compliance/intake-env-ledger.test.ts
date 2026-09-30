@@ -289,9 +289,25 @@ describe("intake env ledger", () => {
     // S33 (shipped as S33-NC, D-R3-1) adds a permission + a guarded update;
     // no variable, no schema. Its bible rollback line is S33.7, word for word.
     expect(none).toContain("S33");
-    expect(ledger).toContain("As of **S33**");
+    expect(ledger).not.toContain("As of **S33**");
     expect(ledger).toContain('"Revert code. No schema. Keyed costs remain valid, provenance-stamped facts." (S33');
     expect(ledger).toContain("S33 needs nothing set.");
+    // S32 (match review) adds migration 0239 + a page/actions; no variable.
+    // Its bible rollback line is S32.7, word for word.
+    expect(none).toContain("S32");
+    expect(ledger).toContain("As of **S32**");
+    expect(ledger).toContain(
+      '"Revert code; the table can stay (unused). Or drop the table \u2014 the planner treats a missing table as \'no decisions\'." (S32',
+    );
+    expect(ledger).toContain("S32 needs nothing set, only migration 0239 applied by hand.");
+    for (const f of [
+      "src/lib/pos/merge-review-core.ts",
+      "src/lib/pos/merge-review-server.ts",
+      "src/lib/pos/merge-decision-store.ts",
+      "src/app/admin/inventory/intake/[id]/match/page.tsx",
+    ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
     for (const f of [
       "src/lib/noncannabis/cost-fill-core.ts",
       "src/app/admin/inventory/noncannabis/actions.ts",

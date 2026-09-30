@@ -101,6 +101,8 @@ export const ISSUE_FIX_ROUTE_FILES: Readonly<Record<string, string>> = {
   "/admin/inventory/drafts": "src/app/admin/inventory/drafts/page.tsx",
   "/admin/settings/types": "src/app/admin/settings/types/page.tsx",
   "/admin/inventory/intake/[id]": "src/app/admin/inventory/intake/[id]/page.tsx",
+  // S32: the side-by-side match review for a product that matched 2+ cards.
+  "/admin/inventory/intake/[id]/match": "src/app/admin/inventory/intake/[id]/match/page.tsx",
   "/admin/inventory/intake": "src/app/admin/inventory/intake/page.tsx",
   "/admin/inventory/[id]": "src/app/admin/inventory/[id]/page.tsx",
   "/admin/inventory": "src/app/admin/inventory/page.tsx",
@@ -152,6 +154,7 @@ function uuid(v: unknown): string | null {
 export function issueRouteFor(href: string): string | null {
   const path = href.split(/[?#]/)[0];
   if (path in ISSUE_FIX_ROUTE_FILES) return path;
+  if (/^\/admin\/inventory\/intake\/[^/]+\/match$/.test(path)) return "/admin/inventory/intake/[id]/match";
   if (/^\/admin\/inventory\/intake\/[^/]+$/.test(path)) return "/admin/inventory/intake/[id]";
   if (/^\/admin\/inventory\/[^/]+$/.test(path)) return "/admin/inventory/[id]";
   if (/^\/admin\/products\/[^/]+$/.test(path)) return "/admin/products/[key]";
@@ -189,6 +192,14 @@ function backQs(back: string | null | undefined): string {
 /** The product (enrichment) page for a LIVE key. */
 export function productPageHref(key: string, back?: string | null): string {
   return `/admin/products/${encodeURIComponent(key.trim())}${backQs(back)}`;
+}
+
+/** S32: the match review for one identity on one delivery. */
+export function matchReviewHref(manifestId: string, identity: string, back?: string | null): string {
+  const b = clean(back);
+  const qs = new URLSearchParams({ identity: identity.trim() });
+  if (b && b.startsWith("/admin/") && !b.startsWith("//")) qs.set("back", b);
+  return `/admin/inventory/intake/${manifestId}/match?${qs.toString()}`;
 }
 
 /** The lot page, optionally at an anchor. */
@@ -276,8 +287,13 @@ export const ISSUE_COPY = {
     "without a vendor. Open the manifest to see what vendor it names and whether that vendor is linked.",
   mergeFix:
     "This product looks like more than one card already on your menu, so we kept it separate instead of guessing. " +
-    "Compare the cards side by side. Nothing is lost \u2014 it sells as its own card. " +
-    "Choosing where it belongs (and having that choice remembered) arrives with the match screen.",
+    "Nothing is lost \u2014 it sells as its own card. Compare the cards side by side and choose: join one of them, " +
+    "or keep it separate. We'll remember your choice for every future delivery of this product.",
+  /** S32: no delivery known (older version) - the list fallback, no promise. */
+  mergeFixNoDelivery:
+    "This product looks like more than one card already on your menu, so we kept it separate instead of guessing. " +
+    "Nothing is lost \u2014 it sells as its own card. This update does not say which delivery it came from, so the " +
+    "screen where you choose can't open from here; compare the cards, and hide the duplicate from its product page if one is wrong.",
   houseTypeFix:
     "The name and the category disagreed about the product type, so no type was set. " +
     "Pick the type on the lot page (Website type & category) \u2014 only this product changes.",
@@ -361,8 +377,13 @@ export function fixLinkForDiagnostic(code: string, ctx: IssueContext = {}): Issu
       const cards = (ctx.liveCardKeys ?? []).map((k) => clean(k)).filter((k): k is string => Boolean(k));
       const extra = cards.map((k, i) => extraLink(productPageHref(k, ctx.back), `Live card ${i + 1}`));
       const family = familyWordsFromIdentity(ctx.identity);
+      // S32: the delivery + identity open the match review, where the choice
+      // is saved (intake/[id]/match). Without both, the S26 list fallback.
+      if (manifestId && family) {
+        return link(matchReviewHref(manifestId, clean(ctx.identity)!, ctx.back), "Compare & choose", "item", ISSUE_COPY.mergeFix, ISSUE_COPY.mergeWhy, extra);
+      }
       const href = family ? `/admin/products?q=${encodeURIComponent(family)}` : "/admin/products";
-      return link(href, "Compare the cards", "list", ISSUE_COPY.mergeFix, ISSUE_COPY.mergeWhy, extra);
+      return link(href, "Compare the cards", "list", ISSUE_COPY.mergeFixNoDelivery, ISSUE_COPY.mergeWhy, extra);
     }
 
     case "draft_inject_house_type_low_confidence": {
@@ -632,12 +653,23 @@ export function __runIssueFixLinkCoreTests(): { passed: number; failed: number }
 
   // 6. merge ambiguous
   const mg = fixLinkForDiagnostic("intake_master_merge_ambiguous", full)!;
-  ok(mg.href === "/admin/products?q=blue%20dream" && mg.kind === "list", "merge → enrichment search by family");
-  ok(mg.label === "Compare the cards", "merge label");
+  ok(
+    mg.href === `/admin/inventory/intake/${M}/match?identity=acme-farms%7Cflower%7Cblue-dream&back=${encodeURIComponent(full.back!)}` && mg.kind === "item",
+    "S32: merge → the match review for this delivery + identity",
+  );
+  ok(issueRouteFor(mg.href) === "/admin/inventory/intake/[id]/match" && mg.routeFile === "src/app/admin/inventory/intake/[id]/match/page.tsx", "S32: match route registered");
+  ok(mg.label === "Compare & choose", "merge label");
   ok(mg.extra.length === 2 && mg.extra[1].href === `/admin/products/CARD%20B?back=${encodeURIComponent(full.back!)}` && mg.extra[1].label === "Live card 2", "merge: one link per live card");
   ok(mg.why === ISSUE_COPY.mergeWhy && mg.fix === ISSUE_COPY.mergeFix, "merge copy");
-  ok(!/remember your choice|we'll remember/i.test(ISSUE_COPY.mergeFix), "merge never promises a remembered choice before S32");
+  ok(/we'll remember your choice/i.test(ISSUE_COPY.mergeFix), "S32: the match review remembers the choice, and the copy says so");
+  ok(!/remember/i.test(ISSUE_COPY.mergeFixNoDelivery), "S32: the no-delivery fallback promises nothing it can't open");
   ok(!mg.href.includes("masters"), "merge never sends to Product Mastering (F-096)");
+  const mgNoM = fixLinkForDiagnostic("intake_master_merge_ambiguous", { ...full, manifestId: null })!;
+  ok(mgNoM.href === "/admin/products?q=blue%20dream" && mgNoM.kind === "list" && mgNoM.label === "Compare the cards" && mgNoM.fix === ISSUE_COPY.mergeFixNoDelivery, "S32: no delivery → S26 family search");
+  const mgBadId = fixLinkForDiagnostic("intake_master_merge_ambiguous", { manifestId: M, identity: "bad" })!;
+  ok(mgBadId.href === "/admin/products" && mgBadId.kind === "list", "S32: bad identity never opens the match review");
+  ok(matchReviewHref(M, " a|b|c ", "//evil") === `/admin/inventory/intake/${M}/match?identity=a%7Cb%7Cc`, "S32: match href trims identity, drops an unsafe back");
+  ok(matchReviewHref(M, "a&b|x|y#z") === `/admin/inventory/intake/${M}/match?identity=a%26b%7Cx%7Cy%23z`, "S32: identity is URL-encoded");
   ok(fixLinkForDiagnostic("intake_master_merge_ambiguous", { identity: "bad" })!.href === "/admin/products", "bad identity → plain list");
   ok(fixLinkForDiagnostic("intake_master_merge_ambiguous", { liveCardKeys: [" ", "X"] })!.extra.length === 1, "blank card keys dropped");
 

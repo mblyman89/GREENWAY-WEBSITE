@@ -41,6 +41,7 @@ describe("decisions doc exists and carries the owner's words", () => {
     expect(doc).toContain("## D-R3-1");
     expect(doc).toContain("## Q-02");
     expect(doc).toContain("## R-LLAMA");
+    expect(doc).toContain("## S32 as built");
   });
   it("quotes the owner verbatim", () => {
     expect(doc).toContain("let's not build this for the cannabis inventory");
@@ -107,6 +108,14 @@ describe("Q-02 volume vs the S14 picker caps", () => {
 describe("R-LLAMA root cause: scanners read flat text, not LlamaParse markdown", () => {
   it("LlamaParse is asked for markdown", () => {
     expect(read("src/lib/inbound-email/llamaparse-core.ts")).toContain('result_type: "markdown"');
+  });
+
+  it("S32 as built: the own-card rule the doc describes is the code", () => {
+    const core = read("src/lib/pos/intake-mastering-core.ts");
+    expect(core).toContain("export function ownCardKeyOf(");
+    expect(core).toContain("own_card_key: ownCardKeyOf(group.items),");
+    expect(core).toContain("sameCardKeySet([...decision.candidate_card_keys, own], matchedKeys);");
+    expect(read("supabase/migrations/0239_intake_merge_decisions.sql")).toContain("own_card_key text");
   });
 
   it("invoice #: flat text found, markdown shapes missed (flip when S34 ships)", () => {

@@ -512,6 +512,14 @@ export const TABLE_RULES: readonly TableRule[] = [
   // recalls instead of paying for another Gemini call. It has no foreign keys
   // (draft_id / lot_id are stamps), so keeping it never leaves a dangling link.
   { table: "product_fact_provenance", disposition: "KEEP", because: "The history of who (or what) set each product fact — description, effects, terpenes — and how sure they were. It is product knowledge, not test activity, and it is how the store remembers a product the next time it arrives." },
+  // intake_merge_decisions (0239, bible S32): the owner's "join card X" /
+  // "keep separate" answers for a product that matched 2+ live cards. Human
+  // decisions about PRODUCTS (like the classification overrides below) that
+  // must keep applying to future deliveries. Its only FK is decided_by ->
+  // staff_profiles (KEEP), so keeping it never leaves a dangling link. After
+  // a wipe the card keys it names are gone, so each answer simply reads as
+  // stale and the planner asks again - it is never applied to other cards.
+  { table: "intake_merge_decisions", disposition: "KEEP", because: "Your answers for products that looked like more than one menu card (join card X, or keep separate). They are decisions about products and keep applying to future deliveries; if the cards they name are gone, the store simply asks you again." },
   { table: "product_classification_overrides", disposition: "KEEP", because: "Your manual corrections to how a product is classified — decisions, and they must keep applying after the wipe." },
   { table: "noncannabis_products", disposition: "KEEP", because: "Your curated non-cannabis catalogue." },
   { table: "noncannabis_sku_sequences", disposition: "KEEP", because: "SKU counters. Resetting them would re-issue SKUs you have already printed on labels." },
