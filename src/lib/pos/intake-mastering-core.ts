@@ -128,7 +128,90 @@ export type IntakeMasteringInputs = {
    * complete). See vendor-identity-core.ts for the rule and its grounding.
    */
   vendorIds?: VendorIdInputs;
+  /**
+   * S32 (D-R2-4): the human's remembered answer for an identity that matched
+   * 2+ live cards, keyed by that identity (vendor|categoryAxis|family, exactly
+   * as the merge_ambiguous diagnostic emits it). Applied ONLY while its
+   * candidate_card_keys still equal the cards matched now (set equality) -
+   * otherwise it is STALE and today's warning returns with stale_decision.
+   * Absent = byte-identical behaviour to before S32.
+   */
+  mergeDecisions?: ReadonlyMap<string, MergeDecision>;
 };
+
+/**
+ * S32: one remembered "join card X" / "keep separate" choice.
+ *
+ * own_card_key is the card THIS product got on its own when the choice was
+ * made: the smallest lot key of the delivery (the new-card key rule below,
+ * "the card id IS that lot key"). Once that version is live, that card has
+ * the same identity, so the NEXT delivery matches the candidates PLUS it.
+ * Without it every saved choice would go stale on the very next delivery.
+ */
+export type MergeDecision = {
+  decision: "join" | "separate";
+  target_card_key: string | null;
+  candidate_card_keys: readonly string[];
+  own_card_key?: string | null;
+};
+
+/** S32: same set of card keys (order and duplicates ignored). */
+export function sameCardKeySet(a: readonly string[], b: readonly string[]): boolean {
+  const sa = new Set(a);
+  const sb = new Set(b);
+  if (sa.size !== sb.size) return false;
+  for (const k of sa) if (!sb.has(k)) return false;
+  return true;
+}
+
+/**
+ * S32: what a remembered decision means for the cards matched NOW.
+ *   none      no decision saved
+ *   stale     the matched cards changed since the choice (a card was hidden,
+ *             added, or went medical-only) - never applied
+ *   join      add the lots to `targetKey` (always one of the matched cards):
+ *             the chosen card, or - for "keep separate" once the product's
+ *             own card is live - its own card (keptSeparate)
+ *   separate  keep as its own NEW card (its own card is not live)
+ * The matched set must equal the saved candidates, or the saved candidates
+ * plus the product's own card - nothing else is ever accepted.
+ */
+export type MergeDecisionVerdict =
+  | { kind: "none" }
+  | { kind: "stale" }
+  | { kind: "join"; targetKey: string; keptSeparate: boolean }
+  | { kind: "separate" };
+
+export function mergeDecisionVerdict(
+  decision: MergeDecision | undefined,
+  matchedKeys: readonly string[],
+): MergeDecisionVerdict {
+  if (!decision) return { kind: "none" };
+  const own = typeof decision.own_card_key === "string" && decision.own_card_key ? decision.own_card_key : null;
+  const exact = sameCardKeySet(decision.candidate_card_keys, matchedKeys);
+  const withOwn =
+    !exact && own !== null && !decision.candidate_card_keys.includes(own) &&
+    sameCardKeySet([...decision.candidate_card_keys, own], matchedKeys);
+  if (!exact && !withOwn) return { kind: "stale" };
+  if (decision.decision === "separate") {
+    return withOwn && own ? { kind: "join", targetKey: own, keptSeparate: true } : { kind: "separate" };
+  }
+  if (decision.decision === "join") {
+    const t = decision.target_card_key;
+    // A join whose target is not one of today's matches can never apply.
+    if (t && t !== own && decision.candidate_card_keys.includes(t) && matchedKeys.includes(t)) {
+      return { kind: "join", targetKey: t, keptSeparate: false };
+    }
+    return { kind: "stale" };
+  }
+  return { kind: "stale" };
+}
+
+/** S32: the key a group's own NEW card gets (the smallest lot key - see the NEW CARD step). */
+export function ownCardKeyOf(items: readonly { source_item_id: string }[]): string | null {
+  const keys = items.map((i) => i.source_item_id).sort((a, b) => a.localeCompare(b));
+  return keys[0] ?? null;
+}
 
 /** SLICE 62: per-lot verified facts (for inventory_lots persistence). */
 export type LotFactBundle = {
@@ -797,9 +880,21 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       vendorIds: group.items.map((gi) => inputs.vendorIds?.vendorIdByLotKey.get(gi.source_item_id)),
     });
 
-    if (liveMatches.length === 1) {
-      // RESTOCK MERGE — append this group's lots to the one matching live card.
-      const target = liveMatches[0];
+    // S32: a remembered human decision for a multi-card match.
+    const verdict =
+      liveMatches.length > 1
+        ? mergeDecisionVerdict(
+            inputs.mergeDecisions?.get(group.identity),
+            liveMatches.map((c) => c.source_item_id),
+          )
+        : ({ kind: "none" } as MergeDecisionVerdict);
+    const decidedTarget =
+      verdict.kind === "join" ? liveMatches.find((c) => c.source_item_id === verdict.targetKey) ?? null : null;
+
+    if (liveMatches.length === 1 || decidedTarget) {
+      // RESTOCK MERGE — append this group's lots to the one matching live card
+      // (S32: or to the card a human chose for a multi-card match).
+      const target = decidedTarget ?? liveMatches[0];
       const list = mergesByCardKey.get(target.source_item_id) ?? [];
       list.push(...sortVariants(variants));
       mergesByCardKey.set(target.source_item_id, list);
@@ -823,12 +918,32 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
           // same name (merged by name exactly as before; worth merging the
           // vendor rows so future matches are exact).
           vendor_record_differs: conflicts.some((c) => c.source_item_id === target.source_item_id),
+          // S32: joined by a remembered human decision, not by a single match.
+          ...(decidedTarget
+            ? {
+                decided: true,
+                identity: group.identity,
+                decision: verdict.kind === "join" && verdict.keptSeparate ? "separate" : "join",
+              }
+            : {}),
         },
       });
       continue;
     }
 
-    if (liveMatches.length > 1) {
+    if (liveMatches.length > 1 && verdict.kind === "separate") {
+      diagnostics.push({
+        severity: "info",
+        code: "intake_master_kept_separate",
+        message: `“${group.display}” matches ${liveMatches.length} live cards; as you chose, it stays its own card.`,
+        context: {
+          identity: group.identity,
+          live_card_keys: liveMatches.map((c) => c.source_item_id),
+          lots: group.items.map((i) => i.source_item_id),
+          decided: true,
+        },
+      });
+    } else if (liveMatches.length > 1) {
       diagnostics.push({
         severity: "warning",
         code: "intake_master_merge_ambiguous",
@@ -837,6 +952,12 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
           identity: group.identity,
           live_card_keys: liveMatches.map((c) => c.source_item_id),
           lots: group.items.map((i) => i.source_item_id),
+          // S32: the key this product's own new card gets (the new-card rule
+          // below: the smallest lot key) - saved with a choice so the next
+          // delivery, which also matches that card, is still recognised.
+          own_card_key: ownCardKeyOf(group.items),
+          // S32: a saved choice exists but the matched cards changed since.
+          ...(verdict.kind === "stale" ? { stale_decision: true } : {}),
         },
       });
     }
@@ -849,6 +970,7 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       a.source_item_id.localeCompare(b.source_item_id),
     );
     const base = sortedItems[0];
+    // S32: ownCardKeyOf must name exactly this card (asserted in self-tests).
     const sorted = sortVariants(variants);
 
     if (group.items.length === 1 && liveMatches.length === 0) {
@@ -1139,6 +1261,137 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
       p.diagnostics.some((d) => d.code === "intake_master_merge_ambiguous" && d.severity === "warning"),
       "ambiguous merge: warning",
     );
+  }
+
+  // S32 (D-R2-4): remembered merge decisions.
+  {
+    const twoLive = [live({}), live({ source_item_id: "card-2", variants: [] })];
+    const base = plan([draft({})], [["d1", enrich({})]], twoLive);
+    const amb = base.diagnostics.find((d) => d.code === "intake_master_merge_ambiguous");
+    const identity = String(amb?.context?.identity ?? "");
+    assert(identity.length > 0, "S32: ambiguous warning carries the identity the decision is keyed on");
+    const withDecisions = (m: Map<string, MergeDecision>, cards = twoLive) =>
+      buildIntakeMasteringPlan({
+        drafts: [draft({})],
+        existingKeys: new Set(),
+        enrichmentByDraftId: new Map([["d1", enrich({})]]),
+        liveCards: cards,
+        mergeDecisions: m,
+      });
+    // (a) no decisions (empty map) → identical plan to no map at all.
+    const a = withDecisions(new Map());
+    assert(JSON.stringify(a.diagnostics) === JSON.stringify(base.diagnostics), "S32 (a): empty decisions → identical diagnostics");
+    assert(JSON.stringify(a.newCards) === JSON.stringify(base.newCards), "S32 (a): empty decisions → identical new cards");
+    assert(a.mergedVariantCount === base.mergedVariantCount, "S32 (a): empty decisions → identical merge count");
+    // (b) join with the matching candidate set → appended to target, no warnings.
+    const b = withDecisions(
+      new Map([[identity, { decision: "join", target_card_key: "card-2", candidate_card_keys: ["card-2", "card-1"] }]]),
+    );
+    assert(b.newCards.length === 0, "S32 (b): join → no new card");
+    assert(b.mergedVariantCount === 1, "S32 (b): join → one merged variant");
+    assert((b.mergesByCardKey.get("card-2") ?? []).length === 1, "S32 (b): join → variants on the CHOSEN card");
+    assert(!b.mergesByCardKey.has("card-1"), "S32 (b): join → never on the other card");
+    assert(!b.diagnostics.some((d) => d.severity === "warning"), "S32 (b): join → zero warnings");
+    const bd = b.diagnostics.find((d) => d.code === "intake_master_restock");
+    assert(bd?.context?.decided === true && bd?.context?.identity === identity, "S32 (b): restock diagnostic marks the human decision");
+    // (c) separate → new card + info diagnostic, zero warnings.
+    const c = withDecisions(
+      new Map([[identity, { decision: "separate", target_card_key: null, candidate_card_keys: ["card-1", "card-2"] }]]),
+    );
+    assert(c.newCards.length === 1 && c.mergedVariantCount === 0, "S32 (c): separate → its own new card");
+    assert(!c.diagnostics.some((d) => d.severity === "warning"), "S32 (c): separate → zero warnings");
+    const cd = c.diagnostics.find((d) => d.code === "intake_master_kept_separate");
+    assert(cd?.severity === "info" && cd?.context?.decided === true && cd?.context?.identity === identity, "S32 (c): kept-separate info diagnostic");
+    // (d) candidate set changed → the warning returns with stale_decision.
+    const threeLive = [...twoLive, live({ source_item_id: "card-3", variants: [] })];
+    const d = withDecisions(
+      new Map([[identity, { decision: "join", target_card_key: "card-1", candidate_card_keys: ["card-1", "card-2"] }]]),
+      threeLive,
+    );
+    const dd = d.diagnostics.find((x) => x.code === "intake_master_merge_ambiguous");
+    assert(dd?.severity === "warning" && dd?.context?.stale_decision === true, "S32 (d): changed cards → stale warning");
+    assert(d.mergedVariantCount === 0 && d.newCards.length === 1, "S32 (d): stale decision never applied");
+    const dSep = withDecisions(
+      new Map([[identity, { decision: "separate", target_card_key: null, candidate_card_keys: ["card-1", "card-2"] }]]),
+      threeLive,
+    );
+    assert(!dSep.diagnostics.some((x) => x.code === "intake_master_kept_separate"), "S32 (d): stale separate not applied");
+    assert(dSep.diagnostics.some((x) => x.context?.stale_decision === true), "S32 (d): stale separate → stale warning");
+    // (e) join target that is now hidden → stale (hidden cards never match).
+    const e3 = [live({}), live({ source_item_id: "card-2", variants: [] }), live({ source_item_id: "card-3", variants: [] })];
+    const eBase = withDecisions(new Map(), e3);
+    const eId = String(eBase.diagnostics.find((x) => x.code === "intake_master_merge_ambiguous")?.context?.identity ?? "");
+    const e = withDecisions(
+      new Map([[eId, { decision: "join", target_card_key: "card-3", candidate_card_keys: ["card-1", "card-2", "card-3"] }]]),
+      [e3[0], e3[1], { ...e3[2], hidden: true }],
+    );
+    assert(e.mergedVariantCount === 0, "S32 (e): hidden join target → nothing merged");
+    assert(
+      e.diagnostics.some((x) => x.code === "intake_master_merge_ambiguous" && x.context?.stale_decision === true),
+      "S32 (e): hidden join target → stale warning",
+    );
+    // A decision for a different identity never leaks.
+    const other = withDecisions(
+      new Map([["someone|else|entirely", { decision: "join", target_card_key: "card-1", candidate_card_keys: ["card-1", "card-2"] }]]),
+    );
+    assert(other.mergedVariantCount === 0 && !other.diagnostics.some((x) => x.context?.stale_decision), "S32: other identity's decision ignored");
+    // A single live match is untouched by any decision.
+    const single = withDecisions(
+      new Map([[identity, { decision: "separate", target_card_key: null, candidate_card_keys: ["card-1", "card-2"] }]]),
+      [live({})],
+    );
+    assert(single.mergedVariantCount === 1, "S32: a single match still restocks (decisions only apply to 2+)");
+    // Pure helpers.
+    assert(sameCardKeySet(["a", "b"], ["b", "a", "a"]), "sameCardKeySet: order/dupes ignored");
+    assert(!sameCardKeySet(["a", "b"], ["a", "c"]), "sameCardKeySet: different member");
+    assert(!sameCardKeySet(["a"], ["a", "b"]), "sameCardKeySet: different size");
+    assert(mergeDecisionVerdict(undefined, ["a"]).kind === "none", "verdict: none");
+    assert(mergeDecisionVerdict({ decision: "join", target_card_key: "z", candidate_card_keys: ["a", "b"] }, ["a", "b"]).kind === "stale", "verdict: join target outside matches → stale");
+    assert(mergeDecisionVerdict({ decision: "join", target_card_key: null, candidate_card_keys: ["a", "b"] }, ["a", "b"]).kind === "stale", "verdict: join without target → stale");
+    const vj = mergeDecisionVerdict({ decision: "join", target_card_key: "b", candidate_card_keys: ["a", "b"] }, ["b", "a"]);
+    assert(vj.kind === "join" && vj.targetKey === "b", "verdict: join");
+    assert(mergeDecisionVerdict({ decision: "separate", target_card_key: null, candidate_card_keys: ["a", "b"] }, ["a", "b"]).kind === "separate", "verdict: separate");
+    // own_card_key: the delivery went live as its own card, so the next
+    // delivery matches the candidates PLUS that card - still the same choice.
+    const vo = mergeDecisionVerdict({ decision: "join", target_card_key: "b", candidate_card_keys: ["a", "b"], own_card_key: "o" }, ["a", "o", "b"]);
+    assert(vo.kind === "join" && vo.targetKey === "b" && !vo.keptSeparate, "verdict: join still applies once own card is live");
+    const so = mergeDecisionVerdict({ decision: "separate", target_card_key: null, candidate_card_keys: ["a", "b"], own_card_key: "o" }, ["o", "a", "b"]);
+    assert(so.kind === "join" && so.targetKey === "o" && so.keptSeparate, "verdict: separate + own card live → onto its own card");
+    assert(mergeDecisionVerdict({ decision: "join", target_card_key: "b", candidate_card_keys: ["a", "b"], own_card_key: "o" }, ["a", "o", "b", "x"]).kind === "stale", "verdict: own + an extra card → stale");
+    assert(mergeDecisionVerdict({ decision: "join", target_card_key: "b", candidate_card_keys: ["a", "b"], own_card_key: "o" }, ["a", "o"]).kind === "stale", "verdict: own replaces a candidate → stale");
+    assert(mergeDecisionVerdict({ decision: "join", target_card_key: "b", candidate_card_keys: ["a", "b"] }, ["a", "o", "b"]).kind === "stale", "verdict: no own key → an extra card is stale");
+    assert(mergeDecisionVerdict({ decision: "join", target_card_key: "o", candidate_card_keys: ["a", "b"], own_card_key: "o" }, ["a", "o", "b"]).kind === "stale", "verdict: join target must be a saved candidate");
+    assert(mergeDecisionVerdict({ decision: "join", target_card_key: "a", candidate_card_keys: ["a", "b"], own_card_key: "a" }, ["a", "b"]).kind === "stale", "verdict: own key inside candidates never joins itself");
+    // End to end: the delivery's own card (smallest lot key) is live.
+    const ownLive = [...twoLive, live({ source_item_id: "LOT-A", variants: [{ source_variant_id: "LOT-A-onboarded", medical: false }] })];
+    const nextDraft = draft({ id: "d9", pos_product_key: "LOT-Z", name: "Blue Dream 3.5g" });
+    const nextPlan = (m: Map<string, MergeDecision>) =>
+      buildIntakeMasteringPlan({
+        drafts: [nextDraft],
+        existingKeys: new Set(),
+        enrichmentByDraftId: new Map([["d9", enrich({})]]),
+        liveCards: ownLive,
+        mergeDecisions: m,
+      });
+    const nAmb = nextPlan(new Map()).diagnostics.find((x) => x.code === "intake_master_merge_ambiguous");
+    const nIds = (nAmb?.context?.live_card_keys as string[] | undefined) ?? [];
+    assert(nIds.length === 3 && nIds.includes("LOT-A") && String(nAmb?.context?.identity) === identity, "S32: own card joins the match set on the next delivery (same identity)");
+    const nJoin = nextPlan(new Map([[identity, { decision: "join", target_card_key: "card-2", candidate_card_keys: ["card-1", "card-2"], own_card_key: "LOT-A" }]]));
+    assert((nJoin.mergesByCardKey.get("card-2") ?? []).length === 1 && !nJoin.diagnostics.some((x) => x.severity === "warning"), "S32: next delivery joins the chosen card, no warning");
+    const nSep = nextPlan(new Map([[identity, { decision: "separate", target_card_key: null, candidate_card_keys: ["card-1", "card-2"], own_card_key: "LOT-A" }]]));
+    assert((nSep.mergesByCardKey.get("LOT-A") ?? []).length === 1 && nSep.newCards.length === 0, "S32: next delivery of a kept-separate product restocks its own card");
+    const nSepD = nSep.diagnostics.find((x) => x.code === "intake_master_restock");
+    assert(nSepD?.context?.decision === "separate" && !nSep.diagnostics.some((x) => x.severity === "warning"), "S32: kept-separate restock is labelled and warning-free");
+    assert(nJoin.diagnostics.find((x) => x.code === "intake_master_restock")?.context?.decision === "join", "S32: joined restock is labelled join");
+    // own_card_key on the warning IS the key the separate card really gets.
+    const two = plan(
+      [draft({ pos_product_key: "LOT-M" }), draft({ id: "d2", pos_product_key: "LOT-C", name: "Blue Dream 3.5g" })],
+      [["d1", enrich({})], ["d2", enrich({})]],
+      twoLive,
+    );
+    const twoAmb = two.diagnostics.find((x) => x.code === "intake_master_merge_ambiguous");
+    assert(twoAmb?.context?.own_card_key === "LOT-C" && two.newCards.length === 1 && two.newCards[0].source_item_id === "LOT-C", "S32: own_card_key names the new card (smallest lot key)");
+    assert(ownCardKeyOf([]) === null && ownCardKeyOf([{ source_item_id: "b" }, { source_item_id: "a" }]) === "a", "ownCardKeyOf helper");
   }
 
   // Hidden and medical-only live cards are never merge targets.

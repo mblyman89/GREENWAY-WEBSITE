@@ -60,6 +60,7 @@ import type { VendorIdInputs } from "@/lib/inventory/vendor-identity-core";
 import {
   buildIntakeMasteringPlan,
   type LotFactBundle,
+  type MergeDecision,
   type MasteredNewCard,
   type MasteredVariant,
 } from "@/lib/pos/intake-mastering-core";
@@ -213,6 +214,12 @@ export type IntakeStagingInputs = {
    * Absent = the name rule, byte for byte.
    */
   vendorIds?: VendorIdInputs;
+  /**
+   * S32: remembered "join card X" / "keep separate" choices for identities
+   * that match 2+ live cards (intake_merge_decisions). Absent or empty =
+   * today's behaviour, byte for byte; a stale choice is never applied.
+   */
+  mergeDecisions?: ReadonlyMap<string, MergeDecision>;
 };
 
 /**
@@ -459,6 +466,7 @@ export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): Intak
     existingKeys,
     enrichmentByDraftId: inputs.enrichmentByDraftId,
     vendorIds: inputs.vendorIds,
+    mergeDecisions: inputs.mergeDecisions,
     liveCards: items
       .filter((it) => it.origin === "carried")
       .map((it) => ({

@@ -1275,12 +1275,21 @@ describe("the migration list is ordered the way the database will see it", () =>
     // gl_factory_reset succeeding and emptying every table, the rollback file
     // proving the old failure, re-apply twice, in a rolled-back transaction)
     // passed.
-    expect(listed[listed.length - 1]).toMatch(/^0238_/);
+    // S32 (bible S32.2/S32.3) added 0239_intake_merge_decisions.sql: one new
+    // table, the remembered "join card X" / "keep separate" answer per
+    // product identity, RLS on with no policy (service role only), decided_by
+    // -> staff_profiles on delete set null. Verified in the build sandbox
+    // against Postgres 15: 0239 applied twice cleanly on top of 0001-0238;
+    // the join-needs-a-target, separate-has-no-target, decision-word and
+    // 2+-candidates checks each refused a bad row; the upsert on identity
+    // replaced an answer; the rollback file dropped the table.
+    expect(listed[listed.length - 1]).toMatch(/^0239_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0238_factory_reset_reaches_every_guard.sql");
-    expect(listed[listed.length - 2]).toBe("0237_fact_review_for_versions.sql");
-    expect(listed[listed.length - 3]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 1]).toBe("0239_intake_merge_decisions.sql");
+    expect(listed[listed.length - 2]).toBe("0238_factory_reset_reaches_every_guard.sql");
+    expect(listed[listed.length - 3]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 4]).toBe("0236_publish_archive_rule.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

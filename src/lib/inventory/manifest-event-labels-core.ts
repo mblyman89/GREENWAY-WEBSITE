@@ -66,6 +66,9 @@ export const MANIFEST_EVENT_LABELS: Readonly<Record<string, ManifestEventLabel>>
   menu_publish_held_for_fact_review: { label: "Menu update held \u00b7 fact check", group: "menu", problem: true },
   menu_publish_held_for_cutover: { label: "Menu update held \u00b7 cutover", group: "menu", problem: true },
   menu_carry_forward_incomplete: { label: "Menu update not built \u00b7 live menu unreadable", group: "menu", problem: true },
+  // S32: the match review (intake/[id]/match) - who chose where a look-alike product belongs.
+  merge_decision_saved: { label: "Look-alike product \u00b7 choice saved", group: "menu", problem: false },
+  merge_decision_forgotten: { label: "Look-alike product \u00b7 choice forgotten", group: "menu", problem: false },
   // Knowledge base
   kb_link: { label: "Knowledge base link", group: "kb", problem: false },
   kb_writeback: { label: "Promoted to the knowledge base", group: "kb", problem: false },
@@ -245,7 +248,7 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   // Every label has text and a valid group.
   const groups = new Set(MANIFEST_EVENT_GROUPS.map((g) => g.key));
   ok(Object.values(MANIFEST_EVENT_LABELS).every((l) => l.label.length > 0 && groups.has(l.group)), "every label valid");
-  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 29, "29 known types");
+  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 31, "31 known types (S32 adds the two match-review events)");
 
   // Grouping keeps order, drops empties, accounting collapsed + last.
   const ev = [

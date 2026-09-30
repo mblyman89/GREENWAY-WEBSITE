@@ -1378,3 +1378,68 @@ in Vercel.
   `supabase/rollbacks/0238_factory_reset_reaches_every_guard.rollback.sql`
   into the SQL editor. It puts back the 0174, 0176, 0177 and 0209 guard
   bodies. The reset then fails again as described above.
+
+## S32 — 0239 — remember where a look-alike product belongs
+
+- [ ] `0239_intake_merge_decisions.sql` — creates one new table,
+  `intake_merge_decisions`. It changes no existing table and touches no row.
+  Its only link is `decided_by` → `staff_profiles` (set null if that staff
+  row is ever deleted).
+
+  **Why:** when a delivered product looks like two or more cards already on
+  your menu (same vendor, category and product family), the store never
+  guesses. It adds the product as its own card and warns "Matched more than
+  one live card". Until now there was nowhere to save your answer, so the
+  same warning came back on every delivery of that product (bible S32,
+  findings F-123, F-096, F-066).
+
+  **What it does:** one row per product identity holds your answer:
+  **Join this card** (the lots go on the card you picked) or **Keep
+  separate** (it is a different product). The answer is used only while the
+  cards it matches are the same cards you compared. If a card is hidden,
+  added or removed, the answer is ignored and you are asked again. Every row
+  must be a valid answer: a join always names a card, keep-separate never
+  does, and at least two cards were compared. Row-level security is on with
+  no policy, so only the server can read or write it.
+
+  **What you will see after it is run:** on a menu update (Menu Imports →
+  the receiving version) the warning's button **Compare & choose** opens
+  "This product looks like more than one card on your menu" with the cards
+  side by side. One click saves your answer (with your name, on the
+  delivery's timeline and in the audit log) and rebuilds that delivery's menu
+  update. **Forget my choice** deletes the answer.
+
+  **Until it is run** nothing breaks. The warning and the comparison page
+  work, and the buttons say this migration is what saves the answer. The
+  menu is built exactly as before.
+
+  Safe to re-run (`create table if not exists`). Verified: all 239
+  migrations apply on a clean Postgres 15, 0239 re-applies cleanly, each
+  check refused a bad row (a join with no card, keep-separate naming a card,
+  an unknown answer, fewer than two cards), an answer saved twice kept one
+  row, and the rollback dropped the table.
+
+  **Run it, then check:**
+
+  ```sql
+  select c.relrowsecurity as rls_on,
+         (select count(*) from pg_policies p where p.tablename = 'intake_merge_decisions') as policies
+    from pg_class c
+   where c.oid = 'public.intake_merge_decisions'::regclass;
+  -- expect true, 0
+
+  select conname
+    from pg_constraint
+   where conrelid = 'public.intake_merge_decisions'::regclass
+     and contype = 'c'
+   order by conname;
+  -- expect intake_merge_decisions_decision_check,
+  --        intake_merge_decisions_target_matches_decision,
+  --        intake_merge_decisions_two_or_more_candidates
+  ```
+
+  **Rollback (only if needed):** "Revert code; the table can stay (unused).
+  Or drop the table — the planner treats a missing table as 'no decisions'."
+  To drop it, paste `supabase/rollbacks/0239_intake_merge_decisions.rollback.sql`
+  into the SQL editor. Every saved answer is forgotten, and the warning returns
+  on the next delivery of each of those products.

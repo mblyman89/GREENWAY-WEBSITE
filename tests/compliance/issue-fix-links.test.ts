@@ -66,7 +66,7 @@ describe("S26 core self-tests", () => {
   it("embedded self-tests all pass (pinned count)", () => {
     const r = __runIssueFixLinkCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(183);
+    expect(r.passed).toBe(189);
   });
 
   it("is registered in the pure self-test runner", () => {
@@ -319,10 +319,27 @@ describe("S26 — end to end through explainDiagnostic (what the owner sees)", (
       ...link,
       context: { identity: "house llc|flower|blue-dream", live_card_keys: ["C1", "GONE"] },
     });
-    expect(x.fixHref).toBe("/admin/products?q=blue%20dream");
+    // S32: with the delivery known, the button opens the match review.
+    expect(x.fixHref).toBe(
+      `/admin/inventory/intake/${M}/match?identity=${encodeURIComponent("house llc|flower|blue-dream").replace(/%20/g, "+")}&back=${encodeURIComponent(BACK)}`,
+    );
+    expect(issueRouteFor(x.fixHref!)).toBe("/admin/inventory/intake/[id]/match");
     expect(x.extra?.map((e) => e.label)).toEqual(["Live card 1"]);
     expect(x.why).toBe(ISSUE_COPY.mergeWhy);
+    expect(x.fixLabel).toBe("Compare & choose");
+    expect(x.fix).toBe(ISSUE_COPY.mergeFix);
+  });
+
+  it("merge ambiguous with no delivery → the S26 family search, and no 'remember' promise", () => {
+    const x = explainDiagnostic("intake_master_merge_ambiguous", "m", {
+      lookups,
+      back: BACK,
+      context: { identity: "house llc|flower|blue-dream", live_card_keys: ["C1"] },
+    });
+    expect(x.fixHref).toBe("/admin/products?q=blue%20dream");
     expect(x.fixLabel).toBe("Compare the cards");
+    expect(x.fix).toBe(ISSUE_COPY.mergeFixNoDelivery);
+    expect(ISSUE_COPY.mergeFixNoDelivery).not.toMatch(/remember/i);
   });
 
   it("with NO lookups (a failed read) every code still gets a working list link", () => {
@@ -358,9 +375,24 @@ describe("S26 — honest copy (no promise the code does not keep)", () => {
       expect(guard, old).not.toContain(old);
     }
   });
-  it("merge copy does not claim the choice is remembered before S32", () => {
-    expect(ISSUE_COPY.mergeFix).not.toMatch(/we'll remember/i);
-    expect(ISSUE_COPY.mergeFix).toContain("arrives with the match screen");
+  it("S32: merge copy promises the remembered choice only where the match screen opens", () => {
+    // The promise is kept: the match page saves to intake_merge_decisions and
+    // the planner reads it (mergeDecisionVerdict) on every delivery.
+    expect(ISSUE_COPY.mergeFix).toMatch(/We'll remember your choice/);
+    expect(ISSUE_COPY.mergeFix).not.toContain("arrives with the match screen");
+    expect(ISSUE_COPY.mergeFixNoDelivery).not.toMatch(/remember/i);
+    expect(read("src/lib/pos/intake-mastering-core.ts")).toContain("inputs.mergeDecisions?.get(group.identity)");
+  });
+
+  it("S32.5: the match route exists, reads identity and posts saveMergeDecisionAction", () => {
+    const file = ISSUE_FIX_ROUTE_FILES["/admin/inventory/intake/[id]/match"];
+    expect(file).toBe("src/app/admin/inventory/intake/[id]/match/page.tsx");
+    expect(existsSync(join(ROOT, file))).toBe(true);
+    const page = code(file);
+    expect(page).toContain("sp.identity");
+    expect(page).toContain("action={saveMergeDecisionAction}");
+    expect(page).toContain("action={forgetMergeDecisionAction}");
+    expect(page).toContain('requirePermission("inventory.manage")');
   });
   it("ambiguous-name copy says names can't be edited here (there is no rename control)", () => {
     expect(ISSUE_COPY.ambiguousNameFix).toContain("can't be edited here yet");
