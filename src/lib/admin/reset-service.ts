@@ -63,9 +63,9 @@ import { createBooksClient } from "@/lib/supabase/books-client";
 import {
   CURRENT_RESET_RPC,
   RESET_AUDIT_RPC,
-  RESET_CONFIRM_PHRASE,
   RESET_PREVIEW_RPC,
 } from "@/lib/accounting/factory-reset-core";
+import { describeRpcError } from "@/lib/admin/reset-errors";
 
 /** The four kinds of evidence that the rehearsal is over, read before wiping. */
 export type ResetPreview = {
@@ -76,6 +76,13 @@ export type ResetPreview = {
   looksLikeRealTrade: boolean;
   retentionCite: string;
   retentionYears: number;
+  /**
+   * D-82. Which version of the reset the database has installed. Migration
+   * 0240 reports "truncate-0240"; the 0209 function reports nothing, so this
+   * is null until the owner applies 0240. The screen uses it to show the one
+   * time upgrade box instead of letting the button time out.
+   */
+  resetEngine: string | null;
 };
 
 export type FactoryResetSummary = {
@@ -110,7 +117,7 @@ function num(v: unknown): number {
 export async function previewFactoryReset(): Promise<ResetPreview> {
   const supabase = await createBooksClient();
   const { data, error } = await supabase.rpc(RESET_PREVIEW_RPC);
-  if (error) throw new Error(describeRpcError(error.message));
+  if (error) throw new Error(describeRpcError(error));
 
   const raw = (data ?? {}) as Record<string, unknown>;
   return {
@@ -121,6 +128,7 @@ export async function previewFactoryReset(): Promise<ResetPreview> {
     looksLikeRealTrade: raw.looks_like_real_trade === true,
     retentionCite: typeof raw.retention_cite === "string" ? raw.retention_cite : "WAC 314-55-087(1)",
     retentionYears: num(raw.retention_years) || 5,
+    resetEngine: typeof raw.reset_engine === "string" ? raw.reset_engine : null,
   };
 }
 
@@ -142,7 +150,7 @@ export async function runFactoryReset(
     confirm_phrase: confirmPhrase,
     acknowledge_wac_314_55_087: acknowledgeRetention,
   });
-  if (error) throw new Error(describeRpcError(error.message));
+  if (error) throw new Error(describeRpcError(error));
 
   const raw = (data ?? {}) as Record<string, unknown>;
   const ev = (raw.evidence_at_reset ?? {}) as Record<string, unknown>;
@@ -173,7 +181,7 @@ export async function runFactoryReset(
 export async function auditFactoryReset(): Promise<ResetAuditProblem[]> {
   const supabase = await createBooksClient();
   const { data, error } = await supabase.rpc(RESET_AUDIT_RPC);
-  if (error) throw new Error(describeRpcError(error.message));
+  if (error) throw new Error(describeRpcError(error));
   if (!Array.isArray(data)) return [];
   return data.map((r) => {
     const row = (r ?? {}) as Record<string, unknown>;
@@ -182,29 +190,4 @@ export async function auditFactoryReset(): Promise<ResetAuditProblem[]> {
       detail: typeof row.detail === "string" ? row.detail : "",
     };
   });
-}
-
-/**
- * Turn a raw Postgres error into something the owner can act on. The DB raises
- * machine-readable prefixes; left alone they surface as wall-of-text alerts.
- */
-function describeRpcError(message: string): string {
-  if (/RESET_NOT_OWNER/.test(message)) {
-    return "Only the owner can run the factory reset. You are signed in, but not as the owner account.";
-  }
-  if (/RESET_BAD_CONFIRMATION/.test(message)) {
-    return `Nothing was deleted. To confirm, type exactly: ${RESET_CONFIRM_PHRASE}`;
-  }
-  if (/RETENTION GUARD/.test(message)) {
-    // The DB message already names the counts and the citation; it is the most
-    // useful text available and is passed through intact.
-    return message;
-  }
-  if (/(function|schema cache).*(does not exist|not found)/i.test(message)) {
-    return (
-      `The factory reset function is not installed in this database yet. Apply ` +
-      `supabase/migrations/0209_factory_reset.sql in the Supabase SQL editor, then try again.`
-    );
-  }
-  return `Reset failed: ${message}`;
 }

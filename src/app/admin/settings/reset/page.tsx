@@ -28,9 +28,16 @@ import {
 } from "@/lib/accounting/factory-reset-core";
 import { listSchemaTables } from "@/lib/admin/schema-tables";
 import { previewFactoryReset } from "@/lib/admin/reset-service";
+import { RESET_ENGINE_CURRENT, RESET_UPGRADE_SQL } from "@/lib/admin/reset-upgrade-sql";
+import { ResetUpgradeBox } from "@/components/admin/settings/ResetUpgradeBox";
 import { resetOperationalDataAction } from "../actions";
 
 export const dynamic = "force-dynamic";
+// D-82: the server action behind the button runs on this route. Vercel's
+// default function limit is shorter than the 55 seconds the 0240 reset allows
+// itself, so give the route room. (The reset itself takes well under a second
+// once 0240 is applied; this is headroom, not a target.)
+export const maxDuration = 300;
 
 export default async function ResetDataSettingsPage({
   searchParams,
@@ -53,6 +60,12 @@ export default async function ResetDataSettingsPage({
   } catch (err) {
     previewError = err instanceof Error ? err.message : "Could not read the database.";
   }
+
+  // D-82: until migration 0240 is applied the database still has the 0209
+  // row-by-row reset, which times out on realistic data. Only shown when the
+  // preview RAN and did not report the current engine, so a preview error
+  // (not the owner, 0209 missing) never produces a misleading upgrade prompt.
+  const needsUpgrade = preview !== null && preview.resetEngine !== RESET_ENGINE_CURRENT;
 
   const wipe = plan.ok ? plan.wipe : [];
   const keep = plan.ok ? plan.keep : [];
@@ -104,6 +117,8 @@ export default async function ResetDataSettingsPage({
           </div>
         ) : null}
 
+        {needsUpgrade ? <ResetUpgradeBox sql={RESET_UPGRADE_SQL} /> : null}
+
         {/* What the database looks like right now */}
         <section className="rounded-xl border border-white/10 bg-white/5 p-5">
           <h2 className="text-sm font-semibold text-white">Before you press it</h2>
@@ -129,7 +144,8 @@ export default async function ResetDataSettingsPage({
                   <>
                     This database contains what looks like <strong className="text-amber-200">real trade</strong>.{" "}
                     {RETENTION_CITE} requires those records for a {RETENTION_YEARS}-year period, so the reset will
-                    refuse unless you export everything first and tick the attestation below.
+                    refuse unless you tick the attestation below. If everything here is rehearsal data, there are no
+                    real records to keep, and ticking the box confirms that.
                   </>
                 ) : (
                   <>
