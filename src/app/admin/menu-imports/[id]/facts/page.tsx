@@ -20,6 +20,7 @@ import { formatDateTime } from "@/lib/pos/format";
 import { resolveFactReview, resolveFactReviewGroup } from "../../actions";
 import { posStateOf } from "@/lib/enrichment/product-visibility-core";
 import { hiddenItemFix } from "@/lib/pos/pos-import-fix-core";
+import { liveWithOpenReviewsCopy } from "@/lib/pos/publish-now-core";
 
 /** fact-review-store.ts writes exactly this reason on a reviewer reject. */
 const REVIEWER_REJECTED_REASON = "reviewer_rejected";
@@ -127,6 +128,16 @@ export default async function FactReviewPage({
         {sp.saved && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             Decision saved.
+          </div>
+        )}
+        {/* R14a: the menu is live with rows still pending -- every decision here
+            is mirrored onto the live menu and the public pages are refreshed. */}
+        {version?.status === "published" && liveWithOpenReviewsCopy(pending.length) && (
+          <div
+            className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-3 text-sm text-[var(--admin-gold)]"
+            data-testid="facts-live-open-reviews"
+          >
+            {liveWithOpenReviewsCopy(pending.length)}
           </div>
         )}
 

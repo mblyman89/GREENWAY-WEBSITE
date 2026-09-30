@@ -156,7 +156,66 @@ export type CommitGateVerdict = {
    * arithmetic callers and the existing self-tests).
    */
   evidence?: CommitEvidenceVerdict | null;
+  /**
+   * R14a: true when the ONLY thing keeping the gate shut is pending
+   * fact-review rows -- the evidence is trustworthy (or not supplied) and the
+   * Rule 3.3 arithmetic balances. This is the one refusal a human may choose
+   * to publish over ("publish now, fix after"). A short read, a failed read or
+   * an imbalance is never overridable.
+   */
+  blockedOnlyByPending: boolean;
+  /**
+   * R14a: how many pending rows the caller explicitly chose to publish with
+   * (0 unless `acknowledgedPendingCount` was passed AND covers the fresh count). Those rows stay
+   * PENDING -- nothing is approved on anyone's behalf.
+   */
+  openReviewsAcknowledged: number;
 };
+
+/**
+ * R14a: options for evaluateCommitGate.
+ *
+ * `acknowledgedPendingCount` is the owner's explicit, attributed "publish now, fix
+ * after" decision (the server action checks the permission and records the
+ * audit row). It opens the gate ONLY over pending review rows: every
+ * integrity refusal still refuses. The pending rows are not decided -- they
+ * go live exactly as staged (uncertain facts were already withheld by the
+ * transformer, which fills mg fields only from VERIFIED extraction) and stay
+ * in the Fact Review queue until a human approves, fixes or rejects them.
+ */
+export type CommitGateOptions = {
+  /**
+   * The pending count the human SAW when they ticked the box. Honoured only
+   * when it is a non-negative integer and the server's fresh pending count is
+   * no larger: a tick given for 612 products never covers 900 (a re-stage or
+   * a stale tab). A smaller fresh count is fine -- someone decided a few rows
+   * in the meantime.
+   */
+  acknowledgedPendingCount?: number | null;
+};
+
+/** R14a: is this acknowledgement valid for `pending` fresh rows? (pure) */
+export function acknowledgementCovers(ack: number | null | undefined, pending: number): boolean {
+  // A negative ack can never cover: pending is a count (>= 0), so
+  // `pending <= ack` already refuses it -- no separate sign check needed.
+  return typeof ack === "number" && Number.isInteger(ack) && pending <= ack;
+}
+
+/** R14a: parse the form's seen-count field ("612"); anything else is null. */
+export function parseAcknowledgedCount(raw: string | null | undefined): number | null {
+  const t = String(raw ?? "").trim();
+  if (!/^\d{1,7}$/.test(t)) return null;
+  return Number(t);
+}
+
+/** R14a: the plain-English line recorded when a publish goes out with open reviews. */
+export function publishedWithOpenReviewsLine(pending: number, summaryLine: string): string {
+  return (
+    `Published now with ${pending} product(s) still awaiting a fact-review decision ` +
+    `(explicit "publish now, fix after" decision -- nothing was approved on anyone's behalf). ` +
+    summaryLine
+  );
+}
 
 /**
  * SLICE 4A: evaluate the gate.
@@ -174,62 +233,72 @@ export type CommitGateVerdict = {
 export function evaluateCommitGate(
   buckets: FactReviewBuckets,
   evidence?: CommitEvidenceInput,
+  options: CommitGateOptions = {},
 ): CommitGateVerdict {
   const reconciliation = buildCommitReconciliation(buckets);
+  const pendingRefusal =
+    `Cannot publish: ${reconciliation.pending} fact-review row(s) still await a human decision. ` +
+    `Open Fact Review and approve, fix, or reject each one -- this import never guesses.`;
+  const imbalanceRefusal =
+    `Cannot publish: the reconciliation arithmetic does not balance ` +
+    `(${reconciliation.rowsIn} row(s) in vs ${reconciliation.goingLive} going live + ` +
+    `${reconciliation.documentedRejects} reject(s) + ${reconciliation.flagsResolved} resolved flag(s) + ` +
+    `${reconciliation.pending} pending). Re-stage the import and report this.`;
 
+  let verdict: CommitEvidenceVerdict | undefined;
   if (evidence) {
-    const verdict = evaluateEvidenceIntegrity(evidence);
+    verdict = evaluateEvidenceIntegrity(evidence);
     if (!verdict.trustworthy) {
-      return { ready: false, reconciliation, message: verdict.message, evidence: verdict };
-    }
-    if (reconciliation.pending > 0) {
       return {
         ready: false,
         reconciliation,
-        message:
-          `Cannot publish: ${reconciliation.pending} fact-review row(s) still await a human decision. ` +
-          `Open Fact Review and approve, fix, or reject each one -- this import never guesses.`,
+        message: verdict.message,
         evidence: verdict,
+        blockedOnlyByPending: false,
+        openReviewsAcknowledged: 0,
       };
     }
-    if (!reconciliation.balanced) {
-      return {
-        ready: false,
-        reconciliation,
-        message:
-          `Cannot publish: the reconciliation arithmetic does not balance ` +
-          `(${reconciliation.rowsIn} row(s) in vs ${reconciliation.goingLive} going live + ` +
-          `${reconciliation.documentedRejects} reject(s) + ${reconciliation.flagsResolved} resolved flag(s) + ` +
-          `${reconciliation.pending} pending). Re-stage the import and report this.`,
-        evidence: verdict,
-      };
-    }
-    return { ready: true, reconciliation, message: reconciliation.summaryLine, evidence: verdict };
   }
+  const withEvidence = <T extends object>(v: T) => (evidence ? { ...v, evidence: verdict } : v);
 
-  if (reconciliation.pending > 0) {
-    return {
-      ready: false,
-      reconciliation,
-      message:
-        `Cannot publish: ${reconciliation.pending} fact-review row(s) still await a human decision. ` +
-        `Open Fact Review and approve, fix, or reject each one -- this import never guesses.`,
-    };
-  }
+  // Defensive: the SLICE 57 partition makes an imbalance unreachable, but the
+  // gate verifies the invariant instead of assuming it (never guess). It is
+  // checked BEFORE the pending branch so an imbalance can never be published
+  // over with the "publish now, fix after" acknowledgement.
   if (!reconciliation.balanced) {
-    // Defensive: the SLICE 57 partition makes this unreachable, but the gate
-    // verifies the invariant instead of assuming it (never guess).
-    return {
+    return withEvidence({
       ready: false,
       reconciliation,
-      message:
-        `Cannot publish: the reconciliation arithmetic does not balance ` +
-        `(${reconciliation.rowsIn} row(s) in vs ${reconciliation.goingLive} going live + ` +
-        `${reconciliation.documentedRejects} reject(s) + ${reconciliation.flagsResolved} resolved flag(s) + ` +
-        `${reconciliation.pending} pending). Re-stage the import and report this.`,
-    };
+      message: imbalanceRefusal,
+      blockedOnlyByPending: false,
+      openReviewsAcknowledged: 0,
+    });
   }
-  return { ready: true, reconciliation, message: reconciliation.summaryLine };
+  if (reconciliation.pending > 0) {
+    if (acknowledgementCovers(options.acknowledgedPendingCount, reconciliation.pending)) {
+      return withEvidence({
+        ready: true,
+        reconciliation,
+        message: publishedWithOpenReviewsLine(reconciliation.pending, reconciliation.summaryLine),
+        blockedOnlyByPending: true,
+        openReviewsAcknowledged: reconciliation.pending,
+      });
+    }
+    return withEvidence({
+      ready: false,
+      reconciliation,
+      message: pendingRefusal,
+      blockedOnlyByPending: true,
+      openReviewsAcknowledged: 0,
+    });
+  }
+  return withEvidence({
+    ready: true,
+    reconciliation,
+    message: reconciliation.summaryLine,
+    blockedOnlyByPending: false,
+    openReviewsAcknowledged: 0,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -470,6 +539,86 @@ export function __runImportCommitCoreTests(): void {
     ok(verdict.reconciliation.balanced === false, "balanced flag reports the corruption");
   }
 
+  // -- R14a: "publish now, fix after" -- the acknowledged override ----------
+  {
+    const buckets = buildFactReviewBuckets(items, diags);
+    const shut = evaluateCommitGate(buckets);
+    ok(shut.blockedOnlyByPending === true, "R14a: pending-only refusal is flagged overridable");
+    ok(shut.openReviewsAcknowledged === 0, "R14a: nothing acknowledged without the option");
+    const open = evaluateCommitGate(buckets, undefined, { acknowledgedPendingCount: 3 });
+    ok(open.ready === true, "R14a: acknowledged pending rows open the gate");
+    ok(open.openReviewsAcknowledged === 3, "R14a: the acknowledged count is the pending count");
+    ok(open.reconciliation.pending === 3, "R14a: the rows stay PENDING (nothing auto-decided)");
+    ok(open.reconciliation.reviewApprovedOrFixed === 0, "R14a: no approval invented by the override");
+    ok(
+      open.message ===
+        publishedWithOpenReviewsLine(3, open.reconciliation.summaryLine) &&
+        open.message.startsWith("Published now with 3 product(s) still awaiting a fact-review decision"),
+      "R14a: the recorded line names the open count",
+    );
+    const stale = evaluateCommitGate(buckets, undefined, { acknowledgedPendingCount: 2 });
+    ok(stale.ready === false, "R14a: a tick for 2 never covers 3 (stale page / re-stage)");
+    ok(stale.openReviewsAcknowledged === 0, "R14a: stale tick acknowledges nothing");
+    const fewer = evaluateCommitGate(buckets, undefined, { acknowledgedPendingCount: 612 });
+    ok(fewer.ready === true && fewer.openReviewsAcknowledged === 3, "R14a: fresh count smaller than seen is fine");
+    const bogus = evaluateCommitGate(buckets, undefined, { acknowledgedPendingCount: 3.5 });
+    ok(bogus.ready === false, "R14a: a non-integer count acknowledges nothing");
+    const neg = evaluateCommitGate(buckets, undefined, { acknowledgedPendingCount: -1 });
+    ok(neg.ready === false, "R14a: a negative count acknowledges nothing");
+    const nul = evaluateCommitGate(buckets, undefined, { acknowledgedPendingCount: null });
+    ok(nul.ready === false, "R14a: null acknowledges nothing");
+    ok(parseAcknowledgedCount("612") === 612 && parseAcknowledgedCount(" 3 ") === 3, "R14a: seen-count parses digits");
+    ok(
+      parseAcknowledgedCount("") === null &&
+        parseAcknowledgedCount("-1") === null &&
+        parseAcknowledgedCount("3.5") === null &&
+        parseAcknowledgedCount("1e3") === null &&
+        parseAcknowledgedCount(null) === null &&
+        parseAcknowledgedCount("12345678") === null,
+      "R14a: anything but plain digits is refused",
+    );
+    ok(acknowledgementCovers(0, 0) && !acknowledgementCovers(0, 1), "R14a: covers is pending <= ack");
+  }
+  {
+    // The override never reaches past integrity refusals.
+    const shortRead = evaluateCommitGate(
+      buildFactReviewBuckets(items, diags),
+      { observedItems: 5, recordedItemCount: 4179 },
+      { acknowledgedPendingCount: 3 },
+    );
+    ok(shortRead.ready === false, "R14a: a short read refuses even when acknowledged");
+    ok(shortRead.blockedOnlyByPending === false, "R14a: a short read is not overridable");
+    const failedReviews = evaluateCommitGate(
+      buildFactReviewBuckets(items, diags),
+      { observedItems: 5, recordedItemCount: 5, reviewsReadFailed: true, observedReviews: 0 },
+      { acknowledgedPendingCount: 3 },
+    );
+    ok(failedReviews.ready === false, "R14a: a failed decisions read refuses even when acknowledged");
+    const b = buildFactReviewBuckets(items, diags);
+    const broken: FactReviewBuckets = { ...b, totals: { ...b.totals, items: 99 } };
+    const imbalanced = evaluateCommitGate(broken, undefined, { acknowledgedPendingCount: 3 });
+    ok(imbalanced.ready === false, "R14a: an imbalance refuses even when acknowledged");
+    ok(imbalanced.message.includes("does not balance"), "R14a: imbalance is reported before pending");
+    ok(imbalanced.blockedOnlyByPending === false, "R14a: an imbalance is not overridable");
+    const healthy = evaluateCommitGate(
+      buildFactReviewBuckets(items, diags),
+      { observedItems: 5, recordedItemCount: 5, serverItemCount: 5 },
+      { acknowledgedPendingCount: 3 },
+    );
+    ok(healthy.ready === true && healthy.evidence?.trustworthy === true, "R14a: trustworthy evidence + ack publishes");
+  }
+  {
+    // Acknowledging with nothing pending changes nothing.
+    const clean = evaluateCommitGate(
+      buildFactReviewBuckets([item({ sourceItemId: "pos-a", name: "A" })], []),
+      undefined,
+      { acknowledgedPendingCount: 5 },
+    );
+    ok(clean.ready === true && clean.openReviewsAcknowledged === 0, "R14a: ack with 0 pending is a no-op");
+    ok(clean.blockedOnlyByPending === false, "R14a: a clean import is not 'blocked'");
+    ok(clean.message.startsWith("Reconciled:"), "R14a: clean message unchanged by ack");
+  }
+
   if (failures > 0) throw new Error(`import-commit-core self-tests: ${failures} failed`);
-  console.log("import-commit-core self-tests passed (29 assertions)");
+  console.log("import-commit-core self-tests passed (67 assertions)");
 }

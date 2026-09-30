@@ -24,6 +24,7 @@ import {
   posDiagnosticToFactReviewDiagnostic,
 } from "@/lib/pos/fact-review-core";
 import { evaluateCommitGate } from "@/lib/pos/import-commit-core";
+import { liveWithOpenReviewsCopy, publishNowAcknowledgementCopy } from "@/lib/pos/publish-now-core";
 import {
   buildPublishVerdict,
   PUBLISH_SWAP_NOTE,
@@ -68,6 +69,8 @@ export default async function ImportReviewPage({
   const { id } = await params;
   const sp = await searchParams;
   const canPublish = can(session.profile.role, "menu.publish");
+  // R14a: "publish now, fix after" is owner/admin only (roles.ts).
+  const canPublishOpenReviews = can(session.profile.role, "menu.publish.open_reviews");
 
   const imp = await getImport(id);
   if (!imp) notFound();
@@ -244,6 +247,18 @@ export default async function ImportReviewPage({
         {sp.published && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             Published. The public menu now reflects this version.
+          </div>
+        )}
+        {/* R14a: live with open reviews -- keep fixing, each decision reaches the live menu. */}
+        {version?.status === "published" && liveWithOpenReviewsCopy(gate.reconciliation.pending) && (
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-3 text-sm text-[var(--admin-gold)]"
+            data-testid="live-open-reviews"
+          >
+            <span>{liveWithOpenReviewsCopy(gate.reconciliation.pending)}</span>
+            <Button href={`/admin/menu-imports/${id}/facts`} variant="primary" size="sm">
+              Keep fixing in Fact Review &rarr;
+            </Button>
           </div>
         )}
 
@@ -586,6 +601,41 @@ export default async function ImportReviewPage({
               >
                 Open fact review
               </Button>
+              {/* R14a: publish now, fix after. Offered ONLY when pending review
+                  rows are the sole refusal; the server re-checks everything on
+                  fresh reads (publishMenuVersion) and records the decision. */}
+              {gate.blockedOnlyByPending && canPublishOpenReviews && version && (
+                <form
+                  action={publishVersion}
+                  className="mt-4 rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/5 p-4"
+                  data-testid="publish-now-form"
+                >
+                  <input type="hidden" name="versionId" value={version.id} />
+                  <input type="hidden" name="importId" value={imp.id} />
+                  <input type="hidden" name="publish_now_offered" value="yes" />
+                  <input type="hidden" name="seen_pending" value={String(gate.reconciliation.pending)} />
+                  <p className="text-sm font-semibold text-white">Or publish now and fix after</p>
+                  <label className="mt-2 flex items-start gap-2 text-xs text-white/75">
+                    <input type="checkbox" name="publish_now" value="yes" className="mt-0.5" required />
+                    <span>{publishNowAcknowledgementCopy(gate.reconciliation.pending)}</span>
+                  </label>
+                  <p className="mt-2 text-xs text-white/50">{PUBLISH_SWAP_NOTE}</p>
+                  {verdict?.requiresRemovalConfirm && (
+                    <label className="mt-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2.5 text-xs text-red-300">
+                      <input type="checkbox" name="confirm_removals" value="yes" className="mt-0.5" />
+                      <span>{removalConfirmCopy(verdict.removedCount)}</span>
+                    </label>
+                  )}
+                  <Button type="submit" variant="confirm" className="mt-3">
+                    Publish now, fix after
+                  </Button>
+                </form>
+              )}
+              {gate.blockedOnlyByPending && canPublish && !canPublishOpenReviews && (
+                <p className="mt-3 text-xs text-white/50">
+                  The owner or an admin can publish now and fix these after.
+                </p>
+              )}
             </div>
           ) : !canPublish ? (
             <p className="mt-2 text-sm text-white/50">

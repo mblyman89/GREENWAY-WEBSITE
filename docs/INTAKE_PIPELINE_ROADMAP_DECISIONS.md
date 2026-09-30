@@ -111,6 +111,22 @@ After a save, the match page reports what the rebuild actually did
 
 ---
 
+## R14a as built — publish now, fix after (Round 14)
+
+**Found in the code, not assumed.** `evaluateCommitGate` refused on any
+pending fact-review row, in the Publish preview and again inside
+`publishMenuVersion`, so a fresh Cultivera upload (~600 pending rows) could
+not go live. The owner or an admin may now tick “Publish now, fix after”
+(permission `menu.publish.open_reviews`). The form posts the pending count
+they saw; the gate honours it only while pending ≤ that count. Imbalance and
+untrustworthy evidence still refuse first. Rows stay pending (nothing is
+approved for anyone); the publish is audited as
+`menu_version.published_with_open_reviews`. Every later decision also lands
+on the live/staged intake-origin versions and refreshes the public menu, so
+fixes made after publishing reach the site.
+
+---
+
 ## Q-02 — How many manifests per week?
 
 **Owner answer:** 15–20 manifests per week, about 65–87 per month.

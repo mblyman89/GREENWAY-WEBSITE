@@ -16,6 +16,13 @@ import {
 import { recordFactReview, listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { removalRefusedCopy } from "@/lib/pos/publish-guard-core";
+import { can } from "@/lib/auth/roles";
+import { parseAcknowledgedCount } from "@/lib/pos/import-commit-core";
+import {
+  PUBLISH_NOW_NOT_ALLOWED_COPY,
+  PUBLISH_NOW_NOT_TICKED_COPY,
+  PUBLISHED_WITH_OPEN_REVIEWS_AUDIT,
+} from "@/lib/pos/publish-now-core";
 import {
   decideHandPublish,
   readCutoverDone,
@@ -210,8 +217,28 @@ export async function publishVersion(formData: FormData): Promise<void> {
     console.error("[menu-imports] publish removal guard diff failed:", err);
   }
 
+  // R14a: "publish now, fix after". The form sends publish_now=yes plus the
+  // pending count the owner SAW; the gate honours it only over pending review
+  // rows and only when the fresh count is no larger (import-commit-core
+  // acknowledgementCovers). Owner/admin only (menu.publish.open_reviews).
+  let acknowledgedPendingCount: number | null = null;
+  if (String(formData.get("publish_now") ?? "") === "yes") {
+    if (!can(session.profile.role, "menu.publish.open_reviews")) {
+      redirect(dest + "?error=" + encodeURIComponent(PUBLISH_NOW_NOT_ALLOWED_COPY));
+    }
+    acknowledgedPendingCount = parseAcknowledgedCount(String(formData.get("seen_pending") ?? ""));
+    if (acknowledgedPendingCount === null) {
+      redirect(dest + "?error=" + encodeURIComponent(PUBLISH_NOW_NOT_TICKED_COPY));
+    }
+  } else if (String(formData.get("publish_now_offered") ?? "") === "yes") {
+    // The publish-now form was shown and the box was left unticked.
+    redirect(dest + "?error=" + encodeURIComponent(PUBLISH_NOW_NOT_TICKED_COPY));
+  }
+
+  let openReviewsAcknowledged = 0;
   try {
-    await publishMenuVersion(versionId, session.userId);
+    const outcome = await publishMenuVersion(versionId, session.userId, { acknowledgedPendingCount });
+    openReviewsAcknowledged = outcome?.openReviewsAcknowledged ?? 0;
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
@@ -219,6 +246,16 @@ export async function publishVersion(formData: FormData): Promise<void> {
       entityType: "menu_version",
       entityId: versionId,
     });
+    if (openReviewsAcknowledged > 0) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: PUBLISHED_WITH_OPEN_REVIEWS_AUDIT,
+        entityType: "menu_version",
+        entityId: versionId,
+        after: { importId, openReviews: openReviewsAcknowledged, seenWhenTicked: acknowledgedPendingCount },
+      });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Publish failed.";
     redirect(dest + "?error=" + encodeURIComponent(message));
@@ -444,6 +481,9 @@ export async function resolveFactReview(formData: FormData): Promise<void> {
   }
 
   revalidatePath(dest);
+  // R14a: decisions mirror onto the LIVE menu too (publish now, fix after),
+  // so the public pages and the live-menu cache tag are refreshed.
+  revalidatePublicMenuSurfaces();
   redirect(dest + "?saved=1");
 }
 
@@ -580,6 +620,9 @@ export async function resolveFactReviewGroup(formData: FormData): Promise<void> 
   }
 
   revalidatePath(dest);
+  // R14a: decisions mirror onto the LIVE menu too (publish now, fix after),
+  // so the public pages and the live-menu cache tag are refreshed.
+  revalidatePublicMenuSurfaces();
   redirect(dest + "?saved=1");
 }
 

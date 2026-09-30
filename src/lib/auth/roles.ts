@@ -43,6 +43,7 @@ export type Permission =
   | "dashboard.view"
   | "menu.import"
   | "menu.publish"
+  | "menu.publish.open_reviews"
   | "orders.view"
   | "orders.manage"
   | "promotions.manage"
@@ -78,6 +79,11 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   "dashboard.view": ["owner", "admin", "manager", "content_editor", "staff", "readonly"],
   "menu.import": ["owner", "admin", "manager"],
   "menu.publish": ["owner", "admin", "manager"],
+  // R14a: publish a POS import while fact-review rows are still pending
+  // ("publish now, fix after", owner Round 14). Owner + admin only: it is the
+  // one decision that sends undecided rows live, so it is narrower than
+  // menu.publish. The rows stay pending and nothing is approved for anyone.
+  "menu.publish.open_reviews": ["owner", "admin"],
   "orders.view": ["owner", "admin", "manager", "staff"],
   "orders.manage": ["owner", "admin", "manager", "staff"],
   "promotions.manage": ["owner", "admin", "manager"],
@@ -259,6 +265,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "dashboard.view": "View the dashboard",
   "menu.import": "Import & stage the menu",
   "menu.publish": "Publish the menu live",
+  "menu.publish.open_reviews": "Publish now, fix after (products still awaiting review; owner & admin)",
   "orders.view": "View orders",
   "orders.manage": "Update order status",
   "promotions.manage": "Manage promotions & specials",
@@ -304,6 +311,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "inventory.cost.fill",
   "menu.import",
   "menu.publish",
+  "menu.publish.open_reviews",
   "promotions.manage",
   "products.enrich",
   "vendors.manage",
