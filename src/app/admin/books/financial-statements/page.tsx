@@ -205,7 +205,7 @@ export default async function FinancialStatementsPage({
           </p>
           <p className="mt-3 text-sm text-white/60">
             <Link
-              href={`/admin/books/chart-of-accounts?entity=${entity}`}
+              href={`/admin/books/accounts?entity=${entity}`}
               className="underline underline-offset-4"
             >
               Open the chart of accounts

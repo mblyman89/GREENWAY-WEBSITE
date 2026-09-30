@@ -58,7 +58,7 @@ function deltaAccent(d: Delta): "green" | "orange" | "muted" {
 export default async function AdminDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ basis?: string }>;
+  searchParams: Promise<{ basis?: string; denied?: string }>;
 }) {
   const sp = await searchParams;
   const session = await requireStaff();
@@ -146,6 +146,17 @@ export default async function AdminDashboardPage({
       />
 
       <div className="space-y-10 px-5 py-6 sm:px-8">
+        {/* S31: requirePermission redirects here with ?denied=1 and
+            requireBooksAccess with ?denied=books (session.ts, books-access.ts).
+            The dashboard used to drop the flag, so a blocked click looked like
+            a random jump back home. Neutral, one line, no data exposed. */}
+        {sp.denied ? (
+          <div role="status" className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm text-[var(--admin-text-muted)]">
+            {sp.denied === "books"
+              ? "The books are owner-only, so you were brought back to the dashboard."
+              : "Your role doesn\u2019t have access to that page, so you were brought back to the dashboard. Ask the owner if you need it."}
+          </div>
+        ) : null}
         {/* ── S-9: missing webhook secrets (fail-closed surfaces offline) ── */}
         {missingSecrets.length > 0 && (
           <div className="rounded-[var(--admin-radius-lg)] border border-amber-500/30 bg-amber-500/[0.06] px-5 py-4">

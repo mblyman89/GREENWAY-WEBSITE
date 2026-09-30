@@ -264,7 +264,7 @@ describe("intake env ledger", () => {
     // S30 (receiving fact review) adds migration 0237 and no variable; its
     // bible rollback line is S30.7, word for word.
     expect(none).toContain("S30");
-    expect(ledger).toContain("As of **S30**");
+    expect(ledger).not.toContain("As of **S30**");
     expect(ledger).toContain(
       '"Migration is additive (nullable column + partial index): leave it; revert code." (S30, shipped as `supabase/rollbacks/0237_fact_review_for_versions.rollback.sql`)',
     );
@@ -275,6 +275,15 @@ describe("intake env ledger", () => {
       "src/app/admin/inventory/drafts/IntakeFactReviewPanel.tsx",
       "src/app/admin/inventory/drafts/actions.ts",
     ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    // S31 (fix-link contract) is a test + a pure core + page fixes; no
+    // variable. Its bible rollback line is S31.7, word for word.
+    expect(none).toContain("S31");
+    expect(ledger).toContain("As of **S31**");
+    expect(ledger).toContain('"Delete the test + doc section." (S31)');
+    expect(ledger).toContain("S31 needs nothing set.");
+    for (const f of ["src/lib/admin/fix-link-contract-core.ts", "tests/compliance/pipeline-fix-links-connected.test.ts"]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }
     expect(ledger).not.toContain("As of **S19**");

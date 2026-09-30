@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { safeAdminPath } from "@/lib/media/return-state-core";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
@@ -107,11 +108,15 @@ export default async function LotDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; back?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { saved, error } = await searchParams;
+  const { saved, error, back } = await searchParams;
+  // S31: vendors/[id] and products/[key] link here with ?back=<admin path>.
+  // Validated with the same guard the media actions use (in-app /admin paths
+  // only), so a crafted link can never make this an open redirect.
+  const backPath = back ? safeAdminPath(back, "") : "";
 
   const lot = await getLotById(id);
   if (!lot) notFound();
@@ -251,6 +256,16 @@ export default async function LotDetailPage({
       <AdminPageHeader
         title={lot.product_name ?? "Inventory lot"}
         subtitle={`Lot ${lot.lot_code ?? "(no code)"} · ${lot.vendor_name ?? "unknown vendor"}`}
+        action={
+          backPath ? (
+            <Link
+              href={backPath}
+              className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[var(--admin-accent)] hover:text-white"
+            >
+              ← Back
+            </Link>
+          ) : undefined
+        }
         breadcrumbs={
           <Breadcrumbs
             items={[

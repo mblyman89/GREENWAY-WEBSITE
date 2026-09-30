@@ -81,6 +81,11 @@ export default async function ManifestReviewPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{
     staged?: string;
+    /** S31: set by the CCRS-CSV / LCB-PDF importers (sparse drafts, no price/COA). */
+    csv?: string;
+    pdf?: string;
+    /** S31: set by "Mark in transit" / "Mark received" (setManifestLifecycleAction). */
+    lifecycle?: string;
     accepted?: string;
     drafts?: string;
     rejected?: string;
@@ -114,6 +119,9 @@ export default async function ManifestReviewPage({
   const { id } = await params;
   const {
     staged,
+    csv,
+    pdf,
+    lifecycle,
     accepted,
     drafts,
     rejected,
@@ -410,6 +418,22 @@ export default async function ManifestReviewPage({
         {staged && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
             Manifest staged as a draft. Review the lines below, then accept to activate the lots.
+          </div>
+        )}
+        {staged && (csv || pdf) && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm text-[var(--admin-text-muted)]">
+            {/* S31: the importers redirect with ?csv=1 / ?pdf=1 (intake/actions.ts);
+                the page used to drop the flag. Both formats carry no price or
+                COA, so every line needs those before it is accepted. */}
+            Imported from the {csv ? "CCRS manifest CSV" : "LCB shipping PDF"} — that file carries no
+            prices or COAs, so each line below is a sparse draft. Fill in cost and COA before accepting.
+          </div>
+        )}
+        {(lifecycle === "in_transit" || lifecycle === "received") && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm text-[var(--admin-text-muted)]">
+            {/* S31: confirmation for setManifestLifecycleAction's redirect. The
+                books result for "received" is on the Accounting tab. */}
+            {lifecycle === "received" ? "Marked received." : "Marked in transit."}
           </div>
         )}
         {accepted && (

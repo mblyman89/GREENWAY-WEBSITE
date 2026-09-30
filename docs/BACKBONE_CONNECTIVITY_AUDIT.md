@@ -275,3 +275,43 @@ Sequenced smallest-risk-first, each a merge-able slice. Numbered as Slice-7 sub-
 4. Any brand/product copy shown on the PUBLIC site must pass compliance guardrails —
    confirm we apply `kb_banned_phrases` + built-in WA rules to KB copy before display.
 
+
+---
+
+## 7. Fix-link contract (S31; F-103, F-114, F-115, F-118)
+
+Owner (Round 12): "make sure that the products from the Cultivera upload specifically can reach the fix pages."
+
+**The rules.** Every link that claims to fix something follows these:
+
+1. **Count-level row → the filtered list.** A row that counts N things opens a list filtered to those N (for example `lotGapHref`, `bulkFixLinkForCause`, `inventoryGapInsights`).
+2. **Item-level row → the row or the control.** A row about one thing opens that thing: the lot page at the section that fixes it (`#coa`, `#lifecycle`, `#adjust`, `#website-category`), the draft row (`#draft-<id>`), the type row (`#type-<slug>`), or the manifest field (`#manifest-vendor`, `#manifest-lines`).
+3. **Never a bare list from a scoped page.** A delivery's page links to *that delivery's* drafts through `draftsForManifestHref(id)` (F-115).
+4. **Never `/admin/products/<key>` unless the key is on the live menu.** That page calls `notFound()` for keys that are not published, so `fixLinkForLot` / `fixLinkForDiagnostic` send a key that is not live to Onboarding or search instead.
+5. **Every query key a link sends is declared in the destination's `searchParams` type.** Next.js silently ignores a key the page does not read, so the owner would see an unfiltered list.
+6. **Every redirect message is shown.** An action that redirects with `?error=` / `?denied=` / `?lifecycle=` lands on a page that renders it.
+
+**The guard.** `tests/compliance/pipeline-fix-links-connected.test.ts` does four things, using the pure core `src/lib/admin/fix-link-contract-core.ts`:
+- **(A)** It calls every generator with inputs that cover every cause, code and context, and checks each emitted href: the page exists (with Next.js route precedence), its query keys are declared, and its anchor is rendered.
+- **(B)** It pins the two Cultivera-product paths:
+  - a hidden card goes to the product page's Visibility "Always show" control;
+  - a lot with no product link goes to the Inventory list, filtered and opened in Bulk fill on `pos_product_key`.
+- **(C)** It allows no standing coloured banner on Publish, Inventory, the Manifest page or Onboarding. Every tinted danger/gold block must be gated and listed by its condition.
+- **(D)** It runs a census of every literal `/admin…` string in `src`: no dead path and no dropped key, apart from an exact three-entry allowlist. None of the three is a clickable link.
+
+**Fixed while building the guard.** Each item was found by the census and confirmed in the code:
+- **Dead links:**
+  - financial statements → `/admin/books/chart-of-accounts` (404) now goes to `/admin/books/accounts?entity=` (that page is the chart of accounts and reads `entity`);
+  - the trial-balance cross-check → `/admin/compliance/excise` (404) now goes to `/admin/reports/excise` (the LIQ-1295 return).
+- **Keys that were silently dropped:**
+  - `?error=` on Product Enrichment (11 product actions) and Vendors (9 actions);
+  - `?error=title|slug` on New post;
+  - `?csv=1` / `?pdf=1` / `?lifecycle=` on the Manifest page;
+  - `?back=` on the lot page, validated by `safeAdminPath`;
+  - `?denied=` on the dashboard, from `requirePermission` / `requireBooksAccess`.
+- **Wrong destination:** the label page's "Inventory list" link sent `?lot=`, which the list never reads. It now offers "Back to lot" plus the plain list.
+
+**Known count-level approximations.** These are documented rather than hidden. Each points at a real filtered list, but the filter is broader than the count:
+- `posToSend` counts draft **and** submitted POs. `/admin/purchasing` takes one `status` value, so the row opens the unfiltered PO list.
+- `heldLots` counts quarantine lots with disposition *accepted*. `/admin/inventory?status=quarantine` shows every quarantine lot, which is a superset.
+- `onboardingDrafts` → `/admin/inventory/drafts`, whose default view is `draft`. That matches the count.

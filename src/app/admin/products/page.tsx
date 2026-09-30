@@ -53,7 +53,7 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; back?: string; manifest?: string; since?: string; vendor?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; back?: string; manifest?: string; since?: string; vendor?: string; error?: string }>;
 }) {
   await requirePermission("products.enrich");
   const sp = await searchParams;
@@ -288,6 +288,15 @@ export default async function ProductsPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {/* S31: every product action (Cultivera-imported products included)
+            redirects here with ?error= when it cannot run; the page used to
+            drop it, so a failed fix looked like nothing happened. Same
+            treatment as the product detail page's error line. */}
+        {sp.error && (
+          <div role="alert" className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">
+            {sp.error}
+          </div>
+        )}
         {/* Green helper box — how to enrich well, with quick links to the
             highest-impact gaps. Pinned to the TOP of the page (above the
             back-link + stage strip) so the guidance & one-click gap fixes are
