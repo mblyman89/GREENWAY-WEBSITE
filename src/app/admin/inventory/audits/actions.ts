@@ -50,6 +50,7 @@ import {
 import { postAuditSession } from "@/lib/inventory/inventory-audit-store";
 import { inventoryAccountByCategory } from "@/lib/inventory/audit-posting-accounts";
 import type { AuditSessionStatus } from "@/lib/inventory/inventory-audit-post-core";
+import { isImportId } from "@/lib/inventory/flagged-count-scope-core";
 
 const HUB = "/admin/inventory/audits";
 
@@ -62,7 +63,8 @@ const HUB = "/admin/inventory/audits";
  */
 function refuse(path: string, code: string, message: string): never {
   const q = new URLSearchParams({ refusalCode: code, refusal: message });
-  redirect(`${path}?${q.toString()}`);
+  // R14b: the path may already carry a query (audits/new?fromImport=<id>).
+  redirect(`${path}${path.includes("?") ? "&" : "?"}${q.toString()}`);
 }
 
 /** Read one required field, refusing rather than coercing a missing value. */
@@ -96,10 +98,15 @@ export async function createAuditAction(form: FormData): Promise<void> {
   const label = requiredField(form, "label");
   const scopeRationale = requiredField(form, "scopeRationale");
   const lotIds = form.getAll("lotId").filter((v): v is string => typeof v === "string");
+  // R14b: a flagged-products count (audits/new?fromImport=<id>) bounces a
+  // refusal back to the same flagged scope. Validated as a UUID first, so the
+  // value can never smuggle another path or query into the redirect.
+  const fromImportRaw = form.get("fromImport");
+  const newPath = isImportId(fromImportRaw) ? `${HUB}/new?fromImport=${fromImportRaw.trim()}` : `${HUB}/new`;
 
   if (scopeRationale.length < 10) {
     refuse(
-      `${HUB}/new`,
+      newPath,
       "SCOPE_RATIONALE_TOO_THIN",
       "Write one honest sentence about why THESE lots. 'Highest value and longest since " +
         "counted' is enough. The reason is what separates an audit from a spot check, and " +
@@ -109,7 +116,7 @@ export async function createAuditAction(form: FormData): Promise<void> {
 
   const result = await createAuditSession({ label, lotIds, scopeRationale });
   if (!result.ok) {
-    refuse(`${HUB}/new`, result.refusal.code, result.refusal.message);
+    refuse(newPath, result.refusal.code, result.refusal.message);
   }
 
   await recordAudit({

@@ -468,13 +468,18 @@ export function planImportLots(sources: readonly ImportLotSource[]): ImportLotPl
     entry.sizes.add(`${src.unitWeight ?? "?"}|${src.unitWeightUom ?? "?"}`);
     sizesByCard.set(src.posProductKey, entry);
   }
-  const mixed = [...sizesByCard.values()].filter((e) => e.sizes.size > 1);
+  const mixedEntries = [...sizesByCard.entries()].filter(([, e]) => e.sizes.size > 1);
+  const mixed = mixedEntries.map(([, e]) => e);
   if (mixed.length > 0) {
     diagnostics.push({
       severity: "warning",
       code: "import_lots_mixed_size_cards",
       message: `${mixed.length} card(s) group multiple package sizes; their lots share one first-in-first-out pool keyed to the card. Unit counts per size may drift until migrated stock sells through — verify with cycle counts.`,
-      context: { cards: mixed.slice(0, 10).map((e) => e.name), total: mixed.length },
+      // `keys` = EVERY flagged card's posProductKey (not just the first ten
+      // names) so the "Count these products" fix can preload exactly those
+      // cards' active lots into a count (R14b). Keys are the same values
+      // stamped on inventory_lots.pos_product_key by createImportLots.
+      context: { cards: mixed.slice(0, 10).map((e) => e.name), total: mixed.length, keys: mixedEntries.map(([k]) => k) },
     });
   }
 
@@ -749,6 +754,17 @@ export function __runImportLotCoreTests(): void {
     ]);
     ok(plan.diagnostics.some((d) => d.code === "import_lots_mixed_size_cards" && d.severity === "warning"), "mixed-size card warned");
     ok(plan.summary.mixedSizeCards === 1, "summary counts mixed-size cards");
+    const d = plan.diagnostics.find((x) => x.code === "import_lots_mixed_size_cards");
+    const keys = (d?.context as { keys?: unknown } | undefined)?.keys;
+    ok(Array.isArray(keys) && keys.length === 1 && keys[0] === plan.lots[0]?.posProductKey, "mixed-size context carries every flagged card key");
+  }
+  // Single-size card: no key leaks into a mixed warning.
+  {
+    const plan = planImportLots([
+      src({ barcode: "T1", unitWeight: 3.5, unitWeightUom: "g" }),
+      src({ barcode: "T2", unitWeight: 3.5, unitWeightUom: "g" }),
+    ]);
+    ok(!plan.diagnostics.some((d) => d.code === "import_lots_mixed_size_cards"), "uniform-size card not warned");
   }
 
   // Sanitization: barcode with unsafe characters gets a CCRS-safe id.

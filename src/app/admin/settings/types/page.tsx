@@ -63,7 +63,7 @@ function flashMessage(saved?: string, reason?: string): { tone: "ok" | "warn"; t
 export default async function TypesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; reason?: string; tab?: string; type?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; reason?: string; tab?: string; type?: string; suggest?: string }>;
 }) {
   await requirePermission("settings.manage");
   const sp = await searchParams;
@@ -72,6 +72,11 @@ export default async function TypesPage({
   // S26: `?type=<name>` (from a menu-draft "Map …" fix link) opens and
   // highlights that inventory type's row so the mapping Select is in view.
   const focusType = typeof sp.type === "string" && sp.type.trim() ? sp.type.trim().slice(0, 120) : null;
+  // R14b: `&suggest=<website category>` (the import page's grounded
+  // suggestion for an unknown Cultivera category) prefills the Add form's
+  // mapping. Used ONLY when it is an active category in the live registry
+  // (checked in the tab); the owner still reviews and presses Add.
+  const suggestCategory = typeof sp.suggest === "string" ? sp.suggest.trim().slice(0, 60) : "";
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -165,6 +170,7 @@ export default async function TypesPage({
             categories={categories}
             unmappedCcrs={unmappedCcrs}
             focusType={focusType}
+            suggestCategory={suggestCategory}
           />
         )}
       </div>
@@ -363,11 +369,13 @@ function InventoryTypesTab({
   categories,
   unmappedCcrs,
   focusType = null,
+  suggestCategory = "",
 }: {
   inventoryTypes: Awaited<ReturnType<typeof listInventoryTypes>>;
   categories: Awaited<ReturnType<typeof listWebsiteCategoryTypes>>;
   unmappedCcrs: Awaited<ReturnType<typeof loadUnmappedCcrsReview>>;
   focusType?: string | null;
+  suggestCategory?: string;
 }) {
   // S26: the row a fix link asked for (matched on key OR label, the same
   // normalisation the resolver's type map uses).
@@ -375,6 +383,15 @@ function InventoryTypesTab({
     typeMatchesFocus(t.key, focusType) || typeMatchesFocus(t.label, focusType);
   const focusFound = focusType ? inventoryTypes.some(isFocus) : false;
   const activeCategories = categories.filter((c) => c.is_active);
+  // R14b: prefill only for a type that is NOT yet in the list, and only with an
+  // active registry category -- anything else is ignored, never trusted.
+  const prefill =
+    focusType && !focusFound
+      ? {
+          label: focusType,
+          category: activeCategories.some((c) => c.value === suggestCategory) ? suggestCategory : "",
+        }
+      : null;
   const categoryLabel = (value: string | null) =>
     (value && categories.find((c) => c.value === value)?.label) || null;
 
@@ -430,8 +447,19 @@ function InventoryTypesTab({
             </>
           ) : (
             <>
-              <strong>&ldquo;{focusType}&rdquo;</strong> isn&apos;t in your list yet. Add it with the form below (use
-              that exact label) and choose its website category.
+              <strong>&ldquo;{focusType}&rdquo;</strong> isn&apos;t in your list yet. The form below is filled in with
+              that exact label
+              {prefill?.category ? (
+                <>
+                  {" "}and the suggested website category{" "}
+                  <strong data-testid="type-focus-suggest">
+                    {activeCategories.find((c) => c.value === prefill.category)?.label ?? prefill.category}
+                  </strong>
+                </>
+              ) : (
+                <> &mdash; choose its website category</>
+              )}
+              . Check it and press Add.
             </>
           )}
         </div>
@@ -442,13 +470,13 @@ function InventoryTypesTab({
         <h3 className="mb-4 text-sm font-semibold text-white">Add an inventory type</h3>
         <form action={createInventoryType} className="grid gap-4 sm:grid-cols-2">
           <Field label="Label" required help="Friendly name (e.g. “Live Resin Cartridge”).">
-            <Input name="label" placeholder="e.g. Live Resin Cartridge" required />
+            <Input name="label" placeholder="e.g. Live Resin Cartridge" required defaultValue={prefill?.label ?? ""} />
           </Field>
           <Field label="Key (optional)" help="Canonical matching key. Auto-derived (lowercase) from the label if blank.">
             <Input name="key" placeholder="auto" />
           </Field>
           <Field label="Maps to website category" help="Groups items of this type on the public menu.">
-            <Select name="website_category" defaultValue="">
+            <Select name="website_category" defaultValue={prefill?.category ?? ""}>
               <option value="">— none —</option>
               {activeCategories.map((c) => (
                 <option key={c.value} value={c.value}>

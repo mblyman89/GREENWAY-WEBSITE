@@ -127,6 +127,31 @@ fixes made after publishing reach the site.
 
 ---
 
+## R14b as built — the remaining Cultivera fix-its (Round 14)
+
+**Measured on the real export, not assumed.** `INVENTORIES.xlsx` (3917 rows):
+Cultivera's InventoryType column holds CCRS types; its Category matches our
+catalog. `cultivera-type-from-category-core` derives OUR type and the expected
+CCRS type from the Category. On the real rows 3790 agree and 127 are flagged:
+125 are type mismatches (largest: Infused Pre-roll filed as Usable Marijuana
+×85), shown with advice to correct the CCRS type in Cultivera, because the
+CCRS type is the regulator's value and is never rewritten here. Two are
+category suspects (the name and the CCRS type both disagree with the
+category: a Panda Candies row that reads as a pre-roll, and a Roll On row
+named “Infused Pre-roll”). Only those two get a one-click “Re-file as …”
+(owner/admin, `inventory.manage`), which writes a product classification
+override validated against the live registries and audited as
+`menu_import.type_check_refiled`. Unknown categories get a grounded placement
+(Dab Rig → paraphernalia per WAC 314-55-010(34); a category that names a
+catalog type → that type), prefilled on the Types page.
+“Count these products” now opens a count preloaded with every active lot
+of every flagged mixed-size card: the import stores all keys, and the planner
+ignores due-ness and the budget. Fact Review adds a one-reason-at-a-time
+view (the focus is kept after each save) and a “Use these values” button
+for values the product name states outright. No migration.
+
+---
+
 ## Q-02 — How many manifests per week?
 
 **Owner answer:** 15–20 manifests per week, about 65–87 per month.

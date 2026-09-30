@@ -32,7 +32,17 @@
  *   strain type          /admin/knowledge-base/library — the live menu overlays
  *                        strain type from the KB by strain NAME
  *                        (strain-terpenes-server.ts buildMenuIndexes).
- *   cycle counts         /admin/inventory/cycle-counts.
+ *   cycle counts         /admin/inventory/audits/new?fromImport=<id> (R14b) —
+ *                        the audit planner reads the import's own
+ *                        import_lots_mixed_size_cards diagnostic, whose
+ *                        context now carries EVERY flagged pos_product_key
+ *                        (import-lot-core.ts), and preloads exactly those
+ *                        products' open lots. The bare cycle-count queue it
+ *                        used to open creates nothing (owner, Round 14).
+ *   unmapped category    /admin/settings/types?tab=inventory&type=<category>
+ *                        — the Types page opens (or offers to add) that exact
+ *                        type (S26 focus); cultivera-type-from-category-core
+ *                        names a suggested placement.
  *
  * Lots are created only when the version is published (or backfilled), so a
  * lot link is only offered once the lots exist; before that the copy says so
@@ -46,6 +56,10 @@
  */
 
 export type PosFixLink = { href: string; label: string };
+
+// R14b: the grounded unknown-category suggestion (pure: catalog + name rules,
+// no I/O; it does not import this file, so no cycle).
+import { suggestForUnknownCategory } from "@/lib/pos/cultivera-type-from-category-core";
 
 export type PosImportFix = {
   /** What the code means, in plain English. */
@@ -100,7 +114,6 @@ export const MISSING_EXPIRY_BULK_HREF =
   "/admin/inventory?status=active&missingExpiry=1&bulk=1&bulkField=expires_on";
 export const MISSING_COA_HREF = "/admin/inventory?status=active&coa=no";
 export const NEEDS_RECEIVED_DATE_HREF = "/admin/inventory?needsReceivedDate=1";
-export const CYCLE_COUNTS_HREF = "/admin/inventory/cycle-counts";
 export const STRAIN_LIBRARY_HREF = "/admin/knowledge-base/library";
 export const MENU_IMPORTS_HREF = "/admin/menu-imports";
 
@@ -148,6 +161,27 @@ export function productVisibilityHref(sourceItemId: string, back?: string): stri
 /** The products list filtered by text (products/page.tsx: name or brand contains q). */
 export function productSearchHref(q: string): string {
   return `/admin/products?q=${enc(q.trim())}`;
+}
+
+/**
+ * R14b: a new count preloaded with every open lot of the products this
+ * import's mixed-size diagnostic flagged (audits/new reads the keys from the
+ * stored diagnostic by import id; the URL never carries 200 keys).
+ */
+export function countFlaggedProductsHref(importId: string): string {
+  return `/admin/inventory/audits/new?fromImport=${enc(importId)}`;
+}
+
+/**
+ * R14b: the Types page with one inventory type opened (or offered to add).
+ * `suggest` (a website category slug, e.g. from cultivera-type-from-category-
+ * core) prefills the Add form's mapping; the Types page re-checks it against
+ * the live registry before using it.
+ */
+export function typeFocusHref(typeName: string, suggest?: string | null): string {
+  const base = `/admin/settings/types?tab=inventory&type=${enc(typeName.trim())}`;
+  const s = String(suggest ?? "").trim();
+  return /^[a-z0-9-]{1,60}$/.test(s) ? `${base}&suggest=${enc(s)}` : base;
 }
 
 /** Lot links are only real once the lots exist. */
@@ -216,7 +250,7 @@ export function posImportFixFor(code: string, ctx: PosFixContext): PosImportFix 
     case "unmapped_category_fallback":
       return {
         what: "Cultivera used a category name the importer does not know, so it was filed under a best-guess category.",
-        how: "Re-file a product from its lot page (Website type & category). A permanent mapping for the category name is a code change — tell us the category and where it belongs.",
+        how: "Use the button on each row below: it opens that exact category on the Types page, where you add it with the suggested website category (the Type & category check on this page names the suggestion). That mapping re-files the back office at once; to move one product on the live menu, re-file it from the check below or its lot page.",
         links: [{ href: "/admin/settings/types?tab=inventory", label: "Open Types & Categories" }],
       };
     case "blank_product_name":
@@ -258,12 +292,16 @@ export function posImportFixFor(code: string, ctx: PosFixContext): PosImportFix 
             : "Several rows shared a barcode and were merged into one lot.";
       return { what, how: `Open each lot below and check its name and identifier before selling.${l.note}`, links: l.links };
     }
-    case "import_lots_mixed_size_cards":
+    case "import_lots_mixed_size_cards": {
+      // R14b: open a count with the FLAGGED products' lots already loaded —
+      // not the bare cycle-count queue, which creates nothing.
+      const l = lotLinks(ctx, [{ href: countFlaggedProductsHref(ctx.importId), label: "Count these products" }]);
       return {
         what: "Some cards group several package sizes, so their unit counts can drift until the migrated stock sells through.",
-        how: "Count those products in a cycle count.",
-        links: [{ href: CYCLE_COUNTS_HREF, label: "Open cycle counts" }],
+        how: `This opens a new count with every open lot of the flagged products already loaded; name it and save.${l.note}`,
+        links: l.links,
       };
+    }
     default:
       return null;
   }
@@ -287,6 +325,14 @@ export function posDiagnosticRowLink(
 ): PosFixLink | null {
   const barcode = ctxStr(context, "barcode");
   const product = ctxStr(context, "product");
+  // R14b: an unknown Cultivera category opens that exact type on the Types
+  // page (not lot-gated: the Types page exists before any lot does).
+  if (code === "new_unmapped_category" || code === "unmapped_category_fallback") {
+    const category = ctxStr(context, "category");
+    return category
+      ? { href: typeFocusHref(category, suggestForUnknownCategory(category)?.websiteCategory), label: `Add "${category}" as a type` }
+      : null;
+  }
   if (ctx.lotsCreated) {
     if (code === "import_lot_cost_unparseable" && barcode) return { href: lotSearchHref(barcode, "unit_cost_minor_units"), label: "Fill this cost" };
     if ((code === "import_lot_barcode_conflict" || code === "import_lot_barcode_merged" || code === "import_lot_coa_missing" || code === "import_lot_received_date_missing") && barcode) {
@@ -385,8 +431,18 @@ export function __runPosImportFixCoreTests(): { passed: number; failed: number }
   ok(posImportFixFor("product_without_inventory", staged)?.links[0].href === `/admin/menu-imports/${ID}#hidden-items`, "no inventory → hidden anchor");
   ok(posImportFixFor("unknown_strain_type", staged)?.links[0].href === "/admin/knowledge-base/library", "strain → library");
   ok(posImportFixFor("new_unmapped_category", staged)?.links[0].href === "/admin/settings/types?tab=inventory", "category → types");
-  ok(posImportFixFor("unmapped_category_fallback", staged)?.how.includes("code change") === true, "category copy is honest");
-  ok(posImportFixFor("import_lots_mixed_size_cards", staged)?.links[0].href === "/admin/inventory/cycle-counts", "mixed → cycle counts");
+  ok(posImportFixFor("unmapped_category_fallback", staged)?.how.includes("code change") === false, "category copy: no dead end");
+  ok(posImportFixFor("unmapped_category_fallback", staged)?.how.includes("suggested website category") === true, "category copy names the suggestion");
+  ok(posImportFixFor("import_lots_mixed_size_cards", live)?.links[0].href === `/admin/inventory/audits/new?fromImport=${ID}`, "mixed → preloaded count");
+  ok(posImportFixFor("import_lots_mixed_size_cards", live)?.links[0].label === "Count these products", "mixed label");
+  ok(posImportFixFor("import_lots_mixed_size_cards", live)?.how.includes("already loaded") === true, "mixed copy");
+  ok(countFlaggedProductsHref("a b") === "/admin/inventory/audits/new?fromImport=a%20b", "count href encodes");
+  ok(typeFocusHref(" Dab Rig ") === "/admin/settings/types?tab=inventory&type=Dab%20Rig", "type focus href trims + encodes");
+  ok(typeFocusHref("Dab Rig", "paraphernalia") === "/admin/settings/types?tab=inventory&type=Dab%20Rig&suggest=paraphernalia", "suggest appended");
+  ok(typeFocusHref("Dab Rig", "Bad Slug!") === "/admin/settings/types?tab=inventory&type=Dab%20Rig", "bad suggest dropped");
+  ok(typeFocusHref("Dab Rig", "") === typeFocusHref("Dab Rig") && typeFocusHref("Dab Rig", null) === typeFocusHref("Dab Rig"), "blank suggest dropped");
+  ok(posDiagnosticRowLink("new_unmapped_category", { category: "Cured Resin Cartridge" }, staged)?.href === "/admin/settings/types?tab=inventory&type=Cured%20Resin%20Cartridge&suggest=cartridge", "row link carries the grounded suggestion");
+  ok(posDiagnosticRowLink("new_unmapped_category", { category: "Zzz Thing" }, staged)?.href === "/admin/settings/types?tab=inventory&type=Zzz%20Thing", "no grounded suggestion → no suggest");
 
   // Lot codes: exact bulk-fill hrefs when lots exist.
   ok(posImportFixFor("import_lot_cost_unparseable", live)?.links[0].href === UNKNOWN_COST_BULK_HREF, "cost bulk href");
@@ -410,7 +466,9 @@ export function __runPosImportFixCoreTests(): { passed: number; failed: number }
   const cb = posImportFixFor("import_lot_cost_unparseable", liveNoLots);
   ok(cb?.links.length === 1 && cb.links[0].href === `/admin/menu-imports/${ID}#backfill-lots`, "live no lots → backfill");
   ok(cb?.how.includes("never created") === true, "backfill note");
-  ok(posImportFixFor("import_lots_mixed_size_cards", staged)?.links.length === 1, "cycle counts not gated on lots");
+  ok(posImportFixFor("import_lots_mixed_size_cards", staged)?.links.length === 0, "count gated on lots (staged: none)");
+  ok(posImportFixFor("import_lots_mixed_size_cards", staged)?.how.includes("created when you publish") === true, "count staged note");
+  ok(posImportFixFor("import_lots_mixed_size_cards", liveNoLots)?.links[0].href === `/admin/menu-imports/${ID}#backfill-lots`, "count live-no-lots → backfill");
   ok(posImportFixFor("import_lot_cost_unparseable", live)?.how.includes("created when") === false, "no note when lots exist");
 
   // Row links.
@@ -431,6 +489,10 @@ export function __runPosImportFixCoreTests(): { passed: number; failed: number }
   ok(posDiagnosticRowLink("product_without_inventory", { product: "Gummies" }, live) === null, "row no-inventory → none (hidden list has exact links)");
   ok(posDiagnosticRowLink("flower_same_size_different_price", { displayName: "OG" }, live)?.label === "Search its lots", "flower row is labelled a search");
   ok(posDiagnosticRowLink("group_variant_merge", { barcode: "B1" }, live) === null, "row info → null");
+  ok(posDiagnosticRowLink("unmapped_category_fallback", { category: "Dab Rig" }, staged)?.href === "/admin/settings/types?tab=inventory&type=Dab%20Rig&suggest=paraphernalia", "row unmapped → type focus (not lot-gated)");
+  ok(posDiagnosticRowLink("new_unmapped_category", { category: "Cured Resin Cartridge" }, live)?.label === 'Add "Cured Resin Cartridge" as a type', "row new category label");
+  ok(posDiagnosticRowLink("new_unmapped_category", { category: " " }, live) === null, "row blank category → null");
+  ok(posDiagnosticRowLink("new_unmapped_category", {}, live) === null, "row no category → null");
 
   // Hidden items.
   const H = (r: string | null, pub: boolean, importId: string | null = ID, factHref: string | null = null) =>

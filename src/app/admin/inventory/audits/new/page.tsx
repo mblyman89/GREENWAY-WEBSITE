@@ -48,7 +48,8 @@ import {
   type AuditPlanGroup,
   type CoverageReport,
 } from "@/lib/inventory/inventory-audit-core";
-import { proposeScope } from "@/lib/inventory/audit-hub-store";
+import { proposeFlaggedScope, proposeScope } from "@/lib/inventory/audit-hub-store";
+import { flaggedScopeRationale, isImportId } from "@/lib/inventory/flagged-count-scope-core";
 import { createAuditAction } from "../actions";
 import { HubRefusal } from "../HubRefusal";
 import { WhyBlockedPanel } from "../WhyBlockedPanel";
@@ -69,7 +70,7 @@ function defaultLabel(): string {
 export default async function NewAuditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ refusal?: string; refusalCode?: string; all?: string }>;
+  searchParams: Promise<{ refusal?: string; refusalCode?: string; all?: string; fromImport?: string }>;
 }) {
   // books-23: owner only. Choosing what to count is the owner's decision.
   await requirePermission("inventory.audit");
@@ -80,10 +81,15 @@ export default async function NewAuditPage({
   // what the cadence says is due -- while still allowing a deliberate override
   // when Michael has a reason, such as the 2026-10-31 full physical.
   const wantsAll = sp.all === "1";
-  const proposed = await proposeScope({
+  // R14b: `?fromImport=<import id>` is the Cultivera import's "Count these
+  // products" fix. It preloads EVERY active lot of the cards that import
+  // flagged as mixed-size (proposeFlaggedScope), instead of the risk ranking.
+  const fromImport = isImportId(sp.fromImport) ? sp.fromImport.trim() : null;
+  const flagged = fromImport ? await proposeFlaggedScope(fromImport) : null;
+  const proposed = flagged ?? (await proposeScope({
     maxLots: wantsAll ? 400 : 40,
     includeOnlyDue: !wantsAll,
-  });
+  }));
 
   return (
     <div className="space-y-6">
@@ -111,13 +117,52 @@ export default async function NewAuditPage({
         <WhyBlockedPanel blockers={[sp.refusal]} title="This could not be saved yet" />
       ) : null}
 
+      {flagged && flagged.ok && fromImport ? (
+        <section className={CARD} data-testid="flagged-scope-banner">
+          <h2 className={H2}>Counting the products your Cultivera import flagged</h2>
+          {flagged.data.found ? (
+            <p className={`mt-1 ${P}`}>
+              The import flagged {flagged.data.flaggedKeys} product
+              {flagged.data.flaggedKeys === 1 ? "" : "s"} whose cards group several package sizes.
+              Every open lot of {flagged.data.flaggedKeys === 1 ? "it" : "them"} is loaded below
+              &mdash; {flagged.data.plan.lotCount} lot{flagged.data.plan.lotCount === 1 ? "" : "s"}.
+              {flagged.data.keysWithoutActiveLots > 0
+                ? ` ${flagged.data.keysWithoutActiveLots} of them have no open lot right now (sold through or archived), so there is nothing to count for those.`
+                : ""}
+            </p>
+          ) : (
+            <p className={`mt-1 ${P}`}>
+              This import has no list of flagged products to load. Imports staged before this
+              feature stored only the first ten names, so upload the files again to get the full
+              list &mdash; or plan a normal count below.
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Link
+              href={`/admin/menu-imports/${fromImport}`}
+              className="text-xs text-[var(--admin-text-muted)] underline decoration-dotted underline-offset-2 hover:text-white"
+            >
+              Back to the import
+            </Link>
+            <Link
+              href="/admin/inventory/audits/new"
+              className="text-xs text-[var(--admin-text-muted)] underline decoration-dotted underline-offset-2 hover:text-white"
+            >
+              Plan the usual count instead
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       {!proposed.ok ? (
         <HubRefusal refusal={proposed.refusal} context="the proposed scope" />
-      ) : (
+      ) : flagged && flagged.ok && !flagged.data.found ? null : (
         <PlanBody
           plan={proposed.data.plan}
           coverage={proposed.data.coverage}
           wantsAll={wantsAll}
+          fromImport={flagged && flagged.ok ? fromImport : null}
+          rationaleDefault={flagged && flagged.ok ? flaggedScopeRationale(flagged.data.flaggedKeys) : undefined}
         />
       )}
 
@@ -133,10 +178,16 @@ function PlanBody({
   plan,
   coverage,
   wantsAll,
+  fromImport = null,
+  rationaleDefault,
 }: {
   plan: AuditPlan;
   coverage: CoverageReport;
   wantsAll: boolean;
+  /** R14b: set when the scope is the import's flagged products. */
+  fromImport?: string | null;
+  /** R14b: pre-written, editable reason for a flagged-products count. */
+  rationaleDefault?: string;
 }) {
   const nothingDue = plan.groups.length === 0;
 
@@ -228,7 +279,7 @@ function PlanBody({
 
       {nothingDue ? (
         <section className={CARD}>
-          <h2 className={H2}>Nothing is due for a count today</h2>
+          <h2 className={H2}>{fromImport ? "None of the flagged products has an open lot" : "Nothing is due for a count today"}</h2>
           <p className={`mt-1 ${P}`}>
             Every lot is inside its cadence window. That is a good outcome and not a reason to
             invent work &mdash; counting things that were just counted uses the staff time the
@@ -246,6 +297,8 @@ function PlanBody({
         </section>
       ) : (
         <form action={createAuditAction} className="space-y-5">
+          {/* R14b: a refusal returns to THIS flagged scope, not the default one. */}
+          {fromImport ? <input type="hidden" name="fromImport" value={fromImport} /> : null}
           <section className={CARD}>
             <h2 className={H2}>Name it and say why</h2>
             <p className={`mt-1 ${P}`}>
@@ -284,6 +337,7 @@ function PlanBody({
                   required
                   minLength={10}
                   rows={3}
+                  defaultValue={rationaleDefault}
                   placeholder="Highest value and longest since counted, plus every product holding more than one open lot."
                 />
               </Field>
@@ -293,7 +347,7 @@ function PlanBody({
           <section className={CARD}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className={H2}>What the system proposes, and why</h2>
-              {!wantsAll ? (
+              {fromImport ? null : !wantsAll ? (
                 <Link
                   href="/admin/inventory/audits/new?all=1"
                   className="text-xs text-[var(--admin-text-muted)] underline decoration-dotted underline-offset-2 hover:text-white"

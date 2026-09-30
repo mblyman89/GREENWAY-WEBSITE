@@ -429,7 +429,7 @@ describe("R14a wiring", () => {
 
   it("the env ledger records R14a as adding no variable", () => {
     const ledger = readFileSync(join(process.cwd(), "docs/INTAKE_PIPELINE_ENV_LEDGER.md"), "utf8");
-    expect(ledger).toContain("S33 (and the Round 14 change set R14a). Their bible");
+    expect(ledger).toContain("S33 (and the Round 14 change sets R14a and R14b). Their bible");
     expect(ledger).toContain("- (R14a needs nothing set.");
     expect(ledger).toContain("No schema, no new reads of the environment, no new network calls, polls or crons.)");
   });

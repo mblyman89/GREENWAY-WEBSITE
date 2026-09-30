@@ -54,6 +54,17 @@ import {
   type FactReviewGroup,
 } from "@/lib/pos/fact-review-bulk-core";
 
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
+import { getOverrideForKey, upsertOverride } from "@/lib/pos/product-classification-overrides";
+import { isValidWebsiteCategory } from "@/lib/menu/menu-category-override-core";
+import {
+  parseTypeCheckRefile,
+  typeCheckReturnHref,
+  TYPE_CHECK_REFILE_AUDIT,
+} from "@/lib/pos/cultivera-type-from-category-core";
+import { parseFactFocus, savedRedirectSuffix } from "@/lib/pos/fact-review-focus-core";
+
 const PRODUCTS_HINT = "PRODUCTS.xlsx";
 const INVENTORIES_HINT = "INVENTORIES.xlsx";
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB safety cap per file
@@ -484,6 +495,11 @@ export async function resolveFactReview(formData: FormData): Promise<void> {
   // R14a: decisions mirror onto the LIVE menu too (publish now, fix after),
   // so the public pages and the live-menu cache tag are refreshed.
   revalidatePublicMenuSurfaces();
+  // R14b: back to the same one-at-a-time focus (sanitised by the pure core).
+  const focusSuffix = savedRedirectSuffix(
+    parseFactFocus({ group: formData.get("focusGroup"), q: formData.get("focusQ") }),
+  );
+  if (focusSuffix) redirect(dest + "?saved=1" + focusSuffix);
   redirect(dest + "?saved=1");
 }
 
@@ -676,4 +692,86 @@ export async function cleanSlateTestDataAction(formData: FormData): Promise<void
     revalidatePublicMenuSurfaces();
   }
   redirect("/admin/menu-imports?cleaned=" + encodeURIComponent(cleaned));
+}
+
+/**
+ * R14b — "Re-file as …" from the import page's Type & category check.
+ *
+ * ONE product, ONE human press (Rule 3.1): writes the same per-product
+ * override the lot page writes (product_classification_overrides, keyed by
+ * source_item_id; the live menu applies its website category at read time via
+ * withCategoryOverride). The CCRS/LCB columns are never touched (E1).
+ *
+ * Validation, all server-side: the product must belong to THIS import's
+ * version (a hidden field is never trusted), the category must be an active
+ * registry category the live menu can apply, and the type a registry label
+ * that does not contradict the catalog (parseTypeCheckRefile).
+ */
+export async function refileFromTypeCheck(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  const importId = String(formData.get("importId") ?? "").trim();
+  const sourceItemId = String(formData.get("sourceItemId") ?? "").trim();
+  if (!importId || !sourceItemId) {
+    redirect("/admin/menu-imports?error=" + encodeURIComponent("Missing import or product."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data: versions, error: vErr } = await admin.from("menu_versions").select("id").eq("import_id", importId);
+  if (vErr || !versions || versions.length === 0) {
+    redirect(typeCheckReturnHref(importId, "This import has no menu version to re-file from.", true));
+  }
+  const { data: rows, error: iErr } = await admin
+    .from("menu_items")
+    .select("source_item_id, name")
+    .in("menu_version_id", versions.map((v: { id: string }) => v.id))
+    .eq("source_item_id", sourceItemId)
+    .limit(1);
+  if (iErr || !rows || rows.length === 0) {
+    redirect(typeCheckReturnHref(importId, "That product is not part of this import.", true));
+  }
+  const productName = String((rows[0] as { name?: string }).name ?? sourceItemId);
+
+  const [categoryRegistry, typeRegistry, current] = await Promise.all([
+    listWebsiteCategoryTypes({ includeInactive: false }),
+    listInventoryTypes({ includeInactive: false }),
+    getOverrideForKey(sourceItemId),
+  ]);
+  const parsed = parseTypeCheckRefile(
+    {
+      website_category: formData.get("website_category") as string | null,
+      house_type: formData.get("house_type") as string | null,
+    },
+    {
+      // Only categories the live menu can apply (menu-category-override-core).
+      validCategoryValues: categoryRegistry.map((c) => c.value).filter((v) => isValidWebsiteCategory(v)),
+      validTypeLabels: typeRegistry.map((t) => t.label),
+    },
+  );
+  if (!parsed.ok) {
+    redirect(typeCheckReturnHref(importId, parsed.error, true));
+  }
+
+  const result = await upsertOverride(
+    sourceItemId,
+    { website_category: parsed.websiteCategory, house_type: parsed.houseType, note: current?.note ?? null },
+    session.userId,
+  );
+  if (!result.ok) {
+    redirect(typeCheckReturnHref(importId, result.error, true));
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: TYPE_CHECK_REFILE_AUDIT,
+    entityType: "product_classification_override",
+    entityId: sourceItemId,
+    before: { website_category: current?.website_category ?? null, house_type: current?.house_type ?? null },
+    after: { website_category: parsed.websiteCategory, house_type: parsed.houseType, import_id: importId },
+  });
+
+  revalidatePath(`/admin/menu-imports/${importId}`);
+  revalidatePath("/admin/inventory");
+  revalidatePublicMenuSurfaces();
+  const label = parsed.houseType ? `${parsed.houseType} (${parsed.websiteCategory})` : parsed.websiteCategory;
+  redirect(typeCheckReturnHref(importId, `Re-filed "${productName}" as ${label}.`));
 }
