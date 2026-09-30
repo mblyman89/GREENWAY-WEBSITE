@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData, backfillImportLots } from "@/lib/pos/import-service";
+import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData, backfillImportLots, fillImportLotFacts } from "@/lib/pos/import-service";
 import {
   getPublishedVersion,
   diffVersions,
@@ -376,6 +376,38 @@ export async function backfillLotsAction(formData: FormData): Promise<void> {
 
   revalidatePath(dest);
   redirect(dest + "?backfilled=" + encodeURIComponent(ok));
+}
+
+/**
+ * R15a — fill received dates + POS cannabinoids onto lots an EARLIER publish
+ * created (before the importer wrote them). Fill-only; re-clickable; audited.
+ */
+export async function fillLotFactsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  const importId = String(formData.get("importId") ?? "");
+  if (!importId) redirect("/admin/menu-imports?error=" + encodeURIComponent("Missing import id."));
+  const dest = `/admin/menu-imports/${importId}`;
+  let msg: string;
+  try {
+    const r = await fillImportLotFacts(importId);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "pos_import.fill_lot_facts",
+      entityType: "pos_import",
+      entityId: importId,
+      after: r,
+    });
+    msg =
+      `Matched ${r.matched} lot(s): filled ${r.datesFilled} received date(s) and cannabinoids on ${r.potencyFilled} lot(s). ` +
+      "Values you already set were left alone." +
+      (r.potencyColumnsPresent ? "" : " THC/CBD columns need migration 0241 applied — dates and CBN/CBC were filled; click again after applying it.");
+  } catch (err) {
+    redirect(dest + "?error=" + encodeURIComponent(err instanceof Error ? err.message : "Fill failed."));
+  }
+  revalidatePath(dest);
+  revalidatePath("/admin/inventory");
+  redirect(dest + "?backfilled=" + encodeURIComponent(msg) + "#lot-plan");
 }
 
 /**

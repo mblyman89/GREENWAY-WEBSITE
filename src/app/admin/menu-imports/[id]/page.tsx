@@ -32,7 +32,7 @@ import {
   removalListTitle,
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
-import { publishVersion, backfillLotsAction, refileFromTypeCheck } from "../actions";
+import { publishVersion, backfillLotsAction, refileFromTypeCheck, fillLotFactsAction } from "../actions";
 import Link from "next/link";
 import {
   posImportFixFor,
@@ -623,7 +623,23 @@ export default async function ImportReviewPage({
                   </Button>
                 )}
               </div>
-            ) : (
+            ) : null}
+            {/* R15a: lots created by an earlier publish never got their received
+                date / THC / CBD / CBN / CBC. Fill-only, safe to re-click. */}
+            {hasCreatedLots && canRefile && !imp.is_test ? (
+              <form action={fillLotFactsAction} className="mt-3" data-testid="lot-plan-fill-facts">
+                <input type="hidden" name="importId" value={imp.id} />
+                <Button type="submit" variant="confirm" size="sm">
+                  Fill received dates & cannabinoids from the spreadsheet
+                </Button>
+                <p className="mt-1 text-xs text-white/45">
+                  Re-reads this import&apos;s stored Cultivera files and fills the Received, THC, CBD and
+                  name-verified CBN/CBC/CBG columns on its lots &mdash; only where they are blank. Anything
+                  you already typed is never overwritten.
+                </p>
+              </form>
+            ) : null}
+            {!hasCreatedLots && (
               <p className="mt-3 text-xs text-white/50" data-testid="lot-plan-not-yet">
                 These lots are created when this version is published; the Bulk fill buttons appear here after that.
               </p>

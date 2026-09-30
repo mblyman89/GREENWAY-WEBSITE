@@ -546,7 +546,8 @@ import { __runScanToCartCoreTests } from "../../src/lib/pos/scan-to-cart-core";
 import { __runVariantLotCoreTests } from "../../src/lib/pos/variant-lot-core";
 import { __runPriceVariantMatchCoreTests } from "../../src/lib/inventory/price-variant-match-core";
 import { __runPriceCorrectionCoreTests } from "../../src/lib/inventory/price-correction-core";
-import { __runImportLotCoreTests } from "../../src/lib/pos/import-lot-core";
+import { __runImportLotCoreTests, __runImportLotFactFillTests } from "../../src/lib/pos/import-lot-core";
+import { __runLotPotencyCoreTests } from "../../src/lib/pos/lot-potency-core";
 import { __runCardBrandCoreTests } from "../../src/lib/menu/card-brand-core";
 import { __runMenuCategoryOverrideCoreTests } from "../../src/lib/menu/menu-category-override-core";
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
@@ -1270,6 +1271,8 @@ __runLiquidVolumeTests();
   __runPriceVariantMatchCoreTests();
   __runPriceCorrectionCoreTests();
   __runImportLotCoreTests();
+  __runImportLotFactFillTests();
+  __runLotPotencyCoreTests();
   __runCardBrandCoreTests();
   { const r = __runMenuCategoryOverrideCoreTests(); if (r.passed < 1) throw new Error("menu-category-override-core: no assertions ran"); console.log(`menu-category-override-core: ${r.passed} assertions passed`); }
   __runVendorDirectoryCoreTests();

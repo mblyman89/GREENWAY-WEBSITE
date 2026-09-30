@@ -34,8 +34,18 @@ import { transformWorkbooks, type TransformResult } from "@/lib/pos/transform";
 import type { GreenwayMenuItem } from "@/lib/pos/transform";
 import type { MenuVersion, PosImport } from "@/lib/pos/db-types";
 import { injectApprovedDraftsIntoVersion } from "@/lib/pos/draft-injection";
-import { planImportLots, resolveLotCreatedAt, assertUniformInsertKeys } from "@/lib/pos/import-lot-core";
-import { storeNow } from "@/lib/reports/timezone";
+import {
+  planImportLots,
+  resolveLotCreatedAt,
+  assertUniformInsertKeys,
+  receivedOnForDb,
+  potencyColumns,
+  planLotFactFill,
+  POS_POTENCY_COLUMNS,
+  type ExistingLotFacts,
+  type PlannedImportLot,
+} from "@/lib/pos/import-lot-core";
+import { storeNow, pacificToday } from "@/lib/reports/timezone";
 import { resolveOrCreateVendor, resolveBrandId, logManifestEvent } from "@/lib/inventory/intake-store";
 import { chunkedIn } from "@/lib/supabase/chunked-in";
 import { getImportDiagnostics, getVersionItems, countVersionItems } from "@/lib/pos/menu-version";
@@ -618,6 +628,8 @@ async function createImportLots(importId: string, actorId: string | null): Promi
   // undated lots share a single deterministic timestamp that is younger than
   // every real received date -- preserving the planner's FIFO ordering.
   const importCreatedAtFallback = storeNow().toISOString();
+  const todayPacific = pacificToday();
+  let potencyColsOk = true;
   let created = 0;
   for (let start = 0; start < toCreate.length; start += LOT_BATCH) {
     const batch = toCreate.slice(start, start + LOT_BATCH);
@@ -654,13 +666,31 @@ async function createImportLots(importId: string, actorId: string | null): Promi
         // NEVER conditional: see the SLICE 1 note above. Received date when the
         // POS export had one, otherwise this run's store-clock instant.
         created_at: resolveLotCreatedAt(lot.createdAtIso, importCreatedAtFallback),
+        // R15a: the received date is a FACT column (migration 0214), not just
+        // a note. NEVER conditional (SLICE 1 uniform keys): null when the
+        // export had no date or the date is outside 0214's sane window.
+        received_on: receivedOnForDb(lot.receivedOn, todayPacific),
+        received_on_source: receivedOnForDb(lot.receivedOn, todayPacific) ? "pos_import" : null,
+        received_on_set_at: receivedOnForDb(lot.receivedOn, todayPacific) ? importCreatedAtFallback : null,
+        // R15a: name-verified CBN/CBC/CBG/CBDV (0138 column, always present).
+        minor_cannabinoids_json: lot.potency?.minors ?? [],
+        // R15a: the POS export's THC/CBD (migration 0241; dropped on retry
+        // when the owner has not applied it yet).
+        ...(potencyColsOk ? potencyColumns(lot.potency, importCreatedAtFallback) : {}),
       });
     }
     const batchNumber = start / LOT_BATCH + 1;
     // Fail loudly and precisely BEFORE the network call if the row builder ever
     // regresses into a ragged key set (Rule 3: precise warnings, never invent).
     assertUniformInsertKeys(rows, `inventory_lots batch ${batchNumber}`);
-    const { error: insErr } = await admin.from("inventory_lots").insert(rows);
+    let { error: insErr } = await admin.from("inventory_lots").insert(rows);
+    if (insErr && potencyColsOk && isMissingPosPotencyColumn(insErr)) {
+      // 0241 not applied yet: retry this batch without the pos_* columns and
+      // stop sending them for the rest of the run. Dates + minors still land.
+      potencyColsOk = false;
+      const stripped = rows.map((r) => withoutPosPotency(r));
+      ({ error: insErr } = await admin.from("inventory_lots").insert(stripped));
+    }
     if (insErr) throw new Error(`Lot creation failed while inserting batch ${batchNumber}: ${insErr.message}`);
     created += rows.length;
   }
@@ -673,6 +703,122 @@ async function createImportLots(importId: string, actorId: string | null): Promi
       context: { created, skippedExisting: existingIds.size, manifestId, plan: plan.summary },
     },
   ]);
+}
+
+// ---------------------------------------------------------------------------
+// R15a — pre-migration tolerance for the 0241 pos_* columns
+// ---------------------------------------------------------------------------
+function isMissingPosPotencyColumn(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
+  if (!error) return false;
+  const msg = String(error.message ?? "").toLowerCase();
+  const signalled = ["42703", "PGRST204"].includes(String(error.code ?? "")) || /column .* does not exist|could not find the .* column/.test(msg);
+  return signalled && POS_POTENCY_COLUMNS.some((c) => new RegExp(`(^|[^a-z0-9_])${c}([^a-z0-9_]|$)`).test(msg));
+}
+
+function withoutPosPotency(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const drop = new Set<string>(POS_POTENCY_COLUMNS);
+  for (const [k, v] of Object.entries(row)) if (!drop.has(k)) out[k] = v;
+  return out;
+}
+
+/**
+ * R15a — FILL the received date + POS potency onto lots an earlier publish
+ * already created (they were inserted before the importer wrote these facts).
+ *
+ * Re-reads the import's STORED raw workbooks (no new egress: same bucket the
+ * publish path reads), re-plans, matches existing lots by their CCRS
+ * inventory external id, and writes ONLY where the lot's value is NULL
+ * (planLotFactFill). received_on_source = "pos_import" so provenance says the
+ * date was machine-read from the export. Never touches a CCRS-filed value (E1)
+ * — received_on/pos_* are descriptive columns; created_at is left alone.
+ */
+export async function fillImportLotFacts(
+  importId: string,
+): Promise<{ matched: number; datesFilled: number; potencyFilled: number; potencyColumnsPresent: boolean }> {
+  const admin = createSupabaseAdminClient();
+  const { data: importRow, error: impErr } = await admin
+    .from("pos_imports")
+    .select("id, products_storage_key, inventories_storage_key, is_test")
+    .eq("id", importId)
+    .single();
+  if (impErr || !importRow) throw new Error(`Fill failed: import ${importId} not found.`);
+  const imp = importRow as Pick<PosImport, "id" | "products_storage_key" | "inventories_storage_key" | "is_test">;
+  if (imp.is_test) throw new Error("Fill refused: this is a TEST import — test imports never create real lots.");
+  if (!imp.products_storage_key || !imp.inventories_storage_key) {
+    throw new Error("Fill failed: this import has no stored raw workbook files to re-read.");
+  }
+  const [productsDl, inventoriesDl] = await Promise.all([
+    admin.storage.from(POS_RAW_BUCKET).download(imp.products_storage_key),
+    admin.storage.from(POS_RAW_BUCKET).download(imp.inventories_storage_key),
+  ]);
+  if (productsDl.error || !productsDl.data || inventoriesDl.error || !inventoriesDl.data) {
+    throw new Error(`Fill failed: could not re-read the raw workbook files (${productsDl.error?.message ?? inventoriesDl.error?.message ?? "unknown"}).`);
+  }
+  const result = transformWorkbooks({
+    productsBuffer: Buffer.from(await productsDl.data.arrayBuffer()),
+    inventoriesBuffer: Buffer.from(await inventoriesDl.data.arrayBuffer()),
+    productsSheet: "Sheet1",
+    inventoriesSheet: "Inventories",
+  });
+  const planned: PlannedImportLot[] = planImportLots(result.lotSources).lots;
+  if (planned.length === 0) return { matched: 0, datesFilled: 0, potencyFilled: 0, potencyColumnsPresent: true };
+
+  // Read the matching lots' current values (with the 0241 columns when present).
+  const fullCols = "id, ccrs_inventory_external_id, received_on, minor_cannabinoids_json, pos_thc, pos_thca, pos_cbd, pos_cbda";
+  const baseCols = "id, ccrs_inventory_external_id, received_on, minor_cannabinoids_json";
+  let potencyColumnsPresent = true;
+  const readChunk = async (cols: string, chunk: string[], from: number, to: number) => {
+    const { data, error } = await admin
+      .from("inventory_lots")
+      .select(cols)
+      .in("ccrs_inventory_external_id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) throw error;
+    return (data as unknown as ExistingLotFacts[] | null) ?? [];
+  };
+  let existing: ExistingLotFacts[];
+  try {
+    existing = await chunkedIn(planned.map((l) => l.ccrsExternalId), (c, f, t) => readChunk(fullCols, c, f, t));
+  } catch (e) {
+    if (!isMissingPosPotencyColumn(e as { code?: string; message?: string })) throw e;
+    potencyColumnsPresent = false;
+    existing = await chunkedIn(planned.map((l) => l.ccrsExternalId), (c, f, t) => readChunk(baseCols, c, f, t));
+  }
+
+  const nowIso = storeNow().toISOString();
+  const plan = planLotFactFill(planned, existing, { pacificToday: pacificToday(), nowIso, potencyColumnsPresent });
+
+  // Dates: one UPDATE per distinct date (≈ a few hundred), each guarded by
+  // `received_on is null` in SQL so a concurrent owner edit is never clobbered.
+  let datesFilled = 0;
+  for (const [date, ids] of plan.dateGroups) {
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const { data, error } = await admin
+        .from("inventory_lots")
+        .update({ received_on: date, received_on_source: "pos_import", received_on_set_at: nowIso })
+        .in("id", chunk)
+        .is("received_on", null)
+        .select("id");
+      if (error) throw new Error(`Fill failed writing received dates: ${error.message}`);
+      datesFilled += (data as unknown[] | null)?.length ?? 0;
+    }
+  }
+  // Potency: per-lot patches (values differ per batch). Guarded fill-only by
+  // the planner; small concurrency to keep the request inside the time budget.
+  let potencyFilled = 0;
+  const queue = [...plan.potencyPatches];
+  const worker = async () => {
+    for (let item = queue.shift(); item; item = queue.shift()) {
+      const { error } = await admin.from("inventory_lots").update(item.patch).eq("id", item.id);
+      if (error) throw new Error(`Fill failed writing potency: ${error.message}`);
+      potencyFilled += 1;
+    }
+  };
+  await Promise.all(Array.from({ length: 8 }, worker));
+  return { matched: plan.matched, datesFilled, potencyFilled, potencyColumnsPresent };
 }
 
 function sanitize(name: string): string {

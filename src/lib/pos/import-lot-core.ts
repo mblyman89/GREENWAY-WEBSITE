@@ -38,6 +38,7 @@
  * scripts/compliance/run-pure-selftests.ts) and mirrored in vitest.
  */
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
+import { resolveLotPotency, hasLotPotency, type LotPotency } from "@/lib/pos/lot-potency-core";
 
 export type ImportLotSource = {
   /** menu_items.source_item_id of the card this row rolled into (`pos-…`). */
@@ -73,6 +74,15 @@ export type ImportLotSource = {
   unitWeight: number | null;
   /** Parsed package unit (g | mg | oz | ml | floz | ea). */
   unitWeightUom: string | null;
+  /**
+   * R15a: raw potency columns for THIS row (Total / Thc / Thca / Cbd / Cbda).
+   * Optional so older callers/tests keep compiling; absent = unknown.
+   */
+  totalRaw?: number | null;
+  thcRaw?: number | null;
+  thcaRaw?: number | null;
+  cbdRaw?: number | null;
+  cbdaRaw?: number | null;
 };
 
 export type PlannedImportLot = {
@@ -121,6 +131,11 @@ export type PlannedImportLot = {
   brandLabel: string | null;
   /** Human note persisted on the lot (provenance + enrichment hints). */
   notes: string;
+  /**
+   * R15a: the POS export's potency for this lot, resolved with the menu
+   * card's rules (lot-potency-core). Null when the export carried none.
+   */
+  potency: LotPotency | null;
 };
 
 export type ImportLotDiagnostic = {
@@ -288,6 +303,116 @@ export function assertUniformInsertKeys(rows: readonly Record<string, unknown>[]
   );
 }
 
+/**
+ * R15a: first row (plan order) whose potency resolves to something. Rows that
+ * share a barcode are the same physical lot, so their numbers are the same
+ * lab result; taking the first evidenced one never blends two batches.
+ */
+function potencyForRows(rows: readonly ImportLotSource[]): LotPotency | null {
+  for (const r of rows) {
+    const p = resolveLotPotency({
+      inventoryType: r.inventoryType,
+      productName: r.productName,
+      totalRaw: r.totalRaw ?? null,
+      thcRaw: r.thcRaw ?? null,
+      thcaRaw: r.thcaRaw ?? null,
+      cbdRaw: r.cbdRaw ?? null,
+      cbdaRaw: r.cbdaRaw ?? null,
+    });
+    if (hasLotPotency(p)) return p;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// R15a — the lot facts the importer writes (and the backfill fills)
+// ---------------------------------------------------------------------------
+
+/** 0241 columns — dropped on retry when the migration is not applied yet. */
+export const POS_POTENCY_COLUMNS = ["pos_thc", "pos_thca", "pos_cbd", "pos_cbda", "pos_potency_unit", "pos_potency_set_at"] as const;
+
+/**
+ * The received date as the DB will accept it. 0214 refuses dates before
+ * 2014-07-08 or after tomorrow (Pacific); one bad cell must never abort a
+ * whole insert batch, so an out-of-window date stays NULL (the lot then lands
+ * on the owner's missing-received-date worklist — the flag is the point).
+ */
+export function receivedOnForDb(receivedOn: string | null, pacificToday: string): string | null {
+  if (!receivedOn) return null;
+  if (receivedOn < "2014-07-08" || receivedOn > pacificToday) return null;
+  return receivedOn;
+}
+
+/** Columns the insert/backfill writes for one planned lot's potency. */
+export function potencyColumns(p: LotPotency | null, nowIso: string): Record<string, unknown> {
+  return {
+    pos_thc: p?.thc ?? null,
+    pos_thca: p?.thca ?? null,
+    pos_cbd: p?.cbd ?? null,
+    pos_cbda: p?.cbda ?? null,
+    pos_potency_unit: p && hasLotPotency(p) ? p.unit : null,
+    pos_potency_set_at: p && hasLotPotency(p) ? nowIso : null,
+  };
+}
+
+export type ExistingLotFacts = {
+  id: string;
+  ccrs_inventory_external_id: string | null;
+  received_on: string | null;
+  pos_thc?: number | null;
+  pos_thca?: number | null;
+  pos_cbd?: number | null;
+  pos_cbda?: number | null;
+  minor_cannabinoids_json?: unknown;
+};
+
+export type LotFactFillPlan = {
+  /** received_on → lot ids (grouped so one UPDATE per distinct date). */
+  dateGroups: Map<string, string[]>;
+  /** Per-lot potency patches (fill-only). */
+  potencyPatches: { id: string; patch: Record<string, unknown> }[];
+  matched: number;
+};
+
+/**
+ * FILL-ONLY plan for lots that already exist (E1/Rule 3.1): a received date is
+ * written only where received_on IS NULL; potency only where every pos_*
+ * column is NULL; minor cannabinoids only where the lot has none. A value the
+ * owner typed (or a previous fill) is never overwritten.
+ */
+export function planLotFactFill(
+  planned: readonly PlannedImportLot[],
+  existing: readonly ExistingLotFacts[],
+  opts: { pacificToday: string; nowIso: string; potencyColumnsPresent: boolean },
+): LotFactFillPlan {
+  const byExt = new Map(planned.map((l) => [l.ccrsExternalId, l]));
+  const dateGroups = new Map<string, string[]>();
+  const potencyPatches: { id: string; patch: Record<string, unknown> }[] = [];
+  let matched = 0;
+  for (const lot of existing) {
+    const plan = lot.ccrs_inventory_external_id ? byExt.get(lot.ccrs_inventory_external_id) : undefined;
+    if (!plan) continue;
+    matched += 1;
+    const date = receivedOnForDb(plan.receivedOn, opts.pacificToday);
+    if (!lot.received_on && date) {
+      const ids = dateGroups.get(date) ?? [];
+      ids.push(lot.id);
+      dateGroups.set(date, ids);
+    }
+    const p = plan.potency;
+    if (!p) continue;
+    const patch: Record<string, unknown> = {};
+    const unset = lot.pos_thc == null && lot.pos_thca == null && lot.pos_cbd == null && lot.pos_cbda == null;
+    if (opts.potencyColumnsPresent && unset && (p.thc !== null || p.cbd !== null || p.thca !== null || p.cbda !== null)) {
+      Object.assign(patch, potencyColumns(p, opts.nowIso));
+    }
+    const hasMinors = Array.isArray(lot.minor_cannabinoids_json) && (lot.minor_cannabinoids_json as unknown[]).length > 0;
+    if (!hasMinors && p.minors.length > 0) patch.minor_cannabinoids_json = p.minors;
+    if (Object.keys(patch).length > 0) potencyPatches.push({ id: lot.id, patch });
+  }
+  return { dateGroups, potencyPatches, matched };
+}
+
 function lotNote(opts: { receivedOn: string | null; coaPresent: boolean; merged: number }): string {
   const parts: string[] = ["Cultivera migration (one-time POS import)."];
   parts.push(opts.receivedOn ? `Received ${opts.receivedOn}.` : "Received date missing in POS export.");
@@ -443,6 +568,7 @@ export function planImportLots(sources: readonly ImportLotSource[]): ImportLotPl
       vendorLabel: first.vendor.trim() || null,
       brandLabel: first.brand.trim() || null,
       notes: lotNote({ receivedOn, coaPresent, merged: rows.length }),
+      potency: potencyForRows(rows),
     });
   }
 
@@ -789,4 +915,26 @@ export function __runImportLotCoreTests(): void {
   }
 
   console.log(`import-lot-core: ${passed} assertions passed`);
+}
+
+/** R15a self-tests (minimal, per owner). */
+export function __runImportLotFactFillTests(): { passed: number } {
+  let passed = 0;
+  const ok = (c: boolean, m: string) => {
+    if (!c) throw new Error(`import-lot-core fact-fill self-test failed: ${m}`);
+    passed += 1;
+  };
+  ok(receivedOnForDb("2013-01-01", "2026-06-01") === null && receivedOnForDb("2026-05-01", "2026-06-01") === "2026-05-01", "received date window");
+  const potency: LotPotency = { unit: "%", thc: 22, thca: null, cbd: null, cbda: null, minors: [] };
+  const planned = [{ ccrsExternalId: "A", receivedOn: "2026-05-01", potency }, { ccrsExternalId: "B", receivedOn: "2026-05-01", potency }] as unknown as PlannedImportLot[];
+  const plan = planLotFactFill(
+    planned,
+    [
+      { id: "1", ccrs_inventory_external_id: "A", received_on: null, pos_thc: null },
+      { id: "2", ccrs_inventory_external_id: "B", received_on: "2026-04-01", pos_thc: 19 },
+    ],
+    { pacificToday: "2026-06-01", nowIso: "2026-06-01T00:00:00Z", potencyColumnsPresent: true },
+  );
+  ok(plan.dateGroups.get("2026-05-01")?.join() === "1" && plan.potencyPatches.length === 1 && plan.potencyPatches[0].id === "1", "fill-only: owner/previous values never overwritten");
+  return { passed };
 }

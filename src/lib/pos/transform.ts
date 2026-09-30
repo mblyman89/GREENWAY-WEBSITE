@@ -1236,6 +1236,12 @@ function collectLotSources(groups: ProductGroup[]): ImportLotSource[] {
           isSample: toBool(row["Is Sample"]),
           unitWeight: variant.package.quantity,
           unitWeightUom: variant.package.unit,
+          // R15a: per-row potency so each lot keeps ITS batch numbers.
+          totalRaw: toNumber(row.Total),
+          thcRaw: toNumber(row.Thc),
+          thcaRaw: toNumber(row.Thca),
+          cbdRaw: toNumber(row.Cbd),
+          cbdaRaw: toNumber(row.Cbda),
         });
       }
     }
