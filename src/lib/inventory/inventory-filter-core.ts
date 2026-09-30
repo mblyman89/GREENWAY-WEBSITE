@@ -40,6 +40,7 @@
  * PURE: no I/O, no React, no server-only. Self-tests registered in the pure
  * runner.
  */
+import { lotThcValue, lotCbdValue } from "@/lib/pos/lot-potency-core";
 import {
   lotTypeLabel,
   lotStrainTypeLabel,
@@ -93,6 +94,10 @@ export type FilterableLot = LotTableFields & {
     lab_name: string | null;
     passed: boolean | null;
   } | null;
+  /** R15a: POS-export potency (0241) + name-verified minors (0138). Optional. */
+  pos_thc?: number | null;
+  pos_cbd?: number | null;
+  minor_cannabinoids_json?: unknown;
 };
 
 /* ── Facets ──────────────────────────────────────────────────────────────── */
@@ -448,8 +453,9 @@ export function lotMatchesFilters(lot: FilterableLot, state: InventoryFilterStat
   if (state.hasStrainType && !matchesPresence(lot.strain_type, state.hasStrainType)) return false;
   if (state.labPassed && !matchesTriState(lot.lab?.passed ?? null, state.labPassed)) return false;
 
-  if (!inNumericRange(lot.lab?.total_thc_pct ?? null, state.thcMin, state.thcMax)) return false;
-  if (!inNumericRange(lot.lab?.total_cbd_pct ?? null, state.cbdMin, state.cbdMax)) return false;
+  // R15a: COA figure first, else the POS export's (lotThcValue/lotCbdValue).
+  if (!inNumericRange(lotThcValue(lot), state.thcMin, state.thcMax)) return false;
+  if (!inNumericRange(lotCbdValue(lot), state.cbdMin, state.cbdMax)) return false;
   if (!inNumericRange(lot.on_hand_qty, state.qtyMin, state.qtyMax)) return false;
   if (!inNumericRange(soldQty(lot), state.soldMin, state.soldMax)) return false;
   if (!inNumericRange(lot.unit_cost_minor_units, state.costMin, state.costMax)) return false;

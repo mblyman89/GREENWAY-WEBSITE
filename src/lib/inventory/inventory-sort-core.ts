@@ -40,6 +40,7 @@
  * PURE: no I/O, no React. Self-tests registered in the pure runner.
  */
 import { intakePotencyUnit } from "@/lib/pos/intake-potency-core";
+import { lotThcValue, lotCbdValue, lotMinorValue } from "@/lib/pos/lot-potency-core";
 import { lotTypeLabel, lotStrainTypeLabel } from "@/lib/inventory/lot-table-core";
 import type { FilterableLot } from "@/lib/inventory/inventory-filter-core";
 
@@ -115,8 +116,11 @@ export const INVENTORY_COLUMN_SORTS: ColumnSortDef[] = [
     // which is how the owner finds what still needs paperwork.
     number: (l) => (l.lab ? 1 : 0),
   },
-  { key: "thc", label: "THC", kind: "potency", firstClick: "desc", number: (l) => l.lab?.total_thc_pct ?? null },
-  { key: "cbd", label: "CBD", kind: "potency", firstClick: "desc", number: (l) => l.lab?.total_cbd_pct ?? null },
+  // R15a: COA figure first, else the Cultivera export's (lot-potency-core).
+  { key: "thc", label: "THC", kind: "potency", firstClick: "desc", number: (l) => lotThcValue(l) },
+  { key: "cbd", label: "CBD", kind: "potency", firstClick: "desc", number: (l) => lotCbdValue(l) },
+  { key: "cbn", label: "CBN", kind: "number", firstClick: "desc", number: (l) => lotMinorValue(l, "cbn") },
+  { key: "cbc", label: "CBC", kind: "number", firstClick: "desc", number: (l) => lotMinorValue(l, "cbc") },
   { key: "received", label: "Received", kind: "date", firstClick: "desc", date: (l) => l.received_on },
   { key: "onhand", label: "On hand", kind: "number", firstClick: "desc", number: (l) => l.on_hand_qty },
   { key: "sold", label: "Sold", kind: "number", firstClick: "desc", number: (l) => soldQty(l) },

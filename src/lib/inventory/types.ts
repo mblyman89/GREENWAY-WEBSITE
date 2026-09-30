@@ -181,6 +181,14 @@ export type InventoryLot = {
    */
   identity_key?: string | null;
   kb_product_id?: string | null;
+  /** R15a (migration 0241): potency stated by the Cultivera POS export. NOT a COA. */
+  pos_thc?: number | null;
+  pos_thca?: number | null;
+  pos_cbd?: number | null;
+  pos_cbda?: number | null;
+  pos_potency_unit?: string | null;
+  /** 0138: [{type:"cbn",value:"100",unit:"mg"}] — name-verified minors. */
+  minor_cannabinoids_json?: unknown;
   status: string; // active | quarantine | recalled | sold_out | destroyed
   notes: string | null;
   created_by: string | null;

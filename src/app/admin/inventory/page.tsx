@@ -32,6 +32,7 @@ import { InventoryFilterPanel } from "@/components/admin/inventory/InventoryFilt
 import { SortableHeader } from "@/components/admin/inventory/SortableHeader";
 import { paramsFrom, clearAllFiltersHref, type RawParams } from "@/lib/inventory/inventory-url-core";
 import { lotReceivedDate, lotTypeLabel, lotSizeLabel, lotSoldQty, lotStrainLabel, lotStrainTypeLabel, lotPotencyLabel } from "@/lib/inventory/lot-table-core";
+import { lotThcValue, lotCbdValue, lotMinorValue, lotPotencySource } from "@/lib/pos/lot-potency-core";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
 import { ListPager } from "@/components/admin/ux/ListPager";
 import { inventoryGapInsights } from "@/lib/insight/inventory";
@@ -644,6 +645,10 @@ export default async function InventoryPage({
                   <SortableHeader columnKey="size" label="Size" raw={sp as RawParams} />
                   <SortableHeader columnKey="coa" label="COA" raw={sp as RawParams} align="center" />
                   <SortableHeader columnKey="thc" label="THC" raw={sp as RawParams} align="right" />
+                  {/* R15a: CBD / CBN / CBC beside THC. COA first, else the Cultivera export. */}
+                  <SortableHeader columnKey="cbd" label="CBD" raw={sp as RawParams} align="right" />
+                  <SortableHeader columnKey="cbn" label="CBN" raw={sp as RawParams} align="right" />
+                  <SortableHeader columnKey="cbc" label="CBC" raw={sp as RawParams} align="right" />
                   <SortableHeader columnKey="received" label="Received" raw={sp as RawParams} />
                   <SortableHeader columnKey="onhand" label="On hand" raw={sp as RawParams} align="right" />
                   <SortableHeader columnKey="sold" label="Sold" raw={sp as RawParams} align="right" />
@@ -688,7 +693,17 @@ export default async function InventoryPage({
                       </td>
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
                         {/* SLICE 61: mg-dosed types (edibles/drinks/topicals/tinctures) show mg, not "%". */}
-                        {lotPotencyLabel(l.lab?.total_thc_pct, l)}
+                        {/* R15a: COA figure when on file, else the Cultivera export's (0241). */}
+                        <span title={lotPotencySource(l) === "pos" ? "From the Cultivera export (not a COA)" : lotPotencySource(l) === "coa" ? "From the COA" : undefined}>
+                          {lotPotencyLabel(lotThcValue(l), l)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{lotPotencyLabel(lotCbdValue(l), l)}</td>
+                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
+                        {lotMinorValue(l, "cbn") == null ? "\u2014" : `${lotMinorValue(l, "cbn")} mg`}
+                      </td>
+                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
+                        {lotMinorValue(l, "cbc") == null ? "\u2014" : `${lotMinorValue(l, "cbc")} mg`}
                       </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotReceivedDate(l)}</td>
                       <td className="px-4 py-3 text-right font-medium text-[var(--admin-text)]">

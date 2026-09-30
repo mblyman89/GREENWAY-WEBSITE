@@ -445,6 +445,43 @@ export function parseTypeCheckRefile(
   return { ok: true, websiteCategory, houseType: label };
 }
 
+// ─── R15b: bulk re-file (smart + manual) ────────────────────────────────
+
+/** Rows from buildTypeCheckReport are capped per group for display; the bulk
+ * press rebuilds the report with this limit so EVERY product of the group is
+ * covered (server-side, never from a hidden field). */
+export const TYPE_CHECK_BULK_ROW_LIMIT = 100_000;
+
+export type BulkRefileTarget = { sourceItemId: string; name: string; websiteCategory: string; houseType: string | null };
+
+/**
+ * The products one bulk press re-files.
+ *   mode "suggested": each row with its OWN name+type-backed suggestion
+ *     (category_suspect rows; rows without a suggestion are left for a human);
+ *   mode "manual": every row of the group gets the ONE category/type the owner
+ *     picked (already validated by parseTypeCheckRefile).
+ * An unknown group key returns [] (the check changed since the page loaded).
+ */
+export function bulkRefileTargets(
+  report: Pick<TypeCheckReport, "groups">,
+  key: string,
+  mode: "suggested" | "manual",
+  manual?: { websiteCategory: string; houseType: string | null },
+): BulkRefileTarget[] {
+  const g = report.groups.find((x) => x.key === key);
+  if (!g) return [];
+  if (mode === "manual") {
+    if (!manual) return [];
+    return g.rows.map((r) => ({ sourceItemId: r.sourceItemId, name: r.name, websiteCategory: manual.websiteCategory, houseType: manual.houseType }));
+  }
+  if (g.verdict !== "category_suspect") return [];
+  return g.rows
+    .filter((r) => r.suggestion)
+    .map((r) => ({ sourceItemId: r.sourceItemId, name: r.name, websiteCategory: r.suggestion!.websiteCategory, houseType: r.suggestion!.houseType }));
+}
+
+export const TYPE_CHECK_BULK_REFILE_AUDIT = "menu_import.type_check_bulk_refiled";
+
 // ─── self-tests ───────────────────────────────────────────────────────────
 
 export function __runCultiveraTypeFromCategoryCoreTests(): { passed: number; failed: number } {
@@ -570,5 +607,14 @@ export function __runCultiveraTypeFromCategoryCoreTests(): { passed: number; fai
   ok(r4.ok && r4.houseType === "My Custom", "refile: custom registry type (no catalog entry) allowed");
   ok(typeCheckReturnHref("i 1", "Re-filed 1") === "/admin/menu-imports/i%201?refiled=Re-filed%201#type-check", "return href");
   ok(typeCheckReturnHref("i", "bad", true) === "/admin/menu-imports/i?error=bad#type-check", "error return href");
+  // R15b bulk re-file.
+  const full = buildTypeCheckReport([
+    { sourceItemId: "p1", name: "Blue Dream Pre-roll 1g", category: "Panda Candies", inventoryType: CCRS_UM },
+    { sourceItemId: "p2", name: "Gelato Pre-roll 1g", category: "Panda Candies", inventoryType: CCRS_UM },
+  ], TYPE_CHECK_BULK_ROW_LIMIT);
+  const suspectKey = full.groups.find((g) => g.verdict === "category_suspect")?.key ?? "";
+  ok(bulkRefileTargets(full, suspectKey, "suggested").length === 2, "bulk suggested covers every row past the display cap");
+  ok(bulkRefileTargets(full, suspectKey, "manual", { websiteCategory: "preroll", houseType: null }).every((t) => t.websiteCategory === "preroll"), "bulk manual applies the one pick");
+  ok(bulkRefileTargets(full, "nope", "suggested").length === 0, "stale group key → nothing");
   return { passed, failed };
 }

@@ -591,6 +591,25 @@ export default async function LotDetailPage({
                 LabtestexternalIdentifier — link or import the lab result before selling.
               </div>
             )}
+            {/* R15a: the Cultivera export's own potency figures (migration 0241),
+                labelled as NOT a COA. The COA above always outranks these. */}
+            {(lot.pos_thc != null || lot.pos_cbd != null || lot.pos_thca != null || lot.pos_cbda != null ||
+              (Array.isArray(lot.minor_cannabinoids_json) && lot.minor_cannabinoids_json.length > 0)) && (
+              <div className="mt-4 border-t border-[var(--admin-border)] pt-3" data-testid="lot-pos-potency">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                  From the Cultivera export (not a COA)
+                </h3>
+                <dl className="space-y-2 text-sm">
+                  <Row label="THC" value={lotPotencyLabel(lot.pos_thc ?? null, lot)} />
+                  <Row label="THCA" value={lotPotencyLabel(lot.pos_thca ?? null, lot)} />
+                  <Row label="CBD" value={lotPotencyLabel(lot.pos_cbd ?? null, lot)} />
+                  <Row label="CBDA" value={lotPotencyLabel(lot.pos_cbda ?? null, lot)} />
+                  {(Array.isArray(lot.minor_cannabinoids_json) ? (lot.minor_cannabinoids_json as { type?: string; value?: string; unit?: string }[]) : []).map((m, i) => (
+                    <Row key={`${m.type}-${i}`} label={String(m.type ?? "").toUpperCase()} value={`${m.value ?? "—"} ${m.unit ?? ""}`.trim()} />
+                  ))}
+                </dl>
+              </div>
+            )}
           </div>
         </div>
 

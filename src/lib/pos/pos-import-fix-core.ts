@@ -29,7 +29,7 @@
  *                        The product page 404s unless the card is in the
  *                        PUBLISHED version, so it is only linked when this
  *                        import's version is the published one.
- *   strain type          /admin/knowledge-base/library — the live menu overlays
+ *   strain type          /admin/menu-imports/[id]/strains (R15b KB fixer) + the library — the live menu overlays
  *                        strain type from the KB by strain NAME
  *                        (strain-terpenes-server.ts buildMenuIndexes).
  *   cycle counts         /admin/inventory/audits/new?fromImport=<id> (R14b) —
@@ -137,6 +137,16 @@ export function missingProductsHref(importId: string): string {
   return `/admin/menu-imports/${enc(importId)}/missing-products`;
 }
 
+/** R15b: the KB strain-type fixer for one import. */
+export function strainsHref(importId: string): string {
+  return `/admin/menu-imports/${enc(importId)}/strains`;
+}
+
+/** R15b: the CCRS adjust-out of legacy no-product-master lots. */
+export function legacyRemovalHref(importId: string): string {
+  return `${missingProductsHref(importId)}#remove-legacy`;
+}
+
 export function importHref(importId: string, anchor?: string): string {
   return `/admin/menu-imports/${enc(importId)}${anchor ? `#${anchor}` : ""}`;
 }
@@ -223,8 +233,11 @@ export function posImportFixFor(code: string, ctx: PosFixContext): PosImportFix 
     case "inventory_without_product_master":
       return {
         what: "In your inventory file but missing from your products file, so the card is hidden.",
-        how: "Work the list by brand and send the rep sheet to Cultivera; or show a product anyway from its product page.",
-        links: [{ href: missingProductsHref(ctx.importId), label: "Work the missing products" }],
+        how: "Work the list by brand and send the rep sheet to Cultivera; or show a product anyway from its product page. If they are legacy records with no real stock, adjust them out of CCRS (Reconciliation) in one confirmed press.",
+        links: [
+          { href: missingProductsHref(ctx.importId), label: "Work the missing products" },
+          ...(ctx.lotsCreated ? [{ href: legacyRemovalHref(ctx.importId), label: "Adjust legacy lots out of CCRS" }] : []),
+        ],
       };
     case "product_without_inventory":
       return {
@@ -243,8 +256,11 @@ export function posImportFixFor(code: string, ctx: PosFixContext): PosImportFix 
     case "unknown_strain_type":
       return {
         what: "Cultivera's strain type was blank or unrecognised, so the card shows no indica/sativa/hybrid.",
-        how: "Set the strain's type once in the Strain library — the live menu uses it for every card with that strain name.",
-        links: [{ href: STRAIN_LIBRARY_HREF, label: "Open the Strain library" }],
+        how: "Match each strain name to the Knowledge Base: exact matches apply in one press, close ones wait for your confirm, and anything new you can type and save to the Strain library so the next import matches on its own.",
+        links: [
+          { href: strainsHref(ctx.importId), label: "Fix strain types from the Knowledge Base" },
+          { href: STRAIN_LIBRARY_HREF, label: "Open the Strain library" },
+        ],
       };
     case "new_unmapped_category":
     case "unmapped_category_fallback":
@@ -429,7 +445,8 @@ export function __runPosImportFixCoreTests(): { passed: number; failed: number }
   ok(posImportFixFor("invalid_price", live)?.links[0].href === "/admin/menu-imports", "error → re-upload");
   ok(posImportFixFor("inventory_without_product_master", staged)?.links[0].href === `/admin/menu-imports/${ID}/missing-products`, "missing masters");
   ok(posImportFixFor("product_without_inventory", staged)?.links[0].href === `/admin/menu-imports/${ID}#hidden-items`, "no inventory → hidden anchor");
-  ok(posImportFixFor("unknown_strain_type", staged)?.links[0].href === "/admin/knowledge-base/library", "strain → library");
+  ok(posImportFixFor("unknown_strain_type", staged)?.links[0].href === `/admin/menu-imports/${ID}/strains`, "strain → KB fixer");
+  ok(posImportFixFor("inventory_without_product_master", live)?.links.some((l) => l.href.endsWith("#remove-legacy")) === true && posImportFixFor("inventory_without_product_master", staged)?.links.length === 1, "legacy adjust-out only once lots exist");
   ok(posImportFixFor("new_unmapped_category", staged)?.links[0].href === "/admin/settings/types?tab=inventory", "category → types");
   ok(posImportFixFor("unmapped_category_fallback", staged)?.how.includes("code change") === false, "category copy: no dead end");
   ok(posImportFixFor("unmapped_category_fallback", staged)?.how.includes("suggested website category") === true, "category copy names the suggestion");
