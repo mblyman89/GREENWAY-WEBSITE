@@ -49,6 +49,57 @@ export function cleanTerpenes(list: readonly string[] | null | undefined): strin
 export type TerpeneIndex = Map<string, string[]>;
 
 /**
+ * R16a — the glue-insensitive fallback key ("GG #4" == "GG4" == "gg-4").
+ *
+ * The strain matcher (ai/kb/strain-matcher.ts matchStrainToKb, step 2) already
+ * calls an alnum-equal name an EXACT/ALIAS match (score 0.99), and the
+ * Cultivera strain fixer bulk-applies types on that basis. The menu overlay
+ * only looked up the whitespace-normalized key, so those same cards got the
+ * type from the fixer but never their terpene profile. Fallback keys live in
+ * the SAME map under a NUL prefix (a character no strain name contains), are
+ * added only when ONE strain owns that alnum key (58 keys in the curated set
+ * are shared by two strains and are skipped — never guess), and are consulted
+ * only after the exact key misses. Keys shorter than 3 characters are never
+ * indexed ("og" alone is too thin to be a fingerprint).
+ */
+export function alnumFallbackKey(raw: string | null | undefined): string {
+  const a = (raw ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return a.length >= 3 ? "\u0000" + a : "";
+}
+
+/**
+ * Add fallback keys for many strains at once: each strain contributes the
+ * alnum key of every label it has, and a key claimed by two different strains
+ * is dropped. `existing` keys are never overwritten.
+ */
+export function addUniqueAlnumKeys<V>(
+  index: Map<string, V>,
+  entries: ReadonlyArray<{ id: string; labels: ReadonlyArray<string | null | undefined>; value: V }>,
+): void {
+  const owner = new Map<string, { id: string; value: V } | null>();
+  for (const e of entries) {
+    for (const l of e.labels) {
+      const k = alnumFallbackKey(l);
+      if (!k) continue;
+      const prev = owner.get(k);
+      if (prev === undefined) owner.set(k, { id: e.id, value: e.value });
+      else if (prev && prev.id !== e.id) owner.set(k, null);
+    }
+  }
+  for (const [k, v] of owner) if (v && !index.has(k)) index.set(k, v.value);
+}
+
+/** Exact key first, then the unique glue-insensitive fallback. */
+function lookupStrain<V>(index: Map<string, V>, strainName: string | null | undefined): V | undefined {
+  const key = normalizeStrainKey(strainName);
+  if (!key) return undefined;
+  const hit = index.get(key);
+  if (hit !== undefined) return hit;
+  const fk = alnumFallbackKey(strainName);
+  return fk ? index.get(fk) : undefined;
+}
+
+/**
  * Build a normalized (name + alias) -> terpenes[] index from the curated static
  * strain dataset. Pure + dependency-light so it is unit-testable and safe on
  * the preview menu with no DB.
@@ -66,14 +117,20 @@ export function buildStaticTerpeneIndex(): TerpeneIndex {
       if (!index.has(nk)) index.set(nk, terps);
     }
   }
+  addUniqueAlnumKeys(
+    index,
+    STRAINS_RICH.filter((s) => cleanTerpenes(s.terpenes).length > 0).map((s) => ({
+      id: s.slug,
+      labels: [s.name, s.slug, ...(s.aliases ?? [])],
+      value: cleanTerpenes(s.terpenes),
+    })),
+  );
   return index;
 }
 
 /** Look up terpenes for a strain name using a prebuilt index. */
 export function terpenesForStrain(index: TerpeneIndex, strainName: string | null | undefined): string[] {
-  const key = normalizeStrainKey(strainName);
-  if (!key) return [];
-  return index.get(key) ?? [];
+  return lookupStrain(index, strainName) ?? [];
 }
 
 /**
@@ -127,6 +184,13 @@ export function buildStaticStrainTypeIndex(): StrainTypeIndex {
       if (!index.has(nk)) index.set(nk, canon);
     }
   }
+  addUniqueAlnumKeys(
+    index,
+    STRAINS_RICH.flatMap((s) => {
+      const canon = canonicalStrainType(s.strain_type);
+      return canon === "unknown" ? [] : [{ id: s.slug, labels: [s.name, s.slug, ...(s.aliases ?? [])], value: canon }];
+    }),
+  );
   return index;
 }
 
@@ -135,9 +199,7 @@ export function strainTypeForStrain(
   index: StrainTypeIndex,
   strainName: string | null | undefined,
 ): GreenwayStrainType | null {
-  const key = normalizeStrainKey(strainName);
-  if (!key) return null;
-  return index.get(key) ?? null;
+  return lookupStrain(index, strainName) ?? null;
 }
 
 /**
@@ -242,6 +304,19 @@ export function __runStrainTerpeneTests(): { passed: number; failed: number } {
   const keepItems = [{ strainName: "Keep Me", strainType: "sativa" }] as unknown as GreenwayMenuItem[];
   const kept = attachStrainProfile(keepItems, index, unknownIndex);
   expect("never downgrade to unknown", kept[0].strainType === "sativa");
+
+  // R16a: glue-insensitive fallback + ambiguity refusal.
+  const fb: TerpeneIndex = new Map([[normalizeStrainKey("GG4"), ["caryophyllene"]]]);
+  addUniqueAlnumKeys(fb, [
+    { id: "gg4", labels: ["GG4"], value: ["caryophyllene"] },
+    { id: "a", labels: ["Zed Kush"], value: ["myrcene"] },
+    { id: "b", labels: ["Zed-Kush"], value: ["limonene"] },
+  ]);
+  expect("alnum fallback: 'GG #4' finds GG4", terpenesForStrain(fb, "GG #4")[0] === "caryophyllene");
+  expect("alnum fallback: a key two strains share is refused", terpenesForStrain(fb, "zedkush").length === 0);
+  expect("alnum fallback: exact key still wins", terpenesForStrain(fb, "gg4")[0] === "caryophyllene");
+  expect("alnum fallback: < 3 chars never indexed", alnumFallbackKey("o g") === "");
+  expect("alnum fallback key never collides with a normalized key", alnumFallbackKey("abc").startsWith("\u0000"));
 
   console.log(`strain-terpenes self-tests: ${passed} passed, ${failed} failed`);
   if (failed > 0 && typeof process !== "undefined") process.exitCode = 1;

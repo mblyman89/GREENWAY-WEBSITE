@@ -17,6 +17,7 @@ import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   parseStrainFixChoice,
+  nameHintBulkGroups,
   strainFixHref,
   STRAIN_FIX_AUDIT,
 } from "@/lib/pos/cultivera-strain-fix-core";
@@ -36,6 +37,12 @@ import {
   TYPE_CHECK_BULK_ROW_LIMIT,
 } from "@/lib/pos/cultivera-type-from-category-core";
 import { getVersionItems } from "@/lib/pos/menu-version";
+import {
+  planBulkReceivedDates,
+  receivedDatesHref,
+  RECEIVED_DATE_BULK_AUDIT,
+} from "@/lib/inventory/received-date-bulk-core";
+import { loadUndatedImportLots, setImportLotsReceivedDate } from "@/lib/inventory/received-date-bulk-store";
 import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
 import { getOverridesForKeys } from "@/lib/pos/product-classification-overrides";
 import { isValidWebsiteCategory } from "@/lib/menu/menu-category-override-core";
@@ -53,6 +60,65 @@ function revalidateStrainSurfaces(importId: string) {
   // Same tag as the KB strain-type index (strain-terpenes-server.ts), so a KB
   // write reaches the live cards on the next request.
   revalidatePublicMenuSurfaces();
+}
+
+// ── received dates (R16b) ───────────────────────────────────────────────────
+
+/**
+ * One vendor group's form: the ticked lots get the group date (or their own
+ * per-lot date), owner-entered and attested. The eligible set is re-read
+ * server-side; a lot dated meanwhile is skipped, never overwritten.
+ */
+export async function setImportReceivedDatesAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  const importId = idFrom(formData);
+  let msg: string;
+  try {
+    const selected = formData.getAll("lot").map((v) => String(v));
+    const perLot: Record<string, string> = {};
+    for (const id of selected) perLot[id] = String(formData.get(`date_${id}`) ?? "");
+    const { lots, manifestFound } = await loadUndatedImportLots(importId);
+    if (!manifestFound) redirect(receivedDatesHref(importId, "This import's lots were not found.", true));
+    const plan = planBulkReceivedDates(
+      { selected, groupDate: String(formData.get("groupDate") ?? ""), perLot, attest: String(formData.get("attest") ?? "") },
+      new Set(lots.map((l) => l.id)),
+    );
+    if (!plan.ok) redirect(receivedDatesHref(importId, plan.error, true));
+    const byId = new Map(lots.map((l) => [l.id, l]));
+    const written: { receivedOn: string; ids: string[] }[] = [];
+    for (const d of plan.byDate) {
+      const ids = await setImportLotsReceivedDate(importId, d.lotIds, d.receivedOn, session.userId);
+      written.push({ receivedOn: d.receivedOn, ids });
+    }
+    const total = written.reduce((n, w) => n + w.ids.length, 0);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: RECEIVED_DATE_BULK_AUDIT,
+      entityType: "pos_import",
+      entityId: importId,
+      before: { received_on: null },
+      after: {
+        received_on_source: "owner_entered",
+        vendor: String(formData.get("vendorName") ?? "") || null,
+        lots: total,
+        byDate: written.map((w) => ({
+          received_on: w.receivedOn,
+          count: w.ids.length,
+          lots: w.ids.slice(0, 50).map((id) => [id, byId.get(id)?.lotCode ?? null, byId.get(id)?.productName ?? null]),
+        })),
+      },
+    });
+    const skipped = plan.lots - total;
+    msg = `Saved the received date on ${total} lot(s).` + (skipped > 0 ? ` ${skipped} already had a date by the time you saved and were left alone.` : "");
+  } catch (err) {
+    unstable_rethrow(err);
+    redirect(receivedDatesHref(importId, err instanceof Error ? err.message : "Could not save the received dates.", true));
+  }
+  revalidatePath(`/admin/menu-imports/${importId}`);
+  revalidatePath(`/admin/menu-imports/${importId}/received-dates`);
+  revalidatePath("/admin/inventory");
+  redirect(receivedDatesHref(importId, msg));
 }
 
 // ── strain types ──────────────────────────────────────────────────────────
@@ -83,6 +149,49 @@ export async function applyKbExactStrainsAction(formData: FormData): Promise<voi
   } catch (err) {
     unstable_rethrow(err);
     redirect(strainFixHref(importId, err instanceof Error ? err.message : "Could not apply the strain types.", true));
+  }
+  revalidateStrainSurfaces(importId);
+  redirect(strainFixHref(importId, msg));
+}
+
+/**
+ * R16: one press for strains whose PRODUCT NAMES state the type with an
+ * explicit >= 90% code (e.g. "(I)", "Indica") and no KB candidate contradicts
+ * it. Writes only the cards whose own name carries the code (nameHintIds),
+ * only where the type is still unknown, provenance "name". Menu cards/lots
+ * only; the Knowledge Base is never written from a name code.
+ */
+export async function applyNameHintStrainsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  const importId = idFrom(formData);
+  let msg: string;
+  try {
+    const { plan } = await loadStrainFixPlan(importId);
+    const hinted = nameHintBulkGroups(plan).filter((g) => g.nameHintIds.length > 0);
+    if (hinted.length === 0) redirect(strainFixHref(importId, "No product-name type codes are left to apply.", true));
+    const r = await applyStrainTypeToCards(
+      importId,
+      hinted.map((g) => ({ sourceItemIds: g.nameHintIds, type: g.nameHint!.value, provenance: "name" as const })),
+      session.userId,
+    );
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: STRAIN_FIX_AUDIT,
+      entityType: "pos_import",
+      entityId: importId,
+      after: {
+        mode: "name_hint_bulk",
+        strains: hinted.length,
+        cards: r.cards,
+        lots: r.lots,
+        sample: hinted.slice(0, 20).map((g) => [g.strainName, g.nameHint!.value, g.nameHint!.evidence, g.nameHintIds.length]),
+      },
+    });
+    msg = `Applied the type stated in the product names for ${hinted.length} strain(s): ${r.cards} card(s) and ${r.lots} lot(s) updated. Cards without a code in their own name were left for the per-strain pick.`;
+  } catch (err) {
+    unstable_rethrow(err);
+    redirect(strainFixHref(importId, err instanceof Error ? err.message : "Could not apply the name-code types.", true));
   }
   revalidateStrainSurfaces(importId);
   redirect(strainFixHref(importId, msg));

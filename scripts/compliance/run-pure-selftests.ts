@@ -815,6 +815,8 @@ import { __runCardIdentityCoreTests } from "../../src/lib/menu/card-identity-cor
 import { __runReprocessCoreTests } from "../../src/lib/inventory/reprocess-core";
 import { __runTransformCoreTests } from "../../src/lib/pos/transform";
 import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
+import { __runKbStrainOverlayCoreTests } from "../../src/lib/menu/kb-strain-overlay-core";
+import { __runReceivedDateBulkCoreTests } from "../../src/lib/inventory/received-date-bulk-core";
 import { __runStrainTaxonomyTests } from "../../src/lib/menu/strain-taxonomy";
 import { __runPosCorsCoreTests } from "../../src/lib/pos/cors-core";
 import { __runPosApiBaseCoreTests } from "../../src/lib/pos/api-base-core";
@@ -1499,6 +1501,8 @@ __runLiquidVolumeTests();
   __runReprocessCoreTests();
   __runTransformCoreTests();
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
+  assertNoFailures("kb-strain-overlay-core", __runKbStrainOverlayCoreTests());
+  assertNoFailures("received-date-bulk-core", __runReceivedDateBulkCoreTests());
   assertNoFailures("strain-taxonomy", __runStrainTaxonomyTests());
   assertNoFailures("pos/cors-core", __runPosCorsCoreTests());
   assertNoFailures("pos/api-base-core", __runPosApiBaseCoreTests());

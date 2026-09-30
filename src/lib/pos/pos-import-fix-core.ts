@@ -173,6 +173,11 @@ export function productSearchHref(q: string): string {
   return `/admin/products?q=${enc(q.trim())}`;
 }
 
+/** R16b: this import's undated lots, one form per vendor (received-dates page). */
+export function importReceivedDatesHref(importId: string): string {
+  return `/admin/menu-imports/${enc(importId)}/received-dates`;
+}
+
 /**
  * R14b: a new count preloaded with every open lot of the products this
  * import's mixed-size diagnostic flagged (audits/new reads the keys from the
@@ -293,8 +298,17 @@ export function posImportFixFor(code: string, ctx: PosFixContext): PosImportFix 
       };
     }
     case "import_lot_received_date_missing": {
-      const l = lotLinks(ctx, [{ href: NEEDS_RECEIVED_DATE_HREF, label: "Set received dates" }]);
-      return { what: "No received date in the export, so the lot ages from the import day.", how: `Open each lot and save its received date.${l.note}`, links: l.links };
+      // R16b: one page for this import's undated lots (per-vendor date, attested),
+      // plus the store-wide list for lots from other sources.
+      const l = lotLinks(ctx, [
+        { href: importReceivedDatesHref(ctx.importId), label: "Set received dates for this import" },
+        { href: NEEDS_RECEIVED_DATE_HREF, label: "All undated lots" },
+      ]);
+      return {
+        what: "No received date in the export, so the lot ages from the import day — and CCRS would report the import day as its CreatedDate.",
+        how: `Enter each vendor's delivery date from the paper manifest or invoice; one save dates every ticked lot.${l.note}`,
+        links: l.links,
+      };
     }
     case "import_lot_barcode_conflict":
     case "import_lot_barcode_merged":
@@ -468,7 +482,9 @@ export function __runPosImportFixCoreTests(): { passed: number; failed: number }
   ok(MISSING_EXPIRY_BULK_HREF === "/admin/inventory?status=active&missingExpiry=1&bulk=1&bulkField=expires_on", "expiry bulk literal");
   ok(posImportFixFor("import_lots_coa_missing_summary", live)?.links[0].href === "/admin/inventory?status=active&coa=no", "coa list");
   ok(posImportFixFor("import_lot_coa_missing", live)?.how.includes("no attach button exists yet") === true, "coa honesty");
-  ok(posImportFixFor("import_lot_received_date_missing", live)?.links[0].href === "/admin/inventory?needsReceivedDate=1", "received date");
+  ok(posImportFixFor("import_lot_received_date_missing", live)?.links[0].href === importReceivedDatesHref(live.importId), "received date: this import's page");
+  ok(posImportFixFor("import_lot_received_date_missing", live)?.links[1].href === "/admin/inventory?needsReceivedDate=1", "received date: store-wide list");
+  ok(importReceivedDatesHref("a b") === "/admin/menu-imports/a%20b/received-dates", "received-dates href encodes");
   ok(posImportFixFor("flower_same_size_different_price", live)?.links[0].href === "/admin/inventory?status=active", "flower lots");
   for (const c of ["import_lot_barcode_conflict", "import_lot_barcode_merged", "import_lot_missing_barcode"]) {
     ok(posImportFixFor(c, live)?.links[0].label === "Open the lots", `${c}: lots`);

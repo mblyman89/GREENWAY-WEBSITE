@@ -44,6 +44,7 @@ import {
   IMPORT_PAGE_ANCHORS,
   MISSING_COA_HREF,
   MISSING_EXPIRY_BULK_HREF,
+  importReceivedDatesHref,
   typeFocusHref,
   lotSearchHref,
   productSearchHref,
@@ -193,6 +194,7 @@ export default async function ImportReviewPage({
       unitsTotal?: number;
       coaMissing?: number;
       expirationMissing?: number;
+      receivedDateMissing?: number;
     };
   }).lotPlan ?? null;
 
@@ -525,6 +527,15 @@ export default async function ImportReviewPage({
                 {typeCheck.agree} agree · {typeCheck.flagged} to look at
                 {typeCheck.noCategory > 0 ? ` · ${typeCheck.noCategory} with no category` : ""}
               </span>
+              {typeCheck.flagged > 0 && (
+                <a
+                  href={`/admin/menu-imports/${imp.id}/type-check/export`}
+                  className="rounded-full border border-white/15 px-3 py-1 text-xs text-white/80 hover:border-[var(--admin-accent)] hover:text-white"
+                  data-testid="type-check-rep-sheet"
+                >
+                  Download the sheet for your Cultivera rep (CSV)
+                </a>
+              )}
             </div>
             <p className="mt-1 text-xs text-white/45">
               Cultivera&apos;s <strong>Category</strong> is our type; its <strong>Inventory Type</strong> is the
@@ -639,6 +650,11 @@ export default async function ImportReviewPage({
                 {(lotPlan.expirationMissing ?? 0) > 0 && (
                   <Button href={MISSING_EXPIRY_BULK_HREF} variant="primary" size="sm" data-testid="lot-plan-expiry-fix">
                     Set expiry dates with Bulk fill →
+                  </Button>
+                )}
+                {(lotPlan.receivedDateMissing ?? 0) > 0 && (
+                  <Button href={importReceivedDatesHref(imp.id)} variant="primary" size="sm" data-testid="lot-plan-received-date-fix">
+                    Set received dates ({lotPlan.receivedDateMissing} blank in the export) →
                   </Button>
                 )}
                 {(lotPlan.coaMissing ?? 0) > 0 && (

@@ -13,6 +13,7 @@
 import { unstable_cache } from "next/cache";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { listKbStrains } from "@/lib/ai/kb/store";
+import { planKbOverlay } from "@/lib/menu/kb-strain-overlay-core";
 import {
   MENU_CACHE_TAG,
   MENU_CACHE_TTL_SECONDS,
@@ -22,12 +23,9 @@ import {
   attachTerpenes,
   buildStaticStrainTypeIndex,
   buildStaticTerpeneIndex,
-  cleanTerpenes,
-  normalizeStrainKey,
   type StrainTypeIndex,
   type TerpeneIndex,
 } from "@/lib/menu/strain-terpenes";
-import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
 
 /**
  * Build both effective indexes in a single KB read: the static curated sets as
@@ -48,21 +46,10 @@ export async function buildMenuIndexes(): Promise<{
     // page of it. A strain missing from the index silently loses its terpene
     // profile and strain type on the customer's product card. listKbStrains()
     // now pages, so this bound is a real maximum rather than a silent cap.
-    const rows = await listKbStrains(50_000);
-    for (const r of rows) {
-      if (!r.active) continue;
-      const keys = [r.name, r.slug].map(normalizeStrainKey).filter((k) => k.length > 0);
-
-      const terps = cleanTerpenes(r.terpenes);
-      if (terps.length > 0) {
-        for (const nk of keys) terpeneIndex.set(nk, terps);
-      }
-
-      const canon = canonicalStrainType(r.strain_type);
-      if (canon !== "unknown") {
-        for (const nk of keys) strainTypeIndex.set(nk, canon);
-      }
-    }
+    const rows = (await listKbStrains(50_000)).filter((r) => r.active);
+    const overlay = planKbOverlay(rows);
+    for (const [k, v] of overlay.terpenes) terpeneIndex.set(k, v);
+    for (const [k, v] of overlay.strainTypes) strainTypeIndex.set(k, v);
   } catch {
     // Degrade to the static indexes on any read error.
   }
@@ -130,7 +117,8 @@ const loadMenuIndexEntriesCached = unstable_cache(
       strainTypes: [...strainTypeIndex.entries()],
     };
   },
-  ["menu-strain-indexes", "v1"],
+  // v2 (R16a): the entries now carry alias + glue-insensitive keys.
+  ["menu-strain-indexes", "v2"],
   { revalidate: MENU_CACHE_TTL_SECONDS, tags: [MENU_CACHE_TAG] },
 );
 
