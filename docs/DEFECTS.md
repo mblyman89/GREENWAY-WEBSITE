@@ -4400,3 +4400,57 @@ removed it names exactly the four blockers above.
 `scripts/recon/factory-reset-guards-pg-check.sql` runs the real reset.
 
 **Related:** D-62 (the reset this repairs), D-63.
+
+## D-82 - the factory reset timed out once there was realistic test data
+
+**Found:** after D-81 was fixed, the owner pressed Reset and got
+`Reset failed: canceling statement due to statement timeout`. He asked for a
+reset that "scales, so we are not just barely making it in time to delete
+everything". Reproduced on Postgres 15 with all 239 migrations, 40,000 orders
+and 2.4 million CCRS rows, not inferred.
+
+**Severity:** high. The only way to clear rehearsal data did not work, and it
+could only get worse as data grew.
+
+**What broke.** The button calls `gl_factory_reset()` through PostgREST as
+the signed-in owner. Supabase sets `statement_timeout = 8s` for the
+`authenticated` role. 0209 empties 139 tables with 139 row-by-row `DELETE`
+statements. Every deleted row fires its row triggers. The 0232
+`orders_customer_rollup_ins_del` AFTER DELETE trigger recomputes the
+customer's totals once per deleted order, and CCRS discovery uploads add
+millions of rows. Measured: the 0209 reset was canceled at 8.0 s at
+`delete from public.orders`. The whole transaction rolled back, so nothing
+was lost.
+
+**How it hid:** every test (and the D-81 scenario script) used a few rows.
+Nothing timed the reset against realistic volume or ran it under the 8 s role
+limit the real button runs under.
+
+**Fix:** 0240 keeps every guard (owner, phrase, retention, door, one audit
+row, cursor rewinds, same result shape). It adds a preflight that runs before
+anything is touched: every table exists, it may be truncated, and no kept
+table has a foreign key into a wiped one. Then it locks and counts the same
+139 tables, and runs one `TRUNCATE` (no CASCADE, no RESTART IDENTITY).
+TRUNCATE time does not depend on row count, and it fires no row triggers.
+The function declares `statement_timeout 55s` and `lock_timeout 20s`.
+Measured: 0.39 s under the 8 s limit on the same data. The reset screen now
+detects an un-upgraded database (the preview does not report
+`reset_engine = truncate-0240`). It shows a one-click Copy + Supabase link
+box instead of letting the owner hit the timeout. A timeout or lock error is
+explained in plain words, including that nothing was deleted.
+
+**Gate:** `tests/compliance/d82-factory-reset-scales.test.ts` fails if:
+
+* the 0240 list is not exactly the WIPE set (and the 0209 order);
+* any refusal comes after the lock;
+* CASCADE or RESTART IDENTITY appears;
+* the time limits go missing;
+* a later migration redefines the reset;
+* the Copy-button text differs from the migration by one byte.
+
+It caught 5 of 5 mutations. `scripts/recon/factory-reset-scales-pg-check.sql`
+runs the real reset as `authenticated` under 8 s, and proves the rollback
+brings the timeout back (SQLSTATE 57014).
+
+**Related:** D-62, D-81 (the guards; 0240 no longer fires them, and they still
+refuse outside a reset).

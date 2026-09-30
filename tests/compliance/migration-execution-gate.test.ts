@@ -1283,13 +1283,27 @@ describe("the migration list is ordered the way the database will see it", () =>
     // the join-needs-a-target, separate-has-no-target, decision-word and
     // 2+-candidates checks each refused a bad row; the upsert on identity
     // replaced an answer; the rollback file dropped the table.
-    expect(listed[listed.length - 1]).toMatch(/^0239_/);
+    // D-82 added 0240_factory_reset_scales.sql (gl_factory_reset empties the
+    // 139 WIPE tables with one lock and one TRUNCATE after counting each, and
+    // declares statement_timeout 55s / lock_timeout 20s, so the reset button
+    // no longer dies on Supabase's 8 second limit). Verified in the build
+    // sandbox against Postgres 15: 0240 applied twice cleanly on top of
+    // 0001-0239; with 40000 orders and 2.4 million CCRS rows the 0209 reset
+    // was canceled at 8.0 s and the 0240 reset finished in 0.39 s under the
+    // same limit; scripts/recon/factory-reset-scales-pg-check.sql (refusals
+    // before anything is emptied, preflight refusals by name, exact counts,
+    // kept tables survive, cursor rewound, one audit row, guards still refuse
+    // after, rollback brings the timeout back, re-apply twice) passed and
+    // failed on each of 3 deliberate sabotages; the D-81 guards check still
+    // passes.
+    expect(listed[listed.length - 1]).toMatch(/^0240_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0239_intake_merge_decisions.sql");
-    expect(listed[listed.length - 2]).toBe("0238_factory_reset_reaches_every_guard.sql");
-    expect(listed[listed.length - 3]).toBe("0237_fact_review_for_versions.sql");
-    expect(listed[listed.length - 4]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 1]).toBe("0240_factory_reset_scales.sql");
+    expect(listed[listed.length - 2]).toBe("0239_intake_merge_decisions.sql");
+    expect(listed[listed.length - 3]).toBe("0238_factory_reset_reaches_every_guard.sql");
+    expect(listed[listed.length - 4]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 5]).toBe("0236_publish_archive_rule.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

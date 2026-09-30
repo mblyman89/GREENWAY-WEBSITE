@@ -1443,3 +1443,59 @@ in Vercel.
   To drop it, paste `supabase/rollbacks/0239_intake_merge_decisions.rollback.sql`
   into the SQL editor. Every saved answer is forgotten, and the warning returns
   on the next delivery of each of those products.
+
+## D-82 — 0240 — the factory reset no longer times out
+
+- [ ] `0240_factory_reset_scales.sql` — replaces the factory reset function
+  (and gives the preview and the post-reset check the same time limits). It
+  changes no table and touches no row. It depends on 0209. If 0209 is missing,
+  the file refuses to run and names it.
+
+  **Easiest way to run it:** open **Admin → Settings → Factory reset**. A
+  yellow box has a **Copy the upgrade** button and a link to the Supabase SQL
+  editor. Paste, click **Run**. When Supabase warns *Potential issue
+  detected / This query includes destructive operations*, click **Run query**.
+  The warning is expected because the new reset uses the word `truncate`.
+  Installing it deletes nothing. You should see `Success. No rows returned`.
+  Refresh the reset page and the yellow box is gone. Every click is written
+  out in `docs/MICHAEL-0240-fix-the-reset-button.md`.
+
+  **Why:** pressing the reset showed
+  `Reset failed: canceling statement due to statement timeout`. Supabase stops
+  website requests after 8 seconds. The 0209 reset deleted 139 tables row by
+  row and fired every row trigger (the worst is the 0232 customer-totals
+  trigger on orders), so with the CCRS and Cultivera uploads it could not
+  finish in time. Nothing was deleted. The whole reset was undone each time.
+
+  **What it does:** the same owner check, typed phrase, retention guard,
+  audit line and result as before. It checks first that every table exists and
+  that no kept table points at a wiped one. Then it locks the 139 tables,
+  counts each one (so the per-table numbers are still exact), and empties all
+  of them with one `TRUNCATE`. The time this takes does not grow with the
+  number of rows. It declares its own limits (55 s statement, 20 s lock wait),
+  but it needs well under 1 s.
+
+  Safe to re-run (`create or replace` and `alter function` only). Verified on
+  Postgres 15 with all 240 migrations and 40,000 orders plus 2.4 million CCRS
+  rows, under the same 8 s limit Supabase uses: the 0209 reset was canceled
+  at 8.0 s, and the 0240 reset finished in 0.39 s with all 139 tables empty,
+  exact counts and a clean post-reset check.
+  `scripts/recon/factory-reset-scales-pg-check.sql` passed, and it failed on
+  each of 3 deliberate sabotages. The D-81 guards script still passes.
+
+  **Run it, then check (optional; the yellow box disappearing is the check):**
+
+  ```sql
+  select p.proname, p.proconfig
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.proname in ('gl_factory_reset', 'gl_factory_reset_preview', 'gl_audit_factory_reset')
+   order by p.proname;
+  -- expect 3 rows, each {search_path=public,statement_timeout=55s,lock_timeout=20s}
+  ```
+
+  **Rollback (only if needed):** paste
+  `supabase/rollbacks/0240_factory_reset_scales.rollback.sql` into the SQL
+  editor. It puts back the 0209 row-by-row reset, and the button times out
+  again on realistic data.

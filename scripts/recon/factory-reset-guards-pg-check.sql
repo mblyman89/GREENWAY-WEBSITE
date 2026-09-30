@@ -32,6 +32,8 @@
 --         anything besides nulling a pointer is still refused.
 -- Part 5  the rollback file brings the D-81 defect back (the reset raises),
 --         and re-applying 0238 cures it again. 0238 applied twice is a no-op.
+--         (D-82: runs on the 0209 engine, by rolling 0240 back first, then
+--         re-applies 0240.)
 begin;
 
 -- Part 1 ---------------------------------------------------------------------
@@ -195,6 +197,11 @@ end
 $p4$;
 
 -- Part 5 ---------------------------------------------------------------------
+-- D-82: 0240 empties the tables with TRUNCATE, which fires no row triggers, so
+-- the 0238 guards are only exercised by the 0209 row-by-row engine. Roll 0240
+-- back first so this part still proves what 0238 fixes, and re-apply it at
+-- the end so the database is left on the current engine.
+\ir ../../supabase/rollbacks/0240_factory_reset_scales.rollback.sql
 \ir ../../supabase/rollbacks/0238_factory_reset_reaches_every_guard.rollback.sql
 do $p5a$
 begin
@@ -218,6 +225,7 @@ begin
   assert (select count(*) from public.gl_audit_events) = 0, 'part5: audit probe emptied';
 end
 $p5b$;
+\ir ../../supabase/migrations/0240_factory_reset_scales.sql
 
 select 'FACTORY RESET GUARDS CHECK PASSED' as result;
 rollback;
