@@ -30,8 +30,10 @@ import {
 import {
   adjustNonCannabisAction,
   archiveNonCannabisAction,
+  fillNonCannabisCostAction,
   updateNonCannabisOpsAction,
 } from "./actions";
+import { COST_FILL_COPY, isCostMissing } from "@/lib/noncannabis/cost-fill-core";
 
 export type CatalogRow = {
   id: string;
@@ -42,6 +44,7 @@ export type CatalogRow = {
   status: "draft" | "active" | "archived";
   qtyOnHand: number;
   priceMinorUnits: number;
+  costMinorUnits: number;
   barcode: string | null;
   reorderPoint: number;
   reorderQty: number;
@@ -135,6 +138,40 @@ function AdjustForm({ row }: { row: CatalogRow }) {
   );
 }
 
+/** S33-NC: a row is "cost missing" when its cost is still $0.00 (0076:43 default). */
+function rowCostMissing(row: CatalogRow): boolean {
+  return isCostMissing({ cost_minor_units: row.costMinorUnits, status: row.status });
+}
+
+/**
+ * S33-NC: key a missing cost. Rendered ONLY while the cost is $0.00 and ONLY
+ * for owner/admin (`inventory.cost.fill`); the action re-checks both.
+ */
+export function CostFillForm({ productId }: { productId: string }) {
+  return (
+    <form action={fillNonCannabisCostAction} className="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="product_id" value={productId} />
+      <Field
+        label="Unit cost (what you paid per item)"
+        htmlFor={`cost-${productId}`}
+        help="Fills a missing $0.00 cost once; a keyed cost is never overwritten"
+      >
+        <Input
+          id={`cost-${productId}`}
+          name="cost"
+          inputMode="decimal"
+          placeholder="e.g. 12.50"
+          required
+          className="w-32"
+        />
+      </Field>
+      <Button type="submit" size="sm" variant="confirm">
+        Save cost
+      </Button>
+    </form>
+  );
+}
+
 function OpsForm({ row }: { row: CatalogRow }) {
   const [barcode, setBarcode] = useState(row.barcode ?? "");
   const barcodeCheck = useMemo(() => {
@@ -204,9 +241,19 @@ function OpsForm({ row }: { row: CatalogRow }) {
   );
 }
 
-export function MerchCatalog({ rows }: { rows: CatalogRow[] }) {
+export function MerchCatalog({
+  rows,
+  canFillCost = false,
+  initialCostMissingOnly = false,
+}: {
+  rows: CatalogRow[];
+  canFillCost?: boolean;
+  initialCostMissingOnly?: boolean;
+}) {
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [costMissingOnly, setCostMissingOnly] = useState(initialCostMissingOnly);
+  const costMissingCount = useMemo(() => rows.filter(rowCostMissing).length, [rows]);
   const [openId, setOpenId] = useState<string | null>(null);
 
   const types = useMemo(() => {
@@ -219,6 +266,7 @@ export function MerchCatalog({ rows }: { rows: CatalogRow[] }) {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
       if (typeFilter && r.type !== typeFilter) return false;
+      if (costMissingOnly && !rowCostMissing(r)) return false;
       if (!needle) return true;
       return (
         r.name.toLowerCase().includes(needle) ||
@@ -227,7 +275,7 @@ export function MerchCatalog({ rows }: { rows: CatalogRow[] }) {
         (r.location ?? "").toLowerCase().includes(needle)
       );
     });
-  }, [rows, q, typeFilter]);
+  }, [rows, q, typeFilter, costMissingOnly]);
 
   return (
     <div className="space-y-3">
@@ -250,6 +298,14 @@ export function MerchCatalog({ rows }: { rows: CatalogRow[] }) {
             ))}
           </Select>
         </Field>
+        <label className="flex items-center gap-2 pb-2 text-xs text-[var(--admin-text-muted)]">
+          <input
+            type="checkbox"
+            checked={costMissingOnly}
+            onChange={(e) => setCostMissingOnly(e.target.checked)}
+          />
+          {COST_FILL_COPY.chip} only ({costMissingCount})
+        </label>
         <p className="pb-2 text-xs text-[var(--admin-text-faint)]">
           {filtered.length} of {rows.length} items
         </p>
@@ -285,6 +341,7 @@ export function MerchCatalog({ rows }: { rows: CatalogRow[] }) {
                     row={r}
                     scanMode={scan.mode}
                     isOpen={isOpen}
+                    canFillCost={canFillCost}
                     onToggle={() => setOpenId(isOpen ? null : r.id)}
                   />
                 );
@@ -301,13 +358,16 @@ function FragmentRow({
   row,
   scanMode,
   isOpen,
+  canFillCost,
   onToggle,
 }: {
   row: CatalogRow;
   scanMode: "manufacturer_barcode" | "inhouse_sku_label";
   isOpen: boolean;
+  canFillCost: boolean;
   onToggle: () => void;
 }) {
+  const costMissing = rowCostMissing(row);
   return (
     <>
       <tr className="border-t border-[var(--admin-border)]">
@@ -316,6 +376,11 @@ function FragmentRow({
           <div className="font-mono text-xs text-[var(--admin-text-faint)]">
             {row.sku} · {row.typeLabel}
           </div>
+          {costMissing ? (
+            <div className="mt-1">
+              <Badge tone="orange">{COST_FILL_COPY.chip}</Badge>
+            </div>
+          ) : null}
         </td>
         <td className="px-4 py-3">
           {scanMode === "manufacturer_barcode" ? (
@@ -360,6 +425,18 @@ function FragmentRow({
         <tr className="border-t border-[var(--admin-border)] bg-[var(--admin-surface-2)]">
           <td colSpan={7} className="px-4 py-4">
             <div className="space-y-4">
+              {costMissing ? (
+                <div id={`cost-fill-${row.id}`}>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                    {COST_FILL_COPY.chip} — margin and shrink value count this item at $0.00 until it is keyed
+                  </p>
+                  {canFillCost ? (
+                    <CostFillForm productId={row.id} />
+                  ) : (
+                    <p className="text-xs text-[var(--admin-text-muted)]">{COST_FILL_COPY.roleNote}</p>
+                  )}
+                </div>
+              ) : null}
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
                   Adjust quantity — every change is logged (who / why / when)

@@ -16,6 +16,8 @@
  */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
+import { COST_FILL_COPY, isCostMissing } from "@/lib/noncannabis/cost-fill-core";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
@@ -37,7 +39,7 @@ import { nonCannabisTypeLabel } from "@/lib/naming/noncannabis-core";
 import { listNonCannabisInvoicePayables } from "@/lib/noncannabis/invoice-store";
 import { NonCannabisIntakeForm } from "./NonCannabisIntakeForm";
 import { InvoiceBuilderForm, type InvoiceProductOption } from "./InvoiceBuilderForm";
-import { MerchCatalog, type CatalogRow } from "./MerchCatalog";
+import { CostFillForm, MerchCatalog, type CatalogRow } from "./MerchCatalog";
 import { activateNonCannabisAction, archiveNonCannabisAction } from "./actions";
 import { withBackParam } from "@/lib/admin/back-link-core";
 
@@ -78,9 +80,13 @@ export default async function NonCannabisInventoryPage({
     archived?: string;
     adjusted?: string;
     ops?: string;
+    costFilled?: string;
+    costMissing?: string;
   }>;
 }) {
-  await requirePermission("inventory.manage");
+  const session = await requirePermission("inventory.manage");
+  // S33-NC (D-R3-1): only owner/admin may key a missing cost.
+  const canFillCost = can(session.profile.role, "inventory.cost.fill");
   const sp = await searchParams;
 
   const [products, adjustments, invoices] = await Promise.all([
@@ -111,6 +117,7 @@ export default async function NonCannabisInventoryPage({
     status: p.status,
     qtyOnHand: p.qty_on_hand ?? 0,
     priceMinorUnits: p.price_minor_units ?? 0,
+    costMinorUnits: p.cost_minor_units ?? 0,
     barcode: p.barcode ?? null,
     reorderPoint: p.reorder_point ?? 0,
     reorderQty: p.reorder_qty ?? 0,
@@ -119,6 +126,9 @@ export default async function NonCannabisInventoryPage({
   }));
 
   const recentAdjustments = adjustments.slice(0, 12);
+  // isCostMissing excludes archived, so this is active + draft items at $0.00.
+  const costMissingActive = active.filter(isCostMissing).length;
+  const costMissingDrafts = drafts.filter(isCostMissing).length;
 
   // Existing products the invoice builder can restock (active + drafts, so a
   // just-staged item can be restocked on a later visit before confirmation).
@@ -157,6 +167,38 @@ export default async function NonCannabisInventoryPage({
         {sp.ops ? (
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-green)]/40 bg-[var(--admin-green)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
             Settings saved for <span className="font-mono">{decodeURIComponent(sp.ops)}</span>.
+          </div>
+        ) : null}
+
+        {sp.costFilled ? (
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-green)]/40 bg-[var(--admin-green)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
+            {COST_FILL_COPY.filled} <span className="font-mono">{decodeURIComponent(sp.costFilled)}</span> — recorded in the Security Log.
+          </div>
+        ) : null}
+        {costMissingActive + costMissingDrafts > 0 ? (
+          <div
+            id="cost-missing"
+            className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-text)]"
+          >
+            <strong>{costMissingActive + costMissingDrafts}</strong> item
+            {costMissingActive + costMissingDrafts === 1 ? "" : "s"} show a{" "}
+            <Badge tone="orange">{COST_FILL_COPY.chip}</Badge> chip (cost is $0.00):{" "}
+            {costMissingActive} in the catalog, {costMissingDrafts} in drafts.{" "}
+            {canFillCost ? (
+              <>
+                {costMissingActive > 0 ? (
+                  <Link
+                    href="/admin/inventory/noncannabis?costMissing=1#catalog"
+                    className="text-[var(--admin-accent)] underline"
+                  >
+                    Show only cost-missing catalog items
+                  </Link>
+                ) : null}{" "}
+                — open an item and key its cost. Drafts have the cost box right on their row.
+              </>
+            ) : (
+              COST_FILL_COPY.roleNote
+            )}
           </div>
         ) : null}
 
@@ -293,11 +335,11 @@ export default async function NonCannabisInventoryPage({
         </Card>
 
         {/* Catalog workbench */}
-        <div>
+        <div id="catalog">
           <h3 className="mb-2 text-sm font-bold text-[var(--admin-text)]">
             Active catalog ({active.length})
           </h3>
-          <MerchCatalog rows={catalogRows} />
+          <MerchCatalog key={sp.costMissing ?? ""} rows={catalogRows} canFillCost={canFillCost} initialCostMissingOnly={sp.costMissing === "1"} />
         </div>
 
         {/* Recent adjustments ledger */}
@@ -462,7 +504,19 @@ export default async function NonCannabisInventoryPage({
                   {drafts.map((p) => (
                     <tr key={p.id} className="border-t border-[var(--admin-border)]">
                       <td className="px-4 py-3 font-mono text-xs text-[var(--admin-text-muted)]">{p.sku}</td>
-                      <td className="px-4 py-3 text-[var(--admin-text)]">{p.name}</td>
+                      <td className="px-4 py-3 text-[var(--admin-text)]">
+                        {p.name}
+                        {isCostMissing(p) ? (
+                          <div className="mt-1 space-y-2">
+                            <Badge tone="orange">{COST_FILL_COPY.chip}</Badge>
+                            {canFillCost ? (
+                              <CostFillForm productId={p.id} />
+                            ) : (
+                              <p className="text-xs text-[var(--admin-text-muted)]">{COST_FILL_COPY.roleNote}</p>
+                            )}
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                         {nonCannabisTypeLabel(p.type)}
                       </td>

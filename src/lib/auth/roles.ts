@@ -58,6 +58,7 @@ export type Permission =
   | "inventory.manage"
   | "inventory.count"
   | "inventory.audit"
+  | "inventory.cost.fill"
   | "compliance.calendar"
   | "reports.view"
   | "books.view"
@@ -131,6 +132,12 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   // someone in and the database refuses them, and the "fix" someone reaches for
   // is loosening the DATABASE.
   "inventory.audit": ["owner"],
+  // S33-NC: key a MISSING ($0.00) non-cannabis unit cost. Owner decision
+  // D-R3-1, verbatim (Michael, Round 6): "owner and admin can add cost if
+  // missing. … It can only be used for non cannabis inventory."
+  // Separate from inventory.manage on purpose: that one also grants manager,
+  // and the owner named only owner and admin. Cannabis cost entry is NOT built.
+  "inventory.cost.fill": ["owner", "admin"],
   "reports.view": ["owner", "admin", "manager", "readonly"],
   // F5-K: the GENERAL LEDGER / books. This is DELIBERATELY a separate
   // permission from "reports.view", which also grants manager and readonly.
@@ -267,6 +274,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "inventory.manage": "Manage inventory lots, COAs & manifests",
   "inventory.count": "Count the shelf (blind physical counts)",
   "inventory.audit": "Approve & post inventory audits (owner only)",
+  "inventory.cost.fill": "Key a missing non-cannabis unit cost (owner & admin)",
   "reports.view": "View reports & exports",
   "books.view": "View the accounting books (general ledger)",
   "financials.view": "View financial reports & accounting exports",
@@ -293,6 +301,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "inventory.manage",
   "inventory.count",
   "inventory.audit",
+  "inventory.cost.fill",
   "menu.import",
   "menu.publish",
   "promotions.manage",

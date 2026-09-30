@@ -389,6 +389,35 @@ export async function updateNonCannabisOps(
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
+/**
+ * S33-NC: fill a MISSING unit cost. Writes only while the row still reads
+ * `cost_minor_units = 0` and is not archived, so a cost someone else keyed
+ * between page load and submit is never overwritten (the `.eq(...,0)` guard).
+ * `filled:false` with `ok:true` means that race was lost: nothing changed.
+ * The caller must already have validated `costMinorUnits > 0` via
+ * `planCostFill` (cost-fill-core.ts).
+ */
+export async function fillNonCannabisCost(
+  id: string,
+  costMinorUnits: number,
+  actorId: string | null,
+): Promise<{ ok: boolean; filled: boolean; error?: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, filled: false, error: "supabase-not-configured" };
+  if (!Number.isSafeInteger(costMinorUnits) || costMinorUnits <= 0) {
+    return { ok: false, filled: false, error: "invalid-cost" };
+  }
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("noncannabis_products")
+    .update({ cost_minor_units: costMinorUnits, updated_by: actorId })
+    .eq("id", id)
+    .eq("cost_minor_units", 0)
+    .neq("status", "archived")
+    .select("id");
+  if (error) return { ok: false, filled: false, error: error.message };
+  return { ok: true, filled: Array.isArray(data) && data.length === 1 };
+}
+
 /** Confirm a draft -> active (staff action). */
 export async function activateNonCannabisProduct(
   id: string,

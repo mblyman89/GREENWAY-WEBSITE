@@ -618,6 +618,7 @@ import { __runVariantGramsCoreTests } from "../../src/lib/pos/variant-grams-core
 import { __runMenuLiveStepCoreTests } from "../../src/lib/inventory/menu-live-step-core";
 import { __runMenuWaitingLinkCoreTests } from "../../src/lib/pos/menu-waiting-link-core";
 import { __runPosImportFixCoreTests } from "../../src/lib/pos/pos-import-fix-core";
+import { __runCostFillCoreTests } from "../../src/lib/noncannabis/cost-fill-core";
 import { __runPublishStoryCoreTests } from "../../src/lib/catalog/publish-story-core";
 import { __runIntakeVersionCopyCoreTests } from "../../src/lib/pos/intake-version-copy-core";
 import { __runDraftDeepLinkCoreTests } from "../../src/lib/catalog/draft-deep-link-core";
@@ -1898,6 +1899,8 @@ __runLiquidVolumeTests();
   // worklist reaches every flag on a paged view.
   { const r = __runMenuWaitingLinkCoreTests(); if (r.failed > 0 || r.passed < 60) throw new Error(`menu-waiting-link-core: ${r.failed} failed, ${r.passed} passed`); }
   { const r = __runPosImportFixCoreTests(); if (r.failed > 0 || r.passed < 140) throw new Error(`pos-import-fix-core: ${r.failed} failed, ${r.passed} passed`); }
+
+  { const r = __runCostFillCoreTests(); if (r.failed > 0 || r.passed < 24) throw new Error(`cost-fill-core: ${r.failed} failed, ${r.passed} passed`); }
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

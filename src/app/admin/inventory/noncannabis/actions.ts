@@ -9,6 +9,7 @@ import {
   activateNonCannabisProduct,
   archiveNonCannabisProduct,
   createNonCannabisAdjustment,
+  fillNonCannabisCost,
   getNonCannabisProduct,
   previewSkuAndName,
   updateNonCannabisOps,
@@ -24,6 +25,7 @@ import {
   type NonCannabisInvoiceLineDraft,
 } from "@/lib/noncannabis/invoice-core";
 import { createNonCannabisInvoice } from "@/lib/noncannabis/invoice-store";
+import { COST_FILL_COPY, planCostFill } from "@/lib/noncannabis/cost-fill-core";
 
 /** Parse a dollar string ("25", "25.00", "$25") into integer minor units. */
 function dollarsToMinor(raw: FormDataEntryValue | null): number {
@@ -324,4 +326,43 @@ export async function previewNonCannabisAction(
 ): Promise<{ sku: string; name: string; nameOk: boolean; nameIssues: string[] }> {
   await requirePermission("inventory.manage");
   return previewSkuAndName(input);
+}
+
+/**
+ * S33-NC: key a MISSING ($0.00) unit cost on a non-cannabis product.
+ * Owner decision D-R3-1: owner and admin only (`inventory.cost.fill`), and
+ * never for cannabis. Fills only while the cost is still 0 — a keyed cost is
+ * never overwritten — and records before/after in the Security Log.
+ */
+export async function fillNonCannabisCostAction(formData: FormData) {
+  const session = await requirePermission("inventory.cost.fill");
+  const productId = String(formData.get("product_id") ?? "");
+  if (!productId) redirect("/admin/inventory/noncannabis?error=missing-product");
+
+  const product = await getNonCannabisProduct(productId);
+  if (!product) redirect("/admin/inventory/noncannabis?error=product-not-found");
+
+  const plan = planCostFill(product, String(formData.get("cost") ?? ""));
+  if (!plan.ok) {
+    redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(plan.message)}`);
+  }
+
+  const res = await fillNonCannabisCost(productId, plan.costMinorUnits, session.userId);
+  if (!res.ok) {
+    redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(res.error ?? "save-failed")}`);
+  }
+  if (!res.filled) {
+    redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(COST_FILL_COPY.raced)}`);
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "noncannabis.cost_fill",
+    entityType: "noncannabis_products",
+    entityId: productId,
+    before: { cost_minor_units: product.cost_minor_units },
+    after: { cost_minor_units: plan.costMinorUnits },
+  });
+  revalidatePath("/admin/inventory/noncannabis");
+  redirect(`/admin/inventory/noncannabis?costFilled=${encodeURIComponent(product.sku)}`);
 }

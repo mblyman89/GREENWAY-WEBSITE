@@ -280,10 +280,23 @@ describe("intake env ledger", () => {
     // S31 (fix-link contract) is a test + a pure core + page fixes; no
     // variable. Its bible rollback line is S31.7, word for word.
     expect(none).toContain("S31");
-    expect(ledger).toContain("As of **S31**");
+    expect(ledger).not.toContain("As of **S31**");
     expect(ledger).toContain('"Delete the test + doc section." (S31)');
     expect(ledger).toContain("S31 needs nothing set.");
     for (const f of ["src/lib/admin/fix-link-contract-core.ts", "tests/compliance/pipeline-fix-links-connected.test.ts"]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    // S33 (shipped as S33-NC, D-R3-1) adds a permission + a guarded update;
+    // no variable, no schema. Its bible rollback line is S33.7, word for word.
+    expect(none).toContain("S33");
+    expect(ledger).toContain("As of **S33**");
+    expect(ledger).toContain('"Revert code. No schema. Keyed costs remain valid, provenance-stamped facts." (S33');
+    expect(ledger).toContain("S33 needs nothing set.");
+    for (const f of [
+      "src/lib/noncannabis/cost-fill-core.ts",
+      "src/app/admin/inventory/noncannabis/actions.ts",
+      "src/app/admin/inventory/noncannabis/MerchCatalog.tsx",
+    ]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }
     expect(ledger).not.toContain("As of **S19**");

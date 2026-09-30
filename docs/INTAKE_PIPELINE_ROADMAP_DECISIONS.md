@@ -72,6 +72,24 @@ therefore add a dedicated permission, e.g. `inventory.cost.fill` =
 managers be excluded, as stated, or included, as the permission map would do by
 default?
 
+**Resolved when S33-NC started (Round 13):** managers are **excluded**. This
+follows the owner's words, "owner and admin can add cost if missing". No new
+answer was assumed. The permission is `inventory.cost.fill` = `["owner","admin"]`
+(`src/lib/auth/roles.ts`). If managers should be allowed, it is a one-line
+change to that list.
+
+**S33-NC as built (Round 13):**
+
+| Piece | Where |
+|---|---|
+| Pure rules: missing = cost 0 and not archived; fill only a 0; refuse a 0 fill; parse with `parseCostInput` | `src/lib/noncannabis/cost-fill-core.ts` (`planCostFill`, `isCostMissing`) |
+| Race-guarded write: `.eq("cost_minor_units", 0)` and `.neq("status","archived")` | `src/lib/noncannabis/store.ts` (`fillNonCannabisCost`) |
+| Action, gated by `inventory.cost.fill`, with before/after `recordAudit` (`noncannabis.cost_fill`) | `src/app/admin/inventory/noncannabis/actions.ts` (`fillNonCannabisCostAction`) |
+| "Cost missing" chip, a "Cost missing only" filter, the cost box in the row panel and on draft rows, and a banner with a count and link | `MerchCatalog.tsx`, `page.tsx` |
+
+`updateNonCannabisOpsAction` still cannot change cost. Cost has its own action,
+so a settings save can never touch it.
+
 ---
 
 ## Q-02 — How many manifests per week?
