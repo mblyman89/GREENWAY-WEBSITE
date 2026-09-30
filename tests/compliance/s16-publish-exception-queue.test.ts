@@ -61,7 +61,7 @@ const outcome = (state: string, extra: Record<string, unknown> = {}) => ({
 describe("S16 queue core", () => {
   it("self-tests pass with an exact count (a deleted check turns this red)", () => {
     // S18 added five cutover checks (22 -> 27).
-    expect(__runPublishQueueTests().passed).toBe(27);
+    expect(__runPublishQueueTests().passed).toBe(32);
   });
   it("the reason comes only from the recorded outcome", () => {
     expect(queueReason({ import_id: null, summary_json: outcome("held_for_fact_review", { held_count: 1 }) })).toBe("fact_review");
@@ -139,7 +139,7 @@ describe("S16 queue core", () => {
 // === 2. Verdict copy, every shape (bible S16.4 / S16.5) ======================
 describe("S16 verdict copy for each shape", () => {
   it("publish-guard self-tests pass with an exact count", () => {
-    expect(__runPublishGuardTests().passed).toBe(111); // S26 +19 issue-link checks; S30 +1
+    expect(__runPublishGuardTests().passed).toBe(114); // S26 +19 issue-link checks; S30 +1; R13a +3 linked codes
   });
   it("first menu: safe, nothing comes off", () => {
     const v = buildPublishVerdict({ added: 4, removed: 0, priceChanged: 0, unchanged: 0, hasLiveMenu: false });
@@ -323,7 +323,7 @@ describe("S16.6 acceptance: exactly one primary action per waiting row", () => {
   });
   it("one Button per row, rendering the reason's action", () => {
     expect((rowBlock.match(/<Button\b/g) ?? []).length).toBe(1);
-    expect(rowBlock).toContain("const action = primaryAction(reason, reviewHref);");
+    expect(rowBlock).toContain("const action = primaryAction(reason, reviewHref, factHref);");
     expect(rowBlock).toContain("<Button href={action.href}");
     expect(rowBlock).toContain("{action.label}");
     expect(rowBlock).toContain("{QUEUE_REASON_TAG[reason]}");

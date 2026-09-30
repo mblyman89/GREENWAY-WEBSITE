@@ -848,7 +848,7 @@ export default async function ProductEditorPage({
               <input type="hidden" name="vendor_id" value={enrichment?.vendor_id ?? ""} />
             </div>
 
-            <div className="space-y-2 rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
+            <div id="visibility" className="scroll-mt-24 space-y-2 rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
               <p className="text-sm font-semibold text-white">Visibility</p>
               <select name="visibility" defaultValue={vis} className={field}>
                 <option value="inherit">Inherit POS ({item.hidden ? "hidden" : "visible"})</option>

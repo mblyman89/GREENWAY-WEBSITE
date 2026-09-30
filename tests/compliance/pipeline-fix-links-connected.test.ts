@@ -59,6 +59,16 @@ import { lotGapHref, LOT_GAP_DEFINITIONS } from "@/lib/inventory/lot-gap-core";
 import { explainDiagnostic } from "@/lib/pos/publish-guard-core";
 import { CUTOVER_ACTION_HREF, primaryAction } from "@/lib/pos/publish-queue-core";
 import { draftsForManifestHref } from "@/lib/catalog/draft-deep-link-core";
+import { factFlagWorklist, factHoldHref, waitingMenuFix } from "@/lib/pos/menu-waiting-link-core";
+import {
+  CULTIVERA_ONLY_CODES,
+  IMPORT_PAGE_ANCHORS,
+  POS_ERROR_CODES,
+  POS_REVIEW_CODES,
+  hiddenItemFix,
+  posDiagnosticRowLink,
+  posImportFixFor,
+} from "@/lib/pos/pos-import-fix-core";
 import type { InventoryStats } from "@/lib/inventory/store";
 
 // ---------------------------------------------------------------------------
@@ -268,10 +278,88 @@ function emittedHrefs(): Map<string, string> {
         warningCount: ISSUE_LINKED_CODES.length + 3,
         reviewHref: review,
         reason,
-        action: primaryAction(reason, review),
+        action: primaryAction(reason, review, factHoldHref({ manifest: { id: MANIFEST } })),
       }),
     )) {
       add(h, `buildPublishIssuesForVersion(${reason})`);
+    }
+  }
+  // Round 13: the waiting-menu / fact-hold links (intake page, Publish page, version page).
+  for (const state of ["held_for_fact_review", "held_for_cutover", "publish_failed", null] as const) {
+    for (const m of [MANIFEST, null]) {
+      const f = waitingMenuFix({ manifestId: m, version: { id: "v1", state } });
+      add(f.href, `waitingMenuFix(${state})`);
+      add(f.extra?.href, `waitingMenuFix(${state}).extra`);
+    }
+  }
+  add(factHoldHref({ manifest: { id: MANIFEST } }), "factHoldHref");
+  for (const r of factFlagWorklist(
+    [{ manifestId: MANIFEST, draftId: DRAFT, productName: "X", reasons: ["r"] }],
+    MANIFEST,
+    new Set<string>(),
+  )) {
+    add(r.href, "factFlagWorklist(off page)");
+  }
+  for (const r of factFlagWorklist(
+    [{ manifestId: MANIFEST, draftId: DRAFT, productName: "X", reasons: ["r"] }],
+    MANIFEST,
+    new Set([DRAFT]),
+  )) {
+    add(`/admin/inventory/drafts${r.href}`, "factFlagWorklist(on page)");
+  }
+  // Round 13: every Cultivera import diagnostic code, in every lot state.
+  const POS_CODES = [
+    ...POS_REVIEW_CODES,
+    ...POS_ERROR_CODES,
+    ...CULTIVERA_ONLY_CODES,
+    "inventory_without_product_master",
+    "product_without_inventory",
+    "flower_same_size_different_price",
+    "unknown_strain_type",
+    "new_unmapped_category",
+    "unmapped_category_fallback",
+    "import_lot_cost_unparseable",
+    "import_lots_expiration_missing_summary",
+    "import_lot_coa_missing",
+    "import_lots_coa_missing_summary",
+    "import_lot_received_date_missing",
+    "import_lot_barcode_conflict",
+    "import_lot_barcode_merged",
+    "import_lot_missing_barcode",
+    "import_lots_mixed_size_cards",
+  ];
+  const IMPORT = "44444444-4444-4444-8444-444444444444";
+  const ROW_CTX = { barcode: "1234567890", product: "Blue Dream 3.5g", displayName: "Blue Dream" };
+  for (const code of POS_CODES) {
+    for (const [versionPublished, lotsCreated] of [
+      [true, true],
+      [true, false],
+      [false, false],
+    ] as const) {
+      const ctx = { importId: IMPORT, versionPublished, lotsCreated };
+      for (const l of posImportFixFor(code, ctx)?.links ?? []) add(l.href, `posImportFixFor(${code})`);
+      add(posDiagnosticRowLink(code, ROW_CTX, ctx)?.href, `posDiagnosticRowLink(${code})`);
+    }
+  }
+  for (const hiddenReason of [
+    "owner_override_hide:x",
+    "owner_override_show:x",
+    "reviewer_rejected",
+    "no_product_master",
+    "no_inventory",
+    null,
+  ]) {
+    for (const importId of [IMPORT, null]) {
+      for (const versionPublished of [true, false]) {
+        const l = hiddenItemFix({
+          sourceItemId: "sku 9/a",
+          hiddenReason,
+          importId,
+          versionPublished,
+          factHref: factHoldHref({ manifest: { id: MANIFEST } }),
+        });
+        add(l?.href, `hiddenItemFix(${hiddenReason})`);
+      }
     }
   }
   add(CUTOVER_ACTION_HREF, "CUTOVER_ACTION_HREF");
@@ -301,6 +389,11 @@ const COMPUTED_ANCHORS: readonly { anchor: RegExp; file: string; renders: string
     file: "src/components/admin/inventory/RegisterSellabilityBanner.tsx",
     renders: "id={RESTORE_TO_SALE_ANCHOR}",
   },
+  // Round 13: the Cultivera import page's sections (pos-import-fix-core IMPORT_PAGE_ANCHORS).
+  { anchor: /^diagnostics$/, file: "src/app/admin/menu-imports/[id]/page.tsx", renders: "id={IMPORT_PAGE_ANCHORS.diagnostics}" },
+  { anchor: /^hidden-items$/, file: "src/app/admin/menu-imports/[id]/page.tsx", renders: "id={IMPORT_PAGE_ANCHORS.hidden}" },
+  { anchor: /^backfill-lots$/, file: "src/app/admin/menu-imports/[id]/page.tsx", renders: "id={IMPORT_PAGE_ANCHORS.backfill}" },
+  { anchor: /^lot-plan$/, file: "src/app/admin/menu-imports/[id]/page.tsx", renders: "id={IMPORT_PAGE_ANCHORS.lotPlan}" },
 ];
 
 function anchorRendered(anchor: string, pageFile: string): boolean {
@@ -360,6 +453,12 @@ describe("S31 A — every generator's fix link lands on a real, filtered, anchor
       "buildManifestIssues",
       "buildPublishIssuesForVersion",
       "CUTOVER_ACTION_HREF",
+      "waitingMenuFix",
+      "factHoldHref",
+      "factFlagWorklist",
+      "posImportFixFor",
+      "posDiagnosticRowLink",
+      "hiddenItemFix",
     ]) {
       expect(sources.has(g), `no href collected from ${g}`).toBe(true);
     }
@@ -373,9 +472,18 @@ describe("S31 A — every generator's fix link lands on a real, filtered, anchor
     expect(failures).toEqual([]);
   });
 
+  it("the import page's computed anchors resolve to the ids the links use", () => {
+    expect(IMPORT_PAGE_ANCHORS).toEqual({
+      diagnostics: "diagnostics",
+      hidden: "hidden-items",
+      backfill: "backfill-lots",
+      lotPlan: "lot-plan",
+    });
+  });
+
   it("every item-level href with an anchor was actually checked (anchors present in the set)", () => {
     const anchors = new Set([...hrefs.keys()].map((h) => parseHref(h).anchor).filter(Boolean));
-    for (const a of ["coa", "lifecycle", "manifest-vendor", "manifest-lines", "register-blocked", "restore-to-sale"]) {
+    for (const a of ["coa", "lifecycle", "manifest-vendor", "manifest-lines", "register-blocked", "restore-to-sale", "flagged-facts", "rejected", "visibility", "hidden-items", "backfill-lots", "website-category"]) {
       expect(anchors.has(a), `no generator emitted #${a}`).toBe(true);
     }
     expect([...anchors].some((a) => a!.startsWith("draft-"))).toBe(true);
@@ -478,6 +586,7 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     "gold\u2192if !isSupabaseServiceConfigured",
     'danger\u2192bannerTone === "danger"', // result of an onboarding action
     "gold\u2192pinned", // the deep-linked draft's own highlight
+    "gold\u2192factWorklist.length > 0", // Round 13: open fact flags for the pinned delivery
   ],
 };
 

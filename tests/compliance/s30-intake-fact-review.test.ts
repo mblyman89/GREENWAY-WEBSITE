@@ -639,7 +639,8 @@ describe("S30 Onboarding loader + inline controls", () => {
 
   it("the page wires the panel on the Approved tab and the banner reads ?fact=", () => {
     const page = read("src/app/admin/inventory/drafts/page.tsx");
-    expect(page).toContain('const factFlags = view === "approved" ? await loadOpenIntakeFactFlags(drafts) : null;');
+    expect(page).toContain('? await loadOpenIntakeFactFlags(focus.manifestId ? [{ manifest_id: focus.manifestId }, ...drafts] : drafts)');
+    expect(page).toContain('view === "approved"');
     expect(page).toContain("factResult ? factResultCopy(factResult, sp.fact_msg)");
     expect(page).toMatch(/view === "approved" && factFlags\?\.flags\.get\(d\.id\) && \(\s*<IntakeFactReviewPanel/);
     expect(page).toContain("FACT_REVIEW_MIGRATION_COPY");

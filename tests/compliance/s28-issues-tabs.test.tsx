@@ -63,7 +63,7 @@ describe("S28 issues-core pure self-tests", () => {
   it("passes every embedded assertion (count pinned)", () => {
     const r = __runIssuesCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(93);
+    expect(r.passed).toBe(99);
   });
   it("is registered in run-pure-selftests", () => {
     const src = read("scripts/compliance/run-pure-selftests.ts");

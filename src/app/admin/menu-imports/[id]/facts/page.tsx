@@ -19,6 +19,10 @@ import type { ReadCompletenessVerdict } from "@/lib/supabase/read-completeness-c
 import { formatDateTime } from "@/lib/pos/format";
 import { resolveFactReview, resolveFactReviewGroup } from "../../actions";
 import { posStateOf } from "@/lib/enrichment/product-visibility-core";
+import { hiddenItemFix } from "@/lib/pos/pos-import-fix-core";
+
+/** fact-review-store.ts writes exactly this reason on a reviewer reject. */
+const REVIEWER_REJECTED_REASON = "reviewer_rejected";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +91,8 @@ export default async function FactReviewPage({
   // SLICE 6B: how many of the rejected rows are the "in inventory, not in the
   // products file" case. Counted from the SAME staged rows the buckets were
   // built from, so this can never disagree with the Rejected count above it.
+  // Round 13: the raw hidden_reason per card, for the Rejected list's fix controls.
+  const hiddenReasonById = new Map(items.map((i) => [i.source_item_id, i.hidden_reason] as const));
   const missingMasterCount = items.filter(
     (i) => {
       // Round 12: the importer's state (an owner Visibility override does not
@@ -304,7 +310,7 @@ export default async function FactReviewPage({
         </section>
 
         {/* Rejected */}
-        <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+        <section id="rejected" className="scroll-mt-24 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-white">
@@ -345,6 +351,34 @@ export default async function FactReviewPage({
                         <li key={n}>{n}</li>
                       ))}
                     </ul>
+                    {/* Round 13: a reviewer reject is reversible (recordFactReview
+                        "approve" clears ONLY reviewer_rejected); every other
+                        reason links to the control that can change it. */}
+                    {hiddenReasonById.get(row.sourceItemId) === REVIEWER_REJECTED_REASON ? (
+                      <form action={resolveFactReview} className="mt-2">
+                        <input type="hidden" name="importId" value={id} />
+                        <input type="hidden" name="sourceItemId" value={row.sourceItemId} />
+                        <input type="hidden" name="action" value="approve" />
+                        <input type="hidden" name="note" value="Undo reject from the Rejected list" />
+                        <button type="submit" className={CHIP_ACTION} data-testid="rejected-undo">
+                          Put back on the menu
+                        </button>
+                      </form>
+                    ) : (
+                      (() => {
+                        const fix = hiddenItemFix({
+                          sourceItemId: row.sourceItemId,
+                          hiddenReason: hiddenReasonById.get(row.sourceItemId) ?? null,
+                          importId: id,
+                          versionPublished: version?.status === "published",
+                        });
+                        return fix ? (
+                          <Link href={fix.href} className={`${CHIP_ACTION} mt-2`} data-testid="rejected-fix">
+                            {fix.label} →
+                          </Link>
+                        ) : null;
+                      })()
+                    )}
                   </div>
                 ))}
               </div>

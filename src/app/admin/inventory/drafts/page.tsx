@@ -120,6 +120,7 @@ import { restockPreviewPlan } from "@/lib/inventory/restock-preview-view-core";
 import { RestockPreviewChip, RestockPreviewUnavailable } from "@/components/admin/catalog/RestockPreviewChip";
 // S30: inline fact review for received products (Approved tab).
 import { loadOpenIntakeFactFlags } from "@/lib/pos/intake-fact-review-server";
+import { factFlagWorklist } from "@/lib/pos/menu-waiting-link-core";
 import {
   FACT_REVIEW_MIGRATION_COPY,
   factResultCopy,
@@ -399,7 +400,18 @@ export default async function CatalogDraftsPage({
 
   // S30: which approved rows have an open fact flag on their delivery's
   // newest held update. Approved tab only; bounded reads; never writes.
-  const factFlags = view === "approved" ? await loadOpenIntakeFactFlags(drafts) : null;
+  // R13a: a delivery-focused view reads THAT delivery's flags even when none
+  // of its flagged rows is on this page (the Approved view is paged).
+  const factFlags =
+    view === "approved"
+      ? await loadOpenIntakeFactFlags(focus.manifestId ? [{ manifest_id: focus.manifestId }, ...drafts] : drafts)
+      : null;
+  // R13a: every open flag for the focused delivery, each with a link that
+  // pins its row - so a flag on page 3 is never invisible from page 1.
+  const factWorklist =
+    factFlags && focus.manifestId && !focus.draftId
+      ? factFlagWorklist(factFlags.flags.values(), focus.manifestId, new Set(drafts.map((d) => d.id)))
+      : [];
   const factResult = parseFactResult(sp.fact);
 
   const banner =
@@ -512,6 +524,34 @@ export default async function CatalogDraftsPage({
             </Link>
           </div>
         )}
+        {/* R13a: the flagged-facts worklist. The Keep / Correct / Take off
+            panel sits on each product's row; this list names every one for
+            the delivery, so none hides on a later page. */}
+        {factWorklist.length > 0 && (
+          <section
+            id="flagged-facts"
+            data-testid="fact-worklist"
+            className="scroll-mt-24 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm"
+          >
+            <p className="font-semibold text-[var(--admin-gold)]">
+              {factWorklist.length} product{factWorklist.length === 1 ? " has a fact" : "s have facts"} to check before this delivery&apos;s menu update goes live
+            </p>
+            <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+              Open each one and choose Keep, Correct, or Take off the menu. The update publishes by itself once every flag has a decision.
+            </p>
+            <ul className="mt-2 space-y-1 text-xs">
+              {factWorklist.map((w) => (
+                <li key={w.draftId} className="flex flex-wrap items-baseline gap-2">
+                  <Link href={w.href} className="font-semibold text-[var(--admin-text)] underline" data-testid="fact-worklist-link">
+                    {w.productName}
+                  </Link>
+                  <span className="text-[var(--admin-text-muted)]">{w.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {/* S17: approve the whole delivery's priced products at once, then
             update the menu ONCE (bible S17.2 / S17.4). */}
         {focus.manifestId && view === "draft" && batchOn && batchPriced !== null && batchPriced > 0 && (

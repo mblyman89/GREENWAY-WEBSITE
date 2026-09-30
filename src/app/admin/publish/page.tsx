@@ -23,6 +23,7 @@ import {
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
 import { formatDateTime } from "@/lib/pos/format";
+import { factHoldHref } from "@/lib/pos/menu-waiting-link-core";
 import {
   describeIntakeVersion,
   parseIntakeSummary,
@@ -96,6 +97,8 @@ type DraftRow = {
   verdict: PublishVerdict | null;
   /** Where "Review & publish" goes — the intake or POS-import review page. */
   reviewHref: string;
+  /** R13a: the delivery's flagged products (fact holds), or null. */
+  factHref: string | null;
   origin: "receiving" | "pos-import";
   /** S01: why a receiving draft is waiting, in plain English (null for POS uploads). */
   story: IntakeVersionDescription | null;
@@ -164,7 +167,9 @@ export default async function PublishCommandCenterPage({
         : `/admin/menu-imports/${v.import_id}?back=${encodeURIComponent("/admin/publish")}`;
     // S01: pure, no I/O — reads the summary_json this row already carries.
     const story = origin === "receiving" ? describeIntakeVersion(v) : null;
-    return { version: v, verdict, reviewHref, origin, story, reason: queueReason(v) };
+    // R13a: where a fact hold is decided - this delivery's approved products.
+    const factHref = origin === "receiving" ? factHoldHref(v.summary_json) : null;
+    return { version: v, verdict, reviewHref, factHref, origin, story, reason: queueReason(v) };
   });
   const overflow = Math.max(0, waiting.length - VERDICT_CAP);
   const latest = rows.find((r) => r.version.freshness === "latest") ?? null;
@@ -177,7 +182,7 @@ export default async function PublishCommandCenterPage({
   // (summary_json.diagnostics + warning_count, F-117) — pure, no new read.
   // A row disappears when its cause is fixed and the page reloads.
   const issuesByVersion = new Map<string, Issue[]>();
-  for (const { version: v, reviewHref, origin, story, reason } of queue.waiting) {
+  for (const { version: v, reviewHref, factHref, origin, story, reason } of queue.waiting) {
     const parsed = parseIntakeSummary(v.summary_json);
     const subject =
       origin === "receiving"
@@ -197,7 +202,7 @@ export default async function PublishCommandCenterPage({
         warningCount: v.warning_count,
         reviewHref,
         reason,
-        action: primaryAction(reason, reviewHref),
+        action: primaryAction(reason, reviewHref, factHref),
       }),
     );
   }
@@ -309,8 +314,8 @@ export default async function PublishCommandCenterPage({
             </p>
           ) : (
             <div className="mt-4 space-y-3">
-              {queue.waiting.map(({ version: v, verdict, reviewHref, origin, story, reason }) => {
-                const action = primaryAction(reason, reviewHref);
+              {queue.waiting.map(({ version: v, verdict, reviewHref, factHref, origin, story, reason }) => {
+                const action = primaryAction(reason, reviewHref, factHref);
                 return (
                   <div
                     key={v.id}

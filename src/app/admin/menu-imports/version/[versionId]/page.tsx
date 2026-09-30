@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
@@ -16,7 +17,9 @@ import {
 } from "@/lib/pos/publish-guard-core";
 import { formatDateTime, formatMoney } from "@/lib/pos/format";
 import { publishVersion } from "../../actions";
-import { describeIntakeVersion, type IntakeVersionTone } from "@/lib/pos/intake-version-copy-core";
+import { describeIntakeVersion, parseIntakeSummary, type IntakeVersionTone } from "@/lib/pos/intake-version-copy-core";
+import { factHoldHref } from "@/lib/pos/menu-waiting-link-core";
+import { hiddenItemFix } from "@/lib/pos/pos-import-fix-core";
 import { loadIssueLookups } from "@/lib/pos/issue-fix-link-server";
 
 // S01: the outcome banner's colour follows the described tone.
@@ -109,6 +112,8 @@ export default async function IntakeVersionReviewPage({
   const hiddenItems = items.filter((i) => i.hidden).slice(0, 100);
   const hiddenTotal = items.filter((i) => i.hidden).length;
   const isPublished = version.status === "published";
+  // R13a: the delivery's flagged products (null when the delivery is unknown).
+  const factHref = factHoldHref(version.summary_json);
 
   // SLICE 76 — plain-English safety verdict: is publishing this draft safe?
   const verdict = diff
@@ -160,6 +165,15 @@ export default async function IntakeVersionReviewPage({
             <p className="mt-1">
               <strong>Next:</strong> {story.action}
             </p>
+          )}
+          {/* R13a: a fact hold is decided on the delivery's approved
+              products, so the one thing to do is one button away. */}
+          {!isPublished && factHref && parseIntakeSummary(version.summary_json).outcome?.state === "held_for_fact_review" && (
+            <div className="mt-3">
+              <Button href={factHref} size="sm" variant="save" data-testid="version-fact-hold-link">
+                Check the flagged facts &rarr;
+              </Button>
+            </div>
           )}
           {story.superseded > 0 && (
             <p className="mt-1 text-xs opacity-80">
@@ -371,8 +385,25 @@ export default async function IntakeVersionReviewPage({
                   <span className="text-white/80">
                     {i.name} <span className="text-white/40">&middot; {i.brand_name} &middot; {i.category}</span>
                   </span>
-                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
-                    {i.hidden_reason ?? "hidden"}
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
+                      {i.hidden_reason ?? "hidden"}
+                    </span>
+                    {(() => {
+                      // Round 13: every hidden card links to the control that changes it.
+                      const fix = hiddenItemFix({
+                        sourceItemId: i.source_item_id,
+                        hiddenReason: i.hidden_reason,
+                        importId: null,
+                        versionPublished: version.status === "published",
+                        factHref,
+                      });
+                      return fix ? (
+                        <Link href={fix.href} data-testid="hidden-item-fix" className="font-semibold text-[var(--admin-accent)] hover:underline">
+                          {fix.label} →
+                        </Link>
+                      ) : null;
+                    })()}
                   </span>
                 </div>
               ))}

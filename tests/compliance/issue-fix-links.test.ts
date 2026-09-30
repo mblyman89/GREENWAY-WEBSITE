@@ -66,7 +66,7 @@ describe("S26 core self-tests", () => {
   it("embedded self-tests all pass (pinned count)", () => {
     const r = __runIssueFixLinkCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(157);
+    expect(r.passed).toBe(183);
   });
 
   it("is registered in the pure self-test runner", () => {

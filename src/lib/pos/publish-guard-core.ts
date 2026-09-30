@@ -407,6 +407,31 @@ const EXPLANATIONS: Record<string, ExplanationRule> = {
     fixLabel: "Compare the cards",
     informational: false,
   },
+  // R13a: three receiving warnings that had no explanation or link.
+  draft_inject_house_type_low_confidence: {
+    title: "Product type not set",
+    meaning: "The product's name and its category disagreed about its type, so no type was assigned automatically.",
+    fix: ISSUE_COPY.houseTypeFix,
+    fixHref: "/admin/inventory/drafts?status=approved",
+    fixLabel: "Open this delivery's products",
+    informational: false,
+  },
+  net_volume_missing: {
+    title: "Liquid size unknown",
+    meaning: "This product counts against the 72 fl oz limit but no package size could be read, so the limit cannot measure it.",
+    fix: ISSUE_COPY.volumeMissingFix,
+    fixHref: "/admin/inventory/drafts?status=approved",
+    fixLabel: "Open this delivery's products",
+    informational: false,
+  },
+  net_volume_needs_confirmation: {
+    title: "Liquid size needs a check",
+    meaning: "The package volume was read from the product name in more than one way; the larger reading was recorded.",
+    fix: ISSUE_COPY.volumeConfirmFix,
+    fixHref: "/admin/inventory/drafts?status=approved",
+    fixLabel: "Open this delivery's products",
+    informational: false,
+  },
   // FYI-only codes — no action needed.
   draft_superseded_by_pos: {
     title: "Already in your POS export",

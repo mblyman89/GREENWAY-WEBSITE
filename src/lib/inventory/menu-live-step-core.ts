@@ -21,6 +21,7 @@
  */
 
 import { PUBLISH_CENTER_PATH } from "@/lib/catalog/publish-story-core";
+import { waitingMenuFix, type WaitingMenuVersion } from "@/lib/pos/menu-waiting-link-core";
 
 /** Mirrors guided-accept-core's GuidedStepState minus "failed" (step ④ never fails). */
 export type MenuStepState = "done" | "current" | "todo";
@@ -34,6 +35,12 @@ export type MenuStepInput = {
    *  (held for a fact check, or auto-publish didn't finish — it waits in the
    *  Publish command center). */
   stagedWaiting: boolean;
+  /** R13a: the one waiting update (newest, not superseded) and why it waits.
+   *  When present the step links to where that reason is FIXED
+   *  (menu-waiting-link-core), never to the bare Publish page. */
+  waitingVersion?: WaitingMenuVersion | null;
+  /** R13a: the delivery, so the link opens its products / returns to it. */
+  manifestId?: string | null;
 };
 
 export type MenuStepView = {
@@ -94,7 +101,13 @@ export function menuStep(manifestStatus: string, input: MenuStepInput | null): M
     };
   }
 
+  if (input.stagedWaiting && input.waitingVersion) {
+    const fix = waitingMenuFix({ manifestId: input.manifestId ?? null, version: input.waitingVersion });
+    return { state: "current", line: fix.fixText, href: fix.href, linkLabel: fix.label };
+  }
+
   if (input.stagedWaiting) {
+    // Legacy input without the named row (a caller that only has the flag).
     return {
       state: "current",
       line: "A menu update from this delivery is waiting instead of going live — either a product has a fact that needs a second look, or the automatic publish didn't finish. Open the Publish command center, check what it names, and press Publish.",
@@ -170,6 +183,23 @@ export function __runMenuLiveStepCoreTests(): void {
   ok(stuck.line !== null && stuck.line.includes("second look"), "stagedWaiting line covers the fact-review hold");
   ok(stuck.line !== null && !/menu imports/i.test(stuck.line), "stagedWaiting line never says Menu Imports");
   ok(stuck.href === PUBLISH_CENTER_PATH && stuck.linkLabel === "Review & publish", "stagedWaiting → publish-center deep-link");
+
+  // R13a: with the named waiting row, the step goes where the reason is fixed.
+  const M = "11111111-2222-4333-8444-555555555555";
+  const held = menuStep("accepted", { ...counts(0, 2, true), manifestId: M, waitingVersion: { id: "v1", state: "held_for_fact_review" } });
+  ok(held.state === "current", "held fact -> current");
+  ok(held.href === `${DRAFTS_PATH}?status=approved&manifest=${M}`, "held fact -> this delivery's approved products");
+  ok(held.linkLabel === "Check the flagged facts", "held fact label");
+  ok(held.line !== null && held.line.includes("second look") && !/menu imports/i.test(held.line), "held fact line");
+  const cut = menuStep("accepted", { ...counts(0, 2, true), manifestId: M, waitingVersion: { id: "v2", state: "held_for_cutover" } });
+  ok(cut.href === "/admin/menu-imports/cutover", "cutover hold -> cutover page");
+  const failed = menuStep("accepted", { ...counts(0, 2, true), manifestId: M, waitingVersion: { id: "v3", state: "auto_publish_failed" } });
+  ok(failed.href !== null && failed.href.startsWith("/admin/menu-imports/version/v3?back="), "failed -> the update's review page");
+  ok(failed.href !== PUBLISH_CENTER_PATH && held.href !== PUBLISH_CENTER_PATH, "never the bare Publish page with a named row");
+  const pendingFirst = menuStep("accepted", { ...counts(1, 0, true), manifestId: M, waitingVersion: { id: "v1", state: "held_for_fact_review" } });
+  ok(pendingFirst.href === DRAFTS_PATH, "pending still outranks a named waiting row");
+  const noFlag = menuStep("accepted", { ...counts(0, 2, false), manifestId: M, waitingVersion: { id: "v1", state: "held_for_fact_review" } });
+  ok(noFlag.state === "done", "stagedWaiting false wins over a stray row");
 
   // Approved and nothing waiting → done ("on the menu").
   const live = menuStep("accepted", counts(0, 3));
