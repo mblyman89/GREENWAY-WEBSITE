@@ -548,6 +548,8 @@ import { __runPriceVariantMatchCoreTests } from "../../src/lib/inventory/price-v
 import { __runPriceCorrectionCoreTests } from "../../src/lib/inventory/price-correction-core";
 import { __runImportLotCoreTests, __runImportLotFactFillTests } from "../../src/lib/pos/import-lot-core";
 import { __runLotPotencyCoreTests } from "../../src/lib/pos/lot-potency-core";
+import { __runCultiveraStrainFixCoreTests } from "../../src/lib/pos/cultivera-strain-fix-core";
+import { __runLegacyLotRemovalCoreTests } from "../../src/lib/pos/legacy-lot-removal-core";
 import { __runCardBrandCoreTests } from "../../src/lib/menu/card-brand-core";
 import { __runMenuCategoryOverrideCoreTests } from "../../src/lib/menu/menu-category-override-core";
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
@@ -1273,6 +1275,8 @@ __runLiquidVolumeTests();
   __runImportLotCoreTests();
   __runImportLotFactFillTests();
   __runLotPotencyCoreTests();
+  __runCultiveraStrainFixCoreTests();
+  __runLegacyLotRemovalCoreTests();
   __runCardBrandCoreTests();
   { const r = __runMenuCategoryOverrideCoreTests(); if (r.passed < 1) throw new Error("menu-category-override-core: no assertions ran"); console.log(`menu-category-override-core: ${r.passed} assertions passed`); }
   __runVendorDirectoryCoreTests();

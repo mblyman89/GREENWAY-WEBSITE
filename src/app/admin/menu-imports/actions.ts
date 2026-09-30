@@ -768,10 +768,13 @@ export async function refileFromTypeCheck(formData: FormData): Promise<void> {
     listInventoryTypes({ includeInactive: false }),
     getOverrideForKey(sourceItemId),
   ]);
+  // R15b: a per-row select posts one "category|type" value.
+  const choice = formData.get("choice");
+  const [choiceCategory, choiceType] = typeof choice === "string" && choice ? choice.split("|") : [null, null];
   const parsed = parseTypeCheckRefile(
     {
-      website_category: formData.get("website_category") as string | null,
-      house_type: formData.get("house_type") as string | null,
+      website_category: choiceCategory ?? (formData.get("website_category") as string | null),
+      house_type: choice ? (choiceType ?? "") : (formData.get("house_type") as string | null),
     },
     {
       // Only categories the live menu can apply (menu-category-override-core).

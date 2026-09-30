@@ -15,6 +15,10 @@ import {
   type MissingMasterRow,
 } from "@/lib/pos/missing-product-master-core";
 import { formatDateTime } from "@/lib/pos/format";
+import { can } from "@/lib/auth/roles";
+import { loadLegacyRemovalPlan } from "@/lib/pos/legacy-lot-removal-store";
+import { legacyRemovalPhrase, LEGACY_REMOVAL_NOTE } from "@/lib/pos/legacy-lot-removal-core";
+import { adjustOutLegacyLotsAction } from "../../fix-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,9 +47,9 @@ export default async function MissingProductsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ back?: string; brand?: string }>;
+  searchParams: Promise<{ back?: string; brand?: string; done?: string; error?: string }>;
 }) {
-  await requirePermission("menu.import");
+  const session = await requirePermission("menu.import");
   const { id } = await params;
   const sp = await searchParams;
 
@@ -79,6 +83,16 @@ export default async function MissingProductsPage({
   // Rejected rows hidden for some OTHER reason are a different problem; say so
   // rather than letting the counts silently disagree.
   const otherRejects = rejected - worklist.totals.items;
+
+  // R15b: the lots behind these cards, for the CCRS adjust-out.
+  let removal: Awaited<ReturnType<typeof loadLegacyRemovalPlan>> | null = null;
+  let removalError: string | null = null;
+  try {
+    removal = await loadLegacyRemovalPlan(id);
+  } catch (err) {
+    removalError = err instanceof Error ? err.message : "Could not read the lots.";
+  }
+  const canAdjust = can(session.profile.role, "inventory.manage") && !imp.is_test;
 
   const selectedBrand = sp.brand ? decodeURIComponent(sp.brand) : null;
   const visibleBrands = selectedBrand
@@ -179,6 +193,58 @@ export default async function MissingProductsPage({
             blank the cell is left blank and listed under &ldquo;Still Needed From Greenway&rdquo; —
             nothing is invented for you.
           </p>
+        </section>
+
+
+        {/* R15b — "I want to delete from ccrs ... a way to bulk adjust those out." */}
+        <section id="remove-legacy" className="scroll-mt-24 rounded-xl border border-orange-500/30 bg-[#0a0a0a] p-5" data-testid="legacy-removal">
+          <h2 className="text-sm font-semibold text-white">Adjust these out of CCRS (legacy records)</h2>
+          <p className="mt-1 max-w-3xl text-xs text-white/55">
+            If these are old Cultivera records with no real stock behind them, remove them here. Each lot gets an
+            inventory adjustment of minus its on-hand quantity with CCRS reason <strong>Reconciliation</strong> (balancing
+            inventory to what is really on the shelf) and this detail: &ldquo;{LEGACY_REMOVAL_NOTE}&rdquo;. The lots go to
+            zero (sold out) and appear on your next <Link href="/admin/compliance/ccrs" className="text-[var(--admin-accent)] hover:underline">CCRS Inventory Adjustment export</Link>.
+            Only lots this import created that still hold stock are included; anything a sale touched since the preview is
+            refused, not forced.
+          </p>
+          {sp.done && <p className="mt-3 rounded border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-3 py-2 text-xs text-[var(--admin-accent)]">{sp.done}</p>}
+          {sp.error && <p className="mt-3 rounded border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs text-red-200">{sp.error}</p>}
+          {removalError && <p className="mt-3 text-xs text-red-200">{removalError}</p>}
+          {removal && !removal.manifestFound && (
+            <p className="mt-3 text-xs text-white/60">This import has not created lots, so there is nothing in inventory to adjust out.</p>
+          )}
+          {removal && removal.manifestFound && (
+            <>
+              <p className="mt-3 text-xs text-white/75">
+                <strong className="text-white">{removal.plan.lots}</strong> lot(s) with <strong className="text-white">{removal.plan.units}</strong> unit(s) on hand
+                behind {removal.flaggedCards} card(s){removal.plan.skippedEmpty > 0 ? ` · ${removal.plan.skippedEmpty} already at zero or not active` : ""}.
+              </p>
+              {removal.plan.lots > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-white/60">Preview the lots</summary>
+                  <ul className="mt-1 max-h-64 space-y-0.5 overflow-auto text-[11px] text-white/60">
+                    {removal.plan.rows.slice(0, 500).map((r) => (
+                      <li key={r.id}>
+                        <Link href={`/admin/inventory/${r.id}`} className="hover:text-white">{r.productName || r.lotCode || r.id}</Link>
+                        <span className="text-white/35"> · {r.lotCode ?? "no barcode"} · −{r.qty}</span>
+                      </li>
+                    ))}
+                    {removal.plan.rows.length > 500 && <li className="text-white/35">+{removal.plan.rows.length - 500} more</li>}
+                  </ul>
+                </details>
+              )}
+              {removal.plan.lots > 0 && canAdjust && (
+                <form action={adjustOutLegacyLotsAction} className="mt-3 flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="importId" value={id} />
+                  <input name="note" maxLength={120} placeholder="Optional extra detail for CCRS" className="w-64 rounded border border-white/15 bg-black px-2 py-1 text-xs text-white" />
+                  <input name="confirm" required placeholder={`Type ${legacyRemovalPhrase(removal.plan.lots)}`} className="w-40 rounded border border-white/15 bg-black px-2 py-1 text-xs text-white" data-testid="legacy-removal-confirm" />
+                  <button type="submit" className="rounded-full bg-orange-500 px-4 py-2 text-xs font-semibold text-black hover:opacity-90" data-testid="legacy-removal-submit">
+                    Adjust out {removal.plan.lots} lot(s)
+                  </button>
+                </form>
+              )}
+            </>
+          )}
         </section>
 
         {worklist.totals.items === 0 ? (

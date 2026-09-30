@@ -33,6 +33,9 @@ import {
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
 import { publishVersion, backfillLotsAction, refileFromTypeCheck, fillLotFactsAction } from "../actions";
+import { bulkRefileFromTypeCheck } from "../fix-actions";
+import { listWebsiteCategoryTypes, listInventoryTypes } from "@/lib/pos/types-store";
+import { isValidWebsiteCategory } from "@/lib/menu/menu-category-override-core";
 import Link from "next/link";
 import {
   posImportFixFor,
@@ -228,6 +231,27 @@ export default async function ImportReviewPage({
     })),
   );
   const canRefile = can(session.profile.role, "inventory.manage");
+  // R15b: the closed vocabulary for the per-row / whole-group "Re-file as" select
+  // (same registries refileFromTypeCheck validates against).
+  let refileChoices: RefileChoice[] = [];
+  if (canRefile && typeCheck.groups.length > 0) {
+    try {
+      const [cats, types] = await Promise.all([
+        listWebsiteCategoryTypes({ includeInactive: false }),
+        listInventoryTypes({ includeInactive: false }),
+      ]);
+      const okCats = cats.filter((c) => isValidWebsiteCategory(c.value));
+      const okValues = new Set(okCats.map((c) => c.value));
+      refileChoices = [
+        ...types
+          .filter((t) => t.website_category && okValues.has(t.website_category))
+          .map((t) => ({ value: `${t.website_category}|${t.label}`, label: `${t.label} (${t.website_category})` })),
+        ...okCats.map((c) => ({ value: `${c.value}|`, label: `${c.label} — category only` })),
+      ];
+    } catch (err) {
+      console.error("[menu-imports/:id] refile registry load error:", err);
+    }
+  }
   const canBackfillLots =
     canPublish &&
     version?.status === "published" &&
@@ -512,7 +536,7 @@ export default async function ImportReviewPage({
             ) : (
               <div className="mt-3 space-y-2">
                 {typeCheck.groups.map((g) => (
-                  <TypeCheckCard key={g.key} g={g} importId={id} canRefile={canRefile} lotsCreated={hasCreatedLots} />
+                  <TypeCheckCard key={g.key} g={g} importId={id} canRefile={canRefile} lotsCreated={hasCreatedLots} choices={refileChoices} />
                 ))}
               </div>
             )}
@@ -786,18 +810,38 @@ const TYPE_CHECK_TITLE: Record<TypeCheckGroup["verdict"], string> = {
   type_mismatch: "CCRS type doesn't match the category",
 };
 
-/** R14b: one Type & category check group, with its per-product fix. */
+type RefileChoice = { value: string; label: string };
+
+/** R15b: a closed "Re-file as" select + submit (server re-validates the pick). */
+function RefileSelect({ choices, defaultValue, testId, label }: { choices: RefileChoice[]; defaultValue?: string; testId: string; label: string }) {
+  return (
+    <>
+      <select name="choice" defaultValue={defaultValue ?? ""} required className="max-w-[14rem] rounded border border-white/15 bg-black px-2 py-1 text-[11px] text-white">
+        <option value="">Re-file as…</option>
+        {choices.map((c) => (
+          <option key={c.value} value={c.value}>{c.label}</option>
+        ))}
+      </select>
+      <button type="submit" className={CHIP_ACTION} data-testid={testId}>{label}</button>
+    </>
+  );
+}
+
+/** R14b: one Type & category check group, with its per-product fix. R15b: bulk + manual. */
 function TypeCheckCard({
   g,
   importId,
   canRefile,
   lotsCreated,
+  choices,
 }: {
   g: TypeCheckGroup;
   importId: string;
   canRefile: boolean;
   lotsCreated: boolean;
+  choices: RefileChoice[];
 }) {
+  const suggestedCount = g.rows.filter((r) => r.suggestion).length;
   const tone = g.verdict === "type_mismatch" ? SEVERITY_STYLE.info : SEVERITY_STYLE.warning;
   return (
     <div className={`rounded-lg border px-3 py-2 text-xs ${tone}`} data-testid="type-check-group" data-verdict={g.verdict}>
@@ -822,6 +866,36 @@ function TypeCheckCard({
         </Link>
       )}
       {g.verdict === "unknown_category" && g.suggestion && <p className="mt-1 text-white/45">{g.suggestion.why}</p>}
+      {canRefile && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {g.verdict === "category_suspect" && suggestedCount > 0 && (
+            <form action={bulkRefileFromTypeCheck}>
+              <input type="hidden" name="importId" value={importId} />
+              <input type="hidden" name="groupKey" value={g.key} />
+              <input type="hidden" name="mode" value="suggested" />
+              <button type="submit" className={CHIP_ACTION} data-testid="type-check-bulk-suggested">
+                Re-file all {g.count} as suggested
+              </button>
+            </form>
+          )}
+          {choices.length > 0 && (
+            <form action={bulkRefileFromTypeCheck} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="importId" value={importId} />
+              <input type="hidden" name="groupKey" value={g.key} />
+              <input type="hidden" name="mode" value="manual" />
+              <RefileSelect
+                choices={choices}
+                defaultValue={g.suggestion ? `${g.suggestion.websiteCategory}|${g.suggestion.houseType ?? ""}` : undefined}
+                testId="type-check-bulk-manual"
+                label={`Re-file all ${g.count}`}
+              />
+            </form>
+          )}
+        </div>
+      )}
+      {canRefile && g.verdict === "type_mismatch" && (
+        <p className="mt-1 text-white/40">Re-filing changes only our type and website category — the CCRS type stays as Cultivera reported it.</p>
+      )}
       <details className="mt-2">
         <summary className="cursor-pointer text-white/60">
           One at a time ({g.rows.length}
@@ -844,6 +918,13 @@ function TypeCheckCard({
                     <button type="submit" className={CHIP_ACTION} data-testid="type-check-refile">
                       Re-file as {r.suggestion.houseType ?? r.suggestion.websiteCategory}
                     </button>
+                  </form>
+                )}
+                {canRefile && choices.length > 0 && (
+                  <form action={refileFromTypeCheck} className="flex items-center gap-1">
+                    <input type="hidden" name="importId" value={importId} />
+                    <input type="hidden" name="sourceItemId" value={r.sourceItemId} />
+                    <RefileSelect choices={choices} testId="type-check-refile-manual" label="Save" />
                   </form>
                 )}
                 <Link

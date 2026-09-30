@@ -30,7 +30,7 @@ import {
 } from "./strain-matcher";
 
 /** DB-first load of active strains (name + aliases); falls back to the seed. */
-async function loadActiveStrains(): Promise<MatchableStrain[]> {
+export async function loadActiveStrains(): Promise<MatchableStrain[]> {
   const seed: MatchableStrain[] = STRAINS_RICH.map((s) => ({
     slug: s.slug,
     name: s.name,
