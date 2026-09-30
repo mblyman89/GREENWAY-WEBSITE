@@ -62,6 +62,7 @@
 import { INVENTORY_TYPE_CATALOG, inventoryTypeKey } from "@/lib/pos/inventory-type-catalog";
 import { HOUSE_TYPE_NAME_RULES } from "@/lib/inventory/house-type-core";
 import { MG_FACT_TYPES } from "@/lib/inventory/fact-extraction-core";
+import { csvCell } from "@/lib/pos/missing-product-master-core";
 
 /** The six CCRS product types Cultivera's InventoryType column carries (measured). */
 export const CCRS_UM = "Usable Marijuana";
@@ -306,7 +307,13 @@ export type TypeCheckItem = {
   inventoryType: string | null;
 };
 
-export type TypeCheckRow = { sourceItemId: string; name: string; suggestion: TypeSuggestion | null };
+export type TypeCheckRow = {
+  sourceItemId: string;
+  name: string;
+  /** The raw POS product name (the rep's match key); R16b rep sheet. */
+  productName?: string | null;
+  suggestion: TypeSuggestion | null;
+};
 
 export type TypeCheckGroup = {
   /** Stable key: verdict|category|actual type. */
@@ -366,7 +373,7 @@ export function buildTypeCheckReport(items: readonly TypeCheckItem[], rowLimit =
       groups.set(key, g);
     }
     g.count += 1;
-    if (g.rows.length < rowLimit) g.rows.push({ sourceItemId: it.sourceItemId, name: it.name, suggestion: a.suggestion });
+    if (g.rows.length < rowLimit) g.rows.push({ sourceItemId: it.sourceItemId, name: it.name, productName: it.productName ?? null, suggestion: a.suggestion });
   }
   const list = [...groups.values()].sort(
     (x, y) => VERDICT_ORDER[x.verdict] - VERDICT_ORDER[y.verdict] || y.count - x.count || x.key.localeCompare(y.key),
@@ -399,6 +406,91 @@ export function typeCheckAdvice(g: Pick<TypeCheckGroup, "verdict" | "category" |
     return "The product name and Cultivera's CCRS type agree with each other and not with the category. Re-file each one below as the suggested type (it moves on the live menu and in the back office at once), and fix the category in Cultivera.";
   }
   return `"${g.category}" is not one of our types yet. Add it on the Types page with the suggested website category, and ask Cultivera to use a standard category name.`;
+}
+
+// ─── R16b: the Cultivera rep sheet (CSV) ─────────────────────────────────────
+//
+// The CCRS type is never rewritten on our side (E1), so the ONLY fix for a
+// type mismatch is in Cultivera — and the owner's rep does Cultivera edits
+// (docs/CULTIVERA_PRODUCT_UPLOAD.md). This is the sheet to send: one row per
+// product, the value it has now, the value it should have, and why. Every
+// "should be" is the category's measured CCRS type or the suggestion the
+// report already made — nothing new is inferred here.
+
+export const TYPE_CHECK_REP_CSV_COLUMNS = [
+  "Product Name (Cultivera)",
+  "Menu Name",
+  "Category (Cultivera)",
+  "Inventory Type now (CCRS)",
+  "Change Inventory Type to",
+  "Change Category to",
+  "Potency display",
+  "Why",
+  "Source Item Id",
+] as const;
+
+/** Row cells for one flagged product (pure). */
+export function typeCheckRepSheetRow(g: TypeCheckGroup, r: TypeCheckRow): string[] {
+  const nowType = g.actualCcrsType || "(blank)";
+  if (g.verdict === "type_mismatch") {
+    const unit = ccrsUnitsDiffer(g.expectedCcrsType, g.actualCcrsType)
+      ? `Shows in ${potencyUnitForCcrsType(g.actualCcrsType)}; will show in ${potencyUnitForCcrsType(g.expectedCcrsType ?? "")}`
+      : "";
+    return [
+      r.productName || r.name,
+      r.name,
+      g.category,
+      nowType,
+      g.expectedCcrsType ?? "",
+      "",
+      unit,
+      `A ${g.category} is ${g.expectedCcrsType ?? "a different type"} (the category's CCRS type on your own export).`,
+      r.sourceItemId,
+    ];
+  }
+  if (g.verdict === "category_suspect") {
+    const to = r.suggestion?.houseType ?? g.suggestion?.houseType ?? "";
+    return [
+      r.productName || r.name,
+      r.name,
+      g.category,
+      nowType,
+      "",
+      to,
+      "",
+      r.suggestion?.why ?? "The product name and the CCRS type agree with each other, not with the category.",
+      r.sourceItemId,
+    ];
+  }
+  // unknown_category
+  const to = r.suggestion?.houseType ?? g.suggestion?.houseType ?? "";
+  return [
+    r.productName || r.name,
+    r.name,
+    g.category,
+    nowType,
+    "",
+    to,
+    "",
+    `"${g.category}" is not a standard Cultivera category.` + (r.suggestion?.why ? ` ${r.suggestion.why}` : ""),
+    r.sourceItemId,
+  ];
+}
+
+/**
+ * The whole sheet (CRLF, header first). Build the report with
+ * TYPE_CHECK_BULK_ROW_LIMIT so every flagged row is present; a group whose
+ * rows were capped is REFUSED (throws) rather than exported short.
+ */
+export function typeCheckRepSheetCsv(report: TypeCheckReport): string {
+  const lines = [TYPE_CHECK_REP_CSV_COLUMNS.map(csvCell).join(",")];
+  for (const g of report.groups) {
+    if (g.rows.length !== g.count) {
+      throw new Error(`The ${g.category} group lists ${g.rows.length} of ${g.count} products; refusing a short sheet.`);
+    }
+    for (const r of g.rows) lines.push(typeCheckRepSheetRow(g, r).map(csvCell).join(","));
+  }
+  return lines.join("\r\n") + "\r\n";
 }
 
 // ─── the one-click re-file (import page) ─────────────────────────────────────
@@ -616,5 +708,21 @@ export function __runCultiveraTypeFromCategoryCoreTests(): { passed: number; fai
   ok(bulkRefileTargets(full, suspectKey, "suggested").length === 2, "bulk suggested covers every row past the display cap");
   ok(bulkRefileTargets(full, suspectKey, "manual", { websiteCategory: "preroll", houseType: null }).every((t) => t.websiteCategory === "preroll"), "bulk manual applies the one pick");
   ok(bulkRefileTargets(full, "nope", "suggested").length === 0, "stale group key → nothing");
+  // R16b rep sheet.
+  const sheetRep = buildTypeCheckReport([
+    { sourceItemId: "t1", name: "Kush Cart 1g", productName: "Kush Cart 1g, 1g", category: "Cartridge", inventoryType: CCRS_UM },
+    { sourceItemId: "p1", name: "Blue Dream Pre-roll 1g", category: "Panda Candies", inventoryType: CCRS_UM },
+  ], TYPE_CHECK_BULK_ROW_LIMIT);
+  const sheet = typeCheckRepSheetCsv(sheetRep).split("\r\n");
+  ok(sheet[0].startsWith("Product Name (Cultivera),Menu Name,") && sheet.length === 4 && sheet[3] === "", "rep sheet: header + one line per flagged product");
+  const mm = sheet.find((l) => l.includes("t1")) ?? "";
+  ok(mm.startsWith('"Kush Cart 1g, 1g",Kush Cart 1g,Cartridge,Usable Marijuana,Concentrate for Inhalation,'), "rep sheet: mismatch row names the CCRS type to change to (POS name quoted)");
+  ok((sheet.find((l) => l.includes("p1")) ?? "").split(",")[5] === "Pre-roll", "rep sheet: suspect row names the category to change to");
+  let refused = false;
+  try { typeCheckRepSheetCsv(buildTypeCheckReport([
+    { sourceItemId: "a", name: "Kush Cart", category: "Cartridge", inventoryType: CCRS_UM },
+    { sourceItemId: "b", name: "OG Cart", category: "Cartridge", inventoryType: CCRS_UM },
+  ], 1)); } catch { refused = true; }
+  ok(refused, "rep sheet: a capped group is refused, never exported short");
   return { passed, failed };
 }

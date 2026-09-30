@@ -67,6 +67,12 @@ export type StrainFixGroup = {
   candidates: StrainFixCandidate[];
   /** An explicit type code in a product name (>= 90% only), for the manual pick. */
   nameHint: { value: GreenwayStrainType; evidence: string } | null;
+  /**
+   * R16: the cards whose OWN product name carries the agreeing >= 90% code.
+   * The bulk name-hint press writes only these (a card without a code is
+   * left for the per-strain pick). Empty when nameHint is null.
+   */
+  nameHintIds: string[];
 };
 
 export type StrainFixPlan = {
@@ -85,7 +91,7 @@ function knownType(raw: string | null | undefined): GreenwayStrainType | null {
 
 /** Cards whose strain type is unknown, grouped by strain name, each matched to the KB. */
 export function planStrainFix(items: readonly StrainFixItem[], strains: readonly MatchableStrain[]): StrainFixPlan {
-  const byKey = new Map<string, { strainName: string; ids: string[]; names: string[] }>();
+  const byKey = new Map<string, { strainName: string; ids: string[]; names: string[]; all: { id: string; name: string }[] }>();
   let unknownCards = 0;
   let noStrainName = 0;
   for (const it of items) {
@@ -93,8 +99,9 @@ export function planStrainFix(items: readonly StrainFixItem[], strains: readonly
     unknownCards += 1;
     const key = normalizeStrainKey(it.strainName);
     if (!key) { noStrainName += 1; continue; }
-    const g = byKey.get(key) ?? { strainName: (it.strainName ?? "").trim().replace(/\s+/g, " "), ids: [], names: [] };
+    const g = byKey.get(key) ?? { strainName: (it.strainName ?? "").trim().replace(/\s+/g, " "), ids: [], names: [], all: [] };
     g.ids.push(it.sourceItemId);
+    g.all.push({ id: it.sourceItemId, name: it.productName || it.name });
     if (g.names.length < 3) g.names.push(it.productName || it.name);
     byKey.set(key, g);
   }
@@ -121,13 +128,16 @@ export function planStrainFix(items: readonly StrainFixItem[], strains: readonly
     } else {
       kind = "no_match";
     }
-    // Name hint: only a >=90% explicit code, and only when every sample agrees.
+    // Name hint: only a >=90% explicit code, and only when EVERY card in the
+    // group that carries a code agrees (R16: all cards, not just the samples).
     let nameHint: StrainFixGroup["nameHint"] = null;
-    for (const n of g.names) {
-      const s = parseStrainTypeFromName(n);
+    let nameHintIds: string[] = [];
+    for (const c of g.all) {
+      const s = parseStrainTypeFromName(c.name);
       if (!s || s.confidence < 90) continue;
-      if (nameHint && nameHint.value !== s.value) { nameHint = null; break; }
-      nameHint = { value: s.value, evidence: s.evidence };
+      if (nameHint && nameHint.value !== s.value) { nameHint = null; nameHintIds = []; break; }
+      if (!nameHint) nameHint = { value: s.value, evidence: s.evidence };
+      nameHintIds.push(c.id);
     }
     groups.push({
       key,
@@ -139,6 +149,7 @@ export function planStrainFix(items: readonly StrainFixItem[], strains: readonly
       best: kind === "kb_confirm" ? candidates.find((c) => c.type) ?? null : best,
       candidates: candidates.filter((c) => c.type).slice(0, 4),
       nameHint,
+      nameHintIds,
     });
   }
   groups.sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.count - a.count || a.key.localeCompare(b.key));
@@ -179,6 +190,30 @@ export function parseStrainFixChoice(
   // alias so the next import matches it exactly (a human pressed it).
   const addAlias = Boolean(candidate && candidate.method !== "exact" && candidate.method !== "alias");
   return { ok: true, key, type: picked.value, kbSlug: candidate?.slug ?? null, saveToKb, addAlias };
+}
+
+/**
+ * R16a — the SECOND bulk-safe set: the product name states the type outright.
+ *
+ * `parseStrainTypeFromName` reads explicit codes ((I), (S), "- Hybrid -",
+ * "sat", ...) and scores them; STRAIN_TYPE_AUTO_MIN_CONFIDENCE (90, the same
+ * bar strain-type-intel-core uses to auto-assign at onboarding) is the line.
+ * `planStrainFix` already keeps a hint only when it is >= 90 AND every sample
+ * name agrees. A group is bulk-safe here only when nothing contradicts it:
+ *   - "no_match": the Knowledge Base has no opinion, the name is the only witness;
+ *   - "kb_confirm": only when the top KB candidate's type EQUALS the hint
+ *     (two independent witnesses agree). A disagreeing candidate waits for a press.
+ * Exact KB matches are already covered by the KB bulk press; "kb_no_type" is
+ * left for a press because it also offers to save the type to the library.
+ * Measured on the real export: 44 groups (59 cards) carry such a hint.
+ */
+export function nameHintBulkGroups(plan: Pick<StrainFixPlan, "groups">): StrainFixGroup[] {
+  return plan.groups.filter((g) => {
+    if (!g.nameHint) return false;
+    if (g.kind === "no_match") return true;
+    if (g.kind === "kb_confirm") return Boolean(g.best?.type && g.best.type === g.nameHint.value);
+    return false;
+  });
 }
 
 export const STRAIN_FIX_AUDIT = "menu_import.strain_type_fixed";
@@ -225,5 +260,29 @@ export function __runCultiveraStrainFixCoreTests(): { passed: number; failed: nu
   ok(good.ok && good.type === "indica" && good.saveToKb && good.kbSlug === null, "manual pick parsed");
   ok(!parseStrainFixChoice({ key: "zzqx qqq", strainType: "purple" }, plan).ok, "junk type refused");
   ok(kbSlugForStrainName("  Blue   Dream ") === "blue dream", "slug convention");
+  const hinted = nameHintBulkGroups(plan).map((g) => g.key);
+  ok(hinted.includes("zzqx qqq") && !hinted.includes("blue dream") && !hinted.includes("watermelon sugar"), "name-hint bulk: no-match with an (I) code only");
+  const agree = planStrainFix([{ sourceItemId: "w", name: "Watermelon Sugar (I)", strainName: "Watermelon Sugar", strainType: "unknown" }], kb);
+  const disagree = planStrainFix([{ sourceItemId: "w", name: "Watermelon Sugar (S)", strainName: "Watermelon Sugar", strainType: "unknown" }], kb);
+  ok(nameHintBulkGroups(agree).length === 1 && nameHintBulkGroups(disagree).length === 0, "name-hint bulk: a KB candidate must agree, never contradict");
+  const mixed = planStrainFix(
+    [
+      { sourceItemId: "m1", name: "Qzx Plum (I) 1g", strainName: "Qzx Plum", strainType: "unknown" },
+      { sourceItemId: "m2", name: "Qzx Plum Cart", strainName: "Qzx Plum", strainType: "unknown" },
+      { sourceItemId: "m3", name: "Qzx Plum 3.5g", strainName: "Qzx Plum", strainType: "unknown" },
+      { sourceItemId: "m4", name: "Qzx Plum 28g", strainName: "Qzx Plum", strainType: "unknown" },
+      { sourceItemId: "m5", name: "Qzx Plum (S) Preroll", strainName: "Qzx Plum", strainType: "unknown" },
+    ],
+    kb,
+  );
+  ok(mixed.groups[0].nameHint === null && mixed.groups[0].nameHintIds.length === 0, "name hint: a conflicting code beyond the 3 samples voids the hint");
+  const partial = planStrainFix(
+    [
+      { sourceItemId: "p1", name: "Qzx Fig (I) 1g", strainName: "Qzx Fig", strainType: "unknown" },
+      { sourceItemId: "p2", name: "Qzx Fig Cart", strainName: "Qzx Fig", strainType: "unknown" },
+    ],
+    kb,
+  );
+  ok(partial.groups[0].nameHintIds.join() === "p1", "name hint: only the cards whose own name carries the code are bulk-written");
   return { passed, failed: 0 };
 }

@@ -79,7 +79,7 @@ export type StrainApplyResult = { cards: number; lots: number };
  */
 export async function applyStrainTypeToCards(
   importId: string,
-  assignments: ReadonlyArray<{ sourceItemIds: readonly string[]; type: GreenwayStrainType; provenance: "kb" | "reviewer" }>,
+  assignments: ReadonlyArray<{ sourceItemIds: readonly string[]; type: GreenwayStrainType; provenance: "kb" | "reviewer" | "name" }>,
   actorId: string | null,
 ): Promise<StrainApplyResult> {
   const admin = createSupabaseAdminClient();

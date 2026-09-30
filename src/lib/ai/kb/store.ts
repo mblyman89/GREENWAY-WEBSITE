@@ -486,6 +486,8 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
 export type KbStrainRow = {
   id: string; slug: string; name: string; strain_type: string | null;
   aroma_notes: string[] | null; flavor_notes: string[] | null; terpenes: string[] | null; active: boolean;
+  /** R16a: alternate spellings (0019 `aliases text[] not null default '{}'`), indexed by the menu overlay. */
+  aliases?: string[] | null;
 };
 
 /**
@@ -508,7 +510,7 @@ export async function listKbStrains(limit = 500): Promise<KbStrainRow[]> {
       const to = Math.min(from + PAGE, limit) - 1;
       const { data, error } = await admin
         .from("kb_strains")
-        .select("id,slug,name,strain_type,aroma_notes,flavor_notes,terpenes,active")
+        .select("id,slug,name,aliases,strain_type,aroma_notes,flavor_notes,terpenes,active")
         .order("name", { ascending: true })
         // `name` is not unique, so it alone is not a stable page boundary.
         .order("id", { ascending: true })

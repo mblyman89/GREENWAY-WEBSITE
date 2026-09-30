@@ -9,9 +9,9 @@ import { CHIP_ACTION } from "@/components/admin/ui";
 import { getImport } from "@/lib/pos/menu-version";
 import { formatDateTime } from "@/lib/pos/format";
 import { loadStrainFixPlan } from "@/lib/pos/cultivera-strain-fix-store";
-import type { StrainFixGroup, StrainFixKind } from "@/lib/pos/cultivera-strain-fix-core";
+import { nameHintBulkGroups, type StrainFixGroup, type StrainFixKind } from "@/lib/pos/cultivera-strain-fix-core";
 import { strainTypeDefinitions, strainTypeLabel } from "@/lib/menu/strain-taxonomy";
-import { applyKbExactStrainsAction, applyStrainChoiceAction } from "../../fix-actions";
+import { applyKbExactStrainsAction, applyNameHintStrainsAction, applyStrainChoiceAction } from "../../fix-actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -24,6 +24,16 @@ const KIND_TITLE: Record<StrainFixKind, string> = {
 };
 
 const TYPE_OPTIONS = strainTypeDefinitions.filter((d) => d.value !== "unknown");
+
+/**
+ * R16: a Cultivera "strain" that is only a type word (seen on the real export:
+ * Loconut topicals filed with strain "Hybrid" / "Sativa" / "Indica"). It is not
+ * a strain, so it must never be added to the Strain library as one.
+ */
+const TYPE_WORD_STRAINS = new Set(["hybrid", "sativa", "indica", "cbd", "sativa hybrid", "indica hybrid", "sativa dominant", "indica dominant"]);
+function isTypeWordStrain(key: string): boolean {
+  return TYPE_WORD_STRAINS.has(key.trim().toLowerCase());
+}
 
 /**
  * R15b — unknown strain types, fixed from the Knowledge Base.
@@ -49,6 +59,8 @@ export default async function ImportStrainsPage({
   const LIMIT = 150;
   const exact = plan.groups.filter((g) => g.kind === "kb_exact");
   const exactCards = exact.reduce((n, g) => n + g.count, 0);
+  const hinted = nameHintBulkGroups(plan).filter((g) => g.nameHintIds.length > 0);
+  const hintedCards = hinted.reduce((n, g) => n + g.nameHintIds.length, 0);
   const rest = plan.groups.filter((g) => g.kind !== "kb_exact");
   const visibleRest = showAll ? rest : rest.slice(0, LIMIT);
 
@@ -122,6 +134,39 @@ export default async function ImportStrainsPage({
           </section>
         )}
 
+        {hinted.length > 0 && (
+          <section className="rounded-xl border border-[var(--admin-gold,#d4a843)]/30 bg-[#0a0a0a] p-5" data-testid="strain-fix-name-hint">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-white">The product name states the type — one press</h2>
+                <p className="mt-1 max-w-2xl text-xs text-white/50">
+                  These strains are not an exact Knowledge Base match, but the product names carry an explicit type code
+                  (like &ldquo;(I)&rdquo; or &ldquo;Sativa&rdquo;), every coded card agrees, and no Knowledge Base
+                  candidate says otherwise. Only the cards whose own name carries the code are set; the rest stay below
+                  for a per-strain pick. Nothing is added to the Strain library from a name code.
+                </p>
+              </div>
+              {canFix && (
+                <form action={applyNameHintStrainsAction}>
+                  <input type="hidden" name="importId" value={id} />
+                  <button type="submit" className="rounded-full border border-[var(--admin-accent)] px-4 py-2 text-xs font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/10" data-testid="strain-fix-apply-name-hint">
+                    Apply the name code to {hintedCards} card{hintedCards === 1 ? "" : "s"} ({hinted.length} strain{hinted.length === 1 ? "" : "s"})
+                  </button>
+                </form>
+              )}
+            </div>
+            <ul className="mt-3 grid gap-1 text-xs text-white/70 sm:grid-cols-2 lg:grid-cols-3">
+              {hinted.slice(0, 60).map((g) => (
+                <li key={g.key} className="truncate" title={g.sampleNames.join(" · ")}>
+                  {g.strainName} → <strong className="text-white">{strainTypeLabel(g.nameHint!.value)}</strong>
+                  <span className="text-white/40"> ×{g.nameHintIds.length}{g.nameHintIds.length < g.count ? ` of ${g.count}` : ""} · {g.nameHint!.evidence}</span>
+                </li>
+              ))}
+              {hinted.length > 60 && <li className="text-white/40">+{hinted.length - 60} more in the same press</li>}
+            </ul>
+          </section>
+        )}
+
         {rest.length > 0 && (
           <section className="space-y-2" data-testid="strain-fix-rest">
             <h2 className="text-sm font-semibold text-white">One at a time ({rest.length})</h2>
@@ -147,7 +192,8 @@ export default async function ImportStrainsPage({
 }
 
 function StrainRow({ g, importId, canFix }: { g: StrainFixGroup; importId: string; canFix: boolean }) {
-  const preset = g.best?.type ?? g.nameHint?.value ?? "";
+  const typeWord = isTypeWordStrain(g.key);
+  const preset = g.best?.type ?? g.nameHint?.value ?? (typeWord ? canonicalTypeWord(g.key) : "");
   return (
     <div className="rounded-lg border border-white/10 bg-[#0a0a0a] px-4 py-3 text-xs" data-testid="strain-fix-row" data-kind={g.kind}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -159,6 +205,12 @@ function StrainRow({ g, importId, canFix }: { g: StrainFixGroup; importId: strin
       </div>
       {g.nameHint && (
         <p className="mt-1 text-white/50">Product name says {strainTypeLabel(g.nameHint.value)} ({g.nameHint.evidence}).</p>
+      )}
+      {typeWord && (
+        <p className="mt-1 text-orange-200/80" data-testid="strain-fix-type-word">
+          Cultivera filed &ldquo;{g.strainName}&rdquo; as the strain name — that is a type, not a strain. Setting the
+          type here is fine; the Strain library box is unticked so it is not added as a strain.
+        </p>
       )}
       {canFix && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -184,7 +236,7 @@ function StrainRow({ g, importId, canFix }: { g: StrainFixGroup; importId: strin
               ))}
             </select>
             <label className="flex items-center gap-1 text-white/60">
-              <input type="checkbox" name="saveToKb" value="1" defaultChecked />
+              <input type="checkbox" name="saveToKb" value="1" defaultChecked={!typeWord} />
               {g.kind === "kb_no_type" ? "save to the Strain library" : "add to the Strain library"}
             </label>
             <button type="submit" className={CHIP_ACTION} data-testid="strain-fix-pick">Set type</button>
@@ -193,4 +245,10 @@ function StrainRow({ g, importId, canFix }: { g: StrainFixGroup; importId: strin
       )}
     </div>
   );
+}
+
+/** "Indica" → "indica" etc. Only for the exact type-word strain names above; else "". */
+function canonicalTypeWord(key: string): string {
+  const k = key.trim().toLowerCase();
+  return TYPE_OPTIONS.some((d) => d.value === k) ? k : "";
 }
