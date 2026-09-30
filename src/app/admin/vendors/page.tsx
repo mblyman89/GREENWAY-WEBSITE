@@ -26,6 +26,8 @@ type Params = {
   itype?: string; // inventory_type filter
   icat?: string; // inventory category filter
   page?: string;
+  /** S31: a vendor action's refusal (e.g. "Vendor not found."), shown not dropped. */
+  error?: string;
 };
 
 export default async function VendorsPage({
@@ -143,6 +145,11 @@ export default async function VendorsPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {sp.error && (
+          <div role="alert" className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">
+            {sp.error}
+          </div>
+        )}
         {/* Import action — bring vendors/brands in from a Cultivera export. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-[var(--admin-text-faint)]">

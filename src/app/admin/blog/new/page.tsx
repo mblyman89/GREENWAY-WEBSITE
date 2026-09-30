@@ -13,10 +13,10 @@ export const dynamic = "force-dynamic";
 export default async function NewBlogPostPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ back?: string }>;
+  searchParams?: Promise<{ back?: string; error?: string }>;
 }) {
   await requirePermission("blog.manage");
-  const sp = searchParams ? await searchParams : {};
+  const sp: { back?: string; error?: string } = searchParams ? await searchParams : {};
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -50,6 +50,16 @@ export default async function NewBlogPostPage({
       <div className="mx-auto w-full max-w-3xl space-y-6 px-5 py-6 sm:px-8">
         {/* GPT-4o idea / headline / trend assistant (local focus) */}
         <BlogIdeaAssistant aiEnabled={isAiConfigured} />
+
+        {/* S31: createPostAction redirects here with ?error=title|slug; the
+            page used to drop it, so a rejected post looked like a no-op. */}
+        {sp.error === "title" || sp.error === "slug" ? (
+          <div role="alert" className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">
+            {sp.error === "title"
+              ? "Give the post a title before creating it."
+              : "That title does not make a usable web address (slug). Use some letters or numbers."}
+          </div>
+        ) : null}
 
         <form action={createPostAction} className="space-y-5">
           {/* Seed passed to the next screen's body-draft AI when an idea is used. */}

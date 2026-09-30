@@ -868,6 +868,7 @@ import { __runLoanCoreTests } from "../../src/lib/loans/loan-core";
 import { __runCustomerInsightsCoreTests } from "../../src/lib/customers/customer-insights-core";
 import { __runCustomerSegmentsCoreTests } from "../../src/lib/customers/customer-segments-core";
 import { __runIntakeFactReviewCoreTests } from "../../src/lib/pos/intake-fact-review-core";
+import { __runFixLinkContractCoreTests } from "../../src/lib/admin/fix-link-contract-core";
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -1885,6 +1886,10 @@ __runLiquidVolumeTests();
   // parsers, open-flag lookup, the narrow 0237 detector, held-copy retire.
   // Measured 136.
   assertRan("intake-fact-review-core", __runIntakeFactReviewCoreTests(), 136);
+  // S31 fix-link contract: href parsing, Next.js route precedence, the
+  // searchParams key reader (inline literal, alias, Record), anchors, and the
+  // coloured-block gate finder. Measured 59.
+  assertRan("fix-link-contract-core", __runFixLinkContractCoreTests(), 59);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

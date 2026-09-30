@@ -40,8 +40,16 @@ export function LabelPrintControls({
             ← Back to manifest
           </Link>
         ) : null}
+        {/* S31: this used to send a `lot` query to the Inventory list, which never reads it,
+            so it opened unfiltered. The lot page is the real destination. */}
         <Link
-          href={`/admin/inventory?lot=${lotId}`}
+          href={`/admin/inventory/${lotId}`}
+          className="text-[var(--admin-text-muted)] underline hover:text-[var(--admin-accent)]"
+        >
+          ← Back to lot
+        </Link>
+        <Link
+          href="/admin/inventory"
           className="text-[var(--admin-text-muted)] underline hover:text-[var(--admin-accent)]"
         >
           Inventory list

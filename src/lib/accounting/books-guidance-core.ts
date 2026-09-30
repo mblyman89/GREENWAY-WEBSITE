@@ -1952,7 +1952,7 @@ export const COMPLETENESS_CHECKS: readonly CompletenessCheck[] = [
     outsideRecord: "The excise return actually filed with the LCB.",
     catches:
       "An excise accrual that drifted from what was reported — and the credit-to-revenue mistake that made the old books show income that was never earned.",
-    href: "/admin/compliance/excise",
+    href: "/admin/reports/excise", // S31: was /admin/compliance/excise (no such page); the LIQ-1295 return lives here.
     authorityIds: ["RCW_69_50_535"],
   },
   {
