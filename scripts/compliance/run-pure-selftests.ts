@@ -590,6 +590,7 @@ import { __runMissingProductMasterCoreTests } from "../../src/lib/pos/missing-pr
 import { __runCompleteReadPlanCoreTests } from "../../src/lib/supabase/complete-read-plan-core";
 import { __runLotGapCoreTests } from "../../src/lib/inventory/lot-gap-core";
 import { __runImportCommitCoreTests } from "../../src/lib/pos/import-commit-core";
+import { __runPublishNowCoreTests } from "../../src/lib/pos/publish-now-core";
 import { __runCommitIntegrityCoreTests } from "../../src/lib/pos/commit-integrity-core";
 import { __runIntakePotencyCoreTests } from "../../src/lib/pos/intake-potency-core";
 import { __runIntakeMasteringCoreTests } from "../../src/lib/pos/intake-mastering-core";
@@ -1301,6 +1302,7 @@ __runLiquidVolumeTests();
   console.log(__runCompleteReadPlanCoreTests());
   console.log(__runLotGapCoreTests());
   __runImportCommitCoreTests();
+  __runPublishNowCoreTests();
   __runCommitIntegrityCoreTests();
   console.log("commit-integrity-core self-tests: all passed");
   __runIntakePotencyCoreTests();

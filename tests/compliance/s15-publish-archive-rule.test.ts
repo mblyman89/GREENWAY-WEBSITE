@@ -530,7 +530,7 @@ describe("S15 wiring - one rule everywhere, old rules gone", () => {
 
   it("the manual publish calls the one rule after the RPC", () => {
     const pub = actions.slice(actions.indexOf("export async function publishVersion"));
-    expect(pub.indexOf("await archiveSupersededStaged({ id: versionId });")).toBeGreaterThan(pub.indexOf("await publishMenuVersion(versionId, session.userId);"));
+    expect(pub.indexOf("await archiveSupersededStaged({ id: versionId });")).toBeGreaterThan(pub.indexOf("await publishMenuVersion(versionId, session.userId, { acknowledgedPendingCount });"));
   });
   it("the automatic publish calls the one rule after a SUCCESSFUL RPC, passing created_at", () => {
     const auto = staging.slice(staging.indexOf("async function autoPublishIntakeVersion"));

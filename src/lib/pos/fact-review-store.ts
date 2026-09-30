@@ -23,6 +23,7 @@ import { pagedAll } from "@/lib/supabase/chunked-in";
 import type { PosFactReview } from "@/lib/pos/db-types";
 import type { FactResolutionAction, FactResolutionInput, FactReviewFacts } from "@/lib/pos/fact-review-core";
 import { isFactReviewMigrationMissing, type IntakeFactAction } from "@/lib/pos/intake-fact-review-core";
+import { mirrorTargetVersionIds, type MirrorVersionRow } from "@/lib/pos/publish-now-core";
 
 /**
  * SLICE 4B: read every saved decision for an import, reporting whether the
@@ -156,12 +157,33 @@ export async function recordFactReview(input: RecordFactReviewInput): Promise<vo
   // 2. Mirror the decision onto the STAGED menu_items row (synthetic flag
   // ids have no staged row - the decision log alone is the record).
   if (input.sourceItemId.startsWith("flag:")) return;
-  const { data: versions, error: vErr } = await admin
-    .from("menu_versions")
-    .select("id")
-    .eq("import_id", input.importId);
-  if (vErr || !versions || versions.length === 0) return; // decision saved; nothing staged to mirror onto
-  const versionIds = versions.map((v) => (v as { id: string }).id);
+  // R14a: this import's versions PLUS the live/staged intake-origin versions
+  // that carry its cards forward by source_item_id (publish-now-core
+  // mirrorTargetVersionIds). Without them a fix made after the first
+  // received delivery landed on an archived version and never reached the
+  // website -- which "publish now, fix after" depends on.
+  // Two plain reads (no filter string built from form input).
+  const [own, carried] = await Promise.all([
+    admin.from("menu_versions").select("id, import_id, status").eq("import_id", input.importId),
+    admin
+      .from("menu_versions")
+      .select("id, import_id, status")
+      .is("import_id", null)
+      .in("status", ["published", "staged"]),
+  ]);
+  if (own.error || !own.data || own.data.length === 0) return; // decision saved; nothing staged to mirror onto
+  // A failed carried read is REPORTED, never silently skipped: the decision is
+  // saved, but the live card would keep the old value and the owner must know.
+  if (carried.error) {
+    throw new Error(
+      `The decision was saved, but the live menu could not be read to apply it (${carried.error.message}). Save it again.`,
+    );
+  }
+  const versionIds = mirrorTargetVersionIds(
+    [...(own.data as MirrorVersionRow[]), ...((carried.data ?? []) as MirrorVersionRow[])],
+    input.importId,
+  );
+  if (versionIds.length === 0) return;
 
   if (input.action === "fix" && input.correctedFacts) {
     const update: Record<string, unknown> = {};

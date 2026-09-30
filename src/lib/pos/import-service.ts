@@ -341,7 +341,29 @@ async function persistDiagnostics(
  * then does the atomic menu swap run, so a live imported menu always has its
  * traceability backbone in place before the first sale.
  */
-export async function publishMenuVersion(versionId: string, actorId: string | null): Promise<void> {
+export type PublishMenuVersionOptions = {
+  /**
+   * R14a: the owner's explicit "publish now, fix after" decision -- the
+   * pending count they SAW when they ticked the box. Honoured ONLY for pending
+   * fact-review rows and only when the fresh count is no larger
+   * (evaluateCommitGate / acknowledgementCovers); every integrity refusal
+   * still refuses. The caller (publishVersion) checks the permission and
+   * writes the audit row.
+   */
+  acknowledgedPendingCount?: number | null;
+};
+
+export type PublishMenuVersionResult = {
+  /** R14a: pending review rows this publish went out with (0 = none). */
+  openReviewsAcknowledged: number;
+};
+
+export async function publishMenuVersion(
+  versionId: string,
+  actorId: string | null,
+  options: PublishMenuVersionOptions = {},
+): Promise<PublishMenuVersionResult> {
+  let openReviewsAcknowledged = 0;
   const admin = createSupabaseAdminClient();
 
   // Guard: refuse to publish a version that has error-severity diagnostics.
@@ -402,8 +424,9 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
       serverItemCount,
       observedReviews: reviewsResult.reviews.length,
       reviewsReadFailed: !reviewsResult.ok,
-    });
+    }, { acknowledgedPendingCount: options.acknowledgedPendingCount ?? null });
     if (!gate.ready) throw new Error(gate.message);
+    openReviewsAcknowledged = gate.openReviewsAcknowledged;
     // Persist the balanced equation so the audit trail shows exactly what
     // this publish committed (idempotent by code+import via the review UI).
     await persistDiagnostics(importId, [
@@ -411,7 +434,9 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
         severity: "info",
         code: "import_commit_reconciled",
         message: gate.message,
-        context: gate.reconciliation,
+        // R14a: the acknowledged count rides with the equation so the audit
+        // trail shows a "publish now, fix after" commit as exactly that.
+        context: { ...gate.reconciliation, openReviewsAcknowledged },
       },
     ]);
 
@@ -424,6 +449,7 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
     p_actor: actorId,
   });
   if (error) throw new Error(`Publish failed: ${error.message}`);
+  return { openReviewsAcknowledged };
 }
 
 const LOT_BATCH = 200;
