@@ -230,7 +230,7 @@ export default async function ManifestReviewPage({
   // pricing, or are stuck staged (publish fallback). Snapshot is null on read
   // failure — the core then renders a neutral todo rather than guessing.
   const menuSnapshot = await intakeMenuStepSnapshot(id);
-  const menuStepView = menuStep(manifest.status, menuSnapshot);
+  const menuStepView = menuStep(manifest.status, menuSnapshot ? { ...menuSnapshot, manifestId: id } : null);
 
   // Convert each intake line's raw LCB classification to OUR website category
   // for display (Request B). Read-only — never mutates the stored CCRS values.
@@ -323,7 +323,9 @@ export default async function ManifestReviewPage({
     heldLots,
     missingCoaLines: missingCoa,
     unmappedCategoryLines: lots.filter((l) => categoryByLotId.get(l.id)?.unmapped).length,
-    menu: menuSnapshot ? { pendingDrafts: menuSnapshot.pendingDrafts, stagedWaiting: menuSnapshot.stagedWaiting } : null,
+    menu: menuSnapshot
+        ? { pendingDrafts: menuSnapshot.pendingDrafts, stagedWaiting: menuSnapshot.stagedWaiting, waitingVersion: menuSnapshot.waitingVersion }
+        : null,
   });
   const issueSummary = summarizeIssues(issues);
   const pageBase = manifestPageBase(id);

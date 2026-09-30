@@ -30,6 +30,7 @@
 
 import { explainDiagnostic, type DiagnosticExplanation } from "@/lib/pos/publish-guard-core";
 import { draftsForManifestHref } from "@/lib/catalog/draft-deep-link-core";
+import { waitingMenuFix, type WaitingMenuVersion } from "@/lib/pos/menu-waiting-link-core";
 import { lotPageHref } from "@/lib/pos/issue-fix-link-core";
 import type { LotGateReason } from "@/lib/inventory/lot-activation-gate-core";
 
@@ -506,7 +507,12 @@ export type ManifestIssueInput = {
   /** Lines whose LCB type maps to no website category. */
   unmappedCategoryLines: number;
   /** intakeMenuStepSnapshot(...) — null when unread (then nothing is claimed). */
-  menu: { pendingDrafts: number; stagedWaiting: boolean } | null;
+  menu: {
+    pendingDrafts: number;
+    stagedWaiting: boolean;
+    /** R13a: the one waiting update and why - the row links where it is fixed. */
+    waitingVersion?: WaitingMenuVersion | null;
+  } | null;
 };
 
 const HELD_REASON_SHORT: Record<string, string> = {
@@ -593,7 +599,22 @@ export function buildManifestIssues(input: ManifestIssueInput): Issue[] {
       fix: { href: draftsForManifestHref(input.manifestId), label: "Open this delivery\u2019s drafts" },
     });
   }
-  if (input.menu && input.menu.stagedWaiting) {
+  if (input.menu && input.menu.stagedWaiting && input.menu.waitingVersion) {
+    // R13a: the link goes where the reason is FIXED (menu-waiting-link-core):
+    // a fact hold to this delivery's approved products (Keep / Correct / Take
+    // off), a cutover hold to the cutover page, anything else to the update's
+    // own review page. Never the bare Publish page (owner: "nothing there").
+    const w = waitingMenuFix({ manifestId: input.manifestId, version: input.menu.waitingVersion });
+    out.push({
+      severity: "warning",
+      code: "manifest_menu_waiting",
+      title: "This delivery\u2019s menu update is waiting",
+      meaning: w.fixText,
+      fixText: `${w.label}.`,
+      fix: { href: w.href, label: w.label },
+      ...(w.extra ? { extra: [{ href: w.extra.href, label: w.extra.label }] } : {}),
+    });
+  } else if (input.menu && input.menu.stagedWaiting) {
     out.push({
       severity: "warning",
       code: "manifest_menu_waiting",
@@ -830,7 +851,17 @@ export function __runIssuesCoreTests(): { passed: number; failed: number } {
   const dr = buildManifestIssues({ ...mEmpty, menu: { pendingDrafts: 3, stagedWaiting: true } });
   ok(dr.length === 2, "drafts + staged rows");
   ok(dr[0].fix?.href === draftsForManifestHref(M), "drafts row → this delivery's drafts");
-  ok(dr[1].fix?.href === "/admin/publish", "staged → publish");
+  ok(dr[1].fix?.href === "/admin/publish", "staged (legacy flag only) → publish");
+  // R13a: with the named waiting row the fix lands where the reason is fixed.
+  const heldRow = buildManifestIssues({ ...mEmpty, menu: { pendingDrafts: 0, stagedWaiting: true, waitingVersion: { id: "v1", state: "held_for_fact_review" } } });
+  ok(heldRow.length === 1 && heldRow[0].code === "manifest_menu_waiting", "held row present");
+  ok(heldRow[0].fix?.href === `/admin/inventory/drafts?status=approved&manifest=${M}`, "fact hold → this delivery's approved products");
+  ok(heldRow[0].extra?.[0]?.href.startsWith("/admin/menu-imports/version/v1?back=") === true, "fact hold extra → the update page");
+  const failRow = buildManifestIssues({ ...mEmpty, menu: { pendingDrafts: 0, stagedWaiting: true, waitingVersion: { id: "v9", state: "auto_publish_failed" } } });
+  ok(failRow[0].fix?.href.startsWith("/admin/menu-imports/version/v9") === true && failRow[0].extra === undefined, "failed → the update page, no extra");
+  const cutRow = buildManifestIssues({ ...mEmpty, menu: { pendingDrafts: 0, stagedWaiting: true, waitingVersion: { id: "v2", state: "held_for_cutover" } } });
+  ok(cutRow[0].fix?.href === "/admin/menu-imports/cutover", "cutover → cutover page");
+  ok(buildManifestIssues({ ...mEmpty, menu: { pendingDrafts: 0, stagedWaiting: false, waitingVersion: { id: "v1", state: "held_for_fact_review" } } }).length === 0, "no waiting flag → no row");
   ok(buildManifestIssues({ ...mEmpty, inProgress: true, menu: { pendingDrafts: 3, stagedWaiting: false } }).length === 0, "drafts row only after finalize");
   ok(buildManifestIssues({ ...mEmpty, menu: null }).length === 0, "unread snapshot claims nothing");
   ok(manifestHeldAutoOpen("0") === undefined, "held=0 (clean finalize) does not open Issues");

@@ -119,6 +119,11 @@ export const ISSUE_LINKED_CODES: readonly string[] = [
   "draft_inject_potency_capped",
   "intake_master_no_vendor",
   "intake_master_merge_ambiguous",
+  // R13a: three receiving warnings that had no fix link (verified in
+  // draft-injection-core.ts; each context carries draft_id + pos_product_key).
+  "draft_inject_house_type_low_confidence",
+  "net_volume_missing",
+  "net_volume_needs_confirmation",
 ];
 
 const DRAFT_CODES = new Set([
@@ -273,6 +278,16 @@ export const ISSUE_COPY = {
     "This product looks like more than one card already on your menu, so we kept it separate instead of guessing. " +
     "Compare the cards side by side. Nothing is lost \u2014 it sells as its own card. " +
     "Choosing where it belongs (and having that choice remembered) arrives with the match screen.",
+  houseTypeFix:
+    "The name and the category disagreed about the product type, so no type was set. " +
+    "Pick the type on the lot page (Website type & category) \u2014 only this product changes.",
+  volumeMissingFix:
+    "It counts against the 72 fl oz limit but its size could not be read. On Product Onboarding, press \u21a9 Restore " +
+    "on it, type the volume from the package, then approve it again.",
+  volumeConfirmFix:
+    "The size was read from the name in more than one way, so the LARGER reading was recorded \u2014 that can only " +
+    "let fewer packages sell, never more. There is no control to change a recorded volume yet; " +
+    "check the package against what is shown on the product.",
   mergeWhy:
     "Products join a live card when vendor, category and product family all match exactly one card. " +
     "This one matched more than one, and we never merge on a guess.",
@@ -348,6 +363,19 @@ export function fixLinkForDiagnostic(code: string, ctx: IssueContext = {}): Issu
       const family = familyWordsFromIdentity(ctx.identity);
       const href = family ? `/admin/products?q=${encodeURIComponent(family)}` : "/admin/products";
       return link(href, "Compare the cards", "list", ISSUE_COPY.mergeFix, ISSUE_COPY.mergeWhy, extra);
+    }
+
+    case "draft_inject_house_type_low_confidence": {
+      if (lotId) return link(lotPageHref(lotId, "website-category"), "Pick this product's type", "item", ISSUE_COPY.houseTypeFix);
+      if (draftId) return link(draftsHref({ status: "approved", draftId }), name ? `Open ${name}` : "Open this product", "item", ISSUE_COPY.houseTypeFix);
+      return link(draftsHref({ status: "approved", ...(manifestId ? { manifestId } : {}) }), "Open this delivery's products", "list", ISSUE_COPY.houseTypeFix);
+    }
+
+    case "net_volume_missing":
+    case "net_volume_needs_confirmation": {
+      const fix = code === "net_volume_missing" ? ISSUE_COPY.volumeMissingFix : ISSUE_COPY.volumeConfirmFix;
+      if (draftId) return link(draftsHref({ status: "approved", draftId }), name ? `Open ${name}` : "Open this product", "item", fix);
+      return link(draftsHref({ status: "approved", ...(manifestId ? { manifestId } : {}) }), "Open this delivery's products", "list", fix);
     }
 
     default:
@@ -517,7 +545,22 @@ export function __runIssueFixLinkCoreTests(): { passed: number; failed: number }
       for (const e of l.extra) ok(issueRouteFor(e.href) !== null && e.routeFile.length > 0, `${code} ${label}: extra route ${e.href}`);
     }
   }
-  ok(ISSUE_LINKED_CODES.length === 8, "eight linked codes");
+  ok(ISSUE_LINKED_CODES.length === 11, "eleven linked codes");
+  // R13a: the three receiving warnings.
+  const ht = fixLinkForDiagnostic("draft_inject_house_type_low_confidence", { lotId: L, draftId: D })!;
+  ok(ht.href === `/admin/inventory/${L}#website-category` && ht.kind === "item", "house type → lot website-category");
+  ok(ht.fix === ISSUE_COPY.houseTypeFix, "house type copy");
+  const htD = fixLinkForDiagnostic("draft_inject_house_type_low_confidence", { draftId: D, productName: "Pen" })!;
+  ok(htD.href === draftsHref({ status: "approved", draftId: D }) && htD.label === "Open Pen", "house type no lot → draft");
+  const htM = fixLinkForDiagnostic("draft_inject_house_type_low_confidence", { manifestId: M })!;
+  ok(htM.href === draftsHref({ status: "approved", manifestId: M }) && htM.kind === "list", "house type → manifest list");
+  const vm = fixLinkForDiagnostic("net_volume_missing", { draftId: D, lotId: L })!;
+  ok(vm.href === draftsHref({ status: "approved", draftId: D }) && vm.fix === ISSUE_COPY.volumeMissingFix, "volume missing → draft (not lot)");
+  ok(ISSUE_COPY.volumeMissingFix.includes("Restore"), "volume missing names the Restore control");
+  const vc = fixLinkForDiagnostic("net_volume_needs_confirmation", { draftId: D })!;
+  ok(vc.fix === ISSUE_COPY.volumeConfirmFix && ISSUE_COPY.volumeConfirmFix.includes("no control"), "volume confirm is honest");
+  const vcE = fixLinkForDiagnostic("net_volume_needs_confirmation", {})!;
+  ok(vcE.href === draftsHref({ status: "approved" }) && vcE.label === "Open this delivery's products", "volume confirm empty → approved list");
   ok(fixLinkForDiagnostic("intake_master_grouped", full) === null, "FYI code → null");
   ok(fixLinkForDiagnostic("draft_injected", full) === null, "success note → null");
   ok(fixLinkForDiagnostic("made_up", full) === null, "unknown code → null");

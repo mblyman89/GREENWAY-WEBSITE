@@ -3,7 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { BackLink } from "@/components/admin/ux";
-import { Button } from "@/components/admin/ui";
+import { Button, CHIP_ACTION } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import {
   getImport,
@@ -32,6 +32,16 @@ import {
   type PublishVerdict,
 } from "@/lib/pos/publish-guard-core";
 import { publishVersion, backfillLotsAction } from "../actions";
+import Link from "next/link";
+import {
+  posImportFixFor,
+  posDiagnosticRowLink,
+  hiddenItemFix,
+  IMPORT_PAGE_ANCHORS,
+  MISSING_COA_HREF,
+  MISSING_EXPIRY_BULK_HREF,
+  type PosFixContext,
+} from "@/lib/pos/pos-import-fix-core";
 
 const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
   safe: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
@@ -112,7 +122,6 @@ export default async function ImportReviewPage({
   const warnings = diagnostics.filter((d) => d.severity === "warning");
   const info = diagnostics.filter((d) => d.severity === "info");
 
-  const codeSummary = summarizeByCode(diagnostics);
 
   // SLICE 57: how many diagnostics feed the golden-record exception queue,
   // and how many decisions are already saved for this import.
@@ -180,6 +189,19 @@ export default async function ImportReviewPage({
   const hasCreatedLots = diagnostics.some(
     (d) => d.code === "import_lots_created" || d.code === "import_lots_already_created",
   );
+  // Round 13: where each diagnostic / hidden card is actually fixed.
+  const fixCtx: PosFixContext = {
+    importId: id,
+    versionPublished: version?.status === "published",
+    lotsCreated: hasCreatedLots,
+  };
+  const codeSummary = summarizeByCode(diagnostics, (d) => {
+    const link = posDiagnosticRowLink(d.code, d.context_json, fixCtx);
+    if (!link) return null;
+    const c = (d.context_json ?? {}) as Record<string, unknown>;
+    const name = [c.product, c.displayName, c.productName, c.barcode].find((v) => typeof v === "string" && v.trim());
+    return { ...link, name: typeof name === "string" ? name : d.message };
+  });
   const canBackfillLots =
     canPublish &&
     version?.status === "published" &&
@@ -345,7 +367,7 @@ export default async function ImportReviewPage({
         </section>
 
         {/* Diagnostics */}
-        <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+        <section id={IMPORT_PAGE_ANCHORS.diagnostics} className="scroll-mt-24 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white">Diagnostics</h2>
             <div className="flex gap-3 text-xs">
@@ -366,18 +388,58 @@ export default async function ImportReviewPage({
 
           {codeSummary.length > 0 ? (
             <div className="mt-3 space-y-1.5">
-              {codeSummary.map((c) => (
-                <div
-                  key={`${c.severity}-${c.code}`}
-                  className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-xs ${SEVERITY_STYLE[c.severity]}`}
-                >
-                  <div>
-                    <span className="font-mono font-semibold">{c.code}</span>
-                    <span className="ml-2 opacity-80">{c.sample}</span>
+              {codeSummary.map((c) => {
+                const fix = posImportFixFor(c.code, fixCtx);
+                const rows = c.rowLinks;
+                return (
+                  <div
+                    key={`${c.severity}-${c.code}`}
+                    data-testid="import-diagnostic"
+                    data-code={c.code}
+                    className={`rounded-lg border px-3 py-2 text-xs ${SEVERITY_STYLE[c.severity]}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span className="font-mono font-semibold">{c.code}</span>
+                        <span className="ml-2 opacity-80">{c.sample}</span>
+                      </div>
+                      <span className="shrink-0 rounded bg-black/30 px-2 py-0.5 font-semibold">×{c.count}</span>
+                    </div>
+                    {fix && (
+                      <div className="mt-2 border-t border-white/10 pt-2 text-white/75">
+                        <p>{fix.what}</p>
+                        <p className="mt-0.5 text-white/60">{fix.how}</p>
+                        {fix.links.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {fix.links.map((l) => (
+                              <Link key={l.href} href={l.href} className={CHIP_ACTION} data-testid="import-diagnostic-fix">
+                                {l.label} →
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {rows.length > 0 && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-white/60">
+                          One at a time ({rows.length}{c.count > rows.length ? ` of ${c.count}` : ""})
+                        </summary>
+                        <ul className="mt-1 max-h-64 space-y-1 overflow-auto">
+                          {rows.map((r) => (
+                            <li key={r.key} className="flex items-center justify-between gap-2">
+                              <span className="truncate text-white/70">{r.name}</span>
+                              <Link href={r.href} data-testid="import-diagnostic-row-fix" className="shrink-0 font-semibold text-[var(--admin-accent)] hover:underline">
+                                {r.label} →
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                   </div>
-                  <span className="shrink-0 rounded bg-black/30 px-2 py-0.5 font-semibold">×{c.count}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="mt-3 text-sm text-white/50">No diagnostics — clean import.</p>
@@ -386,7 +448,7 @@ export default async function ImportReviewPage({
 
         {/* Hidden items */}
         {hiddenTotal > 0 && (
-          <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+          <section id={IMPORT_PAGE_ANCHORS.hidden} className="scroll-mt-24 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
             <h2 className="text-sm font-semibold text-white">
               Hidden items ({hiddenTotal})
             </h2>
@@ -395,16 +457,31 @@ export default async function ImportReviewPage({
               inventory). Showing first {hiddenItems.length}.
             </p>
             <div className="mt-3 max-h-96 overflow-auto rounded-lg border border-white/10">
-              {hiddenItems.map((i) => (
-                <div key={i.id} className="flex items-center justify-between border-b border-white/5 px-3 py-1.5 text-xs">
-                  <span className="text-white/80">
-                    {i.name} <span className="text-white/40">· {i.brand_name} · {i.category}</span>
-                  </span>
-                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
-                    {i.hidden_reason ?? "hidden"}
-                  </span>
-                </div>
-              ))}
+              {hiddenItems.map((i) => {
+                const fix = hiddenItemFix({
+                  sourceItemId: i.source_item_id,
+                  hiddenReason: i.hidden_reason,
+                  importId: id,
+                  versionPublished: fixCtx.versionPublished,
+                });
+                return (
+                  <div key={i.id} className="flex items-center justify-between gap-2 border-b border-white/5 px-3 py-1.5 text-xs">
+                    <span className="text-white/80">
+                      {i.name} <span className="text-white/40">· {i.brand_name} · {i.category}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
+                        {i.hidden_reason ?? "hidden"}
+                      </span>
+                      {fix && (
+                        <Link href={fix.href} data-testid="hidden-item-fix" className="font-semibold text-[var(--admin-accent)] hover:underline">
+                          {fix.label} →
+                        </Link>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}
@@ -412,7 +489,7 @@ export default async function ImportReviewPage({
         {/* T-327 (Slice 1) — Backfill lots for an import published BEFORE the
             lot-creation feature (live menu, but no inventory records yet). */}
         {canBackfillLots && (
-          <section className="rounded-xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/5 p-5">
+          <section id={IMPORT_PAGE_ANCHORS.backfill} className="scroll-mt-24 rounded-xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/5 p-5">
             <h2 className="text-sm font-semibold text-white">
               Missing inventory records for this import
             </h2>
@@ -435,7 +512,7 @@ export default async function ImportReviewPage({
 
         {/* Compliance inventory lots (SLICE 46) */}
         {lotPlan && (
-          <section className="rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-5">
+          <section id={IMPORT_PAGE_ANCHORS.lotPlan} className="scroll-mt-24 rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-5">
             <h2 className="text-sm font-semibold text-white">Compliance inventory lots</h2>
             <p className="mt-1 text-xs text-white/50">
               Publishing this version also creates traceable inventory lots &mdash; the same
@@ -459,6 +536,30 @@ export default async function ImportReviewPage({
                 accent="orange"
               />
             </div>
+            {/* Round 13: the two blanks the import cannot fill, with their real controls. */}
+            {hasCreatedLots ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(lotPlan.expirationMissing ?? 0) > 0 && (
+                  <Button href={MISSING_EXPIRY_BULK_HREF} variant="primary" size="sm" data-testid="lot-plan-expiry-fix">
+                    Set expiry dates with Bulk fill →
+                  </Button>
+                )}
+                {(lotPlan.coaMissing ?? 0) > 0 && (
+                  <Button href={MISSING_COA_HREF} variant="neutral" size="sm" data-testid="lot-plan-coa-list">
+                    See the lots without a COA →
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-white/50" data-testid="lot-plan-not-yet">
+                These lots are created when this version is published; the Bulk fill buttons appear here after that.
+              </p>
+            )}
+            {(lotPlan.coaMissing ?? 0) > 0 && (
+              <p className="mt-2 text-xs text-white/45">
+                Attaching COA files waits on Cultivera&apos;s answer about COA access &mdash; there is no attach button yet.
+              </p>
+            )}
           </section>
         )}
 
@@ -522,18 +623,33 @@ function DiffStat({ label, value, accent }: { label: string; value: number; acce
   );
 }
 
-type CodeSummary = { severity: DiagnosticSeverity; code: string; count: number; sample: string };
+type RowLink = { key: string; href: string; label: string; name: string };
+type CodeSummary = { severity: DiagnosticSeverity; code: string; count: number; sample: string; rowLinks: RowLink[] };
 
-function summarizeByCode(
-  diagnostics: { severity: DiagnosticSeverity; code: string; message: string }[],
+/** Round 13: per-code row links are capped so a 4,000-row code stays renderable. */
+const ROW_LINK_CAP = 200;
+
+function summarizeByCode<D extends { severity: DiagnosticSeverity; code: string; message: string }>(
+  diagnostics: D[],
+  rowLink: (d: D) => { href: string; label: string; name: string } | null,
 ): CodeSummary[] {
   const map = new Map<string, CodeSummary>();
   const rank: Record<DiagnosticSeverity, number> = { error: 0, warning: 1, info: 2 };
   for (const d of diagnostics) {
     const key = `${d.severity}|${d.code}`;
-    const existing = map.get(key);
-    if (existing) existing.count += 1;
-    else map.set(key, { severity: d.severity, code: d.code, count: 1, sample: d.message });
+    let entry = map.get(key);
+    if (entry) entry.count += 1;
+    else {
+      entry = { severity: d.severity, code: d.code, count: 1, sample: d.message, rowLinks: [] };
+      map.set(key, entry);
+    }
+    if (entry.rowLinks.length < ROW_LINK_CAP) {
+      const link = rowLink(d);
+      // One link per destination: a facts link repeated 600 times is noise.
+      if (link && !entry.rowLinks.some((r) => r.href === link.href)) {
+        entry.rowLinks.push({ key: `${link.href}|${entry.rowLinks.length}`, ...link });
+      }
+    }
   }
   return [...map.values()].sort(
     (a, b) => rank[a.severity] - rank[b.severity] || b.count - a.count,

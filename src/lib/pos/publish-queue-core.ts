@@ -90,8 +90,17 @@ export const QUEUE_REASON_TAG: Record<QueueReason, string> = {
  * cutover hold: the fix is on the cutover page (publish the Cultivera upload,
  * or rebuild afterwards); the held snapshot itself is never published.
  */
-export function primaryAction(reason: QueueReason, reviewHref: string): { label: string; href: string } {
+export function primaryAction(
+  reason: QueueReason,
+  reviewHref: string,
+  factHref?: string | null,
+): { label: string; href: string } {
   if (reason === "cutover") return { label: QUEUE_ACTION_LABEL.cutover, href: CUTOVER_ACTION_HREF };
+  // R13a: a fact hold is decided on the delivery's approved products (the
+  // S30 Keep / Correct / Take off panel), not on the review page - the owner
+  // pressed "Check the flagged facts" and found no control there. The caller
+  // passes that link when it knows the delivery; otherwise the review page.
+  if (reason === "fact_review" && factHref) return { label: QUEUE_ACTION_LABEL.fact_review, href: factHref };
   return { label: QUEUE_ACTION_LABEL[reason], href: reviewHref };
 }
 
@@ -170,6 +179,11 @@ export function __runPublishQueueTests(): { passed: number } {
   ok(new Set(reasons.map((r) => QUEUE_REASON_TAG[r])).size === 4, "four distinct tags");
   ok(reasons.every((r) => primaryAction(r, "/x").href === "/x"), "the action goes to the row's review page");
   ok(primaryAction("fact_review", "/v").label === "Check the flagged facts \u2192", "fact button copy");
+  ok(primaryAction("fact_review", "/v", "/f").href === "/f", "R13a: fact hold with a delivery link -> the flagged products");
+  ok(primaryAction("fact_review", "/v", null).href === "/v", "R13a: no delivery link -> review page");
+  ok(primaryAction("fact_review", "/v", "").href === "/v", "R13a: empty delivery link -> review page");
+  ok(primaryAction("publish_failed", "/v", "/f").href === "/v", "R13a: the fact link is used for fact holds only");
+  ok(primaryAction("cutover", "/v", "/f").href === CUTOVER_ACTION_HREF, "R13a: cutover still wins");
   ok(primaryAction("publish_failed", "/v").label === "Try publishing again \u2192", "failed button copy");
   ok(reasons.every((r) => !/REMOVE|WHOLE|REPLACE/.test(QUEUE_ACTION_LABEL[r] + QUEUE_REASON_TAG[r])), "no alarm words");
 

@@ -38,6 +38,13 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
 import { archiveSupersededStaged } from "@/lib/pos/menu-version";
+import {
+  WAITING_VERSION_READ_LIMIT,
+  WAITING_VERSION_SELECT,
+  pickWaitingVersion,
+  type WaitingMenuVersion,
+  type WaitingVersionRow,
+} from "@/lib/pos/menu-waiting-link-core";
 // S30: receiving fact review - saved decisions resolve (and are applied to)
 // the flags that would otherwise hold this update.
 import { listIntakeFactReviewsResult } from "@/lib/pos/fact-review-store";
@@ -741,11 +748,17 @@ async function autoPublishIntakeVersion(
  */
 export async function intakeMenuStepSnapshot(
   manifestId: string,
-): Promise<{ pendingDrafts: number; approvedDrafts: number; stagedWaiting: boolean } | null> {
+): Promise<{
+  pendingDrafts: number;
+  approvedDrafts: number;
+  stagedWaiting: boolean;
+  /** R13a: the ONE waiting update (newest, not superseded) and why it waits. */
+  waitingVersion: WaitingMenuVersion | null;
+} | null> {
   if (!isSupabaseServiceConfigured) return null;
   try {
     const admin = createSupabaseAdminClient();
-    const [pendingRes, approvedRes, stagedRes] = await Promise.all([
+    const [pendingRes, approvedRes, stagedRes, publishedRes] = await Promise.all([
       admin
         .from("catalog_product_drafts")
         .select("id", { count: "exact", head: true })
@@ -756,24 +769,39 @@ export async function intakeMenuStepSnapshot(
         .select("id", { count: "exact", head: true })
         .eq("manifest_id", manifestId)
         .eq("status", "approved"),
+      // R13a: NAMED rows, newest first, not a bare count. A count also
+      // counted receiving updates the next publish archives (S15 rule), so
+      // the ribbon said "waiting" and the Publish page had nothing to show.
       admin
         .from("menu_versions")
-        .select("id", { count: "exact", head: true })
+        .select(WAITING_VERSION_SELECT)
         .is("import_id", null)
         .eq("status", "staged")
-        .eq("summary_json->>manifest_id", manifestId),
+        .eq("summary_json->>manifest_id", manifestId)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(WAITING_VERSION_READ_LIMIT),
+      admin.from("menu_versions").select("id, created_at").eq("status", "published").limit(1).maybeSingle(),
     ]);
-    if (pendingRes.error || approvedRes.error || stagedRes.error) {
+    if (pendingRes.error || approvedRes.error || stagedRes.error || publishedRes.error) {
       console.error(
         "[intake-menu-staging] menu-step snapshot read failed:",
-        pendingRes.error?.message ?? approvedRes.error?.message ?? stagedRes.error?.message,
+        pendingRes.error?.message ??
+          approvedRes.error?.message ??
+          stagedRes.error?.message ??
+          publishedRes.error?.message,
       );
       return null;
     }
+    const waitingVersion = pickWaitingVersion(
+      (stagedRes.data as unknown as WaitingVersionRow[] | null) ?? [],
+      (publishedRes.data as { id: string; created_at: string } | null) ?? null,
+    );
     return {
       pendingDrafts: pendingRes.count ?? 0,
       approvedDrafts: approvedRes.count ?? 0,
-      stagedWaiting: (stagedRes.count ?? 0) > 0,
+      stagedWaiting: waitingVersion !== null,
+      waitingVersion,
     };
   } catch (err) {
     console.error("[intake-menu-staging] menu-step snapshot exception:", err);

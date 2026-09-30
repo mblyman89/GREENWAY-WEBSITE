@@ -410,7 +410,13 @@ export default async function MenuImportsPage({
                           <span className="ml-2 text-red-400">{version.error_count} err</span>
                         )}
                         {version.warning_count > 0 && (
-                          <span className="ml-2 text-[var(--admin-gold)]">{version.warning_count} warn</span>
+                          <Link
+                            href={`${withBackParam(`/admin/menu-imports/${imp.id}`, params)}#diagnostics`}
+                            data-testid="import-warn-link"
+                            className="ml-2 text-[var(--admin-gold)] underline-offset-2 hover:underline"
+                          >
+                            {version.warning_count} warn — fix
+                          </Link>
                         )}
                       </>
                     ) : imp.error_message ? (
