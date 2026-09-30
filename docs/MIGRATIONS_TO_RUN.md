@@ -1310,3 +1310,71 @@ in Vercel.
   a delivery), drops the two constraints and three columns, and restores
   `import_id NOT NULL`. Held receiving updates then go back to
   publish-by-hand.
+
+## D-81 — 0238 — the factory reset can finish
+
+- [ ] `0238_factory_reset_reaches_every_guard.sql` — replaces four database
+  functions (the guards on `gl_template_changes`, `gl_opening_balances`,
+  `gl_override_log` and `gl_audit_events`). It does not change any table and
+  does not touch any row. It depends on 0172, 0174, 0176, 0177 and 0209 (all
+  long applied). If any is missing, the file refuses to run and names it.
+
+  **Why:** Admin → Settings → Reset ("Reset all test data") said
+  "Reset failed" even with the retention box ticked and `ERASE ALL TEST DATA`
+  typed. The reset (0209) empties everything in one transaction. When
+  it reached a table whose guard refuses deletes, the whole reset was undone.
+  0209 opened a door in three guards for the reset only. It missed four
+  places (D-81):
+  `gl_template_changes` (a posting template was ever edited),
+  `gl_override_log` (a journal was ever self-approved under the owner override),
+  posted `gl_opening_balances`, and `gl_audit_events`. The last one blocks as
+  soon as ONE journal was posted or approved through the app. Deleting that
+  journal makes Postgres blank the journal link on its audit rows, and the
+  audit guard refused that change.
+
+  **What it does:** each of the four guards gets the same door 0209 uses,
+  checked first. It is open only inside the transaction the reset itself runs
+  in, and it closes by itself when that transaction ends. Outside a reset
+  every guard refuses exactly as before. Editing is still refused always. The
+  audit guard lets through only the one change the database makes itself
+  (a link going blank, every other column identical), and only during a reset.
+
+  **Until it is run** the reset keeps failing, and nothing else changes.
+
+  Safe to re-run (`create or replace` only). Verified: all 238 migrations
+  apply on a clean Postgres 15, 0238 re-applies cleanly, and the scenario
+  script `scripts/recon/factory-reset-guards-pg-check.sql` passed. It makes
+  real test data through the app functions (template edit, a 6,000 dollar
+  journal approved and posted, a posted opening balance). It then shows every
+  guard still refusing outside a reset, runs the real `gl_factory_reset`
+  (succeeds, every wiped table empty, templates kept) and proves the door is
+  shut afterwards. It restores the rollback (the reset fails again), then
+  re-applies 0238 twice (it works again). All of it in a rolled-back
+  transaction.
+
+  **Run it, then check:**
+
+  ```sql
+  select p.proname,
+         pg_get_functiondef(p.oid) like '%gl_factory_reset_active%' as reset_can_pass
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.proname in ('gl_guard_template_changes_append_only', 'gl_ob_guard_frozen',
+                       'gl_override_log_is_append_only', 'gl_guard_audit_append_only')
+   order by p.proname;
+  -- expect 4 rows, every one true
+
+  select pg_get_functiondef('public.gl_guard_audit_append_only()'::regprocedure)
+         like '%to_jsonb(new)%' as audit_fk_rewrite_allowed;
+  -- expect true (false means 0238 did not run: the audit guard still has only the 0209 door)
+  ```
+
+  Then run the reset again: Admin → Settings → Reset, tick the retention
+  box, type `ERASE ALL TEST DATA`. The "looks like real trade" warning is
+  expected after testing with real data. The box is how you confirm it.
+
+  **Rollback (only if needed):** paste
+  `supabase/rollbacks/0238_factory_reset_reaches_every_guard.rollback.sql`
+  into the SQL editor. It puts back the 0174, 0176, 0177 and 0209 guard
+  bodies. The reset then fails again as described above.
