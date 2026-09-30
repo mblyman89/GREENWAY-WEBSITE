@@ -4352,3 +4352,51 @@ and make Books, not the merchant, decide the entity. An account whose books are
 
 **Related:** D-79 (the same field, its other failure), D-75 (the classifier this
 now sits in front of).
+
+
+## D-81 - the factory reset aborted on four guards 0209 never opened
+
+**Found:** answering the owner: "Please refresh the git repo, then proceed to
+fix the reset data feature so I can clean out all my dirty test data." Every
+blocker below was reproduced on Postgres 15 with all 237 migrations applied,
+not inferred.
+
+**Severity:** high. The only way to clear rehearsal data before go-live did
+not work. The page said "Reset failed" even with the retention box ticked.
+
+**What broke.** `gl_factory_reset()` (0209, D-62) empties 139 tables in one
+transaction and opens one transaction-local door, `gl_factory_reset_active()`,
+through the ledger guards. It gave that door to the posted-journal, posted-line
+and audit guards. It did not give it to:
+
+* `gl_template_changes` - 0174 `gl_guard_template_changes_append_only`
+  (`GL_APPEND_ONLY`), with a row as soon as a posting template was edited.
+* `gl_override_log` - 0177 `gl_override_log_is_append_only`
+  (`GL_OVERRIDE_LOG_APPEND_ONLY`), with a row as soon as the owner override
+  self-approved a journal.
+* posted `gl_opening_balances` - 0176 `gl_ob_guard_frozen` (`GL_OB_FROZEN`).
+* `gl_audit_events` UPDATE. `journal_id` / `period_id` reference `gl_journals`
+  / `gl_periods` ON DELETE SET NULL, and 0209 deletes those two first. So
+  Postgres UPDATEs the audit rows, and the 0209 door covered DELETE only:
+  `GL_IMMUTABLE: gl_audit_events is append-only ... UPDATE ONLY
+  "public"."gl_audit_events" SET "journal_id" = NULL`. One journal posted or
+  approved through the app was enough.
+
+**How it hid:** the pure plan (`factory-reset-core.ts`) was right. It classifies
+tables, and every table was classified. The tests checked the plan and the
+door on the three guards 0209 edited. Nothing looked for OTHER triggers on the
+wiped tables, or at the foreign keys that turn a delete into an update.
+
+**Fix:** 0238 gives the four guards the door, checked first. The audit guard
+passes only the FK-shaped null rewrite, and only during a reset. Outside a
+reset nothing changed. The WIPE/KEEP lists did not change.
+
+**Gate:** `tests/compliance/d81-reset-reaches-every-guard.test.ts` reads every
+migration (last definition wins). It fails if any BEFORE DELETE trigger that
+raises on a table 0209 deletes lacks the door before its first refusal. It also
+fails if a SET NULL foreign key between two wiped tables, emptied parent first,
+meets a BEFORE UPDATE trigger that raises without an UPDATE door. With 0238
+removed it names exactly the four blockers above.
+`scripts/recon/factory-reset-guards-pg-check.sql` runs the real reset.
+
+**Related:** D-62 (the reset this repairs), D-63.
