@@ -26,6 +26,10 @@
     {
       "path": "/api/cron/leafly-ack-sweep",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/lookup-jobs",
+      "schedule": "* * * * *"
     }
   ]
 }
