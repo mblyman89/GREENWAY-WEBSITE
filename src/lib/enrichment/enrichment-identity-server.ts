@@ -16,10 +16,13 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
+import { getPublishedVersion } from "@/lib/pos/menu-version";
 import {
   ENRICHMENT_IDENTITY_ENV,
   enrichmentFollowsIdentityEnabled,
+  enrichmentIdentityForItem,
   indexPublishedByIdentity,
+  type BackfillMenuRow,
   type IdentityCandidate,
 } from "./enrichment-identity-core";
 
@@ -75,7 +78,8 @@ export async function loadPublishedEnrichmentsByIdentity<T extends IdentityCandi
   } catch {
     return out;
   }
-  const columns = mergeColumns(contentColumns, SURVIVORSHIP_COLUMNS);
+  // "*" already carries every survivorship column; never append to it.
+  const columns = contentColumns.trim() === "*" ? "*" : mergeColumns(contentColumns, SURVIVORSHIP_COLUMNS);
   try {
     const rows = await chunkedIn<string, T>(
       keys,
@@ -109,5 +113,40 @@ export async function loadPublishedEnrichmentsByIdentity<T extends IdentityCandi
   } catch (err) {
     console.error("[enrichment-identity] identity read failed:", err instanceof Error ? err.message : err);
     return new Map();
+  }
+}
+
+/** The menu_items columns the S03 identity is built from (never select *). */
+export const MENU_IDENTITY_COLUMNS = "source_item_id, name, product_name, brand_name, vendor_name, category";
+
+/**
+ * The storage identity of ONE published card, read from its RAW menu row
+ * (not the display overlay). null when: flag off, no credentials, no
+ * published version, no such card, not enough identity, or any error.
+ * Used by ensureEnrichment to stamp identity_key on a row it creates or
+ * finds unstamped, so new enrichments are born linked.
+ */
+export async function identityForCardKey(posProductKey: string): Promise<string | null> {
+  const key = (posProductKey ?? "").trim();
+  if (!key || !enrichmentFollowsIdentityOn() || !isSupabaseServiceConfigured) return null;
+  try {
+    const version = await getPublishedVersion();
+    if (!version) return null;
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("menu_items")
+      .select(MENU_IDENTITY_COLUMNS)
+      .eq("menu_version_id", version.id)
+      .eq("source_item_id", key)
+      .limit(2);
+    if (error || !data) return null;
+    const rows = data as unknown as BackfillMenuRow[];
+    // Two rows for one card key in one version would be a data fault: the
+    // backfill plan's rule (conflicting rows -> no identity) applies here too.
+    const ids = new Set(rows.map((r) => enrichmentIdentityForItem(r)));
+    if (ids.size !== 1) return null;
+    return [...ids][0] ?? null;
+  } catch {
+    return null;
   }
 }

@@ -66,7 +66,7 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
  * Fields emptied or removed before items are handed to the client grid.
  * Every entry has been verified unread by the menu client tree.
  */
-export const GRID_TRIMMED_FIELDS = ["description", "hiddenReason"] as const;
+export const GRID_TRIMMED_FIELDS = ["description", "hiddenReason", "identityKey"] as const;
 
 /**
  * Project the published menu down to what the grid actually renders.
@@ -88,6 +88,9 @@ export function toMenuGridItems(items: readonly GreenwayMenuItem[]): GreenwayMen
     // touched; `next` is already a fresh object.
     const next: GreenwayMenuItem = { ...item, description: "" };
     delete next.hiddenReason;
+    // S20: the product identity feeds the server-side enrichment ladder only;
+    // no card reads it, so it never ships to the browser.
+    delete next.identityKey;
     return next;
   });
 }
@@ -125,6 +128,7 @@ export function __runMenuGridProjectionTests(): { passed: number; failed: number
     compounds: [{ name: "THC", value: 24.5, unit: "%" }],
     description: "Should not reach the grid.",
     hiddenReason: "should not reach the grid either",
+    identityKey: "vendor|flower|test-product",
     priceLabel: "$45.00",
     priceMinorUnits: 4500,
     inventoryStatus: "in-stock",
@@ -140,6 +144,7 @@ export function __runMenuGridProjectionTests(): { passed: number; failed: number
   // ── The trimmed fields carry no payload ───────────────────────────────────
   check("description is blanked", asRecord.description === "");
   check("hiddenReason is removed", !("hiddenReason" in asRecord));
+  check("identityKey is removed (S20: server-side only)", !("identityKey" in asRecord));
 
   // ── The type contract is intact (description still PRESENT, just empty) ────
   // This matters: the card components are typed against the full item, so the
