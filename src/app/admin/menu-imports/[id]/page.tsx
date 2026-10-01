@@ -64,6 +64,14 @@ const VERDICT_STYLE: Record<PublishVerdict["level"], string> = {
 };
 
 export const dynamic = "force-dynamic";
+/**
+ * R17 — the lot-plan "Fill received dates & cannabinoids" server action runs
+ * inside this page's function (~300 date UPDATEs + ~2,340 per-lot potency
+ * patches on the real export). Pin the budget explicitly rather than relying
+ * on the platform default; the fill is fill-only, so a re-click after any
+ * timeout safely resumes where it stopped.
+ */
+export const maxDuration = 300;
 
 const SEVERITY_STYLE: Record<DiagnosticSeverity, string> = {
   error: "border-red-500/40 bg-red-500/5 text-red-300",

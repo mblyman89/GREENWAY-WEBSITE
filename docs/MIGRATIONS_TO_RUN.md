@@ -1499,3 +1499,46 @@ in Vercel.
   `supabase/rollbacks/0240_factory_reset_scales.rollback.sql` into the SQL
   editor. It puts back the 0209 row-by-row reset, and the button times out
   again on realistic data.
+
+## R15a — 0241 — Cultivera THC/CBD reach the inventory table
+
+- [ ] `0241_inventory_lot_pos_potency.sql` — adds six empty (nullable) columns
+  to `inventory_lots`: `pos_thc`, `pos_thca`, `pos_cbd`, `pos_cbda`,
+  `pos_potency_unit`, `pos_potency_set_at`, plus two guarded checks (the unit
+  is `%` or `mg`, and no value is below 0). It changes no existing row.
+
+  **How to run it:** open the Supabase SQL editor, paste the whole file, and
+  click **Run**. You should see `Success. No rows returned`. Safe to re-run
+  (`add column if not exists`, and each check is added only if missing).
+
+  **Why:** the Cultivera INVENTORIES spreadsheet carries THC and CBD for every
+  lot, but the inventory table only read lab certificates (`lab_results`).
+  Writing the spreadsheet numbers as a lab result would make the COA column
+  claim a certificate that does not exist, so they get their own columns. The
+  app shows COA numbers first and the spreadsheet numbers second, labelled as
+  not-a-COA (`src/lib/pos/lot-potency-core.ts`). CBN and CBC are not columns
+  in the Cultivera export. When a product name states them, they go into the
+  existing `minor_cannabinoids_json` (0138).
+
+  **After running it (for lots that were already uploaded, with no re-upload
+  needed):** open **Admin → Menu imports → the Cultivera upload** and press
+  **Fill received dates & cannabinoids from the spreadsheet**. It only fills
+  blanks, never overwrites, and is safe to press again. Before 0241 is applied,
+  that button fills only the received dates and the name-stated minor
+  cannabinoids, and the importer retries without the six columns.
+
+  Verified on Postgres 15: applied twice cleanly in a rolled-back transaction,
+  with all six columns and both checks present after the second run.
+
+  **Run it, then check (optional):**
+
+  ```sql
+  select column_name from information_schema.columns
+   where table_schema = 'public' and table_name = 'inventory_lots'
+     and column_name in ('pos_thc','pos_thca','pos_cbd','pos_cbda','pos_potency_unit','pos_potency_set_at')
+   order by column_name;
+  -- expect 6 rows: pos_cbd, pos_cbda, pos_potency_set_at, pos_potency_unit, pos_thc, pos_thca
+  ```
+
+  **Rollback (only if needed):** "Revert code; the columns can stay (unused)."
+  The app reads them only when present.

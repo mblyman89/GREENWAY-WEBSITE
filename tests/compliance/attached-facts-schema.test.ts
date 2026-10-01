@@ -346,9 +346,20 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
       .filter((f) => !f.endsWith(path.join("catalog", "attach-facts-core.ts")))
       .filter((f) => !f.endsWith(path.join("admin", "schema-tables.ts")))
       .filter((f) => !f.endsWith(path.join("accounting", "factory-reset-core.ts")))
+      // S07 (Round 17) is the write door this test was waiting for. It writes
+      // through the core's PROVENANCE_TABLE constant (pinned below).
+      .filter((f) => !f.endsWith(path.join("catalog", "attach-facts.ts")))
       .filter((f) => /attached_facts|product_fact_provenance/.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(ROOT, f));
     expect(hits).toEqual([]);
+  });
+
+  it("S07: the write door inserts provenance only via the core's constant and tolerates a missing 0235", () => {
+    const door = readFileSync(path.join(ROOT, "src/lib/catalog/attach-facts.ts"), "utf8");
+    expect(door).toContain("await admin.from(PROVENANCE_TABLE).insert(provRows);");
+    expect(door).toContain("isMissingAttachedFactsError(error)");
+    expect(door).not.toMatch(/from\("product_fact_provenance"\)/);
+    expect(door).not.toMatch(/attached_facts/);
   });
 
   it("the not-applied detector is narrow (an unrelated missing column still surfaces)", () => {

@@ -77,10 +77,11 @@
  *   false, no and disabled mean 0.
  *
  *   HONESTY: rings 2 and 3 need a writer. The only write door allowed is
- *   attachProductFacts() (S07), and S07 is not built yet. Until it ships,
- *   ATTACH_WRITER_SHIPPED stays false and rings 2 and 3 still behave as
- *   shadow. The UI says so plainly, rather than pretending facts were
- *   attached.
+ *   attachProductFacts() (S07, src/lib/catalog/attach-facts.ts), which has
+ *   shipped, so ATTACH_WRITER_SHIPPED is true and rings 2 and 3 act. A
+ *   lookup still writes nothing by itself: facts attach only when a person
+ *   presses "Save selected", and that save shows its own per-field receipt.
+ *   So the lookup preview and the footer say "on save", never "attached".
  *
  * ═══ DEVIATION NOTE (cited, not guessed) ════════════════════════════════════
  *
@@ -423,10 +424,12 @@ export type AttachPolicyRing = 0 | 1 | 2 | 3;
 export const ATTACH_POLICY_DEFAULT_RING: AttachPolicyRing = 1;
 
 /**
- * False until S07's attachProductFacts() (the ONLY allowed fact writer) ships.
- * Until then, rings 2 and 3 behave as shadow. Flip this in the S07 PR.
+ * True since S07: attachProductFacts() (the ONLY allowed fact writer) has
+ * shipped, so rings 2 and 3 act. Setting this back to false makes rings 2/3
+ * behave as shadow again (the env rollback is ATTACH_POLICY_RING=1 or
+ * ATTACH_FACTS_V2=off - no code change needed).
  */
-export const ATTACH_WRITER_SHIPPED = false;
+export const ATTACH_WRITER_SHIPPED = true;
 
 export function parseAttachPolicyRing(raw: string | null | undefined): AttachPolicyRing {
   const v = String(raw ?? "").trim().toLowerCase();
@@ -496,9 +499,30 @@ export function receiptSentence(
   verdicts: readonly PolicyVerdict[],
   mode: AttachPolicyMode,
   values: Partial<Record<string, unknown>> = {},
+  opts: { onSave?: boolean } = {},
 ): string {
   if (mode === "off" || verdicts.length === 0) return "";
   const act = mode === "act";
+  // S07: a LOOKUP never writes. In the act ring its preview says what Save
+  // selected WILL do; the save itself returns the real receipt.
+  if (act && opts.onSave) {
+    const parts: string[] = [];
+    const attached = verdicts.filter((v) => v.decision === "attach");
+    if (attached.length > 0) {
+      const items = attached.map((v) => (v.confidence !== null ? `${nounFor(v.field)} at ${v.confidence}%` : nounFor(v.field)));
+      parts.push(`We found ${joinList(items)} \u2014 these attach when you press Save selected.`);
+    }
+    for (const v of verdicts.filter((x) => x.decision === "prefill")) {
+      const shown = valueLabel(v.field, values[v.field]);
+      const came = v.confidence !== null ? `came back ${v.confidence}%` : "came back without a confidence";
+      const but = v.conflict ? `, but the ${v.conflict.source} says ${valueLabel(v.field, v.conflict.value)}` : "";
+      parts.push(`${labelFor(v.field)} ${came}${but}, so ${shown} needs you to confirm it.`);
+    }
+    const suggested = verdicts.filter((v) => v.decision === "suggest").length;
+    if (suggested > 0) parts.push(`${suggested} more ${suggested === 1 ? "goes" : "go"} to review when you save.`);
+    if (parts.length === 0) return "";
+    return `Nothing is saved yet. ${parts.join(" ")}`;
+  }
   const parts: string[] = [];
   const attached = verdicts.filter((v) => v.decision === "attach");
   if (attached.length > 0) {
@@ -593,14 +617,16 @@ export function shadowFooterCopy(summary: ShadowSummary | null, ring: AttachPoli
     return `${head}): no lookups yet. Run a lookup on a product and the counts appear here.`;
   }
   const c = summary.counts;
-  const verb = mode === "act" ? "attached" : "would attach";
+  // Counts come from LOOKUPS (catalog_draft.ai_lookup), not from saves, so
+  // even in the act ring they are "ready on save", never "attached".
+  const verb = mode === "act" ? "ready to attach on save" : "would attach";
   const top = summary.topAttach.length ? ` Most often: ${summary.topAttach.map((t) => `${labelFor(t.field).toLowerCase()} (${t.n})`).join(", ")}.` : "";
   const tail =
     mode === "act"
-      ? ""
+      ? " Facts attach only when someone presses Save selected; each save shows exactly what landed."
       : ring >= 2
-        ? ` Nothing has been attached: ${ATTACH_POLICY_RING_ENV}=${ring} is set, but writes switch on only when the single write door (S07) ships.`
-        : ` Nothing has been attached. Set ${ATTACH_POLICY_RING_ENV}=2 to allow writes once the single write door (S07) ships.`;
+        ? ` Nothing has been attached: ${ATTACH_POLICY_RING_ENV}=${ring} is set, but the single write door is switched off in code (ATTACH_WRITER_SHIPPED).`
+        : ` Nothing is auto-attached: Save selected keeps everything for your review. Set ${ATTACH_POLICY_RING_ENV}=2 to let 90%+ facts attach on save.`;
   return `${head}, ${summary.lookups} lookup${summary.lookups === 1 ? "" : "s"}): ${verb} ${c.attach} \u00b7 pre-fill ${c.prefill} \u00b7 suggest ${c.suggest} \u00b7 left alone ${c.ignore}.${top}${tail}`;
 }
 
@@ -671,8 +697,13 @@ export function __runFactAttachPolicyCoreTests(): { passed: number; failed: numb
   ok(parseAttachPolicyRing("0") === 0 && parseAttachPolicyRing(" OFF ") === 0, "0/off → off");
   ok(parseAttachPolicyRing("2") === 2 && parseAttachPolicyRing("3") === 3, "2/3 parse");
   ok(parseAttachPolicyRing("banana") === 1 && parseAttachPolicyRing("4") === 1, "junk → shadow");
-  ok(attachPolicyMode(2) === "shadow" && attachPolicyMode(2, true) === "act", "act needs the writer");
-  ok(ATTACH_WRITER_SHIPPED === false, "S07 not shipped");
+  ok(attachPolicyMode(2, false) === "shadow" && attachPolicyMode(2, true) === "act", "act needs the writer");
+  ok(ATTACH_WRITER_SHIPPED === true && attachPolicyMode(2) === "act" && attachPolicyMode(1) === "shadow", "S07 shipped: ring 2 acts, ring 1 stays shadow");
+  ok(
+    receiptSentence([decide("description", g("x", 94))], "act", {}, { onSave: true }) ===
+      "Nothing is saved yet. We found a description at 94% \u2014 these attach when you press Save selected.",
+    "lookup preview in act never claims attached",
+  );
   ok(ATTACH_POLICY_RING_ENV === "ATTACH_POLICY_RING", "env name matches the bible");
 
   // Receipt — bible copy, word for word, in act mode.

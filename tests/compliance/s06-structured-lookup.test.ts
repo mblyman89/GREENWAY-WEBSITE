@@ -142,6 +142,7 @@ beforeEach(() => {
   act.audits.length = 0;
   act.suggestions.length = 0;
   delete process.env.LOOKUP_SCHEMA_V2;
+  delete process.env.ATTACH_FACTS_V2;
 });
 
 describe("S06 pure cores", () => {
@@ -377,8 +378,15 @@ describe("S06 server actions", () => {
     imageCandidates: ["https://acmefarms.example/img/bd.jpg"],
   };
   const confOf = (field: string) => act.suggestions.find((s) => s.field_key === field)?.confidence;
+  // S07 (Round 17): the F-018 guards below pin the LEGACY save path, which
+  // ATTACH_FACTS_V2=off keeps unchanged. The S07 path is covered (with its own
+  // confidence rules) by tests/compliance/s07-attach-product-facts.test.ts.
+  const legacy = () => {
+    process.env.ATTACH_FACTS_V2 = "off";
+  };
 
   it("F-018 onboarding save: each suggestion carries its OWN field confidence", async () => {
+    legacy();
     const r = await saveLookupToKbAction(
       fd({ draft_id: "d1", payload: JSON.stringify({ ...basePayload, fieldConfidence: { description: 92, short_description: 70, images: 88 } }) }),
     );
@@ -390,6 +398,7 @@ describe("S06 server actions", () => {
   });
 
   it("F-018 legacy rule unchanged without fieldConfidence (strain conf, else 0.75); junk values fall back", async () => {
+    legacy();
     await saveLookupToKbAction(fd({ draft_id: "d1", payload: JSON.stringify(basePayload) }));
     expect(confOf("description")).toBe(0.75);
     act.suggestions.length = 0;
@@ -404,6 +413,7 @@ describe("S06 server actions", () => {
   });
 
   it("F-018 enrichment save: own confidence, legacy fallback", async () => {
+    legacy();
     const r = await enrichmentSaveLookupAction(
       fd({ key: "pk1", product_key: "pk1", payload: JSON.stringify({ ...basePayload, fieldConfidence: { description: 96 } }) }),
     );

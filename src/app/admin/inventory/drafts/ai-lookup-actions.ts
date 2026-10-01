@@ -16,6 +16,7 @@
  *
  * Both require the inventory.manage permission and are audited.
  */
+import { unstable_rethrow } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
@@ -54,7 +55,10 @@ import {
   type AttachPolicyRing,
   type PolicyAuditPayload,
 } from "@/lib/catalog/fact-attach-policy-core";
-import { currentAttachPolicyRing } from "@/lib/catalog/fact-attach-policy-server";
+import { attachFactsV2Enabled, currentAttachPolicyRing } from "@/lib/catalog/fact-attach-policy-server";
+// S07: the single write door (ATTACH_FACTS_V2, default on).
+import { attachProductFacts } from "@/lib/catalog/attach-facts";
+import { factConfidenceFromFacts, type AttachReceipt, type FactConfidence } from "@/lib/catalog/attach-plan-core";
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "").trim();
@@ -85,6 +89,12 @@ export type LookupKbDraft = {
    * v2 lookup gave one. Optional: absent -> the legacy rule, unchanged.
    */
   fieldConfidence?: LookupFieldConfidence;
+  /**
+   * SLICE S07: the strain-level fields' OWN confidences (0-100), only while
+   * the operator kept them exactly as the AI returned them (keptFactConfidence).
+   * Re-parsed server-side; a junk number is treated as unscored.
+   */
+  factConfidence?: FactConfidence;
 };
 
 export type ProductLookupActionResult =
@@ -205,7 +215,9 @@ export async function productLookupAction(
       policy = {
         ring,
         mode,
-        receipt: receiptSentence(verdicts, mode, { strain_type: outcome.facts.fields.strain_type.value }),
+        // S07: the lookup itself writes nothing; in act mode the preview says
+        // what Save selected will do (the save returns the real receipt).
+        receipt: receiptSentence(verdicts, mode, { strain_type: outcome.facts.fields.strain_type.value }, { onSave: true }),
         verdicts: verdicts.map((v) => ({ field: v.field, decision: v.decision, reason: v.reason, chip: v.chip })),
       };
     }
@@ -285,6 +297,7 @@ export async function productLookupAction(
         size: r.size,
         imageCandidates: r.imageCandidates,
         fieldConfidence: fieldConfidenceForSave(outcome.facts),
+        factConfidence: factConfidenceFromFacts(outcome.facts),
       },
       policy,
     };
@@ -301,7 +314,15 @@ export async function productLookupAction(
   }
 }
 
-export type SaveLookupResult = { ok: true } | { ok: false; error: string };
+export type SaveLookupResult =
+  | {
+      ok: true;
+      /** S07: the per-field receipt + sentence (absent on the ATTACH_FACTS_V2=off path). */
+      receipt?: AttachReceipt;
+      sentence?: string;
+      notes?: string[];
+    }
+  | { ok: false; error: string };
 
 /**
  * Save the AI's findings as a kb_strains DRAFT for owner approval. We re-run the
@@ -344,6 +365,30 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
   };
   const safe = postProcessLookup(raw, banned);
 
+  // SLICE S07: the single write door. Every value it uses is re-read on the
+  // server (draft row, lot, strain library, product record); the payload only
+  // supplies the operator's curated text, which was re-sanitized just above.
+  if (attachFactsV2Enabled()) {
+    if (!draftId) return { ok: false, error: "Missing the onboarding draft id - refresh the page and try again." };
+    try {
+      const res = await attachProductFacts({
+        context: { kind: "draft", draftId },
+        safe,
+        sources: Array.isArray(payload.sources) ? payload.sources.filter((x): x is string => typeof x === "string") : [],
+        factConfidence: payload.factConfidence ?? {},
+        suggestionConfidence: (payload.fieldConfidence ?? {}) as Record<string, unknown>,
+        suggestionSource: "model:onboarding-lookup",
+        actor: { userId: session.userId, email: session.email },
+      });
+      if (!res.ok) return { ok: false, error: res.error };
+      return { ok: true, receipt: res.receipt, sentence: res.sentence, notes: res.notes };
+    } catch (err) {
+      unstable_rethrow(err);
+      return { ok: false, error: `Could not save: ${String(err).slice(0, 160)}` };
+    }
+  }
+
+  // ATTACH_FACTS_V2=off: the previous save path, unchanged.
   const posKey = String(payload.posProductKey ?? "").trim();
   const isStrainWorthy =
     safe.strainType !== "unknown" ||

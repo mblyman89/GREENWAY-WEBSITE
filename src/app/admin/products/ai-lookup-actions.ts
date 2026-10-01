@@ -31,6 +31,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { unstable_rethrow } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
@@ -52,6 +53,10 @@ import {
 } from "@/lib/inventory/lookup-facts-core";
 import type { WebCitation } from "@/lib/ai/grounding-core";
 import type { GreenwayStrainType } from "@/lib/leafly/types";
+// S07: the single write door (ATTACH_FACTS_V2, default on).
+import { attachFactsV2Enabled } from "@/lib/catalog/fact-attach-policy-server";
+import { attachProductFacts } from "@/lib/catalog/attach-facts";
+import { factConfidenceFromFacts, type AttachReceipt, type FactConfidence } from "@/lib/catalog/attach-plan-core";
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "").trim();
@@ -78,6 +83,8 @@ export type EnrichmentLookupDraft = {
   imageCandidates: string[];
   /** SLICE S06 (F-018): each staged field's OWN confidence (0-100), when known. */
   fieldConfidence?: LookupFieldConfidence;
+  /** SLICE S07: strain-level own confidences, only for untouched fields (keptFactConfidence). */
+  factConfidence?: FactConfidence;
 };
 
 export type EnrichmentLookupActionResult =
@@ -230,6 +237,7 @@ export async function enrichmentLookupAction(
         size: r.size,
         imageCandidates: r.imageCandidates,
         fieldConfidence: fieldConfidenceForSave(outcome.facts),
+        factConfidence: factConfidenceFromFacts(outcome.facts),
       },
     };
   } catch (err) {
@@ -244,7 +252,15 @@ export async function enrichmentLookupAction(
 }
 
 export type EnrichmentSaveResult =
-  | { ok: true; staged: string[]; savedStrain: boolean }
+  | {
+      ok: true;
+      staged: string[];
+      savedStrain: boolean;
+      /** S07: the per-field receipt + sentence (absent on the ATTACH_FACTS_V2=off path). */
+      receipt?: AttachReceipt;
+      sentence?: string;
+      notes?: string[];
+    }
   | { ok: false; error: string };
 
 /**
@@ -297,6 +313,32 @@ export async function enrichmentSaveLookupAction(formData: FormData): Promise<En
   };
   const safe = postProcessLookup(raw, banned);
 
+  // SLICE S07: the single write door. The strain is keyed by the menu item's
+  // REAL strain name (read server-side), never this payload's product name.
+  if (attachFactsV2Enabled()) {
+    try {
+      const res = await attachProductFacts({
+        context: { kind: "product", posProductKey: key, saveStrain },
+        safe,
+        sources: Array.isArray(payload.sources) ? payload.sources.filter((x): x is string => typeof x === "string") : [],
+        factConfidence: payload.factConfidence ?? {},
+        suggestionConfidence: (payload.fieldConfidence ?? {}) as Record<string, unknown>,
+        suggestionSource: "model:enrichment-lookup",
+        actor: { userId: session.userId, email: session.email },
+        fallbackLabel: name,
+      });
+      if (!res.ok) return { ok: false, error: res.error };
+      revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+      const staged = res.receipt.queued.filter((q) => q.to.includes("Enrichment suggestions")).map((q) => q.field);
+      const savedStrain = [...res.receipt.attached, ...res.receipt.queued].some((x) => x.to.includes("strain library"));
+      return { ok: true, staged, savedStrain, receipt: res.receipt, sentence: res.sentence, notes: res.notes };
+    } catch (err) {
+      unstable_rethrow(err);
+      return { ok: false, error: `Could not save: ${String(err).slice(0, 160)}` };
+    }
+  }
+
+  // ATTACH_FACTS_V2=off: the previous save path, unchanged.
   const isStrainWorthy =
     safe.strainType !== "unknown" ||
     safe.summary.length > 0 ||

@@ -634,6 +634,7 @@ import { __runProductIdentityCoreTests } from "../../src/lib/catalog/product-ide
 import { __runIdentityColumnsCoreTests } from "../../src/lib/catalog/identity-columns-core";
 import { __runAttachFactsCoreTests } from "../../src/lib/catalog/attach-facts-core";
 import { __runFactAttachPolicyCoreTests } from "../../src/lib/catalog/fact-attach-policy-core";
+import { __runAttachPlanCoreTests } from "../../src/lib/catalog/attach-plan-core";
 import { __runOnboardingListCoreTests } from "../../src/lib/catalog/onboarding-list-core";
 import { __runIdentityStampCoreTests } from "../../src/lib/inventory/identity-stamp-core";
 import { __runGroundingCoreTests } from "../../src/lib/ai/grounding-core";
@@ -1900,6 +1901,8 @@ __runLiquidVolumeTests();
   // bible S10.5 cases, §5.5 bands, ring parse (default shadow), the bible
   // receipt copy byte for byte, and the audit fold. Measured 102.
   assertRan("fact-attach-policy-core", __runFactAttachPolicyCoreTests(), 100);
+  // SLICE S07: the single write door planner (attachProductFacts).
+  assertRan("attach-plan-core", __runAttachPlanCoreTests(), 115);
   assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 64);
   // S30 receiving fact review: flag signature, decision partition (stale
   // signature re-asks), fix/reject applied to the snapshot, the shared form
