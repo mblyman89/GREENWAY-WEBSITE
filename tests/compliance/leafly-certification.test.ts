@@ -578,13 +578,16 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
   });
 
   it("each cron runs at exactly its designed cadence (L-34)", () => {
-    // The two Leafly crons are the only sub-daily jobs. Everything else is a
+    // The two Leafly crons and the S13 batch lookup worker are the only
+    // sub-daily jobs (the worker runs every minute and an idle tick is one
+    // indexed query; R19 S13). Everything else is a
     // once-a-day report or sync and has no reason to run more often --
     // compliance reminders and the regulatory watch in particular must not
     // start emailing the owner 96 times a day because of a copy-paste.
     const expected: Record<string, number> = {
       "/api/cron/leafly-ack-sweep": 720, // every 2 minutes
       "/api/cron/leafly-menu-sync": 96, //  every 15 minutes
+      "/api/cron/lookup-jobs": 1440, //    every minute (S13 batch lookup worker)
     };
     for (const c of crons) {
       const want = expected[c.path ?? ""] ?? 1;

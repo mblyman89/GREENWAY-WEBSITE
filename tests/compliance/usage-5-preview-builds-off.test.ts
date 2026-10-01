@@ -52,7 +52,7 @@ describe("USAGE-5 · vercel.json disables automatic deployments off `main`", () 
 
   it("did not disturb the cron list (rule 12 cadences are pinned elsewhere)", () => {
     const crons = cfg.crons ?? [];
-    expect(crons.length).toBe(5);
+    expect(crons.length).toBe(6); // R19 S13 added /api/cron/lookup-jobs
     const byPath = new Map(crons.map((c) => [c.path, c.schedule]));
     expect(byPath.get("/api/cron/leafly-menu-sync")).toBe("*/15 * * * *");
     expect(byPath.get("/api/cron/leafly-ack-sweep")).toBe("*/2 * * * *");

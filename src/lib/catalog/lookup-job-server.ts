@@ -574,6 +574,9 @@ export async function runLookupJobsTick(deps: {
 
     // 4. Work items inside the budget.
     let stopAll: string | null = null;
+    // A claim that keeps missing (another run, or a failing write) must not
+    // spin until the time budget runs out.
+    let claimMisses = 0;
     while (canStartItem({ elapsedMs: now() - t0, startedThisTick: out.started })) {
       const { data: next, error: nErr } = await admin
         .from(LOOKUP_JOB_ITEMS_TABLE)
@@ -594,7 +597,11 @@ export async function runLookupJobsTick(deps: {
         .eq("status", "queued")
         .eq("attempts", attempts)
         .select("id");
-      if (((got as { id: string }[] | null) ?? []).length !== 1) continue; // someone else has it
+      if (((got as { id: string }[] | null) ?? []).length !== 1) {
+        claimMisses += 1; // someone else has it, or the write failed
+        if (claimMisses >= 3) break;
+        continue;
+      }
       out.started += 1;
 
       let patch: Record<string, unknown>;
@@ -646,19 +653,31 @@ export async function runLookupJobsTick(deps: {
     const summary = all ? summarizeJob(all) : null;
     const at = new Date(now()).toISOString();
     const finish = summary?.finished === true;
+    // Release the lease (only if it is still ours) and record progress.
     await admin
       .from(LOOKUP_JOBS_TABLE)
       .update({
-        done: summary ? summary.lookedUp + summary.canceled : undefined,
+        ...(summary ? { done: summary.lookedUp + summary.canceled } : {}),
         lease_until: null,
         lease_token: null,
         updated_at: at,
-        ...(finish ? { status: "done", finished_at: at } : {}),
       })
       .eq("id", job.id)
       .eq("lease_token", token);
-    out.finished = finish;
+    // Finish, guarded on status: a person who pressed Stop while the last
+    // product was in flight keeps 'canceled'; it is never rewritten to 'done'.
+    let finishedNow = false;
     if (finish) {
+      const { data: fin } = await admin
+        .from(LOOKUP_JOBS_TABLE)
+        .update({ status: "done", finished_at: at, updated_at: at })
+        .eq("id", job.id)
+        .in("status", ["queued", "running"])
+        .select("id");
+      finishedNow = ((fin as { id: string }[] | null) ?? []).length === 1;
+    }
+    out.finished = finish;
+    if (finishedNow) {
       await recordAudit({
         actorId: actor.userId,
         actorEmail: actor.email,
