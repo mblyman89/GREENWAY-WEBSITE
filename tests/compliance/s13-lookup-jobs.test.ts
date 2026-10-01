@@ -718,6 +718,7 @@ describe("S13 cron tick: failures, Stop, caps", () => {
     });
     const r = await runLookupJobsTick({ admin: admin(), runItem: r0.fn, now: () => T0 });
     expect(r0.ran).toHaveLength(1);
+    expect(r).toMatchObject({ ok: true, done: 1, finished: true });
     expect(items(db).map((i) => i.status)).toEqual(["done", "canceled", "canceled"]);
     expect(jobs(db)[0].status).toBe("canceled");
     expect(jobs(db)[0].lease_token).toBeNull();
