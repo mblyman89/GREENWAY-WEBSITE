@@ -68,7 +68,7 @@ const inExample = (v: string) => new RegExp(`^#?\\s*${v}=`, "m").test(envExample
 describe("intake env ledger", () => {
   it("derives the pipeline flags from the code (proves the derivation works)", () => {
     const flags = pipelineFlagNames();
-    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "ATTACH_FACTS_V2", "KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY", "GOLDEN_RECORD_ON_APPROVE"]) expect(flags).toContain(v);
+    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "ATTACH_FACTS_V2", "KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY", "GOLDEN_RECORD_ON_APPROVE", "MANIFEST_BATCH_LOOKUP", "LOOKUP_ITEMS_PER_TICK"]) expect(flags).toContain(v);
   });
 
   it("every pipeline flag is in the Shipped table AND .env.example", () => {
@@ -111,7 +111,7 @@ describe("intake env ledger", () => {
 
   it("planned names are the bible's, and none is read by code yet", () => {
     // S09 + S11 shipped (Round 18): no planned row names a variable any more;
-    // the remaining rows (S12, S13, S20) are "named in <slice>".
+    // the remaining row (S20) is "named in <slice>".
     const sec = ledger.slice(ledger.indexOf("## 4. Planned flags"), ledger.indexOf("**Which shipped slice"));
     // S07 shipped (Round 17), S09 + S11 shipped (Round 18): their planned rows left section 4.
     for (const s of ["S07", "S09", "S11"]) expect(sec).not.toMatch(new RegExp(`^\\| ${s} \\|`, "m"));
@@ -120,7 +120,10 @@ describe("intake env ledger", () => {
     // S12 shipped (Round 19): GOLDEN_RECORD_ON_APPROVE, so its planned row left too.
     expect(sec).not.toMatch(/^\| S12 \|/m);
     expect(sec).not.toContain("`GOLDEN_RECORD_ON_APPROVE`");
-    for (const s of ["S13", "S20"]) expect(sec).toMatch(new RegExp(`^\\| ${s} \\| .* \\| named in ${s} \\|$`, "m"));
+    // S13 shipped (Round 19): MANIFEST_BATCH_LOOKUP (+ LOOKUP_ITEMS_PER_TICK), so its planned row left too.
+    expect(sec).not.toMatch(/^\| S13 \|/m);
+    expect(sec).not.toContain("`MANIFEST_BATCH_LOOKUP`");
+    for (const s of ["S20"]) expect(sec).toMatch(new RegExp(`^\\| ${s} \\| .* \\| named in ${s} \\|$`, "m"));
   });
 
   it("S09 + S11 (Round 18) ADDED their bible-named flags, read through the core constants", () => {
@@ -145,6 +148,26 @@ describe("intake env ledger", () => {
     expect(sec1).toMatch(/^\| `GOLDEN_RECORD_ON_APPROVE` \| S12 \| on \|/m);
     expect(ledger).toContain('"Flag; boilerplate path retained", is the `GOLDEN_RECORD_ON_APPROVE` row');
     expect(envExample).toContain("# GOLDEN_RECORD_ON_APPROVE=on");
+  });
+
+  it("S13 (Round 19) ADDED MANIFEST_BATCH_LOOKUP + LOOKUP_ITEMS_PER_TICK, read only in the server helper", () => {
+    const core = read("src/lib/catalog/lookup-job-core.ts");
+    expect(core).toContain('export const MANIFEST_BATCH_LOOKUP_ENV = "MANIFEST_BATCH_LOOKUP"');
+    expect(core).toContain('export const LOOKUP_ITEMS_PER_TICK_ENV = "LOOKUP_ITEMS_PER_TICK"');
+    expect(core).not.toContain("process.env");
+    const server = read("src/lib/catalog/lookup-job-server.ts");
+    expect(server).toContain("process.env[MANIFEST_BATCH_LOOKUP_ENV]");
+    expect(server).toContain("process.env[LOOKUP_ITEMS_PER_TICK_ENV]");
+    // the action file and the cron route never read the flag themselves
+    expect(read("src/app/admin/inventory/drafts/actions.ts")).not.toContain("process.env");
+    expect(read("src/app/api/cron/lookup-jobs/route.ts")).not.toMatch(/process\.env\[?\.?\s*(?:MANIFEST_BATCH_LOOKUP|LOOKUP_ITEMS_PER_TICK)/);
+    const sec1 = ledger.slice(ledger.indexOf("## 1. Shipped pipeline flags"), ledger.indexOf("## 2."));
+    expect(sec1).toMatch(/^\| `MANIFEST_BATCH_LOOKUP` \| S13 \| on \|/m);
+    expect(sec1).toMatch(/^\| `LOOKUP_ITEMS_PER_TICK` \| S13 \| `12` \|/m);
+    expect(ledger).toContain('"Feature flag; per-row lookup remains", is the `MANIFEST_BATCH_LOOKUP` row');
+    expect(ledger).toContain('"chunk size configurable" (S13.8), is the `LOOKUP_ITEMS_PER_TICK` row');
+    expect(envExample).toContain("# MANIFEST_BATCH_LOOKUP=on");
+    expect(envExample).toContain("# LOOKUP_ITEMS_PER_TICK=12");
   });
 
   it("section 5 explains ATTACH_POLICY_RING in plain English, matching the code", () => {
@@ -177,14 +200,22 @@ describe("intake env ledger", () => {
 
   it("the per-slice 'added / added no variable' lists match the Slice column of section 1", () => {
     const sec1 = ledger.slice(ledger.indexOf("## 1. Shipped pipeline flags"), ledger.indexOf("## 2."));
+    // A slice may own more than one variable (S13: the flag + its S13.8 chunk size).
     const bySlice = new Map<string, string>();
-    for (const m of sec1.matchAll(/^\| `([A-Z0-9_]+)` \| (S\d\d) \|/gm)) bySlice.set(m[2], m[1]);
+    for (const m of sec1.matchAll(/^\| `([A-Z0-9_]+)` \| (S\d\d) \|/gm)) {
+      bySlice.set(m[2], [...(bySlice.get(m[2])?.split(",") ?? []), m[1]].sort().join(","));
+    }
     expect(bySlice.size).toBeGreaterThanOrEqual(3);
     const addedLine = ledger.match(/Slices that \*\*added\*\* a variable: ([^\n]+)/);
     const noneLine = ledger.match(/Slices that added \*\*no\*\* variable: ([^\n]+?)\. /);
     expect(addedLine).not.toBeNull();
     expect(noneLine).not.toBeNull();
-    const added = new Map([...addedLine![1].matchAll(/(S\d\d) \(`([A-Z0-9_]+)`\)/g)].map((m) => [m[1], m[2]] as [string, string]));
+    const added = new Map(
+      [...addedLine![1].matchAll(/(S\d\d) \(((?:`[A-Z0-9_]+`(?:, )?)+)\)/g)].map(
+        (m) => [m[1], [...m[2].matchAll(/`([A-Z0-9_]+)`/g)].map((x) => x[1]).sort().join(",")] as [string, string],
+      ),
+    );
+    expect(added.get("S13")).toBe("LOOKUP_ITEMS_PER_TICK,MANIFEST_BATCH_LOOKUP");
     // Every section-1 row appears in the "added" list with the same name, and vice versa.
     expect([...added.entries()].sort()).toEqual([...bySlice.entries()].sort());
     const none = [...noneLine![1].matchAll(/S\d\d/g)].map((m) => m[0]);
