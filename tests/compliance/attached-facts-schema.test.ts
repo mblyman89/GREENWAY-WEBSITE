@@ -351,9 +351,25 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
       // S07 (Round 17) is the write door this test was waiting for. It writes
       // through the core's PROVENANCE_TABLE constant (pinned below).
       .filter((f) => !f.endsWith(path.join("catalog", "attach-facts.ts")))
+      // S12 (Round 19): the golden record READS attached_facts on approve so
+      // the counted description / strain type reach the menu row. Read-only;
+      // pinned by the next test.
+      .filter((f) => !f.endsWith(path.join("catalog", "golden-record-core.ts")))
+      .filter((f) => !f.endsWith(path.join("catalog", "golden-record-server.ts")))
       .filter((f) => /attached_facts|product_fact_provenance/.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(ROOT, f));
     expect(hits).toEqual([]);
+  });
+
+  it("S12: the golden record only READS attached_facts (one named-column select; no write, no provenance)", () => {
+    const server = readFileSync(path.join(ROOT, "src/lib/catalog/golden-record-server.ts"), "utf8");
+    const core = readFileSync(path.join(ROOT, "src/lib/catalog/golden-record-core.ts"), "utf8");
+    expect(server).toMatch(/\.select\(`id, \$\{GOLDEN_FACTS_COLUMN\}`\)/);
+    expect(core).toMatch(/export const GOLDEN_FACTS_COLUMN = "attached_facts";/);
+    for (const src of [server, core]) {
+      expect(src).not.toMatch(/\.(insert|update|upsert|delete|rpc)\(/);
+      expect(src).not.toMatch(/product_fact_provenance|PROVENANCE_TABLE/);
+    }
   });
 
   it("S07: the write door inserts provenance only via the core's constant and tolerates a missing 0235", () => {
