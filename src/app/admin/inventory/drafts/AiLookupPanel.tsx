@@ -37,6 +37,8 @@ import {
 import { GoogleSearchSuggestions, LookupFactsView } from "@/components/admin/LookupFactsView";
 import { keptFieldConfidence, LOOKUP_FIELD_LABELS, type LookupFieldKey } from "@/lib/inventory/lookup-facts-core";
 import type { LookupPolicyView } from "./ai-lookup-actions";
+import { keptFactConfidence, type AttachReceipt } from "@/lib/catalog/attach-plan-core";
+import { AttachReceiptView } from "@/components/admin/AttachReceiptView";
 
 type Props = {
   draftId: string;
@@ -159,6 +161,8 @@ export function AiLookupPanel({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<null | "saved" | "saving-error">(null);
   const [saveMsg, setSaveMsg] = useState<string>("");
+  // S07: what the save actually did (null on the ATTACH_FACTS_V2=off path).
+  const [saveReceipt, setSaveReceipt] = useState<{ receipt: AttachReceipt; sentence: string; notes: string[] } | null>(null);
   const [pending, startTransition] = useTransition();
   const [savePending, startSaveTransition] = useTransition();
 
@@ -174,6 +178,7 @@ export function AiLookupPanel({
     setDraft(null);
     setSaved(null);
     setSaveMsg("");
+    setSaveReceipt(null);
     startTransition(async () => {
       const fd = new FormData();
       fd.set("draft_id", draftId);
@@ -235,6 +240,26 @@ export function AiLookupPanel({
           imagesKept: draft.images.length,
         },
       ),
+      // S07: the strain-level fields' own confidences, only while untouched.
+      factConfidence: keptFactConfidence(
+        data.draft.factConfidence,
+        {
+          summary: data.summary,
+          lineage: data.lineage,
+          effects: data.effects,
+          aroma: data.aromaNotes,
+          flavor: data.flavorNotes,
+          strainType: data.strainType,
+        },
+        {
+          summary: draft.keepSummary ? draft.summary.trim() : "",
+          lineage: draft.keepLineage ? draft.lineage.trim() : "",
+          effects: draft.keepEffects ? splitList(draft.effects) : [],
+          aroma: draft.keepAroma ? splitList(draft.aroma) : [],
+          flavor: draft.keepFlavor ? splitList(draft.flavor) : [],
+          strainType: draft.keepStrainType ? draft.strainType : "unknown",
+        },
+      ),
     };
   }, [data, draft, productName, query, posProductKey]);
 
@@ -261,12 +286,16 @@ export function AiLookupPanel({
     if (!curated) return;
     setSaved(null);
     setSaveMsg("");
+    setSaveReceipt(null);
     startSaveTransition(async () => {
       const fd = new FormData();
       fd.set("draft_id", draftId);
       fd.set("payload", JSON.stringify(curated));
       const res = await saveLookupToKbAction(fd);
       if (res.ok) {
+        if (res.receipt && res.sentence) {
+          setSaveReceipt({ receipt: res.receipt, sentence: res.sentence, notes: res.notes ?? [] });
+        }
         setSaved("saved");
       } else {
         setSaved("saving-error");
@@ -630,7 +659,13 @@ export function AiLookupPanel({
                   {/* Save selected — sends ONLY the checked + edited fields. The
                       server re-sanitizes; the client payload is never trusted. */}
                   <div className="mt-1 border-t border-[var(--admin-border)] pt-1.5">
-                    {saved === "saved" ? (
+                    {saved === "saved" && saveReceipt ? (
+                      <AttachReceiptView
+                        receipt={saveReceipt.receipt}
+                        sentence={saveReceipt.sentence}
+                        notes={saveReceipt.notes}
+                      />
+                    ) : saved === "saved" ? (
                       <p className="text-[var(--admin-accent)]">
                         ✓ Saved as a draft. Nothing publishes until you approve it on the KB /
                         enrichment page.
@@ -733,7 +768,7 @@ export function PolicyReceipt({ policy }: { policy: LookupPolicyView }) {
       data-testid="attach-policy-receipt"
     >
       <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-        {shadow ? "Auto-attach preview (nothing saved)" : "Auto-attach"}
+        {shadow ? "Auto-attach preview (nothing saved)" : "Auto-attach on Save selected (nothing saved yet)"}
       </div>
       {policy.receipt && <p className="mt-0.5 text-[var(--admin-text)]">{policy.receipt}</p>}
       <ul className="mt-1 space-y-0.5 text-[10px] text-[var(--admin-text-muted)]">

@@ -68,7 +68,7 @@ const inExample = (v: string) => new RegExp(`^#?\\s*${v}=`, "m").test(envExample
 describe("intake env ledger", () => {
   it("derives the pipeline flags from the code (proves the derivation works)", () => {
     const flags = pipelineFlagNames();
-    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY"]) expect(flags).toContain(v);
+    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "ATTACH_FACTS_V2", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY"]) expect(flags).toContain(v);
   });
 
   it("every pipeline flag is in the Shipped table AND .env.example", () => {
@@ -110,8 +110,10 @@ describe("intake env ledger", () => {
   });
 
   it("planned names are the bible's, and none is read by code yet", () => {
-    const planned = ["ATTACH_FACTS_V2", "KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW"];
+    const planned = ["KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW"];
     const sec = ledger.slice(ledger.indexOf("## 4. Planned flags"));
+    // S07 shipped (Round 17): its planned row left section 4.
+    expect(sec).not.toMatch(/^\| S07 \|/m);
     const all = walk(path.join(ROOT, "src")).map((f) => readFileSync(f, "utf8")).join("\n");
     for (const v of planned) {
       expect(sec).toContain(`\`${v}\``);
@@ -125,6 +127,7 @@ describe("intake env ledger", () => {
     expect(final.length).toBeGreaterThan(100);
     for (const v of tableNames(ledger, "## 1. Shipped pipeline flags")) expect(final).toContain(`\`${v}\``);
     expect(final).toContain("`ATTACH_POLICY_RING` = `1`");
+    expect(final).toContain("`ATTACH_FACTS_V2` = `on`");
   });
 
   it("the per-slice 'added / added no variable' lists match the Slice column of section 1", () => {
@@ -157,6 +160,12 @@ describe("intake env ledger", () => {
     for (const f of ["src/lib/pos/publish-queue-core.ts", "src/app/admin/publish/page.tsx"]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }
+    // S07 (single write door, Round 17) ADDED a flag - bible S07 "Flag
+    // ATTACH_FACTS_V2=off restores old actions" - and is not filed as "no variable".
+    expect(none).not.toContain("S07");
+    expect(added.get("S07")).toBe("ATTACH_FACTS_V2");
+    expect(read("src/lib/catalog/attach-plan-core.ts")).toContain('export const ATTACH_FACTS_V2_ENV = "ATTACH_FACTS_V2"');
+    expect(read("src/lib/catalog/fact-attach-policy-server.ts")).toContain("process.env[ATTACH_FACTS_V2_ENV]");
     // S17 (batch staging) ADDED a flag - bible S17.7 "Flag." - so it must be in
     // the added list and NOT in the none list.
     expect(none).not.toContain("S17");

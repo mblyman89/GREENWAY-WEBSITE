@@ -36,6 +36,8 @@ import {
 } from "../ai-lookup-actions";
 import { GoogleSearchSuggestions, LookupFactsView } from "@/components/admin/LookupFactsView";
 import { keptFieldConfidence } from "@/lib/inventory/lookup-facts-core";
+import { keptFactConfidence, type AttachReceipt } from "@/lib/catalog/attach-plan-core";
+import { AttachReceiptView } from "@/components/admin/AttachReceiptView";
 
 type Props = {
   /** POS product key (the [key] route) — always present here. */
@@ -145,6 +147,8 @@ export function EnrichmentAiLookupPanel({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<null | "saved" | "saving-error">(null);
   const [saveMsg, setSaveMsg] = useState<string>("");
+  // S07: what the save actually did (null on the ATTACH_FACTS_V2=off path).
+  const [saveReceipt, setSaveReceipt] = useState<{ receipt: AttachReceipt; sentence: string; notes: string[] } | null>(null);
   const [pending, startTransition] = useTransition();
   const [savePending, startSaveTransition] = useTransition();
 
@@ -177,6 +181,7 @@ export function EnrichmentAiLookupPanel({
     setDraft(null);
     setSaved(null);
     setSaveMsg("");
+    setSaveReceipt(null);
     startTransition(async () => {
       const fd = new FormData();
       fd.set("key", productKey);
@@ -222,6 +227,26 @@ export function EnrichmentAiLookupPanel({
           imagesKept: draft.images.length,
         },
       ),
+      // S07: the strain-level fields' own confidences, only while untouched.
+      factConfidence: keptFactConfidence(
+        data.draft.factConfidence,
+        {
+          summary: data.summary,
+          lineage: data.lineage,
+          effects: data.effects,
+          aroma: data.aromaNotes,
+          flavor: data.flavorNotes,
+          strainType: data.strainType,
+        },
+        {
+          summary: draft.keepSummary ? draft.summary.trim() : "",
+          lineage: draft.keepLineage ? draft.lineage.trim() : "",
+          effects: draft.keepEffects ? splitList(draft.effects) : [],
+          aroma: draft.keepAroma ? splitList(draft.aroma) : [],
+          flavor: draft.keepFlavor ? splitList(draft.flavor) : [],
+          strainType: draft.keepStrainType ? draft.strainType : "unknown",
+        },
+      ),
     };
   }, [data, draft, productName, query, productKey]);
 
@@ -247,6 +272,7 @@ export function EnrichmentAiLookupPanel({
     if (!curated) return;
     setSaved(null);
     setSaveMsg("");
+    setSaveReceipt(null);
     startSaveTransition(async () => {
       const fd = new FormData();
       fd.set("key", productKey);
@@ -254,6 +280,9 @@ export function EnrichmentAiLookupPanel({
       fd.set("save_strain", saveStrain ? "1" : "0");
       const res = await enrichmentSaveLookupAction(fd);
       if (res.ok) {
+        if (res.receipt && res.sentence) {
+          setSaveReceipt({ receipt: res.receipt, sentence: res.sentence, notes: res.notes ?? [] });
+        }
         setSaved("saved");
       } else {
         setSaved("saving-error");
@@ -602,7 +631,13 @@ export function EnrichmentAiLookupPanel({
 
               {/* Save selected — sends ONLY checked + edited fields; server re-sanitizes. */}
               <div className="mt-1 space-y-1.5 border-t border-[var(--admin-border)] pt-2">
-                {saved === "saved" ? (
+                {saved === "saved" && saveReceipt ? (
+                  <AttachReceiptView
+                    receipt={saveReceipt.receipt}
+                    sentence={saveReceipt.sentence}
+                    notes={saveReceipt.notes}
+                  />
+                ) : saved === "saved" ? (
                   <p className="text-[var(--admin-accent)]">
                     ✓ Saved as drafts. Descriptions appear as suggestions to Accept and images in the
                     review tray below — nothing publishes until you approve it.

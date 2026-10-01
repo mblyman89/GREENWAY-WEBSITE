@@ -222,11 +222,14 @@ describe("ring", () => {
     for (const w of ["on", "4", "-1", "2.5", "two", "ring2"]) expect(parseAttachPolicyRing(w), w).toBe(1);
     expect(attachPolicyMode(0)).toBe("off");
     expect(attachPolicyMode(1, true)).toBe("shadow");
-    expect(attachPolicyMode(2)).toBe("shadow");
-    expect(attachPolicyMode(3)).toBe("shadow");
+    // S07 shipped the writer: rings 2/3 act by default; false still means shadow.
+    expect(attachPolicyMode(2)).toBe("act");
+    expect(attachPolicyMode(3)).toBe("act");
+    expect(attachPolicyMode(2, false)).toBe("shadow");
+    expect(attachPolicyMode(3, false)).toBe("shadow");
     expect(attachPolicyMode(2, true)).toBe("act");
     expect(attachPolicyMode(3, true)).toBe("act");
-    expect(ATTACH_WRITER_SHIPPED).toBe(false);
+    expect(ATTACH_WRITER_SHIPPED).toBe(true);
   });
 });
 
@@ -253,6 +256,10 @@ describe("receipt + footer copy", () => {
     expect(receiptSentence([decide("images", g(["u"], 99))], "act")).toBe("1 more is a suggestion for you to review.");
     expect(receiptSentence([decide("description", g("x", 94))], "off")).toBe("");
     expect(receiptSentence([], "act")).toBe("");
+    // S07: the lookup preview in act says what Save WILL do - never "attached".
+    const pre = receiptSentence([decide("description", g("x", 94)), decide("strain_type", g("hybrid", 88))], "act", { strain_type: "hybrid" }, { onSave: true });
+    expect(pre).toBe("Nothing is saved yet. We found a description at 94% \u2014 these attach when you press Save selected. Strain type came back 88%, so Hybrid needs you to confirm it.");
+    expect(pre).not.toContain("\u2014 attached");
     expect(receiptSentence([decide("description", g("x", 10))], "act")).toBe("");
   });
 
@@ -262,12 +269,14 @@ describe("receipt + footer copy", () => {
       { policy: { attach: 1, prefill: 0, suggest: 0, ignore: 4, fields: { description: "attach" } } },
     ]);
     expect(shadowFooterCopy(sum, 1)).toBe(
-      "Auto-attach preview (last 7 days, 2 lookups): would attach 4 \u00b7 pre-fill 1 \u00b7 suggest 2 \u00b7 left alone 4. Most often: description (2), vibe / effects (1). Nothing has been attached. Set ATTACH_POLICY_RING=2 to allow writes once the single write door (S07) ships.",
+      "Auto-attach preview (last 7 days, 2 lookups): would attach 4 \u00b7 pre-fill 1 \u00b7 suggest 2 \u00b7 left alone 4. Most often: description (2), vibe / effects (1). Nothing is auto-attached: Save selected keeps everything for your review. Set ATTACH_POLICY_RING=2 to let 90%+ facts attach on save.",
     );
-    expect(shadowFooterCopy(sum, 2)).toContain("ATTACH_POLICY_RING=2 is set, but writes switch on only when the single write door (S07) ships");
-    expect(shadowFooterCopy(sum, 2, true)).toBe(
-      "Auto-attach (last 7 days, 2 lookups): attached 4 \u00b7 pre-fill 1 \u00b7 suggest 2 \u00b7 left alone 4. Most often: description (2), vibe / effects (1).",
+    expect(shadowFooterCopy(sum, 2, false)).toContain("ATTACH_POLICY_RING=2 is set, but the single write door is switched off in code (ATTACH_WRITER_SHIPPED)");
+    // S07: the counts are LOOKUPS, so even in act they never say "attached".
+    expect(shadowFooterCopy(sum, 2)).toBe(
+      "Auto-attach (last 7 days, 2 lookups): ready to attach on save 4 \u00b7 pre-fill 1 \u00b7 suggest 2 \u00b7 left alone 4. Most often: description (2), vibe / effects (1). Facts attach only when someone presses Save selected; each save shows exactly what landed.",
     );
+    expect(shadowFooterCopy(sum, 2)).not.toMatch(/\battached \d/);
     expect(shadowFooterCopy(null, 1)).toBe("Auto-attach preview (last 7 days): counts are unavailable right now.");
     expect(shadowFooterCopy(summarizeShadowAudit([]), 1)).toContain("no lookups yet");
     expect(shadowFooterCopy(sum, 0)).toBe("");
@@ -370,7 +379,13 @@ describe("shadow wiring writes nothing", () => {
     expect(action).toContain("policy: policyAudit,");
     expect(action).toContain("if (ring !== 0 && outcome.facts)");
     expect(action).not.toMatch(/createSupabaseAdminClient|from\("kb_strains"\)|from\("inventory_lots"\)/);
-    expect(action).not.toContain("attachProductFacts");
+    // S07 (Round 17): the LOOKUP still writes nothing. The single write door
+    // runs only inside the Save selected action, behind ATTACH_FACTS_V2.
+    const lookupFn = action.slice(action.indexOf("export async function productLookupAction"), action.indexOf("export async function saveLookupToKbAction"));
+    expect(lookupFn.length).toBeGreaterThan(500);
+    expect(lookupFn).not.toContain("attachProductFacts");
+    const saveFn = action.slice(action.indexOf("export async function saveLookupToKbAction"));
+    expect(saveFn).toMatch(/if \(attachFactsV2Enabled\(\)\) \{[\s\S]*?await attachProductFacts\(/);
     // The approver's pick is a PERSON's value: it must reach the policy.
     expect(action).toContain('const humanStrainType = str(formData, "human_strain_type") || null;');
     expect(action).toContain("human: humanStrainType ? { strain_type: humanStrainType } : {},");
@@ -406,7 +421,7 @@ describe("shadow wiring writes nothing", () => {
 });
 
 describe("panel receipt renders", () => {
-  it("shadow heading + per-field reasons; act heading without 'nothing saved'", async () => {
+  it("shadow heading + per-field reasons; act heading says it attaches on Save selected", async () => {
     const { PolicyReceipt } = await import("@/app/admin/inventory/drafts/AiLookupPanel");
     const base = {
       ring: 1 as const,
@@ -424,7 +439,9 @@ describe("panel receipt renders", () => {
     expect(html).toContain("94% confident.");
     expect(html).toContain('data-testid="attach-policy-receipt"');
     const act = renderToStaticMarkup(createElement(PolicyReceipt, { policy: { ...base, ring: 2, mode: "act" } }));
-    expect(act).not.toContain("nothing saved");
+    // Act mode is still a PREVIEW until Save selected is pressed (S07 writes on save only).
+    expect(act).toContain("Auto-attach on Save selected (nothing saved yet)");
+    expect(act).not.toContain("Auto-attach preview (nothing saved)");
   });
 });
 

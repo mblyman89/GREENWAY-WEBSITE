@@ -27,12 +27,22 @@ import {
   type AttachPolicyRing,
   type ShadowSummary,
 } from "@/lib/catalog/fact-attach-policy-core";
+import { ATTACH_FACTS_V2_ENV, parseAttachFactsV2 } from "@/lib/catalog/attach-plan-core";
 
 /** The audit action the lookup already writes (ai-lookup-actions.ts). */
 export const LOOKUP_AUDIT_ACTION = "catalog_draft.ai_lookup";
 
 export function currentAttachPolicyRing(): AttachPolicyRing {
   return parseAttachPolicyRing(process.env[ATTACH_POLICY_RING_ENV]);
+}
+
+/**
+ * S07 rollback switch: true (the default) routes both "Save selected" buttons
+ * through attachProductFacts(); ATTACH_FACTS_V2=off restores the old save
+ * paths unchanged. No database read.
+ */
+export function attachFactsV2Enabled(): boolean {
+  return parseAttachFactsV2(process.env[ATTACH_FACTS_V2_ENV]);
 }
 
 export async function loadShadowSummary(now: Date = new Date()): Promise<ShadowSummary | null> {

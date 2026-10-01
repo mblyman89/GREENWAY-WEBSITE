@@ -1296,14 +1296,22 @@ describe("the migration list is ordered the way the database will see it", () =>
     // after, rollback brings the timeout back, re-apply twice) passed and
     // failed on each of 3 deliberate sabotages; the D-81 guards check still
     // passes.
-    expect(listed[listed.length - 1]).toMatch(/^0240_/);
+    // R15a added 0241_inventory_lot_pos_potency.sql (six nullable pos_* potency
+    // columns on inventory_lots + two guarded CHECK constraints: unit is % or
+    // mg, values are >= 0; idempotent). This line was not bumped in R15a; R17
+    // bumped it after verifying in the build sandbox against Postgres 15: 0241
+    // applied twice cleanly in a rolled-back transaction, all six columns and
+    // both constraints present after the second run. The owner applies it by
+    // hand (docs/MIGRATIONS_TO_RUN.md).
+    expect(listed[listed.length - 1]).toMatch(/^0241_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0240_factory_reset_scales.sql");
-    expect(listed[listed.length - 2]).toBe("0239_intake_merge_decisions.sql");
-    expect(listed[listed.length - 3]).toBe("0238_factory_reset_reaches_every_guard.sql");
-    expect(listed[listed.length - 4]).toBe("0237_fact_review_for_versions.sql");
-    expect(listed[listed.length - 5]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 1]).toBe("0241_inventory_lot_pos_potency.sql");
+    expect(listed[listed.length - 2]).toBe("0240_factory_reset_scales.sql");
+    expect(listed[listed.length - 3]).toBe("0239_intake_merge_decisions.sql");
+    expect(listed[listed.length - 4]).toBe("0238_factory_reset_reaches_every_guard.sql");
+    expect(listed[listed.length - 5]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 6]).toBe("0236_publish_archive_rule.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
