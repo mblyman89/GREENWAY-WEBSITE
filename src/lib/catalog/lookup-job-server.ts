@@ -54,6 +54,7 @@ import {
   ALL_DONE_COPY,
   DRAFT_GONE_COPY,
   LEFT_REVIEW_COPY,
+  LOOKUP_ITEMS_PER_TICK_ENV,
   LOOKUP_JOBS_TABLE,
   LOOKUP_JOB_ITEMS_TABLE,
   LOOKUP_MAX_JOB_ITEMS,
@@ -70,6 +71,7 @@ import {
   itemErrorText,
   leaseIsFree,
   leaseUntilIso,
+  lookupItemsPerTick,
   manifestBatchLookupEnabled,
   orphanDecision,
   parseItemResult,
@@ -598,7 +600,8 @@ export async function runLookupJobsTick(deps: {
     // A claim that keeps missing (another run, or a failing write) must not
     // spin until the time budget runs out.
     let claimMisses = 0;
-    while (canStartItem({ elapsedMs: now() - t0, startedThisTick: out.started })) {
+    const maxPerTick = lookupItemsPerTick(process.env[LOOKUP_ITEMS_PER_TICK_ENV]);
+    while (canStartItem({ elapsedMs: now() - t0, startedThisTick: out.started, maxPerTick })) {
       const { data: next, error: nErr } = await admin
         .from(LOOKUP_JOB_ITEMS_TABLE)
         .select("id, draft_id, status, attempts")

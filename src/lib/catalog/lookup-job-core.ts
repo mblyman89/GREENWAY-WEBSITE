@@ -71,6 +71,21 @@ export const LOOKUP_TICK_BUDGET_MS = 760_000;
 export const LOOKUP_ITEM_WORST_MS = 300_000;
 /** Hard cap per run, even when lookups are fast (rate-limit courtesy, S13.8). */
 export const LOOKUP_MAX_ITEMS_PER_TICK = 12;
+
+/**
+ * Bible S13.8: "Gemini rate limits/timeouts - chunk size configurable".
+ * LOOKUP_ITEMS_PER_TICK lowers the per-run cap (1..12). Unset, junk, zero or
+ * negative = 12; above 12 is clamped to 12 (the time budget is the real cap).
+ */
+export const LOOKUP_ITEMS_PER_TICK_ENV = "LOOKUP_ITEMS_PER_TICK";
+
+export function lookupItemsPerTick(raw: string | undefined | null): number {
+  const v = String(raw ?? "").trim();
+  if (!/^\d+$/.test(v)) return LOOKUP_MAX_ITEMS_PER_TICK;
+  const n = Number(v);
+  if (!Number.isSafeInteger(n) || n < 1) return LOOKUP_MAX_ITEMS_PER_TICK;
+  return Math.min(n, LOOKUP_MAX_ITEMS_PER_TICK);
+}
 /** The job lease outlives the function (800 s) so a live run is never overtaken. */
 export const LOOKUP_LEASE_MS = 840_000;
 /** An item a killed run left "running" is retried once, then failed. */
@@ -79,10 +94,14 @@ export const LOOKUP_MAX_ATTEMPTS = 2;
 export const LOOKUP_MAX_JOB_ITEMS = 200;
 
 /** May this run start another item? The first one always may. */
-export function canStartItem(input: { elapsedMs: number; startedThisTick: number }): boolean {
+export function canStartItem(input: { elapsedMs: number; startedThisTick: number; maxPerTick?: number }): boolean {
   const started = Number.isFinite(input.startedThisTick) ? Math.max(0, Math.floor(input.startedThisTick)) : 0;
   if (started === 0) return true;
-  if (started >= LOOKUP_MAX_ITEMS_PER_TICK) return false;
+  const cap =
+    typeof input.maxPerTick === "number" && Number.isFinite(input.maxPerTick) && input.maxPerTick >= 1
+      ? Math.min(Math.floor(input.maxPerTick), LOOKUP_MAX_ITEMS_PER_TICK)
+      : LOOKUP_MAX_ITEMS_PER_TICK;
+  if (started >= cap) return false;
   const elapsed = Number.isFinite(input.elapsedMs) ? Math.max(0, input.elapsedMs) : Number.POSITIVE_INFINITY;
   return elapsed + LOOKUP_ITEM_WORST_MS <= LOOKUP_TICK_BUDGET_MS;
 }
@@ -446,6 +465,14 @@ export function __runLookupJobCoreTests(): { passed: number; failed: number } {
   ok(canStartItem({ elapsedMs: 0, startedThisTick: LOOKUP_MAX_ITEMS_PER_TICK }) === false, "per-tick cap");
   ok(canStartItem({ elapsedMs: 0, startedThisTick: LOOKUP_MAX_ITEMS_PER_TICK - 1 }) === true, "under cap");
   ok(canStartItem({ elapsedMs: Number.NaN, startedThisTick: 2 }) === false, "NaN elapsed never starts a second");
+  // S13.8 chunk size
+  ok(lookupItemsPerTick(undefined) === 12 && lookupItemsPerTick("") === 12 && lookupItemsPerTick("abc") === 12, "unset/junk = 12");
+  ok(lookupItemsPerTick("0") === 12 && lookupItemsPerTick("-3") === 12 && lookupItemsPerTick("2.5") === 12, "zero/negative/fraction = 12");
+  ok(lookupItemsPerTick("3") === 3 && lookupItemsPerTick(" 1 ") === 1, "lower cap honoured");
+  ok(lookupItemsPerTick("99") === 12 && lookupItemsPerTick("99999999999999999999") === 12, "clamped to 12");
+  ok(canStartItem({ elapsedMs: 0, startedThisTick: 3, maxPerTick: 3 }) === false && canStartItem({ elapsedMs: 0, startedThisTick: 2, maxPerTick: 3 }) === true, "configured cap");
+  ok(canStartItem({ elapsedMs: 0, startedThisTick: 0, maxPerTick: 1 }) === true && canStartItem({ elapsedMs: 0, startedThisTick: 1, maxPerTick: 1 }) === false, "cap 1 = one per run");
+  ok(canStartItem({ elapsedMs: 0, startedThisTick: 12, maxPerTick: 50 }) === false && canStartItem({ elapsedMs: 0, startedThisTick: 5, maxPerTick: Number.NaN }) === true, "cap cannot exceed 12; NaN = 12");
   ok(LOOKUP_TICK_BUDGET_MS < LOOKUP_TICK_MAX_DURATION_S * 1000, "budget inside maxDuration");
   ok(LOOKUP_LEASE_MS > LOOKUP_TICK_MAX_DURATION_S * 1000, "lease outlives the function");
   ok(LOOKUP_TICK_MAX_DURATION_S <= 800, "Pro maximum");
