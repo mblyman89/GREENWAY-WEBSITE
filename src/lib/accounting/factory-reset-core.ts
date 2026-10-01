@@ -520,6 +520,15 @@ export const TABLE_RULES: readonly TableRule[] = [
   // a wipe the card keys it names are gone, so each answer simply reads as
   // stale and the planner asks again - it is never applied to other cards.
   { table: "intake_merge_decisions", disposition: "KEEP", because: "Your answers for products that looked like more than one menu card (join card X, or keep separate). They are decisions about products and keep applying to future deliveries; if the cards they name are gone, the store simply asks you again." },
+  // lookup_jobs / lookup_job_items (0242, bible S13): the record of each
+  // "Look up all N products on this manifest" press. KEEP, not WIPE: the
+  // 0240 wipe list is fixed SQL, and these tables hold no money, stock or
+  // customer data. They have no foreign key into any emptied table
+  // (manifest_id / draft_id are stamps), and lookup_job_items -> lookup_jobs
+  // is KEEP -> KEEP, so keeping them never leaves a dangling link. After a
+  // wipe, a job naming a gone manifest is simply never shown again.
+  { table: "lookup_jobs", disposition: "KEEP", because: "The record of each batch product lookup you started (which manifest, when, by whom). It holds no money, stock or customer data, and after a wipe a job for a manifest that is gone is simply never shown again." },
+  { table: "lookup_job_items", disposition: "KEEP", because: "One line per product inside a batch lookup, with its short result and how many paid AI lookups it used. It goes with its batch record and holds no money, stock or customer data." },
   { table: "product_classification_overrides", disposition: "KEEP", because: "Your manual corrections to how a product is classified — decisions, and they must keep applying after the wipe." },
   { table: "noncannabis_products", disposition: "KEEP", because: "Your curated non-cannabis catalogue." },
   { table: "noncannabis_sku_sequences", disposition: "KEEP", because: "SKU counters. Resetting them would re-issue SKUs you have already printed on labels." },

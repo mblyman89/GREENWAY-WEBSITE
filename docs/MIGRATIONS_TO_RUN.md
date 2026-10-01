@@ -1542,3 +1542,68 @@ in Vercel.
 
   **Rollback (only if needed):** "Revert code; the columns can stay (unused)."
   The app reads them only when present.
+
+## S13 — 0242 — look up a whole manifest with one button
+
+- [ ] `0242_lookup_jobs.sql` — creates two new tables, `lookup_jobs` and
+  `lookup_job_items`. It changes no existing table and touches no row. The
+  only link is `lookup_job_items.job_id` → `lookup_jobs` (the items go with
+  their job). `manifest_id` and `draft_id` are plain stamps with no link, so
+  the factory reset can still empty manifests and drafts.
+
+  **Why:** Product Onboarding looks a product up one row at a time. For a
+  40-line manifest that is 40 clicks, and a browser tab held open for up to
+  five minutes per product (bible S13, finding F-017).
+
+  **What it does:** each press of **Look up all N products on this manifest**
+  makes one job row plus one item row per product in Needs review. A
+  once-a-minute server job (`/api/cron/lookup-jobs`) does the work, so you
+  can close the tab. At most one job per manifest can be active at a time (a
+  partial unique index), so pressing the button twice gives you the same
+  job. Each product is claimed with a compare-and-swap, so a doubled cron
+  tick never looks a product up twice. A product that fails is marked failed
+  with a plain reason and the job carries on. Every item records how many
+  paid AI web lookups it used, so the job shows its cost. Row-level security
+  is on with no policy, so only the server can read or write these tables.
+
+  **What you will see after it is run:** on **Product Onboarding**, with one
+  delivery picked, the **Look up all N products on this manifest** button,
+  then a progress line such as "9 of 14 looked up · 31 facts attached ·
+  6 need your eye" with the cost underneath, and each row shows its own
+  result.
+
+  **Until it is run** nothing breaks. The button explains that this
+  migration is what turns it on, the cron finds no table and does nothing,
+  and the per-row AI Lookup works exactly as before.
+
+  Safe to re-run (`create table if not exists`, `create index if not
+  exists`). Verified on Postgres 15 with `scripts/recon/lookup-jobs-pg-check.sql`:
+  0242 applied twice in one rolled-back transaction; a second active job for
+  the same manifest was refused and a new job after the first finished was
+  accepted; bad statuses, a duplicate product in one job and a negative
+  `ai_calls` were refused; items cascaded with their job; RLS was on with no
+  policy; and the rollback dropped both tables. With the unique index made
+  non-unique on purpose, the check failed ("second active job was accepted").
+
+  **Run it, then check:**
+
+  ```sql
+  select c.relname, c.relrowsecurity as rls_on,
+         (select count(*) from pg_policies p where p.tablename = c.relname) as policies
+    from pg_class c
+   where c.relname in ('lookup_jobs', 'lookup_job_items')
+     and c.relkind = 'r'
+   order by c.relname;
+  -- expect 2 rows: lookup_job_items true 0, lookup_jobs true 0
+
+  select indexname from pg_indexes
+   where tablename = 'lookup_jobs' and indexname = 'lookup_jobs_one_active_per_manifest';
+  -- expect 1 row
+  ```
+
+  **Rollback (only if needed):** set `MANIFEST_BATCH_LOOKUP=off` in Vercel.
+  The button and progress panel disappear, the cron does nothing, and the
+  per-row lookup stays. To remove the tables as well, paste
+  `supabase/rollbacks/0242_lookup_jobs.rollback.sql` into the SQL editor.
+  Every batch record is forgotten. Facts a batch attached stay where they
+  landed, because they were written by the normal save path.

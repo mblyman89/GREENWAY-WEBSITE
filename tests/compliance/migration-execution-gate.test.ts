@@ -1303,15 +1303,23 @@ describe("the migration list is ordered the way the database will see it", () =>
     // applied twice cleanly in a rolled-back transaction, all six columns and
     // both constraints present after the second run. The owner applies it by
     // hand (docs/MIGRATIONS_TO_RUN.md).
-    expect(listed[listed.length - 1]).toMatch(/^0241_/);
+    // R19 S13 added 0242_lookup_jobs.sql (lookup_jobs + lookup_job_items for
+    // the "Look up all N products on this manifest" button; one active job per
+    // manifest by a partial unique index; RLS on, no policy; idempotent).
+    // Verified in the build sandbox on Postgres 15 with
+    // scripts/recon/lookup-jobs-pg-check.sql: applied twice in a rolled-back
+    // transaction, every constraint refused its bad row, and a non-unique
+    // index mutant failed the check. The owner applies it by hand.
+    expect(listed[listed.length - 1]).toMatch(/^0242_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0241_inventory_lot_pos_potency.sql");
-    expect(listed[listed.length - 2]).toBe("0240_factory_reset_scales.sql");
-    expect(listed[listed.length - 3]).toBe("0239_intake_merge_decisions.sql");
-    expect(listed[listed.length - 4]).toBe("0238_factory_reset_reaches_every_guard.sql");
-    expect(listed[listed.length - 5]).toBe("0237_fact_review_for_versions.sql");
-    expect(listed[listed.length - 6]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 1]).toBe("0242_lookup_jobs.sql");
+    expect(listed[listed.length - 2]).toBe("0241_inventory_lot_pos_potency.sql");
+    expect(listed[listed.length - 3]).toBe("0240_factory_reset_scales.sql");
+    expect(listed[listed.length - 4]).toBe("0239_intake_merge_decisions.sql");
+    expect(listed[listed.length - 5]).toBe("0238_factory_reset_reaches_every_guard.sql");
+    expect(listed[listed.length - 6]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 7]).toBe("0236_publish_archive_rule.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
