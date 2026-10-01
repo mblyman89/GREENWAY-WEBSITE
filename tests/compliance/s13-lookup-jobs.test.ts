@@ -598,6 +598,43 @@ describe("S13 cron tick: concurrency (AGENTS rule 12)", () => {
     expect(jobs(db)[0]).toMatchObject({ status: "done", done: 3 });
   });
 
+  it("the lease RELEASE clears only OUR lease: a run that took over just before the release keeps its lease", async () => {
+    const db = state.db;
+    seedDrafts(db, 1);
+    await enqueue();
+    const thief = "99999999-0000-4000-8000-000000000006";
+    const until = new Date(T0 + 99_000).toISOString();
+    db.before = (req) => {
+      const body = req.body as Row | null;
+      const release = req.method === "PATCH" && req.table === "lookup_jobs" && body && body.lease_token === null;
+      if (release) Object.assign(jobs(db)[0], { lease_token: thief, lease_until: until });
+    };
+    await runLookupJobsTick({ admin: admin(), runItem: runner().fn, now: () => T0 });
+    expect(jobs(db)[0].lease_token).toBe(thief);
+    expect(jobs(db)[0].lease_until).toBe(until);
+  });
+
+  it("the orphan sweep is a compare-and-swap on attempts: an orphan another run already re-claimed is left alone", async () => {
+    const db = state.db;
+    seedDrafts(db, 2);
+    await enqueue();
+    const its = items(db);
+    Object.assign(its[0], { status: "running", attempts: 1 });
+    Object.assign(jobs(db)[0], { status: "running", lease_until: new Date(T0 - 1).toISOString(), lease_token: "99999999-0000-4000-8000-000000000007" });
+    db.before = (req) => {
+      const body = req.body as Row | null;
+      if (req.method === "PATCH" && req.table === "lookup_job_items" && body?.status === "queued" && req.url.searchParams.get("status") === "eq.running") {
+        its[0].attempts = 2; // re-claimed by another run between our read and our write
+      }
+    };
+    const r0 = runner();
+    const r = await runLookupJobsTick({ admin: admin(), runItem: r0.fn, now: () => T0 });
+    expect(r.requeued).toBe(0);
+    expect(items(db)[0]).toMatchObject({ status: "running", attempts: 2 });
+    expect(r0.ran).toEqual([its[1].draft_id]);
+    expect(r.finished).toBe(false);
+  });
+
   it("lease LOST mid-run (a later run took over) -> stops writing: the item is not overwritten and no more products start", async () => {
     const db = state.db;
     seedDrafts(db, 3);
