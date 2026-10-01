@@ -16,6 +16,7 @@ must FAIL:
 Same discipline as scripts/r18/mutate.py: every anchor must appear exactly
 once, the baseline must be green, and every file is restored afterwards.
 """
+import signal
 import subprocess
 import sys
 
@@ -169,6 +170,7 @@ SUITES = [
     "tests/compliance/s12-golden-record.test.ts",
     "tests/compliance/s13-lookup-jobs.test.ts",
     "tests/compliance/intake-env-ledger.test.ts",
+    "tests/compliance/r19-approve-path-compliance-read.test.ts",
 ]
 
 
@@ -182,8 +184,19 @@ def write(p, s):
         fh.write(s)
 
 
-def run_suites():
-    return subprocess.run(["npx", "vitest", "run", *SUITES], capture_output=True, text=True)
+class Hung:
+    """A mutant that makes the suite hang (e.g. an endless loop) is caught: a
+    hang is a failure, never a pass."""
+    returncode = 124
+    stdout = "TIMEOUT"
+
+
+def run_suites(timeout=240):
+    try:
+        return subprocess.run(["npx", "vitest", "run", *SUITES], capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        subprocess.run(["pkill", "-f", "vitest"], capture_output=True)
+        return Hung()
 
 
 # ---------------------------------------------------------------- PRE-FLIGHT
@@ -216,6 +229,15 @@ if r.returncode != 0:
 print("  OK - baseline green\n")
 
 # ------------------------------------------------------------------- MUTATE
+def _restore_and_exit(signum, frame):
+    for path, src in originals.items():
+        write(path, src)
+    print("\nsignal: all files restored")
+    sys.exit(130)
+
+
+signal.signal(signal.SIGTERM, _restore_and_exit)
+signal.signal(signal.SIGINT, _restore_and_exit)
 survivors = []
 try:
     for i, (name, path, old, new) in enumerate(MUTANTS, 1):
