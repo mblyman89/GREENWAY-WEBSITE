@@ -170,7 +170,7 @@ beforeEach(() => {
 // === 1. Pure core ================================================================
 describe("S24 pure core", () => {
   it("self-tests pass with the exact count", () => {
-    expect(__runProductKnowledgeBatchTests()).toEqual({ passed: 129, failed: 0 });
+    expect(__runProductKnowledgeBatchTests()).toEqual({ passed: 145, failed: 0 });
   });
 });
 

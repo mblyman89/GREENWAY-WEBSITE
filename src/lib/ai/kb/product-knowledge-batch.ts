@@ -50,6 +50,7 @@
  * READ-ONLY. Never writes. Never invents copy.
  */
 import "server-only";
+import type { IdentityCandidate } from "@/lib/enrichment/enrichment-identity-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
@@ -70,6 +71,7 @@ import {
   type StrainRow,
 } from "@/lib/ai/kb/product-knowledge-batch-core";
 import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
+import { loadPublishedEnrichmentsByIdentity } from "@/lib/enrichment/enrichment-identity-server";
 
 /**
  * The exact column list `checkProductKnown()` selects (`intake.ts:77-79`).
@@ -398,16 +400,20 @@ export async function loadKnowledgeIndexes(
     return empty;
   }
 
-  const { identityParts, posKeys, strainSlugs, lotKeys } = collectLookupKeys(queries);
+  const { identityParts, posKeys, strainSlugs, lotKeys, identityKeys } = collectLookupKeys(queries);
   const productSlugs = [...new Set(identityParts.map((p) => p.productSlug))];
 
-  const [kb, enrichments, strains] = await Promise.all([
+  const [kb, enrichments, strains, enrichmentsByIdentity] = await Promise.all([
     // S24: with no lot keys loadKbSide makes exactly the pre-S24 single
     // kb_products read (loadLotsForKnowledge short-circuits on []).
     loadKbSide(admin, productSlugs, lotKeys),
     loadEnrichments(admin, posKeys),
     loadStrains(admin, strainSlugs),
+    // S20 rung 3b: published enrichments of the same PRODUCT, by identity.
+    // Empty (no read at all) when ENRICHMENT_FOLLOWS_IDENTITY=off or no query
+    // carries an identity; empty on a pre-0234 database or any error.
+    loadPublishedEnrichmentsByIdentity<EnrichmentRow & IdentityCandidate>(identityKeys, ENRICHMENT_COLUMNS, admin),
   ]);
 
-  return { ...kb, enrichments, strains };
+  return { ...kb, enrichments, strains, enrichmentsByIdentity };
 }
