@@ -90,13 +90,17 @@ export function manifestPageBase(manifestId: string): string {
  * `held` is set by finalize when lots were held in quarantine; landing on
  * Issues shows each held lot with its own fix link (bible S28.2).
  * `booksError` is set by the receiving / vendor-bill wires when the books
- * refused; it opens Accounting (bible S29.2), never the Delivery tab.
+ * refused. R19 (bible S19.18): it NO LONGER auto-opens Accounting — the owner
+ * asked that accounting "not jump to the accounting tab every time an action
+ * happens" (accounting is not fully built at launch). The page stays on
+ * Delivery and the Accounting tab is marked `attention` (a quiet gold ring +
+ * a short glow) instead; `keepParams` carries the banner params onto the
+ * Accounting link so the refusal text is still there one click away.
  */
 export const MANIFEST_PAGE_TABS: readonly TabSpec<ManifestPageTab>[] = [
   { key: "delivery", label: "Delivery", blurb: "The delivery itself: lines, receiving and finalize." },
   { key: "issues", label: "Issues", blurb: "Held lots, missing COAs and unmapped categories — each with its fix.", autoOpenParams: ["held"] },
-  // S29: only a books REFUSAL auto-opens Accounting; a success (`books=`) stays
-  // on Delivery. Placed after Issues so a finalize with held lots AND a books
-  // refusal lands on Issues first (resolveTab takes the first tab in order).
-  { key: "accounting", label: "Accounting", blurb: "What the books recorded for this delivery, and where to follow it up.", autoOpenParams: ["booksError"] },
+  // R19: Accounting never auto-opens (no autoOpenParams). Its link carries the
+  // books result params so the banner shows when the owner chooses to look.
+  { key: "accounting", label: "Accounting", blurb: "What the books recorded for this delivery, and where to follow it up.", keepParams: ["booksError", "books"] },
 ];

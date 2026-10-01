@@ -465,6 +465,32 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* R19 (bible S19.18) — the QUIET "needs attention" tab cue (PageTabs
+   `attention`). Replaces auto-jumping to the Accounting tab: a gold ring that
+   glows brighter → dimmer → brighter for TWO 2s cycles (4s total, under the
+   WCAG 2.2.2 five-second line; 0.5 Hz, far below 2.3.1's 3 flashes/second)
+   and then RESTS on a static ring, so nothing keeps moving on screen.
+   Reduced-motion users get the static ring only. */
+@keyframes gw-tab-attention-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.45), 0 0 4px 0 rgba(255, 215, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.9), 0 0 14px 3px rgba(255, 215, 0, 0.45);
+  }
+}
+.gw-tab-attention {
+  background-color: var(--admin-gold-soft);
+  box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.45), 0 0 4px 0 rgba(255, 215, 0, 0.2);
+  animation: gw-tab-attention-glow 2s ease-in-out 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gw-tab-attention {
+    animation: none;
+  }
+}
+
 /* -------------------------------------------------------------------------
  * SLICE 105 — editable store-hours text size (top green SecondaryBar).
  *

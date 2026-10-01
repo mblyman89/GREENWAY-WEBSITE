@@ -37,6 +37,20 @@ export type TabSpec<K extends string = string> = {
    * (Needs action); warnings alone keep the neutral pill.
    */
   countTone?: "neutral" | "danger";
+  /**
+   * R19 (bible S19.18): a QUIET "look here" cue instead of auto-opening the
+   * tab. Rendered as a highlight ring plus a slow glow that runs twice (4s,
+   * under WCAG 2.2.2's 5-second line, 0.5 Hz — far below 2.3.1's 3 flashes/s)
+   * and then rests on a static ring; none at all under prefers-reduced-motion.
+   * Screen readers get ", needs attention" in the tab's name.
+   */
+  attention?: boolean;
+  /**
+   * R19: extra params ONLY this tab's link carries (on top of `allow`), so a
+   * result banner that lives on this tab (e.g. `booksError` on Accounting)
+   * survives the click instead of being dropped.
+   */
+  keepParams?: readonly string[];
 };
 
 export type TabParams = { tab?: string; error?: string; [k: string]: string | undefined };
@@ -125,6 +139,34 @@ export function tabCountLabel(count: number | null | undefined): string | null {
 export function tabAriaLabel(label: string, count: number | null | undefined): string {
   const c = tabCountLabel(count);
   return c ? `${label}, ${c} item${c === "1" ? "" : "s"}` : label;
+}
+
+/**
+ * R19: the tab's accessible name, or null when the visible label already says
+ * everything (no pill, no attention) — so plain tabs render no aria-label and
+ * the Receiving strip stays byte-identical.
+ *   ("Accounting", 2, true)  → "Accounting, 2 items, needs attention"
+ *   ("Accounting", 0, true)  → "Accounting, needs attention"
+ *   ("Issues", 3, false)     → "Issues, 3 items"
+ */
+export function tabAccessibleName(
+  label: string,
+  count: number | null | undefined,
+  attention: boolean | undefined,
+): string | null {
+  const pill = tabCountLabel(count);
+  if (!pill && attention !== true) return null;
+  const base = tabAriaLabel(label, count);
+  return attention === true ? `${base}, needs attention` : base;
+}
+
+/** R19: the allow-list for ONE tab's link: the strip's list plus the tab's own keepParams (deduped, order kept). */
+export function tabAllowFor(allow: readonly string[], tab: { keepParams?: readonly string[] }): readonly string[] {
+  const extra = tab.keepParams ?? [];
+  if (extra.length === 0) return allow;
+  const out = [...allow];
+  for (const p of extra) if (!out.includes(p)) out.push(p);
+  return out;
 }
 
 /**
@@ -227,6 +269,23 @@ export function __runPageTabsCoreTests(): { passed: number; failed: number } {
   );
   ok(tabHrefCarry("/admin/x", "a", "q=&status=active") === "/admin/x?tab=a&status=active", "carry: blank values dropped");
   ok(tabHrefCarry("/admin/x", "a", "?q=z") === "/admin/x?tab=a&q=z", "carry: a leading ? is tolerated");
+
+  // R19: tabAccessibleName / tabAllowFor
+  ok(tabAccessibleName("Accounting", undefined, undefined) === null, "a11y: plain tab \u2192 no aria-label");
+  ok(tabAccessibleName("Accounting", 0, false) === null, "a11y: zero count, no attention \u2192 null");
+  ok(tabAccessibleName("Issues", 3, false) === "Issues, 3 items", "a11y: count only matches tabAriaLabel");
+  ok(tabAccessibleName("Accounting", 1, true) === "Accounting, 1 item, needs attention", "a11y: count + attention");
+  ok(tabAccessibleName("Accounting", null, true) === "Accounting, needs attention", "a11y: attention only");
+  ok(tabAccessibleName("Accounting", 500, true) === "Accounting, 99+ items, needs attention", "a11y: capped + attention");
+  const allowBase = ["q"] as const;
+  ok(tabAllowFor(allowBase, {}) === allowBase, "allowFor: no keepParams \u2192 same list");
+  ok(tabAllowFor([], { keepParams: ["booksError", "books"] }).join(",") === "booksError,books", "allowFor: adds keepParams");
+  ok(tabAllowFor(["q", "books"], { keepParams: ["books", "booksError"] }).join(",") === "q,books,booksError", "allowFor: dedup, order kept");
+  ok(
+    tabHref("/m", "accounting", { booksError: "no category", tab: "delivery" }, tabAllowFor([], { keepParams: ["booksError"] })) ===
+      "/m?tab=accounting&booksError=no+category",
+    "allowFor: the banner param survives the click",
+  );
 
   return { passed, failed };
 }

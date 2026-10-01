@@ -173,6 +173,17 @@ export function accountingStatus(
 }
 
 /**
+ * R19 (bible S19.18): should the Accounting tab wear its quiet "needs
+ * attention" cue? Yes when the durable timeline still has a refused step
+ * (`open` from accountingStatus) OR this very redirect carried a refusal
+ * (`booksError`, before the event row is read back). Never auto-opens the tab.
+ */
+export function booksNeedsAttention(open: number, booksError: string | null | undefined): boolean {
+  if (Number.isFinite(open) && open > 0) return true;
+  return typeof booksError === "string" && booksError.trim().length > 0;
+}
+
+/**
  * One line per books step for the Accounting tab. "Recorded", never
  * "posted": submitJournal creates a draft and posts only when the database
  * agrees (posting-service.ts submitJournal), so a success can be a draft
@@ -301,5 +312,13 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   ok(booksRefusalNextStep(true).includes("Mark received again"), "in progress retry");
   ok(!/finali[sz]e again|re-?finali/i.test(booksRefusalNextStep(false)), "no false re-finalize promise");
 
+  // R19: booksNeedsAttention
+  ok(booksNeedsAttention(0, undefined) === false, "attention: nothing open, no error");
+  ok(booksNeedsAttention(1, undefined) === true, "attention: a refused step");
+  ok(booksNeedsAttention(0, "no category") === true, "attention: a fresh refusal on the URL");
+  ok(booksNeedsAttention(0, "   ") === false, "attention: blank error is not a refusal");
+  ok(booksNeedsAttention(0, null) === false, "attention: null error");
+  ok(booksNeedsAttention(Number.NaN, "") === false, "attention: NaN open is not open");
+  ok(booksNeedsAttention(2, "x") === true, "attention: both");
   return { passed, failed };
 }

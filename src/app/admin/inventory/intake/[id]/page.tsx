@@ -23,7 +23,7 @@ import { summarizeStagedIntake } from "@/lib/inventory/intake-review-adapter";
 import { IntakeReviewFlagsPanel } from "@/components/admin/inventory/IntakeReviewFlagsPanel";
 import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline";
 import { ManifestAccountingPanel } from "@/components/admin/inventory/ManifestAccountingPanel";
-import { accountingStatus, booksRefusalNextStep, booksResultText } from "@/lib/inventory/manifest-event-labels-core";
+import { accountingStatus, booksNeedsAttention, booksRefusalNextStep, booksResultText } from "@/lib/inventory/manifest-event-labels-core";
 import { ManifestLotDisposition } from "@/components/admin/inventory/ManifestLotDisposition";
 import { manifestStatusBadge } from "@/lib/inventory/intake-disposition-core";
 import {
@@ -335,13 +335,20 @@ export default async function ManifestReviewPage({
   const tabs = MANIFEST_PAGE_TABS.map((t) =>
     t.key === "issues"
       ? { ...t, ...issuesTabBadge(issueSummary) }
-      : t.key === "accounting" && booksState.open > 0
-        ? { ...t, count: booksState.open, countTone: "neutral" as const }
+      : t.key === "accounting"
+        ? {
+            ...t,
+            ...(booksState.open > 0 ? { count: booksState.open, countTone: "neutral" as const } : {}),
+            // R19 (bible S19.18): a refusal QUIETLY marks the tab (gold ring +
+            // a short glow) instead of jumping to it.
+            attention: booksNeedsAttention(booksState.open, booksError),
+          }
         : t,
   );
   // `held=0` is a clean finalize and must NOT auto-open Issues (manifestHeldAutoOpen).
-  // A books refusal (`booksError`) opens Accounting, never Delivery (S29).
-  const activeTab = resolveTab(MANIFEST_PAGE_TABS, { tab, held: manifestHeldAutoOpen(held), booksError }, "delivery");
+  // R19: a books refusal (`booksError`) no longer opens Accounting; the page
+  // stays where the owner was working and the Accounting tab glows instead.
+  const activeTab = resolveTab(MANIFEST_PAGE_TABS, { tab, held: manifestHeldAutoOpen(held) }, "delivery");
 
   return (
     <div>
@@ -611,7 +618,9 @@ export default async function ManifestReviewPage({
         )}
 
         {/* S28: Delivery | Issues; S29: Accounting. Result banners above show on every tab. */}
-        <PageTabs base={pageBase} tabs={tabs} active={activeTab} ariaLabel="Manifest views" allow={[]} />
+        {/* R19: `keep` hands the books result params to the Accounting link only
+            (its keepParams); every other tab still drops them (allow=[]). */}
+        <PageTabs base={pageBase} tabs={tabs} active={activeTab} ariaLabel="Manifest views" allow={[]} keep={{ booksError, books }} />
 
         {activeTab === "issues" && (
           <IssuesList
