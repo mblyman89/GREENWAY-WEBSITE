@@ -35,6 +35,7 @@ import type { MenuItemRow, MenuVariantRow } from "@/lib/pos/db-types";
 import { getPublishedVersion, getVersionItems, getItemBySourceKey } from "@/lib/pos/menu-version";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { withCardIdentity } from "@/lib/menu/card-identity";
+import { enrichmentIdentityForItem } from "@/lib/enrichment/enrichment-identity-core";
 // SLICE A (performance): the cache policy lives in a pure module so the tag
 // used for READING here is provably the same string used for INVALIDATING in
 // src/lib/site/public-surfaces.ts — they cannot drift apart.
@@ -127,6 +128,8 @@ export function menuRowToGreenwayItem(row: MenuItemWithVariants): GreenwayMenuIt
     hidden: row.hidden,
     hiddenReason: row.hidden_reason ?? undefined,
     variants: (row.variants ?? []).map(toVariant),
+    // S20: from the RAW row, before withCardIdentity overlays display labels.
+    identityKey: enrichmentIdentityForItem(row) ?? undefined,
   };
 }
 

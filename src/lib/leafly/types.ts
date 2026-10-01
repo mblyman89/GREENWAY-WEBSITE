@@ -116,6 +116,16 @@ export type GreenwayMenuItem = {
   inventoryStatus: "in-stock" | "low-stock" | "unavailable";
   hidden?: boolean;
   hiddenReason?: string;
+  /**
+   * S20 - the product identity (S03 "vendor|category|family", storage form)
+   * computed from the RAW published menu row in menuRowToGreenwayItem,
+   * BEFORE the SLICE 66 display overlay rewrites brand/vendor (an identity
+   * built from "CERES" would not equal the stamped "CERES - 435011" one).
+   * Server-side only: the enrichment ladder borrows the same product's
+   * published copy by it. Trimmed from the client grid (GRID_TRIMMED_FIELDS).
+   * Absent = unknown (never a wildcard).
+   */
+  identityKey?: string;
   variants: GreenwayMenuVariant[];
   /**
    * Resolved product image URL (DF-3). Populated at render time by the image

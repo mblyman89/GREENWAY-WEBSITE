@@ -46,6 +46,9 @@ import { recordAudit } from "@/lib/auth/audit";
 import { persistSuggestion } from "@/lib/ai/suggestions";
 import { writeBackProductFacts } from "@/lib/ai/kb/writeback";
 import { getPublishedVersion, getItemBySourceKey } from "@/lib/pos/menu-version";
+import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
+import { suggestionTargetKey } from "@/lib/enrichment/enrichment-identity-core";
+import { enrichmentFollowsIdentityOn } from "@/lib/enrichment/enrichment-identity-server";
 import { packImageCandidates } from "@/lib/enrichment/research-core";
 import type { ProductLookupResult } from "@/lib/inventory/product-lookup-core";
 import { deriveVariantLabel } from "@/lib/inventory/manifest-kb-bridge-core";
@@ -127,6 +130,14 @@ interface ServerFacts {
   identityKey: string;
   strainName: string | null;
   posProductKey: string | null;
+  /**
+   * S20 (bible S20.2 "ai_suggestions entity_id = card key"): where the
+   * pending Enrichment suggestions are filed and deduped. The draft's
+   * restock_of_card_key (the ONE live card of the same product, S19) when
+   * ENRICHMENT_FOLLOWS_IDENTITY is on; otherwise posProductKey, exactly as
+   * before. Provenance and the KB write keep the lot's own key.
+   */
+  suggestionKey: string | null;
   manifestStrainType: string | null;
   draftId: string | null;
   lotId: string | null;
@@ -141,12 +152,20 @@ interface ServerFacts {
   } | null;
 }
 
+const DRAFT_FACTS_SELECT = "id, name, brand_name, vendor_name, category, chosen_website_category, strain_name, lot_id, pos_product_key";
+
 async function readDraftFacts(admin: Admin, draftId: string): Promise<ServerFacts | { error: string }> {
-  const { data, error } = await admin
+  // S20: also read the restock hint (0234). A database without it answers
+  // 42703/PGRST204; retry with the pre-S20 column list (suggestions then go
+  // to the lot key, exactly as before).
+  let { data, error } = await admin
     .from("catalog_product_drafts")
-    .select("id, name, brand_name, vendor_name, category, chosen_website_category, strain_name, lot_id, pos_product_key")
+    .select(`${DRAFT_FACTS_SELECT}, restock_of_card_key`)
     .eq("id", draftId)
     .maybeSingle();
+  if (error && isMissingIdentityColumnError("catalog_product_drafts", error)) {
+    ({ data, error } = await admin.from("catalog_product_drafts").select(DRAFT_FACTS_SELECT).eq("id", draftId).maybeSingle());
+  }
   if (error) return { error: `Could not read this onboarding draft: ${error.message.slice(0, 160)}` };
   if (!data) return { error: "This onboarding draft no longer exists - refresh the page." };
   const d = data as {
@@ -159,13 +178,20 @@ async function readDraftFacts(admin: Admin, draftId: string): Promise<ServerFact
     strain_name: string | null;
     lot_id: string | null;
     pos_product_key: string | null;
+    restock_of_card_key?: string | null;
   };
+  const ownKey = (d.pos_product_key ?? "").trim() || null;
   const facts: ServerFacts = {
     productLabel: (d.name ?? "").trim() || "this product",
     brandLabel: (d.brand_name ?? "").trim() || null,
     identityKey: identityForDraft(d).identityKey,
     strainName: (d.strain_name ?? "").trim() || null,
-    posProductKey: (d.pos_product_key ?? "").trim() || null,
+    posProductKey: ownKey,
+    suggestionKey: suggestionTargetKey({
+      posProductKey: ownKey,
+      restockOfCardKey: d.restock_of_card_key ?? null,
+      enabled: enrichmentFollowsIdentityOn(),
+    }),
     manifestStrainType: null,
     draftId: d.id,
     lotId: d.lot_id,
@@ -219,6 +245,8 @@ async function readMenuFacts(posProductKey: string, fallbackName: string): Promi
     identityKey: "",
     strainName: null,
     posProductKey,
+    // A live card: its own key IS the card key.
+    suggestionKey: posProductKey,
     manifestStrainType: null,
     draftId: null,
     lotId: null,
@@ -330,12 +358,12 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
   // Pending suggestions (dedupe). A failed read withholds new suggestions.
   let pending: PendingSuggestion[] = [];
   let pendingReadFailed = false;
-  if (sf.posProductKey) {
+  if (sf.suggestionKey) {
     const { data, error } = await admin
       .from("ai_suggestions")
       .select("field_key, suggested_value")
       .eq("entity_type", "product")
-      .eq("entity_id", sf.posProductKey)
+      .eq("entity_id", sf.suggestionKey)
       .eq("status", "pending");
     if (error) pendingReadFailed = true;
     else pending = (data as PendingSuggestion[] | null) ?? [];
@@ -351,7 +379,8 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
     brandLabel: sf.brandLabel,
     identityKey: sf.identityKey,
     strainName: sf.strainName,
-    posProductKey: sf.posProductKey,
+    // The plan only tests presence (suggestions need a page to land on).
+    posProductKey: sf.suggestionKey,
     kbProductKeyKnown: kbKnown,
     existingStrain,
     existingProduct,
@@ -476,7 +505,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
   }
 
   // ---- 3c. ai_suggestions (pending; a person approves) -------------------------
-  if (plan.suggestions.length > 0 && sf.posProductKey) {
+  if (plan.suggestions.length > 0 && sf.suggestionKey) {
     if (pendingReadFailed) {
       failures.push({
         target: "Enrichment suggestions",
@@ -488,7 +517,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
         try {
           await persistSuggestion({
             entity_type: "product",
-            entity_id: sf.posProductKey,
+            entity_id: sf.suggestionKey,
             field_key: s.field_key,
             suggested_value: s.suggested_value,
             input_summary: `AI lookup for ${sf.productLabel}`,

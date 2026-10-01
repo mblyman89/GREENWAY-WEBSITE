@@ -89,6 +89,10 @@ export function queryFor(item: GreenwayMenuItem) {
       source_item_id: item.id ?? "",
       variants: variants.map((v) => ({ source_variant_id: v.id })),
     }),
+    // S20: the product identity live-menu computed from the RAW menu row
+    // (before the display overlay), for the identity enrichment rung. Never
+    // recomputed here from item.brand/vendor: those may be display labels.
+    identityKey: item.identityKey?.trim() || null,
   };
 }
 

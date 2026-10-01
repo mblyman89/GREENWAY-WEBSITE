@@ -11,6 +11,18 @@ import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import type { ProductEnrichment, EnrichedMenuItem } from "./types";
 import type { MenuItemRow } from "@/lib/pos/db-types";
 import type { CardAttribution, LastManifest } from "./enrichment-manifest-core";
+import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
+import {
+  enrichmentIdentityForItem,
+  enrichmentRowHasContent,
+  resolveEnrichmentForItem,
+  type EnrichmentVia,
+} from "./enrichment-identity-core";
+import {
+  enrichmentFollowsIdentityOn,
+  identityForCardKey,
+  loadPublishedEnrichmentsByIdentity,
+} from "./enrichment-identity-server";
 
 const MEDIA_BUCKET = "media";
 
@@ -48,6 +60,17 @@ export async function getEnrichmentsForKeys(keys: string[]): Promise<Map<string,
 /**
  * Create the enrichment row for a POS key if it doesn't exist yet (lazy init
  * when a staff member first opens a product). Stamps last-seen POS facts.
+ *
+ * S20: also stamps product_enrichments.identity_key (0234) from the card's
+ * RAW published menu row, so a row is born linked to its PRODUCT:
+ *   - on insert, when the identity is known;
+ *   - on an existing row whose identity_key is NULL (gap-fill only: a
+ *     conditional `identity_key IS NULL` update, so it can never overwrite a
+ *     value a backfill or a person set, and a racing writer is harmless).
+ * Best effort and fail-closed: flag off, no card, not enough identity, or a
+ * database without 0234 -> the row is created exactly as before S20.
+ * A pre-0234 row read by `select *` has no identity_key property at all, so
+ * no gap-fill is attempted there.
  */
 export async function ensureEnrichment(
   posProductKey: string,
@@ -56,22 +79,112 @@ export async function ensureEnrichment(
 ): Promise<ProductEnrichment> {
   const admin = createSupabaseAdminClient();
   const existing = await getEnrichment(posProductKey);
-  if (existing) return existing;
-  const { data, error } = await admin
+  if (existing) {
+    if ("identity_key" in existing && !existing.identity_key) {
+      const identity = await identityForCardKey(posProductKey);
+      if (identity) {
+        const { error } = await admin
+          .from("product_enrichments")
+          .update({ identity_key: identity })
+          .eq("id", existing.id)
+          .is("identity_key", null);
+        if (!error) return { ...existing, identity_key: identity };
+      }
+    }
+    return existing;
+  }
+  const base = {
+    pos_product_key: posProductKey,
+    last_seen_name: posFacts.name ?? null,
+    last_seen_brand: posFacts.brand ?? null,
+    last_seen_category: posFacts.category ?? null,
+    status: "draft",
+    created_by: actorId,
+    updated_by: actorId,
+  };
+  const identity = await identityForCardKey(posProductKey);
+  let { data, error } = await admin
     .from("product_enrichments")
-    .insert({
-      pos_product_key: posProductKey,
-      last_seen_name: posFacts.name ?? null,
-      last_seen_brand: posFacts.brand ?? null,
-      last_seen_category: posFacts.category ?? null,
-      status: "draft",
-      created_by: actorId,
-      updated_by: actorId,
-    })
+    .insert(identity ? { ...base, identity_key: identity } : base)
     .select("*")
     .single();
+  if (error && identity && isMissingIdentityColumnError("product_enrichments", error)) {
+    // Pre-0234 database: create the row exactly as before S20.
+    ({ data, error } = await admin.from("product_enrichments").insert(base).select("*").single());
+  }
   if (error || !data) throw new Error(`enrichment init failed: ${error?.message}`);
   return data as ProductEnrichment;
+}
+
+/** What getEnrichmentForItem resolved, and from where. */
+export type ItemEnrichment = {
+  /** The row whose copy/images the card serves (own, or the product's published one). */
+  row: ProductEnrichment | null;
+  via: EnrichmentVia;
+  /** The card's OWN row (what the edit form writes), possibly null or blank. */
+  own: ProductEnrichment | null;
+};
+
+/**
+ * S20 (bible S20.2): the enrichment a card SERVES. The card's own row when it
+ * has content (Q-03: copy already written on a card key always wins); else
+ * the PUBLISHED enrichment of the same product (identity_key), written on an
+ * earlier card key; else the own row as-is. Writes still go to the own row.
+ * Flag off -> exactly getEnrichment(posKey).
+ */
+export async function getEnrichmentForItem(item: MenuItemRow): Promise<ItemEnrichment> {
+  const own = await getEnrichment(item.source_item_id);
+  if (own && enrichmentRowHasContent(own)) return { row: own, via: "pos_key", own };
+  const identity = enrichmentFollowsIdentityOn() ? enrichmentIdentityForItem(item) : null;
+  const byIdentity = identity
+    ? (await loadPublishedEnrichmentsByIdentity<ProductEnrichment>([identity], "*")).get(identity) ?? null
+    : null;
+  const r = resolveEnrichmentForItem({
+    own,
+    byIdentity,
+    enabled: enrichmentFollowsIdentityOn(),
+    hasContent: enrichmentRowHasContent,
+  });
+  return { row: r.row, via: r.via, own };
+}
+
+/**
+ * Batch form of getEnrichmentForItem for the products list (one own-key read
+ * already done by the caller, plus ONE identity read for the cards whose own
+ * row is absent or blank). Returns the served row per card key and the set
+ * of keys served via identity.
+ */
+export async function resolveEnrichmentsForItems(
+  items: readonly MenuItemRow[],
+  ownByKey: ReadonlyMap<string, ProductEnrichment>,
+): Promise<{ byKey: Map<string, ProductEnrichment>; viaIdentity: Set<string> }> {
+  const byKey = new Map<string, ProductEnrichment>(ownByKey);
+  const viaIdentity = new Set<string>();
+  if (!enrichmentFollowsIdentityOn()) return { byKey, viaIdentity };
+  const need = new Map<string, string>();
+  for (const it of items) {
+    const own = ownByKey.get(it.source_item_id) ?? null;
+    if (own && enrichmentRowHasContent(own)) continue;
+    const id = enrichmentIdentityForItem(it);
+    if (id) need.set(it.source_item_id, id);
+  }
+  if (need.size === 0) return { byKey, viaIdentity };
+  const survivors = await loadPublishedEnrichmentsByIdentity<ProductEnrichment>([...need.values()], "*");
+  for (const it of items) {
+    const id = need.get(it.source_item_id);
+    if (!id) continue;
+    const r = resolveEnrichmentForItem({
+      own: ownByKey.get(it.source_item_id) ?? null,
+      byIdentity: survivors.get(id) ?? null,
+      enabled: true,
+      hasContent: enrichmentRowHasContent,
+    });
+    if (r.via === "identity" && r.row) {
+      byKey.set(it.source_item_id, r.row);
+      viaIdentity.add(it.source_item_id);
+    }
+  }
+  return { byKey, viaIdentity };
 }
 
 export type EnrichmentUpdate = Partial<{
