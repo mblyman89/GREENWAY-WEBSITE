@@ -130,6 +130,25 @@ export default async function ProductEditorPage({
           <span className="ml-1 text-white/35">Price &amp; stock are never edited here.</span>
         </div>
 
+        {/* S20: enrichment follows the PRODUCT. A new lot with no content of
+            its own is served the product's published record; say so plainly,
+            and say what an edit here does (it creates this card's own row,
+            which then wins for this card). */}
+        {center.enrichmentVia === "identity" && center.enrichment && (
+          <div className="rounded-xl border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/5 p-4 text-xs text-white/65">
+            <span className="font-semibold text-[var(--admin-accent)]">Served from this product&apos;s record.</span>{" "}
+            This card has no enrichment of its own yet, so the live menu uses the published record of the same
+            product from an earlier lot{" "}
+            <Link
+              href={`/admin/products/${encodeURIComponent(center.enrichment.pos_product_key)}`}
+              className="text-white/85 underline hover:text-white"
+            >
+              ({center.enrichment.pos_product_key})
+            </Link>
+            . Saving anything below creates this card&apos;s own record, which then takes over for this card.
+          </div>
+        )}
+
         {/* SLICE 77: enrichment ⇄ inventory cross-link. The physical lots
             behind this menu item, so staff can jump straight from the menu
             card to the traceability record (vendor, COA, expiry, quantities). */}

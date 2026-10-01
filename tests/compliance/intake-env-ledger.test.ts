@@ -38,7 +38,12 @@ function walk(dir: string): string[] {
 
 /** `export const FOO_ENV = "NAME"` in the pipeline modules. */
 function pipelineFlagNames(): string[] {
-  const files = [...walk(path.join(ROOT, "src/lib/inventory")), ...walk(path.join(ROOT, "src/lib/catalog"))];
+  // S20 (Round 20): the enrichment-identity flag lives under src/lib/enrichment.
+  const files = [
+    ...walk(path.join(ROOT, "src/lib/inventory")),
+    ...walk(path.join(ROOT, "src/lib/catalog")),
+    ...walk(path.join(ROOT, "src/lib/enrichment")),
+  ];
   const names = new Set<string>();
   for (const f of files) {
     for (const m of readFileSync(f, "utf8").matchAll(/export const [A-Z0-9_]+_ENV = "([A-Z0-9_]+)"/g)) names.add(m[1]);
@@ -68,7 +73,7 @@ const inExample = (v: string) => new RegExp(`^#?\\s*${v}=`, "m").test(envExample
 describe("intake env ledger", () => {
   it("derives the pipeline flags from the code (proves the derivation works)", () => {
     const flags = pipelineFlagNames();
-    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "ATTACH_FACTS_V2", "KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY", "GOLDEN_RECORD_ON_APPROVE", "MANIFEST_BATCH_LOOKUP", "LOOKUP_ITEMS_PER_TICK"]) expect(flags).toContain(v);
+    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "ATTACH_FACTS_V2", "KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY", "GOLDEN_RECORD_ON_APPROVE", "MANIFEST_BATCH_LOOKUP", "LOOKUP_ITEMS_PER_TICK", "ENRICHMENT_FOLLOWS_IDENTITY"]) expect(flags).toContain(v);
   });
 
   it("every pipeline flag is in the Shipped table AND .env.example", () => {
@@ -123,7 +128,37 @@ describe("intake env ledger", () => {
     // S13 shipped (Round 19): MANIFEST_BATCH_LOOKUP (+ LOOKUP_ITEMS_PER_TICK), so its planned row left too.
     expect(sec).not.toMatch(/^\| S13 \|/m);
     expect(sec).not.toContain("`MANIFEST_BATCH_LOOKUP`");
-    for (const s of ["S20"]) expect(sec).toMatch(new RegExp(`^\\| ${s} \\| .* \\| named in ${s} \\|$`, "m"));
+    // S20 shipped (Round 20): ENRICHMENT_FOLLOWS_IDENTITY, so the last planned row left too.
+    expect(sec).not.toMatch(/^\| S20 \|/m);
+    expect(sec).not.toContain("named in S");
+    expect(sec).not.toContain("`ENRICHMENT_FOLLOWS_IDENTITY`");
+  });
+
+  it("S20 (Round 20) ADDED ENRICHMENT_FOLLOWS_IDENTITY, read only in the server helper", () => {
+    const core = read("src/lib/enrichment/enrichment-identity-core.ts");
+    expect(core).toContain('export const ENRICHMENT_IDENTITY_ENV = "ENRICHMENT_FOLLOWS_IDENTITY"');
+    expect(core).not.toContain("process.env");
+    expect(read("src/lib/enrichment/enrichment-identity-server.ts")).toContain("process.env[ENRICHMENT_IDENTITY_ENV]");
+    // Every other S20 touch point asks the server helper; none reads the environment.
+    for (const f of [
+      "src/app/admin/products/actions.ts",
+      "src/app/admin/products/page.tsx",
+      "src/app/admin/products/[key]/page.tsx",
+      "src/lib/enrichment/store.ts",
+      "src/lib/enrichment/command-center.ts",
+      "src/lib/enrichment/image-resolver.ts",
+      "src/lib/catalog/attach-facts.ts",
+      "src/lib/ai/kb/product-knowledge-batch.ts",
+      "src/lib/ai/kb/product-lookup.ts",
+    ]) {
+      expect(read(f), f).not.toMatch(/process\.env\[?\.?\s*(?:ENRICHMENT_IDENTITY_ENV|ENRICHMENT_FOLLOWS_IDENTITY)/);
+    }
+    expect(read("src/app/admin/products/actions.ts")).not.toContain("process.env");
+    const sec1 = ledger.slice(ledger.indexOf("## 1. Shipped pipeline flags"), ledger.indexOf("## 2."));
+    expect(sec1).toMatch(/^\| `ENRICHMENT_FOLLOWS_IDENTITY` \| S20 \| on \|/m);
+    expect(ledger).toContain('Its bible rollback line, "Flag", is the `ENRICHMENT_FOLLOWS_IDENTITY` row');
+    expect(ledger).toContain("It needs no new migration: 0234 already added `product_enrichments.identity_key`");
+    expect(envExample).toContain("# ENRICHMENT_FOLLOWS_IDENTITY=on");
   });
 
   it("S09 + S11 (Round 18) ADDED their bible-named flags, read through the core constants", () => {
@@ -216,6 +251,7 @@ describe("intake env ledger", () => {
       ),
     );
     expect(added.get("S13")).toBe("LOOKUP_ITEMS_PER_TICK,MANIFEST_BATCH_LOOKUP");
+    expect(added.get("S20")).toBe("ENRICHMENT_FOLLOWS_IDENTITY");
     // Every section-1 row appears in the "added" list with the same name, and vice versa.
     expect([...added.entries()].sort()).toEqual([...bySlice.entries()].sort());
     const none = [...noneLine![1].matchAll(/S\d\d/g)].map((m) => m[0]);
@@ -380,7 +416,8 @@ describe("intake env ledger", () => {
     // S32 (match review) adds migration 0239 + a page/actions; no variable.
     // Its bible rollback line is S32.7, word for word.
     expect(none).toContain("S32");
-    expect(ledger).toContain("As of **S32**");
+    expect(ledger).not.toContain("As of **S32**");
+    expect(ledger).toContain("As of **S20**");
     expect(ledger).toContain(
       '"Revert code; the table can stay (unused). Or drop the table \u2014 the planner treats a missing table as \'no decisions\'." (S32',
     );
@@ -398,6 +435,14 @@ describe("intake env ledger", () => {
       "src/app/admin/inventory/noncannabis/actions.ts",
       "src/app/admin/inventory/noncannabis/MerchCatalog.tsx",
     ]) {
+      expect(read(f)).not.toMatch(/process\.env/);
+    }
+    // S23 (per-field gap vector) is a pure core + reads; bible S23.7 "Revert.".
+    // No variable, no schema; its new code reads no environment.
+    expect(none).toContain("S23");
+    expect(none).not.toContain("S20");
+    expect(ledger).toContain("S23 needs nothing set.");
+    for (const f of ["src/lib/enrichment/gap-vector-core.ts"]) {
       expect(read(f)).not.toMatch(/process\.env/);
     }
     expect(ledger).not.toContain("As of **S19**");

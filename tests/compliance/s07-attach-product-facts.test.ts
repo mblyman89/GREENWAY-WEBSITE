@@ -786,3 +786,117 @@ describe("C. wiring", () => {
     expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("attach-plan-core", __runAttachPlanCoreTests\(\), \d+\)/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// S20 (Round 20, bible S20.2): "On restock merge ... ai_suggestions
+// entity_id = card key." The draft's restock_of_card_key (0234, the ONE live
+// card of the same product) is the page staff open; the lot key is not.
+// ---------------------------------------------------------------------------
+describe("S20. restock suggestions are filed on the live card", () => {
+  const ENV = "ENRICHMENT_FOLLOWS_IDENTITY";
+  const prev = process.env[ENV];
+  const restore = () => {
+    if (prev === undefined) delete process.env[ENV];
+    else process.env[ENV] = prev;
+  };
+
+  it("flag on + restock hint: every suggestion's entity_id is the CARD key, and the dedupe read asks for the card key", async () => {
+    delete process.env[ENV];
+    try {
+      spies.ring = 1;
+      seedDraft({ restock_of_card_key: "CARD-7" });
+      // a pending suggestion already on the CARD dedupes the same value
+      db.tables.ai_suggestions.push({
+        entity_type: "product",
+        entity_id: "CARD-7",
+        field_key: "short_description",
+        suggested_value: "Berry-forward classic.",
+        status: "pending",
+      });
+      const res = await runDraft();
+      expect(res.ok).toBe(true);
+      const created = db.tables.ai_suggestions.slice(1);
+      expect(created.length).toBeGreaterThan(0);
+      expect(created.every((s) => s.entity_id === "CARD-7")).toBe(true);
+      expect(created.map((s) => s.field_key)).toContain("description");
+      // deduped against the card's pending row -> not listed twice
+      expect(created.map((s) => s.field_key)).not.toContain("short_description");
+      expect(db.tables.ai_suggestions.some((s) => s.entity_id === "LOT-1")).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("flag OFF: suggestions go to the lot key exactly as before S20 (hint ignored)", async () => {
+    process.env[ENV] = "off";
+    try {
+      spies.ring = 1;
+      seedDraft({ restock_of_card_key: "CARD-7" });
+      await runDraft();
+      expect(db.tables.ai_suggestions.length).toBeGreaterThan(0);
+      expect(db.tables.ai_suggestions.every((s) => s.entity_id === "LOT-1")).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("no hint (a new product, not a restock): the lot key, as before", async () => {
+    delete process.env[ENV];
+    try {
+      spies.ring = 1;
+      seedDraft({ restock_of_card_key: null });
+      await runDraft();
+      expect(db.tables.ai_suggestions.length).toBeGreaterThan(0);
+      expect(db.tables.ai_suggestions.every((s) => s.entity_id === "LOT-1")).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("a database without 0234 (restock_of_card_key unknown) retries the draft read without it -> lot key", async () => {
+    delete process.env[ENV];
+    try {
+      spies.ring = 1;
+      seedDraft({ restock_of_card_key: "CARD-7" });
+      db.fail[
+        "catalog_product_drafts:select:id, name, brand_name, vendor_name, category, chosen_website_category, strain_name, lot_id, pos_product_key, restock_of_card_key"
+      ] = { code: "42703", message: 'column catalog_product_drafts.restock_of_card_key does not exist' };
+      const res = await runDraft();
+      expect(res.ok).toBe(true);
+      expect(db.tables.ai_suggestions.length).toBeGreaterThan(0);
+      expect(db.tables.ai_suggestions.every((s) => s.entity_id === "LOT-1")).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("an UNRELATED draft-read error is NOT retried away (narrow missing-column test)", async () => {
+    delete process.env[ENV];
+    try {
+      seedDraft({ restock_of_card_key: "CARD-7" });
+      db.fail[
+        "catalog_product_drafts:select:id, name, brand_name, vendor_name, category, chosen_website_category, strain_name, lot_id, pos_product_key, restock_of_card_key"
+      ] = { code: "42703", message: "column catalog_product_drafts.some_other_col does not exist" };
+      const res = await runDraft();
+      expect(res.ok).toBe(false);
+      expect(db.tables.ai_suggestions).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("provenance stays keyed by the PRODUCT identity / own facts (the card-key change touches suggestions only)", async () => {
+    delete process.env[ENV];
+    try {
+      spies.ring = 2;
+      seedDraft({ restock_of_card_key: "CARD-7" });
+      const res = await runDraft();
+      expect(res.ok).toBe(true);
+      const prov = db.tables.product_fact_provenance;
+      expect(prov.length).toBeGreaterThan(0);
+      expect(prov.some((p) => JSON.stringify(p).includes("CARD-7"))).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+});

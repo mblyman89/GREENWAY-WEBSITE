@@ -7,7 +7,9 @@ import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { StatCard } from "@/components/admin/StatCard";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
-import { getEnrichmentsForKeys, computeGaps, type GapFlags } from "@/lib/enrichment/store";
+import { getEnrichmentsForKeys, resolveEnrichmentsForItems, computeGaps, type GapFlags } from "@/lib/enrichment/store";
+import { enrichmentFollowsIdentityOn } from "@/lib/enrichment/enrichment-identity-server";
+import { linkEnrichmentsToProducts } from "./actions";
 import { resolveMediaUrls } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { ProductGrid, type ProductGridCard } from "@/components/admin/products/ProductGrid";
@@ -53,7 +55,7 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; back?: string; manifest?: string; since?: string; vendor?: string; error?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string; category?: string; brand?: string; stock?: string; view?: string; sort?: string; status?: string; back?: string; manifest?: string; since?: string; vendor?: string; error?: string; linked?: string }>;
 }) {
   await requirePermission("products.enrich");
   const sp = await searchParams;
@@ -171,10 +173,16 @@ export default async function ProductsPage({
   const keys = items.map((i) => i.source_item_id);
   // S22: the lot -> delivery attribution runs beside the enrichment read
   // (two bounded, named-column reads; null = unavailable, filters off).
-  const [enrichments, attribution] = await Promise.all([
+  const [ownEnrichments, attribution] = await Promise.all([
     getEnrichmentsForKeys(keys),
     readEnrichmentAttribution(items),
   ]);
+  // S20: a card whose own row is absent/blank is measured against the
+  // product's published record (what the live menu actually serves it), in
+  // ONE extra read; flag off -> exactly the own-key map, as before.
+  const { byKey: enrichments, viaIdentity } = await resolveEnrichmentsForItems(items, ownEnrichments).catch(
+    () => ({ byKey: ownEnrichments, viaIdentity: new Set<string>() }),
+  );
   const attrs = attribution?.attrs ?? null;
   const now = new Date();
 
@@ -241,6 +249,8 @@ export default async function ProductsPage({
       thumbnailUrl: id ? thumbMap.get(id) ?? null : null,
       // S22: "From <delivery>" line (only when attribution was read).
       receivedFrom: attrs ? receivedFromLabel(attrs.get(g.posKey) ?? null, now) : null,
+      // S20: served from the product's record (an earlier lot), not its own.
+      viaProduct: viaIdentity.has(g.posKey),
     };
   });
 
@@ -543,6 +553,30 @@ export default async function ProductsPage({
           </div>
         </form>
 
+        {/* S20: enrichment follows the PRODUCT, not the lot. One button links
+            existing records to their product so every future lot of the same
+            product is served the copy and photo already written. */}
+        {sp.linked && (
+          <div role="status" className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
+            {sp.linked}
+          </div>
+        )}
+        <form
+          action={linkEnrichmentsToProducts}
+          className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3"
+        >
+          <p className="max-w-3xl text-sm text-[var(--admin-text-muted)]">
+            <span className="font-bold text-[var(--admin-text)]">Product records follow the product:</span> a new lot of
+            a product you already enriched uses that copy and photo automatically
+            {enrichmentFollowsIdentityOn() ? "" : " (currently switched off on this server)"}. Link your existing
+            records once so older work is found too; it only fills blank links and is safe to run again.
+            {viaIdentity.size > 0 ? ` ${viaIdentity.size} card${viaIdentity.size === 1 ? " is" : "s are"} using a product record right now.` : ""}
+          </p>
+          <Button type="submit" variant="neutral" size="sm">
+            Link records to products
+          </Button>
+        </form>
+
         {/* Bulk AI entry point */}
         {isAiConfigured && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/25 bg-[var(--admin-gold-soft)] px-4 py-3">
@@ -620,6 +654,14 @@ export default async function ProductsPage({
                     <Link href={detailHref(g.posKey)} className="font-medium text-[var(--admin-text)] hover:text-[var(--admin-accent)]">
                       {g.name}
                     </Link>
+                    {viaIdentity.has(g.posKey) && (
+                      <span
+                        className="ml-2 text-[0.65rem] text-[var(--admin-accent)]/80"
+                        title="No enrichment of its own yet: the published record of the same product (an earlier lot) serves this card."
+                      >
+                        uses product record
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-[var(--admin-text-muted)]">{g.brand || "—"}</td>
                   <td className="px-4 py-3 text-[var(--admin-text-faint)]">{g.category}</td>

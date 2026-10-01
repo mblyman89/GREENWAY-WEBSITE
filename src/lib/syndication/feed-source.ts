@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { resolveProductImagesBatch } from "@/lib/enrichment/image-resolver";
+import { enrichmentIdentityForItem } from "@/lib/enrichment/enrichment-identity-core";
 import { getMedicalRegistryForKeys } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
 import { buildSyndicationFeed, type FeedSourceItem, type SyndicationItem } from "./menu-feed-core";
@@ -32,7 +33,9 @@ export async function loadSyndicationFeed(): Promise<{
   let exactImageByKey = new Map<string, string>();
   try {
     const resolved = await resolveProductImagesBatch(
-      rows.map((row) => ({ posKey: row.source_item_id })),
+      // S20: identityKey lets a new lot use its product's published photo
+      // (still "exact"); no substitute inputs are passed, as before.
+      rows.map((row) => ({ posKey: row.source_item_id, identityKey: enrichmentIdentityForItem(row) })),
     );
     exactImageByKey = new Map(
       Array.from(resolved.entries())
