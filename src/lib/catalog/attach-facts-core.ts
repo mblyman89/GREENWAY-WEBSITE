@@ -296,6 +296,82 @@ export function latestByField(rows: readonly Pick<ProductFactProvenanceRow, "fie
   return out;
 }
 
+// ─── 4b. The draft's own copy (S11) ───────────────────────────────────────────
+
+/** One fact that really landed live in this save (the door's step 4 set). */
+export interface LandedDraftFact {
+  field: string;
+  value: unknown;
+  source: FactSource;
+  /** 0..1, or null. */
+  confidence: number | null;
+}
+
+/** Named select for the draft's two fact columns (never select *). */
+export const DRAFT_FACT_SELECT = DRAFT_FACT_COLUMNS.join(", ");
+
+export interface DraftFactsMerge {
+  /** The update payload, keyed by DRAFT_FACT_COLUMNS; null = nothing to write. */
+  patch: Record<(typeof DRAFT_FACT_COLUMNS)[number], unknown> | null;
+  written: string[];
+  /** Fields left alone because a PERSON already set them on this draft. */
+  keptHuman: string[];
+}
+
+function asRecord(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" && !Array.isArray(v) ? { ...(v as Record<string, unknown>) } : {};
+}
+
+/**
+ * Merge this save's landed facts into the draft's attached_facts pair.
+ * Survivorship (0235 column comment): a value a person set on the draft
+ * (source "human") is never replaced by a machine source; anything else is
+ * replaced by the newer landed value. Entries for other fields are kept as
+ * they were. Invalid entries (bad field key / source / confidence, or a value
+ * that is not JSON) are skipped, so a bad input can never corrupt the column.
+ * Pure: never mutates its inputs.
+ */
+export function mergeDraftAttachedFacts(input: {
+  existingFacts: unknown;
+  existingProvenance: unknown;
+  landed: readonly LandedDraftFact[];
+  at: string;
+  by: string | null;
+  urls: readonly unknown[];
+}): DraftFactsMerge {
+  const facts = asRecord(input.existingFacts);
+  const prov = asRecord(input.existingProvenance);
+  const written: string[] = [];
+  const keptHuman: string[] = [];
+  const urls = cleanUrls(input.urls) ?? [];
+  for (const l of input.landed) {
+    if (!isFactFieldKey(l.field) || !isFactSource(l.source) || !isStoredConfidence(l.confidence ?? null)) continue;
+    let value: unknown;
+    try {
+      if (l.value === undefined) continue;
+      const s = JSON.stringify(l.value);
+      if (s === undefined) continue;
+      value = JSON.parse(s);
+    } catch {
+      continue;
+    }
+    const cur = asRecord(facts[l.field]);
+    if (cur.source === "human" && l.source !== "human") {
+      if (!keptHuman.includes(l.field)) keptHuman.push(l.field);
+      continue;
+    }
+    facts[l.field] = { value, source: l.source, confidence: l.confidence ?? null, at: input.at } satisfies AttachedFact;
+    prov[l.field] = { source: l.source, confidence: l.confidence ?? null, at: input.at, by: input.by, urls: [...urls] } satisfies FactProvenance;
+    if (!written.includes(l.field)) written.push(l.field);
+  }
+  if (written.length === 0) return { patch: null, written, keptHuman };
+  return {
+    patch: { [DRAFT_FACT_COLUMNS[0]]: facts, [DRAFT_FACT_COLUMNS[1]]: prov } as DraftFactsMerge["patch"],
+    written,
+    keptHuman,
+  };
+}
+
 // ─── 5. "0235 not applied yet" ────────────────────────────────────────────
 
 interface DbErrorLike {
@@ -463,6 +539,57 @@ export function __runAttachFactsCoreTests(): { passed: number; failed: number } 
     !isMissingAttachedFactsError({ code: "42703", message: 'column "product_fact_provenance" does not exist' }),
     "a missing COLUMN named like the table is not a missing table",
   );
+
+  // 6. S11: the draft's own copy (mergeDraftAttachedFacts).
+  ok(DRAFT_FACT_SELECT === "attached_facts, attached_facts_provenance", "draft fact select is named");
+  const AT = "2026-05-01T10:00:00.000Z";
+  const BY = "00000000-0000-4000-8000-000000000001";
+  const none = mergeDraftAttachedFacts({ existingFacts: null, existingProvenance: null, landed: [], at: AT, by: BY, urls: [] });
+  ok(none.patch === null && none.written.length === 0, "nothing landed -> no write");
+  const first = mergeDraftAttachedFacts({
+    existingFacts: null,
+    existingProvenance: null,
+    landed: [
+      { field: "description", value: "Sweet.", source: "gemini", confidence: 0.94 },
+      { field: "effects", value: ["calm"], source: "gemini", confidence: 0.95 },
+    ],
+    at: AT,
+    by: BY,
+    urls: ["https://a.example/x", "nope", "https://a.example/x"],
+  });
+  const fp = (first.patch ?? {}) as Record<string, Record<string, Record<string, unknown>>>;
+  ok(first.written.join() === "description,effects", "written fields");
+  ok(fp.attached_facts?.description?.value === "Sweet." && fp.attached_facts.description.confidence === 0.94 && fp.attached_facts.description.at === AT, "fact shape");
+  ok(fp.attached_facts?.description?.source === "gemini", "fact source");
+  ok(JSON.stringify(fp.attached_facts_provenance?.effects) === JSON.stringify({ source: "gemini", confidence: 0.95, at: AT, by: BY, urls: ["https://a.example/x"] }), "provenance shape + clean urls");
+  const existing = { flavor: { value: ["pine"], source: "human", confidence: null, at: "2026-04-01T00:00:00Z" }, aroma: { value: ["old"], source: "gemini", confidence: 0.91, at: "2026-04-01T00:00:00Z" } };
+  const existingProv = { flavor: { source: "human", confidence: null, at: "2026-04-01T00:00:00Z", by: BY, urls: [] } };
+  const second = mergeDraftAttachedFacts({
+    existingFacts: existing,
+    existingProvenance: existingProv,
+    landed: [
+      { field: "flavor", value: ["web"], source: "gemini", confidence: 0.99 },
+      { field: "aroma", value: ["new"], source: "gemini", confidence: 0.93 },
+      { field: "Bad Key", value: "x", source: "gemini", confidence: 0.99 },
+      { field: "lineage", value: "x", source: "Gemini" as FactSource, confidence: 0.99 },
+      { field: "summary", value: "x", source: "gemini", confidence: 95 },
+      { field: "images", value: undefined, source: "gemini", confidence: 0.99 },
+    ],
+    at: AT,
+    by: null,
+    urls: [],
+  });
+  const sp = (second.patch ?? {}) as Record<string, Record<string, Record<string, unknown>>>;
+  ok(second.keptHuman.join() === "flavor" && JSON.stringify(sp.attached_facts?.flavor) === JSON.stringify(existing.flavor), "a person's value is never replaced by a machine");
+  ok(JSON.stringify(sp.attached_facts_provenance?.flavor) === JSON.stringify(existingProv.flavor), "human provenance kept");
+  ok(JSON.stringify(sp.attached_facts?.aroma?.value) === JSON.stringify(["new"]), "machine value replaced by the newer landed one");
+  ok(second.written.join() === "aroma", "invalid entries skipped: " + second.written.join());
+  ok(JSON.stringify(existing.aroma.value) === JSON.stringify(["old"]), "inputs not mutated");
+  const humanOverHuman = mergeDraftAttachedFacts({ existingFacts: existing, existingProvenance: null, landed: [{ field: "flavor", value: ["mine"], source: "human", confidence: null }], at: AT, by: BY, urls: [] });
+  ok(humanOverHuman.written.join() === "flavor" && humanOverHuman.keptHuman.length === 0, "a person may replace their own value");
+  const loop: Record<string, unknown> = {};
+  loop.self = loop;
+  ok(mergeDraftAttachedFacts({ existingFacts: [], existingProvenance: "x", landed: [{ field: "description", value: loop, source: "gemini", confidence: 0.9 }], at: AT, by: BY, urls: [] }).patch === null, "non-JSON value skipped; junk existing tolerated");
 
   return { passed, failed };
 }

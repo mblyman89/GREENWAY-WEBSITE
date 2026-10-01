@@ -15,7 +15,7 @@ import {
   listPriorClassifications,
 } from "@/lib/inventory/catalog-drafts";
 // S10: the fact-attach policy's shadow counters (one bounded audit read; no writes).
-import { shadowFooterCopy } from "@/lib/catalog/fact-attach-policy-core";
+import { attachPolicyMode, shadowFooterCopy } from "@/lib/catalog/fact-attach-policy-core";
 import { currentAttachPolicyRing, loadShadowSummary } from "@/lib/catalog/fact-attach-policy-server";
 // SLICE 93: strain-type intelligence - the picker's honest placeholder + the
 // canonical dropdown choices (strain-taxonomy, the single source of truth).
@@ -118,6 +118,22 @@ import { loadRestockPreview } from "@/lib/inventory/restock-preview-server";
 import { previewUnavailableCopy } from "@/lib/inventory/vendor-identity-core";
 import { restockPreviewPlan } from "@/lib/inventory/restock-preview-view-core";
 import { RestockPreviewChip, RestockPreviewUnavailable } from "@/components/admin/catalog/RestockPreviewChip";
+// S09: KB-first recall - the "Known product" chip.
+import { KnownProductChip } from "@/components/admin/catalog/KnownProductChip";
+// S11: the onboarding row redesign (provenance chips, Facts + Manifest columns).
+import { FactsPanel } from "@/components/admin/catalog/FactsPanel";
+import {
+  ONBOARDING_V2_ROW_ENV,
+  attachedFactsOf,
+  buildFactChips,
+  identityLine,
+  manifestCell,
+  onboardingV2RowEnabled,
+  rowRecordFacts,
+} from "@/lib/catalog/fact-chips-core";
+import { recallProductMemories, knowledgeQueryForDraft } from "@/lib/catalog/fact-memory";
+import { KB_FIRST_ONBOARDING_ENV, kbFirstOnboardingEnabled } from "@/lib/catalog/fact-memory-core";
+import { identityForDraft } from "@/lib/catalog/product-identity-core";
 // S30: inline fact review for received products (Approved tab).
 import { loadOpenIntakeFactFlags } from "@/lib/pos/intake-fact-review-server";
 import { factFlagWorklist } from "@/lib/pos/menu-waiting-link-core";
@@ -389,11 +405,35 @@ export default async function CatalogDraftsPage({
   // which the lookup panel forwards so the policy can corroborate strain type.
   // The footer's shadow counters are read in parallel (skipped at ring 0).
   const attachRing = currentAttachPolicyRing();
-  const [{ suggestions: strainSuggestions, evidence: strainEvidence }, shadowSummary] = await Promise.all([
+  // S09: what the shop already knows about each product on THIS page (review
+  // tab only): one batched knowledge-ladder load + one fact-history read, in
+  // parallel with the reads above. "Last onboarded" reuses the approved
+  // history already loaded (priorClassifications) - no extra query. Never
+  // throws; KB_FIRST_ONBOARDING=off skips it entirely.
+  const kbFirst = kbFirstOnboardingEnabled(process.env[KB_FIRST_ONBOARDING_ENV]);
+  const [{ suggestions: strainSuggestions, evidence: strainEvidence }, shadowSummary, productMemories] = await Promise.all([
     loadStrainTypeSignals(drafts),
     attachRing === 0 ? Promise.resolve(null) : loadShadowSummary(),
+    kbFirst && view === "draft"
+      ? recallProductMemories(
+          drafts.map((d, i) => ({
+            id: d.id,
+            identityKey: identityForDraft(d, { websiteCategory: resolutions[i]?.websiteCategory ?? null }).identityKey,
+            query: knowledgeQueryForDraft(d),
+            // The keys the S07 door / 0234 seeding may have stamped history under.
+            historyKeys: [identityForDraft(d).identityKey, d.identity_key ?? ""],
+          })),
+          priorClassifications,
+        )
+      : Promise.resolve(null),
   ]);
   const shadowFooter = shadowFooterCopy(shadowSummary, attachRing);
+  // S11: the redesigned row (Facts + Manifest columns, the facts panel, the
+  // lookup outside the approve form, the in-row error). ONBOARDING_V2_ROW=off
+  // renders the previous row (bible S11.7 rollback).
+  const v2Row = onboardingV2RowEnabled(process.env[ONBOARDING_V2_ROW_ENV]);
+  const policyMode = attachPolicyMode(attachRing);
+  const manifestById = new Map((picker?.manifests ?? []).map((m) => [m.id, m]));
 
   // T-314: is the AI lookup available? (soft-disables the panel when no key.)
   const aiLookupEnabled = isAiConfigured;
@@ -414,16 +454,19 @@ export default async function CatalogDraftsPage({
       : [];
   const factResult = parseFactResult(sp.fact);
 
+  // One error sentence for the banner AND (S11, F-033) the failed row itself.
+  const errorText =
+    error === "floor" ? (msg || "Price is below the cost floor.")
+      : error === "price" ? "Enter a valid price before approving."
+        : error ? "Something went wrong updating that draft."
+          : null;
   const banner =
     factResult ? factResultCopy(factResult, sp.fact_msg)
     : batchDone ? batchResultCopy(batchDone)
     : approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
       : dismissed ? "Draft dismissed."
         : restored ? "Draft restored to the review queue."
-          : error === "floor" ? (msg || "Price is below the cost floor.")
-            : error === "price" ? "Enter a valid price before approving."
-              : error ? "Something went wrong updating that draft."
-                : null;
+          : errorText;
   const bannerTone = error || factResult === "error" ? "danger" : "accent";
 
   return (
@@ -704,7 +747,9 @@ export default async function CatalogDraftsPage({
               <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
                 <tr>
                   <th className="px-4 py-3">Product</th>
+                  {v2Row && <th className="px-4 py-3">Manifest</th>}
                   <th className="px-4 py-3">Category &amp; Type</th>
+                  {v2Row && <th className="px-4 py-3">Facts</th>}
                   <th className="px-4 py-3 text-right">THC</th>
                   <th className="px-4 py-3 text-right">Cost</th>
                   <th className="px-4 py-3 text-right">Pricing</th>
@@ -712,7 +757,7 @@ export default async function CatalogDraftsPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--admin-border)]">
-                {drafts.map((d) => {
+                {drafts.map((d, i) => {
                   const approve = approveDraftAction.bind(null, d.id);
                   const dismiss = dismissDraftAction.bind(null, d.id);
                   const restore = restoreDraftAction.bind(null, d.id);
@@ -763,6 +808,45 @@ export default async function CatalogDraftsPage({
                         strain_name: d.strain_name,
                       })
                     : null;
+                  // S11: what is attached (records the row holds + the draft's
+                  // attached facts + the S09 memory), one chip per field.
+                  const facts = v2Row
+                    ? buildFactChips(attachedFactsOf(d as unknown as Record<string, unknown>), productMemories?.get(d.id) ?? null, { mode: policyMode }, rowRecordFacts({
+                        chosenWebsiteCategory: d.chosen_website_category,
+                        resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
+                        resolutionSource: resolutions[i]?.source ?? null,
+                        categoryLabel: (v) => websiteCategoryLabel(v) ?? v,
+                        chosenStrainType: d.chosen_strain_type,
+                        strainSuggestion: strainSuggestions.get(d.id) ?? null,
+                        strainLabel: (v) => strainTypeDefinitions.find((t) => t.value === v)?.label ?? v,
+                        totalThcPct: d.total_thc_pct,
+                        thcPct: d.thc_pct,
+                        labResultId: d.lab_result_id,
+                      }))
+                    : null;
+                  const identity = v2Row
+                    ? identityLine(identityForDraft(d, { websiteCategory: resolutions[i]?.websiteCategory ?? null }).identityKey, d, kbFirst)
+                    : null;
+                  const manifest = v2Row ? manifestCell(d.manifest_id ? manifestById.get(d.manifest_id) : null) : null;
+                  const rowError = v2Row && pinned?.id === d.id ? errorText : null;
+                  // T-314: manual web-grounded lookup (AI_MODEL_HEAVY).
+                  // Prefilled with this row's name + brand; the operator presses
+                  // Search (never auto-run). A >=90% result autofills the
+                  // strain-type select (found by id, so it works inside or
+                  // outside the approve form). S11 (F-020) mounts it OUTSIDE the
+                  // approve form; ONBOARDING_V2_ROW=off keeps it inside.
+                  const lookupPanel = (
+                    <AiLookupPanel
+                      draftId={d.id}
+                      productName={builtName ?? (d.name || "")}
+                      vendorOrBrand={[d.brand_name, d.vendor_name].filter(Boolean).join(" ") || ""}
+                      strainSelectId={`strain-type-${d.id}`}
+                      posProductKey={d.pos_product_key ?? ""}
+                      aiEnabled={aiLookupEnabled}
+                      kbStrainType={strainEvidence.get(d.id)?.kb ?? null}
+                      manifestStrainType={strainEvidence.get(d.id)?.manifest ?? null}
+                    />
+                  );
                   return (
                     <tr
                       key={d.id}
@@ -785,7 +869,22 @@ export default async function CatalogDraftsPage({
                         {previewVerdicts?.get(d.id) ? (
                           <RestockPreviewChip verdict={previewVerdicts.get(d.id)!} />
                         ) : null}
+                        {productMemories?.get(d.id) ? (
+                          <KnownProductChip memory={productMemories.get(d.id)!} now={now} />
+                        ) : null}
                       </td>
+                      {v2Row && (
+                        <td className="px-4 py-3 text-xs text-[var(--admin-text-muted)]" data-testid="draft-row-manifest">
+                          {manifest ? (
+                            <>
+                              <div className="font-medium text-[var(--admin-text)]">{manifest.number}</div>
+                              {manifest.date ? <div className="text-[10px] text-[var(--admin-text-faint)]">{manifest.date}</div> : null}
+                            </>
+                          ) : (
+                            <span className="text-[var(--admin-text-faint)]">{"\u2014"}</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                         {/* OUR labels on screen — never the raw CCRS blob. */}
                         <div>
@@ -816,6 +915,14 @@ export default async function CatalogDraftsPage({
                           LCB: {[d.inventory_type, d.category].filter(Boolean).join(" · ") || "—"}
                         </div>
                       </td>
+                      {v2Row && facts && (
+                        <td className="px-4 py-3 text-xs" data-testid="draft-row-facts">
+                          <div className="font-semibold text-[var(--admin-text)]">{facts.countLabel}</div>
+                          <div className="text-[10px] text-[var(--admin-text-faint)]">
+                            {facts.missing.length === 0 ? "all attached" : `${facts.missing.length} to fill`}
+                          </div>
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
                         {fmtPct(d.total_thc_pct ?? d.thc_pct)}
                       </td>
@@ -837,6 +944,11 @@ export default async function CatalogDraftsPage({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col items-end gap-2">
+                          {rowError && (
+                            <p role="alert" className="max-w-[20rem] text-right text-xs font-semibold text-[var(--admin-danger)]" data-testid="draft-row-error">
+                              {rowError}
+                            </p>
+                          )}
                           {view === "draft" && (
                             <>
                               {/* S14 (F-006): condensed by default. The summary says what
@@ -870,6 +982,12 @@ export default async function CatalogDraftsPage({
                                   <span className="font-semibold text-[var(--admin-accent)] underline group-open:hidden">Review & approve{" \u25be"}</span>
                                   <span className="hidden font-semibold text-[var(--admin-text-muted)] underline group-open:inline">Collapse{" \u25b4"}</span>
                                 </summary>
+                              {facts && identity && (
+                                <div className="mt-2 flex flex-col items-end gap-1" data-testid="draft-row-detail">
+                                  <FactsPanel view={facts} identity={identity} />
+                                  {lookupPanel}
+                                </div>
+                              )}
                               <form action={approve} className="mt-2 flex flex-col items-end gap-2">
                                 {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
                                 {/* SLICE 64: required picks when we couldn't
@@ -1131,22 +1249,9 @@ export default async function CatalogDraftsPage({
                                     </span>
                                   </div>
                                 ) : null}
-                                {/* T-314: manual web-grounded lookup (AI_MODEL_HEAVY).
-                                    Prefilled with this row's name + brand; the
-                                    operator presses Search (never auto-run). A
-                                    >=90% result autofills the strain-type select
-                                    above; otherwise an honest "not found". Offers
-                                    a "Save to KB?" draft for owner approval. */}
-                                <AiLookupPanel
-                                  draftId={d.id}
-                                  productName={builtName ?? (d.name || "")}
-                                  vendorOrBrand={[d.brand_name, d.vendor_name].filter(Boolean).join(" ") || ""}
-                                  strainSelectId={`strain-type-${d.id}`}
-                                  posProductKey={d.pos_product_key ?? ""}
-                                  aiEnabled={aiLookupEnabled}
-                                  kbStrainType={strainEvidence.get(d.id)?.kb ?? null}
-                                  manifestStrainType={strainEvidence.get(d.id)?.manifest ?? null}
-                                />
+                                {/* T-314 lookup: inside the form only on the previous row
+                                    (ONBOARDING_V2_ROW=off); S11 mounts it above the form. */}
+                                {!v2Row && lookupPanel}
                                 <div className="flex items-center gap-2">
                                   <div className="flex items-center gap-1">
                                     <span className="text-[var(--admin-text-faint)]">$</span>

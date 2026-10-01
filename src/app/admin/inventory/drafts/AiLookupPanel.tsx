@@ -19,10 +19,13 @@
  * (graded by confidence) and lets the human decide. Only a true empty miss shows
  * the honest "couldn't find anything" note.
  *
- * NOT wired to a <form onSubmit>: this panel renders INSIDE the row's `approve`
- * <form>, and nested <form>s are invalid HTML, so a submit here would post the
- * OUTER approve form (a full-page reload) instead of running the action. We use
- * a plain <div> + a button onClick + an Enter handler.
+ * NOT wired to a <form onSubmit>. S11 (F-020) mounts this panel OUTSIDE the
+ * row's `approve` <form> (in the row's detail region, above the form); with
+ * ONBOARDING_V2_ROW=off it still renders INSIDE that form, where a nested
+ * <form> would be invalid HTML and a submit would post the OUTER approve form.
+ * A plain <div> + a button onClick + an Enter handler works in both places,
+ * and the strain-type autofill finds its <select> by id either way. The panel
+ * posts no named inputs, so moving it changes nothing the approve form sends.
  *
  * Soft-disables when no AI key is configured.
  */
@@ -170,7 +173,11 @@ export function AiLookupPanel({
     setDraft((d) => (d ? { ...d, [key]: value } : d));
   }
 
-  function run(e?: { preventDefault?: () => void }) {
+  /**
+   * S09: `refresh` = "Refresh from web" - the server ignores what is on file
+   * for this one call and asks the web (memory can be stale: bible S09.8).
+   */
+  function run(e?: { preventDefault?: () => void }, refresh = false) {
     e?.preventDefault?.();
     if (!query.trim()) return;
     setError(null);
@@ -186,6 +193,7 @@ export function AiLookupPanel({
       fd.set("product_name", productName);
       fd.set("vendor_or_brand", vendorOrBrand);
       fd.set("pos_product_key", posProductKey);
+      if (refresh) fd.set("refresh", "1");
       // S10: corroborators + the approver's current strain pick (a person's
       // value always wins in the policy). Shadow only: nothing is written.
       if (kbStrainType) fd.set("kb_strain_type", kbStrainType);
@@ -386,9 +394,37 @@ export function AiLookupPanel({
                   {data.confidence}% confidence
                 </span>
                 <span className="text-[10px] text-[var(--admin-text-faint)]">
-                  {data.usedWebSearch ? "🌐 Live web search" : "⚠️ AI knowledge (no live search)"}
+                  {data.memory?.skipped
+                    ? "📚 Already on file (no web lookup)"
+                    : data.usedWebSearch
+                      ? "🌐 Live web search"
+                      : "⚠️ AI knowledge (no live search)"}
                 </span>
               </div>
+
+              {/* S09: the answer came from what is already on file - no web
+                  lookup ran. Say so, say where, and offer the web anyway. */}
+              {data.memory?.skipped && (
+                <div
+                  className="rounded border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-1.5 py-1 text-[10px] text-[var(--admin-text)]"
+                  data-testid="lookup-memory-notice"
+                >
+                  <p>{data.memory.notice}</p>
+                  <button
+                    type="button"
+                    onClick={() => run(undefined, true)}
+                    disabled={pending}
+                    className="mt-1 font-semibold text-[var(--admin-accent)] underline hover:no-underline disabled:opacity-50"
+                  >
+                    Refresh from web
+                  </button>
+                </div>
+              )}
+              {data.memory && !data.memory.skipped && !data.memory.refresh && data.memory.covered.length > 0 && (
+                <p className="text-[10px] text-[var(--admin-text-faint)]" data-testid="lookup-memory-partial">
+                  Already on file, so the web lookup was told to focus elsewhere: {data.memory.covered.join(", ")}.
+                </p>
+              )}
 
               {/* S06: Google Search Suggestions travel WITH the grounded result
                   (Google grounding terms). Display only -- never saved. */}

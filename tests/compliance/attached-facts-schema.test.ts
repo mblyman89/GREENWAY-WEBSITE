@@ -32,6 +32,8 @@ import { describe, expect, it } from "vitest";
 import {
   ATTACHED_FACTS_MIGRATION,
   DRAFT_FACT_COLUMNS,
+  DRAFT_FACT_SELECT,
+  mergeDraftAttachedFacts,
   FACT_FIELD_KEY_RE,
   FACT_SOURCES,
   PROVENANCE_COLUMNS,
@@ -111,9 +113,9 @@ describe("S08 pure core", () => {
   it("embedded self-tests pass and are registered with a floor", () => {
     const r = __runAttachFactsCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(76);
+    expect(r.passed).toBeGreaterThanOrEqual(89);
     expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(
-      /assertRan\("attach-facts-core", __runAttachFactsCoreTests\(\), 74\)/,
+      /assertRan\("attach-facts-core", __runAttachFactsCoreTests\(\), 89\)/, // S11 raised the floor (section 6: the draft merge)
     );
   });
 });
@@ -360,6 +362,40 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
     expect(door).toContain("isMissingAttachedFactsError(error)");
     expect(door).not.toMatch(/from\("product_fact_provenance"\)/);
     expect(door).not.toMatch(/attached_facts/);
+  });
+
+  it("S11: the door writes the draft's two fact columns ONLY through the core's constants, after provenance, tolerating a missing 0235", () => {
+    const door = readFileSync(path.join(ROOT, "src/lib/catalog/attach-facts.ts"), "utf8");
+    // Read with the named select, write with the merged patch keyed by DRAFT_FACT_COLUMNS.
+    expect(door).toContain('.from("catalog_product_drafts").select(DRAFT_FACT_SELECT).eq("id", sf.draftId).maybeSingle()');
+    expect(door).toContain('.from("catalog_product_drafts").update(merged.patch).eq("id", sf.draftId)');
+    expect(door).toContain("existingFacts: row[DRAFT_FACT_COLUMNS[0]]");
+    expect(door).toContain("existingProvenance: row[DRAFT_FACT_COLUMNS[1]]");
+    // Only landed facts, only a draft context.
+    expect(door).toContain("if (sf.draftId && landed.size > 0) {");
+    // Step order: provenance insert -> draft copy -> audit.
+    const prov = door.indexOf("await admin.from(PROVENANCE_TABLE).insert(provRows);");
+    const draft = door.indexOf("update(merged.patch)");
+    const audit = door.indexOf("await recordAudit({");
+    expect(prov).toBeGreaterThan(-1);
+    expect(draft).toBeGreaterThan(prov);
+    expect(audit).toBeGreaterThan(draft);
+    // Both the read and the write tolerate 0235 not being applied.
+    const step = door.slice(door.indexOf("// ---- 4b."), audit);
+    expect(step.match(/isMissingAttachedFactsError\((cur\.)?error\)/g)?.length).toBe(2);
+  });
+
+  it("S11: the core's merge emits exactly the two 0235 draft columns", () => {
+    const m = mergeDraftAttachedFacts({
+      existingFacts: null,
+      existingProvenance: null,
+      landed: [{ field: "description", value: "x", source: "gemini", confidence: 0.95 }],
+      at: "2026-05-01T00:00:00.000Z",
+      by: null,
+      urls: [],
+    });
+    expect(Object.keys(m.patch ?? {}).sort()).toEqual([...DRAFT_FACT_COLUMNS].sort());
+    expect(DRAFT_FACT_SELECT).toBe(DRAFT_FACT_COLUMNS.join(", "));
   });
 
   it("the not-applied detector is narrow (an unrelated missing column still surfaces)", () => {

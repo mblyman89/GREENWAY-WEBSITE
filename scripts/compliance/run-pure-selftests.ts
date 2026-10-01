@@ -883,6 +883,8 @@ import { __runCustomerInsightsCoreTests } from "../../src/lib/customers/customer
 import { __runCustomerSegmentsCoreTests } from "../../src/lib/customers/customer-segments-core";
 import { __runIntakeFactReviewCoreTests } from "../../src/lib/pos/intake-fact-review-core";
 import { __runFixLinkContractCoreTests } from "../../src/lib/admin/fix-link-contract-core";
+import { __runFactMemoryCoreTests } from "../../src/lib/catalog/fact-memory-core";
+import { __runFactChipsCoreTests } from "../../src/lib/catalog/fact-chips-core";
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -1896,7 +1898,7 @@ __runLiquidVolumeTests();
   // with no clamping, the provenance row builder mirrors every 0235 CHECK,
   // latest-per-field recall, and the "0235 not applied" detector is narrow.
   // Measured 76.
-  assertRan("attach-facts-core", __runAttachFactsCoreTests(), 74);
+  assertRan("attach-facts-core", __runAttachFactsCoreTests(), 89);
   // S10 fact-attach policy: FIELD_POLICY covers every lookup field, the
   // bible S10.5 cases, §5.5 bands, ring parse (default shadow), the bible
   // receipt copy byte for byte, and the audit fold. Measured 102.
@@ -1913,6 +1915,12 @@ __runLiquidVolumeTests();
   // searchParams key reader (inline literal, alias, Record), anchors, and the
   // coloured-block gate finder. Measured 59.
   assertRan("fix-link-contract-core", __runFixLinkContractCoreTests(), 59);
+  // S09 KB-first recall: only owner-published KB / >=90 history counts as
+  // covered, drafts shown but never counted, Gemini skipped only when the
+  // flag is on, no refresh, and memory is complete; a memory answer goes
+  // through the same compliance gate and never decides strain type. Measured 109.
+  assertRan("fact-memory-core", __runFactMemoryCoreTests(), 109);
+  assertRan("fact-chips-core", __runFactChipsCoreTests(), 119);
   // R13a: the waiting-update link goes where the reason is fixed (fact hold
   // -> the delivery's flagged products, cutover -> cutover, else the
   // update's page), superseded rows are never "waiting", and the flagged
