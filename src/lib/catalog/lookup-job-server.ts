@@ -51,6 +51,7 @@ import {
   shouldSkipGemini,
 } from "@/lib/catalog/fact-memory-core";
 import {
+  ALL_DONE_COPY,
   DRAFT_GONE_COPY,
   LEFT_REVIEW_COPY,
   LOOKUP_JOBS_TABLE,
@@ -276,8 +277,19 @@ export type ManifestLookupState =
   | { state: "off" }
   | { state: "migration" }
   | { state: "error" }
-  | { state: "none"; doneDraftIds: Set<string> }
-  | { state: "job"; job: ManifestLookupView; doneDraftIds: Set<string> };
+  | { state: "none"; doneDraftIds: Set<string>; eligible: LookupEligible | null }
+  | { state: "job"; job: ManifestLookupView; doneDraftIds: Set<string>; eligible: LookupEligible | null };
+
+/**
+ * What the button would queue RIGHT NOW, from the same planEnqueue the press
+ * uses, so the label can never promise a number the press does not deliver.
+ * null = could not be read (the page hides the button: never guess a count).
+ */
+export interface LookupEligible {
+  count: number;
+  skippedDone: number;
+  truncated: number;
+}
 
 async function readItems(admin: Admin, jobId: string): Promise<JobItemView[] | null> {
   const out: JobItemView[] = [];
@@ -313,10 +325,18 @@ export async function loadManifestLookup(manifestId: string): Promise<ManifestLo
       .order("created_at", { ascending: false })
       .limit(1);
     if (error) return isMissingLookupJobsTable(error) ? { state: "migration" } : { state: "error" };
-    const done = await alreadyDoneDraftIds(admin, manifestId);
+    const [done, review] = await Promise.all([alreadyDoneDraftIds(admin, manifestId), reviewDraftIds(admin, manifestId)]);
     const doneDraftIds = new Set((done ?? []).map((d) => d.toLowerCase()));
+    let eligible: LookupEligible | null = null;
+    if (done !== null && review !== null) {
+      const plan = planEnqueue({ reviewDraftIds: review, alreadyDoneDraftIds: done, activeJobId: null });
+      eligible =
+        plan.kind === "create"
+          ? { count: plan.total, skippedDone: plan.skippedDone, truncated: plan.truncated }
+          : { count: 0, skippedDone: plan.kind === "nothing" && plan.reason === ALL_DONE_COPY ? review.length : 0, truncated: 0 };
+    }
     const row = ((data as { id: string; status: unknown; created_at: string | null; finished_at: string | null }[] | null) ?? [])[0];
-    if (!row || !isJobStatus(row.status)) return { state: "none", doneDraftIds };
+    if (!row || !isJobStatus(row.status)) return { state: "none", doneDraftIds, eligible };
     const items = await readItems(admin, row.id);
     if (items === null) return { state: "error" };
     const byDraft = new Map<string, JobItemView>();
@@ -325,6 +345,7 @@ export async function loadManifestLookup(manifestId: string): Promise<ManifestLo
     return {
       state: "job",
       doneDraftIds,
+      eligible,
       job: { jobId: row.id, status: row.status, summary: summarizeJob(items), items: byDraft, model, createdAt: row.created_at, finishedAt: row.finished_at },
     };
   } catch (err) {
