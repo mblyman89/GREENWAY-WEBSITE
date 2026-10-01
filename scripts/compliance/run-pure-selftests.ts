@@ -628,6 +628,8 @@ import { __runFactReviewFocusCoreTests } from "../../src/lib/pos/fact-review-foc
 import { __runCostFillCoreTests } from "../../src/lib/noncannabis/cost-fill-core";
 import { __runMergeReviewCoreTests } from "../../src/lib/pos/merge-review-core";
 import { __runGoldenRecordCoreTests } from "../../src/lib/catalog/golden-record-core";
+// R20 S20: enrichment follows the product identity (read ladder, survivorship, suggestion target, backfill).
+import { __runEnrichmentIdentityCoreTests } from "../../src/lib/enrichment/enrichment-identity-core";
 import { __runLookupJobCoreTests } from "../../src/lib/catalog/lookup-job-core";
 import { __runPublishStoryCoreTests } from "../../src/lib/catalog/publish-story-core";
 import { __runIntakeVersionCopyCoreTests } from "../../src/lib/pos/intake-version-copy-core";
@@ -1939,6 +1941,9 @@ __runLiquidVolumeTests();
   { const r = __runGoldenRecordCoreTests(); if (r.failed > 0 || r.passed < 57) throw new Error(`golden-record-core: ${r.failed} failed, ${r.passed} passed`); console.log(`golden-record-core: ${r.passed} assertions passed`); }
   // R19 S13: batch manifest lookup (budget, lease, orphan, enqueue plan, copy, banner). Floor = the exact count.
   { const r = __runLookupJobCoreTests(); if (r.failed > 0 || r.passed < 94) throw new Error(`lookup-job-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-job-core: ${r.passed} assertions passed`); }
+
+  // R20 S20: enrichment identity (flag, survivorship, ladder, suggestion target, backfill). Floor = the exact count.
+  assertRan("enrichment-identity-core", __runEnrichmentIdentityCoreTests(), 85);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
