@@ -13,6 +13,13 @@
  * The one addition is an optional count pill per tab (S28's Issues count).
  * With no count, nothing extra is rendered — not even an aria-label.
  *
+ * R19 (bible S19.18): an optional `attention` cue replaces auto-opening a tab
+ * (the owner: "I don't want it jumping to the accounting tab every time an
+ * action happens"). It adds `data-attention`, the `gw-tab-attention` class
+ * (globals.css: a gold ring + a slow glow that runs twice, ~4s, then rests —
+ * WCAG 2.2.2 / 2.3.1 safe, no motion under prefers-reduced-motion) and
+ * ", needs attention" in the accessible name. Unset → byte-identical markup.
+ *
  * NOT for route-per-tab navigation: ReportTabs (client, usePathname) is the
  * other documented primitive (F-108/F-122). Two primitives, never a third.
  */
@@ -20,7 +27,8 @@
 import Link from "next/link";
 import {
   DEFAULT_KEEP_PARAMS,
-  tabAriaLabel,
+  tabAccessibleName,
+  tabAllowFor,
   tabCountLabel,
   tabHref,
   tabHrefCarry,
@@ -62,17 +70,22 @@ export function PageTabs<K extends string>({
       {tabs.map((tab) => {
         const isActive = tab.key === active;
         const pill = tabCountLabel(tab.count);
+        const attention = tab.attention === true && !isActive;
+        const name = tabAccessibleName(tab.label, tab.count, tab.attention === true && !isActive);
         return (
           <Link
             key={tab.key}
-            href={carry !== undefined ? tabHrefCarry(base, tab.key, carry, carryDrop) : tabHref(base, tab.key, keep, allow)}
+            href={carry !== undefined ? tabHrefCarry(base, tab.key, carry, carryDrop) : tabHref(base, tab.key, keep, tabAllowFor(allow, tab))}
             aria-current={isActive ? "page" : undefined}
-            aria-label={pill ? tabAriaLabel(tab.label, tab.count) : undefined}
+            aria-label={name ?? undefined}
             title={tab.blurb}
+            data-attention={attention ? "true" : undefined}
             className={`rounded-lg px-3.5 py-2 text-xs font-bold transition ${
               isActive
                 ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
-                : "text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] hover:text-[var(--admin-text)]"
+                : attention
+                  ? "gw-tab-attention text-[var(--admin-gold)] hover:bg-[var(--admin-surface-hover)]"
+                  : "text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] hover:text-[var(--admin-text)]"
             }`}
           >
             {tab.icon ? <span className="mr-1.5">{tab.icon}</span> : null}

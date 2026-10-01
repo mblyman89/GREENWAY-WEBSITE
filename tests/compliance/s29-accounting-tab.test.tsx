@@ -116,7 +116,7 @@ beforeEach(() => {
 
 describe("1. manifest-event-labels-core self-tests", () => {
   it("pins the embedded self-test count (42) with zero failures", () => {
-    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 42, failed: 0 });
+    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 49, failed: 0 });
   });
   it("is registered in run-pure-selftests (import AND run)", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
@@ -304,21 +304,26 @@ describe("4. the receiving wire logs its answer to the timeline (action driven)"
 });
 
 describe("5. the Accounting tab", () => {
-  it("tab set: Delivery, Issues, Accounting; only booksError auto-opens it", () => {
+  it("tab set: Delivery, Issues, Accounting; R19: NOTHING auto-opens Accounting", () => {
     expect(MANIFEST_PAGE_TABS.map((t) => t.key)).toEqual(["delivery", "issues", "accounting"]);
     const acc = MANIFEST_PAGE_TABS.find((t) => t.key === "accounting");
-    expect(acc?.autoOpenParams).toEqual(["booksError"]);
-    expect(resolveTab(MANIFEST_PAGE_TABS, { booksError: "no category" }, "delivery")).toBe("accounting");
+    expect(acc?.autoOpenParams).toBeUndefined();
+    expect(acc?.autoOpenOn).toBeUndefined();
+    expect(acc?.keepParams).toEqual(["booksError", "books"]);
+    // Even if a caller still passed booksError, it must not open Accounting.
+    expect(resolveTab(MANIFEST_PAGE_TABS, { booksError: "no category" }, "delivery")).toBe("delivery");
     expect(resolveTab(MANIFEST_PAGE_TABS, { books: "BILL_OK" }, "delivery")).toBe("delivery");
     expect(resolveTab(MANIFEST_PAGE_TABS, { booksError: "" }, "delivery")).toBe("delivery");
-    // Held lots AND a books refusal: Issues first (display order), Accounting one click away.
     expect(resolveTab(MANIFEST_PAGE_TABS, { held: manifestHeldAutoOpen("2"), booksError: "x" }, "delivery")).toBe("issues");
     expect(resolveTab(MANIFEST_PAGE_TABS, { tab: "accounting" }, "delivery")).toBe("accounting");
   });
 
-  it("the page wires booksError into resolveTab and keeps the books-83 pins", () => {
+  it("the page no longer feeds booksError to resolveTab, marks the tab instead, and keeps the books-83 pins", () => {
     const page = read(MANIFEST);
-    expect(page).toContain("resolveTab(MANIFEST_PAGE_TABS, { tab, held: manifestHeldAutoOpen(held), booksError }, \"delivery\")");
+    expect(page).toContain("resolveTab(MANIFEST_PAGE_TABS, { tab, held: manifestHeldAutoOpen(held) }, \"delivery\")");
+    expect(page).not.toMatch(/resolveTab\([^)]*booksError/);
+    expect(page).toContain("attention: booksNeedsAttention(booksState.open, booksError),");
+    expect(page).toContain("keep={{ booksError, books }}");
     expect(page).toMatch(/booksError\?:\s*string;/);
     expect(page).toMatch(/\{booksError\s*&&\s*\(/);
   });
@@ -421,8 +426,9 @@ describe("5. the Accounting tab", () => {
 
   it("the tab badge counts only LIVE refusals (neutral tone)", () => {
     const page = read(MANIFEST);
-    expect(page).toContain('t.key === "accounting" && booksState.open > 0');
-    expect(page).toContain('{ ...t, count: booksState.open, countTone: "neutral" as const }');
+    // R19 reshaped the map (the tab also carries `attention`) but the badge rule is unchanged.
+    expect(page).toContain('t.key === "accounting"');
+    expect(page).toContain('...(booksState.open > 0 ? { count: booksState.open, countTone: "neutral" as const } : {}),');
   });
 
   it("the panel and timeline read no env and do no I/O", () => {

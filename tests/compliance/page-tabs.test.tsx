@@ -40,10 +40,10 @@ const GOLDEN_MANUAL =
   '<nav aria-label="Receiving views" class="flex flex-wrap gap-1.5 border-b border-[var(--admin-border)] pb-3"><a title="Manifests pulled in from vendor_intake@ \u2014 one calm row per real manifest." class="rounded-lg px-3.5 py-2 text-xs font-bold transition text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] hover:text-[var(--admin-text)]" href="/admin/inventory/intake?tab=email"><span class="mr-1.5">\u{1F4EC}</span>Incoming (email)</a><a aria-current="page" title="Paste a link/JSON/CSV, upload a PDF, or run the KB backfill \u2014 for when email didn&#x27;t cover it." class="rounded-lg px-3.5 py-2 text-xs font-bold transition bg-[var(--admin-accent-soft)] text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40" href="/admin/inventory/intake?tab=manual"><span class="mr-1.5">\u{1F9F0}</span>Manual tools</a></nav>';
 
 describe("S27 · page-tabs-core (pure)", () => {
-  it("embedded self-tests pass, and the count is pinned (41)", () => {
+  it("embedded self-tests pass, and the count is pinned (56 — R19 added 10)", () => {
     const r = __runPageTabsCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(46);
+    expect(r.passed).toBe(56);
   });
 
   it("is registered in the pure self-test runner", () => {
@@ -131,7 +131,8 @@ describe("S27 · PageTabs component", () => {
     const src = code("src/components/admin/ui/PageTabs.tsx");
     expect(src).not.toContain('"use client"');
     expect(src).not.toMatch(/usePathname|useRouter|useState|useEffect/);
-    expect(src).toContain("href={carry !== undefined ? tabHrefCarry(base, tab.key, carry, carryDrop) : tabHref(base, tab.key, keep, allow)}");
+    // R19: a tab may add its own keepParams to the allow-list (tabAllowFor, pure core).
+    expect(src).toContain("href={carry !== undefined ? tabHrefCarry(base, tab.key, carry, carryDrop) : tabHref(base, tab.key, keep, tabAllowFor(allow, tab))}");
     expect(read("src/components/admin/ui/index.ts")).toContain('export { PageTabs, type PageTabsProps } from "./PageTabs";');
   });
 
