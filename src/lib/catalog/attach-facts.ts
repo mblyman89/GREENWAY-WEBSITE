@@ -31,6 +31,12 @@
  *   - ai_suggestions via persistSuggestion (pending; a person approves).
  *   - product_fact_provenance (0235) one row per attached field. Missing 0235
  *     is tolerated: the facts are still saved, the receipt notes the trail.
+ *   - S11 (step 4b): the onboarding draft's own copy of the facts that
+ *     LANDED (the two 0235 draft columns, named only through the core's
+ *     DRAFT_FACT_COLUMNS / DRAFT_FACT_SELECT), so the row's Facts panel
+ *     reads server state, never the browser. Draft context only; a value a
+ *     person set is never replaced (mergeDraftAttachedFacts). Missing 0235
+ *     is tolerated the same way.
  *   - one audit row.
  */
 import "server-only";
@@ -46,8 +52,12 @@ import { deriveVariantLabel } from "@/lib/inventory/manifest-kb-bridge-core";
 import { identityForDraft, identityForMenuItem, kbNaturalKey, strainSlug } from "@/lib/catalog/product-identity-core";
 import {
   buildProvenanceRow,
+  DRAFT_FACT_COLUMNS,
+  DRAFT_FACT_SELECT,
   isMissingAttachedFactsError,
+  mergeDraftAttachedFacts,
   PROVENANCE_TABLE,
+  type LandedDraftFact,
   type ProductFactProvenanceInsert,
 } from "@/lib/catalog/attach-facts-core";
 import { attachPolicyMode, type AttachPolicyMode } from "@/lib/catalog/fact-attach-policy-core";
@@ -529,6 +539,51 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
     }
   }
 
+  // ---- 4b. The draft's own copy (S11) ---------------------------------------
+  // Only facts that LANDED live (the same set provenance used), only for an
+  // onboarding draft. Shadow / off rings land nothing, so nothing is written.
+  let draftFactsWritten: string[] = [];
+  if (sf.draftId && landed.size > 0) {
+    const seen = new Set<string>();
+    const landedFacts: LandedDraftFact[] = [];
+    for (const p of plan.provenance) {
+      if (!landed.has(`${p.field}\u001f${p.to}`) || seen.has(p.field)) continue;
+      seen.add(p.field);
+      landedFacts.push({ field: p.field, value: p.value, source: "gemini", confidence: p.confidence });
+    }
+    try {
+      const cur = await admin.from("catalog_product_drafts").select(DRAFT_FACT_SELECT).eq("id", sf.draftId).maybeSingle();
+      if (cur.error) {
+        notes.push(
+          isMissingAttachedFactsError(cur.error)
+            ? "The onboarding row cannot show these facts yet (migration 0235 is not applied). The facts themselves were saved."
+            : `The onboarding row's fact list could not be read, so it was not updated: ${cur.error.message.slice(0, 120)}`,
+        );
+      } else {
+        const row = (cur.data as Record<string, unknown> | null) ?? {};
+        const merged = mergeDraftAttachedFacts({
+          existingFacts: row[DRAFT_FACT_COLUMNS[0]],
+          existingProvenance: row[DRAFT_FACT_COLUMNS[1]],
+          landed: landedFacts,
+          at: new Date().toISOString(),
+          by: input.actor.userId,
+          urls: input.sources,
+        });
+        if (merged.keptHuman.length > 0) {
+          notes.push(`Kept your own ${merged.keptHuman.join(", ")} on this row; the lookup never replaces a person's answer.`);
+        }
+        if (merged.patch) {
+          const { error } = await admin.from("catalog_product_drafts").update(merged.patch).eq("id", sf.draftId);
+          if (!error) draftFactsWritten = merged.written;
+          else if (isMissingAttachedFactsError(error)) notes.push("The onboarding row cannot show these facts yet (migration 0235 is not applied). The facts themselves were saved.");
+          else notes.push(`The onboarding row's fact list could not be updated: ${error.message.slice(0, 120)}`);
+        }
+      }
+    } catch (err) {
+      notes.push(`The onboarding row's fact list could not be updated: ${String(err).slice(0, 120)}`);
+    }
+  }
+
   // ---- 5. Audit -------------------------------------------------------------
   await recordAudit({
     actorId: input.actor.userId,
@@ -548,6 +603,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
       skipped: receipt.skipped.map((s) => ({ field: s.field, reason: s.reason })),
       failures: failures.map((f) => ({ target: f.target, fields: f.fields })),
       provenanceWritten,
+      draftFactsWritten,
     },
   });
 

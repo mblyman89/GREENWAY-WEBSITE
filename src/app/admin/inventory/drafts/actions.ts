@@ -22,6 +22,8 @@ import { validateInventoryTypeDraft } from "@/lib/pos/type-registry-core";
 // working in (hidden `return_manifest` field, re-validated as a UUID by
 // draftsHref — the form is never trusted).
 import { draftsHref } from "@/lib/catalog/draft-deep-link-core";
+// S11: row-level error anchoring rides the redesigned-row flag.
+import { onboardingV2RowOn } from "@/lib/catalog/onboarding-row-flag";
 // S30: inline fact review for receiving-origin products (bible S30.2).
 import {
   factResultCode,
@@ -30,9 +32,17 @@ import {
 } from "@/lib/pos/intake-fact-review-core";
 import { recordIntakeFactReview } from "@/lib/pos/fact-review-store";
 
-function backTo(formData: FormData | undefined, extra: Record<string, string>): string {
+/**
+ * Where an action returns. S11 (F-033): a FAILED row action also passes its
+ * draft id, so the page comes back pinned to that row (?draft=<id>&error=...
+ * #draft-<id>): highlighted, scrolled to, and the error repeated inside the
+ * row. Success redirects pass no id (an approved row has left this tab).
+ * ONBOARDING_V2_ROW=off keeps the previous redirect (no draft pin).
+ */
+function backTo(formData: FormData | undefined, extra: Record<string, string>, failedDraftId?: string): string {
   const raw = formData?.get("return_manifest");
-  return draftsHref({ manifestId: typeof raw === "string" ? raw : null, extra });
+  const anchor = failedDraftId && onboardingV2RowOn() ? failedDraftId : null;
+  return draftsHref({ manifestId: typeof raw === "string" ? raw : null, draftId: anchor, extra });
 }
 
 export async function approveDraftAction(draftId: string, formData: FormData) {
@@ -41,7 +51,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   const raw = (formData.get("price") as string | null)?.trim() ?? "";
   const dollars = Number(raw);
   if (!raw || Number.isNaN(dollars) || dollars <= 0) {
-    redirect(backTo(formData, { error: "price" }));
+    redirect(backTo(formData, { error: "price" }, draftId));
   }
   const priceMinor = Math.round(dollars * 100);
   // SLICE 64: the approver's classification picks. The server re-derives what
@@ -79,7 +89,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       existingValues: registry.map((r) => r.value),
     });
     if (!parsed.ok) {
-      redirect(backTo(formData, { error: "floor", msg: parsed.error }));
+      redirect(backTo(formData, { error: "floor", msg: parsed.error }, draftId));
     }
     const admin = createSupabaseAdminClient();
     const { error } = await admin.from("website_category_types").insert({
@@ -91,7 +101,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       is_system: false,
     });
     if (error) {
-      redirect(backTo(formData, { error: "floor", msg: error.message }));
+      redirect(backTo(formData, { error: "floor", msg: error.message }, draftId));
     }
     await recordAudit({
       actorId: session.userId,
@@ -119,7 +129,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       existingKeys: existing.map((t) => t.key),
     });
     if (!parsed.ok) {
-      redirect(backTo(formData, { error: "floor", msg: parsed.error }));
+      redirect(backTo(formData, { error: "floor", msg: parsed.error }, draftId));
     }
     const admin = createSupabaseAdminClient();
     // Map the new type to the category this approval files under: the human's
@@ -162,7 +172,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
       is_system: false,
     });
     if (error) {
-      redirect(backTo(formData, { error: "floor", msg: error.message }));
+      redirect(backTo(formData, { error: "floor", msg: error.message }, draftId));
     }
     await recordAudit({
       actorId: session.userId,
@@ -193,7 +203,7 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
     // Surface the floor-violation / classification-gate message.
-    redirect(backTo(formData, { error: "floor", msg: result.error ?? "" }));
+    redirect(backTo(formData, { error: "floor", msg: result.error ?? "" }, draftId));
   }
   redirect(backTo(formData, { approved: "1" }));
 }
@@ -219,7 +229,7 @@ export async function dismissDraftAction(draftId: string, formData?: FormData) {
   const result = await setCatalogDraftStatus(draftId, "dismissed", session.userId);
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
-    redirect(backTo(formData, { error: "update" }));
+    redirect(backTo(formData, { error: "update" }, draftId));
   }
   redirect(backTo(formData, { dismissed: "1" }));
 }
@@ -229,7 +239,7 @@ export async function restoreDraftAction(draftId: string, formData?: FormData) {
   const result = await setCatalogDraftStatus(draftId, "draft", session.userId);
   revalidatePath("/admin/inventory/drafts");
   if (!result.ok) {
-    redirect(backTo(formData, { error: "update" }));
+    redirect(backTo(formData, { error: "update" }, draftId));
   }
   redirect(backTo(formData, { restored: "1" }));
 }

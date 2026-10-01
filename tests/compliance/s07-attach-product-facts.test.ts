@@ -431,7 +431,9 @@ describe("B. attachProductFacts end to end", () => {
     expect(res.mode).toBe("act");
     // Order of writes.
     const order = db.log.filter((x) => !x.startsWith("ai_suggestions:persist"));
-    expect(order).toEqual(["kb_products:writeback", "kb_strains:insert", "product_fact_provenance:insert"]);
+    // S11 (Round 18) deliberately adds step 4b: the draft's own copy of the
+    // facts that landed, AFTER provenance and before the audit.
+    expect(order).toEqual(["kb_products:writeback", "kb_strains:insert", "product_fact_provenance:insert", "catalog_product_drafts:update"]);
     expect(spies.audit).toHaveBeenCalledTimes(1);
     expect((spies.audit.mock.calls[0][0] as Row).action).toBe(ATTACH_AUDIT_ACTION);
     // kb_products row really has the facts.
@@ -623,6 +625,106 @@ describe("B. attachProductFacts end to end", () => {
     expect(res.ok).toBe(false);
     expect(db.log).toEqual([]);
     expect(spies.audit).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B2. S11 (Round 18): the draft's own copy of what landed (step 4b)
+// ---------------------------------------------------------------------------
+describe("B2. S11 step 4b - the onboarding row's attached facts", () => {
+  const draftRow = () => db.tables.catalog_product_drafts[0] as Row;
+
+  it("act: writes ONLY the facts that landed live, each with source/confidence/at and provenance by/urls", async () => {
+    seedDraft();
+    const res = await runDraft();
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const facts = draftRow().attached_facts as Record<string, Row>;
+    const prov = draftRow().attached_facts_provenance as Record<string, Row>;
+    const landedFields = res.receipt.attached.filter((a) => a.to.some((t) => t !== "Enrichment suggestions")).map((a) => a.field).sort();
+    expect(Object.keys(facts).sort()).toEqual(landedFields);
+    expect(landedFields.length).toBeGreaterThan(0);
+    expect(facts.description).toMatchObject({ value: "Sweet berry aroma with a smooth finish.", source: "gemini", confidence: 0.95 });
+    expect(typeof facts.description.at).toBe("string");
+    expect(prov.description).toMatchObject({ source: "gemini", confidence: 0.95, by: ACTOR.userId, urls: ["https://example.test/a"] });
+    // The same field set as the immutable trail.
+    expect(db.tables.product_fact_provenance.map((r) => r.field).sort()).toEqual(expect.arrayContaining(Object.keys(facts)));
+    const after = (spies.audit.mock.calls[0][0] as { after: Row }).after;
+    expect((after.draftFactsWritten as string[]).sort()).toEqual(landedFields);
+  });
+
+  it("shadow (ring 1): nothing lands, so the draft row is never written", async () => {
+    spies.ring = 1;
+    seedDraft();
+    const res = await runDraft();
+    expect(res.ok).toBe(true);
+    expect(db.log).not.toContain("catalog_product_drafts:update");
+    expect(draftRow()).not.toHaveProperty("attached_facts");
+  });
+
+  it("a value a PERSON set on the row is kept; the receipt says so", async () => {
+    seedDraft({
+      attached_facts: { description: { value: "My words.", source: "human", confidence: null, at: "2026-01-01T00:00:00Z" } },
+      attached_facts_provenance: null,
+    });
+    const res = await runDraft();
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const facts = draftRow().attached_facts as Record<string, Row>;
+    expect(facts.description.value).toBe("My words.");
+    expect(facts.description.source).toBe("human");
+    expect(res.notes.join(" ")).toContain("Kept your own description");
+  });
+
+  it("0235 not applied: the facts still save, the row is skipped with a plain note", async () => {
+    seedDraft();
+    db.fail["catalog_product_drafts:select:attached_facts, attached_facts_provenance"] = {
+      code: "42703",
+      message: 'column catalog_product_drafts.attached_facts does not exist',
+    };
+    const res = await runDraft();
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(db.log).toContain("kb_products:writeback");
+    expect(db.log).not.toContain("catalog_product_drafts:update");
+    expect(res.notes.join(" ")).toContain("migration 0235 is not applied");
+  });
+
+  it("an unrelated read error is surfaced (never treated as 'nothing there') and nothing is written", async () => {
+    seedDraft();
+    db.fail["catalog_product_drafts:select:attached_facts, attached_facts_provenance"] = { code: "57014", message: "statement timeout" };
+    const res = await runDraft();
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(db.log).not.toContain("catalog_product_drafts:update");
+    expect(res.notes.join(" ")).toContain("could not be read");
+  });
+
+  it("an update error after a good read is reported, the save still succeeds", async () => {
+    seedDraft();
+    db.fail["catalog_product_drafts:update"] = { code: "42703", message: 'column "attached_facts_provenance" of relation "catalog_product_drafts" does not exist' };
+    const res = await runDraft();
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.notes.join(" ")).toContain("migration 0235 is not applied");
+    const after = (spies.audit.mock.calls[0][0] as { after: Row }).after;
+    expect(after.draftFactsWritten).toEqual([]);
+  });
+
+  it("product (enrichment) context never touches catalog_product_drafts", async () => {
+    spies.menuItem = { name: "Blue Dream 3.5g", product_name: "Blue Dream 3.5g", brand_name: "Phat Panda", vendor_name: "Phat Panda LLC", category: "flower", strain_name: "Blue Dream", variants: [{ label: "3.5g" }] };
+    const res = await attachProductFacts({
+      context: { kind: "product", posProductKey: "LOT-1", saveStrain: true },
+      safe: safeLookup(),
+      sources: [],
+      factConfidence: ALL_HIGH,
+      suggestionConfidence: HIGH_PROSE,
+      suggestionSource: "model:enrichment-lookup",
+      actor: ACTOR,
+      fallbackLabel: "Blue Dream",
+    });
+    expect(res.ok).toBe(true);
+    expect(db.log.some((x) => x.startsWith("catalog_product_drafts"))).toBe(false);
   });
 });
 

@@ -17,6 +17,8 @@
  * Both require the inventory.manage permission and are audited.
  */
 import { unstable_rethrow } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { onboardingV2RowOn } from "@/lib/catalog/onboarding-row-flag";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
@@ -29,6 +31,7 @@ import {
 import {
   lookupProduct,
   isAiConfigured,
+  type ProductLookupOutcome,
 } from "@/lib/inventory/product-lookup-ai";
 import { AiLookupError } from "@/lib/ai/provider";
 import {
@@ -59,6 +62,18 @@ import { attachFactsV2Enabled, currentAttachPolicyRing } from "@/lib/catalog/fac
 // S07: the single write door (ATTACH_FACTS_V2, default on).
 import { attachProductFacts } from "@/lib/catalog/attach-facts";
 import { factConfidenceFromFacts, type AttachReceipt, type FactConfidence } from "@/lib/catalog/attach-plan-core";
+// S09: KB-first recall - read what the shop already knows BEFORE paying for Gemini.
+import {
+  KB_FIRST_ONBOARDING_ENV,
+  MEMORY_MODEL_LABEL,
+  alreadyKnownPromptBlock,
+  kbFirstOnboardingEnabled,
+  memoryAuditPayload,
+  memoryRawLookup,
+  memoryResultNotice,
+  shouldSkipGemini,
+} from "@/lib/catalog/fact-memory-core";
+import { recallForDraft } from "@/lib/catalog/fact-memory";
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "").trim();
@@ -130,8 +145,11 @@ export type ProductLookupActionResult =
       hasEnrichmentDraft: boolean;
       /** SLICE S06: structured per-field facts (null on a v1-shaped reply). */
       facts: LookupFacts | null;
-      /** SLICE S06: which shape the reply was parsed as. */
-      schema: "v2" | "v1";
+      /**
+       * SLICE S06: which shape the reply was parsed as. S09: "memory" when no
+       * web lookup ran because every fact was already on file.
+       */
+      schema: "v2" | "v1" | "memory";
       /** SLICE S06: grounded url_citation detail. */
       citations: WebCitation[];
       /** SLICE S06: Google Search Suggestions HTML (display only, never stored). */
@@ -144,8 +162,25 @@ export type ProductLookupActionResult =
        * per-field decision is possible - never guessed).
        */
       policy: LookupPolicyView | null;
+      /**
+       * S09: what recall found. Null when the flag is off, there is no draft
+       * id, or the product has no full identity / nothing on file.
+       */
+      memory: LookupMemoryView | null;
     }
   | { ok: false; error: string };
+
+/** S09: the recall summary the panel shows (field names only; values ride in the result). */
+export type LookupMemoryView = {
+  /** True when Gemini was NOT called (every target fact already on file). */
+  skipped: boolean;
+  /** The operator pressed "Refresh from web" (memory ignored for this call). */
+  refresh: boolean;
+  covered: string[];
+  missing: string[];
+  /** One plain-English line for the panel. */
+  notice: string;
+};
 
 /** S10: the policy verdicts the panel shows (reasons only - no new writes). */
 export type LookupPolicyView = {
@@ -182,21 +217,56 @@ export async function productLookupAction(
   // The approve form's strain pick at search time: a PERSON's value (wins).
   const humanStrainType = str(formData, "human_strain_type") || null;
   if (!query) return { ok: false, error: "Type something to search for first." };
+  // S09: "Refresh from web" - the operator says the product may have changed,
+  // so memory is neither used to skip nor fed to the prompt for this call.
+  const refresh = str(formData, "refresh") === "1";
 
   try {
     const banned = await loadBannedPhrases();
-    const outcome = await lookupProduct({
-      query,
-      productName,
-      vendorOrBrand,
-      extraBanned: banned,
-      context: {
-        entityType: "catalog_drafts",
-        entityId: draftId || null,
-        actorId: session.userId,
-        actorEmail: session.email,
-      },
-    });
+    // S09 RECALL (KB_FIRST_ONBOARDING, default on). Identity is re-derived
+    // SERVER-SIDE from the draft row (never from the client's text). Never
+    // throws; null = nothing known -> the lookup runs exactly as before.
+    const kbFirst = kbFirstOnboardingEnabled(process.env[KB_FIRST_ONBOARDING_ENV]);
+    const memory = kbFirst && draftId ? await recallForDraft(draftId) : null;
+    const skipGemini = shouldSkipGemini({ enabled: kbFirst, refresh, memory });
+    const outcome: Omit<ProductLookupOutcome, "schema"> & { schema: ProductLookupOutcome["schema"] | "memory" } =
+      skipGemini && memory
+        ? {
+            // The SAME compliance gate as a Gemini reply: an approved record
+            // is re-linted against today's banned list. Zero AI calls.
+            result: postProcessLookup(memoryRawLookup(memory), banned),
+            sources: [],
+            model: MEMORY_MODEL_LABEL,
+            usedWebSearch: false,
+            facts: null,
+            schema: "memory",
+            citations: [],
+            searchSuggestions: [],
+          }
+        : await lookupProduct({
+            query,
+            productName,
+            vendorOrBrand,
+            extraBanned: banned,
+            context: {
+              entityType: "catalog_drafts",
+              entityId: draftId || null,
+              actorId: session.userId,
+              actorEmail: session.email,
+            },
+            // Partial memory: tell the model what is already on file. "" when
+            // nothing is covered (or on refresh) -> prompt byte-identical.
+            alreadyKnown: refresh ? "" : alreadyKnownPromptBlock(memory),
+          });
+    const memoryView: LookupMemoryView | null = memory
+      ? {
+          skipped: skipGemini,
+          refresh,
+          covered: [...memory.covered],
+          missing: [...memory.missing],
+          notice: skipGemini ? memoryResultNotice(memory, new Date()) : "",
+        }
+      : null;
 
     const r = outcome.result;
 
@@ -246,6 +316,8 @@ export async function productLookupAction(
         // S10: decision counts + field -> decision (no values). Feeds the
         // drafts-footer shadow counters. Absent when the ring is 0.
         policy: policyAudit,
+        // S09: recall outcome - field names and flags only (no values).
+        memory: kbFirst && draftId ? memoryAuditPayload(memory, skipGemini, refresh) : undefined,
       },
     });
 
@@ -300,6 +372,7 @@ export async function productLookupAction(
         factConfidence: factConfidenceFromFacts(outcome.facts),
       },
       policy,
+      memory: memoryView,
     };
   } catch (err) {
     // Operator-actionable failures (took too long, out of AI credits, bad key)
@@ -381,6 +454,13 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
         actor: { userId: session.userId, email: session.email },
       });
       if (!res.ok) return { ok: false, error: res.error };
+      // S11: when something really landed, re-render the onboarding page so
+      // the row's Facts panel shows the SERVER state (the approve form reads
+      // server state, not the DOM). Client state in this panel survives the
+      // refresh. ONBOARDING_V2_ROW=off keeps the previous behaviour.
+      if (res.receipt.attached.length > 0 && onboardingV2RowOn()) {
+        revalidatePath("/admin/inventory/drafts");
+      }
       return { ok: true, receipt: res.receipt, sentence: res.sentence, notes: res.notes };
     } catch (err) {
       unstable_rethrow(err);

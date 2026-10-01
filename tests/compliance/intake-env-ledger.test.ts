@@ -68,7 +68,7 @@ const inExample = (v: string) => new RegExp(`^#?\\s*${v}=`, "m").test(envExample
 describe("intake env ledger", () => {
   it("derives the pipeline flags from the code (proves the derivation works)", () => {
     const flags = pipelineFlagNames();
-    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "ATTACH_FACTS_V2", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY"]) expect(flags).toContain(v);
+    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "ATTACH_FACTS_V2", "KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY"]) expect(flags).toContain(v);
   });
 
   it("every pipeline flag is in the Shipped table AND .env.example", () => {
@@ -110,15 +110,46 @@ describe("intake env ledger", () => {
   });
 
   it("planned names are the bible's, and none is read by code yet", () => {
-    const planned = ["KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW"];
-    const sec = ledger.slice(ledger.indexOf("## 4. Planned flags"));
-    // S07 shipped (Round 17): its planned row left section 4.
-    expect(sec).not.toMatch(/^\| S07 \|/m);
-    const all = walk(path.join(ROOT, "src")).map((f) => readFileSync(f, "utf8")).join("\n");
-    for (const v of planned) {
-      expect(sec).toContain(`\`${v}\``);
-      expect(all.includes(`"${v}"`), `${v} now ships: move it to §1`).toBe(false);
-    }
+    // S09 + S11 shipped (Round 18): no planned row names a variable any more;
+    // the remaining rows (S12, S13, S20) are "named in <slice>".
+    const sec = ledger.slice(ledger.indexOf("## 4. Planned flags"), ledger.indexOf("**Which shipped slice"));
+    // S07 shipped (Round 17), S09 + S11 shipped (Round 18): their planned rows left section 4.
+    for (const s of ["S07", "S09", "S11"]) expect(sec).not.toMatch(new RegExp(`^\\| ${s} \\|`, "m"));
+    expect(sec).not.toContain("`KB_FIRST_ONBOARDING`");
+    expect(sec).not.toContain("`ONBOARDING_V2_ROW`");
+    for (const s of ["S12", "S13", "S20"]) expect(sec).toMatch(new RegExp(`^\\| ${s} \\| .* \\| named in ${s} \\|$`, "m"));
+  });
+
+  it("S09 + S11 (Round 18) ADDED their bible-named flags, read through the core constants", () => {
+    expect(read("src/lib/catalog/fact-memory-core.ts")).toContain('export const KB_FIRST_ONBOARDING_ENV = "KB_FIRST_ONBOARDING"');
+    expect(read("src/lib/catalog/fact-chips-core.ts")).toContain('export const ONBOARDING_V2_ROW_ENV = "ONBOARDING_V2_ROW"');
+    expect(read("src/app/admin/inventory/drafts/page.tsx")).toContain("process.env[KB_FIRST_ONBOARDING_ENV]");
+    expect(read("src/app/admin/inventory/drafts/page.tsx")).toContain("process.env[ONBOARDING_V2_ROW_ENV]");
+    expect(read("src/lib/catalog/onboarding-row-flag.ts")).toContain("process.env[ONBOARDING_V2_ROW_ENV]");
+    const sec1 = ledger.slice(ledger.indexOf("## 1. Shipped pipeline flags"), ledger.indexOf("## 2."));
+    expect(sec1).toMatch(/^\| `KB_FIRST_ONBOARDING` \| S09 \| on \|/m);
+    expect(sec1).toMatch(/^\| `ONBOARDING_V2_ROW` \| S11 \| on \|/m);
+    expect(ledger).toContain('"Flag KB_FIRST_ONBOARDING=off" (S09) and "Flag ONBOARDING_V2_ROW=off renders today\'s row" (S11)');
+    for (const v of ["KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW"]) expect(envExample).toContain(`# ${v}=on`);
+  });
+
+  it("section 5 explains ATTACH_POLICY_RING in plain English, matching the code", () => {
+    const sec = ledger.slice(ledger.indexOf("## 5. `ATTACH_POLICY_RING` in plain English"), ledger.indexOf("## Final Vercel checklist"));
+    expect(sec.length).toBeGreaterThan(2000);
+    // One row per ring value, in order.
+    const rows = [...sec.matchAll(/^\| `([0-3])`/gm)].map((m) => m[1]);
+    expect(rows).toEqual(["0", "1", "2", "3"]);
+    // The claims are the code's: default 1, junk -> 1, off-words -> 0, 2 and 3 alike, 90% bar.
+    const core = read("src/lib/catalog/fact-attach-policy-core.ts");
+    expect(core).toContain("export const ATTACH_POLICY_DEFAULT_RING: AttachPolicyRing = 1;");
+    expect(core).toContain('if (v === "off" || v === "false" || v === "no" || v === "disabled" || v === "0") return 0;');
+    expect(core).toContain("return writerShipped ? \"act\" : \"shadow\";");
+    expect(core).toContain("export const ATTACH_WRITER_SHIPPED = true;");
+    expect(sec).toContain("falls back to `1`");
+    expect(sec).toContain("the code treats `2` and `3` alike");
+    expect(sec).toContain("90%");
+    expect(sec).toContain("**Nothing lands on a live record.**");
+    expect(sec).toContain("set it back to `1` (or `0`)");
   });
 
   it("the final Vercel checklist exists, is the owner's request, and names each shipped flag", () => {

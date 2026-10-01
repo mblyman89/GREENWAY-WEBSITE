@@ -122,6 +122,14 @@ export async function lookupProduct(input: {
   vendorOrBrand?: string | null;
   extraBanned?: ExtraBannedPhrase[];
   context?: AiContext;
+  /**
+   * SLICE S09: the "already on file" block (fact-memory-core
+   * alreadyKnownPromptBlock) for a PARTIAL memory, so the model spends its
+   * effort on the missing fields. v2 prompt only, inserted between the user
+   * prompt and the shape hint. Absent / "" -> the prompt is byte-identical
+   * to S06 (pinned by tests/compliance/s09-kb-first-onboarding.test.ts).
+   */
+  alreadyKnown?: string;
 }): Promise<ProductLookupOutcome> {
   // SLICE S06 rollback switch (Vercel env). Default ON. With it off, the call
   // below is byte-identical to pre-S06 (same system, user, shape, maxTokens).
@@ -135,7 +143,7 @@ export async function lookupProduct(input: {
   const ws = await generateWebSearch({
     system: v2On ? PRODUCT_LOOKUP_SYSTEM_V2 : PRODUCT_LOOKUP_SYSTEM,
     user: v2On
-      ? `${buildLookupUserPromptV2(promptInput)}${LOOKUP_V2_SHAPE_HINT}`
+      ? `${buildLookupUserPromptV2(promptInput)}${input.alreadyKnown ? input.alreadyKnown : ""}${LOOKUP_V2_SHAPE_HINT}`
       : `${buildLookupUserPrompt(promptInput)}${SHAPE_HINT}`,
     // T-321: do NOT force a low temperature here. This call runs on Gemini 3's
     // google_search grounding path, and Google's official Gemini 3 docs warn
