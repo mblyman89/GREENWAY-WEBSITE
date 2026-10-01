@@ -75,6 +75,7 @@ import {
   type PlannedInjectedItem,
 } from "@/lib/pos/draft-injection-core";
 import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
+import { BOILERPLATE_TAIL, isBoilerplateDescription } from "@/lib/catalog/golden-record-core";
 import {
   cardLotKeys,
   cardVendorIds,
@@ -995,7 +996,11 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
           },
         });
         single.name = group.display;
-        single.description = `${group.display} from ${normalizeWhitespace(single.brand_name) || group.vendor}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`;
+        // SLICE S12: only the placeholder is rebuilt with the built name; real
+        // copy attached at onboarding is never overwritten (F-064).
+        if (isBoilerplateDescription(single.description)) {
+          single.description = `${group.display} from ${normalizeWhitespace(single.brand_name) || group.vendor}${BOILERPLATE_TAIL}`;
+        }
       }
       newCards.push(single);
       continue;
@@ -1030,7 +1035,11 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       })(),
       // Display only: prefer the brand when the manifest carried one (generic
       // JSON); WCIA has no per-line brand, so fall back to the vendor.
-      description: `${group.display} from ${normalizeWhitespace(base.brand_name) || group.vendor}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`,
+      // SLICE S12: real copy attached at onboarding (on the base lot, else
+      // the first lot that has it) wins over the placeholder (F-064).
+      description:
+        sortedItems.map((gi) => gi.description).find((t) => !isBoilerplateDescription(t)) ??
+        `${group.display} from ${normalizeWhitespace(base.brand_name) || group.vendor}${BOILERPLATE_TAIL}`,
       variants: sorted,
     });
     if (group.items.length > 1) {
@@ -1968,6 +1977,56 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     assert(vi2.vendorIdByLotKey.size === 1 && vi2.vendorIdByLotKey.get("LOT-A") === "v1", "inputs: draft ids trimmed+lowercased, agreeing repeats kept, blanks dropped");
     assert(!vi2.vendorIdByLotKey.has("LOT-C"), "inputs: a draft key whose lots disagree gets NO id (never pick one)");
     assert([...(vi2.lotVendorIdsByKey.get("K") ?? [])].join() === "v1,v4" && vi2.lotVendorIdsByKey.size === 1, "inputs: live ids unioned, blanks dropped");
+  }
+
+  // SLICE S12: the placeholder is rebuilt with the built name, but REAL copy
+  // attached at onboarding is never overwritten (F-064), on a singleton or a
+  // rolled-up card.
+  {
+    const p = plan([draft({})], [["d1", enrich({})]]);
+    assert(
+      p.newCards[0].description ===
+        "Blue Dream from Fairwinds. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
+      "S12: singleton placeholder rebuilt with the built name, byte for byte",
+    );
+  }
+  {
+    const gd = { text: "Sweet berry, calm finish.", field: "description" as const, source: "gemini" as const, confidence: 0.95 };
+    const p = plan([draft({})], [["d1", enrich({ goldenDescription: gd })]]);
+    assert(p.newCards[0].name === "Blue Dream", "S12: singleton still gets the built name");
+    assert(p.newCards[0].description === "Sweet berry, calm finish.", "S12: singleton keeps attached copy");
+  }
+  {
+    const gd = { text: "Grouped real copy.", field: "description" as const, source: "human" as const, confidence: null };
+    const p = plan(
+      [
+        draft({}),
+        draft({ id: "d2", pos_product_key: "LOT-B", name: "Blue Dream 3.5g", price_minor_units: 3500 }),
+      ],
+      [
+        ["d1", enrich({})],
+        ["d2", enrich({ packageLabel: "3.5g", goldenDescription: gd })],
+      ],
+    );
+    assert(p.newCards.length === 1, "S12: rollup still one card");
+    assert(p.newCards[0].description === "Grouped real copy.", "S12: rollup takes the first lot with real copy");
+  }
+  {
+    const p = plan(
+      [
+        draft({}),
+        draft({ id: "d2", pos_product_key: "LOT-B", name: "Blue Dream 3.5g", price_minor_units: 3500 }),
+      ],
+      [
+        ["d1", enrich({})],
+        ["d2", enrich({ packageLabel: "3.5g" })],
+      ],
+    );
+    assert(
+      p.newCards[0].description ===
+        "Blue Dream from Fairwinds. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
+      "S12: rollup with no real copy keeps the placeholder, byte for byte",
+    );
   }
 
   return { passed };

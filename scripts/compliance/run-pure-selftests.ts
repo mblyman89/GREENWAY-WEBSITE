@@ -627,6 +627,7 @@ import { __runCultiveraTypeFromCategoryCoreTests } from "../../src/lib/pos/culti
 import { __runFactReviewFocusCoreTests } from "../../src/lib/pos/fact-review-focus-core";
 import { __runCostFillCoreTests } from "../../src/lib/noncannabis/cost-fill-core";
 import { __runMergeReviewCoreTests } from "../../src/lib/pos/merge-review-core";
+import { __runGoldenRecordCoreTests } from "../../src/lib/catalog/golden-record-core";
 import { __runPublishStoryCoreTests } from "../../src/lib/catalog/publish-story-core";
 import { __runIntakeVersionCopyCoreTests } from "../../src/lib/pos/intake-version-copy-core";
 import { __runDraftDeepLinkCoreTests } from "../../src/lib/catalog/draft-deep-link-core";
@@ -1934,6 +1935,7 @@ __runLiquidVolumeTests();
   { const r = __runCostFillCoreTests(); if (r.failed > 0 || r.passed < 24) throw new Error(`cost-fill-core: ${r.failed} failed, ${r.passed} passed`); }
   // S32: the match review (merge-review-core). Floor = the exact count.
   { const r = __runMergeReviewCoreTests(); if (r.failed > 0 || r.passed < 60) throw new Error(`merge-review-core: ${r.failed} failed, ${r.passed} passed`); console.log(`merge-review-core: ${r.passed} assertions passed`); }
+  { const r = __runGoldenRecordCoreTests(); if (r.failed > 0 || r.passed < 57) throw new Error(`golden-record-core: ${r.failed} failed, ${r.passed} passed`); console.log(`golden-record-core: ${r.passed} assertions passed`); }
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

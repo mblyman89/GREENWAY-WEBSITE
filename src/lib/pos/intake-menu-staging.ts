@@ -104,6 +104,8 @@ import {
   type RestageCandidate,
 } from "@/lib/inventory/batch-staging-core";
 import type { MenuItemRow, MenuVariantRow, MenuVersion } from "@/lib/pos/db-types";
+// SLICE S12: the golden record (attached facts, compliance-cleared).
+import { loadGoldenInputs } from "@/lib/catalog/golden-record-server";
 
 export type IntakeStagingOutcome = {
   /** True when a staged version was created. */
@@ -185,11 +187,29 @@ export async function stageIntakeMenuVersionForManifest(
           (e.code === "42703" ||
             /column .* does not exist|could not find .* column/i.test(e.message ?? "")),
       );
-    const firstTry = await admin
+    // R19 (defect found while building S12): this read never selected the
+    // approver's COMPLIANCE answers (0218) or the measured package volume
+    // (0224), although SLICE 18G made masteredToSnapshot and the insert
+    // below carry them. So a product approved at Product Onboarding reached
+    // the menu row - the only surface the register enforces from - with all
+    // four limit columns NULL and no measured volume. Same widest tier and
+    // graduated fallback as draft-injection.ts: a database missing 0218/0224
+    // loses ONLY those columns and stages exactly as before.
+    const COMPLIANCE_COLS =
+      ", chosen_otherwise_taken, chosen_units_per_package, chosen_low_thc_liquid, chosen_unit_thc_mg" +
+      ", chosen_net_volume_ml";
+    const withCompliance = await admin
       .from("catalog_product_drafts")
-      .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type, chosen_strain_type")
+      .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type, chosen_strain_type" + COMPLIANCE_COLS)
       .eq("manifest_id", manifestId)
       .eq("status", "approved");
+    const firstTry = missingCol(withCompliance.error)
+      ? await admin
+          .from("catalog_product_drafts")
+          .select(DRAFT_COLS + ", chosen_website_category, chosen_house_type, chosen_strain_type")
+          .eq("manifest_id", manifestId)
+          .eq("status", "approved")
+      : withCompliance;
     let draftRows: unknown = firstTry.data;
     let dErr = firstTry.error;
     if (missingCol(dErr)) {
@@ -221,6 +241,12 @@ export async function stageIntakeMenuVersionForManifest(
       chosen_website_category?: string | null;
       chosen_house_type?: string | null;
       chosen_strain_type?: string | null;
+      // 0218 / 0224 (R19). Absent when the migration hasn't run.
+      chosen_otherwise_taken?: boolean | null;
+      chosen_units_per_package?: number | string | null;
+      chosen_low_thc_liquid?: boolean | null;
+      chosen_unit_thc_mg?: number | string | null;
+      chosen_net_volume_ml?: number | string | null;
     };
     const drafts = ((draftRows as DraftRow[] | null) ?? []).map((r) => ({
       ...r,
@@ -228,6 +254,12 @@ export async function stageIntakeMenuVersionForManifest(
       cbd_pct: r.cbd_pct != null ? Number(r.cbd_pct) : null,
       total_thc_pct: r.total_thc_pct != null ? Number(r.total_thc_pct) : null,
       price_minor_units: r.price_minor_units != null ? Number(r.price_minor_units) : null,
+      // numerics arrive from PostgREST as strings; Number(null) is 0, which
+      // would invent a unit count / volume. null stays null, explicitly.
+      chosen_units_per_package:
+        r.chosen_units_per_package != null ? Number(r.chosen_units_per_package) : null,
+      chosen_unit_thc_mg: r.chosen_unit_thc_mg != null ? Number(r.chosen_unit_thc_mg) : null,
+      chosen_net_volume_ml: r.chosen_net_volume_ml != null ? Number(r.chosen_net_volume_ml) : null,
     }));
     if (drafts.length === 0) return skip("no-approved-drafts");
 
@@ -316,6 +348,10 @@ export async function stageIntakeMenuVersionForManifest(
       }
     }
 
+    // SLICE S12: one bounded read of the drafts' attached facts (0235), the
+    // description linted server-side. Flag off / 0235 missing / read failed
+    // = empty map = the placeholder sentence, exactly as before.
+    const goldenByDraftId = await loadGoldenInputs(admin, drafts.map((d) => d.id));
     const enrichmentByDraftId = new Map<string, DraftEnrichment>();
     drafts.forEach((d, i) => {
       const lot = d.lot_id ? lotById.get(d.lot_id) ?? null : null;
@@ -341,6 +377,7 @@ export async function stageIntakeMenuVersionForManifest(
           lot && lot.unit_weight != null
             ? `${lot.unit_weight} ${lot.unit_weight_uom ?? ""}`.trim()
             : null,
+        ...(goldenByDraftId.get(d.id) ?? {}),
       });
     });
 

@@ -38,6 +38,13 @@ import {
 } from "@/lib/compliance/liquid-volume-derivation-core";
 import { deriveHouseType, HOUSE_TYPE_MIN_AUTO_CONFIDENCE } from "@/lib/inventory/house-type-core";
 import { categoryToBucket } from "@/lib/compliance/sales-limits-core";
+import {
+  boilerplateDescription,
+  goldenSourceText,
+  resolveGoldenStrainType,
+  type PickedDescription,
+  type PickedStrainType,
+} from "@/lib/catalog/golden-record-core";
 
 /** The approved draft columns injection needs (from catalog_product_drafts). */
 export type ApprovedDraftForInjection = {
@@ -109,6 +116,16 @@ export type DraftEnrichment = {
   onHandQty: number | null;
   /** Package label like "3.5g" from the lot's unit weight; null when unknown. */
   packageLabel: string | null;
+  /**
+   * SLICE S12: the attached description the SERVER already cleared through
+   * the compliance linter (lintCopy + kb_banned_phrases). Absent / null =
+   * the house placeholder sentence, exactly as before S12. The planner never
+   * lints (the compliance module is server-only), so it must never be handed
+   * text the server did not clear.
+   */
+  goldenDescription?: PickedDescription | null;
+  /** SLICE S12: the counted attached strain type (golden-record-core). */
+  attachedStrainType?: PickedStrainType | null;
 };
 
 export type DraftInjectionInputs = {
@@ -618,6 +635,32 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
     }
 
     const brand = d.brand_name?.trim() || "";
+    // SLICE S12: the golden record. Strain type follows the 0235
+    // survivorship order (golden-record-core resolveGoldenStrainType); the
+    // description is the attached copy the server cleared, else the house
+    // sentence. Both disclose where an attached value came from.
+    const golden = resolveGoldenStrainType({
+      chosen: d.chosen_strain_type,
+      attached: enrich.attachedStrainType,
+      enrichment: enrich.strainType,
+    });
+    if ((golden.source === "attached" || golden.source === "attached_human") && enrich.attachedStrainType) {
+      diagnostics.push({
+        severity: "info",
+        code: "draft_inject_strain_type_attached",
+        message: `“${d.name}” strain-typed as “${golden.value}” — from ${goldenSourceText(enrich.attachedStrainType.source, enrich.attachedStrainType.confidence)} (attached at onboarding).`,
+        context: { draft_id: d.id, pos_product_key: key, strain_type: golden.value, source: enrich.attachedStrainType.source },
+      });
+    }
+    const goldenCopy = enrich.goldenDescription?.text?.trim() || null;
+    if (goldenCopy && enrich.goldenDescription) {
+      diagnostics.push({
+        severity: "info",
+        code: "draft_inject_description_attached",
+        message: `“${d.name}” uses the description attached at onboarding (from ${goldenSourceText(enrich.goldenDescription.source, enrich.goldenDescription.confidence)}), not the placeholder sentence.`,
+        context: { draft_id: d.id, pos_product_key: key, field: enrich.goldenDescription.field, source: enrich.goldenDescription.source },
+      });
+    }
     const priceLabel = [formatMoney(d.price_minor_units), enrich.packageLabel ?? ""]
       .filter(Boolean)
       .join(" ");
@@ -640,7 +683,9 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       // value; the enrichment (kb_strains, or the SLICE 93 lot/name verdict
       // the server folded in) fills the rest; "unknown" only when nothing is
       // known. Never guessed here - the server already validated the pick.
-      strain_type: d.chosen_strain_type?.trim() || enrich.strainType?.trim() || "unknown",
+      // SLICE S12: a person's attached answer sits between the two, and a
+      // counted attached value fills the gap before "unknown" (F-067).
+      strain_type: golden.value,
       strain_name: d.strain_name,
       thc: thcPct != null ? formatIntakePotency(thcPct, unit) : null,
       cbd: cbdPct != null ? formatIntakePotency(cbdPct, unit) : null,
@@ -664,8 +709,10 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       unit_thc_mg: d.chosen_unit_thc_mg ?? null,
       otherwise_taken: d.chosen_otherwise_taken ?? null,
       units_per_package: d.chosen_units_per_package ?? null,
-      // Same copy shape as transform.ts genericDescription (verified :586).
-      description: `${d.name}${brand ? ` from ${brand}` : ""}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`,
+      // Same copy shape as transform.ts genericDescription (verified :586),
+      // now built in golden-record-core. SLICE S12: attached, server-cleared
+      // copy replaces it (F-064).
+      description: goldenCopy ?? boilerplateDescription(d.name, brand),
       price_label: priceLabel,
       price_minor_units: d.price_minor_units,
       inventory_status: statusForOnHand(enrich.onHandQty),
@@ -1106,6 +1153,65 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
   {
     const p = plan([draft({})], new Map([["d1", enrich({ strainType: null })]]));
     assert(p.items[0].strain_type === "unknown", "nothing known = unknown, never guessed");
+  }
+
+  // SLICE S12: the golden record. No golden inputs = the placeholder sentence,
+  // byte for byte (the flag-off / pre-0235 path).
+  {
+    const p = plan([draft({})], new Map([["d1", enrich({})]]));
+    assert(
+      p.items[0].description ===
+        "Blue Dream 1g from Fairwinds. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
+      "S12: no golden input = placeholder unchanged",
+    );
+    assert(!p.diagnostics.some((d) => d.code === "draft_inject_description_attached"), "S12: no description diagnostic");
+  }
+  {
+    const p = plan(
+      [draft({})],
+      new Map([["d1", enrich({ goldenDescription: { text: "Sweet berry, calm finish.", field: "description", source: "gemini", confidence: 0.94 } })]]),
+    );
+    assert(p.items[0].description === "Sweet berry, calm finish.", "S12: cleared attached copy replaces the placeholder");
+    const dg = p.diagnostics.find((d) => d.code === "draft_inject_description_attached");
+    assert(Boolean(dg && dg.message.includes("the AI lookup 94%")), "S12: description source disclosed");
+    assert(Object.keys(p.items[0].fact_provenance).length === 0, "S12: description never touches fact_provenance");
+  }
+  {
+    const p = plan(
+      [draft({})],
+      new Map([["d1", enrich({ goldenDescription: { text: "   ", field: "description", source: "human", confidence: null } })]]),
+    );
+    assert(p.items[0].description.endsWith("in Port Orchard."), "S12: blank golden text = placeholder");
+  }
+  {
+    const p = plan(
+      [draft({})],
+      new Map([["d1", enrich({ strainType: null, attachedStrainType: { value: "sativa", source: "gemini", confidence: 0.95 } })]]),
+    );
+    assert(p.items[0].strain_type === "sativa", "S12: attached strain fills the gap before unknown (F-067)");
+    assert(p.diagnostics.some((d) => d.code === "draft_inject_strain_type_attached"), "S12: attached strain disclosed");
+  }
+  {
+    const p = plan(
+      [draft({})],
+      new Map([["d1", enrich({ strainType: "hybrid", attachedStrainType: { value: "sativa", source: "gemini", confidence: 0.95 } })]]),
+    );
+    assert(p.items[0].strain_type === "hybrid", "S12: enrichment verdict beats a machine attached value");
+    assert(!p.diagnostics.some((d) => d.code === "draft_inject_strain_type_attached"), "S12: no attached diagnostic when not used");
+  }
+  {
+    const p = plan(
+      [draft({})],
+      new Map([["d1", enrich({ strainType: "hybrid", attachedStrainType: { value: "indica", source: "human", confidence: null } })]]),
+    );
+    assert(p.items[0].strain_type === "indica", "S12: a person's attached answer beats the enrichment verdict");
+  }
+  {
+    const p = plan(
+      [draft({ chosen_strain_type: "sativa-hybrid" })],
+      new Map([["d1", enrich({ attachedStrainType: { value: "indica", source: "human", confidence: null } })]]),
+    );
+    assert(p.items[0].strain_type === "sativa-hybrid", "S12: the approver's pick still wins");
   }
 
   return { passed };

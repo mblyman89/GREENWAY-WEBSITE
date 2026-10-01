@@ -68,7 +68,7 @@ const inExample = (v: string) => new RegExp(`^#?\\s*${v}=`, "m").test(envExample
 describe("intake env ledger", () => {
   it("derives the pipeline flags from the code (proves the derivation works)", () => {
     const flags = pipelineFlagNames();
-    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "ATTACH_FACTS_V2", "KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY"]) expect(flags).toContain(v);
+    for (const v of ["INTAKE_IDENTITY_STAMP", "LOOKUP_SCHEMA_V2", "ATTACH_POLICY_RING", "ATTACH_FACTS_V2", "KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW", "INTAKE_BATCH_STAGING", "INTAKE_CUTOVER_GUARD", "INTAKE_VENDOR_ID_IDENTITY", "GOLDEN_RECORD_ON_APPROVE"]) expect(flags).toContain(v);
   });
 
   it("every pipeline flag is in the Shipped table AND .env.example", () => {
@@ -117,7 +117,10 @@ describe("intake env ledger", () => {
     for (const s of ["S07", "S09", "S11"]) expect(sec).not.toMatch(new RegExp(`^\\| ${s} \\|`, "m"));
     expect(sec).not.toContain("`KB_FIRST_ONBOARDING`");
     expect(sec).not.toContain("`ONBOARDING_V2_ROW`");
-    for (const s of ["S12", "S13", "S20"]) expect(sec).toMatch(new RegExp(`^\\| ${s} \\| .* \\| named in ${s} \\|$`, "m"));
+    // S12 shipped (Round 19): GOLDEN_RECORD_ON_APPROVE, so its planned row left too.
+    expect(sec).not.toMatch(/^\| S12 \|/m);
+    expect(sec).not.toContain("`GOLDEN_RECORD_ON_APPROVE`");
+    for (const s of ["S13", "S20"]) expect(sec).toMatch(new RegExp(`^\\| ${s} \\| .* \\| named in ${s} \\|$`, "m"));
   });
 
   it("S09 + S11 (Round 18) ADDED their bible-named flags, read through the core constants", () => {
@@ -131,6 +134,17 @@ describe("intake env ledger", () => {
     expect(sec1).toMatch(/^\| `ONBOARDING_V2_ROW` \| S11 \| on \|/m);
     expect(ledger).toContain('"Flag KB_FIRST_ONBOARDING=off" (S09) and "Flag ONBOARDING_V2_ROW=off renders today\'s row" (S11)');
     for (const v of ["KB_FIRST_ONBOARDING", "ONBOARDING_V2_ROW"]) expect(envExample).toContain(`# ${v}=on`);
+  });
+
+  it("S12 (Round 19) ADDED GOLDEN_RECORD_ON_APPROVE, read through the core constant in the server helper only", () => {
+    expect(read("src/lib/catalog/golden-record-core.ts")).toContain('export const GOLDEN_RECORD_ENV = "GOLDEN_RECORD_ON_APPROVE"');
+    expect(read("src/lib/catalog/golden-record-server.ts")).toContain("process.env[GOLDEN_RECORD_ENV]");
+    // the action/producer files never read the environment themselves
+    for (const f of ["src/lib/pos/draft-injection.ts", "src/lib/pos/intake-menu-staging.ts", "src/lib/pos/draft-injection-core.ts"]) expect(read(f)).not.toContain("GOLDEN_RECORD_ENV]");
+    const sec1 = ledger.slice(ledger.indexOf("## 1. Shipped pipeline flags"), ledger.indexOf("## 2."));
+    expect(sec1).toMatch(/^\| `GOLDEN_RECORD_ON_APPROVE` \| S12 \| on \|/m);
+    expect(ledger).toContain('"Flag; boilerplate path retained", is the `GOLDEN_RECORD_ON_APPROVE` row');
+    expect(envExample).toContain("# GOLDEN_RECORD_ON_APPROVE=on");
   });
 
   it("section 5 explains ATTACH_POLICY_RING in plain English, matching the code", () => {
