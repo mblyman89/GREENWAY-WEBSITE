@@ -25,7 +25,15 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { checkProductKnown, type KbProductMatch } from "@/lib/ai/kb/intake";
 import { loadKbKnowledgeIndexes } from "@/lib/ai/kb/product-knowledge-batch";
-import { resolveKbFromIndexes } from "@/lib/ai/kb/product-knowledge-batch-core";
+import {
+  enrichmentByIdentity,
+  fromEnrichmentPure,
+  queryIdentityKey,
+  resolveKbFromIndexes,
+  type EnrichmentRow,
+} from "@/lib/ai/kb/product-knowledge-batch-core";
+import { loadPublishedEnrichmentsByIdentity } from "@/lib/enrichment/enrichment-identity-server";
+import type { IdentityCandidate } from "@/lib/enrichment/enrichment-identity-core";
 
 export type ProductKnowledgeSource = "kb-exact" | "kb-draft" | "enrichment" | "strain" | "none";
 
@@ -74,6 +82,8 @@ export type ProductLookupQuery = {
   menuVariantLabel?: string | null;
   /** S24: the card's lot keys (cardLotKeys), for the writer-identity rungs. */
   lotKeys?: readonly string[] | null;
+  /** S20: the card's product identity (storage form), for rung 3b. */
+  identityKey?: string | null;
 };
 
 /** S24: does this query carry anything the writer-identity rungs can use? */
@@ -162,6 +172,26 @@ export async function lookupProductKnowledge(query: ProductLookupQuery): Promise
     } catch {
       /* fall through */
     }
+  }
+
+  // 3b (S20) — the same PRODUCT's published enrichment, by identity, when the
+  // card's own row is absent or blank. The SAME loader + pure picker as the
+  // batched menu (enrichmentByIdentity), so the detail page and the menu
+  // can never disagree. Flag off / pre-0234 / error -> empty map -> skipped.
+  const identityKey = queryIdentityKey(query);
+  if (identityKey) {
+    const byIdentity = await loadPublishedEnrichmentsByIdentity<EnrichmentRow & IdentityCandidate>(
+      [identityKey],
+      "pos_product_key, display_name, description, short_description, image_media_ids, primary_media_id",
+      admin,
+    );
+    const borrowed = enrichmentByIdentity(query, {
+      kbProducts: new Map(),
+      enrichments: new Map(),
+      strains: new Map(),
+      enrichmentsByIdentity: byIdentity,
+    });
+    if (borrowed) return fromEnrichmentPure(borrowed);
   }
 
   // 4 — strain-level sensory/effects gap-fill.

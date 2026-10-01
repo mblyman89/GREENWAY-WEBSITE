@@ -101,6 +101,15 @@ export type KnowledgeQuery = {
    * plus each `<lotKey>-onboarded` variant's lot), for the lot rungs.
    */
   lotKeys?: readonly string[] | null;
+  /**
+   * S20 - the card's product identity in storage form (S03
+   * "vendor|category|family", enrichment-identity-core
+   * enrichmentIdentityForItem). Used ONLY by rung 3b: when the card's own
+   * enrichment row is absent or blank, the PUBLISHED enrichment of the same
+   * product (written on an earlier card key) is borrowed. null/blank never
+   * matches anything.
+   */
+  identityKey?: string | null;
 };
 
 /**
@@ -166,6 +175,9 @@ export type KnowledgeIndexes = {
   brandNames?: Map<string, string>;
   /** kb_products keyed by id (targets of inventory_lots.kb_product_id). */
   kbById?: Map<string, KbProductMatch>;
+  // S20 (optional: absent = the flag is off or nothing was loaded = pre-S20):
+  /** PUBLISHED product_enrichments keyed by identity_key (survivor per identity). */
+  enrichmentsByIdentity?: Map<string, EnrichmentRow>;
 };
 
 /**
@@ -301,6 +313,13 @@ export function resolveKnowledgeFromIndexes(
     }
   }
 
+  // ── Rung 3b (S20): the same PRODUCT's published enrichment, by identity ──────
+  //    Reached only when the card's own row is absent or blank (Q-03: the
+  //    card's own copy always wins). The loader only indexes published rows;
+  //    a row for this very card key is skipped (it was already judged above).
+  const borrowed = enrichmentByIdentity(query, indexes);
+  if (borrowed) return fromEnrichmentPure(borrowed);
+
   // ── Rung 4: kb_strains by strain slug ─────────────────────────────────────
   const slug = strainSlugOf(query.strainName);
   if (slug) {
@@ -310,6 +329,26 @@ export function resolveKnowledgeFromIndexes(
 
   // ── Rung 5: nothing validated ─────────────────────────────────────────────
   return emptyKnowledge();
+}
+
+/** The trimmed identity a query asks with, or null (blank never matches). */
+export function queryIdentityKey(query: KnowledgeQuery): string | null {
+  const k = typeof query.identityKey === "string" ? query.identityKey.trim() : "";
+  return k === "" ? null : k;
+}
+
+/**
+ * Rung 3b's pick: the identity-indexed published enrichment, when it has
+ * content and is not the card's own row. null otherwise (including when the
+ * index is absent, i.e. ENRICHMENT_FOLLOWS_IDENTITY=off).
+ */
+export function enrichmentByIdentity(query: KnowledgeQuery, indexes: KnowledgeIndexes): EnrichmentRow | null {
+  const id = queryIdentityKey(query);
+  if (!id || !indexes.enrichmentsByIdentity) return null;
+  const row = indexes.enrichmentsByIdentity.get(id);
+  if (!row || !enrichmentHasContent(row)) return null;
+  if (query.posProductKey && row.pos_product_key === query.posProductKey) return null;
+  return row;
 }
 
 /**
@@ -325,14 +364,19 @@ export function collectLookupKeys(queries: readonly KnowledgeQuery[]): {
   strainSlugs: string[];
   /** S24: every distinct lot key (trimmed, non-empty) across the batch. */
   lotKeys: string[];
+  /** S20: every distinct product identity (trimmed, non-empty) across the batch. */
+  identityKeys: string[];
 } {
   const seenIdentity = new Set<string>();
   const lotKeys = new Set<string>();
   const identityParts: { brandSlug: string; productSlug: string; variantLabel: string }[] = [];
   const posKeys = new Set<string>();
   const strainSlugs = new Set<string>();
+  const identityKeys = new Set<string>();
 
   for (const query of queries) {
+    const ik = queryIdentityKey(query);
+    if (ik) identityKeys.add(ik);
     const key = kbIdentityKey(query);
     if (!seenIdentity.has(key)) {
       seenIdentity.add(key);
@@ -352,6 +396,7 @@ export function collectLookupKeys(queries: readonly KnowledgeQuery[]): {
     posKeys: [...posKeys],
     strainSlugs: [...strainSlugs],
     lotKeys: [...lotKeys],
+    identityKeys: [...identityKeys],
   };
 }
 
@@ -1277,6 +1322,112 @@ export function __runProductKnowledgeBatchTests(): { passed: number; failed: num
     "k1,k2",
   );
   eq("KB_RUNGS order", KB_RUNGS.join(","), "lot-link,lot-identity,menu-variant,menu");
+
+  // ── S20: rung 3b, enrichment by product identity ───────────────────────────────
+  {
+    const enr = (key: string, description: string | null, extra: Partial<EnrichmentRow> = {}): EnrichmentRow => ({
+      pos_product_key: key,
+      display_name: null,
+      description,
+      short_description: null,
+      image_media_ids: null,
+      primary_media_id: null,
+      ...extra,
+    });
+    const ID = "vendor-a|flower|blue-dream";
+    const withIdentity = (): KnowledgeIndexes => {
+      const idx = emptyIdx();
+      idx.enrichmentsByIdentity = new Map([[ID, enr("pos-old", "Old card copy")]]);
+      return idx;
+    };
+    // Own row absent -> borrow by identity.
+    {
+      const out = resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "lot-new", identityKey: ID }, withIdentity());
+      eq("S20 own absent -> identity source", out.source, "enrichment");
+      eq("S20 own absent -> identity copy", out.description, "Old card copy");
+    }
+    // Own row blank -> borrow.
+    {
+      const idx = withIdentity();
+      idx.enrichments.set("lot-new", enr("lot-new", null));
+      const out = resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "lot-new", identityKey: ID }, idx);
+      eq("S20 own blank -> identity copy", out.description, "Old card copy");
+    }
+    // Own row with content wins (Q-03).
+    {
+      const idx = withIdentity();
+      idx.enrichments.set("lot-new", enr("lot-new", "Own copy"));
+      const out = resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "lot-new", identityKey: ID }, idx);
+      eq("S20 own content wins over identity", out.description, "Own copy");
+    }
+    // Identity key trimmed.
+    {
+      const out = resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "lot-new", identityKey: `  ${ID} ` }, withIdentity());
+      eq("S20 identity key trimmed", out.description, "Old card copy");
+    }
+    // Blank / null / missing identity never matches (even a "" index entry).
+    {
+      const idx = withIdentity();
+      idx.enrichmentsByIdentity!.set("", enr("pos-x", "Wildcard"));
+      eq("S20 blank identity never matches", resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "k", identityKey: "  " }, idx).source, "none");
+      eq("S20 null identity never matches", resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "k", identityKey: null }, idx).source, "none");
+      eq("S20 missing identity never matches", resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "k" }, idx).source, "none");
+    }
+    // No index (flag off) -> pre-S20 behaviour.
+    {
+      const out = resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "lot-new", identityKey: ID }, emptyIdx());
+      eq("S20 no identity index -> none", out.source, "none");
+    }
+    // Identity row with no content does not win; strain below still can.
+    {
+      const idx = emptyIdx();
+      idx.enrichmentsByIdentity = new Map([[ID, enr("pos-old", null)]]);
+      idx.strains.set("blue dream", { slug: "blue dream", aroma_notes: null, flavor_notes: null, terpenes: null, summary: "Strain s", effects: null });
+      const out = resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "lot-new", identityKey: ID, strainName: "Blue Dream" }, idx);
+      eq("S20 blank identity row falls to strain", out.source, "strain");
+    }
+    // Image-only identity row counts as content.
+    {
+      const idx = emptyIdx();
+      idx.enrichmentsByIdentity = new Map([[ID, enr("pos-old", null, { image_media_ids: ["m1"] })]]);
+      const out = resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "lot-new", identityKey: ID }, idx);
+      eq("S20 image-only identity row borrowed", out.imageMediaIds.join(","), "m1");
+    }
+    // The identity survivor IS the card's own (blank) row -> not re-borrowed.
+    {
+      const idx = emptyIdx();
+      idx.enrichmentsByIdentity = new Map([[ID, enr("lot-new", "x")]]);
+      idx.enrichments.set("lot-new", enr("lot-new", null));
+      const out = resolveKnowledgeFromIndexes({ productName: "P", posProductKey: "lot-new", identityKey: ID }, idx);
+      eq("S20 own row via identity is not re-borrowed", out.source, "none");
+    }
+    // Works without a pos key (identity alone).
+    {
+      const out = resolveKnowledgeFromIndexes({ productName: "P", identityKey: ID }, withIdentity());
+      eq("S20 identity without pos key", out.description, "Old card copy");
+    }
+    // KB still outranks the borrowed enrichment (S24 order unchanged).
+    {
+      const idx = withIdentity();
+      idx.kbProducts.set(kbIdentityKey({ productName: "Blue Dream", brandName: "Greenway", variantLabel: "3.5g" }), kbRow());
+      const out = resolveKnowledgeFromIndexes({ productName: "Blue Dream", brandName: "Greenway", variantLabel: "3.5g", posProductKey: "lot-new", identityKey: ID }, idx);
+      check("S20 kb still outranks identity enrichment", out.source === "kb-exact" || out.source === "kb-draft");
+    }
+    // collectLookupKeys gathers identities (trimmed, deduped, blanks dropped).
+    eq(
+      "S20 collectLookupKeys identityKeys",
+      collectLookupKeys([
+        { productName: "a", identityKey: ` ${ID} ` },
+        { productName: "b", identityKey: ID },
+        { productName: "c", identityKey: "" },
+        { productName: "d", identityKey: null },
+        { productName: "e" },
+        { productName: "f", identityKey: "v|edible|gummy" },
+      ]).identityKeys.join(","),
+      `${ID},v|edible|gummy`,
+    );
+    eq("S20 queryIdentityKey blank -> null", queryIdentityKey({ productName: "p", identityKey: " " }), null);
+  }
 
   return { passed, failed };
 }
