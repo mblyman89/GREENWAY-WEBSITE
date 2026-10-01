@@ -44,6 +44,7 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
     if (!item) return NextResponse.json({ image: null });
     const resolved = await resolveProductImage({
       posKey: item.id,
+      identityKey: item.identityKey ?? null, // S20: the product's photo serves a new lot
       brandSlug: item.brand ?? null,
       vendorSlug: item.vendor ?? null,
       category: item.posInventoryCategory ?? item.category ?? null,

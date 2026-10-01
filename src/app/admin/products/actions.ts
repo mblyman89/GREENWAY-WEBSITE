@@ -37,6 +37,7 @@ import {
 import { parseVisibilityChoice, hiddenOverrideFor } from "@/lib/enrichment/product-visibility-core";
 import { applyProductVisibility } from "@/lib/enrichment/product-visibility-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
+import { runIdentityBackfill } from "@/lib/enrichment/enrichment-identity-server";
 
 const ALLOWED_TAGS = new Set([
   "new-arrival",
@@ -61,6 +62,42 @@ function tagsFromForm(formData: FormData): string[] {
     .getAll("tags")
     .map((t) => String(t).trim().toLowerCase())
     .filter((t) => ALLOWED_TAGS.has(t));
+}
+
+/**
+ * S20 (bible S20.2): link every existing enrichment record to its PRODUCT
+ * (product_enrichments.identity_key from the live menu row), so a future lot
+ * of the same product is served the copy and photo already written. Only
+ * blank links are filled; re-running is safe. Owner-pressed, audited.
+ */
+export async function linkEnrichmentsToProducts(): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const result = await runIdentityBackfill();
+  if (!result.ok) {
+    redirect("/admin/products?error=" + encodeURIComponent(result.error));
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.enrichment_identity_backfill",
+    entityType: "product_enrichments",
+    entityId: null,
+    after: {
+      planned: result.planned,
+      stamped: result.stamped,
+      failed: result.failed,
+      alreadyStamped: result.alreadyStamped,
+      noCard: result.noCard,
+      noIdentity: result.noIdentity,
+      conflicts: result.conflicts,
+      duplicates: result.duplicateLines.slice(0, 50),
+    },
+  });
+  if (result.stamped > 0) {
+    revalidatePath("/admin/products");
+    revalidatePublicMenuSurfaces();
+  }
+  redirect("/admin/products?linked=" + encodeURIComponent(result.summary));
 }
 
 /** Save the marketing enrichment for a product (text + flags + optional image). */

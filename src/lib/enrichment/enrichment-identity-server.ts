@@ -14,7 +14,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
+import { chunkedIn, pagedAllChecked, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import {
@@ -22,6 +22,9 @@ import {
   enrichmentFollowsIdentityEnabled,
   enrichmentIdentityForItem,
   indexPublishedByIdentity,
+  planIdentityBackfill,
+  identityBackfillSummary,
+  type BackfillEnrichmentRow,
   type BackfillMenuRow,
   type IdentityCandidate,
 } from "./enrichment-identity-core";
@@ -148,5 +151,115 @@ export async function identityForCardKey(posProductKey: string): Promise<string 
     return [...ids][0] ?? null;
   } catch {
     return null;
+  }
+}
+
+// --- Backfill (bible S20.2) ---------------------------------------------------------------
+
+export type IdentityBackfillResult =
+  | {
+      ok: true;
+      planned: number;
+      stamped: number;
+      failed: number;
+      alreadyStamped: number;
+      noCard: number;
+      noIdentity: number;
+      conflicts: number;
+      duplicates: number;
+      /** Merge suggestions (bible S20.8), one line per shared identity. */
+      duplicateLines: string[];
+      summary: string;
+    }
+  | { ok: false; error: string };
+
+const BACKFILL_PAGE = 1000;
+
+/**
+ * "Set identity_key on existing product_enrichments from menu_items."
+ * Reads EVERY published menu row (raw identity columns) and EVERY enrichment
+ * row (survivorship columns only), both with a completeness verdict -- a
+ * partial read refuses rather than plan on a short list. Writes are
+ * conditional (`id = ? AND identity_key IS NULL`), so the run is idempotent,
+ * never overwrites a stored identity, and a racing writer is harmless.
+ * Runs regardless of the read flag: stamping is inert until the flag is on,
+ * and it lets the owner prepare the links before switching it on.
+ */
+export async function runIdentityBackfill(admin?: AdminClient): Promise<IdentityBackfillResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
+  let client: AdminClient;
+  try {
+    client = admin ?? createSupabaseAdminClient();
+  } catch {
+    return { ok: false, error: "Supabase is not configured." };
+  }
+  try {
+    const version = await getPublishedVersion();
+    if (!version) return { ok: false, error: "No published menu yet: publish a menu first, then link products." };
+
+    const menu = await pagedAllChecked<BackfillMenuRow>(
+      async (from, to) => {
+        const { data, error } = await client
+          .from("menu_items")
+          .select(`id, ${MENU_IDENTITY_COLUMNS}`)
+          .eq("menu_version_id", version.id)
+          .order("id", { ascending: true })
+          .range(from, to);
+        return { rows: (data as unknown as BackfillMenuRow[] | null) ?? [], ok: !error };
+      },
+      { pageSize: BACKFILL_PAGE },
+    );
+    if (!menu.verdict.complete) {
+      return { ok: false, error: `Could not read the whole live menu (${menu.verdict.message}). Nothing was changed; try again.` };
+    }
+
+    let missingColumn = false;
+    const enr = await pagedAllChecked<BackfillEnrichmentRow>(
+      async (from, to) => {
+        const { data, error } = await client
+          .from("product_enrichments")
+          .select(SURVIVORSHIP_COLUMNS)
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error && isMissingIdentityColumnError("product_enrichments", error)) missingColumn = true;
+        return { rows: (data as unknown as BackfillEnrichmentRow[] | null) ?? [], ok: !error };
+      },
+      { pageSize: BACKFILL_PAGE },
+    );
+    if (missingColumn) {
+      return { ok: false, error: "The product identity column is not in the database yet (migration 0234). Nothing was changed." };
+    }
+    if (!enr.verdict.complete) {
+      return { ok: false, error: `Could not read every enrichment record (${enr.verdict.message}). Nothing was changed; try again.` };
+    }
+
+    const plan = planIdentityBackfill(menu.rows, enr.rows);
+    let stamped = 0;
+    let failed = 0;
+    for (const u of plan.updates) {
+      const { data, error } = await client
+        .from("product_enrichments")
+        .update({ identity_key: u.identity_key })
+        .eq("id", u.id)
+        .is("identity_key", null)
+        .select("id");
+      if (error) failed += 1;
+      else if (Array.isArray(data) && data.length > 0) stamped += 1;
+      // 0 rows = someone stamped it first: not a failure, not ours.
+    }
+    for (const d of plan.duplicates) console.warn(d.logLine);
+    const counts = {
+      planned: plan.updates.length,
+      stamped,
+      failed,
+      alreadyStamped: plan.alreadyStamped,
+      noCard: plan.noCard,
+      noIdentity: plan.noIdentity,
+      conflicts: plan.conflicts.length,
+      duplicates: plan.duplicates.length,
+    };
+    return { ok: true, ...counts, duplicateLines: plan.duplicates.map((d) => d.logLine), summary: identityBackfillSummary(counts) };
+  } catch (err) {
+    return { ok: false, error: `Linking failed: ${err instanceof Error ? err.message : String(err)}. Nothing further was changed.` };
   }
 }

@@ -25,7 +25,8 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
-import { getEnrichment, computeGaps, type GapFlags } from "@/lib/enrichment/store";
+import { getEnrichmentForItem, computeGaps, type GapFlags } from "@/lib/enrichment/store";
+import { enrichmentIdentityForItem, type EnrichmentVia } from "@/lib/enrichment/enrichment-identity-core";
 import type { MenuItemRow, MenuVariantRow } from "@/lib/pos/db-types";
 import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
 import type { ProductEnrichment } from "@/lib/enrichment/types";
@@ -90,7 +91,15 @@ export type VendorSuggestion = ScoredMatch<VendorItemCandidate> & {
 };
 
 export type EnrichmentCommandCenter = {
+  /**
+   * The row SERVED for this card (S20): its own row when it has content,
+   * else the product's published survivor (borrowed via identity_key).
+   */
   enrichment: ProductEnrichment | null;
+  /** S20: how `enrichment` was found ("pos_key" | "identity" | "none"). */
+  enrichmentVia: EnrichmentVia;
+  /** S20: the card's S03 identity (raw menu row); null = not enough identity. */
+  identityKey: string | null;
   gaps: GapFlags;
   /** KB ladder result for this product (source, copy, sensory, image hint). */
   knowledge: ProductKnowledge;
@@ -184,13 +193,16 @@ export async function getEnrichmentCommandCenter(
     category: item.category || null,
   };
 
-  const [enrichment, knowledge, kbRows, mediaRows, vendorRows, liveImage, substitute] =
+  const identityKey = enrichmentIdentityForItem(item);
+  const [served, knowledge, kbRows, mediaRows, vendorRows, liveImage, substitute] =
     await Promise.all([
-      getEnrichment(posKey).catch(() => null),
+      getEnrichmentForItem(item).catch(() => ({ row: null, via: "none" as EnrichmentVia, own: null })),
       lookupProductKnowledge({
         productName: pos.name,
         brandName: pos.brand,
         posProductKey: posKey,
+        // S20: rung 3b borrows the product's published copy for a new lot.
+        identityKey,
         strainName: item.strain_name ?? null,
         // S24 (F-083): same writer-identity inputs the public menu passes.
         menuVariantLabel: item.variants?.[0]?.label ?? null,
@@ -219,6 +231,7 @@ export async function getEnrichmentCommandCenter(
       findVendorCandidates(pos),
       resolveProductImage({
         posKey,
+        identityKey,
         brandSlug: pos.brand,
         category: item.pos_inventory_category ?? pos.category,
         inventoryType: item.pos_inventory_type ?? null,
@@ -229,6 +242,7 @@ export async function getEnrichmentCommandCenter(
       ).catch(() => null),
     ]);
 
+  const enrichment = served.row;
   const gaps = computeGaps(item, enrichment);
 
   // --- Rank KB products -----------------------------------------------------
@@ -347,6 +361,8 @@ export async function getEnrichmentCommandCenter(
 
   return {
     enrichment,
+    enrichmentVia: served.via,
+    identityKey,
     gaps,
     knowledge,
     kbSuggestions,

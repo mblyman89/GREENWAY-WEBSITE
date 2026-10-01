@@ -21,6 +21,8 @@ export type ProductGridCard = {
   thumbnailUrl: string | null;
   /** S22: "0421 · Phat Panda · Mar 12" / "Cultivera import"; null/absent = not shown. */
   receivedFrom?: string | null;
+  /** S20: true = no own enrichment; the product's published record serves this card. */
+  viaProduct?: boolean;
 };
 
 function StatusPill({ status }: { status: string | null }) {
@@ -95,6 +97,14 @@ export function ProductGrid({
               <p className="mt-0.5 text-[0.7rem] text-white/45">
                 {c.brand || "No brand"} · {c.category}
               </p>
+              {c.viaProduct && (
+                <p
+                  className="mt-0.5 truncate text-[0.65rem] text-[var(--admin-accent)]/80"
+                  title="No enrichment of its own yet: the published record of the same product (an earlier lot) serves this card."
+                >
+                  Uses product record
+                </p>
+              )}
               {c.receivedFrom && (
                 <p className="mt-0.5 truncate text-[0.65rem] text-white/35" title={`From ${c.receivedFrom}`}>
                   From {c.receivedFrom}

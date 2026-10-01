@@ -30,6 +30,9 @@ import {
   resolveBrandVendorSubstitute,
   normalizeKey,
 } from "@/lib/ai/kb/image-substitutes";
+// S20: a lot whose own row has no published image borrows the PRODUCT's.
+import { loadPublishedEnrichmentsByIdentity } from "@/lib/enrichment/enrichment-identity-server";
+import type { IdentityCandidate } from "@/lib/enrichment/enrichment-identity-core";
 
 export type ImageSource = "exact" | "brand" | "vendor" | "category" | "inventory_type" | "global";
 
@@ -44,6 +47,13 @@ export type ResolvedImage = {
 export type ProductImageQuery = {
   /** Stable POS product key (matches product_enrichments.pos_product_key). */
   posKey: string;
+  /**
+   * S20: the card's S03 product identity (vendor|category|family), computed
+   * from the RAW menu row. When the card's own published row has no image,
+   * the product's published survivor image is used (still "exact": it is a
+   * photo of this product, published by a person for an earlier lot).
+   */
+  identityKey?: string | null;
   brandSlug?: string | null;
   vendorSlug?: string | null;
   category?: string | null;
@@ -66,7 +76,9 @@ export async function resolveProductImage(
   if (exactUrl) return { url: exactUrl, source: "exact", isFallback: false };
 
   // Step 1: the product's own published enrichment image.
-  const own = await resolveExactEnrichmentImage(q.posKey);
+  const own =
+    (await resolveExactEnrichmentImage(q.posKey)) ??
+    (q.identityKey ? (await batchIdentityImages([q]).catch(() => new Map<string, string>())).get(q.posKey) ?? null : null);
   if (own) return { url: own, source: "exact", isFallback: false };
 
   // Steps 2: brand/vendor approved generic shot.
@@ -145,6 +157,12 @@ export async function resolveProductImagesBatch(
 
   // 1) Batch exact enrichment images.
   const exactByKey = await batchExactImages(items.map((i) => i.posKey));
+  // S20: cards with no own published image borrow their product's (flag-gated
+  // inside the loader; flag off or pre-0234 -> empty map -> exactly pre-S20).
+  const borrowed = await batchIdentityImages(items.filter((i) => !exactByKey.has(i.posKey))).catch(
+    () => new Map<string, string>(),
+  );
+  for (const [k, url] of borrowed) exactByKey.set(k, url);
   const remaining: ProductImageQuery[] = [];
   for (const it of items) {
     const url = exactByKey.get(it.posKey);
@@ -161,6 +179,59 @@ export async function resolveProductImagesBatch(
   for (const it of remaining) {
     const resolved = resolveFromIndex(index, it);
     if (resolved) out.set(it.posKey, resolved);
+  }
+  return out;
+}
+
+/**
+ * S20: posKey -> image URL borrowed from the product's published survivor row
+ * (identity_key), for queries carrying an identityKey. The survivor is the
+ * S20.8 pick (published, newest, id tie-break) -- never a hand-picked
+ * duplicate -- and a survivor that IS the card's own row is skipped (its
+ * image, if any, was already read by batchExactImages).
+ */
+async function batchIdentityImages(items: ProductImageQuery[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const withId = items.filter((i) => Boolean(i.identityKey?.trim()));
+  if (withId.length === 0 || !isSupabaseServiceConfigured) return out;
+  type Row = IdentityCandidate & { primary_media_id: string | null; image_media_ids: string[] | null };
+  const survivors = await loadPublishedEnrichmentsByIdentity<Row>(
+    withId.map((i) => i.identityKey!.trim()),
+    "primary_media_id, image_media_ids",
+  );
+  if (survivors.size === 0) return out;
+  const mediaByKey = new Map<string, string>();
+  for (const it of withId) {
+    const row = survivors.get(it.identityKey!.trim());
+    if (!row || row.pos_product_key === it.posKey) continue;
+    const mediaId = row.primary_media_id || (row.image_media_ids ?? [])[0] || null;
+    if (mediaId) mediaByKey.set(it.posKey, mediaId);
+  }
+  if (mediaByKey.size === 0) return out;
+  const admin = createSupabaseAdminClient();
+  type MediaRow = { id: string; storage_key: string; public_url: string | null };
+  const ids = Array.from(new Set(mediaByKey.values()));
+  const rows = await chunkedIn<string, MediaRow>(
+    ids,
+    async (chunk, from, to) => {
+      const { data } = await admin
+        .from("media_assets")
+        .select("id, storage_key, public_url")
+        .in("id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as MediaRow[] | null) ?? [];
+    },
+    { chunkSize: 300, concurrency: MENU_READ_CONCURRENCY },
+  );
+  const urlById = new Map<string, string>();
+  for (const m of rows) {
+    const url = publicUrlForKey(m.storage_key) ?? m.public_url ?? null;
+    if (url) urlById.set(m.id, url);
+  }
+  for (const [posKey, mediaId] of mediaByKey) {
+    const url = urlById.get(mediaId);
+    if (url) out.set(posKey, url);
   }
   return out;
 }
@@ -294,6 +365,8 @@ async function loadSubstituteIndex(): Promise<SubstituteIndex | null> {
  *  hard import cycle with the leafly types). */
 type ImageableItem = {
   id: string;
+  /** S20: server-side product identity (GreenwayMenuItem.identityKey). */
+  identityKey?: string | null;
   brand?: string | null;
   vendor?: string | null;
   category?: string | null;
@@ -316,6 +389,7 @@ export async function withResolvedImages<T extends ImageableItem>(items: T[]): P
   try {
     const queries: ProductImageQuery[] = items.map((it) => ({
       posKey: it.id,
+      identityKey: it.identityKey ?? null,
       brandSlug: it.brand ?? null,
       vendorSlug: it.vendor ?? null,
       category: it.posInventoryCategory ?? it.category ?? null,
