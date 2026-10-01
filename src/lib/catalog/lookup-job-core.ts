@@ -355,6 +355,33 @@ export const LOOKUP_FLAG_OFF_COPY = "Batch lookup is turned off (MANIFEST_BATCH_
 export const LEFT_REVIEW_COPY = "Approved or dismissed before its turn, so it was not looked up.";
 export const DRAFT_GONE_COPY = "This product draft no longer exists, so it was not looked up.";
 
+// The batch-lookup result travels back in the redirect as ?lookup=<code>
+// (&lookup_msg=<plain sentence> for "nothing" / "error"). Closed set: an
+// unknown or forged code shows nothing, and the message is length-capped.
+export const LOOKUP_RESULT_CODES = ["started", "exists", "nothing", "migration", "error", "stopped", "stop_error"] as const;
+export type LookupResultCode = (typeof LOOKUP_RESULT_CODES)[number];
+
+export function lookupBanner(code: unknown, msg: unknown): { tone: "ok" | "info" | "error"; text: string } | null {
+  if (typeof code !== "string" || !(LOOKUP_RESULT_CODES as readonly string[]).includes(code)) return null;
+  const m = typeof msg === "string" ? msg.trim().slice(0, 300) : "";
+  switch (code as LookupResultCode) {
+    case "started":
+      return { tone: "ok", text: "Batch lookup started. It runs on the server; you can close this tab and come back." };
+    case "exists":
+      return { tone: "info", text: "A batch lookup is already running for this delivery, so a second one was not started." };
+    case "nothing":
+      return { tone: "info", text: m || NOTHING_IN_REVIEW_COPY };
+    case "migration":
+      return { tone: "info", text: LOOKUP_MIGRATION_COPY };
+    case "stopped":
+      return { tone: "ok", text: m || "Batch lookup stopped." };
+    case "stop_error":
+      return { tone: "error", text: m || "The batch lookup could not be stopped just now. Try again." };
+    default:
+      return { tone: "error", text: m || "The batch lookup could not be started just now. Try again." };
+  }
+}
+
 const MISSING_TABLE_CODES = new Set(["42P01", "PGRST205"]);
 
 /**
@@ -517,6 +544,17 @@ export function __runLookupJobCoreTests(): { passed: number; failed: number } {
   ok(stopsWholeJob({ name: "AiBudgetExceededError" }) && !stopsWholeJob({ name: "AiLookupError" }), "budget stops the job, a timeout does not");
   ok(isUuid("123e4567-e89b-12d3-a456-426614174000") && !isUuid("x") && !isUuid(null), "uuid");
   ok(LOOKUP_MIGRATION_COPY.includes("0242_lookup_jobs.sql"), "migration copy names the file");
+
+  // result banner (closed set)
+  ok(lookupBanner("started", "")?.tone === "ok", "banner started");
+  ok(lookupBanner("exists", "")?.text.includes("already running") === true, "banner exists");
+  ok(lookupBanner("nothing", ALL_DONE_COPY)?.text === ALL_DONE_COPY, "banner nothing carries the reason");
+  ok(lookupBanner("nothing", "")?.text === NOTHING_IN_REVIEW_COPY, "banner nothing default");
+  ok(lookupBanner("migration", "x")?.text === LOOKUP_MIGRATION_COPY, "banner migration ignores msg");
+  ok(lookupBanner("error", "")?.tone === "error" && lookupBanner("stop_error", "")?.tone === "error", "banner errors");
+  ok(lookupBanner("stopped", "")?.text === "Batch lookup stopped.", "banner stopped");
+  ok(lookupBanner("hacked", "x") === null && lookupBanner(undefined, "x") === null && lookupBanner(["started"], "") === null, "unknown code shows nothing");
+  ok((lookupBanner("error", "y".repeat(5000))?.text.length ?? 0) === 300, "message capped");
 
   return { passed, failed };
 }

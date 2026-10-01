@@ -27,7 +27,7 @@ import { strainTypePickerPlaceholder } from "@/lib/inventory/strain-type-intel-c
 import { AiLookupPanel } from "./AiLookupPanel";
 import { isAiConfigured } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
-import { approveAllPricedAction, approveDraftAction, dismissDraftAction, restoreDraftAction } from "./actions";
+import { approveAllPricedAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, restoreDraftAction } from "./actions";
 // S17: "Approve all N priced" for one delivery (one menu update per batch).
 import {
   BATCH_BUTTON_HELP,
@@ -143,6 +143,20 @@ import {
   parseFactResult,
 } from "@/lib/pos/intake-fact-review-core";
 import { IntakeFactReviewPanel } from "./IntakeFactReviewPanel";
+// R19 S13: "Look up all N products on this manifest" (server-side batch).
+import { lookupJobsOn, loadManifestLookup } from "@/lib/catalog/lookup-job-server";
+import { attachFactsV2Enabled } from "@/lib/catalog/fact-attach-policy-server";
+import {
+  LOOKUP_ALL_HELP,
+  LOOKUP_ATTACH_V2_OFF_COPY,
+  LOOKUP_MIGRATION_COPY,
+  costLine,
+  itemRowCopy,
+  jobHeadline,
+  lookupAllButtonLabel,
+  lookupBanner,
+  progressLine,
+} from "@/lib/catalog/lookup-job-core";
 
 export const dynamic = "force-dynamic";
 // T-318 / T-323: the AI product lookup (a server action invoked on this route)
@@ -167,7 +181,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; lookup?: string; lookup_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -228,6 +242,16 @@ export default async function CatalogDraftsPage({
     focusManifest && picker?.countsComplete ? pricedInReview(picker.counts.get(focusManifest.id) ?? null) : null;
   const batchOn = batchStagingEnabled(process.env[BATCH_STAGING_ENV]);
   const batchDone = parseBatchResult(sp);
+  // R19 S13: the batch lookup for the focused delivery (review tab only).
+  // Hidden when the flag is off or AI is not set up; the job and the exact
+  // button count are read on the server (never guessed).
+  const batchLookupOn = Boolean(focus.manifestId) && view === "draft" && lookupJobsOn() && isAiConfigured;
+  const batchLookup = batchLookupOn && focus.manifestId ? await loadManifestLookup(focus.manifestId) : null;
+  const batchLookupJob = batchLookup?.state === "job" ? batchLookup.job : null;
+  const batchLookupActive = batchLookupJob !== null && (batchLookupJob.status === "queued" || batchLookupJob.status === "running");
+  const batchLookupEligible = batchLookup && (batchLookup.state === "job" || batchLookup.state === "none") ? batchLookup.eligible : null;
+  const batchLookupAttachOn = attachFactsV2Enabled();
+  const lookupResult = lookupBanner(sp.lookup, sp.lookup_msg);
   const headerTitle = onboardingHeaderTitle(
     focusManifest,
     focusManifest && picker?.countsComplete ? picker.counts.get(focusManifest.id) ?? null : null,
@@ -538,6 +562,20 @@ export default async function CatalogDraftsPage({
           </div>
         )}
 
+        {lookupResult && (
+          <div
+            role={lookupResult.tone === "error" ? "alert" : "status"}
+            data-testid="lookup-result"
+            className={
+              lookupResult.tone === "error"
+                ? "rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+                : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+            }
+          >
+            {lookupResult.text}
+          </div>
+        )}
+
         {/* S30: fact review cannot be saved until migration 0237 is applied. */}
         {factFlags && factFlags.flags.size > 0 && !factFlags.migrated && (
           <p className="text-xs text-[var(--admin-text-muted)]" data-testid="fact-review-migration">
@@ -606,6 +644,57 @@ export default async function CatalogDraftsPage({
             <Button type="submit" variant="save" size="sm">✓ {batchButtonLabel(batchPriced)}</Button>
             <span className="text-xs text-[var(--admin-text-muted)]">{BATCH_BUTTON_HELP}</span>
           </form>
+        )}
+        {/* R19 S13 (bible S13.4): look up the whole delivery on the server.
+            The press only writes a job; the every-minute worker
+            (/api/cron/lookup-jobs) does the lookups, so closing this tab
+            loses nothing. Facts attach only under the S10 attach policy. */}
+        {batchLookupOn && focus.manifestId && batchLookup && (
+          <section
+            data-testid="batch-lookup"
+            className="flex flex-col gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm"
+          >
+            {batchLookup.state === "migration" ? (
+              <p className="text-xs text-[var(--admin-text-muted)]" data-testid="batch-lookup-migration">{LOOKUP_MIGRATION_COPY}</p>
+            ) : batchLookup.state === "error" ? (
+              <p className="text-xs text-[var(--admin-text-muted)]">The batch lookup could not be read just now. Refresh to try again; AI Lookup on each row still works.</p>
+            ) : !batchLookupAttachOn ? (
+              <p className="text-xs text-[var(--admin-text-muted)]">{LOOKUP_ATTACH_V2_OFF_COPY}</p>
+            ) : (
+              <>
+                {batchLookupJob && (
+                  <div data-testid="batch-lookup-progress" aria-live="polite">
+                    <p className="font-semibold text-[var(--admin-text)]">{jobHeadline(batchLookupJob.status, batchLookupJob.summary)}</p>
+                    <p className="text-xs text-[var(--admin-text-muted)]">{progressLine(batchLookupJob.summary)}</p>
+                    <p className="text-xs text-[var(--admin-text-muted)]">{costLine(batchLookupJob.summary, batchLookupJob.model)}</p>
+                    {batchLookupJob.summary.failed > 0 && (
+                      <p className="text-xs text-[var(--admin-danger)]">
+                        {batchLookupJob.summary.failed} could not be looked up; the reason is on each row. AI Lookup on that row tries again.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {batchLookupActive && batchLookupJob ? (
+                  <form action={cancelLookupAction.bind(null, batchLookupJob.jobId)} className="flex flex-wrap items-center gap-3">
+                    <input type="hidden" name="return_manifest" value={focus.manifestId} />
+                    <Button type="submit" variant="neutral" size="sm">Stop the batch lookup</Button>
+                    <span className="text-xs text-[var(--admin-text-muted)]">Refresh to see progress. Products not started yet are skipped; the one in progress finishes.</span>
+                  </form>
+                ) : batchLookupEligible && batchLookupEligible.count > 0 ? (
+                  <form action={lookupAllAction.bind(null, focus.manifestId)} className="flex flex-wrap items-center gap-3">
+                    <input type="hidden" name="return_manifest" value={focus.manifestId} />
+                    <Button type="submit" variant="special" size="sm" data-testid="batch-lookup-button">
+                      {"\u2728 "}{lookupAllButtonLabel(batchLookupEligible.count, batchLookupEligible.skippedDone)}
+                    </Button>
+                    <span className="text-xs text-[var(--admin-text-muted)]">
+                      {LOOKUP_ALL_HELP}
+                      {batchLookupEligible.truncated > 0 ? ` This press covers the first ${batchLookupEligible.count}; press again afterwards for the other ${batchLookupEligible.truncated}.` : ""}
+                    </span>
+                  </form>
+                ) : null}
+              </>
+            )}
+          </section>
         )}
         {pinned && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
@@ -835,7 +924,19 @@ export default async function CatalogDraftsPage({
                   // strain-type select (found by id, so it works inside or
                   // outside the approve form). S11 (F-020) mounts it OUTSIDE the
                   // approve form; ONBOARDING_V2_ROW=off keeps it inside.
+                  // R19 S13: this row's line from the delivery's batch lookup.
+                  const batchItem = batchLookupJob?.items.get(d.id.toLowerCase()) ?? null;
+                  const batchRowLine = batchItem ? (
+                    <p
+                      className={`max-w-[28rem] text-right text-xs ${batchItem.status === "failed" ? "text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}
+                      data-testid="batch-lookup-row"
+                    >
+                      {itemRowCopy(batchItem)}
+                    </p>
+                  ) : null;
                   const lookupPanel = (
+                    <>
+                    {batchRowLine}
                     <AiLookupPanel
                       draftId={d.id}
                       productName={builtName ?? (d.name || "")}
@@ -846,6 +947,7 @@ export default async function CatalogDraftsPage({
                       kbStrainType={strainEvidence.get(d.id)?.kb ?? null}
                       manifestStrainType={strainEvidence.get(d.id)?.manifest ?? null}
                     />
+                    </>
                   );
                   return (
                     <tr

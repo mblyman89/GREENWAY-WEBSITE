@@ -31,6 +31,8 @@ import {
   type FactResultCode,
 } from "@/lib/pos/intake-fact-review-core";
 import { recordIntakeFactReview } from "@/lib/pos/fact-review-store";
+// R19 S13: batch manifest lookup (enqueue / stop; the cron does the work).
+import { enqueueManifestLookup, cancelManifestLookup } from "@/lib/catalog/lookup-job-server";
 
 /**
  * Where an action returns. S11 (F-033): a FAILED row action also passes its
@@ -315,4 +317,29 @@ export async function resolveIntakeFactReview(formData: FormData) {
   const extra: Record<string, string> = { fact: code };
   if (code === "error" && message) extra.fact_msg = message.slice(0, 300);
   redirect(back(form.manifestId, form.draftId, extra));
+}
+
+/**
+ * R19 S13 (bible S13.4): "Look up all N products on this manifest". The
+ * manifest id is bound server-side from the validated page focus (same as
+ * S17's Approve all). This only WRITES the job; the every-minute worker
+ * (/api/cron/lookup-jobs) does the lookups, so closing the tab loses
+ * nothing. Idempotent: a running job is returned, never doubled.
+ */
+export async function lookupAllAction(manifestId: string, formData?: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const res = await enqueueManifestLookup(manifestId, { userId: session.userId, email: session.email });
+  revalidatePath("/admin/inventory/drafts");
+  if (res.ok) redirect(backTo(formData, { lookup: res.kind === "created" ? "started" : "exists" }));
+  if (res.code === "migration") redirect(backTo(formData, { lookup: "migration" }));
+  if (res.code === "nothing") redirect(backTo(formData, { lookup: "nothing", lookup_msg: res.message }));
+  redirect(backTo(formData, { lookup: "error", lookup_msg: res.message }));
+}
+
+/** R19 S13: stop a batch. Products not started yet are canceled; the one in flight finishes. */
+export async function cancelLookupAction(jobId: string, formData?: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const res = await cancelManifestLookup(jobId, { userId: session.userId, email: session.email });
+  revalidatePath("/admin/inventory/drafts");
+  redirect(backTo(formData, { lookup: res.ok ? "stopped" : "stop_error", lookup_msg: res.message }));
 }
