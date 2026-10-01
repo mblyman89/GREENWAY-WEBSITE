@@ -107,6 +107,8 @@ describe("D-82 the 0240 reset empties exactly the WIPE set", () => {
       "atm_connection",
       "product_fact_provenance",
       "intake_merge_decisions",
+      "lookup_jobs",
+      "lookup_job_items",
     ]) {
       expect(list, t).not.toContain(t);
     }
