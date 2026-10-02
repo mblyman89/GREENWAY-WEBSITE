@@ -601,3 +601,26 @@ h1, h2, h3, h4, h5, h6 {
     color: #000 !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * S41 — PRODUCT ONBOARDING: THE FULL-WIDTH DETAIL ROW (zero JS)
+ *
+ * Each product is two rows: the summary row (with its <details> toggle) and a
+ * detail row whose one cell spans every column (IBM Carbon's expandable data
+ * table). The detail row shows only while the summary row's <details> is open.
+ * Inside @supports so a browser without :has() simply shows every detail row:
+ * nothing is ever out of reach, and the approve form is never hidden behind a
+ * toggle that cannot open it (F-006).
+ * ------------------------------------------------------------------------- */
+@supports selector(tr:has(details[open])) {
+  tr.draft-detail-row {
+    display: none;
+  }
+  tr:has(details[data-testid="draft-row-details"][open]) + tr.draft-detail-row {
+    display: table-row;
+  }
+  /* One product reads as one block: no rule between its two rows. */
+  tr:has(details[data-testid="draft-row-details"][open]):has(+ tr.draft-detail-row) {
+    border-bottom-color: transparent;
+  }
+}

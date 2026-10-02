@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -64,6 +65,8 @@ import {
   pickerVendors,
   rowAttention,
   rowStartsOpen,
+  onboardingColumns,
+  detailRowId,
 } from "@/lib/catalog/onboarding-list-core";
 import { identityShadowLogLine, summarizeIdentityShadow } from "@/lib/catalog/product-identity-core";
 import {
@@ -122,6 +125,7 @@ import { RestockPreviewChip, RestockPreviewUnavailable } from "@/components/admi
 import { KnownProductChip } from "@/components/admin/catalog/KnownProductChip";
 // S11: the onboarding row redesign (provenance chips, Facts + Manifest columns).
 import { FactsPanel } from "@/components/admin/catalog/FactsPanel";
+import { ApproveGroup, FieldLabel, OnboardingDetailRow } from "@/components/admin/catalog/OnboardingDetailRow";
 import {
   ONBOARDING_V2_ROW_ENV,
   attachedFactsOf,
@@ -148,13 +152,14 @@ import { lookupJobsOn, loadManifestLookup } from "@/lib/catalog/lookup-job-serve
 import { attachFactsV2Enabled } from "@/lib/catalog/fact-attach-policy-server";
 import {
   LOOKUP_ALL_HELP,
-  LOOKUP_ATTACH_V2_OFF_COPY,
-  LOOKUP_MIGRATION_COPY,
+  LOOKUP_CHOOSE_COPY,
+  LOOKUP_CHOOSE_NONE_COPY,
+  batchLookupEntry,
   costLine,
   itemRowCopy,
   jobHeadline,
-  lookupAllButtonLabel,
   lookupBanner,
+  lookupDeliveryChoices,
   progressLine,
 } from "@/lib/catalog/lookup-job-core";
 
@@ -251,6 +256,28 @@ export default async function CatalogDraftsPage({
   const batchLookupActive = batchLookupJob !== null && (batchLookupJob.status === "queued" || batchLookupJob.status === "running");
   const batchLookupEligible = batchLookup && (batchLookup.state === "job" || batchLookup.state === "none") ? batchLookup.eligible : null;
   const batchLookupAttachOn = attachFactsV2Enabled();
+  // R21: one decision for every state - the button, Stop, a plain reason, or
+  // (no delivery focused) a list of deliveries to open. Never silent.
+  const batchEntry = batchLookupEntry({
+    focused: Boolean(focus.manifestId),
+    view,
+    flagOn: lookupJobsOn(),
+    aiOn: isAiConfigured,
+    attachOn: batchLookupAttachOn,
+    state: batchLookup ? batchLookup.state : null,
+    jobActive: batchLookupActive,
+    eligible: batchLookupEligible,
+  });
+  const batchChoices =
+    batchEntry.kind === "choose" && picker
+      ? lookupDeliveryChoices(
+          picker.manifests.map((m) => ({
+            id: m.id,
+            label: manifestPickerLabel(m, null, now),
+            inReview: picker.countsComplete ? picker.counts.get(m.id)?.inReview ?? 0 : null,
+          })),
+        )
+      : [];
   const lookupResult = lookupBanner(sp.lookup, sp.lookup_msg);
   const headerTitle = onboardingHeaderTitle(
     focusManifest,
@@ -456,6 +483,8 @@ export default async function CatalogDraftsPage({
   // lookup outside the approve form, the in-row error). ONBOARDING_V2_ROW=off
   // renders the previous row (bible S11.7 rollback).
   const v2Row = onboardingV2RowEnabled(process.env[ONBOARDING_V2_ROW_ENV]);
+  // S41: the header cells AND the detail row's colSpan come from this list.
+  const columns = onboardingColumns(v2Row);
   const policyMode = attachPolicyMode(attachRing);
   const manifestById = new Map((picker?.manifests ?? []).map((m) => [m.id, m]));
 
@@ -649,51 +678,69 @@ export default async function CatalogDraftsPage({
             The press only writes a job; the every-minute worker
             (/api/cron/lookup-jobs) does the lookups, so closing this tab
             loses nothing. Facts attach only under the S10 attach policy. */}
-        {batchLookupOn && focus.manifestId && batchLookup && (
+        {batchEntry.kind !== "hidden" && (
           <section
+            id="batch-lookup"
+            aria-labelledby="batch-lookup-title"
             data-testid="batch-lookup"
-            className="flex flex-col gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm"
+            data-entry={batchEntry.kind}
+            className="flex scroll-mt-24 flex-col gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-surface)] px-4 py-3 text-sm"
           >
-            {batchLookup.state === "migration" ? (
-              <p className="text-xs text-[var(--admin-text-muted)]" data-testid="batch-lookup-migration">{LOOKUP_MIGRATION_COPY}</p>
-            ) : batchLookup.state === "error" ? (
-              <p className="text-xs text-[var(--admin-text-muted)]">The batch lookup could not be read just now. Refresh to try again; AI Lookup on each row still works.</p>
-            ) : !batchLookupAttachOn ? (
-              <p className="text-xs text-[var(--admin-text-muted)]">{LOOKUP_ATTACH_V2_OFF_COPY}</p>
-            ) : (
-              <>
-                {batchLookupJob && (
-                  <div data-testid="batch-lookup-progress" aria-live="polite">
-                    <p className="font-semibold text-[var(--admin-text)]">{jobHeadline(batchLookupJob.status, batchLookupJob.summary)}</p>
-                    <p className="text-xs text-[var(--admin-text-muted)]">{progressLine(batchLookupJob.summary)}</p>
-                    <p className="text-xs text-[var(--admin-text-muted)]">{costLine(batchLookupJob.summary, batchLookupJob.model)}</p>
-                    {batchLookupJob.summary.failed > 0 && (
-                      <p className="text-xs text-[var(--admin-danger)]">
-                        {batchLookupJob.summary.failed} could not be looked up; the reason is on each row. AI Lookup on that row tries again.
-                      </p>
-                    )}
-                  </div>
+            <p id="batch-lookup-title" className="font-semibold text-[var(--admin-text)]">{"\u2728 "}Look up a whole delivery with AI</p>
+            {focus.manifestId && batchLookupJob && (
+              <div data-testid="batch-lookup-progress" aria-live="polite">
+                <p className="font-semibold text-[var(--admin-text)]">{jobHeadline(batchLookupJob.status, batchLookupJob.summary)}</p>
+                <p className="text-xs text-[var(--admin-text-muted)]">{progressLine(batchLookupJob.summary)}</p>
+                <p className="text-xs text-[var(--admin-text-muted)]">{costLine(batchLookupJob.summary, batchLookupJob.model)}</p>
+                {batchLookupJob.summary.failed > 0 && (
+                  <p className="text-xs text-[var(--admin-danger)]">
+                    {batchLookupJob.summary.failed} could not be looked up; the reason is on each row. AI Lookup on that row tries again.
+                  </p>
                 )}
-                {batchLookupActive && batchLookupJob ? (
-                  <form action={cancelLookupAction.bind(null, batchLookupJob.jobId)} className="flex flex-wrap items-center gap-3">
-                    <input type="hidden" name="return_manifest" value={focus.manifestId} />
-                    <Button type="submit" variant="neutral" size="sm">Stop the batch lookup</Button>
-                    <span className="text-xs text-[var(--admin-text-muted)]">Refresh to see progress. Products not started yet are skipped; the one in progress finishes.</span>
-                  </form>
-                ) : batchLookupEligible && batchLookupEligible.count > 0 ? (
-                  <form action={lookupAllAction.bind(null, focus.manifestId)} className="flex flex-wrap items-center gap-3">
-                    <input type="hidden" name="return_manifest" value={focus.manifestId} />
-                    <Button type="submit" variant="special" size="sm" data-testid="batch-lookup-button">
-                      {"\u2728 "}{lookupAllButtonLabel(batchLookupEligible.count, batchLookupEligible.skippedDone)}
-                    </Button>
-                    <span className="text-xs text-[var(--admin-text-muted)]">
-                      {LOOKUP_ALL_HELP}
-                      {batchLookupEligible.truncated > 0 ? ` This press covers the first ${batchLookupEligible.count}; press again afterwards for the other ${batchLookupEligible.truncated}.` : ""}
-                    </span>
-                  </form>
-                ) : null}
-              </>
+              </div>
             )}
+            {batchEntry.kind === "reason" ? (
+              <p className="text-xs text-[var(--admin-text-muted)]" data-testid={batchLookup?.state === "migration" ? "batch-lookup-migration" : "batch-lookup-reason"}>
+                {batchEntry.text}
+              </p>
+            ) : batchEntry.kind === "choose" ? (
+              <div data-testid="batch-lookup-choose" className="flex flex-col gap-2">
+                <p className="text-xs text-[var(--admin-text-muted)]">{batchChoices.length > 0 ? LOOKUP_CHOOSE_COPY : LOOKUP_CHOOSE_NONE_COPY}</p>
+                {batchChoices.length > 0 && (
+                  <ul className="flex flex-wrap gap-2">
+                    {batchChoices.map((c) => (
+                      <li key={c.id}>
+                        <Link
+                          href={`${draftsHref({ manifestId: c.id })}#batch-lookup`}
+                          className="inline-flex items-baseline gap-2 rounded-full border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-1 text-xs hover:border-[var(--admin-accent)]"
+                          data-testid="batch-lookup-choice"
+                        >
+                          <span className="font-semibold text-[var(--admin-text)]">{c.label}</span>
+                          <span className="text-[var(--admin-text-muted)]">{c.countText}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : batchEntry.kind === "stop" && focus.manifestId && batchLookupJob ? (
+              <form action={cancelLookupAction.bind(null, batchLookupJob.jobId)} className="flex flex-wrap items-center gap-3">
+                <input type="hidden" name="return_manifest" value={focus.manifestId} />
+                <Button type="submit" variant="neutral" size="sm">Stop the batch lookup</Button>
+                <span className="text-xs text-[var(--admin-text-muted)]">Refresh to see progress. Products not started yet are skipped; the one in progress finishes.</span>
+              </form>
+            ) : batchEntry.kind === "button" && focus.manifestId && batchLookupEligible ? (
+              <form action={lookupAllAction.bind(null, focus.manifestId)} className="flex flex-wrap items-center gap-3">
+                <input type="hidden" name="return_manifest" value={focus.manifestId} />
+                <Button type="submit" variant="special" size="sm" data-testid="batch-lookup-button">
+                  {"\u2728 "}{batchEntry.label}
+                </Button>
+                <span className="text-xs text-[var(--admin-text-muted)]">
+                  {LOOKUP_ALL_HELP}
+                  {batchLookupEligible.truncated > 0 ? ` This press covers the first ${batchLookupEligible.count}; press again afterwards for the other ${batchLookupEligible.truncated}.` : ""}
+                </span>
+              </form>
+            ) : null}
           </section>
         )}
         {pinned && (
@@ -832,17 +879,14 @@ export default async function CatalogDraftsPage({
           />
         ) : (
           <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" aria-label={v2Row ? "Products to onboard" : undefined}>
               <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
                 <tr>
-                  <th className="px-4 py-3">Product</th>
-                  {v2Row && <th className="px-4 py-3">Manifest</th>}
-                  <th className="px-4 py-3">Category &amp; Type</th>
-                  {v2Row && <th className="px-4 py-3">Facts</th>}
-                  <th className="px-4 py-3 text-right">THC</th>
-                  <th className="px-4 py-3 text-right">Cost</th>
-                  <th className="px-4 py-3 text-right">Pricing</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  {columns.map((c) => (
+                    <th key={c.key} className={c.alignRight ? "px-4 py-3 text-right" : "px-4 py-3"}>
+                      {c.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--admin-border)]">
@@ -928,7 +972,7 @@ export default async function CatalogDraftsPage({
                   const batchItem = batchLookupJob?.items.get(d.id.toLowerCase()) ?? null;
                   const batchRowLine = batchItem ? (
                     <p
-                      className={`max-w-[28rem] text-right text-xs ${batchItem.status === "failed" ? "text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}
+                      className={`${v2Row ? "text-left" : "max-w-[28rem] text-right"} text-xs ${batchItem.status === "failed" ? "text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}
                       data-testid="batch-lookup-row"
                     >
                       {itemRowCopy(batchItem)}
@@ -946,12 +990,318 @@ export default async function CatalogDraftsPage({
                       aiEnabled={aiLookupEnabled}
                       kbStrainType={strainEvidence.get(d.id)?.kb ?? null}
                       manifestStrainType={strainEvidence.get(d.id)?.manifest ?? null}
+                      wide={v2Row}
                     />
                     </>
                   );
+                  // S41: the approve controls - narrow inside the cell on the
+                  // previous row, full zone width in the detail row.
+                  const ctl = v2Row ? "w-full text-sm" : "w-48 text-xs";
+                  const box = v2Row ? "w-full" : "w-48";
+                  const hasSizeBlock =
+                    view === "draft" && Boolean(ca?.needsOtherwiseTakenPick || ca?.promptsLowThcLiquid || va?.needsVolumePick);
+                  const approveForm = (
+                              <form action={approve} className={v2Row ? "flex flex-col gap-3" : "mt-2 flex flex-col items-end gap-2"} data-testid={v2Row ? "draft-approve-form" : undefined}>
+                                {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
+                                {/* SLICE 64: required picks when we couldn't
+                                    classify at >=90% confidence. The server
+                                    re-checks — this is UX, not the gate.
+                                    SLICE 91 (owner): BOTH pickers are now on
+                                    EVERY draft row — "I want to be able to
+                                    edit each one just in case." When the
+                                    machine already classified the product the
+                                    empty option reads "Keep auto: X" and
+                                    submits NO override; only an actual
+                                    selection records a human pick. */}
+                                <ApproveGroup on={v2Row} legend="Classify">
+                                <FieldLabel on={v2Row} htmlFor={`website-category-${d.id}`}>Website category</FieldLabel>
+                                <Select
+                                  id={v2Row ? `website-category-${d.id}` : undefined}
+                                  name="website_category"
+                                  required={needsCategoryPick}
+                                  defaultValue=""
+                                  className={ctl}
+                                  aria-label="Website category"
+                                >
+                                  <option value="" disabled={needsCategoryPick}>
+                                    {categoryPickerPlaceholder({
+                                      needsCategoryPick,
+                                      resolvedLabel: displayCategory
+                                        ? websiteCategoryLabel(displayCategory)
+                                        : null,
+                                    })}
+                                  </option>
+                                  {categoryChoices.map(([value, label]) => (
+                                    <option key={value} value={value}>
+                                      {label}
+                                    </option>
+                                  ))}
+                                  {/* SLICE 78: create a category without leaving
+                                      onboarding — name it in the box below. */}
+                                  <option value="__new__">➕ Create a new category…</option>
+                                </Select>
+                                <Input
+                                  name="new_category_label"
+                                  placeholder="New category name (only if creating one)"
+                                  className={ctl}
+                                  aria-label="New category name"
+                                />
+                                <FieldLabel on={v2Row} htmlFor={`house-type-${d.id}`}>Product type</FieldLabel>
+                                <Select
+                                  id={v2Row ? `house-type-${d.id}` : undefined}
+                                  name="house_type"
+                                  required={needsTypePick}
+                                  defaultValue={needsTypePick ? a?.suggestedHouseType ?? "" : ""}
+                                  className={ctl}
+                                  aria-label="Product type"
+                                >
+                                  <option value="" disabled={needsTypePick}>
+                                    {typePickerPlaceholder({
+                                      needsTypePick,
+                                      autoType,
+                                      confidence: a?.house.confidence ?? 0,
+                                    })}
+                                  </option>
+                                  {typeGroups.map((g) => (
+                                    <optgroup key={g.category} label={g.categoryLabel}>
+                                      {g.types.map((t) => (
+                                        <option key={t.label} value={t.label}>
+                                          {t.label}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  ))}
+                                  {/* SLICE 92: create a product type without
+                                      leaving onboarding — name it in the box
+                                      below. It saves to the same registry the
+                                      Types & Categories page manages. */}
+                                  <option value="__new_type__">➕ Create a new product type…</option>
+                                </Select>
+                                <Input
+                                  name="new_type_label"
+                                  placeholder="New type name (only if creating one)"
+                                  className={ctl}
+                                  aria-label="New product type name"
+                                />
+                                </ApproveGroup>
+                                {/* SLICE 93: strain type - never required. The
+                                    machine's verdict (strain library > the
+                                    manifest's stated fact > the name parse)
+                                    shows in the empty option; >=90% reads
+                                    "Keep auto" and submits NO override. Only
+                                    an actual selection records a human pick,
+                                    which also gap-fills the strain library so
+                                    it auto-attaches on future lots. */}
+                                <ApproveGroup on={v2Row} legend="Menu card">
+                                <FieldLabel on={v2Row} htmlFor={`strain-type-${d.id}`}>Strain type</FieldLabel>
+                                <Select
+                                  id={`strain-type-${d.id}`}
+                                  name="strain_type"
+                                  defaultValue=""
+                                  className={ctl}
+                                  aria-label="Strain type"
+                                >
+                                  <option value="">
+                                    {strainTypePickerPlaceholder(strainSuggestions.get(d.id) ?? null)}
+                                  </option>
+                                  {strainTypeDefinitions
+                                    .filter((s) => s.value !== "unknown")
+                                    .map((s) => (
+                                      <option key={s.value} value={s.value}>
+                                        {s.label}
+                                      </option>
+                                    ))}
+                                </Select>
+                                </ApproveGroup>
+                                {/* SLICE 18-0: the COMPLIANCE classification.
+                                    Only rendered where the answer could change
+                                    a limit — the three liquid_edible shelves,
+                                    or a name/CCRS type that looks like a
+                                    suppository. On a flower or cartridge lot
+                                    nothing appears at all, because
+                                    qualifiesAsOtherwiseTaken() would refuse to
+                                    move that line out of its statutory bucket
+                                    however it were answered.
+
+                                    Why this one BLOCKS while strain type does
+                                    not: an unflagged suppository is filed as an
+                                    ordinary topical, lands in the 2016 g liquid
+                                    bucket, and the ten-unit maximum silently
+                                    never engages (migration 0217). Silence here
+                                    does not fail closed — it disables a
+                                    statutory limit. */}
+                                <ApproveGroup on={v2Row && hasSizeBlock} legend="Size & compliance">
+                                {view === "draft" && ca?.needsOtherwiseTakenPick ? (
+                                  <div className={`flex ${box} flex-col gap-1 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2`}>
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                                      Compliance
+                                    </span>
+                                    <label
+                                      className="text-[10px] text-[var(--admin-text-faint)]"
+                                      htmlFor={`otherwise-taken-${d.id}`}
+                                    >
+                                      Taken into the body another way? (suppository)
+                                    </label>
+                                    <Select
+                                      id={`otherwise-taken-${d.id}`}
+                                      name="otherwise_taken"
+                                      required
+                                      /* SLICE 18F: pre-filled from the last
+                                         answer a human gave for this product.
+                                         `required` STAYS - Option B saves the
+                                         typing, never the decision. */
+                                      defaultValue={prefill.otherwiseTaken}
+                                      className="text-xs"
+                                      aria-label="Otherwise taken into the body"
+                                    >
+                                      <option value="" disabled>
+                                        {otherwiseTakenPickerPlaceholder({
+                                          needsOtherwiseTakenPick: true,
+                                        })}
+                                      </option>
+                                      <option value="no">No — ordinary product</option>
+                                      <option value="yes">Yes — suppository (10-unit limit)</option>
+                                    </Select>
+                                    <Input
+                                      name="units_per_package"
+                                      inputMode="numeric"
+                                      placeholder="Units per package (a box of 6 = 6)"
+                                      className="text-xs"
+                                      aria-label="Units per package"
+                                      defaultValue={prefill.unitsPerPackage}
+                                    />
+                                    {/* SLICE 18F: never a silent pre-fill. The
+                                        operator is told WHOSE answer this is
+                                        and HOW OLD it is, so a stale
+                                        classification can be spotted and
+                                        overridden rather than rubber-stamped. */}
+                                    {prefill.isRemembered ? (
+                                      <span className="text-[10px] text-[var(--admin-accent)]">
+                                        {describeMemory(memory)}
+                                      </span>
+                                    ) : null}
+                                    {ca.suspected ? (
+                                      <span className="text-[10px] text-[var(--admin-warning,#b45309)]">
+                                        This name looks like a suppository — please confirm.
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                                {/* SLICE 18-0: the low-THC beverage question is
+                                    PROMPTED, never required. The asymmetry is
+                                    deliberate: an unanswered beverage stays in
+                                    the TIGHTER 2016 g liquid bucket, so silence
+                                    can only ever under-sell — a lawful sale we
+                                    declined, not an unlawful one we made. That
+                                    does not justify blocking a delivery. */}
+                                {view === "draft" && ca?.promptsLowThcLiquid ? (
+                                  <div className={`flex ${box} flex-col gap-1 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2`}>
+                                    <label
+                                      className="text-[10px] text-[var(--admin-text-faint)]"
+                                      htmlFor={`low-thc-${d.id}`}
+                                    >
+                                      Low-THC beverage? (≤ 4 mg per sealed container)
+                                    </label>
+                                    <Select
+                                      id={`low-thc-${d.id}`}
+                                      name="low_thc_liquid"
+                                      defaultValue=""
+                                      className="text-xs"
+                                      aria-label="Low-THC beverage"
+                                    >
+                                      <option value="">{lowThcPickerPlaceholder()}</option>
+                                      <option value="no">No</option>
+                                      <option value="yes">Yes — 200 mg THC allowance</option>
+                                    </Select>
+                                    <Input
+                                      name="unit_thc_mg"
+                                      inputMode="decimal"
+                                      placeholder="mg THC in ONE sealed container"
+                                      className="text-xs"
+                                      aria-label="THC milligrams per container"
+                                    />
+                                  </div>
+                                ) : null}
+                                {/* SLICE L5: the VOLUME gate. Unlike the
+                                    low-THC prompt above this one BLOCKS, and
+                                    for the same reason otherwise_taken does:
+                                    an unmeasured liquid has no volume for the
+                                    limit engine to measure, falls back to a
+                                    28 g default, and 72 packages of ANY size
+                                    fit the 72 fl oz cap. Silence here does not
+                                    fail closed — it disables a statutory
+                                    limit. Shown only when the name gave us
+                                    nothing, so nobody is asked to re-measure a
+                                    bottle whose size we already read. */}
+                                {view === "draft" && va?.needsVolumePick ? (
+                                  <div className={`flex ${box} flex-col gap-1 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2`}>
+                                    <label
+                                      className="text-[10px] text-[var(--admin-text-faint)]"
+                                      htmlFor={`net-volume-${d.id}`}
+                                    >
+                                      Package volume — required (the name states no size)
+                                    </label>
+                                    <Input
+                                      id={`net-volume-${d.id}`}
+                                      name="net_volume_quantity"
+                                      inputMode="decimal"
+                                      required
+                                      placeholder={volumePickerPlaceholder({ needsVolumePick: true })}
+                                      className="text-xs"
+                                      aria-label="Package volume"
+                                    />
+                                    <Select
+                                      name="net_volume_unit"
+                                      required
+                                      defaultValue=""
+                                      className="text-xs"
+                                      aria-label="Package volume unit"
+                                    >
+                                      <option value="" disabled>
+                                        Pick a unit…
+                                      </option>
+                                      <option value="ml">ml</option>
+                                      <option value="l">L</option>
+                                      <option value="floz">fl oz</option>
+                                    </Select>
+                                    {/* Said plainly, because guessing wrong here
+                                        is a ~4% error on a legal limit. */}
+                                    <span className="text-[10px] text-[var(--admin-text-faint)]">
+                                      A bare &quot;oz&quot; is not accepted — fl oz and weight oz
+                                      are different amounts.
+                                    </span>
+                                  </div>
+                                ) : null}
+                                </ApproveGroup>
+                                {/* T-314 lookup: inside the form only on the previous row
+                                    (ONBOARDING_V2_ROW=off); S11 mounts it above the form. */}
+                                {!v2Row && lookupPanel}
+                                <FieldLabel on={v2Row} htmlFor={`price-${d.id}`}>Menu price</FieldLabel>
+                                <div className={v2Row ? "flex flex-wrap items-center gap-2" : "flex items-center gap-2"}>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[var(--admin-text-faint)]">$</span>
+                                    <Input
+                                      id={v2Row ? `price-${d.id}` : undefined}
+                                      name="price"
+                                      type="number"
+                                      step="0.01"
+                                      min={floorDollars}
+                                      defaultValue={defaultPrice ? defaultPrice.toFixed(2) : ""}
+                                      className="w-24"
+                                    />
+                                  </div>
+                                  <Button type="submit" variant="save" size="sm">✓ Approve</Button>
+                                </div>
+                                {v2Row && (
+                                  <p className="text-xs text-[var(--admin-text-muted)]" data-testid="draft-approve-price-hint">
+                                    Floor {fmtMoney(d.price_floor_minor_units)} {"\u00b7"} AI suggests {fmtMoney(d.suggested_price_minor_units)}
+                                  </p>
+                                )}
+                              </form>
+                  );
                   return (
+                    <Fragment key={d.id}>
                     <tr
-                      key={d.id}
                       id={draftRowAnchorId(d.id)}
                       aria-current={pinned?.id === d.id ? "true" : undefined}
                       className={`scroll-mt-24 align-top ${
@@ -1062,7 +1412,10 @@ export default async function CatalogDraftsPage({
                                 className="group flex flex-col items-end"
                                 data-testid="draft-row-details"
                               >
-                                <summary className="flex cursor-pointer list-none flex-wrap items-center justify-end gap-1 text-xs">
+                                <summary
+                                  className="flex cursor-pointer list-none flex-wrap items-center justify-end gap-1 text-xs"
+                                  aria-controls={v2Row ? detailRowId(draftRowAnchorId(d.id)) : undefined}
+                                >
                                   {rowChips.length === 0 ? (
                                     <span className="rounded-full bg-[var(--admin-accent-soft)] px-2 py-0.5 font-semibold text-[var(--admin-accent)]">
                                       Ready to approve
@@ -1084,291 +1437,7 @@ export default async function CatalogDraftsPage({
                                   <span className="font-semibold text-[var(--admin-accent)] underline group-open:hidden">Review & approve{" \u25be"}</span>
                                   <span className="hidden font-semibold text-[var(--admin-text-muted)] underline group-open:inline">Collapse{" \u25b4"}</span>
                                 </summary>
-                              {facts && identity && (
-                                <div className="mt-2 flex flex-col items-end gap-1" data-testid="draft-row-detail">
-                                  <FactsPanel view={facts} identity={identity} />
-                                  {lookupPanel}
-                                </div>
-                              )}
-                              <form action={approve} className="mt-2 flex flex-col items-end gap-2">
-                                {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
-                                {/* SLICE 64: required picks when we couldn't
-                                    classify at >=90% confidence. The server
-                                    re-checks — this is UX, not the gate.
-                                    SLICE 91 (owner): BOTH pickers are now on
-                                    EVERY draft row — "I want to be able to
-                                    edit each one just in case." When the
-                                    machine already classified the product the
-                                    empty option reads "Keep auto: X" and
-                                    submits NO override; only an actual
-                                    selection records a human pick. */}
-                                <Select
-                                  name="website_category"
-                                  required={needsCategoryPick}
-                                  defaultValue=""
-                                  className="w-48 text-xs"
-                                  aria-label="Website category"
-                                >
-                                  <option value="" disabled={needsCategoryPick}>
-                                    {categoryPickerPlaceholder({
-                                      needsCategoryPick,
-                                      resolvedLabel: displayCategory
-                                        ? websiteCategoryLabel(displayCategory)
-                                        : null,
-                                    })}
-                                  </option>
-                                  {categoryChoices.map(([value, label]) => (
-                                    <option key={value} value={value}>
-                                      {label}
-                                    </option>
-                                  ))}
-                                  {/* SLICE 78: create a category without leaving
-                                      onboarding — name it in the box below. */}
-                                  <option value="__new__">➕ Create a new category…</option>
-                                </Select>
-                                <Input
-                                  name="new_category_label"
-                                  placeholder="New category name (only if creating one)"
-                                  className="w-48 text-xs"
-                                  aria-label="New category name"
-                                />
-                                <Select
-                                  name="house_type"
-                                  required={needsTypePick}
-                                  defaultValue={needsTypePick ? a?.suggestedHouseType ?? "" : ""}
-                                  className="w-48 text-xs"
-                                  aria-label="Product type"
-                                >
-                                  <option value="" disabled={needsTypePick}>
-                                    {typePickerPlaceholder({
-                                      needsTypePick,
-                                      autoType,
-                                      confidence: a?.house.confidence ?? 0,
-                                    })}
-                                  </option>
-                                  {typeGroups.map((g) => (
-                                    <optgroup key={g.category} label={g.categoryLabel}>
-                                      {g.types.map((t) => (
-                                        <option key={t.label} value={t.label}>
-                                          {t.label}
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  ))}
-                                  {/* SLICE 92: create a product type without
-                                      leaving onboarding — name it in the box
-                                      below. It saves to the same registry the
-                                      Types & Categories page manages. */}
-                                  <option value="__new_type__">➕ Create a new product type…</option>
-                                </Select>
-                                <Input
-                                  name="new_type_label"
-                                  placeholder="New type name (only if creating one)"
-                                  className="w-48 text-xs"
-                                  aria-label="New product type name"
-                                />
-                                {/* SLICE 93: strain type - never required. The
-                                    machine's verdict (strain library > the
-                                    manifest's stated fact > the name parse)
-                                    shows in the empty option; >=90% reads
-                                    "Keep auto" and submits NO override. Only
-                                    an actual selection records a human pick,
-                                    which also gap-fills the strain library so
-                                    it auto-attaches on future lots. */}
-                                <Select
-                                  id={`strain-type-${d.id}`}
-                                  name="strain_type"
-                                  defaultValue=""
-                                  className="w-48 text-xs"
-                                  aria-label="Strain type"
-                                >
-                                  <option value="">
-                                    {strainTypePickerPlaceholder(strainSuggestions.get(d.id) ?? null)}
-                                  </option>
-                                  {strainTypeDefinitions
-                                    .filter((s) => s.value !== "unknown")
-                                    .map((s) => (
-                                      <option key={s.value} value={s.value}>
-                                        {s.label}
-                                      </option>
-                                    ))}
-                                </Select>
-                                {/* SLICE 18-0: the COMPLIANCE classification.
-                                    Only rendered where the answer could change
-                                    a limit — the three liquid_edible shelves,
-                                    or a name/CCRS type that looks like a
-                                    suppository. On a flower or cartridge lot
-                                    nothing appears at all, because
-                                    qualifiesAsOtherwiseTaken() would refuse to
-                                    move that line out of its statutory bucket
-                                    however it were answered.
-
-                                    Why this one BLOCKS while strain type does
-                                    not: an unflagged suppository is filed as an
-                                    ordinary topical, lands in the 2016 g liquid
-                                    bucket, and the ten-unit maximum silently
-                                    never engages (migration 0217). Silence here
-                                    does not fail closed — it disables a
-                                    statutory limit. */}
-                                {view === "draft" && ca?.needsOtherwiseTakenPick ? (
-                                  <div className="flex w-48 flex-col gap-1 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-                                      Compliance
-                                    </span>
-                                    <label
-                                      className="text-[10px] text-[var(--admin-text-faint)]"
-                                      htmlFor={`otherwise-taken-${d.id}`}
-                                    >
-                                      Taken into the body another way? (suppository)
-                                    </label>
-                                    <Select
-                                      id={`otherwise-taken-${d.id}`}
-                                      name="otherwise_taken"
-                                      required
-                                      /* SLICE 18F: pre-filled from the last
-                                         answer a human gave for this product.
-                                         `required` STAYS - Option B saves the
-                                         typing, never the decision. */
-                                      defaultValue={prefill.otherwiseTaken}
-                                      className="text-xs"
-                                      aria-label="Otherwise taken into the body"
-                                    >
-                                      <option value="" disabled>
-                                        {otherwiseTakenPickerPlaceholder({
-                                          needsOtherwiseTakenPick: true,
-                                        })}
-                                      </option>
-                                      <option value="no">No — ordinary product</option>
-                                      <option value="yes">Yes — suppository (10-unit limit)</option>
-                                    </Select>
-                                    <Input
-                                      name="units_per_package"
-                                      inputMode="numeric"
-                                      placeholder="Units per package (a box of 6 = 6)"
-                                      className="text-xs"
-                                      aria-label="Units per package"
-                                      defaultValue={prefill.unitsPerPackage}
-                                    />
-                                    {/* SLICE 18F: never a silent pre-fill. The
-                                        operator is told WHOSE answer this is
-                                        and HOW OLD it is, so a stale
-                                        classification can be spotted and
-                                        overridden rather than rubber-stamped. */}
-                                    {prefill.isRemembered ? (
-                                      <span className="text-[10px] text-[var(--admin-accent)]">
-                                        {describeMemory(memory)}
-                                      </span>
-                                    ) : null}
-                                    {ca.suspected ? (
-                                      <span className="text-[10px] text-[var(--admin-warning,#b45309)]">
-                                        This name looks like a suppository — please confirm.
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-                                {/* SLICE 18-0: the low-THC beverage question is
-                                    PROMPTED, never required. The asymmetry is
-                                    deliberate: an unanswered beverage stays in
-                                    the TIGHTER 2016 g liquid bucket, so silence
-                                    can only ever under-sell — a lawful sale we
-                                    declined, not an unlawful one we made. That
-                                    does not justify blocking a delivery. */}
-                                {view === "draft" && ca?.promptsLowThcLiquid ? (
-                                  <div className="flex w-48 flex-col gap-1 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2">
-                                    <label
-                                      className="text-[10px] text-[var(--admin-text-faint)]"
-                                      htmlFor={`low-thc-${d.id}`}
-                                    >
-                                      Low-THC beverage? (≤ 4 mg per sealed container)
-                                    </label>
-                                    <Select
-                                      id={`low-thc-${d.id}`}
-                                      name="low_thc_liquid"
-                                      defaultValue=""
-                                      className="text-xs"
-                                      aria-label="Low-THC beverage"
-                                    >
-                                      <option value="">{lowThcPickerPlaceholder()}</option>
-                                      <option value="no">No</option>
-                                      <option value="yes">Yes — 200 mg THC allowance</option>
-                                    </Select>
-                                    <Input
-                                      name="unit_thc_mg"
-                                      inputMode="decimal"
-                                      placeholder="mg THC in ONE sealed container"
-                                      className="text-xs"
-                                      aria-label="THC milligrams per container"
-                                    />
-                                  </div>
-                                ) : null}
-                                {/* SLICE L5: the VOLUME gate. Unlike the
-                                    low-THC prompt above this one BLOCKS, and
-                                    for the same reason otherwise_taken does:
-                                    an unmeasured liquid has no volume for the
-                                    limit engine to measure, falls back to a
-                                    28 g default, and 72 packages of ANY size
-                                    fit the 72 fl oz cap. Silence here does not
-                                    fail closed — it disables a statutory
-                                    limit. Shown only when the name gave us
-                                    nothing, so nobody is asked to re-measure a
-                                    bottle whose size we already read. */}
-                                {view === "draft" && va?.needsVolumePick ? (
-                                  <div className="flex w-48 flex-col gap-1 rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2">
-                                    <label
-                                      className="text-[10px] text-[var(--admin-text-faint)]"
-                                      htmlFor={`net-volume-${d.id}`}
-                                    >
-                                      Package volume — required (the name states no size)
-                                    </label>
-                                    <Input
-                                      id={`net-volume-${d.id}`}
-                                      name="net_volume_quantity"
-                                      inputMode="decimal"
-                                      required
-                                      placeholder={volumePickerPlaceholder({ needsVolumePick: true })}
-                                      className="text-xs"
-                                      aria-label="Package volume"
-                                    />
-                                    <Select
-                                      name="net_volume_unit"
-                                      required
-                                      defaultValue=""
-                                      className="text-xs"
-                                      aria-label="Package volume unit"
-                                    >
-                                      <option value="" disabled>
-                                        Pick a unit…
-                                      </option>
-                                      <option value="ml">ml</option>
-                                      <option value="l">L</option>
-                                      <option value="floz">fl oz</option>
-                                    </Select>
-                                    {/* Said plainly, because guessing wrong here
-                                        is a ~4% error on a legal limit. */}
-                                    <span className="text-[10px] text-[var(--admin-text-faint)]">
-                                      A bare &quot;oz&quot; is not accepted — fl oz and weight oz
-                                      are different amounts.
-                                    </span>
-                                  </div>
-                                ) : null}
-                                {/* T-314 lookup: inside the form only on the previous row
-                                    (ONBOARDING_V2_ROW=off); S11 mounts it above the form. */}
-                                {!v2Row && lookupPanel}
-                                <div className="flex items-center gap-2">
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[var(--admin-text-faint)]">$</span>
-                                    <Input
-                                      name="price"
-                                      type="number"
-                                      step="0.01"
-                                      min={floorDollars}
-                                      defaultValue={defaultPrice ? defaultPrice.toFixed(2) : ""}
-                                      className="w-24"
-                                    />
-                                  </div>
-                                  <Button type="submit" variant="save" size="sm">✓ Approve</Button>
-                                </div>
-                              </form>
+                              {!v2Row && approveForm}
                               </details>
                               <form action={dismiss}>
                                 {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
@@ -1412,6 +1481,26 @@ export default async function CatalogDraftsPage({
                         </div>
                       </td>
                     </tr>
+                    {/* S41 (bible S41.2): the opened row's full-width detail -
+                        a second row spanning every column, shown by CSS while
+                        the summary row's <details> is open. */}
+                    {v2Row && view === "draft" && (
+                      <OnboardingDetailRow
+                        id={detailRowId(draftRowAnchorId(d.id))}
+                        colSpan={columns.length}
+                        highlighted={pinned?.id === d.id}
+                        facts={
+                          facts && identity ? (
+                            <div className="flex flex-col gap-2" data-testid="draft-row-detail">
+                              <FactsPanel view={facts} identity={identity} wide />
+                            </div>
+                          ) : null
+                        }
+                        lookup={lookupPanel}
+                        approve={approveForm}
+                      />
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>

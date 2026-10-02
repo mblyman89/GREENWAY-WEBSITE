@@ -23,13 +23,16 @@ import type { FactChipsView, IdentityLine } from "@/lib/catalog/fact-chips-core"
 export function FactsPanel({
   view,
   identity,
+  wide = false,
 }: {
   view: FactChipsView;
   identity: IdentityLine;
+  /** S41: in the full-width detail row the panel fills its zone (no 34rem cap). */
+  wide?: boolean;
 }) {
   return (
     <section
-      className="w-full max-w-[34rem] space-y-1.5 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2 text-left text-xs"
+      className={`w-full ${wide ? "" : "max-w-[34rem] "}space-y-1.5 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-2 text-left text-xs`}
       data-testid="facts-panel"
       aria-label="Facts attached to this product"
     >

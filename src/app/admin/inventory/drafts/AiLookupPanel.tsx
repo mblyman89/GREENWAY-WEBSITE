@@ -61,6 +61,8 @@ type Props = {
    */
   kbStrainType?: string | null;
   manifestStrainType?: string | null;
+  /** S41: fill the detail row's "AI lookup" zone instead of the fixed w-80. */
+  wide?: boolean;
 };
 
 type Ok = Extract<ProductLookupActionResult, { ok: true }>;
@@ -155,6 +157,7 @@ export function AiLookupPanel({
   aiEnabled,
   kbStrainType = null,
   manifestStrainType = null,
+  wide = false,
 }: Props) {
   const initialQuery = [productName, vendorOrBrand].filter(Boolean).join(" ").trim();
   const [query, setQuery] = useState(initialQuery);
@@ -326,7 +329,7 @@ export function AiLookupPanel({
   }
 
   return (
-    <div className="mt-1 w-80 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-2">
+    <div className={`mt-1 ${wide ? "w-full" : "w-80"} rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-2`}>
       <div className="mb-1 flex items-center justify-between">
         <span className="flex items-center gap-1 text-[11px] font-bold text-[var(--admin-accent)]">
           <span aria-hidden>🤖</span> AI Lookup

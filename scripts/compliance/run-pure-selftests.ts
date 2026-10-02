@@ -1910,7 +1910,7 @@ __runLiquidVolumeTests();
   assertRan("fact-attach-policy-core", __runFactAttachPolicyCoreTests(), 100);
   // SLICE S07: the single write door planner (attachProductFacts).
   assertRan("attach-plan-core", __runAttachPlanCoreTests(), 115);
-  assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 64);
+  assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 77);
   // S30 receiving fact review: flag signature, decision partition (stale
   // signature re-asks), fix/reject applied to the snapshot, the shared form
   // parsers, open-flag lookup, the narrow 0237 detector, held-copy retire.
@@ -1941,7 +1941,7 @@ __runLiquidVolumeTests();
   { const r = __runMergeReviewCoreTests(); if (r.failed > 0 || r.passed < 60) throw new Error(`merge-review-core: ${r.failed} failed, ${r.passed} passed`); console.log(`merge-review-core: ${r.passed} assertions passed`); }
   { const r = __runGoldenRecordCoreTests(); if (r.failed > 0 || r.passed < 57) throw new Error(`golden-record-core: ${r.failed} failed, ${r.passed} passed`); console.log(`golden-record-core: ${r.passed} assertions passed`); }
   // R19 S13: batch manifest lookup (budget, lease, orphan, enqueue plan, copy, banner). Floor = the exact count.
-  { const r = __runLookupJobCoreTests(); if (r.failed > 0 || r.passed < 94) throw new Error(`lookup-job-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-job-core: ${r.passed} assertions passed`); }
+  { const r = __runLookupJobCoreTests(); if (r.failed > 0 || r.passed < 119) throw new Error(`lookup-job-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-job-core: ${r.passed} assertions passed`); }
 
   // R20 S20: enrichment identity (flag, survivorship, ladder, suggestion target, backfill). Floor = the exact count.
   assertRan("enrichment-identity-core", __runEnrichmentIdentityCoreTests(), 85);

@@ -374,6 +374,89 @@ export const LOOKUP_FLAG_OFF_COPY = "Batch lookup is turned off (MANIFEST_BATCH_
 export const LEFT_REVIEW_COPY = "Approved or dismissed before its turn, so it was not looked up.";
 export const DRAFT_GONE_COPY = "This product draft no longer exists, so it was not looked up.";
 
+// R21 (owner: "I was not able to find the look up all products from a
+// manifest on the onboard page. Is the button wired up?"). The button WAS
+// wired (lookupAllAction -> lookup_jobs -> /api/cron/lookup-jobs), but the
+// section only rendered with ?manifest= in the URL and rendered NOTHING for
+// six other states. batchLookupEntry is the one decision: every state either
+// shows the button or says in plain words why not and what to do.
+
+export const LOOKUP_UNKNOWN_COUNT_COPY =
+  "We could not count this delivery's products just now, so the button is hidden rather than guessing a number. Refresh to try again; AI Lookup on each row still works.";
+export const LOOKUP_READ_ERROR_COPY =
+  "The batch lookup could not be read just now. Refresh to try again; AI Lookup on each row still works.";
+export const LOOKUP_CHOOSE_COPY =
+  "Batch lookup works one delivery at a time. Open a delivery below and press \u201cLook up all\u201d at the top of its list.";
+export const LOOKUP_CHOOSE_NONE_COPY =
+  "No recent delivery has products waiting in Needs review, so there is nothing to look up in bulk right now.";
+
+export type BatchLookupEntryInput = {
+  /** A delivery is focused (?manifest=<uuid>). */
+  focused: boolean;
+  /** The onboarding tab: only Needs review ("draft") can be looked up. */
+  view: string;
+  flagOn: boolean;
+  aiOn: boolean;
+  attachOn: boolean;
+  /** loadManifestLookup(...).state, or null when it was not read. */
+  state: "off" | "migration" | "error" | "none" | "job" | null;
+  /** The newest job is queued or running. */
+  jobActive: boolean;
+  eligible: { count: number; skippedDone: number; truncated: number } | null;
+};
+
+export type BatchLookupEntry =
+  | { kind: "hidden" }
+  | { kind: "choose" }
+  | { kind: "reason"; text: string }
+  | { kind: "stop" }
+  | { kind: "button"; label: string };
+
+export function batchLookupEntry(i: BatchLookupEntryInput): BatchLookupEntry {
+  if (i.view !== "draft") return { kind: "hidden" };
+  if (!i.flagOn) return { kind: "reason", text: LOOKUP_FLAG_OFF_COPY };
+  if (!i.aiOn) return { kind: "reason", text: LOOKUP_AI_OFF_COPY };
+  if (!i.focused) return { kind: "choose" };
+  if (i.state === "migration") return { kind: "reason", text: LOOKUP_MIGRATION_COPY };
+  if (i.state === "off") return { kind: "reason", text: LOOKUP_FLAG_OFF_COPY };
+  if (i.state !== "none" && i.state !== "job") return { kind: "reason", text: LOOKUP_READ_ERROR_COPY };
+  if (!i.attachOn) return { kind: "reason", text: LOOKUP_ATTACH_V2_OFF_COPY };
+  if (i.jobActive) return { kind: "stop" };
+  const e = i.eligible;
+  if (!e || !Number.isFinite(e.count) || e.count < 0) return { kind: "reason", text: LOOKUP_UNKNOWN_COUNT_COPY };
+  if (e.count > 0) return { kind: "button", label: lookupAllButtonLabel(e.count, e.skippedDone) };
+  return { kind: "reason", text: e.skippedDone > 0 ? ALL_DONE_COPY : NOTHING_IN_REVIEW_COPY };
+}
+
+export type LookupDeliveryChoiceInput = { id: string; label: string; inReview: number | null };
+export type LookupDeliveryChoice = LookupDeliveryChoiceInput & { countText: string };
+export const LOOKUP_CHOICES_MAX = 8;
+
+/**
+ * The unfocused strip: recent deliveries (picker order, newest first) that
+ * still have products in Needs review. A delivery whose count could not be
+ * read is kept and says so (never hidden, never given an invented number).
+ */
+export function lookupDeliveryChoices(
+  rows: readonly LookupDeliveryChoiceInput[] | null | undefined,
+  max: number = LOOKUP_CHOICES_MAX,
+): LookupDeliveryChoice[] {
+  const out: LookupDeliveryChoice[] = [];
+  const seen = new Set<string>();
+  const cap = Number.isInteger(max) && max > 0 ? max : LOOKUP_CHOICES_MAX;
+  for (const r of rows ?? []) {
+    if (out.length >= cap) break;
+    if (!r || !isUuid(r.id)) continue;
+    const id = r.id.trim().toLowerCase();
+    if (seen.has(id)) continue;
+    const n = typeof r.inReview === "number" && Number.isFinite(r.inReview) ? r.inReview : null;
+    if (n !== null && n <= 0) continue;
+    seen.add(id);
+    out.push({ id: r.id, label: r.label, inReview: n, countText: n === null ? "count not available" : `${n} in Needs review` });
+  }
+  return out;
+}
+
 // The batch-lookup result travels back in the redirect as ?lookup=<code>
 // (&lookup_msg=<plain sentence> for "nothing" / "error"). Closed set: an
 // unknown or forged code shows nothing, and the message is length-capped.
@@ -582,6 +665,49 @@ export function __runLookupJobCoreTests(): { passed: number; failed: number } {
   ok(lookupBanner("stopped", "")?.text === "Batch lookup stopped.", "banner stopped");
   ok(lookupBanner("hacked", "x") === null && lookupBanner(undefined, "x") === null && lookupBanner(["started"], "") === null, "unknown code shows nothing");
   ok((lookupBanner("error", "y".repeat(5000))?.text.length ?? 0) === 300, "message capped");
+
+  // R21: the entry decision (every state says something)
+  const base: BatchLookupEntryInput = { focused: true, view: "draft", flagOn: true, aiOn: true, attachOn: true, state: "none", jobActive: false, eligible: { count: 14, skippedDone: 0, truncated: 0 } };
+  const ent = (o: Partial<BatchLookupEntryInput>) => batchLookupEntry({ ...base, ...o });
+  const btn = ent({});
+  ok(btn.kind === "button" && btn.label === "Look up all 14 products on this manifest", "focused + eligible = button");
+  const btn2 = ent({ eligible: { count: 3, skippedDone: 2, truncated: 0 } });
+  ok(btn2.kind === "button" && btn2.label === "Look up the 3 products not looked up yet", "skipped label");
+  ok(ent({ view: "approved" }).kind === "hidden" && ent({ view: "dismissed", focused: false }).kind === "hidden", "other tabs hidden");
+  ok(ent({ focused: false }).kind === "choose", "unfocused = choose a delivery");
+  const r = (o: Partial<BatchLookupEntryInput>) => { const x = ent(o); return x.kind === "reason" ? x.text : `<${x.kind}>`; };
+  ok(r({ flagOn: false }) === LOOKUP_FLAG_OFF_COPY && r({ flagOn: false, focused: false }) === LOOKUP_FLAG_OFF_COPY, "flag off says so (focused or not)");
+  ok(r({ aiOn: false }) === LOOKUP_AI_OFF_COPY && r({ aiOn: false, focused: false }) === LOOKUP_AI_OFF_COPY, "AI off says so (focused or not)");
+  ok(r({ flagOn: false, aiOn: false }) === LOOKUP_FLAG_OFF_COPY, "flag reason first");
+  ok(r({ state: "migration" }) === LOOKUP_MIGRATION_COPY, "migration");
+  ok(r({ state: "error" }) === LOOKUP_READ_ERROR_COPY && r({ state: null }) === LOOKUP_READ_ERROR_COPY, "error / unread");
+  ok(r({ state: "off" }) === LOOKUP_FLAG_OFF_COPY, "server says off");
+  ok(r({ attachOn: false }) === LOOKUP_ATTACH_V2_OFF_COPY, "attach off");
+  ok(r({ attachOn: false, state: "migration" }) === LOOKUP_MIGRATION_COPY, "migration before attach");
+  ok(ent({ state: "job", jobActive: true }).kind === "stop", "active job = stop");
+  ok(ent({ state: "job", jobActive: true, eligible: null }).kind === "stop", "active job wins over unknown count");
+  ok(r({ eligible: null }) === LOOKUP_UNKNOWN_COUNT_COPY, "unknown count is said, never guessed");
+  ok(r({ eligible: { count: Number.NaN, skippedDone: 0, truncated: 0 } }) === LOOKUP_UNKNOWN_COUNT_COPY, "NaN count = unknown");
+  ok(r({ eligible: { count: 0, skippedDone: 0, truncated: 0 } }) === NOTHING_IN_REVIEW_COPY, "nothing in review");
+  ok(r({ eligible: { count: 0, skippedDone: 5, truncated: 0 } }) === ALL_DONE_COPY, "all done");
+  ok(r({ state: "job", eligible: { count: 0, skippedDone: 5, truncated: 0 } }) === ALL_DONE_COPY, "finished job, all done");
+  ok(ent({ state: "job", eligible: { count: 1, skippedDone: 0, truncated: 0 } }).kind === "button", "finished job, new arrivals = button");
+  // R21: the choose-a-delivery strip
+  const U1 = "123e4567-e89b-12d3-a456-426614174001";
+  const U2 = "123e4567-e89b-12d3-a456-426614174002";
+  const U3 = "123e4567-e89b-12d3-a456-426614174003";
+  const ch = lookupDeliveryChoices([
+    { id: U1, label: "A", inReview: 4 },
+    { id: U2, label: "B", inReview: 0 },
+    { id: U3, label: "C", inReview: null },
+    { id: U1.toUpperCase(), label: "A again", inReview: 4 },
+    { id: "nope", label: "bad", inReview: 3 },
+  ]);
+  ok(ch.length === 2 && ch[0].id === U1 && ch[1].id === U3, "keeps in-review + unknown, drops zero / dupes / non-uuid");
+  ok(ch[0].countText === "4 in Needs review" && ch[1].countText === "count not available", "count text never invented");
+  ok(lookupDeliveryChoices([{ id: U1, label: "A", inReview: 1 }, { id: U3, label: "C", inReview: 2 }], 1).length === 1, "cap");
+  ok(lookupDeliveryChoices(null).length === 0 && lookupDeliveryChoices([], 0).length === 0, "empty");
+  ok(lookupDeliveryChoices([{ id: U1, label: "A", inReview: -2 }]).length === 0, "negative = none");
 
   return { passed, failed };
 }
