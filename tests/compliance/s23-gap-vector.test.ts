@@ -292,6 +292,16 @@ describe("loadGapProvenance (the one S23 read)", () => {
     await expect(loadGapProvenance({ identityKeys: [ID] })).resolves.toBeNull();
     expect(spy).toHaveBeenCalled();
   });
+  it("a client that THROWS synchronously -> null, never throws (the page still renders)", async () => {
+    const throwing = {
+      from() {
+        throw new Error("boom");
+      },
+    } as unknown as Parameters<typeof loadGapProvenance>[1];
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(loadGapProvenance({ identityKeys: [ID], posKeys: ["LOT-1"] }, throwing)).resolves.toBeNull();
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("[gap-vector] fact history read threw"), expect.stringContaining("boom"));
+  });
 });
 
 describe("S23.4: the detail header sentence, end to end through the read", () => {

@@ -43,6 +43,7 @@ import {
 } from "@/lib/enrichment/enrichment-identity-server";
 import { ensureEnrichment, getEnrichmentForItem, resolveEnrichmentsForItems } from "@/lib/enrichment/store";
 import { resolveProductImagesBatch } from "@/lib/enrichment/image-resolver";
+import { lookupProductKnowledge } from "@/lib/ai/kb/product-lookup";
 import { menuRowToGreenwayItem } from "@/lib/pos/live-menu";
 import { toMenuGridItems } from "@/lib/menu/menu-grid-projection-core";
 import { queryFor } from "@/lib/menu/product-knowledge-display";
@@ -328,6 +329,17 @@ describe("the read ladder: own row with content first, then the PRODUCT's publis
     expect(byKey.has("BARE")).toBe(false);
     expect(byKey.get("LOT-OLD")?.pos_product_key).toBe("LOT-OLD");
   });
+  it("list page batch: when EVERY card has its own content, no identity read is made at all", async () => {
+    st.db.rows("product_enrichments").push(
+      enrichment({ pos_product_key: "A", identity_key: ID, description: "a copy" }),
+      enrichment({ pos_product_key: "B", identity_key: "other|edible|gummy", short_description: "b line" }),
+    );
+    const [a, b] = st.db.rows("product_enrichments") as unknown as ProductEnrichment[];
+    const own = new Map<string, ProductEnrichment>([["A", a!], ["B", b!]]);
+    const { viaIdentity } = await resolveEnrichmentsForItems([card("A"), card("B")], own);
+    expect(identityReads(st.db)).toEqual([]);
+    expect(viaIdentity.size).toBe(0);
+  });
 });
 
 describe("images: a new lot shows its product's published photo (still 'exact')", () => {
@@ -358,6 +370,31 @@ describe("images: a new lot shows its product's published photo (still 'exact')"
     process.env[ENRICHMENT_IDENTITY_ENV] = "off";
     const off = await resolveProductImagesBatch([{ posKey: "LOT-NEW", identityKey: ID }]);
     expect(off.has("LOT-NEW")).toBe(false);
+    expect(identityReads(st.db)).toEqual([]);
+  });
+  it("a card is never 'borrowed' from its OWN row (no second media read for the same row)", async () => {
+    // The card's own published row IS the product's survivor, and its media
+    // asset is gone: the own-key read finds no URL, and the identity rung must
+    // not re-read the very same row's media as if it were another lot's photo.
+    st.db.rows("product_enrichments").push(enrichment({ pos_product_key: "SELF", identity_key: ID, primary_media_id: "m-gone" }));
+    const r = await resolveProductImagesBatch([{ posKey: "SELF", identityKey: ID }]);
+    expect(identityReads(st.db)).toHaveLength(1);
+    const mediaGets = st.db.log.filter((q) => q.method === "GET" && q.table === "media_assets");
+    expect(mediaGets).toHaveLength(1);
+    expect(r.get("SELF")?.source === "exact").toBe(false);
+  });
+  it("per-item KB lookup (detail page / command center) borrows the product's published copy: rung 3b", async () => {
+    st.db.rows("product_enrichments").push(enrichment({ pos_product_key: "LOT-OLD", identity_key: ID, description: "Written once." }));
+    const k = await lookupProductKnowledge({ productName: "Blue Dream", brandName: "Phat Panda", posProductKey: "LOT-NEW", identityKey: ID });
+    expect(k.source).toBe("enrichment");
+    expect(k.description).toBe("Written once.");
+    expect(identityReads(st.db)).toHaveLength(1);
+    // Flag off: rung 3b is skipped and no identity read is made.
+    st.db = new FakePostgrest();
+    st.db.rows("product_enrichments").push(enrichment({ pos_product_key: "LOT-OLD", identity_key: ID, description: "Written once." }));
+    process.env[ENRICHMENT_IDENTITY_ENV] = "off";
+    const off = await lookupProductKnowledge({ productName: "Blue Dream", brandName: "Phat Panda", posProductKey: "LOT-NEW", identityKey: ID });
+    expect(off.description).not.toBe("Written once.");
     expect(identityReads(st.db)).toEqual([]);
   });
 });
