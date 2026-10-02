@@ -15,6 +15,8 @@ export type ProductGridCard = {
   brand: string;
   category: string;
   hasDescription: boolean;
+  /** S23: the only copy is the house placeholder sentence (counts as missing). */
+  descriptionPlaceholder?: boolean;
   hasImage: boolean;
   hasBrandLink: boolean;
   enrichmentStatus: string | null;
@@ -39,13 +41,13 @@ function StatusPill({ status }: { status: string | null }) {
   );
 }
 
-function GapBadge({ ok, label }: { ok: boolean; label: string }) {
+function GapBadge({ ok, label, why }: { ok: boolean; label: string; why?: string }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6rem] font-semibold ${
         ok ? "bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]/80" : "bg-[var(--admin-orange)]/15 text-[var(--admin-orange)]"
       }`}
-      title={ok ? `${label}: done` : `${label}: missing`}
+      title={ok ? `${label}: done` : why ? `${label}: missing (${why})` : `${label}: missing`}
     >
       {ok ? "✓" : "○"} {label}
     </span>
@@ -113,7 +115,11 @@ export function ProductGrid({
             </div>
             <div className="mt-auto flex flex-wrap gap-1">
               <GapBadge ok={c.hasImage} label="Photo" />
-              <GapBadge ok={c.hasDescription} label="Copy" />
+              <GapBadge
+                ok={c.hasDescription}
+                label="Copy"
+                why={c.descriptionPlaceholder ? "only the placeholder sentence" : undefined}
+              />
               <GapBadge ok={c.hasBrandLink} label="Brand" />
             </div>
           </div>

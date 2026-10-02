@@ -13,6 +13,8 @@ import { listSuggestions, isAiConfigured } from "@/lib/ai/suggestions";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { getEnrichmentCommandCenter } from "@/lib/enrichment/command-center";
 import { checklistComplete } from "@/lib/enrichment/match-core";
+// S23: the per-field gap header (pure copy; the vector is built by the command center).
+import { gapHeadline, gapFootnote } from "@/lib/enrichment/gap-vector-core";
 import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
 import {
   buildWebSearchUrl,
@@ -128,6 +130,52 @@ export default async function ProductEditorPage({
           {item.name} · price {item.price_label} · {item.inventory_status} · strain {item.strain_type}
           {item.strain_name ? ` (${item.strain_name})` : ""} · THC {item.thc ?? "—"} · CBD {item.cbd ?? "—"}.
           <span className="ml-1 text-white/35">Price &amp; stock are never edited here.</span>
+        </div>
+
+        {/* S23 (F-082): the per-field gap vector, LOUD. Red = still missing on
+            this card (a placeholder description counts as missing); accent =
+            attached at onboarding, with who/what attached it and how sure
+            (product_fact_provenance). The sentence is the bible S23.4 copy. */}
+        <div
+          data-testid="gap-header"
+          className={`rounded-xl border p-4 ${
+            center.gapVector.missing.length > 0
+              ? "border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/5"
+              : "border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/5"
+          }`}
+        >
+          <p
+            className={`text-sm font-semibold ${
+              center.gapVector.missing.length > 0 ? "text-[var(--admin-danger)]" : "text-[var(--admin-accent)]"
+            }`}
+          >
+            {gapHeadline(center.gapVector)}
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-1.5 text-[11px]" aria-label="Fields on this card">
+            {center.gapVector.entries
+              .filter((g) => g.state === "missing")
+              .map((g) => (
+                <li
+                  key={g.field}
+                  className="rounded-full border border-[var(--admin-danger)]/50 bg-[var(--admin-danger)]/10 px-2 py-0.5 font-semibold text-[var(--admin-danger)]"
+                >
+                  Missing: {g.label}
+                </li>
+              ))}
+            {center.gapVector.entries
+              .filter((g) => g.attachedBy !== null)
+              .map((g) => (
+                <li
+                  key={g.field}
+                  className="rounded-full border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-2 py-0.5 text-[var(--admin-accent)]"
+                >
+                  {g.label} · {g.attachedBy}
+                </li>
+              ))}
+          </ul>
+          {gapFootnote(center.gapVector) && (
+            <p className="mt-2 text-[11px] text-white/45">{gapFootnote(center.gapVector)}</p>
+          )}
         </div>
 
         {/* S20: enrichment follows the PRODUCT. A new lot with no content of

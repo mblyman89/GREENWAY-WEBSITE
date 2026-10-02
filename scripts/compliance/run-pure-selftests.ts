@@ -630,6 +630,7 @@ import { __runMergeReviewCoreTests } from "../../src/lib/pos/merge-review-core";
 import { __runGoldenRecordCoreTests } from "../../src/lib/catalog/golden-record-core";
 // R20 S20: enrichment follows the product identity (read ladder, survivorship, suggestion target, backfill).
 import { __runEnrichmentIdentityCoreTests } from "../../src/lib/enrichment/enrichment-identity-core";
+import { __runGapVectorCoreTests } from "../../src/lib/enrichment/gap-vector-core";
 import { __runLookupJobCoreTests } from "../../src/lib/catalog/lookup-job-core";
 import { __runPublishStoryCoreTests } from "../../src/lib/catalog/publish-story-core";
 import { __runIntakeVersionCopyCoreTests } from "../../src/lib/pos/intake-version-copy-core";
@@ -1944,6 +1945,7 @@ __runLiquidVolumeTests();
 
   // R20 S20: enrichment identity (flag, survivorship, ladder, suggestion target, backfill). Floor = the exact count.
   assertRan("enrichment-identity-core", __runEnrichmentIdentityCoreTests(), 85);
+  assertRan("gap-vector-core", __runGapVectorCoreTests(), 89);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

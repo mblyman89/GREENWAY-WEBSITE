@@ -399,8 +399,14 @@ describe("S24 wiring", () => {
     const src = stripComments(read("src/lib/enrichment/command-center.ts"));
     const call = src.slice(src.indexOf("lookupProductKnowledge({"), src.indexOf("}).catch("));
     expect(call).toMatch(/menuVariantLabel: item\.variants\?\.\[0\]\?\.label \?\? null/);
-    expect(call).toMatch(/lotKeys: cardLotKeys\(/);
-    expect(call).toMatch(/source_variant_id: v\.source_variant_id/);
+    // S23 hoisted the lot keys into ONE constant so the KB ladder and the
+    // gap header's fact-history read use the identical keys.
+    expect(call).toMatch(/\blotKeys,\n/);
+    const decl = src.slice(src.indexOf("const lotKeys = cardLotKeys({"), src.indexOf("lookupProductKnowledge({"));
+    expect(decl.length).toBeGreaterThan(0);
+    expect(decl).toMatch(/source_item_id: posKey \?\? ""/);
+    expect(decl).toMatch(/source_variant_id: v\.source_variant_id/);
+    expect(src).toMatch(/loadGapProvenance\(\{ identityKeys: \[identityKey\], posKeys: lotKeys \}\)/);
   });
 
   it("the admin page hands command-center the item WITH its variants", () => {
@@ -443,7 +449,7 @@ describe("S24 wiring", () => {
     // Later slices move the "As of" marker forward; S24 must stay in its no-variable list.
     expect(ledger).toMatch(/As of \*\*S\d+\*\* it reads \([^)]*\bS24\b[^)]*added no variable/);
     expect(ledger).toMatch(/Slices that added \*\*no\*\* variable:[^\n]*\bS24\b/);
-    expect(ledger).toMatch(/"Revert\." \(S16, S21, S22, S24\)/);
+    expect(ledger).toMatch(/"Revert\." \(S16, S21, S22, S23, S24\)/); // S23 joined in Round 20
     expect(ledger).toContain("S24 needs nothing set");
   });
 });

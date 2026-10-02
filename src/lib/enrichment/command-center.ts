@@ -26,6 +26,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import { getEnrichmentForItem, computeGaps, type GapFlags } from "@/lib/enrichment/store";
+// S23: the per-field gap vector + its one read (the onboarding fact history).
+import { buildGapVector, type GapVector } from "@/lib/enrichment/gap-vector-core";
+import { loadGapProvenance } from "@/lib/enrichment/gap-vector-server";
 import { enrichmentIdentityForItem, type EnrichmentVia } from "@/lib/enrichment/enrichment-identity-core";
 import type { MenuItemRow, MenuVariantRow } from "@/lib/pos/db-types";
 import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
@@ -101,6 +104,11 @@ export type EnrichmentCommandCenter = {
   /** S20: the card's S03 identity (raw menu row); null = not enough identity. */
   identityKey: string | null;
   gaps: GapFlags;
+  /**
+   * S23: the per-field gap vector for the detail header ("Still missing: ...
+   * Attached at onboarding: ..."). Boilerplate description counts as missing.
+   */
+  gapVector: GapVector;
   /** KB ladder result for this product (source, copy, sensory, image hint). */
   knowledge: ProductKnowledge;
   kbSuggestions: KbSuggestion[];
@@ -194,7 +202,11 @@ export async function getEnrichmentCommandCenter(
   };
 
   const identityKey = enrichmentIdentityForItem(item);
-  const [served, knowledge, kbRows, mediaRows, vendorRows, liveImage, substitute] =
+  const lotKeys = cardLotKeys({
+    source_item_id: posKey ?? "",
+    variants: (item.variants ?? []).map((v) => ({ source_variant_id: v.source_variant_id })),
+  });
+  const [served, knowledge, kbRows, mediaRows, vendorRows, liveImage, substitute, provenance] =
     await Promise.all([
       getEnrichmentForItem(item).catch(() => ({ row: null, via: "none" as EnrichmentVia, own: null })),
       lookupProductKnowledge({
@@ -206,10 +218,7 @@ export async function getEnrichmentCommandCenter(
         strainName: item.strain_name ?? null,
         // S24 (F-083): same writer-identity inputs the public menu passes.
         menuVariantLabel: item.variants?.[0]?.label ?? null,
-        lotKeys: cardLotKeys({
-          source_item_id: posKey ?? "",
-          variants: (item.variants ?? []).map((v) => ({ source_variant_id: v.source_variant_id })),
-        }),
+        lotKeys,
       }).catch(
         (): ProductKnowledge => ({
           source: "none",
@@ -240,10 +249,19 @@ export async function getEnrichmentCommandCenter(
         item.pos_inventory_category ?? pos.category,
         item.pos_inventory_type ?? null,
       ).catch(() => null),
+      // S23: the onboarding fact history, by the card's identity AND its lot
+      // keys (the S07 door stamps the draft's identity + lot key). null = not read.
+      loadGapProvenance({ identityKeys: [identityKey], posKeys: lotKeys }).catch(() => null),
     ]);
 
   const enrichment = served.row;
   const gaps = computeGaps(item, enrichment);
+  const gapVector = buildGapVector({
+    item: { description: item.description, strain_type: item.strain_type, category: item.category },
+    enrichment,
+    knowledge,
+    provenance,
+  });
 
   // --- Rank KB products -----------------------------------------------------
   const kbRanked = rankMatches(
@@ -364,6 +382,7 @@ export async function getEnrichmentCommandCenter(
     enrichmentVia: served.via,
     identityKey,
     gaps,
+    gapVector,
     knowledge,
     kbSuggestions,
     mediaSuggestions,
