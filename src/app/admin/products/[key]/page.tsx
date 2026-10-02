@@ -135,7 +135,7 @@ export default async function ProductEditorPage({
         {/* S23 (F-082): the per-field gap vector, LOUD. Red = still missing on
             this card (a placeholder description counts as missing); accent =
             attached at onboarding, with who/what attached it and how sure
-            (product_fact_provenance). The sentence is the bible S23.4 copy. */}
+            (the onboarding fact history, read by the command center). The sentence is the bible S23.4 copy. */}
         <div
           data-testid="gap-header"
           className={`rounded-xl border p-4 ${
