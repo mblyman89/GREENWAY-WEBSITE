@@ -111,7 +111,7 @@ describe("S14 pure core — embedded self-tests", () => {
   it("pass with no failures", () => {
     const r = __runOnboardingListCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(64);
+    expect(r.passed).toBe(77);
   });
 });
 
@@ -716,17 +716,31 @@ describe("S14 drafts page wiring", () => {
     expect(page).toContain("listPage.plan.ignored.length > 0");
   });
 
-  it("F-006: the approve form lives INSIDE a condensed <details>; Dismiss stays outside", () => {
+  it("F-006 (re-pinned by S41, bible S41.3): the approve form is only visible while the row's <details> is open; Dismiss stays in the summary row", () => {
     const d = page.indexOf('data-testid="draft-row-details"');
     expect(d).toBeGreaterThan(-1);
     const detailsOpen = page.lastIndexOf("<details", d);
     expect(page.slice(detailsOpen, d)).toContain("open={rowStartsOpen({ rows: list.rows, pinned: pinned?.id === d.id })}");
-    const approve = page.indexOf("<form action={approve}", d);
+    // ONE approve form per row, built once as approveForm ...
+    expect(page.match(/<form action=\{approve\}/g)?.length).toBe(1);
+    expect(page.indexOf("<form action={approve}")).toBeGreaterThan(page.indexOf("const approveForm = ("));
+    // ... mounted in exactly two mutually exclusive places: inside <details>
+    // (flag off, the previous row) or in the S41 detail row (flag on), which
+    // globals.css shows only while that <details> is open.
     const close = page.indexOf("</details>", d);
+    const inDetails = page.slice(d, close);
+    expect(inDetails).toContain("{!v2Row && approveForm}");
+    expect(page.match(/approveForm\}/g)?.length).toBe(2);
+    const detailRow = page.indexOf("<OnboardingDetailRow", close);
+    expect(page.slice(close, detailRow)).toContain('{v2Row && view === "draft" && (');
+    expect(page.slice(detailRow, page.indexOf("/>", page.indexOf("approve={approveForm}", detailRow)))).toContain("approve={approveForm}");
+    const css = read("src/app/globals.css");
+    expect(css).toContain("tr.draft-detail-row {\n    display: none;");
+    expect(css).toContain('tr:has(details[data-testid="draft-row-details"][open]) + tr.draft-detail-row {\n    display: table-row;');
+    expect(css).toContain("@supports selector(tr:has(details[open]))");
     const dismiss = page.indexOf("<form action={dismiss}", d);
-    expect(approve).toBeGreaterThan(d);
-    expect(close).toBeGreaterThan(page.indexOf("✓ Approve", approve));
     expect(dismiss).toBeGreaterThan(close);
+    expect(dismiss).toBeLessThan(detailRow);
     const summary = page.slice(page.indexOf("<summary", d), page.indexOf("</summary>", d));
     expect(summary).toContain("rowChips.map");
     expect(summary).toContain("Ready to approve");
@@ -782,7 +796,7 @@ describe("S14 drafts page wiring", () => {
 describe("S14 runner registration", () => {
   it("the pure core is registered with a floor", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
-    expect(runner).toContain('assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 64);');
+    expect(runner).toContain('assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 77);');
     expect(runner).toMatch(/import \{ __runOnboardingListCoreTests \} from "\.\.\/\.\.\/src\/lib\/catalog\/onboarding-list-core"/);
   });
   it("the core is pure (no server-only / supabase / env)", () => {

@@ -485,6 +485,42 @@ export function rowStartsOpen(opts: { rows: RowsMode; pinned: boolean }): boolea
   return opts.rows === "expanded" || opts.pinned;
 }
 
+// ─── 6b. S41: the full-width detail row ─────────────────────────────────────
+//
+// R21 (owner: "has the onboard product rows been changed to utilize all
+// available space?"). The table's header cells come from ONE list, and the
+// expanded detail row's colSpan is that list's length, so adding a column
+// can never leave the detail row short (IBM Carbon "Data table -
+// Expandable": the expanded section spans the whole table).
+
+export type OnboardingColumn = { key: string; label: string; alignRight: boolean };
+
+export function onboardingColumns(v2Row: boolean): OnboardingColumn[] {
+  const cols: OnboardingColumn[] = [{ key: "product", label: "Product", alignRight: false }];
+  if (v2Row) cols.push({ key: "manifest", label: "Manifest", alignRight: false });
+  cols.push({ key: "category", label: "Category & Type", alignRight: false });
+  if (v2Row) cols.push({ key: "facts", label: "Facts", alignRight: false });
+  cols.push(
+    { key: "thc", label: "THC", alignRight: true },
+    { key: "cost", label: "Cost", alignRight: true },
+    { key: "pricing", label: "Pricing", alignRight: true },
+    { key: "actions", label: "Actions", alignRight: true },
+  );
+  return cols;
+}
+
+/** The three zones of the opened row, in reading order (bible S41.2). */
+export const DETAIL_ZONES = [
+  { key: "facts", title: "What we know" },
+  { key: "lookup", title: "AI lookup" },
+  { key: "approve", title: "Approve" },
+] as const;
+
+/** The detail row's id: the summary row's anchor + "-detail" (aria-controls). */
+export function detailRowId(rowAnchorId: string): string {
+  return `${rowAnchorId}-detail`;
+}
+
 // ─── 7. URLs ─────────────────────────────────────────────────────────────────
 
 export type OnboardingListHrefOpts = {
@@ -634,6 +670,18 @@ export function __runOnboardingListCoreTests(): { passed: number; failed: number
   ok(chips.find((x) => x.key === "low_thc")?.blocking === false, "low-THC is informational");
   ok(rowStartsOpen({ rows: "condensed", pinned: true }) && rowStartsOpen({ rows: "expanded", pinned: false }), "open when pinned or expanded");
   ok(!rowStartsOpen({ rows: "condensed", pinned: false }), "condensed by default");
+
+  // S41: header cells and the detail row's colSpan come from one list.
+  const on = onboardingColumns(true);
+  const off = onboardingColumns(false);
+  ok(on.length === 8 && off.length === 6, "8 columns with the v2 row, 6 without");
+  ok(on.map((c) => c.key).join(",") === "product,manifest,category,facts,thc,cost,pricing,actions", "v2 column order");
+  ok(off.map((c) => c.key).join(",") === "product,category,thc,cost,pricing,actions", "v1 column order");
+  ok(off.map((c) => c.label).join("|") === "Product|Category & Type|THC|Cost|Pricing|Actions", "v1 labels unchanged");
+  ok(on.filter((c) => c.alignRight).map((c) => c.key).join(",") === "thc,cost,pricing,actions", "numbers + actions right-aligned");
+  ok(new Set(on.map((c) => c.key)).size === on.length, "keys unique");
+  ok(DETAIL_ZONES.map((z) => z.key).join(",") === "facts,lookup,approve", "zones in reading order");
+  ok(detailRowId("draft-abc") === "draft-abc-detail", "detail row id");
 
   // URLs.
   ok(onboardingListHref() === "/admin/inventory/drafts", "canonical URL");

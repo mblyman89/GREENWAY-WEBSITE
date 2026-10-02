@@ -39,6 +39,7 @@ import {
   __runFactChipsCoreTests,
 } from "@/lib/catalog/fact-chips-core";
 import { FactsPanel } from "@/components/admin/catalog/FactsPanel";
+import { onboardingColumns } from "@/lib/catalog/onboarding-list-core";
 
 const ROOT = join(__dirname, "..", "..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
@@ -436,13 +437,13 @@ describe("page wiring (ONBOARDING_V2_ROW)", () => {
   });
 
   it("adds Manifest and Facts columns only with the flag on (header + cells)", () => {
-    expect(page).toContain('{v2Row && <th className="px-4 py-3">Manifest</th>}');
-    expect(page).toContain('{v2Row && <th className="px-4 py-3">Facts</th>}');
+    // S41: the header cells come from ONE list (onboardingColumns), so the
+    // detail row's colSpan can never drift from the header count.
     const ths = page.slice(page.indexOf("<thead"), page.indexOf("</thead>"));
-    expect(ths.indexOf("Product</th>")).toBeLessThan(ths.indexOf("Manifest</th>"));
-    expect(ths.indexOf("Manifest</th>")).toBeLessThan(ths.indexOf("Category &amp; Type</th>"));
-    expect(ths.indexOf("Category &amp; Type</th>")).toBeLessThan(ths.indexOf("Facts</th>"));
-    expect(ths.indexOf("Facts</th>")).toBeLessThan(ths.indexOf("THC</th>"));
+    expect(ths).toContain("{columns.map((c) => (");
+    expect(page).toContain("const columns = onboardingColumns(v2Row);");
+    expect(onboardingColumns(true).map((c) => c.label)).toEqual(["Product", "Manifest", "Category & Type", "Facts", "THC", "Cost", "Pricing", "Actions"]);
+    expect(onboardingColumns(false).map((c) => c.label)).toEqual(["Product", "Category & Type", "THC", "Cost", "Pricing", "Actions"]);
     // Cells in the same order as the headers.
     const body = page.slice(page.indexOf("<tbody"));
     const order = ['<KnownProductChip', 'data-testid="draft-row-manifest"', "OUR labels on screen", 'data-testid="draft-row-facts"', "fmtPct(d.total_thc_pct ?? d.thc_pct)"].map((s) => body.indexOf(s));
@@ -478,25 +479,25 @@ describe("page wiring (ONBOARDING_V2_ROW)", () => {
     expect(page).toContain("identityLine(identityForDraft(d, { websiteCategory: resolutions[i]?.websiteCategory ?? null }).identityKey, d, kbFirst)");
   });
 
-  it("F-020: with the flag on the panel + lookup sit in the detail region ABOVE (outside) the approve form", () => {
-    const details = page.indexOf('data-testid="draft-row-details"');
-    const summaryEnd = page.indexOf("</summary>", details);
-    const detail = page.indexOf('data-testid="draft-row-detail"', summaryEnd);
-    const form = page.indexOf("<form action={approve}", details);
+  it("F-020 (S41): with the flag on the facts and the lookup sit in their own zones of the detail row, OUTSIDE the approve form", () => {
+    const form = page.indexOf("<form action={approve}");
     const formEnd = page.indexOf("</form>", form);
-    expect(detail).toBeGreaterThan(summaryEnd);
-    expect(detail).toBeLessThan(form);
-    const region = page.slice(detail, form);
-    expect(region).toContain("<FactsPanel view={facts} identity={identity} />");
-    expect(region).toContain("{lookupPanel}");
-    expect(page.slice(detail - 200, detail)).toContain("{facts && identity && (");
+    const row = page.indexOf("<OnboardingDetailRow");
+    expect(row).toBeGreaterThan(formEnd);
+    const props = page.slice(row, page.indexOf("approve={approveForm}", row));
+    expect(props).toContain('data-testid="draft-row-detail"');
+    expect(props).toContain("<FactsPanel view={facts} identity={identity} wide />");
+    expect(props).toContain("facts && identity ? (");
+    expect(props).toContain("lookup={lookupPanel}");
+    // The zones are in reading order: facts -> lookup -> approve.
+    expect(props.indexOf("facts={")).toBeLessThan(props.indexOf("lookup={lookupPanel}"));
     // Inside the form the lookup renders ONLY when the flag is off.
     const inForm = page.slice(form, formEnd);
     expect(inForm).toContain("{!v2Row && lookupPanel}");
     expect(inForm).not.toContain("<AiLookupPanel");
     // Exactly one AiLookupPanel element, mounted once per row via lookupPanel.
     expect(page.match(/<AiLookupPanel\b/g)?.length).toBe(1);
-    expect(page.match(/\{lookupPanel\}|\{!v2Row && lookupPanel\}/g)?.length).toBe(2);
+    expect(page.match(/lookup=\{lookupPanel\}|\{!v2Row && lookupPanel\}/g)?.length).toBe(2);
   });
 
   it("Approve remains ONE button, inside the approve form", () => {

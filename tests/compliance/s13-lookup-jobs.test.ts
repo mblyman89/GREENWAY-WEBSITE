@@ -274,10 +274,11 @@ describe("S13 pure core", () => {
   it("self-tests pass with the exact count (a deleted check turns this red)", () => {
     const r = __runLookupJobCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(94);
+    // R21: +25 for batchLookupEntry / lookupDeliveryChoices (the button is never silently absent).
+    expect(r.passed).toBe(119);
   });
   it("the pure runner pins the same floor", () => {
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupJobCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 94\)/);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/__runLookupJobCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 119\)/);
   });
   it("the core is pure: no process.env, no server-only, no I/O imports", () => {
     const src = read("src/lib/catalog/lookup-job-core.ts");
@@ -967,9 +968,11 @@ describe("S13 wiring", () => {
   });
   it("the page shows the panel, the button, the per-row line and the result banner", () => {
     const page = read("src/app/admin/inventory/drafts/page.tsx");
-    for (const id of ["batch-lookup", "batch-lookup-button", "batch-lookup-progress", "batch-lookup-row", "batch-lookup-migration", "lookup-result"]) {
+    for (const id of ["batch-lookup", "batch-lookup-button", "batch-lookup-progress", "batch-lookup-row", "lookup-result", "batch-lookup-choose", "batch-lookup-choice"]) {
       expect(page, id).toContain(`data-testid="${id}"`);
     }
+    // R21: the migration / reason line shares one <p>; its testid is chosen by state.
+    expect(page).toContain('data-testid={batchLookup?.state === "migration" ? "batch-lookup-migration" : "batch-lookup-reason"}');
     expect(page).toMatch(/lookupAllAction/);
     expect(page).toMatch(/cancelLookupAction/);
   });
