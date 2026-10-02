@@ -356,6 +356,10 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
       // pinned by the next test.
       .filter((f) => !f.endsWith(path.join("catalog", "golden-record-core.ts")))
       .filter((f) => !f.endsWith(path.join("catalog", "golden-record-server.ts")))
+      // S23 (Round 20): the detail-page gap header READS product_fact_provenance
+      // (who attached each field, how sure). Read-only; pinned by the S23 test below.
+      .filter((f) => !f.endsWith(path.join("enrichment", "gap-vector-core.ts")))
+      .filter((f) => !f.endsWith(path.join("enrichment", "gap-vector-server.ts")))
       .filter((f) => /attached_facts|product_fact_provenance/.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(ROOT, f));
     expect(hits).toEqual([]);
@@ -369,6 +373,21 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
     for (const src of [server, core]) {
       expect(src).not.toMatch(/\.(insert|update|upsert|delete|rpc)\(/);
       expect(src).not.toMatch(/product_fact_provenance|PROVENANCE_TABLE/);
+    }
+  });
+
+  it("S23: the gap header only READS provenance (core constant, named select, bounded; no write; missing 0235 tolerated)", () => {
+    const server = readFileSync(path.join(ROOT, "src/lib/enrichment/gap-vector-server.ts"), "utf8");
+    const core = readFileSync(path.join(ROOT, "src/lib/enrichment/gap-vector-core.ts"), "utf8");
+    expect(server).toContain(".from(PROVENANCE_TABLE)");
+    expect(server).toContain(".select(`id, ${GAP_PROVENANCE_SELECT}`)");
+    expect(server).toContain(".limit(GAP_PROVENANCE_LIMIT)");
+    expect(server).toContain("isMissingAttachedFactsError(error)");
+    expect(server).not.toMatch(/from\("product_fact_provenance"\)/);
+    expect(core).toMatch(/export const GAP_PROVENANCE_SELECT = "field, value_json, source, confidence, created_at";/);
+    for (const src of [server, core]) {
+      expect(src).not.toMatch(/\.(insert|update|upsert|delete|rpc)\(/);
+      expect(src).not.toMatch(/attached_facts/);
     }
   });
 

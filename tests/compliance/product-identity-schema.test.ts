@@ -267,11 +267,27 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
           if (/\.select\([^)]*\b(identity_key|kb_product_id|restock_of_card_key)\b/.test(src)) {
             offenders.push(path.relative(ROOT, p));
           }
+          // S20 (Round 20) added the first guarded reader on purpose: the
+          // attach door reads restock_of_card_key and retries without it on
+          // 42703/PGRST204 (pinned by the next test).
         }
       }
     };
     walk(path.join(ROOT, "src"));
-    expect(offenders).toEqual([]);
+    expect(offenders).toEqual(["src/lib/catalog/attach-facts.ts"]);
+  });
+
+  it("S20: the one identity-column select (attach door, restock_of_card_key) retries WITHOUT it before 0234", () => {
+    const door = readFileSync(path.join(ROOT, "src/lib/catalog/attach-facts.ts"), "utf8");
+    const selects = door.match(/\.select\([^)]*\b(identity_key|kb_product_id|restock_of_card_key)\b[^)]*\)/g) ?? [];
+    expect(selects).toEqual([".select(`${DRAFT_FACTS_SELECT}, restock_of_card_key`)"]);
+    expect(door).toContain('if (error && isMissingIdentityColumnError("catalog_product_drafts", error)) {');
+    expect(door).toContain('.select(DRAFT_FACTS_SELECT).eq("id", draftId).maybeSingle()');
+    expect(door).toMatch(/const DRAFT_FACTS_SELECT = "[^"]*"/);
+    expect(/const DRAFT_FACTS_SELECT = "([^"]*)"/.exec(door)?.[1]).not.toMatch(/identity_key|kb_product_id|restock_of_card_key/);
+    // S20's identity-indexed reads go through constants, each guarded for pre-0234.
+    const ids = readFileSync(path.join(ROOT, "src/lib/enrichment/enrichment-identity-server.ts"), "utf8");
+    expect(ids.match(/isMissingIdentityColumnError\("product_enrichments", error\)/g)?.length).toBe(2);
   });
 
   it("S05's named select-column constants (invisible to the .select( regex) name no 0234 column", () => {

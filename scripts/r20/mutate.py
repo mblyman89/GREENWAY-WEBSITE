@@ -100,6 +100,12 @@ MUTANTS = [
     ("attach door never reads the restock hint", ATT,
      "      restockOfCardKey: d.restock_of_card_key ?? null,",
      "      restockOfCardKey: null,"),
+    ("attach door loses its pre-0234 retry (onboarding breaks before the migration)", ATT,
+     '  if (error && isMissingIdentityColumnError("catalog_product_drafts", error)) {',
+     "  if (false) {"),
+    ("the gap reader writes to the provenance trail", GVS,
+     "        .limit(GAP_PROVENANCE_LIMIT);\n      return",
+     "        .limit(GAP_PROVENANCE_LIMIT);\n      void db.from(PROVENANCE_TABLE).update({});\n      return"),
     # --- backfill ---------------------------------------------------------------
     ("backfill overwrites a stored identity", IDC,
      "    if (stored) {\n      plan.alreadyStamped += 1;",
@@ -298,6 +304,8 @@ SUITES = [
     "tests/compliance/s22-enrichment-manifest-filter.test.tsx",
     "tests/compliance/intake-env-ledger.test.ts",
     "tests/compliance/menu-knowledge-batch.test.ts",
+    "tests/compliance/attached-facts-schema.test.ts",
+    "tests/compliance/product-identity-schema.test.ts",
 ]
 
 
