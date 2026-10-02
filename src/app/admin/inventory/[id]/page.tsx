@@ -41,7 +41,23 @@ import {
   updateLotAfterTaxPriceAction,
   updateLotReceivedDateAction,
   updateLotComplianceClassificationAction,
+  linkLotProductAction,
+  linkLotCoaAction,
 } from "../actions";
+// S37: the two "fill only when empty" doors (product link, attach a lab result).
+import {
+  productLinkEligibility,
+  coaLinkEligibility,
+  parseLabtestSearch,
+  sortCoaCandidates,
+  coaCandidateView,
+  keySourceLabel,
+  PRODUCT_LINK_ANCHOR,
+  type CoaCandidateView,
+  type LotDraftHint,
+} from "@/lib/inventory/lot-link-core";
+import { findLabResultsByLabtestId, listDraftHintsForLot } from "@/lib/inventory/lot-link-store";
+import { LotProductLinkPanel, LotCoaAttach } from "@/components/admin/inventory/LotLinkPanels";
 // SLICE 18A: the compliance-classification panel. Status is derived by the
 // pure core from MENU truth (the only surface the register enforces from).
 import {
@@ -108,11 +124,11 @@ export default async function LotDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; back?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { saved, error, back } = await searchParams;
+  const { saved, error, back, coaSearch } = await searchParams;
   // S31: vendors/[id] and products/[key] link here with ?back=<admin path>.
   // Validated with the same guard the media actions use (in-app /admin paths
   // only), so a crafted link can never make this an open redirect.
@@ -236,6 +252,31 @@ export default async function LotDetailPage({
   const priceAction = updateLotAfterTaxPriceAction.bind(null, id);
   // SLICE 2: the owner's received-date entry form.
   const receivedDateAction = updateLotReceivedDateAction.bind(null, id);
+  // Standing rule 8: the business clock is America/Los_Angeles. Using the UTC
+  // date here made "today" roll over at 4pm/5pm Pacific, which could mark a
+  // lot expired a day early and cap the received-date picker a day short.
+  // (S37: declared here because the COA candidates read it too.)
+  const today = pacificToday();
+
+  // S37: the narrow link doors. Eligibility decides whether each form shows.
+  const productLinkAction = linkLotProductAction.bind(null, id);
+  const coaLinkAction = linkLotCoaAction.bind(null, id);
+  const productGate = productLinkEligibility(lot);
+  const coaGate = coaLinkEligibility(lot);
+  const draftHints: LotDraftHint[] = productGate.ok ? await listDraftHintsForLot(id) : [];
+  const coaTerm = parseLabtestSearch(coaSearch);
+  let coaCandidates: CoaCandidateView[] = [];
+  let coaSearchError: string | null = coaTerm.ok ? null : coaTerm.error;
+  if (coaGate.ok && coaTerm.ok && coaTerm.value) {
+    const found = await findLabResultsByLabtestId(coaTerm.value, id);
+    if (found.ok) {
+      coaCandidates = sortCoaCandidates(found.rows).map((r) =>
+        coaCandidateView(r, today, found.linkedLots.get(r.id) ?? null),
+      );
+    } else {
+      coaSearchError = `Could not search lab results: ${found.error}`;
+    }
+  }
 
   // T-324: everything the price row + edit field need. The category that drives
   // the tax divisor/floor is the SAME website category the menu/cart use.
@@ -245,10 +286,6 @@ export default async function LotDetailPage({
   const currentBaseMinor =
     currentAfterTaxMinor != null ? baseFromAfterTax(currentAfterTaxMinor, priceCategory) : null;
 
-  // Standing rule 8: the business clock is America/Los_Angeles. Using the UTC
-  // date here made "today" roll over at 4pm/5pm Pacific, which could mark a
-  // lot expired a day early and cap the received-date picker a day short.
-  const today = pacificToday();
   const expired = lot.expires_on != null && lot.expires_on < today;
 
   return (
@@ -402,6 +439,18 @@ export default async function LotDetailPage({
           </div>
         </div>
 
+        {/* S37: #product-link is where "Not linked to a product" fix links land.
+            The id is literal so the fix-link contract test can see it. */}
+        <div id="product-link" className="scroll-mt-24">
+          <LotProductLinkPanel
+            currentKey={lot.pos_product_key?.trim() ? lot.pos_product_key : null}
+            keySourceLabel={keySourceLabel(lot.pos_product_key_source)}
+            refusal={productGate.ok ? null : productGate.reason}
+            drafts={draftHints}
+            action={productLinkAction}
+          />
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Lot facts */}
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
@@ -457,7 +506,23 @@ export default async function LotDetailPage({
               />
               <Row label="Sample" value={lot.is_sample ? "Yes (vendor sample)" : "No"} />
               <Row label="Medical" value={lot.is_medical ? "Yes (DOH compliant)" : "No"} />
-              <Row label="POS product key" value={lot.pos_product_key ?? "— (not linked)"} />
+              {/* S37: an unlinked lot links straight to the form below. */}
+              {lot.pos_product_key ? (
+                <Row label="POS product key" value={lot.pos_product_key} />
+              ) : (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--admin-text-faint)]">POS product key</dt>
+                  <dd className="text-right">
+                    <a
+                      href={`#${PRODUCT_LINK_ANCHOR}`}
+                      data-testid="lot-key-not-linked"
+                      className="font-medium text-[var(--admin-orange)] underline"
+                    >
+                      Not linked — Link this lot to a product
+                    </a>
+                  </dd>
+                </div>
+              )}
               <Row
                 label="Expires"
                 value={
@@ -511,7 +576,8 @@ export default async function LotDetailPage({
                 {migrationCallout.coaMissing ? (
                   <p className="mt-2">
                     The import brought no lab results. A COA spreadsheet import for these lots is on the
-                    roadmap; until then the COA link is added when the lab result is imported.
+                    roadmap; until then, a lab result that is already imported can be attached in the
+                    COA panel ({"\u201c"}Attach a lab result{"\u201d"}).
                   </p>
                 ) : null}
               </div>
@@ -591,6 +657,16 @@ export default async function LotDetailPage({
                 LabtestexternalIdentifier — link or import the lab result before selling.
               </div>
             )}
+            {/* S37: attach an already-imported lab result (fill only when empty). */}
+            <LotCoaAttach
+              lotId={lot.id}
+              back={backPath}
+              refusal={coaGate.ok ? null : coaGate.reason}
+              search={coaTerm.ok ? coaTerm.value : null}
+              candidates={coaCandidates}
+              searchError={coaSearchError}
+              action={coaLinkAction}
+            />
             {/* R15a: the Cultivera export's own potency figures (migration 0241),
                 labelled as NOT a COA. The COA above always outranks these. */}
             {(lot.pos_thc != null || lot.pos_cbd != null || lot.pos_thca != null || lot.pos_cbda != null ||

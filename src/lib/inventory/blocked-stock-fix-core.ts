@@ -84,16 +84,18 @@ export function fixLinkForLot(cause: BlockedCause, lotId: string, productKey: st
      */
     case "no_product_link":
       /**
-       * Round 11 audit (honest): the lot page shows the POS product key READ-
-       * ONLY (lot-edit-core LOCKED_LOT_FIELDS). The only writer today is Bulk
-       * fill (applyBulkFill), which fills lots from the one-time Cultivera
-       * import. So the per-lot link says exactly that instead of promising a
-       * control the lot page does not have; per-lot linking is S37.
+       * S37: the lot page now has the control — "Link this lot to a product"
+       * (#product-link, linkLotProductAction). It fills ONLY an empty key, to
+       * a key found on the published menu or in Product Onboarding, audited.
+       * pos_product_key stays in LOCKED_LOT_FIELDS: this is a narrow door, not
+       * an edit (a linked key is never re-pointed). (Round 11 sent this to the
+       * bare lot page with a "read-only" note because the control did not
+       * exist yet.)
        */
       return {
-        href: `/admin/inventory/${lotId}`,
-        label: "Open lot (see its product details)",
-        why: "The POS product key is read-only on the lot page. Lots from the one-time Cultivera import can be linked with Bulk fill on the Inventory list; other lots are linked when they are received through Product Intake.",
+        href: `/admin/inventory/${lotId}#product-link`,
+        label: "Link this lot to a product",
+        why: "Opens the lot's Product link form. Enter the POS product key of a card on the published menu or a draft in Product Onboarding; it only fills an empty key and is recorded in the audit trail.",
       };
 
     /**
@@ -127,9 +129,11 @@ export function fixLinkForLot(cause: BlockedCause, lotId: string, productKey: st
             why: "Set Visibility to “Always show” on the product page, then save. It un-hides the card on the live menu and the register right away.",
           }
         : {
-            href: `/admin/inventory/${lotId}`,
-            label: "Open lot",
-            why: "This lot is hidden on the menu but carries no product key to follow, so start at the lot.",
+            // S37: with no key there is no card to un-hide; the first fix is
+            // the link itself, so land on the lot's Product link form.
+            href: `/admin/inventory/${lotId}#product-link`,
+            label: "Link this lot to a product",
+            why: "This lot carries no product key, so there is no card to un-hide yet. Link it to its product first.",
           };
 
     /**
@@ -291,9 +295,14 @@ export function __runBlockedStockFixCoreTests(): void {
   );
   ok(fixLinkForLot("lot_not_active", "lot-s", "K").href === "/admin/inventory/lot-s#lifecycle", "inactive -> #lifecycle");
   ok(fixLinkForLot("lot_empty", "lot-e", "K").href === "/admin/inventory/lot-e#adjust", "empty -> #adjust");
+  // S37: the lot page now carries the control, so the link lands on it.
   ok(
-    /read-only/i.test(fixLinkForLot("no_product_link", "lot-u", null).why),
-    "unlinked lot link is honest that the key is read-only on the lot page",
+    /only fills an empty key/i.test(fixLinkForLot("no_product_link", "lot-u", null).why),
+    "unlinked lot link says it only fills an empty key",
+  );
+  ok(
+    !/read-only/i.test(fixLinkForLot("no_product_link", "lot-u", null).why),
+    "unlinked lot link no longer claims the key is read-only",
   );
   // THE TRAP: products/[key] calls notFound() for unpublished keys.
   ok(
@@ -303,18 +312,19 @@ export function __runBlockedStockFixCoreTests(): void {
 
   // ── The one cause the old blanket link got right stays right ─────────────
   ok(
-    fixLinkForLot("no_product_link", "lot-3", null).href === "/admin/inventory/lot-3",
-    "an unlinked lot opens the lot",
+    fixLinkForLot("no_product_link", "lot-3", null).href === "/admin/inventory/lot-3#product-link",
+    "an unlinked lot opens the lot's Product link form",
   );
 
   // ── Never emit a link that cannot resolve ────────────────────────────────
   const hiddenNoKey = fixLinkForLot("hidden_card", "lot-4", null);
-  ok(hiddenNoKey.href === "/admin/inventory/lot-4", "hidden without a key falls back to the lot");
+  ok(hiddenNoKey.href === "/admin/inventory/lot-4#product-link", "hidden without a key falls back to the lot's Product link form");
   ok(!hiddenNoKey.href.includes("undefined"), "no 'undefined' ever reaches a URL");
   ok(!hiddenNoKey.href.endsWith("/"), "no empty trailing segment");
 
   const blankKey = fixLinkForLot("hidden_card", "lot-5", "   ");
-  ok(blankKey.href === "/admin/inventory/lot-5", "a blank key is treated as no key");
+  // R22 S37: re-pinned deliberately — no key now opens the Product link form.
+  ok(blankKey.href === "/admin/inventory/lot-5#product-link", "a blank key is treated as no key");
 
   // ── Keys are encoded, so odd characters cannot break the URL ─────────────
   const odd = fixLinkForLot("hidden_card", "lot-6", "A B/C?D&E");

@@ -274,7 +274,19 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
       }
     };
     walk(path.join(ROOT, "src"));
-    expect(offenders).toEqual(["src/lib/catalog/attach-facts.ts"]);
+    // R22 (S35) added the second guarded reader on purpose: the Masters page
+    // reads menu_items.identity_key for ONE page of live cards and treats a
+    // missing 0234 column as "not available" (pinned by the next test).
+    expect(offenders.sort()).toEqual(["src/lib/catalog/attach-facts.ts", "src/lib/products/masters-store.ts"]);
+  });
+
+  it("S35: the Masters page identity read is opt-in, bounded and guarded for pre-0234", () => {
+    const store = readFileSync(path.join(ROOT, "src/lib/products/masters-store.ts"), "utf8");
+    const selects = store.match(/\.select\([^)]*\b(identity_key|kb_product_id|restock_of_card_key)\b[^)]*\)/g) ?? [];
+    expect(selects).toEqual(['.select("source_item_id, identity_key")']);
+    expect(store).toContain('if (!isMissingIdentityColumnError("menu_items", error)) {');
+    expect(store).toContain(".limit(keys.length);");
+    expect(store).toContain('.in("source_item_id", [...keys])');
   });
 
   it("S20: the one identity-column select (attach door, restock_of_card_key) retries WITHOUT it before 0234", () => {

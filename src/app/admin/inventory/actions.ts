@@ -55,6 +55,24 @@ import {
 // The write goes to the menu because that is the only surface the register
 // enforces from (live-menu.ts:94-100).
 import { applyClassificationToMenu } from "@/lib/inventory/classification-status-store";
+// S37: the two narrow "fill only when empty" doors on the lot page.
+import {
+  productLinkEligibility,
+  coaLinkEligibility,
+  refusalMessage,
+  parseLinkKeyInput,
+  parseLabResultChoice,
+  resolveKeyEvidence,
+  resolutionLabel,
+  PRODUCT_LINK_ANCHOR,
+  COA_ANCHOR,
+} from "@/lib/inventory/lot-link-core";
+import {
+  loadProductKeyEvidence,
+  linkLotProductKey,
+  labResultExists,
+  linkLotLabResult,
+} from "@/lib/inventory/lot-link-store";
 
 const VALID_REASONS = new Set([
   "receive",
@@ -175,6 +193,98 @@ export async function updateLotReceivedDateAction(lotId: string, formData: FormD
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
   redirect(`/admin/inventory/${lotId}?saved=1`);
+}
+
+function lotErr(lotId: string, anchor: string, msg: string): never {
+  redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent(msg) + `#${anchor}`);
+}
+
+/**
+ * S37 — link a lot that has NO product key to a key that really exists.
+ *
+ * Narrow door, not an edit: LOCKED_LOT_FIELDS still lists pos_product_key.
+ * Refuses when the lot already has a key (pure check for the message, then
+ * the guard in the UPDATE for the race), requires the key to resolve on the
+ * published menu or in Product Onboarding, writes provenance
+ * (owner_entered) and an audit event.
+ */
+export async function linkLotProductAction(lotId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+
+  const parsed = parseLinkKeyInput(formData.get("pos_product_key") as string | null);
+  if (!parsed.ok) lotErr(lotId, PRODUCT_LINK_ANCHOR, parsed.error);
+
+  const before = await getLotById(lotId);
+  if (!before) lotErr(lotId, PRODUCT_LINK_ANCHOR, "That lot no longer exists.");
+  const gate = productLinkEligibility(before);
+  if (!gate.ok) lotErr(lotId, PRODUCT_LINK_ANCHOR, refusalMessage(gate.reason));
+
+  const found = await loadProductKeyEvidence(parsed.value);
+  if (!found.ok) lotErr(lotId, PRODUCT_LINK_ANCHOR, found.error);
+  const resolved = resolveKeyEvidence(found.evidence);
+  if (!resolved.ok) lotErr(lotId, PRODUCT_LINK_ANCHOR, resolved.error);
+
+  const result = await linkLotProductKey(lotId, parsed.value, session.userId);
+  if (!result.ok) lotErr(lotId, PRODUCT_LINK_ANCHOR, result.error);
+  if (!result.linked) lotErr(lotId, PRODUCT_LINK_ANCHOR, refusalMessage("key_already_set"));
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inventory_lot.product_linked",
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: { pos_product_key: before.pos_product_key ?? null },
+    after: {
+      pos_product_key: parsed.value,
+      pos_product_key_source: "owner_entered",
+      resolved_from: resolved.where,
+      changes: [`Linked to product key ${parsed.value} (found on ${resolutionLabel(resolved.where)})`],
+    },
+  });
+
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory");
+  redirect(`/admin/inventory/${lotId}?saved=1#${PRODUCT_LINK_ANCHOR}`);
+}
+
+/**
+ * S37 — attach an ALREADY-IMPORTED lab result to a lot that has none.
+ * Refuses when a COA is already linked (message + guard in the UPDATE),
+ * verifies the lab result exists, audits the link.
+ */
+export async function linkLotCoaAction(lotId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+
+  const choice = parseLabResultChoice(formData.get("lab_result_id") as string | null);
+  if (!choice.ok) lotErr(lotId, COA_ANCHOR, choice.error);
+
+  const before = await getLotById(lotId);
+  if (!before) lotErr(lotId, COA_ANCHOR, "That lot no longer exists.");
+  const gate = coaLinkEligibility(before);
+  if (!gate.ok) lotErr(lotId, COA_ANCHOR, refusalMessage(gate.reason));
+
+  const exists = await labResultExists(choice.value);
+  if (!exists.ok) lotErr(lotId, COA_ANCHOR, exists.error);
+  if (!exists.exists) lotErr(lotId, COA_ANCHOR, "That lab result no longer exists. Search again.");
+
+  const result = await linkLotLabResult(lotId, choice.value, session.userId);
+  if (!result.ok) lotErr(lotId, COA_ANCHOR, result.error);
+  if (!result.linked) lotErr(lotId, COA_ANCHOR, refusalMessage("coa_already_linked"));
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "inventory_lot.coa_linked",
+    entityType: "inventory_lot",
+    entityId: lotId,
+    before: { lab_result_id: before.lab_result_id ?? null },
+    after: { lab_result_id: choice.value, changes: [`Attached lab result ${choice.value}`] },
+  });
+
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory");
+  redirect(`/admin/inventory/${lotId}?saved=1#${COA_ANCHOR}`);
 }
 
 /**

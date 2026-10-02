@@ -20,6 +20,9 @@ import {
   type IdentityResolver,
 } from "@/lib/products/masters-cluster";
 import { generateStructured, isAiConfigured, AiNotConfiguredError } from "@/lib/ai/provider";
+import { summarizeMasteredCards, type MasteredCard } from "@/lib/products/mastered-menu-core";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
 import { groupingSuggestionSchema } from "@/lib/ai/schemas/grouping";
 
 export { isAiConfigured };
@@ -133,6 +136,91 @@ export async function loadCandidateItems(): Promise<MasterCandidateItem[]> {
       // menu item is treated as medical only if ALL its variants are medical.
       medical: (i.variants ?? []).length > 0 && (i.variants ?? []).every((v) => v.medical),
     }));
+}
+
+// ---------------------------------------------------------------------------
+// S35 — what is actually mastered on the live menu (read-only)
+// ---------------------------------------------------------------------------
+
+export type MasteredMenuLoad =
+  | { ok: true; versionId: string | null; cards: MasteredCard[] }
+  | { ok: false; error: string };
+
+/**
+ * Every visible card on the PUBLISHED version, summarised (mastered-menu-core).
+ * Reuses the same published read as loadCandidateItems (getPublishedVersion +
+ * getVersionItems) — no new table.
+ *
+ * getVersionItems answers [] both for an empty version and for a failed read
+ * (it refuses to return a partial menu). The version row's own item_count
+ * tells the two apart: a version that says it holds cards but loads none is
+ * reported as a read failure, never shown as "nothing is mastered".
+ */
+export async function loadMasteredMenu(): Promise<MasteredMenuLoad> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase service role not configured." };
+  const version = await getPublishedVersion();
+  if (!version) return { ok: true, versionId: null, cards: [] };
+  const items = await getVersionItems(version.id);
+  if (items.length === 0 && (version.item_count ?? 0) > 0) {
+    return {
+      ok: false,
+      error: `The live menu says it has ${version.item_count} cards but none could be read. Reload the page; if it persists, check the database connection.`,
+    };
+  }
+  return { ok: true, versionId: version.id, cards: summarizeMasteredCards(items) };
+}
+
+/**
+ * identity_key for the cards on ONE page of the Live cards tab (opt-in: the
+ * full-menu loaders never fetch it, MENU_ITEM_DROPPED_COLUMNS). Bounded by
+ * the page size. Before migration 0234 the column does not exist; that read
+ * error, like any other, yields an empty map so the page shows "not
+ * available" instead of breaking or inventing a key.
+ */
+export async function loadIdentityKeysForCards(versionId: string, keys: readonly string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!isSupabaseServiceConfigured || keys.length === 0) return out;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("menu_items")
+    .select("source_item_id, identity_key")
+    .eq("menu_version_id", versionId)
+    .in("source_item_id", [...keys])
+    .limit(keys.length);
+  if (error) {
+    // Pre-0234 the column is absent: expected, say nothing. Anything else is a
+    // real fault and is logged, but the page still renders ("not available").
+    if (!isMissingIdentityColumnError("menu_items", error)) {
+      console.error("[masters-store] identity_key read failed:", error.message);
+    }
+    return out;
+  }
+  for (const r of (data as { source_item_id: string; identity_key: string | null }[] | null) ?? []) {
+    const k = (r.identity_key ?? "").trim();
+    if (k) out.set(r.source_item_id, k);
+  }
+  return out;
+}
+
+/**
+ * Every manual-master member row (one pos_product_key belongs to at most one
+ * master, 0036). Paged with an honest verdict (pagedAllChecked, ordered on the
+ * unique id), so PostgREST's 1000-row cap can never silently shorten it; an
+ * incomplete read is returned as `complete:false` and the page says so.
+ */
+export async function listAllMasterMembers(): Promise<{ members: ProductMasterMember[]; complete: boolean }> {
+  if (!isSupabaseServiceConfigured) return { members: [], complete: false };
+  const admin = createSupabaseAdminClient();
+  const { rows, verdict } = await pagedAllChecked<ProductMasterMember>(async (from, to) => {
+    const { data, error } = await admin
+      .from("product_master_members")
+      .select("id, master_id, pos_product_key, variant_label, sort_order")
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) return { rows: [], ok: false };
+    return { rows: (data as ProductMasterMember[] | null) ?? [], ok: true };
+  });
+  return { members: rows, complete: verdict.complete };
 }
 
 // ---------------------------------------------------------------------------

@@ -483,7 +483,7 @@ describe("S31 A — every generator's fix link lands on a real, filtered, anchor
 
   it("every item-level href with an anchor was actually checked (anchors present in the set)", () => {
     const anchors = new Set([...hrefs.keys()].map((h) => parseHref(h).anchor).filter(Boolean));
-    for (const a of ["coa", "lifecycle", "manifest-vendor", "manifest-lines", "register-blocked", "restore-to-sale", "flagged-facts", "rejected", "visibility", "hidden-items", "backfill-lots", "website-category"]) {
+    for (const a of ["coa", "product-link", "lifecycle", "manifest-vendor", "manifest-lines", "register-blocked", "restore-to-sale", "flagged-facts", "rejected", "visibility", "hidden-items", "backfill-lots", "website-category"]) {
       expect(anchors.has(a), `no generator emitted #${a}`).toBe(true);
     }
     expect([...anchors].some((a) => a!.startsWith("draft-"))).toBe(true);

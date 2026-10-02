@@ -115,6 +115,11 @@ export type InventoryLot = {
   manifest_id: string | null;
   lab_result_id: string | null;
   pos_product_key: string | null;
+  /**
+   * S37 — where pos_product_key came from (migration 0215 check constraint:
+   * pos_import | owner_entered). Optional: older reads may not carry it.
+   */
+  pos_product_key_source?: string | null;
   product_name: string | null;
   strain_name: string | null;
   /** "indica" | "sativa" | "hybrid" | null (migration 0138 — Rule 1.4, own box). */

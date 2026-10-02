@@ -191,24 +191,34 @@ describe("S27 · adopting pages (bible S27.1 consumers)", () => {
     expect(page).toContain('const BASE = "/admin/settings/types";');
   });
 
-  it("masters page: same resolution, counts moved into pills, back= survives the switch", () => {
-    const legacy = (tab?: string) => (tab === "suggestions" ? "suggestions" : "masters");
-    for (const tab of [undefined, "", "masters", "suggestions", "Suggestions", "bogus"]) {
-      expect(resolveTab(MASTERS_PAGE_TABS, { tab }, "masters"), String(tab)).toBe(legacy(tab));
+  it("masters page (S35): Live cards is the default, counts in pills, back= survives the switch", () => {
+    // RE-PINNED DELIBERATELY in R22 (bible S35): the default moved from
+    // "masters" to the new "live" tab; explicit tabs resolve as before.
+    const expected = (tab?: string) => (tab === "suggestions" ? "suggestions" : tab === "masters" ? "masters" : "live");
+    for (const tab of [undefined, "", "live", "masters", "suggestions", "Suggestions", "bogus"]) {
+      expect(resolveTab(MASTERS_PAGE_TABS, { tab }, "live"), String(tab)).toBe(expected(tab));
     }
     expect(MASTERS_PAGE_TABS.map((t) => tabHref(MASTERS_PAGE_BASE, t.key))).toEqual([
+      "/admin/products/masters?tab=live",
       "/admin/products/masters?tab=masters",
       "/admin/products/masters?tab=suggestions",
     ]);
     const page = code("src/app/admin/products/masters/page.tsx");
-    expect(page).toContain("tabs={withTabCounts(MASTERS_PAGE_TABS, { masters: masters.length, suggestions: suggestions.length })}");
+    expect(page).toContain("tabs={withTabCounts(MASTERS_PAGE_TABS, {");
+    expect(page).toContain("live: mastered.ok ? stats.cards : null,");
+    expect(page).toContain("masters: masters.length,");
+    expect(page).toContain("suggestions: suggestions.length,");
     expect(page).toContain("keep={{ back: sp.back }}");
-    expect(page).toContain('resolveTab(MASTERS_PAGE_TABS, { tab: sp.tab }, "masters")');
+    expect(page).toContain('resolveTab(MASTERS_PAGE_TABS, { tab: sp.tab }, "live")');
     expect(page).toContain('const BASE = "/admin/products/masters";');
-    // Every suggestion action redirects with tab=suggestions, so no auto-open is needed.
+    // Every suggestion action redirects with tab=suggestions, and every manual
+    // master redirect names tab=masters, so nothing lands on the wrong tab now
+    // that the default is Live cards.
     const actions = read("src/app/admin/products/masters/actions.ts");
     expect(actions).toContain("redirect(`${BASE}?tab=suggestions&rejected=1`)");
     expect(actions).toContain("redirect(`${BASE}?tab=suggestions&generated=");
+    expect(actions).toContain("redirect(`${BASE}?tab=masters&deleted=1`)");
+    expect(actions).not.toMatch(/redirect\(`\$\{BASE\}\?(?!tab=)/);
   });
 
   it("no hand-rolled ?tab= strip survives on the adopting pages", () => {
