@@ -11,6 +11,7 @@ import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import type { ProductEnrichment, EnrichedMenuItem } from "./types";
 import type { MenuItemRow } from "@/lib/pos/db-types";
 import type { CardAttribution, LastManifest } from "./enrichment-manifest-core";
+import { describedBy } from "./gap-vector-core";
 import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
 import {
   enrichmentIdentityForItem,
@@ -237,6 +238,12 @@ export type GapFlags = {
   brand: string;
   category: string;
   hasDescription: boolean;
+  /**
+   * S23: true when the only text on file is the house placeholder sentence
+   * (so hasDescription is false although the row is not blank). Optional:
+   * literal GapFlags-shaped rows elsewhere predate it.
+   */
+  descriptionPlaceholder?: boolean;
   hasImage: boolean;
   hasBrandLink: boolean;
   enrichmentStatus: string | null;
@@ -266,7 +273,13 @@ export function computeGaps(
   // attributeCards). Omitted by callers that don't need it.
   attribution?: CardAttribution | null,
 ): GapFlags {
-  const hasDescription = Boolean(enrichment?.description || (item.description && item.description.trim().length > 0));
+  // S23 (F-082/F-064): the house placeholder ("<name> from <brand>. Browse
+  // current availability...") is NOT a description. Same rule as the detail
+  // header's gap vector (gap-vector-core describedBy), so the list counters
+  // and the detail page can never disagree.
+  const describedFrom = describedBy(enrichment?.description, item.description);
+  const hasDescription = describedFrom !== null;
+  const descriptionPlaceholder = !hasDescription && String(enrichment?.description || item.description || "").trim() !== "";
   const hasImage = Boolean(enrichment && (enrichment.primary_media_id || enrichment.image_media_ids.length > 0));
   const hasBrandLink = Boolean(enrichment?.brand_id);
   return {
@@ -275,6 +288,7 @@ export function computeGaps(
     brand: item.brand_name,
     category: item.category,
     hasDescription,
+    descriptionPlaceholder,
     hasImage,
     hasBrandLink,
     enrichmentStatus: enrichment?.status ?? null,

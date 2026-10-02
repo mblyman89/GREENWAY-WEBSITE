@@ -215,6 +215,9 @@ export default async function ProductsPage({
   const vendorChoices = attribution ? deliveryVendorChoices(attribution.manifests, pickerOptions) : [];
 
   const missingDesc = gaps.filter((g) => !g.hasDescription).length;
+  // S23: of those, how many only carry the house placeholder sentence (they
+  // used to count as "described").
+  const placeholderDesc = gaps.filter((g) => g.descriptionPlaceholder === true).length;
   const missingImg = gaps.filter((g) => !g.hasImage).length;
   const missingTags = gaps.filter((g) => !g.hasTags).length;
   const enriched = gaps.filter((g) => g.enrichmentStatus === "published").length;
@@ -243,6 +246,8 @@ export default async function ProductsPage({
       brand: g.brand,
       category: g.category,
       hasDescription: g.hasDescription,
+      // S23: the copy is only the placeholder sentence.
+      descriptionPlaceholder: g.descriptionPlaceholder === true,
       hasImage: g.hasImage,
       hasBrandLink: g.hasBrandLink,
       enrichmentStatus: g.enrichmentStatus,
@@ -391,7 +396,13 @@ export default async function ProductsPage({
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Products" value={stats.total} hint={`${stats.visible} visible · ${stats.hidden} hidden`} accent="muted" />
           <StatCard label="Enriched & live" value={enriched} hint={`avg ${stats.avgCompleteness}% complete`} accent="green" />
-          <StatCard label="Missing description" value={missingDesc} accent="orange" href="/admin/products?gap=description#worklist" />
+          <StatCard
+            label="Missing description"
+            value={missingDesc}
+            hint={placeholderDesc > 0 ? `${placeholderDesc} only have the placeholder sentence` : undefined}
+            accent="orange"
+            href="/admin/products?gap=description#worklist"
+          />
           <StatCard label="Missing image" value={missingImg} accent="orange" href="/admin/products?gap=image#worklist" />
         </div>
 
@@ -678,7 +689,17 @@ export default async function ProductsPage({
                       <span className="text-[var(--admin-text-faint)]">○</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-center">{g.hasDescription ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}</td>
+                  <td className="px-4 py-3 text-center">
+                    {g.hasDescription ? (
+                      "✅"
+                    ) : g.descriptionPlaceholder ? (
+                      <span className="text-[var(--admin-orange)]" title="Only the placeholder sentence - no real description yet">
+                        placeholder
+                      </span>
+                    ) : (
+                      <span className="text-[var(--admin-orange)]">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-center">{g.hasImage ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}</td>
                   <td className="px-4 py-3 text-center">{g.hasBrandLink ? "✅" : <span className="text-[var(--admin-text-faint)]">—</span>}</td>
                   <td className="px-4 py-3 text-center">{g.hasTags ? "✅" : <span className="text-[var(--admin-text-faint)]">—</span>}</td>

@@ -346,8 +346,9 @@ describe("S22 grid card", () => {
 describe("S22 wiring", () => {
   const page = read("src/app/admin/products/page.tsx");
   it("searchParams gain manifest, since, vendor and are parsed by the core", () => {
-    // S31 appended `error?: string` (product actions redirect with ?error=).
-    expect(page).toMatch(/back\?: string; manifest\?: string; since\?: string; vendor\?: string; error\?: string \}/);
+    // S31 appended `error?: string` (product actions redirect with ?error=);
+    // S20 appended `linked?: string` (the "Link records to products" flash).
+    expect(page).toMatch(/back\?: string; manifest\?: string; since\?: string; vendor\?: string; error\?: string; linked\?: string \}/);
     expect(page).toContain("const mf = parseEnrichmentManifestParams(sp);");
   });
   it("attribution runs beside the enrichment read and feeds GapFlags", () => {
