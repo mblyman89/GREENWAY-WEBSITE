@@ -30,11 +30,17 @@ export const TYPES_PAGE_TABS: readonly TabSpec<TypesPageTab>[] = [
   },
 ];
 
-export type MastersPageTab = "masters" | "suggestions";
+export type MastersPageTab = "live" | "masters" | "suggestions";
 
 export const MASTERS_PAGE_BASE = "/admin/products/masters";
 
+/**
+ * S35: "Live cards" (default) is what is actually mastered on the published
+ * menu; "Masters" is the manual product_masters side table, which intake
+ * mastering does not read (F-096); "Suggestions" proposes groupings.
+ */
 export const MASTERS_PAGE_TABS: readonly TabSpec<MastersPageTab>[] = [
+  { key: "live", label: "Live cards", blurb: "Every card on your live menu with its sizes, prices, stock and the lots that feed it." },
   { key: "masters", label: "Product Masters", blurb: "Every product master you have created or accepted." },
   { key: "suggestions", label: "Suggestions", blurb: "Groupings the system proposes — accept or reject each one." },
 ];

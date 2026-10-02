@@ -185,11 +185,16 @@ describe("Round 11 — every inventory fix button lands on the control that fixe
     expect(fixLinkForLot("recall_hold", "lot-9", null).href).toBe("/admin/inventory/lot-9#lifecycle");
   });
 
-  it("the unlinked-lot link is honest: the key is read-only on the lot page", () => {
+  // S37 (re-pinned deliberately): the lot page now HAS the control, so the
+  // unlinked-lot link lands on it instead of apologising for its absence.
+  it("unlinked lots open the Product link form (#product-link anchor + form exist)", () => {
     const link = fixLinkForLot("no_product_link", "lot-9", null);
-    expect(link.why).toMatch(/read-only/i);
-    expect(link.label).not.toMatch(/link a product/i);
-    expect(read("src/lib/inventory/lot-edit-core.ts")).toContain("pos_product_key");
+    expect(link.href).toBe("/admin/inventory/lot-9#product-link");
+    expect(link.label).toBe("Link this lot to a product");
+    expect(link.why).not.toMatch(/read-only/i);
+    expect(lotPage()).toMatch(/id="product-link"[\s\S]{0,400}<LotProductLinkPanel[\s\S]{0,400}action=\{productLinkAction\}/);
+    // The lock stays: this is a narrow fill-only door, not an edit.
+    expect(read("src/lib/inventory/lot-edit-core.ts")).toContain('"pos_product_key"');
   });
 });
 
@@ -207,10 +212,12 @@ describe("SLICE 20 — links are safe to build", () => {
     }
   });
 
-  it("falls back to the lot when a cause needs a key it does not have", () => {
+  // S37 (re-pinned deliberately): with no key the first fix is the link
+  // itself, so the fallback lands on the lot's Product link form.
+  it("falls back to the lot's Product link form when a cause needs a key it does not have", () => {
     for (const key of [null, "", "   "]) {
       const link = fixLinkForLot("hidden_card", "lot-7", key);
-      expect(link.href).toBe("/admin/inventory/lot-7");
+      expect(link.href).toBe("/admin/inventory/lot-7#product-link");
     }
   });
 

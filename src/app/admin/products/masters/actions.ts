@@ -86,7 +86,7 @@ export async function rejectSuggestionAction(formData: FormData): Promise<void> 
 export async function createMasterAction(formData: FormData): Promise<void> {
   const session = await requirePermission("inventory.manage");
   const display = str(formData, "display_name");
-  if (!display) redirect(`${BASE}?error=` + encodeURIComponent("A name is required."));
+  if (!display) redirect(`${BASE}?tab=masters&error=` + encodeURIComponent("A name is required."));
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("product_masters")
@@ -101,7 +101,7 @@ export async function createMasterAction(formData: FormData): Promise<void> {
     })
     .select("id")
     .single();
-  if (error || !data) redirect(`${BASE}?error=` + encodeURIComponent(error?.message ?? "Failed."));
+  if (error || !data) redirect(`${BASE}?tab=masters&error=` + encodeURIComponent(error?.message ?? "Failed."));
   const id = (data as { id: string }).id;
   await recordAudit({
     actorId: session.userId,
@@ -117,7 +117,7 @@ export async function createMasterAction(formData: FormData): Promise<void> {
 export async function updateMasterAction(formData: FormData): Promise<void> {
   const session = await requirePermission("inventory.manage");
   const id = str(formData, "id");
-  if (!id) redirect(`${BASE}?error=` + encodeURIComponent("Missing id."));
+  if (!id) redirect(`${BASE}?tab=masters&error=` + encodeURIComponent("Missing id."));
   const admin = createSupabaseAdminClient();
   const { error } = await admin
     .from("product_masters")
@@ -147,7 +147,7 @@ export async function publishMasterAction(formData: FormData): Promise<void> {
   const id = str(formData, "id");
   const status = str(formData, "status");
   if (!id || !["draft", "published", "archived"].includes(status)) {
-    redirect(`${BASE}?error=` + encodeURIComponent("Bad request."));
+    redirect(`${BASE}?tab=masters&error=` + encodeURIComponent("Bad request."));
   }
   await setMasterStatus(id, status as "draft" | "published" | "archived", session.userId);
   await recordAudit({
@@ -181,7 +181,7 @@ export async function removeMemberAction(formData: FormData): Promise<void> {
 export async function deleteMasterAction(formData: FormData): Promise<void> {
   const session = await requirePermission("inventory.manage");
   const id = str(formData, "id");
-  if (!id) redirect(`${BASE}?error=` + encodeURIComponent("Missing id."));
+  if (!id) redirect(`${BASE}?tab=masters&error=` + encodeURIComponent("Missing id."));
   await deleteMaster(id);
   await recordAudit({
     actorId: session.userId,
@@ -191,5 +191,5 @@ export async function deleteMasterAction(formData: FormData): Promise<void> {
     entityId: id,
   });
   revalidatePath(BASE);
-  redirect(`${BASE}?deleted=1`);
+  redirect(`${BASE}?tab=masters&deleted=1`);
 }

@@ -14,7 +14,29 @@ import {
   listMasters,
   listSuggestions,
   isAiConfigured,
+  loadMasteredMenu,
+  loadIdentityKeysForCards,
+  listAllMasterMembers,
 } from "@/lib/products/masters-store";
+// S35 — what is actually mastered on the live menu.
+import { ListPager } from "@/components/admin/ux";
+import { listWindow, parsePageParam } from "@/lib/admin/list-window-core";
+import {
+  MASTERS_SUBTITLE,
+  MANUAL_MASTER_RULE,
+  LIVE_CARDS_PAGE_SIZE,
+  LIVE_CARD_FILTERS,
+  masteredStats,
+  parseLiveCardsFilter,
+  filterCards,
+  liveCardsHref,
+  masterMemberViews,
+  manualMasterByKey,
+  type MasteredCard,
+  type MasterMemberView,
+  type LiveCardsFilter,
+} from "@/lib/products/mastered-menu-core";
+import { LiveCardRow, MasterMembersList } from "@/components/admin/products/MasteredCards";
 import {
   generateSuggestions,
   acceptSuggestionAction,
@@ -37,16 +59,18 @@ export default async function MastersPage({
     rejected?: string;
     deleted?: string;
     back?: string;
+    show?: string;
+    page?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
-  const tab = resolveTab(MASTERS_PAGE_TABS, { tab: sp.tab }, "masters");
+  const tab = resolveTab(MASTERS_PAGE_TABS, { tab: sp.tab }, "live");
 
   if (!isSupabaseServiceConfigured) {
     return (
       <div>
-        <AdminPageHeader title="Product Mastering" subtitle="Group items that are the same product at different sizes." />
+        <AdminPageHeader title="Product Mastering" subtitle={MASTERS_SUBTITLE} />
         <div className="px-5 py-6 sm:px-8">
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             The database isn&apos;t fully set up yet. Once setup is complete,
@@ -57,19 +81,37 @@ export default async function MastersPage({
     );
   }
 
-  const [masters, suggestions] = await Promise.all([
+  const [masters, suggestions, mastered, memberRead] = await Promise.all([
     listMasters(),
     listSuggestions({ status: "pending" }),
+    loadMasteredMenu(),
+    listAllMasterMembers(),
   ]);
 
-  const published = masters.filter((m) => m.status === "published").length;
-  const drafts = masters.filter((m) => m.status === "draft").length;
+  const cards: MasteredCard[] = mastered.ok ? mastered.cards : [];
+  const stats = masteredStats(cards);
+  const cardsByKey = new Map(cards.map((c) => [c.key, c]));
+  const masterNames = new Map(masters.map((m) => [m.id, m.display_name]));
+  const membersByMaster = masterMemberViews(memberRead.members, cardsByKey);
+  const masterByKey = manualMasterByKey(memberRead.members, masterNames);
+
+  // Live cards: filter, then window (ListPager) — never an unbounded list.
+  const show = parseLiveCardsFilter(sp.show);
+  const filtered = filterCards(cards, show);
+  const win = listWindow(filtered.length, parsePageParam(sp.page), LIVE_CARDS_PAGE_SIZE);
+  const pageCards = filtered.slice(win.from, win.to + 1);
+  // identity_key is opt-in (never on the full-menu read): only this page's cards.
+  const identityKeys =
+    tab === "live" && mastered.ok && mastered.versionId
+      ? await loadIdentityKeysForCards(mastered.versionId, pageCards.map((c) => c.key))
+      : new Map<string, string>();
+  const selfHref = liveCardsHref(BASE, show, win.page, sp.back);
 
   return (
     <div>
       <AdminPageHeader
         title="Product Mastering"
-        subtitle="Group menu items that are really one product sold at different sizes or forms into a single card, so your menu reads clean. AI suggests groupings — you decide."
+        subtitle={MASTERS_SUBTITLE}
         breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Mastering" }]} />}
         help={
           <HelpPanel
@@ -124,23 +166,62 @@ export default async function MastersPage({
           </div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Product masters" value={masters.length} hint={`${published} published · ${drafts} draft`} accent="green" />
-          <StatCard label="Pending suggestions" value={suggestions.length} accent={suggestions.length > 0 ? "gold" : "muted"} />
-          <StatCard label="Published cards" value={published} accent="green" />
-          <StatCard label="AI grouping" value={isAiConfigured ? "On" : "Off"} hint={isAiConfigured ? "smarter matches enabled" : "exact-name only"} accent={isAiConfigured ? "green" : "muted"} />
+        <p
+          className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm text-[var(--admin-text-muted)]"
+          data-testid="manual-master-rule"
+        >
+          {MANUAL_MASTER_RULE}
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="masters-stats">
+          <StatCard
+            label="Live cards"
+            value={mastered.ok ? stats.cards : "—"}
+            hint={mastered.ok ? `${stats.singleSize} single size · ${stats.medicalOnly} medical only` : "could not read the live menu"}
+            accent="green"
+          />
+          <StatCard label="Multi-size" value={mastered.ok ? stats.multiSize : "—"} hint="cards selling 2+ sizes" accent="green" />
+          <StatCard label="Sizes on menu" value={mastered.ok ? stats.sizes : "—"} accent="muted" />
+          <StatCard
+            label="Pending suggestions"
+            value={suggestions.length}
+            hint={isAiConfigured ? "AI grouping on" : "exact-name matches only"}
+            accent={suggestions.length > 0 ? "gold" : "muted"}
+          />
         </div>
 
         <PageTabs
           base={BASE}
-          tabs={withTabCounts(MASTERS_PAGE_TABS, { masters: masters.length, suggestions: suggestions.length })}
+          tabs={withTabCounts(MASTERS_PAGE_TABS, {
+            live: mastered.ok ? stats.cards : null,
+            masters: masters.length,
+            suggestions: suggestions.length,
+          })}
           active={tab}
           keep={{ back: sp.back }}
           ariaLabel="Product mastering views"
         />
 
-        {tab === "masters" ? (
-          <MastersTab masters={masters} sp={sp} />
+        {tab === "live" ? (
+          <LiveCardsTab
+            load={mastered}
+            filtered={filtered}
+            pageCards={pageCards}
+            win={win}
+            show={show}
+            back={sp.back}
+            selfHref={selfHref}
+            identityKeys={identityKeys}
+            masterByKey={masterByKey}
+          />
+        ) : tab === "masters" ? (
+          <MastersTab
+            masters={masters}
+            sp={sp}
+            membersByMaster={membersByMaster}
+            membersComplete={memberRead.complete}
+            menuReadOk={mastered.ok}
+          />
         ) : (
           <SuggestionsTab suggestions={suggestions} />
         )}
@@ -149,12 +230,103 @@ export default async function MastersPage({
   );
 }
 
+function LiveCardsTab({
+  load,
+  filtered,
+  pageCards,
+  win,
+  show,
+  back,
+  selfHref,
+  identityKeys,
+  masterByKey,
+}: {
+  load: Awaited<ReturnType<typeof loadMasteredMenu>>;
+  filtered: MasteredCard[];
+  pageCards: MasteredCard[];
+  win: ReturnType<typeof listWindow>;
+  show: LiveCardsFilter;
+  back: string | undefined;
+  selfHref: string;
+  identityKeys: Map<string, string>;
+  masterByKey: Map<string, string>;
+}) {
+  if (!load.ok) {
+    return (
+      <div
+        className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+        data-testid="live-cards-error"
+      >
+        {load.error}
+      </div>
+    );
+  }
+  if (load.cards.length === 0) {
+    return (
+      <EmptyState
+        icon="🗂️"
+        title={load.versionId ? "Your live menu has no visible cards" : "No live menu yet"}
+        description={
+          load.versionId
+            ? "Every card on the published menu is hidden, so nothing is mastered on the menu customers see."
+            : "Publish a menu and the cards customers see — with their sizes, prices and stock — will be listed here."
+        }
+      />
+    );
+  }
+  return (
+    <div className="space-y-4" data-testid="live-cards">
+      <nav className="flex flex-wrap gap-2" aria-label="Filter live cards">
+        {LIVE_CARD_FILTERS.map((f) => (
+          <Link
+            key={f.key}
+            href={liveCardsHref(BASE, f.key, 1, back)}
+            aria-current={f.key === show ? "page" : undefined}
+            className={
+              f.key === show
+                ? "rounded-full bg-[var(--admin-accent)] px-3 py-1 text-xs font-semibold text-black"
+                : "rounded-full border border-[var(--admin-border)] px-3 py-1 text-xs text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+            }
+          >
+            {f.label}
+          </Link>
+        ))}
+      </nav>
+      {filtered.length === 0 ? (
+        <EmptyState icon="🗂️" title="No cards match this filter" description="Choose “All cards” to see every live card." />
+      ) : (
+        <>
+          <ListPager window={win} total={filtered.length} noun="card" makeHref={(p) => liveCardsHref(BASE, show, p, back)} />
+          <ul className="space-y-3">
+            {pageCards.map((c) => (
+              <LiveCardRow
+                key={c.key}
+                card={c}
+                back={selfHref}
+                manualMaster={masterByKey.get(c.key) ?? null}
+                identityKey={identityKeys.get(c.key) ?? null}
+              />
+            ))}
+          </ul>
+          <ListPager window={win} total={filtered.length} noun="card" makeHref={(p) => liveCardsHref(BASE, show, p, back)} />
+        </>
+      )}
+    </div>
+  );
+}
+
 function MastersTab({
   masters,
   sp,
+  membersByMaster,
+  membersComplete,
+  menuReadOk,
 }: {
   masters: Awaited<ReturnType<typeof listMasters>>;
   sp: Record<string, string | string[] | undefined>;
+  membersByMaster: Map<string, MasterMemberView[]>;
+  membersComplete: boolean;
+  menuReadOk: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -174,18 +346,30 @@ function MastersTab({
         </form>
       </div>
 
+      {(!membersComplete || !menuReadOk) && masters.length > 0 && (
+        <p className="text-xs text-[var(--admin-orange)]" data-testid="masters-partial">
+          {!membersComplete
+            ? "Some master members could not be read, so a list below may be incomplete."
+            : "The live menu could not be read, so members are shown without their sizes, prices or stock."}
+        </p>
+      )}
       {masters.length === 0 ? (
         <EmptyState icon="📦" title="No product masters yet" description="Generate suggestions above, accept the good ones, or create one manually." />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {masters.map((m) => (
-            <Link
+            <div
               key={m.id}
-              href={withBackParam(`${BASE}/${m.id}`, sp)}
-              className="admin-card-interactive flex flex-col gap-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"
+              className="flex flex-col gap-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"
+              data-testid="master-card"
             >
               <div className="flex items-center gap-2">
-                <span className="flex-1 truncate text-sm font-semibold text-white">{m.display_name}</span>
+                <Link
+                  href={withBackParam(`${BASE}/${m.id}`, sp)}
+                  className="flex-1 truncate text-sm font-semibold text-white hover:text-[var(--admin-accent)]"
+                >
+                  {m.display_name}
+                </Link>
                 {m.status === "published" ? (
                   <Badge tone="green">published</Badge>
                 ) : m.status === "draft" ? (
@@ -200,7 +384,8 @@ function MastersTab({
               {m.created_origin === "ai_suggestion" && (
                 <span className="text-[10px] text-white/30">✨ from AI suggestion</span>
               )}
-            </Link>
+              <MasterMembersList members={membersByMaster.get(m.id) ?? []} back={`${BASE}?tab=masters`} />
+            </div>
           ))}
         </div>
       )}

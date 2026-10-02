@@ -644,6 +644,9 @@ import { __runOnboardingListCoreTests } from "../../src/lib/catalog/onboarding-l
 // R21 (C): the enrichment media-library picker (pickable, search, order, copy).
 import { __runLibraryPickerCoreTests } from "../../src/lib/media/library-picker-core";
 import { __runMasteringPreviewCoreTests } from "../../src/lib/inventory/mastering-preview-core";
+// R22 (S37): the lot page's fill-only-when-empty product-link + attach-COA doors.
+import { __runLotLinkCoreTests } from "../../src/lib/inventory/lot-link-core";
+import { __runMasteredMenuCoreTests } from "../../src/lib/products/mastered-menu-core";
 import { __runIdentityStampCoreTests } from "../../src/lib/inventory/identity-stamp-core";
 import { __runGroundingCoreTests } from "../../src/lib/ai/grounding-core";
 import { __runLookupFactsCoreTests } from "../../src/lib/inventory/lookup-facts-core";
@@ -1953,6 +1956,11 @@ __runLiquidVolumeTests();
   // R21 (C): enrichment media-library picker. Floor = the exact count.
   assertRan("library-picker-core", __runLibraryPickerCoreTests(), 34);
   assertRan("mastering-preview-core", __runMasteringPreviewCoreTests(), 17);
+
+  // R22 (S37): lot-link-core. Floor = the exact count.
+  assertRan("lot-link-core", __runLotLinkCoreTests(), 59);
+  // R22 (S35): mastered-menu-core. Floor = the exact count.
+  assertRan("mastered-menu-core", __runMasteredMenuCoreTests(), 55);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }
