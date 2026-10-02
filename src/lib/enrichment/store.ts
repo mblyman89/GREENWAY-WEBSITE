@@ -104,9 +104,12 @@ export async function ensureEnrichment(
     updated_by: actorId,
   };
   const identity = await identityForCardKey(posProductKey);
+  // One explicit row type (postgrest-js rejects excess properties per
+  // inferred union member): identity_key present only when known.
+  const row: typeof base & { identity_key?: string } = identity ? { ...base, identity_key: identity } : base;
   let { data, error } = await admin
     .from("product_enrichments")
-    .insert(identity ? { ...base, identity_key: identity } : base)
+    .insert(row)
     .select("*")
     .single();
   if (error && identity && isMissingIdentityColumnError("product_enrichments", error)) {

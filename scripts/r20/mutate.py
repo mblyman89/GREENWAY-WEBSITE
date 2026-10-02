@@ -137,8 +137,8 @@ MUTANTS = [
      "    throw err;"),
     # --- stamping on create -----------------------------------------------------
     ("new rows are born unlinked", STORE,
-     "    .insert(identity ? { ...base, identity_key: identity } : base)",
-     "    .insert(base)"),
+     "  const row: typeof base & { identity_key?: string } = identity ? { ...base, identity_key: identity } : base;",
+     "  const row: typeof base & { identity_key?: string } = base;"),
     ("pre-0234 insert is not retried", STORE,
      "  if (error && identity && isMissingIdentityColumnError(\"product_enrichments\", error)) {",
      "  if (false) {"),
