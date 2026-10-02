@@ -641,6 +641,8 @@ import { __runAttachFactsCoreTests } from "../../src/lib/catalog/attach-facts-co
 import { __runFactAttachPolicyCoreTests } from "../../src/lib/catalog/fact-attach-policy-core";
 import { __runAttachPlanCoreTests } from "../../src/lib/catalog/attach-plan-core";
 import { __runOnboardingListCoreTests } from "../../src/lib/catalog/onboarding-list-core";
+// R21 (C): the enrichment media-library picker (pickable, search, order, copy).
+import { __runLibraryPickerCoreTests } from "../../src/lib/media/library-picker-core";
 import { __runIdentityStampCoreTests } from "../../src/lib/inventory/identity-stamp-core";
 import { __runGroundingCoreTests } from "../../src/lib/ai/grounding-core";
 import { __runLookupFactsCoreTests } from "../../src/lib/inventory/lookup-facts-core";
@@ -1946,6 +1948,9 @@ __runLiquidVolumeTests();
   // R20 S20: enrichment identity (flag, survivorship, ladder, suggestion target, backfill). Floor = the exact count.
   assertRan("enrichment-identity-core", __runEnrichmentIdentityCoreTests(), 85);
   assertRan("gap-vector-core", __runGapVectorCoreTests(), 89);
+
+  // R21 (C): enrichment media-library picker. Floor = the exact count.
+  assertRan("library-picker-core", __runLibraryPickerCoreTests(), 34);
 
   console.log("ALL PURE SELF-TESTS PASSED");
 }

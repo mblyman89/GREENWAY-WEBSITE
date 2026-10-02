@@ -157,6 +157,10 @@ describe("buildAssetGuidance", () => {
     expect(lines.some((l) => l.includes("Photograph the product in store"))).toBe(true);
     expect(lines.some((l) => l.includes("approved fallback image"))).toBe(true);
     expect(lines.some((l) => l.includes("AI description"))).toBe(true);
+    // Round 21 (C): library first, upload second.
+    const lib = lines.findIndex((l) => l.includes("media library first"));
+    expect(lib).toBeGreaterThanOrEqual(0);
+    expect(lib).toBeLessThan(lines.findIndex((l) => l.includes("Photograph the product in store")));
   });
 
   it("leads with review-matches and skips harvest/fallback when not applicable", () => {
@@ -300,6 +304,12 @@ describe("SLICE 73 — buildGuidanceActions (jump-to buttons)", () => {
   it("offers KB harvest, in-page upload anchor and fallback manager for a missing image", () => {
     expect(bare.some((a) => a.href === "/admin/knowledge-base/harvest")).toBe(true);
     expect(bare.some((a) => a.href === "#upload")).toBe(true);
+    // Round 21 (C): the in-page library picker comes before the upload field.
+    const lib = bare.findIndex((a) => a.href === "#library");
+    expect(lib).toBeGreaterThanOrEqual(0);
+    expect(lib).toBeLessThan(bare.findIndex((a) => a.href === "#upload"));
+    expect(bare[lib]!.label).toBe("Choose from the media library");
+    expect(bare.find((a) => a.href === "#upload")!.label).toBe("Upload a new photo");
     expect(bare.some((a) => a.href === "/admin/knowledge-base/images")).toBe(true);
   });
 

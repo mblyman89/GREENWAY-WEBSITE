@@ -24,6 +24,10 @@ import {
 import { buildEnrichmentLookupQuery } from "@/lib/enrichment/lookup-query-core";
 import { liveVisibilityText } from "@/lib/enrichment/product-visibility-core";
 import { EnrichmentAiLookupPanel } from "./EnrichmentAiLookupPanel";
+// Round 21 (C): library-first photo picker (upload becomes the secondary path).
+import { MediaLibraryPicker } from "./MediaLibraryPicker";
+import { libraryPickerView, parseLibraryQuery, parseLibraryScope } from "@/lib/media/library-picker-core";
+import { readLibraryPickerAssets } from "@/lib/media/library-picker-server";
 import {
   updateProductEnrichment,
   setEnrichmentStatus,
@@ -57,12 +61,12 @@ export default async function ProductEditorPage({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; ai?: string; back?: string; research?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; ai?: string; back?: string; research?: string; lq?: string; lscope?: string }>;
 }) {
   const session = await requirePermission("products.enrich");
   const { key: rawKey } = await params;
   const key = decodeURIComponent(rawKey);
-  const { saved, error, ai, back, research } = await searchParams;
+  const { saved, error, ai, back, research, lq, lscope } = await searchParams;
 
   const published = await getPublishedVersion();
   if (!published) notFound();
@@ -98,6 +102,18 @@ export default async function ProductEditorPage({
   // Resolve gallery image URLs.
   const galleryIds = enrichment?.image_media_ids ?? [];
   const urlMap = await mediaUrlsForIds(galleryIds);
+
+  // Round 21 (C): the media-library picker. Search + scope are GET params
+  // (lq, lscope); the view marks photos already in this product's gallery.
+  const libraryScope = parseLibraryScope(lscope);
+  const libraryRead = await readLibraryPickerAssets(libraryScope);
+  const libraryView = libraryPickerView({
+    assets: libraryRead.assets,
+    query: parseLibraryQuery(lq),
+    scope: libraryScope,
+    galleryIds,
+    productName: item.product_name?.trim() || item.name,
+  });
 
   const currentTags = new Set(enrichment?.tags ?? []);
   const vis = enrichment?.hidden_override === null || enrichment?.hidden_override === undefined
@@ -756,6 +772,16 @@ export default async function ProductEditorPage({
           )}
         </div>
 
+        {/* Round 21 (C): library first. Outside the editor's multipart form
+            so each tile's attach form is never nested. */}
+        <MediaLibraryPicker
+          productKey={key}
+          back={back ?? null}
+          view={libraryView}
+          readOk={libraryRead.ok}
+          action={attachMatchedMedia}
+        />
+
         {/* Editor form */}
         <form action={updateProductEnrichment} encType="multipart/form-data" className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <input type="hidden" name="key" value={key} />
@@ -896,9 +922,19 @@ export default async function ProductEditorPage({
                   Removing an image only takes it off this product — the file stays in the media library.
                 </p>
               )}
+              {/* Round 21 (C): adding a photo starts in the media library; the
+                  file input is the secondary "not in the library" path. */}
+              <a
+                href="#library"
+                data-testid="images-choose-library"
+                className="block rounded-lg bg-[var(--admin-accent)] px-3 py-2 text-center text-xs font-semibold text-black hover:brightness-110"
+              >
+                Add a photo from the media library ↑
+              </a>
               <label id="upload" className="block scroll-mt-24">
-                <span className={label}>Add image</span>
-                <input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" className="block w-full text-xs text-white/70 file:mr-2 file:rounded file:border-0 file:bg-[var(--admin-accent)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-black" />
+                <span className={label}>Or upload a new photo from your computer</span>
+                <input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" className="block w-full text-xs text-white/70 file:mr-2 file:rounded file:border file:border-white/20 file:bg-transparent file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white/80" />
+                <span className="mt-1 block text-[11px] text-white/40">Saved to the media library when you press Save enrichment.</span>
               </label>
             </div>
 
