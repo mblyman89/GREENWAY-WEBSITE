@@ -164,7 +164,7 @@ describe("1. pure cores", () => {
   });
   it("intake-mastering-core self-tests (S32 block included) pass with zero failures", () => {
     // Throws on the first failure; returns the count when all pass.
-    expect(__runIntakeMasteringCoreTests().passed).toBe(188);
+    expect(__runIntakeMasteringCoreTests().passed).toBe(206);
   });
   it("the core is pure (no React, next/*, supabase, env, fetch)", () => {
     const src = read("src/lib/pos/merge-review-core.ts");

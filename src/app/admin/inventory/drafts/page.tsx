@@ -121,6 +121,7 @@ import { loadRestockPreview } from "@/lib/inventory/restock-preview-server";
 import { previewUnavailableCopy } from "@/lib/inventory/vendor-identity-core";
 import { restockPreviewPlan } from "@/lib/inventory/restock-preview-view-core";
 import { RestockPreviewChip, RestockPreviewUnavailable } from "@/components/admin/catalog/RestockPreviewChip";
+import { MasteringPreviewPanel } from "@/components/admin/catalog/MasteringPreviewPanel";
 // S09: KB-first recall - the "Known product" chip.
 import { KnownProductChip } from "@/components/admin/catalog/KnownProductChip";
 // S11: the onboarding row redesign (provenance chips, Facts + Manifest columns).
@@ -383,32 +384,6 @@ export default async function CatalogDraftsPage({
     );
   });
 
-  // S19.2 PREVIEW: what Approve WILL do for each row of the focused delivery
-  // ("Restock -> joins live card ..."). Same pure planner as the staging
-  // (previewRestockVerdicts), same category rule (chosen ?? resolved). Only
-  // on the review tab of ONE delivery - the question is per delivery, and
-  // it keeps the reads bounded. Any incomplete read says so on screen.
-  const previewPlan = restockPreviewPlan({ view, manifestId: focus.manifestId, rows: drafts.length });
-  const restockPreview = previewPlan.load
-    ? await loadRestockPreview(
-        drafts.map((d, i) => ({
-          id: d.id,
-          pos_product_key: d.pos_product_key,
-          name: d.name,
-          brand_name: d.brand_name,
-          vendor_name: d.vendor_name,
-          strain_name: d.strain_name,
-          category: d.chosen_website_category?.trim() || resolutions[i]?.websiteCategory || null,
-        })),
-      )
-    : null;
-  const previewNote =
-    previewPlan.unavailable !== null
-      ? previewUnavailableCopy(previewPlan.unavailable)
-      : restockPreview && !restockPreview.ok
-        ? previewUnavailableCopy(restockPreview.reason)
-        : null;
-  const previewVerdicts = restockPreview && restockPreview.ok ? restockPreview.verdicts : null;
 
   // S03 SHADOW RING (console only, zero behaviour change, ZERO queries): how
   // many open drafts are re-deliveries of an already-approved product whose
@@ -462,7 +437,7 @@ export default async function CatalogDraftsPage({
   // history already loaded (priorClassifications) - no extra query. Never
   // throws; KB_FIRST_ONBOARDING=off skips it entirely.
   const kbFirst = kbFirstOnboardingEnabled(process.env[KB_FIRST_ONBOARDING_ENV]);
-  const [{ suggestions: strainSuggestions, evidence: strainEvidence }, shadowSummary, productMemories] = await Promise.all([
+  const [{ suggestions: strainSuggestions, evidence: strainEvidence, sizeLabels: strainSizeLabels }, shadowSummary, productMemories] = await Promise.all([
     loadStrainTypeSignals(drafts),
     attachRing === 0 ? Promise.resolve(null) : loadShadowSummary(),
     kbFirst && view === "draft"
@@ -479,6 +454,39 @@ export default async function CatalogDraftsPage({
       : Promise.resolve(null),
   ]);
   const shadowFooter = shadowFooterCopy(shadowSummary, attachRing);
+
+  // (S34: runs after the strain-signal read so each row carries its lot's size label.)
+  // S19.2 PREVIEW: what Approve WILL do for each row of the focused delivery
+  // ("Restock -> joins live card ..."). Same pure planner as the staging
+  // (previewRestockVerdicts), same category rule (chosen ?? resolved). Only
+  // on the review tab of ONE delivery - the question is per delivery, and
+  // it keeps the reads bounded. Any incomplete read says so on screen.
+  const previewPlan = restockPreviewPlan({ view, manifestId: focus.manifestId, rows: drafts.length });
+  const restockPreview = previewPlan.load
+    ? await loadRestockPreview(
+        drafts.map((d, i) => ({
+          id: d.id,
+          pos_product_key: d.pos_product_key,
+          name: d.name,
+          brand_name: d.brand_name,
+          vendor_name: d.vendor_name,
+          strain_name: d.strain_name,
+          category: d.chosen_website_category?.trim() || resolutions[i]?.websiteCategory || null,
+          // S34: the size Approve will write (same lot read as strain type; display only).
+          size_label: strainSizeLabels.get(d.id) ?? null,
+        })),
+      )
+    : null;
+  const previewNote =
+    previewPlan.unavailable !== null
+      ? previewUnavailableCopy(previewPlan.unavailable)
+      : restockPreview && !restockPreview.ok
+        ? previewUnavailableCopy(restockPreview.reason)
+        : null;
+  const previewVerdicts = restockPreview && restockPreview.ok ? restockPreview.verdicts : null;
+  // S34: the groups the SAME dry run built (null = no preview -> no panel).
+  const previewGroups = restockPreview && restockPreview.ok ? restockPreview.groups : null;
+
   // S11: the redesigned row (Facts + Manifest columns, the facts panel, the
   // lookup outside the approve form, the in-row error). ONBOARDING_V2_ROW=off
   // renders the previous row (bible S11.7 rollback).
@@ -853,6 +861,15 @@ export default async function CatalogDraftsPage({
         )}
 
         {previewNote && drafts.length > 0 ? <RestockPreviewUnavailable text={previewNote} /> : null}
+        {drafts.length > 0 ? (
+          <MasteringPreviewPanel
+            groups={previewGroups}
+            rowNames={new Map(drafts.map((d) => [d.id, d.name]))}
+            totalRows={drafts.length}
+            manifestId={focus.manifestId}
+            back={draftsHref({ manifestId: focus.manifestId })}
+          />
+        ) : null}
         {drafts.length === 0 ? (
           <EmptyState
             icon="📝"

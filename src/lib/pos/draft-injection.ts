@@ -29,7 +29,7 @@ import {
   type DraftEnrichment,
   type InjectionDiagnostic,
 } from "@/lib/pos/draft-injection-core";
-import { intakeDisplayName } from "@/lib/pos/intake-mastering-core";
+import { intakeDisplayName, lotPackageLabel } from "@/lib/pos/intake-mastering-core";
 // SLICE S12: the golden record (attached facts, compliance-cleared).
 import { loadGoldenInputs } from "@/lib/catalog/golden-record-server";
 
@@ -234,10 +234,7 @@ export async function injectApprovedDraftsIntoVersion(
         websiteCategory: resolutions[i]?.websiteCategory ?? null,
         strainType: auto && auto !== "unknown" ? auto : null,
         onHandQty: lot ? Number(lot.on_hand_qty ?? 0) : null,
-        packageLabel:
-          lot && lot.unit_weight != null
-            ? `${lot.unit_weight} ${lot.unit_weight_uom ?? ""}`.trim()
-            : null,
+        packageLabel: lotPackageLabel(lot),
         ...(goldenByDraftId.get(d.id) ?? {}),
       });
     });

@@ -82,7 +82,7 @@ import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 // S32: remembered answers for products that matched 2+ live cards.
 import { loadMergeDecisions } from "@/lib/pos/merge-decision-store";
 import { mergeAmbiguousIdentities } from "@/lib/pos/merge-review-core";
-import type { MergeDecision } from "@/lib/pos/intake-mastering-core";
+import { lotPackageLabel, type MergeDecision } from "@/lib/pos/intake-mastering-core";
 import type { ApprovedDraftForInjection, DraftEnrichment } from "@/lib/pos/draft-injection-core";
 // S01: self-describing intake versions (manifest header + publish outcome +
 // humanised notes). Pure; see the file header for where the truth lives.
@@ -373,10 +373,7 @@ export async function stageIntakeMenuVersionForManifest(
         websiteCategory: resolutions[i]?.websiteCategory ?? null,
         strainType: auto && auto !== "unknown" ? auto : null,
         onHandQty: lot ? Number(lot.on_hand_qty ?? 0) : null,
-        packageLabel:
-          lot && lot.unit_weight != null
-            ? `${lot.unit_weight} ${lot.unit_weight_uom ?? ""}`.trim()
-            : null,
+        packageLabel: lotPackageLabel(lot),
         ...(goldenByDraftId.get(d.id) ?? {}),
       });
     });
