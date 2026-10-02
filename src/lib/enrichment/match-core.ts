@@ -233,6 +233,8 @@ export function buildAssetGuidance(g: GuidanceInput): string[] {
     out.push("Review the suggested matches below — applying one takes a single click.");
   }
   if (!g.hasImage) {
+    // Round 21 (C): the photo may already be in the library — look there first.
+    out.push("Check your media library first — \u201CChoose from your media library\u201D on this page lists every photo you already have.");
     if (g.vendorMatches === 0) {
       out.push("Harvest the vendor's Cultivera/GrowFlow menu (Purchasing → Vendor Menus) — product photos import straight into the media library.");
     }
@@ -303,6 +305,13 @@ export function buildGuidanceActions(g: GuidanceActionInput): GuidanceAction[] {
         hint: "Import product photos straight from the vendor's Cultivera/GrowFlow menu into the media library.",
       });
     }
+    // Round 21 (C): library first. The in-page picker lists the photos you
+    // already own; attaching is one click. Upload stays, but second.
+    out.push({
+      label: "Choose from the media library",
+      href: "#library",
+      hint: "Pick a photo you already have — every uploaded or imported image is listed here, best match first.",
+    });
     const q = (g.searchQuery ?? "").trim();
     out.push({
       label: "Search the media library",
@@ -315,9 +324,9 @@ export function buildGuidanceActions(g: GuidanceActionInput): GuidanceAction[] {
       hint: "The crawler chases brand and product images/descriptions from the web, worst-covered first.",
     });
     out.push({
-      label: "Upload a photo",
+      label: "Upload a new photo",
       href: "#upload",
-      hint: "Jump to the Add image field — a phone photo on a neutral background works great.",
+      hint: "Not in the library? Upload from your computer — a phone photo on a neutral background works great.",
     });
     if (g.substituteAvailable) {
       out.push({
@@ -679,6 +688,11 @@ export function __runEnrichmentMatchCoreTests(): void {
   ok(bare.some((l) => l.includes("Phat Panda rep")), "guidance personalises the brand-rep ask");
   ok(bare.some((l) => l.includes("approved fallback image")), "guidance offers the approved fallback");
   ok(bare.some((l) => l.includes("AI description")), "guidance covers the missing description");
+  ok(
+    bare.findIndex((l) => l.includes("media library first")) >= 0 &&
+      bare.findIndex((l) => l.includes("media library first")) < bare.findIndex((l) => l.includes("Photograph the product")),
+    "guidance: R21 library-first line precedes the upload line",
+  );
 
   // Guidance — matches exist → review-first line; no harvest line when vendor matched.
   const matched = buildAssetGuidance({
@@ -753,6 +767,11 @@ export function __runEnrichmentMatchCoreTests(): void {
   ok(bareActs.some((a) => a.href === "/admin/media?q=Grape%20Gas%203.5g"), "actions: media search pre-filled with the product name");
   ok(bareActs.some((a) => a.href === "/admin/knowledge-base/harvest"), "actions: KB harvest button offered for missing image");
   ok(bareActs.some((a) => a.href === "#upload"), "actions: in-page jump to the upload field");
+  ok(
+    bareActs.findIndex((a) => a.href === "#library") >= 0 &&
+      bareActs.findIndex((a) => a.href === "#library") < bareActs.findIndex((a) => a.href === "#upload"),
+    "actions: R21 library picker offered before the upload field",
+  );
   ok(bareActs.some((a) => a.href === "/admin/knowledge-base/images"), "actions: fallback manager offered when substitute exists");
   ok(bareActs.some((a) => a.href === "#ai"), "actions: missing description → jump to AI panel");
   ok(bareActs[bareActs.length - 1]?.href === "#brand", "actions: unlinked brand → jump to brand panel, last");
