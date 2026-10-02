@@ -89,6 +89,7 @@ import {
   type VendorIdInputs,
 } from "@/lib/inventory/vendor-identity-core";
 import { formatMoney } from "@/lib/pos/format";
+import { variantSizeValue } from "@/lib/menu/variant-sort";
 
 /** A live (carried-forward) card the planner may merge a restock into. */
 export type LiveCardCandidate = {
@@ -99,7 +100,17 @@ export type LiveCardCandidate = {
   category: string;
   strain_name: string | null;
   hidden: boolean;
-  variants: { source_variant_id: string; medical: boolean }[];
+  /**
+   * S34: label / price / stock are OPTIONAL - only the Onboarding preview
+   * reads them (to say what the joined card has now); the merge never does.
+   */
+  variants: {
+    source_variant_id: string;
+    medical: boolean;
+    label?: string | null;
+    price_minor_units?: number | null;
+    inventory_level?: number | null;
+  }[];
 };
 
 /** One size/lot on a mastered card (sort_order assigned by the composer). */
@@ -562,7 +573,85 @@ export type RestockPreviewDraft = {
   strain_name: string | null;
   /** The website category the row will be filed under (chosen ?? resolved); null = unmapped. */
   category: string | null;
+  /**
+   * S34: the size label Approve will write for this row's variant - the SAME
+   * derivation draft injection / staging use (`${unit_weight} ${uom}` from
+   * the row's lot). null/absent = not recorded (shown as such, never guessed).
+   * Display only: grouping and verdicts never read it.
+   */
+  size_label?: string | null;
 };
+
+/**
+ * The variant size label Approve writes for a lot: `${unit_weight} ${uom}`,
+ * or null when the lot carries no unit weight. ONE definition, used by draft
+ * injection, intake staging and the S34 preview (so the preview's sizes are
+ * the labels Approve will write).
+ */
+export function lotPackageLabel(
+  lot: { unit_weight: number | null; unit_weight_uom: string | null } | null | undefined,
+): string | null {
+  return lot && lot.unit_weight != null ? `${lot.unit_weight} ${lot.unit_weight_uom ?? ""}`.trim() : null;
+}
+
+/** S34: what a row's size reads as when the lot carries no unit weight. */
+export const PREVIEW_SIZE_UNKNOWN = "size not recorded";
+
+/** S34: the joined live card as it is NOW (from the same S19 read). */
+export type PreviewLiveCardView = {
+  key: string;
+  name: string;
+  /** Its current sizes, ladder order (lowest first), blanks dropped. */
+  variantLabels: string[];
+  /** [min, max] over the variants that carry a price; null = none do. */
+  priceRangeMinor: [number, number] | null;
+  /** Sum of inventory_level; null when ANY variant's level is unknown. */
+  onHand: number | null;
+};
+
+/** S34: one group of rows Approve will master as ONE card. */
+export type PreviewGroupView = {
+  identity: string;
+  category: string;
+  family: string;
+  /** The member rows, input order. */
+  draftIds: string[];
+  /** One label per member row, ladder order (unknown sizes last, as PREVIEW_SIZE_UNKNOWN). */
+  sizes: string[];
+  /** The SAME verdict object every member row carries. */
+  verdict: RestockVerdict;
+  /** Present only for a "joins" verdict. */
+  liveCard?: PreviewLiveCardView;
+};
+
+/** Ladder order: smallest size first, sizeless labels after, then by label. */
+function ladderSort(labels: string[]): string[] {
+  return [...labels].sort((a, b) => {
+    const sa = variantSizeValue(a);
+    const sb = variantSizeValue(b);
+    if (sa != null && sb != null && sa !== sb) return sa - sb;
+    if (sa != null && sb == null) return -1;
+    if (sa == null && sb != null) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+/** S34: the joined card's current shape, from the variants S19 already read. */
+export function liveCardView(card: LiveCardCandidate): PreviewLiveCardView {
+  const labels = card.variants.map((v) => (typeof v.label === "string" ? v.label.trim() : "")).filter(Boolean);
+  const prices = card.variants
+    .map((v) => v.price_minor_units)
+    .filter((p): p is number => typeof p === "number" && Number.isFinite(p) && p >= 0);
+  const levels = card.variants.map((v) => v.inventory_level);
+  const onHandKnown = levels.length > 0 && levels.every((l) => typeof l === "number" && Number.isFinite(l));
+  return {
+    key: card.source_item_id,
+    name: card.name,
+    variantLabels: ladderSort(labels),
+    priceRangeMinor: prices.length > 0 ? [Math.min(...prices), Math.max(...prices)] : null,
+    onHand: onHandKnown ? (levels as number[]).reduce((a, b) => a + Math.max(0, b), 0) : null,
+  };
+}
 
 /**
  * S19.2 "Preview": the mastering decision run DRY for one delivery's rows,
@@ -583,7 +672,22 @@ export function previewRestockVerdicts(input: {
   liveCards: LiveCardCandidate[];
   vendorIds?: VendorIdInputs;
 }): Map<string, RestockVerdict> {
+  return previewMasteringGroups(input).verdicts;
+}
+
+/**
+ * S34: the SAME dry run as previewRestockVerdicts (it IS that function's
+ * body - the wrapper above only drops .groups), plus the groups it already
+ * built: which rows Approve masters as ONE card, their sizes, and the live
+ * card a "joins" group lands on. Never a second grouping (bible S34.8).
+ */
+export function previewMasteringGroups(input: {
+  drafts: RestockPreviewDraft[];
+  liveCards: LiveCardCandidate[];
+  vendorIds?: VendorIdInputs;
+}): { verdicts: Map<string, RestockVerdict>; groups: PreviewGroupView[] } {
   const out = new Map<string, RestockVerdict>();
+  const views: PreviewGroupView[] = [];
   const live = buildLiveMergeIndex(input.liveCards, input.vendorIds);
   const liveCardKeys = new Set(input.liveCards.map((c) => c.source_item_id));
 
@@ -648,8 +752,19 @@ export function previewRestockVerdicts(input: {
       verdict = { kind: "new" };
     }
     for (const r of g.rows) out.set(r.id, verdict);
+    const sized = g.rows.map((r) => (typeof r.size_label === "string" ? r.size_label.trim() : "")).filter(Boolean);
+    const unknown = g.rows.length - sized.length;
+    views.push({
+      identity: g.identity,
+      category: g.category,
+      family: g.family,
+      draftIds: g.rows.map((r) => r.id),
+      sizes: [...ladderSort(sized), ...Array.from({ length: unknown }, () => PREVIEW_SIZE_UNKNOWN)],
+      verdict,
+      ...(m.cards.length === 1 ? { liveCard: liveCardView(m.cards[0]) } : {}),
+    });
   }
-  return out;
+  return { verdicts: out, groups: views };
 }
 
 /** Ceiling on live lot keys one vendor-id read may ask about (never paged past). */
@@ -1941,6 +2056,65 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     // Preview == plan on the acceptance fixture.
     const pf = pv(draftsFx.map((d) => row({ id: d.id, pos_product_key: d.pos_product_key, name: d.name, brand_name: d.brand_name, vendor_name: d.vendor_name, strain_name: d.strain_name })), liveFx, idsFx);
     assert([...pf.values()].every((v) => v.kind === "joins") && pf.size === 3, "preview == plan on the S19.6 fixture");
+
+    // --- S34: previewMasteringGroups wraps the SAME dry run ---
+    const sameMap = (a: Map<string, RestockVerdict>, b: Map<string, RestockVerdict>) =>
+      a.size === b.size && [...a.keys()].join() === [...b.keys()].join() && [...a].every(([k, v]) => JSON.stringify(v) === JSON.stringify(b.get(k)));
+    const s34Fixtures: Array<[RestockPreviewDraft[], LiveCardCandidate[], VendorIdInputs | undefined]> = [
+      [[row({})], [cult], ids],
+      [[row({})], [live({})], undefined],
+      [[row({})], [live({}), live({ source_item_id: "card-2", variants: [] })], ids],
+      [[row({ pos_product_key: "pos-0123456789ab" })], [cult], ids],
+      [[row({ pos_product_key: "LOT-OLD" })], [live({})], undefined],
+      [[row({ vendor_name: " " }), row({ id: "d2", name: "Flower", strain_name: null }), row({ id: "d3", pos_product_key: null }), row({ id: "d4", category: null })], [cult], undefined],
+      [[row({}), row({ id: "d2", pos_product_key: "LOT-B", name: "Blue Dream 3.5g" })], [cult], ids2],
+      [draftsFx.map((d) => row({ id: d.id, pos_product_key: d.pos_product_key, name: d.name, brand_name: d.brand_name, vendor_name: d.vendor_name, strain_name: d.strain_name })), liveFx, idsFx],
+    ];
+    assert(
+      s34Fixtures.every(([dr, lc, v]) => sameMap(previewMasteringGroups({ drafts: dr, liveCards: lc, vendorIds: v }).verdicts, pv(dr, lc, v))),
+      "S34: wrapper verdicts identical on every S19 preview fixture",
+    );
+    const s34Rows = [
+      row({ id: "m1", pos_product_key: "LOT-M1", name: "Blue Dream 7g", size_label: "7 g" }),
+      row({ id: "m2", pos_product_key: "LOT-M2", name: "Blue Dream 1g", size_label: "1 g" }),
+      row({ id: "m3", pos_product_key: "LOT-M3", name: "Blue Dream 3.5g", size_label: null }),
+      row({ id: "m4", pos_product_key: "LOT-M4", name: "Blue Dream 3.5g", size_label: "3.5 g" }),
+      row({ id: "n1", pos_product_key: "LOT-N1", name: "Gelato 1g", strain_name: "Gelato", size_label: "1 g" }),
+      row({ id: "x1", pos_product_key: "pos-0123456789ab" }),
+      row({ id: "x2", pos_product_key: "LOT-OLD" }),
+      row({ id: "x3", vendor_name: "" }),
+      row({ id: "x4", name: "Flower", strain_name: null }),
+      row({ id: "x5", pos_product_key: null }),
+    ];
+    const liveSized = live({
+      variants: [
+        { source_variant_id: "LOT-OLD-onboarded", medical: false, label: "3.5g", price_minor_units: 3500, inventory_level: 9 },
+        { source_variant_id: "LOT-OLD2-onboarded", medical: false, label: "1g", price_minor_units: 1200, inventory_level: 5 },
+      ],
+    });
+    const mg = previewMasteringGroups({ drafts: s34Rows, liveCards: [liveSized, cult] });
+    const grouped = mg.groups.flatMap((g) => g.draftIds);
+    assert(new Set(grouped).size === grouped.length, "S34: each draft in at most one group");
+    assert(grouped.slice().sort().join() === "m1,m2,m3,m4,n1", "S34: every groupable draft in exactly one group");
+    assert(["x1", "x2", "x3", "x4", "x5"].every((id) => !grouped.includes(id)), "S34: already_live / no_vendor / vague_name / keyless rows are not grouped");
+    assert(mg.groups.length === 2 && mg.groups[0].draftIds.join() === "m1,m2,m3,m4", "S34: groups in first-seen order, members in input order");
+    assert(mg.groups[0].sizes.join("|") === "1 g|3.5 g|7 g|" + PREVIEW_SIZE_UNKNOWN, "S34: sizes in ladder order, unknown sizes last and named");
+    assert(mg.groups.every((g) => g.draftIds.every((id) => mg.verdicts.get(id) === g.verdict)), "S34: group verdict === each member's verdict");
+    const bd = mg.groups[0];
+    assert(bd.verdict.kind === "joins" && bd.liveCard?.key === "card-1", "S34: joins group carries the live card");
+    assert(bd.liveCard?.variantLabels.join() === "1g,3.5g", "S34: live card sizes in ladder order");
+    assert(bd.liveCard?.priceRangeMinor?.join() === "1200,3500" && bd.liveCard?.onHand === 14, "S34: live card price range + on hand");
+    assert(mg.groups[1].verdict.kind === "new" && mg.groups[1].liveCard === undefined, "S34: new group has no live card");
+    assert(bd.identity === "fairwinds-llc|flower|blue-dream" && bd.identity === identityKey("Fairwinds LLC", "flower", "blue-dream") && bd.category === "flower" && bd.family === "blue-dream", "S34: group carries the S19 identity (the S32 review key)");
+    const s34Amb = previewMasteringGroups({ drafts: [row({})], liveCards: [live({}), live({ source_item_id: "card-2", variants: [] })], vendorIds: ids }).groups;
+    assert(s34Amb.length === 1 && s34Amb[0].verdict.kind === "ambiguous" && s34Amb[0].liveCard === undefined, "S34: ambiguous group, no single live card");
+    // liveCardView honesty: unknown level -> null on hand; no prices -> null range.
+    const lv = liveCardView(live({ variants: [{ source_variant_id: "a", medical: false, label: " 7g ", price_minor_units: null, inventory_level: 3 }, { source_variant_id: "b", medical: false, label: "", inventory_level: null }] }));
+    assert(lv.onHand === null && lv.priceRangeMinor === null && lv.variantLabels.join() === "7g", "S34: liveCardView never invents stock or price");
+    assert(liveCardView(live({ variants: [] })).onHand === null, "S34: a card with no variants has unknown stock");
+    assert(lotPackageLabel({ unit_weight: 3.5, unit_weight_uom: "g" }) === "3.5 g" && lotPackageLabel({ unit_weight: 1, unit_weight_uom: null }) === "1", "S34: lotPackageLabel = the staging label");
+    assert(lotPackageLabel({ unit_weight: null, unit_weight_uom: "g" }) === null && lotPackageLabel(null) === null && lotPackageLabel({ unit_weight: 0, unit_weight_uom: "g" }) === "0 g", "S34: lotPackageLabel null only without a weight (0 kept, as before)");
+    assert(liveCardView(live({ variants: [{ source_variant_id: "a", medical: false, label: "1g", price_minor_units: 900, inventory_level: -2 }] })).onHand === 0, "S34: negative stock counts as zero");
     // buildLiveMergeIndex / matchLiveCards surface.
     const idx = buildLiveMergeIndex([cult], ids);
     assert(idx.byVendorId.size === 1 && idx.vidsByCard.get("pos-0123456789ab")?.has("v-fw") === true, "index: vendor-id keyed (lowercased)");

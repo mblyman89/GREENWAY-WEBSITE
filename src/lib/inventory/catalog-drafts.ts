@@ -90,6 +90,7 @@ import {
   STRAIN_TYPE_AUTO_MIN_CONFIDENCE,
 } from "@/lib/inventory/strain-type-intel-core";
 import { recordAudit } from "@/lib/auth/audit";
+import { lotPackageLabel } from "@/lib/pos/intake-mastering-core";
 // S17: "Approve all priced" - one menu version per approve batch.
 import {
   BATCH_APPROVE_MAX,
@@ -899,15 +900,22 @@ export async function loadStrainTypeSignals(
 ): Promise<{
   suggestions: Map<string, ReturnType<typeof suggestStrainType>>;
   evidence: Map<string, StrainTypeEvidence>;
+  /**
+   * S34: the size label Approve will write for each draft's variant, from the
+   * SAME lot read (no extra query) and the same derivation staging uses
+   * (lotPackageLabel). Absent = no lot / no unit weight / read failed.
+   */
+  sizeLabels: Map<string, string>;
 }> {
   const out = new Map<string, ReturnType<typeof suggestStrainType>>();
   const evidence = new Map<string, StrainTypeEvidence>();
+  const sizeLabels = new Map<string, string>();
   if (!isSupabaseServiceConfigured || drafts.length === 0) {
     for (const d of drafts) {
       out.set(d.id, suggestStrainType({ productName: d.name }));
       evidence.set(d.id, { kb: null, manifest: null });
     }
-    return { suggestions: out, evidence };
+    return { suggestions: out, evidence, sizeLabels };
   }
   const admin = createSupabaseAdminClient();
 
@@ -928,10 +936,18 @@ export async function loadStrainTypeSignals(
 
   const lotIds = Array.from(new Set(drafts.map((d) => d.lot_id).filter((v): v is string => Boolean(v))));
   const lotTypeById = new Map<string, string>();
+  const lotSizeById = new Map<string, string>();
   if (lotIds.length > 0) {
-    const { data } = await admin.from("inventory_lots").select("id, strain_type").in("id", lotIds);
-    for (const l of (data as { id: string; strain_type: string | null }[] | null) ?? []) {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select("id, strain_type, unit_weight, unit_weight_uom")
+      .in("id", lotIds);
+    for (const l of (data as
+      | { id: string; strain_type: string | null; unit_weight: number | null; unit_weight_uom: string | null }[]
+      | null) ?? []) {
       if (l.strain_type) lotTypeById.set(l.id, l.strain_type);
+      const size = lotPackageLabel(l);
+      if (size) lotSizeById.set(l.id, size);
     }
   }
 
@@ -948,8 +964,10 @@ export async function loadStrainTypeSignals(
       }),
     );
     evidence.set(d.id, { kb, manifest });
+    const size = d.lot_id ? lotSizeById.get(d.lot_id) : undefined;
+    if (size) sizeLabels.set(d.id, size);
   }
-  return { suggestions: out, evidence };
+  return { suggestions: out, evidence, sizeLabels };
 }
 
 /**

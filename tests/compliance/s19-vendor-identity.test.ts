@@ -107,7 +107,7 @@ afterEach(() => {
 describe("S19 pure cores", () => {
   it("self-tests pass with exact counts (a deleted check turns this red)", () => {
     expect(__runVendorIdentityCoreTests().passed).toBe(74);
-    expect(__runIntakeMasteringCoreTests().passed).toBe(188);
+    expect(__runIntakeMasteringCoreTests().passed).toBe(206);
     expect(__runIntakeMenuStagingCoreTests().passed).toBe(74);
     expect(__runRestockPreviewViewTests().passed).toBe(11);
   });
@@ -435,7 +435,12 @@ describe("S19.2 preview server (loadRestockPreview)", () => {
     expect(inList(itemsReq, "category")).toEqual(["flower"]);
     expect(itemsReq.url.searchParams.get("menu_version_id")).toBe("eq.pub-1");
     const vReq = net.reqs.find((r) => table(r) === "menu_variants")!;
-    expect(sel(vReq)).toBe("menu_item_id,source_variant_id,medical");
+    expect(sel(vReq)).toBe("menu_item_id,source_variant_id,medical,label,price_minor_units,inventory_level"); // S34 widened
+    // S34: the same dry run returns the group + the joined card as it is now.
+    expect(res.groups).toHaveLength(1);
+    expect(res.groups[0].draftIds).toEqual(["d1"]);
+    expect(res.groups[0].verdict).toBe(res.verdicts.get("d1"));
+    expect(res.groups[0].liveCard).toEqual({ key: "pos-0123456789ab", name: "Blue Dream", variantLabels: ["3.5g"], priceRangeMinor: [3000, 3000], onHand: 5 });
     expect(net.reqs.every((r) => r.method === "GET")).toBe(true);
   });
 
@@ -461,7 +466,7 @@ describe("S19.2 preview server (loadRestockPreview)", () => {
   it("no categories -> no reads, empty verdicts", async () => {
     world({});
     const res = await load([row({ category: null })]);
-    expect(res).toEqual({ ok: true, verdicts: new Map(), matchedByVendorId: false });
+    expect(res).toEqual({ ok: true, verdicts: new Map(), groups: [], matchedByVendorId: false });
     expect(net.reqs).toHaveLength(0);
   });
 

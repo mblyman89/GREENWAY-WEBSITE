@@ -49,7 +49,7 @@ describe("R21 A — the batch lookup is never silently absent", () => {
     expect(batchLookupEntry({ ...base, focused: false, state: null, eligible: null })).toEqual({ kind: "choose" });
   });
   it("every state that used to render nothing now says why in plain words", () => {
-    const text = (o: Partial<typeof base> & Record<string, unknown>) => {
+    const text = (o: Record<string, unknown>) => {
       const e = batchLookupEntry({ ...base, ...o } as Parameters<typeof batchLookupEntry>[0]);
       return e.kind === "reason" ? e.text : e.kind;
     };
@@ -163,15 +163,20 @@ describe("R21 B — S41 detail row renders", () => {
   });
 });
 
+// Children go in as createElement arguments (react/no-children-prop); the
+// props are typed as the full prop type so tsc accepts the call.
+type AG = Parameters<typeof ApproveGroup>[0];
+type FL = Parameters<typeof FieldLabel>[0];
+
 describe("R21 B — flag off is the previous markup", () => {
   it("ApproveGroup / FieldLabel are pass-through / nothing when off", () => {
-    const off = renderToStaticMarkup(createElement(ApproveGroup, { on: false, legend: "Classify" }, createElement("i", null, "x")));
+    const off = renderToStaticMarkup(createElement(ApproveGroup, { on: false, legend: "Classify" } as AG, createElement("i", null, "x")));
     expect(off).toBe("<i>x</i>");
-    expect(renderToStaticMarkup(createElement(FieldLabel, { on: false, htmlFor: "a" }, "Label"))).toBe("");
-    const on = renderToStaticMarkup(createElement(ApproveGroup, { on: true, legend: "Classify" }, createElement("i", null, "x")));
+    expect(renderToStaticMarkup(createElement(FieldLabel, { on: false, htmlFor: "a" } as FL, "Label"))).toBe("");
+    const on = renderToStaticMarkup(createElement(ApproveGroup, { on: true, legend: "Classify" } as AG, createElement("i", null, "x")));
     expect(on).toContain("<fieldset");
     expect(on).toContain(">Classify</legend>");
-    expect(renderToStaticMarkup(createElement(FieldLabel, { on: true, htmlFor: "a" }, "Label"))).toBe('<label for="a" class="text-xs text-[var(--admin-text-muted)]">Label</label>');
+    expect(renderToStaticMarkup(createElement(FieldLabel, { on: true, htmlFor: "a" } as FL, "Label"))).toBe('<label for="a" class="text-xs text-[var(--admin-text-muted)]">Label</label>');
   });
   it("FactsPanel keeps its 34rem cap unless wide (golden class)", () => {
     const view = buildFactChips(null, null, { mode: "act" });

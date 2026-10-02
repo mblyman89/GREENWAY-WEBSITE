@@ -33,8 +33,9 @@ import {
   buildVendorIdInputs,
   groupingCategoryAxis,
   planVendorIdLookup,
-  previewRestockVerdicts,
+  previewMasteringGroups,
   type LiveCardCandidate,
+  type PreviewGroupView,
   type RestockPreviewDraft,
 } from "@/lib/pos/intake-mastering-core";
 import {
@@ -50,8 +51,12 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 export const LOT_VENDOR_COLUMNS = "pos_product_key, vendor_id";
 /** The live-card columns the preview needs (menu_items). */
 export const PREVIEW_ITEM_COLUMNS = "id, source_item_id, name, brand_name, vendor_name, category, strain_name, hidden";
-/** The variant columns the preview needs (menu_variants). */
-export const PREVIEW_VARIANT_COLUMNS = "menu_item_id, source_variant_id, medical";
+/**
+ * The variant columns the preview needs (menu_variants). S34: label / price /
+ * stock so the mastering preview can say what a joined card has NOW - same
+ * paged read, no extra query.
+ */
+export const PREVIEW_VARIANT_COLUMNS = "menu_item_id, source_variant_id, medical, label, price_minor_units, inventory_level";
 /** Most live cards one preview reads (3 pages); more = "too many to preview". */
 export const PREVIEW_LIVE_CARD_CAP = 3000;
 
@@ -113,7 +118,13 @@ export function previewCategories(categories: Array<string | null | undefined>):
 }
 
 export type RestockPreviewResult =
-  | { ok: true; verdicts: Map<string, RestockVerdict>; matchedByVendorId: boolean }
+  | {
+      ok: true;
+      verdicts: Map<string, RestockVerdict>;
+      /** S34: the groups the SAME dry run built (one per card Approve will make or join). */
+      groups: PreviewGroupView[];
+      matchedByVendorId: boolean;
+    }
   | { ok: false; reason: "flag_off" | "read_incomplete" | "too_many" };
 
 type PreviewItemRow = {
@@ -126,17 +137,24 @@ type PreviewItemRow = {
   strain_name: string | null;
   hidden: boolean | null;
 };
-type PreviewVariantRow = { menu_item_id: string; source_variant_id: string; medical: boolean | null };
+type PreviewVariantRow = {
+  menu_item_id: string;
+  source_variant_id: string;
+  medical: boolean | null;
+  label: string | null;
+  price_minor_units: number | null;
+  inventory_level: number | null;
+};
 
 /**
  * S19.2 Preview for one delivery's rows: what Approve will do, from the SAME
- * pure planner the staging uses (previewRestockVerdicts). Nothing live yet ->
+ * pure planner the staging uses (previewRestockVerdicts / S34 previewMasteringGroups - the same body). Nothing live yet ->
  * every usable row is "New card" (true: there is no card to join).
  */
 export async function loadRestockPreview(drafts: RestockPreviewDraft[]): Promise<RestockPreviewResult> {
   if (!vendorIdIdentityEnabled(process.env[VENDOR_ID_IDENTITY_ENV])) return { ok: false, reason: "flag_off" };
   const categories = previewCategories(drafts.map((d) => d.category));
-  if (categories.length === 0) return { ok: true, verdicts: new Map(), matchedByVendorId: false };
+  if (categories.length === 0) return { ok: true, verdicts: new Map(), groups: [], matchedByVendorId: false };
   try {
     const admin = createSupabaseAdminClient();
     const { data: pub, error: pErr } = await admin
@@ -151,7 +169,8 @@ export async function loadRestockPreview(drafts: RestockPreviewDraft[]): Promise
     }
     const publishedId = (pub as { id: string } | null)?.id ?? null;
     if (!publishedId) {
-      return { ok: true, verdicts: previewRestockVerdicts({ drafts, liveCards: [] }), matchedByVendorId: false };
+      const dry = previewMasteringGroups({ drafts, liveCards: [] });
+      return { ok: true, verdicts: dry.verdicts, groups: dry.groups, matchedByVendorId: false };
     }
 
     const items = await pagedAllChecked<PreviewItemRow>(
@@ -192,10 +211,16 @@ export async function loadRestockPreview(drafts: RestockPreviewDraft[]): Promise
     );
     if (variantsFailed) return { ok: false, reason: "read_incomplete" };
 
-    const byItem = new Map<string, { source_variant_id: string; medical: boolean }[]>();
+    const byItem = new Map<string, LiveCardCandidate["variants"]>();
     for (const v of variants) {
       const list = byItem.get(v.menu_item_id) ?? [];
-      list.push({ source_variant_id: v.source_variant_id, medical: v.medical === true });
+      list.push({
+        source_variant_id: v.source_variant_id,
+        medical: v.medical === true,
+        label: v.label ?? null,
+        price_minor_units: v.price_minor_units ?? null,
+        inventory_level: v.inventory_level ?? null,
+      });
       byItem.set(v.menu_item_id, list);
     }
     const liveCards: LiveCardCandidate[] = items.rows.map((r) => ({
@@ -209,8 +234,8 @@ export async function loadRestockPreview(drafts: RestockPreviewDraft[]): Promise
       variants: byItem.get(r.id) ?? [],
     }));
     const vendorIds = await loadVendorIdInputs(admin, { drafts, liveCards });
-    const verdicts = previewRestockVerdicts({ drafts, liveCards, vendorIds });
-    return { ok: true, verdicts, matchedByVendorId: Boolean(vendorIds) };
+    const dry = previewMasteringGroups({ drafts, liveCards, vendorIds });
+    return { ok: true, verdicts: dry.verdicts, groups: dry.groups, matchedByVendorId: Boolean(vendorIds) };
   } catch (err) {
     console.error("[restock-preview] preview failed (display unaffected):", err);
     return { ok: false, reason: "read_incomplete" };
