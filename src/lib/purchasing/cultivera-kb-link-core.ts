@@ -33,6 +33,7 @@
 import {
   resolveMenuDescription,
 } from "./menu-description-core";
+import { dashedSlug } from "@/lib/catalog/slug-core";
 
 /** The subset of a Cultivera menu-item row this module reads (structural, so it
  *  works for both the DB row and any normalized shape carrying these fields). */
@@ -62,11 +63,7 @@ const NUL = "\u0000";
  * Empty/whitespace/undefined -> "".
  */
 export function slugifyDashed(value: string | null | undefined): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return dashedSlug(value);
 }
 
 /**

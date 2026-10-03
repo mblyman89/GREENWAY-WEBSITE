@@ -35,6 +35,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { strainSlug } from "@/lib/catalog/slug-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
 import { archiveSupersededStaged } from "@/lib/pos/menu-version";
@@ -309,7 +310,7 @@ export async function stageIntakeMenuVersionForManifest(
     const slugs = Array.from(
       new Set(
         drafts
-          .map((d) => d.strain_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "")
+          .map((d) => strainSlug(d.strain_name))
           .filter(Boolean),
       ),
     );
@@ -355,7 +356,7 @@ export async function stageIntakeMenuVersionForManifest(
     const enrichmentByDraftId = new Map<string, DraftEnrichment>();
     drafts.forEach((d, i) => {
       const lot = d.lot_id ? lotById.get(d.lot_id) ?? null : null;
-      const slug = d.strain_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+      const slug = strainSlug(d.strain_name);
       const rawStrainType = slug ? strainTypeBySlug.get(slug) ?? null : null;
       // SLICE 93: the curated KB still leads, but the manifest's stated fact
       // (inventory_lots.strain_type) and a confident name parse now fill the

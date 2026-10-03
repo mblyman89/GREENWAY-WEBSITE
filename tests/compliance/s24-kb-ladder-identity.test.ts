@@ -420,7 +420,10 @@ describe("S24 wiring", () => {
     const src = stripComments(read("src/lib/ai/kb/product-lookup.ts"));
     expect(src).toContain("resolveKbFromIndexes(query, kbIndexes)");
     expect(src).toContain("loadKbKnowledgeIndexes(query)");
-    expect(src).toContain('toLowerCase().replace(/\\s+/g, " ")');
+    // R24 S20 (F-053): the spaced kb_strains slug now comes from slug-core
+    // (updated on purpose; the rule's body is pinned in r24-s20-slug-core-brand).
+    expect(src).toContain("const slug = strainSlug(query.strainName);");
+    expect(src).toContain('import { strainSlug } from "@/lib/catalog/slug-core";');
   });
 
   it("the loader keeps chunkedIn + MENU_READ_CONCURRENCY on every S24 read", () => {

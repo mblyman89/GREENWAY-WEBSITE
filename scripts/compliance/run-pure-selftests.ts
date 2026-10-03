@@ -639,6 +639,7 @@ import { __runProductIdentityCoreTests } from "../../src/lib/catalog/product-ide
 import { __runIdentityColumnsCoreTests } from "../../src/lib/catalog/identity-columns-core";
 import { __runAttachFactsCoreTests } from "../../src/lib/catalog/attach-facts-core";
 import { __runApproveAttachCoreTests } from "../../src/lib/catalog/approve-attach-core";
+import { __runSlugCoreTests } from "../../src/lib/catalog/slug-core";
 import { __runFactAttachPolicyCoreTests } from "../../src/lib/catalog/fact-attach-policy-core";
 import { __runAttachPlanCoreTests } from "../../src/lib/catalog/attach-plan-core";
 import { __runOnboardingListCoreTests } from "../../src/lib/catalog/onboarding-list-core";
@@ -1520,7 +1521,7 @@ __runLiquidVolumeTests();
   __runSampleGuardrailTests();
   __runCardCannabinoidTests();
   __runCycleCountSheetTests();
-  __runCardIdentityCoreTests();
+  assertRan("card-identity-core", __runCardIdentityCoreTests(), 34);
   __runReprocessCoreTests();
   __runTransformCoreTests();
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
@@ -1920,6 +1921,7 @@ __runLiquidVolumeTests();
   // Measured 76.
   assertRan("attach-facts-core", __runAttachFactsCoreTests(), 89);
   assertRan("approve-attach-core", __runApproveAttachCoreTests(), 40);
+  assertRan("slug-core", __runSlugCoreTests(), 30);
   // S10 fact-attach policy: FIELD_POLICY covers every lookup field, the
   // bible S10.5 cases, §5.5 bands, ring parse (default shadow), the bible
   // receipt copy byte for byte, and the audit fold. Measured 102.

@@ -17,6 +17,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { strainSlug } from "@/lib/catalog/slug-core";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 // SLICE 93: kb > manifest fact > confident name parse - one folded verdict.
 import {
@@ -176,7 +177,7 @@ export async function injectApprovedDraftsIntoVersion(
     const slugs = Array.from(
       new Set(
         drafts
-          .map((d) => d.strain_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "")
+          .map((d) => strainSlug(d.strain_name))
           .filter(Boolean),
       ),
     );
@@ -216,7 +217,7 @@ export async function injectApprovedDraftsIntoVersion(
     const enrichmentByDraftId = new Map<string, DraftEnrichment>();
     drafts.forEach((d, i) => {
       const lot = d.lot_id ? lotById.get(d.lot_id) ?? null : null;
-      const slug = d.strain_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+      const slug = strainSlug(d.strain_name);
       const rawStrainType = slug ? strainTypeBySlug.get(slug) ?? null : null;
       // SLICE 93: the curated KB still leads, but the manifest's stated fact
       // (inventory_lots.strain_type) and a confident name parse now fill the

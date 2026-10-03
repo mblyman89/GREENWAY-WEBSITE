@@ -24,6 +24,7 @@
  * Nothing here touches POS truth (price/stock). It only enriches the KB.
  */
 import "server-only";
+import { dashedSlug, strainSlug as sharedStrainSlug } from "@/lib/catalog/slug-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { checkCompliance, checkEffects } from "@/lib/ai/compliance";
@@ -37,16 +38,12 @@ import {
 
 /** Dashed slug (brands/products): lowercase, non-alnum → dash. */
 function slugifyDashed(value: string): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return dashedSlug(value);
 }
 
 /** Strain slug matches the generator convention: lowercase, single-spaced. */
 function strainSlug(value: string): string {
-  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return sharedStrainSlug(value);
 }
 
 /** Union two string arrays (case-insensitive), preserving first-seen casing. */

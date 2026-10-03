@@ -23,6 +23,7 @@
  * crawler/app/kb_products.py:
  *     trim -> lowercase -> [^a-z0-9]+ => '-' -> strip leading/trailing '-'.
  */
+import { dashedSlug } from "@/lib/catalog/slug-core";
 
 /** The subset of a GrowFlow menu-item row this module reads. Structural so it
  *  works for both the DB row (snake_case size_label) and the normalized item. */
@@ -56,11 +57,7 @@ const NUL = "\u0000";
  * Empty/whitespace/undefined -> "".
  */
 export function slugifyDashed(value: string | null | undefined): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return dashedSlug(value);
 }
 
 /**

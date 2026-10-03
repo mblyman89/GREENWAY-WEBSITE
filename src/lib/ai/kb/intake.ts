@@ -18,15 +18,12 @@
  * "not-ready" result so intake still proceeds via enrichment.
  */
 import "server-only";
+import { dashedSlug } from "@/lib/catalog/slug-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 function slugifyDashed(value: string): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return dashedSlug(value);
 }
 
 export type KbProductMatch = {
