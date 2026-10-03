@@ -112,6 +112,12 @@ import {
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 import { linkKbProductsToDrafts } from "@/lib/inventory/kb-link-store";
 import {
+  RECEIVED_DATE_STAMP_ERROR_EVENT,
+  isMissingReceivedOnColumns,
+  planReceivedOnStamp,
+} from "@/lib/inventory/intake-lot-facts-core";
+import { pacificToday } from "@/lib/reports/timezone";
+import {
   deriveManifestStatus,
   normalizePartialNote,
 } from "@/lib/inventory/intake-disposition-core";
@@ -1283,6 +1289,10 @@ export async function finalizeManifestDispositions(
   // PO's received quantities idempotent across re-finalizes.
   const activatedLotIds: string[] = [];
   const rejectedLotIds: string[] = [];
+  // R25 A: accepted lots HELD in quarantine in this run. They were physically
+  // received and accepted (disposition "accepted"), so they get the received
+  // date too; only their sellability is held.
+  const heldLotIds: string[] = [];
   // SLICE 103 — the old loop awaited TWO round-trips PER LOT (update +
   // adjustment insert), so a 28-line manifest paid ~56 sequential database
   // trips before the follow-up chores even started (the owner: "the finalize
@@ -1311,6 +1321,7 @@ export async function finalizeManifestDispositions(
                 .join(" ")}`.slice(0, 2000),
             })
             .eq("id", lot.id);
+          heldLotIds.push(lot.id);
         }
         continue;
       }
@@ -1352,6 +1363,49 @@ export async function finalizeManifestDispositions(
       .from("inventory_lots")
       .update({ status: "rejected", dispositioned_at: nowIso, updated_by: actorId })
       .in("id", rejectedLotIds);
+  }
+
+  // R25 A: THE RECEIVED DATE. Owner: "The receive date should be the date the
+  // manifest was accepted into the system via receiving." Before this, no
+  // intake path ever wrote received_on (0214), so every intake lot read as
+  // unknown and CCRS fell back to created_at (the STAGING instant). Planned by
+  // the pure intake-lot-facts-core: the Pacific day of THIS accept instant
+  // (nowIso, the same instant stamped as accepted_at below), source
+  // "manifest". FILL-ONLY: `.is("received_on", null)` means a date a person
+  // typed, or the POS export supplied, is never overwritten, and a
+  // re-finalize never moves a date already set. Best-effort: the stock is
+  // already active, so a failure is put on the manifest timeline (the owner's
+  // received-date worklist still lists the lot) instead of failing the accept.
+  const receivedStamp = planReceivedOnStamp({
+    acceptedAtIso: nowIso,
+    todayPacific: pacificToday(),
+    lotIds: [...activatedLotIds, ...heldLotIds],
+  });
+  if (receivedStamp.write) {
+    try {
+      const { error: recErr } = await admin
+        .from("inventory_lots")
+        .update(receivedStamp.patch)
+        .in("id", receivedStamp.lotIds)
+        .is("received_on", null);
+      if (recErr) {
+        await logManifestEvent(
+          manifestId,
+          RECEIVED_DATE_STAMP_ERROR_EVENT,
+          isMissingReceivedOnColumns(recErr)
+            ? "The received date could not be saved on the accepted lots: the received-date columns are not in the database yet (migration 0214)."
+            : `The received date could not be saved on the accepted lots: ${String(recErr.message ?? "").slice(0, 300)}`,
+          actorId,
+        );
+      }
+    } catch (err) {
+      await logManifestEvent(
+        manifestId,
+        RECEIVED_DATE_STAMP_ERROR_EVENT,
+        `The received date could not be saved on the accepted lots: ${err instanceof Error ? err.message : String(err)}`.slice(0, 400),
+        actorId,
+      );
+    }
   }
 
   // derivedStatus reflects what actually happened. If lots were accepted but

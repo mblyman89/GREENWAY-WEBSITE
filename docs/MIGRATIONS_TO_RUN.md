@@ -1670,3 +1670,49 @@ in Vercel.
   stay unused. To remove them as well, paste
   `supabase/rollbacks/0243_master_suggestions_v2.rollback.sql` into the SQL
   editor (this forgets every remembered rejection).
+
+## R25 A — 0244 — intake lots get their received date and strain type
+
+- [ ] `0244_intake_lot_received_date_strain_type_backfill.sql` — DATA ONLY
+  (no new columns; needs 0214's `received_on` columns, which you already
+  have). It fills two facts on lots that came in through intake:
+
+  1. **Received date** = the Pacific day the manifest was accepted in
+     Receiving (the earlier of the manifest's accepted time and the lot's
+     first "Accepted from vendor manifest intake" stock entry, so a
+     re-finalize cannot move it later). Only for lots that were accepted
+     (sellable or held), only where the date is still blank — a date you
+     typed or the POS import gave is never touched. The Cultivera import's
+     synthetic manifest (`POS-IMPORT-…`) is skipped.
+  2. **Strain type** = the type you picked on the approved Product
+     Onboarding draft for that lot (latest approval wins), marked as coming
+     from a reviewer. A lot you hand-edited after approving is left alone.
+
+  Every change writes one `audit_logs` row (`actor_email = 'migration:0244'`).
+  New intakes do this by themselves from now on (the finalize stamps the date;
+  approval copies the strain type), so this only catches up existing lots.
+
+  Safe to re-run (it only fills what is still missing). Verified on Postgres
+  15 with `scripts/recon/intake-lot-facts-pg-check.sql`: applied twice in one
+  rolled-back transaction with every edge case asserted, an exact rollback,
+  and 19 deliberate SQL mutations all caught (`scripts/r25/mutate_a_sql.py`).
+
+  **Run it, then check:**
+
+  ```sql
+  select action, count(*) from public.audit_logs
+   where actor_email = 'migration:0244' group by action;
+  -- received_on_backfill = lots that got a date; strain_type_backfill = lots
+  -- that got your pick
+
+  select count(*) as intake_lots_still_without_date
+    from public.inventory_lots l join public.inbound_manifests m on m.id = l.manifest_id
+   where l.received_on is null and l.disposition = 'accepted' and m.accepted_at is not null
+     and coalesce(m.manifest_number, '') not like 'POS-IMPORT-%';
+  -- expect 0
+  ```
+
+  **Rollback (only if needed):** paste
+  `supabase/rollbacks/0244_intake_lot_received_date_strain_type_backfill.rollback.sql`
+  into the SQL editor. It restores exactly what 0244 changed, except where a
+  person has since changed the value again (those are kept).

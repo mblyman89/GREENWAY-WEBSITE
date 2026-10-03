@@ -74,6 +74,7 @@ import {
 // provenance. Pure policy; the write below obeys it. See migration 0219 - this
 // is a paper trail, never enforcement.
 import { planClassificationMirror } from "@/lib/inventory/classification-mirror-core";
+import { LOT_STRAIN_TYPE_HUMAN_PROVENANCE, planLotStrainTypeMirror } from "@/lib/inventory/intake-lot-facts-core";
 import {
   resolveWebsiteCategories,
   resolveWebsiteCategoryForLot,
@@ -1358,6 +1359,23 @@ export async function approveDraftWithPrice(
     },
   }).catch(() => {});
 
+  // R25 A: THE STRAIN TYPE ON THE LOT. Owner: "the strain type did not get
+  // saved to the inventory page, or it is unaware of them. I entered the
+  // strain type for all products in onboarding." The pick above reached the
+  // draft, the strain library and the menu, but never inventory_lots, the
+  // column the inventory list and the lot page read. Mirror the HUMAN pick
+  // (only a pick; no pick = the lot keeps the manifest's stated value) with
+  // fact_provenance.strain_type = "reviewer". Same ordering doctrine as the
+  // classification mirror above: the approval is already saved, so this is
+  // best-effort and every outcome (written, skipped and why, failed) is in
+  // the audit trail.
+  await mirrorStrainTypePickToLot(admin, {
+    draftId,
+    lotId: row?.lot_id ?? null,
+    humanPick: strainChoice.value,
+    actorId,
+  });
+
   // SLICE 93: "It should save to the kb as well so it auto attaches on that
   // product when we get new lots in." Fold the machine signals (curated KB >
   // manifest's stated fact > name parse) with the human's pick on top, then
@@ -1482,6 +1500,79 @@ export async function approveAllPricedForManifest(
  * missing row, gap-fill a null/unknown type, flip ONLY on a human pick -
  * the machine never overrides curation. Every write is audited.
  */
+/** R25 A: audit action for the lot strain-type mirror (approval). */
+export const LOT_STRAIN_TYPE_MIRROR_AUDIT_ACTION = "catalog_draft.strain_type_mirrored";
+
+/**
+ * R25 A: copy the approver's strain-type pick onto the inventory lot. Planned
+ * by the pure intake-lot-facts-core; never throws; always audited.
+ */
+export async function mirrorStrainTypePickToLot(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  input: { draftId: string; lotId: string | null; humanPick: string | null; actorId: string | null },
+): Promise<{ written: boolean; code: string }> {
+  let outcome: Record<string, unknown> = {};
+  let result: { written: boolean; code: string } = { written: false, code: "not_run" };
+  let before: string | null = null;
+  try {
+    let lot: { strain_type: string | null; fact_provenance: unknown } | null = null;
+    if (input.lotId && input.humanPick) {
+      const { data, error } = await admin
+        .from("inventory_lots")
+        .select("id, strain_type, fact_provenance")
+        .eq("id", input.lotId)
+        .maybeSingle();
+      if (error) {
+        // Never write blind over a value we could not read.
+        outcome = { lot_read_failed: error.message };
+        result = { written: false, code: "lot_read_failed" };
+      } else if (!data) {
+        outcome = { lot_mirror_skipped: "lot_not_found" };
+        result = { written: false, code: "lot_not_found" };
+      } else {
+        lot = data as { strain_type: string | null; fact_provenance: unknown };
+      }
+    }
+    if (result.code === "not_run") {
+      const plan = planLotStrainTypeMirror({
+        lotId: input.lotId,
+        humanPick: input.humanPick,
+        lotStrainType: lot?.strain_type ?? null,
+        lotFactProvenance: lot?.fact_provenance ?? null,
+      });
+      if (!plan.write) {
+        outcome = { lot_mirror_skipped: plan.code, reason: plan.reason };
+        result = { written: false, code: plan.code };
+      } else {
+        before = plan.before;
+        const { error: wErr } = await admin
+          .from("inventory_lots")
+          .update({ ...plan.patch, updated_by: input.actorId })
+          .eq("id", plan.lotId);
+        if (wErr) {
+          outcome = { lot_row_write_failed: wErr.message };
+          result = { written: false, code: "write_failed" };
+        } else {
+          outcome = { lot_mirrored: plan.lotId, strain_type: plan.patch.strain_type, provenance: LOT_STRAIN_TYPE_HUMAN_PROVENANCE };
+          result = { written: true, code: "written" };
+        }
+      }
+    }
+  } catch (err) {
+    outcome = { lot_row_write_failed: err instanceof Error ? err.message : String(err) };
+    result = { written: false, code: "threw" };
+  }
+  await recordAudit({
+    actorId: input.actorId,
+    action: LOT_STRAIN_TYPE_MIRROR_AUDIT_ACTION,
+    entityType: "inventory_lot",
+    entityId: input.lotId ?? input.draftId,
+    before: { strain_type: before },
+    after: { draft_id: input.draftId, human_pick: input.humanPick, ...outcome },
+  }).catch(() => {});
+  return result;
+}
+
 async function saveStrainTypeToKb(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   input: {
