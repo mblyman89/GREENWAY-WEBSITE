@@ -143,7 +143,12 @@ describe("B. slug-core: every KB slug site delegates (no private copy of the rul
     "src/lib/ai/kb/intake.ts": ["return dashedSlug(value);"],
     "src/lib/ai/kb/retrieval.ts": ["return dashedSlug(value);"],
     "src/lib/kb/enrich-from-discovery.ts": ["return dashedSlug(value);"],
-    "src/lib/ai/kb/store.ts": ["return dashedSlug(value);", "const slug = strainSlug(input.slug?.trim() || name);"],
+    // R25 B (pin updated on purpose): store.ts's private slugifyName wrapper is
+    // gone; the dashed KB forms (brand / category / FAQ) now resolve through
+    // planKbSlug in kb-slug-input-core, which itself delegates to slug-core's
+    // dashedSlug (pinned in the kb-slug-input-core entry below).
+    "src/lib/ai/kb/store.ts": ["return planKbSlug({ typed: t, fallbackName, existingExact });", "const slug = strainSlug(input.slug?.trim() || name);"],
+    "src/lib/catalog/kb-slug-input-core.ts": ["const slug = dashedSlug(typed);", "const slug = dashedSlug(input.fallbackName);"],
     "src/lib/ai/kb/product-knowledge-batch-core.ts": ["return dashedSlug(value);", "const slug = sharedStrainSlug(strainName);"],
     "src/lib/ai/kb/ccrs-category-match-core.ts": ["return dashedSlug(value);"],
     "src/lib/purchasing/growflow-kb-link-core.ts": ["return dashedSlug(value);"],
