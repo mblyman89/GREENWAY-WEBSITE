@@ -1607,3 +1607,66 @@ in Vercel.
   `supabase/rollbacks/0242_lookup_jobs.rollback.sql` into the SQL editor.
   Every batch record is forgotten. Facts a batch attached stay where they
   landed, because they were written by the normal save path.
+
+## S36 — 0243 — suggestions explain themselves, and a "Reject" sticks
+
+- [ ] `0243_master_suggestions_v2.sql` — adds one empty column,
+  `product_master_suggestions.evidence_json`, and creates one new table,
+  `product_master_pair_decisions`. It changes no existing row. The only link
+  is `decided_by` → `staff_profiles` (cleared, not deleted, if a staff member
+  is removed).
+
+  **Why:** the Suggestions tab on **Product Mastering** gave every match the
+  same score and the same reason, never counted evidence *against* a match,
+  and a rejected suggestion came straight back the next time you pressed
+  **Generate suggestions** (bible S36, findings F-129 and F-130).
+
+  **What it does:** every suggestion now saves its field-by-field reasons
+  (same vendor, same strain, same size twice, and so on) in `evidence_json`.
+  When you press **Reject**, one row per pair of cards in that suggestion is
+  saved with a fingerprint of both cards' vendor, brand, strain, market and
+  sizes. That pair is then left out of every future suggestion until one of
+  the two cards changes one of those things. Row-level security is on with
+  no policy, so only the server can read or write the table.
+
+  **Before it is run** the new code still works: suggestions are scored and
+  shown with a Strong / Likely / Review badge, but their reasons are not
+  saved (the card shows a one-line reason instead), and **Reject** rejects
+  without remembering. An orange banner on the page says the migration is
+  missing.
+
+  **What you will see after it is run:** each suggestion shows a badge such
+  as "Strong · 99%" and a row of green plus lines and orange minus lines.
+  After **Reject**, the banner says "Suggestion rejected. 3 pair(s) will stay
+  hidden until one of the products changes." Pressing **Generate
+  suggestions** again does not bring them back, and the banner says how many
+  rejected pairs stayed hidden.
+
+  Safe to re-run (`add column if not exists`, `create table if not exists`).
+  Verified on Postgres 15 with `scripts/recon/master-suggestions-v2-pg-check.sql`:
+  0243 applied twice in one rolled-back transaction; an ordered pair was
+  accepted; a reversed pair, a self pair, a duplicate pair, a decision other
+  than `not_a_match` and a missing fingerprint were refused; an upsert
+  replaced the fingerprint; removing the staff member kept the row; RLS was on
+  with no policy; and the rollback removed the table and the column without
+  losing any suggestion. With the ordering check removed on purpose, the
+  check failed ("reversed pair was accepted").
+
+  **Run it, then check:**
+
+  ```sql
+  select column_name, data_type from information_schema.columns
+   where table_name = 'product_master_suggestions' and column_name = 'evidence_json';
+  -- expect 1 row: evidence_json jsonb
+
+  select c.relname, c.relrowsecurity as rls_on,
+         (select count(*) from pg_policies p where p.tablename = c.relname) as policies
+    from pg_class c
+   where c.relname = 'product_master_pair_decisions' and c.relkind = 'r';
+  -- expect 1 row: product_master_pair_decisions true 0
+  ```
+
+  **Rollback (only if needed):** revert the code; the column and table can
+  stay unused. To remove them as well, paste
+  `supabase/rollbacks/0243_master_suggestions_v2.rollback.sql` into the SQL
+  editor (this forgets every remembered rejection).

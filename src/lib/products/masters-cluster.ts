@@ -19,6 +19,17 @@
  * See docs/PRODUCT_MASTERING_DESIGN.md for the full grounding + algorithm.
  */
 
+import {
+  canonicalStrainTypeForMatch,
+  lowestPricePerGram,
+  normalizeSizeLabel,
+  parseThcPercent,
+  type MatchRecord,
+  type SizedPrice,
+} from "@/lib/products/match-weights-core";
+import { normalizeVendorKey, stripLicenseSuffix } from "@/lib/inventory/vendor-resolve-core";
+import { parseWeightLabelGrams } from "@/lib/compliance/weight-label-core";
+
 export type MasterCandidateItem = {
   /** Stable POS key (menu_items.source_item_id). */
   key: string;
@@ -29,6 +40,14 @@ export type MasterCandidateItem = {
   priceMinor: number;
   /** 7f: adult-use vs medical never marry (regulatory + pricing correctness). */
   medical?: boolean;
+  /** S36: the licensee that shipped it (menu_items.vendor_name). */
+  vendor?: string | null;
+  /** S36: menu_items.strain_type (indica / sativa / hybrid / …). */
+  strainType?: string | null;
+  /** S36: menu_items.thc display string ("24.5%", "100mg"). */
+  thc?: string | null;
+  /** S36: every size this card is sold in, with its price. */
+  sizes?: SizedPrice[];
 };
 
 /**
@@ -187,4 +206,40 @@ export function deriveVariantLabel(name: string): string | null {
   if (!m) return null;
   const unit = m[2].toLowerCase().replace(/grams?/, "g").replace(/pack/, "pk");
   return `${m[1]}${unit}`;
+}
+
+// ===========================================================================
+// S36 — the scored record for one candidate
+// ===========================================================================
+
+/**
+ * The record match-weights-core scores. Identity axes come from the backbone
+ * resolver (alias-aware strain, brand slug, family, market); vendor is the
+ * license-stripped, normalised vendor label ("CERES - 435011" and "Ceres"
+ * agree); sizes fall back to the size in the card name when the card has no
+ * variants. Nothing is invented: an unknown value stays empty/null and
+ * scores 0.
+ */
+export function toMatchRecord(item: MasterCandidateItem, id: ResolvedIdentity): MatchRecord {
+  const sized: SizedPrice[] =
+    item.sizes && item.sizes.length > 0
+      ? item.sizes.filter((s) => !!normalizeSizeLabel(s.label))
+      : (() => {
+          const label = deriveVariantLabel(item.name);
+          return label ? [{ label, priceMinor: item.priceMinor }] : [];
+        })();
+  return {
+    key: item.key,
+    name: item.name,
+    vendor: normalizeVendorKey(stripLicenseSuffix(item.vendor ?? "")),
+    brand: id.brandIdentity === "unknown-brand" ? "" : id.brandIdentity,
+    strain: id.strainIdentity,
+    strainVerified: id.strainVerified,
+    family: id.categoryFamily,
+    market: id.market === "medical" ? "medical" : "adult",
+    strainType: canonicalStrainTypeForMatch(item.strainType),
+    sizes: Array.from(new Set(sized.map((s) => normalizeSizeLabel(s.label)))),
+    thcPct: parseThcPercent(item.thc),
+    pricePerGramMinor: lowestPricePerGram(sized, (l) => parseWeightLabelGrams(l)),
+  };
 }

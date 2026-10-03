@@ -59,6 +59,13 @@ import {
   rejectSuggestionAction,
   createMasterAction,
 } from "./actions";
+import {
+  bandBadgeText,
+  contributionText,
+  readEvidence,
+  REJECT_HELP,
+  type MatchBand,
+} from "@/lib/products/match-weights-core";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +80,9 @@ export default async function MastersPage({
     generated?: string;
     clusters?: string;
     rejected?: string;
+    remembered?: string;
+    suppressed?: string;
+    unmigrated?: string;
     deleted?: string;
     back?: string;
     show?: string;
@@ -161,9 +171,12 @@ export default async function MastersPage({
             ]}
           >
             <p>
-              Suggestions are <strong>drafts only</strong>. Exact-name matches are
-              found instantly; the AI adds smarter matches (e.g. brand spelled two
-              ways) when it&apos;s configured.
+              Suggestions are <strong>drafts only</strong>. Each one is scored field
+              by field (vendor, brand, strain, product type, market, strain type,
+              sizes, THC and price per gram): matching facts add points, conflicting
+              facts take points away, and the card shows every line. Strong is 95% or
+              more, Likely 80&ndash;95%, Review 50&ndash;80%. The AI only adds a second
+              opinion to Review suggestions; it never makes the score.
             </p>
             <SopSheetLink slug="master" />
           </HelpPanel>
@@ -194,13 +207,24 @@ export default async function MastersPage({
         )}
         {sp.generated !== undefined && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
-            Created {sp.generated} new suggestion(s) from {sp.clusters ?? 0} candidate group(s).
-            {!isAiConfigured && " (AI not configured — exact-name matches only.)"}
+            Created {sp.generated} new suggestion(s) from {sp.clusters ?? 0} scored group(s).
+            {sp.suppressed && Number(sp.suppressed) > 0 && ` ${sp.suppressed} pair(s) you rejected stayed hidden.`}
+            {!isAiConfigured && " (AI not configured — rule scores only, no second opinion.)"}
           </div>
         )}
         {sp.rejected && (
-          <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
-            Suggestion rejected.
+          <div
+            className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]"
+            data-testid="masters-rejected-banner"
+          >
+            {sp.unmigrated
+              ? "Suggestion rejected. It is not remembered yet: run migration 0243 so rejected pairs stay hidden."
+              : `Suggestion rejected. ${sp.remembered ?? 0} pair(s) will stay hidden until one of the products changes.`}
+          </div>
+        )}
+        {sp.unmigrated && !sp.rejected && sp.generated !== undefined && (
+          <div className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] px-4 py-3 text-sm text-[var(--admin-orange)]" data-testid="masters-unmigrated-banner">
+            Migration 0243 is not applied yet, so the field-by-field reasons were not saved and rejections are not remembered.
           </div>
         )}
 
@@ -223,7 +247,7 @@ export default async function MastersPage({
           <StatCard
             label="Pending suggestions"
             value={suggestions.length}
-            hint={isAiConfigured ? "AI grouping on" : "exact-name matches only"}
+            hint={isAiConfigured ? "scored · AI second opinion on" : "scored · rule scores only"}
             accent={suggestions.length > 0 ? "gold" : "muted"}
           />
         </div>
@@ -572,14 +596,9 @@ function SuggestionsTab({
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-white">{s.display_name}</span>
-                {s.confidence != null && (
-                  <Badge tone={s.confidence >= 0.8 ? "green" : "gold"}>
-                    {Math.round(s.confidence * 100)}% match
-                  </Badge>
-                )}
-                {s.model === "ai" ? <Badge tone="outline">✨ AI</Badge> : <Badge tone="neutral">exact name</Badge>}
+                <SuggestionBadge suggestion={s} />
               </div>
-              <p className="mt-1 text-xs text-white/50">{s.rationale}</p>
+              <SuggestionWhy suggestion={s} />
               <ul className="mt-2 space-y-1">
                 {s.members_json.map((m) => (
                   <li key={m.pos_product_key} className="text-xs text-white/70">
@@ -598,10 +617,70 @@ function SuggestionsTab({
                 <input type="hidden" name="id" value={s.id} />
                 <Button type="submit" variant="neutral">Reject</Button>
               </form>
+              <p className="max-w-[11rem] text-[10px] leading-snug text-white/40" data-testid="suggestion-reject-help">
+                {REJECT_HELP}
+              </p>
             </div>
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+type SuggestionRow = Awaited<ReturnType<typeof listSuggestions>>[number];
+
+const BAND_TONE: Record<Exclude<MatchBand, "hidden">, "green" | "gold" | "orange"> = {
+  strong: "green",
+  likely: "gold",
+  review: "orange",
+};
+
+/** S36: "Strong / Likely / Review · n%". Old rows (no evidence) keep the old badge. */
+function SuggestionBadge({ suggestion: s }: { suggestion: SuggestionRow }) {
+  const ev = readEvidence(s.evidence_json);
+  if (ev) {
+    return (
+      <>
+        <Badge tone={BAND_TONE[ev.band]}>
+          <span data-testid="suggestion-band">{bandBadgeText(ev.band, ev.probability)}</span>
+        </Badge>
+        {ev.ai && <Badge tone="outline">{ev.ai.agrees ? "\u2728 AI agrees" : "\u2728 AI unsure"}</Badge>}
+      </>
+    );
+  }
+  return (
+    <>
+      {s.confidence != null && (
+        <Badge tone={s.confidence >= 0.8 ? "green" : "gold"}>{Math.round(s.confidence * 100)}% match</Badge>
+      )}
+      {s.model === "ai" ? <Badge tone="outline">✨ AI</Badge> : <Badge tone="neutral">older suggestion</Badge>}
+    </>
+  );
+}
+
+/** S36: the per-field waterfall, plus-lines first. Old rows show their saved reason. */
+function SuggestionWhy({ suggestion: s }: { suggestion: SuggestionRow }) {
+  const ev = readEvidence(s.evidence_json);
+  if (!ev) return <p className="mt-1 text-xs text-white/50">{s.rationale}</p>;
+  const lines = [...ev.contributions].sort((a, b) => b.weight - a.weight);
+  return (
+    <div className="mt-1" data-testid="suggestion-waterfall">
+      <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+        {lines.map((c) => (
+          <li
+            key={c.field}
+            className={c.weight > 0 ? "text-[var(--admin-accent)]" : c.weight < 0 ? "text-[var(--admin-orange)]" : "text-white/35"}
+          >
+            {contributionText(c)}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-0.5 text-[10px] text-white/35">
+        Starting point {contributionText({ weight: ev.prior, note: "(most look-alikes are different products)" })} · total {ev.weight.toFixed(1)}
+        {ev.pairs.length > 1 && ` · weakest of ${ev.pairs.length} pairs shown`}
+      </p>
+      {ev.ai && <p className="mt-0.5 text-[10px] text-white/45">AI second opinion: {ev.ai.note}</p>}
     </div>
   );
 }

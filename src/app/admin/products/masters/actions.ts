@@ -34,16 +34,17 @@ export async function generateSuggestions(): Promise<void> {
       entityId: null,
     });
     revalidatePath(BASE);
-    redirect(`${BASE}?tab=suggestions&generated=${result.created}&clusters=${result.clustersConsidered}`);
+    const extra = `${result.suppressed ? `&suppressed=${result.suppressed}` : ""}${result.migrated === false ? "&unmigrated=1" : ""}`;
+    redirect(`${BASE}?tab=suggestions&generated=${result.created}&clusters=${result.clustersConsidered}${extra}`);
   } catch (err) {
     unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate
     if (err instanceof AiNotConfiguredError) {
       // Deterministic suggestions still ran; AI just didn't. Re-run without AI is
       // already covered inside the service (it handles unconfigured AI), so this
       // branch only triggers if the whole call threw — surface a soft message.
-      redirect(`${BASE}?tab=suggestions&error=` + encodeURIComponent("AI is not configured; only exact-name matches were suggested."));
+      redirect(`${BASE}?tab=suggestions&error=` + encodeURIComponent("AI is not configured; the rule scores were still made."));
     }
-    throw err;
+    redirect(`${BASE}?tab=suggestions&error=` + encodeURIComponent(err instanceof Error ? err.message : "Suggestions could not be made."));
   }
 }
 
@@ -70,16 +71,20 @@ export async function rejectSuggestionAction(formData: FormData): Promise<void> 
   const session = await requirePermission("inventory.manage");
   const id = str(formData, "id");
   if (!id) redirect(`${BASE}?tab=suggestions&error=` + encodeURIComponent("Missing id."));
-  await rejectSuggestion(id, session.userId);
+  const result = await rejectSuggestion(id, session.userId);
+  if (!result.ok) {
+    redirect(`${BASE}?tab=suggestions&error=` + encodeURIComponent(result.error ?? "The rejection could not be saved."));
+  }
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "product_master.suggestion_rejected",
     entityType: "product_master_suggestion",
     entityId: id,
+    after: { pairs_remembered: result.remembered, migrated: result.migrated },
   });
   revalidatePath(BASE);
-  redirect(`${BASE}?tab=suggestions&rejected=1`);
+  redirect(`${BASE}?tab=suggestions&rejected=1${result.migrated ? `&remembered=${result.remembered}` : "&unmigrated=1"}`);
 }
 
 /** Create a master manually (empty, ready for members). */

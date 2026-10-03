@@ -218,7 +218,8 @@ describe("S27 · adopting pages (bible S27.1 consumers)", () => {
     // master redirect names tab=masters, so nothing lands on the wrong tab now
     // that the default is Live cards.
     const actions = read("src/app/admin/products/masters/actions.ts");
-    expect(actions).toContain("redirect(`${BASE}?tab=suggestions&rejected=1`)");
+    // S36 appends &remembered=N / &unmigrated=1 after rejected=1; the tab pin is the prefix.
+    expect(actions).toContain("redirect(`${BASE}?tab=suggestions&rejected=1${");
     expect(actions).toContain("redirect(`${BASE}?tab=suggestions&generated=");
     expect(actions).toContain("redirect(`${BASE}?tab=masters&deleted=1`)");
     expect(actions).not.toMatch(/redirect\(`\$\{BASE\}\?(?!tab=)/);

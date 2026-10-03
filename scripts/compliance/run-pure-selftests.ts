@@ -650,6 +650,8 @@ import { __runMasteredMenuCoreTests } from "../../src/lib/products/mastered-menu
 import { __runApprovedRowCoreTests } from "../../src/lib/catalog/approved-row-core";
 import { __runWaitingFactsCoreTests } from "../../src/lib/catalog/waiting-facts-core";
 import { __runSeoDraftCoreTests } from "../../src/lib/enrichment/seo-draft-core";
+// R24 (S36): explainable Fellegi-Sunter match weights for master suggestions.
+import { __runMatchWeightsCoreTests } from "../../src/lib/products/match-weights-core";
 import { __runSensoryFillCoreTests } from "../../src/lib/enrichment/sensory-fill-core";
 import { __runMastersFilterCoreTests } from "../../src/lib/products/masters-filter-core";
 import { __runFinalizeBannerCoreTests } from "../../src/lib/inventory/finalize-banner-core";
@@ -1981,6 +1983,8 @@ __runLiquidVolumeTests();
   assertRan("waiting-facts-core", __runWaitingFactsCoreTests(), 72);
   // R23: approved-row-core. Floor = the exact count.
   assertRan("approved-row-core", __runApprovedRowCoreTests(), 11);
+  // R24 (S36): match-weights-core. Floor = the exact count.
+  assertRan("match-weights-core", __runMatchWeightsCoreTests(), 130);
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

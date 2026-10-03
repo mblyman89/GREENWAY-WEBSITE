@@ -11,10 +11,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import {
-  buildCandidateClusters,
-  deterministicNameGroups,
   deriveVariantLabel,
-  backboneGroups,
+  toMatchRecord,
   type MasterCandidateItem,
   type ResolvedIdentity,
   type IdentityResolver,
@@ -24,6 +22,19 @@ import { summarizeMasteredCards, type MasteredCard } from "@/lib/products/master
 import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
 import { groupingSuggestionSchema } from "@/lib/ai/schemas/grouping";
+import {
+  BAND_LABEL,
+  candidatePairs,
+  evidenceForGroup,
+  groupScoredPairs,
+  isMissingEvidenceColumn,
+  isMissingPairDecisionsTable,
+  orderPairKeys,
+  pairId,
+  rationaleFromScore,
+  readEvidence,
+  type SuggestionEvidence,
+} from "@/lib/products/match-weights-core";
 
 export { isAiConfigured };
 
@@ -71,6 +82,8 @@ export type ProductMasterSuggestion = {
   prompt_version: string | null;
   input_summary: string | null;
   created_at: string;
+  /** S36 (0243): the explainable evidence; absent before 0243 / on old rows. */
+  evidence_json?: unknown;
 };
 
 export const GROUPING_PROMPT_VERSION = "grouping@2025-06-1";
@@ -135,6 +148,11 @@ export async function loadCandidateItems(): Promise<MasterCandidateItem[]> {
       // 7f: item-level medical flag isn't on MenuItemRow; variants carry it. A
       // menu item is treated as medical only if ALL its variants are medical.
       medical: (i.variants ?? []).length > 0 && (i.variants ?? []).every((v) => v.medical),
+      // S36: the facts the explainable score compares.
+      vendor: i.vendor_name,
+      strainType: i.strain_type,
+      thc: i.thc,
+      sizes: (i.variants ?? []).map((v) => ({ label: v.label, priceMinor: v.price_minor_units })),
     }));
 }
 
@@ -426,18 +444,66 @@ export type GenerateResult = {
   created: number;
   clustersConsidered: number;
   aiUsed: boolean;
+  /** S36: candidate pairs scored. */
+  pairsScored?: number;
+  /** S36: pairs held back by a remembered rejection (fingerprint unchanged). */
+  suppressed?: number;
+  /** S36: false when 0243 is not applied (no waterfall saved, no rejection memory). */
+  migrated?: boolean;
 };
 
+/** S36: one remembered rejection. */
+export type PairDecisionRow = { key_a: string; key_b: string; decision: string; fingerprint: string };
+
 /**
- * Generate DRAFT grouping suggestions for the current published menu.
+ * Every remembered "not the same product" pair (paged). Before 0243 the table
+ * is missing: that reads as NO decisions and `migrated: false` (today's
+ * behaviour, never a guess). Any other failure is reported as `ok: false` so
+ * the caller can refuse to propose pairs it cannot check.
+ */
+export async function loadPairDecisions(): Promise<{ ok: boolean; migrated: boolean; byPair: Map<string, string> }> {
+  const byPair = new Map<string, string>();
+  if (!isSupabaseServiceConfigured) return { ok: true, migrated: true, byPair };
+  const admin = createSupabaseAdminClient();
+  let missing = false;
+  const res = await pagedAllChecked<PairDecisionRow>(async (from, to) => {
+    const { data, error } = await admin
+      .from("product_master_pair_decisions")
+      .select("key_a, key_b, decision, fingerprint")
+      .order("key_a", { ascending: true })
+      .order("key_b", { ascending: true })
+      .range(from, to);
+    if (error) {
+      if (isMissingPairDecisionsTable(error)) missing = true;
+      else console.error("[masters-store] pair decisions read failed:", error.message);
+      return { ok: false, rows: [] };
+    }
+    return { ok: true, rows: (data as PairDecisionRow[] | null) ?? [] };
+  });
+  if (missing) return { ok: true, migrated: false, byPair };
+  if (!res.verdict.complete) return { ok: false, migrated: true, byPair };
+  for (const r of res.rows) {
+    if (r.decision === "not_a_match" && typeof r.fingerprint === "string") byPair.set(pairId(r.key_a, r.key_b), r.fingerprint);
+  }
+  return { ok: true, migrated: true, byPair };
+}
+
+/**
+ * Generate DRAFT grouping suggestions for the current published menu (S36).
  *
  * Strategy:
- *   1. Build coarse brand+category clusters (pure).
- *   2. For each cluster, compute deterministic same-name groups (high confidence,
- *      no AI cost) and persist them directly as suggestions.
- *   3. If AI is configured, additionally ask the model to find finer groupings
- *      the deterministic pass missed (e.g. brand-spelling variants). Capped per
- *      run so we never run away on cost.
+ *   1. Every free card is resolved against the backbone (alias-aware strain,
+ *      brand slug, family, market) and turned into a MatchRecord.
+ *   2. Candidate pairs come from two blocking rules: vendor + family, and
+ *      brand + family (the fallback for vendor-less legacy cards).
+ *   3. Each pair gets an explainable Fellegi–Sunter score
+ *      (match-weights-core): agreement adds, disagreement subtracts.
+ *   4. Pairs the owner rejected are held back while their fingerprint still
+ *      matches; a changed card re-opens them.
+ *   5. Strong pairs group (never across market, never through a rejected
+ *      pair); a card still alone may get one Likely/Review pair.
+ *   6. AI is OPTIONAL and only adds a second opinion to Review-band
+ *      suggestions. It never creates a suggestion and never changes a score.
  *
  * NOTHING here publishes — everything is a pending suggestion for staff review.
  */
@@ -451,149 +517,120 @@ export async function generateGroupingSuggestions(opts?: {
   const items = await loadCandidateItems();
   const already = await assignedKeys();
   const free = items.filter((i) => !already.has(i.key));
-  const clusters = buildCandidateClusters(free);
+  const byKey = new Map(free.map((i) => [i.key, i] as const));
 
-  // Avoid re-proposing groups we've already suggested (pending) — keyed by the
-  // sorted member-key set.
+  const decisions = await loadPairDecisions();
+  if (!decisions.ok) {
+    // Never propose a pair we cannot check against the owner's rejections.
+    throw new Error("Your earlier rejections could not be read, so no suggestions were made. Reload and try again.");
+  }
+
+  // Avoid re-proposing a member set we already suggested. A REJECTED set is
+  // governed by its pair decisions once 0243 is applied (so it re-opens when a
+  // card changes); a rejected row with no evidence (made before S36), or any
+  // rejection while 0243 is missing, keeps blocking its exact set as before.
   const existing = await listSuggestions();
   const seenSets = new Set(
-    existing.map((s) => s.members_json.map((m) => m.pos_product_key).sort().join("|")),
+    existing
+      .filter((s) => !(s.status === "rejected" && decisions.migrated && readEvidence(s.evidence_json)))
+      .map((s) => s.members_json.map((m) => m.pos_product_key).sort().join("|")),
   );
 
-  const toInsert: Record<string, unknown>[] = [];
+  const resolve = await buildBackboneIdentityResolver();
+  const records = free.map((i) => toMatchRecord(i, resolve(i)));
+  const { pairs } = candidatePairs(records);
+  let suppressed = 0;
+  const groups = groupScoredPairs(records, pairs, {
+    isSuppressed: (a, b, fingerprint) => {
+      const hit = decisions.byPair.get(pairId(a.key, b.key)) === fingerprint;
+      if (hit) suppressed += 1;
+      return hit;
+    },
+  });
 
-  function pushSuggestion(
-    group: MasterCandidateItem[],
-    displayName: string,
-    rationale: string,
-    confidence: number,
-  ) {
-    const keys = group.map((g) => g.key).sort();
-    const setKey = keys.join("|");
-    if (seenSets.has(setKey)) return;
+  const toInsert: Record<string, unknown>[] = [];
+  const reviewRows: Array<{ row: Record<string, unknown>; members: MasterCandidateItem[]; evidence: SuggestionEvidence }> = [];
+  for (const g of groups) {
+    const setKey = [...g.keys].sort().join("|");
+    if (seenSets.has(setKey)) continue;
     seenSets.add(setKey);
-    const members: GroupingMember[] = group.map((g) => ({
-      pos_product_key: g.key,
-      name: g.name,
-      variant_label: deriveVariantLabel(g.name),
-    }));
-    toInsert.push({
-      display_name: displayName,
-      brand_name: group[0]?.brand ?? null,
-      category: group[0]?.category ?? null,
-      members_json: members,
-      rationale,
-      confidence,
+    const members = g.keys.map((k) => byKey.get(k)).filter((m): m is MasterCandidateItem => !!m);
+    if (members.length < 2) continue;
+    const evidence = evidenceForGroup(g);
+    const first = members[0];
+    const row: Record<string, unknown> = {
+      display_name: first.strainName || first.name,
+      brand_name: first.brand ?? null,
+      category: first.category ?? null,
+      members_json: members.map((m) => ({ pos_product_key: m.key, name: m.name, variant_label: deriveVariantLabel(m.name) })),
+      rationale: rationaleFromScore(g.headline.score.contributions),
+      confidence: evidence.probability,
       status: "pending",
       model: null,
       prompt_version: GROUPING_PROMPT_VERSION,
-      input_summary: `cluster ${group[0]?.brand}/${group[0]?.category}, ${group.length} items`,
+      input_summary: `${BAND_LABEL[g.band]} \u00b7 ${members.length} cards \u00b7 weight ${evidence.weight}`,
       generated_by: opts?.generatedBy ?? null,
-    });
+      evidence_json: evidence,
+    };
+    toInsert.push(row);
+    if (g.band === "review") reviewRows.push({ row, members, evidence });
   }
 
-  // 1b) 7f — BACKBONE deterministic pass (highest signal, no AI cost). Groups by
-  // canonical brand + category-family + canonical strain (alias-aware) + market,
-  // so alias/spelling variants of one cultivar marry across sizes and a flower
-  // never marries a vape. Confidence is higher when the strain was verified
-  // against a curated kb_strains row.
-  const resolve = await buildBackboneIdentityResolver();
-  const backboneKeyed = new Set<string>();
-  for (const bg of backboneGroups(free, resolve)) {
-    const name = bg.items[0].strainName || bg.items[0].name;
-    const conf = bg.strainVerified ? 0.97 : 0.9;
-    const rationale = bg.strainVerified
-      ? "Same brand, same product-type family, and the SAME curated strain (matched to the knowledge base, alias-aware) across multiple sizes."
-      : "Same brand, same product-type family, and the same strain/name across multiple sizes.";
-    const before = toInsert.length;
-    pushSuggestion(bg.items, name, rationale, conf);
-    // Track keys we grouped so the legacy + AI passes don't re-propose them.
-    if (toInsert.length > before) for (const it of bg.items) backboneKeyed.add(it.key);
-  }
-
-  // 2) deterministic same-name groups (legacy string fallback for anything the
-  // backbone pass didn't already cover — e.g. items with no backbone match).
-  for (const cluster of clusters) {
-    for (const group of deterministicNameGroups(cluster)) {
-      if (group.some((g) => backboneKeyed.has(g.key))) continue;
-      const name = group[0].strainName || group[0].name;
-      pushSuggestion(
-        group,
-        name,
-        "Same brand, category, and product name across multiple sizes/forms.",
-        0.9,
-      );
-    }
-  }
-
-  // 3) AI pass for finer groupings the deterministic pass missed.
+  // Optional AI second opinion, Review band only, capped (cost).
   let aiUsed = false;
-  if (isAiConfigured) {
+  if (isAiConfigured && reviewRows.length > 0) {
     const maxAi = opts?.maxAiClusters ?? 12;
-    let used = 0;
-    for (const cluster of clusters) {
-      if (used >= maxAi) break;
-      // Only ask the AI about clusters where deterministic grouping didn't already
-      // explain everything (i.e. there are still ungrouped, differently-named items).
-      const detGrouped = new Set(
-        deterministicNameGroups(cluster).flat().map((g) => g.key),
-      );
-      // Exclude anything already grouped deterministically (legacy OR backbone).
-      const remaining = cluster.filter((c) => !detGrouped.has(c.key) && !backboneKeyed.has(c.key));
-      if (remaining.length < 2) continue;
-
-      // 7f: give the model the backbone-resolved facts so it adjudicates on
-      // canonical identity, not just raw strings.
-      const list = remaining
-        .map((r) => {
-          const id = resolve(r);
-          return `- key=${r.key} | name="${r.name}" | strain="${r.strainName ?? ""}" | canonical_strain="${id.strainIdentity}"${id.strainVerified ? " (verified)" : ""} | family="${id.categoryFamily}" | price=${(r.priceMinor / 100).toFixed(2)}`;
+    for (const r of reviewRows.slice(0, maxAi)) {
+      const list = r.members
+        .map((m) => {
+          const id = resolve(m);
+          return `- key=${m.key} | name="${m.name}" | vendor="${m.vendor ?? ""}" | canonical_strain="${id.strainIdentity}"${id.strainVerified ? " (verified)" : ""} | family="${id.categoryFamily}" | price=${(m.priceMinor / 100).toFixed(2)}`;
         })
         .join("\n");
       try {
         const result = await generateStructured({
           system:
-            "You are a retail cannabis catalog assistant. You group menu items that are the SAME product sold at different sizes/forms (e.g. a 1g and 3.5g of one strain by one brand). Be conservative: only group items you are confident are the same product. Never invent sizes or names. Never include health/medical claims.",
-          user: `These menu items share a brand and category. Decide whether two or more are the SAME product at different sizes/forms, and if so return the member keys to group:\n${list}\n\nReturn member_keys using EXACTLY the key tokens shown.`,
+            "You are a retail cannabis catalog assistant. Decide whether menu items are the SAME product sold at different sizes. Be conservative. Never invent sizes or names. Never include health/medical claims.",
+          user: `Are these the same product at different sizes?\n${list}\n\nReturn member_keys using EXACTLY the key tokens shown.`,
           schema: groupingSuggestionSchema,
           tier: "light",
           temperature: 0.1,
-          maxTokens: 400,
+          maxTokens: 300,
         });
         aiUsed = true;
-        used += 1;
-        if (
-          result.should_group &&
-          Array.isArray(result.member_keys) &&
-          result.member_keys.length >= 2
-        ) {
-          const validKeys = new Set(remaining.map((r) => r.key));
-          const picked = remaining.filter((r) => result.member_keys.includes(r.key));
-          if (picked.length >= 2 && picked.every((p) => validKeys.has(p.key))) {
-            const conf = Math.max(0, Math.min(1, Number(result.confidence) || 0.5));
-            pushSuggestion(
-              picked,
-              result.display_name?.trim() || picked[0].name,
-              result.rationale?.trim() || "AI grouped as the same product.",
-              conf,
-            );
-            // mark these as model-generated
-            const last = toInsert[toInsert.length - 1];
-            if (last) last.model = "ai";
-          }
-        }
+        const note = result.rationale?.trim().slice(0, 200) || (result.should_group ? "Looks like the same product." : "Looks like different products.");
+        // r.evidence IS r.row.evidence_json (same object): the note lands on the row.
+        r.evidence.ai = { agrees: !!result.should_group, note };
+        r.row.model = "ai-tiebreak";
       } catch {
-        // Swallow per-cluster AI errors so one bad cluster doesn't abort the run.
-        used += 1;
+        // A failed second opinion leaves the rule score alone.
       }
     }
   }
 
+  let migrated = decisions.migrated;
   if (toInsert.length > 0) {
-    await admin.from("product_master_suggestions").insert(toInsert);
+    const { error } = await admin.from("product_master_suggestions").insert(toInsert);
+    if (error && isMissingEvidenceColumn(error)) {
+      // 0243 not applied: save the suggestions without their waterfall.
+      migrated = false;
+      const { error: e2 } = await admin
+        .from("product_master_suggestions")
+        .insert(toInsert.map(({ evidence_json: _drop, ...rest }) => rest));
+      if (e2) throw new Error(e2.message);
+    } else if (error) {
+      throw new Error(error.message);
+    }
   }
 
-  return { created: toInsert.length, clustersConsidered: clusters.length, aiUsed };
+  return {
+    created: toInsert.length,
+    clustersConsidered: groups.length,
+    aiUsed,
+    pairsScored: pairs.length,
+    suppressed,
+    migrated,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -648,13 +685,60 @@ export async function acceptSuggestion(
   return { masterId };
 }
 
-export async function rejectSuggestion(id: string, reviewerId: string | null): Promise<void> {
-  if (!isSupabaseServiceConfigured) return;
+export type RejectResult = {
+  ok: boolean;
+  /** Pairs remembered (one per member pair). */
+  remembered: number;
+  /** false when 0243 is not applied: the suggestion is rejected but not remembered. */
+  migrated: boolean;
+  error?: string;
+};
+
+/**
+ * Reject a suggestion (S36). Writes ONE product_master_pair_decisions row per
+ * member pair with the fingerprint the suggestion was scored on, so the pair
+ * stays out of every future suggestion until one of the two cards changes.
+ * The pair rows are written FIRST: if they fail for a real reason the
+ * suggestion stays pending (nothing half-done). Before 0243 the table is
+ * missing; the suggestion is still rejected (today's behaviour) and the
+ * caller is told it was not remembered.
+ */
+export async function rejectSuggestion(id: string, reviewerId: string | null): Promise<RejectResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, remembered: 0, migrated: true, error: "Database not configured." };
   const admin = createSupabaseAdminClient();
-  await admin
+  const suggestion = await getSuggestion(id);
+  if (!suggestion) return { ok: false, remembered: 0, migrated: true, error: "Suggestion not found." };
+  if (suggestion.status !== "pending") return { ok: false, remembered: 0, migrated: true, error: "Suggestion already reviewed." };
+
+  const evidence = readEvidence(suggestion.evidence_json);
+  const now = new Date().toISOString();
+  const rows: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+  for (const p of evidence?.pairs ?? []) {
+    const o = orderPairKeys(p.a, p.b);
+    if (!o || seen.has(pairId(o[0], o[1]))) continue;
+    seen.add(pairId(o[0], o[1]));
+    rows.push({ key_a: o[0], key_b: o[1], decision: "not_a_match", fingerprint: p.fingerprint, decided_by: reviewerId, decided_at: now });
+  }
+
+  let migrated = true;
+  if (rows.length > 0) {
+    const { error } = await admin.from("product_master_pair_decisions").upsert(rows, { onConflict: "key_a,key_b" });
+    if (error) {
+      if (!isMissingPairDecisionsTable(error)) {
+        console.error("[masters-store] pair decisions write failed:", error.message);
+        return { ok: false, remembered: 0, migrated: true, error: "The rejection could not be saved. Nothing changed; try again." };
+      }
+      migrated = false;
+    }
+  }
+
+  const { error: upErr } = await admin
     .from("product_master_suggestions")
-    .update({ status: "rejected", reviewed_by: reviewerId, reviewed_at: new Date().toISOString() })
+    .update({ status: "rejected", reviewed_by: reviewerId, reviewed_at: now })
     .eq("id", id);
+  if (upErr) return { ok: false, remembered: migrated ? rows.length : 0, migrated, error: upErr.message };
+  return { ok: true, remembered: migrated ? rows.length : 0, migrated };
 }
 
 export async function setMasterStatus(

@@ -16,8 +16,9 @@
  * Supported: GET (select columns, filters, order, offset, limit), POST
  * (insert object or array, defaults, return=representation), PATCH (filtered
  * update, return=representation), unique constraints with an optional
- * partial predicate (23505), and "missing table" mode (PGRST205, as PostgREST
- * answers for a table that is not in its schema cache).
+ * partial predicate (23505), "missing table" mode (PGRST205, as PostgREST
+ * answers for a table that is not in its schema cache), and (R24) upsert via
+ * Prefer resolution=merge-duplicates + on_conflict.
  */
 
 export type Row = Record<string, unknown>;
@@ -100,6 +101,28 @@ export class FakePostgrest {
       const input = (Array.isArray(req.body) ? req.body : [req.body]) as Row[];
       const created: Row[] = [];
       const staged = [...all];
+      // R24: upsert (Prefer resolution=merge-duplicates + on_conflict), as
+      // postgrest-js sends it: a row whose on_conflict columns equal an
+      // existing row's is MERGED into it instead of inserted.
+      const onConflict = req.url.searchParams.get("on_conflict");
+      if (prefer.includes("resolution=merge-duplicates") && onConflict) {
+        const cols = onConflict.split(",").map((c) => c.trim());
+        const keyOf = (r: Row) => cols.map((c) => String(r[c])).join("\u0000");
+        const merged: Row[] = [];
+        for (const r of input) {
+          const hit = all.find((e) => keyOf(e) === keyOf(r));
+          if (hit) {
+            Object.assign(hit, r);
+            merged.push(hit);
+          } else {
+            const row: Row = { id: this.nextId(), ...(this.defaults.get(req.table)?.() ?? {}), ...r };
+            all.push(row);
+            merged.push(row);
+          }
+        }
+        if (!wantRows) return { status: 201, body: undefined };
+        return this.shape(merged.map((r) => pick(r, select)), objectAccept);
+      }
       for (const r of input) {
         const row: Row = { id: this.nextId(), ...(this.defaults.get(req.table)?.() ?? {}), ...r };
         const clash = this.violates(req.table, row, staged);
