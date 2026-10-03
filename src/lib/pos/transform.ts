@@ -25,6 +25,7 @@ import { STATUTORY_GRAMS_PER_OUNCE, AVOIRDUPOIS_GRAMS_PER_OUNCE } from "@/lib/co
 // source now, instead of a hand-copied 29.5735 literal, so the package-size
 // parser and the sales-limit cap can never drift apart.
 import { ML_PER_FLUID_OUNCE, ML_PER_LITRE } from "@/lib/compliance/liquid-volume-core";
+import { boilerplateDescription } from "@/lib/catalog/golden-record-core";
 // SLICE 56: the word-by-word extraction engine (SLICE 55). Pure module — the
 // transformer cross-examines every mg-dosed row's NAME against its potency
 // COLUMNS and only trusts arithmetic-verified facts (docs/data-governance.md
@@ -626,7 +627,11 @@ function statusForInventory(level: number): InventoryStatus {
   return "in-stock";
 }
 
-function genericDescription(group: ProductGroup) { return `${group.displayName} from ${group.brand}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`; }
+// R24 S23 follow-up: the house placeholder sentence has ONE source,
+// golden-record-core boilerplateDescription() (the S23 gap vector recognises
+// exactly that tail). group.brand is always firstNonBlank(..., "Greenway"),
+// so the output is byte-identical to the old inline template.
+function genericDescription(group: ProductGroup) { return boilerplateDescription(group.displayName, group.brand); }
 
 function shouldDisplayThcTotal(inventoryType: string) { return THC_TOTAL_ALLOWED_TYPES.has(normalizeWhitespace(inventoryType)); }
 function cannabinoidUnitForInventoryType(inventoryType: string): CannabinoidUnit {

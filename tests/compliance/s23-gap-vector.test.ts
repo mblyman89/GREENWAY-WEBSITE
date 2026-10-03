@@ -89,15 +89,21 @@ function enr(over: Partial<ProductEnrichment> = {}): ProductEnrichment {
 }
 
 /**
- * The transform.ts genericDescription template, READ FROM SOURCE and
- * instantiated - so if a writer's wording ever drifts from BOILERPLATE_TAIL
- * this test fails instead of quietly counting placeholders as described.
+ * The transform.ts genericDescription placeholder. R24 S23 follow-up (updated
+ * ON PURPOSE): transform.ts no longer has an inline template; it delegates to
+ * golden-record-core boilerplateDescription(). Read the source to prove the
+ * delegation is still the shape below, then instantiate through the shared
+ * function - so a drifted copy reappearing in transform.ts fails here. The
+ * byte-for-byte golden master against the legacy template, through the REAL
+ * transformWorkbooks pipeline, lives in r24-s23-transform-boilerplate.test.ts.
  */
 function transformGeneric(displayName: string, brand: string): string {
   const src = read("src/lib/pos/transform.ts");
-  const m = src.match(/function genericDescription\(group: ProductGroup\) \{ return `([^`]*)`; \}/);
-  if (!m) throw new Error("transform.ts genericDescription not found - update this test with the new shape");
-  return m[1]!.replace("${group.displayName}", displayName).replace("${group.brand}", brand);
+  if (!src.includes("function genericDescription(group: ProductGroup) { return boilerplateDescription(group.displayName, group.brand); }")) {
+    throw new Error("transform.ts genericDescription no longer delegates to boilerplateDescription - update this test with the new shape");
+  }
+  if (src.includes("Browse current availability")) throw new Error("transform.ts has an inline copy of the placeholder sentence again");
+  return boilerplateDescription(displayName, brand);
 }
 
 beforeEach(() => {
