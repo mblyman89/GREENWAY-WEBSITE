@@ -469,7 +469,10 @@ describe("S17 wiring", () => {
 
   it("the coalesce runs AFTER the fresh snapshot's items are written, behind the flag", () => {
     const stage = bodyOf(staging, "export async function stageIntakeMenuVersionForManifest");
-    const persist = stage.indexOf("await persistSnapshotItems(version.id, plan.items);");
+    // R25 C (pin updated on purpose): persistSnapshotItems now also receives
+    // the live cards' KB links (fill-only carry). The ordering pinned here is
+    // unchanged.
+    const persist = stage.indexOf("await persistSnapshotItems(version.id, plan.items, priorKbLinks);");
     const coalesce = stage.indexOf("await replaceRecentRestages(version, manifestId, draftIdList(drafts.map((d) => d.id)));");
     expect(persist).toBeGreaterThan(-1);
     expect(coalesce).toBeGreaterThan(persist);

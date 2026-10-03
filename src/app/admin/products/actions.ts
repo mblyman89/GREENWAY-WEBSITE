@@ -40,6 +40,8 @@ import { parseVisibilityChoice, hiddenOverrideFor } from "@/lib/enrichment/produ
 import { applyProductVisibility } from "@/lib/enrichment/product-visibility-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { runIdentityBackfill } from "@/lib/enrichment/enrichment-identity-server";
+import { runMenuKbLinkBackfill } from "@/lib/catalog/menu-kb-link-server";
+import { MENU_KB_LINK_BACKFILL_AUDIT_ACTION } from "@/lib/catalog/menu-kb-link-core";
 import { attachKbMatchFacts as attachKbMatchFactsServer, KB_MATCH_AUDIT_ACTION } from "@/lib/enrichment/kb-match-attach";
 
 const ALLOWED_TAGS = new Set([
@@ -101,6 +103,37 @@ export async function linkEnrichmentsToProducts(): Promise<void> {
     revalidatePublicMenuSurfaces();
   }
   redirect("/admin/products?linked=" + encodeURIComponent(result.summary));
+}
+
+/**
+ * R25 C ("the product menu item linked to its knowledge base"): link every
+ * live menu card that has no link yet to its knowledge-base product
+ * (menu_items.kb_product_id), from the approval link on its lots. New menus
+ * are linked as they are built; this catches up cards published before.
+ * Fill-only and safe to run again. Owner-pressed, audited.
+ */
+export async function linkMenuCardsToKbAction(): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const result = await runMenuKbLinkBackfill();
+  if (!result.ok) {
+    redirect("/admin/products?error=" + encodeURIComponent(result.error));
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: MENU_KB_LINK_BACKFILL_AUDIT_ACTION,
+    entityType: "menu_items",
+    entityId: null,
+    after: {
+      stamped: result.stamped,
+      alreadyLinked: result.alreadyLinked,
+      noLink: result.noLink,
+      conflicts: result.conflicts,
+      failed: result.failed,
+    },
+  });
+  if (result.stamped > 0) revalidatePath("/admin/products");
+  redirect("/admin/products?linked=" + encodeURIComponent(result.message));
 }
 
 /** Save the marketing enrichment for a product (text + flags + optional image). */

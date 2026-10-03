@@ -277,7 +277,32 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
     // R22 (S35) added the second guarded reader on purpose: the Masters page
     // reads menu_items.identity_key for ONE page of live cards and treats a
     // missing 0234 column as "not available" (pinned by the next test).
-    expect(offenders.sort()).toEqual(["src/lib/catalog/attach-facts.ts", "src/lib/products/masters-store.ts"]);
+    // R25 C added the third and fourth guarded readers on purpose (pin
+    // updated on purpose): the menu-card KB link backfill reads
+    // menu_items.kb_product_id and REFUSES with "migration 0234" on a missing
+    // column, and the product page reads one card's kb_product_id and treats
+    // any error as "not linked" (both pinned by the "R25 C" test below).
+    expect(offenders.sort()).toEqual([
+      "src/lib/catalog/attach-facts.ts",
+      "src/lib/catalog/menu-kb-link-server.ts",
+      "src/lib/enrichment/command-center.ts",
+      "src/lib/products/masters-store.ts",
+    ]);
+  });
+
+  it("R25 C: the menu-card KB link readers are guarded for pre-0234", () => {
+    const sel = /\.select\([^)]*\b(identity_key|kb_product_id|restock_of_card_key)\b[^)]*\)/g;
+    const srv = readFileSync(path.join(ROOT, "src/lib/catalog/menu-kb-link-server.ts"), "utf8");
+    expect(srv.match(sel) ?? []).toEqual(['.select("id, source_item_id, kb_product_id")']);
+    expect(srv).toContain('if (error && isMissingIdentityColumnError("menu_items", error)) missingColumn = true;');
+    expect(srv).toContain("if (missingColumn) {");
+    // The lot read names inventory_lots.kb_product_id through a constant; a
+    // failed read (pre-0234 included) is null = no links, never a throw.
+    expect(srv).toContain(".select(MENU_KB_LINK_LOT_COLUMNS)");
+    expect(srv).toContain("return failed ? null : rows;");
+    const cc = readFileSync(path.join(ROOT, "src/lib/enrichment/command-center.ts"), "utf8");
+    expect(cc.match(sel) ?? []).toEqual(['.select("kb_product_id")']);
+    expect(cc).toContain("if (error || !data) return null;");
   });
 
   it("S35: the Masters page identity read is opt-in, bounded and guarded for pre-0234", () => {

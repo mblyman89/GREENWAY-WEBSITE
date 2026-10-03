@@ -908,6 +908,7 @@ import { __runFactMemoryCoreTests } from "../../src/lib/catalog/fact-memory-core
 import { __runFactChipsCoreTests } from "../../src/lib/catalog/fact-chips-core";
 import { __runIntakeLotFactsCoreTests } from "../../src/lib/inventory/intake-lot-facts-core";
 import { __runKbSlugInputCoreTests } from "../../src/lib/catalog/kb-slug-input-core";
+import { __runMenuKbLinkCoreTests } from "../../src/lib/catalog/menu-kb-link-core";
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -1995,6 +1996,7 @@ __runLiquidVolumeTests();
   assertRan("intake-lot-facts-core", __runIntakeLotFactsCoreTests(), 44);
   // R25 B: one dashed slug rule for every KB form (brand, product type, FAQ).
   assertRan("kb-slug-input-core", __runKbSlugInputCoreTests(), 38);
+  assertRan("menu-kb-link-core", __runMenuKbLinkCoreTests(), 39);
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

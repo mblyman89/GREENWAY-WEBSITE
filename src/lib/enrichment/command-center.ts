@@ -44,6 +44,7 @@ import { loadGapProvenance } from "@/lib/enrichment/gap-vector-server";
 import { enrichmentIdentityForItem, type EnrichmentVia } from "@/lib/enrichment/enrichment-identity-core";
 import type { MenuItemRow, MenuVariantRow } from "@/lib/pos/db-types";
 import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
+import { cleanKbProductId } from "@/lib/catalog/menu-kb-link-core";
 import type { ProductEnrichment } from "@/lib/enrichment/types";
 import { resolveProductImage, type ResolvedImage } from "@/lib/enrichment/image-resolver";
 import { lookupProductKnowledge, type ProductKnowledge } from "@/lib/ai/kb/product-lookup";
@@ -136,6 +137,12 @@ export type EnrichmentCommandCenter = {
   sensoryOrigins: Partial<Record<SensoryField, string>>;
   /** R23: the KB row linked to this card by "Use these facts", or null. */
   linkedKb: LinkedKb | null;
+  /**
+   * R25 C: the KB product this MENU CARD is linked to (menu_items.
+   * kb_product_id, stamped from its lot's approval link), or null (not
+   * linked yet, pre-0234, or the read failed).
+   */
+  menuCardKb: LinkedKb | null;
   kbSuggestions: KbSuggestion[];
   mediaSuggestions: MediaSuggestion[];
   vendorSuggestions: VendorSuggestion[];
@@ -243,6 +250,27 @@ type LinkedKbRow = {
   terpenes: string[] | null;
   effects: string[] | null;
 };
+
+/**
+ * R25 C: the menu card's own link (menu_items.kb_product_id). The full-menu
+ * loaders deliberately do not fetch the column (MENU_ITEM_DROPPED_COLUMNS),
+ * so it is read here by row id. Pre-0234 / any error / no row -> null.
+ */
+async function loadMenuCardKbId(menuItemId: string | null | undefined): Promise<string | null> {
+  const id = typeof menuItemId === "string" ? menuItemId.trim() : "";
+  if (!id || !isSupabaseServiceConfigured) return null;
+  try {
+    const { data, error } = await createSupabaseAdminClient()
+      .from("menu_items")
+      .select("kb_product_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (error || !data) return null;
+    return cleanKbProductId((data as { kb_product_id?: unknown }).kb_product_id);
+  } catch {
+    return null;
+  }
+}
 
 /** The kb_products row a human linked to this card. */
 async function loadKbById(id: string): Promise<LinkedKbRow | null> {
@@ -370,11 +398,15 @@ export async function getEnrichmentCommandCenter(
   const suggestionKeys = Array.from(
     new Set([posKey, enrichment?.pos_product_key].filter((k): k is string => typeof k === "string" && k.trim() !== "")),
   );
-  const [acceptedRows, linkedRow, strainRow] = await Promise.all([
+  const menuCardKbId = await loadMenuCardKbId(item.id);
+  const [acceptedRows, linkedRow, strainRow, menuCardRow] = await Promise.all([
     loadAcceptedSensory(suggestionKeys),
     linkedId ? loadKbById(linkedId) : Promise.resolve(null),
     loadActiveStrain(item.strain_name ?? null),
+    menuCardKbId && menuCardKbId !== linkedId ? loadKbById(menuCardKbId) : Promise.resolve(null),
   ]);
+  // The same row as the enrichment link is read once and reused.
+  const menuCardKbRow = menuCardKbId && menuCardKbId === linkedId ? linkedRow : menuCardRow;
   const layers: SensoryLayer[] = [
     { label: "Accepted here", ...sensoryFromAcceptedSuggestions(acceptedRows) },
   ];
@@ -544,6 +576,9 @@ export async function getEnrichmentCommandCenter(
     knowledge: filledKnowledge,
     sensoryOrigins: filled.origins,
     linkedKb: linkedRow ? { id: linkedRow.id, displayName: linkedRow.display_name, status: linkedRow.status } : null,
+    menuCardKb: menuCardKbRow
+      ? { id: menuCardKbRow.id, displayName: menuCardKbRow.display_name, status: menuCardKbRow.status }
+      : null,
     kbSuggestions,
     mediaSuggestions,
     vendorSuggestions,
