@@ -45,6 +45,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { dashedSlug } from "@/lib/catalog/slug-core";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
 import { normalizeLicense } from "@/lib/discovery/reconcile";
@@ -76,11 +77,7 @@ export type EnrichResult = {
 
 /** Dashed slug — MUST match writeback.ts so kb_brands.slug ↔ kb_products.brand_slug link. */
 function slugifyDashed(value: string): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return dashedSlug(value);
 }
 
 /** Union two string arrays (case-insensitive), preserving first-seen casing. */

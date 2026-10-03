@@ -58,6 +58,7 @@ import {
   variantLabelFromMenuLabel,
 } from "@/lib/catalog/product-identity-core";
 import { isPromotableLot } from "@/lib/inventory/manifest-kb-bridge-core";
+import { dashedSlug, strainSlug as sharedStrainSlug } from "@/lib/catalog/slug-core";
 
 /**
  * Slugify exactly as `checkProductKnown` does (`intake.ts:25-31`).
@@ -69,17 +70,13 @@ import { isPromotableLot } from "@/lib/inventory/manifest-kb-bridge-core";
  * silently lose their knowledge copy.
  */
 export function slugifyDashed(value: string): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return dashedSlug(value);
 }
 
 /** The strain-slug normalisation from `product-lookup.ts:139`. */
 export function strainSlugOf(strainName: string | null | undefined): string | null {
   if (!strainName) return null;
-  const slug = strainName.trim().toLowerCase().replace(/\s+/g, " ");
+  const slug = sharedStrainSlug(strainName);
   return slug.length > 0 ? slug : null;
 }
 

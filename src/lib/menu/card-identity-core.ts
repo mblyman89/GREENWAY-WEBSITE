@@ -56,7 +56,64 @@ export type CardIdentityItem = {
   id: string;
   brand: string;
   vendor?: string;
+  /**
+   * S20 (R24 follow-up): the card's S03 product identity, computed by
+   * live-menu from the RAW menu row. Lets a card with no brand link of its
+   * own show the brand linked on its product's published enrichment.
+   */
+  identityKey?: string | null;
 };
+
+/** Where a card's brand link came from (for tests and logs). */
+export type CardBrandVia = "own" | "identity";
+
+/**
+ * S20 follow-up (bible 19.19 "Next fixes": `loadPublishedEnrichmentBrands`
+ * by identity). posKey -> brand_id, the SAME ladder S20 uses for copy and
+ * images (enrichment-identity-core resolveEnrichmentForItem):
+ *   1. the card's OWN published enrichment brand link wins (Q-03: what was
+ *      set on a card's own key is never overridden by a sibling);
+ *   2. else the product's PUBLISHED survivor (by identity_key) - only when
+ *      it is not the card's own row and it carries a brand link;
+ *   3. else nothing (the row's own brand text shows, exactly as before).
+ * The survivors map is already published-only and survivorship-picked by
+ * the shared identity read; an unknown identity ("" / null) never matches.
+ */
+export function resolveCardBrandIds(
+  items: readonly Pick<CardIdentityItem, "id" | "identityKey">[],
+  ownBrandIdByKey: ReadonlyMap<string, string>,
+  survivorByIdentity: ReadonlyMap<string, { pos_product_key: string; brand_id: string | null }>,
+): Map<string, { brandId: string; via: CardBrandVia }> {
+  const out = new Map<string, { brandId: string; via: CardBrandVia }>();
+  for (const it of items) {
+    const own = (ownBrandIdByKey.get(it.id) ?? "").trim();
+    if (own) {
+      out.set(it.id, { brandId: own, via: "own" });
+      continue;
+    }
+    const identity = (it.identityKey ?? "").trim();
+    if (!identity) continue;
+    const row = survivorByIdentity.get(identity);
+    if (!row || row.pos_product_key === it.id) continue;
+    const borrowed = (row.brand_id ?? "").trim();
+    if (borrowed) out.set(it.id, { brandId: borrowed, via: "identity" });
+  }
+  return out;
+}
+
+/** The cards that need the identity read: an identity, and no own brand link. */
+export function identityKeysNeedingBrand(
+  items: readonly Pick<CardIdentityItem, "id" | "identityKey">[],
+  ownBrandIdByKey: ReadonlyMap<string, string>,
+): string[] {
+  const keys = new Set<string>();
+  for (const it of items) {
+    if ((ownBrandIdByKey.get(it.id) ?? "").trim()) continue;
+    const identity = (it.identityKey ?? "").trim();
+    if (identity) keys.add(identity);
+  }
+  return [...keys];
+}
 
 /**
  * Overlay display identity onto rendered menu items (pure; the server caller
@@ -95,7 +152,7 @@ export function applyCardIdentity<T extends CardIdentityItem>(
 // ---------------------------------------------------------------------------
 // Self-tests (pure, no I/O)
 // ---------------------------------------------------------------------------
-export function __runCardIdentityCoreTests(): void {
+export function __runCardIdentityCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   const ok = (cond: boolean, msg: string) => {
     if (!cond) throw new Error(`card-identity-core self-test failed: ${msg}`);
@@ -146,5 +203,27 @@ export function __runCardIdentityCoreTests(): void {
   const noop = applyCardIdentity([items[2]], new Map(), new Map());
   ok(noop[0] === items[2], "empty maps -> no-op");
 
+  // --- resolveCardBrandIds (S20 follow-up: the brand label follows the product) ---
+  const ID = "grow-op-farms|flower|blue-dream";
+  const surv = new Map([[ID, { pos_product_key: "CARD-A", brand_id: "brand-a" }]]);
+  const r1 = resolveCardBrandIds([{ id: "LOT-7", identityKey: ID }], new Map(), surv);
+  ok(r1.get("LOT-7")?.brandId === "brand-a" && r1.get("LOT-7")?.via === "identity", "no own link -> borrows the product's published brand");
+  const r2 = resolveCardBrandIds([{ id: "LOT-7", identityKey: ID }], new Map([["LOT-7", "brand-own"]]), surv);
+  ok(r2.get("LOT-7")?.brandId === "brand-own" && r2.get("LOT-7")?.via === "own", "own link wins over the identity (Q-03)");
+  const r3 = resolveCardBrandIds([{ id: "CARD-A", identityKey: ID }], new Map(), surv);
+  ok(!r3.has("CARD-A"), "a card never borrows from itself");
+  const r4 = resolveCardBrandIds([{ id: "LOT-7", identityKey: "" }, { id: "LOT-8", identityKey: null }, { id: "LOT-9" }], new Map(), new Map([["", { pos_product_key: "X", brand_id: "b" }]]));
+  ok(r4.size === 0, "unknown identity is never a wildcard");
+  const r5 = resolveCardBrandIds([{ id: "LOT-7", identityKey: ID }], new Map(), new Map([[ID, { pos_product_key: "CARD-A", brand_id: "  " }]]));
+  ok(r5.size === 0, "a survivor without a brand link lends nothing");
+  const r6 = resolveCardBrandIds([{ id: "LOT-7", identityKey: `  ${ID} ` }], new Map([["LOT-7", "  "]]), surv);
+  ok(r6.get("LOT-7")?.via === "identity", "blank own link does not block; identity trimmed");
+  const need = identityKeysNeedingBrand(
+    [{ id: "A", identityKey: ID }, { id: "B", identityKey: ID }, { id: "C", identityKey: "x|y|z" }, { id: "D", identityKey: "" }],
+    new Map([["C", "brand-c"]]),
+  );
+  ok(need.length === 1 && need[0] === ID, "only cards without an own link ask; de-duplicated; blank skipped");
+
   console.log(`card-identity-core: ${passed} assertions passed`);
+  return { passed, failed: 0 };
 }

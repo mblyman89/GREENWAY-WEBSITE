@@ -130,16 +130,24 @@ describe("S03 — the three slug conventions stay distinct and byte-identical to
     for (const s of SLUG_SAMPLES) expect(strainSlug(s)).toBe(strainSlugOf(s) ?? "");
   });
 
-  it("the private copies in kb/intake.ts, kb/writeback.ts, kb/store.ts still have the exact dashed body", () => {
+  // R24 S20 (F-053): the private copies were collapsed into ONE pure module,
+  // src/lib/catalog/slug-core.ts. These two pins were updated ON PURPOSE: the
+  // exact bodies now live only in slug-core, and every former copy must
+  // delegate to it (golden-master parity lives in r24-s20-slug-core-brand).
+  it("the dashed body lives in slug-core and kb/intake.ts, kb/writeback.ts, kb/store.ts delegate to it", () => {
     const body = /\.trim\(\)\s*\.toLowerCase\(\)\s*\.replace\(\/\[\^a-z0-9\]\+\/g, "-"\)\s*\.replace\(\/\^-\+\|-\+\$\/g, ""\)/;
-    for (const f of ["src/lib/ai/kb/intake.ts", "src/lib/ai/kb/writeback.ts", "src/lib/ai/kb/store.ts"]) {
-      expect(read(f), f).toMatch(body);
+    expect(read("src/lib/catalog/slug-core.ts")).toMatch(body);
+    for (const f of ["src/lib/ai/kb/intake.ts", "src/lib/ai/kb/writeback.ts", "src/lib/ai/kb/store.ts", "src/lib/catalog/product-identity-core.ts"]) {
+      const src = read(f);
+      expect(src, f).not.toMatch(body);
+      expect(src, f).toMatch(/from "(@\/lib\/catalog|\.)\/slug-core"/);
     }
-    expect(read("src/lib/catalog/product-identity-core.ts")).toMatch(body);
   });
 
-  it("every kb_strains reader still uses the SPACED slug (never 'fix' to dashed)", () => {
+  it("every kb_strains reader still uses the SPACED slug via slug-core (never 'fix' to dashed)", () => {
     const spaced = 'toLowerCase().replace(/\\s+/g, " ")';
+    expect(read("src/lib/catalog/slug-core.ts")).toContain(spaced);
+    expect(strainSlug(" Blue   Dream ")).toBe("blue dream");
     for (const f of [
       "src/lib/ai/kb/store.ts",
       "src/lib/ai/kb/writeback.ts",
@@ -148,7 +156,10 @@ describe("S03 — the three slug conventions stay distinct and byte-identical to
       "src/lib/pos/intake-menu-staging.ts",
       "src/lib/catalog/product-identity-core.ts",
     ]) {
-      expect(read(f), f).toContain(spaced);
+      const src = read(f);
+      expect(src, f).toMatch(/from "(@\/lib\/catalog|\.)\/slug-core"/);
+      expect(src, f).toMatch(/\b(strainSlug|sharedStrainSlug)\b/);
+      expect(src, f).not.toContain(spaced);
     }
   });
 
@@ -315,6 +326,8 @@ describe("S03 — shadow ring (console only, zero queries, zero behaviour change
     expect(imports).toEqual([
       'import { classificationMemoryKey } from "@/lib/inventory/classification-memory-core";',
       'import { deriveVariantLabel } from "@/lib/inventory/manifest-kb-bridge-core";',
+      // R24 S20: the slug bodies moved to the pure, import-free slug-core.
+      'import { dashedSlug, strainSlug } from "./slug-core";',
     ]);
     expect(src).not.toMatch(/server-only|supabase|node:fs/);
   });

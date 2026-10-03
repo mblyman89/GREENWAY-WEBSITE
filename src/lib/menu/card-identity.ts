@@ -26,16 +26,20 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { normalizeVendorKey } from "@/lib/inventory/vendor-resolve-core";
 import {
   applyCardIdentity,
+  identityKeysNeedingBrand,
+  resolveCardBrandIds,
   vendorShortLabel,
   type CardIdentityItem,
 } from "@/lib/menu/card-identity-core";
+import { loadPublishedEnrichmentsByIdentity } from "@/lib/enrichment/enrichment-identity-server";
+import type { IdentityCandidate } from "@/lib/enrichment/enrichment-identity-core";
 
 /** Overlay display identity (enriched brand, short vendor) onto menu items. */
 export async function withCardIdentity<T extends CardIdentityItem>(items: T[]): Promise<T[]> {
   if (!isSupabaseServiceConfigured || items.length === 0) return items;
   try {
     const [brandByKey, vendorShortByKey] = await Promise.all([
-      loadPublishedEnrichmentBrands(items.map((i) => i.id)),
+      loadPublishedEnrichmentBrands(items),
       items.some((i) => (i.vendor ?? "").trim()) ? loadVendorShortLabels() : Promise.resolve(new Map<string, string>()),
     ]);
     return applyCardIdentity(items, brandByKey, vendorShortByKey);
@@ -44,10 +48,22 @@ export async function withCardIdentity<T extends CardIdentityItem>(items: T[]): 
   }
 }
 
-/** pos_product_key → brands.display_name for PUBLISHED enrichments with a brand link. */
-async function loadPublishedEnrichmentBrands(posKeys: string[]): Promise<Map<string, string>> {
+/**
+ * pos_product_key → brands.display_name for PUBLISHED enrichments with a brand link.
+ *
+ * S20 follow-up (R24; bible 19.19 "Next fixes"): the brand label follows the
+ * PRODUCT, not only the card key. A card whose own key has no published
+ * brand link borrows the brand linked on its product's published survivor
+ * (identity_key), by the same ladder S20 uses for copy and images
+ * (resolveCardBrandIds: own first, never itself, unknown identity never
+ * matches). The identity read is the ONE shared S20 read
+ * (loadPublishedEnrichmentsByIdentity): flag ENRICHMENT_FOLLOWS_IDENTITY off,
+ * a database without 0234, or any read error -> an empty map -> exactly the
+ * pre-S20 own-key-only behaviour.
+ */
+async function loadPublishedEnrichmentBrands(items: readonly CardIdentityItem[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  const keys = Array.from(new Set(posKeys.filter(Boolean)));
+  const keys = Array.from(new Set(items.map((i) => i.id).filter(Boolean)));
   if (keys.length === 0) return out;
   const admin = createSupabaseAdminClient();
 
@@ -78,8 +94,23 @@ async function loadPublishedEnrichmentBrands(posKeys: string[]): Promise<Map<str
     // into a Map, so overlapping them cannot change the result.
     { chunkSize: CHUNK, concurrency: MENU_READ_CONCURRENCY },
   );
+  const ownBrandIdByKey = new Map<string, string>();
   for (const r of enrichmentRows) {
-    if (r.brand_id) brandIdByKey.set(r.pos_product_key, r.brand_id);
+    if (r.brand_id) ownBrandIdByKey.set(r.pos_product_key, r.brand_id);
+  }
+
+  // 1b) S20: cards without an own brand link ask their product's published
+  // survivor (only those cards; empty map when flag off / pre-0234 / error).
+  const needIdentity = identityKeysNeedingBrand(items, ownBrandIdByKey);
+  type BrandSurvivor = IdentityCandidate & { brand_id: string | null };
+  const survivors =
+    needIdentity.length > 0
+      ? await loadPublishedEnrichmentsByIdentity<BrandSurvivor>(needIdentity, "brand_id", admin).catch(
+          () => new Map<string, BrandSurvivor>(),
+        )
+      : new Map<string, BrandSurvivor>();
+  for (const [posKey, { brandId }] of resolveCardBrandIds(items, ownBrandIdByKey, survivors)) {
+    brandIdByKey.set(posKey, brandId);
   }
   if (brandIdByKey.size === 0) return out;
 

@@ -9,6 +9,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { strainSlug } from "@/lib/catalog/slug-core";
 import { usableCount } from "@/lib/supabase/read-completeness-core";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 // S14: the onboarding list's query plan, picker filter and counts (pure).
@@ -922,7 +923,7 @@ export async function loadStrainTypeSignals(
   const slugs = Array.from(
     new Set(
       drafts
-        .map((d) => d.strain_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "")
+        .map((d) => strainSlug(d.strain_name))
         .filter(Boolean),
     ),
   );
@@ -952,7 +953,7 @@ export async function loadStrainTypeSignals(
   }
 
   for (const d of drafts) {
-    const slug = d.strain_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+    const slug = strainSlug(d.strain_name);
     const kb = slug ? kbTypeBySlug.get(slug) ?? null : null;
     const manifest = d.lot_id ? lotTypeById.get(d.lot_id) ?? null : null;
     out.set(
@@ -1494,7 +1495,7 @@ async function saveStrainTypeToKb(
 ): Promise<void> {
   const name = input.strainName?.trim();
   if (!name) return; // no strain on the draft - nothing to attach the type to.
-  const slug = name.toLowerCase().replace(/\s+/g, " ");
+  const slug = strainSlug(name);
 
   // Existing curated row (the same slug convention injection/staging read by).
   const { data: strainData } = await admin

@@ -11,6 +11,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { dashedSlug, strainSlug } from "@/lib/catalog/slug-core";
 import {
   SEED_TERPENES,
   SEED_CANNABINOIDS,
@@ -1239,11 +1240,7 @@ export type UpsertProductCategoryInput = {
 
 /** Normalize a display name into a stable slug (lowercase, dashed). */
 function slugifyName(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return dashedSlug(value);
 }
 
 export async function upsertKbProductCategory(
@@ -1382,7 +1379,7 @@ export type UpsertStrainInput = {
  */
 export async function upsertKbStrain(input: UpsertStrainInput, actorId: string | null): Promise<void> {
   const name = input.name.trim();
-  const slug = (input.slug?.trim() || name).toLowerCase().replace(/\s+/g, " ");
+  const slug = strainSlug(input.slug?.trim() || name);
   const conf =
     input.confidence === null || input.confidence === undefined
       ? null

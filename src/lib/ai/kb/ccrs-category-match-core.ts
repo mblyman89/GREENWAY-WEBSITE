@@ -23,6 +23,7 @@
  * writeback.ts and just feeds this the category rows. tsx-unit-testable and
  * safe in the pure self-test harness.
  */
+import { dashedSlug } from "@/lib/catalog/slug-core";
 
 /** The minimal category shape the matcher needs (subset of KbProductCategoryRow). */
 export type CcrsMatchCategory = {
@@ -63,11 +64,7 @@ export function normalizeCcrsType(raw: string | null | undefined): string {
 
 /** Dashed slug form of a value (mirrors writeback.ts slugifyDashed). PURE. */
 export function slugifyDashedPure(value: string | null | undefined): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return dashedSlug(value);
 }
 
 /** Deterministic ordering so ties always resolve the same way. */

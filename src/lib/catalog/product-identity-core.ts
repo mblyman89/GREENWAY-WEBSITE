@@ -65,6 +65,7 @@
  */
 import { classificationMemoryKey } from "@/lib/inventory/classification-memory-core";
 import { deriveVariantLabel } from "@/lib/inventory/manifest-kb-bridge-core";
+import { dashedSlug, strainSlug } from "./slug-core";
 
 // ---------------------------------------------------------------------------
 // 1. Product identity key
@@ -109,19 +110,9 @@ export function sameProductIdentity(a: IdentityInput, b: IdentityInput): boolean
 // 2. Dashed slug + 3. spaced strain slug
 // ---------------------------------------------------------------------------
 
-/** kb_products / kb_brands slug (convention 2). */
-export function dashedSlug(value: string | null | undefined): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-/** kb_strains slug (convention 3): lowercase, single-spaced, NOT dashed. */
-export function strainSlug(value: string | null | undefined): string {
-  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-}
+// Conventions 2 and 3 live in ONE place: slug-core.ts (R24, finding F-053).
+// Re-exported so every existing importer keeps working unchanged.
+export { dashedSlug, strainSlug };
 
 // ---------------------------------------------------------------------------
 // KB natural key

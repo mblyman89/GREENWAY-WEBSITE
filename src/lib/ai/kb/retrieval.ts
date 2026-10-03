@@ -19,6 +19,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { dashedSlug } from "@/lib/catalog/slug-core";
 import {
   SEED_TERPENES,
   SEED_CANNABINOIDS,
@@ -500,11 +501,7 @@ async function loadNotes(): Promise<KbNote[]> {
 
 /** Dashed slug (matches writeback's brand/product convention). */
 function slugifyDashed(value: string | null | undefined): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return dashedSlug(value);
 }
 
 type KbProductFactRow = {

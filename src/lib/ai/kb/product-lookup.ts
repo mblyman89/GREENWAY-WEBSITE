@@ -23,6 +23,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { strainSlug } from "@/lib/catalog/slug-core";
 import { checkProductKnown, type KbProductMatch } from "@/lib/ai/kb/intake";
 import { loadKbKnowledgeIndexes } from "@/lib/ai/kb/product-knowledge-batch";
 import {
@@ -196,7 +197,7 @@ export async function lookupProductKnowledge(query: ProductLookupQuery): Promise
 
   // 4 — strain-level sensory/effects gap-fill.
   if (query.strainName) {
-    const slug = query.strainName.trim().toLowerCase().replace(/\s+/g, " ");
+    const slug = strainSlug(query.strainName);
     try {
       const { data: strain } = await admin
         .from("kb_strains")
