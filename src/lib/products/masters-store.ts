@@ -203,6 +203,56 @@ export async function loadIdentityKeysForCards(versionId: string, keys: readonly
 }
 
 /**
+ * R23 (owner fix 7) — the lot keys received on ONE manifest, for the
+ * Mastering manifest filter. Paged with an honest verdict; any failed or
+ * incomplete read answers ok:false so the page says "could not read" and
+ * shows nothing rather than everything.
+ */
+export async function loadManifestLotKeys(
+  manifestId: string,
+): Promise<{ ok: boolean; lots: { pos_product_key: string | null; lot_code: string | null }[] }> {
+  if (!isSupabaseServiceConfigured || !manifestId) return { ok: false, lots: [] };
+  const admin = createSupabaseAdminClient();
+  const { rows, verdict } = await pagedAllChecked<{ id: string; pos_product_key: string | null; lot_code: string | null }>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("inventory_lots")
+        .select("id, pos_product_key, lot_code")
+        .eq("manifest_id", manifestId)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) return { rows: [], ok: false };
+      return { rows: (data as { id: string; pos_product_key: string | null; lot_code: string | null }[] | null) ?? [], ok: true };
+    },
+    { maxRows: 20_000 },
+  );
+  return { ok: verdict.complete, lots: rows };
+}
+
+/**
+ * R23 (owner fix 7) — accepted deliveries for the manifest filter options
+ * (newest first, bounded). A failed read answers [] and the select simply
+ * offers "Any manifest".
+ */
+export async function listMasterableManifests(limit = 300): Promise<
+  { id: string; manifest_number: string | null; vendor_label: string | null; transfer_date: string | null; invoice_number_override: string | null; status: string }[]
+> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("inbound_manifests")
+    .select("id, manifest_number, vendor_label, transfer_date, invoice_number_override, status")
+    .in("status", ["accepted", "partially_accepted"])
+    .order("transfer_date", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) {
+    console.error("[masters-store] manifest options read failed:", error.message);
+    return [];
+  }
+  return (data as { id: string; manifest_number: string | null; vendor_label: string | null; transfer_date: string | null; invoice_number_override: string | null; status: string }[] | null) ?? [];
+}
+
+/**
  * Every manual-master member row (one pos_product_key belongs to at most one
  * master, 0036). Paged with an honest verdict (pagedAllChecked, ordered on the
  * unique id), so PostgREST's 1000-row cap can never silently shorten it; an

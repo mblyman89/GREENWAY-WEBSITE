@@ -207,7 +207,9 @@ export async function approveDraftAction(draftId: string, formData: FormData) {
     // Surface the floor-violation / classification-gate message.
     redirect(backTo(formData, { error: "floor", msg: result.error ?? "" }, draftId));
   }
-  redirect(backTo(formData, { approved: "1" }));
+  // R23 (item 5): the review queue stays put (no pin), and the banner gets
+  // a link to the product on the Approved tab (validated as a UUID there).
+  redirect(backTo(formData, { approved: "1", approved_draft: draftId }));
 }
 
 /**

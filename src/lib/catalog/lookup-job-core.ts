@@ -354,7 +354,7 @@ export function itemRowCopy(item: JobItemView): string {
     case "attached":
       return `Batch lookup: ${plural(r.attached, "fact", "facts")} attached${r.queued > 0 ? `, ${r.queued} waiting for you` : ""}`;
     case "review":
-      return `Batch lookup: ${plural(r.queued, "fact", "facts")} waiting for you in Product Enrichment`;
+      return `Batch lookup: ${plural(r.queued, "fact", "facts")} waiting for you - attach them below`;
     case "not_found":
       return "Batch lookup: nothing found on the web";
     default:
@@ -636,7 +636,7 @@ export function __runLookupJobCoreTests(): { passed: number; failed: number } {
   ok(jobHeadline("queued", summarizeJob([{ draftId: "1", status: "queued", result: null, error: null, aiCalls: 0 }])).startsWith("Batch lookup waiting"), "waiting headline");
   ok(jobHeadline("running", s) === "Batch lookup running", "running headline");
   ok(itemRowCopy(items[0]) === "Batch lookup: 3 facts attached", "row attached");
-  ok(itemRowCopy(items[1]) === "Batch lookup: 2 facts waiting for you in Product Enrichment", "row review");
+  ok(itemRowCopy(items[1]) === "Batch lookup: 2 facts waiting for you - attach them below", "row review");
   ok(itemRowCopy(items[2]) === "Batch lookup: already on file (no lookup paid)", "row known");
   ok(itemRowCopy(items[4]) === "Batch lookup failed: x", "row failed");
   ok(itemRowCopy(items[5]) === "Batch lookup: waiting" && itemRowCopy(items[6]) === "Batch lookup: looking up now", "row pending");

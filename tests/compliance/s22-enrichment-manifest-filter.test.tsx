@@ -138,7 +138,7 @@ describe("S22 cores", () => {
     expect(__runEnrichmentManifestCoreTests()).toEqual({ passed: 75, failed: 0 });
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     __runEnrichmentMatchCoreTests();
-    expect(log).toHaveBeenCalledWith("enrichment-match-core: 78 checks passed");
+    expect(log).toHaveBeenCalledWith("enrichment-match-core: 83 checks passed");
     log.mockRestore();
   });
   it("parseEnrichmentSort accepts 'newest' (bible S22.5); the default is unchanged", () => {

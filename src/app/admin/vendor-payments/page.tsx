@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
@@ -107,6 +108,8 @@ export default async function VendorPaymentsPage({
             ← Back to Product Intake Hub
           </BackLink>
         </div>
+        {/* R23 item 8: the one pipeline bar, in order. */}
+        <CatalogStageStrip current="pay" />
 
         {/* Readiness at a glance — real state, no fabricated payables ledger. */}
         <div className="grid gap-4 sm:grid-cols-3">

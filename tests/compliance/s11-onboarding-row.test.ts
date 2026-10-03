@@ -331,10 +331,12 @@ describe("F-033: a failed row action comes back pinned to that row", () => {
     );
   });
 
-  it("approve success is NOT pinned (the row has left the review tab)", async () => {
+  it("approve success is NOT pinned (the row has left the review tab) - R23: it names the draft for the banner link", async () => {
     const { approveDraftAction } = await import("@/app/admin/inventory/drafts/actions");
     await expect(approveDraftAction(D, form({ price: "20" }))).rejects.toThrow("NEXT_REDIRECT");
-    expect(lastRedirect()).toBe(`redirect:/admin/inventory/drafts?manifest=${M}&approved=1`);
+    expect(lastRedirect()).toBe(`redirect:/admin/inventory/drafts?manifest=${M}&approved=1&approved_draft=${D}`);
+    expect(lastRedirect()).not.toContain("&draft=");
+    expect(lastRedirect()).not.toContain("#draft-");
   });
 
   it("dismiss / restore failures are pinned; their successes are not", async () => {
@@ -379,7 +381,8 @@ describe("F-033: a failed row action comes back pinned to that row", () => {
     const approve = fn("approveDraftAction", "approveAllPricedAction");
     expect(approve.match(/redirect\(backTo\(formData, \{ error: [^\n]*\}, draftId\)\);/g)?.length).toBe(6);
     expect(approve).not.toMatch(/redirect\(backTo\(formData, \{ error: [^\n]*\}\)\);/);
-    expect(approve).toContain('redirect(backTo(formData, { approved: "1" }));');
+    // R23: the success redirect also names the approved draft for the banner link (still unpinned).
+    expect(approve).toContain('redirect(backTo(formData, { approved: "1", approved_draft: draftId }));');
     expect(fn("dismissDraftAction", "restoreDraftAction")).toContain('redirect(backTo(formData, { error: "update" }, draftId));');
     expect(fn("restoreDraftAction", "resolveIntakeFactReview")).toContain('redirect(backTo(formData, { error: "update" }, draftId));');
     expect(fn("approveAllPricedAction", "dismissDraftAction")).not.toContain(", draftId)");

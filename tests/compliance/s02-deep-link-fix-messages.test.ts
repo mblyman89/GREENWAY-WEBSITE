@@ -252,7 +252,8 @@ describe("S02 structural pins — the pages use the core", () => {
   });
 
   it("intake banners open THIS delivery's drafts (F-080)", () => {
-    expect(intake.match(/href=\{draftsForManifestHref\(id\)\}/g)).toHaveLength(2);
+    // R23: the accepted + finalized banners merged into ONE (finalize-banner-core).
+    expect(intake.match(/href=\{draftsForManifestHref\(id\)\}/g)).toHaveLength(1);
     expect(intake).not.toContain('href="/admin/inventory/drafts"');
   });
 

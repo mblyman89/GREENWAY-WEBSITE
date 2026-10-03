@@ -27,7 +27,19 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import { getEnrichmentForItem, computeGaps, type GapFlags } from "@/lib/enrichment/store";
 // S23: the per-field gap vector + its one read (the onboarding fact history).
-import { buildGapVector, type GapVector } from "@/lib/enrichment/gap-vector-core";
+import { buildGapVector, latestProvenance, type GapVector } from "@/lib/enrichment/gap-vector-core";
+// R23 (fixes 3 + 10): the sensory gap-fill layer (after the ladder, before the vector).
+import {
+  factsToAdd,
+  fillSensory,
+  kbMatchAction,
+  sensoryFromAcceptedSuggestions,
+  sensoryFromProvenance,
+  SENSORY_FIELDS,
+  type SensoryField,
+  type SensoryLayer,
+} from "@/lib/enrichment/sensory-fill-core";
+import { strainSlug } from "@/lib/catalog/product-identity-core";
 import { loadGapProvenance } from "@/lib/enrichment/gap-vector-server";
 import { enrichmentIdentityForItem, type EnrichmentVia } from "@/lib/enrichment/enrichment-identity-core";
 import type { MenuItemRow, MenuVariantRow } from "@/lib/pos/db-types";
@@ -80,7 +92,12 @@ export type KbSuggestion = ScoredMatch<KbCandidate> & {
   effects: string[];
   primaryMediaId: string | null;
   imageUrl: string | null;
+  /** R23 (fix 10): the row's button - linked already / use its facts / link it. */
+  action: { kind: "linked" | "use" | "link"; label: string };
 };
+
+/** R23: the KB row a human linked to this card (enrichment.kb_product_id). */
+export type LinkedKb = { id: string; displayName: string; status: string };
 
 /** A ranked media-library suggestion with its URL resolved. */
 export type MediaSuggestion = ScoredMatch<MediaCandidate> & {
@@ -109,8 +126,16 @@ export type EnrichmentCommandCenter = {
    * Attached at onboarding: ..."). Boilerplate description counts as missing.
    */
   gapVector: GapVector;
-  /** KB ladder result for this product (source, copy, sensory, image hint). */
+  /**
+   * KB ladder result for this product (source, copy, sensory, image hint).
+   * R23: its four sensory lists are GAP-FILLED (sensory-fill-core) from the
+   * linked KB row, accepted suggestions, onboarding-attached facts and the
+   * strain library; `sensoryOrigins` names where each filled list came from.
+   */
   knowledge: ProductKnowledge;
+  sensoryOrigins: Partial<Record<SensoryField, string>>;
+  /** R23: the KB row linked to this card by "Use these facts", or null. */
+  linkedKb: LinkedKb | null;
   kbSuggestions: KbSuggestion[];
   mediaSuggestions: MediaSuggestion[];
   vendorSuggestions: VendorSuggestion[];
@@ -185,6 +210,84 @@ async function findVendorCandidates(pos: PosProductSignals): Promise<VendorItemC
 }
 
 // ---------------------------------------------------------------------------
+// R23 (fixes 3 + 10): the sensory fill-layer reads. Each fails soft to
+// "no layer" (never throws, never worse than before R23).
+// ---------------------------------------------------------------------------
+
+/** Accepted sensory/effects suggestions for the card, newest first. */
+async function loadAcceptedSensory(keys: string[]): Promise<{ field_key: string; suggested_value: string }[]> {
+  if (!isSupabaseServiceConfigured || keys.length === 0) return [];
+  try {
+    const { data, error } = await createSupabaseAdminClient()
+      .from("ai_suggestions")
+      .select("field_key, suggested_value, created_at")
+      .eq("entity_type", "product")
+      .in("entity_id", keys)
+      .eq("status", "accepted")
+      .in("field_key", ["sensory", "effects"])
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error || !data) return [];
+    return data as { field_key: string; suggested_value: string }[];
+  } catch {
+    return [];
+  }
+}
+
+type LinkedKbRow = {
+  id: string;
+  display_name: string;
+  status: string;
+  aroma_notes: string[] | null;
+  flavor_notes: string[] | null;
+  terpenes: string[] | null;
+  effects: string[] | null;
+};
+
+/** The kb_products row a human linked to this card. */
+async function loadKbById(id: string): Promise<LinkedKbRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const { data, error } = await createSupabaseAdminClient()
+      .from("kb_products")
+      .select("id, display_name, status, aroma_notes, flavor_notes, terpenes, effects")
+      .eq("id", id)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as LinkedKbRow;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The ACTIVE strain-library row for the card's real strain name (the same
+ * rule as ladder rung 4). effects (0071) is read separately so a database
+ * without it still gets aroma/flavor/terpenes.
+ */
+async function loadActiveStrain(strainName: string | null): Promise<Omit<SensoryLayer, "label"> | null> {
+  const slug = strainSlug(strainName);
+  if (!slug || !isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_strains")
+      .select("aroma_notes, flavor_notes, terpenes")
+      .eq("slug", slug)
+      .eq("active", true)
+      .maybeSingle();
+    if (error || !data) return null;
+    let effects: unknown[] = [];
+    const eff = await admin.from("kb_strains").select("effects").eq("slug", slug).eq("active", true).maybeSingle();
+    if (!eff.error && eff.data) effects = ((eff.data as { effects?: unknown[] | null }).effects ?? []) as unknown[];
+    const row = data as { aroma_notes: unknown[] | null; flavor_notes: unknown[] | null; terpenes: unknown[] | null };
+    return { aromaNotes: row.aroma_notes, flavorNotes: row.flavor_notes, terpenes: row.terpenes, effects };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // The aggregator
 // ---------------------------------------------------------------------------
 
@@ -256,10 +359,49 @@ export async function getEnrichmentCommandCenter(
 
   const enrichment = served.row;
   const gaps = computeGaps(item, enrichment);
+
+  // R23 (fixes 3 + 10): the ladder stops at its first rung, and the
+  // enrichment rung carries no sensory lists, so a card with its own copy
+  // read "Still missing: effects, terpenes, aroma, flavor" even when those
+  // facts were on file. Gap-fill each EMPTY list (never replace one) from,
+  // in order: facts accepted on this card, the KB row a human linked,
+  // facts attached at onboarding (provenance = landed), the strain library.
+  const linkedId = typeof enrichment?.kb_product_id === "string" ? enrichment.kb_product_id.trim() : "";
+  const suggestionKeys = Array.from(
+    new Set([posKey, enrichment?.pos_product_key].filter((k): k is string => typeof k === "string" && k.trim() !== "")),
+  );
+  const [acceptedRows, linkedRow, strainRow] = await Promise.all([
+    loadAcceptedSensory(suggestionKeys),
+    linkedId ? loadKbById(linkedId) : Promise.resolve(null),
+    loadActiveStrain(item.strain_name ?? null),
+  ]);
+  const layers: SensoryLayer[] = [
+    { label: "Accepted here", ...sensoryFromAcceptedSuggestions(acceptedRows) },
+  ];
+  if (linkedRow) {
+    layers.push({
+      label: "Linked KB",
+      effects: linkedRow.effects,
+      terpenes: linkedRow.terpenes,
+      aromaNotes: linkedRow.aroma_notes,
+      flavorNotes: linkedRow.flavor_notes,
+    });
+  }
+  layers.push({ label: "Attached at onboarding", ...sensoryFromProvenance(latestProvenance(provenance)) });
+  if (strainRow) layers.push({ label: "Strain library", ...strainRow });
+  const filled = fillSensory(knowledge, layers);
+  const filledKnowledge: ProductKnowledge = {
+    ...knowledge,
+    effects: filled.lists.effects,
+    terpenes: filled.lists.terpenes,
+    aromaNotes: filled.lists.aromaNotes,
+    flavorNotes: filled.lists.flavorNotes,
+  };
+
   const gapVector = buildGapVector({
     item: { description: item.description, strain_type: item.strain_type, category: item.category },
     enrichment,
-    knowledge,
+    knowledge: { ...filledKnowledge, sensoryOrigins: filled.origins },
     provenance,
   });
 
@@ -318,16 +460,26 @@ export async function getEnrichmentCommandCenter(
   const kbSuggestions: KbSuggestion[] = kbRanked.map((m) => {
     const row = kbById.get(m.candidate.id);
     const imgId = row?.primary_media_id || row?.image_media_ids?.[0] || null;
-    return {
-      ...m,
-      description: row?.description ?? null,
-      shortDescription: row?.short_description ?? null,
+    const kbLists = {
       aromaNotes: row?.aroma_notes ?? [],
       flavorNotes: row?.flavor_notes ?? [],
       terpenes: row?.terpenes ?? [],
       effects: row?.effects ?? [],
+    };
+    const proseAdds: string[] = [];
+    if (!enrichment?.description?.trim() && row?.description?.trim()) proseAdds.push("description");
+    if (!enrichment?.short_description?.trim() && row?.short_description?.trim()) proseAdds.push("short description");
+    return {
+      ...m,
+      description: row?.description ?? null,
+      shortDescription: row?.short_description ?? null,
+      ...kbLists,
       primaryMediaId: imgId,
       imageUrl: imgId ? urlMap.get(imgId) ?? null : null,
+      action: kbMatchAction({
+        linked: linkedId !== "" && linkedId === m.candidate.id,
+        adds: [...factsToAdd(filledKnowledge, kbLists), ...proseAdds],
+      }),
     };
   });
 
@@ -370,11 +522,17 @@ export async function getEnrichmentCommandCenter(
   });
 
   // SLICE 75 — the permanent ✓/○ scorecard (the panel never disappears now).
+  // R23 (fix 3): plus a "Sensory facts" row measured by the SAME gap vector
+  // as the red header, so the two can never disagree again. Hidden when the
+  // fields do not apply (non-cannabis: all four not_applicable).
+  const sensoryEntries = gapVector.entries.filter((x) => (SENSORY_FIELDS as readonly string[]).includes(x.field));
+  const sensoryApplies = sensoryEntries.some((x) => x.state !== "not_applicable");
   const checklist = buildEnrichmentChecklist({
     hasDescription: gaps.hasDescription,
     hasImage: gaps.hasImage,
     hasBrandLink: gaps.hasBrandLink,
     hasTags: gaps.hasTags,
+    sensoryMissing: sensoryApplies ? sensoryEntries.filter((x) => x.state === "missing").map((x) => x.label) : undefined,
   });
 
   return {
@@ -383,7 +541,9 @@ export async function getEnrichmentCommandCenter(
     identityKey,
     gaps,
     gapVector,
-    knowledge,
+    knowledge: filledKnowledge,
+    sensoryOrigins: filled.origins,
+    linkedKb: linkedRow ? { id: linkedRow.id, displayName: linkedRow.display_name, status: linkedRow.status } : null,
     kbSuggestions,
     mediaSuggestions,
     vendorSuggestions,

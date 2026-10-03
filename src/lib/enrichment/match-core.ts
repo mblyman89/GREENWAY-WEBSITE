@@ -386,6 +386,13 @@ export type ChecklistInput = {
   hasBrandLink?: boolean;
   /** Omit (undefined) to hide the tags row (legacy callers). */
   hasTags?: boolean;
+  /**
+   * R23 (fix 3): the sensory/experience fields (effects, terpenes, aroma,
+   * flavor) the gap vector still counts as missing, by label. [] = all on
+   * file (row done). Omit (undefined) to hide the row - legacy callers and
+   * non-cannabis cards, where the fields do not apply.
+   */
+  sensoryMissing?: readonly string[];
 };
 
 /**
@@ -426,6 +433,17 @@ export function buildEnrichmentChecklist(g: ChecklistInput): ChecklistItem[] {
       detail: g.hasTags
         ? "Tagged for search and filtering."
         : "No tags yet — harder to find in search and filters.",
+    });
+  }
+  if (g.sensoryMissing !== undefined) {
+    const missing = g.sensoryMissing.filter((x) => typeof x === "string" && x.trim() !== "");
+    out.push({
+      label: "Sensory facts",
+      done: missing.length === 0,
+      detail:
+        missing.length === 0
+          ? "Effects, terpenes, aroma and flavor are on file."
+          : `Still missing: ${missing.join(", ")} — use a knowledge-base match's “Use these facts”, or attach them at onboarding.`,
     });
   }
   return out;
@@ -821,6 +839,14 @@ export function __runEnrichmentMatchCoreTests(): void {
   const listLegacy = buildEnrichmentChecklist({ hasDescription: true, hasImage: false });
   ok(listLegacy.length === 2, "checklist: brand/tags omitted → rows hidden (legacy callers safe)");
   ok(!checklistComplete(listLegacy) && checklistComplete([]), "checklist: one open row blocks complete; empty list is trivially complete");
+  // R23 (fix 3): the sensory row - header and checklist can no longer disagree.
+  const listSens = buildEnrichmentChecklist({ hasDescription: true, hasImage: true, hasBrandLink: true, hasTags: true, sensoryMissing: ["effects", "aroma"] });
+  ok(listSens.length === 5 && listSens[4]?.label === "Sensory facts" && !listSens[4]!.done, "checklist: sensory missing -> fifth row open");
+  ok(!checklistComplete(listSens), "checklist: sensory missing blocks fully enriched");
+  ok(listSens[4]!.detail.includes("effects, aroma"), "checklist: sensory row names the missing fields");
+  const listSensDone = buildEnrichmentChecklist({ hasDescription: true, hasImage: true, hasBrandLink: true, hasTags: true, sensoryMissing: [] });
+  ok(listSensDone[4]?.done === true && checklistComplete(listSensDone), "checklist: sensory all on file -> done");
+  ok(buildEnrichmentChecklist({ hasDescription: true, hasImage: true, hasBrandLink: true, hasTags: true, sensoryMissing: ["  "] })[4]?.done === true, "checklist: blank labels ignored");
 
   // S22 - newest from receiving.
   ok(parseEnrichmentSort("newest") === "newest", "sort parser accepts S22 newest");

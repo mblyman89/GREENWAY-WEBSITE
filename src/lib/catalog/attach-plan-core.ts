@@ -188,6 +188,24 @@ export interface PlanInput {
    * reason (never a guessed create over a row we could not see).
    */
   strainBlockedReason?: string | null;
+  /**
+   * R23 (owner: "I want to be able to attach as much as possible on
+   * onboarding"): a PERSON pressed Attach on one waiting fact in the row's AI
+   * card. The value was re-derived server-side (never from the browser) and
+   * re-linted. Then:
+   *   - the verdict source is "human" (S10 decide(): "You entered it."), so
+   *     the ring does not gate it - the ring governs what the AI does on its
+   *     own, and this is not the AI on its own;
+   *   - a value the product record ALREADY holds counts as confirmed (it is
+   *     there), so the fact history and the row's copy record the person's
+   *     confirmation (the Enrichment page reads that history);
+   *   - a different populated description is still never replaced
+   *     (survivorship), and the reason says so;
+   *   - the caller keeps the strain library out of it (strainBlockedReason):
+   *     a strain row is shared by every product of that strain.
+   * Absent = the AI lookup path, byte-for-byte as before.
+   */
+  confirmedBy?: "human" | null;
 }
 
 export interface PlannedSuggestion {
@@ -325,6 +343,14 @@ const SKIP = {
   already_present: "The record already has this, so nothing changed.",
   strain_type_kept: "The strain library already has a type for this strain; a machine never changes it.",
   strain_unchecked: "\"Also save as a KB strain draft\" was left unchecked, so the strain library was not touched.",
+  record_has_other:
+    "The product record already has a different one, and an attach never replaces it. Change it on Product Enrichment if this one is better.",
+  human_no_strain:
+    "Attaching from the onboarding row fills this product's own record only; the shared strain library is curated on the KB library page.",
+  human_scope:
+    "Only the description, short line, effects, aroma and flavor can be attached from the onboarding row; a person decides the rest on the approve form.",
+  no_record_key:
+    "This product's knowledge-base record could not be identified from its lot (product name or POS key missing), so it was not attached. It is still waiting on Product Enrichment.",
 } as const;
 
 /**
@@ -348,8 +374,12 @@ export function factConfidenceFromFacts(
 
 // --- 4. The planner -------------------------------------------------------------
 
+/** The fields kb_products holds (the only live target a person's attach uses). */
+const KB_PRODUCT_FIELDS: ReadonlySet<AttachField> = new Set<AttachField>(["description", "short_description", "aroma", "flavor", "effects"]);
+
 export function planAttach(input: PlanInput): AttachPlan {
-  const act = input.mode === "act";
+  const human = input.confirmedBy === "human";
+  const act = input.mode === "act" || human;
   const receipt: AttachReceipt = { attached: [], queued: [], skipped: [] };
   const decisions: Partial<Record<AttachField, AttachDecision>> = {};
   const provenance: PlannedProvenance[] = [];
@@ -365,7 +395,7 @@ export function planAttach(input: PlanInput): AttachPlan {
     byField.set(inc.field, { field: inc.field, value, confidence: policyConfidence(inc.confidence) });
   }
 
-  const blocked = (input.strainBlockedReason ?? "").trim();
+  const blocked = (input.strainBlockedReason ?? "").trim() || (human ? SKIP.human_no_strain : "");
   const strainName = input.strainWriteDisabled || blocked ? "" : (input.strainName ?? "").replace(/\s+/g, " ").trim();
   const slug = strainName ? strainSlug(strainName) : "";
   const noStrainReason = blocked || (input.strainWriteDisabled ? SKIP.strain_unchecked : SKIP.no_strain);
@@ -375,7 +405,7 @@ export function planAttach(input: PlanInput): AttachPlan {
 
   // Verdicts (S10 policy, gemini source, server-read corroborators).
   const verdictOf = (f: AttachIncoming) =>
-    decide(f.field, { source: "gemini", value: f.value, confidence: f.confidence }, {
+    decide(f.field, { source: human ? "human" : "gemini", value: f.value, confidence: f.confidence }, {
       kbValue: f.field === "strain_type" ? ex?.strain_type ?? null : null,
       manifestValue: f.field === "strain_type" ? input.manifestStrainType : null,
     });
@@ -478,6 +508,7 @@ export function planAttach(input: PlanInput): AttachPlan {
   // ---- kb_products (auto-attach only) --------------------------------------
   const productLanded = new Set<AttachField>();
   const productKept = new Set<AttachField>();
+  const productOther = new Set<AttachField>();
   const ep = input.existingProduct ?? null;
   if (act && input.kbProductKeyKnown) {
     for (const f of ["description", "short_description", "aroma", "flavor", "effects"] as const) {
@@ -489,6 +520,7 @@ export function planAttach(input: PlanInput): AttachPlan {
         // The same text is already live (e.g. a second Save): nothing to do,
         // and never a duplicate suggestion of what the record already says.
         if (normalizeForDedupe(ep[f]) === normalizeForDedupe(v as string)) productKept.add(f);
+        else productOther.add(f);
         continue;
       }
       if (f === "aroma" || f === "flavor" || f === "effects") {
@@ -529,7 +561,8 @@ export function planAttach(input: PlanInput): AttachPlan {
     return c !== null && c > 0 ? c / 100 : suggestionConfidence(undefined, input.strainTypeConfidence);
   };
   const needsSuggestion = (f: AttachField) => byField.has(f) && !productLanded.has(f) && !productKept.has(f);
-  if (input.posProductKey) {
+  // R23: a person's attach never files a suggestion - it attaches or says why not.
+  if (input.posProductKey && !human) {
     for (const f of ["description", "short_description"] as const) {
       if (needsSuggestion(f)) pushSugg(f, byField.get(f)!.value as string, legacyConf(f), [f]);
     }
@@ -550,7 +583,8 @@ export function planAttach(input: PlanInput): AttachPlan {
     if (!inc) continue;
     const conf = inc.confidence;
     const live: AttachTarget[] = [];
-    if (productLanded.has(f)) live.push("product record");
+    // R23: a person confirming what the record already holds IS attached.
+    if (productLanded.has(f) || (human && productKept.has(f))) live.push("product record");
     if (strainLanded.has(f) && attachedSet.has(f)) live.push("strain library");
     const staged: AttachTarget[] = [];
     if (strainLanded.has(f) && !attachedSet.has(f)) staged.push("strain library");
@@ -570,6 +604,9 @@ export function planAttach(input: PlanInput): AttachPlan {
     // Not landed anywhere: say exactly why.
     let reason: string;
     if (productKept.has(f)) reason = SKIP.already_present;
+    else if (human && productOther.has(f)) reason = SKIP.record_has_other;
+    else if (human && !KB_PRODUCT_FIELDS.has(f)) reason = SKIP.human_scope;
+    else if (human && !input.kbProductKeyKnown) reason = SKIP.no_record_key;
     else if (queuedSugg.get(f) === "duplicate") reason = SKIP.already_pending;
     else if (f === "strain_type") {
       const exType = ex?.strain_type ? canonicalStrainType(ex.strain_type) : "unknown";
@@ -1153,6 +1190,65 @@ export function __runAttachPlanCoreTests(): { passed: number; failed: number } {
     ok(again.receipt.skipped.find((x) => x.field === "description")?.reason === SKIP.already_present, "re-save description: already present");
     ok(again.receipt.skipped.find((x) => x.field === "aroma")?.reason === SKIP.already_pending || again.receipt.skipped.find((x) => x.field === "aroma")?.reason === SKIP.already_present, "re-save aroma: already there");
     ok(fieldsIn(again.receipt).length === 3, "re-save: each field reported once");
+  }
+
+  // 26. R23: a PERSON's attach from the onboarding row (confirmedBy "human").
+  {
+    const H = { confirmedBy: "human" as const, strainBlockedReason: null };
+    // Shadow ring: the AI alone lands nothing; a person's click lands it.
+    const ai = planAttach(base({ mode: "shadow", incoming: [inc("effects", ["calm"], 72)] }));
+    ok(ai.kbProduct === null && ai.receipt.attached.length === 0, "shadow AI path: nothing live");
+    const hp = planAttach(base({ mode: "shadow", ...H, incoming: [inc("effects", ["calm"], null)] }));
+    ok(JSON.stringify(hp.kbProduct) === JSON.stringify({ effects: ["calm"] }), "human: effects land on the product record in shadow");
+    ok(hp.decisions.effects === "attach", "human: verdict attach (You entered it.)");
+    ok(hp.receipt.attached.length === 1 && hp.receipt.attached[0].to.join() === "product record", "human: receipt attached -> product record only");
+    ok(hp.suggestions.length === 0, "human: never files a suggestion");
+    ok(hp.strain === null, "human: never writes the shared strain library");
+    ok(hp.provenance.length === 1 && hp.provenance[0].to === "product record" && hp.provenance[0].confidence === null, "human: one provenance row, no model score");
+    // Off ring too: a person is not the AI on its own.
+    ok(planAttach(base({ mode: "off", ...H, incoming: [inc("aroma", ["pine"], null)] })).kbProduct?.aroma_notes?.[0] === "pine", "human: lands even when the ring is off");
+    // Already on the record: confirmed (attached, recorded) but not rewritten.
+    const same = planAttach(base({
+      mode: "shadow",
+      ...H,
+      existingProduct: { description: "Bright  citrus.", short_description: null, aroma_notes: ["Pine"], flavor_notes: [], effects: [] },
+      incoming: [inc("description", "Bright citrus.", null), inc("aroma", ["pine"], null)],
+    }));
+    ok(same.kbProduct === null, "human confirm of what is there: no write");
+    ok(same.receipt.attached.map((a) => a.field).join() === "description,aroma", "human confirm of what is there: counted as attached");
+    ok(same.provenance.length === 2, "human confirm of what is there: history recorded");
+    // The AI path on the same input still says "already present" (unchanged).
+    const sameAi = planAttach(base({
+      existingProduct: { description: "Bright citrus.", short_description: null, aroma_notes: ["pine"], flavor_notes: [], effects: [] },
+      incoming: [inc("description", "Bright citrus.", 95)],
+    }));
+    ok(sameAi.receipt.attached.length === 0 && sameAi.receipt.skipped[0]?.reason === SKIP.already_present, "AI path unchanged: already present is skipped");
+    // A DIFFERENT description is never replaced, and the reason says so.
+    const other = planAttach(base({
+      ...H,
+      existingProduct: { description: "Our own words.", short_description: null, aroma_notes: [], flavor_notes: [], effects: [] },
+      incoming: [inc("description", "The web's words.", null)],
+    }));
+    ok(other.kbProduct === null && other.receipt.skipped[0]?.reason === SKIP.record_has_other, "human: populated different prose kept, reason says so");
+    // Out-of-scope fields are reported, never written anywhere.
+    const scope = planAttach(base({ ...H, incoming: [inc("summary", "S.", null), inc("strain_type", "indica", null), inc("images", ["https://x.test/a.jpg"], null)] }));
+    ok(scope.strain === null && scope.kbProduct === null && scope.suggestions.length === 0, "human: out-of-scope fields write nothing");
+    ok(scope.receipt.skipped.length === 3 && scope.receipt.skipped.every((x) => x.reason === SKIP.human_scope), "human: out-of-scope reason on each");
+    // No record key: say why, never guess a row.
+    const nokey = planAttach(base({ ...H, kbProductKeyKnown: false, incoming: [inc("flavor", ["sweet"], null)] }));
+    ok(nokey.kbProduct === null && nokey.receipt.skipped[0]?.reason === SKIP.no_record_key, "human: unknown record key -> reason, no write");
+    // A caller's own strain-blocked reason still wins over the human default.
+    const blockedOwn = planAttach(base({ confirmedBy: "human", strainBlockedReason: "custom", incoming: [inc("lineage", "A x B", null)] }));
+    ok(blockedOwn.strain === null && blockedOwn.receipt.skipped.length === 1, "human: lineage never reaches the strain library");
+    // Lists are unioned, never replaced.
+    const union = planAttach(base({
+      ...H,
+      existingProduct: { description: null, short_description: null, aroma_notes: [], flavor_notes: [], effects: ["Relaxed"] },
+      incoming: [inc("effects", ["relaxed", "happy"], null)],
+    }));
+    ok(JSON.stringify(union.kbProduct?.effects) === JSON.stringify(["relaxed", "happy"]), "human: incoming list passed for the writer's union");
+    // Absent confirmedBy = exactly the AI path (shadow lands nothing).
+    ok(planAttach(base({ mode: "shadow", confirmedBy: null, incoming: [inc("effects", ["calm"], 99)] })).kbProduct === null, "confirmedBy null = AI path");
   }
 
   return { passed, failed };

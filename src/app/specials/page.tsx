@@ -11,6 +11,7 @@ import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { resolveSpecialsPresentation } from "@/lib/specials/specials-presentation-core";
 import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
+import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 
 // USAGE-5 — WHY THIS IS NO LONGER `force-dynamic` (same reasoning as SLICE D
 // on the home page, src/app/page.tsx).
@@ -58,7 +59,9 @@ export default async function SpecialsPage() {
       getPageBanners("specials", ["specials.hero"]),
       // SLICE 40: overlay the KB strain profile (same as home + shop) so the
       // specials cards show the strain type instead of the raw POS value.
-      loadLiveMenuItemsCached().then((items) => withMenuProfile(items)),
+      // R23 item 9: resolve each card's image (its own enrichment photo first)
+      // exactly like the shop menu (ShopPage) and the product page do.
+      loadLiveMenuItemsCached().then((items) => withMenuProfile(items)).then((items) => withResolvedImages(items)),
       // SLICE 106: how the weekly-deal grid is PRESENTED (draft-aware). The
       // SEED_DEFAULTS fallback is the live-look-safe default, so pre-seed and
       // pre-migration this is identical to today.

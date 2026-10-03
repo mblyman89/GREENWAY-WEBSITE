@@ -16,14 +16,14 @@
  *
  * Both require the inventory.manage permission and are audited.
  */
-import { unstable_rethrow } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { onboardingV2RowOn } from "@/lib/catalog/onboarding-row-flag";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
 import { upsertKbStrain } from "@/lib/ai/kb/store";
-import { persistSuggestion, listSuggestions } from "@/lib/ai/suggestions";
+import { persistSuggestion, listSuggestions, reviewSuggestion } from "@/lib/ai/suggestions";
 import {
   packImageCandidates,
   RESEARCH_IMAGES_FIELD,
@@ -74,6 +74,23 @@ import {
   shouldSkipGemini,
 } from "@/lib/catalog/fact-memory-core";
 import { recallForDraft } from "@/lib/catalog/fact-memory";
+// R23 (items 2 + 6): attach one waiting fact from the row's AI card.
+import { attachedFactsOf } from "@/lib/catalog/fact-chips-core";
+import { draftsHref, normalizeDraftView } from "@/lib/catalog/draft-deep-link-core";
+import {
+  PICK_BAD_FIELD,
+  PICK_NO_MEMORY,
+  gatedValue,
+  isWaitingField,
+  pickMemoryValue,
+  pickSuggestionValue,
+  rawLookupForField,
+  suggestionClosable,
+  type PickResult,
+  type WaitingResultCode,
+  type WaitingSuggestionRow,
+} from "@/lib/catalog/waiting-facts-core";
+import { readDraftForWaiting, readWaitingSuggestion } from "@/lib/catalog/waiting-facts-server";
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "").trim();
@@ -605,4 +622,117 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
   } catch (err) {
     return { ok: false, error: `Could not save the draft: ${String(err).slice(0, 160)}` };
   }
+}
+
+// ---------------------------------------------------------------------------
+// R23 (items 2 + 6): attach ONE waiting fact from the onboarding row.
+//
+// The browser names WHICH fact (draft id, field, origin, suggestion id) -
+// never its text. The value is re-read here (the pending suggestion, checked
+// against THIS draft's suggestion key; or the product memory, recalled
+// again), run through the same compliance gate as a web reply, and saved
+// through the S07 door as a PERSON's confirmed answer (confirmedBy
+// "human"): this product's own record only, never the shared strain
+// library, never a new suggestion, provenance source "human". Not gated by
+// the attach ring - the ring governs what lands WITHOUT a person.
+// ---------------------------------------------------------------------------
+
+/** Where the form returns to (the row stays pinned and open). */
+function waitingBack(formData: FormData, draftId: string, code: WaitingResultCode, msg: string): string {
+  const manifest = str(formData, "return_manifest");
+  const status = normalizeDraftView(str(formData, "return_status"));
+  return draftsHref({ status, manifestId: manifest || null, draftId, extra: { wf: code, ...(msg ? { wf_msg: msg.slice(0, 300) } : {}) } });
+}
+
+export async function attachWaitingFactAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  const draftId = str(formData, "draft_id");
+  const field = str(formData, "field");
+  const origin = str(formData, "origin");
+  const suggestionId = str(formData, "suggestion_id");
+  if (!draftId) redirect(draftsHref({ extra: { wf: "error", wf_msg: "Missing the onboarding draft id - refresh the page and try again." } }));
+  if (!isWaitingField(field)) redirect(waitingBack(formData, draftId, "error", PICK_BAD_FIELD));
+
+  let target = "";
+  try {
+    const draft = await readDraftForWaiting(draftId);
+    if (!draft) {
+      target = waitingBack(formData, draftId, "error", "This onboarding draft could not be read just now - refresh the page.");
+    } else if (draft.status !== "draft" && draft.status !== "approved") {
+      target = waitingBack(formData, draftId, "error", "This product was dismissed, so nothing was attached. Restore it first.");
+    } else {
+      // 1. Re-read the value on the server.
+      let suggestionRow: WaitingSuggestionRow | null = null;
+      let pick: PickResult;
+      if (origin === "suggestion") {
+        suggestionRow = await readWaitingSuggestion(suggestionId);
+        pick = pickSuggestionValue(suggestionRow, field, draft.key);
+      } else if (origin === "memory") {
+        const kbFirst = kbFirstOnboardingEnabled(process.env[KB_FIRST_ONBOARDING_ENV]);
+        pick = kbFirst ? pickMemoryValue(await recallForDraft(draftId), field) : { ok: false, reason: PICK_NO_MEMORY };
+      } else {
+        pick = { ok: false, reason: "Unknown fact - refresh the page." };
+      }
+      if (!pick.ok) {
+        target = waitingBack(formData, draftId, "error", pick.reason);
+      } else {
+        // 2. The same compliance gate as a web reply (today's banned list).
+        const banned = await loadBannedPhrases();
+        const safe = postProcessLookup(rawLookupForField(field, pick.value), banned);
+        const gated = gatedValue(field, safe);
+        if ((Array.isArray(gated) && gated.length === 0) || gated === "") {
+          target = waitingBack(formData, draftId, "skipped", "That fact did not pass the compliance check (a medical claim, a banned phrase or a non-experiential effect), so it was not attached.");
+        } else {
+          // 3. The single write door, as a person's confirmed answer.
+          const res = await attachProductFacts({
+            context: { kind: "draft", draftId },
+            safe,
+            sources: [],
+            factConfidence: {},
+            suggestionConfidence: {},
+            suggestionSource: "human:onboarding-attach",
+            actor: { userId: session.userId, email: session.email },
+            confirmedBy: "human",
+          });
+          if (!res.ok) {
+            target = waitingBack(formData, draftId, "error", res.error);
+          } else {
+            const landed = res.receipt.attached.some((a) => a.field === field);
+            const skip = res.receipt.skipped.find((s) => s.field === field);
+            // 4. Close the pending sensory/effects suggestion only when every
+            //    part of it is now a person's answer on this row.
+            let closed = false;
+            if (landed && suggestionRow) {
+              const after = await readDraftForWaiting(draftId);
+              if (after && suggestionClosable(suggestionRow, attachedFactsOf(after.row))) {
+                try {
+                  await reviewSuggestion(suggestionRow.id, "accepted", session.userId);
+                  closed = true;
+                } catch {
+                  /* best effort: the fact is attached; the suggestion stays pending */
+                }
+              }
+            }
+            await recordAudit({
+              actorId: session.userId,
+              actorEmail: session.email,
+              action: "catalog_draft.waiting_fact_attach",
+              entityType: "catalog_product_drafts",
+              entityId: draftId,
+              after: { field, origin, suggestionId: suggestionRow?.id ?? null, landed, suggestionClosed: closed, mode: res.mode },
+            });
+            const note = res.notes.length > 0 ? ` ${res.notes.join(" ")}` : "";
+            target = landed
+              ? waitingBack(formData, draftId, "attached", `${res.sentence}${note}`)
+              : waitingBack(formData, draftId, "skipped", `${skip?.reason ?? res.sentence}${note}`);
+            revalidatePath("/admin/inventory/drafts");
+          }
+        }
+      }
+    }
+  } catch (err) {
+    unstable_rethrow(err);
+    target = waitingBack(formData, draftId, "error", `Could not attach: ${String(err).slice(0, 160)}`);
+  }
+  redirect(target);
 }

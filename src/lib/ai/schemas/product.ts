@@ -133,3 +133,35 @@ export const productEffectsSchema = defineSchema<ProductEffectsResult>("product_
   confidence: { kind: "number", description: "0 to 1 grounding confidence.", min: 0, max: 1 },
   used_generic_language: { kind: "boolean", description: "True if facts were too thin." },
 });
+
+// R23 (fix 4): product SEO title + meta description draft. The lengths are
+// enforced again by seo-draft-core (cleanSeoTitle / cleanSeoMeta) after the
+// reply, so a model that ignores maxLength can never store an over-long pair.
+export type ProductSeoResult = {
+  seo_title: string;
+  seo_description: string;
+  confidence: number;
+};
+
+export const productSeoSchema = defineSchema<ProductSeoResult>("product_seo", {
+  seo_title: {
+    kind: "string",
+    description:
+      "Search-result title for this product page, at most 39 characters. Product name first, then brand or format. Do NOT include the store name (it is appended automatically). No price, no stock, no trailing period.",
+    minLength: 4,
+    maxLength: 80,
+  },
+  seo_description: {
+    kind: "string",
+    description:
+      "Meta description, 120-160 characters. Aroma, flavor, format, brand and that it is available for in-store pickup at a licensed 21+ Washington retailer. No price, no stock, no health, medical or effect claims.",
+    minLength: 40,
+    maxLength: 320,
+  },
+  confidence: {
+    kind: "number",
+    description: "0 to 1. How well the title and description are grounded in the provided facts.",
+    min: 0,
+    max: 1,
+  },
+});

@@ -27,6 +27,8 @@ import { dohPillForItem } from "@/lib/menu/menu-doh-badge-core";
 import { classificationPillsForItem } from "@/lib/menu/menu-classification-badge-core";
 import { resolveDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
+import { getEnrichmentForPublicItem } from "@/lib/enrichment/store";
+import { productSeoMetadata } from "@/lib/enrichment/seo-draft-core";
 import { getMerchDefById, getMerchMenuItemById, merchMenuItems, merchProductDefs, merchIdForKey } from "@/lib/merch/merch-catalog";
 import { MerchDetailPanel } from "@/components/merch/MerchDetailPanel";
 import { MerchProductCard } from "@/components/merch/MerchProductCard";
@@ -324,9 +326,17 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     item.description?.trim() ||
     `${item.name} by ${item.brand} — ${formatWebsiteCategory(item.category)} available at Greenway Marijuana in Port Orchard, WA.`;
 
+  // R23 (fix 4): the SEO title / meta description staff accept on the
+  // enrichment page finally reach the page head. Only a PUBLISHED card's
+  // values are served (productSeoMetadata), from the same row the card is
+  // served (own key, else the product's published survivor - S20); merch has
+  // no enrichment row, and a failed read keeps the defaults.
+  const enrichment = isMerchItem(item) ? null : await getEnrichmentForPublicItem({ posKey: item.id, identityKey: item.identityKey });
+  const seo = productSeoMetadata({ enrichment, defaultTitle: `${item.name} — ${item.brand}`, defaultDescription: description });
+
   return pageMetadata({
-    title: `${item.name} — ${item.brand}`,
-    description,
+    title: seo.title,
+    description: seo.description,
     path: `/menu/products/${item.id}`,
   });
 }

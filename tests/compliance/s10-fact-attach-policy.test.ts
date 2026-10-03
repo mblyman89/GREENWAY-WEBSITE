@@ -373,8 +373,14 @@ describe("shadow wiring writes nothing", () => {
   });
 
   it("the action logs counts on the audit it already wrote (no new write, no new query)", () => {
-    // Same three audit calls as before S10 (lookup, KB draft, enrichment draft).
-    expect(action.match(/recordAudit\(/g)?.length).toBe(3);
+    // Same three audit calls as before S10 (lookup, KB draft, enrichment draft)
+    // in the lookup + Save paths. R23 added attachWaitingFactAction after them,
+    // which writes exactly one audit of its own (the person's attach).
+    const waitingAt = action.indexOf("export async function attachWaitingFactAction");
+    expect(waitingAt).toBeGreaterThan(0);
+    expect(action.slice(0, waitingAt).match(/recordAudit\(/g)?.length).toBe(3);
+    expect(action.slice(waitingAt).match(/recordAudit\(/g)?.length).toBe(1);
+    expect(action.slice(waitingAt)).toContain('action: "catalog_draft.waiting_fact_attach"');
     expect(action).toContain('action: "catalog_draft.ai_lookup"');
     expect(action).toContain("policy: policyAudit,");
     expect(action).toContain("if (ring !== 0 && outcome.facts)");

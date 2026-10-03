@@ -26,6 +26,19 @@ import { strainTypePickerPlaceholder } from "@/lib/inventory/strain-type-intel-c
 // with "gemini", otherwise the OpenAI web_search tool) - see
 // src/lib/ai/provider.ts generateWebSearch.
 import { AiLookupPanel } from "./AiLookupPanel";
+// R23 (items 2 + 6): "Facts waiting for you" - attach in the row's AI card.
+import { attachWaitingFactAction } from "./ai-lookup-actions";
+import { WaitingFactsPanel } from "@/components/admin/catalog/WaitingFactsPanel";
+import { buildWaitingFacts, waitingResultBanner } from "@/lib/catalog/waiting-facts-core";
+import { loadWaitingSuggestions, waitingKeyForDraft } from "@/lib/catalog/waiting-facts-server";
+// R23 (item 5): the approved row opens too.
+import {
+  APPROVED_BANNER_LINK_TEXT,
+  APPROVED_TOGGLE_CLOSE,
+  APPROVED_TOGGLE_OPEN,
+  approvedBannerLink,
+  approvedRowCopy,
+} from "@/lib/catalog/approved-row-core";
 import { isAiConfigured } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 import { approveAllPricedAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, restoreDraftAction } from "./actions";
@@ -187,7 +200,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; lookup?: string; lookup_msg?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; lookup?: string; lookup_msg?: string; wf?: string; wf_msg?: string; approved_draft?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -279,7 +292,7 @@ export default async function CatalogDraftsPage({
           })),
         )
       : [];
-  const lookupResult = lookupBanner(sp.lookup, sp.lookup_msg);
+  const lookupResult = lookupBanner(sp.lookup, sp.lookup_msg) ?? waitingResultBanner(sp.wf, sp.wf_msg);
   const headerTitle = onboardingHeaderTitle(
     focusManifest,
     focusManifest && picker?.countsComplete ? picker.counts.get(focusManifest.id) ?? null : null,
@@ -437,10 +450,15 @@ export default async function CatalogDraftsPage({
   // history already loaded (priorClassifications) - no extra query. Never
   // throws; KB_FIRST_ONBOARDING=off skips it entirely.
   const kbFirst = kbFirstOnboardingEnabled(process.env[KB_FIRST_ONBOARDING_ENV]);
-  const [{ suggestions: strainSuggestions, evidence: strainEvidence, sizeLabels: strainSizeLabels }, shadowSummary, productMemories] = await Promise.all([
+  // R23 (items 2 + 6): the facts a lookup filed for these rows (one bounded
+  // read, the same suggestion key the S07 door files under). R23 (item 5):
+  // the approved tab recalls memory too, so its opened row shows the facts.
+  const rowsOpen = view === "draft" || view === "approved";
+  const waitingKeys = new Map(drafts.map((d) => [d.id, waitingKeyForDraft(d)] as const));
+  const [{ suggestions: strainSuggestions, evidence: strainEvidence, sizeLabels: strainSizeLabels }, shadowSummary, productMemories, waitingRead] = await Promise.all([
     loadStrainTypeSignals(drafts),
     attachRing === 0 ? Promise.resolve(null) : loadShadowSummary(),
-    kbFirst && view === "draft"
+    kbFirst && rowsOpen
       ? recallProductMemories(
           drafts.map((d, i) => ({
             id: d.id,
@@ -452,6 +470,7 @@ export default async function CatalogDraftsPage({
           priorClassifications,
         )
       : Promise.resolve(null),
+    rowsOpen ? loadWaitingSuggestions(Array.from(waitingKeys.values())) : Promise.resolve({ ok: true, rows: [] }),
   ]);
   const shadowFooter = shadowFooterCopy(shadowSummary, attachRing);
 
@@ -528,6 +547,8 @@ export default async function CatalogDraftsPage({
       : dismissed ? "Draft dismissed."
         : restored ? "Draft restored to the review queue."
           : errorText;
+  // R23 (item 5): where the product just approved went (validated UUID only).
+  const approvedLink = approved ? approvedBannerLink(sp.approved_draft, focus.manifestId) : null;
   const bannerTone = error || factResult === "error" ? "danger" : "accent";
 
   return (
@@ -596,6 +617,14 @@ export default async function CatalogDraftsPage({
             }
           >
             {banner}
+            {approved && approvedLink && (
+              <>
+                {" "}
+                <a href={approvedLink} className="font-semibold underline" data-testid="approved-banner-link">
+                  {APPROVED_BANNER_LINK_TEXT} &rarr;
+                </a>
+              </>
+            )}
           </div>
         )}
 
@@ -960,7 +989,7 @@ export default async function CatalogDraftsPage({
                     : null;
                   // S11: what is attached (records the row holds + the draft's
                   // attached facts + the S09 memory), one chip per field.
-                  const facts = v2Row
+                  const facts = v2Row && rowsOpen
                     ? buildFactChips(attachedFactsOf(d as unknown as Record<string, unknown>), productMemories?.get(d.id) ?? null, { mode: policyMode }, rowRecordFacts({
                         chosenWebsiteCategory: d.chosen_website_category,
                         resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
@@ -974,7 +1003,7 @@ export default async function CatalogDraftsPage({
                         labResultId: d.lab_result_id,
                       }))
                     : null;
-                  const identity = v2Row
+                  const identity = v2Row && rowsOpen
                     ? identityLine(identityForDraft(d, { websiteCategory: resolutions[i]?.websiteCategory ?? null }).identityKey, d, kbFirst)
                     : null;
                   const manifest = v2Row ? manifestCell(d.manifest_id ? manifestById.get(d.manifest_id) : null) : null;
@@ -995,9 +1024,31 @@ export default async function CatalogDraftsPage({
                       {itemRowCopy(batchItem)}
                     </p>
                   ) : null;
+                  // R23 (item 2/6): the facts the batch lookup (pending
+                  // suggestions on this product's key) and the S09 memory hold
+                  // for this row, minus what is already attached - each one
+                  // attachable right here, without approving first.
+                  const waitingView = rowsOpen
+                    ? buildWaitingFacts({
+                        suggestionKey: waitingKeys.get(d.id) ?? null,
+                        suggestions: waitingRead.rows,
+                        memory: productMemories?.get(d.id) ?? null,
+                        attached: attachedFactsOf(d as unknown as Record<string, unknown>),
+                      })
+                    : null;
                   const lookupPanel = (
                     <>
                     {batchRowLine}
+                    {waitingView && (
+                      <WaitingFactsPanel
+                        draftId={d.id}
+                        view={waitingView}
+                        action={attachWaitingFactAction}
+                        returnManifest={focus.manifestId}
+                        returnStatus={view}
+                        readFailed={!waitingRead.ok}
+                      />
+                    )}
                     <AiLookupPanel
                       draftId={d.id}
                       productName={builtName ?? (d.name || "")}
@@ -1017,6 +1068,33 @@ export default async function CatalogDraftsPage({
                   const box = v2Row ? "w-full" : "w-48";
                   const hasSizeBlock =
                     view === "draft" && Boolean(ca?.needsOtherwiseTakenPick || ca?.promptsLowThcLiquid || va?.needsVolumePick);
+                  // R23 (item 5): the Approved tab's third zone - what was
+                  // decided, and where to finish.
+                  const approvedCopy = view === "approved"
+                    ? approvedRowCopy({
+                        priceMinorUnits: d.price_minor_units,
+                        categoryLabel: displayCategory ? websiteCategoryLabel(displayCategory) ?? displayCategory : null,
+                        strainLabel: d.chosen_strain_type
+                          ? strainTypeDefinitions.find((t) => t.value === d.chosen_strain_type)?.label ?? d.chosen_strain_type
+                          : null,
+                        houseType: displayType,
+                      })
+                    : null;
+                  const approvedZone = approvedCopy ? (
+                    <div className="flex flex-col gap-2" data-testid="approved-zone">
+                      <p className="text-xs text-[var(--admin-text-muted)]">{approvedCopy.lead}</p>
+                      {approvedCopy.lines.length > 0 && (
+                        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                          {approvedCopy.lines.map(([label, value]) => (
+                            <Fragment key={label}>
+                              <dt className="text-[var(--admin-text-muted)]">{label}</dt>
+                              <dd className="font-semibold text-[var(--admin-text)]">{value}</dd>
+                            </Fragment>
+                          ))}
+                        </dl>
+                      )}
+                    </div>
+                  ) : null;
                   const approveForm = (
                               <form action={approve} className={v2Row ? "flex flex-col gap-3" : "mt-2 flex flex-col items-end gap-2"} data-testid={v2Row ? "draft-approve-form" : undefined}>
                                 {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
@@ -1464,6 +1542,24 @@ export default async function CatalogDraftsPage({
                           )}
                           {view !== "draft" && (
                             <>
+                              {/* R23 (item 5): the Approved tab opens the same
+                                  full-width detail row (CSS keys on this testid). */}
+                              {v2Row && view === "approved" && (
+                                <details
+                                  open={rowStartsOpen({ rows: list.rows, pinned: pinned?.id === d.id })}
+                                  className="group flex flex-col items-end"
+                                  data-testid="draft-row-details"
+                                >
+                                  <summary
+                                    className="flex cursor-pointer list-none items-center justify-end gap-1 text-xs"
+                                    aria-controls={detailRowId(draftRowAnchorId(d.id))}
+                                    data-testid="approved-row-toggle"
+                                  >
+                                    <span className="font-semibold text-[var(--admin-accent)] underline group-open:hidden">{APPROVED_TOGGLE_OPEN}{" \u25be"}</span>
+                                    <span className="hidden font-semibold text-[var(--admin-text-muted)] underline group-open:inline">{APPROVED_TOGGLE_CLOSE}{" \u25b4"}</span>
+                                  </summary>
+                                </details>
+                              )}
                               {d.price_minor_units != null && (
                                 <span className="text-sm font-semibold text-[var(--admin-text)]">
                                   {fmtMoney(d.price_minor_units)}
@@ -1501,7 +1597,7 @@ export default async function CatalogDraftsPage({
                     {/* S41 (bible S41.2): the opened row's full-width detail -
                         a second row spanning every column, shown by CSS while
                         the summary row's <details> is open. */}
-                    {v2Row && view === "draft" && (
+                    {v2Row && rowsOpen && (
                       <OnboardingDetailRow
                         id={detailRowId(draftRowAnchorId(d.id))}
                         colSpan={columns.length}
@@ -1514,7 +1610,7 @@ export default async function CatalogDraftsPage({
                           ) : null
                         }
                         lookup={lookupPanel}
-                        approve={approveForm}
+                        approve={view === "approved" ? approvedZone : approveForm}
                       />
                     )}
                     </Fragment>

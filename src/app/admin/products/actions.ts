@@ -11,6 +11,7 @@ import {
   generateProductTags,
   generateProductSensory,
   generateProductEffects,
+  generateProductSeo,
   reviewSuggestion,
   getSuggestion,
   type ProductFacts,
@@ -28,6 +29,7 @@ import {
 import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
 import { researchUrl, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
 import { persistSuggestion } from "@/lib/ai/suggestions";
+import { SEO_FIELD_KEY, parseSeoSuggestion } from "@/lib/enrichment/seo-draft-core";
 import {
   validateResearchUrl,
   packImageCandidates,
@@ -38,6 +40,7 @@ import { parseVisibilityChoice, hiddenOverrideFor } from "@/lib/enrichment/produ
 import { applyProductVisibility } from "@/lib/enrichment/product-visibility-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { runIdentityBackfill } from "@/lib/enrichment/enrichment-identity-server";
+import { attachKbMatchFacts as attachKbMatchFactsServer, KB_MATCH_AUDIT_ACTION } from "@/lib/enrichment/kb-match-attach";
 
 const ALLOWED_TAGS = new Set([
   "new-arrival",
@@ -260,6 +263,21 @@ export async function generateProductAi(formData: FormData): Promise<void> {
       await generateProductSensory(key, facts, session.userId);
     } else if (kind === "effects") {
       await generateProductEffects(key, facts, session.userId);
+    } else if (kind === "seo") {
+      // R23 (fix 4): ground the SEO draft in the card's OWN copy (read on the
+      // server, never from the form) plus the aroma / flavor the page shows.
+      const own = await getEnrichment(key).catch(() => null);
+      const list = (name: string) =>
+        String(formData.get(name) ?? "")
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .slice(0, 8);
+      await generateProductSeo(
+        key,
+        { ...facts, description: own?.description ?? null, aroma: list("posAroma"), flavor: list("posFlavor") },
+        session.userId,
+      );
     } else {
       await generateProductDescription(key, facts, session.userId);
     }
@@ -314,6 +332,14 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
       .map((t) => t.trim().toLowerCase())
       .filter((t) => ALLOWED_TAGS.has(t));
     await updateEnrichment(key, { tags }, session.userId);
+  } else if (sugg!.field_key === SEO_FIELD_KEY) {
+    // R23 (fix 4): one "seo" suggestion carries both parts; re-cleaned here
+    // so a row edited in the database can never exceed the length rules.
+    const seo = parseSeoSuggestion(sugg!.suggested_value);
+    if (!seo) {
+      redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("That SEO draft could not be read. Draft it again.") + "#ai");
+    }
+    await updateEnrichment(key, { seo_title: seo!.title, seo_description: seo!.description }, session.userId);
   }
   // sensory + effects have no enrichment column; they are validated facts that
   // live on the accepted suggestion and are promoted to the KB (on accept here
@@ -392,6 +418,42 @@ export async function applyMatchedText(formData: FormData): Promise<void> {
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
   redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+}
+
+/**
+ * R23 (fix 10): "Use these facts" / "Link to this card" on a KB suggested
+ * match. The server re-reads the KB row by id and compliance-gates every
+ * value (src/lib/enrichment/kb-match-attach.ts); this wrapper only adds the
+ * permission, the audit, the KB write-back and the redirect.
+ */
+export async function attachKbMatchFacts(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "").trim();
+  const kbId = String(formData.get("kbId") ?? "").trim();
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+  const res = await attachKbMatchFactsServer({ posKey: key, kbId, actor: { userId: session.userId } });
+  if (!res.ok) {
+    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent(res.error) + "#matches");
+  }
+  // Promote the newly-accepted facts into the KB (drafts-only, best-effort),
+  // exactly as accepting an AI suggestion does.
+  const writeback = await writeBackOnPublish(key, session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: KB_MATCH_AUDIT_ACTION,
+    entityType: "product",
+    entityId: key,
+    after: {
+      kb_product_id: res.kbId,
+      adds: res.plan.adds,
+      refused: res.plan.refused,
+      linked: res.linked,
+      kb_writeback: writeback ?? undefined,
+    },
+  });
+  revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1&note=` + encodeURIComponent(res.message) + "#matches");
 }
 
 /** Attach an EXISTING media-library asset (KB image / library match) to the gallery. */
