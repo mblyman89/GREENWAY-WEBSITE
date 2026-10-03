@@ -100,17 +100,30 @@ export async function upsertBrandAction(formData: FormData): Promise<void> {
   const session = await requirePermission("products.enrich");
   const name = String(formData.get("name") ?? "").trim();
   if (!name) back("Please enter a brand name.", false);
-  const slug = (String(formData.get("slug") ?? "").trim() || name).toLowerCase().replace(/\s+/g, " ");
+  // R25 B: the slug rule lives in the store (resolveDashedKbSlug): dashed
+  // like every kb_brands key the intake writer reads; blank = from the name.
+  const typedSlug = String(formData.get("slug") ?? "").trim();
   const known_for = String(formData.get("known_for") ?? "").trim() || null;
   const house_style = String(formData.get("house_style") ?? "").trim() || null;
   const sensory_notes = String(formData.get("sensory_notes") ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  await upsertKbBrand({ slug, name, known_for, house_style, sensory_notes }, session.profile.id);
-  await recordAudit({ actorId: session.profile.id, action: "kb.brand.upsert", entityType: "kb_brand", entityId: slug }).catch(() => {});
+  let saved: { slug: string; via: string; changed: boolean };
+  try {
+    saved = await upsertKbBrand({ slug: typedSlug, name, known_for, house_style, sensory_notes }, session.profile.id);
+  } catch (e) {
+    back(e instanceof Error ? e.message : "Couldn't save the brand.", false);
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "kb.brand.upsert",
+    entityType: "kb_brand",
+    entityId: saved.slug,
+    after: { slug: saved.slug, typed_slug: typedSlug || null, slug_via: saved.via },
+  }).catch(() => {});
   revalidatePath(PATH);
-  back(`Saved brand facts for "${name}".`);
+  back(saved.changed ? `Saved brand facts for "${name}" (slug saved as "${saved.slug}").` : `Saved brand facts for "${name}".`);
 }
 
 /**

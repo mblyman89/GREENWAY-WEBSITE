@@ -11,7 +11,8 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { dashedSlug, strainSlug } from "@/lib/catalog/slug-core";
+import { strainSlug } from "@/lib/catalog/slug-core";
+import { planKbSlug, typedSlugText, type DashedKbSlugTable, type KbSlugPlan } from "@/lib/catalog/kb-slug-input-core";
 import {
   SEED_TERPENES,
   SEED_CANNABINOIDS,
@@ -1238,9 +1239,30 @@ export type UpsertProductCategoryInput = {
   active?: boolean;
 };
 
-/** Normalize a display name into a stable slug (lowercase, dashed). */
-function slugifyName(value: string): string {
-  return dashedSlug(value);
+/**
+ * R25 B: the slug to WRITE for a dashed-keyed KB form (kb_brands,
+ * kb_product_categories, kb_faqs). One exact-match read: a typed slug that
+ * already names a row is kept verbatim (editing a legacy row never forks a
+ * new one); anything else is dashedSlug(typed || name). Pure rule in
+ * kb-slug-input-core. A failed read is NOT treated as "no row" (that could
+ * fork a legacy row): the save is refused with the reason.
+ */
+export async function resolveDashedKbSlug(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  table: DashedKbSlugTable,
+  typed: string | null | undefined,
+  fallbackName?: string | null,
+): Promise<KbSlugPlan> {
+  const t = typedSlugText(typed);
+  let existingExact = false;
+  if (t) {
+    const { data, error } = await admin.from(table).select("slug").eq("slug", t).limit(1);
+    if (error) {
+      return { ok: false, reason: `Couldn't check the existing slug "${t}": ${error.message}` };
+    }
+    existingExact = Array.isArray(data) && data.length > 0;
+  }
+  return planKbSlug({ typed: t, fallbackName, existingExact });
 }
 
 export async function upsertKbProductCategory(
@@ -1251,8 +1273,11 @@ export async function upsertKbProductCategory(
     return { ok: false, message: "The database isn't connected yet." };
   }
   const admin = createSupabaseAdminClient();
-  const slug = (input.slug?.trim() || slugifyName(input.name)) || slugifyName(input.name);
-  if (!slug) return { ok: false, message: "A product type needs a name." };
+  // R25 B: a typed slug is dashed like every other kb_product_categories
+  // slug (legacy exact rows kept); blank = dashed from the name.
+  const slugPlan = await resolveDashedKbSlug(admin, "kb_product_categories", input.slug, input.name);
+  if (!slugPlan.ok) return { ok: false, message: slugPlan.reason };
+  const slug = slugPlan.slug;
   const row = {
     slug,
     name: input.name.trim(),
@@ -1593,11 +1618,20 @@ export type UpsertBrandInput = {
   sensory_notes?: string[]; aliases?: string[];
 };
 
-export async function upsertKbBrand(input: UpsertBrandInput, actorId: string | null): Promise<void> {
+export async function upsertKbBrand(
+  input: UpsertBrandInput,
+  actorId: string | null,
+): Promise<{ slug: string; via: string; changed: boolean }> {
   const admin = createSupabaseAdminClient();
+  // R25 B: "the brand form use dashes". The intake writer, retrieval and the
+  // identity core all key kb_brands by dashedSlug; the form used to save a
+  // SPACED slug ("phat panda") the writer never finds. Same rule now; a
+  // legacy exact row keeps updating itself.
+  const slugPlan = await resolveDashedKbSlug(admin, "kb_brands", input.slug, input.name);
+  if (!slugPlan.ok) throw new Error(slugPlan.reason);
   const { error } = await admin.from("kb_brands").upsert(
     {
-      slug: input.slug.trim().toLowerCase(),
+      slug: slugPlan.slug,
       name: input.name.trim(),
       known_for: input.known_for ?? null,
       house_style: input.house_style ?? null,
@@ -1610,6 +1644,7 @@ export async function upsertKbBrand(input: UpsertBrandInput, actorId: string | n
     { onConflict: "slug" },
   );
   if (error) throw new Error(error.message);
+  return { slug: slugPlan.slug, via: slugPlan.via, changed: slugPlan.changed };
 }
 
 // ---------------------------------------------------------------------------
@@ -2166,12 +2201,16 @@ export async function upsertKbFaq(
   actorId: string | null,
 ): Promise<{ ok: boolean; message: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
-  const slug = input.slug.trim().toLowerCase();
-  if (!slug) return { ok: false, message: "A slug is required." };
+  if (!typedSlugText(input.slug)) return { ok: false, message: "A slug is required." };
   if (!input.question.trim()) return { ok: false, message: "A question is required." };
   if (!input.answer.trim()) return { ok: false, message: "An answer is required." };
   try {
     const admin = createSupabaseAdminClient();
+    // R25 B: FAQ slugs are dashed like the seeded pack ("store-hours"); an
+    // existing exact slug (the edit form sends it read-only) is kept.
+    const slugPlan = await resolveDashedKbSlug(admin, "kb_faqs", input.slug);
+    if (!slugPlan.ok) return { ok: false, message: slugPlan.reason };
+    const slug = slugPlan.slug;
     const { error } = await admin.from("kb_faqs").upsert(
       {
         slug,

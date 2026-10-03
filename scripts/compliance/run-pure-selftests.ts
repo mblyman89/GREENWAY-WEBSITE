@@ -907,6 +907,7 @@ import { __runFixLinkContractCoreTests } from "../../src/lib/admin/fix-link-cont
 import { __runFactMemoryCoreTests } from "../../src/lib/catalog/fact-memory-core";
 import { __runFactChipsCoreTests } from "../../src/lib/catalog/fact-chips-core";
 import { __runIntakeLotFactsCoreTests } from "../../src/lib/inventory/intake-lot-facts-core";
+import { __runKbSlugInputCoreTests } from "../../src/lib/catalog/kb-slug-input-core";
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -1992,6 +1993,8 @@ __runLiquidVolumeTests();
   assertRan("match-weights-core", __runMatchWeightsCoreTests(), 130);
   // R25 A: intake lot facts (manifest received date + strain-type mirror).
   assertRan("intake-lot-facts-core", __runIntakeLotFactsCoreTests(), 44);
+  // R25 B: one dashed slug rule for every KB form (brand, product type, FAQ).
+  assertRan("kb-slug-input-core", __runKbSlugInputCoreTests(), 38);
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
