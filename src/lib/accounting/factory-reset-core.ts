@@ -527,6 +527,13 @@ export const TABLE_RULES: readonly TableRule[] = [
   // (manifest_id / draft_id are stamps), and lookup_job_items -> lookup_jobs
   // is KEEP -> KEEP, so keeping them never leaves a dangling link. After a
   // wipe, a job naming a gone manifest is simply never shown again.
+  // product_master_pair_decisions (0243, bible S36): the owner's "these two
+  // cards are NOT the same product" answers from the Suggestions tab. Human
+  // decisions about PRODUCTS, like intake_merge_decisions above, so KEEP.
+  // Its only FK is decided_by -> staff_profiles (KEEP), so keeping it never
+  // leaves a dangling link. After a wipe the card keys it names are gone and
+  // each row simply never matches a pair again.
+  { table: "product_master_pair_decisions", disposition: "KEEP", because: "Your \"not the same product\" answers from the Product Masters suggestions. They are decisions about products; if either card later changes (vendor, brand, strain, market or size) the pair is simply suggested again." },
   { table: "lookup_jobs", disposition: "KEEP", because: "The record of each batch product lookup you started (which manifest, when, by whom). It holds no money, stock or customer data, and after a wipe a job for a manifest that is gone is simply never shown again." },
   { table: "lookup_job_items", disposition: "KEEP", because: "One line per product inside a batch lookup, with its short result and how many paid AI lookups it used. It goes with its batch record and holds no money, stock or customer data." },
   { table: "product_classification_overrides", disposition: "KEEP", because: "Your manual corrections to how a product is classified — decisions, and they must keep applying after the wipe." },

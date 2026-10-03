@@ -1310,16 +1310,26 @@ describe("the migration list is ordered the way the database will see it", () =>
     // scripts/recon/lookup-jobs-pg-check.sql: applied twice in a rolled-back
     // transaction, every constraint refused its bad row, and a non-unique
     // index mutant failed the check. The owner applies it by hand.
-    expect(listed[listed.length - 1]).toMatch(/^0242_/);
+    // R24 S36 added 0243_master_suggestions_v2.sql (product_master_suggestions
+    // .evidence_json + product_master_pair_decisions, one row per rejected
+    // pair, key_a < key_b in byte order; RLS on, no policy; idempotent).
+    // Verified in the build sandbox on Postgres 15 with
+    // scripts/recon/master-suggestions-v2-pg-check.sql: applied twice in a
+    // rolled-back transaction, reversed/self/duplicate pairs, a bad decision
+    // and a null fingerprint were refused, the rollback removed both objects,
+    // and with the ordering check removed on purpose the check failed
+    // ("reversed pair was accepted"). The owner applies it by hand.
+    expect(listed[listed.length - 1]).toMatch(/^0243_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0242_lookup_jobs.sql");
-    expect(listed[listed.length - 2]).toBe("0241_inventory_lot_pos_potency.sql");
-    expect(listed[listed.length - 3]).toBe("0240_factory_reset_scales.sql");
-    expect(listed[listed.length - 4]).toBe("0239_intake_merge_decisions.sql");
-    expect(listed[listed.length - 5]).toBe("0238_factory_reset_reaches_every_guard.sql");
-    expect(listed[listed.length - 6]).toBe("0237_fact_review_for_versions.sql");
-    expect(listed[listed.length - 7]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 1]).toBe("0243_master_suggestions_v2.sql");
+    expect(listed[listed.length - 2]).toBe("0242_lookup_jobs.sql");
+    expect(listed[listed.length - 3]).toBe("0241_inventory_lot_pos_potency.sql");
+    expect(listed[listed.length - 4]).toBe("0240_factory_reset_scales.sql");
+    expect(listed[listed.length - 5]).toBe("0239_intake_merge_decisions.sql");
+    expect(listed[listed.length - 6]).toBe("0238_factory_reset_reaches_every_guard.sql");
+    expect(listed[listed.length - 7]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 8]).toBe("0236_publish_archive_rule.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
