@@ -1364,14 +1364,35 @@ export async function approveDraftWithPrice(
   // null/unknown type, and only a HUMAN pick may flip a curated value. The
   // machine never overrides curation. Best-effort - a KB hiccup never fails
   // the approval (the pick is already persisted on the draft).
+  //
+  // R24 (bible S12.2 + S12.6): with GOLDEN_RECORD_ON_APPROVE on (the default)
+  // the approval goes through the attach door instead (attachOnApproval): the
+  // SAME strain-type rules, PLUS the kb_products row at the lot's natural key
+  // (created as a hidden draft, gap-filled with the facts the draft already
+  // counts) and the fill-only kb_product_id links on the draft and lot.
+  // GOLDEN_RECORD_ON_APPROVE=off is the rollback: the SLICE 93 path below,
+  // unchanged. Dynamic import, like the staging below: the door's graph is
+  // only loaded by an approval.
   try {
-    await saveStrainTypeToKb(admin, {
-      strainName: row?.strain_name ?? null,
-      lotId: row?.lot_id ?? null,
-      productName: row?.name ?? null,
-      humanPick: strainChoice.value,
-      actorId,
-    });
+    const { goldenRecordOn } = await import("@/lib/catalog/golden-record-server");
+    if (goldenRecordOn()) {
+      const { attachOnApproval } = await import("@/lib/catalog/attach-facts");
+      const attached = await attachOnApproval({
+        draftId,
+        humanStrainPick: strainChoice.value,
+        productName: row?.name ?? null,
+        actorId,
+      });
+      if (!attached.ok) console.error("[catalog-drafts] approval KB attach failed:", attached.error ?? attached.note);
+    } else {
+      await saveStrainTypeToKb(admin, {
+        strainName: row?.strain_name ?? null,
+        lotId: row?.lot_id ?? null,
+        productName: row?.name ?? null,
+        humanPick: strainChoice.value,
+        actorId,
+      });
+    }
   } catch (err) {
     console.error("[catalog-drafts] strain-type KB save failed:", err);
   }

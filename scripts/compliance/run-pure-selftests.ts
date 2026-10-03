@@ -638,6 +638,7 @@ import { __runDraftDeepLinkCoreTests } from "../../src/lib/catalog/draft-deep-li
 import { __runProductIdentityCoreTests } from "../../src/lib/catalog/product-identity-core";
 import { __runIdentityColumnsCoreTests } from "../../src/lib/catalog/identity-columns-core";
 import { __runAttachFactsCoreTests } from "../../src/lib/catalog/attach-facts-core";
+import { __runApproveAttachCoreTests } from "../../src/lib/catalog/approve-attach-core";
 import { __runFactAttachPolicyCoreTests } from "../../src/lib/catalog/fact-attach-policy-core";
 import { __runAttachPlanCoreTests } from "../../src/lib/catalog/attach-plan-core";
 import { __runOnboardingListCoreTests } from "../../src/lib/catalog/onboarding-list-core";
@@ -1918,6 +1919,7 @@ __runLiquidVolumeTests();
   // latest-per-field recall, and the "0235 not applied" detector is narrow.
   // Measured 76.
   assertRan("attach-facts-core", __runAttachFactsCoreTests(), 89);
+  assertRan("approve-attach-core", __runApproveAttachCoreTests(), 40);
   // S10 fact-attach policy: FIELD_POLICY covers every lookup field, the
   // bible S10.5 cases, §5.5 bands, ring parse (default shadow), the bible
   // receipt copy byte for byte, and the audit fold. Measured 102.

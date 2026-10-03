@@ -72,11 +72,20 @@ import {
   reconcileReceipt,
   verifyKbProductWrite,
   type AttachReceipt,
+  type KbProductFacts,
   type ExistingProduct,
   type ExistingStrain,
   type PendingSuggestion,
   type WriteFailure,
 } from "@/lib/catalog/attach-plan-core";
+
+import {
+  approvalAttachNote,
+  approvalKbFacts,
+  approvalStrainVerdict,
+  planApprovalStrainWrite,
+  type ApprovalStrainWrite,
+} from "@/lib/catalog/approve-attach-core";
 
 /** The one audit action this door writes. */
 export const ATTACH_AUDIT_ACTION = "catalog.facts_attached";
@@ -655,4 +664,240 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
     identityKey: sf.identityKey,
   });
   return { ok: true, mode, receipt, sentence, notes };
+}
+
+// =============================================================================
+// R24 S12 follow-up (bible S12.2 + the open S12.6 line): the APPROVAL goes
+// through this door too.
+//
+//   "approveDraftWithPrice: after update, call attachProductFacts ... ->
+//    replaces saveStrainTypeToKb; set kb_product_id on draft/lot"
+//   "kb_products row exists/updated for every approved product with identity."
+//
+// Approving is not an AI lookup, so it does not re-run the lookup planner. It
+// uses the door's own pieces - the SAME server-side draft/lot/brand read
+// (readDraftFacts), the SAME kb_products natural key, the SAME gap-fill writer
+// with its compliance gate, the SAME read-your-write check
+// (verifyKbProductWrite) and the SAME audit action - plus the pure decisions
+// in approve-attach-core.ts:
+//   1. the strain type into kb_strains, under the unchanged SLICE 93 rules
+//      (only a person's pick may flip a curated type; a machine verdict below
+//      90% is never written);
+//   2. the kb_products row at the lot's natural key: created as a hidden
+//      draft when missing, gap-filled with the facts the draft ALREADY counts
+//      (the draft's attached facts via DRAFT_FACT_SELECT, >= 90% or a person) - never replacing a populated
+//      slot, never the placeholder sentence;
+//   3. fill-only links: the draft's and the lot's kb_product_id are set only
+//      where empty (conditional UPDATE ... WHERE kb_product_id IS NULL), and
+//      a database without 0234 is reported, never fatal.
+// Never throws: the approval is already saved when this runs.
+// =============================================================================
+
+/** The audit action the old saveStrainTypeToKb wrote - kept, so the strain history reads the same. */
+export const APPROVAL_STRAIN_AUDIT_ACTION = "kb.strain.type_from_onboarding";
+
+export interface ApprovalAttachResult {
+  ok: boolean;
+  kb: "written" | "no_key" | "failed" | "unavailable";
+  kbProductId: string | null;
+  facts: string[];
+  strain: ApprovalStrainWrite | null;
+  strainWritten: boolean;
+  linked: { draft: boolean; lot: boolean; preMigration: boolean };
+  failures: WriteFailure[];
+  note: string;
+  error?: string;
+}
+
+export async function attachOnApproval(input: {
+  draftId: string;
+  /** validateStrainTypeChoice's canonical value, or null when no pick was made. */
+  humanStrainPick: string | null;
+  /** The draft name (the name parse is the last strain-type signal). */
+  productName: string | null;
+  actorId: string | null;
+}): Promise<ApprovalAttachResult> {
+  const result: ApprovalAttachResult = {
+    ok: false,
+    kb: "no_key",
+    kbProductId: null,
+    facts: [],
+    strain: null,
+    strainWritten: false,
+    linked: { draft: false, lot: false, preMigration: false },
+    failures: [],
+    note: "",
+  };
+  if (!isSupabaseServiceConfigured) {
+    result.error = "The database is not configured.";
+    result.note = result.error;
+    return result;
+  }
+  try {
+    const admin = createSupabaseAdminClient();
+    const sf = await readDraftFacts(admin, input.draftId);
+    if ("error" in sf) {
+      result.error = sf.error;
+      result.note = sf.error;
+      return result;
+    }
+
+    // ---- 1. Strain type (SLICE 93 rules, unchanged) --------------------------
+    const slug = strainSlug(sf.strainName);
+    if (slug) {
+      const { data: sData, error: sErr } = await admin.from("kb_strains").select("id, strain_type").eq("slug", slug).maybeSingle();
+      if (sErr) {
+        // Cannot see the row -> never a blind create over a row we could not read.
+        result.strain = { action: "skip", slug, reason: "the strain library could not be read just now" };
+      } else {
+        const existing = sData as { id: string; strain_type: string | null } | null;
+        const verdict = approvalStrainVerdict({
+          humanPick: input.humanStrainPick,
+          kbStrainType: existing?.strain_type ?? null,
+          lotStrainType: sf.manifestStrainType,
+          productName: input.productName,
+        });
+        result.strain = planApprovalStrainWrite({
+          strainName: sf.strainName,
+          existing: { exists: Boolean(existing?.id), strainType: existing?.strain_type ?? null },
+          verdict,
+          actorId: input.actorId,
+        });
+        const w = result.strain;
+        if (w && w.action !== "skip") {
+          const { error } =
+            w.action === "create"
+              ? await admin.from("kb_strains").insert(w.row)
+              : await admin.from("kb_strains").update(w.patch).eq("id", existing!.id);
+          if (error) {
+            result.failures.push({ target: "strain library", fields: ["strain_type"], reason: `The strain library could not be saved: ${error.message.slice(0, 120)}` });
+          } else {
+            result.strainWritten = true;
+            await recordAudit({
+              actorId: input.actorId,
+              action: APPROVAL_STRAIN_AUDIT_ACTION,
+              entityType: "kb_strain",
+              entityId: slug,
+              before: { strain_type: existing?.strain_type ?? null },
+              after: { strain_type: w.verdict.value, decision: w.action, source: w.verdict.source, reason: w.reason, via: "approve" },
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    // ---- 2. kb_products at the natural key (gap-fill, read-your-write) -------
+    if (sf.kb) {
+      let attached: unknown = null;
+      const cur = await admin.from("catalog_product_drafts").select(DRAFT_FACT_SELECT).eq("id", input.draftId).maybeSingle();
+      if (!cur.error) attached = (cur.data as Record<string, unknown> | null)?.[DRAFT_FACT_COLUMNS[0]] ?? null;
+      // A missing 0235 (or any failed read) means "no attached facts": the row
+      // is still made, it just carries nothing that was not counted.
+      const facts = approvalKbFacts(attached);
+      const wb = await writeBackProductFacts(
+        {
+          posProductKey: sf.kb.posProductKey,
+          productName: sf.kb.productName,
+          brandName: sf.kb.brandName,
+          category: null,
+          description: facts.description,
+          short_description: facts.short_description,
+          aroma_notes: facts.aroma_notes,
+          flavor_notes: facts.flavor_notes,
+          effects: facts.effects,
+          brandId: sf.kb.brandId,
+          vendorId: sf.kb.vendorId,
+          // The strain is decided ONCE, above.
+          strainName: null,
+          variantLabel: sf.kb.variantLabel,
+          confidence: null,
+          source: "enrichment",
+        },
+        input.actorId,
+      );
+      if (!wb.wroteProduct) {
+        result.kb = wb.skippedReason && /not available/i.test(wb.skippedReason) ? "unavailable" : "failed";
+      } else {
+        const k = kbNaturalKey({ brandName: sf.kb.brandName, productName: sf.kb.productName, variantLabel: sf.kb.variantLabel });
+        const { data: back, error: backErr } = await admin
+          .from("kb_products")
+          .select("id, description, short_description, aroma_notes, flavor_notes, effects")
+          .eq("brand_slug", k.brand_slug)
+          .eq("product_slug", k.product_slug)
+          .eq("variant_label", k.variant_label)
+          .maybeSingle();
+        if (backErr || !back) {
+          result.kb = "failed";
+        } else {
+          result.kb = "written";
+          result.kbProductId = ((back as { id?: string }).id ?? "").trim() || null;
+          const planned: KbProductFacts = {};
+          if (facts.description) planned.description = facts.description;
+          if (facts.short_description) planned.short_description = facts.short_description;
+          if (facts.aroma_notes.length) planned.aroma_notes = facts.aroma_notes;
+          if (facts.flavor_notes.length) planned.flavor_notes = facts.flavor_notes;
+          if (facts.effects.length) planned.effects = facts.effects;
+          result.failures.push(...verifyKbProductWrite(planned, back as Record<string, unknown>));
+          const notLanded = new Set(result.failures.filter((f) => f.target === "product record").flatMap((f) => f.fields as string[]));
+          result.facts = facts.fields.filter((f) => !notLanded.has(f));
+        }
+      }
+    }
+
+    // ---- 3. Fill-only links (0234) ------------------------------------------
+    if (result.kbProductId) {
+      const { data: dLinked, error: dErr } = await admin
+        .from("catalog_product_drafts")
+        .update({ kb_product_id: result.kbProductId, updated_by: input.actorId })
+        .eq("id", input.draftId)
+        .is("kb_product_id", null)
+        .select("id");
+      if (dErr) {
+        if (isMissingIdentityColumnError("catalog_product_drafts", dErr)) result.linked.preMigration = true;
+        else result.failures.push({ target: "product record", fields: [], reason: `The draft could not be linked: ${dErr.message.slice(0, 120)}` });
+      } else result.linked.draft = ((dLinked as unknown[] | null) ?? []).length > 0;
+      if (sf.lotId && !result.linked.preMigration) {
+        const { data: lLinked, error: lErr } = await admin
+          .from("inventory_lots")
+          .update({ kb_product_id: result.kbProductId, updated_by: input.actorId })
+          .eq("id", sf.lotId)
+          .is("kb_product_id", null)
+          .select("id");
+        if (lErr) {
+          if (isMissingIdentityColumnError("inventory_lots", lErr)) result.linked.preMigration = true;
+          else result.failures.push({ target: "product record", fields: [], reason: `The lot could not be linked: ${lErr.message.slice(0, 120)}` });
+        } else result.linked.lot = ((lLinked as unknown[] | null) ?? []).length > 0;
+      }
+    }
+
+    result.ok = true;
+    result.note = approvalAttachNote({ kb: result.kb, facts: result.facts, strain: result.strain, linked: result.linked });
+
+    // ---- 4. Audit (the door's action, marked as the approval) ----------------
+    await recordAudit({
+      actorId: input.actorId,
+      action: ATTACH_AUDIT_ACTION,
+      entityType: "catalog_product_drafts",
+      entityId: input.draftId,
+      after: {
+        via: "approve",
+        identityKey: sf.identityKey || null,
+        kbProductId: result.kbProductId,
+        kb: result.kb,
+        facts: result.facts,
+        strainSlug: result.strain?.slug ?? null,
+        strainAction: result.strain?.action ?? null,
+        strainWritten: result.strainWritten,
+        linked: result.linked,
+        failures: result.failures.map((f) => ({ target: f.target, fields: f.fields, reason: f.reason })),
+        note: result.note,
+      },
+    }).catch(() => {});
+    return result;
+  } catch (err) {
+    result.ok = false;
+    result.error = err instanceof Error ? err.message : String(err);
+    result.note = `The approval's knowledge-base step failed: ${result.error.slice(0, 160)}. The approval itself is saved.`;
+    return result;
+  }
 }

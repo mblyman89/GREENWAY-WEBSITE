@@ -17,8 +17,9 @@
  * (insert object or array, defaults, return=representation), PATCH (filtered
  * update, return=representation), unique constraints with an optional
  * partial predicate (23505), "missing table" mode (PGRST205, as PostgREST
- * answers for a table that is not in its schema cache), and (R24) upsert via
- * Prefer resolution=merge-duplicates + on_conflict.
+ * answers for a table that is not in its schema cache), (R24) upsert via
+ * Prefer resolution=merge-duplicates + on_conflict, and (R24 S12) HEAD probes
+ * and the not.is.null filter.
  */
 
 export type Row = Record<string, unknown>;
@@ -87,6 +88,12 @@ export class FakePostgrest {
     const all = this.rows(req.table);
     const filters = parseFilters(req.url);
     const select = req.url.searchParams.get("select");
+
+    // R24 S12: HEAD (postgrest-js `{ head: true }`, the writer's column/table
+    // probes) is a GET without a body. A column this fake does not know is
+    // simply absent from rows - Postgres would say 42703; tests that need that
+    // answer it from `before`.
+    if (req.method === "HEAD") return { status: 200, body: undefined };
 
     if (req.method === "GET") {
       let out = all.filter((r) => filters.every((f) => f(r)));
@@ -203,6 +210,9 @@ function parseFilters(url: URL): Array<(r: Row) => boolean> {
       else if (val === "true") out.push((r) => r[col] === true);
       else if (val === "false") out.push((r) => r[col] === false);
       else throw new Error(`is.${val} not emulated`);
+    } else if (op === "not" && val === "is.null") {
+      // R24 S12: .not(col, "is", null)
+      out.push((r) => r[col] !== null && r[col] !== undefined);
     } else if (op === "lt" || op === "lte" || op === "gt" || op === "gte") {
       out.push((r) => {
         const a = r[col];
