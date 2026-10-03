@@ -9,7 +9,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, resolveEnrichmentsForItems, computeGaps, type GapFlags } from "@/lib/enrichment/store";
 import { enrichmentFollowsIdentityOn } from "@/lib/enrichment/enrichment-identity-server";
-import { linkEnrichmentsToProducts } from "./actions";
+import { linkEnrichmentsToProducts, linkMenuCardsToKbAction } from "./actions";
 import { resolveMediaUrls } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { ProductGrid, type ProductGridCard } from "@/components/admin/products/ProductGrid";
@@ -585,6 +585,25 @@ export default async function ProductsPage({
           </p>
           <Button type="submit" variant="neutral" size="sm">
             Link records to products
+          </Button>
+        </form>
+
+        {/* R25 C: the menu card linked to its knowledge-base product. New
+            menus link themselves as they are built; this catches up the cards
+            already live. */}
+        <form
+          action={linkMenuCardsToKbAction}
+          data-testid="link-menu-cards-kb"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3"
+        >
+          <p className="max-w-3xl text-sm text-[var(--admin-text-muted)]">
+            <span className="font-bold text-[var(--admin-text)]">Menu cards linked to the knowledge base:</span> when
+            you approve a product, its lot is linked to its knowledge-base product, and every menu built after that
+            carries the link. Press once to link the cards that are already live. It only fills blank links, never
+            guesses (a card whose lots point at two different products is left for you), and is safe to run again.
+          </p>
+          <Button type="submit" variant="neutral" size="sm">
+            Link menu cards to the KB
           </Button>
         </form>
 

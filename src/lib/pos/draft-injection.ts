@@ -33,6 +33,7 @@ import {
 import { intakeDisplayName, lotPackageLabel } from "@/lib/pos/intake-mastering-core";
 // SLICE S12: the golden record (attached facts, compliance-cleared).
 import { loadGoldenInputs } from "@/lib/catalog/golden-record-server";
+import { insertMenuItemsWithKbLink, logMenuKbLinkPlan, planMenuKbLinksForCards } from "@/lib/catalog/menu-kb-link-server";
 
 export type DraftInjectionResult = {
   injected: number;
@@ -297,10 +298,17 @@ export async function injectApprovedDraftsIntoVersion(
         hidden_reason: it.hidden_reason,
         sort_order: it.sort_order,
       }));
-      const { data: inserted, error: iErr } = await admin
-        .from("menu_items")
-        .insert(rows)
-        .select("id, source_item_id");
+      // R25 C: each new card linked to its knowledge-base product
+      // (menu_items.kb_product_id) from its lot's approval link.
+      const kbPlan = await planMenuKbLinksForCards(
+        admin,
+        plan.items.map((it) => ({
+          source_item_id: it.source_item_id,
+          variantIds: it.variant ? [it.variant.source_variant_id] : [],
+        })),
+      );
+      logMenuKbLinkPlan("draft-injection", kbPlan);
+      const { data: inserted, error: iErr } = await insertMenuItemsWithKbLink(admin, rows, kbPlan.links);
       if (iErr || !inserted) {
         console.error("[draft-injection] item insert failed:", iErr?.message);
         return none;

@@ -107,6 +107,11 @@ import {
 import type { MenuItemRow, MenuVariantRow, MenuVersion } from "@/lib/pos/db-types";
 // SLICE S12: the golden record (attached facts, compliance-cleared).
 import { loadGoldenInputs } from "@/lib/catalog/golden-record-server";
+import {
+  insertMenuItemsWithKbLink,
+  logMenuKbLinkPlan,
+  planMenuKbLinksForCards,
+} from "@/lib/catalog/menu-kb-link-server";
 
 export type IntakeStagingOutcome = {
   /** True when a staged version was created. */
@@ -280,6 +285,8 @@ export async function stageIntakeMenuVersionForManifest(
     }
     const published = (publishedRow as MenuVersion | null) ?? null;
     let publishedItems: CarryForwardItem[] = [];
+    // R25 C: the live cards' existing KB links, kept fill-only on the restage.
+    let priorKbLinks = new Map<string, string>();
     if (published) {
       // S19 (latent defect, fixed fail-closed): the carry-forward must be the
       // WHOLE live menu - the staged snapshot replaces it on auto-publish.
@@ -292,6 +299,7 @@ export async function stageIntakeMenuVersionForManifest(
         return await carryForwardIncomplete(verdict.missing);
       }
       publishedItems = carry.items;
+      priorKbLinks = carry.priorKbLinks;
     }
 
     // 3) Enrichment (same sources as draft-injection.ts): website category via
@@ -577,7 +585,7 @@ export async function stageIntakeMenuVersionForManifest(
     const version = versionRow as MenuVersion;
 
     // 6) Persist items + variants in batches (same shape as persistMenuItems).
-    await persistSnapshotItems(version.id, plan.items);
+    await persistSnapshotItems(version.id, plan.items, priorKbLinks);
 
     // 6b) S17 coalesce: this snapshot now safely exists (items included), so
     //     a recent UNPUBLISHED update of this delivery that it provably
@@ -999,6 +1007,11 @@ const RESTAGE_READ_MAX = 25;
  */
 type CarryForwardRead = {
   items: CarryForwardItem[];
+  /**
+   * R25 C: source_item_id -> menu_items.kb_product_id on the live rows (the
+   * select is "*", so present once 0234 is applied; absent before = empty).
+   */
+  priorKbLinks: Map<string, string>;
   readFailed: boolean;
   rowsRead: number;
   expectedTotal: number | null;
@@ -1071,10 +1084,17 @@ async function loadCarryForwardItems(versionId: string): Promise<CarryForwardRea
     }
   }
 
+  const priorKbLinks = new Map<string, string>();
+  for (const it of items) {
+    const kb = typeof it.kb_product_id === "string" ? it.kb_product_id.trim() : "";
+    if (kb && it.source_item_id) priorKbLinks.set(it.source_item_id, kb);
+  }
+
   return {
     readFailed,
     rowsRead: items.length,
     expectedTotal,
+    priorKbLinks,
     // The mapping stays INSIDE this function on purpose: restage-plumbing
     // (SLICE 18G) scopes its guard to this body, so the limit columns are
     // proven to be assigned from the very rows this read returned.
@@ -1152,8 +1172,22 @@ function countVendors(
 async function persistSnapshotItems(
   versionId: string,
   items: Awaited<ReturnType<typeof buildIntakeStagedVersionPlan>>["items"],
+  priorKbLinks: Map<string, string> = new Map(),
 ) {
   const admin = createSupabaseAdminClient();
+
+  // R25 C: link every card to its knowledge-base product (menu_items.
+  // kb_product_id, 0234) from its lots' approval links; a live card keeps the
+  // link it already had. One lot read for the whole snapshot.
+  const kbPlan = await planMenuKbLinksForCards(
+    admin,
+    items.map((it) => ({
+      source_item_id: it.source_item_id,
+      variantIds: it.variants.map((v) => v.source_variant_id),
+      prior: priorKbLinks.get(it.source_item_id) ?? null,
+    })),
+  );
+  logMenuKbLinkPlan("intake-menu-staging", kbPlan);
 
   for (let start = 0; start < items.length; start += ITEM_BATCH) {
     const batch = items.slice(start, start + ITEM_BATCH);
@@ -1207,10 +1241,7 @@ async function persistSnapshotItems(
       sort_order: it.sort_order,
     }));
 
-    const { data: inserted, error } = await admin
-      .from("menu_items")
-      .insert(rows)
-      .select("id, source_item_id");
+    const { data: inserted, error } = await insertMenuItemsWithKbLink(admin, rows, kbPlan.links);
     if (error || !inserted) {
       throw new Error(`Failed to insert staged menu items: ${error?.message ?? "unknown"}`);
     }

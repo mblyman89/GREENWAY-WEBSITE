@@ -384,6 +384,12 @@ export default async function ProductEditorPage({
                     Linked: {center.linkedKb.displayName}
                   </span>
                 )}
+                {center.menuCardKb && (
+                  <span data-testid="menu-card-kb-badge" className="rounded bg-[var(--admin-accent)]/15 px-1.5 py-0.5 text-[10px] text-[var(--admin-accent)]">
+                    Menu card linked: {center.menuCardKb.displayName}
+                    {center.menuCardKb.status !== "published" ? ` (${center.menuCardKb.status})` : ""}
+                  </span>
+                )}
               </div>
               {center.knowledge.source !== "none" ||
               center.knowledge.aromaNotes.length > 0 ||

@@ -34,6 +34,7 @@ import { transformWorkbooks, type TransformResult } from "@/lib/pos/transform";
 import type { GreenwayMenuItem } from "@/lib/pos/transform";
 import type { MenuVersion, PosImport } from "@/lib/pos/db-types";
 import { injectApprovedDraftsIntoVersion } from "@/lib/pos/draft-injection";
+import { insertMenuItemsWithKbLink, logMenuKbLinkPlan, planMenuKbLinksForCards } from "@/lib/catalog/menu-kb-link-server";
 import {
   planImportLots,
   resolveLotCreatedAt,
@@ -244,6 +245,14 @@ const DIAG_BATCH = 500;
 async function persistMenuItems(versionId: string, items: GreenwayMenuItem[]) {
   const admin = createSupabaseAdminClient();
 
+  // R25 C: link every card to its knowledge-base product (menu_items.
+  // kb_product_id) from the approval links on its lots. One lot read.
+  const kbPlan = await planMenuKbLinksForCards(
+    admin,
+    items.map((item) => ({ source_item_id: item.id, variantIds: item.variants.map((v) => v.id) })),
+  );
+  logMenuKbLinkPlan("import-service", kbPlan);
+
   for (let start = 0; start < items.length; start += ITEM_BATCH) {
     const batch = items.slice(start, start + ITEM_BATCH);
     const rows = batch.map((item, idx) => ({
@@ -284,10 +293,7 @@ async function persistMenuItems(versionId: string, items: GreenwayMenuItem[]) {
       sort_order: start + idx,
     }));
 
-    const { data: inserted, error } = await admin
-      .from("menu_items")
-      .insert(rows)
-      .select("id, source_item_id");
+    const { data: inserted, error } = await insertMenuItemsWithKbLink(admin, rows, kbPlan.links);
     if (error || !inserted) {
       throw new Error(`Failed to insert menu items: ${error?.message ?? "unknown"}`);
     }
