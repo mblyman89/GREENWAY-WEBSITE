@@ -118,25 +118,28 @@ describe("R-LLAMA root cause: scanners read flat text, not LlamaParse markdown",
     expect(read("supabase/migrations/0239_intake_merge_decisions.sql")).toContain("own_card_key text");
   });
 
-  it("invoice #: flat text found, markdown shapes missed (flip when S34 ships)", () => {
+  // R26 flip (on purpose): S34 shipped as markdown-fields-core. Both scanners
+  // now normalize LlamaParse markdown first, so the markdown shapes that used to
+  // be pinned as misses are now read.
+  it("invoice #: flat text AND markdown shapes found (R26 flipped)", () => {
     expect(extractInvoiceNumberFromText("Invoice #: INV-15121 Order #: 15121")).toBe("INV-15121");
-    expect(extractInvoiceNumberFromText("**Invoice #:** INV-15121")).toBeNull();
-    expect(extractInvoiceNumberFromText("| Invoice # | INV-15121 |")).toBeNull();
+    expect(extractInvoiceNumberFromText("**Invoice #:** INV-15121")).toBe("INV-15121");
+    expect(extractInvoiceNumberFromText("| Invoice # | INV-15121 |")).toBe("INV-15121");
     expect(
       extractInvoiceNumberFromText("| Invoice # | Order Date |\n|---|---|\n| INV-15121 | 07/14/2026 |"),
-    ).toBeNull();
-    expect(extractInvoiceNumberFromText("Invoice \\# 0000020830")).toBeNull();
+    ).toBe("INV-15121");
+    expect(extractInvoiceNumberFromText("Invoice \\# 0000020830")).toBe("0000020830");
   });
 
-  it("driver license: flat text found, markdown shapes missed (flip when S34 ships)", () => {
+  it("driver license: flat text AND markdown shapes found (R26 flipped)", () => {
     expect(
       readDriverLicenseNumber("Driver's Name: John Doe License #: H0M3R Vehicle Make: Ford"),
     ).toBe("H0M3R");
     expect(
       readDriverLicenseNumber("| Driver's Name: | John Doe |\n| License #: | H0M3R |\n| Vehicle Make: | Ford |"),
-    ).toBeNull();
+    ).toBe("H0M3R");
     expect(
       readDriverLicenseNumber("**Driver's Name:** John Doe **License #:** H0M3R **Vehicle Make:** Ford"),
-    ).toBeNull();
+    ).toBe("H0M3R");
   });
 });

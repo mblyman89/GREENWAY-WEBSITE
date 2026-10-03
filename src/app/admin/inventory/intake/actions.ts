@@ -364,38 +364,90 @@ export async function reExtractManifestAiAction(manifestId: string) {
     return rank(a.role) - rank(b.role);
   });
 
+  // R26 — read EVERY archived document (not just the first that parses):
+  //  - transport: one GROUNDED reading per PDF (doc-transport-core: layout
+  //    parser, Contingency Manifest positions, Cultivera invoice, markdown-
+  //    aware labels; vision values must appear in the PDF's own text layer);
+  //    every reading whose manifest # matches this row folds in, fill-only-
+  //    empty (mergeMatchingDonors), so the invoice can fill what the manifest
+  //    lacked;
+  //  - invoice/order #: scanned across ALL docs incl. the transfer JSON
+  //    (invoice-number-core) and PERSISTED (migration 0245) — it used to be
+  //    found and then only shown in the redirect URL.
+  const { readPdfLayer } = await import("@/lib/inventory/pdf-extract");
+  const { readDocTransport } = await import("@/lib/inventory/doc-transport-core");
+  const { mergeMatchingDonors } = await import("@/lib/inventory/manifest-merge-core");
+  const { selectInvoiceNumber, invoiceDocRole } = await import("@/lib/inventory/invoice-number-core");
+  const { backfillManifestTransport, recordInvoiceNumberDetected } = await import(
+    "@/lib/inventory/intake-store"
+  );
+  type Donor = import("@/lib/inventory/manifest-merge-core").TransportDonor;
+  type InvDoc = import("@/lib/inventory/invoice-number-core").InvoiceSourceDoc;
+
   const cap = makeCapturingRecovery();
   let filledFields = 0;
-  let readInvoice: string | null = manifest.manifest_number ?? null;
   let usedRole = "";
   let parsedOk = false;
+  const donors: Donor[] = [];
+  const invoiceDocs: InvDoc[] = [];
+  let droppedCount = 0;
 
   for (const doc of ordered) {
-    const res = await parsePdfManifest(doc.bytes, cap.recover);
-    if (!res.ok) continue;
-    parsedOk = true;
-    usedRole = doc.role;
-    // Backfill transport fill-only-empty (single-manifest, audited). Includes
-    // the newly-captured driver license number where present.
-    const { backfillManifestTransport } = await import("@/lib/inventory/intake-store");
+    if (doc.role === "coa") continue; // a lab report is never transport / invoice
+    const res = await parsePdfManifest(doc.bytes.slice(), cap.recover);
+    const layer = await readPdfLayer(doc.bytes.slice());
+    if (res.ok) {
+      parsedOk = true;
+      if (!usedRole) usedRole = doc.role;
+    }
+    invoiceDocs.push({
+      role: invoiceDocRole(doc.role),
+      label: doc.filename,
+      text: res.text ?? null,
+      layerText: layer.text,
+    });
+    const read = readDocTransport({
+      visionText: res.text ?? null,
+      layerText: layer.text,
+      page1: layer.page1,
+      layoutManifestNumber: res.ok ? res.manifest.manifest_number : null,
+      layoutTransport: res.ok ? (res.manifest.transport ?? null) : null,
+    });
+    droppedCount += read.dropped.length;
+    if (read.donor) {
+      donors.push(read.donor);
+      if (!usedRole) usedRole = doc.role;
+    }
+  }
+  // The archived transfer JSON (WCIA) keeps its locked precedence for the #.
+  for (const doc of docs) {
+    if (doc.role !== "transfer-json") continue;
+    try {
+      invoiceDocs.push({
+        role: "transfer-json",
+        label: doc.filename,
+        payload: JSON.parse(new TextDecoder().decode(doc.bytes)),
+      });
+    } catch {
+      /* not JSON — skip */
+    }
+  }
+
+  const transport = mergeMatchingDonors(manifest.manifest_number, donors);
+  if (transport) {
     filledFields = await backfillManifestTransport(
       manifestId,
-      res.manifest.transport,
+      transport,
       session.userId,
-      `Run AI extract (${doc.role || "document"})`,
+      `Run AI extract (${donors.length} document${donors.length === 1 ? "" : "s"}, text-layer grounded${droppedCount ? `; ${droppedCount} unverified value(s) dropped` : ""})`,
     );
-    // Re-scan the invoice/order number from the freshly parsed text (read-only
-    // convenience for the summary; the stored raw_payload is unchanged here).
-    try {
-      const { extractInvoiceNumberFromText } = await import(
-        "@/lib/inventory/manifest-table-core"
-      );
-      readInvoice = extractInvoiceNumberFromText(res.text) ?? readInvoice;
-    } catch {
-      /* summary-only; ignore */
-    }
-    break; // the first PDF that parses is the primary; done.
   }
+  const invoicePick = selectInvoiceNumber(invoiceDocs);
+  if (invoicePick) {
+    await recordInvoiceNumberDetected(manifestId, invoicePick, session.userId);
+  }
+  // Display value for the banner: found invoice/order #, else manifest #.
+  const readInvoice: string | null = invoicePick?.value ?? manifest.manifest_number ?? null;
 
   // Record the honest AI status against the manifest number (never blank).
   await recordManifestParseStatus(
@@ -412,6 +464,7 @@ export async function reExtractManifestAiAction(manifestId: string) {
   );
 
   revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  revalidatePath("/admin/inventory/intake"); // R26: the Invoice # column may have changed
   const params = new URLSearchParams({
     ai: "1",
     filled: String(filledFields),

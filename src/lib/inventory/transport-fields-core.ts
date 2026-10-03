@@ -17,8 +17,12 @@
  * "Vehicle" label. Anything that looks like a plain WA origin license (6 digits)
  * standing alone is rejected to avoid mistaking the origin license for a DL.
  *
- * WHY PURE: no I/O, no imports — unit-testable with tsx and mirrored in vitest.
+ * WHY PURE: no I/O — unit-testable with tsx and mirrored in vitest. R26: the
+ * one import is the pure markdown normalizer, so LlamaParse markdown shapes
+ * ("| License #: | H0M3R |", "**License #:** H0M3R") read like flat text.
  */
+
+import { normalizeMarkdownFields } from "./markdown-fields-core";
 
 /** The subset of transport fields this helper can recover. All optional. */
 export type ExtractedTransportFields = {
@@ -27,7 +31,7 @@ export type ExtractedTransportFields = {
 
 /** Collapse whitespace so label/value adjacency survives PDF line wrapping. */
 function flatten(text: string): string {
-  return text.replace(/\s+/g, " ");
+  return normalizeMarkdownFields(text).replace(/\s+/g, " ");
 }
 
 /**
@@ -137,6 +141,16 @@ export function __runTransportFieldsCoreTests(): string {
 
   // 9) The struct returns the same value the direct reader does.
   ok(extractTransportFields(vmi).driver_license_number === "H0M3R", "struct matches reader");
+
+  // 10) R26 — SYNTHETIC LlamaParse markdown shapes (labelled synthetic; no API
+  //     key in the sandbox). Same driver-block anchoring must hold.
+  const mdTable = "| Driver's Name: | John Doe |\n|---|---|\n| License #: | H0M3R |\n| Vehicle Make: | Ford |";
+  ok(readDriverLicenseNumber(mdTable) === "H0M3R", "R26 markdown pipe table DL");
+  const mdBold = "**Driver's Name:** John Doe **License #:** H0M3R **Vehicle Make:** Ford";
+  ok(readDriverLicenseNumber(mdBold) === "H0M3R", "R26 markdown bold DL");
+  // The origin-licensee "License #:" in a markdown table is still outside the window.
+  const mdOrigin = "| Licensee Name: | Farm |\n|---|---|\n| License #: | 413287 |\n\n**Driver's Name:** Jo Roe **Vehicle Make:** Ford";
+  ok(readDriverLicenseNumber(mdOrigin) === null, "R26 markdown origin license is never the DL");
 
   return `transport-fields-core: ${n} assertions passed`;
 }

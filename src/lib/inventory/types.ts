@@ -31,6 +31,14 @@ export type InboundManifest = {
    * UI. Null means "use the derived value" (the original behavior).
    */
   invoice_number_override?: string | null;
+  /**
+   * R26 (migration 0245): the invoice/order # FOUND by scanning ALL of the
+   * manifest's documents (invoice PDF, manifest PDF, transfer JSON, email
+   * body). Never the manifest number. Null when none was found / pre-0245.
+   */
+  invoice_number_detected?: string | null;
+  /** R26: provenance of invoice_number_detected ("role:how:document"). */
+  invoice_number_source?: string | null;
   // Denormalized lot rollups for the partial-accept badge (migration 0059).
   accepted_lot_count?: number;
   rejected_lot_count?: number;

@@ -24,6 +24,7 @@
 
 import { normalizeStage, classifyEta, type ManifestStage } from "@/lib/inventory/manifest-pipeline-core";
 import { pacificParts } from "@/lib/reports/timezone";
+import { normalizeMarkdownFields } from "@/lib/inventory/markdown-fields-core";
 
 // ── Invoice / order number ──────────────────────────────────────────────────
 
@@ -85,7 +86,11 @@ function looksLikeInvoiceId(v: string): boolean {
 
 export function extractInvoiceNumberFromText(text: string): string | null {
   if (!text) return null;
-  const flat = text.replace(/\s+/g, " ").trim();
+  // R26 — LlamaParse MARKDOWN is the primary text since #799; its bold
+  // markers, "\#" escapes and table cells hid every label/value adjacency the
+  // patterns below rely on. Normalize to "Label: value" first. unpdf flat text
+  // has no markdown structure and passes through byte-for-byte unchanged.
+  const flat = normalizeMarkdownFields(text).replace(/\s+/g, " ").trim();
   if (flat.length === 0) return null;
 
   // The id value is dot-aware: starts/ends alnum, may hold - and . internally
@@ -186,10 +191,20 @@ export function invoiceNumberForRow(row: {
    * WINS over the derived value (payload scan / manifest-number fallback).
    */
   invoice_number_override?: string | null;
+  /**
+   * R26 (migration 0245): the invoice/order # found across ALL the manifest's
+   * documents (invoice-number-core; JSON first, vision values grounded in the
+   * PDF text layer). Wins over the single-document payload re-scan.
+   */
+  invoice_number_detected?: string | null;
 }): string | null {
   // Owner override always wins when set to a non-blank value.
   const override = (row.invoice_number_override ?? "").trim();
   if (override) return override;
+
+  // R26: what the document scan found (never the manifest number).
+  const detected = (row.invoice_number_detected ?? "").trim();
+  if (detected) return detected;
 
   const fromPayload = extractInvoiceNumber(row.raw_payload);
   if (fromPayload) return fromPayload;
