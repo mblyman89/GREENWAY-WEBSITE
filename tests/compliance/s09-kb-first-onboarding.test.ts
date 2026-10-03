@@ -320,9 +320,10 @@ describe("S09 wiring", () => {
     expect(panel).toContain("Refresh from web");
   });
 
-  it("the page recalls ONCE per render, review tab only, inside the existing Promise.all, reusing approved history", () => {
+  it("the page recalls ONCE per render, review + Approved tabs (R23), inside the existing Promise.all, reusing approved history", () => {
     expect(page.match(/recallProductMemories\(/g)).toHaveLength(1);
-    expect(page).toContain('kbFirst && view === "draft"');
+    expect(page).toContain("kbFirst && rowsOpen");
+    expect(page).toContain('const rowsOpen = view === "draft" || view === "approved";');
     expect(page).toContain("          priorClassifications,\n        )");
     expect(page).toContain("<KnownProductChip memory={productMemories.get(d.id)!} now={now} />");
     expect(page).not.toMatch(/recallForDraft/);

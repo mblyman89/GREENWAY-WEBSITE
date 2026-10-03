@@ -9,7 +9,7 @@
  *   S23.4 copy:       "Still missing: terpenes, image. Attached at onboarding:
  *                      description (Gemini 94%), effects (KB), strain type (You)."
  *
- * The decisions live in gap-vector-core (89 embedded self-tests, pinned
+ * The decisions live in gap-vector-core (92 embedded self-tests, pinned
  * below). Here we prove: (1) computeGaps - the function behind every list
  * counter and filter - treats EVERY writer's placeholder as missing, using
  * the writers' REAL template text read from source (not a copy that could
@@ -108,11 +108,11 @@ afterEach(() => {
 });
 
 describe("S23 pure core", () => {
-  it("embedded self-tests: exactly 89 pass, 0 fail (pinned)", () => {
-    expect(__runGapVectorCoreTests()).toEqual({ passed: 89, failed: 0 });
+  it("embedded self-tests: exactly 92 pass, 0 fail (pinned)", () => {
+    expect(__runGapVectorCoreTests()).toEqual({ passed: 92, failed: 0 });
   });
   it("the runner registers them with the exact floor", () => {
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("gap-vector-core", __runGapVectorCoreTests\(\), 89\)/);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(/assertRan\("gap-vector-core", __runGapVectorCoreTests\(\), 92\)/);
   });
   it("the core is pure: no environment, no server-only, no I/O imports", () => {
     const src = read("src/lib/enrichment/gap-vector-core.ts");
@@ -343,7 +343,9 @@ describe("S23 wiring", () => {
   const detail = read("src/app/admin/products/[key]/page.tsx");
   it("the command center builds the vector from the SERVED row, the KB result and the history", () => {
     expect(cc).toContain("gapVector: GapVector;");
-    expect(cc).toMatch(/const gapVector = buildGapVector\(\{\s*item: \{ description: item\.description, strain_type: item\.strain_type, category: item\.category \},\s*enrichment,\s*knowledge,\s*provenance,\s*\}\);/);
+    expect(cc).toMatch(/const gapVector = buildGapVector\(\{\s*item: \{ description: item\.description, strain_type: item\.strain_type, category: item\.category \},\s*enrichment,\s*knowledge: \{ \.\.\.filledKnowledge, sensoryOrigins: filled\.origins \},\s*provenance,\s*\}\);/);
+    // R23: the vector reads the GAP-FILLED knowledge (ladder lists kept, empty ones filled).
+    expect(cc).toContain("const filled = fillSensory(");
     expect(cc).toContain("loadGapProvenance({ identityKeys: [identityKey], posKeys: lotKeys }).catch(() => null)");
     expect(cc).toMatch(/\n    gapVector,\n/);
   });

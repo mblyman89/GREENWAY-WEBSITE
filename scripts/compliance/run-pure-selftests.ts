@@ -647,6 +647,12 @@ import { __runMasteringPreviewCoreTests } from "../../src/lib/inventory/masterin
 // R22 (S37): the lot page's fill-only-when-empty product-link + attach-COA doors.
 import { __runLotLinkCoreTests } from "../../src/lib/inventory/lot-link-core";
 import { __runMasteredMenuCoreTests } from "../../src/lib/products/mastered-menu-core";
+import { __runApprovedRowCoreTests } from "../../src/lib/catalog/approved-row-core";
+import { __runWaitingFactsCoreTests } from "../../src/lib/catalog/waiting-facts-core";
+import { __runSeoDraftCoreTests } from "../../src/lib/enrichment/seo-draft-core";
+import { __runSensoryFillCoreTests } from "../../src/lib/enrichment/sensory-fill-core";
+import { __runMastersFilterCoreTests } from "../../src/lib/products/masters-filter-core";
+import { __runFinalizeBannerCoreTests } from "../../src/lib/inventory/finalize-banner-core";
 import { __runIdentityStampCoreTests } from "../../src/lib/inventory/identity-stamp-core";
 import { __runGroundingCoreTests } from "../../src/lib/ai/grounding-core";
 import { __runLookupFactsCoreTests } from "../../src/lib/inventory/lookup-facts-core";
@@ -1915,7 +1921,8 @@ __runLiquidVolumeTests();
   // receipt copy byte for byte, and the audit fold. Measured 102.
   assertRan("fact-attach-policy-core", __runFactAttachPolicyCoreTests(), 100);
   // SLICE S07: the single write door planner (attachProductFacts).
-  assertRan("attach-plan-core", __runAttachPlanCoreTests(), 115);
+  // R23: +19 for the human-confirmed attach (case 26). Floor = the exact count.
+  assertRan("attach-plan-core", __runAttachPlanCoreTests(), 147);
   assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 77);
   // S30 receiving fact review: flag signature, decision partition (stale
   // signature re-asks), fix/reject applied to the snapshot, the shared form
@@ -1951,7 +1958,7 @@ __runLiquidVolumeTests();
 
   // R20 S20: enrichment identity (flag, survivorship, ladder, suggestion target, backfill). Floor = the exact count.
   assertRan("enrichment-identity-core", __runEnrichmentIdentityCoreTests(), 85);
-  assertRan("gap-vector-core", __runGapVectorCoreTests(), 89);
+  assertRan("gap-vector-core", __runGapVectorCoreTests(), 92);
 
   // R21 (C): enrichment media-library picker. Floor = the exact count.
   assertRan("library-picker-core", __runLibraryPickerCoreTests(), 34);
@@ -1962,6 +1969,18 @@ __runLiquidVolumeTests();
   // R22 (S35): mastered-menu-core. Floor = the exact count.
   assertRan("mastered-menu-core", __runMasteredMenuCoreTests(), 55);
 
+  // R23: finalize-banner-core. Floor = the exact count.
+  assertRan("finalize-banner-core", __runFinalizeBannerCoreTests(), 38);
+  // R23: masters-filter-core. Floor = the exact count.
+  assertRan("masters-filter-core", __runMastersFilterCoreTests(), 39);
+  // R23: sensory-fill-core. Floor = the exact count.
+  assertRan("sensory-fill-core", __runSensoryFillCoreTests(), 54);
+  // R23: seo-draft-core. Floor = the exact count.
+  assertRan("seo-draft-core", __runSeoDraftCoreTests(), 51);
+  // R23: waiting-facts-core. Floor = the exact count.
+  assertRan("waiting-facts-core", __runWaitingFactsCoreTests(), 72);
+  // R23: approved-row-core. Floor = the exact count.
+  assertRan("approved-row-core", __runApprovedRowCoreTests(), 11);
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

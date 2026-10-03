@@ -717,6 +717,7 @@ describe("S14 drafts page wiring", () => {
   });
 
   it("F-006 (re-pinned by S41, bible S41.3): the approve form is only visible while the row's <details> is open; Dismiss stays in the summary row", () => {
+    // R23: the FIRST draft-row-details is the review tab's (the Approved tab's toggle follows it).
     const d = page.indexOf('data-testid="draft-row-details"');
     expect(d).toBeGreaterThan(-1);
     const detailsOpen = page.lastIndexOf("<details", d);
@@ -732,8 +733,11 @@ describe("S14 drafts page wiring", () => {
     expect(inDetails).toContain("{!v2Row && approveForm}");
     expect(page.match(/approveForm\}/g)?.length).toBe(2);
     const detailRow = page.indexOf("<OnboardingDetailRow", close);
-    expect(page.slice(close, detailRow)).toContain('{v2Row && view === "draft" && (');
-    expect(page.slice(detailRow, page.indexOf("/>", page.indexOf("approve={approveForm}", detailRow)))).toContain("approve={approveForm}");
+    // R23 (item 5): the detail row also opens on the Approved tab, whose third zone is the read-only summary.
+    expect(page.slice(close, detailRow)).toContain("{v2Row && rowsOpen && (");
+    expect(page).toContain('const rowsOpen = view === "draft" || view === "approved";');
+    const approveProp = 'approve={view === "approved" ? approvedZone : approveForm}';
+    expect(page.slice(detailRow, page.indexOf("/>", page.indexOf(approveProp, detailRow)))).toContain(approveProp);
     const css = read("src/app/globals.css");
     expect(css).toContain("tr.draft-detail-row {\n    display: none;");
     expect(css).toContain('tr:has(details[data-testid="draft-row-details"][open]) + tr.draft-detail-row {\n    display: table-row;');
@@ -787,7 +791,8 @@ describe("S14 drafts page wiring", () => {
 
   it("F-080: finalize still lands on ?manifest= (S02's link, which S14 relies on)", () => {
     const intake = read("src/app/admin/inventory/intake/[id]/page.tsx");
-    expect((intake.match(/draftsForManifestHref\(/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // R23: one merged finalize banner → one link (plus the import).
+    expect((intake.match(/draftsForManifestHref\(/g) ?? []).length).toBeGreaterThanOrEqual(1);
   });
 });
 

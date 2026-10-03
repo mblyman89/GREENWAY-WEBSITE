@@ -216,16 +216,16 @@ describe("R21 B — S41 page wiring", () => {
     expect(page).toContain("colSpan={columns.length}");
     expect(page).not.toMatch(/colSpan=\{\d+\}/);
   });
-  it("the detail row renders only on the review tab with the flag, after the summary row, inside one Fragment per draft", () => {
+  it("the detail row renders on the review + Approved tabs (R23) with the flag, after the summary row, inside one Fragment per draft", () => {
     const at = page.indexOf("<OnboardingDetailRow");
-    expect(page.slice(at - 400, at)).toContain('{v2Row && view === "draft" && (');
+    expect(page.slice(at - 400, at)).toContain("{v2Row && rowsOpen && (");
     expect(page.lastIndexOf("</tr>", at)).toBeGreaterThan(page.lastIndexOf("<Fragment key={d.id}>", at));
     expect(page.indexOf("</Fragment>", at)).toBeGreaterThan(at);
   });
   it("the approve form is built ONCE and mounted in exactly one place per flag state", () => {
     expect(page.match(/<form action=\{approve\}/g)?.length).toBe(1);
     expect(page.match(/approveForm\}/g)?.length).toBe(2);
-    expect(page).toContain("approve={approveForm}");
+    expect(page).toContain('approve={view === "approved" ? approvedZone : approveForm}');
     expect(page).toContain("{!v2Row && approveForm}");
   });
   it("labelled groups in the Approve zone: Classify, Menu card, Size & compliance (only when a block shows)", () => {

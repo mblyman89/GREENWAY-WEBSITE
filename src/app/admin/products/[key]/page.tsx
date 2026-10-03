@@ -12,9 +12,22 @@ import { listLotsForProductKey } from "@/lib/inventory/store";
 import { listSuggestions, isAiConfigured } from "@/lib/ai/suggestions";
 import { checkCompliance } from "@/lib/ai/compliance";
 import { getEnrichmentCommandCenter } from "@/lib/enrichment/command-center";
+import {
+  SEO_FIELD_KEY,
+  SEO_HINT_TEXT,
+  SEO_META_MAX,
+  SEO_META_MIN,
+  SEO_SITE_SUFFIX,
+  SEO_TITLE_MAX,
+  cleanSeoTitle,
+  fullSeoTitle,
+  seoMetaHint,
+  seoSuggestionDisplay,
+} from "@/lib/enrichment/seo-draft-core";
 import { checklistComplete } from "@/lib/enrichment/match-core";
 // S23: the per-field gap header (pure copy; the vector is built by the command center).
 import { gapHeadline, gapFootnote } from "@/lib/enrichment/gap-vector-core";
+import { knowledgeSourceLabel } from "@/lib/enrichment/sensory-fill-core";
 import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
 import {
   buildWebSearchUrl,
@@ -34,6 +47,7 @@ import {
   generateProductAi,
   acceptSuggestion,
   rejectSuggestion,
+  attachKbMatchFacts,
   applyMatchedText,
   attachMatchedMedia,
   importVendorImage,
@@ -61,12 +75,15 @@ export default async function ProductEditorPage({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; ai?: string; back?: string; research?: string; lq?: string; lscope?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; ai?: string; back?: string; research?: string; lq?: string; lscope?: string; note?: string }>;
 }) {
   const session = await requirePermission("products.enrich");
   const { key: rawKey } = await params;
   const key = decodeURIComponent(rawKey);
-  const { saved, error, ai, back, research, lq, lscope } = await searchParams;
+  const { saved, error, ai, back, research, lq, lscope, note } = await searchParams;
+  // R23: the one-line receipt a KB "Use these facts" click redirects with
+  // (React escapes it; clamped so a crafted link cannot flood the page).
+  const savedNote = typeof note === "string" ? note.trim().slice(0, 400) : "";
 
   const published = await getPublishedVersion();
   if (!published) notFound();
@@ -135,7 +152,11 @@ export default async function ProductEditorPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
-        {saved && <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">Saved.</div>}
+        {saved && (
+          <div data-testid="saved-banner" className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
+            {savedNote ? `Saved. ${savedNote}` : "Saved."}
+          </div>
+        )}
         {ai && <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-2 text-sm text-[var(--admin-gold)]">AI draft generated — review it below.</div>}
         {research && <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-2 text-sm text-[var(--admin-gold)]">{research}</div>}
         {error && <div className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">{error}</div>}
@@ -355,11 +376,20 @@ export default async function ProductEditorPage({
             <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm font-semibold text-white">Knowledge base</p>
-                <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase text-white/60">
-                  {center.knowledge.source === "none" ? "no match" : center.knowledge.source}
+                <span data-testid="kb-source-badge" className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/60">
+                  {knowledgeSourceLabel(center.knowledge.source)}
                 </span>
+                {center.linkedKb && (
+                  <span data-testid="kb-linked-badge" className="rounded bg-[var(--admin-accent)]/15 px-1.5 py-0.5 text-[10px] text-[var(--admin-accent)]">
+                    Linked: {center.linkedKb.displayName}
+                  </span>
+                )}
               </div>
-              {center.knowledge.source !== "none" ? (
+              {center.knowledge.source !== "none" ||
+              center.knowledge.aromaNotes.length > 0 ||
+              center.knowledge.flavorNotes.length > 0 ||
+              center.knowledge.terpenes.length > 0 ||
+              center.knowledge.effects.length > 0 ? (
                 <div className="mt-3 space-y-3 text-xs text-white/70">
                   {center.knowledge.description && (
                     <div className="flex items-start justify-between gap-3">
@@ -393,7 +423,16 @@ export default async function ProductEditorPage({
                     center.knowledge.flavorNotes.length > 0 ||
                     center.knowledge.terpenes.length > 0 ||
                     center.knowledge.effects.length > 0) && (
-                    <div className="flex flex-wrap gap-1.5 border-t border-white/10 pt-2">
+                    <div data-testid="kb-sensory-chips" className="flex flex-wrap gap-1.5 border-t border-white/10 pt-2">
+                      {Object.keys(center.sensoryOrigins).length > 0 && (
+                        <p data-testid="kb-sensory-origins" className="w-full text-[10px] text-white/45">
+                          Filled in from:{" "}
+                          {(["effects", "terpenes", "aroma", "flavor"] as const)
+                            .filter((f) => center.sensoryOrigins[f])
+                            .map((f) => `${f} (${center.sensoryOrigins[f]})`)
+                            .join(", ")}
+                        </p>
+                      )}
                       {center.knowledge.aromaNotes.map((n) => (
                         <span key={`a-${n}`} className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/60">aroma: {n}</span>
                       ))}
@@ -446,7 +485,21 @@ export default async function ProductEditorPage({
                         </p>
                         <p className="mt-0.5 text-[11px] text-white/45">{m.reasons.join(" ")}</p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        {/* R23 (fix 10): suggested matches are no longer read-only. */}
+                        {m.action.kind === "linked" ? (
+                          <span data-testid="kb-match-linked" className="rounded-lg border border-[var(--admin-accent)]/40 px-2.5 py-1 text-[11px] text-[var(--admin-accent)]">
+                            ✓ {m.action.label}
+                          </span>
+                        ) : (
+                          <form action={attachKbMatchFacts}>
+                            <input type="hidden" name="key" value={key} />
+                            <input type="hidden" name="kbId" value={m.candidate.id} />
+                            <Button type="submit" variant={m.action.kind === "use" ? "confirm" : "neutral"} size="sm" data-testid="kb-match-use">
+                              {m.action.label}
+                            </Button>
+                          </form>
+                        )}
                         {m.primaryMediaId && !center.gaps.hasImage && (
                           <form action={attachMatchedMedia}>
                             <input type="hidden" name="key" value={key} />
@@ -718,6 +771,22 @@ export default async function ProductEditorPage({
                     Draft aroma &amp; flavor
                   </Button>
                 </form>
+                {/* R23 (fix 4): one pending "seo" suggestion (title + meta),
+                    grounded on the server in this card's own description. */}
+                <form action={generateProductAi}>
+                  <input type="hidden" name="key" value={key} />
+                  <input type="hidden" name="kind" value="seo" />
+                  <input type="hidden" name="posName" value={enrichment?.display_name || item.name} />
+                  <input type="hidden" name="posBrand" value={item.brand_name} />
+                  <input type="hidden" name="posCategory" value={item.category} />
+                  <input type="hidden" name="posStrainType" value={item.strain_type} />
+                  <input type="hidden" name="posStrainName" value={item.strain_name ?? ""} />
+                  <input type="hidden" name="posAroma" value={center.knowledge.aromaNotes.join(", ")} />
+                  <input type="hidden" name="posFlavor" value={center.knowledge.flavorNotes.join(", ")} />
+                  <Button type="submit" variant="neutral" size="sm" data-testid="ai-draft-seo">
+                    Draft SEO title &amp; meta
+                  </Button>
+                </form>
               </div>
             )}
           </div>
@@ -729,7 +798,11 @@ export default async function ProductEditorPage({
           {suggestions.length > 0 ? (
             <ul className="mt-4 space-y-3">
               {suggestions.map((s) => {
-                const flags = s.field_key === "description" ? checkCompliance(s.suggested_value ?? "").flags : [];
+                const seoText = s.field_key === SEO_FIELD_KEY ? seoSuggestionDisplay(s.suggested_value) : null;
+                const flags =
+                  s.field_key === "description" || s.field_key === SEO_FIELD_KEY
+                    ? checkCompliance(seoText ?? s.suggested_value ?? "").flags
+                    : [];
                 return (
                   <li key={s.id} className="rounded-lg border border-white/10 bg-black p-3">
                     <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-white/40">
@@ -745,7 +818,9 @@ export default async function ProductEditorPage({
                       <span>{s.model}</span>
                       <span>· {new Date(s.created_at).toLocaleString()}</span>
                     </div>
-                    <p className="text-sm text-white/85 whitespace-pre-wrap">{s.suggested_value}</p>
+                    <p className="text-sm text-white/85 whitespace-pre-wrap" data-testid={seoText ? "ai-seo-suggestion" : undefined}>
+                      {seoText ?? s.suggested_value}
+                    </p>
                     {flags.length > 0 && (
                       <p className="mt-2 rounded bg-[var(--admin-orange)]/10 px-2 py-1 text-[11px] text-[var(--admin-orange)]">
                         ⚠ Compliance check flagged: {flags.join(", ")}. Review carefully before accepting.
@@ -832,8 +907,26 @@ export default async function ProductEditorPage({
 
             <div className="border-t border-white/10 pt-4">
               <span className={label}>SEO</span>
-              <input name="seo_title" defaultValue={enrichment?.seo_title ?? ""} placeholder="SEO title" className={`${field} mb-2`} />
+              <input
+                name="seo_title"
+                defaultValue={enrichment?.seo_title ?? ""}
+                placeholder="SEO title"
+                className={`${field} mb-1`}
+              />
+              <p className="mb-2 text-[11px] text-white/45" data-testid="seo-title-help">
+                Up to {SEO_TITLE_MAX} characters; the site adds &ldquo;{SEO_SITE_SUFFIX.trim()}&rdquo;
+                {enrichment?.seo_title ? <> &mdash; Google sees: &ldquo;{fullSeoTitle(cleanSeoTitle(enrichment.seo_title))}&rdquo;</> : null}.
+              </p>
               <textarea name="seo_description" defaultValue={enrichment?.seo_description ?? ""} rows={2} placeholder="SEO meta description" className={field} />
+              <p className="mt-1 text-[11px] text-white/45" data-testid="seo-meta-help">
+                Aim for {SEO_META_MIN}&ndash;{SEO_META_MAX} characters
+                {enrichment?.seo_description ? ` (now ${enrichment.seo_description.trim().length}, ${SEO_HINT_TEXT[seoMetaHint(enrichment.seo_description)]})` : ""}
+                . No draft yet? Use{" "}
+                <a href="#ai" className="underline">
+                  Draft SEO title &amp; meta
+                </a>{" "}
+                in AI assist; it arrives as a suggestion you accept. Only a published card&apos;s SEO reaches Google.
+              </p>
             </div>
           </div>
 

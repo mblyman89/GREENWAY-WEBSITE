@@ -573,7 +573,10 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
   ],
   "src/app/admin/inventory/intake/[id]/page.tsx": [
     "gold\u2192staged",
-    "danger\u2192rejected",
+    // R23 fix 1: the three raw-string finalize banners (one of them a red
+    // "Whole manifest rejected" lit by `rejected=0`) became ONE banner from
+    // finalize-banner-core; it is gold only when lots were refused at the dock.
+    'gold\u2192: finalBanner.tone === "gold"',
     'danger\u2192ai === "nodocs"',
     'danger\u2192error === "aiextract"',
     'danger\u2192error === "sample_cap"',

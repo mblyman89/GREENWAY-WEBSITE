@@ -206,9 +206,12 @@ describe("S27 · adopting pages (bible S27.1 consumers)", () => {
     const page = code("src/app/admin/products/masters/page.tsx");
     expect(page).toContain("tabs={withTabCounts(MASTERS_PAGE_TABS, {");
     expect(page).toContain("live: mastered.ok ? stats.cards : null,");
-    expect(page).toContain("masters: masters.length,");
+    // R23: the pill counts what the vendor/manifest filter leaves visible.
+    expect(page).toContain("masters: visibleMasters.length,");
+    expect(page).not.toContain("masters: masters.length,");
     expect(page).toContain("suggestions: suggestions.length,");
-    expect(page).toContain("keep={{ back: sp.back }}");
+    // R23: the vendor/manifest filter survives a tab switch too.
+    expect(page).toContain("keep={{ back: sp.back, vendor: facets.vendor || undefined, manifest: facets.manifest || undefined }}");
     expect(page).toContain('resolveTab(MASTERS_PAGE_TABS, { tab: sp.tab }, "live")');
     expect(page).toContain('const BASE = "/admin/products/masters";');
     // Every suggestion action redirects with tab=suggestions, and every manual

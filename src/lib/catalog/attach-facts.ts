@@ -100,6 +100,14 @@ export interface AttachProductFactsInput {
   actor: { userId: string | null; email: string | null };
   /** Receipt label when the published menu item cannot be read (enrichment page only). */
   fallbackLabel?: string;
+  /**
+   * R23: a PERSON pressed Attach on one waiting fact in the onboarding row
+   * (attachWaitingFactAction). Draft context only. The planner then treats
+   * it as the person's own answer (attach-plan-core confirmedBy), the fact
+   * history and the row's copy are stamped source "human", and the shared
+   * strain library is left alone. Absent = the AI lookup path, unchanged.
+   */
+  confirmedBy?: "human";
 }
 
 export type AttachProductFactsResult =
@@ -319,13 +327,16 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
     sf = await readMenuFacts(input.context.posProductKey, input.fallbackLabel ?? "");
   }
   const strainWriteDisabled = input.context.kind === "product" && !input.context.saveStrain;
+  // R23: only a draft context may carry a person's confirmation.
+  const human = input.confirmedBy === "human" && input.context.kind === "draft";
+  const factSource = human ? ("human" as const) : ("gemini" as const);
 
   // Existing strain (keyed by the REAL strain name - F-012).
   let existingStrain: ExistingStrain | null = null;
   let strainCols: StrainCols = { effects: true, provenance: true };
   let strainBlockedReason: string | null = null;
   const slug = strainSlug(sf.strainName);
-  if (slug && !strainWriteDisabled) {
+  if (slug && !strainWriteDisabled && !human) {
     const r = await readStrain(admin, slug);
     if (!r.ok) strainBlockedReason = "The strain library could not be read just now, so the strain was not touched. Try again.";
     else if (!r.cols.provenance && !r.row) {
@@ -391,6 +402,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
     incoming: buildAttachIncoming(input.safe, imageLines, input.factConfidence, input.suggestionConfidence),
     strainWriteDisabled,
     strainBlockedReason,
+    confirmedBy: human ? "human" : null,
   });
 
   const failures: WriteFailure[] = [];
@@ -544,7 +556,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
       identityKey: sf.identityKey,
       field: p.field,
       value: p.value,
-      source: "gemini",
+      source: factSource,
       confidence: p.confidence,
       urls: input.sources,
       kbProductId: p.to === "product record" ? kbProductId : null,
@@ -578,7 +590,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
     for (const p of plan.provenance) {
       if (!landed.has(`${p.field}\u001f${p.to}`) || seen.has(p.field)) continue;
       seen.add(p.field);
-      landedFacts.push({ field: p.field, value: p.value, source: "gemini", confidence: p.confidence });
+      landedFacts.push({ field: p.field, value: p.value, source: factSource, confidence: p.confidence });
     }
     try {
       const cur = await admin.from("catalog_product_drafts").select(DRAFT_FACT_SELECT).eq("id", sf.draftId).maybeSingle();
@@ -622,6 +634,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
     entityId: input.context.kind === "draft" ? input.context.draftId : input.context.posProductKey,
     after: {
       mode,
+      confirmedBy: human ? "human" : null,
       identityKey: sf.identityKey || null,
       strainSlug: plan.strain?.slug ?? null,
       strainAction: plan.strain?.action ?? null,

@@ -900,3 +900,128 @@ describe("S20. restock suggestions are filed on the live card", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// R23 (items 2 + 6): a PERSON's Attach from the onboarding row. The owner:
+// "after the AI lookup is finished, for all the facts to be shown in the ai
+// card section in the product row. with the ability to attach them there,
+// rather than needing to approve everything".
+// ---------------------------------------------------------------------------
+describe("R23. confirmedBy human - the onboarding row's Attach", () => {
+  const draftRow = () => db.tables.catalog_product_drafts[0] as Row;
+  async function runHuman(safe: ReturnType<typeof safeLookup>, over: Record<string, unknown> = {}) {
+    return attachProductFacts({
+      context: { kind: "draft", draftId: DRAFT_ID },
+      safe,
+      sources: [],
+      factConfidence: {},
+      suggestionConfidence: {},
+      suggestionSource: "human:onboarding-attach",
+      actor: ACTOR,
+      confirmedBy: "human",
+      ...over,
+    } as Parameters<typeof attachProductFacts>[0]);
+  }
+  const only = (o: Record<string, unknown>) =>
+    safeLookup({ summary: "", effects: [], aroma_notes: [], flavor_notes: [], lineage: "", description: "", short_description: "", strain_type: "", strain_type_confidence: 0, size: "", ...o });
+
+  it("lands on the product record even in shadow (ring 1): provenance + row copy say source human, no model score", async () => {
+    spies.ring = 1;
+    seedDraft();
+    const res = await runHuman(only({ effects: ["relaxed", "happy"] }));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.receipt.attached.map((a) => a.field)).toEqual(["effects"]);
+    expect(db.log).toContain("kb_products:writeback");
+    expect(db.tables.kb_products[0]?.effects).toEqual(["relaxed", "happy"]);
+    expect(db.tables.product_fact_provenance.length).toBe(1);
+    expect(db.tables.product_fact_provenance[0]).toMatchObject({ field: "effects", source: "human" });
+    const facts = draftRow().attached_facts as Record<string, Row>;
+    expect(facts.effects).toMatchObject({ source: "human" });
+    const after = (spies.audit.mock.calls.at(-1)![0] as { after: Row }).after;
+    expect(after.confirmedBy).toBe("human");
+  });
+
+  it("never touches the shared strain library and never files a suggestion", async () => {
+    spies.ring = 2;
+    seedDraft();
+    const res = await runHuman(only({ aroma_notes: ["pine"], lineage: "A x B", strain_type: "indica", strain_type_confidence: 0.99 }));
+    expect(res.ok).toBe(true);
+    expect(db.log).not.toContain("kb_strains:insert");
+    expect(db.log).not.toContain("kb_strains:update");
+    expect(db.tables.kb_strains).toEqual([]);
+    expect(spies.suggestion).not.toHaveBeenCalled();
+    expect(db.tables.ai_suggestions).toEqual([]);
+  });
+
+  it("a product (enrichment) context cannot claim a person's confirmation - the ring still governs", async () => {
+    spies.ring = 1;
+    seedDraft();
+    // A real menu item, so the product record IS reachable - only the guard stops the write.
+    spies.menuItem = { name: "Blue Dream 3.5g", product_name: "Blue Dream 3.5g", brand_name: "Phat Panda", vendor_name: "Phat Panda LLC", category: "flower", strain_name: "Blue Dream", variants: [{ label: "3.5g" }] };
+    const res = await attachProductFacts({
+      context: { kind: "product", posProductKey: "LOT-1", saveStrain: false },
+      safe: only({ effects: ["relaxed"] }),
+      sources: [],
+      factConfidence: { effects: 95 },
+      suggestionConfidence: {},
+      suggestionSource: "x",
+      actor: ACTOR,
+      confirmedBy: "human",
+      fallbackLabel: "Blue Dream 3.5g",
+    } as Parameters<typeof attachProductFacts>[0]);
+    expect(res.ok && res.mode).toBe("shadow");
+    expect(db.log).not.toContain("kb_products:writeback");
+    expect(db.tables.product_fact_provenance.every((r) => r.source !== "human")).toBe(true);
+  });
+
+  it("the control: the same reachable product with ring 2 DOES write back (so the test above can fail)", async () => {
+    spies.ring = 2;
+    seedDraft();
+    spies.menuItem = { name: "Blue Dream 3.5g", product_name: "Blue Dream 3.5g", brand_name: "Phat Panda", vendor_name: "Phat Panda LLC", category: "flower", strain_name: "Blue Dream", variants: [{ label: "3.5g" }] };
+    const res = await attachProductFacts({
+      context: { kind: "product", posProductKey: "LOT-1", saveStrain: false },
+      safe: only({ effects: ["relaxed"] }),
+      sources: [],
+      factConfidence: { effects: 95 },
+      suggestionConfidence: {},
+      suggestionSource: "x",
+      actor: ACTOR,
+      fallbackLabel: "Blue Dream 3.5g",
+    } as Parameters<typeof attachProductFacts>[0]);
+    expect(res.ok).toBe(true);
+    expect(db.log).toContain("kb_products:writeback");
+  });
+
+  it("a person's attach never even reads the strain library (control: the model path does)", async () => {
+    spies.ring = 2;
+    seedDraft();
+    const touched: string[] = [];
+    const orig = fake.from;
+    fake.from = (t: string) => {
+      touched.push(t);
+      return orig(t);
+    };
+    try {
+      const res = await runHuman(only({ effects: ["relaxed"] }));
+      expect(res.ok).toBe(true);
+      expect(touched).not.toContain("kb_strains");
+      touched.length = 0;
+      const ctl = await runHuman(only({ effects: ["relaxed"] }), { confirmedBy: undefined });
+      expect(ctl.ok).toBe(true);
+      expect(touched).toContain("kb_strains");
+    } finally {
+      fake.from = orig;
+    }
+  });
+
+  it("without confirmedBy, the same call in shadow attaches nothing (the guard is the flag, not the source string)", async () => {
+    spies.ring = 1;
+    seedDraft();
+    const res = await runHuman(only({ effects: ["relaxed"] }), { confirmedBy: undefined });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.receipt.attached.filter((a) => a.to.includes("product record"))).toEqual([]);
+    expect(db.log).not.toContain("kb_products:writeback");
+  });
+});

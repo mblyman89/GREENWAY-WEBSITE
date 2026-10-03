@@ -15,8 +15,10 @@ import {
   productTagsSchema,
   productSensorySchema,
   productEffectsSchema,
+  productSeoSchema,
   ALLOWED_PRODUCT_TAGS,
 } from "./schemas/product";
+import { SEO_FIELD_KEY, SEO_TITLE_MAX, SEO_META_MAX, seoPromptFacts, seoSuggestionValue } from "@/lib/enrichment/seo-draft-core";
 import { buildGroundedFacts, loadBannedPhrases } from "./kb/retrieval";
 import type { AiSuggestion, AiSuggestionStatus } from "@/lib/enrichment/types";
 
@@ -229,6 +231,62 @@ export async function generateProductEffects(
     complianceFlags: flags,
     // Effects are pre-filtered, so nothing blocks acceptance; flags are advisory.
     blockingFlags: [],
+    confidence: result.confidence,
+  };
+}
+
+/**
+ * R23 (fix 4): draft the product page's SEO title + meta description as ONE
+ * pending suggestion (field_key "seo", compact JSON) the person accepts or
+ * rejects like every other AI draft. The reply is re-cleaned by
+ * seo-draft-core (title <= 39 chars because the layout appends
+ * " | Greenway Marijuana"; meta <= 160 at a word boundary) and
+ * compliance-scanned; the accept path re-scans it (acceptWithComplianceGate).
+ * Grounded in the product's OWN description and accepted aroma / flavor when
+ * the caller passes them, so the meta matches the page it describes.
+ */
+export async function generateProductSeo(
+  posProductKey: string,
+  facts: ProductFacts & { description?: string | null; aroma?: readonly string[]; flavor?: readonly string[] },
+  generatedBy: string | null,
+): Promise<GeneratedSuggestion> {
+  const { summary } = factLines(facts);
+  const banned = await loadBannedPhrases();
+  const lines = seoPromptFacts({
+    name: facts.name,
+    brand: facts.brand,
+    category: facts.category,
+    strainType: facts.strainType,
+    description: facts.description,
+    aroma: facts.aroma,
+    flavor: facts.flavor,
+  });
+  const result = await generateStructured({
+    system: COMPLIANCE_SYSTEM,
+    user: `Write search-engine metadata for this product page at a licensed 21+ Washington State cannabis retailer (Greenway Marijuana, Port Orchard). Use ONLY the facts below. Title: at most ${SEO_TITLE_MAX} characters, product name first, descriptive and specific to THIS product, no store name (it is appended automatically), no keyword stuffing. Meta description: 120-${SEO_META_MAX} characters, a natural sentence that summarizes the product (aroma, flavor, format, brand) and mentions in-store pickup. Never mention price, stock, discounts, health, medical or effect claims, or anything that appeals to minors. Set confidence low if the facts are thin.\n\n${lines.join("\n")}`,
+    schema: productSeoSchema,
+    tier: "light",
+    maxTokens: 160,
+    context: { feature: "product.seo", entityType: "product", entityId: posProductKey, actorId: generatedBy },
+  });
+  const value = seoSuggestionValue({ title: result.seo_title, description: result.seo_description });
+  if (!value) throw new Error("The AI reply had no usable SEO title or description. Try again.");
+  const parsed = JSON.parse(value) as { seo_title: string; seo_description: string };
+  const compliance = checkCompliance(`${parsed.seo_title} ${parsed.seo_description}`, banned);
+  const suggestion = await persistSuggestion({
+    entity_type: "product",
+    entity_id: posProductKey,
+    field_key: SEO_FIELD_KEY,
+    suggested_value: value,
+    input_summary: summary,
+    generated_by: generatedBy,
+    confidence: result.confidence,
+    source: "model",
+  });
+  return {
+    suggestion,
+    complianceFlags: compliance.flags,
+    blockingFlags: compliance.blockingFlags,
     confidence: result.confidence,
   };
 }

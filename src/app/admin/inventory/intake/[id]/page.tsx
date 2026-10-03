@@ -26,6 +26,7 @@ import { ManifestAccountingPanel } from "@/components/admin/inventory/ManifestAc
 import { accountingStatus, booksNeedsAttention, booksRefusalNextStep, booksResultText } from "@/lib/inventory/manifest-event-labels-core";
 import { ManifestLotDisposition } from "@/components/admin/inventory/ManifestLotDisposition";
 import { manifestStatusBadge } from "@/lib/inventory/intake-disposition-core";
+import { finalizeBanner } from "@/lib/inventory/finalize-banner-core";
 import {
   parseUsualTransport,
   suggestTransportDefaults,
@@ -348,6 +349,7 @@ export default async function ManifestReviewPage({
   // `held=0` is a clean finalize and must NOT auto-open Issues (manifestHeldAutoOpen).
   // R19: a books refusal (`booksError`) no longer opens Accounting; the page
   // stays where the owner was working and the Accounting tab glows instead.
+  const finalBanner = finalizeBanner({ finalized, accepted, rejected, drafts, held });
   const activeTab = resolveTab(MANIFEST_PAGE_TABS, { tab, held: manifestHeldAutoOpen(held) }, "delivery");
 
   return (
@@ -445,40 +447,36 @@ export default async function ManifestReviewPage({
             {lifecycle === "received" ? "Marked received." : "Marked in transit."}
           </div>
         )}
-        {accepted && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
-            Accepted — {accepted} lot{accepted === "1" ? "" : "s"} activated and on hand.
-            {drafts && drafts !== "0" && (
-              <>
-                {" "}
-                {drafts} product{drafts === "1" ? "" : "s"} weren&apos;t on the live menu —{" "}
+        {/* R23: ONE calm banner per outcome (finalize-banner-core). The old
+            three independent banners keyed on raw strings, so `rejected=0`
+            from every finalize lit a red "Whole manifest rejected" bar. */}
+        {finalBanner && (
+          <div
+            data-finalize-banner={finalBanner.kind}
+            data-tone={finalBanner.tone}
+            className={
+              finalBanner.tone === "green"
+                ? "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+                : finalBanner.tone === "gold"
+                  ? "rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-text)]"
+                  : "rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm text-[var(--admin-text)]"
+            }
+          >
+            <div className="font-semibold">{finalBanner.headline}</div>
+            {finalBanner.details.map((d) => (
+              <div key={d} className="mt-0.5 text-[var(--admin-text-muted)]">
+                {d}
+              </div>
+            ))}
+            {finalBanner.drafts > 0 && (
+              <div className="mt-0.5">
+                {finalBanner.drafts} new product{finalBanner.drafts === 1 ? "" : "s"} weren&apos;t on the live
+                menu yet →{" "}
                 <Link href={draftsForManifestHref(id)} className="font-semibold underline">
-                  review {drafts === "1" ? "it" : "them"} as draft{drafts === "1" ? "" : "s"}
+                  onboard {finalBanner.drafts === 1 ? "it" : "them"}
                 </Link>
                 .
-              </>
-            )}
-          </div>
-        )}
-        {rejected && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
-            Whole manifest rejected at the dock — refused product never entered inventory (nothing
-            destroyed). No CCRS filing on our end; ask the vendor to Update/Delete their manifest.
-          </div>
-        )}
-        {finalized && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
-            Finalized as <strong>{manifestStatusBadge(finalized).label}</strong> — {accepted ?? 0}{" "}
-            activated, {rejected ?? 0} refused at dock.
-            {drafts && drafts !== "0" && (
-              <>
-                {" "}
-                {drafts} new product{drafts === "1" ? "" : "s"} →{" "}
-                <Link href={draftsForManifestHref(id)} className="font-semibold underline">
-                  review draft{drafts === "1" ? "" : "s"}
-                </Link>
-                .
-              </>
+              </div>
             )}
           </div>
         )}

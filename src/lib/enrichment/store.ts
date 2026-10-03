@@ -153,6 +153,30 @@ export async function getEnrichmentForItem(item: MenuItemRow): Promise<ItemEnric
 }
 
 /**
+ * R23 (fix 4): the enrichment row a PUBLIC product page is served, from the
+ * public item's stable key + the identity live-menu computed from the raw
+ * row (GreenwayMenuItem.identityKey). Same S20 rule as getEnrichmentForItem:
+ * own key with content, else the product's published survivor. Never throws
+ * (page metadata must never break the page); null when nothing is on file.
+ */
+export async function getEnrichmentForPublicItem(input: {
+  posKey: string;
+  identityKey?: string | null;
+}): Promise<ProductEnrichment | null> {
+  try {
+    const own = await getEnrichment(input.posKey);
+    if (own && enrichmentRowHasContent(own)) return own;
+    const identity = enrichmentFollowsIdentityOn() ? (input.identityKey ?? "").trim() : "";
+    const byIdentity = identity
+      ? (await loadPublishedEnrichmentsByIdentity<ProductEnrichment>([identity], "*")).get(identity) ?? null
+      : null;
+    return resolveEnrichmentForItem({ own, byIdentity, enabled: enrichmentFollowsIdentityOn(), hasContent: enrichmentRowHasContent }).row;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Batch form of getEnrichmentForItem for the products list (one own-key read
  * already done by the caller, plus ONE identity read for the cards whose own
  * row is absent or blank). Returns the served row per card key and the set

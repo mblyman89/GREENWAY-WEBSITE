@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { withBackParam } from "@/lib/admin/back-link-core";
@@ -17,7 +18,22 @@ import {
   loadMasteredMenu,
   loadIdentityKeysForCards,
   listAllMasterMembers,
+  loadManifestLotKeys,
+  listMasterableManifests,
 } from "@/lib/products/masters-store";
+// R23 (owner fix 7): vendor + manifest facets.
+import {
+  parseMastersFilter,
+  isFiltered,
+  vendorOptions,
+  manifestKeySet,
+  manifestOptions,
+  applyMastersFilter,
+  masterPasses,
+  withMastersFilter,
+  filterSummary,
+  type MastersFilter,
+} from "@/lib/products/masters-filter-core";
 // S35 — what is actually mastered on the live menu.
 import { ListPager } from "@/components/admin/ux";
 import { listWindow, parsePageParam } from "@/lib/admin/list-window-core";
@@ -61,6 +77,8 @@ export default async function MastersPage({
     back?: string;
     show?: string;
     page?: string;
+    vendor?: string;
+    manifest?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -81,15 +99,30 @@ export default async function MastersPage({
     );
   }
 
-  const [masters, suggestions, mastered, memberRead] = await Promise.all([
+  const facets = parseMastersFilter(sp);
+  const [masters, suggestions, mastered, memberRead, manifestRows, manifestLots] = await Promise.all([
     listMasters(),
     listSuggestions({ status: "pending" }),
     loadMasteredMenu(),
     listAllMasterMembers(),
+    listMasterableManifests(),
+    facets.manifest ? loadManifestLotKeys(facets.manifest) : Promise.resolve(null),
   ]);
 
-  const cards: MasteredCard[] = mastered.ok ? mastered.cards : [];
-  const stats = masteredStats(cards);
+  const allCards: MasteredCard[] = mastered.ok ? mastered.cards : [];
+  // R23 fix 7: facets narrow first (AND); a manifest whose lots could not be
+  // read shows nothing and says so — never silently "all".
+  const manifestReadFailed = manifestLots !== null && !manifestLots.ok;
+  const manifestKeys = manifestLots && manifestLots.ok ? manifestKeySet(manifestLots.lots) : null;
+  const cards: MasteredCard[] = applyMastersFilter(allCards, facets, manifestKeys);
+  const vendorOpts = vendorOptions(allCards);
+  const manifestOpts = manifestOptions(manifestRows, facets.vendor);
+  const vendorLabel = facets.vendor ? (vendorOpts.find((v) => v.key === facets.vendor)?.label ?? facets.vendor) : null;
+  const manifestLabel = facets.manifest
+    ? (manifestOptions(manifestRows, "").find((m) => m.id === facets.manifest)?.label ?? "the selected manifest")
+    : null;
+  const passingKeys = new Set(cards.map((c) => c.key));
+  const stats = masteredStats(allCards);
   const cardsByKey = new Map(cards.map((c) => [c.key, c]));
   const masterNames = new Map(masters.map((m) => [m.id, m.display_name]));
   const membersByMaster = masterMemberViews(memberRead.members, cardsByKey);
@@ -105,7 +138,10 @@ export default async function MastersPage({
     tab === "live" && mastered.ok && mastered.versionId
       ? await loadIdentityKeysForCards(mastered.versionId, pageCards.map((c) => c.key))
       : new Map<string, string>();
-  const selfHref = liveCardsHref(BASE, show, win.page, sp.back);
+  const selfHref = withMastersFilter(liveCardsHref(BASE, show, win.page, sp.back), facets);
+  const visibleMasters = isFiltered(facets)
+    ? masters.filter((m) => masterPasses(membersByMaster.get(m.id) ?? [], passingKeys))
+    : masters;
 
   return (
     <div>
@@ -149,6 +185,8 @@ export default async function MastersPage({
             ← Back to Product Intake Hub
           </BackLink>
         </div>
+        {/* R23 item 8: the one pipeline bar, in order. */}
+        <CatalogStageStrip current="master" />
         {sp.error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             {decodeURIComponent(sp.error)}
@@ -194,13 +232,30 @@ export default async function MastersPage({
           base={BASE}
           tabs={withTabCounts(MASTERS_PAGE_TABS, {
             live: mastered.ok ? stats.cards : null,
-            masters: masters.length,
+            masters: visibleMasters.length,
             suggestions: suggestions.length,
           })}
           active={tab}
-          keep={{ back: sp.back }}
+          keep={{ back: sp.back, vendor: facets.vendor || undefined, manifest: facets.manifest || undefined }}
+          allow={["back", "vendor", "manifest"]}
           ariaLabel="Product mastering views"
         />
+
+        {tab !== "suggestions" && mastered.ok && allCards.length > 0 && (
+          <MastersFacetForm
+            tab={tab}
+            back={sp.back}
+            facets={facets}
+            vendorOpts={vendorOpts}
+            manifestOpts={manifestOpts}
+            summary={
+              isFiltered(facets)
+                ? filterSummary(cards.length, allCards.length, vendorLabel, manifestLabel)
+                : null
+            }
+            manifestReadFailed={manifestReadFailed}
+          />
+        )}
 
         {tab === "live" ? (
           <LiveCardsTab
@@ -210,13 +265,15 @@ export default async function MastersPage({
             win={win}
             show={show}
             back={sp.back}
+            facets={facets}
             selfHref={selfHref}
             identityKeys={identityKeys}
             masterByKey={masterByKey}
           />
         ) : tab === "masters" ? (
           <MastersTab
-            masters={masters}
+            masters={visibleMasters}
+            filtered={isFiltered(facets)}
             sp={sp}
             membersByMaster={membersByMaster}
             membersComplete={memberRead.complete}
@@ -237,6 +294,7 @@ function LiveCardsTab({
   win,
   show,
   back,
+  facets,
   selfHref,
   identityKeys,
   masterByKey,
@@ -247,6 +305,7 @@ function LiveCardsTab({
   win: ReturnType<typeof listWindow>;
   show: LiveCardsFilter;
   back: string | undefined;
+  facets: MastersFilter;
   selfHref: string;
   identityKeys: Map<string, string>;
   masterByKey: Map<string, string>;
@@ -280,7 +339,7 @@ function LiveCardsTab({
         {LIVE_CARD_FILTERS.map((f) => (
           <Link
             key={f.key}
-            href={liveCardsHref(BASE, f.key, 1, back)}
+            href={withMastersFilter(liveCardsHref(BASE, f.key, 1, back), facets)}
             aria-current={f.key === show ? "page" : undefined}
             className={
               f.key === show
@@ -293,10 +352,18 @@ function LiveCardsTab({
         ))}
       </nav>
       {filtered.length === 0 ? (
-        <EmptyState icon="🗂️" title="No cards match this filter" description="Choose “All cards” to see every live card." />
+        <EmptyState
+          icon="🗂️"
+          title="No cards match this filter"
+          description={
+            isFiltered(facets)
+              ? "No live card matches this vendor / manifest. Choose “Clear” above to see every live card."
+              : "Choose “All cards” to see every live card."
+          }
+        />
       ) : (
         <>
-          <ListPager window={win} total={filtered.length} noun="card" makeHref={(p) => liveCardsHref(BASE, show, p, back)} />
+          <ListPager window={win} total={filtered.length} noun="card" makeHref={(p) => withMastersFilter(liveCardsHref(BASE, show, p, back), facets)} />
           <ul className="space-y-3">
             {pageCards.map((c) => (
               <LiveCardRow
@@ -308,7 +375,7 @@ function LiveCardsTab({
               />
             ))}
           </ul>
-          <ListPager window={win} total={filtered.length} noun="card" makeHref={(p) => liveCardsHref(BASE, show, p, back)} />
+          <ListPager window={win} total={filtered.length} noun="card" makeHref={(p) => withMastersFilter(liveCardsHref(BASE, show, p, back), facets)} />
         </>
       )}
     </div>
@@ -317,12 +384,14 @@ function LiveCardsTab({
 
 function MastersTab({
   masters,
+  filtered,
   sp,
   membersByMaster,
   membersComplete,
   menuReadOk,
 }: {
   masters: Awaited<ReturnType<typeof listMasters>>;
+  filtered: boolean;
   sp: Record<string, string | string[] | undefined>;
   membersByMaster: Map<string, MasterMemberView[]>;
   membersComplete: boolean;
@@ -354,7 +423,15 @@ function MastersTab({
         </p>
       )}
       {masters.length === 0 ? (
-        <EmptyState icon="📦" title="No product masters yet" description="Generate suggestions above, accept the good ones, or create one manually." />
+        filtered ? (
+          <EmptyState
+            icon="📦"
+            title="No masters for this vendor / manifest"
+            description="No master has a member card that matches the filter above. Choose “Clear” to see every master."
+          />
+        ) : (
+          <EmptyState icon="📦" title="No product masters yet" description="Generate suggestions above, accept the good ones, or create one manually." />
+        )
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {masters.map((m) => (
@@ -388,6 +465,86 @@ function MastersTab({
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+/** R23 fix 7 — plain GET form (works without JS; the URL is shareable). */
+function MastersFacetForm({
+  tab,
+  back,
+  facets,
+  vendorOpts,
+  manifestOpts,
+  summary,
+  manifestReadFailed,
+}: {
+  tab: string;
+  back: string | undefined;
+  facets: MastersFilter;
+  vendorOpts: { key: string; label: string; count: number }[];
+  manifestOpts: { id: string; label: string }[];
+  summary: string | null;
+  manifestReadFailed: boolean;
+}) {
+  const selectCls =
+    "min-w-48 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)]";
+  const clearQs = new URLSearchParams({ tab });
+  if (back?.trim()) clearQs.set("back", back.trim());
+  return (
+    <div
+      className="space-y-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"
+      data-testid="masters-facets"
+    >
+      <form method="get" action={BASE} className="flex flex-wrap items-end gap-3" role="search" aria-label="Filter by vendor and manifest">
+        <input type="hidden" name="tab" value={tab} />
+        {back?.trim() ? <input type="hidden" name="back" value={back.trim()} /> : null}
+        <label className="flex flex-col gap-1 text-xs text-[var(--admin-text-muted)]">
+          Vendor
+          <select name="vendor" defaultValue={facets.vendor} className={selectCls} data-testid="masters-vendor-select">
+            <option value="">Any vendor</option>
+            {vendorOpts.map((v) => (
+              <option key={v.key} value={v.key}>
+                {v.label} ({v.count})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-[var(--admin-text-muted)]">
+          Manifest
+          <select name="manifest" defaultValue={facets.manifest} className={selectCls} data-testid="masters-manifest-select">
+            <option value="">Any manifest</option>
+            {manifestOpts.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button type="submit">Apply</Button>
+        {isFiltered(facets) && (
+          <Link
+            href={`${BASE}?${clearQs.toString()}`}
+            className="py-2 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+            data-testid="masters-facets-clear"
+          >
+            Clear
+          </Link>
+        )}
+      </form>
+      {manifestReadFailed ? (
+        <p className="text-xs text-[var(--admin-orange)]" data-testid="masters-manifest-read-failed">
+          The lots on that manifest could not be read, so no card is shown. Reload the page; if it persists, check the database connection.
+        </p>
+      ) : summary ? (
+        <p className="text-xs text-[var(--admin-text-muted)]" data-testid="masters-facets-summary">
+          {summary}
+        </p>
+      ) : (
+        <p className="text-xs text-[var(--admin-text-faint)]">
+          Pick a vendor and/or a received manifest to narrow the cards and masters below.
+        </p>
       )}
     </div>
   );

@@ -189,6 +189,12 @@ export interface GapKnowledgeInput {
   terpenes: readonly string[] | null;
   aromaNotes: readonly string[] | null;
   flavorNotes: readonly string[] | null;
+  /**
+   * R23 (fix 3): per-field origin of a sensory list the command center
+   * gap-filled AFTER the ladder (sensory-fill-core), e.g. { aroma: "Linked
+   * KB" }. Wins over the ladder source label for that field's "seen in".
+   */
+  sensoryOrigins?: Partial<Record<string, string>> | null;
 }
 
 /** One product_fact_provenance row as read (GAP_PROVENANCE_SELECT). */
@@ -334,10 +340,13 @@ export function buildGapVector(input: GapVectorInput): GapVector {
     }
   };
 
-  const seenLabel = (s: GapSeenIn): string | null => {
+  const seenLabel = (s: GapSeenIn, field: GapField): string | null => {
     if (s === "enrichment") return "Enrichment";
     if (s === "menu") return "Menu";
-    if (s === "kb") return kbLabel(k?.source);
+    if (s === "kb") {
+      const origin = k?.sensoryOrigins?.[field];
+      return typeof origin === "string" && origin.trim() !== "" ? origin.trim() : kbLabel(k?.source);
+    }
     return null;
   };
 
@@ -349,7 +358,7 @@ export function buildGapVector(input: GapVectorInput): GapVector {
       label: GAP_FIELD_LABEL[field],
       state,
       attachedBy: p ? provenanceChip(p) : null,
-      seenIn: state === "filled" && !p ? seenLabel(seen) : null,
+      seenIn: state === "filled" && !p ? seenLabel(seen, field) : null,
       borrowedFrom:
         field === "description" && state === "missing" && k && k.source !== "none" && isRealDescription(k.description)
           ? kbLabel(k.source)
@@ -622,6 +631,11 @@ export function __runGapVectorCoreTests(): { passed: number; failed: number } {
   eq("strain rung label", strainK.entries.find((x) => x.field === "aroma")!.seenIn, "Strain library");
   const draftK = buildGapVector({ item: { description: REAL, strain_type: "Hybrid", category: "flower" }, enrichment: null, knowledge: { ...k, source: "kb-draft" }, provenance: [] });
   eq("kb-draft rung label", draftK.entries.find((x) => x.field === "aroma")!.seenIn, "KB draft");
+  // R23: a gap-filled sensory list names its own origin; others keep the rung label.
+  const filledK = buildGapVector({ item: { description: REAL, strain_type: "Hybrid", category: "flower" }, enrichment: null, knowledge: { ...k, source: "enrichment", sensoryOrigins: { aroma: " Linked KB ", effects: "  " } }, provenance: [] });
+  eq("origin label wins for its field", filledK.entries.find((x) => x.field === "aroma")!.seenIn, "Linked KB");
+  eq("blank origin falls back to rung", filledK.entries.find((x) => x.field === "effects")!.seenIn, "Enrichment");
+  eq("other field keeps rung label", filledK.entries.find((x) => x.field === "flavor")!.seenIn, "Enrichment");
   eq("blank-string sensory list -> missing", buildGapVector({ item: { description: REAL, strain_type: "Hybrid", category: "flower" }, enrichment: null, knowledge: { ...k, effects: [" "] }, provenance: [] }).missing.includes("effects"), true);
 
   // 14. nothing missing
