@@ -1328,18 +1328,30 @@ describe("the migration list is ordered the way the database will see it", () =>
     // case asserted, exact rollback) and 19 SQL mutants all killed by
     // scripts/r25/mutate_a_sql.py; all 244 migrations re-applied clean on a
     // fresh database. The owner applies it by hand.
-    expect(listed[listed.length - 1]).toMatch(/^0244_/);
+    // R26 added 0245_manifest_invoice_number_detected.sql (two nullable text
+    // columns on inbound_manifests: the invoice/order # found across ALL the
+    // manifest's documents + its provenance; additive, idempotent, no
+    // backfill). The tripwire FIRED and was HONOURED: 245 .sql files,
+    // `grep -cvE '^[0-9]{4}_'` returns 0, `sort -c` clean. Verified on
+    // Postgres 15: all 245 migrations applied in order on a fresh database
+    // bootstrapped exactly as CI does, 0245 re-applied cleanly, and
+    // scripts/recon/invoice-number-detected-pg-check.sql passed (applied
+    // twice, nullable text + comments, no backfill, writer update, exact
+    // rollback) with 6 deliberate SQL mutants all caught. The owner applies
+    // it by hand.
+    expect(listed[listed.length - 1]).toMatch(/^0245_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0244_intake_lot_received_date_strain_type_backfill.sql");
-    expect(listed[listed.length - 2]).toBe("0243_master_suggestions_v2.sql");
-    expect(listed[listed.length - 3]).toBe("0242_lookup_jobs.sql");
-    expect(listed[listed.length - 4]).toBe("0241_inventory_lot_pos_potency.sql");
-    expect(listed[listed.length - 5]).toBe("0240_factory_reset_scales.sql");
-    expect(listed[listed.length - 6]).toBe("0239_intake_merge_decisions.sql");
-    expect(listed[listed.length - 7]).toBe("0238_factory_reset_reaches_every_guard.sql");
-    expect(listed[listed.length - 8]).toBe("0237_fact_review_for_versions.sql");
-    expect(listed[listed.length - 9]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 1]).toBe("0245_manifest_invoice_number_detected.sql");
+    expect(listed[listed.length - 2]).toBe("0244_intake_lot_received_date_strain_type_backfill.sql");
+    expect(listed[listed.length - 3]).toBe("0243_master_suggestions_v2.sql");
+    expect(listed[listed.length - 4]).toBe("0242_lookup_jobs.sql");
+    expect(listed[listed.length - 5]).toBe("0241_inventory_lot_pos_potency.sql");
+    expect(listed[listed.length - 6]).toBe("0240_factory_reset_scales.sql");
+    expect(listed[listed.length - 7]).toBe("0239_intake_merge_decisions.sql");
+    expect(listed[listed.length - 8]).toBe("0238_factory_reset_reaches_every_guard.sql");
+    expect(listed[listed.length - 9]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 10]).toBe("0236_publish_archive_rule.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

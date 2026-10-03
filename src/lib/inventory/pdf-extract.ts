@@ -28,6 +28,7 @@ import {
   looksLikeTransferLog,
 } from "@/lib/inventory/pdf-transferlog-core";
 import { parseCoaSummary, looksLikeCoaSummary } from "@/lib/inventory/pdf-coa-core";
+import type { PageLayer, PositionedText } from "@/lib/inventory/pdf-contingency-manifest-core";
 
 /** Extract the merged plain text from a PDF given its raw bytes. */
 export async function extractPdfText(bytes: Uint8Array): Promise<string> {
@@ -38,6 +39,47 @@ export async function extractPdfText(bytes: Uint8Array): Promise<string> {
   if (typeof t === "string") return t;
   if (Array.isArray(t)) return (t as unknown[]).join("\n");
   return "";
+}
+
+/**
+ * R26 — the PDF's OWN text layer, read independently of LlamaParse:
+ *  - `text`: unpdf merged text ("" for a scanned image or unreadable bytes);
+ *  - `page1`: page-1 text items with their positions (pdf.js transform),
+ *    which the Contingency Manifest reader needs because that form's LABELS
+ *    are an image and only the values are text.
+ * This is the GROUNDING reference for vision output (extraction-grounding-
+ * core): a vision value on a digital PDF must appear here. Reads a COPY of
+ * the bytes (pdf.js may detach the buffer it is given). Never throws.
+ */
+export type PdfLayer = { text: string; page1: PageLayer | null };
+
+export async function readPdfLayer(bytes: Uint8Array): Promise<PdfLayer> {
+  let text = "";
+  try {
+    text = await extractPdfText(bytes.slice());
+  } catch {
+    text = "";
+  }
+  let page1: PageLayer | null = null;
+  try {
+    const pdf = await getDocumentProxy(bytes.slice());
+    const page = await pdf.getPage(1);
+    const vp = page.getViewport({ scale: 1 });
+    const tc = await page.getTextContent();
+    const items: PositionedText[] = [];
+    for (const raw of tc.items as unknown[]) {
+      const it = raw as { str?: unknown; transform?: unknown };
+      if (typeof it.str !== "string" || !it.str.trim() || !Array.isArray(it.transform)) continue;
+      const x = Number(it.transform[4]);
+      const y = Number(it.transform[5]);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      items.push({ str: it.str, x: Math.round(x), y: Math.round(y) });
+    }
+    page1 = { width: vp.width, height: vp.height, items };
+  } catch {
+    page1 = null;
+  }
+  return { text, page1 };
 }
 
 /**

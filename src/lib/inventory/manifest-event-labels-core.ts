@@ -16,7 +16,8 @@
  *                                 draft_seed_error, kb_writeback_error,
  *                                 po_auto_receive, menu_auto_carry, note,
  *                                 in_transit/received (lifecycle), transport,
- *                                 invoice_number_override
+ *                                 invoice_number_override,
+ *                                 invoice_number_detected (R26)
  *   import-service.ts             accepted (Cultivera migration)
  *   po-link-store.ts              po_link
  *   kb-link-store.ts              kb_link
@@ -57,6 +58,7 @@ export const MANIFEST_EVENT_LABELS: Readonly<Record<string, ManifestEventLabel>>
   po_auto_receive: { label: "Purchase order received", group: "delivery", problem: false },
   transport: { label: "Transport details", group: "delivery", problem: false },
   invoice_number_override: { label: "Invoice # corrected", group: "delivery", problem: false },
+  invoice_number_detected: { label: "Invoice # found in the documents", group: "delivery", problem: false },
   note: { label: "Note", group: "delivery", problem: false },
   // Menu
   draft_seed_error: { label: "Onboarding drafts failed", group: "menu", problem: true },
@@ -259,7 +261,9 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   // Every label has text and a valid group.
   const groups = new Set(MANIFEST_EVENT_GROUPS.map((g) => g.key));
   ok(Object.values(MANIFEST_EVENT_LABELS).every((l) => l.label.length > 0 && groups.has(l.group)), "every label valid");
-  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 31, "31 known types (S32 adds the two match-review events)");
+  // R26 pin update (on purpose): +invoice_number_detected (migration 0245 writer).
+  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 32, "32 known types (R26 adds invoice_number_detected)");
+  ok(isKnownEventType("invoice_number_detected") && labelForEvent("invoice_number_detected").label === "Invoice # found in the documents" && labelForEvent("invoice_number_detected").group === "delivery" && !labelForEvent("invoice_number_detected").problem, "R26 invoice # found is a known delivery, non-problem label");
 
   // Grouping keeps order, drops empties, accounting collapsed + last.
   const ev = [

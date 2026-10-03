@@ -23,6 +23,7 @@ import {
   parseVendorJson,
   looksLikeWciaTransferStrict,
   type ParsedManifest,
+  type ParsedTransport,
 } from "@/lib/inventory/intake-parser";
 import {
   parseCcrsManifestCsv,
@@ -33,6 +34,7 @@ import {
   stageManifest,
   setManifestLifecycle,
   backfillManifestTransport,
+  recordInvoiceNumberDetected,
 } from "@/lib/inventory/intake-store";
 import type {
   NormalizedInboundEmail,
@@ -58,21 +60,29 @@ function pdfRoleRank(role: AttachmentRole): number {
       return 3; // coa — never a manifest candidate (still read + merged + archived separately)
   }
 }
-import { parsePdfManifestFromBase64, parseCoaFromBase64 } from "@/lib/inventory/pdf-extract";
+import {
+  parsePdfManifestFromBase64,
+  parseCoaFromBase64,
+  readPdfLayer,
+} from "@/lib/inventory/pdf-extract";
 import { llamaParseRecoverText, makeCapturingRecovery } from "@/lib/inbound-email/llamaparse-recovery";
 import { recordManifestParseStatus } from "@/lib/inbound-email/llamaparse-status-server";
 import {
   mergeInvoicePricesByLot,
   mergeCoaByLot,
-  chooseTransportDonor,
+  mergeMatchingDonors,
   foldTransport,
   type TransportDonor,
 } from "@/lib/inventory/manifest-merge-core";
-import { extractCultiveraInvoiceTransport } from "@/lib/inventory/pdf-cultivera-invoice-core";
 import { extractGenericPdfTransport } from "@/lib/inventory/pdf-generic-transport-core";
+import { readDocTransport } from "@/lib/inventory/doc-transport-core";
+import {
+  invoiceDocRole,
+  selectInvoiceNumber,
+  type InvoiceSourceDoc,
+} from "@/lib/inventory/invoice-number-core";
 import { archiveEmailedCoaForManifest } from "@/lib/inventory/coa-archive";
 import { archiveManifestDocuments } from "@/lib/inventory/manifest-docs";
-import { mergeTransportFillEmpty } from "@/lib/inventory/manifest-merge-core";
 import { classifyMinerKind, type MinerSource } from "@/lib/inventory/vendor-goldminer-core";
 import { enrichVendorFromIntakeDocs } from "@/lib/inventory/vendor-goldminer-store";
 
@@ -271,60 +281,70 @@ export async function stageManifestsFromEmail(
   const minerSources: MinerSource[] = [];
   const pdfDonors: TransportDonor[] = [];
   const invoiceDonors: TransportDonor[] = [];
+  // R26 — every document's text is kept for the invoice/order # scan
+  // (invoice-number-core): the invoice PDF riding the email is where the
+  // number prints, but only the PRIMARY document used to be read for it.
+  const invoiceDocs: InvoiceSourceDoc[] = [];
+  // R26 (found by testing): each PDF's GROUNDED transport, by attachment, so
+  // the PDF-primary route below can replace the layout parser's raw (vision)
+  // transport with the grounded one - otherwise a hallucinated value in the
+  // primary manifest would sit in the base and win the fill-only fold.
+  const groundedByAtt = new Map<object, ParsedTransport | null>();
   if (pdfCands.length > 0) {
     for (const att of pdfCands) {
       if (classifyAttachmentRole(att) === "coa") continue; // COAs carry no transport
-      // PR-2: recover text via LlamaParse (vision-OCR) when the PDF is a scanned
-      // image with no unpdf text layer — the owner's real failure. Free-first:
-      // recovery only fires when unpdf comes back blank.
+      // PR-2: recover text via LlamaParse (vision-OCR) — the PRIMARY reader.
       const parsed = await parsePdfManifestFromBase64(
         att.base64 as string,
         llamaParseRecoverText,
       );
+      // R26: the PDF's OWN text layer (+ page-1 positions), read independently
+      // of LlamaParse. It grounds vision values (a hallucinated value the
+      // layer does not contain is dropped) and lets the Contingency Manifest
+      // — whose labels are an image — be read by cell position.
+      const layer = await readPdfLayer(new Uint8Array(Buffer.from(att.base64 as string, "base64")));
+      invoiceDocs.push({
+        role: invoiceDocRole(classifyAttachmentRole(att)),
+        label: att.filename ?? "attachment.pdf",
+        text: parsed.text ?? null,
+        layerText: layer.text,
+      });
       if (parsed.text) {
         minerSources.push({
           kind: classifyMinerKind(classifyAttachmentRole(att), parsed.text),
           text: parsed.text,
         });
       }
+      // SLICE 69 / H18 / SLICE 41 / R26: one grounded transport reading per
+      // document (doc-transport-core): the layout parser's transport first
+      // (when one matched), then the Contingency Manifest positions, the
+      // Cultivera invoice reader and the markdown-aware field-LABEL reader,
+      // fill-only-when-empty, every value grounded in the text layer,
+      // arrived_at never doc-sourced, null unless real facts were found.
+      const read = readDocTransport({
+        visionText: parsed.text ?? null,
+        layerText: layer.text,
+        page1: layer.page1,
+        layoutManifestNumber: parsed.ok ? parsed.manifest.manifest_number : null,
+        layoutTransport: parsed.ok ? (parsed.manifest.transport ?? null) : null,
+      });
+      groundedByAtt.set(att, read.donor?.transport ?? null);
+      if (read.dropped.length > 0) {
+        console.warn(
+          "[inbound-email] vision values not found in the PDF text layer were dropped:",
+          read.dropped.map((d) => d.field).join(", "),
+        );
+      }
       if (parsed.ok) {
-        // SLICE 69: a layout parser can read the LINES perfectly yet miss
-        // transport fields its layout doesn't print where expected (the
-        // owner's real failure: driver/vehicle sit in the document but never
-        // reached the form). Run the field-LABEL extractor over the SAME text
-        // and fill any transport blanks the layout parser left — fill-only-
-        // when-empty, arrived_at never doc-sourced, same manifest so no
-        // cross-pollination risk.
-        let donorTransport = parsed.manifest.transport ?? null;
-        const extra = extractGenericPdfTransport(parsed.text);
-        if (extra) {
-          donorTransport = mergeTransportFillEmpty(donorTransport, extra.transport).transport;
-        }
+        // A layout-parsed manifest PDF is always a donor slot (its own number).
         pdfDonors.push({
           manifest_number: parsed.manifest.manifest_number,
-          transport: donorTransport,
+          transport: read.donor?.transport ?? parsed.manifest.transport ?? null,
         });
-      } else if (parsed.text) {
-        // H18: a PDF that is NOT a manifest can still carry transport. The
-        // real Cultivera invoice (SPR ORD-24706, owner-verified) prints
-        // Driver / Plate / vehicle / Arrival date even though the manifest
-        // PDF is the primary source. The extractor is layout-gated and
-        // returns null unless the text really is this invoice AND at least
-        // one transport fact was found — never a donor full of nulls.
-        const inv = extractCultiveraInvoiceTransport(parsed.text);
-        if (inv) {
-          invoiceDonors.push(inv);
-        } else {
-          // SLICE 41 — provider-agnostic fallback. A NEW provider's PDFs
-          // (the real Bamboo "Washington Marijuana Transportation Manifest")
-          // match no layout-specific parser, so their transport never
-          // reached the form. Field-LABEL extraction reads driver / vehicle
-          // / plate / VIN / carrier / times from ANY transport-ish PDF;
-          // arrival feeds eta_date only, arrived_at never doc-sourced, and
-          // null unless real facts were found (never a donor of nulls).
-          const gen = extractGenericPdfTransport(parsed.text);
-          if (gen) invoiceDonors.push(gen);
-        }
+      } else if (read.donor) {
+        // A PDF that is NOT a layout manifest can still carry transport (the
+        // Cultivera invoice; Bamboo; the LCB Contingency Manifest).
+        invoiceDonors.push(read.donor);
       }
     }
     // Invoice donors go LAST so an exact manifest-number tie prefers the
@@ -352,6 +372,8 @@ export async function stageManifestsFromEmail(
   // SLICE 102: the body text is also a (last-resort) gold-miner source.
   if (typeof email.bodyText === "string" && email.bodyText.trim().length > 0) {
     minerSources.push({ kind: "email-body", text: email.bodyText });
+    // R26: and the last-resort invoice/order # source.
+    invoiceDocs.push({ role: "email-body", label: "email body", text: email.bodyText });
   }
 
   // 1) Textual attachments (JSON / CCRS CSV). H15b strict gate: only
@@ -367,7 +389,9 @@ export async function stageManifestsFromEmail(
     }
     let manifest = outcome.manifest;
     // H17: enrich with the bundled shipping PDF's transport (fill-only-empty).
-    const donor = chooseTransportDonor(manifest.manifest_number, pdfDonors);
+    // R26: EVERY exact-number donor folds in order (manifest PDF, then the
+    // invoice), fill-only-empty — no longer just the first match.
+    const donor = mergeMatchingDonors(manifest.manifest_number, pdfDonors);
     if (donor) manifest = foldTransport(manifest, donor);
     // Keep the original text as raw payload for provenance in the KB snapshot.
     const rawPayload =
@@ -375,9 +399,17 @@ export async function stageManifestsFromEmail(
         ? safeJson(att.text)
         : att.text;
     const staged = await stageManifest(manifest, rawPayload, actorId, { sourceUrl: null });
+    // R26: the invoice/order # across ALL the email's documents (this JSON
+    // first — the locked external_id decision — then invoice PDF, manifest
+    // PDF, email body). Persisted for new AND re-sent (duplicate) manifests.
+    const invoicePick = selectInvoiceNumber([
+      { role: "transfer-json", label: att.filename ?? "transfer.json", payload: rawPayload },
+      ...invoiceDocs,
+    ]);
     if (staged.ok) {
       result.staged += 1;
       result.manifestIds.push(staged.manifestId);
+      await recordInvoiceNumberDetected(staged.manifestId, invoicePick, actorId);
       // SLICE 69: archive EVERY document the email carried (manifest PDF,
       // invoice PDF, COA, transfer JSON, extras) into private storage linked
       // to this manifest — permanent download buttons for every row.
@@ -404,6 +436,7 @@ export async function stageManifestsFromEmail(
           actorId,
           "re-sent vendor email",
         );
+        await recordInvoiceNumberDetected(staged.existingManifestId, invoicePick, actorId);
       }
       console.warn("[inbound-email] duplicate manifest skipped:", staged.error);
     } else {
@@ -471,7 +504,11 @@ export async function stageManifestsFromEmail(
         continue;
       }
       if (!primary) {
-        primary = { manifest: parsed.manifest, text: parsed.text };
+        // R26: the primary's transport is the GROUNDED read of this same PDF
+        // (identical to the layout transport whenever the text layer prints
+        // every value, and for scans, which have no layer to check against).
+        const grounded = groundedByAtt.has(att) ? groundedByAtt.get(att) ?? undefined : parsed.manifest.transport;
+        primary = { manifest: { ...parsed.manifest, transport: grounded }, text: parsed.text };
         primaryPdfCap = primaryCap; // PR-A: this capturer maps to the primary manifest
       } else {
         // A second manifest-capable PDF: keep OpenTHC invoices as price donors.
@@ -508,13 +545,17 @@ export async function stageManifestsFromEmail(
       // invoice's driver / plate / vehicle) onto the primary manifest too —
       // fill-only-when-empty, arrived_at never doc-sourced, manifest-number
       // matched (same conservative rules as the JSON path above).
-      const pdfDonor = chooseTransportDonor(merged.manifest_number, pdfDonors);
+      const pdfDonor = mergeMatchingDonors(merged.manifest_number, pdfDonors);
       if (pdfDonor) merged = foldTransport(merged, pdfDonor);
 
       const staged = await stageManifest(merged, primary.text, actorId, { sourceUrl: null });
+      // R26: the invoice/order # across ALL the email's PDFs (invoice-role
+      // first) + body — not only the primary manifest's text.
+      const invoicePick = selectInvoiceNumber(invoiceDocs);
       if (staged.ok) {
         result.staged += 1;
         result.manifestIds.push(staged.manifestId);
+        await recordInvoiceNumberDetected(staged.manifestId, invoicePick, actorId);
         // PR-A: record which engine read this manifest (llama / FB) so the
         // intake table badge + detail statement can show it. Best-effort.
         await recordManifestParseStatus(
@@ -552,6 +593,7 @@ export async function stageManifestsFromEmail(
             actorId,
             "re-sent vendor email (PDF)",
           );
+          await recordInvoiceNumberDetected(staged.existingManifestId, invoicePick, actorId);
         }
         console.warn("[inbound-email] duplicate manifest (pdf) skipped:", staged.error);
       } else {

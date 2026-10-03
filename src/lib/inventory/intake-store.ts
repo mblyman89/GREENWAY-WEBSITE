@@ -2106,6 +2106,64 @@ export async function setManifestInvoiceOverride(
 }
 
 /**
+ * R26 — persist the invoice/order # FOUND in a manifest's documents
+ * (invoice-number-core.selectInvoiceNumber) with its provenance (migration
+ * 0245). Writes ONLY invoice_number_detected / invoice_number_source; never
+ * touches the owner's override (which still wins on display) and never stores
+ * the manifest number (that is the display fallback). Skips the write when
+ * the stored value is already identical. No-op-safe before 0245 is applied
+ * (42703 / PGRST204 -> "missing-column"). Never throws.
+ */
+export async function recordInvoiceNumberDetected(
+  manifestId: string,
+  pick: { value: string; source: string } | null,
+  actorId: string | null,
+): Promise<"saved" | "unchanged" | "none" | "missing-column" | "error"> {
+  if (!isSupabaseServiceConfigured) return "error";
+  const value = (pick?.value ?? "").trim();
+  if (!value) return "none";
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error: readErr } = await admin
+      .from("inbound_manifests")
+      .select("invoice_number_detected")
+      .eq("id", manifestId)
+      .maybeSingle();
+    if (readErr) {
+      const code = (readErr as { code?: string }).code ?? "";
+      return code === "42703" || code === "PGRST204" ? "missing-column" : "error";
+    }
+    if (!data) return "error";
+    const current = ((data as { invoice_number_detected?: string | null }).invoice_number_detected ?? "").trim();
+    if (current === value) return "unchanged";
+    const { error } = await admin
+      .from("inbound_manifests")
+      .update({
+        invoice_number_detected: value,
+        invoice_number_source: pick?.source ?? null,
+        updated_by: actorId,
+      })
+      .eq("id", manifestId);
+    if (error) {
+      const code = (error as { code?: string }).code ?? "";
+      return code === "42703" || code === "PGRST204" ? "missing-column" : "error";
+    }
+    await logManifestEvent(
+      manifestId,
+      "invoice_number_detected",
+      current
+        ? `Invoice/Order # re-read from the documents: "${value}" (was "${current}"; source ${pick?.source ?? "?"}).`
+        : `Invoice/Order # found in the documents: "${value}" (source ${pick?.source ?? "?"}).`,
+      actorId,
+    );
+    return "saved";
+  } catch (err) {
+    console.error("[intake-store] invoice # record failed:", err);
+    return "error";
+  }
+}
+
+/**
  * H15a — seed transport / ETA drafts from the parsed document at staging time.
  * Best-effort: skips silently when the parser found nothing; never fails the
  * stage (staging already succeeded — transport is enrichment, not a gate).

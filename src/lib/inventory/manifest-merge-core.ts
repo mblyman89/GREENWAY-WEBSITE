@@ -290,6 +290,36 @@ export function chooseTransportDonor(
 }
 
 /**
+ * R26 — fold EVERY donor whose manifest number EXACTLY matches, in order,
+ * fill-only-when-empty. The real QGT email carries TWO documents for the same
+ * manifest 15410217973875889: the Contingency Manifest (driver, VIN, plate,
+ * vehicle, departure, ETA) and the Cultivera invoice (driver, plate, vehicle
+ * with year, ETA). chooseTransportDonor returns only the FIRST exact match, so
+ * whichever came second could never fill a field the first lacked. With no
+ * exact match this defers to chooseTransportDonor's conservative
+ * single-candidate rule (unchanged). arrived_at is never doc-sourced.
+ */
+export function mergeMatchingDonors(
+  manifestNumber: string | null | undefined,
+  donors: readonly TransportDonor[],
+): ParsedTransport | null {
+  const norm = (v: string | null | undefined): string | null => {
+    const t = (v ?? "").replace(/\s+/g, "").trim();
+    return t.length > 0 ? t : null;
+  };
+  const target = norm(manifestNumber);
+  const exact = target
+    ? donors.filter((d) => transportHasData(d.transport) && norm(d.manifest_number) === target)
+    : [];
+  if (exact.length === 0) return chooseTransportDonor(manifestNumber, donors);
+  let out: ParsedTransport | null = null;
+  // mergeTransportFillEmpty never copies arrived_at (never doc-sourced), so
+  // the result's arrived_at is null by construction (self-test + R26 suite).
+  for (const d of exact) out = mergeTransportFillEmpty(out, d.transport).transport;
+  return out;
+}
+
+/**
  * H18 — plan a transport BACKFILL for an ALREADY-staged manifest.
  *
  * WHY: the H16b-7 dedupe correctly refuses to stage the same manifest twice —
@@ -556,6 +586,28 @@ export function __runManifestMergeTests(): { passed: number; failed: number } {
     eta_date: "2026-07-16", // DIFFERS — must NOT overwrite
     arrived_at: "2026-07-15T17:00", // never doc-sourced
   };
+  // R26 mergeMatchingDonors: all exact matches fold in order; the second
+  // fills what the first lacked, never overwrites; no exact -> legacy rule.
+  {
+    const a = { ...emptyTransport(), driver_name: "Chris Gibilterra", vehicle_vin: "W1Y40BHY9LT036548" };
+    const b = { ...emptyTransport(), driver_name: "Someone Else", vehicle_plate: "A3169588", arrived_at: "2025-03-13T16:00" };
+    const other = { ...emptyTransport(), vehicle_description: "Other Truck" };
+    const m = mergeMatchingDonors("1541 0217973875889", [
+      { manifest_number: "15410217973875889", transport: a },
+      { manifest_number: "999", transport: other },
+      { manifest_number: "15410217973875889", transport: b },
+    ]);
+    ok(m?.driver_name === "Chris Gibilterra", "mergeMatching: first exact donor wins a field");
+    ok(m?.vehicle_plate === "A3169588", "mergeMatching: second exact donor fills a blank");
+    ok(m?.vehicle_vin === "W1Y40BHY9LT036548", "mergeMatching: first donor's vin kept");
+    ok(m?.vehicle_description == null, "mergeMatching: non-matching donor never folds");
+    ok(m?.arrived_at == null, "mergeMatching: arrived_at never doc-sourced");
+    ok(
+      mergeMatchingDonors("X1", [{ manifest_number: null, transport: other }])?.vehicle_description === "Other Truck",
+      "mergeMatching: no exact -> single-candidate legacy rule",
+    );
+    ok(mergeMatchingDonors("X1", []) === null, "mergeMatching: no donors -> null");
+  }
   const plan = planTransportBackfill(existingRow, pdfTransport);
   ok(plan != null, "backfill: plan produced when empty fields gain values");
   ok(plan?.patch.driver_name === "Kory T Anderson", "backfill fills empty driver");

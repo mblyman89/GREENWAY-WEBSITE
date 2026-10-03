@@ -909,6 +909,13 @@ import { __runFactChipsCoreTests } from "../../src/lib/catalog/fact-chips-core";
 import { __runIntakeLotFactsCoreTests } from "../../src/lib/inventory/intake-lot-facts-core";
 import { __runKbSlugInputCoreTests } from "../../src/lib/catalog/kb-slug-input-core";
 import { __runMenuKbLinkCoreTests } from "../../src/lib/catalog/menu-kb-link-core";
+// R26 — LlamaParse markdown normalizer, grounding, contingency-manifest
+// positions, per-document transport, multi-document invoice/order #.
+import { __runMarkdownFieldsTests } from "../../src/lib/inventory/markdown-fields-core";
+import { __runExtractionGroundingTests } from "../../src/lib/inventory/extraction-grounding-core";
+import { __runContingencyManifestTests } from "../../src/lib/inventory/pdf-contingency-manifest-core";
+import { __runDocTransportTests } from "../../src/lib/inventory/doc-transport-core";
+import { __runInvoiceNumberCoreTests } from "../../src/lib/inventory/invoice-number-core";
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -1997,6 +2004,11 @@ __runLiquidVolumeTests();
   // R25 B: one dashed slug rule for every KB form (brand, product type, FAQ).
   assertRan("kb-slug-input-core", __runKbSlugInputCoreTests(), 38);
   assertRan("menu-kb-link-core", __runMenuKbLinkCoreTests(), 39);
+  assertRan("markdown-fields-core", __runMarkdownFieldsTests(), 37);
+  assertRan("extraction-grounding-core", __runExtractionGroundingTests(), 23);
+  assertRan("pdf-contingency-manifest-core", __runContingencyManifestTests(), 21);
+  assertRan("doc-transport-core", __runDocTransportTests(), 39); // R26: 39 (ground-before-merge + manifest-# grounding + drop de-dup)
+  assertRan("invoice-number-core", __runInvoiceNumberCoreTests(), 18);
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

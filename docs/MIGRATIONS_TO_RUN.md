@@ -1716,3 +1716,35 @@ in Vercel.
   `supabase/rollbacks/0244_intake_lot_received_date_strain_type_backfill.rollback.sql`
   into the SQL editor. It restores exactly what 0244 changed, except where a
   person has since changed the value again (those are kept).
+
+## R26 — 0245 — the Invoice # found in the documents is saved
+
+- [ ] `0245_manifest_invoice_number_detected.sql` — two new empty columns on
+  `inbound_manifests`: `invoice_number_detected` (the invoice / order # the
+  intake found by reading ALL of a delivery's documents — the transfer JSON,
+  the vendor's invoice PDF, the manifest PDF, the email) and
+  `invoice_number_source` (which document it came from, e.g.
+  `invoice:vision+layer:QGT_FreddysFuego_INVOICE.pdf`). Nothing is filled in
+  by the migration; new deliveries and the **Run AI extract** button fill it.
+  The Invoice # column shows: your own correction first, then this found
+  number, then the old one-document scan, then the manifest number.
+
+  Until you run it, the app keeps working exactly as before (the save quietly
+  skips). Safe to re-run. Verified on Postgres 15: all 245 migrations applied
+  in order on a fresh database, 0245 re-applied cleanly, and
+  `scripts/recon/invoice-number-detected-pg-check.sql` passed (6 deliberate
+  SQL mutations all caught).
+
+  **Run it, then check:**
+
+  ```sql
+  select column_name, data_type, is_nullable from information_schema.columns
+   where table_schema = 'public' and table_name = 'inbound_manifests'
+     and column_name in ('invoice_number_detected', 'invoice_number_source');
+  -- expect 2 rows: text, YES
+  ```
+
+  **Rollback (only if needed):** revert the code; the columns can stay unused.
+  To remove them as well, paste
+  `supabase/rollbacks/0245_manifest_invoice_number_detected.rollback.sql`
+  into the SQL editor (this forgets the numbers that were found).
