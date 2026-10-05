@@ -49,6 +49,7 @@
  * ------------------------------------------------------------------ */
 
 export const CCRS_ISSUE_CODES = [
+  "E3_EXTERNAL_ID_UNASSIGNED",
   "E7_TOTALCOST_ZERO",
   "E7_SAMPLE_DESCRIPTION",
   "E8_ONHAND_GT_INITIAL",
@@ -357,6 +358,7 @@ export function productRowIssues(f: ProductRowFacts): Array<{
  * ------------------------------------------------------------------ */
 
 const PINS: Record<CcrsIssueCode, string> = {
+  E3_EXTERNAL_ID_UNASSIGNED: "[G L0224-L0225]",
   E7_TOTALCOST_ZERO: "[G L0614]",
   E7_SAMPLE_DESCRIPTION: "[FAQ L0035]",
   E8_ONHAND_GT_INITIAL: "[G L0597]",

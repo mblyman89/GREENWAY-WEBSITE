@@ -88,7 +88,7 @@ export type ImportLotSource = {
 export type PlannedImportLot = {
   /** inventory_lots.lot_code — the Cultivera barcode (null only if blank). */
   lotCode: string | null;
-  /** Canonical CCRS InventoryExternalIdentifier (sanitized barcode). */
+  /** Canonical CCRS InventoryExternalIdentifier (the barcode exactly as filed; S-10). */
   ccrsExternalId: string;
   /** inventory_lots.pos_product_key = menu_items.source_item_id (card key). */
   posProductKey: string;
@@ -542,7 +542,13 @@ export function planImportLots(sources: readonly ImportLotSource[]): ImportLotPl
       });
     }
 
-    const ccrsExternalId = deriveInventoryExternalId({ lot_code: barcode }) ?? barcode;
+    // S-10: a Cultivera barcode IS the id Cultivera filed with CCRS (the LCB's
+    // 2026-09-18 delivery matches 4,098 of 4,208 shelf barcodes exactly). Pass
+    // it through byte-for-byte — dots included — via the stored-id path. Only a
+    // synthetic NOBARCODE key (never filed) is minted.
+    const ccrsExternalId = (first.barcode ?? "").trim()
+      ? deriveInventoryExternalId({ ccrs_inventory_external_id: barcode }) ?? barcode
+      : deriveInventoryExternalId({ lot_code: barcode }) ?? barcode;
 
     lots.push({
       lotCode: (first.barcode ?? "").trim() ? barcode : null,
@@ -697,7 +703,10 @@ export function __runImportLotCoreTests(): void {
     ok(plan.lots.length === 1, "one source -> one lot");
     const l = plan.lots[0];
     ok(l.lotCode === "GF42802505795142", "lot_code = barcode");
-    ok(l.ccrsExternalId === "GF42802505795142", "CCRS id = sanitized barcode");
+    ok(l.ccrsExternalId === "GF42802505795142", "CCRS id = barcode as filed");
+    // S-10: a dotted filed barcode is NOT rewritten to hyphens.
+    const dotted = planImportLots([src({ barcode: "WAR413541.IN132IB0" })]).lots[0];
+    ok(dotted.ccrsExternalId === "WAR413541.IN132IB0", "S-10: dotted barcode passes through byte-for-byte");
     ok(l.posProductKey === "pos-abc123", "lot keyed to the menu card (source_item_id)");
     ok(l.receivedQty === 10 && l.unit === "each", "received qty + unit");
     ok(l.unitCostMinorUnits === 500, "cost in minor units (cents)");
@@ -893,10 +902,12 @@ export function __runImportLotCoreTests(): void {
     ok(!plan.diagnostics.some((d) => d.code === "import_lots_mixed_size_cards"), "uniform-size card not warned");
   }
 
-  // Sanitization: barcode with unsafe characters gets a CCRS-safe id.
+  // S-10: the barcode IS the id filed in CCRS, so it passes through exactly
+  // (trim only). Rewriting "AB 12/34" to "AB-12-34" would address a
+  // different, nonexistent CCRS lot. (Pre-S-10 this asserted the rewrite.)
   {
-    const plan = planImportLots([src({ barcode: "AB 12/34" })]);
-    ok(plan.lots[0].ccrsExternalId === "AB-12-34", "CCRS id sanitized (alphanumerics + hyphens)");
+    const plan = planImportLots([src({ barcode: " AB 12/34 " })]);
+    ok(plan.lots[0].ccrsExternalId === "AB 12/34", "CCRS id = barcode as filed (trim only, no rewrite)");
     ok(plan.lots[0].lotCode === "AB 12/34", "lot_code keeps the verbatim barcode");
   }
 

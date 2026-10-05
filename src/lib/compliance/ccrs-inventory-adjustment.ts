@@ -75,7 +75,7 @@ export async function buildCcrsInventoryAdjustmentCsv(
   const { data, error } = await admin
     .from("inventory_adjustments")
     .select(
-      "id, qty_delta, reason, note, created_at, lot:inventory_lots(id, lot_code, pos_product_key)",
+      "id, qty_delta, reason, note, created_at, lot:inventory_lots(id, lot_code, pos_product_key, ccrs_inventory_external_id)",
     )
     .gte("created_at", fromISO)
     .lte("created_at", toISO)

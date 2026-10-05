@@ -23,6 +23,16 @@
  *
  * The derived form is sanitized to CCRS-safe characters and clamped to 100 chars.
  *
+ * S-10 (bible v2 Part 03 §C, 2026-10-05) — TWO JOBS, TWO FUNCTIONS:
+ *  • PASS-THROUGH. An id that is already on the CCRS record (every lot Cultivera
+ *    filed; 62,744 ids in the LCB's 2026-09-18 delivery, 4,295 of them dotted
+ *    like "WAR413541.IN132IB0") is returned BYTE-FOR-BYTE (trim only). The LCB
+ *    examiner: periods are "your choice" and ids are text up to 100 [G L0224].
+ *    Rewriting "." to "-" produces an id CCRS has never seen, and every Sale
+ *    row against it fails "Invalid InventoryExternalIdentifier".
+ *  • MINTING. Only a brand-new lot that has never been filed gets a minted id
+ *    (`mintExternalId`, Greenway's [A-Za-z0-9-] convention).
+ *
  * Everything here is PURE (no I/O), so it's unit-testable and importable anywhere.
  */
 
@@ -38,7 +48,7 @@ export const CCRS_EXTERNAL_ID_MAX = 100;
  * integrators for readable ids, so we allow a single hyphen as a separator but
  * never anything else.
  */
-export function sanitizeExternalId(raw: string): string {
+export function mintExternalId(raw: string): string {
   const cleaned = (raw ?? "")
     .trim()
     .replace(/[^A-Za-z0-9]+/g, "-")
@@ -47,8 +57,44 @@ export function sanitizeExternalId(raw: string): string {
 }
 
 /**
- * Validate a CCRS external identifier. Returns the list of problems (empty =
- * valid). Used to surface precise warnings before an upload.
+ * @deprecated S-10: use `mintExternalId` for NEW ids only. Never call this on an
+ * id that is already on the CCRS record (that is `passThroughExternalId`).
+ */
+export const sanitizeExternalId = mintExternalId;
+
+/**
+ * Return an already-filed CCRS identifier exactly as filed: trimmed, nothing
+ * else. "" when blank. Dots, leading zeros, case — all preserved [G L0224].
+ */
+export function passThroughExternalId(raw: string | null | undefined): string {
+  return (raw ?? "").trim();
+}
+
+/**
+ * Validate an identifier that is (or will be) on the CCRS record WITHOUT
+ * imposing Greenway's minting alphabet. CCRS defines ExternalIdentifier as
+ * Text (100), required on Insert/Update/Delete [G L0224-L0225]. We additionally
+ * refuse the four characters a CSV cell cannot carry without quoting/breaking a
+ * row (CR, LF, comma, double quote) — none occurs in any filed id (measured over
+ * the 62,744-row delivery: only "." ×4,295 and "-" ×3 are non-alphanumeric).
+ * Empty result = valid.
+ */
+export function validatePassThroughExternalId(value: string | null | undefined): string[] {
+  const errs: string[] = [];
+  const v = (value ?? "").trim();
+  if (!v) {
+    errs.push("missing");
+    return errs;
+  }
+  if (v.length > CCRS_EXTERNAL_ID_MAX) errs.push(`exceeds ${CCRS_EXTERNAL_ID_MAX} characters`);
+  if (/[\r\n,"]/.test(v)) errs.push("contains a line break, comma, or double quote");
+  return errs;
+}
+
+/**
+ * Validate a MINTED Greenway identifier against our own [A-Za-z0-9-] convention.
+ * Not a CCRS rule: never apply it to an already-filed id (use
+ * `validatePassThroughExternalId`). Empty result = valid.
  */
 export function validateExternalId(value: string | null | undefined): string[] {
   const errs: string[] = [];
@@ -207,28 +253,52 @@ export type LotIdentitySource = {
 };
 
 /**
+ * S-10: the id ASSIGNED to a lot, or null. Never mints.
+ *
+ * Every CCRS file that names an existing lot (Inventory.csv, Sale.csv,
+ * InventoryAdjustment.csv) must carry the id that lot was filed under, so an
+ * export may only READ the stored id. Returns null when none is stored; the
+ * caller withholds the row (E3_EXTERNAL_ID_UNASSIGNED) rather than inventing
+ * an id CCRS has never seen.
+ */
+export function assignedInventoryExternalId(
+  src: Pick<LotIdentitySource, "ccrs_inventory_external_id">,
+): string | null {
+  const v = passThroughExternalId(src.ccrs_inventory_external_id);
+  return v ? v : null;
+}
+
+/**
  * Derive the canonical CCRS inventory external identifier for a lot.
  *
- * Preference order (first usable wins):
- *   1. An already-assigned ccrs_inventory_external_id (sanitized) — NEVER drift.
- *   2. lot_code (vendor/CCRS-aligned lot code) — most likely to match the
- *      Inventory.csv the licensee already filed.
- *   3. pos_product_key.
- *   4. the DB id (prefixed) as a guaranteed-unique fallback.
+ * S-10: a lot that already HAS an assigned ccrs_inventory_external_id returns it
+ * byte-for-byte (trim only) — NEVER re-sanitized, never drifted. Only a lot with
+ * no assigned id falls through to `mintInventoryExternalId` (lot_code →
+ * pos_product_key → LOT-<id>, minted). Every caller that reads a lot from the
+ * database MUST select and pass `ccrs_inventory_external_id`, otherwise it is
+ * minting a second identity for a lot that already has one.
  *
  * Returns null only if nothing usable exists.
  */
 export function deriveInventoryExternalId(src: LotIdentitySource): string | null {
-  const explicit = sanitizeExternalId(src.ccrs_inventory_external_id ?? "");
-  if (explicit) return explicit;
+  const assigned = passThroughExternalId(src.ccrs_inventory_external_id);
+  if (assigned) return assigned;
+  return mintInventoryExternalId(src);
+}
 
-  const fromLot = sanitizeExternalId(src.lot_code ?? "");
+/**
+ * Mint an id for a lot that has NEVER been filed (a new receiving-intake lot).
+ * Greenway convention: lot_code → pos_product_key → LOT-<db id>, each minted to
+ * [A-Za-z0-9-]. Do not call this for a lot that already carries an id.
+ */
+export function mintInventoryExternalId(src: LotIdentitySource): string | null {
+  const fromLot = mintExternalId(src.lot_code ?? "");
   if (fromLot) return fromLot;
 
-  const fromKey = sanitizeExternalId(src.pos_product_key ?? "");
+  const fromKey = mintExternalId(src.pos_product_key ?? "");
   if (fromKey) return fromKey;
 
-  const fromId = sanitizeExternalId(src.id ? `LOT-${src.id}` : "");
+  const fromId = mintExternalId(src.id ? `LOT-${src.id}` : "");
   if (fromId) return fromId;
 
   return null;
@@ -247,10 +317,12 @@ export function resolveSaleInventoryExternalId(opts: {
   lotCanonical?: string | null;
   posProductKey?: string | null;
 }): { value: string; source: "line" | "lot" | "product_key" | "none" } {
-  const line = sanitizeExternalId(opts.lineExplicit ?? "");
+  // S-10: both are ids already assigned to a filed lot — pass through, never
+  // re-sanitize (a dotted filed id must reach Sale.csv with its dot).
+  const line = passThroughExternalId(opts.lineExplicit);
   if (line) return { value: line, source: "line" };
 
-  const lot = sanitizeExternalId(opts.lotCanonical ?? "");
+  const lot = passThroughExternalId(opts.lotCanonical);
   if (lot) return { value: lot, source: "lot" };
 
   const key = sanitizeExternalId(opts.posProductKey ?? "");
@@ -340,6 +412,43 @@ export function __runCcrsIdentifierTests(): { passed: number; failed: number } {
   ok(deriveInventoryExternalId({ lot_code: "LOT 9" }) === "LOT-9", "derive falls to sanitized lot_code");
   ok(deriveInventoryExternalId({ id: "abc" }) === "LOT-abc", "derive last-resort uses id");
   ok(deriveInventoryExternalId({}) === null, "derive returns null when nothing usable");
+
+  // S-10 pass-through: an assigned, filed id is returned byte-for-byte.
+  ok(
+    deriveInventoryExternalId({ ccrs_inventory_external_id: " WAR413541.IN132IB0 ", lot_code: "x" }) ===
+      "WAR413541.IN132IB0",
+    "S-10: assigned dotted id passes through, trim only",
+  );
+  ok(
+    deriveInventoryExternalId({ ccrs_inventory_external_id: "000123" }) === "000123",
+    "S-10: leading zeros preserved",
+  );
+  ok(
+    resolveSaleInventoryExternalId({ lotCanonical: "I65303102101603WAR413541.IN132IB0" }).value ===
+      "I65303102101603WAR413541.IN132IB0",
+    "S-10: Sale line keeps the dotted lot id",
+  );
+  ok(
+    resolveSaleInventoryExternalId({ lineExplicit: "WAR413541.INX" }).value === "WAR413541.INX",
+    "S-10: Sale line explicit keeps its dot",
+  );
+  ok(validatePassThroughExternalId("WAR413541.IN132IB0").length === 0, "S-10: dotted id valid for pass-through");
+  ok(validatePassThroughExternalId("44557481674921553-1").length === 0, "S-10: filed hyphen id valid");
+  ok(validatePassThroughExternalId("").includes("missing"), "S-10: blank pass-through missing");
+  ok(validatePassThroughExternalId("a,b").some((e) => /comma/.test(e)), "S-10: comma refused");
+  ok(validatePassThroughExternalId('a"b').length === 1, "S-10: quote refused");
+  ok(validatePassThroughExternalId("a\nb").length === 1, "S-10: newline refused");
+  ok(validatePassThroughExternalId("x".repeat(101)).some((e) => /exceeds/.test(e)), "S-10: 101 chars refused");
+  ok(validatePassThroughExternalId("x".repeat(100)).length === 0, "S-10: 100 chars allowed");
+  ok(mintInventoryExternalId({ lot_code: "LOT 9.5" }) === "LOT-9-5", "S-10: minting still sanitizes new lots");
+  ok(sanitizeExternalId === mintExternalId, "S-10: deprecated alias is the minting function");
+  ok(assignedInventoryExternalId({ ccrs_inventory_external_id: " WA1.X " }) === "WA1.X", "S-10: assigned id trimmed, dot kept");
+  ok(assignedInventoryExternalId({ ccrs_inventory_external_id: "   " }) === null, "S-10: blank assigned id is null (never minted)");
+  ok(assignedInventoryExternalId({ ccrs_inventory_external_id: null }) === null, "S-10: missing assigned id is null");
+  ok(
+    assignedInventoryExternalId({ lot_code: "LOT1", ccrs_inventory_external_id: null } as never) === null,
+    "S-10: assigned id ignores lot_code (no fallback minting at export)",
+  );
 
   if (failed === 0) console.log(`ccrs-identifiers: all ${passed} tests passed`);
   return { passed, failed };

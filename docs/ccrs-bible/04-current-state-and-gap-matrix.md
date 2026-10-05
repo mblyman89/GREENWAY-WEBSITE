@@ -41,6 +41,24 @@ Every row: what the LCB says (pin into Part 02), what the code does (pin into Pa
 - `deriveInventoryExternalId` (`ccrs-identifiers.ts` L221-L236): explicit → lot_code → pos_product_key → `LOT-<uuid>`. `sanitizeExternalId` (L41-L47) replaces every non-alphanumeric run with `-`. **Consequence:** a vendor id like `WCIA_00123.4` becomes `WCIA-00123-4`; if we then Insert that as our Inventory ExternalIdentifier it differs from the vendor's `FromInventoryExternalIdentifier`, which is exactly the case the guide says demands an InventoryTransfer row with both ids `[G L0124-L0128]`, `[FAQ L0058-L0059]`. See **N-02**.
 - Sale.csv uses `resolveSaleInventoryExternalId` (L245): line override → lot canonical → sanitized pos key (degraded, W2).
 
+### A.3 S-10 identifier pass-through — DONE (2026-10-05, Bible v2 Part 07 S-10)
+
+The A.2 consequence above is closed for every **existing** lot. CCRS matches rows by ExternalIdentifier exactly as filed: Update alters "an existing record indicated by external identifier" `[G L0247]`, and an adjustment's id must be an `Inventory.ExternalIdentifier` or it fails `Invalid InventoryExternalIdentifier` `[G L1077-L1083]`; the LCB's 2026-09-18 Service Desk delivery holds 62,744 filed ids, 4,295 of them dotted, and all 62,744 validate under the new pass-through rule and pass through byte-for-byte (measured, `analysis3/s10/all-filed-ids-validate.out`).
+
+| Path | Before S-10 | After S-10 |
+|---|---|---|
+| `deriveInventoryExternalId` | stored id **re-sanitized** (dots → hyphens) | stored id passed through, trim only; minting only when nothing is stored (`mintInventoryExternalId`) |
+| Inventory.csv (`ccrs-batch.ts` `buildInventoryFile`) | invented an id at export from lot_code when none stored | `assignedInventoryExternalId` reads the stored id only; an unassigned lot is **withheld** with blocking `E3_EXTERNAL_ID_UNASSIGNED` `[G L0224-L0225]` |
+| InventoryAdjustment (`ccrs-inventory-adjustment(.ts/-core.ts)`) | did not select the stored id; derived from lot_code (**could differ from Inventory.csv**) | selects and uses the lot's stored id |
+| Sale correction (`disposition.ts`) | same defect as adjustments | stored id first |
+| Sale.csv (`ccrs-sales.ts`) | `validateExternalId` flagged every dotted id | `validatePassThroughExternalId` (only `,` `"` CR/LF or > 100 chars refused) |
+| Cultivera import (`import-lot-core.ts`) | barcode sanitized | barcode passed through as filed |
+| Stored data | 0034 sanitized every lot; 180 dotted shelf barcodes stored hyphenated | migration **0246** restores `trim(lot_code)` on Cultivera-import lots whose stored id is exactly 0034's sanitized form; audited, exact rollback |
+
+Still minting (by design, new lots only): receiving intake (`intake-store.ts`, `deriveInventoryExternalId({pos_product_key, lot_code})`) and the adjustment row id `ADJ-<uuid>`. Both move to the D-01a `GWL-`/`GWJ-` sequence formats in S-12 (ledger + DB sequence). Product-key sanitizing in Product.csv is S-11.
+
+Tests: `tests/compliance/s10-identifier-passthrough.test.ts` (fixture of 69 real filed ids covering all 35 id shape families, a guardrail that no `src/` call passes a stored id into minting); `scripts/recon/ccrs-lot-id-passthrough-pg-check.sql` (7 seeded edge cases, applied twice, rollback); mutations M25–M32 in `mutate_check.py` and Q1–Q9 in `mutate_0246_sql.py`, all killed.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

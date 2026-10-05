@@ -105,7 +105,9 @@ describe("the code facts the COA roadmap cites (flip when S39/S40 ship)", () => 
 
   it("Cultivera-import lots are keyed by the CCRS id the S39 matcher uses first", () => {
     const src = read("src/lib/pos/import-lot-core.ts");
-    expect(src).toContain("const ccrsExternalId = deriveInventoryExternalId({ lot_code: barcode }) ?? barcode;");
+    // S-10 (bible v2 Part 03 §C): the barcode is the id Cultivera FILED, so it is
+    // passed through as an assigned id (dots kept), not re-minted from lot_code.
+    expect(src).toContain("? deriveInventoryExternalId({ ccrs_inventory_external_id: barcode }) ?? barcode");
     expect(read("src/lib/inventory/bulk-fill-core.ts")).toContain(
       'export const MIGRATION_MARKER = "Cultivera migration (one-time POS import).";',
     );
