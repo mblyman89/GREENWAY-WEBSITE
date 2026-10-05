@@ -32,7 +32,7 @@ import { preTaxLineBaseMinor, preTaxUnitMinor } from "@/lib/reports/tax-base-cor
 import {
   deriveInventoryExternalId,
   resolveSaleInventoryExternalId,
-  validateExternalId,
+  validatePassThroughExternalId,
 } from "@/lib/compliance/ccrs-identifiers";
 // Mastering Slice 1: sold lines resolve the variant's own lot key first.
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
@@ -407,7 +407,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     if (!inventoryExternalId) {
       missingInvIds++;
     } else {
-      const idErrs = validateExternalId(inventoryExternalId);
+      const idErrs = validatePassThroughExternalId(inventoryExternalId);
       if (idErrs.length) invalidIds++;
       if (resolved.source === "product_key") fallbackKeyIds++;
       // CCRS rejects sales of inventory still in a quarantine area.
@@ -455,7 +455,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   }
   if (invalidIds > 0) {
     warnings.push(
-      `${invalidIds} line(s) have an InventoryExternalIdentifier that may be rejected (over 100 chars or non-alphanumeric). These were sanitized, but confirm they still match the id you filed in CCRS.`,
+      `${invalidIds} line(s) have an InventoryExternalIdentifier CCRS cannot accept (over 100 characters, or a comma, quote, or line break). The id is sent exactly as stored — correct it on the inventory lot to the id that was filed in CCRS.`,
     );
   }
   if (quarantinedIds > 0) {

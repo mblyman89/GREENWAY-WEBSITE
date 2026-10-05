@@ -1,21 +1,21 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace` by `build_atlas_part.py`.
+Generated 2026-10-05 23:10Z at commit `2582c9cd3f83c98cf6ca973d7dd9eb11e937d1e4` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff acb6d32 -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 2582c9c -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
 ## 0. Module inventory (line counts + every `export` with its line)
 
-### `src/lib/compliance/ccrs-batch.ts` (653 L)
+### `src/lib/compliance/ccrs-batch.ts` (819 L)
 
-- L45: `export type CcrsFile = {`
-- L57: `export type CcrsSyncIssue = {`
-- L64: `export type CcrsBatch = {`
-- L424: `export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {`
+- L57: `export type CcrsFile = {`
+- L69: `export type CcrsSyncIssue = {`
+- L86: `export type CcrsBatch = {`
+- L590: `export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {`
 
 ### `src/lib/compliance/ccrs-batch-core.ts` (1304 L)
 
@@ -63,20 +63,25 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 - L84: `export async function getCcrsLicenseSettings(): Promise<CcrsLicenseSettings> {`
 - L183: `export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<CcrsBuildResult> {`
 
-### `src/lib/compliance/ccrs-identifiers.ts` (347 L)
+### `src/lib/compliance/ccrs-identifiers.ts` (456 L)
 
-- L29: `export const CCRS_EXTERNAL_ID_MAX = 100;`
-- L41: `export function sanitizeExternalId(raw: string): string {`
-- L53: `export function validateExternalId(value: string | null | undefined): string[] {`
-- L75: `export function validateLicenseNumber(`
-- L100: `export type ExternalIdCollision = {`
-- L115: `export function findExternalIdCollisions(`
-- L132: `export type SaleIdProblem = {`
-- L146: `export function checkSaleIdentifierIntegrity(`
-- L198: `export type LotIdentitySource = {`
-- L221: `export function deriveInventoryExternalId(src: LotIdentitySource): string | null {`
-- L245: `export function resolveSaleInventoryExternalId(opts: {`
-- L264: `export function __runCcrsIdentifierTests(): { passed: number; failed: number } {`
+- L39: `export const CCRS_EXTERNAL_ID_MAX = 100;`
+- L51: `export function mintExternalId(raw: string): string {`
+- L63: `export const sanitizeExternalId = mintExternalId;`
+- L69: `export function passThroughExternalId(raw: string | null | undefined): string {`
+- L82: `export function validatePassThroughExternalId(value: string | null | undefined): string[] {`
+- L99: `export function validateExternalId(value: string | null | undefined): string[] {`
+- L121: `export function validateLicenseNumber(`
+- L146: `export type ExternalIdCollision = {`
+- L161: `export function findExternalIdCollisions(`
+- L178: `export type SaleIdProblem = {`
+- L192: `export function checkSaleIdentifierIntegrity(`
+- L244: `export type LotIdentitySource = {`
+- L264: `export function assignedInventoryExternalId(`
+- L283: `export function deriveInventoryExternalId(src: LotIdentitySource): string | null {`
+- L294: `export function mintInventoryExternalId(src: LotIdentitySource): string | null {`
+- L315: `export function resolveSaleInventoryExternalId(opts: {`
+- L336: `export function __runCcrsIdentifierTests(): { passed: number; failed: number } {`
 
 ### `src/lib/compliance/ccrs-week-core.ts` (451 L)
 
@@ -133,24 +138,24 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 - L138: `export function verdictSummary(v: CcrsSubmitVerdict): string {`
 - L149: `export function __runCcrsSubmitGateTests(): { passed: number; failed: number } {`
 
-### `src/lib/compliance/ccrs-inventory-adjustment-core.ts` (374 L)
+### `src/lib/compliance/ccrs-inventory-adjustment-core.ts` (417 L)
 
-- L22: `export type CcrsLicenseLike = {`
-- L32: `export const CCRS_ADJUSTMENT_REASONS = [`
-- L41: `export type CcrsAdjustmentReason = (typeof CCRS_ADJUSTMENT_REASONS)[number];`
-- L58: `export function mapAdjustmentReason(internal: string): CcrsAdjustmentReason {`
-- L97: `export function isReportableAdjustment(internal: string, qtyDelta: number): boolean {`
-- L109: `export function mmddyyyy(iso: string | Date): string {`
-- L114: `export function cell(v: unknown): string {`
-- L121: `export function adjustmentQuantity(qtyDelta: number): string {`
-- L127: `export function adjustmentDetail(note: string | null | undefined): string {`
-- L135: `export const ADJUSTMENT_COLUMNS = [`
-- L154: `export type AdjustmentSourceRow = {`
-- L167: `export type AdjustmentMapResult = {`
-- L173: `export function mapAdjustmentRow(`
-- L217: `export function buildAdjustmentFile(rows: string[][], license: CcrsLicenseLike): string {`
-- L226: `export function makeAdjustmentFileName(licenseNumber: string): string {`
-- L234: `export function __runCcrsAdjustmentTests(): void {`
+- L26: `export type CcrsLicenseLike = {`
+- L36: `export const CCRS_ADJUSTMENT_REASONS = [`
+- L45: `export type CcrsAdjustmentReason = (typeof CCRS_ADJUSTMENT_REASONS)[number];`
+- L62: `export function mapAdjustmentReason(internal: string): CcrsAdjustmentReason {`
+- L101: `export function isReportableAdjustment(internal: string, qtyDelta: number): boolean {`
+- L113: `export function mmddyyyy(iso: string | Date): string {`
+- L118: `export function cell(v: unknown): string {`
+- L125: `export function adjustmentQuantity(qtyDelta: number): string {`
+- L131: `export function adjustmentDetail(note: string | null | undefined): string {`
+- L139: `export const ADJUSTMENT_COLUMNS = [`
+- L158: `export type AdjustmentSourceRow = {`
+- L173: `export type AdjustmentMapResult = {`
+- L179: `export function mapAdjustmentRow(`
+- L241: `export function buildAdjustmentFile(rows: string[][], license: CcrsLicenseLike): string {`
+- L250: `export function makeAdjustmentFileName(licenseNumber: string): string {`
+- L258: `export function __runCcrsAdjustmentTests(): void {`
 
 ### `src/lib/compliance/ccrs-inventory-adjustment.ts` (112 L)
 
@@ -201,7 +206,7 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 - L245: `export function planMonthlyReminders(`
 - L293: `export function __runCcrsDeadlineTests(): { passed: number; failed: number } {`
 
-### `src/lib/inventory/disposition.ts` (1170 L)
+### `src/lib/inventory/disposition.ts` (1185 L)
 
 - L51: `export const DESTRUCTION_QUARANTINE_HOURS = HOLD_HOURS_DEFAULT;`
 - L58: `export {`
@@ -220,17 +225,17 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 - L349: `export async function findReturnableOrderLines(search: string, limit = 8): Promise<ReturnableOrderLine[]> {`
 - L440: `export async function listCustomerReturns(limit = 50): Promise<CustomerReturn[]> {`
 - L466: `export async function createCustomerReturn(`
-- L751: `export async function markCorrectionsExported(ids: string[]): Promise<void> {`
-- L768: `export async function listVendorReturns(limit = 100): Promise<VendorReturnWithLot[]> {`
-- L783: `export async function createVendorReturn(`
-- L853: `export async function updateVendorReturnManifest(`
-- L884: `export async function listDestructionEvents(limit = 100): Promise<DestructionEventWithLot[]> {`
-- L899: `export async function getDestructionEvent(id: string): Promise<DestructionEvent | null> {`
-- L913: `export async function scheduleDestruction(`
-- L973: `export async function completeDestruction(`
-- L1074: `export async function cancelDestruction(`
-- L1092: `export type DispositionSummary = {`
-- L1100: `export async function dispositionSummary(): Promise<DispositionSummary> {`
+- L766: `export async function markCorrectionsExported(ids: string[]): Promise<void> {`
+- L783: `export async function listVendorReturns(limit = 100): Promise<VendorReturnWithLot[]> {`
+- L798: `export async function createVendorReturn(`
+- L868: `export async function updateVendorReturnManifest(`
+- L899: `export async function listDestructionEvents(limit = 100): Promise<DestructionEventWithLot[]> {`
+- L914: `export async function getDestructionEvent(id: string): Promise<DestructionEvent | null> {`
+- L928: `export async function scheduleDestruction(`
+- L988: `export async function completeDestruction(`
+- L1089: `export async function cancelDestruction(`
+- L1107: `export type DispositionSummary = {`
+- L1115: `export async function dispositionSummary(): Promise<DispositionSummary> {`
 
 ### `src/lib/inventory/disposition-core.ts` (529 L)
 
@@ -262,33 +267,34 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 - L344: `export const VENDOR_RETURN_MANIFEST_STEPS: readonly string[] = [`
 - L355: `export function __runDispositionCoreTests(): { passed: number; failed: number } {`
 
-### `src/lib/inventory/intake-store.ts` (2060 L)
+### `src/lib/inventory/intake-store.ts` (2280 L)
 
-- L118: `export async function listManifests(opts?: {`
-- L140: `export async function countManifestsByStatus(): Promise<StageCounts> {`
-- L192: `export async function resolveOrCreateVendor(`
-- L428: `export async function resolveBrandId(`
-- L440: `export async function resolveBrandIdDetailed(`
-- L513: `export async function stageManifest(`
-- L716: `export async function rejectManifest(`
-- L776: `export async function setLotDisposition(`
-- L833: `export async function preflightManifestSampleCap(`
-- L971: `export async function gatherSampleCapNotice(manifestId: string): Promise<`
-- L1034: `export async function finalizeManifestDispositions(`
-- L1435: `export async function seedIncomingSampleEvents(`
-- L1536: `export async function rememberVendorUsualTransport(`
-- L1584: `export async function listManifestLots(manifestId: string) {`
-- L1638: `export async function listLabFactsByIds(`
-- L1706: `export type ManifestLotExportRow = {`
-- L1734: `export async function listAllManifestLotsForExport(`
-- L1792: `export type ManifestLifecycleStatus =`
-- L1807: `export async function logManifestEvent(`
-- L1832: `export async function setManifestLifecycle(`
-- L1858: `export async function updateManifestTransport(`
-- L1919: `export async function setManifestInvoiceOverride(`
-- L1953: `export async function seedTransportFromParsed(`
-- L1998: `export async function backfillManifestTransport(`
-- L2048: `export async function listManifestEvents(manifestId: string) {`
+- L142: `export async function listManifests(opts?: {`
+- L164: `export async function countManifestsByStatus(): Promise<StageCounts> {`
+- L216: `export async function resolveOrCreateVendor(`
+- L452: `export async function resolveBrandId(`
+- L464: `export async function resolveBrandIdDetailed(`
+- L537: `export async function stageManifest(`
+- L807: `export async function rejectManifest(`
+- L867: `export async function setLotDisposition(`
+- L924: `export async function preflightManifestSampleCap(`
+- L1062: `export async function gatherSampleCapNotice(manifestId: string): Promise<`
+- L1125: `export async function finalizeManifestDispositions(`
+- L1592: `export async function seedIncomingSampleEvents(`
+- L1693: `export async function rememberVendorUsualTransport(`
+- L1741: `export async function listManifestLots(manifestId: string) {`
+- L1800: `export async function listLabFactsByIds(`
+- L1868: `export type ManifestLotExportRow = {`
+- L1896: `export async function listAllManifestLotsForExport(`
+- L1954: `export type ManifestLifecycleStatus =`
+- L1969: `export async function logManifestEvent(`
+- L1994: `export async function setManifestLifecycle(`
+- L2020: `export async function updateManifestTransport(`
+- L2081: `export async function setManifestInvoiceOverride(`
+- L2117: `export async function recordInvoiceNumberDetected(`
+- L2173: `export async function seedTransportFromParsed(`
+- L2218: `export async function backfillManifestTransport(`
+- L2268: `export async function listManifestEvents(manifestId: string) {`
 
 ### `src/lib/inventory/intake-parser.ts` (797 L)
 
@@ -326,33 +332,43 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 
 - L51: `export async function decrementInventoryForOrder(orderId: string): Promise<void> {`
 
-### `src/lib/pos/import-lot-core.ts` (777 L)
+### `src/lib/pos/import-lot-core.ts` (952 L)
 
-- L42: `export type ImportLotSource = {`
-- L78: `export type PlannedImportLot = {`
-- L126: `export type ImportLotDiagnostic = {`
-- L133: `export type ImportLotPlan = {`
-- L152: `export function costToMinorUnits(raw: string | null | undefined): number | null {`
-- L162: `export function parseUsDate(raw: string | null | undefined): string | null {`
-- L185: `export function coaFlagToBool(raw: string | null | undefined): boolean {`
-- L235: `export function resolveLotCreatedAt(plannedIso: string | null, fallbackIso: string): string {`
-- L248: `export function insertKeySignature(row: Record<string, unknown>): string {`
-- L259: `export function findNonUniformInsertRow(`
-- L279: `export function assertUniformInsertKeys(rows: readonly Record<string, unknown>[], label: string): void {`
-- L308: `export function planImportLots(sources: readonly ImportLotSource[]): ImportLotPlan {`
-- L524: `export function __runImportLotCoreTests(): void {`
+- L43: `export type ImportLotSource = {`
+- L88: `export type PlannedImportLot = {`
+- L141: `export type ImportLotDiagnostic = {`
+- L148: `export type ImportLotPlan = {`
+- L167: `export function costToMinorUnits(raw: string | null | undefined): number | null {`
+- L177: `export function parseUsDate(raw: string | null | undefined): string | null {`
+- L200: `export function coaFlagToBool(raw: string | null | undefined): boolean {`
+- L250: `export function resolveLotCreatedAt(plannedIso: string | null, fallbackIso: string): string {`
+- L263: `export function insertKeySignature(row: Record<string, unknown>): string {`
+- L274: `export function findNonUniformInsertRow(`
+- L294: `export function assertUniformInsertKeys(rows: readonly Record<string, unknown>[], label: string): void {`
+- L332: `export const POS_POTENCY_COLUMNS = ["pos_thc", "pos_thca", "pos_cbd", "pos_cbda", "pos_potency_unit", "pos_potency_set_at"] as const;`
+- L340: `export function receivedOnForDb(receivedOn: string | null, pacificToday: string): string | null {`
+- L347: `export function potencyColumns(p: LotPotency | null, nowIso: string): Record<string, unknown> {`
+- L358: `export type ExistingLotFacts = {`
+- L369: `export type LotFactFillPlan = {`
+- L383: `export function planLotFactFill(`
+- L433: `export function planImportLots(sources: readonly ImportLotSource[]): ImportLotPlan {`
+- L661: `export function __runImportLotCoreTests(): void {`
+- L932: `export function __runImportLotFactFillTests(): { passed: number } {`
 
-### `src/lib/pos/import-service.ts` (794 L)
+### `src/lib/pos/import-service.ts` (972 L)
 
-- L52: `export function sha256(buffer: Buffer | Uint8Array): string {`
-- L56: `export type CreateImportInput = {`
-- L66: `export type CreateImportResult = {`
-- L73: `export async function findDuplicateImport(`
-- L93: `export async function runImport(input: CreateImportInput): Promise<CreateImportResult> {`
-- L344: `export async function publishMenuVersion(versionId: string, actorId: string | null): Promise<void> {`
-- L657: `export async function countTestData(): Promise<{ imports: number; versions: number }> {`
-- L671: `export async function cleanSlateTestData(): Promise<{`
-- L719: `export async function backfillImportLots(`
+- L63: `export function sha256(buffer: Buffer | Uint8Array): string {`
+- L67: `export type CreateImportInput = {`
+- L77: `export type CreateImportResult = {`
+- L84: `export async function findDuplicateImport(`
+- L104: `export async function runImport(input: CreateImportInput): Promise<CreateImportResult> {`
+- L360: `export type PublishMenuVersionOptions = {`
+- L372: `export type PublishMenuVersionResult = {`
+- L377: `export async function publishMenuVersion(`
+- L742: `export async function fillImportLotFacts(`
+- L835: `export async function countTestData(): Promise<{ imports: number; versions: number }> {`
+- L849: `export async function cleanSlateTestData(): Promise<{`
+- L897: `export async function backfillImportLots(`
 
 ### `src/lib/pos/returns-core.ts` (396 L)
 
@@ -453,473 +469,473 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 
 - L7: `export function LicenseSettingsForm({`
 
-### `src/components/admin/reports/ReportTabs.tsx` (61 L)
+### `src/components/admin/reports/ReportTabs.tsx` (62 L)
 
 - L13: `export type ReportTab = { href: string; label: string; icon: string };`
 - L15: `export const REPORT_TABS: ReportTab[] = [`
-- L34: `export function ReportTabs() {`
+- L35: `export function ReportTabs() {`
 
-### `src/components/admin/admin-nav-data.ts` (230 L)
+### `src/components/admin/admin-nav-data.ts` (232 L)
 
 - L4: `export type AdminNavItem = {`
 - L41: `export const adminNav: AdminNavItem[] = [`
-- L193: `export const navGroups: AdminNavItem["group"][] = [`
+- L195: `export const navGroups: AdminNavItem["group"][] = [`
 
 ## A. Batch builders — `src/lib/compliance/ccrs-batch.ts`
 
 `src/lib/compliance/ccrs-batch.ts` L160-L193 — buildStrainFile — NOTE: no guard for Unknown/THC/Other (guide p.12 L358: 'Strain name is invalid, cannot be Unknown, THC, or Other'). Defaults StrainType to Hybrid.
 
 ```ts
- 160| function buildStrainFile(
- 161|   items: MenuItemRow[],
- 162|   license: string,
- 163|   submittedBy: string,
- 164|   createdBy: string,
- 165|   createdDate: string,
- 166| ): { rows: string[][]; warnings: string[] } {
- 167|   const warnings: string[] = [];
- 168|   const seen = new Set<string>();
- 169|   const rows: string[][] = [];
- 170|   const defaulted: string[] = [];
- 171|   for (const it of items) {
- 172|     const strain = (it.strain_name ?? "").trim();
- 173|     if (!strain) continue;
- 174|     const key = strain.toLowerCase();
- 175|     if (seen.has(key)) continue;
- 176|     seen.add(key);
- 177|     // B2: StrainType MUST be one of Indica/Sativa/Hybrid. Normalize the POS
- 178|     // label; when it can't be resolved we default to Hybrid (safe superset) and
- 179|     // flag the strain so an employee can correct it (drafts-only).
- 180|     const st = normalizeStrainType(it.strain_type);
- 181|     if (st.defaulted) defaulted.push(strain);
- 182|     rows.push([license, strain, st.value, createdBy, createdDate]);
- 183|   }
- 184|   if (defaulted.length > 0) {
- 185|     warnings.push(
- 186|       `${defaulted.length} strain(s) had no recognizable Indica/Sativa/Hybrid type and were defaulted to "Hybrid" — set the correct StrainType before uploading: ${default
- 187|         .slice(0, 15)
- 188|         .join(", ")}${defaulted.length > 15 ? "…" : ""}.`,
- 189|     );
- 190|   }
- 191|   if (rows.length === 0) warnings.push("No named strains found in the published menu.");
- 192|   return { rows, warnings };
- 193| }
+ 160|   created_at: string;
+ 161|   /**
+ 162|    * SLICE 2 (migration 0214) — the evidenced day the lot was received.
+ 163|    * NULL means unknown; see ccrsInventoryCreatedDate() for how that is
+ 164|    * handled when filling Inventory.CreatedDate.
+ 165|    */
+ 166|   received_on: string | null;
+ 167|   /**
+ 168|    * S-02 / E7: a vendor TRADE SAMPLE (migration 0024 L32,
+ 169|    * `is_sample boolean not null default false`). It has no purchase value, but
+ 170|    * CCRS still requires a positive TotalCost and the FAQ dictates exactly
+ 171|    * $0.01 [FAQ L0035]. Selected explicitly so the E7 check can tell a sample
+ 172|    * apart from a lot whose cost was never entered.
+ 173|    */
+ 174|   is_sample: boolean | null;
+ 175| };
+ 176| 
+ 177| // ---------------------------------------------------------------------------
+ 178| // Per-file generators for the master-data files (Strain / Area / Product /
+ 179| // Inventory). Adjustment + Sale reuse the existing mature builders.
+ 180| // ---------------------------------------------------------------------------
+ 181| 
+ 182| /** grams from a unit_weight + uom (g default). Returns "" when unknown. */
+ 183| function toGrams(weight: number | null, uom: string | null): string {
+ 184|   if (weight == null || !Number.isFinite(weight)) return "";
+ 185|   const u = (uom ?? "g").toLowerCase();
+ 186|   const g = u === "mg" ? weight / 1000 : u === "oz" ? weight * AVOIRDUPOIS_GRAMS_PER_OUNCE : weight;
+ 187|   return (Math.round(g * 1000) / 1000).toString();
+ 188| }
+ 189| 
+ 190| function buildStrainFile(
+ 191|   items: MenuItemRow[],
+ 192|   license: string,
+ 193|   submittedBy: string,
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L201-L213 — buildAreaFile — emits Area 'Quarantine' IsQuarantine=TRUE whenever hasQuarantine. FAQ (Data Reporting, IsQuarantine Q): 'There are no quarantine requirements for cannabis products. You will have an entry as FALSE.' → compliance question, Part 04 flag N-01.
 
 ```ts
- 201| function buildAreaFile(
- 202|   hasQuarantine: boolean,
- 203|   license: string,
- 204|   createdBy: string,
- 205|   createdDate: string,
- 206| ): { rows: string[][]; warnings: string[] } {
- 207|   const rows: string[][] = [];
- 208|   rows.push([license, "Sales Floor", "FALSE", "AREA-SALES-FLOOR", createdBy, createdDate, "", "", "Insert"]);
- 209|   if (hasQuarantine) {
- 210|     rows.push([license, "Quarantine", "TRUE", "AREA-QUARANTINE", createdBy, createdDate, "", "", "Insert"]);
- 211|   }
- 212|   return { rows, warnings: [] };
- 213| }
+ 201|   const reserved: CcrsIssueRow[] = [];
+ 202|   for (const it of items) {
+ 203|     const strain = (it.strain_name ?? "").trim();
+ 204|     if (!strain) continue;
+ 205|     const key = strain.toLowerCase();
+ 206|     if (seen.has(key)) continue;
+ 207|     seen.add(key);
+ 208|     // E11 [G L0358] "Strain name is invalid, cannot be Unknown, THC, or Other."
+ 209|     // Exact match only — "Other Kush" is a real strain and must still ship.
+ 210|     if (isReservedStrainName(strain)) {
+ 211|       reserved.push({
+ 212|         id: (it.source_item_id ?? strain).trim(),
+ 213|         label: strain,
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L215-L260 — buildProductFile (part 1) — weightByKey from lots; grams may be '' when no lot weight.
 
 ```ts
- 215| function buildProductFile(
- 216|   items: MenuItemRow[],
- 217|   lots: LotRow[],
- 218|   license: string,
- 219|   createdBy: string,
- 220|   createdDate: string,
- 221| ): { rows: string[][]; warnings: string[]; nameByProductKey: Map<string, string> } {
- 222|   const warnings: string[] = [];
- 223|   // CCRS joins Inventory.Product -> Product.Name by the EXACT name string. We
- 224|   // record the final (clamped) Name we wrote for each raw product key so the
- 225|   // Inventory file can reference the IDENTICAL string. See
- 226|   // docs/CCRS_PRODUCT_NAMING_RESEARCH.md (the Inventory.Product join bug).
- 227|   const nameByProductKey = new Map<string, string>();
- 228|   // Weight per product key from lots (first non-null wins).
- 229|   const weightByKey = new Map<string, string>();
- 230|   for (const l of lots) {
- 231|     const key = (l.pos_product_key ?? "").trim();
- 232|     if (!key) continue;
- 233|     if (!weightByKey.has(key)) {
- 234|       const g = toGrams(l.unit_weight, l.unit_weight_uom);
- 235|       if (g) weightByKey.set(key, g);
- 236|     }
- 237|   }
- 238|   const seen = new Set<string>();
- 239|   const usedNamesLower = new Set<string>();
- 240|   const rows: string[][] = [];
- 241|   for (const it of items) {
- 242|     const key = (it.source_item_id ?? "").trim();
- 243|     if (!key) continue;
- 244|     const ext = sanitizeExternalId(key);
- 245|     if (!ext || seen.has(ext)) continue;
- 246|     seen.add(ext);
- 247|     const rawCategory = (it.pos_inventory_category ?? "").trim();
- 248|     const rawType = (it.pos_inventory_type ?? "").trim();
- 249|     const grams = weightByKey.get(key) ?? "";
- 250| 
- 251|     // SLICE 53 (two-layer naming, owner-approved): the CCRS Product.Name is
- 252|     // AUTO-COMPOSED from stored fields — short vendor + brand + display name +
- 253|     // measured cannabinoid tag + type + size ("Downtown Space OG Flower 1g").
- 254|     // The human-facing menu_items.name is untouched; the composed name lives
- 255|     // only in these files. Falls back to the display name when composition is
- 256|     // impossible (never guesses).
- 257|     const composed = composeCcrsProductName({
- 258|       name: (it.name ?? "").trim(),
- 259|       vendor: it.vendor_name,
- 260|       brand: it.brand_name,
+ 215|       });
+ 216|       continue;
+ 217|     }
+ 218|     // B2: StrainType MUST be one of Indica/Sativa/Hybrid. Normalize the POS
+ 219|     // label; when it can't be resolved we default to Hybrid (safe superset) and
+ 220|     // flag the strain so an employee can correct it (drafts-only).
+ 221|     const st = normalizeStrainType(it.strain_type);
+ 222|     if (st.defaulted) defaulted.push(strain);
+ 223|     rows.push([license, strain, st.value, createdBy, createdDate]);
+ 224|   }
+ 225|   if (defaulted.length > 0) {
+ 226|     warnings.push(
+ 227|       `${defaulted.length} strain(s) had no recognizable Indica/Sativa/Hybrid type and were defaulted to "Hybrid" — set the correct StrainType before uploading: ${default
+ 228|         .slice(0, 15)
+ 229|         .join(", ")}${defaulted.length > 15 ? "…" : ""}.`,
+ 230|     );
+ 231|   }
+ 232|   if (rows.length === 0) warnings.push("No named strains found in the published menu.");
+ 233|   const issues: CcrsSyncIssue[] = [];
+ 234|   if (reserved.length > 0) {
+ 235|     issues.push({
+ 236|       severity: "error",
+ 237|       file: "Strain",
+ 238|       code: "E11_STRAIN_NAME_RESERVED",
+ 239|       specPin: specPinFor("E11_STRAIN_NAME_RESERVED"),
+ 240|       count: reserved.length,
+ 241|       rows: reserved,
+ 242|       message: `${reserved.length} product(s) use a strain name CCRS reserves — "Strain name is invalid, cannot be Unknown, THC, or Other." [G L0358]. Set the real strain
+ 243|     });
+ 244|   }
+ 245|   return { rows, warnings, issues };
+ 246| }
+ 247| 
+ 248| /**
+ 249|  * Area.csv — CCRS requires the physical/logical areas that hold inventory. We do
+ 250|  * not model named rooms in the DB, so we report the two areas our inventory
+ 251|  * lifecycle actually uses: the default sales-floor area and a Quarantine area
+ 252|  * (recalled/quarantine lots). This keeps Inventory.Area references valid.
+ 253|  */
+ 254| function buildAreaFile(
+ 255|   hasQuarantine: boolean,
+ 256|   license: string,
+ 257|   createdBy: string,
+ 258|   createdDate: string,
+ 259| ): { rows: string[][]; warnings: string[] } {
+ 260|   const rows: string[][] = [];
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L280-L349 — buildProductFile (part 2) — classification via deriveCcrsClassificationFromType; E4 error message; clamps; warnings.slice(0,30).
 
 ```ts
- 280|     // is derived from the vendor-set LCB TYPE alone (pos_inventory_type). The
- 281|     // house/merchandising label (pos_inventory_category, e.g. "Pre-roll",
- 282|     // "Gummies") is a STOREFRONT concept and is NOT used as a CCRS category — it
- 283|     // only feeds the composed Name above. Deriving the category from the type
- 284|     // (an inversion of the CCRS enum) is deterministic and never guesses; a
- 285|     // blank/unknown type still raises the pre-existing ERROR safety net so a
- 286|     // human fixes the source. NEVER-INVENT policy preserved.
- 287|     const cls = deriveCcrsClassificationFromType(rawType);
- 288|     let category = rawCategory;
- 289|     let type = rawType;
- 290|     if (cls.ok) {
- 291|       category = cls.category;
- 292|       type = cls.type;
- 293|       // Advisory (never blocks): a legacy 2021-vocabulary value ("Usable
- 294|       // Marijuana", inhalation concentrate under IntermediateProduct) was
- 295|       // canonicalized to the current Table 2 spelling/category. Surface it so
- 296|       // staff see what was translated.
- 297|       if (cls.aliased && cls.aliasNote) {
- 298|         warnings.push(`Product "${productName || ext}": ${cls.aliasNote}`);
- 299|       }
- 300|     } else {
- 301|       warnings.push(`ERROR — Product "${productName || ext}": ${cls.error} Fix the CCRS mapping (Inventory types) before submitting.`);
- 302|     }
- 303| 
- 304|     // C2: clamp Name (75) and Description (250); flag truncation (don't silently cut).
- 305|     const nameClamp = clampText(productName, CCRS_PRODUCT_NAME_MAX);
- 306|     if (nameClamp.truncated) {
- 307|       warnings.push(`Product "${productName.slice(0, 40)}…": Name exceeds ${CCRS_PRODUCT_NAME_MAX} chars and was truncated — shorten it in the source.`);
- 308|     }
- 309|     // Naming-convention check (drafts-only, surfaced as a warning): if the Name
- 310|     // violates the house convention (leading symbol, disallowed char, casing),
- 311|     // flag it so staff fix the source. Does NOT alter the value written here.
- 312|     const nameCheck = validateName(nameClamp.value);
- 313|     if (!nameCheck.ok) {
- 314|       warnings.push(
- 315|         `Product "${nameClamp.value.slice(0, 40)}…": name convention issues — ${nameCheck.issues.map((i) => i.message).join(" ")} Suggested: "${suggestName(nameClamp.valu
- 316|       );
- 317|     }
- 318|     // Record the exact Name for the Inventory.Product join (keyed by raw key).
- 319|     nameByProductKey.set(key, nameClamp.value);
- 320|     const descClamp = clampText(it.description, CCRS_PRODUCT_DESCRIPTION_MAX);
- 321|     if (descClamp.truncated) {
- 322|       warnings.push(`Product "${productName || ext}": Description exceeds ${CCRS_PRODUCT_DESCRIPTION_MAX} chars and was truncated — shorten it in the source.`);
- 323|     }
- 324| 
- 325|     rows.push([
- 326|       license,
- 327|       category,
- 328|       type,
- 329|       nameClamp.value,
- 330|       descClamp.value,
- 331|       grams,
- 332|       ext,
- 333|       createdBy,
- 334|       createdDate,
- 335|       "",
- 336|       "",
- 337|       "Insert",
- 338|     ]);
- 339|   }
- 340|   if (rows.length === 0) warnings.push("No products found in the published menu.");
- 341|   // Cap the warning noise (errors first so critical mapping issues aren't buried).
- 342|   const unique = [...new Set(warnings)];
- 343|   const errorsFirst = [
- 344|     ...unique.filter((w) => w.startsWith("ERROR")),
- 345|     ...unique.filter((w) => !w.startsWith("ERROR")),
- 346|   ];
- 347|   const dedupWarnings = errorsFirst.slice(0, 30);
- 348|   return { rows, warnings: dedupWarnings, nameByProductKey };
- 349| }
+ 280|   const warnings: string[] = [];
+ 281|   const e9Rows: CcrsIssueRow[] = [];
+ 282|   const e10Rows: CcrsIssueRow[] = [];
+ 283|   // CCRS joins Inventory.Product -> Product.Name by the EXACT name string. We
+ 284|   // record the final (clamped) Name we wrote for each raw product key so the
+ 285|   // Inventory file can reference the IDENTICAL string. See
+ 286|   // docs/CCRS_PRODUCT_NAMING_RESEARCH.md (the Inventory.Product join bug).
+ 287|   const nameByProductKey = new Map<string, string>();
+ 288|   // Weight per product key from lots (first non-null wins).
+ 289|   const weightByKey = new Map<string, string>();
+ 290|   for (const l of lots) {
+ 291|     const key = (l.pos_product_key ?? "").trim();
+ 292|     if (!key) continue;
+ 293|     if (!weightByKey.has(key)) {
+ 294|       const g = toGrams(l.unit_weight, l.unit_weight_uom);
+ 295|       if (g) weightByKey.set(key, g);
+ 296|     }
+ 297|   }
+ 298|   const seen = new Set<string>();
+ 299|   const usedNamesLower = new Set<string>();
+ 300|   const rows: string[][] = [];
+ 301|   for (const it of items) {
+ 302|     const key = (it.source_item_id ?? "").trim();
+ 303|     if (!key) continue;
+ 304|     const ext = sanitizeExternalId(key);
+ 305|     if (!ext || seen.has(ext)) continue;
+ 306|     seen.add(ext);
+ 307|     const rawCategory = (it.pos_inventory_category ?? "").trim();
+ 308|     const rawType = (it.pos_inventory_type ?? "").trim();
+ 309|     const grams = weightByKey.get(key) ?? "";
+ 310| 
+ 311|     // SLICE 53 (two-layer naming, owner-approved): the CCRS Product.Name is
+ 312|     // AUTO-COMPOSED from stored fields — short vendor + brand + display name +
+ 313|     // measured cannabinoid tag + type + size ("Downtown Space OG Flower 1g").
+ 314|     // The human-facing menu_items.name is untouched; the composed name lives
+ 315|     // only in these files. Falls back to the display name when composition is
+ 316|     // impossible (never guesses).
+ 317|     const composed = composeCcrsProductName({
+ 318|       name: (it.name ?? "").trim(),
+ 319|       vendor: it.vendor_name,
+ 320|       brand: it.brand_name,
+ 321|       posInventoryCategory: it.pos_inventory_category,
+ 322|       category: it.category,
+ 323|       unitWeightGrams: grams || null,
+ 324|       totalThc: jsonToCannabinoid(it.total_thc_json),
+ 325|       totalCbd: jsonToCannabinoid(it.total_cbd_json),
+ 326|       compounds: jsonToCompounds(it.compounds_json),
+ 327|     });
+ 328|     // CCRS joins Inventory.Product -> Product.Name by EXACT string, so two
+ 329|     // DIFFERENT products must never share one Name. Deterministic suffix from
+ 330|     // the product's own external id on collision (stable batch after batch).
+ 331|     const disamb = disambiguateCcrsName(composed.name, ext, usedNamesLower);
+ 332|     if (disamb.disambiguated) {
+ 333|       warnings.push(
+ 334|         `Product "${composed.name.slice(0, 40)}…": composed CCRS name collided with another product — suffixed to "${disamb.name.slice(0, 60)}" to keep the Inventory→Prod
+ 335|       );
+ 336|     }
+ 337|     const productName = disamb.name;
+ 338| 
+ 339|     // C1 (Slice 55, owner-confirmed): the CCRS (InventoryCategory, InventoryType)
+ 340|     // is derived from the vendor-set LCB TYPE alone (pos_inventory_type). The
+ 341|     // house/merchandising label (pos_inventory_category, e.g. "Pre-roll",
+ 342|     // "Gummies") is a STOREFRONT concept and is NOT used as a CCRS category — it
+ 343|     // only feeds the composed Name above. Deriving the category from the type
+ 344|     // (an inversion of the CCRS enum) is deterministic and never guesses; a
+ 345|     // blank/unknown type still raises the pre-existing ERROR safety net so a
+ 346|     // human fixes the source. NEVER-INVENT policy preserved.
+ 347|     const cls = deriveCcrsClassificationFromType(rawType);
+ 348|     let category = rawCategory;
+ 349|     let type = rawType;
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L351-L417 — buildInventoryFile — ext id derive; Area choice; TotalCost = unit_cost_minor_units*received_qty (0 when cost missing → guide p.17 L614 'TotalCost cannot equal 0'); IsMedical hard 'FALSE'; Operation Insert.
 
 ```ts
- 351| function buildInventoryFile(
- 352|   lots: LotRow[],
- 353|   itemsByKey: Map<string, MenuItemRow>,
- 354|   license: string,
- 355|   createdBy: string,
- 356|   nameByProductKey: Map<string, string>,
- 357| ): { rows: string[][]; warnings: string[] } {
- 358|   const warnings: string[] = [];
- 359|   const rows: string[][] = [];
- 360|   for (const l of lots) {
- 361|     const ext = deriveInventoryExternalId({
- 362|       ccrs_inventory_external_id: l.ccrs_inventory_external_id,
- 363|       lot_code: l.lot_code,
- 364|       pos_product_key: l.pos_product_key,
- 365|       id: l.id,
- 366|     });
- 367|     if (!ext) {
- 368|       warnings.push(`Lot ${l.id} has no usable external identifier and was skipped.`);
- 369|       continue;
- 370|     }
- 371|     const key = (l.pos_product_key ?? "").trim();
- 372|     const item = key ? itemsByKey.get(key) : undefined;
- 373|     const strain = (item?.strain_name ?? "").trim();
- 374|     // CCRS joins Inventory.Product -> Product.Name by the EXACT name string
- 375|     // (NOT by ExternalIdentifier). Write the identical Name recorded by
- 376|     // buildProductFile. See docs/CCRS_PRODUCT_NAMING_RESEARCH.md.
- 377|     const productName = nameByProductKey.get(key) ?? "";
- 378|     if (!productName) {
- 379|       warnings.push(
- 380|         `Lot ${l.id}: no matching Product.Name for key "${key}" — Inventory.Product would be blank/invalid. Ensure the product is in the published menu.`,
- 381|       );
- 382|     }
- 383|     const area = l.status === "quarantine" || l.status === "recalled" ? "Quarantine" : "Sales Floor";
- 384|     const totalCostMinor = (l.unit_cost_minor_units ?? 0) * (l.received_qty ?? 0);
- 385|     rows.push([
- 386|       license,
- 387|       strain,
- 388|       area,
- 389|       productName,
- 390|       String(l.received_qty ?? 0),
- 391|       String(l.on_hand_qty ?? 0),
- 392|       (Math.max(0, totalCostMinor) / 100).toFixed(2),
- 393|       "FALSE", // IsMedical — medical exemptions are tracked per-sale, not per-lot
- 394|       ext,
- 395|       createdBy,
- 396|       // SLICE 2 — report the day the lot was ACTUALLY received when we can
- 397|       // evidence it. This used to be `ccrsDate(l.created_at)` unconditionally;
- 398|       // for a lot whose POS export had a blank Received date, created_at is
- 399|       // the instant the migration ran, so the LCB was being told the lot was
- 400|       // created on import day. ccrsInventoryCreatedDate() prefers the
- 401|       // evidenced received_on and falls back to created_at only when the date
- 402|       // is genuinely unknown — and those lots are flagged for the owner rather
- 403|       // than quietly given a manufactured date.
- 404|       //
- 405|       // This is a no-op for the ~3,977 lots that DID carry a received date:
- 406|       // SLICE 1 already set their created_at to noon UTC on that same day, so
- 407|       // the emitted MM/DD/YYYY is byte-identical.
- 408|       ccrsDate(ccrsInventoryCreatedDate(l)),
- 409|       "",
- 410|       "",
- 411|       "Insert",
- 412|     ]);
- 413|     const idErrs = validateExternalId(ext);
- 414|     if (idErrs.length) warnings.push(`Inventory id "${ext}" ${idErrs.join(", ")}.`);
- 415|   }
- 416|   if (rows.length === 0) warnings.push("No inventory lots found to report.");
- 417|   return { rows, warnings: [...new Set(warnings)].slice(0, 25) };
+ 351|       category = cls.category;
+ 352|       type = cls.type;
+ 353|       // Advisory (never blocks): a legacy 2021-vocabulary value ("Usable
+ 354|       // Marijuana", inhalation concentrate under IntermediateProduct) was
+ 355|       // canonicalized to the current Table 2 spelling/category. Surface it so
+ 356|       // staff see what was translated.
+ 357|       if (cls.aliased && cls.aliasNote) {
+ 358|         warnings.push(`Product "${productName || ext}": ${cls.aliasNote}`);
+ 359|       }
+ 360|     } else {
+ 361|       warnings.push(`ERROR — Product "${productName || ext}": ${cls.error} Fix the CCRS mapping (Inventory types) before submitting.`);
+ 362|     }
+ 363| 
+ 364|     // C2: clamp Name (75) and Description (250); flag truncation (don't silently cut).
+ 365|     const nameClamp = clampText(productName, CCRS_PRODUCT_NAME_MAX);
+ 366|     if (nameClamp.truncated) {
+ 367|       warnings.push(`Product "${productName.slice(0, 40)}…": Name exceeds ${CCRS_PRODUCT_NAME_MAX} chars and was truncated — shorten it in the source.`);
+ 368|     }
+ 369|     // Naming-convention check (drafts-only, surfaced as a warning): if the Name
+ 370|     // violates the house convention (leading symbol, disallowed char, casing),
+ 371|     // flag it so staff fix the source. Does NOT alter the value written here.
+ 372|     const nameCheck = validateName(nameClamp.value);
+ 373|     if (!nameCheck.ok) {
+ 374|       warnings.push(
+ 375|         `Product "${nameClamp.value.slice(0, 40)}…": name convention issues — ${nameCheck.issues.map((i) => i.message).join(" ")} Suggested: "${suggestName(nameClamp.valu
+ 376|       );
+ 377|     }
+ 378|     // Record the exact Name for the Inventory.Product join (keyed by raw key).
+ 379|     nameByProductKey.set(key, nameClamp.value);
+ 380|     const descClamp = clampText(it.description, CCRS_PRODUCT_DESCRIPTION_MAX);
+ 381|     if (descClamp.truncated) {
+ 382|       warnings.push(`Product "${productName || ext}": Description exceeds ${CCRS_PRODUCT_DESCRIPTION_MAX} chars and was truncated — shorten it in the source.`);
+ 383|     }
+ 384| 
+ 385|     // E9 / E10 — for Usable Cannabis and Cannabis Mix Packaged ONLY, the guide
+ 386|     // makes UnitWeightGrams and Description mandatory:
+ 387|     //   [G L0489-L0490] "required when InventoryType = Useable cannabis, or
+ 388|     //                    Cannabis Mix Packaged All other product types weight
+ 389|     //                    can be reported as 0"
+ 390|     //   [G L0482-L0483] the same note for Description
+ 391|     //   [G L0434] "If Useable Cannabis is selected, Unit Weight Gram cannot be 0"
+ 392|     // `type` is the CANONICAL Table 2 value resolved above, so we compare that
+ 393|     // rather than the raw vendor string.
+ 394|     for (const found of productRowIssues({
+ 395|       id: ext,
+ 396|       label: nameClamp.value || ext,
+ 397|       inventoryType: type,
+ 398|       unitWeightGrams: grams,
+ 399|       description: descClamp.value,
+ 400|     })) {
+ 401|       if (found.code === "E9_UNITWEIGHT_ZERO_USABLE") e9Rows.push(found.row);
+ 402|       else e10Rows.push(found.row);
+ 403|     }
+ 404| 
+ 405|     rows.push([
+ 406|       license,
+ 407|       category,
+ 408|       type,
+ 409|       nameClamp.value,
+ 410|       descClamp.value,
+ 411|       grams,
+ 412|       ext,
+ 413|       createdBy,
+ 414|       createdDate,
+ 415|       "",
+ 416|       "",
+ 417|       "Insert",
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L424-L500 — buildCcrsBatch (part 1) — license/Supabase guards E1/E2; published menu; lots pagedAll excluding status=destroyed.
 
 ```ts
- 424| export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {
- 425|   const license = await getCcrsLicenseSettings();
- 426|   const submittedBy = license.submittedBy || "Greenway";
- 427|   const createdBy = submittedBy;
- 428|   const now = new Date();
- 429|   const createdDate = ccrsDate(now);
- 430|   const syncIssues: CcrsSyncIssue[] = [];
- 431| 
- 432|   const emptyBatch = (): CcrsBatch => ({
- 433|     licenseNumber: license.licenseNumber,
- 434|     submittedBy,
- 435|     fromISO,
- 436|     toISO,
- 437|     files: [],
- 438|     syncIssues,
- 439|     totalRecords: 0,
- 440|     generatedAt: now.toISOString(),
- 441|   });
- 442| 
- 443|   if (!license.licenseNumber) {
- 444|     syncIssues.push({
- 445|       severity: "error",
- 446|       file: "General",
- 447|       message: "License number is not set. Add it in Compliance settings before generating a batch.",
- 448|     });
- 449|   }
- 450| 
- 451|   if (!isSupabaseServiceConfigured) {
- 452|     syncIssues.push({ severity: "error", file: "General", message: "Supabase is not configured." });
- 453|     return emptyBatch();
- 454|   }
- 455| 
- 456|   const admin = createSupabaseAdminClient();
- 457| 
- 458|   // --- Master data (published menu + inventory lots) ------------------------
- 459|   const versionId = await getPublishedVersionId(admin);
- 460|   let items: MenuItemRow[] = [];
- 461|   if (versionId) {
- 462|     const { data } = await admin
- 463|       .from("menu_items")
- 464|       .select(
- 465|         "source_item_id, name, strain_name, strain_type, pos_inventory_type, pos_inventory_category, description, brand_name, vendor_name, category, total_thc_json, total
- 466|       )
- 467|       .eq("menu_version_id", versionId)
- 468|       .eq("hidden", false);
- 469|     items = (data as MenuItemRow[] | null) ?? [];
- 470|   } else {
- 471|     syncIssues.push({
- 472|       severity: "warning",
- 473|       file: "Product",
- 474|       message: "No published menu version — Strain/Product files will be empty.",
- 475|     });
- 476|   }
- 477|   const itemsByKey = new Map(items.map((i) => [i.source_item_id.trim(), i]));
- 478| 
- 479|   // SLICE 2: paged. `.limit(5000)` did NOT raise the PostgREST 1,000-row cap,
- 480|   // so with 4,179 lots the Inventory.csv filed with the WA LCB contained the
- 481|   // first 1,000 lots and silently omitted the rest. That is an incomplete
- 482|   // state traceability filing, which is why this is fixed in the same slice
- 483|   // as the received date. (Selecting `received_on` for CreatedDate.)
- 484|   const lots = await pagedAll<LotRow>(async (from, to) => {
- 485|     const { data } = await admin
- 486|       .from("inventory_lots")
- 487|       .select(
- 488|         "id, lot_code, pos_product_key, product_name, ccrs_inventory_external_id, received_qty, on_hand_qty, unit_cost_minor_units, unit_weight, unit_weight_uom, status, 
- 489|       )
- 490|       .neq("status", "destroyed")
- 491|       .order("id", { ascending: true })
- 492|       .range(from, to);
- 493|     return (data as LotRow[] | null) ?? [];
- 494|   });
- 495|   const hasQuarantine = lots.some((l) => l.status === "quarantine" || l.status === "recalled");
- 496| 
- 497|   // --- Build each master-data file ------------------------------------------
- 498|   const strain = buildStrainFile(items, license.licenseNumber, submittedBy, createdBy, createdDate);
- 499|   const area = buildAreaFile(hasQuarantine, license.licenseNumber, createdBy, createdDate);
- 500|   const product = buildProductFile(items, lots, license.licenseNumber, createdBy, createdDate);
+ 424|     ...unique.filter((w) => w.startsWith("ERROR")),
+ 425|     ...unique.filter((w) => !w.startsWith("ERROR")),
+ 426|   ];
+ 427|   const dedupWarnings = errorsFirst.slice(0, 30);
+ 428|   const issues: CcrsSyncIssue[] = [];
+ 429|   if (e9Rows.length > 0) {
+ 430|     issues.push({
+ 431|       severity: "error",
+ 432|       file: "Product",
+ 433|       code: "E9_UNITWEIGHT_ZERO_USABLE",
+ 434|       specPin: specPinFor("E9_UNITWEIGHT_ZERO_USABLE"),
+ 435|       count: e9Rows.length,
+ 436|       rows: e9Rows,
+ 437|       message: `${e9Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no unit weight. CCRS rejects the Product file — "If Useable Cannabis is selected,
+ 438|     });
+ 439|   }
+ 440|   if (e10Rows.length > 0) {
+ 441|     issues.push({
+ 442|       severity: "error",
+ 443|       file: "Product",
+ 444|       code: "E10_DESCRIPTION_REQUIRED",
+ 445|       specPin: specPinFor("E10_DESCRIPTION_REQUIRED"),
+ 446|       count: e10Rows.length,
+ 447|       rows: e10Rows,
+ 448|       message: `${e10Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no Description, which CCRS requires for those two types [G L0482-L0483]. Add a s
+ 449|     });
+ 450|   }
+ 451|   return { rows, warnings: dedupWarnings, nameByProductKey, issues };
+ 452| }
+ 453| 
+ 454| function buildInventoryFile(
+ 455|   lots: LotRow[],
+ 456|   itemsByKey: Map<string, MenuItemRow>,
+ 457|   license: string,
+ 458|   createdBy: string,
+ 459|   nameByProductKey: Map<string, string>,
+ 460| ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
+ 461|   const warnings: string[] = [];
+ 462|   const rows: string[][] = [];
+ 463|   // S-02 coded pre-flight errors. Rows are collected, never capped.
+ 464|   const e7Rows: CcrsIssueRow[] = [];
+ 465|   const e8Rows: CcrsIssueRow[] = [];
+ 466|   // S-10: a lot with NO assigned ccrs_inventory_external_id is withheld, never
+ 467|   // given an id invented at export time (standing rule 3). Every receiving-
+ 468|   // intake and Cultivera-import lot is assigned one when it is created, so this
+ 469|   // only fires on an anomaly — exactly the lot an employee must look at.
+ 470|   const e3Rows: CcrsIssueRow[] = [];
+ 471|   for (const l of lots) {
+ 472|     const ext = assignedInventoryExternalId(l);
+ 473|     if (!ext) {
+ 474|       e3Rows.push({
+ 475|         id: l.id,
+ 476|         label: l.lot_code ?? l.product_name ?? l.id,
+ 477|         detail: "No CCRS inventory identifier is assigned to this lot.",
+ 478|       });
+ 479|       continue;
+ 480|     }
+ 481|     const key = (l.pos_product_key ?? "").trim();
+ 482|     const item = key ? itemsByKey.get(key) : undefined;
+ 483|     const strain = (item?.strain_name ?? "").trim();
+ 484|     // CCRS joins Inventory.Product -> Product.Name by the EXACT name string
+ 485|     // (NOT by ExternalIdentifier). Write the identical Name recorded by
+ 486|     // buildProductFile. See docs/CCRS_PRODUCT_NAMING_RESEARCH.md.
+ 487|     const productName = nameByProductKey.get(key) ?? "";
+ 488|     if (!productName) {
+ 489|       warnings.push(
+ 490|         `Lot ${l.id}: no matching Product.Name for key "${key}" — Inventory.Product would be blank/invalid. Ensure the product is in the published menu.`,
+ 491|       );
+ 492|     }
+ 493|     const area = l.status === "quarantine" || l.status === "recalled" ? "Quarantine" : "Sales Floor";
+ 494|     const totalCostMinor = (l.unit_cost_minor_units ?? 0) * (l.received_qty ?? 0);
+ 495| 
+ 496|     // E7 [G L0614] / E8 [G L0597]. The decision lives in the pure core so it is
+ 497|     // unit-tested directly; a failing row is WITHHELD because CCRS rejects the
+ 498|     // whole file on one bad row and tells us only by email [FAQ L0102].
+ 499|     const initialQty = l.received_qty ?? 0;
+ 500|     const onHandQty = l.on_hand_qty ?? 0;
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L540-L652 — buildCcrsBatch (part 2) — InventoryTransfer emitted EMPTY with an explanatory note (guide p.33 L1162 says it 'is required weekly by any licensed facility that receives inventory'); sort; E3; orphan products; verifySaleNumericColumns; WARNING_CAP_PER_FILE.
 
 ```ts
- 540|   files.push({
- 541|     type: "InventoryAdjustment",
- 542|     group: uploadGroupOf("InventoryAdjustment"),
- 543|     fileName: adj.fileName,
- 544|     csv: adj.csv,
- 545|     recordCount: adj.recordCount,
- 546|     skipped: adj.skipped,
- 547|     warnings: adj.warnings,
- 548|     empty: adj.recordCount === 0,
- 549|   });
- 550|   // InventoryTransfer: only the RECEIVING licensee submits it; retail intake is
- 551|   // reported via Inventory.csv. We emit an empty, correctly-shaped file and note
- 552|   // it so staff know it is intentionally empty for a retailer.
- 553|   push("InventoryTransfer", [], [
- 554|     "InventoryTransfer is submitted by the receiving licensee; retail intake is reported via Inventory.csv. This file is intentionally empty.",
- 555|   ]);
- 556|   files.push({
- 557|     type: "Sale",
- 558|     group: uploadGroupOf("Sale"),
- 559|     fileName: sale.fileName,
- 560|     csv: sale.csv,
- 561|     recordCount: sale.recordCount,
- 562|     skipped: sale.skipped,
- 563|     warnings: sale.warnings,
- 564|     empty: sale.recordCount === 0,
- 565|   });
- 566| 
- 567|   // Order files by upload group (1 → 2 → 3), preserving intra-group order.
- 568|   const order = new Map(CCRS_UPLOAD_ORDER.map((t, i) => [t, i]));
- 569|   files.sort((a, b) => (order.get(a.type) ?? 99) - (order.get(b.type) ?? 99));
- 570| 
- 571|   // --- Sync / data-integrity analysis (flag out-of-sync BEFORE upload) ------
- 572|   const lotsMissingId = lots.filter(
- 573|     (l) =>
- 574|       !deriveInventoryExternalId({
- 575|         ccrs_inventory_external_id: l.ccrs_inventory_external_id,
- 576|         lot_code: l.lot_code,
- 577|         pos_product_key: l.pos_product_key,
- 578|         id: l.id,
- 579|       }),
- 580|   ).length;
- 581|   if (lotsMissingId > 0) {
- 582|     syncIssues.push({
- 583|       severity: "error",
- 584|       file: "Inventory",
- 585|       message: "Inventory lots have no usable CCRS external identifier and cannot be reported.",
- 586|       count: lotsMissingId,
- 587|     });
- 588|   }
+ 540|       "",
+ 541|       "Insert",
+ 542|     ]);
+ 543|     // S-10: filed ids carry dots (4,295 in the LCB delivery) and are legal
+ 544|     // [G L0224]; only CSV-breaking characters and > 100 chars are flagged.
+ 545|     const idErrs = validatePassThroughExternalId(ext);
+ 546|     if (idErrs.length) warnings.push(`Inventory id "${ext}" ${idErrs.join(", ")}.`);
+ 547|   }
+ 548|   if (rows.length === 0) warnings.push("No inventory lots found to report.");
+ 549|   const issues: CcrsSyncIssue[] = [];
+ 550|   if (e3Rows.length > 0) {
+ 551|     issues.push({
+ 552|       severity: "error",
+ 553|       file: "Inventory",
+ 554|       code: "E3_EXTERNAL_ID_UNASSIGNED",
+ 555|       specPin: specPinFor("E3_EXTERNAL_ID_UNASSIGNED"),
+ 556|       count: e3Rows.length,
+ 557|       rows: e3Rows,
+ 558|       message: `${e3Rows.length} lot(s) have no CCRS inventory identifier assigned, so they were left out of Inventory.csv. ExternalIdentifier is required on every row [G
+ 559|     });
+ 560|   }
+ 561|   if (e8Rows.length > 0) {
+ 562|     issues.push({
+ 563|       severity: "error",
+ 564|       file: "Inventory",
+ 565|       code: "E8_ONHAND_GT_INITIAL",
+ 566|       specPin: specPinFor("E8_ONHAND_GT_INITIAL"),
+ 567|       count: e8Rows.length,
+ 568|       rows: e8Rows,
+ 569|       message: `${e8Rows.length} lot(s) report more on hand than were ever received. CCRS rejects the Inventory file with "QuanityOnHand is greater than InitialQuantity" 
+ 570|     });
+ 571|   }
+ 572|   if (e7Rows.length > 0) {
+ 573|     issues.push({
+ 574|       severity: "error",
+ 575|       file: "Inventory",
+ 576|       code: "E7_TOTALCOST_ZERO",
+ 577|       specPin: specPinFor("E7_TOTALCOST_ZERO"),
+ 578|       count: e7Rows.length,
+ 579|       rows: e7Rows,
+ 580|       message: `${e7Rows.length} lot(s) have no cost, so TotalCost would be 0 and CCRS rejects the Inventory file ("TotalCost cannot equal 0" [G L0614]). Enter the unit c
+ 581|     });
+ 582|   }
+ 583|   return { rows, warnings: [...new Set(warnings)].slice(0, 25), issues };
+ 584| }
+ 585| 
+ 586| // ---------------------------------------------------------------------------
+ 587| // The full batch
+ 588| // ---------------------------------------------------------------------------
  589| 
- 590|   // Products referenced by lots but absent from the published menu (Product.csv
- 591|   // won't contain them → Inventory.Product reference would be invalid).
- 592|   const productExtInFile = new Set(product.rows.map((r) => r[6]));
- 593|   const orphanLotProducts = new Set<string>();
- 594|   for (const l of lots) {
- 595|     const ext = sanitizeExternalId((l.pos_product_key ?? "").trim());
- 596|     if (ext && !productExtInFile.has(ext)) orphanLotProducts.add(ext);
- 597|   }
- 598|   if (orphanLotProducts.size > 0) {
- 599|     syncIssues.push({
- 600|       severity: "warning",
- 601|       file: "Product",
- 602|       message: "Inventory lots reference products not present in the published menu (Product.csv).",
- 603|       count: orphanLotProducts.size,
- 604|     });
- 605|   }
- 606| 
- 607|   // Slice 96: numeric-column safety on the EMITTED Sale rows. Parse the assembled
- 608|   // Sale csv's data rows (skip the 3-row header + column row) and flag any
- 609|   // negative/NaN/mis-formatted Quantity or money value. Defense-in-depth — the
- 610|   // builder already skips bad lines, but this guarantees the file the LCB sees is
- 611|   // numerically sound. Never rewrites values.
- 612|   const saleFile = files.find((f) => f.type === "Sale");
- 613|   if (saleFile && saleFile.recordCount > 0) {
- 614|     const saleLines = saleFile.csv.replace(/\r\n$/, "").split("\r\n").slice(4);
- 615|     const saleRows = saleLines.map((l) => splitCsvLine(l));
- 616|     for (const p of verifySaleNumericColumns(saleRows)) {
- 617|       syncIssues.push({ severity: p.severity, file: "Sale", message: p.message });
- 618|     }
- 619|   }
- 620| 
- 621|   // Carry each file's own warnings up as sync issues with HONEST severity
- 622|   // (Slice 93). Batch-blocking messages (invalid enum, missing id, etc.) become
- 623|   // `error` and are NEVER dropped by the cap; advisory notes stay `warning` and
- 624|   // are capped per file to avoid noise.
- 625|   const WARNING_CAP_PER_FILE = 5;
- 626|   for (const f of files) {
- 627|     let warningCount = 0;
- 628|     for (const w of f.warnings) {
- 629|       const severity = classifyWarning(w);
- 630|       if (severity === "error") {
- 631|         // Always surface blocking errors — no cap.
- 632|         syncIssues.push({ severity: "error", file: f.type, message: w });
- 633|       } else if (warningCount < WARNING_CAP_PER_FILE) {
- 634|         syncIssues.push({ severity: "warning", file: f.type, message: w });
- 635|         warningCount += 1;
- 636|       }
- 637|     }
- 638|   }
- 639| 
- 640|   const totalRecords = files.reduce((a, f) => a + f.recordCount, 0);
- 641| 
- 642|   return {
- 643|     licenseNumber: license.licenseNumber,
- 644|     submittedBy,
- 645|     fromISO,
- 646|     toISO,
- 647|     files,
- 648|     syncIssues,
- 649|     totalRecords,
- 650|     generatedAt: now.toISOString(),
- 651|   };
- 652| }
+ 590| export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {
+ 591|   const license = await getCcrsLicenseSettings();
+ 592|   const submittedBy = license.submittedBy || "Greenway";
+ 593|   const createdBy = submittedBy;
+ 594|   const now = new Date();
+ 595|   const createdDate = ccrsDate(now);
+ 596|   const syncIssues: CcrsSyncIssue[] = [];
+ 597| 
+ 598|   const emptyBatch = (): CcrsBatch => ({
+ 599|     licenseNumber: license.licenseNumber,
+ 600|     submittedBy,
+ 601|     fromISO,
+ 602|     toISO,
+ 603|     files: [],
+ 604|     syncIssues,
+ 605|     totalRecords: 0,
+ 606|     generatedAt: now.toISOString(),
+ 607|   });
+ 608| 
+ 609|   if (!license.licenseNumber) {
+ 610|     syncIssues.push({
+ 611|       severity: "error",
+ 612|       file: "General",
+ 613|       message: "License number is not set. Add it in Compliance settings before generating a batch.",
+ 614|     });
+ 615|   }
+ 616| 
+ 617|   if (!isSupabaseServiceConfigured) {
+ 618|     syncIssues.push({ severity: "error", file: "General", message: "Supabase is not configured." });
+ 619|     return emptyBatch();
+ 620|   }
+ 621| 
+ 622|   const admin = createSupabaseAdminClient();
+ 623| 
+ 624|   // --- Master data (published menu + inventory lots) ------------------------
+ 625|   const versionId = await getPublishedVersionId(admin);
+ 626|   let items: MenuItemRow[] = [];
+ 627|   if (versionId) {
+ 628|     const { data } = await admin
+ 629|       .from("menu_items")
+ 630|       .select(
+ 631|         "source_item_id, name, strain_name, strain_type, pos_inventory_type, pos_inventory_category, description, brand_name, vendor_name, category, total_thc_json, total
+ 632|       )
+ 633|       .eq("menu_version_id", versionId)
+ 634|       .eq("hidden", false);
+ 635|     items = (data as MenuItemRow[] | null) ?? [];
+ 636|   } else {
+ 637|     syncIssues.push({
+ 638|       severity: "warning",
+ 639|       file: "Product",
+ 640|       message: "No published menu version — Strain/Product files will be empty.",
+ 641|     });
+ 642|   }
+ 643|   const itemsByKey = new Map(items.map((i) => [i.source_item_id.trim(), i]));
+ 644| 
+ 645|   // SLICE 2: paged. `.limit(5000)` did NOT raise the PostgREST 1,000-row cap,
+ 646|   // so with 4,179 lots the Inventory.csv filed with the WA LCB contained the
+ 647|   // first 1,000 lots and silently omitted the rest. That is an incomplete
+ 648|   // state traceability filing, which is why this is fixed in the same slice
+ 649|   // as the received date. (Selecting `received_on` for CreatedDate.)
+ 650|   const lots = await pagedAll<LotRow>(async (from, to) => {
+ 651|     const { data } = await admin
+ 652|       .from("inventory_lots")
 ```
 
 ## B. Core/pure helpers — `src/lib/compliance/ccrs-batch-core.ts`
@@ -1251,90 +1267,90 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 `src/lib/compliance/ccrs-identifiers.ts` L30-L60 — sanitizeExternalId — replaces every non-alphanumeric run with '-' (would alter a vendor-issued id containing '_' or '.'); validateExternalId
 
 ```ts
-  30| 
-  31| /**
-  32|  * Sanitize an arbitrary string into a CCRS-safe external identifier:
-  33|  *  • keep alphanumerics; map any other run to a single hyphen
-  34|  *  • trim leading/trailing hyphens
-  35|  *  • clamp to 100 chars
-  36|  *
-  37|  * CCRS says "alpha-numeric"; in practice hyphens are widely accepted and used by
-  38|  * integrators for readable ids, so we allow a single hyphen as a separator but
-  39|  * never anything else.
-  40|  */
-  41| export function sanitizeExternalId(raw: string): string {
-  42|   const cleaned = (raw ?? "")
-  43|     .trim()
-  44|     .replace(/[^A-Za-z0-9]+/g, "-")
-  45|     .replace(/^-+|-+$/g, "");
-  46|   return cleaned.slice(0, CCRS_EXTERNAL_ID_MAX);
-  47| }
-  48| 
-  49| /**
-  50|  * Validate a CCRS external identifier. Returns the list of problems (empty =
-  51|  * valid). Used to surface precise warnings before an upload.
-  52|  */
-  53| export function validateExternalId(value: string | null | undefined): string[] {
-  54|   const errs: string[] = [];
-  55|   const v = (value ?? "").trim();
-  56|   if (!v) {
-  57|     errs.push("missing");
-  58|     return errs;
-  59|   }
-  60|   if (v.length > CCRS_EXTERNAL_ID_MAX) errs.push(`exceeds ${CCRS_EXTERNAL_ID_MAX} characters`);
+  30|  *    examiner: periods are "your choice" and ids are text up to 100 [G L0224].
+  31|  *    Rewriting "." to "-" produces an id CCRS has never seen, and every Sale
+  32|  *    row against it fails "Invalid InventoryExternalIdentifier".
+  33|  *  • MINTING. Only a brand-new lot that has never been filed gets a minted id
+  34|  *    (`mintExternalId`, Greenway's [A-Za-z0-9-] convention).
+  35|  *
+  36|  * Everything here is PURE (no I/O), so it's unit-testable and importable anywhere.
+  37|  */
+  38| 
+  39| export const CCRS_EXTERNAL_ID_MAX = 100;
+  40| 
+  41| /**
+  42|  * Sanitize an arbitrary string into a CCRS-safe external identifier:
+  43|  *  • keep alphanumerics; map any other run to a single hyphen
+  44|  *  • trim leading/trailing hyphens
+  45|  *  • clamp to 100 chars
+  46|  *
+  47|  * CCRS says "alpha-numeric"; in practice hyphens are widely accepted and used by
+  48|  * integrators for readable ids, so we allow a single hyphen as a separator but
+  49|  * never anything else.
+  50|  */
+  51| export function mintExternalId(raw: string): string {
+  52|   const cleaned = (raw ?? "")
+  53|     .trim()
+  54|     .replace(/[^A-Za-z0-9]+/g, "-")
+  55|     .replace(/^-+|-+$/g, "");
+  56|   return cleaned.slice(0, CCRS_EXTERNAL_ID_MAX);
+  57| }
+  58| 
+  59| /**
+  60|  * @deprecated S-10: use `mintExternalId` for NEW ids only. Never call this on an
 ```
 
 `src/lib/compliance/ccrs-identifiers.ts` L215-L262 — deriveInventoryExternalId (explicit → lot_code → pos_product_key → LOT-<id>) and resolveSaleInventoryExternalId
 
 ```ts
- 215|  *      Inventory.csv the licensee already filed.
- 216|  *   3. pos_product_key.
- 217|  *   4. the DB id (prefixed) as a guaranteed-unique fallback.
- 218|  *
- 219|  * Returns null only if nothing usable exists.
- 220|  */
- 221| export function deriveInventoryExternalId(src: LotIdentitySource): string | null {
- 222|   const explicit = sanitizeExternalId(src.ccrs_inventory_external_id ?? "");
- 223|   if (explicit) return explicit;
- 224| 
- 225|   const fromLot = sanitizeExternalId(src.lot_code ?? "");
- 226|   if (fromLot) return fromLot;
- 227| 
- 228|   const fromKey = sanitizeExternalId(src.pos_product_key ?? "");
- 229|   if (fromKey) return fromKey;
- 230| 
- 231|   const fromId = sanitizeExternalId(src.id ? `LOT-${src.id}` : "");
- 232|   if (fromId) return fromId;
- 233| 
- 234|   return null;
- 235| }
- 236| 
- 237| /**
- 238|  * Resolve the InventoryExternalIdentifier to put on a Sale.csv line.
- 239|  *
- 240|  * Preference order:
- 241|  *   1. The line's own ccrs_inventory_external_id (explicit per-sale override).
- 242|  *   2. The canonical id derived from the matched inventory lot.
- 243|  *   3. A sanitized pos_product_key as a degraded fallback (with a warning upstream).
- 244|  */
- 245| export function resolveSaleInventoryExternalId(opts: {
- 246|   lineExplicit?: string | null;
- 247|   lotCanonical?: string | null;
- 248|   posProductKey?: string | null;
- 249| }): { value: string; source: "line" | "lot" | "product_key" | "none" } {
- 250|   const line = sanitizeExternalId(opts.lineExplicit ?? "");
- 251|   if (line) return { value: line, source: "line" };
- 252| 
- 253|   const lot = sanitizeExternalId(opts.lotCanonical ?? "");
- 254|   if (lot) return { value: lot, source: "lot" };
- 255| 
- 256|   const key = sanitizeExternalId(opts.posProductKey ?? "");
- 257|   if (key) return { value: key, source: "product_key" };
- 258| 
- 259|   return { value: "", source: "none" };
- 260| }
- 261| 
- 262| // ── Self-tests (tsx) ─────────────────────────────────────────────────────────
+ 215|         problems.push({
+ 216|           code: "duplicate_sale_detail",
+ 217|           saleExternalId,
+ 218|           detail: `SaleDetailExternalIdentifier "${d}" appears more than once in this sale`,
+ 219|         });
+ 220|       }
+ 221|       seen.add(d);
+ 222|     }
+ 223|     // SaleType / SaleDate consistency across the sale.
+ 224|     const types = new Set(group.map((l) => (l.saleType ?? "").trim()).filter(Boolean));
+ 225|     if (types.size > 1) {
+ 226|       problems.push({
+ 227|         code: "sale_type_mismatch",
+ 228|         saleExternalId,
+ 229|         detail: `mixed SaleType values in one sale: ${Array.from(types).join(", ")}`,
+ 230|       });
+ 231|     }
+ 232|     const dates = new Set(group.map((l) => (l.saleDate ?? "").trim()).filter(Boolean));
+ 233|     if (dates.size > 1) {
+ 234|       problems.push({
+ 235|         code: "sale_date_mismatch",
+ 236|         saleExternalId,
+ 237|         detail: `mixed SaleDate values in one sale: ${Array.from(dates).join(", ")}`,
+ 238|       });
+ 239|     }
+ 240|   }
+ 241|   return problems;
+ 242| }
+ 243| 
+ 244| export type LotIdentitySource = {
+ 245|   /** Persisted canonical id, if we've already assigned one. Always preferred. */
+ 246|   ccrs_inventory_external_id?: string | null;
+ 247|   /** The POS product key (= menu_items.source_item_id = order_lines.product_id). */
+ 248|   pos_product_key?: string | null;
+ 249|   /** Vendor/manifest lot code. */
+ 250|   lot_code?: string | null;
+ 251|   /** Stable DB primary key as a last resort. */
+ 252|   id?: string | null;
+ 253| };
+ 254| 
+ 255| /**
+ 256|  * S-10: the id ASSIGNED to a lot, or null. Never mints.
+ 257|  *
+ 258|  * Every CCRS file that names an existing lot (Inventory.csv, Sale.csv,
+ 259|  * InventoryAdjustment.csv) must carry the id that lot was filed under, so an
+ 260|  * export may only READ the stored id. Returns null when none is stored; the
+ 261|  * caller withholds the row (E3_EXTERNAL_ID_UNASSIGNED) rather than inventing
+ 262|  * an id CCRS has never seen.
 ```
 
 ## D. Week / ledger
@@ -1875,220 +1891,220 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 `src/lib/compliance/ccrs-inventory-adjustment-core.ts` L28-L135 — CCRS_ADJUSTMENT_REASONS, mapAdjustmentReason (return→Other; comment says detail REQUIRED), isReportableAdjustment, adjustmentDetail (returns '' for null — E13)
 
 ```ts
-  28| // Reason mapping — internal reason → CCRS AdjustmentReason (valid values only)
-  29| // ---------------------------------------------------------------------------
+  28|   submittedBy: string;
+  29| };
   30| 
-  31| /** The exact set of AdjustmentReason values CCRS accepts. */
-  32| export const CCRS_ADJUSTMENT_REASONS = [
-  33|   "Destruction",
-  34|   "Reconciliation",
-  35|   "Lost",
-  36|   "Seizure",
-  37|   "Theft",
-  38|   "ReturnedLabSample",
-  39|   "Other",
-  40| ] as const;
-  41| export type CcrsAdjustmentReason = (typeof CCRS_ADJUSTMENT_REASONS)[number];
-  42| 
-  43| /**
-  44|  * Map an internal adjustment reason to a valid CCRS AdjustmentReason.
-  45|  *
-  46|  *   receive       → (not exported — additions are reported via Inventory.csv)
-  47|  *   destruction   → Destruction
-  48|  *   count         → Reconciliation   (cycle-count variance correction)
-  49|  *   shrink        → Lost
-  50|  *   damage        → Lost
-  51|  *   sample        → ReturnedLabSample (lab/QA sample pulled from sellable stock)
-  52|  *   recall        → Destruction       (recalled product is destroyed)
-  53|  *   return        → Other             (customer return add-back; detail REQUIRED)
-  54|  *   theft         → Theft
-  55|  *   seizure       → Seizure
-  56|  *   other / *     → Other
-  57|  */
-  58| export function mapAdjustmentReason(internal: string): CcrsAdjustmentReason {
-  59|   switch ((internal ?? "").trim().toLowerCase()) {
-  60|     case "destruction":
-  61|       return "Destruction";
-  62|     case "count":
-  63|       return "Reconciliation";
-  64|     case "shrink":
-  65|     case "damage":
-  66|       return "Lost";
-  67|     case "sample":
-  68|       return "ReturnedLabSample";
-  69|     // Task K: an EMPLOYEE trade sample (WAC 314-55-096) is reported to CCRS as
-  70|     // an InventoryAdjustment with reason "Other" and a detail naming the
-  71|     // employee (LCB-confirmed shape). It is NOT a returned lab sample.
-  72|     case "employee_sample":
-  73|       return "Other";
-  74|     case "recall":
-  75|       return "Destruction";
-  76|     // Task Q: a CUSTOMER return (WAC 314-55-079(12)) adds quantity BACK to the
-  77|     // inventory identifier. Per the LCB CCRS FAQ the sale identifier is deleted
-  78|     // and the inventory identifier is "reported on an Inventory Adjustment as a
-  79|     // return, with details" — 'Return' is not a valid AdjustmentReason, so the
-  80|     // correct encoding is Other + a mandatory detail stating the ADD direction.
-  81|     case "return":
-  82|       return "Other";
-  83|     case "theft":
-  84|       return "Theft";
-  85|     case "seizure":
-  86|       return "Seizure";
-  87|     default:
-  88|       return "Other";
-  89|   }
-  90| }
-  91| 
-  92| /**
-  93|  * Should this internal reason be exported to CCRS InventoryAdjustment at all?
-  94|  * Positive deltas that represent RECEIVING are reported via Inventory.csv, not
-  95|  * here, so we exclude `receive`. A zero-delta row is a no-op.
-  96|  */
-  97| export function isReportableAdjustment(internal: string, qtyDelta: number): boolean {
-  98|   const r = (internal ?? "").trim().toLowerCase();
-  99|   if (r === "receive") return false;
- 100|   return qtyDelta !== 0;
- 101| }
- 102| 
- 103| // ---------------------------------------------------------------------------
- 104| // Formatting helpers
- 105| // ---------------------------------------------------------------------------
+  31| // ---------------------------------------------------------------------------
+  32| // Reason mapping — internal reason → CCRS AdjustmentReason (valid values only)
+  33| // ---------------------------------------------------------------------------
+  34| 
+  35| /** The exact set of AdjustmentReason values CCRS accepts. */
+  36| export const CCRS_ADJUSTMENT_REASONS = [
+  37|   "Destruction",
+  38|   "Reconciliation",
+  39|   "Lost",
+  40|   "Seizure",
+  41|   "Theft",
+  42|   "ReturnedLabSample",
+  43|   "Other",
+  44| ] as const;
+  45| export type CcrsAdjustmentReason = (typeof CCRS_ADJUSTMENT_REASONS)[number];
+  46| 
+  47| /**
+  48|  * Map an internal adjustment reason to a valid CCRS AdjustmentReason.
+  49|  *
+  50|  *   receive       → (not exported — additions are reported via Inventory.csv)
+  51|  *   destruction   → Destruction
+  52|  *   count         → Reconciliation   (cycle-count variance correction)
+  53|  *   shrink        → Lost
+  54|  *   damage        → Lost
+  55|  *   sample        → ReturnedLabSample (lab/QA sample pulled from sellable stock)
+  56|  *   recall        → Destruction       (recalled product is destroyed)
+  57|  *   return        → Other             (customer return add-back; detail REQUIRED)
+  58|  *   theft         → Theft
+  59|  *   seizure       → Seizure
+  60|  *   other / *     → Other
+  61|  */
+  62| export function mapAdjustmentReason(internal: string): CcrsAdjustmentReason {
+  63|   switch ((internal ?? "").trim().toLowerCase()) {
+  64|     case "destruction":
+  65|       return "Destruction";
+  66|     case "count":
+  67|       return "Reconciliation";
+  68|     case "shrink":
+  69|     case "damage":
+  70|       return "Lost";
+  71|     case "sample":
+  72|       return "ReturnedLabSample";
+  73|     // Task K: an EMPLOYEE trade sample (WAC 314-55-096) is reported to CCRS as
+  74|     // an InventoryAdjustment with reason "Other" and a detail naming the
+  75|     // employee (LCB-confirmed shape). It is NOT a returned lab sample.
+  76|     case "employee_sample":
+  77|       return "Other";
+  78|     case "recall":
+  79|       return "Destruction";
+  80|     // Task Q: a CUSTOMER return (WAC 314-55-079(12)) adds quantity BACK to the
+  81|     // inventory identifier. Per the LCB CCRS FAQ the sale identifier is deleted
+  82|     // and the inventory identifier is "reported on an Inventory Adjustment as a
+  83|     // return, with details" — 'Return' is not a valid AdjustmentReason, so the
+  84|     // correct encoding is Other + a mandatory detail stating the ADD direction.
+  85|     case "return":
+  86|       return "Other";
+  87|     case "theft":
+  88|       return "Theft";
+  89|     case "seizure":
+  90|       return "Seizure";
+  91|     default:
+  92|       return "Other";
+  93|   }
+  94| }
+  95| 
+  96| /**
+  97|  * Should this internal reason be exported to CCRS InventoryAdjustment at all?
+  98|  * Positive deltas that represent RECEIVING are reported via Inventory.csv, not
+  99|  * here, so we exclude `receive`. A zero-delta row is a no-op.
+ 100|  */
+ 101| export function isReportableAdjustment(internal: string, qtyDelta: number): boolean {
+ 102|   const r = (internal ?? "").trim().toLowerCase();
+ 103|   if (r === "receive") return false;
+ 104|   return qtyDelta !== 0;
+ 105| }
  106| 
- 107| /** MM/DD/YYYY for the Pacific calendar day (B3) — delegates to the shared,
- 108|  * timezone-correct formatter so AdjustmentDate uses the WA business day. */
- 109| export function mmddyyyy(iso: string | Date): string {
- 110|   return ccrsDate(iso);
- 111| }
- 112| 
- 113| /** CCRS dislikes embedded quotes; strip them and quote if a comma/newline. */
- 114| export function cell(v: unknown): string {
- 115|   const s = v == null ? "" : String(v);
- 116|   const clean = s.replace(/"/g, "");
- 117|   return /[,\n]/.test(clean) ? `"${clean}"` : clean;
- 118| }
- 119| 
- 120| /** Reported quantity is always the absolute magnitude of the change. */
- 121| export function adjustmentQuantity(qtyDelta: number): string {
- 122|   const n = Math.abs(Number(qtyDelta) || 0);
- 123|   return Number.isInteger(n) ? String(n) : String(parseFloat(n.toFixed(4)));
- 124| }
- 125| 
- 126| /** Clamp free-form detail to the CCRS 250-char limit. */
- 127| export function adjustmentDetail(note: string | null | undefined): string {
- 128|   return (note ?? "").replace(/\s+/g, " ").trim().slice(0, 250);
- 129| }
- 130| 
- 131| // A5: the LIVE LCB InventoryAdjustment.csv template is 12 columns — the
- 132| // per-adjustment unique `ExternalIdentifier` sits between AdjustmentDate and
- 133| // CreatedBy and was previously missing (11 cols → CCRS rejection). This set now
- 134| // matches ccrs-batch-core.CCRS_COLUMNS.InventoryAdjustment exactly.
- 135| export const ADJUSTMENT_COLUMNS = [
+ 107| // ---------------------------------------------------------------------------
+ 108| // Formatting helpers
+ 109| // ---------------------------------------------------------------------------
+ 110| 
+ 111| /** MM/DD/YYYY for the Pacific calendar day (B3) — delegates to the shared,
+ 112|  * timezone-correct formatter so AdjustmentDate uses the WA business day. */
+ 113| export function mmddyyyy(iso: string | Date): string {
+ 114|   return ccrsDate(iso);
+ 115| }
+ 116| 
+ 117| /** CCRS dislikes embedded quotes; strip them and quote if a comma/newline. */
+ 118| export function cell(v: unknown): string {
+ 119|   const s = v == null ? "" : String(v);
+ 120|   const clean = s.replace(/"/g, "");
+ 121|   return /[,\n]/.test(clean) ? `"${clean}"` : clean;
+ 122| }
+ 123| 
+ 124| /** Reported quantity is always the absolute magnitude of the change. */
+ 125| export function adjustmentQuantity(qtyDelta: number): string {
+ 126|   const n = Math.abs(Number(qtyDelta) || 0);
+ 127|   return Number.isInteger(n) ? String(n) : String(parseFloat(n.toFixed(4)));
+ 128| }
+ 129| 
+ 130| /** Clamp free-form detail to the CCRS 250-char limit. */
+ 131| export function adjustmentDetail(note: string | null | undefined): string {
+ 132|   return (note ?? "").replace(/\s+/g, " ").trim().slice(0, 250);
+ 133| }
+ 134| 
+ 135| // A5: the LIVE LCB InventoryAdjustment.csv template is 12 columns — the
 ```
 
 `src/lib/compliance/ccrs-inventory-adjustment-core.ts` L135-L235 — ADJUSTMENT_COLUMNS, mapAdjustmentRow, buildAdjustmentFile, makeAdjustmentFileName
 
 ```ts
- 135| export const ADJUSTMENT_COLUMNS = [
- 136|   "LicenseNumber",
- 137|   "InventoryExternalIdentifier",
- 138|   "AdjustmentReason",
- 139|   "AdjustmentDetail",
- 140|   "Quantity",
- 141|   "AdjustmentDate",
- 142|   "ExternalIdentifier",
- 143|   "CreatedBy",
- 144|   "CreatedDate",
- 145|   "UpdatedBy",
- 146|   "UpdatedDate",
- 147|   "Operation",
- 148| ] as const;
- 149| 
- 150| // ---------------------------------------------------------------------------
- 151| // Row mapping (PURE)
- 152| // ---------------------------------------------------------------------------
+ 135| // A5: the LIVE LCB InventoryAdjustment.csv template is 12 columns — the
+ 136| // per-adjustment unique `ExternalIdentifier` sits between AdjustmentDate and
+ 137| // CreatedBy and was previously missing (11 cols → CCRS rejection). This set now
+ 138| // matches ccrs-batch-core.CCRS_COLUMNS.InventoryAdjustment exactly.
+ 139| export const ADJUSTMENT_COLUMNS = [
+ 140|   "LicenseNumber",
+ 141|   "InventoryExternalIdentifier",
+ 142|   "AdjustmentReason",
+ 143|   "AdjustmentDetail",
+ 144|   "Quantity",
+ 145|   "AdjustmentDate",
+ 146|   "ExternalIdentifier",
+ 147|   "CreatedBy",
+ 148|   "CreatedDate",
+ 149|   "UpdatedBy",
+ 150|   "UpdatedDate",
+ 151|   "Operation",
+ 152| ] as const;
  153| 
- 154| export type AdjustmentSourceRow = {
- 155|   id: string;
- 156|   qty_delta: number;
- 157|   reason: string;
- 158|   note: string | null;
- 159|   created_at: string;
- 160|   lot: {
- 161|     id: string | null;
- 162|     lot_code: string | null;
- 163|     pos_product_key: string | null;
- 164|   } | null;
- 165| };
- 166| 
- 167| export type AdjustmentMapResult = {
- 168|   row: string[] | null;
- 169|   skipReason?: string;
- 170| };
- 171| 
- 172| /** Map one internal adjustment row to a CCRS CSV row. PURE. */
- 173| export function mapAdjustmentRow(
- 174|   src: AdjustmentSourceRow,
- 175|   license: CcrsLicenseLike,
- 176| ): AdjustmentMapResult {
- 177|   if (!isReportableAdjustment(src.reason, Number(src.qty_delta))) {
- 178|     return { row: null, skipReason: `${src.reason} (not reportable)` };
- 179|   }
- 180| 
- 181|   const externalId = deriveInventoryExternalId({
- 182|     lot_code: src.lot?.lot_code ?? null,
- 183|     pos_product_key: src.lot?.pos_product_key ?? null,
- 184|     id: src.lot?.id ?? null,
- 185|   });
- 186|   if (!externalId) {
- 187|     return { row: null, skipReason: `adjustment ${src.id} has no resolvable inventory identifier` };
- 188|   }
- 189| 
- 190|   const date = mmddyyyy(src.created_at);
- 191|   // A5: the per-adjustment ExternalIdentifier — unique + deterministic so
- 192|   // re-generating the same range yields the same id (idempotent upload).
- 193|   const adjustmentExternalId = sanitizeExternalId(`ADJ-${src.id}`);
- 194|   const row = [
- 195|     license.licenseNumber,
- 196|     externalId,
- 197|     mapAdjustmentReason(src.reason),
- 198|     adjustmentDetail(src.note),
- 199|     adjustmentQuantity(Number(src.qty_delta)),
- 200|     date,
- 201|     adjustmentExternalId, // ExternalIdentifier (per-adjustment, unique)
- 202|     license.submittedBy, // CreatedBy
- 203|     date, // CreatedDate
- 204|     license.submittedBy, // UpdatedBy
- 205|     date, // UpdatedDate
- 206|     "Insert", // Operation
- 207|   ];
- 208|   return { row };
- 209| }
- 210| 
- 211| /**
- 212|  * Assemble the full file text. PURE. A4: uses the shared, spec-verified
- 213|  * assembler so the header is the 3-row common header (SubmittedBy /
- 214|  * SubmittedDate / NumberRecords, one per line), then the exact 12-column header
- 215|  * row, then data rows, joined with \r\n and NumberRecords == data-row count.
- 216|  */
- 217| export function buildAdjustmentFile(rows: string[][], license: CcrsLicenseLike): string {
- 218|   return assembleCcrsFile({
- 219|     type: "InventoryAdjustment",
- 220|     submittedBy: license.submittedBy,
- 221|     rows,
- 222|   });
- 223| }
- 224| 
- 225| /** File naming (spec convention): InventoryAdjustment_<license>_YYYYMMDDHHMMSS.csv */
- 226| export function makeAdjustmentFileName(licenseNumber: string): string {
- 227|   return ccrsFileName("InventoryAdjustment", licenseNumber);
- 228| }
- 229| 
- 230| // ---------------------------------------------------------------------------
- 231| // Self-tests (tsx-runnable — PURE module, no server-only).
- 232| // ---------------------------------------------------------------------------
- 233| 
- 234| export function __runCcrsAdjustmentTests(): void {
- 235|   let pass = 0;
+ 154| // ---------------------------------------------------------------------------
+ 155| // Row mapping (PURE)
+ 156| // ---------------------------------------------------------------------------
+ 157| 
+ 158| export type AdjustmentSourceRow = {
+ 159|   id: string;
+ 160|   qty_delta: number;
+ 161|   reason: string;
+ 162|   note: string | null;
+ 163|   created_at: string;
+ 164|   lot: {
+ 165|     id: string | null;
+ 166|     lot_code: string | null;
+ 167|     pos_product_key: string | null;
+ 168|     /** S-10: the id the lot was FILED under. Must be selected by the reader. */
+ 169|     ccrs_inventory_external_id?: string | null;
+ 170|   } | null;
+ 171| };
+ 172| 
+ 173| export type AdjustmentMapResult = {
+ 174|   row: string[] | null;
+ 175|   skipReason?: string;
+ 176| };
+ 177| 
+ 178| /** Map one internal adjustment row to a CCRS CSV row. PURE. */
+ 179| export function mapAdjustmentRow(
+ 180|   src: AdjustmentSourceRow,
+ 181|   license: CcrsLicenseLike,
+ 182| ): AdjustmentMapResult {
+ 183|   if (!isReportableAdjustment(src.reason, Number(src.qty_delta))) {
+ 184|     return { row: null, skipReason: `${src.reason} (not reportable)` };
+ 185|   }
+ 186| 
+ 187|   // S-10: the adjustment must reference the SAME id the Inventory row carries
+ 188|   // [G L1077-L1083] (Valid Values: Inventory.ExternalIdentifier) — the
+ 189|     // lot's assigned id first, byte-for-byte.
+ 190|   const externalId = deriveInventoryExternalId({
+ 191|     ccrs_inventory_external_id: src.lot?.ccrs_inventory_external_id ?? null,
+ 192|     lot_code: src.lot?.lot_code ?? null,
+ 193|     pos_product_key: src.lot?.pos_product_key ?? null,
+ 194|     id: src.lot?.id ?? null,
+ 195|   });
+ 196|   if (!externalId) {
+ 197|     return { row: null, skipReason: `adjustment ${src.id} has no resolvable inventory identifier` };
+ 198|   }
+ 199| 
+ 200|   // E13 [G L1111] "Inventory AdjustmentDetail missing". CCRS requires a
+ 201|   // free-text detail for reasons that carry no self-evident explanation
+ 202|   // (Other, Theft). Emitting the row without one gets the InventoryAdjustment
+ 203|   // file rejected, so withhold it behind the stable E13: prefix and let the
+ 204|   // I/O wrapper raise it as a CODED error instead of a generic skip (W16).
+ 205|   const ccrsReason = mapAdjustmentReason(src.reason);
+ 206|   const detail = adjustmentDetail(src.note);
+ 207|   if (adjustmentDetailRequired(ccrsReason) && !detail) {
+ 208|     return {
+ 209|       row: null,
+ 210|       skipReason: `${E13_SKIP_PREFIX} adjustment ${src.id} is reported as "${ccrsReason}" but has no detail note — CCRS requires one [G L1111]`,
+ 211|     };
+ 212|   }
+ 213| 
+ 214|   const date = mmddyyyy(src.created_at);
+ 215|   // A5: the per-adjustment ExternalIdentifier — unique + deterministic so
+ 216|   // re-generating the same range yields the same id (idempotent upload).
+ 217|   const adjustmentExternalId = sanitizeExternalId(`ADJ-${src.id}`);
+ 218|   const row = [
+ 219|     license.licenseNumber,
+ 220|     externalId,
+ 221|     ccrsReason,
+ 222|     detail,
+ 223|     adjustmentQuantity(Number(src.qty_delta)),
+ 224|     date,
+ 225|     adjustmentExternalId, // ExternalIdentifier (per-adjustment, unique)
+ 226|     license.submittedBy, // CreatedBy
+ 227|     date, // CreatedDate
+ 228|     license.submittedBy, // UpdatedBy
+ 229|     date, // UpdatedDate
+ 230|     "Insert", // Operation
+ 231|   ];
+ 232|   return { row };
+ 233| }
+ 234| 
+ 235| /**
 ```
 
 `src/lib/compliance/ccrs-inventory-adjustment.ts` L45-L111 — buildCcrsInventoryAdjustmentCsv (DB read + skipReason warnings W16)
@@ -2127,7 +2143,7 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
   75|   const { data, error } = await admin
   76|     .from("inventory_adjustments")
   77|     .select(
-  78|       "id, qty_delta, reason, note, created_at, lot:inventory_lots(id, lot_code, pos_product_key)",
+  78|       "id, qty_delta, reason, note, created_at, lot:inventory_lots(id, lot_code, pos_product_key, ccrs_inventory_external_id)",
   79|     )
   80|     .gte("created_at", fromISO)
   81|     .lte("created_at", toISO)
@@ -2285,127 +2301,127 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 `src/lib/inventory/disposition.ts` L595-L630 — CCRS Sale-row snapshot + medical mirror
 
 ```ts
- 595|   }
- 596| 
- 597|   // ── Snapshot the CCRS Sale-row data for the correction file ───────────────
- 598|   const inventoryExternalId = resolveSaleInventoryExternalId({
- 599|     lineExplicit: l.ccrs_inventory_external_id,
- 600|     lotCanonical: deriveInventoryExternalId({
- 601|       lot_code: lotRow.lot_code,
- 602|       pos_product_key: lotRow.pos_product_key,
- 603|       id: lotRow.id,
- 604|     }),
- 605|     posProductKey: lineLotKey,
- 606|   }).value;
- 607| 
- 608|   const qty = Number(l.quantity) || 0;
- 609|   const soldUnit = l.price_minor_units ?? 0; // tax-INCLUSIVE out-the-door unit
- 610|   const regularUnit = l.regular_price_minor_units ?? soldUnit; // tax-INCLUSIVE
- 611| 
- 612|   // Medical + tax status mirror the Sale.csv builder (see ccrs-sales.ts).
- 613|   let isMedical = false;
- 614|   let salesExempt = false;
- 615|   let exciseExempt = false;
- 616|   try {
- 617|     const { data: exemptRows } = await admin
- 618|       .from("medical_exempt_sales")
- 619|       .select("product_sku, sales_tax_exempt, excise_tax_exempt")
- 620|       .eq("order_id", o.id);
- 621|     for (const r of (exemptRows as
- 622|       | { product_sku: string | null; sales_tax_exempt: boolean | null; excise_tax_exempt: boolean | null }[]
- 623|       | null) ?? []) {
- 624|       isMedical = true;
- 625|       if (r.product_sku && r.product_sku === l.product_id) {
- 626|         salesExempt = salesExempt || r.sales_tax_exempt === true;
- 627|         exciseExempt = exciseExempt || r.excise_tax_exempt === true;
- 628|       }
- 629|     }
- 630|   } catch {
+ 595|             ccrs_inventory_external_id: string | null;
+ 596|             status: string;
+ 597|           }[]
+ 598|         | null) ?? [];
+ 599|     lotRow = candidates.find((c) => c.status !== "quarantine") ?? candidates[0] ?? null;
+ 600|     lotId = lotRow?.id ?? null;
+ 601|   }
+ 602|   if (!lotRow || !lotId) {
+ 603|     return {
+ 604|       ok: false,
+ 605|       error:
+ 606|         "No inventory lot matches this product — pick the lot manually so the add-back lands on the correct CCRS inventory identifier.",
+ 607|     };
+ 608|   }
+ 609| 
+ 610|   // ── Snapshot the CCRS Sale-row data for the correction file ───────────────
+ 611|   const inventoryExternalId = resolveSaleInventoryExternalId({
+ 612|     lineExplicit: l.ccrs_inventory_external_id,
+ 613|     // S-10: the correction must reference the id the lot was FILED under.
+ 614|     lotCanonical: deriveInventoryExternalId({
+ 615|       ccrs_inventory_external_id: lotRow.ccrs_inventory_external_id ?? null,
+ 616|       lot_code: lotRow.lot_code,
+ 617|       pos_product_key: lotRow.pos_product_key,
+ 618|       id: lotRow.id,
+ 619|     }),
+ 620|     posProductKey: lineLotKey,
+ 621|   }).value;
+ 622| 
+ 623|   const qty = Number(l.quantity) || 0;
+ 624|   const soldUnit = l.price_minor_units ?? 0; // tax-INCLUSIVE out-the-door unit
+ 625|   const regularUnit = l.regular_price_minor_units ?? soldUnit; // tax-INCLUSIVE
+ 626| 
+ 627|   // Medical + tax status mirror the Sale.csv builder (see ccrs-sales.ts).
+ 628|   let isMedical = false;
+ 629|   let salesExempt = false;
+ 630|   let exciseExempt = false;
 ```
 
 `src/lib/inventory/disposition.ts` L675-L705 — postAddition 'return' + destroy branch
 
 ```ts
- 675|   // ── Post the POSITIVE add-back adjustment (internal 'return' → CCRS Other) ─
- 676|   const note = buildCustomerReturnAdjustmentNote({
- 677|     quantity: input.quantity,
- 678|     unit: null,
- 679|     reason: input.reason,
- 680|     disposition: input.disposition,
- 681|     saleExternalId,
- 682|     detail: input.detail,
- 683|   });
- 684|   const posted = await postAddition(lotId, input.quantity, "return", note, actorId);
- 685|   if (!posted.ok) return posted;
- 686| 
- 687|   // ── If destroying, open the destruction event for the returned quantity ───
- 688|   let destructionEventId: string | null = null;
- 689|   if (input.disposition === "destroy") {
- 690|     const scheduled = await scheduleDestruction(
- 691|       {
- 692|         lotId,
- 693|         quantity: input.quantity,
- 694|         reason: "other",
- 695|         detail: `Customer return (${input.reason.replace(/_/g, " ")}) — sale ${saleExternalId}`,
- 696|         // Only the returned unit is segregated — the rest of the lot stays sellable.
- 697|         quarantineLot: false,
- 698|       },
- 699|       actorId,
- 700|     );
- 701|     if (scheduled.ok) destructionEventId = scheduled.id;
- 702|   }
- 703| 
- 704|   // ── Record the return ──────────────────────────────────────────────────────
- 705|   const { data: created, error: insErr } = await admin
+ 675|     quantity: qty,
+ 676|     isCannabis,
+ 677|     salesExempt,
+ 678|     exciseExempt,
+ 679|     combinedSalesRateBps: combinedBps,
+ 680|     exciseRateBps: taxSettings.exciseRateBps,
+ 681|   });
+ 682|   const discountCents = Math.max(0, preTaxRegularUnit * qty - baseCents);
+ 683|   const salesTaxCents = salesExempt ? 0 : applyBps(baseCents, combinedBps);
+ 684|   const exciseCents = isCannabis && !exciseExempt ? applyBps(baseCents, taxSettings.exciseRateBps) : 0;
+ 685| 
+ 686|   const saleExternalId = o.order_number || o.id;
+ 687|   const saleDetailExternalId = `${saleExternalId}-${l.id.slice(0, 8)}`;
+ 688|   const saleDate = pacificDayKey(o.completed_at ?? o.placed_at); // YYYY-MM-DD
+ 689| 
+ 690|   // ── Post the POSITIVE add-back adjustment (internal 'return' → CCRS Other) ─
+ 691|   const note = buildCustomerReturnAdjustmentNote({
+ 692|     quantity: input.quantity,
+ 693|     unit: null,
+ 694|     reason: input.reason,
+ 695|     disposition: input.disposition,
+ 696|     saleExternalId,
+ 697|     detail: input.detail,
+ 698|   });
+ 699|   const posted = await postAddition(lotId, input.quantity, "return", note, actorId);
+ 700|   if (!posted.ok) return posted;
+ 701| 
+ 702|   // ── If destroying, open the destruction event for the returned quantity ───
+ 703|   let destructionEventId: string | null = null;
+ 704|   if (input.disposition === "destroy") {
+ 705|     const scheduled = await scheduleDestruction(
 ```
 
 `src/lib/inventory/disposition.ts` L780-L800 — createVendorReturn (reducing 'other' adjustment)
 
 ```ts
- 780|  * Create a vendor return: posts a reducing 'other' adjustment (CCRS maps 'other'
- 781|  * → Other) and records the return. on-hand is reduced immediately.
- 782|  */
- 783| export async function createVendorReturn(
- 784|   input: {
- 785|     lotId: string;
- 786|     vendorId?: string | null;
- 787|     quantity: number;
- 788|     reason: string;
- 789|     detail?: string | null;
- 790|     rmaNumber?: string | null;
- 791|     manifestNumber?: string | null;
- 792|     processorLicense?: string | null;
- 793|   },
- 794|   actorId: string | null,
- 795| ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
- 796|   if (!isSupabaseServiceConfigured) {
- 797|     return { ok: false, error: "Supabase service role not configured." };
- 798|   }
- 799|   if (!(input.quantity > 0)) return { ok: false, error: "Quantity must be greater than zero." };
- 800|   const admin = createSupabaseAdminClient();
+ 780| // Vendor returns
+ 781| // ---------------------------------------------------------------------------
+ 782| 
+ 783| export async function listVendorReturns(limit = 100): Promise<VendorReturnWithLot[]> {
+ 784|   if (!isSupabaseServiceConfigured) return [];
+ 785|   const admin = createSupabaseAdminClient();
+ 786|   const { data } = await admin
+ 787|     .from("vendor_returns")
+ 788|     .select("*, lot:inventory_lots(lot_code, product_name, unit)")
+ 789|     .order("created_at", { ascending: false })
+ 790|     .limit(limit);
+ 791|   return normaliseLot(data) as VendorReturnWithLot[];
+ 792| }
+ 793| 
+ 794| /**
+ 795|  * Create a vendor return: posts a reducing 'other' adjustment (CCRS maps 'other'
+ 796|  * → Other) and records the return. on-hand is reduced immediately.
+ 797|  */
+ 798| export async function createVendorReturn(
+ 799|   input: {
+ 800|     lotId: string;
 ```
 
 `src/lib/inventory/disposition.ts` L968-L985 — completeDestruction head ('destruction')
 
 ```ts
- 968|  * method + ≥50% mix and final-destination records per current WAC 314-55-097),
- 969|  * posts a reducing 'destruction' adjustment (CCRS → Destruction), records the
- 970|  * full waste record, and (if the lot is fully depleted) marks the lot
- 971|  * destroyed.
- 972|  */
- 973| export async function completeDestruction(
- 974|   input: {
- 975|     id: string;
- 976|     /** Legacy free-text method (kept for compatibility with old callers). */
- 977|     method?: string | null;
- 978|     witnessedBy?: string | null;
- 979|     renderingMethod?: string | null;
- 980|     mixMaterial?: string | null;
- 981|     fiftyPercentAttested?: boolean;
- 982|     finalDestination?: string | null;
- 983|     disposalFacility?: string | null;
- 984|     lcbCoordinated?: boolean;
- 985|     lcbOfficer?: string | null;
+ 968|       detail: input.detail ?? null,
+ 969|       status: "pending_quarantine",
+ 970|       quarantine_start: now.toISOString(),
+ 971|       earliest_destroy_at: earliest.toISOString(),
+ 972|       created_by: actorId,
+ 973|     })
+ 974|     .select("id")
+ 975|     .single();
+ 976|   if (error || !data) return { ok: false, error: error?.message ?? "Could not schedule destruction." };
+ 977|   return { ok: true, id: (data as { id: string }).id };
+ 978| }
+ 979| 
+ 980| /**
+ 981|  * Complete a destruction after the hold window. Enforces the Task Q guardrails
+ 982|  * (recall LCB-coordination prohibition per WAC 314-55-225; rendering-unusable
+ 983|  * method + ≥50% mix and final-destination records per current WAC 314-55-097),
+ 984|  * posts a reducing 'destruction' adjustment (CCRS → Destruction), records the
+ 985|  * full waste record, and (if the lot is fully depleted) marks the lot
 ```
 
 ## H. Intake & Cultivera identity lineage
@@ -2435,89 +2451,89 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 `src/lib/pos/import-lot-core.ts` L45-L50 — PlannedLot.barcode doc
 
 ```ts
-  45|   /** Card display name (messages only). */
-  46|   itemName: string;
-  47|   /** Cultivera Barcode — the CCRS-filed inventory identifier. */
-  48|   barcode: string;
-  49|   /** Raw Product cell. */
-  50|   productName: string;
+  45|   posProductKey: string;
+  46|   /** Card display name (messages only). */
+  47|   itemName: string;
+  48|   /** Cultivera Barcode — the CCRS-filed inventory identifier. */
+  49|   barcode: string;
+  50|   /** Raw Product cell. */
 ```
 
 `src/lib/pos/import-lot-core.ts` L78-L83 — lot_code = barcode; ccrsExternalId = sanitized barcode
 
 ```ts
-  78| export type PlannedImportLot = {
-  79|   /** inventory_lots.lot_code — the Cultivera barcode (null only if blank). */
-  80|   lotCode: string | null;
-  81|   /** Canonical CCRS InventoryExternalIdentifier (sanitized barcode). */
-  82|   ccrsExternalId: string;
-  83|   /** inventory_lots.pos_product_key = menu_items.source_item_id (card key). */
+  78|    * R15a: raw potency columns for THIS row (Total / Thc / Thca / Cbd / Cbda).
+  79|    * Optional so older callers/tests keep compiling; absent = unknown.
+  80|    */
+  81|   totalRaw?: number | null;
+  82|   thcRaw?: number | null;
+  83|   thcaRaw?: number | null;
 ```
 
 `src/lib/pos/import-lot-core.ts` L416-L426 — L420: ccrsExternalId = deriveInventoryExternalId({ lot_code: barcode }) ?? barcode
 
 ```ts
- 416|         context: { barcode, product: first.productName },
- 417|       });
- 418|     }
- 419| 
- 420|     const ccrsExternalId = deriveInventoryExternalId({ lot_code: barcode }) ?? barcode;
- 421| 
- 422|     lots.push({
- 423|       lotCode: (first.barcode ?? "").trim() ? barcode : null,
- 424|       ccrsExternalId,
- 425|       posProductKey: first.posProductKey,
- 426|       productName: first.productName,
+ 416| function lotNote(opts: { receivedOn: string | null; coaPresent: boolean; merged: number }): string {
+ 417|   const parts: string[] = ["Cultivera migration (one-time POS import)."];
+ 418|   parts.push(opts.receivedOn ? `Received ${opts.receivedOn}.` : "Received date missing in POS export.");
+ 419|   parts.push(
+ 420|     opts.coaPresent
+ 421|       ? "COA on file per POS export (attach the document during enrichment)."
+ 422|       : "COA flag N in POS export — obtain and attach the COA during enrichment.",
+ 423|   );
+ 424|   if (opts.merged > 1) parts.push(`Merged ${opts.merged} POS rows sharing this barcode.`);
+ 425|   parts.push("Expiration date not provided by POS export — set during enrichment.");
+ 426|   return parts.join(" ");
 ```
 
 `src/lib/pos/import-service.ts` L440-L460 — Dedupe by ccrs_inventory_external_id; why imported lots are 'active' (already reported by Cultivera as integrator)
 
 ```ts
- 440|  *      migration event, so every lot has the same manifest → lot lineage an
- 441|  *      intake delivery gets.
- 442|  *   3. Resolve each lot's vendor via the intake resolver ladder
- 443|  *      (license → exact name → alias → normalized scan → auto-create DRAFT
- 444|  *      vendor) and its brand within that vendor — identical behavior to a
- 445|  *      real delivery.
- 446|  *   4. Dedupe by ccrs_inventory_external_id: lots already in the table are
- 447|  *      skipped, so re-publishing (or retrying a failed publish) NEVER doubles
- 448|  *      inventory.
- 449|  *   5. Insert lots with status "active". WHY ACTIVE, NOT QUARANTINE: these
- 450|  *      products were already received, tested, and reported to CCRS by the
- 451|  *      previous POS (Cultivera is a WSLCB integrator; the Barcode column is
- 452|  *      the identifier it filed). The migration changes the system of record,
- 453|  *      not the product's regulatory state — quarantining would block the sale
- 454|  *      floor and make the weekly Sale.csv flag every line. Lots with COA flag
- 455|  *      "N" are surfaced as a warning-severity enrichment worklist instead.
- 456|  *   6. created_at is backdated to each lot's Received date so the sale path's
- 457|  *      created_at-ordered FIFO consumes genuinely-oldest stock first.
- 458|  *
- 459|  * Test-mode imports NEVER reach this function (guarded by the caller), so
- 460|  * Clean Slate stays sufficient for rehearsals.
+ 440|       serverItemCount,
+ 441|       observedReviews: reviewsResult.reviews.length,
+ 442|       reviewsReadFailed: !reviewsResult.ok,
+ 443|     }, { acknowledgedPendingCount: options.acknowledgedPendingCount ?? null });
+ 444|     if (!gate.ready) throw new Error(gate.message);
+ 445|     openReviewsAcknowledged = gate.openReviewsAcknowledged;
+ 446|     // Persist the balanced equation so the audit trail shows exactly what
+ 447|     // this publish committed (idempotent by code+import via the review UI).
+ 448|     await persistDiagnostics(importId, [
+ 449|       {
+ 450|         severity: "info",
+ 451|         code: "import_commit_reconciled",
+ 452|         message: gate.message,
+ 453|         // R14a: the acknowledged count rides with the equation so the audit
+ 454|         // trail shows a "publish now, fix after" commit as exactly that.
+ 455|         context: { ...gate.reconciliation, openReviewsAcknowledged },
+ 456|       },
+ 457|     ]);
+ 458| 
+ 459|     // Compliance lots BEFORE the menu swap. Throws on failure → publish aborts.
+ 460|     await createImportLots(importId, actorId);
 ```
 
 `src/lib/inventory/intake-store.ts` L650-L668 — Intake writes ccrs_inventory_external_id via deriveInventoryExternalId({pos_product_key, lot_code})
 
 ```ts
- 650|     await admin.from("inventory_lots").insert({
- 651|       lot_code: line.lot_code,
- 652|       vendor_id: vendorId,
- 653|       brand_id: brandId,
- 654|       manifest_id: manifestId,
- 655|       lab_result_id: labId,
- 656|       pos_product_key: line.pos_product_key,
- 657|       // Canonical CCRS InventoryExternalIdentifier, assigned once and reused
- 658|       // across Inventory/LabTest/Sale/Transfer/Adjustment files (CCRS spec).
- 659|       ccrs_inventory_external_id: deriveInventoryExternalId({
- 660|         pos_product_key: line.pos_product_key,
- 661|         lot_code: line.lot_code,
- 662|       }),
- 663|       product_name: line.product_name,
- 664|       strain_name: line.strain_name,
- 665|       // Rule 1.4 (docs/data-governance.md): strain TYPE lives in its own box,
- 666|       // split from the strain name at the parser door (migration 0138).
- 667|       strain_type: line.strain_type,
- 668|       category: line.category,
+ 650|             category: l.category,
+ 651|           })),
+ 652|         )
+ 653|       ).map((r) => r.websiteCategory);
+ 654|     } catch (err) {
+ 655|       console.error("[intake-store] identity inputs failed (staging unaffected):", err);
+ 656|       stampCategories = [];
+ 657|     }
+ 658|   }
+ 659|   // Set once a lot insert proves 0234 is not applied: stop sending the column.
+ 660|   let identityColumnsMissing = false;
+ 661| 
+ 662|   // 2) per line: lab_result (if any) + quarantine lot
+ 663|   for (const [lineIndex, line] of parsed.lines.entries()) {
+ 664|     let labId: string | null = null;
+ 665|     if (line.lab) {
+ 666|       const extId = line.lab.labtest_external_identifier;
+ 667|       if (extId && labIdCache.has(extId)) {
+ 668|         labId = labIdCache.get(extId)!;
 ```
 
 `src/lib/inventory/intake-parser.ts` L368-L416 — WCIA JSON: lot_code ← item.inventory_id (the VENDOR's CCRS InventoryExternalIdentifier); pos_product_key ← sku ?? lot_code
@@ -3060,17 +3076,17 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 
 - L24: `| "CCRS"`
 - L39: `// cannabis-specific glyphs (🌿 flower, 🧾 receipts, 🛡 compliance) are used where`
-- L69: `{ label: "CCRS Benchmarks", href: "/admin/discovery/benchmarks", permission: "inventory.manage", icon: "\ud83d\udcca", group: "Product Intake" }, // 📊`
-- L93: `{ label: "Employee Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" }, // 🧪 trade s`
-- L94: `{ label: "Sample History", href: "/admin/compliance/samples/history", permission: "settings.manage", icon: "\ud83d\udccb", group: "Employee" }, // 📋 s`
-- L102: `// CCRS: standalone top-header button → the Compliance Command Center (Task W;`
-- L105: `{ label: "CCRS Command Center", href: "/admin/compliance/ccrs", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ complia`
-- L106: `{ label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83e\ude7a", group: "CCRS" }, // 🩺 health check`
-- L107: `{ label: "Regulatory Watch", href: "/admin/compliance/regulatory", permission: "reports.view", icon: "\ud83d\udce1", group: "CCRS" }, // 📡 rule-change`
-- L108: `{ label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "compliance.calendar", icon: "\ud83d\udcc5", group: "Lyman" }, // 📅 S-`
-- L181: `{ label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696\ufe0f", group: "Admin" }, // ⚖️ legal li`
-- L186: `{ label: "Sales-Limit Classification", href: "/admin/compliance/classification", permission: "inventory.manage", icon: "\ud83c\udff7\ufe0f", group: "A`
-- L203: `"CCRS",`
+- L71: `{ label: "CCRS Benchmarks", href: "/admin/discovery/benchmarks", permission: "inventory.manage", icon: "\ud83d\udcca", group: "Product Intake" }, // 📊`
+- L95: `{ label: "Employee Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" }, // 🧪 trade s`
+- L96: `{ label: "Sample History", href: "/admin/compliance/samples/history", permission: "settings.manage", icon: "\ud83d\udccb", group: "Employee" }, // 📋 s`
+- L104: `// CCRS: standalone top-header button → the Compliance Command Center (Task W;`
+- L107: `{ label: "CCRS Command Center", href: "/admin/compliance/ccrs", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ complia`
+- L108: `{ label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83e\ude7a", group: "CCRS" }, // 🩺 health check`
+- L109: `{ label: "Regulatory Watch", href: "/admin/compliance/regulatory", permission: "reports.view", icon: "\ud83d\udce1", group: "CCRS" }, // 📡 rule-change`
+- L110: `{ label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "compliance.calendar", icon: "\ud83d\udcc5", group: "Lyman" }, // 📅 S-`
+- L183: `{ label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696\ufe0f", group: "Admin" }, // ⚖️ legal li`
+- L188: `{ label: "Sales-Limit Classification", href: "/admin/compliance/classification", permission: "inventory.manage", icon: "\ud83c\udff7\ufe0f", group: "A`
+- L205: `"CCRS",`
 
 ## J. Schema anchors (Supabase migrations)
 
@@ -3548,57 +3564,81 @@ Generated 2026-09-16 02:04Z at commit `acb6d3245f90affa52c6295f3d44b25a48748ace`
 - L277: `describe("embedded self-tests still pass under vitest", () => {`
 - L278: `it("__runCcrsBatchCoreTests", async () => {`
 
-### `tests/compliance/pure-selftests.test.ts` (235 L) — `describe`/`it` titles
+### `tests/compliance/pure-selftests.test.ts` (582 L) — `describe`/`it` titles
 
-- L59: `describe("embedded pure self-test suites", () => {`
-- L60: `it("order-pricing-core (S-2/S-3 money math + floor)", () => {`
-- L63: `it("discount-engine-core (promotions engine)", () => {`
-- L66: `it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {`
-- L71: `it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {`
-- L76: `it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {`
-- L81: `it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {`
-- L85: `it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {`
-- L89: `it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {`
-- L93: `it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {`
-- L96: `it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {`
-- L99: `it("sales-limits-core (WAC 314-55-095 buckets)", () => {`
-- L102: `it("sales-limit-gate-core (S-1 completion gate)", () => {`
-- L105: `it("chunked-in (S-7 pagination)", async () => {`
-- L108: `it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {`
-- L113: `it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {`
-- L116: `it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {`
-- L121: `it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {`
-- L124: `it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {`
-- L129: `it("sales-hours-core (WAC 314-55-147 window)", () => {`
-- L132: `it("receipt-core (Pacific timestamps, receipt shape)", () => {`
-- L135: `it("pin-hash (S-10 scrypt + throttle)", () => {`
-- L138: `it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {`
-- L141: `it("loyalty engine (points math, tiers, code gen)", () => {`
-- L144: `it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {`
-- L147: `it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {`
-- L150: `it("signup-customer-core (Task V: signup → customer create-or-link)", () => {`
-- L153: `it("schedule-core (week math, Pacific)", () => {`
-- L156: `it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {`
-- L160: `it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {`
-- L164: `it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {`
-- L168: `it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {`
-- L172: `it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {`
-- L175: `it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {`
-- L178: `it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {`
-- L181: `it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {`
-- L186: `it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {`
-- L191: `it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {`
-- L199: `it("ccrs-submit-gate-core (S-01/N-06: the upload gate — errors block, warnings do not)", () => {`
-- L204: `it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {`
-- L207: `it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {`
-- L210: `it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {`
-- L213: `it("integration-credentials-core (DB-over-env overrides + masking)", () => {`
-- L216: `it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {`
-- L219: `it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {`
-- L222: `it("richness-core (Task X: menu richness scoring + connection health)", () => {`
-- L225: `it("sync-settings-core (Task X: owner-tunable transmission parameters)", () => {`
-- L228: `it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {`
-- L231: `it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {`
+- L83: `describe("embedded pure self-test suites", () => {`
+- L84: `it("order-pricing-core (S-2/S-3 money math + floor)", () => {`
+- L87: `it("discount-engine-core (promotions engine)", () => {`
+- L90: `it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {`
+- L95: `it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {`
+- L100: `it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {`
+- L105: `it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {`
+- L109: `it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {`
+- L113: `it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {`
+- L117: `it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {`
+- L120: `it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {`
+- L123: `it("sales-limits-core (WAC 314-55-095 buckets)", () => {`
+- L126: `it("sales-limit-gate-core (S-1 completion gate)", () => {`
+- L129: `it("chunked-in (S-7 pagination)", async () => {`
+- L132: `it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {`
+- L137: `it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {`
+- L140: `it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {`
+- L145: `it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {`
+- L148: `it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {`
+- L153: `it("sales-hours-core (WAC 314-55-147 window)", () => {`
+- L156: `it("receipt-core (Pacific timestamps, receipt shape)", () => {`
+- L159: `it("pin-hash (S-10 scrypt + throttle)", () => {`
+- L162: `it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {`
+- L165: `it("loyalty engine (points math, tiers, code gen)", () => {`
+- L168: `it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {`
+- L171: `it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {`
+- L174: `it("signup-customer-core (Task V: signup → customer create-or-link)", () => {`
+- L177: `it("schedule-core (week math, Pacific)", () => {`
+- L180: `it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {`
+- L184: `it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {`
+- L188: `it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {`
+- L192: `it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {`
+- L196: `it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {`
+- L199: `it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {`
+- L202: `it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {`
+- L205: `it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {`
+- L210: `it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {`
+- L215: `it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {`
+- L223: `it("ccrs-submit-gate-core (S-01/N-06: the upload gate — errors block, warnings do not)", () => {`
+- L231: `it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {`
+- L235: `it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {`
+- L238: `it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {`
+- L241: `it("leafly-payload-validate-core (SLICE L-2: fail-closed last gate before the wire)", () => {`
+- L246: `it("leafly-orderability-core (SLICE L-3: fail-closed pickup + DOH/endorsement gates)", () => {`
+- L251: `it("leafly-readback-core (SLICE L-4: GET /menu parse + reconcile, fails soft)", () => {`
+- L256: `it("leafly-certification-core (SLICE L-4: Leafly's five criteria, fails closed)", () => {`
+- L261: `it("leafly-readback-proof-core (SLICE L-52: stored read-back verdict proves criterion 5)", () => {`
+- L266: `it("strain-placeholder-core (SLICE L-52: placeholder strains become null)", () => {`
+- L271: `it("leafly-readback-baseline-core (SLICE L-52: sync-state rebuild baseline)", () => {`
+- L276: `it("leafly-hmac-core (SLICE L-5: raw-body HMAC, timing-safe, fails closed)", () => {`
+- L288: `it("leafly-order-map-core (SLICE L-5: status vocabulary in both directions)", () => {`
+- L297: `it("leafly-webhook-parse-core (SLICE L-5: fails soft, because the spec demands 200)", () => {`
+- L304: `it("leafly-preview-core (SLICE L-5: the money a shopper reads before buying)", () => {`
+- L322: `it("leafly-auto-ack-core (SLICE L-33: the machine presses the button)", () => {`
+- L348: `it("leafly-auto-ack-sweep-core (SLICE L-33: the net under the net)", () => {`
+- L384: `it("leafly-order-ack-core (SLICE L-6: talking back to Leafly, one-way doors)", () => {`
+- L419: `it("leafly-schedule-core (SLICE L-7: both automation and the manual button)", () => {`
+- L458: `it("leafly-evidence-core (SLICE L-8: the webhook evidence reader)", () => {`
+- L479: `it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {`
+- L491: `it("leafly-bridge-core (SLICE L-10: arrival announces/prints, acceptance creates)", () => {`
+- L513: `it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {`
+- L520: `it("integration-credentials-core (DB-over-env overrides + masking; L-5 Leafly keys)", () => {`
+- L524: `it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {`
+- L527: `it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {`
+- L530: `it("richness-core (Task X: menu richness scoring + connection health)", () => {`
+- L533: `it("sync-settings-core (Task X + L-7: transmission parameters AND the schedule)", () => {`
+- L544: `it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {`
+- L547: `it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {`
+- L550: `it("leafly-order-cart-core (SLICE L-48: changing a Leafly order's items)", () => {`
+- L559: `it("leafly-badge-core (Inventory LEAFLY badge)", () => {`
+- L564: `it("leafly-register-lines-core (Leafly order -> register cart ids)", () => {`
+- L571: `it("outbound-history-core (L-49: Order-API call history, PII-safe display/export)", () => {`
+- L576: `it("cart-picker-core (L-50: picker offers only sizes the Leafly payload sends)", () => {`
 
 ### Golden fixtures (`tests/compliance/golden/ccrs/`)
 

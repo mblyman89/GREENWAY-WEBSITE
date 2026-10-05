@@ -41,6 +41,13 @@ PREFLIGHT_TESTS = "tests/compliance/ccrs-preflight.test.ts"
 GENERATOR = "scripts/compliance/generate-preprod-test-files.ts"
 GENERATOR_TESTS = "tests/compliance/ccrs-preprod-generator.test.ts"
 
+# S-10 identifier pass-through (Bible v2 Part 09).
+IDS = "src/lib/compliance/ccrs-identifiers.ts"
+IMPORTLOT = "src/lib/pos/import-lot-core.ts"
+BATCHSRV = "src/lib/compliance/ccrs-batch.ts"
+DISPO = "src/lib/inventory/disposition.ts"
+S10_TESTS = "tests/compliance/s10-identifier-passthrough.test.ts"
+
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
     (
@@ -241,6 +248,73 @@ MUTATIONS = [
         STAMP_TESTS,
         "Filename must derive from the live stamp, not a hard-coded value.",
     ),
+    (
+        "M25-s10-resanitize-assigned",
+        IDS,
+        "  if (assigned) return assigned;",
+        "  if (assigned) return mintExternalId(assigned);",
+        S10_TESTS,
+        "S-10: a filed dotted id rewritten to hyphens addresses a different, "
+        "nonexistent CCRS lot.",
+    ),
+    (
+        "M26-s10-passthrough-rewrites",
+        IDS,
+        '  return (raw ?? "").trim();',
+        '  return (raw ?? "").trim().replace(/[.]/g, "-");',
+        S10_TESTS,
+        "S-10: pass-through may trim only; any rewrite breaks the exact match.",
+    ),
+    (
+        "M27-s10-export-mints-fallback",
+        IDS,
+        "  return v ? v : null;",
+        '  return v ? v : (src as { lot_code?: string | null }).lot_code ?? null;',
+        S10_TESTS,
+        "S-10: export must withhold an unassigned lot (E3), never invent an "
+        "id from lot_code.",
+    ),
+    (
+        "M28-s10-adjustment-drops-assigned",
+        ADJCORE,
+        "    ccrs_inventory_external_id: src.lot?.ccrs_inventory_external_id ?? null,",
+        "    ccrs_inventory_external_id: null,",
+        S10_TESTS,
+        "S-10: InventoryAdjustment must carry the same id as Inventory.csv.",
+    ),
+    (
+        "M29-s10-import-sanitizes-barcode",
+        IMPORTLOT,
+        "      ? deriveInventoryExternalId({ ccrs_inventory_external_id: barcode }) ?? barcode",
+        "      ? deriveInventoryExternalId({ lot_code: barcode }) ?? barcode",
+        S10_TESTS,
+        "S-10: the Cultivera barcode IS the filed id; minting it from "
+        "lot_code rewrites dots.",
+    ),
+    (
+        "M30-s10-batch-mints-again",
+        BATCHSRV,
+        "    const ext = assignedInventoryExternalId(l);",
+        "    const ext = assignedInventoryExternalId(l) ?? l.lot_code;",
+        S10_TESTS,
+        "S-10: Inventory.csv must not fall back to an id CCRS never saw.",
+    ),
+    (
+        "M31-s10-disposition-drops-assigned",
+        DISPO,
+        "      ccrs_inventory_external_id: lotRow.ccrs_inventory_external_id ?? null,",
+        "      ccrs_inventory_external_id: null,",
+        S10_TESTS,
+        "S-10: a sale-correction must address the lot by its filed id.",
+    ),
+    (
+        "M32-s10-validator-allows-comma",
+        IDS,
+        '  if (/[\\r\\n,"]/.test(v))',
+        '  if (/[\\r\\n"]/.test(v))',
+        S10_TESTS,
+        "S-10: an unencoded comma in an id shifts every CSV column after it.",
+    ),
 ]
 
 
@@ -276,6 +350,7 @@ def main() -> int:
         BATCH_TESTS,
         PREFLIGHT_TESTS,
         GENERATOR_TESTS,
+        S10_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)

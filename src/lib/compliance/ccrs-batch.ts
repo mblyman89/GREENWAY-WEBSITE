@@ -34,7 +34,11 @@ import {
   CCRS_PRODUCT_DESCRIPTION_MAX,
   type CcrsRetailerFileType,
 } from "@/lib/compliance/ccrs-batch-core";
-import { deriveInventoryExternalId, validateExternalId, sanitizeExternalId } from "@/lib/compliance/ccrs-identifiers";
+import {
+  assignedInventoryExternalId,
+  validatePassThroughExternalId,
+  sanitizeExternalId,
+} from "@/lib/compliance/ccrs-identifiers";
 import {
   inventoryRowVerdict,
   productRowIssues,
@@ -459,15 +463,19 @@ function buildInventoryFile(
   // S-02 coded pre-flight errors. Rows are collected, never capped.
   const e7Rows: CcrsIssueRow[] = [];
   const e8Rows: CcrsIssueRow[] = [];
+  // S-10: a lot with NO assigned ccrs_inventory_external_id is withheld, never
+  // given an id invented at export time (standing rule 3). Every receiving-
+  // intake and Cultivera-import lot is assigned one when it is created, so this
+  // only fires on an anomaly — exactly the lot an employee must look at.
+  const e3Rows: CcrsIssueRow[] = [];
   for (const l of lots) {
-    const ext = deriveInventoryExternalId({
-      ccrs_inventory_external_id: l.ccrs_inventory_external_id,
-      lot_code: l.lot_code,
-      pos_product_key: l.pos_product_key,
-      id: l.id,
-    });
+    const ext = assignedInventoryExternalId(l);
     if (!ext) {
-      warnings.push(`Lot ${l.id} has no usable external identifier and was skipped.`);
+      e3Rows.push({
+        id: l.id,
+        label: l.lot_code ?? l.product_name ?? l.id,
+        detail: "No CCRS inventory identifier is assigned to this lot.",
+      });
       continue;
     }
     const key = (l.pos_product_key ?? "").trim();
@@ -532,11 +540,24 @@ function buildInventoryFile(
       "",
       "Insert",
     ]);
-    const idErrs = validateExternalId(ext);
+    // S-10: filed ids carry dots (4,295 in the LCB delivery) and are legal
+    // [G L0224]; only CSV-breaking characters and > 100 chars are flagged.
+    const idErrs = validatePassThroughExternalId(ext);
     if (idErrs.length) warnings.push(`Inventory id "${ext}" ${idErrs.join(", ")}.`);
   }
   if (rows.length === 0) warnings.push("No inventory lots found to report.");
   const issues: CcrsSyncIssue[] = [];
+  if (e3Rows.length > 0) {
+    issues.push({
+      severity: "error",
+      file: "Inventory",
+      code: "E3_EXTERNAL_ID_UNASSIGNED",
+      specPin: specPinFor("E3_EXTERNAL_ID_UNASSIGNED"),
+      count: e3Rows.length,
+      rows: e3Rows,
+      message: `${e3Rows.length} lot(s) have no CCRS inventory identifier assigned, so they were left out of Inventory.csv. ExternalIdentifier is required on every row [G L0224-L0225]. Open each lot and enter the identifier it was filed under in CCRS (for stock Cultivera reported, that is the barcode exactly as printed), then rebuild.`,
+    });
+  }
   if (e8Rows.length > 0) {
     issues.push({
       severity: "error",
@@ -720,15 +741,9 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
   files.sort((a, b) => (order.get(a.type) ?? 99) - (order.get(b.type) ?? 99));
 
   // --- Sync / data-integrity analysis (flag out-of-sync BEFORE upload) ------
-  const lotsMissingId = lots.filter(
-    (l) =>
-      !deriveInventoryExternalId({
-        ccrs_inventory_external_id: l.ccrs_inventory_external_id,
-        lot_code: l.lot_code,
-        pos_product_key: l.pos_product_key,
-        id: l.id,
-      }),
-  ).length;
+  // S-10: same rule as buildInventoryFile's E3 — an unassigned id is missing,
+  // whatever could be minted for it.
+  const lotsMissingId = lots.filter((l) => !assignedInventoryExternalId(l)).length;
   if (lotsMissingId > 0) {
     syncIssues.push({
       severity: "error",

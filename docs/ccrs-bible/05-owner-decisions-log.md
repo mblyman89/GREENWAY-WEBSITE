@@ -166,6 +166,17 @@ should be recorded verbatim before we trust our own enforcement.
 Until T-19 is run, our behaviour is the conservative one: we block the row
 locally rather than risk a rejected file.
 
+## D-14 — Build Bible v2; "make CCRS and our inventory equal" (2026-10-05, S-10)
+
+Owner, verbatim: *"I want to proceed with all of your recommendations you laid out above. … this must be perfect before we go live. Please follow the standing rules and never guess, never assume. Test it, test the tests. Guide me how to test via preprod."* Then, relaying the Cannabis Examiner Unit on questions 5 and 6: *"Q5 and q6, Brian says to clean it all out. Make CCRS and our inventory equal each other."*
+
+Recorded consequences:
+
+1. **D-01b Keep** is in force: every filed id passes through byte-for-byte (S-10). Only new lots get minted ids (D-01a formats, S-12).
+2. The cleanup target is **CCRS QoH = our QoH for every lot**, not only "zero the stale lots". Measured against the 2026-09-01 back-office snapshot: of 4,098 barcodes in both, QoH matches on 1,040 and differs on 3,058; and 495 of the 40,662 "stale" lots were created on or after 2026-09-01, so a dated snapshot must never zero a lot created after it. Therefore every equalize wave is built from a **same-day** pair (fresh Service Desk copy + same-day back-office export), and lots created after the older snapshot are HELD (S-14).
+3. The mechanism (Inventory Update vs InventoryAdjustment) is still decided by PREprod probe P-01 (D-02), not by inference.
+4. An inventory lot with no assigned CCRS id is withheld from Inventory.csv with a blocking error rather than given an invented id (S-10, `E3_EXTERNAL_ID_UNASSIGNED`).
+
 ## Decisions that are still the owner's to make (do NOT decide these for him)
 
 | Ref | Decision | Why it is his |

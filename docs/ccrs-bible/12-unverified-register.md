@@ -28,6 +28,9 @@ Owners: **O** = owner (only he can log in / email LCB); **A** = agent (code/test
 | U-20 | Production sends the identical confirmation without the `PRE` prefix | Inference from the `PRE` marker in the PREprod subject/body; never observed in production | First production upload | O | hub "confirmed" state copy | OPEN |
 | U-21 | An empty `Description` is **permanently** acceptable for Usable Cannabis | T-19 was **accepted** 13:07:18 despite the guide's Note `[G L0482-L0483]`; the Note exists, so LCB may begin enforcing | PRE **T-72** (re-run monthly) | A | S-02b demotes E10 error→warning | OPEN |
 
+| U-22 | Production `inventory_lots` has **no** row with a blank `ccrs_inventory_external_id` (so S-10's E3 withholding fires on nothing today) | Every intake and import path assigns one at creation (code read, S-10); production data not queried by the agent | Owner runs, in the Supabase SQL editor: `select count(*) from inventory_lots where coalesce(trim(ccrs_inventory_external_id),'') = '';` — expect `0` | O | S-10 E3 | OPEN |
+| U-23 | Migration 0246 will repair ≈ 180 production lots (the dotted shelf barcodes) | 180 = back-office barcodes that are dotted **and** filed exactly `[analysis3/s10]`; production lot count not queried by the agent | After applying 0246: `select count(*) from audit_logs where actor_email = 'migration:0246';` — expect ≤ 186 and close to 180; any figure far off is investigated before any upload | O | S-10 data repair | OPEN |
+
 ## Adding a row
 
 A new `U-nn` is added the moment an agent writes a sentence about CCRS behaviour that it cannot pin to Part 02. The same PR that adds code depending on that sentence must add the row and a Part 06 test that would close it. Examiner questions beyond Q9 are appended to Part 06 §G in the same PR (Q10 = U-12, Q11 = U-13, Q12 = U-16 as of this writing).

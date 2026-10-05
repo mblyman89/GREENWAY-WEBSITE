@@ -165,6 +165,8 @@ export type AdjustmentSourceRow = {
     id: string | null;
     lot_code: string | null;
     pos_product_key: string | null;
+    /** S-10: the id the lot was FILED under. Must be selected by the reader. */
+    ccrs_inventory_external_id?: string | null;
   } | null;
 };
 
@@ -182,7 +184,11 @@ export function mapAdjustmentRow(
     return { row: null, skipReason: `${src.reason} (not reportable)` };
   }
 
+  // S-10: the adjustment must reference the SAME id the Inventory row carries
+  // [G L1077-L1083] (Valid Values: Inventory.ExternalIdentifier) — the
+    // lot's assigned id first, byte-for-byte.
   const externalId = deriveInventoryExternalId({
+    ccrs_inventory_external_id: src.lot?.ccrs_inventory_external_id ?? null,
     lot_code: src.lot?.lot_code ?? null,
     pos_product_key: src.lot?.pos_product_key ?? null,
     id: src.lot?.id ?? null,
@@ -370,6 +376,25 @@ export function __runCcrsAdjustmentTests(): void {
     lic,
   );
   ok(r5.row === null && !!r5.skipReason, "no-identifier row skipped with reason");
+
+  // S-10: a lot filed under a dotted id is adjusted under THAT id, not its lot_code.
+  const r6 = mapAdjustmentRow(
+    {
+      id: "a6",
+      qty_delta: -1,
+      reason: "count",
+      note: "recount",
+      created_at: "2025-03-09T12:00:00Z",
+      lot: {
+        id: "L6",
+        lot_code: "GF41612400006794",
+        pos_product_key: "pk6",
+        ccrs_inventory_external_id: "WAR413541.IN132IB0",
+      },
+    },
+    lic,
+  );
+  eq(r6.row?.[1], "WAR413541.IN132IB0", "S-10: adjustment carries the filed (assigned) id byte-for-byte");
 
   const file = buildAdjustmentFile([r1.row as string[]], lic);
   // A4: 3-row common header (one attribute per line) + \r\n line endings.

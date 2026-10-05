@@ -336,3 +336,14 @@ we never invent a CCRS value.
   InventoryAdjustment path and the batch's Product/Inventory paths must all use the
   identical derivation — they do call `deriveInventoryExternalId`, so the KEYS are
   consistent; the only defects are the file-shape/column ones (A4/A5). ✓
+
+#### D1 — CORRECTED 2026-10-05 (Bible v2 S-10) — the "well-designed" verdict above was wrong in two places
+- `deriveInventoryExternalId` re-sanitized the **stored** id, so a filed id such
+  as `WAR413541.IN132IB0` was sent as `WAR413541-IN132IB0` — a different,
+  nonexistent CCRS lot. 4,295 of our 62,744 filed ids are dotted.
+- The InventoryAdjustment and sale-correction paths did not read the stored id
+  at all; they re-derived from `lot_code`, so their id could differ from the one
+  on Inventory.csv.
+- Fixed: stored ids pass through (trim only); exports read only the assigned id
+  and withhold an unassigned lot (`E3_EXTERNAL_ID_UNASSIGNED`); migration 0246
+  restores the dotted ids 0034 rewrote. See `docs/ccrs-bible/04-current-state-and-gap-matrix.md` §A.3.

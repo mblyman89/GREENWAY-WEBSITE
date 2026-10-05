@@ -565,11 +565,16 @@ export async function createCustomerReturn(
 
   // ── Resolve the inventory lot (explicit pick wins; else by product key) ───
   let lotId = (input.lotId ?? "").trim() || null;
-  let lotRow: { id: string; lot_code: string | null; pos_product_key: string | null } | null = null;
+  let lotRow: {
+    id: string;
+    lot_code: string | null;
+    pos_product_key: string | null;
+    ccrs_inventory_external_id?: string | null;
+  } | null = null;
   if (lotId) {
     const { data } = await admin
       .from("inventory_lots")
-      .select("id, lot_code, pos_product_key")
+      .select("id, lot_code, pos_product_key, ccrs_inventory_external_id")
       .eq("id", lotId)
       .maybeSingle();
     lotRow = (data as typeof lotRow) ?? null;
@@ -577,12 +582,20 @@ export async function createCustomerReturn(
   } else if (lineLotKey) {
     const { data } = await admin
       .from("inventory_lots")
-      .select("id, lot_code, pos_product_key, status, created_at")
+      .select("id, lot_code, pos_product_key, ccrs_inventory_external_id, status, created_at")
       .eq("pos_product_key", lineLotKey)
       .order("created_at", { ascending: false })
       .limit(5);
     const candidates =
-      (data as { id: string; lot_code: string | null; pos_product_key: string | null; status: string }[] | null) ?? [];
+      (data as
+        | {
+            id: string;
+            lot_code: string | null;
+            pos_product_key: string | null;
+            ccrs_inventory_external_id: string | null;
+            status: string;
+          }[]
+        | null) ?? [];
     lotRow = candidates.find((c) => c.status !== "quarantine") ?? candidates[0] ?? null;
     lotId = lotRow?.id ?? null;
   }
@@ -597,7 +610,9 @@ export async function createCustomerReturn(
   // ── Snapshot the CCRS Sale-row data for the correction file ───────────────
   const inventoryExternalId = resolveSaleInventoryExternalId({
     lineExplicit: l.ccrs_inventory_external_id,
+    // S-10: the correction must reference the id the lot was FILED under.
     lotCanonical: deriveInventoryExternalId({
+      ccrs_inventory_external_id: lotRow.ccrs_inventory_external_id ?? null,
       lot_code: lotRow.lot_code,
       pos_product_key: lotRow.pos_product_key,
       id: lotRow.id,
