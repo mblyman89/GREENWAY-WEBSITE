@@ -129,13 +129,11 @@ describe("ccrsDate uses the PACIFIC calendar day", () => {
   });
 });
 
-describe("ccrsCell quoting", () => {
-  it("quotes cells containing commas and doubles embedded quotes (S-09, RFC 4180)", () => {
-    expect(ccrsCell("Smith, Jane")).toBe('"Smith, Jane"');
-    // S-09 / U-25: quotes used to be STRIPPED, which silently changed any
-    // name containing a ". Now lossless. (The 14 "quoted" names in the LCB's
-    // Inventory report are stored without quotes — U-42, S-11 recon.)
-    expect(ccrsCell('He said "hi"')).toBe('"He said ""hi"""');
+describe("ccrsCell — written the way CCRS reads (S-09b)", () => {
+  it("never adds quotes; refuses a comma or double quote (CCRS splits on every comma, P20261005A)", () => {
+    expect(() => ccrsCell("Smith, Jane")).toThrow(/comma/);
+    expect(() => ccrsCell('He said "hi"')).toThrow(/double quote/);
+    expect(ccrsCell("Trailing ")).toBe("Trailing ");
     expect(ccrsCell(null)).toBe("");
   });
 });

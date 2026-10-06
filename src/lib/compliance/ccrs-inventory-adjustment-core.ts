@@ -114,8 +114,9 @@ export function mmddyyyy(iso: string | Date): string {
   return ccrsDate(iso);
 }
 
-/** S-09 (U-25): delegates to the lossless RFC 4180 encoder. Quotes are
- * doubled, never stripped — stripping changed the data CCRS received. */
+/** S-09b: delegates to the shared CCRS encoder. CCRS splits on every comma
+ * and ignores quoting, so the encoder never adds quotes and throws on a comma,
+ * double quote or line break (the builder withholds/rewrites those first). */
 export function cell(v: unknown): string {
   return ccrsCell(v);
 }
@@ -297,8 +298,12 @@ export function __runCcrsAdjustmentTests(): void {
   // 11:30 PM Pacific on Jun 15 (06:30 UTC Jun 16) must format as Jun 15, not 16.
   eq(mmddyyyy("2025-06-16T06:30:00Z"), "06/15/2025", "mmddyyyy Pacific late-evening");
 
-  eq(cell("a,b"), '"a,b"', "comma quoted");
-  eq(cell('a"b'), '"a""b"', "quotes doubled (S-09)");
+  {
+    let threw = 0;
+    for (const v of ["a,b", 'a"b']) { try { cell(v); } catch { threw += 1; } }
+    eq(threw, 2, "comma and double quote refused (S-09b)");
+  }
+  eq(cell(" a b "), " a b ", "edge spaces sent as-is, never quoted (S-09b)");
   eq(cell(null), "", "null cell");
 
   const lic: CcrsLicenseLike = { licenseNumber: "412345", submittedBy: "Greenway" };

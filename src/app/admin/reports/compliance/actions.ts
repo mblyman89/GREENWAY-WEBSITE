@@ -24,6 +24,11 @@ export async function saveLicenseSettingsAction(formData: FormData): Promise<Sav
   if (submittedBy.length > 35) {
     return { ok: false, error: "Submitted-by name must be 35 characters or fewer (CCRS limit)." };
   }
+  // S-09b: SubmittedBy is written into row 1 (and CreatedBy) of every CCRS
+  // file, and CCRS splits every row on every comma (PREprod P20261005A).
+  if (/[,"]/.test(submittedBy)) {
+    return { ok: false, error: "Submitted-by name cannot contain a comma or a double quote — CCRS splits every row on every comma." };
+  }
 
   try {
     const admin = createSupabaseAdminClient();

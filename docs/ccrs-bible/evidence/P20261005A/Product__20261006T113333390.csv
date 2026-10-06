@@ -1,0 +1,4 @@
+LicenseNumber,InventoryCategory,InventoryType,Name,Description,ExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation,ErrorMessage,UnitWeightGrams
+413541,EndProduct,Usable Cannabis,"""P20261005A Mama J's Fidelity - 3.5g""","P-04 fidelity case C1: leading + trailing double quote,1,P20261005A-P01,,10/05/2026,,,Insert,Operation is invalid must be Insert, Update or Delete,
+413541,EndProduct,Usable Cannabis,P20261005A Piña Crème Fidelity - 1g,"P-04 fidelity case C4: correct UTF-8 accents (ñ,1,P20261005A-P04,,10/05/2026,,,Insert,Operation is invalid must be Insert, Update or Delete,
+413541,EndProduct,Usable Cannabis,"P20261005A Smith, Jane Fidelity - 1g",1,P20261005A-P07,,10/05/2026,,,Insert,Operation is invalid must be Insert, Update or Delete,

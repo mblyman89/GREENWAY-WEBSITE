@@ -321,6 +321,17 @@ we never invent a CCRS value.
   LCB's Inventory *report* only; the Product report stores those names with
   0 `"` (U-42). The fix stands on its own (lossless for every character).
 
+#### C2d — CRITICAL — FIXED 2026-10-06 (S-09b) — CCRS does not honour CSV quoting
+- PREprod run P20261005A: a comma inside an RFC 4180-quoted cell was split by
+  CCRS, shifting the row; rejected `Operation is invalid must be Insert,
+  Update or Delete`. Our S-09 encoder (and the legacy one before it) relied on
+  quoting, so ANY comma in a Description, AdjustmentDetail, name or
+  SubmittedBy would have failed the whole file in production.
+- Fixed: the encoder never adds quotes; `,`/`"` in free text are rewritten
+  (`E44`, advisory); in any other column the row is withheld (`E42`/`E43`,
+  blocking, `[G L0167-L0169]`); the verifier counts columns the way CCRS does.
+  Evidence `docs/ccrs-bible/evidence/P20261005A/`. Open: U-44, U-17 note.
+
 #### C2c — HIGH — FIXED 2026-10-06 (Bible v2 S-11) — strain casing split across files; no ledger routing
 - The Strain file deduped case-insensitively but each Inventory row kept its
   own casing, so `Dutch Treat` + `Dutch treat` sent one Strain row and an
