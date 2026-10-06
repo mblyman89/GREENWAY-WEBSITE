@@ -59,6 +59,27 @@ Still minting (by design, new lots only): receiving intake (`intake-store.ts`, `
 
 Tests: `tests/compliance/s10-identifier-passthrough.test.ts` (fixture of 69 real filed ids covering all 35 id shape families, a guardrail that no `src/` call passes a stored id into minting); `scripts/recon/ccrs-lot-id-passthrough-pg-check.sql` (7 seeded edge cases, applied twice, rollback); mutations M25–M32 in `mutate_check.py` and Q1–Q9 in `mutate_0246_sql.py`, all killed.
 
+### A.4 S-09 lossless CSV encoder + E38 — DONE (2026-10-06, Bible v2 Part 05 §F.1)
+
+**Defect (Bible v2 gap E25):** `ccrsCell` deleted every double quote (`s.replace(/"/g, "")`) and quoted only on `,`/`\n`. CCRS's own export uses RFC 4180 doubled quotes, and the LCB's 2026-09-18 Service Desk delivery shows **14 live Inventory rows** whose Product name contains a literal `"` (17 distinct values across Inventory/Product/Strain, measured `analysis3/s09/real_names.out`, `refs.out`). Names must match in the "same format and spelling" `[G L0580-L0583]`, so stripping the quote could never reference those rows. The adjustment core carried a second, independent copy of the same stripping `cell()`.
+
+| Rule | Before S-09 | After S-09 |
+|---|---|---|
+| `"` in a value | deleted | doubled and the cell wrapped (`"a""b"`) — RFC 4180 |
+| `,` in a value | wrapped | wrapped (unchanged) |
+| leading/trailing space (1 filed value, `GF41583505706958 `) | emitted bare (trim-prone) | wrapped so it survives any reader that trims |
+| TAB (2 filed values), non-ASCII (68 filed values), double spaces (338 filed values) | untouched | untouched — byte-for-byte (E26 closed: nothing to do but prove it) |
+| CR/LF | wrapped, so the physical file got an extra line | **refused**: `ccrsCell` throws `CcrsEncodeError`; every builder first withholds such a row with blocking **`E38_FIELD_HAS_LINE_BREAK`** `[G L0167-L0169]` and lists it (never silently dropped, never sent) |
+| adjustment `cell()` | own stripping copy | delegates to `ccrsCell` |
+
+E38 wiring: weekly batch `push()` (Strain/Area/Product/Inventory/Transfer, coded sync issue with row list), `buildCcrsSaleCsv`, `buildCcrsInventoryAdjustmentCsv`, and the sale-correction export route (a withheld correction stays **pending** — it is not marked exported). `splitCsvLine` is the exact inverse of `ccrsCell` for every accepted value.
+
+**Data finding that contradicts the v2 draft:** U-25 said "none in filed data". The Product report actually holds **2** names with an embedded LF (`LAff Gas Infused Pre-roll Lemoncello x Jack \nHerer - 0.5g` / `- 3g`); the Inventory rows referencing them are QoH 0. E38 means we will never emit those names; the cleanup (S-14) must reference them, if at all, by their filed lot id only.
+
+Tests: `tests/compliance/ccrs-csv-fidelity.test.ts` (fixture `fixtures/ccrs-real-names.json` = 89 real values from the delivery: every one round-trips through `ccrsCell`→`splitCsvLine` and through an assembled Inventory file that `verifyCcrsFile` accepts; E38 helpers; a source guard that every builder withholds before encoding); mutations M33–M46 in `mutate_check.py`, all killed.
+
+PREprod probe **P-04** (Bible v2 Part 06 §A.4, settles U-27): `npx tsx scripts/compliance/generate-p04-fidelity-probe.ts --run P<yyyymmdd><letter>` writes 12 run-prefixed files (Strain, Area, Product with 8 character-class cases, one Inventory Insert per case, one Inventory Update) plus a MANIFEST with the expected result per file; guarded by `tests/compliance/p04-fidelity-probe.test.ts` and mutations M47–M50.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

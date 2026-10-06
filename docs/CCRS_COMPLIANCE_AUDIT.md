@@ -307,6 +307,16 @@ we never invent a CCRS value.
 - **Fix:** Clamp each field to its documented length in the PURE mapping layer and
   warn when truncation occurs.
 
+#### C2b — CRITICAL — FIXED 2026-10-06 (Bible v2 S-09) — the cell encoder deleted double quotes
+- `ccrsCell` (and a separate copy in the adjustment core) removed every `"`
+  from every value. 14 live Inventory rows reference Product names CCRS holds
+  with a literal `"`; names match only in the "same format and spelling"
+  `[G L0580-L0583]`, so those rows could never be addressed.
+- Fixed: one lossless RFC 4180 encoder (quotes doubled, edge spaces protected,
+  TAB / non-ASCII / inner spacing byte-for-byte). A value with CR/LF is never
+  emitted; its row is withheld with blocking `E38_FIELD_HAS_LINE_BREAK`
+  `[G L0167-L0169]` and listed. See `docs/ccrs-bible/04-current-state-and-gap-matrix.md` §A.4.
+
 #### C3 — OK (verified) — Boolean columns
 - `IsQuarantine` (Area) and `IsMedical` (Inventory) emit `TRUE`/`FALSE`. Manual:
   Boolean, valid values TRUE/FALSE. ✓

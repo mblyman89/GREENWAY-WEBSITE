@@ -30,6 +30,9 @@ import {
   classifyWarning,
   verifySaleNumericColumns,
   splitCsvLine,
+  withholdLineBreakRows,
+  e38Message,
+  CCRS_COLUMNS,
   CCRS_PRODUCT_NAME_MAX,
   CCRS_PRODUCT_DESCRIPTION_MAX,
   type CcrsRetailerFileType,
@@ -687,17 +690,36 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
   const files: CcrsFile[] = [];
   const push = (
     type: CcrsRetailerFileType,
-    rows: string[][],
+    rawRows: string[][],
     warnings: string[],
     skipped = 0,
   ) => {
+    // S-09 E38: a value with a line break cannot be one CSV record; withhold
+    // the row and report it (never silently dropped, never sent corrupted).
+    const e38 = withholdLineBreakRows(rawRows, CCRS_COLUMNS[type], (r, i) => {
+      const ext = CCRS_COLUMNS[type].indexOf("ExternalIdentifier");
+      const name = CCRS_COLUMNS[type].indexOf(type === "Strain" ? "Strain" : type === "Area" ? "Area" : "Name");
+      return (ext >= 0 && r[ext]) || (name >= 0 && r[name]) || `row ${i + 1}`;
+    });
+    const rows = e38.rows;
+    if (e38.withheld.length > 0) {
+      syncIssues.push({
+        severity: "error",
+        file: type,
+        code: "E38_FIELD_HAS_LINE_BREAK",
+        specPin: specPinFor("E38_FIELD_HAS_LINE_BREAK"),
+        count: e38.withheld.length,
+        rows: e38.withheld.map((w) => ({ id: w.label, label: w.label, detail: `${w.column} contains a line break` })),
+        message: e38Message(type, e38.withheld),
+      });
+    }
     files.push({
       type,
       group: uploadGroupOf(type),
       fileName: ccrsFileName(type, license.licenseNumber, now),
       csv: assembleCcrsFile({ type, submittedBy, submittedDate: now, rows }),
       recordCount: rows.length,
-      skipped,
+      skipped: skipped + e38.withheld.length,
       warnings,
       empty: rows.length === 0,
     });
