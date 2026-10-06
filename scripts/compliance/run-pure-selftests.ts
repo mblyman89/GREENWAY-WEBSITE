@@ -514,6 +514,8 @@ import { __runAuditHubGuidanceCoreTests } from "../../src/lib/inventory/audit-hu
 import { __runInventoryAuditPostCoreTests } from "../../src/lib/inventory/inventory-audit-post-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runCcrsLedgerCoreTests } from "../../src/lib/compliance/ccrs-ledger-core";
+import { __runCcrsFileStateCoreTests } from "../../src/lib/compliance/ccrs-file-state-core";
+import { __runCcrsLedgerSeedCoreTests } from "../../src/lib/compliance/ccrs-ledger-seed-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
 import { __runApplySettingsTests } from "../../src/lib/syndication/apply-settings-core";
@@ -1264,6 +1266,9 @@ __runLiquidVolumeTests();
   __runSyncPlanTests();
   __runPreflightTests();
   __runCcrsLedgerCoreTests();
+  // S-12a: CCRS file state machine (mirrors the 0247 guard) + ledger seed.
+  __runCcrsFileStateCoreTests();
+  __runCcrsLedgerSeedCoreTests();
   __runRichnessTests();
   // Floored as of L-7 -- see the note on `__runSyncSettingsTests`. This core now
   // also resolves the automatic sync schedule, and the round trip it asserts

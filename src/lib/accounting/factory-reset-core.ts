@@ -646,6 +646,17 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ccrs_export_batches", disposition: "WIPE", because: "Test CCRS export files." },
   { table: "ccrs_adjustment_batches", disposition: "WIPE", because: "Test CCRS adjustment files." },
   { table: "ccrs_week_submissions", disposition: "WIPE", because: "Test weekly CCRS submission records." },
+  // CCRS ledger (migration 0247, slice S-12a). All four are KEEP, decided
+  // one by one: they mirror what the State's CCRS system already holds for
+  // this license (every filed Strain, Area, Product and Inventory id, and
+  // every file ever uploaded). The State never forgets a filed id, so if a
+  // reset emptied this mirror the next export would re-Insert ids CCRS
+  // already has, or re-use ones it retired. The rows carry an env column
+  // (preprod/prod), so PREprod test files never mix with production truth.
+  { table: "ccrs_files", disposition: "KEEP", because: "Every CCRS file sent to the State — the State keeps them, so we do too." },
+  { table: "ccrs_filed_entities", disposition: "KEEP", because: "Ids already on file with the State; wiping them would cause duplicate filings." },
+  { table: "ccrs_file_rows", disposition: "KEEP", because: "Row-by-row content of files the State already received." },
+  { table: "ccrs_file_issues", disposition: "KEEP", because: "The State's error/warning findings on files already sent." },
   { table: "compliance_reminder_log", disposition: "WIPE", because: "Reminders fired during testing." },
   { table: "syndication_logs", disposition: "WIPE", because: "Test pushes of your menu to third-party sites." },
   { table: "syndication_sync_state", disposition: "WIPE", because: "Where each syndication feed left off during testing." },

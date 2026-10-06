@@ -1,10 +1,10 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-10-06 22:09Z at commit `88bce0c30815adeafa136c4ce700c7fb2755baf2` by `build_atlas_part.py`.
+Generated 2026-10-06 22:53Z at commit `5436205f74c285d088992b7435d22454eaa6e46c` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 88bce0c -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 5436205 -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
