@@ -153,6 +153,38 @@ So **our product key never identifies a filed product**. The only honest bridge 
 
 **Until S-12 loads a ledger, `buildCcrsBatch` passes `null`** and the plan reproduces the pre-S-11 rows byte-for-byte (every row Insert, our ids), except the strain-casing fix above. Tests: `tests/compliance/ccrs-ledger-routing.test.ts` (64: every state × intent, real ids/names from the delivery, both real case-variant groups, legacy byte-identity, source guards); mutations M51–M68 in `mutate_check.py`, all killed.
 
+### A.6 S-12a CCRS ledger: schema, file state machine, one-time seed — DONE in code (2026-10-06); owner applies 0247 by hand
+
+**What it is.** Our own copy of what the State's CCRS already holds for license 413541: every filed Strain / Area / Product / Inventory id, and (from now on) every file we send. Until this existed, every export guessed "Insert" (S-11 routing passed `null`). S-12b wires the ledger into the batch; S-12a only builds and fills it.
+
+**Migration `0247_ccrs_ledger.sql`** — four tables, all RLS (staff read, admin write), all **KEEP** in the factory reset (`factory-reset-core.ts` TABLE_RULES — the State never forgets a filed id, so neither may we):
+
+| Table | Holds | Key guards |
+|---|---|---|
+| `ccrs_files` | one row per CCRS file (plus 4 `seed` pseudo-files for provenance) | `file_name` unique; `(env, sha256)` unique — the same bytes cannot be recorded twice; trigger `ccrs_files_guard`: born `draft` (seed files born `closed`), only the 10 legal state edges, `sha256 / file_name / number_records / env / file_type / storage_path` frozen once out of `draft`, never deleted once out of `draft` |
+| `ccrs_filed_entities` | one row per filed id | unique `(env, file_type, external_id)` — PREprod and production never mix; `seed_conflicts` keeps every duplicate row as evidence |
+| `ccrs_file_rows` | the rows inside each file | unique `(file_id, row_no)`; `withheld` ⇔ a withheld code |
+| `ccrs_file_issues` | the State's error/warning findings per file | severity check |
+
+The rollback refuses (`ROLLBACK_REFUSED`) once any real file has left `draft`. Proof: `scripts/recon/ccrs-ledger-pg-check.sql` on Postgres 15 (clean slate → applied twice → every edge, every frozen field, delete refusal, cascade, RLS, `updated_at`, refused rollback → clean rollback → re-apply); **26/26 SQL mutants killed** (`scripts/ccrs-bible/mutate_0247_sql.py`). The TypeScript mirror `ccrs-file-state-core.ts` is tested to have the **same 10 edges in the same order** as the SQL `legal` array.
+
+**Seed `scripts/compliance/seed-ccrs-ledger.ts`** (pure core `ccrs-ledger-seed-core.ts`) from the LCB delivery current through 2026-09-18 (U-30):
+
+| Source | Rows | Entities | Rule |
+|---|---|---|---|
+| Inventory | 62,744 | 62,744 | Quantity on Hand exactly 0 → `closed` (17,998); else `seed` (44,746). `product_external_id` = filed Product Identifier. `filed_name` null (see correction below) |
+| Product | 64,566 | 64,563 | `filed_name` = Product report **Name** by id. Id `1` (4 junk rows, U-24) → one `unknown` entity, all 4 rows kept in `seed_conflicts`, never Updated |
+| Strain | 9,736 | 9,692 | id = exact Name; 44 exact-duplicate groups collapse (first row kept, all rows in `seed_conflicts`); case variants stay separate (U-45 makes them harmless; A16 tidiness) |
+| Area | 9 | 9 | id = ExternalIdentifier |
+
+The CLI refuses to write unless every count equals `EXPECTED_2026_09_18` (a fresh delivery must be measured and the expectation updated in a reviewed PR). Every insert ends `on conflict (env, file_type, external_id) do nothing`, so a re-run changes nothing and never overwrites a row routing has since moved. **Proven on local Postgres:** first run 137,008 entities + 4 provenance files in one transaction (~7 s); second run identical count, identical `xmin` sum (no row touched), still 4 files.
+
+**Correction to Part 03 §D.4 (v2 draft).** §D.4 seeded `filed_name` from the Inventory report's "Product Name" column. Measured: that column equals the Product **Description** in 62,742 of 62,744 rows. So Inventory `filed_name` is null and the filed product name is reached through `product_external_id` → Product `filed_name` (same bridge as §A.5).
+
+**Two Inventory product ids are absent from the Product report** (`C1100018446`, `C11000113380`); they are seeded as-is and surface as a ledger warning in S-12b, not guessed.
+
+Tests: `tests/compliance/s12a-ccrs-ledger.test.ts` (30, including the real-delivery count check when the files are present); self-tests registered in `run-pure-selftests.ts`; migration gate pins `0247_ccrs_ledger.sql`; mutations **M78–M89** in `mutate_check.py`, all killed.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

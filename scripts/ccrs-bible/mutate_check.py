@@ -59,6 +59,13 @@ P04_TESTS = "tests/compliance/p04-fidelity-probe.test.ts"
 # S-11 ledger routing (Bible v2 Part 03 §D.3, slice plan S-11).
 LEDGER = "src/lib/compliance/ccrs-ledger-core.ts"
 S11_TESTS = "tests/compliance/ccrs-ledger-routing.test.ts"
+# S-12a ledger schema + seed (Bible v2 Part 03 §D.4, Part 05 §A).
+FSTATE = "src/lib/compliance/ccrs-file-state-core.ts"
+SEEDCORE = "src/lib/compliance/ccrs-ledger-seed-core.ts"
+SEEDCLI = "scripts/compliance/seed-ccrs-ledger.ts"
+MIG0247 = "supabase/migrations/0247_ccrs_ledger.sql"
+RESETCORE = "src/lib/accounting/factory-reset-core.ts"
+S12A_TESTS = "tests/compliance/s12a-ccrs-ledger.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -616,6 +623,102 @@ MUTATIONS = [
         P04_TESTS,
         "P-04b: a comma anywhere in a probe file repeats run A's failure.",
     ),
+    (
+        'M78-s12a-extra-transition',
+        FSTATE,
+        '  "errored>reconciling",\n  "reconciling>closed",\n];',
+        '  "errored>reconciling",\n  "reconciling>closed",\n  "uploaded>abandoned",\n];',
+        S12A_TESTS,
+        'S-12a: once uploaded the State has the file; it can never be abandoned (TS == SQL).',
+    ),
+    (
+        'M79-s12a-sql-extra-transition',
+        MIG0247,
+        "    'reconciling>closed'\n  ];",
+        "    'reconciling>closed',\n    'closed>draft'\n  ];",
+        S12A_TESTS,
+        'S-12a: SQL guard edges must equal the TypeScript list exactly.',
+    ),
+    (
+        'M80-s12a-immutable-field-dropped',
+        FSTATE,
+        '["sha256", "fileName", "numberRecords", "env", "fileType", "storagePath"] as const;',
+        '["sha256", "fileName", "numberRecords", "env", "fileType"] as const;',
+        S12A_TESTS,
+        'S-12a: storage path is frozen once a file leaves draft.',
+    ),
+    (
+        'M81-s12a-inflight-ignores-operation',
+        FSTATE,
+        '`${r.env}\\u0000${r.fileType}\\u0000${r.externalId}\\u0000${r.operation ?? ""}`;',
+        '`${r.env}\\u0000${r.fileType}\\u0000${r.externalId}`;',
+        S12A_TESTS,
+        'S-12a: in-flight key includes operation (Insert and Update are different rows).',
+    ),
+    (
+        'M82-s12a-qoh-closed-flipped',
+        SEEDCORE,
+        'if (Number(qoh) === 0) { e.state = "closed"; inventoryClosed += 1; }',
+        'if (Number(qoh) !== 0) { e.state = "closed"; inventoryClosed += 1; }',
+        S12A_TESTS,
+        'S-12a: only QoH 0 lots are seeded closed.',
+    ),
+    (
+        'M83-s12a-unknown-product-dropped',
+        SEEDCORE,
+        'if (SEED_UNKNOWN_PRODUCT_IDS.has(id)) { e.state = "unknown"; unknownProducts += 1; }',
+        '',
+        S12A_TESTS,
+        'S-12a: junk Product id "1" must be unknown (withheld), never treated as filed.',
+    ),
+    (
+        'M84-s12a-on-conflict-update',
+        SEEDCORE,
+        '"\\non conflict (env, file_type, external_id) do nothing;",',
+        '"\\non conflict (env, file_type, external_id) do update set state = excluded.state;",',
+        S12A_TESTS,
+        'S-12a: a re-run must never overwrite a row routing has since moved.',
+    ),
+    (
+        'M85-s12a-conflicts-discarded',
+        SEEDCORE,
+        'e.seedConflicts = all.length > 1 ? all : null;',
+        'e.seedConflicts = null;',
+        S12A_TESTS,
+        'S-12a: duplicate rows are kept as evidence, not silently thrown away.',
+    ),
+    (
+        'M86-s12a-header-check-loosened',
+        SEEDCORE,
+        'if (header.length !== want.length || header.some((h, i) => h !== want[i])) {',
+        'if (header.length !== want.length) {',
+        S12A_TESTS,
+        'S-12a: a re-ordered column must be refused, not shifted silently.',
+    ),
+    (
+        'M87-s12a-sqltext-no-escape',
+        SEEDCORE,
+        "return `'${v.replace(/'/g, \"''\")}'`;",
+        "return `'${v}'`;",
+        S12A_TESTS,
+        "S-12a: names like Mack's GAK must be quoted safely in SQL.",
+    ),
+    (
+        'M88-s12a-ledger-wiped-by-reset',
+        RESETCORE,
+        '{ table: "ccrs_filed_entities", disposition: "KEEP",',
+        '{ table: "ccrs_filed_entities", disposition: "WIPE",',
+        S12A_TESTS,
+        'S-12a: a factory reset must never forget what the State holds.',
+    ),
+    (
+        'M89-s12a-expected-count-drift',
+        SEEDCLI,
+        '  inventoryClosed: 17998,',
+        '  inventoryClosed: 17999,',
+        S12A_TESTS,
+        'S-12a: the CLI refusal counts must equal what the delivery measures.',
+    ),
 ]
 
 
@@ -655,6 +758,7 @@ def main() -> int:
         S09_TESTS,
         P04_TESTS,
         S11_TESTS,
+        S12A_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)
