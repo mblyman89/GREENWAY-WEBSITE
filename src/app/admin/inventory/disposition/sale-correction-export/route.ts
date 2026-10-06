@@ -21,7 +21,7 @@ import {
   makeSaleCorrectionFileName,
 } from "@/lib/compliance/ccrs-sale-correction-core";
 import { markCorrectionsExported, type CustomerReturn } from "@/lib/inventory/disposition";
-import { CCRS_COLUMNS, withholdLineBreakRows } from "@/lib/compliance/ccrs-batch-core";
+import { CCRS_COLUMNS, withholdUnencodableRows } from "@/lib/compliance/ccrs-batch-core";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -74,13 +74,14 @@ export async function GET() {
     }
   }
 
-  // S-09 E38: a correction carrying a line break cannot be one CSV record.
+  // S-09 E38 / S-09b E42-E43: a correction carrying a line break, comma or
+  // double quote cannot be one CCRS record (CCRS splits on every comma).
   // Withhold it and leave it PENDING (never marked exported) so it is fixed
   // and re-sent, not lost. rows[i] belongs to includedIds[i].
-  const e38 = withholdLineBreakRows(rows, CCRS_COLUMNS.Sale, (_r, i) => includedIds[i]);
+  const e38 = withholdUnencodableRows(rows, CCRS_COLUMNS.Sale, (_r, i) => includedIds[i]);
   const withheldIds = new Set(e38.withheld.map((w) => w.label));
   const exportIds = includedIds.filter((id) => !withheldIds.has(id));
-  for (const w of e38.withheld) skipped.push(`${w.label}: ${w.column} contains a line break (E38) — left pending`);
+  for (const w of e38.withheld) skipped.push(`${w.label}: ${w.column} contains a ${w.reason} — left pending`);
 
   const csv = buildSaleCorrectionFile(e38.rows, license);
   const fileName = makeSaleCorrectionFileName(license.licenseNumber);

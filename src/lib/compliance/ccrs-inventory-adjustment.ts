@@ -19,7 +19,13 @@ import {
   mapAdjustmentRow,
   type AdjustmentSourceRow,
 } from "@/lib/compliance/ccrs-inventory-adjustment-core";
-import { CCRS_COLUMNS, e38Message, withholdLineBreakRows } from "@/lib/compliance/ccrs-batch-core";
+import {
+  CCRS_COLUMNS,
+  CCRS_FREE_TEXT_COLUMNS,
+  freeTextRewriteMessage,
+  unencodableMessage,
+  withholdUnencodableRows,
+} from "@/lib/compliance/ccrs-batch-core";
 
 export {
   CCRS_ADJUSTMENT_REASONS,
@@ -103,14 +109,24 @@ export async function buildCcrsInventoryAdjustmentCsv(
     }
   }
 
-  // S-09 E38: a value with a line break cannot be one CSV record.
-  const e38 = withholdLineBreakRows(rows, CCRS_COLUMNS.InventoryAdjustment, (r, i) => {
-    const ext = CCRS_COLUMNS.InventoryAdjustment.indexOf("ExternalIdentifier");
-    return r[ext] || `row ${i + 1}`;
-  });
+  // S-09 E38 / S-09b E42-E44: CCRS splits every row on every comma. The
+  // free-text AdjustmentDetail is rewritten (`,`→`;`, `"`→`'`, reported); a
+  // line break, or a comma/quote anywhere else, withholds the row.
+  const e38 = withholdUnencodableRows(
+    rows,
+    CCRS_COLUMNS.InventoryAdjustment,
+    (r, i) => {
+      const ext = CCRS_COLUMNS.InventoryAdjustment.indexOf("ExternalIdentifier");
+      return r[ext] || `row ${i + 1}`;
+    },
+    CCRS_FREE_TEXT_COLUMNS.InventoryAdjustment,
+  );
+  if (e38.rewritten.length > 0) {
+    result.warnings.push(freeTextRewriteMessage("InventoryAdjustment", e38.rewritten));
+  }
   if (e38.withheld.length > 0) {
     result.skipped += e38.withheld.length;
-    result.warnings.push(e38Message("InventoryAdjustment", e38.withheld));
+    result.warnings.push(unencodableMessage("InventoryAdjustment", e38.withheld));
   }
 
   result.recordCount = e38.rows.length;

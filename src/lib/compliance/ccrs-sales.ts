@@ -41,8 +41,8 @@ import {
   ccrsFileName,
   ccrsDate,
   saleTypeForOrder,
-  withholdLineBreakRows,
-  e38Message,
+  withholdUnencodableRows,
+  unencodableMessage,
   CCRS_COLUMNS,
 } from "@/lib/compliance/ccrs-batch-core";
 
@@ -485,13 +485,14 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     );
   }
 
-  // S-09 E38: a value with a line break cannot be one CSV record.
-  const e38 = withholdLineBreakRows(rows, CCRS_COLUMNS.Sale, (r, i) => {
+  // S-09 E38 / S-09b E42-E43: a value with a line break, comma or double
+  // quote cannot be one CCRS record (CCRS splits on every comma).
+  const e38 = withholdUnencodableRows(rows, CCRS_COLUMNS.Sale, (r, i) => {
     // Sale has no plain ExternalIdentifier column; the line id is SaleDetailExternalIdentifier.
     const ext = CCRS_COLUMNS.Sale.indexOf("SaleDetailExternalIdentifier");
     return r[ext] || `row ${i + 1}`;
   });
-  if (e38.withheld.length > 0) warnings.push(e38Message("Sale", e38.withheld));
+  if (e38.withheld.length > 0) warnings.push(unencodableMessage("Sale", e38.withheld));
 
   result.csv = buildFile(e38.rows, license);
   result.fileName = makeFileName(license.licenseNumber);

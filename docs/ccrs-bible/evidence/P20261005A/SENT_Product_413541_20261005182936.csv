@@ -1,0 +1,12 @@
+SubmittedBy,Greenway Marijuana
+SubmittedDate,10/05/2026
+NumberRecords,8
+LicenseNumber,InventoryCategory,InventoryType,Name,Description,UnitWeightGrams,ExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation
+413541,EndProduct,Usable Cannabis,"""P20261005A Mama J's Fidelity - 3.5g""","P-04 fidelity case C1: leading + trailing double quote, apostrophe inside",1,P20261005A-P01,Greenway Marijuana,10/05/2026,,,Insert
+413541,EndProduct,Usable Cannabis,"P20261005A 7"" Cone Fidelity - 1g",P-04 fidelity case C2: double quote in the middle,1,P20261005A-P02,Greenway Marijuana,10/05/2026,,,Insert
+413541,EndProduct,Usable Cannabis,P20261005A 	Tab Fidelity - 1g,P-04 fidelity case C3: TAB character,1,P20261005A-P03,Greenway Marijuana,10/05/2026,,,Insert
+413541,EndProduct,Usable Cannabis,P20261005A Piña Crème Fidelity - 1g,"P-04 fidelity case C4: correct UTF-8 accents (ñ, è)",1,P20261005A-P04,Greenway Marijuana,10/05/2026,,,Insert
+413541,EndProduct,Usable Cannabis,P20261005A Banana CrÃ©me Fidelity,P-04 fidelity case C5: mojibake exactly as CCRS holds it (Ã©),1,P20261005A-P05,Greenway Marijuana,10/05/2026,,,Insert
+413541,EndProduct,Usable Cannabis,P20261005A Pre-Rolls  - Double  Space - 5g,P-04 fidelity case C6: double spaces,1,P20261005A-P06,Greenway Marijuana,10/05/2026,,,Insert
+413541,EndProduct,Usable Cannabis,"P20261005A Smith, Jane Fidelity - 1g",P-04 fidelity case C7: comma (quoted cell),1,P20261005A-P07,Greenway Marijuana,10/05/2026,,,Insert
+413541,EndProduct,Usable Cannabis,"P20261005A Trailing Space Fidelity ",P-04 fidelity case C8: trailing space (quoted cell),1,P20261005A-P08,Greenway Marijuana,10/05/2026,,,Insert

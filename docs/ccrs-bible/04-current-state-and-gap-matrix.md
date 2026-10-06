@@ -82,6 +82,26 @@ PREprod probe **P-04** (Bible v2 Part 06 §A.4, settles U-27): `npx tsx scripts/
 
 **Correction (S-11 recon, 2026-10-06, `analysis3/s11/quotes.out`, `namecol.out`):** the "14 live rows whose Product name contains a literal `"`" above is a reading of the LCB's *Inventory report*, and that report is not the stored value. In the Product report (same delivery) **0** of 64,566 names contain `"`; each of the 14 Inventory "Name" cells is exactly `"` + the filed Product.Name + `"`, and all 14 contain an apostrophe (1,885 rows have apostrophe names; only these 14 are wrapped — all CreatedDate 8/30/2024, the Cultivera migration day). The 3 quoted Inventory Strain cells behave the same way (Strains.csv has 0 `"`). So CCRS **stores** those names without quotes; the wrapping is an artifact of that report. Two consequences: (1) S-09's encoder is still right and still needed — it is lossless for every character, and the 2 TAB / 68 non-ASCII / 338 double-space / 1 edge-space values are real; (2) the name a filed lot must carry comes from the **Product report** by the lot's filed Product Identifier, never from the Inventory report's display (S-11, §A.5). P-04 C1 still proves that CCRS stores a name with leading and trailing `"` byte-for-byte; it no longer "mirrors 14 live rows". Recorded as **U-42**; the routing assumption it supports is **U-43**. (U-28…U-41 are reserved by the Bible v2 draft and land with S-19.)
 
+### A.4b S-09b — CCRS's reader splits on every comma; the encoder now writes for that reader — DONE (2026-10-06)
+
+**Observed (PREprod run P20261005A, evidence `docs/ccrs-bible/evidence/P20261005A/`):** the P-04 Product file (8 rows, RFC 4180-quoted where needed) was rejected. CCRS's echo (`Product__20261006T113333390.csv`) returned exactly the **3** rows that held a comma — C1 and C4 in Description, C7 in Name — each cut at that comma, so every later value moved one column right and the Operation column held a blank → `Operation is invalid must be Insert, Update or Delete` (new vocabulary, §H #12). The 5 rows without a comma raised no error. Conclusion: **CCRS splits every line on every comma and does not honour CSV quoting.** This overturns S-09's RFC 4180 premise (U-27).
+
+| Rule | S-09 | S-09b |
+|---|---|---|
+| `,` in a join key / id / name / date | wrapped in quotes (CCRS ignored them → row shifted) | **withheld**, blocking `E42_FIELD_HAS_COMMA` `[G L0167-L0169]` |
+| `,` or `"` in Product.Description / InventoryAdjustment.AdjustmentDetail | wrapped / doubled | rewritten `,`→`;` `"`→`'` (same length), advisory `E44_FREE_TEXT_REWRITTEN` with before/after |
+| `"` anywhere else | doubled and wrapped | **withheld**, blocking `E43_FIELD_HAS_DOUBLE_QUOTE` until U-44 (P-04b Q1/Q2) |
+| leading/trailing space | wrapped (the quotes would have become data) | sent bare |
+| CR/LF | withheld E38 | withheld E38 (unchanged) |
+| verifier column count | RFC 4180 split | **CCRS split** (`ccrsReaderSplit`, every comma) + any `"` is an error |
+| SubmittedBy setting | ≤35 chars | ≤35 chars, no `,` or `"` |
+
+One withhold path: `withholdUnencodableRows` (replaces `withholdLineBreakRows`/`e38Message`) is wired in the batch `push()`, Sale, InventoryAdjustment and the sale-correction route (withheld corrections stay pending). A product withheld for its Name also withholds its lots, because the same Name is in Inventory.Product. **Data exposure:** 0 of 64,566 filed Product names and 0 filed Inventory cells contain a comma (`analysis3/s09`, Part 05 §F.1); 46 Cultivera product names did before normalisation (`normalized_cultivera/PRODUCTS_change_report.csv`, "Old Name"), so E42 is a live guard, not a theoretical one. Descriptions with commas are common in our own data and are now rewritten, not withheld.
+
+U-17 is now contradicted: the echo listed 3 of 8 rows, not all 8. P-04b optional step B settles whether the other 5 were filed.
+
+Tests: `tests/compliance/ccrs-csv-fidelity.test.ts` (rewritten; includes the P20261005A evidence as a fixture: the sent file must now FAIL our verifier with exactly 3 column-shift errors), `tests/compliance/p04-fidelity-probe.test.ts` (P-04b: one Product file per case, no commas anywhere, Q1/Q2 isolated); goldens regenerated (3 comma values → `;`/no comma, hand-verified diff); mutations M69–M76.
+
 ### A.5 S-11 ledger routing (Strain casing, filed Product name, Operation) — DONE (2026-10-06, Bible v2 Part 07 S-11)
 
 **What the delivery says (measured, `analysis3/s11/`):**
@@ -213,6 +233,7 @@ fixtures rather than inferred.
 | 9 | `CheckSum and number of records don't match` | Inventory | **E19** | undocumented vocabulary; file-fatal |
 | 10 | `Inventory Adjustment Details missing` | InventoryAdjustment | E13 | confirmed |
 | 11 | `Only Medical Sales Excise tax can be 0` | Sale | E12 | **differs from prediction**; names *Excise* explicitly → `OtherTax` **is** the 37% excise and 0.00 is legal only when medical |
+| 12 | `Operation is invalid must be Insert, Update or Delete` | Product | **E42** | observed P20261005A: the symptom of a comma inside a value — CCRS split the row, the Operation column received a shifted blank. Not an Operation bug |
 
 ### Coverage against the 14 real rejections
 

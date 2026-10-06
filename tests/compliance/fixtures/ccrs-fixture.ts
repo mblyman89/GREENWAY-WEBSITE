@@ -49,7 +49,7 @@ export const FIXTURE_ROWS: Record<CcrsRetailerFileType, string[][]> = {
       "EndProduct",
       "Usable Cannabis",
       "Blue Dream Flower 3.5g T25",
-      "Blue Dream indoor flower, 3.5 g jar",
+      "Blue Dream indoor flower; 3.5 g jar",
       "3.5",
       "PROD-1",
       "Jane Budtender",
@@ -63,7 +63,7 @@ export const FIXTURE_ROWS: Record<CcrsRetailerFileType, string[][]> = {
       "EndProduct",
       "Concentrate for Inhalation",
       "GDP Live Resin 1g T78",
-      "Granddaddy Purple live resin, 1 g",
+      "Granddaddy Purple live resin; 1 g",
       "1",
       "PROD-2",
       "Jane Budtender",
@@ -155,11 +155,12 @@ export const FIXTURE_ROWS: Record<CcrsRetailerFileType, string[][]> = {
       "1", "23.36", "0.00", "0.00", "0.00",
       "ORD-1002", "ORD-1002-e5f6a7b8", "Jane Budtender", "06/15/2025", "", "", "Insert",
     ],
-    // A name containing a comma exercises the quoting rule of ccrsCell.
+    // S-09b: CCRS splits on every comma (PREprod P20261005A), so no fixture
+    // value may contain one; this row keeps a two-part CreatedBy without it.
     [
       FIXTURE_LICENSE, "", "INV-1", "", "RecreationalRetail", "06/15/2025",
       "1", "8.20", "1.02", "0.67", "2.66",
-      "ORD-1003", "ORD-1003-c9d0e1f2", "Smith, Jane", "06/15/2025", "", "", "Insert",
+      "ORD-1003", "ORD-1003-c9d0e1f2", "Smith Jane", "06/15/2025", "", "", "Insert",
     ],
   ],
 };

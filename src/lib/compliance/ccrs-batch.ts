@@ -30,8 +30,11 @@ import {
   classifyWarning,
   verifySaleNumericColumns,
   splitCsvLine,
-  withholdLineBreakRows,
-  e38Message,
+  withholdUnencodableRows,
+  unencodableMessage,
+  freeTextRewriteMessage,
+  CCRS_UNENCODABLE_CODE,
+  CCRS_FREE_TEXT_COLUMNS,
   CCRS_COLUMNS,
   CCRS_PRODUCT_NAME_MAX,
   CCRS_PRODUCT_DESCRIPTION_MAX,
@@ -784,23 +787,46 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
     warnings: string[],
     skipped = 0,
   ) => {
-    // S-09 E38: a value with a line break cannot be one CSV record; withhold
-    // the row and report it (never silently dropped, never sent corrupted).
-    const e38 = withholdLineBreakRows(rawRows, CCRS_COLUMNS[type], (r, i) => {
-      const ext = CCRS_COLUMNS[type].indexOf("ExternalIdentifier");
-      const name = CCRS_COLUMNS[type].indexOf(type === "Strain" ? "Strain" : type === "Area" ? "Area" : "Name");
-      return (ext >= 0 && r[ext]) || (name >= 0 && r[name]) || `row ${i + 1}`;
-    });
+    // S-09 E38 / S-09b E42-E44: CCRS splits every row on every comma and does
+    // not honour quoting (PREprod P20261005A). Free-text columns are rewritten
+    // (`,`→`;`, `"`→`'`, reported); a line break, or a comma/quote in any other
+    // column, withholds the row (never silently dropped, never sent shifted).
+    // A product withheld for its Name also withholds its lots: the same Name
+    // sits in Inventory.Product, so those rows are caught here too.
+    const e38 = withholdUnencodableRows(
+      rawRows,
+      CCRS_COLUMNS[type],
+      (r, i) => {
+        const ext = CCRS_COLUMNS[type].indexOf("ExternalIdentifier");
+        const name = CCRS_COLUMNS[type].indexOf(type === "Strain" ? "Strain" : type === "Area" ? "Area" : "Name");
+        return (ext >= 0 && r[ext]) || (name >= 0 && r[name]) || `row ${i + 1}`;
+      },
+      CCRS_FREE_TEXT_COLUMNS[type] ?? [],
+    );
     const rows = e38.rows;
-    if (e38.withheld.length > 0) {
+    for (const reason of ["line break", "comma", "double quote"] as const) {
+      const these = e38.withheld.filter((w) => w.reason === reason);
+      if (these.length === 0) continue;
+      const code = CCRS_UNENCODABLE_CODE[reason];
       syncIssues.push({
         severity: "error",
         file: type,
-        code: "E38_FIELD_HAS_LINE_BREAK",
-        specPin: specPinFor("E38_FIELD_HAS_LINE_BREAK"),
-        count: e38.withheld.length,
-        rows: e38.withheld.map((w) => ({ id: w.label, label: w.label, detail: `${w.column} contains a line break` })),
-        message: e38Message(type, e38.withheld),
+        code,
+        specPin: specPinFor(code),
+        count: these.length,
+        rows: these.map((w) => ({ id: w.label, label: w.label, detail: `${w.column} contains a ${reason}` })),
+        message: unencodableMessage(type, these),
+      });
+    }
+    if (e38.rewritten.length > 0) {
+      syncIssues.push({
+        severity: "warning",
+        file: type,
+        code: "E44_FREE_TEXT_REWRITTEN",
+        specPin: specPinFor("E44_FREE_TEXT_REWRITTEN"),
+        count: e38.rewritten.length,
+        rows: e38.rewritten.map((w) => ({ id: w.label, label: w.label, detail: `${w.column}: "${w.before}" → "${w.after}"` })),
+        message: freeTextRewriteMessage(type, e38.rewritten),
       });
     }
     files.push({

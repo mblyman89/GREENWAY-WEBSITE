@@ -63,6 +63,9 @@ export const CCRS_ISSUE_CODES = [
   "E39_STRAIN_CASE_VARIANT",
   "E40_PRODUCT_NAME_FROM_LEDGER",
   "E41_LEDGER_WITHHELD",
+  "E42_FIELD_HAS_COMMA",
+  "E43_FIELD_HAS_DOUBLE_QUOTE",
+  "E44_FREE_TEXT_REWRITTEN",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -387,6 +390,17 @@ const PINS: Record<CcrsIssueCode, string> = {
   // S-11: Insert/Update/Delete definitions — an Update needs an existing record.
   // Blocking: the row's CCRS state is unproven, so it is withheld.
   E41_LEDGER_WITHHELD: "[G L0246-L0248]",
+  // S-09b: "Do not add/remove columns." CCRS splits each row on EVERY comma
+  // and ignores CSV quoting (observed PREprod P20261005A: a quoted comma
+  // shifted the row and it was rejected "Operation is invalid"), so a comma
+  // in any value adds a column. Blocking: the row is withheld.
+  E42_FIELD_HAS_COMMA: "[G L0167-L0169]",
+  // S-09b: a `"` that is part of a value — whether CCRS stores it unchanged is
+  // unproven (U-44, PREprod P-04b). Blocking until that run closes U-44.
+  E43_FIELD_HAS_DOUBLE_QUOTE: "[G L0167-L0169]",
+  // S-09b: Product.Description / AdjustmentDetail are free text that nothing
+  // joins on, so `,`→`;` and `"`→`'` instead of withholding. Advisory.
+  E44_FREE_TEXT_REWRITTEN: "[G L0167-L0169]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {
