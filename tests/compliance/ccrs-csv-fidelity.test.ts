@@ -8,8 +8,10 @@
  * The fixture holds REAL values from the LCB CCRS Service Desk delivery of
  * 2026-09-18 (license 413541): names CCRS already stores with literal double
  * quotes, TABs, mojibake, edge spaces, double spaces and line breaks. The old
- * encoder STRIPPED double quotes, so 14 live Inventory rows could never be
- * referenced in the exact spelling CCRS holds. These tests prove every one of
+ * encoder STRIPPED double quotes, so no name containing one could be sent in
+ * its exact spelling. (S-11 correction, U-42: the 14 quote-wrapped Inventory
+ * report names are stored WITHOUT quotes per the Product report; the fixture
+ * keeps them as real report values.) These tests prove every one of
  * those values now survives encode → parse byte-for-byte, and that line-break
  * values are withheld (reported, never sent corrupted, never silently lost).
  */

@@ -6,8 +6,10 @@
  * a TAB, non-ASCII, mojibake, a double space, a comma or a trailing space,
  * does CCRS store it byte-for-byte, so an Inventory row referencing that exact
  * name binds to it? Names must match in the "same format and spelling"
- * [G L0580-L0583]; the live record holds 14 live Inventory rows with a `"` in
- * the Product name, so the cleanup depends on this answer.
+ * [G L0580-L0583]. (S-11 correction: the 14 "quoted" Inventory names in the
+ * LCB report are stored WITHOUT quotes per the Product report — U-42. P-04 still
+ * settles whether every character class survives upload, which every future
+ * Product name and the TAB/non-ASCII/double-space filed names depend on.)
  *
  * HOW: Strain + Area + Product (all cases) → wait ≥10 min [G L0530] → one
  * Inventory Insert file PER CASE (a file is rejected as a whole, U-17, so one
@@ -114,7 +116,7 @@ export function p04Manifest(run: string, license: string, files: P04File[]): str
   L.push("|---|---|---|---|");
   for (const c of P04_CASES) L.push(`| ${c.code} | ${c.what} | \`${c.mirrors.replace(/\t/g, "\\t")}\` | \`${JSON.stringify(c.name(run))}\` |`);
   L.push("\n- **Inventory file for a case succeeds** → CCRS stored that Product name byte-for-byte and the join works. U-27 is closed for that character class.");
-  L.push("- **It fails with `Invalid Product`** → CCRS altered the name on the way in. Paste the email; S-09 then needs a per-character rule for that class before the cleanup touches those 14 live rows.");
+  L.push("- **It fails with `Invalid Product`** → CCRS altered the name on the way in. Paste the email; S-09 then needs a per-character rule for that class before the cleanup touches any filed name of that class.");
   L.push("- **C8 (trailing space)** is the only case where both outcomes are plausible: if CCRS trims on store, C8 fails `Invalid Product`. That tells us to reference the one filed edge-space value without its trailing space.");
   L.push("- **The Product file (3) fails as a whole** → the email's attached CSV names the bad row(s); paste it. Do not continue to step 2.");
   L.push("- **Update file succeeds** → every name round-trips a second time; the Update path is safe for the cleanup.\n");

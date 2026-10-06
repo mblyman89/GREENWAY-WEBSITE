@@ -56,6 +56,7 @@ import { validateName, suggestName, type Cannabinoid } from "@/lib/naming/conven
 import { composeCcrsProductName, disambiguateCcrsName } from "@/lib/compliance/ccrs-product-name-core";
 import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
+import { applyProductPlan, planLedgerBatch, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
 
 export type CcrsFile = {
   type: CcrsRetailerFileType;
@@ -196,6 +197,7 @@ function buildStrainFile(
   submittedBy: string,
   createdBy: string,
   createdDate: string,
+  plan: LedgerPlan,
 ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
   const warnings: string[] = [];
   const seen = new Set<string>();
@@ -203,11 +205,15 @@ function buildStrainFile(
   const defaulted: string[] = [];
   const reserved: CcrsIssueRow[] = [];
   for (const it of items) {
-    const strain = (it.strain_name ?? "").trim();
-    if (!strain) continue;
-    const key = strain.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const raw = (it.strain_name ?? "").trim();
+    if (!raw) continue;
+    // S-11: the plan decides. A strain already on file in ANY casing is never
+    // re-sent (Strain has no Operation [G L0319-L0320]); a case variant of a
+    // filed or already-emitted strain is never sent at all [BRIAN A16].
+    const strain = plan.strainCanonical.get(raw) ?? raw;
+    if (!plan.strainEmit.has(strain)) continue;
+    if (seen.has(strain)) continue;
+    seen.add(strain);
     // E11 [G L0358] "Strain name is invalid, cannot be Unknown, THC, or Other."
     // Exact match only — "Other Kush" is a real strain and must still ship.
     if (isReservedStrainName(strain)) {
@@ -234,6 +240,21 @@ function buildStrainFile(
   }
   if (rows.length === 0) warnings.push("No named strains found in the published menu.");
   const issues: CcrsSyncIssue[] = [];
+  if (plan.strainCaseVariants.length > 0) {
+    issues.push({
+      severity: "warning",
+      file: "Strain",
+      code: "E39_STRAIN_CASE_VARIANT",
+      specPin: specPinFor("E39_STRAIN_CASE_VARIANT"),
+      count: plan.strainCaseVariants.length,
+      rows: plan.strainCaseVariants.map((v) => ({
+        id: v.ours,
+        label: v.ours,
+        detail: `written as "${v.value}" (${v.source === "ledger" ? "the spelling already filed in CCRS" : "the first spelling in this batch"})`,
+      })),
+      message: `${plan.strainCaseVariants.length} strain name(s) differ from another only by capital letters. CCRS must never receive the same strain with a different capitalization (LCB Service Desk: "Dutch Treat vs Dutch treat"), so each was written with one spelling everywhere and no extra Strain row was sent. Fix the spelling on the product to match, so this warning goes away.`,
+    });
+  }
   if (reserved.length > 0) {
     issues.push({
       severity: "error",
@@ -278,6 +299,8 @@ function buildProductFile(
   rows: string[][];
   warnings: string[];
   nameByProductKey: Map<string, string>;
+  /** S-11: the product key behind each row in `rows`, same order. */
+  keys: string[];
   issues: CcrsSyncIssue[];
 } {
   const warnings: string[] = [];
@@ -301,6 +324,7 @@ function buildProductFile(
   const seen = new Set<string>();
   const usedNamesLower = new Set<string>();
   const rows: string[][] = [];
+  const keys: string[] = [];
   for (const it of items) {
     const key = (it.source_item_id ?? "").trim();
     if (!key) continue;
@@ -419,6 +443,7 @@ function buildProductFile(
       "",
       "Insert",
     ]);
+    keys.push(key);
   }
   if (rows.length === 0) warnings.push("No products found in the published menu.");
   // Cap the warning noise (errors first so critical mapping issues aren't buried).
@@ -451,15 +476,14 @@ function buildProductFile(
       message: `${e10Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no Description, which CCRS requires for those two types [G L0482-L0483]. Add a short product description (250 characters max) and rebuild.`,
     });
   }
-  return { rows, warnings: dedupWarnings, nameByProductKey, issues };
+  return { rows, warnings: dedupWarnings, nameByProductKey, keys, issues };
 }
 
 function buildInventoryFile(
   lots: LotRow[],
-  itemsByKey: Map<string, MenuItemRow>,
   license: string,
   createdBy: string,
-  nameByProductKey: Map<string, string>,
+  plan: LedgerPlan,
 ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
   const warnings: string[] = [];
   const rows: string[][] = [];
@@ -471,6 +495,9 @@ function buildInventoryFile(
   // intake and Cultivera-import lot is assigned one when it is created, so this
   // only fires on an anomaly — exactly the lot an employee must look at.
   const e3Rows: CcrsIssueRow[] = [];
+  // S-11: lots the ledger routing refuses (uncertain / deleted / unknown id, or
+  // a filed lot whose filed product cannot be proven) — never guessed at.
+  const e41Rows: CcrsIssueRow[] = [];
   for (const l of lots) {
     const ext = assignedInventoryExternalId(l);
     if (!ext) {
@@ -482,12 +509,20 @@ function buildInventoryFile(
       continue;
     }
     const key = (l.pos_product_key ?? "").trim();
-    const item = key ? itemsByKey.get(key) : undefined;
-    const strain = (item?.strain_name ?? "").trim();
+    const planned = plan.lots.get(l.id);
+    if (!planned) throw new Error(`S-11 invariant: lot ${l.id} has no ledger plan`);
+    if (planned.action === "withhold") {
+      e41Rows.push({ id: l.id, label: l.lot_code ?? ext, detail: planned.reason });
+      continue;
+    }
+    // S-11: the Strain cell carries the ONE spelling the plan chose (the filed
+    // casing when CCRS has it) — Valid Values: Strain.Strain [G L0552].
+    const strain = planned.strain;
     // CCRS joins Inventory.Product -> Product.Name by the EXACT name string
-    // (NOT by ExternalIdentifier). Write the identical Name recorded by
-    // buildProductFile. See docs/CCRS_PRODUCT_NAMING_RESEARCH.md.
-    const productName = nameByProductKey.get(key) ?? "";
+    // (NOT by ExternalIdentifier) [G L0580-L0583]. For a lot CCRS already
+    // holds, that is the name its FILED product carries; otherwise the Name
+    // buildProductFile wrote. See docs/CCRS_PRODUCT_NAMING_RESEARCH.md.
+    const productName = planned.productName;
     if (!productName) {
       warnings.push(
         `Lot ${l.id}: no matching Product.Name for key "${key}" — Inventory.Product would be blank/invalid. Ensure the product is in the published menu.`,
@@ -541,7 +576,7 @@ function buildInventoryFile(
       ccrsDate(ccrsInventoryCreatedDate(l)),
       "",
       "",
-      "Insert",
+      planned.op,
     ]);
     // S-10: filed ids carry dots (4,295 in the LCB delivery) and are legal
     // [G L0224]; only CSV-breaking characters and > 100 chars are flagged.
@@ -559,6 +594,17 @@ function buildInventoryFile(
       count: e3Rows.length,
       rows: e3Rows,
       message: `${e3Rows.length} lot(s) have no CCRS inventory identifier assigned, so they were left out of Inventory.csv. ExternalIdentifier is required on every row [G L0224-L0225]. Open each lot and enter the identifier it was filed under in CCRS (for stock Cultivera reported, that is the barcode exactly as printed), then rebuild.`,
+    });
+  }
+  if (e41Rows.length > 0) {
+    issues.push({
+      severity: "error",
+      file: "Inventory",
+      code: "E41_LEDGER_WITHHELD",
+      specPin: specPinFor("E41_LEDGER_WITHHELD"),
+      count: e41Rows.length,
+      rows: e41Rows,
+      message: `${e41Rows.length} lot(s) were left out of Inventory.csv because we cannot prove what CCRS holds for them. Insert creates a record and Update alters "an existing record indicated by external identifier" [G L0246-L0248], so sending either on a guess risks a rejected file. Each row says why; reconcile it, then rebuild.`,
     });
   }
   if (e8Rows.length > 0) {
@@ -664,16 +710,60 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
   const hasQuarantine = lots.some((l) => l.status === "quarantine" || l.status === "recalled");
 
   // --- Build each master-data file ------------------------------------------
-  const strain = buildStrainFile(items, license.licenseNumber, submittedBy, createdBy, createdDate);
+  // S-11: one pure plan routes every Strain/Product/Inventory row. The ledger
+  // (what CCRS already holds) is loaded by S-12; until then `ledger` is null and
+  // the plan reproduces the pre-S-11 rows exactly (every row Insert, our ids),
+  // except that a strain's case variants now share ONE spelling [BRIAN A16].
+  const ledger: LedgerView | null = null;
+  const productBuild = buildProductFile(items, lots, license.licenseNumber, createdBy, createdDate);
+  const plan = planLedgerBatch({
+    view: ledger,
+    lots: lots
+      .map((l) => ({ l, ext: assignedInventoryExternalId(l) }))
+      .filter((x): x is { l: LotRow; ext: string } => !!x.ext)
+      .map(({ l, ext }) => {
+        const key = (l.pos_product_key ?? "").trim();
+        return {
+          lotId: l.id,
+          label: l.lot_code ?? ext,
+          inventoryExternalId: ext,
+          productKey: key,
+          strain: ((key ? itemsByKey.get(key) : undefined)?.strain_name ?? "").trim(),
+        };
+      }),
+    products: productBuild.keys.map((key, i) => ({
+      key,
+      legacyId: productBuild.rows[i][CCRS_COLUMNS.Product.indexOf("ExternalIdentifier")],
+      ourName: productBuild.nameByProductKey.get(key) ?? "",
+    })),
+    strains: items.map((it) => (it.strain_name ?? "").trim()).filter(Boolean),
+  });
+  const strain = buildStrainFile(items, license.licenseNumber, submittedBy, createdBy, createdDate, plan);
   const area = buildAreaFile(hasQuarantine, license.licenseNumber, createdBy, createdDate);
-  const product = buildProductFile(items, lots, license.licenseNumber, createdBy, createdDate);
-  const inventory = buildInventoryFile(
-    lots,
-    itemsByKey,
-    license.licenseNumber,
-    createdBy,
-    product.nameByProductKey,
-  );
+  const product = { ...productBuild, ...applyProductPlan(productBuild.rows, productBuild.keys, plan) };
+  const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan);
+  if (product.withheld.length > 0) {
+    syncIssues.push({
+      severity: "error",
+      file: "Product",
+      code: "E41_LEDGER_WITHHELD",
+      specPin: specPinFor("E41_LEDGER_WITHHELD"),
+      count: product.withheld.length,
+      rows: product.withheld.map((w) => ({ id: w.key, label: w.label, detail: w.reason })),
+      message: `${product.withheld.length} product(s) were left out of Product.csv because no CCRS Product id is assigned or its CCRS status is unproven [G L0246-L0248]. Lots of these products are withheld from Inventory.csv too.`,
+    });
+  }
+  if (plan.nameFromLedger.length > 0) {
+    syncIssues.push({
+      severity: "warning",
+      file: "Inventory",
+      code: "E40_PRODUCT_NAME_FROM_LEDGER",
+      specPin: specPinFor("E40_PRODUCT_NAME_FROM_LEDGER"),
+      count: plan.nameFromLedger.length,
+      rows: plan.nameFromLedger.map((n) => ({ id: n.lotId, label: n.label, detail: `ours "${n.ours}" → filed "${n.filed}"` })),
+      message: `${plan.nameFromLedger.length} lot(s) are already filed in CCRS under a product whose name differs from ours. Inventory must name the product "in the same format and spelling as previously submitted" [G L0580-L0583], so the filed name was used. To change the name in CCRS, choose Rename for that product.`,
+    });
+  }
 
   // S-02: coded, pinned pre-flight errors from the master-data builders. These
   // are BLOCKING — the submit gate refuses to build the zip while any remain,

@@ -60,6 +60,9 @@ export const CCRS_ISSUE_CODES = [
   "E12_EXCISE_NOT_37PCT",
   "E13_ADJUSTMENT_DETAIL_MISSING",
   "E38_FIELD_HAS_LINE_BREAK",
+  "E39_STRAIN_CASE_VARIANT",
+  "E40_PRODUCT_NAME_FROM_LEDGER",
+  "E41_LEDGER_WITHHELD",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -374,6 +377,16 @@ const PINS: Record<CcrsIssueCode, string> = {
   // columns, then one with too many). Whether CCRS's reader honours a quoted
   // line break is unknown (U-25), so such a row is withheld.
   E38_FIELD_HAS_LINE_BREAK: "[G L0167-L0169]",
+  // S-11: "Duplicate Strain. The Strain must be unique for the LicenseNumber."
+  // plus Brian A16 (never a capitalization variant). Advisory: the builder has
+  // already written one spelling everywhere.
+  E39_STRAIN_CASE_VARIANT: "[G L0359]",
+  // S-11: Inventory.Product must match the product name "in the same format and
+  // spelling as previously submitted". Advisory: the filed name was used.
+  E40_PRODUCT_NAME_FROM_LEDGER: "[G L0580-L0583]",
+  // S-11: Insert/Update/Delete definitions — an Update needs an existing record.
+  // Blocking: the row's CCRS state is unproven, so it is withheld.
+  E41_LEDGER_WITHHELD: "[G L0246-L0248]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {

@@ -513,6 +513,7 @@ import { __runAuditHubGuidanceCoreTests } from "../../src/lib/inventory/audit-hu
 // lives in migration 0192 and is exercised by scripts/accounting.
 import { __runInventoryAuditPostCoreTests } from "../../src/lib/inventory/inventory-audit-post-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
+import { __runCcrsLedgerCoreTests } from "../../src/lib/compliance/ccrs-ledger-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
 import { __runApplySettingsTests } from "../../src/lib/syndication/apply-settings-core";
@@ -1262,6 +1263,7 @@ __runLiquidVolumeTests();
   }
   __runSyncPlanTests();
   __runPreflightTests();
+  __runCcrsLedgerCoreTests();
   __runRichnessTests();
   // Floored as of L-7 -- see the note on `__runSyncSettingsTests`. This core now
   // also resolves the automatic sync schedule, and the round trip it asserts
