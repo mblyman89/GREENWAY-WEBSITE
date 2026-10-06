@@ -130,9 +130,9 @@ describe("ccrsDate uses the PACIFIC calendar day", () => {
 });
 
 describe("ccrsCell — written the way CCRS reads (S-09b)", () => {
-  it("never adds quotes; refuses a comma or double quote (CCRS splits on every comma, P20261005A)", () => {
+  it("never adds quotes; refuses a comma (CCRS splits on every comma, P20261005A); a double quote passes through (P20261006A)", () => {
     expect(() => ccrsCell("Smith, Jane")).toThrow(/comma/);
-    expect(() => ccrsCell('He said "hi"')).toThrow(/double quote/);
+    expect(ccrsCell('He said "hi"')).toBe('He said "hi"');
     expect(ccrsCell("Trailing ")).toBe("Trailing ");
     expect(ccrsCell(null)).toBe("");
   });

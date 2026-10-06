@@ -74,8 +74,8 @@ export async function GET() {
     }
   }
 
-  // S-09 E38 / S-09b E42-E43: a correction carrying a line break, comma or
-  // double quote cannot be one CCRS record (CCRS splits on every comma).
+  // S-09 E38 / S-09b E42: a correction carrying a line break or comma cannot
+  // be one CCRS record (CCRS splits on every comma). A `"` is fine (S-09c).
   // Withhold it and leave it PENDING (never marked exported) so it is fixed
   // and re-sent, not lost. rows[i] belongs to includedIds[i].
   const e38 = withholdUnencodableRows(rows, CCRS_COLUMNS.Sale, (_r, i) => includedIds[i]);

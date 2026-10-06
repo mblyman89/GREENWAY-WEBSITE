@@ -26,8 +26,9 @@ export async function saveLicenseSettingsAction(formData: FormData): Promise<Sav
   }
   // S-09b: SubmittedBy is written into row 1 (and CreatedBy) of every CCRS
   // file, and CCRS splits every row on every comma (PREprod P20261005A).
-  if (/[,"]/.test(submittedBy)) {
-    return { ok: false, error: "Submitted-by name cannot contain a comma or a double quote — CCRS splits every row on every comma." };
+  // A `"` is accepted by CCRS (S-09c, PREprod P20261006A), so only a comma is refused.
+  if (/,/.test(submittedBy)) {
+    return { ok: false, error: "Submitted-by name cannot contain a comma — CCRS splits every row on every comma." };
   }
 
   try {

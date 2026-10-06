@@ -485,8 +485,8 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     );
   }
 
-  // S-09 E38 / S-09b E42-E43: a value with a line break, comma or double
-  // quote cannot be one CCRS record (CCRS splits on every comma).
+  // S-09 E38 / S-09b E42: a value with a line break or comma cannot be one
+  // CCRS record (CCRS splits on every comma). A `"` is fine (S-09c).
   const e38 = withholdUnencodableRows(rows, CCRS_COLUMNS.Sale, (r, i) => {
     // Sale has no plain ExternalIdentifier column; the line id is SaleDetailExternalIdentifier.
     const ext = CCRS_COLUMNS.Sale.indexOf("SaleDetailExternalIdentifier");

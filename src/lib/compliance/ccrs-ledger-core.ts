@@ -158,7 +158,8 @@ export function routeOperation(view: LedgerView, t: LedgerFileType, id: string, 
 /**
  * An EVENT row (Sale, Adjustment, Transfer) is always an Insert, but the lot it
  * names must be one CCRS holds, else CCRS answers "Invalid
- * InventoryExternalIdentifier" for the whole file.
+ * InventoryExternalIdentifier" for that row (CCRS accepts row-by-row,
+ * U-17 CLOSED FALSE).
  */
 export function routeReference(view: LedgerView, t: LedgerFileType, id: string): { ok: boolean; state: LedgerState | null } {
   const e = ledgerEntry(view, t, id);

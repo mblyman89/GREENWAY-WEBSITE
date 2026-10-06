@@ -10,7 +10,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CCRS_COLUMNS, ccrsReaderSplit, verifyCcrsFile } from "@/lib/compliance/ccrs-batch-core";
+import { CCRS_COLUMNS, ccrsCell, ccrsReaderSplit, verifyCcrsFile } from "@/lib/compliance/ccrs-batch-core";
 import { buildP04, P04_CASES, p04Manifest, RUN_RE } from "../../scripts/compliance/generate-p04-fidelity-probe";
 
 const RUN = "P20261015A";
@@ -47,16 +47,20 @@ describe("P-04b probe files", () => {
     }
   });
 
-  it("every plain file passes our own verifier; the Q files fail ONLY the double-quote rule", () => {
+  it("every file, the Q files included, passes our own verifier (S-09c: a quote is no longer an error)", () => {
     for (const f of files) {
       const errs = verifyCcrsFile(f.type, f.csv).filter((p) => p.severity === "error");
-      const q = f.cases.length === 1 && P04_CASES.find((c) => c.code === f.cases[0])?.rawQuote;
-      if (q) {
-        expect(errs.length).toBe(1);
-        expect(errs[0].message).toMatch(/double quote/);
-      } else {
-        expect(errs).toEqual([]);
-      }
+      expect(errs).toEqual([]);
+    }
+  });
+
+  it("S-09c: the production encoder now writes the Q names itself, byte-identical to the token-swapped files that PREprod accepted", () => {
+    for (const code of ["Q1", "Q2"]) {
+      const c = P04_CASES.find((x) => x.code === code)!;
+      const name = c.name(RUN);
+      expect(ccrsCell(name)).toBe(name);
+      const f = files.find((x) => x.type === "Product" && x.cases[0] === code)!;
+      expect(f.csv).toContain(`,${name},`);
     }
   });
 

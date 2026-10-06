@@ -1,23 +1,23 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-10-06 19:45Z at commit `813a0853ba335c3a7cc2589231be47392ad08fff` by `build_atlas_part.py`.
+Generated 2026-10-06 22:09Z at commit `88bce0c30815adeafa136c4ce700c7fb2755baf2` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 813a085 -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 88bce0c -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
 ## 0. Module inventory (line counts + every `export` with its line)
 
-### `src/lib/compliance/ccrs-batch.ts` (957 L)
+### `src/lib/compliance/ccrs-batch.ts` (959 L)
 
 - L64: `export type CcrsFile = {`
 - L76: `export type CcrsSyncIssue = {`
 - L93: `export type CcrsBatch = {`
-- L642: `export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {`
+- L644: `export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {`
 
-### `src/lib/compliance/ccrs-batch-core.ts` (1518 L)
+### `src/lib/compliance/ccrs-batch-core.ts` (1516 L)
 
 - L27: `export type CcrsRetailerFileType =`
 - L37: `export const CCRS_COLUMNS: Record<CcrsRetailerFileType, readonly string[]> = {`
@@ -44,30 +44,30 @@ Generated 2026-10-06 19:45Z at commit `813a0853ba335c3a7cc2589231be47392ad08fff`
 - L570: `export function uploadGroupOf(type: CcrsRetailerFileType): number {`
 - L582: `export class CcrsEncodeError extends Error {`
 - L590: `export function ccrsHasLineBreak(v: unknown): boolean {`
-- L613: `export type CcrsUnencodableReason = "line break" | "comma" | "double quote";`
-- L616: `export function ccrsUnencodableReason(v: unknown): CcrsUnencodableReason | null {`
-- L633: `export const CCRS_FREE_TEXT_COLUMNS: Partial<Record<CcrsRetailerFileType, readonly string[]>> = {`
-- L639: `export function ccrsFreeText(v: string): string {`
-- L643: `export type CcrsWithheldRow = { label: string; column: string; value: string; reason: CcrsUnencodableReason };`
-- L644: `export type CcrsRewrittenCell = { label: string; column: string; before: string; after: string };`
-- L657: `export function withholdUnencodableRows(`
-- L697: `export const CCRS_UNENCODABLE_CODE = {`
+- L615: `export type CcrsUnencodableReason = "line break" | "comma";`
+- L618: `export function ccrsUnencodableReason(v: unknown): CcrsUnencodableReason | null {`
+- L635: `export const CCRS_FREE_TEXT_COLUMNS: Partial<Record<CcrsRetailerFileType, readonly string[]>> = {`
+- L641: `export function ccrsFreeText(v: string): string {`
+- L645: `export type CcrsWithheldRow = { label: string; column: string; value: string; reason: CcrsUnencodableReason };`
+- L646: `export type CcrsRewrittenCell = { label: string; column: string; before: string; after: string };`
+- L659: `export function withholdUnencodableRows(`
+- L699: `export const CCRS_UNENCODABLE_CODE = {`
 - L713: `export function unencodableMessage(fileType: string, withheld: { label: string; column: string; reason?: CcrsUnencodableReason }[]): string {`
 - L728: `export function freeTextRewriteMessage(fileType: string, rewritten: CcrsRewrittenCell[]): string {`
-- L746: `export function ccrsCell(v: unknown): string {`
-- L762: `export function ccrsReaderSplit(line: string): string[] {`
-- L773: `export function ccrsDate(iso: string | Date): string {`
-- L795: `export function ccrsFileStamp(now: Date = new Date()): string {`
-- L808: `export function ccrsFileName(`
-- L825: `export function assembleCcrsFile(opts: {`
-- L868: `export function padHeaderRowsForTemplates(`
-- L906: `export function verifySaleNumericColumns(rows: ReadonlyArray<readonly string[]>): CcrsBatchProblem[] {`
-- L943: `export type CcrsBatchProblem = {`
-- L949: `export type CcrsBatchVerification = {`
-- L960: `export function splitCsvLine(line: string): string[] {`
-- L1006: `export function verifyCcrsFile(`
-- L1149: `export function verifyCcrsBatch(`
-- L1166: `export function __runCcrsBatchCoreTests(): void {`
+- L747: `export function ccrsCell(v: unknown): string {`
+- L763: `export function ccrsReaderSplit(line: string): string[] {`
+- L774: `export function ccrsDate(iso: string | Date): string {`
+- L796: `export function ccrsFileStamp(now: Date = new Date()): string {`
+- L809: `export function ccrsFileName(`
+- L826: `export function assembleCcrsFile(opts: {`
+- L869: `export function padHeaderRowsForTemplates(`
+- L907: `export function verifySaleNumericColumns(rows: ReadonlyArray<readonly string[]>): CcrsBatchProblem[] {`
+- L944: `export type CcrsBatchProblem = {`
+- L950: `export type CcrsBatchVerification = {`
+- L961: `export function splitCsvLine(line: string): string[] {`
+- L1007: `export function verifyCcrsFile(`
+- L1147: `export function verifyCcrsBatch(`
+- L1164: `export function __runCcrsBatchCoreTests(): void {`
 
 ### `src/lib/compliance/ccrs-sales.ts` (527 L)
 
@@ -151,7 +151,7 @@ Generated 2026-10-06 19:45Z at commit `813a0853ba335c3a7cc2589231be47392ad08fff`
 - L138: `export function verdictSummary(v: CcrsSubmitVerdict): string {`
 - L149: `export function __runCcrsSubmitGateTests(): { passed: number; failed: number } {`
 
-### `src/lib/compliance/ccrs-inventory-adjustment-core.ts` (421 L)
+### `src/lib/compliance/ccrs-inventory-adjustment-core.ts` (423 L)
 
 - L26: `export type CcrsLicenseLike = {`
 - L36: `export const CCRS_ADJUSTMENT_REASONS = [`
@@ -159,16 +159,16 @@ Generated 2026-10-06 19:45Z at commit `813a0853ba335c3a7cc2589231be47392ad08fff`
 - L62: `export function mapAdjustmentReason(internal: string): CcrsAdjustmentReason {`
 - L101: `export function isReportableAdjustment(internal: string, qtyDelta: number): boolean {`
 - L113: `export function mmddyyyy(iso: string | Date): string {`
-- L120: `export function cell(v: unknown): string {`
-- L125: `export function adjustmentQuantity(qtyDelta: number): string {`
-- L131: `export function adjustmentDetail(note: string | null | undefined): string {`
-- L139: `export const ADJUSTMENT_COLUMNS = [`
-- L158: `export type AdjustmentSourceRow = {`
-- L173: `export type AdjustmentMapResult = {`
-- L179: `export function mapAdjustmentRow(`
-- L241: `export function buildAdjustmentFile(rows: string[][], license: CcrsLicenseLike): string {`
-- L250: `export function makeAdjustmentFileName(licenseNumber: string): string {`
-- L258: `export function __runCcrsAdjustmentTests(): void {`
+- L121: `export function cell(v: unknown): string {`
+- L126: `export function adjustmentQuantity(qtyDelta: number): string {`
+- L132: `export function adjustmentDetail(note: string | null | undefined): string {`
+- L140: `export const ADJUSTMENT_COLUMNS = [`
+- L159: `export type AdjustmentSourceRow = {`
+- L174: `export type AdjustmentMapResult = {`
+- L180: `export function mapAdjustmentRow(`
+- L242: `export function buildAdjustmentFile(rows: string[][], license: CcrsLicenseLike): string {`
+- L251: `export function makeAdjustmentFileName(licenseNumber: string): string {`
+- L259: `export function __runCcrsAdjustmentTests(): void {`
 
 ### `src/lib/compliance/ccrs-inventory-adjustment.ts` (139 L)
 
@@ -836,119 +836,119 @@ Generated 2026-10-06 19:45Z at commit `813a0853ba335c3a7cc2589231be47392ad08fff`
 `src/lib/compliance/ccrs-batch.ts` L540-L652 — buildCcrsBatch (part 2) — InventoryTransfer emitted EMPTY with an explanatory note (guide p.33 L1162 says it 'is required weekly by any licensed facility that receives inventory'); sort; E3; orphan products; verifySaleNumericColumns; WARNING_CAP_PER_FILE.
 
 ```ts
- 540|     const initialQty = l.received_qty ?? 0;
- 541|     const onHandQty = l.on_hand_qty ?? 0;
- 542|     const verdict = inventoryRowVerdict({
- 543|       id: l.id,
- 544|       label: l.lot_code ?? ext,
- 545|       initialQty,
- 546|       onHandQty,
- 547|       totalCostMinorUnits: totalCostMinor,
- 548|       isSample: l.is_sample === true,
- 549|     });
- 550|     if (!verdict.emit) {
- 551|       if (verdict.code === "E8_ONHAND_GT_INITIAL") e8Rows.push(verdict.row);
- 552|       else e7Rows.push(verdict.row);
- 553|       continue;
- 554|     }
- 555| 
- 556|     rows.push([
- 557|       license,
- 558|       strain,
- 559|       area,
- 560|       productName,
- 561|       String(l.received_qty ?? 0),
- 562|       String(l.on_hand_qty ?? 0),
- 563|       verdict.totalCost,
- 564|       "FALSE", // IsMedical — medical exemptions are tracked per-sale, not per-lot
- 565|       ext,
- 566|       createdBy,
- 567|       // SLICE 2 — report the day the lot was ACTUALLY received when we can
- 568|       // evidence it. This used to be `ccrsDate(l.created_at)` unconditionally;
- 569|       // for a lot whose POS export had a blank Received date, created_at is
- 570|       // the instant the migration ran, so the LCB was being told the lot was
- 571|       // created on import day. ccrsInventoryCreatedDate() prefers the
- 572|       // evidenced received_on and falls back to created_at only when the date
- 573|       // is genuinely unknown — and those lots are flagged for the owner rather
- 574|       // than quietly given a manufactured date.
- 575|       //
- 576|       // This is a no-op for the ~3,977 lots that DID carry a received date:
- 577|       // SLICE 1 already set their created_at to noon UTC on that same day, so
- 578|       // the emitted MM/DD/YYYY is byte-identical.
- 579|       ccrsDate(ccrsInventoryCreatedDate(l)),
- 580|       "",
- 581|       "",
- 582|       planned.op,
- 583|     ]);
- 584|     // S-10: filed ids carry dots (4,295 in the LCB delivery) and are legal
- 585|     // [G L0224]; only CSV-breaking characters and > 100 chars are flagged.
- 586|     const idErrs = validatePassThroughExternalId(ext);
- 587|     if (idErrs.length) warnings.push(`Inventory id "${ext}" ${idErrs.join(", ")}.`);
- 588|   }
- 589|   if (rows.length === 0) warnings.push("No inventory lots found to report.");
- 590|   const issues: CcrsSyncIssue[] = [];
- 591|   if (e3Rows.length > 0) {
- 592|     issues.push({
- 593|       severity: "error",
- 594|       file: "Inventory",
- 595|       code: "E3_EXTERNAL_ID_UNASSIGNED",
- 596|       specPin: specPinFor("E3_EXTERNAL_ID_UNASSIGNED"),
- 597|       count: e3Rows.length,
- 598|       rows: e3Rows,
- 599|       message: `${e3Rows.length} lot(s) have no CCRS inventory identifier assigned, so they were left out of Inventory.csv. ExternalIdentifier is required on every row [G
- 600|     });
- 601|   }
- 602|   if (e41Rows.length > 0) {
- 603|     issues.push({
- 604|       severity: "error",
- 605|       file: "Inventory",
- 606|       code: "E41_LEDGER_WITHHELD",
- 607|       specPin: specPinFor("E41_LEDGER_WITHHELD"),
- 608|       count: e41Rows.length,
- 609|       rows: e41Rows,
- 610|       message: `${e41Rows.length} lot(s) were left out of Inventory.csv because we cannot prove what CCRS holds for them. Insert creates a record and Update alters "an ex
- 611|     });
- 612|   }
- 613|   if (e8Rows.length > 0) {
- 614|     issues.push({
- 615|       severity: "error",
- 616|       file: "Inventory",
- 617|       code: "E8_ONHAND_GT_INITIAL",
- 618|       specPin: specPinFor("E8_ONHAND_GT_INITIAL"),
- 619|       count: e8Rows.length,
- 620|       rows: e8Rows,
- 621|       message: `${e8Rows.length} lot(s) report more on hand than were ever received. CCRS rejects the Inventory file with "QuanityOnHand is greater than InitialQuantity" 
- 622|     });
- 623|   }
- 624|   if (e7Rows.length > 0) {
- 625|     issues.push({
- 626|       severity: "error",
- 627|       file: "Inventory",
- 628|       code: "E7_TOTALCOST_ZERO",
- 629|       specPin: specPinFor("E7_TOTALCOST_ZERO"),
- 630|       count: e7Rows.length,
- 631|       rows: e7Rows,
- 632|       message: `${e7Rows.length} lot(s) have no cost, so TotalCost would be 0 and CCRS rejects the Inventory file ("TotalCost cannot equal 0" [G L0614]). Enter the unit c
- 633|     });
- 634|   }
- 635|   return { rows, warnings: [...new Set(warnings)].slice(0, 25), issues };
- 636| }
- 637| 
- 638| // ---------------------------------------------------------------------------
- 639| // The full batch
+ 540|     // references it fails too (CCRS accepts row-by-row: U-17 CLOSED FALSE,
+ 541|     // PREprod P20261005A/P20261006A, Brian A24).
+ 542|     const initialQty = l.received_qty ?? 0;
+ 543|     const onHandQty = l.on_hand_qty ?? 0;
+ 544|     const verdict = inventoryRowVerdict({
+ 545|       id: l.id,
+ 546|       label: l.lot_code ?? ext,
+ 547|       initialQty,
+ 548|       onHandQty,
+ 549|       totalCostMinorUnits: totalCostMinor,
+ 550|       isSample: l.is_sample === true,
+ 551|     });
+ 552|     if (!verdict.emit) {
+ 553|       if (verdict.code === "E8_ONHAND_GT_INITIAL") e8Rows.push(verdict.row);
+ 554|       else e7Rows.push(verdict.row);
+ 555|       continue;
+ 556|     }
+ 557| 
+ 558|     rows.push([
+ 559|       license,
+ 560|       strain,
+ 561|       area,
+ 562|       productName,
+ 563|       String(l.received_qty ?? 0),
+ 564|       String(l.on_hand_qty ?? 0),
+ 565|       verdict.totalCost,
+ 566|       "FALSE", // IsMedical — medical exemptions are tracked per-sale, not per-lot
+ 567|       ext,
+ 568|       createdBy,
+ 569|       // SLICE 2 — report the day the lot was ACTUALLY received when we can
+ 570|       // evidence it. This used to be `ccrsDate(l.created_at)` unconditionally;
+ 571|       // for a lot whose POS export had a blank Received date, created_at is
+ 572|       // the instant the migration ran, so the LCB was being told the lot was
+ 573|       // created on import day. ccrsInventoryCreatedDate() prefers the
+ 574|       // evidenced received_on and falls back to created_at only when the date
+ 575|       // is genuinely unknown — and those lots are flagged for the owner rather
+ 576|       // than quietly given a manufactured date.
+ 577|       //
+ 578|       // This is a no-op for the ~3,977 lots that DID carry a received date:
+ 579|       // SLICE 1 already set their created_at to noon UTC on that same day, so
+ 580|       // the emitted MM/DD/YYYY is byte-identical.
+ 581|       ccrsDate(ccrsInventoryCreatedDate(l)),
+ 582|       "",
+ 583|       "",
+ 584|       planned.op,
+ 585|     ]);
+ 586|     // S-10: filed ids carry dots (4,295 in the LCB delivery) and are legal
+ 587|     // [G L0224]; only CSV-breaking characters and > 100 chars are flagged.
+ 588|     const idErrs = validatePassThroughExternalId(ext);
+ 589|     if (idErrs.length) warnings.push(`Inventory id "${ext}" ${idErrs.join(", ")}.`);
+ 590|   }
+ 591|   if (rows.length === 0) warnings.push("No inventory lots found to report.");
+ 592|   const issues: CcrsSyncIssue[] = [];
+ 593|   if (e3Rows.length > 0) {
+ 594|     issues.push({
+ 595|       severity: "error",
+ 596|       file: "Inventory",
+ 597|       code: "E3_EXTERNAL_ID_UNASSIGNED",
+ 598|       specPin: specPinFor("E3_EXTERNAL_ID_UNASSIGNED"),
+ 599|       count: e3Rows.length,
+ 600|       rows: e3Rows,
+ 601|       message: `${e3Rows.length} lot(s) have no CCRS inventory identifier assigned, so they were left out of Inventory.csv. ExternalIdentifier is required on every row [G
+ 602|     });
+ 603|   }
+ 604|   if (e41Rows.length > 0) {
+ 605|     issues.push({
+ 606|       severity: "error",
+ 607|       file: "Inventory",
+ 608|       code: "E41_LEDGER_WITHHELD",
+ 609|       specPin: specPinFor("E41_LEDGER_WITHHELD"),
+ 610|       count: e41Rows.length,
+ 611|       rows: e41Rows,
+ 612|       message: `${e41Rows.length} lot(s) were left out of Inventory.csv because we cannot prove what CCRS holds for them. Insert creates a record and Update alters "an ex
+ 613|     });
+ 614|   }
+ 615|   if (e8Rows.length > 0) {
+ 616|     issues.push({
+ 617|       severity: "error",
+ 618|       file: "Inventory",
+ 619|       code: "E8_ONHAND_GT_INITIAL",
+ 620|       specPin: specPinFor("E8_ONHAND_GT_INITIAL"),
+ 621|       count: e8Rows.length,
+ 622|       rows: e8Rows,
+ 623|       message: `${e8Rows.length} lot(s) report more on hand than were ever received. CCRS rejects the Inventory file with "QuanityOnHand is greater than InitialQuantity" 
+ 624|     });
+ 625|   }
+ 626|   if (e7Rows.length > 0) {
+ 627|     issues.push({
+ 628|       severity: "error",
+ 629|       file: "Inventory",
+ 630|       code: "E7_TOTALCOST_ZERO",
+ 631|       specPin: specPinFor("E7_TOTALCOST_ZERO"),
+ 632|       count: e7Rows.length,
+ 633|       rows: e7Rows,
+ 634|       message: `${e7Rows.length} lot(s) have no cost, so TotalCost would be 0 and CCRS rejects the Inventory file ("TotalCost cannot equal 0" [G L0614]). Enter the unit c
+ 635|     });
+ 636|   }
+ 637|   return { rows, warnings: [...new Set(warnings)].slice(0, 25), issues };
+ 638| }
+ 639| 
  640| // ---------------------------------------------------------------------------
- 641| 
- 642| export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {
- 643|   const license = await getCcrsLicenseSettings();
- 644|   const submittedBy = license.submittedBy || "Greenway";
- 645|   const createdBy = submittedBy;
- 646|   const now = new Date();
- 647|   const createdDate = ccrsDate(now);
- 648|   const syncIssues: CcrsSyncIssue[] = [];
- 649| 
- 650|   const emptyBatch = (): CcrsBatch => ({
- 651|     licenseNumber: license.licenseNumber,
- 652|     submittedBy,
+ 641| // The full batch
+ 642| // ---------------------------------------------------------------------------
+ 643| 
+ 644| export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {
+ 645|   const license = await getCcrsLicenseSettings();
+ 646|   const submittedBy = license.submittedBy || "Greenway";
+ 647|   const createdBy = submittedBy;
+ 648|   const now = new Date();
+ 649|   const createdDate = ccrsDate(now);
+ 650|   const syncIssues: CcrsSyncIssue[] = [];
+ 651| 
+ 652|   const emptyBatch = (): CcrsBatch => ({
 ```
 
 ## B. Core/pure helpers — `src/lib/compliance/ccrs-batch-core.ts`
@@ -1161,118 +1161,118 @@ Generated 2026-10-06 19:45Z at commit `813a0853ba335c3a7cc2589231be47392ad08fff`
  606|  *   - a comma can never be carried in any CCRS cell (E42);
  607|  *   - wrapping a cell in quotes does not protect anything and the quote marks
  608|  *     themselves would reach CCRS as data, so we never add quotes;
- 609|  *   - whether a `"` that is part of the value is stored as-is is not yet
- 610|  *     proven (U-44, PREprod P-04b C1/C2), so a value containing one is
- 611|  *     withheld (E43) until that run answers it.
- 612|  */
- 613| export type CcrsUnencodableReason = "line break" | "comma" | "double quote";
- 614| 
- 615| /** Why a value cannot be written into a CCRS cell, or null when it can. */
- 616| export function ccrsUnencodableReason(v: unknown): CcrsUnencodableReason | null {
- 617|   if (v == null) return null;
- 618|   const s = String(v);
- 619|   if (/[\r\n]/.test(s)) return "line break";
- 620|   if (s.includes(",")) return "comma";
- 621|   if (s.includes('"')) return "double quote";
- 622|   return null;
- 623| }
- 624| 
- 625| /**
- 626|  * Free-text columns: never a join key (Inventory joins Product by Name, Strain
- 627|  * by Strain, Area by Area [G L0550-L0583]; nothing joins on these), so a comma
- 628|  * or double quote in them is REWRITTEN (`,` → `;`, `"` → `'`, same length, so
- 629|  * the 250-character clamp is unaffected) and reported as a warning (E44),
- 630|  * instead of holding back the whole product. Join keys, ids, names and dates
- 631|  * are never rewritten — a row with a comma or quote there is withheld.
- 632|  */
- 633| export const CCRS_FREE_TEXT_COLUMNS: Partial<Record<CcrsRetailerFileType, readonly string[]>> = {
- 634|   Product: ["Description"],
- 635|   InventoryAdjustment: ["AdjustmentDetail"],
- 636| };
- 637| 
- 638| /** The disclosed free-text rewrite: `,` → `;` and `"` → `'`. Nothing else changes. */
- 639| export function ccrsFreeText(v: string): string {
- 640|   return v.replace(/,/g, ";").replace(/"/g, "'");
- 641| }
- 642| 
- 643| export type CcrsWithheldRow = { label: string; column: string; value: string; reason: CcrsUnencodableReason };
- 644| export type CcrsRewrittenCell = { label: string; column: string; before: string; after: string };
- 645| 
- 646| /**
- 647|  * S-09 E38 + S-09b E42/E43/E44: make rows safe for CCRS's comma-split reader.
- 648|  * PURE. Every builder calls this immediately before assembleCcrsFile, so the
- 649|  * encoder's throw is a tripwire that production never reaches.
- 650|  *   1. free-text columns (CCRS_FREE_TEXT_COLUMNS) get `,`/`"` rewritten and
- 651|  *      each rewrite is reported (E44, warning);
- 652|  *   2. a row still holding a line break, comma or double quote in ANY cell is
- 653|  *      withheld and reported with the first offending column (E38/E42/E43).
- 654|  * Withheld rows are reported, never silently dropped (Part 05 D-12). `label`
- 655|  * is the operator-facing handle for the fix-link.
- 656|  */
- 657| export function withholdUnencodableRows(
- 658|   rows: string[][],
- 659|   columns: readonly string[],
- 660|   label: (row: string[], index: number) => string,
+ 609|  *   - a `"` that is part of the value is carried as-is: PREprod P20261006A
+ 610|  *     (P-04b, 28/28 files Success, evidence docs/ccrs-bible/evidence/
+ 611|  *     P20261006A/) accepted Product/Inventory rows whose names hold a `"`
+ 612|  *     and accepted Inventory rows that referenced those names, so the
+ 613|  *     former E43 hold is lifted (S-09c, U-44 CLOSED; stored bytes U-44b).
+ 614|  */
+ 615| export type CcrsUnencodableReason = "line break" | "comma";
+ 616| 
+ 617| /** Why a value cannot be written into a CCRS cell, or null when it can. */
+ 618| export function ccrsUnencodableReason(v: unknown): CcrsUnencodableReason | null {
+ 619|   if (v == null) return null;
+ 620|   const s = String(v);
+ 621|   if (/[\r\n]/.test(s)) return "line break";
+ 622|   if (s.includes(",")) return "comma";
+ 623|   return null;
+ 624| }
+ 625| 
+ 626| /**
+ 627|  * Free-text columns: never a join key (Inventory joins Product by Name, Strain
+ 628|  * by Strain, Area by Area [G L0550-L0583]; nothing joins on these), so a comma
+ 629|  * in them is REWRITTEN (`,` → `;`, same length, so
+ 630|  * the 250-character clamp is unaffected) and reported as a warning (E44),
+ 631|  * instead of holding back the whole product. Join keys, ids, names and dates
+ 632|  * are never rewritten — a row with a comma there is withheld. A `"` is sent
+ 633|  * unchanged everywhere (S-09c, PREprod P20261006A).
+ 634|  */
+ 635| export const CCRS_FREE_TEXT_COLUMNS: Partial<Record<CcrsRetailerFileType, readonly string[]>> = {
+ 636|   Product: ["Description"],
+ 637|   InventoryAdjustment: ["AdjustmentDetail"],
+ 638| };
+ 639| 
+ 640| /** The disclosed free-text rewrite: `,` → `;`. Nothing else changes (a `"` is kept, S-09c). */
+ 641| export function ccrsFreeText(v: string): string {
+ 642|   return v.replace(/,/g, ";");
+ 643| }
+ 644| 
+ 645| export type CcrsWithheldRow = { label: string; column: string; value: string; reason: CcrsUnencodableReason };
+ 646| export type CcrsRewrittenCell = { label: string; column: string; before: string; after: string };
+ 647| 
+ 648| /**
+ 649|  * S-09 E38 + S-09b E42/E44 (+ S-09c: E43 retired): make rows safe for CCRS's comma-split reader.
+ 650|  * PURE. Every builder calls this immediately before assembleCcrsFile, so the
+ 651|  * encoder's throw is a tripwire that production never reaches.
+ 652|  *   1. free-text columns (CCRS_FREE_TEXT_COLUMNS) get `,` rewritten and
+ 653|  *      each rewrite is reported (E44, warning);
+ 654|  *   2. a row still holding a line break or comma in ANY cell is
+ 655|  *      withheld and reported with the first offending column (E38/E42).
+ 656|  * Withheld rows are reported, never silently dropped (Part 05 D-12). `label`
+ 657|  * is the operator-facing handle for the fix-link.
+ 658|  */
+ 659| export function withholdUnencodableRows(
+ 660|   rows: string[][],
 ```
 
 `src/lib/compliance/ccrs-batch-core.ts` L776-L830 — verifyCcrsFile header checks
 
 ```ts
- 776|   return `${mm}/${dd}/${yyyy}`;
- 777| }
- 778| 
- 779| /**
- 780|  * YYYYMMDDHHMMSS timestamp for the file name, in the **Pacific** wall clock.
- 781|  *
- 782|  * CCRS bible slice S-01 / gap N-05. The LCB FAQ is explicit:
- 783|  *   "the file name should be referenced in PST"   [FAQ L0075]
- 784|  * and the naming convention itself is
- 785|  *   UploadType_LicenseNumber_YYYYMMDDHHMMSS       [G L0046]
- 786|  *
- 787|  * This used `getUTC*`. A batch generated after ~5 PM Pacific was therefore named
- 788|  * with TOMORROW's date while the file's own `SubmittedDate` row (ccrsDate, which
- 789|  * has always been Pacific) said today — two different days inside one upload,
- 790|  * and a file name that disagrees with the week it belongs to.
- 791|  *
- 792|  * DST is handled by the shared Intl-based helper (`pacificParts`), so PST/PDT
- 793|  * resolve correctly for any instant; no fixed offset is used anywhere.
- 794|  */
- 795| export function ccrsFileStamp(now: Date = new Date()): string {
- 796|   const t = pacificParts(now); // America/Los_Angeles wall clock
- 797|   const p = (n: number, w = 2) => String(n).padStart(w, "0");
- 798|   return (
- 799|     `${t.year}${p(t.month)}${p(t.day)}` + `${p(t.hour)}${p(t.minute)}${p(t.second)}`
- 800|   );
- 801| }
- 802| 
- 803| /**
- 804|  * Build the CCRS file name.
- 805|  *   Licensees:   UploadType_LicenseNumber_YYYYMMDDHHMMSS.csv
- 806|  * When the license number is blank we substitute LICENSE so the shape is clear.
- 807|  */
- 808| export function ccrsFileName(
- 809|   type: CcrsRetailerFileType,
- 810|   licenseNumber: string,
- 811|   now: Date = new Date(),
- 812| ): string {
- 813|   const lic = (licenseNumber ?? "").trim() || "LICENSE";
- 814|   return `${type}_${lic}_${ccrsFileStamp(now)}.csv`;
- 815| }
- 816| 
- 817| /**
- 818|  * Assemble a full CCRS file from data rows.
- 819|  * Row 1: SubmittedBy,<value>
- 820|  * Row 2: SubmittedDate,<MM/DD/YYYY>
- 821|  * Row 3: NumberRecords,<count>   (MUST equal data-row count exactly)
- 822|  * Row 4: the column header row
- 823|  * Rows 5+: data rows
- 824|  */
- 825| export function assembleCcrsFile(opts: {
- 826|   type: CcrsRetailerFileType;
- 827|   submittedBy: string;
- 828|   submittedDate?: Date;
- 829|   rows: string[][];
- 830| }): string {
+ 776|   const [yyyy, mm, dd] = key.split("-");
+ 777|   return `${mm}/${dd}/${yyyy}`;
+ 778| }
+ 779| 
+ 780| /**
+ 781|  * YYYYMMDDHHMMSS timestamp for the file name, in the **Pacific** wall clock.
+ 782|  *
+ 783|  * CCRS bible slice S-01 / gap N-05. The LCB FAQ is explicit:
+ 784|  *   "the file name should be referenced in PST"   [FAQ L0075]
+ 785|  * and the naming convention itself is
+ 786|  *   UploadType_LicenseNumber_YYYYMMDDHHMMSS       [G L0046]
+ 787|  *
+ 788|  * This used `getUTC*`. A batch generated after ~5 PM Pacific was therefore named
+ 789|  * with TOMORROW's date while the file's own `SubmittedDate` row (ccrsDate, which
+ 790|  * has always been Pacific) said today — two different days inside one upload,
+ 791|  * and a file name that disagrees with the week it belongs to.
+ 792|  *
+ 793|  * DST is handled by the shared Intl-based helper (`pacificParts`), so PST/PDT
+ 794|  * resolve correctly for any instant; no fixed offset is used anywhere.
+ 795|  */
+ 796| export function ccrsFileStamp(now: Date = new Date()): string {
+ 797|   const t = pacificParts(now); // America/Los_Angeles wall clock
+ 798|   const p = (n: number, w = 2) => String(n).padStart(w, "0");
+ 799|   return (
+ 800|     `${t.year}${p(t.month)}${p(t.day)}` + `${p(t.hour)}${p(t.minute)}${p(t.second)}`
+ 801|   );
+ 802| }
+ 803| 
+ 804| /**
+ 805|  * Build the CCRS file name.
+ 806|  *   Licensees:   UploadType_LicenseNumber_YYYYMMDDHHMMSS.csv
+ 807|  * When the license number is blank we substitute LICENSE so the shape is clear.
+ 808|  */
+ 809| export function ccrsFileName(
+ 810|   type: CcrsRetailerFileType,
+ 811|   licenseNumber: string,
+ 812|   now: Date = new Date(),
+ 813| ): string {
+ 814|   const lic = (licenseNumber ?? "").trim() || "LICENSE";
+ 815|   return `${type}_${lic}_${ccrsFileStamp(now)}.csv`;
+ 816| }
+ 817| 
+ 818| /**
+ 819|  * Assemble a full CCRS file from data rows.
+ 820|  * Row 1: SubmittedBy,<value>
+ 821|  * Row 2: SubmittedDate,<MM/DD/YYYY>
+ 822|  * Row 3: NumberRecords,<count>   (MUST equal data-row count exactly)
+ 823|  * Row 4: the column header row
+ 824|  * Rows 5+: data rows
+ 825|  */
+ 826| export function assembleCcrsFile(opts: {
+ 827|   type: CcrsRetailerFileType;
+ 828|   submittedBy: string;
+ 829|   submittedDate?: Date;
+ 830|   rows: string[][];
 ```
 
 ## C. Identifiers — `src/lib/compliance/ccrs-identifiers.ts`
@@ -1994,130 +1994,130 @@ Generated 2026-10-06 19:45Z at commit `813a0853ba335c3a7cc2589231be47392ad08fff`
  115| }
  116| 
  117| /** S-09b: delegates to the shared CCRS encoder. CCRS splits on every comma
- 118|  * and ignores quoting, so the encoder never adds quotes and throws on a comma,
- 119|  * double quote or line break (the builder withholds/rewrites those first). */
- 120| export function cell(v: unknown): string {
- 121|   return ccrsCell(v);
- 122| }
- 123| 
- 124| /** Reported quantity is always the absolute magnitude of the change. */
- 125| export function adjustmentQuantity(qtyDelta: number): string {
- 126|   const n = Math.abs(Number(qtyDelta) || 0);
- 127|   return Number.isInteger(n) ? String(n) : String(parseFloat(n.toFixed(4)));
- 128| }
- 129| 
- 130| /** Clamp free-form detail to the CCRS 250-char limit. */
- 131| export function adjustmentDetail(note: string | null | undefined): string {
- 132|   return (note ?? "").replace(/\s+/g, " ").trim().slice(0, 250);
- 133| }
- 134| 
- 135| // A5: the LIVE LCB InventoryAdjustment.csv template is 12 columns — the
+ 118|  * and ignores quoting, so the encoder never adds quotes and throws on a comma
+ 119|  * or line break (the builder withholds/rewrites those first). A `"` is sent
+ 120|  * unchanged (S-09c, PREprod P20261006A). */
+ 121| export function cell(v: unknown): string {
+ 122|   return ccrsCell(v);
+ 123| }
+ 124| 
+ 125| /** Reported quantity is always the absolute magnitude of the change. */
+ 126| export function adjustmentQuantity(qtyDelta: number): string {
+ 127|   const n = Math.abs(Number(qtyDelta) || 0);
+ 128|   return Number.isInteger(n) ? String(n) : String(parseFloat(n.toFixed(4)));
+ 129| }
+ 130| 
+ 131| /** Clamp free-form detail to the CCRS 250-char limit. */
+ 132| export function adjustmentDetail(note: string | null | undefined): string {
+ 133|   return (note ?? "").replace(/\s+/g, " ").trim().slice(0, 250);
+ 134| }
+ 135| 
 ```
 
 `src/lib/compliance/ccrs-inventory-adjustment-core.ts` L135-L235 — ADJUSTMENT_COLUMNS, mapAdjustmentRow, buildAdjustmentFile, makeAdjustmentFileName
 
 ```ts
- 135| // A5: the LIVE LCB InventoryAdjustment.csv template is 12 columns — the
- 136| // per-adjustment unique `ExternalIdentifier` sits between AdjustmentDate and
- 137| // CreatedBy and was previously missing (11 cols → CCRS rejection). This set now
- 138| // matches ccrs-batch-core.CCRS_COLUMNS.InventoryAdjustment exactly.
- 139| export const ADJUSTMENT_COLUMNS = [
- 140|   "LicenseNumber",
- 141|   "InventoryExternalIdentifier",
- 142|   "AdjustmentReason",
- 143|   "AdjustmentDetail",
- 144|   "Quantity",
- 145|   "AdjustmentDate",
- 146|   "ExternalIdentifier",
- 147|   "CreatedBy",
- 148|   "CreatedDate",
- 149|   "UpdatedBy",
- 150|   "UpdatedDate",
- 151|   "Operation",
- 152| ] as const;
- 153| 
- 154| // ---------------------------------------------------------------------------
- 155| // Row mapping (PURE)
- 156| // ---------------------------------------------------------------------------
- 157| 
- 158| export type AdjustmentSourceRow = {
- 159|   id: string;
- 160|   qty_delta: number;
- 161|   reason: string;
- 162|   note: string | null;
- 163|   created_at: string;
- 164|   lot: {
- 165|     id: string | null;
- 166|     lot_code: string | null;
- 167|     pos_product_key: string | null;
- 168|     /** S-10: the id the lot was FILED under. Must be selected by the reader. */
- 169|     ccrs_inventory_external_id?: string | null;
- 170|   } | null;
- 171| };
- 172| 
- 173| export type AdjustmentMapResult = {
- 174|   row: string[] | null;
- 175|   skipReason?: string;
- 176| };
- 177| 
- 178| /** Map one internal adjustment row to a CCRS CSV row. PURE. */
- 179| export function mapAdjustmentRow(
- 180|   src: AdjustmentSourceRow,
- 181|   license: CcrsLicenseLike,
- 182| ): AdjustmentMapResult {
- 183|   if (!isReportableAdjustment(src.reason, Number(src.qty_delta))) {
- 184|     return { row: null, skipReason: `${src.reason} (not reportable)` };
- 185|   }
- 186| 
- 187|   // S-10: the adjustment must reference the SAME id the Inventory row carries
- 188|   // [G L1077-L1083] (Valid Values: Inventory.ExternalIdentifier) — the
- 189|     // lot's assigned id first, byte-for-byte.
- 190|   const externalId = deriveInventoryExternalId({
- 191|     ccrs_inventory_external_id: src.lot?.ccrs_inventory_external_id ?? null,
- 192|     lot_code: src.lot?.lot_code ?? null,
- 193|     pos_product_key: src.lot?.pos_product_key ?? null,
- 194|     id: src.lot?.id ?? null,
- 195|   });
- 196|   if (!externalId) {
- 197|     return { row: null, skipReason: `adjustment ${src.id} has no resolvable inventory identifier` };
- 198|   }
- 199| 
- 200|   // E13 [G L1111] "Inventory AdjustmentDetail missing". CCRS requires a
- 201|   // free-text detail for reasons that carry no self-evident explanation
- 202|   // (Other, Theft). Emitting the row without one gets the InventoryAdjustment
- 203|   // file rejected, so withhold it behind the stable E13: prefix and let the
- 204|   // I/O wrapper raise it as a CODED error instead of a generic skip (W16).
- 205|   const ccrsReason = mapAdjustmentReason(src.reason);
- 206|   const detail = adjustmentDetail(src.note);
- 207|   if (adjustmentDetailRequired(ccrsReason) && !detail) {
- 208|     return {
- 209|       row: null,
- 210|       skipReason: `${E13_SKIP_PREFIX} adjustment ${src.id} is reported as "${ccrsReason}" but has no detail note — CCRS requires one [G L1111]`,
- 211|     };
- 212|   }
- 213| 
- 214|   const date = mmddyyyy(src.created_at);
- 215|   // A5: the per-adjustment ExternalIdentifier — unique + deterministic so
- 216|   // re-generating the same range yields the same id (idempotent upload).
- 217|   const adjustmentExternalId = sanitizeExternalId(`ADJ-${src.id}`);
- 218|   const row = [
- 219|     license.licenseNumber,
- 220|     externalId,
- 221|     ccrsReason,
- 222|     detail,
- 223|     adjustmentQuantity(Number(src.qty_delta)),
- 224|     date,
- 225|     adjustmentExternalId, // ExternalIdentifier (per-adjustment, unique)
- 226|     license.submittedBy, // CreatedBy
- 227|     date, // CreatedDate
- 228|     license.submittedBy, // UpdatedBy
- 229|     date, // UpdatedDate
- 230|     "Insert", // Operation
- 231|   ];
- 232|   return { row };
- 233| }
- 234| 
- 235| /**
+ 135| 
+ 136| // A5: the LIVE LCB InventoryAdjustment.csv template is 12 columns — the
+ 137| // per-adjustment unique `ExternalIdentifier` sits between AdjustmentDate and
+ 138| // CreatedBy and was previously missing (11 cols → CCRS rejection). This set now
+ 139| // matches ccrs-batch-core.CCRS_COLUMNS.InventoryAdjustment exactly.
+ 140| export const ADJUSTMENT_COLUMNS = [
+ 141|   "LicenseNumber",
+ 142|   "InventoryExternalIdentifier",
+ 143|   "AdjustmentReason",
+ 144|   "AdjustmentDetail",
+ 145|   "Quantity",
+ 146|   "AdjustmentDate",
+ 147|   "ExternalIdentifier",
+ 148|   "CreatedBy",
+ 149|   "CreatedDate",
+ 150|   "UpdatedBy",
+ 151|   "UpdatedDate",
+ 152|   "Operation",
+ 153| ] as const;
+ 154| 
+ 155| // ---------------------------------------------------------------------------
+ 156| // Row mapping (PURE)
+ 157| // ---------------------------------------------------------------------------
+ 158| 
+ 159| export type AdjustmentSourceRow = {
+ 160|   id: string;
+ 161|   qty_delta: number;
+ 162|   reason: string;
+ 163|   note: string | null;
+ 164|   created_at: string;
+ 165|   lot: {
+ 166|     id: string | null;
+ 167|     lot_code: string | null;
+ 168|     pos_product_key: string | null;
+ 169|     /** S-10: the id the lot was FILED under. Must be selected by the reader. */
+ 170|     ccrs_inventory_external_id?: string | null;
+ 171|   } | null;
+ 172| };
+ 173| 
+ 174| export type AdjustmentMapResult = {
+ 175|   row: string[] | null;
+ 176|   skipReason?: string;
+ 177| };
+ 178| 
+ 179| /** Map one internal adjustment row to a CCRS CSV row. PURE. */
+ 180| export function mapAdjustmentRow(
+ 181|   src: AdjustmentSourceRow,
+ 182|   license: CcrsLicenseLike,
+ 183| ): AdjustmentMapResult {
+ 184|   if (!isReportableAdjustment(src.reason, Number(src.qty_delta))) {
+ 185|     return { row: null, skipReason: `${src.reason} (not reportable)` };
+ 186|   }
+ 187| 
+ 188|   // S-10: the adjustment must reference the SAME id the Inventory row carries
+ 189|   // [G L1077-L1083] (Valid Values: Inventory.ExternalIdentifier) — the
+ 190|     // lot's assigned id first, byte-for-byte.
+ 191|   const externalId = deriveInventoryExternalId({
+ 192|     ccrs_inventory_external_id: src.lot?.ccrs_inventory_external_id ?? null,
+ 193|     lot_code: src.lot?.lot_code ?? null,
+ 194|     pos_product_key: src.lot?.pos_product_key ?? null,
+ 195|     id: src.lot?.id ?? null,
+ 196|   });
+ 197|   if (!externalId) {
+ 198|     return { row: null, skipReason: `adjustment ${src.id} has no resolvable inventory identifier` };
+ 199|   }
+ 200| 
+ 201|   // E13 [G L1111] "Inventory AdjustmentDetail missing". CCRS requires a
+ 202|   // free-text detail for reasons that carry no self-evident explanation
+ 203|   // (Other, Theft). Emitting the row without one gets the InventoryAdjustment
+ 204|   // file rejected, so withhold it behind the stable E13: prefix and let the
+ 205|   // I/O wrapper raise it as a CODED error instead of a generic skip (W16).
+ 206|   const ccrsReason = mapAdjustmentReason(src.reason);
+ 207|   const detail = adjustmentDetail(src.note);
+ 208|   if (adjustmentDetailRequired(ccrsReason) && !detail) {
+ 209|     return {
+ 210|       row: null,
+ 211|       skipReason: `${E13_SKIP_PREFIX} adjustment ${src.id} is reported as "${ccrsReason}" but has no detail note — CCRS requires one [G L1111]`,
+ 212|     };
+ 213|   }
+ 214| 
+ 215|   const date = mmddyyyy(src.created_at);
+ 216|   // A5: the per-adjustment ExternalIdentifier — unique + deterministic so
+ 217|   // re-generating the same range yields the same id (idempotent upload).
+ 218|   const adjustmentExternalId = sanitizeExternalId(`ADJ-${src.id}`);
+ 219|   const row = [
+ 220|     license.licenseNumber,
+ 221|     externalId,
+ 222|     ccrsReason,
+ 223|     detail,
+ 224|     adjustmentQuantity(Number(src.qty_delta)),
+ 225|     date,
+ 226|     adjustmentExternalId, // ExternalIdentifier (per-adjustment, unique)
+ 227|     license.submittedBy, // CreatedBy
+ 228|     date, // CreatedDate
+ 229|     license.submittedBy, // UpdatedBy
+ 230|     date, // UpdatedDate
+ 231|     "Insert", // Operation
+ 232|   ];
+ 233|   return { row };
+ 234| }
+ 235| 
 ```
 
 `src/lib/compliance/ccrs-inventory-adjustment.ts` L45-L111 — buildCcrsInventoryAdjustmentCsv (DB read + skipReason warnings W16)
@@ -2819,8 +2819,8 @@ Generated 2026-10-06 19:45Z at commit `813a0853ba335c3a7cc2589231be47392ad08fff`
   74|     }
   75|   }
   76| 
-  77|   // S-09 E38 / S-09b E42-E43: a correction carrying a line break, comma or
-  78|   // double quote cannot be one CCRS record (CCRS splits on every comma).
+  77|   // S-09 E38 / S-09b E42: a correction carrying a line break or comma cannot
+  78|   // be one CCRS record (CCRS splits on every comma). A `"` is fine (S-09c).
   79|   // Withhold it and leave it PENDING (never marked exported) so it is fixed
   80|   // and re-sent, not lost. rows[i] belongs to includedIds[i].
   81|   const e38 = withholdUnencodableRows(rows, CCRS_COLUMNS.Sale, (_r, i) => includedIds[i]);
@@ -3555,7 +3555,7 @@ Generated 2026-10-06 19:45Z at commit `813a0853ba335c3a7cc2589231be47392ad08fff`
 - L123: `it("a UTC instant on the next day still reports the Pacific day", () => {`
 - L127: `it("a plain Pacific-afternoon instant formats as expected", () => {`
 - L132: `describe("ccrsCell — written the way CCRS reads (S-09b)", () => {`
-- L133: `it("never adds quotes; refuses a comma or double quote (CCRS splits on every comma, P20261005A)", () => {`
+- L133: `it("never adds quotes; refuses a comma (CCRS splits on every comma, P20261005A); a double quote passes through (P20261006A)", () => {`
 - L141: `describe("file naming convention", () => {`
 - L142: `it("UploadType_LicenseNumber_YYYYMMDDHHMMSS.csv", () => {`
 - L155: `describe("upload order of operations (Group 1 → 2 → 3)", () => {`
