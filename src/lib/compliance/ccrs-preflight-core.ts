@@ -151,9 +151,10 @@ export type LotCostInput = {
  *
  * A trade sample has no value, but CCRS still requires a positive number, and
  * the FAQ dictates exactly $0.01 [FAQ L0035]. Anything else that is <= 0 is an
- * E7 error and the row must NOT be emitted: the LCB rejects the whole file on
- * one bad row, so a missing row with a blocking error in front of it is
- * strictly safer than a row we know will be rejected.
+ * E7 error and the row must NOT be emitted: the LCB rejects that row (CCRS
+ * accepts row-by-row, U-17 CLOSED FALSE) and everything referencing it then
+ * fails, so a missing row with a blocking error in front of it is strictly
+ * safer than a row we know will be rejected.
  */
 export function totalCostForLot(lot: LotCostInput): { value: string | null; ok: boolean } {
   if (lot.isSample) return { value: TRADE_SAMPLE_TOTAL_COST, ok: true };
@@ -395,11 +396,12 @@ const PINS: Record<CcrsIssueCode, string> = {
   // shifted the row and it was rejected "Operation is invalid"), so a comma
   // in any value adds a column. Blocking: the row is withheld.
   E42_FIELD_HAS_COMMA: "[G L0167-L0169]",
-  // S-09b: a `"` that is part of a value — whether CCRS stores it unchanged is
-  // unproven (U-44, PREprod P-04b). Blocking until that run closes U-44.
+  // RETIRED (S-09c): a `"` in a value is accepted and re-referenceable
+  // (PREprod P20261006A, 28/28 Success; U-44 CLOSED), so nothing emits E43 any
+  // more. The code stays registered so issues stored before S-09c still render.
   E43_FIELD_HAS_DOUBLE_QUOTE: "[G L0167-L0169]",
   // S-09b: Product.Description / AdjustmentDetail are free text that nothing
-  // joins on, so `,`→`;` and `"`→`'` instead of withholding. Advisory.
+  // joins on, so `,`→`;` instead of withholding (a `"` is kept, S-09c). Advisory.
   E44_FREE_TEXT_REWRITTEN: "[G L0167-L0169]",
 };
 

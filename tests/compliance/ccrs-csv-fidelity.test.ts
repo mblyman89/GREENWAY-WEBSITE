@@ -11,7 +11,9 @@
  *
  * So CCRS splits every row on every comma and ignores quoting. The encoder
  * therefore never adds quotes, never changes a character, and refuses a value
- * holding a comma (E42), double quote (E43, U-44 open) or line break (E38).
+ * holding a comma (E42) or line break (E38). A `"` passes through unchanged:
+ * PREprod P20261006A (P-04b, 28/28 Success) accepted names holding one and
+ * Inventory rows referencing them (S-09c; E43 retired, U-44 CLOSED).
  * Free-text Description/AdjustmentDetail are rewritten instead (E44).
  *
  * The fixture holds REAL values from the LCB CCRS Service Desk delivery of
@@ -94,7 +96,7 @@ describe("the PREprod evidence this slice rests on (P20261005A)", () => {
     const file = evidence("SENT_Product_413541_20261005182936.csv");
     const errs = verifyCcrsFile("Product", file).filter((p) => p.severity === "error");
     expect(errs.filter((e) => /as CCRS reads it/.test(e.message))).toHaveLength(3);
-    expect(errs.some((e) => /double quote/.test(e.message))).toBe(true);
+    expect(errs.some((e) => /double quote/.test(e.message))).toBe(false); // S-09c
   });
 });
 
@@ -117,19 +119,23 @@ describe("ccrsCell sends every value CCRS can carry byte-for-byte, never adds qu
     expect(ccrsCell(undefined)).toBe("");
   });
 
-  it("refuses a comma, a double quote and CR/LF with CcrsEncodeError naming the reason", () => {
+  it("refuses a comma and CR/LF with CcrsEncodeError naming the reason; a double quote passes through (S-09c)", () => {
     expect(() => ccrsCell("Smith, Jane")).toThrow(CcrsEncodeError);
     expect(() => ccrsCell("Smith, Jane")).toThrow(/comma \(E42\)/);
     for (const v of C.dquote.sample.filter((s) => !/[\r\n]/.test(s))) {
-      expect(() => ccrsCell(v)).toThrow(/double quote|comma/);
+      if (v.includes(",")) expect(() => ccrsCell(v)).toThrow(/comma/);
+      else {
+        expect(ccrsCell(v)).toBe(v);
+        expect(ccrsReaderSplit(["L", ccrsCell(v), "R"].join(","))).toEqual(["L", v, "R"]);
+      }
     }
     for (const v of [...C.crlf.sample, "a\r\nb", "a\rb"]) expect(() => ccrsCell(v)).toThrow(/line break \(E38\)/);
   });
 
-  it("reason precedence: line break, then comma, then double quote", () => {
+  it("reason precedence: line break, then comma; a double quote alone is fine (S-09c)", () => {
     expect(ccrsUnencodableReason('a\n,"')).toBe("line break");
     expect(ccrsUnencodableReason('a,"')).toBe("comma");
-    expect(ccrsUnencodableReason('a"')).toBe("double quote");
+    expect(ccrsUnencodableReason('a"')).toBeNull();
     expect(ccrsUnencodableReason("a")).toBeNull();
     expect(ccrsUnencodableReason(null)).toBeNull();
   });
@@ -173,11 +179,11 @@ describe("assembled files carry the exact spelling and the column count CCRS wil
     const bad = good.replace("Kush", '"Kush, Blue"');
     const errs = verifyCcrsFile("Strain", bad).filter((p) => p.severity === "error").map((p) => p.message);
     expect(errs.some((m) => /6 column\(s\) as CCRS reads it/.test(m))).toBe(true);
-    expect(errs.some((m) => /double quote/.test(m))).toBe(true);
+    expect(errs.some((m) => /double quote/.test(m))).toBe(false); // S-09c: the comma is the error, not the quote
   });
 });
 
-describe("withholdUnencodableRows — E38 / E42 / E43 withhold, E44 free-text rewrite", () => {
+describe("withholdUnencodableRows — E38 / E42 withhold, E44 free-text rewrite (E43 retired S-09c)", () => {
   const cols = CCRS_COLUMNS.Product;
   const mk = (name: string, desc: string, id: string) => cols.map((c) => (c === "Name" ? name : c === "Description" ? desc : c === "ExternalIdentifier" ? id : "x"));
   const label = (r: string[]) => r[cols.indexOf("ExternalIdentifier")];
@@ -189,7 +195,7 @@ describe("withholdUnencodableRows — E38 / E42 / E43 withhold, E44 free-text re
     expect(ccrsHasLineBreak(null)).toBe(false);
   });
 
-  it("withholds a comma / quote / line break in a NON-free-text column, names the column and reason, keeps order", () => {
+  it("withholds a comma / line break in a NON-free-text column, names the column and reason, keeps order; a quote row is kept", () => {
     const good = mk("Good", "fine", "GWP-1");
     const out = withholdUnencodableRows(
       [good, mk("Smith, Jane", "d", "GWP-2"), mk('7" Cone', "d", "GWP-3"), mk(C.crlf.sample[0], "d", "GWP-4"), good],
@@ -197,10 +203,9 @@ describe("withholdUnencodableRows — E38 / E42 / E43 withhold, E44 free-text re
       label,
       CCRS_FREE_TEXT_COLUMNS.Product,
     );
-    expect(out.rows).toEqual([good, good]);
+    expect(out.rows).toEqual([good, mk('7" Cone', "d", "GWP-3"), good]);
     expect(out.withheld.map((w) => [w.label, w.column, w.reason])).toEqual([
       ["GWP-2", "Name", "comma"],
-      ["GWP-3", "Name", "double quote"],
       ["GWP-4", "Name", "line break"],
     ]);
     expect(() => assembleCcrsFile({ type: "Product", submittedBy: "G", rows: out.rows })).not.toThrow();
@@ -210,10 +215,14 @@ describe("withholdUnencodableRows — E38 / E42 / E43 withhold, E44 free-text re
     const desc = 'Indoor, hand-trimmed "small batch"';
     const out = withholdUnencodableRows([mk("Blue Dream", desc, "GWP-9")], cols, label, CCRS_FREE_TEXT_COLUMNS.Product);
     expect(out.withheld).toEqual([]);
-    expect(out.rows[0][cols.indexOf("Description")]).toBe("Indoor; hand-trimmed 'small batch'");
+    expect(out.rows[0][cols.indexOf("Description")]).toBe('Indoor; hand-trimmed "small batch"');
     expect(out.rows[0][cols.indexOf("Description")].length).toBe(desc.length);
-    expect(out.rewritten).toEqual([{ label: "GWP-9", column: "Description", before: desc, after: "Indoor; hand-trimmed 'small batch'" }]);
-    expect(ccrsFreeText("a,b\"c")).toBe("a;b'c");
+    expect(out.rewritten).toEqual([{ label: "GWP-9", column: "Description", before: desc, after: 'Indoor; hand-trimmed "small batch"' }]);
+    expect(ccrsFreeText("a,b\"c")).toBe('a;b"c');
+    // a quote-only Description is not a rewrite at all
+    const q = withholdUnencodableRows([mk("Blue Dream", 'say "hi"', "GWP-8")], cols, label, CCRS_FREE_TEXT_COLUMNS.Product);
+    expect(q.rewritten).toEqual([]);
+    expect(q.rows[0][cols.indexOf("Description")]).toBe('say "hi"');
   });
 
   it("does not mutate the caller's rows; a Description with a line break is still withheld (E38)", () => {
@@ -249,23 +258,28 @@ describe("withholdUnencodableRows — E38 / E42 / E43 withhold, E44 free-text re
     expect(one).toContain("Remove the comma");
     const lb = unencodableMessage("Product", [{ label: "GWP-4", column: "Name" }]);
     expect(lb).toContain("Remove the line break");
-    const many = unencodableMessage("Product", Array.from({ length: 12 }, (_, i) => ({ label: `L${i}`, column: "Name", reason: "double quote" as const })));
+    const many = unencodableMessage("Product", Array.from({ length: 12 }, (_, i) => ({ label: `L${i}`, column: "Name", reason: "comma" as const })));
     expect(many).toContain("12 Product row(s)");
     expect(many).toContain("L9 (Name)");
     expect(many).not.toContain("L10 (Name)");
     expect(many).toContain("and 2 more");
-    expect(many).toContain("Remove the double quote");
+    expect(many).toContain("Remove the comma");
+    expect(many).not.toMatch(/double quote/);
     const rw = freeTextRewriteMessage("Product", [{ label: "GWP-9", column: "Description", before: "a,b", after: "a;b" }]);
     expect(classifyWarning(rw)).not.toBe("error");
     expect(rw).toContain("GWP-9 (Description)");
   });
 
-  it("E38 / E42 / E43 / E44 are registered preflight codes pinned to the CSV rule", () => {
+  it("E38 / E42 / E43 (retired, still registered for stored issues) / E44 are registered preflight codes pinned to the CSV rule", () => {
     for (const code of ["E38_FIELD_HAS_LINE_BREAK", "E42_FIELD_HAS_COMMA", "E43_FIELD_HAS_DOUBLE_QUOTE", "E44_FREE_TEXT_REWRITTEN"] as const) {
       expect(CCRS_ISSUE_CODES).toContain(code);
       expect(specPinFor(code)).toBe("[G L0167-L0169]");
     }
-    expect(CCRS_UNENCODABLE_CODE).toEqual({ "line break": "E38_FIELD_HAS_LINE_BREAK", comma: "E42_FIELD_HAS_COMMA", "double quote": "E43_FIELD_HAS_DOUBLE_QUOTE" });
+    expect(CCRS_UNENCODABLE_CODE).toEqual({ "line break": "E38_FIELD_HAS_LINE_BREAK", comma: "E42_FIELD_HAS_COMMA" });
+    // nothing emits E43 any more (S-09c)
+    for (const p of ["src/lib/compliance/ccrs-batch.ts", "src/lib/compliance/ccrs-batch-core.ts", "src/lib/compliance/ccrs-sales.ts", "src/lib/compliance/ccrs-inventory-adjustment.ts"]) {
+      expect(src(p)).not.toContain("E43_FIELD_HAS_DOUBLE_QUOTE");
+    }
   });
 });
 

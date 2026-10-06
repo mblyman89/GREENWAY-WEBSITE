@@ -1,0 +1,62 @@
+# Data rows of the 28 files uploaded 2026-10-06 (header rows omitted). TAB shown as <TAB>; CRLF stripped. Read from the generated files with tail -n +5.
+== Strain_413541_20261006124016
+413541,P20261006A Fidelity Kush,Hybrid,Greenway Marijuana,10/06/2026
+== Area_413541_20261006124017
+413541,P20261006A Sales Floor,False,P20261006A-AREA-1,Greenway Marijuana,10/06/2026,,,Insert
+== Product_413541_20261006124018
+413541,EndProduct,Usable Cannabis,P20261006A <TAB>Tab Fidelity - 1g,P-04b fidelity case C3: TAB character,1,P20261006A-P-C3,Greenway Marijuana,10/06/2026,,,Insert
+== Product_413541_20261006124019
+413541,EndProduct,Usable Cannabis,P20261006A Piña Crème Fidelity - 1g,P-04b fidelity case C4: correct UTF-8 accents (ñ è),1,P20261006A-P-C4,Greenway Marijuana,10/06/2026,,,Insert
+== Product_413541_20261006124020
+413541,EndProduct,Usable Cannabis,P20261006A Banana CrÃ©me Fidelity,P-04b fidelity case C5: mojibake exactly as CCRS holds it (Ã©),1,P20261006A-P-C5,Greenway Marijuana,10/06/2026,,,Insert
+== Product_413541_20261006124021
+413541,EndProduct,Usable Cannabis,P20261006A Pre-Rolls  - Double  Space - 5g,P-04b fidelity case C6: double spaces,1,P20261006A-P-C6,Greenway Marijuana,10/06/2026,,,Insert
+== Product_413541_20261006124022
+413541,EndProduct,Usable Cannabis,P20261006A Trailing Space Fidelity ,P-04b fidelity case C8: trailing space (sent bare),1,P20261006A-P-C8,Greenway Marijuana,10/06/2026,,,Insert
+== Product_413541_20261006124023
+413541,EndProduct,Usable Cannabis,P20261006A Mama J's Fidelity - 3.5g,P-04b fidelity case C9: apostrophe (2198 filed names have one),1,P20261006A-P-C9,Greenway Marijuana,10/06/2026,,,Insert
+== Product_413541_20261006124024
+413541,EndProduct,Usable Cannabis,P20261006A 7" Cone Fidelity - 1g,P-04b fidelity case Q1: bare double quote in the middle (U-44),1,P20261006A-P-Q1,Greenway Marijuana,10/06/2026,,,Insert
+== Product_413541_20261006124025
+413541,EndProduct,Usable Cannabis,"P20261006A Mama J's Quoted - 3.5g",P-04b fidelity case Q2: bare double quotes at both ends (U-44),1,P20261006A-P-Q2,Greenway Marijuana,10/06/2026,,,Insert
+== Inventory_413541_20261006124026
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A <TAB>Tab Fidelity - 1g,10,10,10.00,False,P20261006A-L-C3,Greenway Marijuana,10/06/2026,,,Insert
+== Inventory_413541_20261006124027
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A Piña Crème Fidelity - 1g,10,10,10.00,False,P20261006A-L-C4,Greenway Marijuana,10/06/2026,,,Insert
+== Inventory_413541_20261006124028
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A Banana CrÃ©me Fidelity,10,10,10.00,False,P20261006A-L-C5,Greenway Marijuana,10/06/2026,,,Insert
+== Inventory_413541_20261006124029
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A Pre-Rolls  - Double  Space - 5g,10,10,10.00,False,P20261006A-L-C6,Greenway Marijuana,10/06/2026,,,Insert
+== Inventory_413541_20261006124030
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A Trailing Space Fidelity ,10,10,10.00,False,P20261006A-L-C8,Greenway Marijuana,10/06/2026,,,Insert
+== Inventory_413541_20261006124031
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A Mama J's Fidelity - 3.5g,10,10,10.00,False,P20261006A-L-C9,Greenway Marijuana,10/06/2026,,,Insert
+== Inventory_413541_20261006124032
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A 7" Cone Fidelity - 1g,10,10,10.00,False,P20261006A-L-Q1,Greenway Marijuana,10/06/2026,,,Insert
+== Inventory_413541_20261006124033
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,"P20261006A Mama J's Quoted - 3.5g",10,10,10.00,False,P20261006A-L-Q2,Greenway Marijuana,10/06/2026,,,Insert
+== Inventory_413541_20261006124034
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A <TAB>Tab Fidelity - 1g,10,9,10.00,False,P20261006A-L-C3,Greenway Marijuana,10/06/2026,Greenway Marijuana,10/06/2026,Update
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A Piña Crème Fidelity - 1g,10,9,10.00,False,P20261006A-L-C4,Greenway Marijuana,10/06/2026,Greenway Marijuana,10/06/2026,Update
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A Banana CrÃ©me Fidelity,10,9,10.00,False,P20261006A-L-C5,Greenway Marijuana,10/06/2026,Greenway Marijuana,10/06/2026,Update
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A Pre-Rolls  - Double  Space - 5g,10,9,10.00,False,P20261006A-L-C6,Greenway Marijuana,10/06/2026,Greenway Marijuana,10/06/2026,Update
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A Trailing Space Fidelity ,10,9,10.00,False,P20261006A-L-C8,Greenway Marijuana,10/06/2026,Greenway Marijuana,10/06/2026,Update
+413541,P20261006A Fidelity Kush,P20261006A Sales Floor,P20261006A Mama J's Fidelity - 3.5g,10,9,10.00,False,P20261006A-L-C9,Greenway Marijuana,10/06/2026,Greenway Marijuana,10/06/2026,Update
+== Inventory_413541_20261006124040
+413541,P20261005A Fidelity Kush,P20261005A Sales Floor,P20261005A Pre-Rolls  - Double  Space - 5g,10,10,10.00,False,P20261006A-U17-L06,Greenway Marijuana,10/06/2026,,,Insert
+== Strain_413541_20261005195104
+413541,P20261005B Dutch Treat,Hybrid,Greenway Marijuana,10/05/2026
+== Area_413541_20261005195105
+413541,P20261005B Sales Floor,False,P20261005B-AREA-1,Greenway Marijuana,10/05/2026,,,Insert
+== Product_413541_20261005195106
+413541,EndProduct,Usable Cannabis,P20261005B Casing Probe - 1g,S-11 strain casing probe,1,P20261005B-P01,Greenway Marijuana,10/05/2026,,,Insert
+== Inventory_413541_20261005195107
+413541,P20261005B Dutch Treat,P20261005B Sales Floor,P20261005B Casing Probe - 1g,10,10,10.00,False,P20261005B-L01,Greenway Marijuana,10/05/2026,,,Insert
+== Inventory_413541_20261005195108
+413541,P20261005B Dutch treat,P20261005B Sales Floor,P20261005B Casing Probe - 1g,10,10,10.00,False,P20261005B-L02,Greenway Marijuana,10/05/2026,,,Insert
+== Strain_413541_20261005182934
+413541,P20261005A Fidelity Kush,Hybrid,Greenway Marijuana,10/05/2026
+== Area_413541_20261005182935
+413541,P20261005A Sales Floor,False,P20261005A-AREA-1,Greenway Marijuana,10/05/2026,,,Insert
+== Inventory_413541_20261005182938
+413541,P20261005A Fidelity Kush,P20261005A Sales Floor,"P20261005A 7"" Cone Fidelity - 1g",10,10,10.00,False,P20261005A-L02,Greenway Marijuana,10/05/2026,,,Insert

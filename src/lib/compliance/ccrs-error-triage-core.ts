@@ -205,7 +205,7 @@ export function triageCcrsErrorEmail(pasted: string): TriageResult {
     const parts: string[] = [];
     if (actionable.length > 0) {
       parts.push(
-        `${actionable.length} actionable error type(s) recognized — follow the fix steps, correct the original file(s), and re-upload with matching NumberRecords.`,
+        `${actionable.length} actionable error type(s) recognized — follow the fix steps, then re-send ONLY the rows listed in the error file (CCRS accepted every other row — it accepts row-by-row, PREprod P20261005A), with NumberRecords matching the new file.`,
       );
     }
     const benign = findings.length - actionable.length;

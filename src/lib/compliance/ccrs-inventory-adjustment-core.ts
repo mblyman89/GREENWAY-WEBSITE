@@ -115,8 +115,9 @@ export function mmddyyyy(iso: string | Date): string {
 }
 
 /** S-09b: delegates to the shared CCRS encoder. CCRS splits on every comma
- * and ignores quoting, so the encoder never adds quotes and throws on a comma,
- * double quote or line break (the builder withholds/rewrites those first). */
+ * and ignores quoting, so the encoder never adds quotes and throws on a comma
+ * or line break (the builder withholds/rewrites those first). A `"` is sent
+ * unchanged (S-09c, PREprod P20261006A). */
 export function cell(v: unknown): string {
   return ccrsCell(v);
 }
@@ -300,8 +301,9 @@ export function __runCcrsAdjustmentTests(): void {
 
   {
     let threw = 0;
-    for (const v of ["a,b", 'a"b']) { try { cell(v); } catch { threw += 1; } }
-    eq(threw, 2, "comma and double quote refused (S-09b)");
+    for (const v of ["a,b", "a\nb"]) { try { cell(v); } catch { threw += 1; } }
+    eq(threw, 2, "comma and line break refused (S-09b)");
+    eq(cell('a"b'), 'a"b', "double quote passes through unchanged (S-09c)");
   }
   eq(cell(" a b "), " a b ", "edge spaces sent as-is, never quoted (S-09b)");
   eq(cell(null), "", "null cell");

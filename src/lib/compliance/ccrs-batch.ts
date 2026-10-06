@@ -535,8 +535,10 @@ function buildInventoryFile(
     const totalCostMinor = (l.unit_cost_minor_units ?? 0) * (l.received_qty ?? 0);
 
     // E7 [G L0614] / E8 [G L0597]. The decision lives in the pure core so it is
-    // unit-tested directly; a failing row is WITHHELD because CCRS rejects the
-    // whole file on one bad row and tells us only by email [FAQ L0102].
+    // unit-tested directly; a failing row is WITHHELD because CCRS rejects
+    // that row, tells us only by email [FAQ L0102], and every later row that
+    // references it fails too (CCRS accepts row-by-row: U-17 CLOSED FALSE,
+    // PREprod P20261005A/P20261006A, Brian A24).
     const initialQty = l.received_qty ?? 0;
     const onHandQty = l.on_hand_qty ?? 0;
     const verdict = inventoryRowVerdict({
@@ -770,8 +772,8 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
 
   // S-02: coded, pinned pre-flight errors from the master-data builders. These
   // are BLOCKING — the submit gate refuses to build the zip while any remain,
-  // because CCRS rejects the whole file on one bad row and tells us only by
-  // email [FAQ L0102].
+  // because CCRS rejects each bad row (row-by-row acceptance, U-17 CLOSED
+  // FALSE), tells us only by email [FAQ L0102], and dependent rows then fail.
   syncIssues.push(...strain.issues, ...product.issues, ...inventory.issues);
 
   // --- Reuse mature builders for Adjustment + Sale --------------------------
@@ -804,7 +806,7 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
       CCRS_FREE_TEXT_COLUMNS[type] ?? [],
     );
     const rows = e38.rows;
-    for (const reason of ["line break", "comma", "double quote"] as const) {
+    for (const reason of ["line break", "comma"] as const) {
       const these = e38.withheld.filter((w) => w.reason === reason);
       if (these.length === 0) continue;
       const code = CCRS_UNENCODABLE_CODE[reason];

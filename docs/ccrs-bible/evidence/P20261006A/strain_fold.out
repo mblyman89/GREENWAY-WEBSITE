@@ -1,0 +1,30 @@
+strain header ['StrainType', 'Name', 'CreatedBy', 'CreatedDate', 'UpdatedBy', 'UpdatedDate']
+inventory header ['License Number', 'Strain', 'Inventory Type', 'Name', 'Product Identifier', 'Product Name', 'IsMedical', 'InventoryIdentifier (ExternalIdentifier on inventory.csv)', 'Initial Quantity', 'Quantity on Hand', 'TotalCost', 'CreatedBy', 'CreatedDate', 'Updatedby', 'UpdatedDate']
+inventory rows (all) strain exact-missing but casefold-present: 1017
+by CreatedDate year: {'2019': 6, '2020': 54, '2021': 75, '2022': 882}
+distinct (used, filed) pairs: 348
+     42  used='GOLDEN PINEAPPLE'  filed=['Golden Pineapple']
+     39  used='WEDDING CAKE'  filed=['Wedding Cake']
+     36  used='Trophy Wife'  filed=['Trophy wife']
+     30  used='Flower'  filed=['flower']
+     30  used='Legalized OG'  filed=['Legalized Og']
+     27  used='Pineapple Express'  filed=['Pineapple express']
+     23  used='Sour Zkittlez'  filed=['Sour ZkittleZ']
+     23  used='TIDO'  filed=['Tido']
+rows created 2025-2026: 0
+--- rows whose strain is absent even case-insensitively ---
+rows: 22
+by year: {'2021': 1, '2022': 11, '2023': 1, '2024': 6, '2025': 3}
+by creator: {'Michael Lyman': 12, 'Greenway Marijuana': 2, 'User-110211': 8}
+   4/2/2024 Greenway Marijuana '4:01'
+   5/2/2025 User-110211 '4:01'
+   5/2/2025 User-110211 '4:01'
+   6/17/2022 Michael Lyman 'Huckleberry Lemonade 1:10'
+   6/23/2022 Michael Lyman 'Orange Purple Diesel'
+   7/9/2025 User-110211 '4:01'
+   8/30/2024 User-110211 '4:01'
+   8/30/2024 User-110211 '"Bubba\'s Gift"'
+   8/30/2024 User-110211 '"People\'s Diesel"'
+   8/30/2024 User-110211 '"Suga\' Booga\'"'
+   9/15/2022 Michael Lyman 'Green Ribbon'
+   9/29/2021 Michael Lyman 'DefaultStrain'

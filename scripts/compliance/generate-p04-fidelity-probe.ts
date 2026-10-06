@@ -50,9 +50,10 @@ export type P04Case = {
   what: string;
   mirrors: string;
   name: (run: string) => string;
-  /** U-44 probe: the name holds a bare `"` that production withholds (E43).
-   * Written into its OWN file by swapping a token after the production
-   * encoder has built the row, so nothing else in the file is hand-made. */
+  /** U-44 probe: the name holds a bare `"` (production withheld it as E43 when
+   * P-04b was built; PREprod P20261006A accepted it, so S-09c lifted E43).
+   * Still written by swapping a token after the production encoder has built
+   * the row, so a re-run reproduces the uploaded bytes exactly. */
   rawQuote?: true;
 };
 
@@ -124,10 +125,8 @@ export function buildP04(run: string, license: string, start: Date): P04File[] {
   const plain = P04_CASES.filter((c) => !c.rawQuote);
   add("3", `${pad(3 + 2 * n)}-Inventory-Update-plain`, "Inventory", plain.map((c) => inv(c, "Update", c.name(run))), ok, plain.map((c) => c.code));
   for (const f of files) {
-    const quoteCase = f.cases.length === 1 && P04_CASES.find((c) => c.code === f.cases[0])?.rawQuote;
     const errs = verifyCcrsFile(f.type, f.csv)
-      .filter((p) => p.severity === "error")
-      .filter((p) => !(quoteCase && /double quote/.test(p.message))); // the one deliberate U-44 exception
+      .filter((p) => p.severity === "error"); // S-09c: no quote exception any more — every file must pass
     if (errs.length) throw new Error(`${f.folder}: our own verifier rejects it: ${errs.map((e) => e.message).join("; ")}`);
     if (f.csv.replace(/\r\n$/, "").split("\r\n").slice(4).some((l) => l.split(",").length !== CCRS_COLUMNS[f.type].length)) {
       throw new Error(`${f.folder}: a row would shift under CCRS's comma split`);
@@ -162,7 +161,7 @@ export function p04Manifest(run: string, license: string, files: P04File[]): str
   L.push("- **A case's Inventory file succeeds** → CCRS stored that Product name exactly as sent and the join works. U-27 is closed for that character class.");
   L.push("- **It fails with `Invalid Product`** → CCRS changed the name on the way in. Paste the email.");
   L.push("- **C8 (trailing space)**: if CCRS trims on store, C8's Inventory fails `Invalid Product`.");
-  L.push("- **Q1 / Q2 (U-44)**: success means a bare `\"` is stored as a plain character, and production may stop withholding names that contain one (E43). Failure keeps E43 on.");
+  L.push("- **Q1 / Q2 (U-44)**: success means a bare `\"` is accepted and re-referenceable. RESULT (P20261006A): Success — E43 lifted in S-09c.");
   L.push("- **Update file succeeds** → every plain name round-trips a second time; the Update path is safe for the cleanup.\n");
   L.push("Files are UTF-8 **without** a BOM and use CRLF (U-26: the Sept files had no BOM and were accepted). No file contains a comma inside a value.");
   return L.join("\n") + "\n";

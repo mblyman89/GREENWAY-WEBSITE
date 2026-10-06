@@ -90,7 +90,7 @@ PREprod probe **P-04** (Bible v2 Part 06 §A.4, settles U-27): `npx tsx scripts/
 |---|---|---|
 | `,` in a join key / id / name / date | wrapped in quotes (CCRS ignored them → row shifted) | **withheld**, blocking `E42_FIELD_HAS_COMMA` `[G L0167-L0169]` |
 | `,` or `"` in Product.Description / InventoryAdjustment.AdjustmentDetail | wrapped / doubled | rewritten `,`→`;` `"`→`'` (same length), advisory `E44_FREE_TEXT_REWRITTEN` with before/after |
-| `"` anywhere else | doubled and wrapped | **withheld**, blocking `E43_FIELD_HAS_DOUBLE_QUOTE` until U-44 (P-04b Q1/Q2) |
+| `"` anywhere else | doubled and wrapped | **withheld**, blocking `E43_FIELD_HAS_DOUBLE_QUOTE` until U-44 (P-04b Q1/Q2) — **lifted S-09c: sent unchanged (§A.4c)** |
 | leading/trailing space | wrapped (the quotes would have become data) | sent bare |
 | CR/LF | withheld E38 | withheld E38 (unchanged) |
 | verifier column count | RFC 4180 split | **CCRS split** (`ccrsReaderSplit`, every comma) + any `"` is an error |
@@ -101,6 +101,23 @@ One withhold path: `withholdUnencodableRows` (replaces `withholdLineBreakRows`/`
 U-17 is now contradicted: the echo listed 3 of 8 rows, not all 8. P-04b optional step B settles whether the other 5 were filed.
 
 Tests: `tests/compliance/ccrs-csv-fidelity.test.ts` (rewritten; includes the P20261005A evidence as a fixture: the sent file must now FAIL our verifier with exactly 3 column-shift errors), `tests/compliance/p04-fidelity-probe.test.ts` (P-04b: one Product file per case, no commas anywhere, Q1/Q2 isolated); goldens regenerated (3 comma values → `;`/no comma, hand-verified diff); mutations M69–M76.
+
+### A.4c S-09c — PREprod P20261006A / P20261005B: quote hold lifted, row-by-row acceptance, case-insensitive strain lookup — DONE (2026-10-06)
+
+**Observed (evidence `docs/ccrs-bible/evidence/P20261006A/`, 28 owner-forwarded "PRE: CCRS Processing Successful" emails, every name matched to a generated file):**
+
+| Run | Files | Result | What it proves |
+|---|---|---|---|
+| P-04b (P20261006A) | 19 | 19/19 Success | Every character class — TAB, non-ASCII, mojibake, double space, trailing space, apostrophe, bare `"` in the middle (Q1) and at both ends (Q2) — is accepted in a Product name AND an Inventory row naming it is accepted. U-44 CLOSED for acceptance, U-27 CLOSED. |
+| P-04b file 20 | 1 | Success | Inventory naming run-A product P06 (filed in the P20261005A Product file that ALSO held 3 rejected rows) was accepted, so P06 was filed: CCRS accepts row-by-row. **U-17 CLOSED FALSE** (Brian A24 agrees). |
+| S-11 casing (P20261005B) files 1–4 | 4 | Success | One-spelling routing works end to end. |
+| S-11 control (file 5) | 1 | Success (expected failure) | Inventory named `P20261005B Dutch treat`; only `P20261005B Dutch Treat` was ever filed as a Strain. CCRS's Inventory→Strain lookup **ignores letter case**. Independently confirmed by production: 1,017 filed Inventory rows (2019–2022) name a strain that exists in the Strain report only case-insensitively (`analysis3/s12/strain_fold.out`). **U-45 CLOSED.** |
+
+**Code changes:** E43 retired — a `"` is carried unchanged in every column (`ccrsUnencodableReason` has two reasons, `line break` and `comma`); free text rewrites `,`→`;` only; the verifier no longer flags a quote; SubmittedBy refuses a comma only. `E43_FIELD_HAS_DOUBLE_QUOTE` stays registered so issues stored earlier still render. "Whole file rejected" comments corrected to row-by-row; the triage summary now says to re-send only the rows in the error file.
+
+**What did NOT change (and why):** the S-11 one-spelling Strain rule stays — it is tidy, it matches Brian A16 and the Valid Values wording, and U-45 proves only the Inventory→Strain lookup, not Product names, the Strain file's own duplicate check, or spaces/punctuation (U-45b). Identifier validation still refuses `"` (no filed id has ever held one; D-01b keeps ids byte-for-byte). A comma is still withheld (P20261005A).
+
+**Residue:** what CCRS *stores* (bytes, casing) is only visible in a Service Desk report copy — U-27b, U-44b, U-45b. Tests: `ccrs-csv-fidelity`, `p04-fidelity-probe`, `ccrs-batch` updated; mutations M35/M73 retargeted (a quote must pass through), M77 added (free text keeps a quote).
 
 ### A.5 S-11 ledger routing (Strain casing, filed Product name, Operation) — DONE (2026-10-06, Bible v2 Part 07 S-11)
 

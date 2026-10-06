@@ -606,11 +606,13 @@ export function ccrsHasLineBreak(v: unknown): boolean {
  *   - a comma can never be carried in any CCRS cell (E42);
  *   - wrapping a cell in quotes does not protect anything and the quote marks
  *     themselves would reach CCRS as data, so we never add quotes;
- *   - whether a `"` that is part of the value is stored as-is is not yet
- *     proven (U-44, PREprod P-04b C1/C2), so a value containing one is
- *     withheld (E43) until that run answers it.
+ *   - a `"` that is part of the value is carried as-is: PREprod P20261006A
+ *     (P-04b, 28/28 files Success, evidence docs/ccrs-bible/evidence/
+ *     P20261006A/) accepted Product/Inventory rows whose names hold a `"`
+ *     and accepted Inventory rows that referenced those names, so the
+ *     former E43 hold is lifted (S-09c, U-44 CLOSED; stored bytes U-44b).
  */
-export type CcrsUnencodableReason = "line break" | "comma" | "double quote";
+export type CcrsUnencodableReason = "line break" | "comma";
 
 /** Why a value cannot be written into a CCRS cell, or null when it can. */
 export function ccrsUnencodableReason(v: unknown): CcrsUnencodableReason | null {
@@ -618,39 +620,39 @@ export function ccrsUnencodableReason(v: unknown): CcrsUnencodableReason | null 
   const s = String(v);
   if (/[\r\n]/.test(s)) return "line break";
   if (s.includes(",")) return "comma";
-  if (s.includes('"')) return "double quote";
   return null;
 }
 
 /**
  * Free-text columns: never a join key (Inventory joins Product by Name, Strain
  * by Strain, Area by Area [G L0550-L0583]; nothing joins on these), so a comma
- * or double quote in them is REWRITTEN (`,` → `;`, `"` → `'`, same length, so
+ * in them is REWRITTEN (`,` → `;`, same length, so
  * the 250-character clamp is unaffected) and reported as a warning (E44),
  * instead of holding back the whole product. Join keys, ids, names and dates
- * are never rewritten — a row with a comma or quote there is withheld.
+ * are never rewritten — a row with a comma there is withheld. A `"` is sent
+ * unchanged everywhere (S-09c, PREprod P20261006A).
  */
 export const CCRS_FREE_TEXT_COLUMNS: Partial<Record<CcrsRetailerFileType, readonly string[]>> = {
   Product: ["Description"],
   InventoryAdjustment: ["AdjustmentDetail"],
 };
 
-/** The disclosed free-text rewrite: `,` → `;` and `"` → `'`. Nothing else changes. */
+/** The disclosed free-text rewrite: `,` → `;`. Nothing else changes (a `"` is kept, S-09c). */
 export function ccrsFreeText(v: string): string {
-  return v.replace(/,/g, ";").replace(/"/g, "'");
+  return v.replace(/,/g, ";");
 }
 
 export type CcrsWithheldRow = { label: string; column: string; value: string; reason: CcrsUnencodableReason };
 export type CcrsRewrittenCell = { label: string; column: string; before: string; after: string };
 
 /**
- * S-09 E38 + S-09b E42/E43/E44: make rows safe for CCRS's comma-split reader.
+ * S-09 E38 + S-09b E42/E44 (+ S-09c: E43 retired): make rows safe for CCRS's comma-split reader.
  * PURE. Every builder calls this immediately before assembleCcrsFile, so the
  * encoder's throw is a tripwire that production never reaches.
- *   1. free-text columns (CCRS_FREE_TEXT_COLUMNS) get `,`/`"` rewritten and
+ *   1. free-text columns (CCRS_FREE_TEXT_COLUMNS) get `,` rewritten and
  *      each rewrite is reported (E44, warning);
- *   2. a row still holding a line break, comma or double quote in ANY cell is
- *      withheld and reported with the first offending column (E38/E42/E43).
+ *   2. a row still holding a line break or comma in ANY cell is
+ *      withheld and reported with the first offending column (E38/E42).
  * Withheld rows are reported, never silently dropped (Part 05 D-12). `label`
  * is the operator-facing handle for the fix-link.
  */
@@ -697,13 +699,11 @@ export function withholdUnencodableRows(
 export const CCRS_UNENCODABLE_CODE = {
   "line break": "E38_FIELD_HAS_LINE_BREAK",
   comma: "E42_FIELD_HAS_COMMA",
-  "double quote": "E43_FIELD_HAS_DOUBLE_QUOTE",
 } as const satisfies Record<CcrsUnencodableReason, string>;
 
 const REASON_FIX: Record<CcrsUnencodableReason, string> = {
   "line break": "a value contains a line break, which a CCRS .CSV row cannot carry",
   comma: "a value contains a comma, and CCRS splits every row on every comma (quoting does not protect it), which would shift the columns",
-  "double quote": "a value contains a double quote (\"), which CCRS has not yet been proven to store unchanged",
 };
 
 /**
@@ -711,14 +711,14 @@ const REASON_FIX: Record<CcrsUnencodableReason, string> = {
  * marker). One sentence per reason present, each naming up to 10 rows.
  */
 export function unencodableMessage(fileType: string, withheld: { label: string; column: string; reason?: CcrsUnencodableReason }[]): string {
-  const reasons: CcrsUnencodableReason[] = ["line break", "comma", "double quote"];
+  const reasons: CcrsUnencodableReason[] = ["line break", "comma"];
   const parts: string[] = [];
   for (const reason of reasons) {
     const these = withheld.filter((w) => (w.reason ?? "line break") === reason);
     if (these.length === 0) continue;
     const list = these.slice(0, 10).map((w) => `${w.label} (${w.column})`).join("; ");
     const more = these.length > 10 ? ` and ${these.length - 10} more` : "";
-    const what = reason === "line break" ? "line break" : reason === "comma" ? "comma" : "double quote";
+    const what = reason;
     parts.push(`${these.length} ${fileType} row(s) were left out because ${REASON_FIX[reason]}: ${list}${more}. Remove the ${what} from the source record and rebuild.`);
   }
   return `Error — ${parts.join(" ")}`;
@@ -728,7 +728,7 @@ export function unencodableMessage(fileType: string, withheld: { label: string; 
 export function freeTextRewriteMessage(fileType: string, rewritten: CcrsRewrittenCell[]): string {
   const list = rewritten.slice(0, 10).map((w) => `${w.label} (${w.column})`).join("; ");
   const more = rewritten.length > 10 ? ` and ${rewritten.length - 10} more` : "";
-  return `${rewritten.length} ${fileType} free-text value(s) had commas changed to semicolons and double quotes to apostrophes, because CCRS splits every row on every comma: ${list}${more}. The rest of each row was sent unchanged.`;
+  return `${rewritten.length} ${fileType} free-text value(s) had commas changed to semicolons, because CCRS splits every row on every comma: ${list}${more}. The rest of each row was sent unchanged.`;
 }
 
 /**
@@ -740,7 +740,8 @@ export function freeTextRewriteMessage(fileType: string, rewritten: CcrsRewritte
  * CSV quoting (PREprod P20261005A — see the note above ccrsUnencodableReason),
  * so added quotes would become part of the value. TAB, non-ASCII, runs of
  * spaces and edge spaces pass through as they are. A value this encoder
- * cannot carry THROWS (line break E38, comma E42, double quote E43); every
+ * cannot carry THROWS (line break E38, comma E42); a `"` passes through
+ * unchanged (S-09c, PREprod P20261006A); every
  * builder withholds such a row first with withholdUnencodableRows.
  */
 export function ccrsCell(v: unknown): string {
@@ -1079,9 +1080,6 @@ export function verifyCcrsFile(
     if (cells.length !== expected.length) {
       err(`Data row ${rowNo} has ${cells.length} column(s) as CCRS reads it (every comma splits); expected ${expected.length}.`);
     }
-    if (line.includes('"')) {
-      err(`Data row ${rowNo} contains a double quote ("), which CCRS has not been proven to store unchanged (U-44).`);
-    }
     for (const c of dateCols) {
       const v = (cells[c] ?? "").trim();
       if (v && !MMDDYYYY_RE.test(v)) {
@@ -1242,29 +1240,29 @@ export function __runCcrsBatchCoreTests(): void {
   {
     const throws = (v: unknown) => { try { ccrsCell(v); return false; } catch (e) { return e instanceof CcrsEncodeError; } };
     assert(throws("a,b"), "comma refused (E42)");
-    assert(throws('he said "hi"') && throws('"Mama J\'s"'), "double quote refused (E43)");
+    assert(ccrsCell('he said "hi"') === 'he said "hi"' && ccrsCell('"Mama J\'s"') === '"Mama J\'s"', "double quote passes through unchanged (S-09c, P20261006A)");
     assert(throws("a\nb") && throws("a\rb"), "CR/LF refused (E38)");
     assert(ccrsCell(" x") === " x" && ccrsCell("x ") === "x ", "edge spaces sent as-is, never wrapped");
     assert(ccrsCell("a  b") === "a  b", "internal double space untouched");
     assert(ccrsCell("a\tb") === "a\tb", "TAB untouched");
     assert(ccrsCell("Piña") === "Piña", "non-ASCII untouched");
     assert(ccrsCell(null) === "" && ccrsCell(0) === "0", "null/number");
-    assert(ccrsUnencodableReason("a,b") === "comma" && ccrsUnencodableReason('a"b') === "double quote" && ccrsUnencodableReason("a\r\n,\"") === "line break" && ccrsUnencodableReason("ok") === null && ccrsUnencodableReason(null) === null, "reason precedence");
+    assert(ccrsUnencodableReason("a,b") === "comma" && ccrsUnencodableReason('a"b') === null && ccrsUnencodableReason('a",') === "comma" && ccrsUnencodableReason("a\r\n,\"") === "line break" && ccrsUnencodableReason("ok") === null && ccrsUnencodableReason(null) === null, "reason precedence");
   }
   assert(ccrsHasLineBreak("a\nb") && ccrsHasLineBreak("a\r") && !ccrsHasLineBreak("a\tb") && !ccrsHasLineBreak(null), "line-break probe");
   {
     const w = withholdUnencodableRows([["a", "b"], ["c", "x\ny"], ["d", "e"], ["f", "g,h"], ["i", 'j"']], ["C1", "C2"], (r) => r[0]);
-    assert(w.rows.length === 2 && w.rows[1][0] === "d", "keeps clean rows in order");
-    assert(JSON.stringify(w.withheld.map((x) => [x.label, x.column, x.reason])) === JSON.stringify([["c", "C2", "line break"], ["f", "C2", "comma"], ["i", "C2", "double quote"]]), "reports row + column + reason");
+    assert(w.rows.length === 3 && w.rows[1][0] === "d" && w.rows[2][1] === 'j"', "keeps clean rows in order; a quote row is kept unchanged");
+    assert(JSON.stringify(w.withheld.map((x) => [x.label, x.column, x.reason])) === JSON.stringify([["c", "C2", "line break"], ["f", "C2", "comma"]]), "reports row + column + reason");
     assert(classifyWarning(unencodableMessage("Product", w.withheld)) === "error", "withhold message is blocking");
     assert(withholdUnencodableRows([], ["C1"], () => "").rows.length === 0, "empty input");
     const f = withholdUnencodableRows([["P1", 'a, "b"'], ["P2", "x\ny"]], ["Name", "Description"], (r) => r[0], ["Description"]);
-    assert(f.rows.length === 1 && f.rows[0][1] === "a; 'b'", "free text rewritten , → ; and \" → '");
+    assert(f.rows.length === 1 && f.rows[0][1] === 'a; "b"', "free text rewritten , → ; and the quote kept");
     assert(f.rewritten.length === 1 && f.rewritten[0].label === "P1" && f.rewritten[0].before === 'a, "b"', "rewrite reported");
     assert(f.withheld.length === 1 && f.withheld[0].reason === "line break", "free text with a line break still withheld");
     assert(classifyWarning(freeTextRewriteMessage("Product", f.rewritten)) !== "error", "rewrite message is advisory");
   }
-  for (const v of ["Shatter J's", " lead", "trail ", "x\ty", "Limón", "", "a  b"]) {
+  for (const v of ["Shatter J's", 'He said "hi"', '"wrapped"', " lead", "trail ", "x\ty", "Limón", "", "a  b"]) {
     const back = ccrsReaderSplit(["L", ccrsCell(v), "R"].join(","));
     assert(back.length === 3 && back[1] === v, "round-trip through the CCRS reader: " + JSON.stringify(v));
   }

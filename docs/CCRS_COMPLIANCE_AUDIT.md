@@ -331,6 +331,13 @@ we never invent a CCRS value.
   (`E44`, advisory); in any other column the row is withheld (`E42`/`E43`,
   blocking, `[G L0167-L0169]`); the verifier counts columns the way CCRS does.
   Evidence `docs/ccrs-bible/evidence/P20261005A/`. Open: U-44, U-17 note.
+- Update 2026-10-06 (S-09c, PREprod P20261006A, 28/28 Success): a `"` is
+  accepted and re-referenceable, so E43 is retired and quotes pass through;
+  free text rewrites commas only. U-17 CLOSED FALSE — CCRS accepts
+  row-by-row, so after an error re-send only the rows in the error file.
+  U-45: the Inventory→Strain lookup ignores letter case (S-11 control file
+  succeeded; 1,017 production rows agree). Evidence
+  `docs/ccrs-bible/evidence/P20261006A/`.
 
 #### C2c — HIGH — FIXED 2026-10-06 (Bible v2 S-11) — strain casing split across files; no ledger routing
 - The Strain file deduped case-insensitively but each Inventory row kept its
