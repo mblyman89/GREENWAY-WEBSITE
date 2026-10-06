@@ -46,6 +46,7 @@ import { __runCcrsDeadlineTests } from "@/lib/compliance/ccrs-deadline-core";
 import { __runCcrsErrorTriageTests } from "@/lib/compliance/ccrs-error-triage-core";
 import { __runCcrsSubmitGateTests } from "@/lib/compliance/ccrs-submit-gate-core";
 import { __runCcrsPreflightCoreTests } from "@/lib/compliance/ccrs-preflight-core";
+import { __runCcrsLedgerCoreTests } from "@/lib/compliance/ccrs-ledger-core";
 import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
 import { __runLeaflyPayloadTests } from "@/lib/leafly/payload-core";
 import { __runLeaflyPayloadValidateTests } from "@/lib/leafly/payload-validate-core";
@@ -231,6 +232,9 @@ describe("embedded pure self-test suites", () => {
   it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {
     const out = __runCcrsPreflightCoreTests();
     expect(out).toContain("0 failed");
+  });
+  it("ccrs-ledger-core (Bible v2 S-11: ledger routing, strain casing, filed product name)", () => {
+    expect(() => __runCcrsLedgerCoreTests()).not.toThrow();
   });
   it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {
     expect(() => __runMenuFeedTests()).not.toThrow();

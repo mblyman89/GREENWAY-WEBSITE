@@ -80,6 +80,42 @@ Tests: `tests/compliance/ccrs-csv-fidelity.test.ts` (fixture `fixtures/ccrs-real
 
 PREprod probe **P-04** (Bible v2 Part 06 §A.4, settles U-27): `npx tsx scripts/compliance/generate-p04-fidelity-probe.ts --run P<yyyymmdd><letter>` writes 12 run-prefixed files (Strain, Area, Product with 8 character-class cases, one Inventory Insert per case, one Inventory Update) plus a MANIFEST with the expected result per file; guarded by `tests/compliance/p04-fidelity-probe.test.ts` and mutations M47–M50.
 
+**Correction (S-11 recon, 2026-10-06, `analysis3/s11/quotes.out`, `namecol.out`):** the "14 live rows whose Product name contains a literal `"`" above is a reading of the LCB's *Inventory report*, and that report is not the stored value. In the Product report (same delivery) **0** of 64,566 names contain `"`; each of the 14 Inventory "Name" cells is exactly `"` + the filed Product.Name + `"`, and all 14 contain an apostrophe (1,885 rows have apostrophe names; only these 14 are wrapped — all CreatedDate 8/30/2024, the Cultivera migration day). The 3 quoted Inventory Strain cells behave the same way (Strains.csv has 0 `"`). So CCRS **stores** those names without quotes; the wrapping is an artifact of that report. Two consequences: (1) S-09's encoder is still right and still needed — it is lossless for every character, and the 2 TAB / 68 non-ASCII / 338 double-space / 1 edge-space values are real; (2) the name a filed lot must carry comes from the **Product report** by the lot's filed Product Identifier, never from the Inventory report's display (S-11, §A.5). P-04 C1 still proves that CCRS stores a name with leading and trailing `"` byte-for-byte; it no longer "mirrors 14 live rows". Recorded as **U-42**; the routing assumption it supports is **U-43**. (U-28…U-41 are reserved by the Bible v2 draft and land with S-19.)
+
+### A.5 S-11 ledger routing (Strain casing, filed Product name, Operation) — DONE (2026-10-06, Bible v2 Part 07 S-11)
+
+**What the delivery says (measured, `analysis3/s11/`):**
+
+| Fact | Count | Source |
+|---|---|---|
+| Inventory rows whose filed Product Identifier is in the Product report | 62,742 of 62,744 | `namecol.out` |
+| Inventory "Product Name" column equal to Product.**Description** (not Name) | 62,742 of 62,742 | `namecol.out` |
+| Filed Product ids starting `pos-` (our menu-card key, `transform.ts` `pos-${stableId(...)}`) | **0** of 64,563 | `idshape.out` |
+| Filed Product ids starting `GWP-` | 0 | `idshape.out` |
+| Strain case-variant groups CCRS already holds | 2 (`Mack's GAK`/`Mack's Gak`, `Snoop's Dream x Gobbstopper`/lower-case) | `strain_case.out` |
+| Dashed product-id twins (`C1-110211…` ↔ `C1…`) | 13,324 pairs, 12,981 same name, the rest differ only by apostrophes | `pairs.out` |
+
+So **our product key never identifies a filed product**. The only honest bridge is the lot: filed Inventory id → its filed Product Identifier → that Product's filed Name. Part 03 §D.4 of the v2 draft seeded `filed_name` from the Inventory "Product Name" column; that column is the Description, so the seed (S-12) must take the Name from the Product report by id.
+
+**Defects fixed now (no ledger needed):** the Strain file deduped case-insensitively, but the Inventory row kept the lot's own casing, so a batch with `Dutch Treat` and `Dutch treat` sent one Strain row and an Inventory row naming a strain CCRS was never given (`Invalid Strain`, Valid Values `Strain.Strain` `[G L0552]`). Now one spelling (the first) is written in **both** files, and the advisory **`E39_STRAIN_CASE_VARIANT`** `[G L0359]` lists every variant so the source can be fixed (Brian A16: "do not submit the same name with a variation of captilization").
+
+**Routing core (`src/lib/compliance/ccrs-ledger-core.ts`, pure):** `buildLedgerView` (reports duplicate ids, throws on an unknown state), `routeOperation` (Part 03 §D.3 table verbatim), `routeReference` (event rows may only name a seed/filed/confirmed lot), `resolveStrainCasing` (exact → filed; case-fold hit → filed casing, never sent; else new), `resolveProductName` (filed lot → filed product Name; unprovable filed product → withhold; operator rename → our name + Product Update), `formatMintedProductId` (`GWP-<seq6>`, optional PREprod run prefix), `planLedgerBatch` (every Strain/Product/Inventory decision for one batch), `applyProductPlan`.
+
+| Situation (ledger loaded) | Strain file | Product file | Inventory row |
+|---|---|---|---|
+| strain filed exactly | not sent | — | as filed |
+| strain filed in another casing | not sent; **E39** | — | **filed** casing |
+| strain not filed (40 lots) | sent once | — | as sent |
+| lot filed (seed/filed/confirmed/closed) | — | our product row not sent if every lot is filed | **Update**, Product = **filed** Name; **E40** if ours differs |
+| lot uncertain / deleted / unknown, or its filed product unprovable | — | — | withheld, **E41** (blocking) |
+| new product with an assigned `GWP-` id | — | **Insert** (Update if already ours on file) | Insert, our name |
+| product with no assigned id | — | withheld, **E41** | withheld, **E41** |
+| our name already filed under another id | — | withheld, **E41** (gap N-12: which record a shared name resolves to is undefined) | withheld |
+| operator chose Rename of a filed product | — | one **Update** under the filed id with our name | Update with the new name (U-39) |
+| two renames of one filed product in a batch | — | nothing | all its lots withheld |
+
+**Until S-12 loads a ledger, `buildCcrsBatch` passes `null`** and the plan reproduces the pre-S-11 rows byte-for-byte (every row Insert, our ids), except the strain-casing fix above. Tests: `tests/compliance/ccrs-ledger-routing.test.ts` (64: every state × intent, real ids/names from the delivery, both real case-variant groups, legacy byte-identity, source guards); mutations M51–M68 in `mutate_check.py`, all killed.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

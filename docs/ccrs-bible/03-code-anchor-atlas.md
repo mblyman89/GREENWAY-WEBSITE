@@ -1,21 +1,21 @@
 # 03 — Code Anchor Atlas (generated from the tree)
 
-Generated 2026-10-06 01:19Z at commit `2f8fb1aacc8f04b07d0125b0417f76efe211eed4` by `build_atlas_part.py`.
+Generated 2026-10-06 02:49Z at commit `19259d072d00f6a69b9852e2bb715ce5bdc30196` by `build_atlas_part.py`.
 
 **Rules for using this part**
 
-1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 2f8fb1a -- <file>`; if the file changed, re-run the generator and re-pin.
+1. Every `L####` here was read from the file at the commit above. Before editing, run `git diff 19259d0 -- <file>`; if the file changed, re-run the generator and re-pin.
 2. Snippets are verbatim. If a snippet here disagrees with the file, the FILE wins and this part must be regenerated — never 'fix' the atlas by hand.
 3. Anchors are grouped by the flow they belong to: (A) batch builders, (B) core/pure helpers, (C) identifiers, (D) week/ledger, (E) triage/gate, (F) adjustments & corrections, (G) returns/disposition, (H) intake & Cultivera identity, (I) routes/pages/components, (J) schema.
 
 ## 0. Module inventory (line counts + every `export` with its line)
 
-### `src/lib/compliance/ccrs-batch.ts` (841 L)
+### `src/lib/compliance/ccrs-batch.ts` (931 L)
 
-- L60: `export type CcrsFile = {`
-- L72: `export type CcrsSyncIssue = {`
-- L89: `export type CcrsBatch = {`
-- L593: `export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {`
+- L61: `export type CcrsFile = {`
+- L73: `export type CcrsSyncIssue = {`
+- L90: `export type CcrsBatch = {`
+- L639: `export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {`
 
 ### `src/lib/compliance/ccrs-batch-core.ts` (1393 L)
 
@@ -490,456 +490,456 @@ Generated 2026-10-06 01:19Z at commit `2f8fb1aacc8f04b07d0125b0417f76efe211eed4`
 `src/lib/compliance/ccrs-batch.ts` L160-L193 — buildStrainFile — NOTE: no guard for Unknown/THC/Other (guide p.12 L358: 'Strain name is invalid, cannot be Unknown, THC, or Other'). Defaults StrainType to Hybrid.
 
 ```ts
- 160|   unit_weight: number | null;
- 161|   unit_weight_uom: string | null;
- 162|   status: string;
- 163|   created_at: string;
- 164|   /**
- 165|    * SLICE 2 (migration 0214) — the evidenced day the lot was received.
- 166|    * NULL means unknown; see ccrsInventoryCreatedDate() for how that is
- 167|    * handled when filling Inventory.CreatedDate.
- 168|    */
- 169|   received_on: string | null;
- 170|   /**
- 171|    * S-02 / E7: a vendor TRADE SAMPLE (migration 0024 L32,
- 172|    * `is_sample boolean not null default false`). It has no purchase value, but
- 173|    * CCRS still requires a positive TotalCost and the FAQ dictates exactly
- 174|    * $0.01 [FAQ L0035]. Selected explicitly so the E7 check can tell a sample
- 175|    * apart from a lot whose cost was never entered.
- 176|    */
- 177|   is_sample: boolean | null;
- 178| };
- 179| 
- 180| // ---------------------------------------------------------------------------
- 181| // Per-file generators for the master-data files (Strain / Area / Product /
- 182| // Inventory). Adjustment + Sale reuse the existing mature builders.
- 183| // ---------------------------------------------------------------------------
- 184| 
- 185| /** grams from a unit_weight + uom (g default). Returns "" when unknown. */
- 186| function toGrams(weight: number | null, uom: string | null): string {
- 187|   if (weight == null || !Number.isFinite(weight)) return "";
- 188|   const u = (uom ?? "g").toLowerCase();
- 189|   const g = u === "mg" ? weight / 1000 : u === "oz" ? weight * AVOIRDUPOIS_GRAMS_PER_OUNCE : weight;
- 190|   return (Math.round(g * 1000) / 1000).toString();
- 191| }
- 192| 
- 193| function buildStrainFile(
+ 160|   unit_cost_minor_units: number | null;
+ 161|   unit_weight: number | null;
+ 162|   unit_weight_uom: string | null;
+ 163|   status: string;
+ 164|   created_at: string;
+ 165|   /**
+ 166|    * SLICE 2 (migration 0214) — the evidenced day the lot was received.
+ 167|    * NULL means unknown; see ccrsInventoryCreatedDate() for how that is
+ 168|    * handled when filling Inventory.CreatedDate.
+ 169|    */
+ 170|   received_on: string | null;
+ 171|   /**
+ 172|    * S-02 / E7: a vendor TRADE SAMPLE (migration 0024 L32,
+ 173|    * `is_sample boolean not null default false`). It has no purchase value, but
+ 174|    * CCRS still requires a positive TotalCost and the FAQ dictates exactly
+ 175|    * $0.01 [FAQ L0035]. Selected explicitly so the E7 check can tell a sample
+ 176|    * apart from a lot whose cost was never entered.
+ 177|    */
+ 178|   is_sample: boolean | null;
+ 179| };
+ 180| 
+ 181| // ---------------------------------------------------------------------------
+ 182| // Per-file generators for the master-data files (Strain / Area / Product /
+ 183| // Inventory). Adjustment + Sale reuse the existing mature builders.
+ 184| // ---------------------------------------------------------------------------
+ 185| 
+ 186| /** grams from a unit_weight + uom (g default). Returns "" when unknown. */
+ 187| function toGrams(weight: number | null, uom: string | null): string {
+ 188|   if (weight == null || !Number.isFinite(weight)) return "";
+ 189|   const u = (uom ?? "g").toLowerCase();
+ 190|   const g = u === "mg" ? weight / 1000 : u === "oz" ? weight * AVOIRDUPOIS_GRAMS_PER_OUNCE : weight;
+ 191|   return (Math.round(g * 1000) / 1000).toString();
+ 192| }
+ 193| 
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L201-L213 — buildAreaFile — emits Area 'Quarantine' IsQuarantine=TRUE whenever hasQuarantine. FAQ (Data Reporting, IsQuarantine Q): 'There are no quarantine requirements for cannabis products. You will have an entry as FALSE.' → compliance question, Part 04 flag N-01.
 
 ```ts
- 201|   const seen = new Set<string>();
- 202|   const rows: string[][] = [];
- 203|   const defaulted: string[] = [];
- 204|   const reserved: CcrsIssueRow[] = [];
- 205|   for (const it of items) {
- 206|     const strain = (it.strain_name ?? "").trim();
- 207|     if (!strain) continue;
- 208|     const key = strain.toLowerCase();
- 209|     if (seen.has(key)) continue;
- 210|     seen.add(key);
- 211|     // E11 [G L0358] "Strain name is invalid, cannot be Unknown, THC, or Other."
- 212|     // Exact match only — "Other Kush" is a real strain and must still ship.
- 213|     if (isReservedStrainName(strain)) {
+ 201| ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
+ 202|   const warnings: string[] = [];
+ 203|   const seen = new Set<string>();
+ 204|   const rows: string[][] = [];
+ 205|   const defaulted: string[] = [];
+ 206|   const reserved: CcrsIssueRow[] = [];
+ 207|   for (const it of items) {
+ 208|     const raw = (it.strain_name ?? "").trim();
+ 209|     if (!raw) continue;
+ 210|     // S-11: the plan decides. A strain already on file in ANY casing is never
+ 211|     // re-sent (Strain has no Operation [G L0319-L0320]); a case variant of a
+ 212|     // filed or already-emitted strain is never sent at all [BRIAN A16].
+ 213|     const strain = plan.strainCanonical.get(raw) ?? raw;
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L215-L260 — buildProductFile (part 1) — weightByKey from lots; grams may be '' when no lot weight.
 
 ```ts
- 215|         id: (it.source_item_id ?? strain).trim(),
- 216|         label: strain,
- 217|         detail: `"${strain}" is a reserved CCRS strain name`,
- 218|       });
- 219|       continue;
- 220|     }
- 221|     // B2: StrainType MUST be one of Indica/Sativa/Hybrid. Normalize the POS
- 222|     // label; when it can't be resolved we default to Hybrid (safe superset) and
- 223|     // flag the strain so an employee can correct it (drafts-only).
- 224|     const st = normalizeStrainType(it.strain_type);
- 225|     if (st.defaulted) defaulted.push(strain);
- 226|     rows.push([license, strain, st.value, createdBy, createdDate]);
- 227|   }
- 228|   if (defaulted.length > 0) {
- 229|     warnings.push(
- 230|       `${defaulted.length} strain(s) had no recognizable Indica/Sativa/Hybrid type and were defaulted to "Hybrid" — set the correct StrainType before uploading: ${default
- 231|         .slice(0, 15)
- 232|         .join(", ")}${defaulted.length > 15 ? "…" : ""}.`,
- 233|     );
- 234|   }
- 235|   if (rows.length === 0) warnings.push("No named strains found in the published menu.");
- 236|   const issues: CcrsSyncIssue[] = [];
- 237|   if (reserved.length > 0) {
- 238|     issues.push({
- 239|       severity: "error",
- 240|       file: "Strain",
- 241|       code: "E11_STRAIN_NAME_RESERVED",
- 242|       specPin: specPinFor("E11_STRAIN_NAME_RESERVED"),
- 243|       count: reserved.length,
- 244|       rows: reserved,
- 245|       message: `${reserved.length} product(s) use a strain name CCRS reserves — "Strain name is invalid, cannot be Unknown, THC, or Other." [G L0358]. Set the real strain
- 246|     });
- 247|   }
- 248|   return { rows, warnings, issues };
- 249| }
- 250| 
- 251| /**
- 252|  * Area.csv — CCRS requires the physical/logical areas that hold inventory. We do
- 253|  * not model named rooms in the DB, so we report the two areas our inventory
- 254|  * lifecycle actually uses: the default sales-floor area and a Quarantine area
- 255|  * (recalled/quarantine lots). This keeps Inventory.Area references valid.
- 256|  */
- 257| function buildAreaFile(
- 258|   hasQuarantine: boolean,
- 259|   license: string,
- 260|   createdBy: string,
+ 215|     if (seen.has(strain)) continue;
+ 216|     seen.add(strain);
+ 217|     // E11 [G L0358] "Strain name is invalid, cannot be Unknown, THC, or Other."
+ 218|     // Exact match only — "Other Kush" is a real strain and must still ship.
+ 219|     if (isReservedStrainName(strain)) {
+ 220|       reserved.push({
+ 221|         id: (it.source_item_id ?? strain).trim(),
+ 222|         label: strain,
+ 223|         detail: `"${strain}" is a reserved CCRS strain name`,
+ 224|       });
+ 225|       continue;
+ 226|     }
+ 227|     // B2: StrainType MUST be one of Indica/Sativa/Hybrid. Normalize the POS
+ 228|     // label; when it can't be resolved we default to Hybrid (safe superset) and
+ 229|     // flag the strain so an employee can correct it (drafts-only).
+ 230|     const st = normalizeStrainType(it.strain_type);
+ 231|     if (st.defaulted) defaulted.push(strain);
+ 232|     rows.push([license, strain, st.value, createdBy, createdDate]);
+ 233|   }
+ 234|   if (defaulted.length > 0) {
+ 235|     warnings.push(
+ 236|       `${defaulted.length} strain(s) had no recognizable Indica/Sativa/Hybrid type and were defaulted to "Hybrid" — set the correct StrainType before uploading: ${default
+ 237|         .slice(0, 15)
+ 238|         .join(", ")}${defaulted.length > 15 ? "…" : ""}.`,
+ 239|     );
+ 240|   }
+ 241|   if (rows.length === 0) warnings.push("No named strains found in the published menu.");
+ 242|   const issues: CcrsSyncIssue[] = [];
+ 243|   if (plan.strainCaseVariants.length > 0) {
+ 244|     issues.push({
+ 245|       severity: "warning",
+ 246|       file: "Strain",
+ 247|       code: "E39_STRAIN_CASE_VARIANT",
+ 248|       specPin: specPinFor("E39_STRAIN_CASE_VARIANT"),
+ 249|       count: plan.strainCaseVariants.length,
+ 250|       rows: plan.strainCaseVariants.map((v) => ({
+ 251|         id: v.ours,
+ 252|         label: v.ours,
+ 253|         detail: `written as "${v.value}" (${v.source === "ledger" ? "the spelling already filed in CCRS" : "the first spelling in this batch"})`,
+ 254|       })),
+ 255|       message: `${plan.strainCaseVariants.length} strain name(s) differ from another only by capital letters. CCRS must never receive the same strain with a different cap
+ 256|     });
+ 257|   }
+ 258|   if (reserved.length > 0) {
+ 259|     issues.push({
+ 260|       severity: "error",
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L280-L349 — buildProductFile (part 2) — classification via deriveCcrsClassificationFromType; E4 error message; clamps; warnings.slice(0,30).
 
 ```ts
- 280|   nameByProductKey: Map<string, string>;
- 281|   issues: CcrsSyncIssue[];
- 282| } {
- 283|   const warnings: string[] = [];
- 284|   const e9Rows: CcrsIssueRow[] = [];
- 285|   const e10Rows: CcrsIssueRow[] = [];
- 286|   // CCRS joins Inventory.Product -> Product.Name by the EXACT name string. We
- 287|   // record the final (clamped) Name we wrote for each raw product key so the
- 288|   // Inventory file can reference the IDENTICAL string. See
- 289|   // docs/CCRS_PRODUCT_NAMING_RESEARCH.md (the Inventory.Product join bug).
- 290|   const nameByProductKey = new Map<string, string>();
- 291|   // Weight per product key from lots (first non-null wins).
- 292|   const weightByKey = new Map<string, string>();
- 293|   for (const l of lots) {
- 294|     const key = (l.pos_product_key ?? "").trim();
- 295|     if (!key) continue;
- 296|     if (!weightByKey.has(key)) {
- 297|       const g = toGrams(l.unit_weight, l.unit_weight_uom);
- 298|       if (g) weightByKey.set(key, g);
- 299|     }
- 300|   }
- 301|   const seen = new Set<string>();
- 302|   const usedNamesLower = new Set<string>();
- 303|   const rows: string[][] = [];
- 304|   for (const it of items) {
- 305|     const key = (it.source_item_id ?? "").trim();
- 306|     if (!key) continue;
- 307|     const ext = sanitizeExternalId(key);
- 308|     if (!ext || seen.has(ext)) continue;
- 309|     seen.add(ext);
- 310|     const rawCategory = (it.pos_inventory_category ?? "").trim();
- 311|     const rawType = (it.pos_inventory_type ?? "").trim();
- 312|     const grams = weightByKey.get(key) ?? "";
- 313| 
- 314|     // SLICE 53 (two-layer naming, owner-approved): the CCRS Product.Name is
- 315|     // AUTO-COMPOSED from stored fields — short vendor + brand + display name +
- 316|     // measured cannabinoid tag + type + size ("Downtown Space OG Flower 1g").
- 317|     // The human-facing menu_items.name is untouched; the composed name lives
- 318|     // only in these files. Falls back to the display name when composition is
- 319|     // impossible (never guesses).
- 320|     const composed = composeCcrsProductName({
- 321|       name: (it.name ?? "").trim(),
- 322|       vendor: it.vendor_name,
- 323|       brand: it.brand_name,
- 324|       posInventoryCategory: it.pos_inventory_category,
- 325|       category: it.category,
- 326|       unitWeightGrams: grams || null,
- 327|       totalThc: jsonToCannabinoid(it.total_thc_json),
- 328|       totalCbd: jsonToCannabinoid(it.total_cbd_json),
- 329|       compounds: jsonToCompounds(it.compounds_json),
- 330|     });
- 331|     // CCRS joins Inventory.Product -> Product.Name by EXACT string, so two
- 332|     // DIFFERENT products must never share one Name. Deterministic suffix from
- 333|     // the product's own external id on collision (stable batch after batch).
- 334|     const disamb = disambiguateCcrsName(composed.name, ext, usedNamesLower);
- 335|     if (disamb.disambiguated) {
- 336|       warnings.push(
- 337|         `Product "${composed.name.slice(0, 40)}…": composed CCRS name collided with another product — suffixed to "${disamb.name.slice(0, 60)}" to keep the Inventory→Prod
- 338|       );
- 339|     }
- 340|     const productName = disamb.name;
- 341| 
- 342|     // C1 (Slice 55, owner-confirmed): the CCRS (InventoryCategory, InventoryType)
- 343|     // is derived from the vendor-set LCB TYPE alone (pos_inventory_type). The
- 344|     // house/merchandising label (pos_inventory_category, e.g. "Pre-roll",
- 345|     // "Gummies") is a STOREFRONT concept and is NOT used as a CCRS category — it
- 346|     // only feeds the composed Name above. Deriving the category from the type
- 347|     // (an inversion of the CCRS enum) is deterministic and never guesses; a
- 348|     // blank/unknown type still raises the pre-existing ERROR safety net so a
- 349|     // human fixes the source. NEVER-INVENT policy preserved.
+ 280|   license: string,
+ 281|   createdBy: string,
+ 282|   createdDate: string,
+ 283| ): { rows: string[][]; warnings: string[] } {
+ 284|   const rows: string[][] = [];
+ 285|   rows.push([license, "Sales Floor", "FALSE", "AREA-SALES-FLOOR", createdBy, createdDate, "", "", "Insert"]);
+ 286|   if (hasQuarantine) {
+ 287|     rows.push([license, "Quarantine", "TRUE", "AREA-QUARANTINE", createdBy, createdDate, "", "", "Insert"]);
+ 288|   }
+ 289|   return { rows, warnings: [] };
+ 290| }
+ 291| 
+ 292| function buildProductFile(
+ 293|   items: MenuItemRow[],
+ 294|   lots: LotRow[],
+ 295|   license: string,
+ 296|   createdBy: string,
+ 297|   createdDate: string,
+ 298| ): {
+ 299|   rows: string[][];
+ 300|   warnings: string[];
+ 301|   nameByProductKey: Map<string, string>;
+ 302|   /** S-11: the product key behind each row in `rows`, same order. */
+ 303|   keys: string[];
+ 304|   issues: CcrsSyncIssue[];
+ 305| } {
+ 306|   const warnings: string[] = [];
+ 307|   const e9Rows: CcrsIssueRow[] = [];
+ 308|   const e10Rows: CcrsIssueRow[] = [];
+ 309|   // CCRS joins Inventory.Product -> Product.Name by the EXACT name string. We
+ 310|   // record the final (clamped) Name we wrote for each raw product key so the
+ 311|   // Inventory file can reference the IDENTICAL string. See
+ 312|   // docs/CCRS_PRODUCT_NAMING_RESEARCH.md (the Inventory.Product join bug).
+ 313|   const nameByProductKey = new Map<string, string>();
+ 314|   // Weight per product key from lots (first non-null wins).
+ 315|   const weightByKey = new Map<string, string>();
+ 316|   for (const l of lots) {
+ 317|     const key = (l.pos_product_key ?? "").trim();
+ 318|     if (!key) continue;
+ 319|     if (!weightByKey.has(key)) {
+ 320|       const g = toGrams(l.unit_weight, l.unit_weight_uom);
+ 321|       if (g) weightByKey.set(key, g);
+ 322|     }
+ 323|   }
+ 324|   const seen = new Set<string>();
+ 325|   const usedNamesLower = new Set<string>();
+ 326|   const rows: string[][] = [];
+ 327|   const keys: string[] = [];
+ 328|   for (const it of items) {
+ 329|     const key = (it.source_item_id ?? "").trim();
+ 330|     if (!key) continue;
+ 331|     const ext = sanitizeExternalId(key);
+ 332|     if (!ext || seen.has(ext)) continue;
+ 333|     seen.add(ext);
+ 334|     const rawCategory = (it.pos_inventory_category ?? "").trim();
+ 335|     const rawType = (it.pos_inventory_type ?? "").trim();
+ 336|     const grams = weightByKey.get(key) ?? "";
+ 337| 
+ 338|     // SLICE 53 (two-layer naming, owner-approved): the CCRS Product.Name is
+ 339|     // AUTO-COMPOSED from stored fields — short vendor + brand + display name +
+ 340|     // measured cannabinoid tag + type + size ("Downtown Space OG Flower 1g").
+ 341|     // The human-facing menu_items.name is untouched; the composed name lives
+ 342|     // only in these files. Falls back to the display name when composition is
+ 343|     // impossible (never guesses).
+ 344|     const composed = composeCcrsProductName({
+ 345|       name: (it.name ?? "").trim(),
+ 346|       vendor: it.vendor_name,
+ 347|       brand: it.brand_name,
+ 348|       posInventoryCategory: it.pos_inventory_category,
+ 349|       category: it.category,
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L351-L417 — buildInventoryFile — ext id derive; Area choice; TotalCost = unit_cost_minor_units*received_qty (0 when cost missing → guide p.17 L614 'TotalCost cannot equal 0'); IsMedical hard 'FALSE'; Operation Insert.
 
 ```ts
- 351|     let category = rawCategory;
- 352|     let type = rawType;
- 353|     if (cls.ok) {
- 354|       category = cls.category;
- 355|       type = cls.type;
- 356|       // Advisory (never blocks): a legacy 2021-vocabulary value ("Usable
- 357|       // Marijuana", inhalation concentrate under IntermediateProduct) was
- 358|       // canonicalized to the current Table 2 spelling/category. Surface it so
- 359|       // staff see what was translated.
- 360|       if (cls.aliased && cls.aliasNote) {
- 361|         warnings.push(`Product "${productName || ext}": ${cls.aliasNote}`);
- 362|       }
- 363|     } else {
- 364|       warnings.push(`ERROR — Product "${productName || ext}": ${cls.error} Fix the CCRS mapping (Inventory types) before submitting.`);
- 365|     }
- 366| 
- 367|     // C2: clamp Name (75) and Description (250); flag truncation (don't silently cut).
- 368|     const nameClamp = clampText(productName, CCRS_PRODUCT_NAME_MAX);
- 369|     if (nameClamp.truncated) {
- 370|       warnings.push(`Product "${productName.slice(0, 40)}…": Name exceeds ${CCRS_PRODUCT_NAME_MAX} chars and was truncated — shorten it in the source.`);
- 371|     }
- 372|     // Naming-convention check (drafts-only, surfaced as a warning): if the Name
- 373|     // violates the house convention (leading symbol, disallowed char, casing),
- 374|     // flag it so staff fix the source. Does NOT alter the value written here.
- 375|     const nameCheck = validateName(nameClamp.value);
- 376|     if (!nameCheck.ok) {
- 377|       warnings.push(
- 378|         `Product "${nameClamp.value.slice(0, 40)}…": name convention issues — ${nameCheck.issues.map((i) => i.message).join(" ")} Suggested: "${suggestName(nameClamp.valu
- 379|       );
- 380|     }
- 381|     // Record the exact Name for the Inventory.Product join (keyed by raw key).
- 382|     nameByProductKey.set(key, nameClamp.value);
- 383|     const descClamp = clampText(it.description, CCRS_PRODUCT_DESCRIPTION_MAX);
- 384|     if (descClamp.truncated) {
- 385|       warnings.push(`Product "${productName || ext}": Description exceeds ${CCRS_PRODUCT_DESCRIPTION_MAX} chars and was truncated — shorten it in the source.`);
- 386|     }
- 387| 
- 388|     // E9 / E10 — for Usable Cannabis and Cannabis Mix Packaged ONLY, the guide
- 389|     // makes UnitWeightGrams and Description mandatory:
- 390|     //   [G L0489-L0490] "required when InventoryType = Useable cannabis, or
- 391|     //                    Cannabis Mix Packaged All other product types weight
- 392|     //                    can be reported as 0"
- 393|     //   [G L0482-L0483] the same note for Description
- 394|     //   [G L0434] "If Useable Cannabis is selected, Unit Weight Gram cannot be 0"
- 395|     // `type` is the CANONICAL Table 2 value resolved above, so we compare that
- 396|     // rather than the raw vendor string.
- 397|     for (const found of productRowIssues({
- 398|       id: ext,
- 399|       label: nameClamp.value || ext,
- 400|       inventoryType: type,
- 401|       unitWeightGrams: grams,
- 402|       description: descClamp.value,
- 403|     })) {
- 404|       if (found.code === "E9_UNITWEIGHT_ZERO_USABLE") e9Rows.push(found.row);
- 405|       else e10Rows.push(found.row);
- 406|     }
- 407| 
- 408|     rows.push([
- 409|       license,
- 410|       category,
- 411|       type,
- 412|       nameClamp.value,
- 413|       descClamp.value,
- 414|       grams,
- 415|       ext,
- 416|       createdBy,
- 417|       createdDate,
+ 351|       totalThc: jsonToCannabinoid(it.total_thc_json),
+ 352|       totalCbd: jsonToCannabinoid(it.total_cbd_json),
+ 353|       compounds: jsonToCompounds(it.compounds_json),
+ 354|     });
+ 355|     // CCRS joins Inventory.Product -> Product.Name by EXACT string, so two
+ 356|     // DIFFERENT products must never share one Name. Deterministic suffix from
+ 357|     // the product's own external id on collision (stable batch after batch).
+ 358|     const disamb = disambiguateCcrsName(composed.name, ext, usedNamesLower);
+ 359|     if (disamb.disambiguated) {
+ 360|       warnings.push(
+ 361|         `Product "${composed.name.slice(0, 40)}…": composed CCRS name collided with another product — suffixed to "${disamb.name.slice(0, 60)}" to keep the Inventory→Prod
+ 362|       );
+ 363|     }
+ 364|     const productName = disamb.name;
+ 365| 
+ 366|     // C1 (Slice 55, owner-confirmed): the CCRS (InventoryCategory, InventoryType)
+ 367|     // is derived from the vendor-set LCB TYPE alone (pos_inventory_type). The
+ 368|     // house/merchandising label (pos_inventory_category, e.g. "Pre-roll",
+ 369|     // "Gummies") is a STOREFRONT concept and is NOT used as a CCRS category — it
+ 370|     // only feeds the composed Name above. Deriving the category from the type
+ 371|     // (an inversion of the CCRS enum) is deterministic and never guesses; a
+ 372|     // blank/unknown type still raises the pre-existing ERROR safety net so a
+ 373|     // human fixes the source. NEVER-INVENT policy preserved.
+ 374|     const cls = deriveCcrsClassificationFromType(rawType);
+ 375|     let category = rawCategory;
+ 376|     let type = rawType;
+ 377|     if (cls.ok) {
+ 378|       category = cls.category;
+ 379|       type = cls.type;
+ 380|       // Advisory (never blocks): a legacy 2021-vocabulary value ("Usable
+ 381|       // Marijuana", inhalation concentrate under IntermediateProduct) was
+ 382|       // canonicalized to the current Table 2 spelling/category. Surface it so
+ 383|       // staff see what was translated.
+ 384|       if (cls.aliased && cls.aliasNote) {
+ 385|         warnings.push(`Product "${productName || ext}": ${cls.aliasNote}`);
+ 386|       }
+ 387|     } else {
+ 388|       warnings.push(`ERROR — Product "${productName || ext}": ${cls.error} Fix the CCRS mapping (Inventory types) before submitting.`);
+ 389|     }
+ 390| 
+ 391|     // C2: clamp Name (75) and Description (250); flag truncation (don't silently cut).
+ 392|     const nameClamp = clampText(productName, CCRS_PRODUCT_NAME_MAX);
+ 393|     if (nameClamp.truncated) {
+ 394|       warnings.push(`Product "${productName.slice(0, 40)}…": Name exceeds ${CCRS_PRODUCT_NAME_MAX} chars and was truncated — shorten it in the source.`);
+ 395|     }
+ 396|     // Naming-convention check (drafts-only, surfaced as a warning): if the Name
+ 397|     // violates the house convention (leading symbol, disallowed char, casing),
+ 398|     // flag it so staff fix the source. Does NOT alter the value written here.
+ 399|     const nameCheck = validateName(nameClamp.value);
+ 400|     if (!nameCheck.ok) {
+ 401|       warnings.push(
+ 402|         `Product "${nameClamp.value.slice(0, 40)}…": name convention issues — ${nameCheck.issues.map((i) => i.message).join(" ")} Suggested: "${suggestName(nameClamp.valu
+ 403|       );
+ 404|     }
+ 405|     // Record the exact Name for the Inventory.Product join (keyed by raw key).
+ 406|     nameByProductKey.set(key, nameClamp.value);
+ 407|     const descClamp = clampText(it.description, CCRS_PRODUCT_DESCRIPTION_MAX);
+ 408|     if (descClamp.truncated) {
+ 409|       warnings.push(`Product "${productName || ext}": Description exceeds ${CCRS_PRODUCT_DESCRIPTION_MAX} chars and was truncated — shorten it in the source.`);
+ 410|     }
+ 411| 
+ 412|     // E9 / E10 — for Usable Cannabis and Cannabis Mix Packaged ONLY, the guide
+ 413|     // makes UnitWeightGrams and Description mandatory:
+ 414|     //   [G L0489-L0490] "required when InventoryType = Useable cannabis, or
+ 415|     //                    Cannabis Mix Packaged All other product types weight
+ 416|     //                    can be reported as 0"
+ 417|     //   [G L0482-L0483] the same note for Description
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L424-L500 — buildCcrsBatch (part 1) — license/Supabase guards E1/E2; published menu; lots pagedAll excluding status=destroyed.
 
 ```ts
- 424|   // Cap the warning noise (errors first so critical mapping issues aren't buried).
- 425|   const unique = [...new Set(warnings)];
- 426|   const errorsFirst = [
- 427|     ...unique.filter((w) => w.startsWith("ERROR")),
- 428|     ...unique.filter((w) => !w.startsWith("ERROR")),
- 429|   ];
- 430|   const dedupWarnings = errorsFirst.slice(0, 30);
- 431|   const issues: CcrsSyncIssue[] = [];
- 432|   if (e9Rows.length > 0) {
- 433|     issues.push({
- 434|       severity: "error",
- 435|       file: "Product",
- 436|       code: "E9_UNITWEIGHT_ZERO_USABLE",
- 437|       specPin: specPinFor("E9_UNITWEIGHT_ZERO_USABLE"),
- 438|       count: e9Rows.length,
- 439|       rows: e9Rows,
- 440|       message: `${e9Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no unit weight. CCRS rejects the Product file — "If Useable Cannabis is selected,
- 441|     });
- 442|   }
- 443|   if (e10Rows.length > 0) {
- 444|     issues.push({
- 445|       severity: "error",
- 446|       file: "Product",
- 447|       code: "E10_DESCRIPTION_REQUIRED",
- 448|       specPin: specPinFor("E10_DESCRIPTION_REQUIRED"),
- 449|       count: e10Rows.length,
- 450|       rows: e10Rows,
- 451|       message: `${e10Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no Description, which CCRS requires for those two types [G L0482-L0483]. Add a s
- 452|     });
- 453|   }
- 454|   return { rows, warnings: dedupWarnings, nameByProductKey, issues };
- 455| }
- 456| 
- 457| function buildInventoryFile(
- 458|   lots: LotRow[],
- 459|   itemsByKey: Map<string, MenuItemRow>,
- 460|   license: string,
- 461|   createdBy: string,
- 462|   nameByProductKey: Map<string, string>,
- 463| ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
- 464|   const warnings: string[] = [];
- 465|   const rows: string[][] = [];
- 466|   // S-02 coded pre-flight errors. Rows are collected, never capped.
- 467|   const e7Rows: CcrsIssueRow[] = [];
- 468|   const e8Rows: CcrsIssueRow[] = [];
- 469|   // S-10: a lot with NO assigned ccrs_inventory_external_id is withheld, never
- 470|   // given an id invented at export time (standing rule 3). Every receiving-
- 471|   // intake and Cultivera-import lot is assigned one when it is created, so this
- 472|   // only fires on an anomaly — exactly the lot an employee must look at.
- 473|   const e3Rows: CcrsIssueRow[] = [];
- 474|   for (const l of lots) {
- 475|     const ext = assignedInventoryExternalId(l);
- 476|     if (!ext) {
- 477|       e3Rows.push({
- 478|         id: l.id,
- 479|         label: l.lot_code ?? l.product_name ?? l.id,
- 480|         detail: "No CCRS inventory identifier is assigned to this lot.",
- 481|       });
- 482|       continue;
- 483|     }
- 484|     const key = (l.pos_product_key ?? "").trim();
- 485|     const item = key ? itemsByKey.get(key) : undefined;
- 486|     const strain = (item?.strain_name ?? "").trim();
- 487|     // CCRS joins Inventory.Product -> Product.Name by the EXACT name string
- 488|     // (NOT by ExternalIdentifier). Write the identical Name recorded by
- 489|     // buildProductFile. See docs/CCRS_PRODUCT_NAMING_RESEARCH.md.
- 490|     const productName = nameByProductKey.get(key) ?? "";
- 491|     if (!productName) {
- 492|       warnings.push(
- 493|         `Lot ${l.id}: no matching Product.Name for key "${key}" — Inventory.Product would be blank/invalid. Ensure the product is in the published menu.`,
- 494|       );
- 495|     }
- 496|     const area = l.status === "quarantine" || l.status === "recalled" ? "Quarantine" : "Sales Floor";
- 497|     const totalCostMinor = (l.unit_cost_minor_units ?? 0) * (l.received_qty ?? 0);
- 498| 
- 499|     // E7 [G L0614] / E8 [G L0597]. The decision lives in the pure core so it is
- 500|     // unit-tested directly; a failing row is WITHHELD because CCRS rejects the
+ 424|       inventoryType: type,
+ 425|       unitWeightGrams: grams,
+ 426|       description: descClamp.value,
+ 427|     })) {
+ 428|       if (found.code === "E9_UNITWEIGHT_ZERO_USABLE") e9Rows.push(found.row);
+ 429|       else e10Rows.push(found.row);
+ 430|     }
+ 431| 
+ 432|     rows.push([
+ 433|       license,
+ 434|       category,
+ 435|       type,
+ 436|       nameClamp.value,
+ 437|       descClamp.value,
+ 438|       grams,
+ 439|       ext,
+ 440|       createdBy,
+ 441|       createdDate,
+ 442|       "",
+ 443|       "",
+ 444|       "Insert",
+ 445|     ]);
+ 446|     keys.push(key);
+ 447|   }
+ 448|   if (rows.length === 0) warnings.push("No products found in the published menu.");
+ 449|   // Cap the warning noise (errors first so critical mapping issues aren't buried).
+ 450|   const unique = [...new Set(warnings)];
+ 451|   const errorsFirst = [
+ 452|     ...unique.filter((w) => w.startsWith("ERROR")),
+ 453|     ...unique.filter((w) => !w.startsWith("ERROR")),
+ 454|   ];
+ 455|   const dedupWarnings = errorsFirst.slice(0, 30);
+ 456|   const issues: CcrsSyncIssue[] = [];
+ 457|   if (e9Rows.length > 0) {
+ 458|     issues.push({
+ 459|       severity: "error",
+ 460|       file: "Product",
+ 461|       code: "E9_UNITWEIGHT_ZERO_USABLE",
+ 462|       specPin: specPinFor("E9_UNITWEIGHT_ZERO_USABLE"),
+ 463|       count: e9Rows.length,
+ 464|       rows: e9Rows,
+ 465|       message: `${e9Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no unit weight. CCRS rejects the Product file — "If Useable Cannabis is selected,
+ 466|     });
+ 467|   }
+ 468|   if (e10Rows.length > 0) {
+ 469|     issues.push({
+ 470|       severity: "error",
+ 471|       file: "Product",
+ 472|       code: "E10_DESCRIPTION_REQUIRED",
+ 473|       specPin: specPinFor("E10_DESCRIPTION_REQUIRED"),
+ 474|       count: e10Rows.length,
+ 475|       rows: e10Rows,
+ 476|       message: `${e10Rows.length} Usable Cannabis / Cannabis Mix Packaged product(s) have no Description, which CCRS requires for those two types [G L0482-L0483]. Add a s
+ 477|     });
+ 478|   }
+ 479|   return { rows, warnings: dedupWarnings, nameByProductKey, keys, issues };
+ 480| }
+ 481| 
+ 482| function buildInventoryFile(
+ 483|   lots: LotRow[],
+ 484|   license: string,
+ 485|   createdBy: string,
+ 486|   plan: LedgerPlan,
+ 487| ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
+ 488|   const warnings: string[] = [];
+ 489|   const rows: string[][] = [];
+ 490|   // S-02 coded pre-flight errors. Rows are collected, never capped.
+ 491|   const e7Rows: CcrsIssueRow[] = [];
+ 492|   const e8Rows: CcrsIssueRow[] = [];
+ 493|   // S-10: a lot with NO assigned ccrs_inventory_external_id is withheld, never
+ 494|   // given an id invented at export time (standing rule 3). Every receiving-
+ 495|   // intake and Cultivera-import lot is assigned one when it is created, so this
+ 496|   // only fires on an anomaly — exactly the lot an employee must look at.
+ 497|   const e3Rows: CcrsIssueRow[] = [];
+ 498|   // S-11: lots the ledger routing refuses (uncertain / deleted / unknown id, or
+ 499|   // a filed lot whose filed product cannot be proven) — never guessed at.
+ 500|   const e41Rows: CcrsIssueRow[] = [];
 ```
 
 `src/lib/compliance/ccrs-batch.ts` L540-L652 — buildCcrsBatch (part 2) — InventoryTransfer emitted EMPTY with an explanatory note (guide p.33 L1162 says it 'is required weekly by any licensed facility that receives inventory'); sort; E3; orphan products; verifySaleNumericColumns; WARNING_CAP_PER_FILE.
 
 ```ts
- 540|       // the emitted MM/DD/YYYY is byte-identical.
- 541|       ccrsDate(ccrsInventoryCreatedDate(l)),
- 542|       "",
- 543|       "",
- 544|       "Insert",
- 545|     ]);
- 546|     // S-10: filed ids carry dots (4,295 in the LCB delivery) and are legal
- 547|     // [G L0224]; only CSV-breaking characters and > 100 chars are flagged.
- 548|     const idErrs = validatePassThroughExternalId(ext);
- 549|     if (idErrs.length) warnings.push(`Inventory id "${ext}" ${idErrs.join(", ")}.`);
- 550|   }
- 551|   if (rows.length === 0) warnings.push("No inventory lots found to report.");
- 552|   const issues: CcrsSyncIssue[] = [];
- 553|   if (e3Rows.length > 0) {
- 554|     issues.push({
- 555|       severity: "error",
- 556|       file: "Inventory",
- 557|       code: "E3_EXTERNAL_ID_UNASSIGNED",
- 558|       specPin: specPinFor("E3_EXTERNAL_ID_UNASSIGNED"),
- 559|       count: e3Rows.length,
- 560|       rows: e3Rows,
- 561|       message: `${e3Rows.length} lot(s) have no CCRS inventory identifier assigned, so they were left out of Inventory.csv. ExternalIdentifier is required on every row [G
- 562|     });
- 563|   }
- 564|   if (e8Rows.length > 0) {
- 565|     issues.push({
- 566|       severity: "error",
- 567|       file: "Inventory",
- 568|       code: "E8_ONHAND_GT_INITIAL",
- 569|       specPin: specPinFor("E8_ONHAND_GT_INITIAL"),
- 570|       count: e8Rows.length,
- 571|       rows: e8Rows,
- 572|       message: `${e8Rows.length} lot(s) report more on hand than were ever received. CCRS rejects the Inventory file with "QuanityOnHand is greater than InitialQuantity" 
- 573|     });
- 574|   }
- 575|   if (e7Rows.length > 0) {
- 576|     issues.push({
- 577|       severity: "error",
- 578|       file: "Inventory",
- 579|       code: "E7_TOTALCOST_ZERO",
- 580|       specPin: specPinFor("E7_TOTALCOST_ZERO"),
- 581|       count: e7Rows.length,
- 582|       rows: e7Rows,
- 583|       message: `${e7Rows.length} lot(s) have no cost, so TotalCost would be 0 and CCRS rejects the Inventory file ("TotalCost cannot equal 0" [G L0614]). Enter the unit c
- 584|     });
+ 540|       id: l.id,
+ 541|       label: l.lot_code ?? ext,
+ 542|       initialQty,
+ 543|       onHandQty,
+ 544|       totalCostMinorUnits: totalCostMinor,
+ 545|       isSample: l.is_sample === true,
+ 546|     });
+ 547|     if (!verdict.emit) {
+ 548|       if (verdict.code === "E8_ONHAND_GT_INITIAL") e8Rows.push(verdict.row);
+ 549|       else e7Rows.push(verdict.row);
+ 550|       continue;
+ 551|     }
+ 552| 
+ 553|     rows.push([
+ 554|       license,
+ 555|       strain,
+ 556|       area,
+ 557|       productName,
+ 558|       String(l.received_qty ?? 0),
+ 559|       String(l.on_hand_qty ?? 0),
+ 560|       verdict.totalCost,
+ 561|       "FALSE", // IsMedical — medical exemptions are tracked per-sale, not per-lot
+ 562|       ext,
+ 563|       createdBy,
+ 564|       // SLICE 2 — report the day the lot was ACTUALLY received when we can
+ 565|       // evidence it. This used to be `ccrsDate(l.created_at)` unconditionally;
+ 566|       // for a lot whose POS export had a blank Received date, created_at is
+ 567|       // the instant the migration ran, so the LCB was being told the lot was
+ 568|       // created on import day. ccrsInventoryCreatedDate() prefers the
+ 569|       // evidenced received_on and falls back to created_at only when the date
+ 570|       // is genuinely unknown — and those lots are flagged for the owner rather
+ 571|       // than quietly given a manufactured date.
+ 572|       //
+ 573|       // This is a no-op for the ~3,977 lots that DID carry a received date:
+ 574|       // SLICE 1 already set their created_at to noon UTC on that same day, so
+ 575|       // the emitted MM/DD/YYYY is byte-identical.
+ 576|       ccrsDate(ccrsInventoryCreatedDate(l)),
+ 577|       "",
+ 578|       "",
+ 579|       planned.op,
+ 580|     ]);
+ 581|     // S-10: filed ids carry dots (4,295 in the LCB delivery) and are legal
+ 582|     // [G L0224]; only CSV-breaking characters and > 100 chars are flagged.
+ 583|     const idErrs = validatePassThroughExternalId(ext);
+ 584|     if (idErrs.length) warnings.push(`Inventory id "${ext}" ${idErrs.join(", ")}.`);
  585|   }
- 586|   return { rows, warnings: [...new Set(warnings)].slice(0, 25), issues };
- 587| }
- 588| 
- 589| // ---------------------------------------------------------------------------
- 590| // The full batch
- 591| // ---------------------------------------------------------------------------
- 592| 
- 593| export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {
- 594|   const license = await getCcrsLicenseSettings();
- 595|   const submittedBy = license.submittedBy || "Greenway";
- 596|   const createdBy = submittedBy;
- 597|   const now = new Date();
- 598|   const createdDate = ccrsDate(now);
- 599|   const syncIssues: CcrsSyncIssue[] = [];
- 600| 
- 601|   const emptyBatch = (): CcrsBatch => ({
- 602|     licenseNumber: license.licenseNumber,
- 603|     submittedBy,
- 604|     fromISO,
- 605|     toISO,
- 606|     files: [],
- 607|     syncIssues,
- 608|     totalRecords: 0,
- 609|     generatedAt: now.toISOString(),
- 610|   });
- 611| 
- 612|   if (!license.licenseNumber) {
- 613|     syncIssues.push({
- 614|       severity: "error",
- 615|       file: "General",
- 616|       message: "License number is not set. Add it in Compliance settings before generating a batch.",
- 617|     });
- 618|   }
- 619| 
- 620|   if (!isSupabaseServiceConfigured) {
- 621|     syncIssues.push({ severity: "error", file: "General", message: "Supabase is not configured." });
- 622|     return emptyBatch();
- 623|   }
- 624| 
- 625|   const admin = createSupabaseAdminClient();
- 626| 
- 627|   // --- Master data (published menu + inventory lots) ------------------------
- 628|   const versionId = await getPublishedVersionId(admin);
- 629|   let items: MenuItemRow[] = [];
- 630|   if (versionId) {
- 631|     const { data } = await admin
- 632|       .from("menu_items")
- 633|       .select(
- 634|         "source_item_id, name, strain_name, strain_type, pos_inventory_type, pos_inventory_category, description, brand_name, vendor_name, category, total_thc_json, total
- 635|       )
- 636|       .eq("menu_version_id", versionId)
- 637|       .eq("hidden", false);
- 638|     items = (data as MenuItemRow[] | null) ?? [];
- 639|   } else {
- 640|     syncIssues.push({
- 641|       severity: "warning",
- 642|       file: "Product",
- 643|       message: "No published menu version — Strain/Product files will be empty.",
- 644|     });
- 645|   }
- 646|   const itemsByKey = new Map(items.map((i) => [i.source_item_id.trim(), i]));
- 647| 
- 648|   // SLICE 2: paged. `.limit(5000)` did NOT raise the PostgREST 1,000-row cap,
- 649|   // so with 4,179 lots the Inventory.csv filed with the WA LCB contained the
- 650|   // first 1,000 lots and silently omitted the rest. That is an incomplete
- 651|   // state traceability filing, which is why this is fixed in the same slice
- 652|   // as the received date. (Selecting `received_on` for CreatedDate.)
+ 586|   if (rows.length === 0) warnings.push("No inventory lots found to report.");
+ 587|   const issues: CcrsSyncIssue[] = [];
+ 588|   if (e3Rows.length > 0) {
+ 589|     issues.push({
+ 590|       severity: "error",
+ 591|       file: "Inventory",
+ 592|       code: "E3_EXTERNAL_ID_UNASSIGNED",
+ 593|       specPin: specPinFor("E3_EXTERNAL_ID_UNASSIGNED"),
+ 594|       count: e3Rows.length,
+ 595|       rows: e3Rows,
+ 596|       message: `${e3Rows.length} lot(s) have no CCRS inventory identifier assigned, so they were left out of Inventory.csv. ExternalIdentifier is required on every row [G
+ 597|     });
+ 598|   }
+ 599|   if (e41Rows.length > 0) {
+ 600|     issues.push({
+ 601|       severity: "error",
+ 602|       file: "Inventory",
+ 603|       code: "E41_LEDGER_WITHHELD",
+ 604|       specPin: specPinFor("E41_LEDGER_WITHHELD"),
+ 605|       count: e41Rows.length,
+ 606|       rows: e41Rows,
+ 607|       message: `${e41Rows.length} lot(s) were left out of Inventory.csv because we cannot prove what CCRS holds for them. Insert creates a record and Update alters "an ex
+ 608|     });
+ 609|   }
+ 610|   if (e8Rows.length > 0) {
+ 611|     issues.push({
+ 612|       severity: "error",
+ 613|       file: "Inventory",
+ 614|       code: "E8_ONHAND_GT_INITIAL",
+ 615|       specPin: specPinFor("E8_ONHAND_GT_INITIAL"),
+ 616|       count: e8Rows.length,
+ 617|       rows: e8Rows,
+ 618|       message: `${e8Rows.length} lot(s) report more on hand than were ever received. CCRS rejects the Inventory file with "QuanityOnHand is greater than InitialQuantity" 
+ 619|     });
+ 620|   }
+ 621|   if (e7Rows.length > 0) {
+ 622|     issues.push({
+ 623|       severity: "error",
+ 624|       file: "Inventory",
+ 625|       code: "E7_TOTALCOST_ZERO",
+ 626|       specPin: specPinFor("E7_TOTALCOST_ZERO"),
+ 627|       count: e7Rows.length,
+ 628|       rows: e7Rows,
+ 629|       message: `${e7Rows.length} lot(s) have no cost, so TotalCost would be 0 and CCRS rejects the Inventory file ("TotalCost cannot equal 0" [G L0614]). Enter the unit c
+ 630|     });
+ 631|   }
+ 632|   return { rows, warnings: [...new Set(warnings)].slice(0, 25), issues };
+ 633| }
+ 634| 
+ 635| // ---------------------------------------------------------------------------
+ 636| // The full batch
+ 637| // ---------------------------------------------------------------------------
+ 638| 
+ 639| export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {
+ 640|   const license = await getCcrsLicenseSettings();
+ 641|   const submittedBy = license.submittedBy || "Greenway";
+ 642|   const createdBy = submittedBy;
+ 643|   const now = new Date();
+ 644|   const createdDate = ccrsDate(now);
+ 645|   const syncIssues: CcrsSyncIssue[] = [];
+ 646| 
+ 647|   const emptyBatch = (): CcrsBatch => ({
+ 648|     licenseNumber: license.licenseNumber,
+ 649|     submittedBy,
+ 650|     fromISO,
+ 651|     toISO,
+ 652|     files: [],
 ```
 
 ## B. Core/pure helpers — `src/lib/compliance/ccrs-batch-core.ts`
@@ -3530,7 +3530,7 @@ Generated 2026-10-06 01:19Z at commit `2f8fb1aacc8f04b07d0125b0417f76efe211eed4`
 
 ## K. Tests and fixtures
 
-### `tests/compliance/ccrs-batch.test.ts` (285 L) — `describe`/`it` titles
+### `tests/compliance/ccrs-batch.test.ts` (286 L) — `describe`/`it` titles
 
 - L46: `describe("CCRS golden files — all 7 retailer file types", () => {`
 - L48: `it(`${type}.csv is byte-identical to the hand-verified golden`, () => {`
@@ -3547,102 +3547,103 @@ Generated 2026-10-06 01:19Z at commit `2f8fb1aacc8f04b07d0125b0417f76efe211eed4`
 - L127: `it("a plain Pacific-afternoon instant formats as expected", () => {`
 - L132: `describe("ccrsCell quoting", () => {`
 - L133: `it("quotes cells containing commas and doubles embedded quotes (S-09, RFC 4180)", () => {`
-- L142: `describe("file naming convention", () => {`
-- L143: `it("UploadType_LicenseNumber_YYYYMMDDHHMMSS.csv", () => {`
-- L156: `describe("upload order of operations (Group 1 → 2 → 3)", () => {`
-- L157: `it("upload order covers all 7 types with Sale last", () => {`
-- L162: `it("Strain/Area/Product precede Inventory, which precedes Sale", () => {`
-- L168: `describe("SaleType / StrainType enums", () => {`
-- L169: `it("medical orders → RecreationalMedical, others → RecreationalRetail", () => {`
-- L173: `it("strain-type normalization collapses to the 3 CCRS values", () => {`
-- L181: `describe("product classification (Table 2)", () => {`
-- L182: `it("valid category/type pairs pass, invalid ones fail", () => {`
-- L194: `it("canonicalizes legacy 2021 LCB vocabulary to the modern enum", () => {`
-- L212: `describe("Sale numeric-column safety (defense in depth)", () => {`
-- L214: `it("a clean Sale row passes", () => {`
-- L217: `it("zero/negative/non-numeric quantity is flagged", () => {`
-- L224: `it("negative or 3-decimal money is flagged", () => {`
-- L234: `describe("CCRS Product.Name two-layer composition (SLICE 53)", () => {`
-- L235: `it("composes the owner-approved example and guards duplication/collisions", async () => {`
-- L271: `it("__runCcrsProductNameCoreTests", async () => {`
-- L279: `describe("embedded self-tests still pass under vitest", () => {`
-- L280: `it("__runCcrsBatchCoreTests", async () => {`
+- L143: `describe("file naming convention", () => {`
+- L144: `it("UploadType_LicenseNumber_YYYYMMDDHHMMSS.csv", () => {`
+- L157: `describe("upload order of operations (Group 1 → 2 → 3)", () => {`
+- L158: `it("upload order covers all 7 types with Sale last", () => {`
+- L163: `it("Strain/Area/Product precede Inventory, which precedes Sale", () => {`
+- L169: `describe("SaleType / StrainType enums", () => {`
+- L170: `it("medical orders → RecreationalMedical, others → RecreationalRetail", () => {`
+- L174: `it("strain-type normalization collapses to the 3 CCRS values", () => {`
+- L182: `describe("product classification (Table 2)", () => {`
+- L183: `it("valid category/type pairs pass, invalid ones fail", () => {`
+- L195: `it("canonicalizes legacy 2021 LCB vocabulary to the modern enum", () => {`
+- L213: `describe("Sale numeric-column safety (defense in depth)", () => {`
+- L215: `it("a clean Sale row passes", () => {`
+- L218: `it("zero/negative/non-numeric quantity is flagged", () => {`
+- L225: `it("negative or 3-decimal money is flagged", () => {`
+- L235: `describe("CCRS Product.Name two-layer composition (SLICE 53)", () => {`
+- L236: `it("composes the owner-approved example and guards duplication/collisions", async () => {`
+- L272: `it("__runCcrsProductNameCoreTests", async () => {`
+- L280: `describe("embedded self-tests still pass under vitest", () => {`
+- L281: `it("__runCcrsBatchCoreTests", async () => {`
 
-### `tests/compliance/pure-selftests.test.ts` (582 L) — `describe`/`it` titles
+### `tests/compliance/pure-selftests.test.ts` (586 L) — `describe`/`it` titles
 
-- L83: `describe("embedded pure self-test suites", () => {`
-- L84: `it("order-pricing-core (S-2/S-3 money math + floor)", () => {`
-- L87: `it("discount-engine-core (promotions engine)", () => {`
-- L90: `it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {`
-- L95: `it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {`
-- L100: `it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {`
-- L105: `it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {`
-- L109: `it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {`
-- L113: `it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {`
-- L117: `it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {`
-- L120: `it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {`
-- L123: `it("sales-limits-core (WAC 314-55-095 buckets)", () => {`
-- L126: `it("sales-limit-gate-core (S-1 completion gate)", () => {`
-- L129: `it("chunked-in (S-7 pagination)", async () => {`
-- L132: `it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {`
-- L137: `it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {`
-- L140: `it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {`
-- L145: `it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {`
-- L148: `it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {`
-- L153: `it("sales-hours-core (WAC 314-55-147 window)", () => {`
-- L156: `it("receipt-core (Pacific timestamps, receipt shape)", () => {`
-- L159: `it("pin-hash (S-10 scrypt + throttle)", () => {`
-- L162: `it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {`
-- L165: `it("loyalty engine (points math, tiers, code gen)", () => {`
-- L168: `it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {`
-- L171: `it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {`
-- L174: `it("signup-customer-core (Task V: signup → customer create-or-link)", () => {`
-- L177: `it("schedule-core (week math, Pacific)", () => {`
-- L180: `it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {`
-- L184: `it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {`
-- L188: `it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {`
-- L192: `it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {`
-- L196: `it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {`
-- L199: `it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {`
-- L202: `it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {`
-- L205: `it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {`
-- L210: `it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {`
-- L215: `it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {`
-- L223: `it("ccrs-submit-gate-core (S-01/N-06: the upload gate — errors block, warnings do not)", () => {`
-- L231: `it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {`
-- L235: `it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {`
-- L238: `it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {`
-- L241: `it("leafly-payload-validate-core (SLICE L-2: fail-closed last gate before the wire)", () => {`
-- L246: `it("leafly-orderability-core (SLICE L-3: fail-closed pickup + DOH/endorsement gates)", () => {`
-- L251: `it("leafly-readback-core (SLICE L-4: GET /menu parse + reconcile, fails soft)", () => {`
-- L256: `it("leafly-certification-core (SLICE L-4: Leafly's five criteria, fails closed)", () => {`
-- L261: `it("leafly-readback-proof-core (SLICE L-52: stored read-back verdict proves criterion 5)", () => {`
-- L266: `it("strain-placeholder-core (SLICE L-52: placeholder strains become null)", () => {`
-- L271: `it("leafly-readback-baseline-core (SLICE L-52: sync-state rebuild baseline)", () => {`
-- L276: `it("leafly-hmac-core (SLICE L-5: raw-body HMAC, timing-safe, fails closed)", () => {`
-- L288: `it("leafly-order-map-core (SLICE L-5: status vocabulary in both directions)", () => {`
-- L297: `it("leafly-webhook-parse-core (SLICE L-5: fails soft, because the spec demands 200)", () => {`
-- L304: `it("leafly-preview-core (SLICE L-5: the money a shopper reads before buying)", () => {`
-- L322: `it("leafly-auto-ack-core (SLICE L-33: the machine presses the button)", () => {`
-- L348: `it("leafly-auto-ack-sweep-core (SLICE L-33: the net under the net)", () => {`
-- L384: `it("leafly-order-ack-core (SLICE L-6: talking back to Leafly, one-way doors)", () => {`
-- L419: `it("leafly-schedule-core (SLICE L-7: both automation and the manual button)", () => {`
-- L458: `it("leafly-evidence-core (SLICE L-8: the webhook evidence reader)", () => {`
-- L479: `it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {`
-- L491: `it("leafly-bridge-core (SLICE L-10: arrival announces/prints, acceptance creates)", () => {`
-- L513: `it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {`
-- L520: `it("integration-credentials-core (DB-over-env overrides + masking; L-5 Leafly keys)", () => {`
-- L524: `it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {`
-- L527: `it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {`
-- L530: `it("richness-core (Task X: menu richness scoring + connection health)", () => {`
-- L533: `it("sync-settings-core (Task X + L-7: transmission parameters AND the schedule)", () => {`
-- L544: `it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {`
-- L547: `it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {`
-- L550: `it("leafly-order-cart-core (SLICE L-48: changing a Leafly order's items)", () => {`
-- L559: `it("leafly-badge-core (Inventory LEAFLY badge)", () => {`
-- L564: `it("leafly-register-lines-core (Leafly order -> register cart ids)", () => {`
-- L571: `it("outbound-history-core (L-49: Order-API call history, PII-safe display/export)", () => {`
-- L576: `it("cart-picker-core (L-50: picker offers only sizes the Leafly payload sends)", () => {`
+- L84: `describe("embedded pure self-test suites", () => {`
+- L85: `it("order-pricing-core (S-2/S-3 money math + floor)", () => {`
+- L88: `it("discount-engine-core (promotions engine)", () => {`
+- L91: `it("brand-match-core (SLICE T1: ONE brand matcher, real catalogue fixtures)", () => {`
+- L96: `it("markdown-lock-core (SLICE C1: clearance is excluded from other deals)", () => {`
+- L101: `it("brand-resolve-core (rule 11: RECEIVING intake shares the ONE brand matcher)", () => {`
+- L106: `it("po-receive-core (defects A+B: auto-receive refuses ambiguous names)", () => {`
+- L110: `it("bundle-apportionment-core (SLICE D1: exact-cent N-for-M splitting)", () => {`
+- L114: `it("saturday-headline-core (SLICE D3: headline target + exact-cent blend)", () => {`
+- L118: `it("weight-label-core (SLICE W1: one grams parser for discounts AND the WAC limit)", () => {`
+- L121: `it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {`
+- L124: `it("sales-limits-core (WAC 314-55-095 buckets)", () => {`
+- L127: `it("sales-limit-gate-core (S-1 completion gate)", () => {`
+- L130: `it("chunked-in (S-7 pagination)", async () => {`
+- L133: `it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {`
+- L138: `it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {`
+- L141: `it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {`
+- L146: `it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {`
+- L149: `it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {`
+- L154: `it("sales-hours-core (WAC 314-55-147 window)", () => {`
+- L157: `it("receipt-core (Pacific timestamps, receipt shape)", () => {`
+- L160: `it("pin-hash (S-10 scrypt + throttle)", () => {`
+- L163: `it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {`
+- L166: `it("loyalty engine (points math, tiers, code gen)", () => {`
+- L169: `it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {`
+- L172: `it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {`
+- L175: `it("signup-customer-core (Task V: signup → customer create-or-link)", () => {`
+- L178: `it("schedule-core (week math, Pacific)", () => {`
+- L181: `it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {`
+- L185: `it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {`
+- L189: `it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {`
+- L193: `it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {`
+- L197: `it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {`
+- L200: `it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {`
+- L203: `it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {`
+- L206: `it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {`
+- L211: `it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {`
+- L216: `it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {`
+- L224: `it("ccrs-submit-gate-core (S-01/N-06: the upload gate — errors block, warnings do not)", () => {`
+- L232: `it("ccrs-preflight-core (S-02: E7-E13 blocking pre-flight checks)", () => {`
+- L236: `it("ccrs-ledger-core (Bible v2 S-11: ledger routing, strain casing, filed product name)", () => {`
+- L239: `it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {`
+- L242: `it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {`
+- L245: `it("leafly-payload-validate-core (SLICE L-2: fail-closed last gate before the wire)", () => {`
+- L250: `it("leafly-orderability-core (SLICE L-3: fail-closed pickup + DOH/endorsement gates)", () => {`
+- L255: `it("leafly-readback-core (SLICE L-4: GET /menu parse + reconcile, fails soft)", () => {`
+- L260: `it("leafly-certification-core (SLICE L-4: Leafly's five criteria, fails closed)", () => {`
+- L265: `it("leafly-readback-proof-core (SLICE L-52: stored read-back verdict proves criterion 5)", () => {`
+- L270: `it("strain-placeholder-core (SLICE L-52: placeholder strains become null)", () => {`
+- L275: `it("leafly-readback-baseline-core (SLICE L-52: sync-state rebuild baseline)", () => {`
+- L280: `it("leafly-hmac-core (SLICE L-5: raw-body HMAC, timing-safe, fails closed)", () => {`
+- L292: `it("leafly-order-map-core (SLICE L-5: status vocabulary in both directions)", () => {`
+- L301: `it("leafly-webhook-parse-core (SLICE L-5: fails soft, because the spec demands 200)", () => {`
+- L308: `it("leafly-preview-core (SLICE L-5: the money a shopper reads before buying)", () => {`
+- L326: `it("leafly-auto-ack-core (SLICE L-33: the machine presses the button)", () => {`
+- L352: `it("leafly-auto-ack-sweep-core (SLICE L-33: the net under the net)", () => {`
+- L388: `it("leafly-order-ack-core (SLICE L-6: talking back to Leafly, one-way doors)", () => {`
+- L423: `it("leafly-schedule-core (SLICE L-7: both automation and the manual button)", () => {`
+- L462: `it("leafly-evidence-core (SLICE L-8: the webhook evidence reader)", () => {`
+- L483: `it("order-origin-core (SLICE L-2: website vs Leafly vs register)", () => {`
+- L495: `it("leafly-bridge-core (SLICE L-10: arrival announces/prints, acceptance creates)", () => {`
+- L517: `it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {`
+- L524: `it("integration-credentials-core (DB-over-env overrides + masking; L-5 Leafly keys)", () => {`
+- L528: `it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {`
+- L531: `it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {`
+- L534: `it("richness-core (Task X: menu richness scoring + connection health)", () => {`
+- L537: `it("sync-settings-core (Task X + L-7: transmission parameters AND the schedule)", () => {`
+- L548: `it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {`
+- L551: `it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {`
+- L554: `it("leafly-order-cart-core (SLICE L-48: changing a Leafly order's items)", () => {`
+- L563: `it("leafly-badge-core (Inventory LEAFLY badge)", () => {`
+- L568: `it("leafly-register-lines-core (Leafly order -> register cart ids)", () => {`
+- L575: `it("outbound-history-core (L-49: Order-API call history, PII-safe display/export)", () => {`
+- L580: `it("cart-picker-core (L-50: picker offers only sizes the Leafly payload sends)", () => {`
 
 ### Golden fixtures (`tests/compliance/golden/ccrs/`)
 

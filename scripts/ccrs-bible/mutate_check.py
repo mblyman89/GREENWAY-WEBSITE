@@ -56,6 +56,9 @@ SCROUTE = "src/app/admin/inventory/disposition/sale-correction-export/route.ts"
 S09_TESTS = "tests/compliance/ccrs-csv-fidelity.test.ts"
 P04GEN = "scripts/compliance/generate-p04-fidelity-probe.ts"
 P04_TESTS = "tests/compliance/p04-fidelity-probe.test.ts"
+# S-11 ledger routing (Bible v2 Part 03 §D.3, slice plan S-11).
+LEDGER = "src/lib/compliance/ccrs-ledger-core.ts"
+S11_TESTS = "tests/compliance/ccrs-ledger-routing.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -470,6 +473,79 @@ MUTATIONS = [
         P04_TESTS,
         "P-04: running without a run id must be refused (Part 06 §A.2).",
     ),
+    # ---- S-11 ledger routing --------------------------------------------
+    ("M51-s11-strain-lot-casing", LEDGER,
+     '  if (filed && filed.length > 0) return { kind: "case-variant", value: filed[0], ours: strain };',
+     '  if (filed && filed.length > 0) return { kind: "case-variant", value: strain, ours: strain };',
+     S11_TESTS, "Slice-plan mandated: returning the lot casing sends a Brian-A16 case variant."),
+    ("M52-s11-closed-not-update", LEDGER,
+     '    case "confirmed":\n    case "closed":\n      return { op: "Update"',
+     '    case "confirmed":\n      return { op: "Update"',
+     S11_TESTS, "Part 03 §D.3: a closed lot may be re-stated by Update."),
+    ("M53-s11-uncertain-updates", LEDGER,
+     '    case "uncertain":\n      return { op: "withhold"',
+     '    case "uncertain":\n      return { op: "Update"',
+     S11_TESTS, "Uncertain ids must be reconciled before any row is sent."),
+    ("M54-s11-delete-unproven", LEDGER,
+     '    return e && PRESENT.has(e.state)\n      ? { op: "Delete"',
+     '    return e\n      ? { op: "Delete"',
+     S11_TESTS, "Never Delete a record not proven on file."),
+    ("M55-s11-absent-update", LEDGER,
+     '  if (!e) return { op: "Insert", state, reason: "not on file" };',
+     '  if (!e) return { op: "Update", state, reason: "not on file" };',
+     S11_TESTS, "[G L0247] Update alters an EXISTING record."),
+    ("M56-s11-reference-closed-ok", LEDGER,
+     '  return { ok: !!e && PRESENT.has(e.state), state: e?.state ?? null };',
+     '  return { ok: !!e && e.state !== "uncertain", state: e?.state ?? null };',
+     S11_TESTS, "Event rows may only name seed/filed/confirmed lots."),
+    ("M57-s11-product-our-name", LEDGER,
+     '  return { kind: "filed", name: p.filedName, productExternalId: pid, differs: ourName !== p.filedName };',
+     '  return { kind: "filed", name: ourName, productExternalId: pid, differs: ourName !== p.filedName };',
+     S11_TESTS, "[G L0580-L0583] filed lots must name the product as filed."),
+    ("M58-s11-product-unproven-ok", LEDGER,
+     '  if (!PRESENT.has(p.state)) return { kind: "withhold"',
+     '  if (false) return { kind: "withhold"',
+     S11_TESTS, "A filed product in uncertain/deleted state is not proof."),
+    ("M59-s11-strain-batch-variant", LEDGER,
+     '    } else if (first !== s) {\n      strainCaseVariants.push({ ours: s, value: first, source: "batch" });\n      value = first;',
+     '    } else if (first !== s) {\n      strainCaseVariants.push({ ours: s, value: first, source: "batch" });',
+     S11_TESTS, "In-batch case variants must share one spelling in every file."),
+    ("M60-s11-resend-filed-strain", LEDGER,
+     '      if (r.kind !== "new") {\n        strainCanonical.set(s, value);\n        return value;\n      }',
+     '      if (false) {\n        strainCanonical.set(s, value);\n        return value;\n      }',
+     S11_TESTS, "A strain on file in any casing is never re-sent."),
+    ("M61-s11-no-name-collision", LEDGER,
+     '        if (r.op === "Insert" && holders.length > 0) {',
+     '        if (false) {',
+     S11_TESTS, "Gap N-12: never Insert a second product under a filed name."),
+    ("M62-s11-unassigned-legacy-id", LEDGER,
+     '    products.set(p.key, { action: "withhold", reason: "no CCRS Product id (GWP-) is assigned to this product" });',
+     '    products.set(p.key, { action: "emit", op: "Insert", ext: p.legacyId });',
+     S11_TESTS, "Never invent a Product id at export time (standing rule 3)."),
+    ("M63-s11-rename-conflict-moves", LEDGER,
+     '    if (names.size === 1) renames.set(',
+     '    if (names.size >= 1) renames.set(',
+     S11_TESTS, "Two new names for one filed product: nobody moves."),
+    ("M64-s11-apply-keeps-op", LEDGER,
+     '    row[iOp] = pp.op;\n',
+     '',
+     S11_TESTS, "Product Operation must come from the plan."),
+    ("M65-s11-apply-drops-rename", LEDGER,
+     '    row[iOp] = "Update";\n    out.push(row);',
+     '    row[iOp] = "Update";',
+     S11_TESTS, "A rename must emit its Product Update row (U-39)."),
+    ("M66-s11-inv-op-insert", BATCHSRV,
+     '      planned.op,\n    ]);',
+     '      "Insert",\n    ]);',
+     S11_TESTS, "Inventory Operation must come from the plan."),
+    ("M67-s11-strain-lowercase-dedupe", BATCHSRV,
+     '    if (!plan.strainEmit.has(strain)) continue;\n',
+     '',
+     S11_TESTS, "Strain file must not re-send filed strains."),
+    ("M68-s11-pin", PREFLIGHT,
+     '  E39_STRAIN_CASE_VARIANT: "[G L0359]",',
+     '  E39_STRAIN_CASE_VARIANT: "[G L0358]",',
+     S11_TESTS, "Pins are verbatim-checked; a drifted pin must fail."),
 ]
 
 
@@ -508,6 +584,7 @@ def main() -> int:
         S10_TESTS,
         S09_TESTS,
         P04_TESTS,
+        S11_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)

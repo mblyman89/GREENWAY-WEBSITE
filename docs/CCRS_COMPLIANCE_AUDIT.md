@@ -317,6 +317,22 @@ we never invent a CCRS value.
   emitted; its row is withheld with blocking `E38_FIELD_HAS_LINE_BREAK`
   `[G L0167-L0169]` and listed. See `docs/ccrs-bible/04-current-state-and-gap-matrix.md` §A.4.
 
+- Correction 2026-10-06 (S-11 recon): the 14 rows are quote-wrapped in the
+  LCB's Inventory *report* only; the Product report stores those names with
+  0 `"` (U-42). The fix stands on its own (lossless for every character).
+
+#### C2c — HIGH — FIXED 2026-10-06 (Bible v2 S-11) — strain casing split across files; no ledger routing
+- The Strain file deduped case-insensitively but each Inventory row kept its
+  own casing, so `Dutch Treat` + `Dutch treat` sent one Strain row and an
+  Inventory row naming a strain CCRS never received (`Invalid Strain`;
+  Valid Values `Strain.Strain` `[G L0552]`; Brian A16).
+- Fixed: one pure plan (`ccrs-ledger-core.ts`) writes one spelling in both
+  files and raises advisory `E39_STRAIN_CASE_VARIANT` `[G L0359]`. With a
+  ledger (S-12) the same plan routes Insert/Update/withhold per Part 03 §D.3,
+  names filed lots by their filed product Name (`E40`, `[G L0580-L0583]`) and
+  withholds the unprovable (`E41`, `[G L0246-L0248]`). See
+  `docs/ccrs-bible/04-current-state-and-gap-matrix.md` §A.5.
+
 #### C3 — OK (verified) — Boolean columns
 - `IsQuarantine` (Area) and `IsMedical` (Inventory) emit `TRUE`/`FALSE`. Manual:
   Boolean, valid values TRUE/FALSE. ✓
