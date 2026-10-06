@@ -130,9 +130,11 @@ describe("ccrsDate uses the PACIFIC calendar day", () => {
 });
 
 describe("ccrsCell quoting", () => {
-  it("quotes cells containing commas and strips embedded quotes", () => {
+  it("quotes cells containing commas and doubles embedded quotes (S-09, RFC 4180)", () => {
     expect(ccrsCell("Smith, Jane")).toBe('"Smith, Jane"');
-    expect(ccrsCell('He said "hi"')).toBe("He said hi");
+    // S-09 / U-25: quotes used to be STRIPPED, which silently changed 14 live
+    // Inventory product names CCRS holds with a literal ". Now lossless.
+    expect(ccrsCell('He said "hi"')).toBe('"He said ""hi"""');
     expect(ccrsCell(null)).toBe("");
   });
 });

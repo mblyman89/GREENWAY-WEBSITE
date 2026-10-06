@@ -59,6 +59,7 @@ export const CCRS_ISSUE_CODES = [
   "E11_STRAIN_NAME_RESERVED",
   "E12_EXCISE_NOT_37PCT",
   "E13_ADJUSTMENT_DETAIL_MISSING",
+  "E38_FIELD_HAS_LINE_BREAK",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -368,6 +369,11 @@ const PINS: Record<CcrsIssueCode, string> = {
   E11_STRAIN_NAME_RESERVED: "[G L0358]",
   E12_EXCISE_NOT_37PCT: "[G L1377]",
   E13_ADJUSTMENT_DETAIL_MISSING: "[G L1111]",
+  // S-09: "Only load .CSV files … Do not add/remove columns." A raw line break
+  // inside a value splits one record across two lines (a row with too few
+  // columns, then one with too many). Whether CCRS's reader honours a quoted
+  // line break is unknown (U-25), so such a row is withheld.
+  E38_FIELD_HAS_LINE_BREAK: "[G L0167-L0169]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {

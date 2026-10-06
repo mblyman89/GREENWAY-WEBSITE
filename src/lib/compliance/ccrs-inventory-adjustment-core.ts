@@ -20,7 +20,7 @@ import {
   adjustmentDetailRequired,
   E13_SKIP_PREFIX,
 } from "@/lib/compliance/ccrs-preflight-core";
-import { assembleCcrsFile, ccrsFileName, ccrsDate } from "@/lib/compliance/ccrs-batch-core";
+import { assembleCcrsFile, ccrsCell, ccrsFileName, ccrsDate } from "@/lib/compliance/ccrs-batch-core";
 
 /** Minimal license identity needed to build a row (matches CcrsLicenseSettings). */
 export type CcrsLicenseLike = {
@@ -114,11 +114,10 @@ export function mmddyyyy(iso: string | Date): string {
   return ccrsDate(iso);
 }
 
-/** CCRS dislikes embedded quotes; strip them and quote if a comma/newline. */
+/** S-09 (U-25): delegates to the lossless RFC 4180 encoder. Quotes are
+ * doubled, never stripped — stripping changed the data CCRS received. */
 export function cell(v: unknown): string {
-  const s = v == null ? "" : String(v);
-  const clean = s.replace(/"/g, "");
-  return /[,\n]/.test(clean) ? `"${clean}"` : clean;
+  return ccrsCell(v);
 }
 
 /** Reported quantity is always the absolute magnitude of the change. */
@@ -299,7 +298,7 @@ export function __runCcrsAdjustmentTests(): void {
   eq(mmddyyyy("2025-06-16T06:30:00Z"), "06/15/2025", "mmddyyyy Pacific late-evening");
 
   eq(cell("a,b"), '"a,b"', "comma quoted");
-  eq(cell('a"b'), "ab", "quote stripped");
+  eq(cell('a"b'), '"a""b"', "quotes doubled (S-09)");
   eq(cell(null), "", "null cell");
 
   const lic: CcrsLicenseLike = { licenseNumber: "412345", submittedBy: "Greenway" };

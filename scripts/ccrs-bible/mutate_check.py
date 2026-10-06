@@ -47,6 +47,15 @@ IMPORTLOT = "src/lib/pos/import-lot-core.ts"
 BATCHSRV = "src/lib/compliance/ccrs-batch.ts"
 DISPO = "src/lib/inventory/disposition.ts"
 S10_TESTS = "tests/compliance/s10-identifier-passthrough.test.ts"
+# S-09 RFC 4180 encoder + E38 (Bible v2 Part 05 §F.1, Part 12 U-25).
+SALES = "src/lib/compliance/ccrs-sales.ts"
+ADJSRV = "src/lib/compliance/ccrs-inventory-adjustment.ts"
+ADJCORE = "src/lib/compliance/ccrs-inventory-adjustment-core.ts"
+PREFLIGHT = "src/lib/compliance/ccrs-preflight-core.ts"
+SCROUTE = "src/app/admin/inventory/disposition/sale-correction-export/route.ts"
+S09_TESTS = "tests/compliance/ccrs-csv-fidelity.test.ts"
+P04GEN = "scripts/compliance/generate-p04-fidelity-probe.ts"
+P04_TESTS = "tests/compliance/p04-fidelity-probe.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -315,6 +324,152 @@ MUTATIONS = [
         S10_TESTS,
         "S-10: an unencoded comma in an id shifts every CSV column after it.",
     ),
+    (
+        "M33-s09-strip-quotes",
+        CORE,
+        """  return needsQuotes ? `"${s.replace(/"/g, '""')}"` : s;""",
+        """  const c = s.replace(/"/g, ""); return /,/.test(c) ? `"${c}"` : c;""",
+        S09_TESTS,
+        "S-09: stripping quotes changes 14 live product names CCRS holds.",
+    ),
+    (
+        "M34-s09-quotes-not-doubled",
+        CORE,
+        """  return needsQuotes ? `"${s.replace(/"/g, '""')}"` : s;""",
+        """  return needsQuotes ? `"${s}"` : s;""",
+        S09_TESTS,
+        "S-09: an undoubled quote ends the field early and shifts columns.",
+    ),
+    (
+        "M35-s09-edge-space-unprotected",
+        CORE,
+        """  const needsQuotes = /[",]/.test(s) || s !== s.replace(/^ +| +$/g, "");""",
+        """  const needsQuotes = /[",]/.test(s);""",
+        S09_TESTS,
+        "S-09: a trailing space must be protected so it is not trimmed in transit.",
+    ),
+    (
+        "M36-s09-comma-unquoted",
+        CORE,
+        """  const needsQuotes = /[",]/.test(s) || s !== s.replace(/^ +| +$/g, "");""",
+        """  const needsQuotes = /["]/.test(s) || s !== s.replace(/^ +| +$/g, "");""",
+        S09_TESTS,
+        "S-09: an unquoted comma adds a column [G L0167-L0169].",
+    ),
+    (
+        "M37-s09-linebreak-no-throw",
+        CORE,
+        """  if (/[\\r\\n]/.test(s)) {
+    throw new CcrsEncodeError(""",
+        """  if (/[\\r\\n]/.test(s) && false) {
+    throw new CcrsEncodeError(""",
+        S09_TESTS,
+        "S-09: a line break inside a cell splits one record into two.",
+    ),
+    (
+        "M38-s09-withhold-noop",
+        CORE,
+        "    const bad = r.findIndex((c) => ccrsHasLineBreak(c));",
+        "    const bad = -1 as number;",
+        S09_TESTS,
+        "S-09 E38: line-break rows must be withheld, not sent.",
+    ),
+    (
+        "M39-s09-e38-nonblocking",
+        CORE,
+        "  return `Error — ${withheld.length} ${fileType} row(s) were left out",
+        "  return `Note: ${withheld.length} ${fileType} row(s) were left out",
+        S09_TESTS,
+        "S-09 E38: a withheld row must block, not pass as a warning.",
+    ),
+    (
+        "M40-s09-e38-cap-off",
+        CORE,
+        "  const list = withheld.slice(0, 10).map(",
+        "  const list = withheld.map(",
+        S09_TESTS,
+        "S-09 E38: the message stays readable (first 10, then a count).",
+    ),
+    (
+        "M41-s09-batch-push-no-withhold",
+        BATCHSRV,
+        "    const rows = e38.rows;",
+        "    const rows = rawRows;",
+        S09_TESTS,
+        "S-09 E38: the weekly batch must withhold before assembling.",
+    ),
+    (
+        "M42-s09-sales-no-withhold",
+        SALES,
+        "  result.csv = buildFile(e38.rows, license);",
+        "  result.csv = buildFile(rows, license);",
+        S09_TESTS,
+        "S-09 E38: Sale.csv must withhold before assembling.",
+    ),
+    (
+        "M43-s09-adjustment-no-withhold",
+        ADJSRV,
+        "  result.csv = buildAdjustmentFile(e38.rows, license);",
+        "  result.csv = buildAdjustmentFile(rows, license);",
+        S09_TESTS,
+        "S-09 E38: InventoryAdjustment.csv must withhold before assembling.",
+    ),
+    (
+        "M44-s09-route-marks-withheld-exported",
+        SCROUTE,
+        "    await markCorrectionsExported(exportIds);",
+        "    await markCorrectionsExported(includedIds);",
+        S09_TESTS,
+        "S-09 E38: a withheld correction must stay pending, not be lost.",
+    ),
+    (
+        "M45-s09-adjustment-cell-strips",
+        ADJCORE,
+        "  return ccrsCell(v);",
+        """  return ccrsCell(v == null ? v : String(v).replace(/"/g, ""));""",
+        S09_TESTS,
+        "S-09: the adjustment encoder must be the same lossless encoder.",
+    ),
+    (
+        "M46-s09-e38-pin-wrong",
+        PREFLIGHT,
+        '  E38_FIELD_HAS_LINE_BREAK: "[G L0167-L0169]",',
+        '  E38_FIELD_HAS_LINE_BREAK: "[G L1057-L1058]",',
+        S09_TESTS,
+        "S-09 E38: the pin must cite the CSV rule, not file dependency.",
+    ),
+    (
+        "M47-p04-run-prefix-dropped",
+        P04GEN,
+        "    `${run}-L0${i + 1}`, by, today,",
+        "    `L0${i + 1}`, by, today,",
+        P04_TESTS,
+        "P-04: an unprefixed id can collide with the 2026-09-17 run.",
+    ),
+    (
+        "M48-p04-quote-case-lost",
+        P04GEN,
+        """name: (r) => `"${r} Mama J's Fidelity - 3.5g"` },""",
+        """name: (r) => `${r} Mama J's Fidelity - 3.5g` },""",
+        P04_TESTS,
+        "P-04: C1 must actually carry the leading/trailing quote it probes.",
+    ),
+    (
+        "M49-p04-same-stamp",
+        P04GEN,
+        "    const at = new Date(start.getTime() + k * 1000);",
+        "    const at = new Date(start.getTime());",
+        P04_TESTS,
+        "P-04: two files with one name cannot both be uploaded unambiguously.",
+    ),
+    (
+        "M50-p04-cli-no-refusal",
+        P04GEN,
+        "  if (!run || !RUN_RE.test(run)) {\n    console.error(",
+        "  if (false) {\n    console.error(",
+        P04_TESTS,
+        "P-04: running without a run id must be refused (Part 06 §A.2).",
+    ),
 ]
 
 
@@ -351,6 +506,8 @@ def main() -> int:
         PREFLIGHT_TESTS,
         GENERATOR_TESTS,
         S10_TESTS,
+        S09_TESTS,
+        P04_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)

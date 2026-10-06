@@ -19,6 +19,7 @@ import {
   mapAdjustmentRow,
   type AdjustmentSourceRow,
 } from "@/lib/compliance/ccrs-inventory-adjustment-core";
+import { CCRS_COLUMNS, e38Message, withholdLineBreakRows } from "@/lib/compliance/ccrs-batch-core";
 
 export {
   CCRS_ADJUSTMENT_REASONS,
@@ -102,9 +103,19 @@ export async function buildCcrsInventoryAdjustmentCsv(
     }
   }
 
-  result.recordCount = rows.length;
-  result.csv = buildAdjustmentFile(rows, license);
-  if (rows.length === 0) {
+  // S-09 E38: a value with a line break cannot be one CSV record.
+  const e38 = withholdLineBreakRows(rows, CCRS_COLUMNS.InventoryAdjustment, (r, i) => {
+    const ext = CCRS_COLUMNS.InventoryAdjustment.indexOf("ExternalIdentifier");
+    return r[ext] || `row ${i + 1}`;
+  });
+  if (e38.withheld.length > 0) {
+    result.skipped += e38.withheld.length;
+    result.warnings.push(e38Message("InventoryAdjustment", e38.withheld));
+  }
+
+  result.recordCount = e38.rows.length;
+  result.csv = buildAdjustmentFile(e38.rows, license);
+  if (e38.rows.length === 0) {
     result.warnings.push("No reportable adjustments found in the selected range.");
   }
   return result;

@@ -1,0 +1,111 @@
+{
+  "source": "LCB CCRS Service Desk delivery 2026-09-18 (license 413541): Inventory Strain/Name/Product Name, Product name/description/strain columns, Strain names — extracted by analysis3/s09_real_names.py; trimmed sample for S-09 fidelity tests",
+  "categories": {
+    "dquote": {
+      "distinctInDelivery": 17,
+      "sample": [
+        "\"Bodhi High Platinum Ice Live Resin Bubba's Gift - 1g\"",
+        "\"Bubba's Gift\"",
+        "\"Grand Cru Pre-roll Suga' Booga' - 1g\"",
+        "\"Mama J's Flower Forbidden Wife - 3.5g\"",
+        "\"Mama J's Flower Grape Stomper - 3.5g\"",
+        "\"Mama J's Pre-roll Apple Fritter - 3.5g\"",
+        "\"Mama J's Pre-roll Golden Pineapple - 3.5g\"",
+        "\"Mama J's Pre-roll Pack Sour Apple - 3.5g\"",
+        "\"Mama J's Pre-roll RS-11 - 3.5g\"",
+        "\"Mr. Moxey's Mints 25:1 CBD Zen Peppermint - 0.44oz\"",
+        "\"People's Diesel\"",
+        "\"Shatter J's Infused Blunt Sherbet OG - 1g\"",
+        "\"Shatter J's Infused Pre-roll Blackberry Pie - 1g\"",
+        "\"Shatter J's Infused Pre-roll Lemon Meringue - 1g\"",
+        "\"Suga' Booga'\"",
+        "\"The People's Flower GG # 4 - 1g\"",
+        "\"The People's Flower People's Diesel - 1g\""
+      ]
+    },
+    "comma": {
+      "distinctInDelivery": 0,
+      "sample": []
+    },
+    "tab": {
+      "distinctInDelivery": 2,
+      "sample": [
+        "13230460135089916 \tReserve Ceramic Cartridge - 01g - Blue Lime Pie",
+        "GF41583505706958 \tCanna Organix - Sauced & Tossed - Gelonade - 1g"
+      ]
+    },
+    "crlf": {
+      "distinctInDelivery": 2,
+      "sample": [
+        "LAff Gas Infused Pre-roll Lemoncello x Jack \nHerer - 0.5g",
+        "LAff Gas Infused Pre-roll Lemoncello x Jack \nHerer - 3g"
+      ]
+    },
+    "nonascii": {
+      "distinctInDelivery": 68,
+      "sample": [
+        ".75g Trichome InTERPreter Pre-Rolls 2ct - CrÃªpes+PC - 1.5g",
+        ".75g Trichome InTERPreter Pre-Rolls 2ct - Ice Cream Cake Bx1+RÃ© - 1.5g",
+        "All-In-One Cart - PiÃ±a Puro - 1g",
+        "Amarena de LimÃ³n",
+        "Banana CrÃ©me",
+        "Bubbaâ€™s Gift.",
+        "CBDabs - Viva PiÃ±ata - 1g",
+        "Classic Hash - Banana CrÃ©me - 1g",
+        "Czarâ€™s Reserve Flower Krazy runtz",
+        "Czarâ€™s Reserve Flower Krazy runtz Krazy runtz Hybrid Flower",
+        "Czarâ€™s Reserve Flower Power Sherb",
+        "Czarâ€™s Reserve Flower Power Sherb Power Sherb Hybrid Flower",
+        "Dabstract Cartridge Grandpaâ€™s Gun Chest",
+        "Dabstract Cartridge Grandpaâ€™s Gun Chest Grandpaâ€™s Gun Chest Hybrid Cartridge",
+        "Diamond Dinger -Â Big Harbor Kush (H)",
+        "Diamond Dinger -Â Diamond Fog (H)",
+        "Diamond Dinger -Â Grand Salami (S)",
+        "Fire Bros All-In-One Cart - Heat WavÃ© - 1g",
+        "Fire Bros Gold Series-Disposable Cartridge-PelÃ© 1970-1g",
+        "Fire Bros Pre-Roll 2-Pack - PavÃ© - 1g",
+        "Fire Bros. - PavÃ© - 14g",
+        "Fire Bros. - PavÃ© - 1g",
+        "Fire Bros. - PavÃ© - 3.5g",
+        "Fire Bros. - PavÃ© - 7g",
+        "Firecracker Infused Pre-roll Grandpaâ€™s Gun Chest"
+      ]
+    },
+    "edge_space": {
+      "distinctInDelivery": 1,
+      "sample": [
+        "GF41583505706958 "
+      ]
+    },
+    "double_space": {
+      "distinctInDelivery": 338,
+      "sample": [
+        ".5g Isolated Pre-Rolled Cones  - Isolated Crop CircleZ Pre-Rolled Cones -1",
+        "2727  Signature Flower - Pineapple Treat - 14g",
+        "2727 -  Blunts - Grape - Carbon Fiber - 1.5g",
+        "2727 - Blunts -  Original  - Orange Cookies - 1.5g",
+        "2727 - Pre-Rolls  - Gassed OG - 5g",
+        "2727 - Pre-Rolls  - Ice Queen - 5g",
+        "2727 - Vape Cart  Blueberry Pancakes - 1g",
+        "2727 -Blunts -  Blueberry - Now & Lator - 1.5g",
+        "2727 -Blunts -  Vanilla - Gelato Mintz - 1.5g",
+        "2727 Pre-roll Modified Grapes  Modified Grapes Indica Pre-roll",
+        "2727 Pre-roll Rainbow Flame  Rainbow Flame  Hybrid Pre-roll",
+        "2727 Super Mega Bussin -  Honey Oil - Alley-Oop - 1g",
+        "4.20 Minis Milk Chocolate  Dark Chocolate Espresso Hybrid Chocolate",
+        "4.20 Minis Milk Chocolate 100mg THC Minis Milk Chocolate  Hybrid Edible",
+        "Airo Pro Co2 Cartridge Dutch Treat Dutch Treat  Hybrid Cartridge",
+        "Atomic Apple Beverage 100mg  100mg   Hybrid Beverage",
+        "Binske Shot Orange Breeze  Orange Breeze Sativa Beverage",
+        "Bodhi HIgh-Originial-Cartridge-Shaq Diesel  (S)-1g",
+        "Bodhi High - Original Terp Crystal  Live Resin  - Blue Dream - Sativa Domi",
+        "Bodhi High - Original Terp Crystal Live Resin  - Lemon OG Kush- Indica Dom",
+        "Bodhi High - Pure Terp Batter Live Resin  - Lemon Tree Live Resin - Sativa",
+        "Bodhi High - Pure Terp Crystal Live Resin  - Berry Funnel Cake- Indica Dom",
+        "Bodhi High - Pure Terp Crystal Live Resin  - Permanent Marker- Indica Domi",
+        "Bodhi High - Pure Terp Crystal Live Resin  - Tropic Truffle- Sativa Domina",
+        "Bodhi High - Pure Vape Live Resin Cartridge  - Ultimate Jack Herer - Sativ"
+      ]
+    }
+  }
+}
