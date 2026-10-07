@@ -463,7 +463,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   }
   if (quarantinedIds > 0) {
     warnings.push(
-      `${quarantinedIds} line(s) reference inventory currently in a QUARANTINE area. CCRS rejects sales of quarantined inventory ("Sold item cannot be in Quarantine"). Accept/move the lot out of quarantine in CCRS before uploading.`,
+      `${quarantinedIds} line(s) sold inventory from a lot that is on QUARANTINE hold in our system. A held lot should not be sold; check the lot and the sale before uploading. (Since S-13 every lot is reported in the Sales Floor Area, IsQuarantine FALSE [G L0298-L0299], so CCRS's "Sold item cannot be in Quarantine" [G L1305] is not expected for these lines.)`,
     );
   }
   if (skipped > 0) {

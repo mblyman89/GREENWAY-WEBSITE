@@ -25,6 +25,7 @@ This bible exists so that no future agent drifts. If a thing is not in here, it 
 | 13 | `13-sources.md` | Every source with URL, fetch date, on-disk path, checksum | hand+generated |
 | 14 | `14-examiner-email-draft.md` | The ready-to-send examiner email for the Part 06 §G3 questions, with the question→U-xx map and what to do with the answers | hand |
 | 15 | `15-preprod-run-results-2026-09-17.md` | **What CCRS actually did.** The 2026-09-17 PREprod run + the examiner's answers: 11 verbatim error strings, the success email that no LCB document mentions, and the rules they imply | hand |
+| 16 | `16-owner-guide-s13-areas-and-p02.md` | **Owner guide (S-13).** What changed in Areas, the P-02 PREprod probe step by step, and the end-to-end PREprod test with an expected result for every step | hand |
 | — | `evidence/2026-09-17-preprod-run/` | Primary artifacts: 14 returned error CSVs, 10 success emails, examiner reply, the 23 probe files, 4 reproduction scripts | raw |
 
 ## Reading order for a fresh agent

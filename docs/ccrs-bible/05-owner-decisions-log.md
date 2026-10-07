@@ -177,6 +177,10 @@ Recorded consequences:
 3. The mechanism (Inventory Update vs InventoryAdjustment) is still decided by PREprod probe P-01 (D-02), not by inference.
 4. An inventory lot with no assigned CCRS id is withheld from Inventory.csv with a blocking error rather than given an invented id (S-10, `E3_EXTERNAL_ID_UNASSIGNED`).
 
+## D-03-AREA (2026-10-07, S-13) — Area set; NOT the same as D-03 (medical) above
+
+Bible v2 (analysis3 Part 08) reused the number D-03 for "which Area set survives". The code calls it D-03 because the slice plan does. Recommendation: keep `C1100011`–`14`, retire `C1-11021100011`–`14` + `A65303` `[BRIAN A11]`. The owner accepted "all of your recommendations". The summary line he saw read "most-recently-dated Sales Floor set", and both sets share CreatedDate 2024-08-22. **Status: production runs Update-only (no Delete) until (1) PREprod P-02 answers U-31 and (2) the owner explicitly confirms set C.** The plan is a reviewed code constant (`PROD_AREA_PLAN` in `ccrs-area-core.ts`), not a `license_settings` column.
+
 ## Decisions that are still the owner's to make (do NOT decide these for him)
 
 | Ref | Decision | Why it is his |

@@ -404,6 +404,30 @@ Part 10 holds the procedure. No code in this slice until the owner says go. Plac
 
 ---
 
+## S-13 — Areas (D-03, N-01, E23) — DONE in code (2026-10-07); production stays Update-only until PREprod probe P-02 closes U-31
+
+**Why.** Before S-13 every batch Inserted `Sales Floor`/`AREA-SALES-FLOOR` (an id CCRS does not hold under that name: gap E23) and, when any lot was on hold, an Area `Quarantine` with **IsQuarantine TRUE** (N-01). The guide says IsQuarantine must be False for cannabis `[G L0298-L0299]` and CCRS refuses a sale from quarantine `[G L1305]`.
+
+**What it does** (`src/lib/compliance/ccrs-area-core.ts`, pure; wired in `ccrs-batch.ts` `buildAreaFile`):
+- **Ledger-driven.** The Area file is planned from what CCRS holds (S-12 ledger) and owner decision **D-03** (code constant `PROD_AREA_PLAN`: keep `C1100011`–`C1100014`, retire `A65303` and `C1-11021100011`–`14`). PREprod has its own empty plan. **Note:** the D-03 line the owner accepted ("all of your recommendations") read "most-recently-dated Sales Floor set". Both id sets carry the same CreatedDate, so set C is our resolution. Get the owner's explicit OK before `mode: "delete"` is switched on. Update-only does not touch the retired ids.
+- **Production default `mode: "update-only"`.** While any retired id is still on file, the four kept ids are sent as `Update` (filed name, IsQuarantine `FALSE`, UpdatedBy/UpdatedDate set). **No Delete is sent** until P-02 proves what CCRS does when an Area that Inventory references is Deleted (U-31). Update-only is safe whichever way U-31 answers. `mode: "delete"` is coded and tested and is switched on by a reviewed one-line change (an intentional deviation from a `license_settings` column: no migration, and the switch is code-reviewed).
+- **Every lot is reported in `Sales Floor`** with IsQuarantine `FALSE`. The quarantine Area is gone. A lot on quarantine/recalled hold in our system raises advisory **E45_HELD_LOT_NOT_AN_AREA** (Inventory). Hold remains an in-app status and does not move the lot in CCRS. OD-3 is still the owner's to answer.
+- **Never guesses.** A kept/retired id the ledger does not show as present, a kept id with no filed name, or a needed name held only by an uncertain/unknown record → blocking **E46_AREA_LEDGER**. Two present records with the same name → advisory E46.
+- **PREprod / new names.** A needed name with no surviving holder is Inserted under `GWA-<SLUG>` (D-01a). A taken id gets the suffix `-2`…`-99`. An empty PREprod ledger → one Insert `GWA-SALES-FLOOR`; once that row is filed, nothing more is sent. Production with no ledger emits **nothing** (so E23 cannot recur).
+- **Proof:** `tests/compliance/s13-ccrs-areas.test.ts` (38 tests: D-03 constant, both modes, real 2026-09 Cultivera Area.csv cross-check through `buildLedgerSeed`, outbox self-check L_REF_AREA/L_DELETE_NOT_ON_FILE), `tests/compliance/p02-area-probe.test.ts` (9), self-test runner, **50/50 TS mutants killed** (`scripts/ccrs-bible/mutate_s13_ts.py`).
+
+**Enterprise practice (fetched 2026-10-07).**
+- S-13 follows **parallel change / expand–migrate–contract**: "breaking the change into three distinct phases: expand, migrate, and contract" (Fowler/Sato, https://martinfowler.com/bliki/ParallelChange.html).
+  - Expand = the kept ids are refreshed with Update so they are the most recently ingested `Sales Floor` `[BRIAN A12]`.
+  - Contract = Delete the retired ids, and only after P-02.
+  - The same source warns "If the contract phase is not executed you might end up in a worse state than you started, therefore you need discipline to finish the transition". The register row U-31 is that discipline.
+- MDM practice is to rely on referential integrity before deleting reference data: "Try to delete a Zone that has Areas pointing to it? Foreign key violation" (https://primentra.com/blog/hard-delete-vs-soft-delete-master-data). CCRS gives no such guarantee in writing, so P-02 tests it.
+- The same source says deleted codes "squat" and block re-use. That is why P-02 file 9 Inserts a **new** id and never re-uses a deleted one (outcome E).
+
+**P-02 PREprod probe (closes U-31, U-32).** `npx tsx scripts/compliance/generate-p02-area-probe.ts --run P2026MMDDX` writes 10 files plus `MANIFEST.md`, with three 10-minute waits `[G L0530]`. File 6 is produced by the real planner in delete mode (Delete a duplicate-name record and the record of a referenced Area; Update the keeper). Files 7–10 show whether Inventory still joins. The manifest lists outcomes A–E and the action for each. A → flip production to `mode: "delete"`. B/C/E → stay Update-only. Evidence goes in `docs/ccrs-bible/evidence/<run>/`.
+
+---
+
 ## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
 
 **R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).
@@ -411,6 +435,18 @@ Part 10 holds the procedure. No code in this slice until the owner says go. Plac
 **R-2 Monthly LIQ-1295 excise payment automation.** Known: there is no LCB payment API in the sources; payment is made through the LCB's online system. Research: the accepted payment channels (online portal/ACH), whether a scheduled ACH debit can be set up, and whether report filing can be automated at all. Until then: the monthly reminder plus the dismiss/record path.
 
 **R-3 DOR combined excise / sales-tax return tracking (gap).** Not tracked anywhere in the code today. Monthly filers are due the 25th. Build: a calendar task + reminders + dismiss + "filed" record, same pattern as S-12d (add `dor_excise` to `WAIVABLE_OBLIGATIONS` and to the 0250 check in a new migration).
+
+**R-4 PREprod tab shows the amber "ledger not started" banner instead of the green bar (owner report 2026-10-07).** Not yet diagnosed. **First hypothesis, unproven:** the button the owner tested was the S-12d *first-day-of-sales* start date, not **Start PREprod ledger** (CcrsFilesPanel "PREprod set-up (one time per test cycle)"). The amber text itself says "PREprod ledger not started (…). Start it in the CCRS files section below". If the reason in brackets is `seed-not-finalized`, pressing Start PREprod ledger once should turn it green. Check this first. Do not assume the cause; recon it first. Known code facts:
+- the banner is `src/app/admin/compliance/ccrs/page.tsx` ~L491-L496, shown when `!batch.ledger.view`, and its text includes `absentReason`;
+- the reason comes from `buildCcrsBatch` (`ccrs-batch.ts`): `"not-configured"` (early return ~L719, e.g. no license/Supabase), or `decodeLedgerSlice` (`ccrs-ledger-store-core.ts` L44-L54): `"migration-not-applied"` (RPC missing) or `"seed-not-finalized"` (`loaded` false);
+- `ccrs_ledger_slice` (0248 ~L551) sets `loaded` = a `ccrs_files` row exists with `env = p_env, purpose = 'seed', state = 'closed'`;
+- `ccrs_preprod_ledger_start` (0249 ~L495-L506) inserts exactly such a row for `preprod`.
+
+Fix steps:
+1. Ask the owner for the exact banner text (the reason in brackets) and whether **Start PREprod ledger** has been pressed.
+2. Query `ccrs_files` for the preprod seed row and call `ccrs_ledger_slice('preprod', …)` by hand.
+3. Check that the page builds with `env=preprod` and that no cache serves an old render.
+4. Fix only the proven cause, with a test.
 
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 

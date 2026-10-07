@@ -60,6 +60,7 @@ import { composeCcrsProductName, disambiguateCcrsName } from "@/lib/compliance/c
 import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
 import { NO_PRODUCT_ID_REASON, applyProductPlan, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
+import { areaPlanFor, isHeldLotStatus, planAreaFile } from "@/lib/compliance/ccrs-area-core";
 import { loadLedgerForBatch } from "@/lib/compliance/ccrs-ledger-store";
 
 export type CcrsFile = {
@@ -293,37 +294,38 @@ function buildStrainFile(
 }
 
 /**
- * Area.csv — CCRS requires the physical/logical areas that hold inventory. We do
- * not model named rooms in the DB, so we report the two areas our inventory
- * lifecycle actually uses: the default sales-floor area and a Quarantine area
- * (recalled/quarantine lots). This keeps Inventory.Area references valid.
+ * Area.csv — S-13: planned over the CCRS ledger by the pure core
+ * (ccrs-area-core.ts, D-03, [BRIAN A11] [BRIAN A12], [G L0298-L0299]). The
+ * old literals (`AREA-SALES-FLOOR`, a `Quarantine`/TRUE area) are gone: a new
+ * "Sales Floor" record would silently become every lot's join target (E23),
+ * and IsQuarantine TRUE "only applies to imported CBD" [G L0298].
  */
 function buildAreaFile(
-  hasQuarantine: boolean,
+  env: LedgerEnv,
   license: string,
   createdBy: string,
   createdDate: string,
-  ledger: LedgerView | null = null,
-): { rows: string[][]; warnings: string[] } {
-  const rows: string[][] = [];
-  const wanted: [string, string, string][] = [["Sales Floor", "FALSE", "AREA-SALES-FLOOR"]];
-  if (hasQuarantine) wanted.push(["Quarantine", "TRUE", "AREA-QUARANTINE"]);
-  // S-12b: with a ledger, an Area NAME CCRS already holds is never Inserted
-  // again under a new id. Inventory.Area joins by name to the most recently
-  // ingested record [BRIAN A12], so a new "Sales Floor" record would silently
-  // become the join target (gap E23). The full ledger-driven Area file
-  // (Delete/Update of the filed set, D-03, no Quarantine area N-01) is S-13.
-  const held = new Set<string>();
-  if (ledger) {
-    for (const e of ledger.entries.values()) {
-      if (e.fileType === "Area" && e.filedName && (e.state === "seed" || e.state === "filed" || e.state === "confirmed")) held.add(e.filedName);
-    }
+  ledger: LedgerView | null,
+): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[]; inventoryAreaName: string } {
+  const plan = planAreaFile({ view: ledger, config: areaPlanFor(env), license, by: createdBy, date: createdDate });
+  const issues: CcrsSyncIssue[] = [];
+  for (const severity of ["error", "warning"] as const) {
+    const these = plan.problems.filter((p) => p.severity === severity);
+    if (these.length === 0) continue;
+    issues.push({
+      severity,
+      file: "Area",
+      code: "E46_AREA_LEDGER",
+      specPin: specPinFor("E46_AREA_LEDGER"),
+      count: these.length,
+      rows: these.map((p) => ({ id: p.id, label: p.id, detail: p.detail })),
+      message:
+        severity === "error"
+          ? `${these.length} Area record(s) the plan (D-03) relies on are not provably held by CCRS. An Update or Delete of a record CCRS does not hold is an error [G L0246-L0248]; reconcile the ledger before exporting.`
+          : `${these.length} Area name(s) are held by more than one CCRS record; CCRS uses the most recently ingested one [BRIAN A12]. Advisory.`,
+    });
   }
-  for (const [name, quarantine, id] of wanted) {
-    if (held.has(name)) continue;
-    rows.push([license, name, quarantine, id, createdBy, createdDate, "", "", "Insert"]);
-  }
-  return { rows, warnings: [] };
+  return { rows: plan.rows, warnings: [], issues, inventoryAreaName: plan.inventoryAreaName };
 }
 
 function buildProductFile(
@@ -521,10 +523,12 @@ function buildInventoryFile(
   license: string,
   createdBy: string,
   plan: LedgerPlan,
+  areaName: string,
 ): { rows: string[][]; warnings: string[]; issues: CcrsSyncIssue[] } {
   const warnings: string[] = [];
   const rows: string[][] = [];
   // S-02 coded pre-flight errors. Rows are collected, never capped.
+  const e45Rows: CcrsIssueRow[] = [];
   const e7Rows: CcrsIssueRow[] = [];
   const e8Rows: CcrsIssueRow[] = [];
   // S-10: a lot with NO assigned ccrs_inventory_external_id is withheld, never
@@ -565,7 +569,11 @@ function buildInventoryFile(
         `Lot ${l.id}: no matching Product.Name for key "${key}" — Inventory.Product would be blank/invalid. Ensure the product is in the published menu.`,
       );
     }
-    const area = l.status === "quarantine" || l.status === "recalled" ? "Quarantine" : "Sales Floor";
+    // S-13: every lot sits in the one surviving Sales Floor. A held lot is NOT
+    // moved to a quarantine Area: "IsQuarantine True only applies to imported
+    // CBD" [G L0298-L0299]. How a hold is shown to CCRS is open (N-01, OD-3).
+    const area = areaName;
+    if (isHeldLotStatus(l.status)) e45Rows.push({ id: l.id, label: l.lot_code ?? ext, detail: `status "${l.status}" → Area "${areaName}"` });
     const totalCostMinor = (l.unit_cost_minor_units ?? 0) * (l.received_qty ?? 0);
 
     // E7 [G L0614] / E8 [G L0597]. The decision lives in the pure core so it is
@@ -668,6 +676,17 @@ function buildInventoryFile(
       message: `${e7Rows.length} lot(s) have no cost, so TotalCost would be 0 and CCRS rejects the Inventory file ("TotalCost cannot equal 0" [G L0614]). Enter the unit cost on each lot. A vendor TRADE SAMPLE should be marked as a sample instead — it reports $0.01 [FAQ L0035].`,
     });
   }
+  if (e45Rows.length > 0) {
+    issues.push({
+      severity: "warning",
+      file: "Inventory",
+      code: "E45_HELD_LOT_NOT_AN_AREA",
+      specPin: specPinFor("E45_HELD_LOT_NOT_AN_AREA"),
+      count: e45Rows.length,
+      rows: e45Rows,
+      message: `${e45Rows.length} lot(s) are on hold (quarantine or recalled) in our system. They are reported in the "${areaName}" Area, not a quarantine Area: "IsQuarantine True only applies to imported CBD. There are no quarantine requirements for cannabis products and must have an entry as False." [G L0298-L0299]. Advisory; a held lot that is sold is still an error.`,
+    });
+  }
   return { rows, warnings: [...new Set(warnings)], issues };
 }
 
@@ -752,7 +771,6 @@ export async function buildCcrsBatch(
       .range(from, to);
     return (data as LotRow[] | null) ?? [];
   });
-  const hasQuarantine = lots.some((l) => l.status === "quarantine" || l.status === "recalled");
 
   // --- Build each master-data file ------------------------------------------
   // S-11: one pure plan routes every Strain/Product/Inventory row against the
@@ -802,9 +820,9 @@ export async function buildCcrsBatch(
     strains: items.map((it) => (it.strain_name ?? "").trim()).filter(Boolean),
   });
   const strain = buildStrainFile(items, license.licenseNumber, submittedBy, createdBy, createdDate, plan);
-  const area = buildAreaFile(hasQuarantine, license.licenseNumber, createdBy, createdDate, ledger);
+  const area = buildAreaFile(env, license.licenseNumber, createdBy, createdDate, ledger);
   const product = { ...productBuild, ...applyProductPlan(productBuild.rows, productBuild.keys, plan) };
-  const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan);
+  const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan, area.inventoryAreaName);
   if (product.withheld.length > 0) {
     syncIssues.push({
       severity: "error",
@@ -832,7 +850,7 @@ export async function buildCcrsBatch(
   // are BLOCKING — the submit gate refuses to build the zip while any remain,
   // because CCRS rejects each bad row (row-by-row acceptance, U-17 CLOSED
   // FALSE), tells us only by email [FAQ L0102], and dependent rows then fail.
-  syncIssues.push(...strain.issues, ...product.issues, ...inventory.issues);
+  syncIssues.push(...strain.issues, ...area.issues, ...product.issues, ...inventory.issues);
 
   // --- Reuse mature builders for Adjustment + Sale --------------------------
   const [adj, sale] = await Promise.all([
