@@ -215,9 +215,11 @@ describe("S-12b batch builder loads the ledger", () => {
     expect(BATCH).toContain("if (slice.kind === \"loaded\" && slice.ledger.duplicates.length > 0) {");
     expect(BATCH).toContain('absentReason: slice.kind === "loaded" ? null : slice.reason,');
   });
-  it("an Area NAME CCRS already holds (seed/filed/confirmed) is never Inserted again (E23 interim)", () => {
-    expect(BATCH).toContain('if (e.fileType === "Area" && e.filedName && (e.state === "seed" || e.state === "filed" || e.state === "confirmed")) held.add(e.filedName);');
-    expect(BATCH).toContain("    if (held.has(name)) continue;");
+  it("the Area file is planned over the ledger by the S-13 core (E23 interim superseded)", () => {
+    // The behaviour (a held name is never Inserted again) is now proven on the
+    // pure core in tests/compliance/s13-ccrs-areas.test.ts.
+    expect(BATCH).toContain("const plan = planAreaFile({ view: ledger, config: areaPlanFor(env), license, by: createdBy, date: createdDate });");
+    expect(BATCH).not.toContain("AREA-SALES-FLOOR\",");
   });
   it("no warning cap anywhere on the path to the operator (Part 05 section H)", () => {
     expect(BATCH).not.toContain("WARNING_CAP_PER_FILE");

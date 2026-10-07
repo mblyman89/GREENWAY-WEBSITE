@@ -515,6 +515,7 @@ import { __runAuditHubGuidanceCoreTests } from "../../src/lib/inventory/audit-hu
 import { __runInventoryAuditPostCoreTests } from "../../src/lib/inventory/inventory-audit-post-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runCcrsLedgerCoreTests } from "../../src/lib/compliance/ccrs-ledger-core";
+import { __runCcrsAreaCoreTests } from "../../src/lib/compliance/ccrs-area-core";
 import { __runCcrsFileStateCoreTests } from "../../src/lib/compliance/ccrs-file-state-core";
 import { __runCcrsLedgerSeedCoreTests } from "../../src/lib/compliance/ccrs-ledger-seed-core";
 import { __runCcrsChunkCoreTests } from "../../src/lib/compliance/ccrs-chunk-core";
@@ -1275,6 +1276,7 @@ __runLiquidVolumeTests();
   __runSyncPlanTests();
   __runPreflightTests();
   __runCcrsLedgerCoreTests();
+  __runCcrsAreaCoreTests(); // S-13
   // S-12a: CCRS file state machine (mirrors the 0247 guard) + ledger seed.
   __runCcrsFileStateCoreTests();
   __runCcrsLedgerSeedCoreTests();

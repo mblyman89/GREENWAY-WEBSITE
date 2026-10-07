@@ -66,6 +66,8 @@ export const CCRS_ISSUE_CODES = [
   "E42_FIELD_HAS_COMMA",
   "E43_FIELD_HAS_DOUBLE_QUOTE",
   "E44_FREE_TEXT_REWRITTEN",
+  "E45_HELD_LOT_NOT_AN_AREA",
+  "E46_AREA_LEDGER",
 ] as const;
 
 export type CcrsIssueCode = (typeof CCRS_ISSUE_CODES)[number];
@@ -403,6 +405,13 @@ const PINS: Record<CcrsIssueCode, string> = {
   // S-09b: Product.Description / AdjustmentDetail are free text that nothing
   // joins on, so `,`→`;` instead of withholding (a `"` is kept, S-09c). Advisory.
   E44_FREE_TEXT_REWRITTEN: "[G L0167-L0169]",
+  // S-13 (plan name W-quarantine-status-not-an-area): a quarantine/recalled lot
+  // is reported in the Sales Floor, because "IsQuarantine True only applies to
+  // imported CBD … must have an entry as False." Advisory.
+  E45_HELD_LOT_NOT_AN_AREA: "[G L0298-L0299]",
+  // S-13: an Area id the D-03 plan Updates/Deletes is not provably held by
+  // CCRS (Update/Delete need an existing record). Blocking when an error.
+  E46_AREA_LEDGER: "[G L0246-L0248]",
 };
 
 export function specPinFor(code: CcrsIssueCode): string {
