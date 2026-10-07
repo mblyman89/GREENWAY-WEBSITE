@@ -17,20 +17,29 @@
  *      while the Product file was unanswered.
  *
  * Usage: PGURL=postgres://postgres:postgres@localhost:5432/<db> npx tsx scripts/recon/ccrs-lifecycle-e2e.ts
+ * Add PGROLEURL=postgres://service_role:<pw>@localhost:5432/<db> to run every
+ * function call AS service_role (the app's role). That run found the missing
+ * ccrs_promote_rows grant that a superuser run hides.
  * The database must have every migration applied. It writes prod ccrs_* rows:
  * use a throwaway database, never a real one.
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { classifyEcho, type OurRow } from "../../src/lib/compliance/ccrs-outcome-core";
-import { decodeMarkUploaded, decodeOutcome, parseSuccessEmails } from "../../src/lib/compliance/ccrs-lifecycle-core";
+import { decodeAbandon, decodeMarkUploaded, decodeOutcome, decodePreprodStart, parseSuccessEmails } from "../../src/lib/compliance/ccrs-lifecycle-core";
 
 const PGURL = process.env.PGURL;
 if (!PGURL) throw new Error("PGURL is required");
 if (/supabase\.co|pooler\.supabase/.test(PGURL)) throw new Error("refusing to run against Supabase: throwaway local database only");
 
+// Optional: PGROLEURL = the same database logged in as service_role, the role
+// the app's RPCs run as. Function calls then go through it (proving the 0249
+// grants and that no hidden privilege is needed); cleanup stays on PGURL.
+const ROLEURL = process.env.PGROLEURL ?? PGURL;
+const admin = (q: string): string =>
+  execFileSync("psql", [PGURL!, "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c", q], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const sql = (q: string): string =>
-  execFileSync("psql", [PGURL, "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c", q], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  execFileSync("psql", [ROLEURL!, "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c", q], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const sqlFails = (q: string): string => {
   try {
     sql(q);
@@ -57,7 +66,7 @@ function file(type: string, name: string, stamp: string, cols: string, rows: str
 }
 
 // clean slate for the tables this touches (throwaway DB)
-sql("set session_replication_role = replica; truncate public.ccrs_file_issues, public.ccrs_file_rows, public.ccrs_file_contents, public.ccrs_filed_entities, public.ccrs_files cascade;");
+admin("set session_replication_role = replica; truncate public.ccrs_file_issues, public.ccrs_file_rows, public.ccrs_file_contents, public.ccrs_filed_entities, public.ccrs_files cascade;");
 
 const PCOLS = "LicenseNumber,InventoryCategory,InventoryType,Name,Description,UnitWeightGrams,ExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation";
 const prod = file("Product", "Product_413541_20261007120000.csv", "2026-10-07T19:00:00Z", PCOLS, [
@@ -110,5 +119,21 @@ const s = decodeOutcome(sid, "success", JSON.parse(sql(`select public.ccrs_recor
 check(s.state === "closed" && s.rows.landed === 2, "Strain closes on success");
 check(/CCRS_OUTCOME_NOT_UPLOADED/.test(sqlFails(`select public.ccrs_record_outcome('${sid}', 'success', now(), '[]'::jsonb, null)`)), "an answer is recorded once");
 
-sql("set session_replication_role = replica; truncate public.ccrs_file_issues, public.ccrs_file_rows, public.ccrs_file_contents, public.ccrs_filed_entities, public.ccrs_files cascade;");
+// abandon: a third file, emitted but never uploaded, is set aside with a reason
+const area = file("Area", "Area_413541_20261007120002.csv", "2026-10-07T19:00:02Z", "LicenseNumber,Area,IsQuarantine,ExternalIdentifier,CreatedBy,CreatedDate,UpdatedBy,UpdatedDate,Operation", [
+  "413541,E2E Floor,FALSE,E2E-AREA-1,G,10/07/2026,,,Insert",
+]);
+sql(`select public.ccrs_emit_files('prod', ${lit(JSON.stringify([area]))}::jsonb, '[]'::jsonb)`);
+const aid = sql(`select id from public.ccrs_files where file_name = ${lit(area.file_name)}`);
+check(/CCRS_ABANDON_REASON/.test(sqlFails(`select public.ccrs_abandon_file('${aid}', 'short')`)), "abandon needs a 10+ character reason");
+const ab = decodeAbandon(aid, JSON.parse(sql(`select public.ccrs_abandon_file('${aid}', 'E2E test file, never uploaded')::text`)));
+check(ab.fileName === area.file_name, "abandoned");
+check(sql(`select count(*) from public.ccrs_filed_entities where external_id='E2E-AREA-1'`) === "0", "an abandoned file files nothing");
+
+// PREprod ledger start: once, then "already"
+const st1 = decodePreprodStart(JSON.parse(sql(`select public.ccrs_preprod_ledger_start('e2e')::text`)));
+const st2 = decodePreprodStart(JSON.parse(sql(`select public.ccrs_preprod_ledger_start('e2e')::text`)));
+check(st1.status === "started" && st2.status === "already" && st1.id === st2.id, "PREprod ledger starts once");
+
+admin("set session_replication_role = replica; truncate public.ccrs_file_issues, public.ccrs_file_rows, public.ccrs_file_contents, public.ccrs_filed_entities, public.ccrs_files cascade;");
 console.log(`CCRS LIFECYCLE E2E PASSED (${n} checks)`);

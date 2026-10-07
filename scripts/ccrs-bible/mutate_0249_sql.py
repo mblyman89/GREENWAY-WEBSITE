@@ -77,7 +77,7 @@ MUTANTS = [
     ("L57", MIG, "  values ('preprod', 'Area', 'seed',", "  values ('prod', 'Area', 'seed',"),
     # grants / hygiene
     ("L58", MIG, "grant execute on function public.ccrs_record_outcome(uuid, text, timestamptz, jsonb, text[]) to service_role;", "grant execute on function public.ccrs_record_outcome(uuid, text, timestamptz, jsonb, text[]) to service_role, authenticated;"),
-    ("L59", MIG, "revoke all on function public.ccrs_promote_rows(uuid, uuid[], timestamptz) from public, anon, authenticated;", "grant execute on function public.ccrs_promote_rows(uuid, uuid[], timestamptz) to service_role;"),
+    ("L59", MIG, "grant execute on function public.ccrs_promote_rows(uuid, uuid[], timestamptz) to service_role;\n", ""),
     ("L60", MIG, "create or replace function public.ccrs_abandon_file(p_file_id uuid, p_reason text)\nreturns jsonb\nlanguage plpgsql\n", "create or replace function public.ccrs_abandon_file(p_file_id uuid, p_reason text)\nreturns jsonb\nlanguage plpgsql\nsecurity definer\n"),
     ("L61", MIG, "grant execute on function public.ccrs_mark_uploaded(uuid, timestamptz, uuid, text) to service_role;", ""),
     # rollback
