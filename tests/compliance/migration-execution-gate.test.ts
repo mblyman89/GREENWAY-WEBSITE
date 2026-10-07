@@ -1365,22 +1365,33 @@ describe("the migration list is ordered the way the database will see it", () =>
     // asserted, real rollback refusals + clean drop + re-apply) and the SQL
     // mutants in scripts/ccrs-bible/mutate_0248_sql.py all killed. The owner
     // applies it by hand.
-    expect(listed[listed.length - 1]).toMatch(/^0248_/);
+    // S-12c (CCRS Bible v2) added 0249_ccrs_upload_lifecycle.sql (no new
+    // tables or columns: ccrs_mark_uploaded, ccrs_record_outcome with the
+    // internal ccrs_promote_rows, ccrs_abandon_file, ccrs_preprod_ledger_start
+    // and ccrs_upload_group; service-role-only, search_path pinned, not
+    // security definer; idempotent). The tripwire FIRED and was HONOURED: 249
+    // .sql files, gapless. Verified by scripts/recon/ccrs-lifecycle-pg-check.sql
+    // on Postgres 15 (rollback for a clean slate, applied twice, F1-F14 file
+    // scenarios, rollback keeps every row, re-apply) and 63 SQL mutants all
+    // killed by scripts/ccrs-bible/mutate_0249_sql.py. The owner applies it by
+    // hand.
+    expect(listed[listed.length - 1]).toMatch(/^0249_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0248_ccrs_outbox.sql");
-    expect(listed[listed.length - 2]).toBe("0247_ccrs_ledger.sql");
-    expect(listed[listed.length - 3]).toBe("0246_ccrs_lot_external_id_passthrough.sql");
-    expect(listed[listed.length - 4]).toBe("0245_manifest_invoice_number_detected.sql");
-    expect(listed[listed.length - 5]).toBe("0244_intake_lot_received_date_strain_type_backfill.sql");
-    expect(listed[listed.length - 6]).toBe("0243_master_suggestions_v2.sql");
-    expect(listed[listed.length - 7]).toBe("0242_lookup_jobs.sql");
-    expect(listed[listed.length - 8]).toBe("0241_inventory_lot_pos_potency.sql");
-    expect(listed[listed.length - 9]).toBe("0240_factory_reset_scales.sql");
-    expect(listed[listed.length - 10]).toBe("0239_intake_merge_decisions.sql");
-    expect(listed[listed.length - 11]).toBe("0238_factory_reset_reaches_every_guard.sql");
-    expect(listed[listed.length - 12]).toBe("0237_fact_review_for_versions.sql");
-    expect(listed[listed.length - 13]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 1]).toBe("0249_ccrs_upload_lifecycle.sql");
+    expect(listed[listed.length - 2]).toBe("0248_ccrs_outbox.sql");
+    expect(listed[listed.length - 3]).toBe("0247_ccrs_ledger.sql");
+    expect(listed[listed.length - 4]).toBe("0246_ccrs_lot_external_id_passthrough.sql");
+    expect(listed[listed.length - 5]).toBe("0245_manifest_invoice_number_detected.sql");
+    expect(listed[listed.length - 6]).toBe("0244_intake_lot_received_date_strain_type_backfill.sql");
+    expect(listed[listed.length - 7]).toBe("0243_master_suggestions_v2.sql");
+    expect(listed[listed.length - 8]).toBe("0242_lookup_jobs.sql");
+    expect(listed[listed.length - 9]).toBe("0241_inventory_lot_pos_potency.sql");
+    expect(listed[listed.length - 10]).toBe("0240_factory_reset_scales.sql");
+    expect(listed[listed.length - 11]).toBe("0239_intake_merge_decisions.sql");
+    expect(listed[listed.length - 12]).toBe("0238_factory_reset_reaches_every_guard.sql");
+    expect(listed[listed.length - 13]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 14]).toBe("0236_publish_archive_rule.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

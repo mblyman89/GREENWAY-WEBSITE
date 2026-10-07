@@ -45,6 +45,7 @@ import {
   outboxReadmeLines,
   type EmitIssue,
 } from "@/lib/compliance/ccrs-outbox-core";
+import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { buildZip } from "@/lib/reports/zip";
 
@@ -218,7 +219,10 @@ export async function GET(request: Request) {
     ...gate,
     ...outboxNote,
     "",
-    ...outboxReadmeLines(planned, zipFiles.map((z) => z.name)),
+    ...outboxReadmeLines(planned, zipFiles.map((z) => z.name), ccrsPortalUrl(env)),
+    "",
+    "After each upload, open the CCRS hub (Compliance > CCRS, files list), press \"Mark uploaded\", then record",
+    "the CCRS email (success or error) there. The next file's upload is refused until the previous one is answered.",
     "",
     "Do not rename any file and do not open and save it in Excel: CCRS matches its emails by exact file name,",
     "and refuses the same file name or the same data twice [BRIAN A29].",

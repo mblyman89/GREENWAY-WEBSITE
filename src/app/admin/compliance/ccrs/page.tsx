@@ -42,7 +42,23 @@ import { CcrsAdvisorPanel } from "@/components/admin/reports/CcrsAdvisorPanel";
 import { PushRemindersPanel } from "@/components/admin/compliance/PushRemindersPanel";
 import { UploadWalkthrough } from "@/components/admin/compliance/UploadWalkthrough";
 import { ErrorTriagePanel } from "@/components/admin/compliance/ErrorTriagePanel";
-import { resolveWeekAction, unresolveWeekAction, setWeekErrorStatusAction, assignProductIdsAction } from "./actions";
+import {
+  resolveWeekAction,
+  unresolveWeekAction,
+  setWeekErrorStatusAction,
+  assignProductIdsAction,
+  markUploadedAction,
+  recordSuccessAction,
+  recordErrorAction,
+  recordNoEmailAction,
+  abandonFileAction,
+  startPreprodLedgerAction,
+  assignPreprodProductIdsAction,
+} from "./actions";
+import { CcrsFilesPanel } from "@/components/admin/compliance/CcrsFilesPanel";
+import { listCcrsFiles } from "@/lib/compliance/ccrs-ledger-store";
+import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
+import { ccrsPortalUrl } from "@/lib/compliance/ccrs-lifecycle-core";
 
 export const dynamic = "force-dynamic";
 
@@ -81,12 +97,15 @@ const STATUS_META: Record<
 export default async function CcrsCommandCenterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ week?: string; saved?: string; error?: string; note?: string; env?: string }>;
 }) {
   const session = await requirePermission("reports.view");
   const canEdit = can(session.profile.role, "settings.manage");
   const sp = await searchParams;
   const todayIso = pacificToday();
+  // S-12c: which CCRS the page works against. Anything but "preprod" is prod.
+  const env = parseLedgerEnv(sp.env);
+  const envQ = env === "preprod" ? "&env=preprod" : "";
 
   // ── Weekly deadline picture ────────────────────────────────────────────────
   const overview = await getWeeklyOverview({ lookbackWeeks: 6 });
@@ -109,7 +128,7 @@ export default async function CcrsCommandCenterPage({
   const license = await getCcrsLicenseSettings();
   const range = resolveRange({ from: week.start, to: week.end });
   const batch = isSupabaseServiceConfigured
-    ? await buildCcrsBatch(range.fromISO, range.toISO)
+    ? await buildCcrsBatch(range.fromISO, range.toISO, { env })
     : null;
   const verification = batch
     ? verifyCcrsBatch(batch.files.map((f) => ({ type: f.type, csv: f.csv })))
@@ -136,7 +155,10 @@ export default async function CcrsCommandCenterPage({
   const warnings = verdict?.warnings ?? [];
   const totalRecords = batch?.totalRecords ?? 0;
   const nothingToReport = totalRecords === 0 && errors.length === 0;
-  const qs = `from=${week.start}&to=${week.end}`;
+  const qs = `from=${week.start}&to=${week.end}${envQ}`;
+  const ccrsFiles = isSupabaseServiceConfigured
+    ? await listCcrsFiles(createSupabaseAdminClient(), env)
+    : { available: false, files: [], issues: [], error: null };
 
   // ── DOH / medical evidence for the week ────────────────────────────────────
   const EXEMPT_SCAN_MAX_ROWS = 100_000;
@@ -230,9 +252,26 @@ export default async function CcrsCommandCenterPage({
         </div>
       </div>
 
+      {/* S-12c: environment switch. PREprod is LCB's test site; nothing here touches production. */}
+      <div className={`flex flex-wrap items-center gap-2 rounded-xl border px-4 py-2 text-xs ${env === "preprod" ? "border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-100" : "border-white/10 bg-white/[0.02] text-white/60"}`}>
+        <span className="font-bold uppercase tracking-wide">CCRS:</span>
+        <Link href={`/admin/compliance/ccrs?week=${week.key}`} className={`rounded-lg px-3 py-1 font-semibold ${env === "prod" ? "bg-emerald-500/25 text-emerald-100" : "border border-white/15 hover:bg-white/5"}`}>
+          Production
+        </Link>
+        <Link href={`/admin/compliance/ccrs?week=${week.key}&env=preprod`} className={`rounded-lg px-3 py-1 font-semibold ${env === "preprod" ? "bg-fuchsia-500/30 text-fuchsia-50" : "border border-white/15 hover:bg-white/5"}`}>
+          PREprod (test site)
+        </Link>
+        {env === "preprod" ? (
+          <span>
+            Every export, upload and answer below is PREprod only. Upload at{" "}
+            <a href={ccrsPortalUrl("preprod")} target="_blank" rel="noreferrer" className="underline">precannabisreporting.lcb.wa.gov</a>, never production.
+          </span>
+        ) : null}
+      </div>
+
       {sp.saved ? (
         <p className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs font-semibold text-emerald-200">
-          ✓ Saved.
+          ✓ Saved.{sp.note ? ` ${sp.note}` : ""}
         </p>
       ) : null}
       {sp.error ? (
@@ -261,7 +300,7 @@ export default async function CcrsCommandCenterPage({
             </div>
             {urgent.week.key !== week.key ? (
               <Link
-                href={`/admin/compliance/ccrs?week=${urgent.week.key}`}
+                href={`/admin/compliance/ccrs?week=${urgent.week.key}${envQ}`}
                 className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-xs font-bold text-black transition hover:opacity-90"
               >
                 Jump to that week →
@@ -289,7 +328,7 @@ export default async function CcrsCommandCenterPage({
             return (
               <Link
                 key={w.week.key}
-                href={`/admin/compliance/ccrs?week=${w.week.key}`}
+                href={`/admin/compliance/ccrs?week=${w.week.key}${envQ}`}
                 className={`rounded-xl border px-3 py-2 text-xs transition ${
                   selected
                     ? "border-[var(--admin-accent)] bg-[var(--admin-accent)]/10"
@@ -333,10 +372,11 @@ export default async function CcrsCommandCenterPage({
             {/* S-12b: ledger status + GWP- id assignment (D-01a) */}
             {!batch.ledger.view ? (
               <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-[11px] text-amber-100">
-                CCRS ledger not loaded ({batch.ledger.absentReason}). Files are built the old way (every row Insert) and are
-                NOT recorded. Do not upload to production until migration 0248 is applied and the seed is finalized.
+                {env === "preprod"
+                  ? `PREprod ledger not started (${batch.ledger.absentReason}). Start it in the CCRS files section below so PREprod exports are recorded.`
+                  : `CCRS ledger not loaded (${batch.ledger.absentReason}). Files are built the old way (every row Insert) and are NOT recorded. Do not upload to production until migration 0248 is applied and the seed is finalized.`}
               </p>
-            ) : batch.ledger.unassignedProductKeys.length > 0 ? (
+            ) : env === "prod" && batch.ledger.unassignedProductKeys.length > 0 ? (
               <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-[11px] text-sky-100">
                 <p className="font-semibold">
                   {batch.ledger.unassignedProductKeys.length} product(s) have no CCRS Product id yet, so they (and their lots)
@@ -412,6 +452,33 @@ export default async function CcrsCommandCenterPage({
           }))}
           batchZipHref={`/admin/reports/compliance/batch-export?${qs}`}
           submittable={submittable}
+          portalUrl={ccrsPortalUrl(env)}
+        />
+      ) : null}
+
+      {/* S-12c: every emitted file, its state, and what to do next */}
+      {batch ? (
+        <CcrsFilesPanel
+          env={env}
+          weekKey={week.key}
+          canEdit={canEdit}
+          available={ccrsFiles.available}
+          loadError={ccrsFiles.error}
+          files={ccrsFiles.files}
+          issues={ccrsFiles.issues}
+          ledgerLoaded={!!batch.ledger.view}
+          unassignedProductCount={batch.ledger.unassignedProductKeys.length}
+          nowISO={new Date().toISOString()}
+          suggestedRun={`P${todayIso.replaceAll("-", "")}A`}
+          actions={{
+            markUploaded: markUploadedAction,
+            recordSuccess: recordSuccessAction,
+            recordError: recordErrorAction,
+            recordNoEmail: recordNoEmailAction,
+            abandon: abandonFileAction,
+            startPreprod: startPreprodLedgerAction,
+            assignPreprodIds: assignPreprodProductIdsAction,
+          }}
         />
       ) : null}
 

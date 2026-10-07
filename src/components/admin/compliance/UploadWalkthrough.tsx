@@ -25,9 +25,11 @@ type Props = {
   files: FileSummary[];
   batchZipHref: string;
   submittable: boolean;
+  /** S-12c: the portal of the env the zip targets (PREprod is a different host). */
+  portalUrl?: string;
 };
 
-const PORTAL_URL = "https://cannabisreporting.lcb.wa.gov";
+const PROD_PORTAL_URL = "https://cannabisreporting.lcb.wa.gov";
 const WAIT_MINUTES = 10;
 
 type StepId =
@@ -84,7 +86,9 @@ function fmtRemaining(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable }: Props) {
+export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable, portalUrl }: Props) {
+  const PORTAL_URL = portalUrl ?? PROD_PORTAL_URL;
+  const portalHost = PORTAL_URL.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const raw = useSyncExternalStore(
     storeSubscribe,
     () => {
@@ -175,7 +179,7 @@ export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable }:
         <p className="text-xs text-white/55">
           Open{" "}
           <a href={PORTAL_URL} target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] underline">
-            cannabisreporting.lcb.wa.gov
+            {portalHost}
           </a>{" "}
           and sign in with your SecureAccess Washington (SAW) account. (The LCB is moving CCRS to
           WA.gov login around Oct 2026.)
