@@ -66,6 +66,16 @@ SEEDCLI = "scripts/compliance/seed-ccrs-ledger.ts"
 MIG0247 = "supabase/migrations/0247_ccrs_ledger.sql"
 RESETCORE = "src/lib/accounting/factory-reset-core.ts"
 S12A_TESTS = "tests/compliance/s12a-ccrs-ledger.test.ts"
+# S-12b ledger-backed routing, chunked outbox, emit (Part 05 sections B-D).
+OUTBOX = "src/lib/compliance/ccrs-outbox-core.ts"
+CHUNK = "src/lib/compliance/ccrs-chunk-core.ts"
+STORECORE = "src/lib/compliance/ccrs-ledger-store-core.ts"
+EXPROUTE = "src/app/admin/reports/compliance/batch-export/route.ts"
+OUTBOX_TESTS = "tests/compliance/ccrs-outbox-core.test.ts"
+CHUNK_TESTS = "tests/compliance/ccrs-chunk-core.test.ts"
+S12B_TESTS = "tests/compliance/s12b-ccrs-outbox.test.ts"
+P11GEN = "scripts/compliance/generate-p11-chunk-naming-probe.ts"
+P11_TESTS = "tests/compliance/p11-chunk-naming-probe.test.ts"
 
 # (id, file, old_fragment, new_fragment, test_target, why)
 MUTATIONS = [
@@ -524,7 +534,7 @@ MUTATIONS = [
      '        if (false) {',
      S11_TESTS, "Gap N-12: never Insert a second product under a filed name."),
     ("M62-s11-unassigned-legacy-id", LEDGER,
-     '    products.set(p.key, { action: "withhold", reason: "no CCRS Product id (GWP-) is assigned to this product" });',
+     '    products.set(p.key, { action: "withhold", reason: NO_PRODUCT_ID_REASON });',
      '    products.set(p.key, { action: "emit", op: "Insert", ext: p.legacyId });',
      S11_TESTS, "Never invent a Product id at export time (standing rule 3)."),
     ("M63-s11-rename-conflict-moves", LEDGER,
@@ -719,6 +729,182 @@ MUTATIONS = [
         S12A_TESTS,
         'S-12a: the CLI refusal counts must equal what the delivery measures.',
     ),
+    (
+        'M90-s12b-seed-routes-insert',
+        LEDGER,
+        '    case "seed":\n    case "filed":',
+        '    case "seed":\n      return { op: "Insert", state, reason: "mutant" };\n    case "filed":',
+        S11_TESTS,
+        'S-12b acceptance: every seeded shelf lot must be an Update, never re-Inserted.',
+    ),
+    (
+        'M91-s12b-chunk-off-by-one',
+        CHUNK,
+        '  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));',
+        '  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size - 1));',
+        CHUNK_TESTS,
+        'S-12b D-07/D-08: 10,000-row chunks must not drop the last row of a chunk.',
+    ),
+    (
+        'M92-s12b-stamp-reuse',
+        CHUNK,
+        '  const next = floorToSecond(lastUsed).getTime() + 1000;',
+        '  const next = floorToSecond(lastUsed).getTime();',
+        CHUNK_TESTS,
+        'Part 05 B: a regeneration must never reuse a stamp already emitted.',
+    ),
+    (
+        'M93-s12b-insert-on-file-allowed',
+        OUTBOX,
+        '          if (e && e.state !== "deleted") push("L_INSERT_ON_FILE",',
+        '          if (false && e && e.state !== "deleted") push("L_INSERT_ON_FILE",',
+        OUTBOX_TESTS,
+        'The self-check must refuse an Insert of an id CCRS already holds.',
+    ),
+    (
+        'M94-s12b-update-not-on-file-allowed',
+        OUTBOX,
+        '          if (!createdHere && !(e && UPDATABLE.has(e.state))) {',
+        '          if (false) {',
+        OUTBOX_TESTS,
+        'The self-check must refuse an Update CCRS cannot apply [FAQ L0053].',
+    ),
+    (
+        'M95-s12b-event-lot-closed-ok',
+        OUTBOX,
+        '          if (!(e && PRESENT.has(e.state)) && !newIds.has(key("Inventory", inv))) {',
+        '          if (!(e && UPDATABLE.has(e.state)) && !newIds.has(key("Inventory", inv))) {',
+        OUTBOX_TESTS,
+        'Part 03 L189: an event row naming a closed lot is not enough.',
+    ),
+    (
+        'M96-s12b-sha-not-utf8',
+        OUTBOX,
+        '  return createHash("sha256").update(Buffer.from(s, "utf8")).digest("hex");',
+        '  return createHash("sha256").update(Buffer.from(s, "latin1")).digest("hex");',
+        OUTBOX_TESTS,
+        'The stored hash must be of the exact UTF-8 bytes the operator uploads.',
+    ),
+    (
+        'M97-s12b-slice-other-error-fails-open',
+        STORECORE,
+        '    bad(`${error.code ?? "?"} ${error.message ?? ""}`.trim());',
+        '    return { kind: "absent", reason: "migration-not-applied" };',
+        S12B_TESTS,
+        'A timeout must never silently fall back to legacy (all-Insert) routing.',
+    ),
+    (
+        'M98-s12b-slice-env-echo-unchecked',
+        STORECORE,
+        '  if (d.env !== env) bad(',
+        '  if (false) bad(',
+        S12B_TESTS,
+        'A PREprod ledger must never route a production file.',
+    ),
+    (
+        'M99-s12b-env-case-folded',
+        STORECORE,
+        '  return raw === "preprod" ? "preprod" : "prod";',
+        '  return raw?.toLowerCase() === "preprod" ? "preprod" : "prod";',
+        S12B_TESTS,
+        'Only an exact "preprod" may target PREprod (no accidental env switch).',
+    ),
+    (
+        'M100-s12b-verify-refusal-dropped',
+        EXPROUTE,
+        '    if (problems.length > 0) {\n      return refuse(',
+        '    if (problems.length < 0) {\n      return refuse(',
+        OUTBOX_TESTS,
+        'A ledger self-check problem must refuse the download (409), not ship it.',
+    ),
+    (
+        'M101-s12b-area-held-name-reinserted',
+        BATCHSRV,
+        '    if (held.has(name)) continue;',
+        '    if (false && held.has(name)) continue;',
+        S12B_TESTS,
+        'E23: an Area name CCRS holds must never be Inserted again under a new id.',
+    ),
+    (
+        'M102-s12b-file-contents-wiped-by-reset',
+        RESETCORE,
+        '{ table: "ccrs_file_contents", disposition: "KEEP",',
+        '{ table: "ccrs_file_contents", disposition: "WIPE",',
+        S12B_TESTS,
+        'A factory reset must never delete the bytes we sent to the State.',
+    ),
+    (
+        'M103-s12b-finalize-not-last',
+        SEEDCLI,
+        '  const chunks = [...seedInsertSql(seed.entities), fin];',
+        '  const chunks = [fin, ...seedInsertSql(seed.entities)];',
+        S12B_TESTS,
+        'Finalize must run after every insert, or the ledger looks loaded while short.',
+    ),
+    (
+        'M104-p11-not-production-names',
+        P11GEN,
+        '{ licenseNumber: license, now: at(3), lastStamp: at(2), chunkRows: 1 }',
+        '{ licenseNumber: license, now: at(3), lastStamp: at(3), chunkRows: 1 }',
+        P11_TESTS,
+        'P-11 must upload exactly the names the production planner emits.',
+    ),
+    (
+        'M105-p11-update-misses-chunk-2',
+        P11GEN,
+        'rows: [inv("L01", "Update"), inv("L02", "Update")]',
+        'rows: [inv("L01", "Update")]',
+        P11_TESTS,
+        'P-11: the Update must name the chunk-2 lot, or it cannot prove chunk 2 was stored.',
+    ),
+    (
+        'M106-p11-run-prefix-dropped',
+        P11GEN,
+        '    `${run}-${lot}`, BY, today,',
+        '    `X-${lot}`, BY, today,',
+        P11_TESTS,
+        'Part 06 A.2: every PREprod id carries the run prefix.',
+    ),
+    (
+        'M107-s12b-assign-keyset-unchecked',
+        STORECORE,
+        '  if (got.length !== want.length || got.some((k, i) => k !== want[i])) {',
+        '  if (false) {',
+        S12B_TESTS,
+        'D-01a: every product key asked for must come back with exactly one id.',
+    ),
+    (
+        'M108-s12b-assign-id-shape-loosened',
+        STORECORE,
+        '  const idRe = env === "prod" ? /^GWP-[0-9]{6}$/ :',
+        '  const idRe = env === "prod" ? /GWP-[0-9]+/ :',
+        S12B_TESTS,
+        'D-01a: a production Product id is exactly GWP-<6 digits>, no run prefix.',
+    ),
+    (
+        'M109-s12b-unassigned-includes-other-withholds',
+        BATCHSRV,
+        '.filter(([, pp]) => pp.action === "withhold" && pp.reason === NO_PRODUCT_ID_REASON)',
+        '.filter(([, pp]) => pp.action === "withhold")',
+        S12B_TESTS,
+        'Only products withheld for lack of an id may be offered for assignment.',
+    ),
+    (
+        'M110-s12b-seed-file-not-one-transaction',
+        SEEDCLI,
+        '  return `begin;\\nset local statement_timeout = 0;\\n${chunks.join("\\n")}\\ncommit;\\n`;',
+        '  return chunks.map((c) => `begin;\\n${c}\\ncommit;\\n`).join("");',
+        S12B_TESTS,
+        'A half-loaded seed would look like a partial ledger; the file must be atomic.',
+    ),
+    (
+        'M111-s12b-seed-file-overwrites',
+        SEEDCLI,
+        '    if (existsSync(sqlFile)) { console.error(`REFUSED: ${sqlFile} already exists`); return 2; }',
+        '',
+        S12B_TESTS,
+        'The seed writer must never silently overwrite an existing file.',
+    ),
 ]
 
 
@@ -759,6 +945,10 @@ def main() -> int:
         P04_TESTS,
         S11_TESTS,
         S12A_TESTS,
+        OUTBOX_TESTS,
+        CHUNK_TESTS,
+        S12B_TESTS,
+        P11_TESTS,
     )
     for target in baseline_targets:
         res = vitest(target)

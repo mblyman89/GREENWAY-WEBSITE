@@ -2,9 +2,13 @@
  * scripts/compliance/seed-ccrs-ledger.ts — Bible v2 Part 03 §D.4, slice S-12a.
  *
  * Seeds public.ccrs_filed_entities (env 'prod') from the LCB Service Desk
- * delivery and records each source file as a 'seed' pseudo-file in
- * public.ccrs_files. Idempotent: `on conflict do nothing`, so a re-run writes
- * zero rows and never overwrites a row that routing has since moved.
+ * delivery, then calls public.ccrs_seed_finalize (migration 0248, S-12b),
+ * which re-counts what was loaded, records each source file as a 'seed'
+ * pseudo-file in public.ccrs_files (this is what switches ledger routing on)
+ * and links the one-time Cultivera import lots (Part 03 §D.5) — all in the
+ * same transaction as the inserts. Idempotent: `on conflict do nothing`, so a
+ * re-run writes zero rows and never overwrites a row routing has since moved.
+ * Requires migrations 0247 AND 0248.
  *
  * Refuses to write unless the counts equal the figures measured from these
  * exact files (Part 03 §D.4 / analysis3/s12a/counts.out). A different
@@ -17,17 +21,34 @@
  *     --product   /workspace/analysis2/sheets/Product_report.csv \
  *     --strain    /workspace/analysis2/sheets/Strains.csv \
  *     --area      /workspace/analysis2/sheets/Area.csv \
- *     (--out <dir> | --psql <PGURL>)  [--expect '<json counts>']
+ *     (--out <dir> | --psql <PGURL> | --sql-file <file>)  [--expect '<json counts>']
  *
- *   --out   writes numbered .sql files (one transaction each) to apply in order
+ *   --out   writes numbered .sql files (one transaction each) to apply in order;
+ *           the LAST file is the finalize call — apply it after all the others
  *   --psql  applies them in ONE transaction through psql (ON_ERROR_STOP)
+ *   --sql-file  writes that SAME single-transaction script to one file (the
+ *           owner runs it with psql; byte-identical to what --psql sends)
  *   no target → dry run: prints the counts only
  */
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { buildLedgerSeed, seedInsertSql, seedProvenanceSql, type SeedSource } from "../../src/lib/compliance/ccrs-ledger-seed-core";
+import { SEED_SOURCE, buildLedgerSeed, seedInsertSql, sqlText, type SeedSource } from "../../src/lib/compliance/ccrs-ledger-seed-core";
+
+/**
+ * The finalize call that ends every load. Provenance is written by the
+ * function (not by a bare INSERT) so the ledger can never look "loaded" while
+ * its counts are short or the migration lots are unlinked.
+ */
+export function seedFinalizeSql(
+  expected: { entities: Record<SeedSource, number>; inventoryClosed: number },
+  provenance: readonly { source: SeedSource; fileName: string; sha256: string; rows: number }[],
+): string {
+  const prov = provenance.map((p) => ({ file_type: p.source, file_name: p.fileName, sha256: p.sha256, rows: p.rows }));
+  const exp = { entities: expected.entities, inventoryClosed: expected.inventoryClosed };
+  return `select public.ccrs_seed_finalize(${sqlText(SEED_SOURCE)}, ${sqlText(JSON.stringify(exp))}::jsonb, ${sqlText(JSON.stringify(prov))}::jsonb) as finalize;`;
+}
 
 /** Measured from the 2026-09-18 delivery (analysis3/s12a/counts.out). */
 export const EXPECTED_2026_09_18 = {
@@ -42,6 +63,16 @@ export const EXPECTED_2026_09_18 = {
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
+}
+
+/**
+ * The whole load as ONE transaction: every insert, then finalize. A failure
+ * anywhere rolls everything back (psql ON_ERROR_STOP). `statement_timeout` is
+ * lifted for this transaction only (SET LOCAL), so a slow network cannot cut
+ * the load in half; it reverts at commit.
+ */
+export function singleTransactionSql(chunks: readonly string[]): string {
+  return `begin;\nset local statement_timeout = 0;\n${chunks.join("\n")}\ncommit;\n`;
 }
 
 export function main(): number {
@@ -59,21 +90,27 @@ export function main(): number {
     console.error(`REFUSED: counts differ from the expectation.\n  expected ${JSON.stringify(expected)}\n  got      ${got}\nMeasure the delivery and pass --expect if it is a new delivery.`);
     return 1;
   }
-  const prov = seedProvenanceSql((Object.keys(paths) as SeedSource[]).map((k) => ({
+  const fin = seedFinalizeSql(expected, (Object.keys(paths) as SeedSource[]).map((k) => ({
     source: k, fileName: basename(paths[k]!), sha256: createHash("sha256").update(bytes[k]).digest("hex"), rows: seed.counts.sourceRows[k],
   })));
-  const chunks = [prov, ...seedInsertSql(seed.entities)];
+  // Finalize LAST: it counts what the inserts loaded.
+  const chunks = [...seedInsertSql(seed.entities), fin];
   const out = arg("out");
   const pg = arg("psql");
+  const sqlFile = arg("sql-file");
+  const oneTransaction = singleTransactionSql(chunks);
   if (out) {
     mkdirSync(out, { recursive: true });
     if (readdirSync(out).length) { console.error(`REFUSED: ${out} is not empty`); return 2; }
     chunks.forEach((c, i) => writeFileSync(join(out, `${String(i).padStart(4, "0")}.sql`), `begin;\n${c}\ncommit;\n`));
     console.log(`wrote ${chunks.length} files to ${out}`);
+  } else if (sqlFile) {
+    if (existsSync(sqlFile)) { console.error(`REFUSED: ${sqlFile} already exists`); return 2; }
+    writeFileSync(sqlFile, oneTransaction);
+    console.log(`wrote ${sqlFile} (${Buffer.byteLength(oneTransaction)} bytes, sha256 ${createHash("sha256").update(oneTransaction).digest("hex")})`);
   } else if (pg) {
-    const sql = `begin;\n${chunks.join("\n")}\ncommit;\n`;
-    execFileSync("psql", [pg, "-q", "-v", "ON_ERROR_STOP=1", "-f", "-"], { input: sql, stdio: ["pipe", "inherit", "inherit"], maxBuffer: 1 << 30 });
-    console.log(`applied ${seed.entities.length} entities (+ provenance) in one transaction`);
+    execFileSync("psql", [pg, "-q", "-v", "ON_ERROR_STOP=1", "-f", "-"], { input: oneTransaction, stdio: ["pipe", "inherit", "inherit"], maxBuffer: 1 << 30 });
+    console.log(`applied ${seed.entities.length} entities and finalized (provenance + lot linking) in one transaction`);
   } else {
     console.log("dry run (no --out / --psql): nothing written");
   }
