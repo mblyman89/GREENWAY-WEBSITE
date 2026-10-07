@@ -12,7 +12,7 @@
  *    1,000,000, asserted.
  *  - Chunks get DISTINCT STAMPS, never a suffix: the name shape
  *    `UploadType_LicenseNumber_YYYYMMDDHHMMSS` [G L0046] has no chunk slot and
- *    a suffix is unobserved (U-36). Chunk k is stamped base + (k-1) seconds, so
+ *    a suffix is not needed (U-36 CLOSED 2026-10-07: one-second-apart chunks both accepted and stored, P-11 P20261007A). Chunk k is stamped base + (k-1) seconds, so
  *    a one-chunk file keeps exactly today's name.
  *  - Group order: all Group 1 (Strain, Area, Product) before Group 2
  *    (Inventory) before Group 3 (Adjustment, Transfer, Sale) [G L1057-L1058];
