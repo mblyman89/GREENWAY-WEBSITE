@@ -16,6 +16,8 @@ import { resolveWeek, unresolveWeek, setWeekErrorStatus } from "@/lib/compliance
 import { weekFromKey } from "@/lib/compliance/ccrs-week-core";
 import { resolveRange } from "@/lib/reports/range";
 import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { assignProductIds } from "@/lib/compliance/ccrs-ledger-store";
 
 const BASE = "/admin/compliance/ccrs";
 
@@ -132,4 +134,51 @@ export async function setWeekErrorStatusAction(formData: FormData): Promise<void
 
   revalidatePath(BASE);
   back(weekKey, "saved=1");
+}
+
+/**
+ * S-12b: assign GWP- CCRS Product ids (D-01a) to every product of the selected
+ * week that is withheld ONLY because it has no id yet. Production only.
+ *
+ * The keys are recomputed HERE from the server-built batch, never taken from
+ * the form, so a crafted request cannot mint ids for arbitrary keys. The SQL
+ * function is idempotent and an assigned id is permanent (0248 trigger).
+ */
+export async function assignProductIdsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const weekKey = String(formData.get("week_key") ?? "");
+  const week = weekFromKey(weekKey);
+  if (!week) redirect(`${BASE}?error=${encodeURIComponent("Invalid week.")}`);
+
+  const range = resolveRange({ from: week.start, to: week.end });
+  const batch = await buildCcrsBatch(range.fromISO, range.toISO, { env: "prod" });
+  if (!batch.ledger.view) {
+    back(week.key, `error=${encodeURIComponent(`No CCRS ledger yet (${batch.ledger.absentReason ?? "unknown"}): apply migration 0248 and finalize the seed first.`)}`);
+  }
+  const keys = batch.ledger.unassignedProductKeys;
+  if (keys.length === 0) back(week.key, "saved=1");
+
+  let assigned: Awaited<ReturnType<typeof assignProductIds>>;
+  try {
+    assigned = await assignProductIds(createSupabaseAdminClient(), "prod", keys, session.email ?? session.profile.id);
+  } catch (e) {
+    back(week.key, `error=${encodeURIComponent(e instanceof Error ? e.message : "Could not assign CCRS Product ids.")}`);
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "ccrs.product_ids.assigned",
+    entityType: "ccrs_product_ids",
+    entityId: week.key,
+    after: {
+      env: "prod",
+      requested: keys.length,
+      newlyAssigned: assigned.filter((a) => a.newlyAssigned).length,
+      ids: assigned.map((a) => ({ key: a.productKey, id: a.externalId, new: a.newlyAssigned })),
+    },
+  });
+
+  revalidatePath(BASE);
+  back(week.key, "saved=1");
 }

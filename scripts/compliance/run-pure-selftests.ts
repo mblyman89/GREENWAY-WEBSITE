@@ -516,6 +516,10 @@ import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runCcrsLedgerCoreTests } from "../../src/lib/compliance/ccrs-ledger-core";
 import { __runCcrsFileStateCoreTests } from "../../src/lib/compliance/ccrs-file-state-core";
 import { __runCcrsLedgerSeedCoreTests } from "../../src/lib/compliance/ccrs-ledger-seed-core";
+import { __runCcrsChunkCoreTests } from "../../src/lib/compliance/ccrs-chunk-core";
+import { __runCcrsControlTotalsCoreTests } from "../../src/lib/compliance/ccrs-control-totals-core";
+import { __runCcrsOutboxCoreTests } from "../../src/lib/compliance/ccrs-outbox-core";
+import { __runCcrsLedgerStoreCoreTests } from "../../src/lib/compliance/ccrs-ledger-store-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
 import { __runApplySettingsTests } from "../../src/lib/syndication/apply-settings-core";
@@ -1269,6 +1273,12 @@ __runLiquidVolumeTests();
   // S-12a: CCRS file state machine (mirrors the 0247 guard) + ledger seed.
   __runCcrsFileStateCoreTests();
   __runCcrsLedgerSeedCoreTests();
+  // S-12b: chunking + distinct stamps, and exact control totals (Part 05 sections B, C, G).
+  __runCcrsChunkCoreTests();
+  __runCcrsControlTotalsCoreTests();
+  // S-12b: outbox planner/verifier/emit payload, and the ledger-slice decoder.
+  __runCcrsOutboxCoreTests();
+  __runCcrsLedgerStoreCoreTests();
   __runRichnessTests();
   // Floored as of L-7 -- see the note on `__runSyncSettingsTests`. This core now
   // also resolves the automatic sync schedule, and the round trip it asserts

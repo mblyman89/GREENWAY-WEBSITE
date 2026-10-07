@@ -185,6 +185,31 @@ The CLI refuses to write unless every count equals `EXPECTED_2026_09_18` (a fres
 
 Tests: `tests/compliance/s12a-ccrs-ledger.test.ts` (30, including the real-delivery count check when the files are present); self-tests registered in `run-pure-selftests.ts`; migration gate pins `0247_ccrs_ledger.sql`; mutations **M78–M89** in `mutate_check.py`, all killed.
 
+### A.7 S-12b ledger-backed routing, chunked outbox, emit — DONE in code (2026-10-07); owner applies 0248 and runs the seed by hand
+
+**What changed.** `buildCcrsBatch` now loads the CCRS ledger (one RPC, `ccrs_ledger_slice`) and routes every row against it: a lot CCRS already holds is an **Update**, an Insert happens only for an id CCRS never received (Part 03 §D.3). Until 0248 is applied **and** the seed is finalized the slice answers "absent" and the batch is built exactly as before (every row Insert) and is **not recorded** — the hub shows an amber banner saying so. Any other RPC failure (timeout, permission, malformed answer, env mismatch) **throws**: routing on a partial ledger could turn an Update into an Insert.
+
+**Migration `0248_ccrs_outbox.sql`** — all functions `service_role` only, none `security definer`, `search_path` pinned:
+
+| Object | Purpose |
+|---|---|
+| `ccrs_file_contents` (KEEP) | the exact UTF-8 bytes of every emitted file; immutable; `byte_length = octet_length(content)` |
+| `ccrs_product_ids` (KEEP) + `ccrs_gwp_seq` | our product key → minted `GWP-<6 digits>` (D-01a; PREprod adds the run prefix); never changed or deleted |
+| `ccrs_files.stamp_at`, `control_totals` | the stamp in the file name; per-file totals (Part 05 §G) |
+| `ccrs_emit_files(env, files, general_issues)` | one transaction: re-hashes the bytes, checks CRLF, NumberRecords, row width, monotonic stamps per env, writes file + bytes + rows + issues; identical bytes in the same env → `duplicate` (Brian A29), served from the STORED bytes under the STORED name |
+| `ccrs_assign_product_ids(env, keys, by, run)` | idempotent GWP- assignment (advisory-locked) |
+| `ccrs_link_unfiled_migration_lots(apply)` | Cultivera import lots CCRS never received → `unknown` (withheld, never Inserted) |
+| `ccrs_seed_finalize(source, expected, provenance)` | the LAST statement of the seed load: refuses unless every count equals the measured delivery, links migration lots, writes provenance; re-run → `already-finalized` |
+| `ccrs_ledger_slice(env, inventory_ids, product_names)` | what one batch routes against (its lots, their products, assigned GWP- products, name holders, all Strains and Areas), the last stamp, `loaded` |
+
+**Route `batch-export`** — plan (10,000-row chunks, D-07/D-08; stamps +1 s from the last stored stamp; exact names `Type_413541_YYYYMMDDHHMMSS.csv` [G L0046], no suffix) → **ledger self-check on the exact bytes** (Part 05 §D.4; `L_INSERT_ON_FILE`, `L_UPDATE_NOT_ON_FILE`, `L_REF_*`; any problem → HTTP 409 listing every row) → emit → zip. README lists every file in upload order by group with "(part k of n)" and the pace-by-success-email rule [BRIAN A27].
+
+**Also in this slice:** warning caps removed end-to-end (Part 05 §H; the AI prompt keeps 20 with a "+N more" line); an Area NAME CCRS already holds is never Inserted under a new id (E23 interim; full fix S-13); an owner button **"Assign CCRS Product ids (GWP-)"** on the hub (permission `settings.manage`, keys recomputed server-side, audited `ccrs.product_ids.assigned`); PREprod probe P-11 generator (U-36).
+
+**Acceptance (Part 07 S-12b), proven on local Postgres 15 with the real 2026-09-18 delivery** (`scripts/recon/ccrs-s12b-acceptance.ts`): 4,200/4,200 seeded shelf lots → Update; 3 post-cutover lots → Insert; tamper tests fire each L_* code; emit stores 4,200 Update rows; the same content twice → `duplicate`. **D-06 measured = 16** live strains CCRS holds in no casing (Part 04 L126). The planner puts exactly those strains into Strain.csv of the same emission (upload group 1); the self-check blocks an Inventory row naming one **only** if no Strain row in the emission creates it (proven both ways in the acceptance run). Whether to Insert those 16 strain names or re-point the lots to a filed strain stays an owner decision (S-14 W2).
+
+Tests: `s12b-ccrs-outbox.test.ts`, `ccrs-outbox-core.test.ts`, `ccrs-chunk-core.test.ts`, `ccrs-control-totals-core.test.ts`, `p11-chunk-naming-probe.test.ts`; `scripts/recon/ccrs-outbox-pg-check.sql`; **57/57 SQL mutants** (`mutate_0248_sql.py`); mutations **M90–M111** in `mutate_check.py` (M62 retargeted to `NO_PRODUCT_ID_REASON`); full harness **111 killed, 0 survived**. Seed delivery: `seed-ccrs-ledger.ts --sql-file` writes ONE transaction (`singleTransactionSql`); on a fresh DB (boot + 248 migrations) it finalizes in 4.2 s, a re-run returns `already-finalized`, and a file truncated at 40 MB loads nothing (atomic). The seed file is LCB data and is never committed.
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

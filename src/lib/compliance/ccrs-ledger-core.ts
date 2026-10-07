@@ -223,6 +223,9 @@ export function resolveProductName(
  * Minted Product ids (D-01a). The SEQUENCE is S-12's; this is the format.
  * ------------------------------------------------------------------ */
 export const PREPROD_RUN_RE = /^P\d{8}[A-Z]$/;
+
+/** The withhold reason for a product with no assigned GWP- id (S-12b assigns on owner action). */
+export const NO_PRODUCT_ID_REASON = "no CCRS Product id (GWP-) is assigned to this product";
 export function formatMintedProductId(seq: number, preprodRun?: string): string {
   if (!Number.isInteger(seq) || seq < 1 || seq > 999_999) throw new Error(`GWP sequence out of range: ${seq}`);
   if (preprodRun !== undefined && !PREPROD_RUN_RE.test(preprodRun)) throw new Error(`bad PREprod run id: ${preprodRun}`);
@@ -398,7 +401,7 @@ export function planLedgerBatch(input: PlanInput): LedgerPlan {
       }
       continue;
     }
-    products.set(p.key, { action: "withhold", reason: "no CCRS Product id (GWP-) is assigned to this product" });
+    products.set(p.key, { action: "withhold", reason: NO_PRODUCT_ID_REASON });
   }
 
   // ── Finalise lots now that product outcomes are known.

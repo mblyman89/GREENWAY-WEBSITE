@@ -657,6 +657,8 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ccrs_filed_entities", disposition: "KEEP", because: "Ids already on file with the State; wiping them would cause duplicate filings." },
   { table: "ccrs_file_rows", disposition: "KEEP", because: "Row-by-row content of files the State already received." },
   { table: "ccrs_file_issues", disposition: "KEEP", because: "The State's error/warning findings on files already sent." },
+  { table: "ccrs_file_contents", disposition: "KEEP", because: "The exact bytes of every CCRS file we emitted — the operator downloads these, never a regeneration." },
+  { table: "ccrs_product_ids", disposition: "KEEP", because: "The GWP- Product ids assigned for CCRS — once filed, an id is the State's key and is never reassigned." },
   { table: "compliance_reminder_log", disposition: "WIPE", because: "Reminders fired during testing." },
   { table: "syndication_logs", disposition: "WIPE", because: "Test pushes of your menu to third-party sites." },
   { table: "syndication_sync_state", disposition: "WIPE", because: "Where each syndication feed left off during testing." },

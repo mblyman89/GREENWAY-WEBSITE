@@ -42,7 +42,7 @@ import { CcrsAdvisorPanel } from "@/components/admin/reports/CcrsAdvisorPanel";
 import { PushRemindersPanel } from "@/components/admin/compliance/PushRemindersPanel";
 import { UploadWalkthrough } from "@/components/admin/compliance/UploadWalkthrough";
 import { ErrorTriagePanel } from "@/components/admin/compliance/ErrorTriagePanel";
-import { resolveWeekAction, unresolveWeekAction, setWeekErrorStatusAction } from "./actions";
+import { resolveWeekAction, unresolveWeekAction, setWeekErrorStatusAction, assignProductIdsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -330,6 +330,29 @@ export default async function CcrsCommandCenterPage({
 
         {batch ? (
           <div className="mt-4 space-y-3">
+            {/* S-12b: ledger status + GWP- id assignment (D-01a) */}
+            {!batch.ledger.view ? (
+              <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-[11px] text-amber-100">
+                CCRS ledger not loaded ({batch.ledger.absentReason}). Files are built the old way (every row Insert) and are
+                NOT recorded. Do not upload to production until migration 0248 is applied and the seed is finalized.
+              </p>
+            ) : batch.ledger.unassignedProductKeys.length > 0 ? (
+              <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-[11px] text-sky-100">
+                <p className="font-semibold">
+                  {batch.ledger.unassignedProductKeys.length} product(s) have no CCRS Product id yet, so they (and their lots)
+                  are withheld.
+                </p>
+                {canEdit ? (
+                  <form action={assignProductIdsAction} className="mt-2">
+                    <input type="hidden" name="week_key" value={week.key} />
+                    <Button type="submit" variant="confirm" size="sm">
+                      Assign CCRS Product ids (GWP-) to these {batch.ledger.unassignedProductKeys.length}
+                    </Button>
+                    <p className="mt-1 text-white/50">Permanent: an assigned id is never changed or reused. Production only.</p>
+                  </form>
+                ) : null}
+              </div>
+            ) : null}
             <div
               className={`rounded-xl border px-4 py-3 text-xs font-semibold ${
                 submittable
@@ -359,7 +382,7 @@ export default async function CcrsCommandCenterPage({
                   {warnings.length} warning(s) — non-blocking, worth a skim
                 </summary>
                 <ul className="mt-2 space-y-1">
-                  {warnings.slice(0, 25).map((w, i) => (
+                  {warnings.map((w, i) => (
                     <li key={i}>
                       • [{w.file}] {w.message}
                       {w.count ? ` (${w.count})` : ""}

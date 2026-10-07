@@ -59,7 +59,8 @@ import { validateName, suggestName, type Cannabinoid } from "@/lib/naming/conven
 import { composeCcrsProductName, disambiguateCcrsName } from "@/lib/compliance/ccrs-product-name-core";
 import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
-import { applyProductPlan, planLedgerBatch, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
+import { NO_PRODUCT_ID_REASON, applyProductPlan, planLedgerBatch, type LedgerEnv, type LedgerPlan, type LedgerView } from "@/lib/compliance/ccrs-ledger-core";
+import { loadLedgerForBatch } from "@/lib/compliance/ccrs-ledger-store";
 
 export type CcrsFile = {
   type: CcrsRetailerFileType;
@@ -99,6 +100,25 @@ export type CcrsBatch = {
   syncIssues: CcrsSyncIssue[];
   totalRecords: number;
   generatedAt: string;
+  /**
+   * S-12b: what the rows were routed against. `view` null = legacy routing
+   * (every row Insert, our ids) because the 0248 migration is not applied or
+   * the production seed is not finalized yet (ccrs-ledger-store-core).
+   */
+  ledger: {
+    env: LedgerEnv;
+    view: LedgerView | null;
+    /** why there is no view (null when loaded). */
+    absentReason: "migration-not-applied" | "seed-not-finalized" | "not-configured" | null;
+    /** greatest file stamp already stored in this env (ISO), null = none. */
+    lastStamp: string | null;
+    /**
+     * Product keys withheld ONLY because no GWP- id is assigned yet (sorted).
+     * The owner assigns them with one audited action (ccrs_assign_product_ids);
+     * the export never assigns on its own (D-01a: ids are minted deliberately).
+     */
+    unassignedProductKeys: string[];
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -283,11 +303,25 @@ function buildAreaFile(
   license: string,
   createdBy: string,
   createdDate: string,
+  ledger: LedgerView | null = null,
 ): { rows: string[][]; warnings: string[] } {
   const rows: string[][] = [];
-  rows.push([license, "Sales Floor", "FALSE", "AREA-SALES-FLOOR", createdBy, createdDate, "", "", "Insert"]);
-  if (hasQuarantine) {
-    rows.push([license, "Quarantine", "TRUE", "AREA-QUARANTINE", createdBy, createdDate, "", "", "Insert"]);
+  const wanted: [string, string, string][] = [["Sales Floor", "FALSE", "AREA-SALES-FLOOR"]];
+  if (hasQuarantine) wanted.push(["Quarantine", "TRUE", "AREA-QUARANTINE"]);
+  // S-12b: with a ledger, an Area NAME CCRS already holds is never Inserted
+  // again under a new id. Inventory.Area joins by name to the most recently
+  // ingested record [BRIAN A12], so a new "Sales Floor" record would silently
+  // become the join target (gap E23). The full ledger-driven Area file
+  // (Delete/Update of the filed set, D-03, no Quarantine area N-01) is S-13.
+  const held = new Set<string>();
+  if (ledger) {
+    for (const e of ledger.entries.values()) {
+      if (e.fileType === "Area" && e.filedName && (e.state === "seed" || e.state === "filed" || e.state === "confirmed")) held.add(e.filedName);
+    }
+  }
+  for (const [name, quarantine, id] of wanted) {
+    if (held.has(name)) continue;
+    rows.push([license, name, quarantine, id, createdBy, createdDate, "", "", "Insert"]);
   }
   return { rows, warnings: [] };
 }
@@ -634,14 +668,19 @@ function buildInventoryFile(
       message: `${e7Rows.length} lot(s) have no cost, so TotalCost would be 0 and CCRS rejects the Inventory file ("TotalCost cannot equal 0" [G L0614]). Enter the unit cost on each lot. A vendor TRADE SAMPLE should be marked as a sample instead — it reports $0.01 [FAQ L0035].`,
     });
   }
-  return { rows, warnings: [...new Set(warnings)].slice(0, 25), issues };
+  return { rows, warnings: [...new Set(warnings)], issues };
 }
 
 // ---------------------------------------------------------------------------
 // The full batch
 // ---------------------------------------------------------------------------
 
-export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<CcrsBatch> {
+export async function buildCcrsBatch(
+  fromISO: string,
+  toISO: string,
+  opts: { env?: LedgerEnv } = {},
+): Promise<CcrsBatch> {
+  const env: LedgerEnv = opts.env ?? "prod";
   const license = await getCcrsLicenseSettings();
   const submittedBy = license.submittedBy || "Greenway";
   const createdBy = submittedBy;
@@ -658,6 +697,7 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
     syncIssues,
     totalRecords: 0,
     generatedAt: now.toISOString(),
+    ledger: { env, view: null, absentReason: "not-configured", lastStamp: null, unassignedProductKeys: [] },
   });
 
   if (!license.licenseNumber) {
@@ -715,12 +755,30 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
   const hasQuarantine = lots.some((l) => l.status === "quarantine" || l.status === "recalled");
 
   // --- Build each master-data file ------------------------------------------
-  // S-11: one pure plan routes every Strain/Product/Inventory row. The ledger
-  // (what CCRS already holds) is loaded by S-12; until then `ledger` is null and
-  // the plan reproduces the pre-S-11 rows exactly (every row Insert, our ids),
-  // except that a strain's case variants now share ONE spelling [BRIAN A16].
-  const ledger: LedgerView | null = null;
+  // S-11: one pure plan routes every Strain/Product/Inventory row against the
+  // ledger (what CCRS already holds). S-12b loads it: ccrs_ledger_slice returns
+  // the entries for exactly these lots and product names (Part 03 §D.3). While
+  // the 0248 migration is not applied or the seed is not finalized the slice
+  // is "absent", `ledger` is null and the plan reproduces the pre-S-11 rows
+  // (every row Insert, our ids). Any other failure THROWS: routing against a
+  // partial ledger could turn an Update into an Insert.
   const productBuild = buildProductFile(items, lots, license.licenseNumber, createdBy, createdDate);
+  const slice = await loadLedgerForBatch(
+    admin,
+    env,
+    lots.map((l) => assignedInventoryExternalId(l)).filter((x): x is string => !!x),
+    [...productBuild.nameByProductKey.values()],
+  );
+  const ledger: LedgerView | null = slice.kind === "loaded" ? slice.ledger.view : null;
+  if (slice.kind === "loaded" && slice.ledger.duplicates.length > 0) {
+    syncIssues.push({
+      severity: "error",
+      file: "General",
+      message: `The CCRS ledger holds ${slice.ledger.duplicates.length} duplicate record(s). Routing cannot prove which one CCRS holds; reconcile the ledger before exporting.`,
+      count: slice.ledger.duplicates.length,
+      rows: slice.ledger.duplicates.map((d) => ({ id: d, label: d, detail: "duplicate ledger record" })),
+    });
+  }
   const plan = planLedgerBatch({
     view: ledger,
     lots: lots
@@ -744,7 +802,7 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
     strains: items.map((it) => (it.strain_name ?? "").trim()).filter(Boolean),
   });
   const strain = buildStrainFile(items, license.licenseNumber, submittedBy, createdBy, createdDate, plan);
-  const area = buildAreaFile(hasQuarantine, license.licenseNumber, createdBy, createdDate);
+  const area = buildAreaFile(hasQuarantine, license.licenseNumber, createdBy, createdDate, ledger);
   const product = { ...productBuild, ...applyProductPlan(productBuild.rows, productBuild.keys, plan) };
   const inventory = buildInventoryFile(lots, license.licenseNumber, createdBy, plan);
   if (product.withheld.length > 0) {
@@ -925,21 +983,12 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
   }
 
   // Carry each file's own warnings up as sync issues with HONEST severity
-  // (Slice 93). Batch-blocking messages (invalid enum, missing id, etc.) become
-  // `error` and are NEVER dropped by the cap; advisory notes stay `warning` and
-  // are capped per file to avoid noise.
-  const WARNING_CAP_PER_FILE = 5;
+  // (Slice 93). S-12b: no cap — "no caps; every finding is recorded" (Part 05
+  // §H). A capped list hides findings from the operator and from the issues
+  // stored with the emitted file (ccrs_file_issues).
   for (const f of files) {
-    let warningCount = 0;
     for (const w of f.warnings) {
-      const severity = classifyWarning(w);
-      if (severity === "error") {
-        // Always surface blocking errors — no cap.
-        syncIssues.push({ severity: "error", file: f.type, message: w });
-      } else if (warningCount < WARNING_CAP_PER_FILE) {
-        syncIssues.push({ severity: "warning", file: f.type, message: w });
-        warningCount += 1;
-      }
+      syncIssues.push({ severity: classifyWarning(w), file: f.type, message: w });
     }
   }
 
@@ -954,5 +1003,15 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
     syncIssues,
     totalRecords,
     generatedAt: now.toISOString(),
+    ledger: {
+      env,
+      view: ledger,
+      absentReason: slice.kind === "loaded" ? null : slice.reason,
+      lastStamp: slice.kind === "loaded" && slice.ledger.lastStamp ? slice.ledger.lastStamp.toISOString() : null,
+      unassignedProductKeys: [...plan.products]
+        .filter(([, pp]) => pp.action === "withhold" && pp.reason === NO_PRODUCT_ID_REASON)
+        .map(([k]) => k)
+        .sort(),
+    },
   };
 }

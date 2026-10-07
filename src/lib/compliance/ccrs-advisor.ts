@@ -66,6 +66,8 @@ function summarize(batch: CcrsBatch): string {
   for (const e of errors) lines.push(`  ERROR [${e.file}]: ${e.message}${e.count ? ` (${e.count})` : ""}`);
   lines.push(`Sync warnings: ${warns.length}`);
   for (const w of warns.slice(0, 20)) lines.push(`  WARN [${w.file}]: ${w.message}${w.count ? ` (${w.count})` : ""}`);
+  // The AI prompt is bounded (20 lines); say so rather than hide the rest.
+  if (warns.length > 20) lines.push(`  (+${warns.length - 20} more warning(s) not shown here; every one is on the CCRS page)`);
   return lines.join("\n");
 }
 
