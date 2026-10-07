@@ -193,7 +193,11 @@ export default async function CompliancePage({
                       ? "DUE TODAY — no export on record"
                       : p.status === "due_soon"
                         ? `due in ${p.daysUntilDue} day(s) — no export on record`
-                        : `due in ${p.daysUntilDue} day(s)`;
+                        : p.status === "dismissed"
+                          ? `dismissed with a reason${p.waiver ? `: "${p.waiver.reason}"` : ""} (CCRS page)`
+                          : p.status === "before_start"
+                            ? "before your first day of sales (not tracked)"
+                            : `due in ${p.daysUntilDue} day(s)`;
               return (
                 <li key={label} className={tone}>
                   • Sales month <span className="font-bold">{label}</span> — report due{" "}

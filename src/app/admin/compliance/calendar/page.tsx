@@ -27,6 +27,9 @@ export const dynamic = "force-dynamic";
 function statusBadge(entry: CalendarEntry) {
   if (entry.status === "done") return <Badge tone="green">Done</Badge>;
   if (entry.status === "overdue") return <Badge tone="danger">Overdue</Badge>;
+  // S-12d: set on the CCRS page (first day of sales / dismiss with a reason)
+  if (entry.status === "before_start") return <Badge tone="neutral">Before sales start</Badge>;
+  if (entry.status === "dismissed") return <Badge tone="neutral">Dismissed</Badge>;
   if (entry.daysUntilDue <= 3) return <Badge tone="orange">Due in {entry.daysUntilDue}d</Badge>;
   return <Badge tone="neutral">Due in {entry.daysUntilDue}d</Badge>;
 }
@@ -119,6 +122,10 @@ export default async function ComplianceCalendarPage({
                     {entry.done
                       ? ` · Signed off ${new Date(entry.done.doneAt).toLocaleString()}${entry.done.byEmail ? ` by ${entry.done.byEmail}` : ""}`
                       : ""}
+                    {entry.status === "dismissed" && entry.waiver
+                      ? ` · Dismissed on the CCRS page${entry.waiver.waivedByEmail ? ` by ${entry.waiver.waivedByEmail}` : ""}: "${entry.waiver.reason}"`
+                      : ""}
+                    {entry.status === "before_start" ? " · Before your first day of sales (set on the CCRS page)" : ""}
                   </p>
                 </div>
                 <form action={setPeriodDoneAction}>

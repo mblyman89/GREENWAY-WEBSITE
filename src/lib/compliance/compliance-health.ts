@@ -28,6 +28,8 @@ import {
   type ComplianceHealthReport,
 } from "@/lib/compliance/compliance-health-core";
 import { getCcrsFilingOverview } from "@/lib/compliance/ccrs-filing-status";
+import { getObligationContext } from "@/lib/compliance/obligation-waiver-store";
+import type { ObligationContext } from "@/lib/compliance/obligation-waiver-core";
 import { periodKey } from "@/lib/compliance/ccrs-deadline-core";
 import { getSalesLimitSettings, listRecentSalesLimitOverrides } from "@/lib/compliance/sales-limits";
 import { verifyExemptSaleRecords } from "@/lib/medical/exempt-sale-record-core";
@@ -60,10 +62,16 @@ export async function getComplianceHealth(
   const facts: ComplianceHealthFacts = {};
 
   // 1) CCRS upload cadence — how long since the last export was generated?
-  facts.ccrsBatch = await readLatestBatchHealth(todayIso, weeklyWindowDays);
+  // S-12d: first day of sales + written dismissals (fails safe: EMPTY_CONTEXT).
+  const obligationCtx = await getObligationContext();
+  const batchHealth = await readLatestBatchHealth(todayIso, weeklyWindowDays);
+  facts.ccrsBatch =
+    batchHealth && obligationCtx.startDate && todayIso < obligationCtx.startDate
+      ? { ...batchHealth, salesStartDate: obligationCtx.startDate }
+      : batchHealth;
 
   // 2) Monthly reporting deadline (LIQ-1295).
-  facts.deadline = await readDeadlineHealth(todayIso);
+  facts.deadline = await readDeadlineHealth(todayIso, obligationCtx);
 
   // 3) Dirty inventory lots held in quarantine.
   facts.dirtyLots = await readDirtyLotHealth();
@@ -136,9 +144,12 @@ async function readLatestBatchHealth(
   }
 }
 
-async function readDeadlineHealth(todayIso: string): Promise<ComplianceHealthFacts["deadline"]> {
+async function readDeadlineHealth(
+  todayIso: string,
+  ctx: ObligationContext,
+): Promise<ComplianceHealthFacts["deadline"]> {
   try {
-    const overview = await getCcrsFilingOverview(todayIso, { lookbackMonths: 3 });
+    const overview = await getCcrsFilingOverview(todayIso, { lookbackMonths: 3, ctx });
     if (!overview.available) return { available: false, anyOverdue: false, mostUrgent: null };
     const u = overview.mostUrgent;
     return {

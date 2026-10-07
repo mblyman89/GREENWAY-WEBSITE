@@ -54,7 +54,12 @@ import {
   abandonFileAction,
   startPreprodLedgerAction,
   assignPreprodProductIdsAction,
+  setObligationStartAction,
+  dismissPeriodAction,
+  undoDismissalAction,
 } from "./actions";
+import { getObligationContext, listRecentWaivers } from "@/lib/compliance/obligation-waiver-store";
+import { validateDismissal, REASON_MIN, REASON_MAX } from "@/lib/compliance/obligation-waiver-core";
 import { CcrsFilesPanel } from "@/components/admin/compliance/CcrsFilesPanel";
 import { listCcrsFiles } from "@/lib/compliance/ccrs-ledger-store";
 import { parseLedgerEnv } from "@/lib/compliance/ccrs-ledger-store-core";
@@ -92,7 +97,72 @@ const STATUS_META: Record<
   overdue: { label: "OVERDUE", pill: "bg-red-500/25 text-red-200" },
   submitted: { label: "Submitted", pill: "bg-emerald-500/20 text-emerald-200" },
   nothing_to_report: { label: "Nothing to report", pill: "bg-emerald-500/15 text-emerald-200/80" },
+  // S-12d
+  before_start: { label: "Before sales start", pill: "bg-white/5 text-white/40" },
+  dismissed: { label: "Dismissed", pill: "bg-violet-500/15 text-violet-200/80" },
 };
+
+/** S-12d: monthly LIQ-1295 status words for the owner. */
+const MONTH_STATUS_LABEL: Record<string, string> = {
+  filed: "export on record",
+  before_start: "before sales start (not tracked)",
+  dismissed: "dismissed",
+  overdue: "overdue",
+  due_today: "due today",
+  due_soon: "due soon",
+  upcoming: "upcoming",
+};
+
+/** S-12d: the small "dismiss with a reason" form, used for weeks and months. */
+function DismissForm({
+  obligation,
+  periodKey,
+  weekKey,
+  env,
+  label,
+}: {
+  obligation: "ccrs_weekly" | "liq1295";
+  periodKey: string;
+  weekKey: string;
+  env: string;
+  label: string;
+}) {
+  return (
+    <form action={dismissPeriodAction} className="mt-2 flex flex-wrap items-end gap-2">
+      <input type="hidden" name="obligation" value={obligation} />
+      <input type="hidden" name="period_key" value={periodKey} />
+      <input type="hidden" name="week_key" value={weekKey} />
+      <input type="hidden" name="env" value={env} />
+      <label className="min-w-[16rem] flex-1 text-[11px] text-white/50">
+        Reason ({REASON_MIN} to {REASON_MAX} characters, kept forever)
+        <input
+          name="reason"
+          required
+          minLength={REASON_MIN}
+          maxLength={REASON_MAX}
+          placeholder="e.g. Filed by Cultivera, our integrator, before we took over"
+          className="mt-1 block w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
+        />
+      </label>
+      <Button type="submit" variant="neutral" size="sm">
+        {label}
+      </Button>
+    </form>
+  );
+}
+
+function UndoDismissForm({ waiverId, weekKey, env }: { waiverId: string; weekKey: string; env: string }) {
+  return (
+    <form action={undoDismissalAction} className="inline">
+      <input type="hidden" name="waiver_id" value={waiverId} />
+      <input type="hidden" name="week_key" value={weekKey} />
+      <input type="hidden" name="env" value={env} />
+      <Button type="submit" variant="danger" size="sm">
+        Undo dismissal
+      </Button>
+    </form>
+  );
+}
 
 export default async function CcrsCommandCenterPage({
   searchParams,
@@ -109,6 +179,9 @@ export default async function CcrsCommandCenterPage({
 
   // ── Weekly deadline picture ────────────────────────────────────────────────
   const overview = await getWeeklyOverview({ lookbackWeeks: 6 });
+  // S-12d: first day of sales + dismissals (fails safe: empty = nags as before).
+  const obligationCtx = await getObligationContext();
+  const waiverHistory = isSupabaseServiceConfigured ? await listRecentWaivers(20) : [];
   const ledger = isSupabaseServiceConfigured ? await listWeekSubmissions(12) : [];
 
   // Selected week: explicit ?week= → most urgent unresolved → last completed.
@@ -215,7 +288,7 @@ export default async function CcrsCommandCenterPage({
     : 0;
 
   // ── Monthly LIQ-1295 strip ─────────────────────────────────────────────────
-  const filing = await getCcrsFilingOverview(todayIso, { lookbackMonths: 2 });
+  const filing = await getCcrsFilingOverview(todayIso, { lookbackMonths: 2, ctx: obligationCtx });
 
   // ── Banner tone ────────────────────────────────────────────────────────────
   const urgent = overview.mostUrgent;
@@ -309,12 +382,57 @@ export default async function CcrsCommandCenterPage({
           </div>
         ) : (
           <p className="text-sm font-bold text-emerald-200">
-            ✓ All completed weeks are resolved. Current week ({overview.current.week.start} –{" "}
+            ✓ All completed weeks are resolved{overview.beforeStartCount + overview.dismissedCount > 0
+              ? ` (${overview.beforeStartCount} before sales start, ${overview.dismissedCount} dismissed with a reason)`
+              : ""}. Current week ({overview.current.week.start} –{" "}
             {overview.current.week.end}) closes Saturday; its upload is due Sunday{" "}
             {overview.current.week.due}.
           </p>
         )}
       </div>
+
+      {/* S-12d) First day of sales */}
+      <Section
+        title="First day of sales"
+        subtitle="Weeks and months before this date stop nagging you. Your integrator (Cultivera) files those; this system does not."
+      >
+        <div className="space-y-2 text-xs text-white/60">
+          <p>
+            {obligationCtx.startDate ? (
+              <>
+                Set to <strong className="text-white">{obligationCtx.startDate}</strong>. CCRS weeks that end before it show
+                as &ldquo;Before sales start&rdquo; and send no reminders. LIQ-1295 months that end before it go quiet only
+                after their due date, so a real upcoming LIQ-1295 is still reminded.
+              </>
+            ) : (
+              <>Not set. Every past week and month is treated as yours to file, so the backlog nags.</>
+            )}
+          </p>
+          {canEdit ? (
+            <form action={setObligationStartAction} className="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="week_key" value={week.key} />
+              <input type="hidden" name="env" value={env} />
+              <label className="text-[11px] text-white/50">
+                First day of sales (YYYY-MM-DD)
+                <input
+                  type="date"
+                  name="start_date"
+                  defaultValue={obligationCtx.startDate ?? "2026-11-01"}
+                  className="mt-1 block rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
+                />
+              </label>
+              <Button type="submit" variant="save" size="sm">
+                Save first day of sales
+              </Button>
+              {obligationCtx.startDate ? (
+                <span className="text-[11px] text-white/35">Clear the box and save to remove it.</span>
+              ) : null}
+            </form>
+          ) : (
+            <p className="text-white/40">Changing it requires the &ldquo;Change settings&rdquo; permission.</p>
+          )}
+        </div>
+      </Section>
 
       {/* 2) Week picker */}
       <Section
@@ -542,6 +660,25 @@ export default async function CcrsCommandCenterPage({
               </div>
             ) : null}
           </div>
+        ) : selectedDeadline.status === "before_start" ? (
+          <p className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-white/50">
+            This week ends before your first day of sales ({obligationCtx.startDate}). It is not tracked here and sends
+            no reminders. You can still record it if you uploaded it yourself.
+          </p>
+        ) : selectedDeadline.status === "dismissed" && selectedDeadline.waiver ? (
+          <div className="space-y-2 rounded-xl border border-violet-400/25 bg-violet-400/5 px-4 py-3 text-xs text-violet-100">
+            <p>
+              Dismissed by {selectedDeadline.waiver.waivedByEmail ?? "staff"}
+              {selectedDeadline.waiver.waivedAt
+                ? ` on ${new Date(selectedDeadline.waiver.waivedAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} PT`
+                : ""}
+              . Reason: <strong>{selectedDeadline.waiver.reason}</strong>
+            </p>
+            <p className="text-violet-100/60">No reminders are sent for this week. Undo it if it was a mistake; it shows as due again.</p>
+            {canEdit && selectedDeadline.waiver.id ? (
+              <UndoDismissForm waiverId={selectedDeadline.waiver.id} weekKey={week.key} env={env} />
+            ) : null}
+          </div>
         ) : !weekCompleted ? (
           <p className="text-xs text-white/40">
             This week is still in progress — it can be recorded after it closes Saturday night.
@@ -600,6 +737,16 @@ export default async function CcrsCommandCenterPage({
                 </p>
               ) : null}
             </form>
+
+            {/* S-12d: check it off with a reason (for example the integrator filed it) */}
+            <div className="rounded-xl border border-white/10 bg-black/20 p-4 md:col-span-2">
+              <p className="text-xs font-bold text-white/80">Someone else handled this week (dismiss with a reason)</p>
+              <p className="mt-1 text-[11px] text-white/45">
+                Use this when the week was filed outside this system, for example by Cultivera. It does NOT tell the
+                State anything; it only stops the reminders here and keeps your reason, name and time as evidence.
+              </p>
+              <DismissForm obligation="ccrs_weekly" periodKey={week.key} weekKey={week.key} env={env} label="Dismiss this week" />
+            </div>
           </div>
         ) : (
           <p className="text-xs text-white/40">
@@ -688,12 +835,33 @@ export default async function CcrsCommandCenterPage({
                     ? "text-orange-200"
                     : p.status === "filed"
                       ? "text-emerald-200/80"
-                      : "text-white/60";
+                      : p.status === "dismissed"
+                        ? "text-violet-200/80"
+                        : p.status === "before_start"
+                          ? "text-white/35"
+                          : "text-white/60";
+              const canDismiss =
+                canEdit &&
+                p.status !== "filed" &&
+                p.status !== "before_start" &&
+                p.status !== "dismissed" &&
+                validateDismissal("liq1295", label, todayIso).ok;
               return (
                 <li key={label} className={tone}>
                   • Sales month <span className="font-bold">{label}</span> — due{" "}
-                  <span className="font-bold">{p.dueDate}</span> —{" "}
-                  {p.status === "filed" ? "export on record" : p.status.replace("_", " ")}
+                  <span className="font-bold">{p.dueDate}</span> — {MONTH_STATUS_LABEL[p.status] ?? p.status}
+                  {p.status === "dismissed" && p.waiver ? (
+                    <span className="ml-1 text-violet-100/70">
+                      (by {p.waiver.waivedByEmail ?? "staff"}: &ldquo;{p.waiver.reason}&rdquo;){" "}
+                      {canEdit && p.waiver.id ? <UndoDismissForm waiverId={p.waiver.id} weekKey={week.key} env={env} /> : null}
+                    </span>
+                  ) : null}
+                  {canDismiss ? (
+                    <details className="ml-3 mt-1 text-white/50">
+                      <summary className="cursor-pointer text-[11px] underline">Already filed elsewhere? Dismiss with a reason</summary>
+                      <DismissForm obligation="liq1295" periodKey={label} weekKey={week.key} env={env} label={`Dismiss ${label}`} />
+                    </details>
+                  ) : null}
                 </li>
               );
             })}
@@ -701,7 +869,29 @@ export default async function CcrsCommandCenterPage({
         ) : (
           <p className="text-xs text-white/40">Connect Supabase to track the monthly deadline.</p>
         )}
+        <p className="mt-2 text-[11px] text-white/35">
+          The LIQ-1295 is required every month even with no sales, so a month only goes quiet once it is filed
+          (export on record), dismissed with your reason, or before your first day of sales AND past its due date.
+        </p>
       </Section>
+
+      {/* S-12d: dismissal history (evidence) */}
+      {waiverHistory.length > 0 ? (
+        <Section title="Dismissed deadlines" subtitle="Every check-off with its reason, newest first. Never edited or deleted; undo keeps the record.">
+          <ul className="space-y-1 text-xs text-white/60">
+            {waiverHistory.map((w) => (
+              <li key={w.id}>
+                • {w.obligation === "ccrs_weekly" ? "CCRS week" : "LIQ-1295 month"}{" "}
+                <span className="font-bold text-white/80">{w.period_key}</span> by {w.waived_by_email ?? "staff"} on{" "}
+                {new Date(w.waived_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} PT: &ldquo;{w.reason}&rdquo;
+                {w.revoked_at
+                  ? ` (undone by ${w.revoked_by_email ?? "staff"} on ${new Date(w.revoked_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} PT)`
+                  : ""}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
 
       {/* 9) Reminders */}
       <PushRemindersPanel />
@@ -709,7 +899,8 @@ export default async function CcrsCommandCenterPage({
         Automatic reminders (daily cron): Thursday heads-up → Saturday week-close → Sunday
         DUE-TODAY → daily OVERDUE escalation until the week is recorded, plus the monthly LIQ-1295
         cadence. Email goes to the staff list; push goes to every enabled device. Recording a week
-        above is what stops them — the system never assumes an upload happened.
+        above is what stops them — the system never assumes an upload happened. Weeks before your
+        first day of sales and anything you dismissed with a reason are quiet too.
       </p>
 
       {/* 10) Ledger */}

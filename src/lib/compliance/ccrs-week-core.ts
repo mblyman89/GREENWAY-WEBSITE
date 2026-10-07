@@ -22,6 +22,14 @@
  * sign-off recorded in either place can be correlated.
  */
 
+import {
+  EMPTY_CONTEXT,
+  waiverKey,
+  weekBeforeStart,
+  type ObligationContext,
+  type Waiver,
+} from "./obligation-waiver-core";
+
 // ── Plain ISO-date helpers (UTC-anchored math on Y-M-D strings) ─────────────
 
 const DAY_MS = 86_400_000;
@@ -120,7 +128,9 @@ export type WeekStatus =
   | "due_today" // today IS the due Sunday and the week is unresolved
   | "overdue" // past the due Sunday and unresolved
   | "submitted" // resolved: files uploaded to CCRS
-  | "nothing_to_report"; // resolved: verified no new activity that week
+  | "nothing_to_report" // resolved: verified no new activity that week
+  | "before_start" // S-12d: ends before the owner's start date (not this system's to file)
+  | "dismissed"; // S-12d: checked off with a written reason (obligation_waivers)
 
 export type WeekDeadline = {
   week: CcrsWeek;
@@ -128,6 +138,8 @@ export type WeekDeadline = {
   /** Signed days from today to the due date (negative once overdue). */
   daysUntilDue: number;
   resolution: WeekResolution | null;
+  /** S-12d: the reason, when the week was dismissed. */
+  waiver?: Waiver | null;
 };
 
 /**
@@ -138,16 +150,21 @@ export function weekDeadline(
   week: CcrsWeek,
   todayIso: string,
   resolution: WeekResolution | null,
+  ctx: ObligationContext = EMPTY_CONTEXT,
 ): WeekDeadline {
   const daysUntilDue = isoDayDiff(week.due, todayIso);
+  // S-12d precedence: ledger > before start > dismissed > dates.
+  const waiver = ctx.waivers.get(waiverKey("ccrs_weekly", week.key)) ?? null;
   let status: WeekStatus;
   if (resolution === "submitted") status = "submitted";
   else if (resolution === "nothing_to_report") status = "nothing_to_report";
+  else if (weekBeforeStart(week.end, ctx.startDate)) status = "before_start";
   else if (todayIso <= week.end) status = "in_progress";
+  else if (waiver) status = "dismissed";
   else if (daysUntilDue > 0) status = "open";
   else if (daysUntilDue === 0) status = "due_today";
   else status = "overdue";
-  return { week, status, daysUntilDue, resolution };
+  return { week, status, daysUntilDue, resolution, waiver: status === "dismissed" ? waiver : null };
 }
 
 export type WeeklyOverview = {
@@ -159,6 +176,9 @@ export type WeeklyOverview = {
   mostUrgent: WeekDeadline | null;
   overdueCount: number;
   allClear: boolean;
+  /** S-12d: completed weeks in the window that are before the start date / dismissed. */
+  beforeStartCount: number;
+  dismissedCount: number;
 };
 
 /**
@@ -170,21 +190,22 @@ export type WeeklyOverview = {
 export function weeklyDeadlineOverview(
   todayIso: string,
   resolutions: ReadonlyMap<string, WeekResolution> | Record<string, WeekResolution>,
-  opts?: { lookbackWeeks?: number },
+  opts?: { lookbackWeeks?: number; ctx?: ObligationContext },
 ): WeeklyOverview {
+  const ctx = opts?.ctx ?? EMPTY_CONTEXT;
   const lookback = Math.max(1, Math.min(26, opts?.lookbackWeeks ?? 4));
   const get = (key: string): WeekResolution | null => {
     if (resolutions instanceof Map) return resolutions.get(key) ?? null;
     return (resolutions as Record<string, WeekResolution>)[key] ?? null;
   };
 
-  const current = weekDeadline(weekContaining(todayIso), todayIso, get(weekContaining(todayIso).key));
+  const current = weekDeadline(weekContaining(todayIso), todayIso, get(weekContaining(todayIso).key), ctx);
 
   const weeks: WeekDeadline[] = [];
   let start = addDaysIso(weekStartFor(todayIso), -7);
   for (let i = 0; i < lookback; i += 1) {
     const wk = weekFromStart(start);
-    weeks.push(weekDeadline(wk, todayIso, get(wk.key)));
+    weeks.push(weekDeadline(wk, todayIso, get(wk.key), ctx));
     start = addDaysIso(start, -7);
   }
 
@@ -198,7 +219,18 @@ export function weeklyDeadlineOverview(
       : null;
   const overdueCount = weeks.filter((w) => w.status === "overdue").length;
 
-  return { current, weeks, mostUrgent, overdueCount, allClear: unresolved.length === 0 };
+  const beforeStartCount = weeks.filter((w) => w.status === "before_start").length;
+  const dismissedCount = weeks.filter((w) => w.status === "dismissed").length;
+
+  return {
+    current,
+    weeks,
+    mostUrgent,
+    overdueCount,
+    allClear: unresolved.length === 0,
+    beforeStartCount,
+    dismissedCount,
+  };
 }
 
 // ── Reminder planner ────────────────────────────────────────────────────────
@@ -234,13 +266,17 @@ export type PlannedReminder = {
 export function planWeeklyReminders(
   todayIso: string,
   resolutions: ReadonlyMap<string, WeekResolution> | Record<string, WeekResolution>,
-  opts?: { lookbackWeeks?: number },
+  opts?: { lookbackWeeks?: number; ctx?: ObligationContext },
 ): PlannedReminder[] {
   const out: PlannedReminder[] = [];
   const dow = isoWeekday(todayIso);
   const overview = weeklyDeadlineOverview(todayIso, resolutions, opts);
 
-  if (dow === 4) {
+  // S-12d: no heads-up / week-close reminder about a week that is before the
+  // start date (the integrator files it, not this system).
+  const currentOwed = overview.current.status !== "before_start";
+
+  if (dow === 4 && currentOwed) {
     // Thursday heads-up about the running week.
     const wk = overview.current.week;
     out.push({
@@ -255,7 +291,7 @@ export function planWeeklyReminders(
     });
   }
 
-  if (dow === 6) {
+  if (dow === 6 && currentOwed) {
     // Saturday wrap — the week closes tonight.
     const wk = overview.current.week;
     out.push({
@@ -443,6 +479,74 @@ export function __runCcrsWeekTests(): { passed: number; failed: number } {
     const kb = b.find((x) => x.stage === "overdue_daily")?.dedupeKey ?? "";
     ok(ka !== "" && kb !== "" && ka !== kb, "overdue_daily dedupe key varies by day");
     ok(ka.includes("2026-01-19"), "dedupe key embeds the date");
+  }
+
+  // ── S-12d: start date + dismiss with reason ──
+  // Today Wed 2026-10-07; start 2026-11-01 (a Sunday). Every completed week is
+  // before the start, so nothing is overdue and no reminder fires.
+  {
+    const ctx = { startDate: "2026-11-01", waivers: new Map() };
+    const o = weeklyDeadlineOverview("2026-10-07", {}, { lookbackWeeks: 6, ctx });
+    ok(o.weeks.every((w) => w.status === "before_start"), "all backlog weeks before start");
+    ok(o.overdueCount === 0 && o.mostUrgent === null && o.allClear, "backlog not overdue, all clear");
+    ok(o.beforeStartCount === 6, `before-start count (got ${o.beforeStartCount})`);
+    ok(o.current.status === "before_start", "current week (Oct 4-10) is before start");
+    ok(planWeeklyReminders("2026-10-07", {}, { lookbackWeeks: 6, ctx }).length === 0, "no reminders on a weekday");
+    ok(planWeeklyReminders("2026-10-08", {}, { lookbackWeeks: 6, ctx }).length === 0, "no Thursday heads-up before start");
+    ok(planWeeklyReminders("2026-10-10", {}, { lookbackWeeks: 6, ctx }).length === 0, "no Saturday wrap before start");
+    // Without the context the same day nags (proves the context is what quiets it).
+    ok(planWeeklyReminders("2026-10-08", {}, { lookbackWeeks: 6 }).length >= 2, "without a start date the backlog nags");
+  }
+  // The first live week (Nov 1-7) is owed: Thursday Nov 5 heads-up fires.
+  {
+    const ctx = { startDate: "2026-11-01", waivers: new Map() };
+    const r = planWeeklyReminders("2026-11-05", {}, { lookbackWeeks: 4, ctx });
+    ok(r.some((x) => x.stage === "thursday_heads_up" && x.weekKey === "W-2026-11-01"), "heads-up for the first live week");
+    ok(!r.some((x) => x.stage === "overdue_daily"), "older weeks stay quiet");
+    // Sunday Nov 8 is due day for Nov 1-7.
+    const s = planWeeklyReminders("2026-11-08", {}, { lookbackWeeks: 4, ctx });
+    ok(s.some((x) => x.stage === "sunday_due" && x.weekKey === "W-2026-11-01"), "first live week is DUE on Nov 8");
+    const m = planWeeklyReminders("2026-11-09", {}, { lookbackWeeks: 4, ctx });
+    ok(m.filter((x) => x.stage === "overdue_daily").length === 1, "exactly one overdue week on Nov 9");
+  }
+  // A midweek start: the week containing it is owed.
+  {
+    const ctx = { startDate: "2026-11-04", waivers: new Map() };
+    const o = weeklyDeadlineOverview("2026-11-09", {}, { lookbackWeeks: 2, ctx });
+    ok(o.weeks[0].week.key === "W-2026-11-01" && o.weeks[0].status === "overdue", "week containing a midweek start is owed");
+    ok(o.weeks[1].status === "before_start", "the week before is not");
+  }
+  // Dismissed: one specific week checked off with a reason.
+  {
+    const w = { obligation: "ccrs_weekly" as const, periodKey: "W-2026-01-04", reason: "Filed by Cultivera", waivedAt: "t", waivedByEmail: null };
+    const ctx = { startDate: null, waivers: new Map([["ccrs_weekly:W-2026-01-04", w]]) };
+    const o = weeklyDeadlineOverview("2026-01-14", {}, { lookbackWeeks: 2, ctx });
+    ok(o.weeks[0].status === "dismissed" && o.weeks[0].waiver?.reason === "Filed by Cultivera", "dismissed week carries its reason");
+    ok(o.weeks[1].status === "overdue", "a different week is untouched");
+    ok(o.overdueCount === 1 && o.dismissedCount === 1, "counts split dismissed vs overdue");
+    ok(o.mostUrgent?.week.key === "W-2025-12-28", "most urgent skips the dismissed week");
+    const r = planWeeklyReminders("2026-01-14", {}, { lookbackWeeks: 2, ctx });
+    ok(!r.some((x) => x.weekKey === "W-2026-01-04"), "no reminder for the dismissed week");
+    ok(r.some((x) => x.weekKey === "W-2025-12-28"), "reminder for the other week still fires");
+    // Ledger wins over a dismissal.
+    const sub = weeklyDeadlineOverview("2026-01-14", { "W-2026-01-04": "submitted" }, { lookbackWeeks: 1, ctx });
+    ok(sub.weeks[0].status === "submitted" && sub.weeks[0].waiver === null, "submitted beats dismissed");
+    // A waiver on the running week does nothing (it is in progress, not owed).
+    const cw = { ...w, periodKey: "W-2026-01-11" };
+    const ctx2 = { startDate: null, waivers: new Map([["ccrs_weekly:W-2026-01-11", cw]]) };
+    ok(weeklyDeadlineOverview("2026-01-14", {}, { lookbackWeeks: 1, ctx: ctx2 }).current.status === "in_progress", "waiver cannot pre-excuse the running week");
+    // A liq1295 waiver with the same text key never touches a week.
+    const lw = { ...w, obligation: "liq1295" as const };
+    const ctx3 = { startDate: null, waivers: new Map([["liq1295:W-2026-01-04", lw]]) };
+    ok(weeklyDeadlineOverview("2026-01-14", {}, { lookbackWeeks: 1, ctx: ctx3 }).weeks[0].status === "overdue", "other obligation's waiver ignored");
+  }
+  // Before-start beats a waiver and beats in-progress.
+  {
+    const w = { obligation: "ccrs_weekly" as const, periodKey: "W-2026-10-04", reason: "x".repeat(10), waivedAt: "t", waivedByEmail: null };
+    const ctx = { startDate: "2026-11-01", waivers: new Map([["ccrs_weekly:W-2026-10-04", w]]) };
+    const d = weekDeadline(weekFromStart("2026-10-04"), "2026-10-20", null, ctx);
+    ok(d.status === "before_start" && d.waiver === null, "before_start wins over dismissed");
+    ok(weekDeadline(weekFromStart("2026-10-04"), "2026-10-20", "nothing_to_report", ctx).status === "nothing_to_report", "ledger wins over before_start");
   }
 
   if (failed === 0) console.log(`ccrs-week-core: all ${passed} tests passed`);

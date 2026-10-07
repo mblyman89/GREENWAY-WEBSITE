@@ -33,6 +33,8 @@ import {
   reportingDeadlineOverview,
   type PeriodDeadline,
 } from "@/lib/compliance/ccrs-deadline-core";
+import type { ObligationContext } from "@/lib/compliance/obligation-waiver-core";
+import { getObligationContext } from "@/lib/compliance/obligation-waiver-store";
 
 export type CcrsFilingOverview = {
   /** True when we could read the export log (service configured + query ok). */
@@ -66,7 +68,13 @@ const EMPTY: CcrsFilingOverview = {
  */
 export async function getCcrsFilingOverview(
   todayIso: string,
-  opts?: { holidays?: ReadonlySet<string>; soonDays?: number; lookbackMonths?: number },
+  opts?: {
+    holidays?: ReadonlySet<string>;
+    soonDays?: number;
+    lookbackMonths?: number;
+    /** S-12d: pass to skip the read; omitted = read it (every caller gets it). */
+    ctx?: ObligationContext;
+  },
 ): Promise<CcrsFilingOverview> {
   if (!isSupabaseServiceConfigured) return EMPTY;
 
@@ -93,10 +101,13 @@ export async function getCcrsFilingOverview(
     }
   }
 
+  // S-12d: first day of sales + written dismissals. Fails safe (EMPTY_CONTEXT).
+  const ctx = opts?.ctx ?? (await getObligationContext());
   const overview = reportingDeadlineOverview(todayIso, exported, {
     holidays: opts?.holidays,
     soonDays: opts?.soonDays,
     lookbackMonths: opts?.lookbackMonths,
+    ctx,
   });
 
   return {

@@ -20,6 +20,7 @@ import {
   type WeekResolution,
   type WeeklyOverview,
 } from "@/lib/compliance/ccrs-week-core";
+import { getObligationContext } from "@/lib/compliance/obligation-waiver-store";
 
 export type WeekSubmissionRow = {
   id: string;
@@ -69,8 +70,10 @@ export async function getWeekResolutions(lookbackWeeks = 8): Promise<Map<string,
 /** The full weekly deadline picture as of today (Pacific). */
 export async function getWeeklyOverview(opts?: { lookbackWeeks?: number }): Promise<WeeklyOverview> {
   const lookbackWeeks = opts?.lookbackWeeks ?? 4;
-  const resolutions = await getWeekResolutions(lookbackWeeks);
-  return weeklyDeadlineOverview(pacificToday(), resolutions, { lookbackWeeks });
+  // S-12d: the first day of sales + written dismissals (fails safe: an
+  // unreadable context nags as before).
+  const [resolutions, ctx] = await Promise.all([getWeekResolutions(lookbackWeeks), getObligationContext()]);
+  return weeklyDeadlineOverview(pacificToday(), resolutions, { lookbackWeeks, ctx });
 }
 
 /**
