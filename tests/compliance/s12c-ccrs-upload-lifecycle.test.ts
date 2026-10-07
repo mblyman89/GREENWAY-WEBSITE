@@ -213,10 +213,9 @@ describe("0249 hygiene", () => {
     expect((CODE.match(/set search_path = public, pg_temp/g) ?? []).length).toBe(6);
     expect(CODE).not.toMatch(/create table|alter table/i);
   });
-  it("revoked from public/anon/authenticated; service_role gets all but the internal ccrs_promote_rows", () => {
+  it("revoked from public/anon/authenticated; service_role gets all six (record_outcome is invoker, so it needs promote_rows)", () => {
     for (const f of fns) expect(MIG).toMatch(new RegExp(`revoke all on function public\\.${f}\\([^)]*\\) from public, anon, authenticated;`));
-    for (const f of fns.filter((x) => x !== "ccrs_promote_rows")) expect(MIG).toMatch(new RegExp(`grant execute on function public\\.${f}\\([^)]*\\) to service_role;`));
-    expect(MIG).not.toMatch(/grant execute on function public\.ccrs_promote_rows/);
+    for (const f of fns) expect(MIG).toMatch(new RegExp(`grant execute on function public\\.${f}\\([^)]*\\) to service_role;`));
   });
   it("rollback drops exactly those functions and touches no row", () => {
     const drops = [...RB.matchAll(/drop function if exists public\.(\w+)\(/g)].map((m) => m[1]);

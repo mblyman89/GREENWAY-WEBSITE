@@ -523,5 +523,11 @@ revoke all on function public.ccrs_preprod_ledger_start(text) from public, anon,
 grant execute on function public.ccrs_upload_group(text) to service_role;
 grant execute on function public.ccrs_mark_uploaded(uuid, timestamptz, uuid, text) to service_role;
 grant execute on function public.ccrs_record_outcome(uuid, text, timestamptz, jsonb, text[]) to service_role;
+-- ccrs_promote_rows is internal, but ccrs_record_outcome is NOT security definer,
+-- so it runs with the caller's rights: the role that calls record_outcome must be
+-- able to run the helper too (same pattern as 0248's seed_finalize ->
+-- link_unfiled_migration_lots). Proven by scripts/recon/ccrs-lifecycle-e2e.ts run
+-- with PGROLEURL logged in as service_role.
+grant execute on function public.ccrs_promote_rows(uuid, uuid[], timestamptz) to service_role;
 grant execute on function public.ccrs_abandon_file(uuid, text) to service_role;
 grant execute on function public.ccrs_preprod_ledger_start(text) to service_role;

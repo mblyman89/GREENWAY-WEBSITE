@@ -461,7 +461,7 @@ begin
     assert r.proconfig @> array['search_path=public, pg_temp'], r.proname || ' pins search_path';
     assert not has_function_privilege('anon', r.oid, 'execute'), r.proname || ' anon';
     assert not has_function_privilege('authenticated', r.oid, 'execute'), r.proname || ' authenticated';
-    assert has_function_privilege('service_role', r.oid, 'execute') = (r.proname <> 'ccrs_promote_rows'), r.proname || ' service_role';
+    assert has_function_privilege('service_role', r.oid, 'execute'), r.proname || ' service_role (record_outcome runs promote_rows with the caller''s rights)';
   end loop;
   assert (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public'
             and p.proname in ('ccrs_upload_group', 'ccrs_mark_uploaded', 'ccrs_promote_rows', 'ccrs_record_outcome', 'ccrs_abandon_file', 'ccrs_preprod_ledger_start')) = 6, 'six functions';
