@@ -20,6 +20,15 @@
  * feed the STORE's Pacific wall-clock date via lib/reports/timezone.
  */
 
+import {
+  EMPTY_CONTEXT,
+  monthBeforeStartAndPastDue,
+  waiverKey,
+  weekBeforeStart,
+  type ObligationContext,
+  type Waiver,
+} from "./obligation-waiver-core";
+
 // ---------------------------------------------------------------------------
 // Plain calendar dates
 // ---------------------------------------------------------------------------
@@ -187,7 +196,16 @@ export type DoneRecord = { doneAt: string; byEmail: string | null };
 /** taskId -> periodKey -> record. */
 export type DoneMap = Partial<Record<CalendarTaskId, Record<string, DoneRecord>>>;
 
-export type CalendarEntryStatus = "done" | "due" | "overdue";
+/**
+ * S-12d adds two quiet statuses for the two State-reporting tasks only
+ * (liq1295, ccrs_weekly), from the shared ObligationContext:
+ *  - before_start: the period is before the first day of sales (weekly: the
+ *    week ended before it; monthly: the month ended before it AND its due
+ *    date has passed, so a real upcoming deadline is still shown as due);
+ *  - dismissed: checked off on the CCRS page with a written reason.
+ * Neither counts as overdue. Precedence: done > before_start > dismissed.
+ */
+export type CalendarEntryStatus = "done" | "due" | "overdue" | "before_start" | "dismissed";
 
 export type CalendarEntry = {
   task: CalendarTaskDef;
@@ -196,6 +214,8 @@ export type CalendarEntry = {
   /** Days until the due date (negative when overdue). */
   daysUntilDue: number;
   done: DoneRecord | null;
+  /** S-12d: the written reason when status is "dismissed". */
+  waiver?: Waiver | null;
 };
 
 function daysBetween(a: PlainDate, b: PlainDate): number {
@@ -205,13 +225,37 @@ function daysBetween(a: PlainDate, b: PlainDate): number {
 }
 
 /** Evaluate every task's current pending period against the done map. */
-export function evaluateCalendar(today: PlainDate, doneMap: DoneMap): CalendarEntry[] {
+export function evaluateCalendar(
+  today: PlainDate,
+  doneMap: DoneMap,
+  ctx: ObligationContext = EMPTY_CONTEXT,
+): CalendarEntry[] {
   return CALENDAR_TASKS.map((task) => {
     const period = pendingPeriodFor(task.id, today);
     const done = doneMap[task.id]?.[period.periodKey] ?? null;
     const daysUntilDue = daysBetween(today, period.dueDate);
-    const status: CalendarEntryStatus = done ? "done" : daysUntilDue < 0 ? "overdue" : "due";
-    return { task, period, status, daysUntilDue, done };
+    let status: CalendarEntryStatus = done ? "done" : daysUntilDue < 0 ? "overdue" : "due";
+    let waiver: Waiver | null = null;
+    if (!done && (task.id === "liq1295" || task.id === "ccrs_weekly")) {
+      const todayIso = formatPlainDate(today);
+      const dueIso = formatPlainDate(period.dueDate);
+      let beforeStart = false;
+      if (task.id === "ccrs_weekly") {
+        // the pending week always ended yesterday-or-earlier (its Saturday)
+        beforeStart = weekBeforeStart(formatPlainDate(addDays(period.dueDate, -1)), ctx.startDate);
+      } else {
+        const [y, m] = period.periodKey.split("-").map(Number);
+        beforeStart = monthBeforeStartAndPastDue(y, m, dueIso, todayIso, ctx.startDate);
+      }
+      // the pending period has always ended (prior month / last full week)
+      const w = ctx.waivers.get(waiverKey(task.id, period.periodKey)) ?? null;
+      if (beforeStart) status = "before_start";
+      else if (w) {
+        status = "dismissed";
+        waiver = w;
+      }
+    }
+    return { task, period, status, daysUntilDue, done, waiver };
   });
 }
 

@@ -47,6 +47,11 @@ export type ComplianceHealthFacts = {
     weeklyWindowDays: number;
     /** ISO date of the most recent export (informational). */
     lastExportDate?: string;
+    /**
+     * S-12d: set ONLY while today is before the owner's first day of sales.
+     * The weekly upload duty has not started, so the cadence check is ok.
+     */
+    salesStartDate?: string | null;
   };
   deadline?: {
     available: boolean;
@@ -113,6 +118,14 @@ export function buildComplianceHealth(facts: ComplianceHealthFacts): ComplianceH
         title: "CCRS upload cadence (weekly)",
         level: "unknown",
         summary: "Could not read the CCRS export log.",
+      });
+    } else if (f.salesStartDate) {
+      checks.push({
+        key: "ccrs_batch",
+        title: "CCRS upload cadence (weekly)",
+        level: "ok",
+        summary: `Sales start ${f.salesStartDate}. The weekly CCRS upload cadence is checked from then on.`,
+        details: ["Change the first day of sales on the CCRS page (Admin, Compliance, CCRS)."],
       });
     } else if (f.daysSinceLastExport === null) {
       checks.push({
@@ -350,6 +363,10 @@ export function __runComplianceHealthTests(): { passed: number; failed: number }
     const never = buildComplianceHealth({ ...green, ccrsBatch: { available: true, daysSinceLastExport: null, weeklyWindowDays: 7 } });
     ok(never.checks.find((c) => c.key === "ccrs_batch")?.level === "warning", "never-exported → warning");
     // exactly at the window boundary is still OK (not past it).
+    const preStart = buildComplianceHealth({ ...green, ccrsBatch: { available: true, daysSinceLastExport: null, weeklyWindowDays: 7, salesStartDate: "2026-11-01" } });
+    ok(preStart.checks.find((c) => c.key === "ccrs_batch")?.level === "ok", "S-12d: before the first day of sales the cadence check is ok");
+    const preStartStale = buildComplianceHealth({ ...green, ccrsBatch: { available: false, daysSinceLastExport: null, weeklyWindowDays: 7, salesStartDate: "2026-11-01" } });
+    ok(preStartStale.checks.find((c) => c.key === "ccrs_batch")?.level === "unknown", "S-12d: unreadable log still unknown before start");
     const boundary = buildComplianceHealth({ ...green, ccrsBatch: { available: true, daysSinceLastExport: 7, weeklyWindowDays: 7 } });
     ok(boundary.checks.find((c) => c.key === "ccrs_batch")?.level === "ok", "at weekly boundary → ok");
   }

@@ -37,6 +37,7 @@ import { planWeeklyReminders } from "@/lib/compliance/ccrs-week-core";
 import { getWeekResolutions } from "@/lib/compliance/ccrs-week-store";
 import { planMonthlyReminders } from "@/lib/compliance/ccrs-deadline-core";
 import { getCcrsFilingOverview } from "@/lib/compliance/ccrs-filing-status";
+import { getObligationContext } from "@/lib/compliance/obligation-waiver-store";
 import { sendPushToAll, isPushConfigured } from "@/lib/notifications/push";
 import { planLargeDraftNotice } from "@/lib/accounting/large-draft-notice-core";
 import { loadUnapprovedDrafts } from "@/lib/accounting/large-draft-notice-store";
@@ -197,11 +198,15 @@ export async function runComplianceReminders(): Promise<ReminderRunResult> {
 
   const todayIso = pacificToday();
 
+  // S-12d: the first day of sales + written dismissals, read ONCE for both
+  // planners. Fails safe: unreadable -> EMPTY_CONTEXT -> reminders as before.
+  const obligationCtx = await getObligationContext();
+
   // 1) Weekly CCRS reminders from the submission ledger.
   const reminders: Reminder[] = [];
   try {
     const resolutions = await getWeekResolutions(8);
-    for (const r of planWeeklyReminders(todayIso, resolutions, { lookbackWeeks: 4 })) {
+    for (const r of planWeeklyReminders(todayIso, resolutions, { lookbackWeeks: 4, ctx: obligationCtx })) {
       reminders.push({
         dedupeKey: r.dedupeKey,
         stage: r.stage,
@@ -219,7 +224,7 @@ export async function runComplianceReminders(): Promise<ReminderRunResult> {
 
   // 2) Monthly LIQ-1295 reminders from the export evidence.
   try {
-    const filing = await getCcrsFilingOverview(todayIso, { lookbackMonths: 3 });
+    const filing = await getCcrsFilingOverview(todayIso, { lookbackMonths: 3, ctx: obligationCtx });
     if (filing.available) {
       for (const m of planMonthlyReminders(todayIso, filing.periods)) {
         reminders.push({

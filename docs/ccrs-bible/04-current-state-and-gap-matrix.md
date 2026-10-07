@@ -210,6 +210,10 @@ Tests: `tests/compliance/s12a-ccrs-ledger.test.ts` (30, including the real-deliv
 
 Tests: `s12b-ccrs-outbox.test.ts`, `ccrs-outbox-core.test.ts`, `ccrs-chunk-core.test.ts`, `ccrs-control-totals-core.test.ts`, `p11-chunk-naming-probe.test.ts`; `scripts/recon/ccrs-outbox-pg-check.sql`; **57/57 SQL mutants** (`mutate_0248_sql.py`); mutations **M90–M111** in `mutate_check.py` (M62 retargeted to `NO_PRODUCT_ID_REASON`); full harness **111 killed, 0 survived**. Seed delivery: `seed-ccrs-ledger.ts --sql-file` writes ONE transaction (`singleTransactionSql`); on a fresh DB (boot + 248 migrations) it finalizes in 4.2 s, a re-run returns `already-finalized`, and a file truncated at 40 MB loads nothing (atomic). The seed file is LCB data and is never committed.
 
+### A.8 S-12d first day of sales + dismiss with a reason — DONE in code (2026-10-07); owner applies 0250 by hand
+
+Migration `0250_obligation_waivers.sql` (KEEP on factory reset; RLS staff read / admin write; no delete; undo once; reason 10–500 characters; only ended Sunday weeks `W-YYYY-MM-DD` and months `YYYY-MM`). The first day of sales is the site setting `compliance_obligation_start`. Every reminder and overdue count reads one shared context (`getObligationContext`); if it cannot be read, behaviour is unchanged. Full detail and proof: Part 09 S-12d. Not covered: the DOR excise/sales-tax return has no reminder in the code (Part 09 R-3).
+
 ## B. Gap matrix — errors (blocking) and warnings
 
 Legend: **Spec** = LCB text pin; **Code** = current behaviour pin; **Fix** = what the slice must do; **Slice** = Part 09 id.

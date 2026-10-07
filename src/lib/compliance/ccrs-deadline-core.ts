@@ -28,6 +28,14 @@
  * (e.g. presence of a ccrs_export_batches row / a recorded LIQ-1295 filing).
  */
 
+import {
+  EMPTY_CONTEXT,
+  monthBeforeStartAndPastDue,
+  waiverKey,
+  type ObligationContext,
+  type Waiver,
+} from "./obligation-waiver-core";
+
 export type ReportingPeriod = {
   /** Calendar year of the sales month. */
   year: number;
@@ -40,7 +48,9 @@ export type DeadlineStatus =
   | "upcoming" // due date is more than `soonDays` away
   | "due_soon" // within `soonDays` and not yet due
   | "due_today" // due date is today
-  | "overdue"; // past the due date and not filed
+  | "overdue" // past the due date and not filed
+  | "before_start" // S-12d: month ended before the start date AND its due date passed
+  | "dismissed"; // S-12d: checked off with a written reason (obligation_waivers)
 
 export type PeriodDeadline = {
   period: ReportingPeriod;
@@ -50,6 +60,8 @@ export type PeriodDeadline = {
   daysUntilDue: number;
   status: DeadlineStatus;
   filed: boolean;
+  /** S-12d: the reason, when the month was dismissed. */
+  waiver?: Waiver | null;
 };
 
 const WEEKEND = new Set([0, 6]); // Sun, Sat
@@ -110,20 +122,37 @@ export function periodDeadline(
   period: ReportingPeriod,
   todayIso: string,
   filed: boolean,
-  opts?: { holidays?: ReadonlySet<string>; soonDays?: number },
+  opts?: { holidays?: ReadonlySet<string>; soonDays?: number; ctx?: ObligationContext },
 ): PeriodDeadline {
   const soonDays = opts?.soonDays ?? 5;
+  const ctx = opts?.ctx ?? EMPTY_CONTEXT;
   const dueDate = dueDateForPeriod(period, opts?.holidays);
   const daysUntilDue = dayDiff(dueDate, todayIso);
+  // S-12d precedence: filed > before start (past due only) > dismissed > dates.
+  // A dismissal is only honoured once the sales month has ENDED.
+  const monthEnded = todayIso > lastDayOfMonthIsoOf(period);
+  const waiver = monthEnded ? ctx.waivers.get(waiverKey("liq1295", periodKey(period))) ?? null : null;
 
   let status: DeadlineStatus;
   if (filed) status = "filed";
+  else if (monthBeforeStartAndPastDue(period.year, period.month, dueDate, todayIso, ctx.startDate)) status = "before_start";
+  else if (waiver) status = "dismissed";
   else if (daysUntilDue < 0) status = "overdue";
   else if (daysUntilDue === 0) status = "due_today";
   else if (daysUntilDue <= soonDays) status = "due_soon";
   else status = "upcoming";
 
-  return { period, dueDate, daysUntilDue, status, filed };
+  return { period, dueDate, daysUntilDue, status, filed, waiver: status === "dismissed" ? waiver : null };
+}
+
+function lastDayOfMonthIsoOf(p: ReportingPeriod): string {
+  const d = new Date(Date.UTC(p.year, p.month, 0)).getUTCDate();
+  return `${p.year}-${String(p.month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** S-12d: statuses that need no action (filed, before start, dismissed). PURE. */
+export function isSettled(status: DeadlineStatus): boolean {
+  return status === "filed" || status === "before_start" || status === "dismissed";
 }
 
 /** period → "YYYY-MM" key. PURE. */
@@ -194,7 +223,7 @@ export function priorPeriod(todayIso: string, monthsBack: number): ReportingPeri
 export function reportingDeadlineOverview(
   todayIso: string,
   filedPeriodKeys: ReadonlySet<string>,
-  opts?: { holidays?: ReadonlySet<string>; soonDays?: number; lookbackMonths?: number },
+  opts?: { holidays?: ReadonlySet<string>; soonDays?: number; lookbackMonths?: number; ctx?: ObligationContext },
 ): { periods: PeriodDeadline[]; mostUrgentUnfiled: PeriodDeadline | null; anyOverdue: boolean } {
   const lookback = opts?.lookbackMonths ?? 3;
   const periods: PeriodDeadline[] = [];
@@ -205,7 +234,8 @@ export function reportingDeadlineOverview(
     periods.push(periodDeadline(p, todayIso, filed, opts));
   }
 
-  const unfiled = periods.filter((p) => !p.filed);
+  // S-12d: before-start and dismissed months need no action either.
+  const unfiled = periods.filter((p) => !isSettled(p.status));
   // Most urgent = smallest daysUntilDue (overdue = most negative) among unfiled.
   const mostUrgentUnfiled =
     unfiled.length > 0
@@ -248,7 +278,7 @@ export function planMonthlyReminders(
 ): PlannedMonthlyReminder[] {
   const out: PlannedMonthlyReminder[] = [];
   for (const p of periods) {
-    if (p.filed) continue;
+    if (p.filed || isSettled(p.status)) continue;
     const key = periodKey(p.period);
     const label = `${p.period.year}-${String(p.period.month).padStart(2, "0")}`;
     if (p.status === "due_soon") {
@@ -441,6 +471,61 @@ export function __runCcrsDeadlineTests(): { passed: number; failed: number } {
     ok(filedNow.length === 0, "filed period produces no monthly reminders");
     const upcoming = planMonthlyReminders("2025-02-05", [periodDeadline(jan, "2025-02-05", false)]);
     ok(upcoming.length === 0, "upcoming (outside soon window) produces no reminders");
+  }
+
+  // ── S-12d: start date + dismiss with reason ──
+  // Today 2026-10-07, start 2026-11-01. Aug 2026 is due 2026-09-21 (20th is a
+  // Sunday), Jul 2026 due 2026-08-20, Sep 2026 due 2026-10-20.
+  {
+    const ctx = { startDate: "2026-11-01", waivers: new Map() };
+    const o = reportingDeadlineOverview("2026-10-07", new Set(), { lookbackMonths: 3, ctx });
+    const by = (m: number) => o.periods.find((p) => p.period.month === m)!;
+    ok(by(9).status === "upcoming", `Sep 2026 still a live deadline (got ${by(9).status})`);
+    ok(by(8).status === "before_start" && by(8).dueDate === "2026-09-21", "Aug 2026 backlog quiet (due 09-21 passed)");
+    ok(by(7).status === "before_start", "Jul 2026 backlog quiet");
+    ok(!o.anyOverdue, "no overdue with a start date");
+    ok(o.mostUrgentUnfiled?.period.month === 9, "most urgent is the real Sep deadline");
+    ok(planMonthlyReminders("2026-10-07", o.periods).length === 0, "no monthly reminders today (Sep not in soon window)");
+    // Oct 16: Sep due-soon still fires (real deadline).
+    const soon = reportingDeadlineOverview("2026-10-16", new Set(), { lookbackMonths: 3, ctx });
+    ok(planMonthlyReminders("2026-10-16", soon.periods).some((r) => r.stage === "liq_due_soon" && r.periodKey === "2026-09"), "Sep due-soon still fires before start");
+    // Oct 20 due-today still fires.
+    const today = reportingDeadlineOverview("2026-10-20", new Set(), { lookbackMonths: 3, ctx });
+    ok(planMonthlyReminders("2026-10-20", today.periods).some((r) => r.stage === "liq_due_today"), "Sep due-today still fires");
+    // Oct 21: Sep quiet (pre-start, past due).
+    const after = reportingDeadlineOverview("2026-10-21", new Set(), { lookbackMonths: 3, ctx });
+    ok(planMonthlyReminders("2026-10-21", after.periods).length === 0, "Sep quiet the day after its due date");
+    // Without a start date the same day nags daily (proves the context matters).
+    const raw = reportingDeadlineOverview("2026-10-21", new Set(), { lookbackMonths: 3 });
+    ok(planMonthlyReminders("2026-10-21", raw.periods).filter((r) => r.stage === "liq_overdue_daily").length === 3, "without start: 3 overdue nags");
+    // First live month Nov 2026 (due 2026-12-21, the 20th is Sunday) nags when late.
+    const late = reportingDeadlineOverview("2026-12-22", new Set(), { lookbackMonths: 3, ctx });
+    const nov = late.periods.find((p) => p.period.month === 11)!;
+    ok(nov.dueDate === "2026-12-21" && nov.status === "overdue", `Nov 2026 overdue on 12-22 (got ${nov.dueDate} ${nov.status})`);
+    // Oct 2026 (ended before Nov 1 start, due 11-20) is quiet on 12-22.
+    ok(late.periods.find((p) => p.period.month === 10)!.status === "before_start", "Oct 2026 quiet after its due date");
+  }
+  // Dismissed month.
+  {
+    const w = { obligation: "liq1295" as const, periodKey: "2025-01", reason: "Filed on paper", waivedAt: "t", waivedByEmail: null };
+    const ctx = { startDate: null, waivers: new Map([["liq1295:2025-01", w]]) };
+    const d = periodDeadline({ year: 2025, month: 1 }, "2025-02-25", false, { ctx });
+    ok(d.status === "dismissed" && d.waiver?.reason === "Filed on paper", "dismissed month carries its reason");
+    ok(periodDeadline({ year: 2025, month: 1 }, "2025-02-25", true, { ctx }).status === "filed", "filed beats dismissed");
+    ok(planMonthlyReminders("2025-02-25", [d]).length === 0, "no reminder for a dismissed month");
+    ok(isSettled("dismissed") && isSettled("before_start") && isSettled("filed"), "settled statuses");
+    ok(!isSettled("overdue") && !isSettled("due_soon") && !isSettled("due_today") && !isSettled("upcoming"), "unsettled statuses");
+    // A dismissal of a month that has not ended is ignored.
+    const cur = { ...w, periodKey: "2025-02" };
+    const ctx2 = { startDate: null, waivers: new Map([["liq1295:2025-02", cur]]) };
+    ok(periodDeadline({ year: 2025, month: 2 }, "2025-02-28", false, { ctx: ctx2 }).status !== "dismissed", "running month cannot be pre-dismissed");
+    ok(periodDeadline({ year: 2025, month: 2 }, "2025-03-01", false, { ctx: ctx2 }).status === "dismissed", "dismissal applies once the month ended");
+    // A weekly waiver never touches a month.
+    const ctx3 = { startDate: null, waivers: new Map([["ccrs_weekly:2025-01", { ...w, obligation: "ccrs_weekly" as const }]]) };
+    ok(periodDeadline({ year: 2025, month: 1 }, "2025-02-25", false, { ctx: ctx3 }).status === "overdue", "other obligation's waiver ignored");
+    // Before start beats dismissed.
+    const ctx4 = { startDate: "2025-06-01", waivers: new Map([["liq1295:2025-01", w]]) };
+    ok(periodDeadline({ year: 2025, month: 1 }, "2025-02-25", false, { ctx: ctx4 }).status === "before_start", "before_start beats dismissed");
   }
 
   if (failed === 0) console.log(`ccrs-deadline-core: all ${passed} tests passed`);

@@ -21,6 +21,7 @@ import {
   type DoneMap,
   type PlainDate,
 } from "./compliance-calendar-core";
+import { getObligationContext } from "./obligation-waiver-store";
 
 export const CALENDAR_KEY = "compliance_calendar_done";
 const CALENDAR_LABEL = "Compliance calendar — completed periods (S-18)";
@@ -49,8 +50,10 @@ export async function getDoneMap(): Promise<DoneMap> {
 
 /** The evaluated calendar for today. */
 export async function getCalendarEntries(): Promise<CalendarEntry[]> {
-  const doneMap = await getDoneMap();
-  return evaluateCalendar(todayPacific(), doneMap);
+  // S-12d: the first day of sales + written dismissals quiet the State
+  // reporting tasks (fails safe: an unreadable context nags as before).
+  const [doneMap, ctx] = await Promise.all([getDoneMap(), getObligationContext()]);
+  return evaluateCalendar(todayPacific(), doneMap, ctx);
 }
 
 /** Overdue count for the dashboard nag (0 when DB unavailable = quiet). */

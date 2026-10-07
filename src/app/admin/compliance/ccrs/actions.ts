@@ -37,6 +37,14 @@ import {
   parseSuccessEmails,
 } from "@/lib/compliance/ccrs-lifecycle-core";
 
+import {
+  START_SETTING_KEY,
+  dismissPeriod,
+  getObligationContext,
+  setObligationStartDate,
+  undoDismissal,
+} from "@/lib/compliance/obligation-waiver-store";
+
 const BASE = "/admin/compliance/ccrs";
 
 function back(weekKey: string, extra?: string): never {
@@ -476,4 +484,90 @@ export async function assignPreprodProductIdsAction(formData: FormData): Promise
   });
   revalidatePath(BASE);
   backTo(week.key, "preprod", okQ(`${assigned.length} PREprod product id(s) ready (run ${run}).`));
+}
+
+// ── S-12d: first day of sales + dismiss with a reason ──────────────────────
+// The rules live in obligation-waiver-core (validated again in the store and
+// floored by migration 0250). Same permission as recording a week.
+
+function backToWeek(formData: FormData, extra: string): never {
+  const weekKey = String(formData.get("week_key") ?? "");
+  const envQ = String(formData.get("env") ?? "") === "preprod" ? "&env=preprod" : "";
+  redirect(`${BASE}?${weekKey ? `week=${encodeURIComponent(weekKey)}&` : ""}${extra}${envQ}`);
+}
+
+function revalidateNagSurfaces(): void {
+  revalidatePath(BASE);
+  revalidatePath("/admin/compliance/calendar");
+  revalidatePath("/admin/compliance/health");
+  revalidatePath("/admin/reports/compliance");
+  revalidatePath("/admin");
+}
+
+/** Set (or clear) the first day of sales. */
+export async function setObligationStartAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const raw = String(formData.get("start_date") ?? "");
+  const before = (await getObligationContext()).startDate;
+  const res = await setObligationStartDate({ raw, byId: session.profile.id });
+  if (!res.ok) backToWeek(formData, `error=${encodeURIComponent(res.error)}`);
+  const after = res.value ? res.value : null;
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: after ? "compliance_obligation.start_date_set" : "compliance_obligation.start_date_cleared",
+    entityType: "site_setting",
+    entityId: START_SETTING_KEY,
+    before: { startDate: before },
+    after: { startDate: after },
+  });
+  revalidateNagSurfaces();
+  backToWeek(
+    formData,
+    `saved=1&note=${encodeURIComponent(after ? `First day of sales set to ${after}.` : "First day of sales cleared.")}`,
+  );
+}
+
+/** Check one ended CCRS week or LIQ-1295 month off with a written reason. */
+export async function dismissPeriodAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const res = await dismissPeriod({
+    obligation: String(formData.get("obligation") ?? ""),
+    periodKey: String(formData.get("period_key") ?? ""),
+    reason: String(formData.get("reason") ?? ""),
+    byId: session.profile.id,
+    byEmail: session.email,
+  });
+  if (!res.ok) backToWeek(formData, `error=${encodeURIComponent(res.error)}`);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "compliance_obligation.dismissed",
+    entityType: "obligation_waiver",
+    entityId: `${res.obligation}:${res.periodKey}`,
+    after: { obligation: res.obligation, periodKey: res.periodKey, reason: res.reason },
+  });
+  revalidateNagSurfaces();
+  backToWeek(formData, `saved=1&note=${encodeURIComponent(`Dismissed ${res.periodKey}. Reminders for it stop.`)}`);
+}
+
+/** Undo a dismissal: the period nags again; the record keeps who undid it. */
+export async function undoDismissalAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const res = await undoDismissal({
+    id: String(formData.get("waiver_id") ?? ""),
+    byId: session.profile.id,
+    byEmail: session.email,
+  });
+  if (!res.ok) backToWeek(formData, `error=${encodeURIComponent(res.error)}`);
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "compliance_obligation.dismissal_undone",
+    entityType: "obligation_waiver",
+    entityId: `${res.row?.obligation}:${res.row?.period_key}`,
+    before: { reason: res.row?.reason, waivedAt: res.row?.waived_at, waivedBy: res.row?.waived_by_email },
+  });
+  revalidateNagSurfaces();
+  backToWeek(formData, `saved=1&note=${encodeURIComponent(`Dismissal of ${res.row?.period_key} undone. It shows as due again.`)}`);
 }

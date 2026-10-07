@@ -387,6 +387,31 @@ Part 10 holds the procedure. No code in this slice until the owner says go. Plac
 
 ---
 
+## S-12d — First day of sales + dismiss a deadline with a reason — DONE in code (2026-10-07); owner applies 0250 by hand
+
+**Why.** The owner was nagged (email/SMS reminders, CCRS page, compliance calendar, dashboard count, Compliance Health) about every CCRS week and LIQ-1295 month before this system files anything. Those periods are filed by the integrator (Cultivera). Measured on 2026-10-07 with the real engines: 8 overdue weeks and 2 overdue LIQ-1295 months with no start date; **0 overdue weeks, 0 overdue months** with the start date 2026-11-01 (a Sunday, so the first day of a CCRS week).
+
+**Ground.** LIQ-1295 is due the 20th of the following month and is required even with no sales; weekly CCRS is due the Sunday after the Sun–Sat week (calendar task text, WAC 314-55-083(4)). The codebase holds no DOR sales-tax/excise-return reminder (searched), so there is nothing to dismiss there yet (see R-3).
+
+**What it does.**
+- **First day of sales** (`site_settings.compliance_obligation_start`, `{startDate}`): a CCRS week that ends before it is `before_start`. A LIQ-1295 month that ends before it is `before_start` only **after its due date**, so a required LIQ-1295 is still reminded.
+- **Dismiss with a reason** (table `obligation_waivers`, migration 0250): one ended week or LIQ-1295 month, 10–500 characters of reason, who and when. Undo keeps the row (revoked by/at). The database refuses deletes, edits to the reason, and a second undo. Only `ccrs_weekly` and `liq1295` can be dismissed; `dor_excise` is rejected on purpose.
+- **Precedence everywhere:** recorded/filed > before_start > dismissed > date math. Both new statuses are "settled": no reminder of any stage.
+- **One context, every nag surface:** reminder cron (weekly + monthly), CCRS page, compliance calendar and the dashboard overdue count, Compliance Health (the cadence check is ok before the start date), classic compliance report.
+- **Fails safe:** if the context cannot be read it is empty, so nagging is exactly as before. It never goes silent by accident.
+
+**Proof.** `scripts/recon/obligation-waivers-pg-check.sql` PASSED on PG15 (applied twice, every check, guard, FK set-null cascade, RLS as authenticated, rollback refuses with rows); **30/30 SQL mutants** (`mutate_0250_sql.py`; 3 equivalent documented); `tests/compliance/s12d-obligation-dismiss.test.ts` 33 tests; self-tests (waiver 58, week 65, deadline 51, health 20); **38/38 TS mutants** (`mutate_s12d_ts.py`); factory reset KEEPs the table.
+
+---
+
+## Roadmap (owner-requested 2026-10-07; research first, build later, switch on only after the upload process is proven)
+
+**R-1 Automated weekly CCRS upload.** Goal: no hand upload, no waiting 10 minutes between groups. Known facts: the LCB says API/system-to-system access is for integrators only (Brian A33); Greenway currently uploads by hand through the CCRS portal; Cultivera is the current integrator. Research (do not assume): (a) how enterprise integrators submit for many licensees — the LCB integrator path, its approval steps, credentials and terms; (b) whether a licensee can become its own integrator, and the cost; (c) whether browser automation of the portal is allowed by the LCB terms of use (ask the LCB in writing before building anything); (d) how success/error emails are read automatically (S-16 email ingestion is a prerequisite either way). Gate: every item in "what is left" below is closed and N consecutive weeks are accepted with zero errors on hand upload. Then a switch in settings turns automation on, starting dry-run (build + verify + notify, no submit).
+
+**R-2 Monthly LIQ-1295 excise payment automation.** Known: there is no LCB payment API in the sources; payment is made through the LCB's online system. Research: the accepted payment channels (online portal/ACH), whether a scheduled ACH debit can be set up, and whether report filing can be automated at all. Until then: the monthly reminder plus the dismiss/record path.
+
+**R-3 DOR combined excise / sales-tax return tracking (gap).** Not tracked anywhere in the code today. Monthly filers are due the 25th. Build: a calendar task + reminders + dismiss + "filed" record, same pattern as S-12d (add `dor_excise` to `WAIVABLE_OBLIGATIONS` and to the 0250 check in a new migration).
+
 ## Cross-slice guardrail tests (added in the slice that first needs them, kept forever)
 
 | Test | Slice | Purpose |

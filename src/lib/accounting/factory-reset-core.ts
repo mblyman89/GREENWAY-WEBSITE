@@ -659,6 +659,9 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ccrs_file_issues", disposition: "KEEP", because: "The State's error/warning findings on files already sent." },
   { table: "ccrs_file_contents", disposition: "KEEP", because: "The exact bytes of every CCRS file we emitted — the operator downloads these, never a regeneration." },
   { table: "ccrs_product_ids", disposition: "KEEP", because: "The GWP- Product ids assigned for CCRS — once filed, an id is the State's key and is never reassigned." },
+  // S-12d (0250): the owner's written reasons for checking off a real State
+  // deadline. Evidence for an examiner, not test activity.
+  { table: "obligation_waivers", disposition: "KEEP", because: "Your written reasons for checking off real State deadlines (for example \"filed by Cultivera\") — evidence, not test data." },
   { table: "compliance_reminder_log", disposition: "WIPE", because: "Reminders fired during testing." },
   { table: "syndication_logs", disposition: "WIPE", because: "Test pushes of your menu to third-party sites." },
   { table: "syndication_sync_state", disposition: "WIPE", because: "Where each syndication feed left off during testing." },
