@@ -9,6 +9,14 @@ These three scripts produce and verify the reference volumes of `docs/ccrs-bible
 | `build_atlas_part.py` | `docs/ccrs-bible/03-code-anchor-atlas.md` — verbatim code snippets with line numbers, stamped with the git commit | this working tree |
 | `check_pins.py` | Verifies every `[G L####]` / `[FAQ L####]` / … pin in the hand-written parts resolves to a real line, and that quotes next to a pin appear at that line | both |
 | `mutate_check.py` | **"Test the tests."** Deliberately breaks the implementation one edit at a time and asserts the named test file goes RED. A surviving mutation is a hole in the tests | this working tree |
+| `mutate_0246_sql.py` … `mutate_0249_sql.py` | SQL mutants of each CCRS ledger migration: every mutant must make `scripts/recon/*-pg-check.sql` fail on a real Postgres (`PGURL` = a throwaway database with every migration applied; without it they SKIP) | a local Postgres |
+| `mutate_s12c_ts.py` | S-12c TS mutants (Pacific time, success-email parsing, matching, the 0249 answer decoders, classifyEcho, the no-email SLA, portal URLs). Each must turn `tests/compliance/s12c-ccrs-upload-lifecycle.test.ts` RED. Must print `ALL KILLED` | this working tree |
+
+S-12c also ships `scripts/recon/ccrs-lifecycle-e2e.ts`: an end-to-end contract check
+that runs the TS cores against the real 0249 functions (emit → pacing refusal →
+mark uploaded → rows read back → classifyEcho verdict recorded as-is → success email
+closes a file). `PGURL=postgres://…/<throwaway db> npx tsx scripts/recon/ccrs-lifecycle-e2e.ts`
+must print `CCRS LIFECYCLE E2E PASSED`. It refuses Supabase URLs.
 
 ## Running
 

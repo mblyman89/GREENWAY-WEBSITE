@@ -520,6 +520,8 @@ import { __runCcrsChunkCoreTests } from "../../src/lib/compliance/ccrs-chunk-cor
 import { __runCcrsControlTotalsCoreTests } from "../../src/lib/compliance/ccrs-control-totals-core";
 import { __runCcrsOutboxCoreTests } from "../../src/lib/compliance/ccrs-outbox-core";
 import { __runCcrsLedgerStoreCoreTests } from "../../src/lib/compliance/ccrs-ledger-store-core";
+import { __runCcrsOutcomeCoreTests } from "../../src/lib/compliance/ccrs-outcome-core";
+import { __runCcrsLifecycleCoreTests } from "../../src/lib/compliance/ccrs-lifecycle-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
 import { __runApplySettingsTests } from "../../src/lib/syndication/apply-settings-core";
@@ -1279,6 +1281,8 @@ __runLiquidVolumeTests();
   // S-12b: outbox planner/verifier/emit payload, and the ledger-slice decoder.
   __runCcrsOutboxCoreTests();
   __runCcrsLedgerStoreCoreTests();
+  __runCcrsOutcomeCoreTests(); // S-12c
+  __runCcrsLifecycleCoreTests(); // S-12c
   __runRichnessTests();
   // Floored as of L-7 -- see the note on `__runSyncSettingsTests`. This core now
   // also resolves the automatic sync schedule, and the round trip it asserts

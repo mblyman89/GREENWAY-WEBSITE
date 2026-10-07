@@ -287,9 +287,18 @@ export function checkEmitResult(sent: readonly EmitPayloadFile[], got: unknown):
  * name), same order as `files`. Group rule [G L1057-L1058]; pacing by the
  * success email, 10 minutes a guideline [BRIAN A27] (Part 05 §C).
  */
-export function outboxReadmeLines(files: readonly OutboxFile[], names: readonly string[]): string[] {
+export function outboxReadmeLines(
+  files: readonly OutboxFile[],
+  names: readonly string[],
+  portalUrl: string = "https://cannabisreporting.lcb.wa.gov/",
+): string[] {
   if (names.length !== files.length) throw new Error("outbox: README names do not match the files");
-  const out = ["Upload these files at https://cannabisreporting.lcb.wa.gov/ (SAW login), ONE AT A TIME, in this order:"];
+  // S-12c: a PREprod zip names the PREprod portal (ccrsPortalUrl(env)); the
+  // default stays production so every existing caller is unchanged.
+  const pre = portalUrl.includes("precannabisreporting");
+  const out = [
+    `Upload these files at ${portalUrl} (SAW login)${pre ? " - PREPROD TEST SITE, not production" : ""}, ONE AT A TIME, in this order:`,
+  ];
   let group = 0;
   files.forEach((f, i) => {
     if (f.group !== group) {
