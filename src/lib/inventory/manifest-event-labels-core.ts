@@ -26,7 +26,8 @@
  *   intake-menu-staging.ts        menu_carry_forward_incomplete,
  *                                 menu_publish_held_for_fact_review,
  *                                 menu_publish_held_for_cutover,
- *                                 menu_auto_publish, menu_auto_publish_failed
+ *                                 menu_auto_publish, menu_auto_publish_failed,
+ *                                 menu_published_some_withheld (R27)
  *
  * An UNKNOWN type (a future writer) never breaks the page: it falls back to
  * the old humanised text in the "delivery" group — and the compliance test
@@ -66,6 +67,8 @@ export const MANIFEST_EVENT_LABELS: Readonly<Record<string, ManifestEventLabel>>
   menu_auto_publish: { label: "Published to the live menu", group: "menu", problem: false },
   menu_auto_publish_failed: { label: "Automatic publish didn\u2019t finish", group: "menu", problem: true },
   menu_publish_held_for_fact_review: { label: "Menu update held \u00b7 fact check", group: "menu", problem: true },
+  // R27: the delivery published, but products whose facts are not set stayed off.
+  menu_published_some_withheld: { label: "Published \u00b7 some products kept off until facts are set", group: "menu", problem: true },
   menu_publish_held_for_cutover: { label: "Menu update held \u00b7 cutover", group: "menu", problem: true },
   menu_carry_forward_incomplete: { label: "Menu update not built \u00b7 live menu unreadable", group: "menu", problem: true },
   // S32: the match review (intake/[id]/match) - who chose where a look-alike product belongs.
@@ -262,7 +265,9 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   const groups = new Set(MANIFEST_EVENT_GROUPS.map((g) => g.key));
   ok(Object.values(MANIFEST_EVENT_LABELS).every((l) => l.label.length > 0 && groups.has(l.group)), "every label valid");
   // R26 pin update (on purpose): +invoice_number_detected (migration 0245 writer).
-  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 32, "32 known types (R26 adds invoice_number_detected)");
+  // R27 pin update (on purpose): +menu_published_some_withheld (intake-menu-staging writer).
+  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 33, "33 known types (R27 adds menu_published_some_withheld)");
+  ok(labelForEvent("menu_published_some_withheld").group === "menu" && labelForEvent("menu_published_some_withheld").problem, "R27 withheld publish is a menu problem (products still need facts)");
   ok(isKnownEventType("invoice_number_detected") && labelForEvent("invoice_number_detected").label === "Invoice # found in the documents" && labelForEvent("invoice_number_detected").group === "delivery" && !labelForEvent("invoice_number_detected").problem, "R26 invoice # found is a known delivery, non-problem label");
 
   // Grouping keeps order, drops empties, accounting collapsed + last.

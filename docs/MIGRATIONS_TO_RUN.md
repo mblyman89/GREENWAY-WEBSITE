@@ -1748,3 +1748,46 @@ in Vercel.
   To remove them as well, paste
   `supabase/rollbacks/0245_manifest_invoice_number_detected.rollback.sql`
   into the SQL editor (this forgets the numbers that were found).
+
+## R27 — 0251 — total THC/CBD follow the Washington rule
+
+- [ ] `0251_wa_total_thc_cbd_repair.sql` — no new tables or columns. It
+  repairs THC numbers already saved. Until now the transfer reader saved the
+  lab's **total cannabinoids** (THC + CBD + everything else) as "total THC".
+  Your Apple Cardamom showed 0.7045% THC, but the lab's own total THC is
+  0.2456%. Washington's rule (WAC 314-55-102) is total THC = THC + 0.877 ×
+  THCA, and total CBD works the same way. That is the number the lab itself
+  reports as `total-thc` / `total-cbd`.
+
+  The migration copies the lab's own reported totals into `lab_results`. It
+  only does this where the lab reported them as a number of 0 or more, and
+  only where the saved value is different. A lab result with no reported
+  total is left alone: no formula is applied and nothing is guessed. Product
+  Onboarding drafts and Knowledge Base products that were copied from that
+  lab result are corrected too, but only while they still hold the old
+  copied number. Anything a person has changed since then is kept. Menu cards
+  are not touched; they pick up the right number the next time they are
+  built. Every change gets an audit row (`migration:0251`) that keeps the old
+  value.
+
+  The code fix in the same release stops new deliveries from getting it
+  wrong, whether or not you run this. Safe to re-run: the second run changes
+  nothing. Verified on Postgres 15: all 251 migrations applied in order on a
+  fresh database, 0251 re-applied cleanly, and
+  `scripts/recon/wa-total-thc-repair-pg-check.sql` passed (19 deliberate SQL
+  mutations, all caught by `scripts/r27/mutate_0251_sql.py`).
+
+  **Run it, then check:**
+
+  ```sql
+  select action, count(*) from public.audit_logs
+   where actor_email = 'migration:0251' group by action;
+  -- one row per kind of repair (lab_total_repair / draft_total_repair /
+  -- kb_total_repair) with how many were corrected; no rows = nothing needed it
+  ```
+
+  **Rollback (only if needed):** paste
+  `supabase/rollbacks/0251_wa_total_thc_cbd_repair.rollback.sql` into the SQL
+  editor. It puts back exactly the old values, except where a person has
+  changed the value again since (those are kept), and removes the 0251 audit
+  rows.

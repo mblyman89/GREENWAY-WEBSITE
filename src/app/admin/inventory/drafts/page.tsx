@@ -153,7 +153,7 @@ import { recallProductMemories, knowledgeQueryForDraft } from "@/lib/catalog/fac
 import { KB_FIRST_ONBOARDING_ENV, kbFirstOnboardingEnabled } from "@/lib/catalog/fact-memory-core";
 import { identityForDraft } from "@/lib/catalog/product-identity-core";
 // S30: inline fact review for received products (Approved tab).
-import { loadOpenIntakeFactFlags } from "@/lib/pos/intake-fact-review-server";
+import { loadOpenIntakeFactFlags, loadSavedProductFacts, savedFactsMapKey } from "@/lib/pos/intake-fact-review-server";
 import { factFlagWorklist } from "@/lib/pos/menu-waiting-link-core";
 import {
   FACT_REVIEW_MIGRATION_COPY,
@@ -161,6 +161,7 @@ import {
   parseFactResult,
 } from "@/lib/pos/intake-fact-review-core";
 import { IntakeFactReviewPanel } from "./IntakeFactReviewPanel";
+import { ProductFactsPanel } from "./ProductFactsPanel";
 // R19 S13: "Look up all N products on this manifest" (server-side batch).
 import { lookupJobsOn, loadManifestLookup } from "@/lib/catalog/lookup-job-server";
 import { attachFactsV2Enabled } from "@/lib/catalog/fact-attach-policy-server";
@@ -533,6 +534,11 @@ export default async function CatalogDraftsPage({
       ? factFlagWorklist(factFlags.flags.values(), focus.manifestId, new Set(drafts.map((d) => d.id)))
       : [];
   const factResult = parseFactResult(sp.fact);
+  // R27: the facts a person saved for each shown product (review AND
+  // approved tabs) - shown and editable on the row's Product facts panel.
+  const savedFacts = rowsOpen && v2Row
+    ? await loadSavedProductFacts(focus.manifestId ? [{ manifest_id: focus.manifestId }, ...drafts] : drafts)
+    : null;
 
   // One error sentence for the banner AND (S11, F-033) the failed row itself.
   const errorText =
@@ -1078,6 +1084,10 @@ export default async function CatalogDraftsPage({
                           ? strainTypeDefinitions.find((t) => t.value === d.chosen_strain_type)?.label ?? d.chosen_strain_type
                           : null,
                         houseType: displayType,
+                        // R27: never "live" while a fact check keeps it off.
+                        factHold: factFlags?.flags.get(d.id)
+                          ? (factFlags.flags.get(d.id)!.withheld ? "withheld" : "held")
+                          : null,
                       })
                     : null;
                   const approvedZone = approvedCopy ? (
@@ -1603,9 +1613,21 @@ export default async function CatalogDraftsPage({
                         colSpan={columns.length}
                         highlighted={pinned?.id === d.id}
                         facts={
-                          facts && identity ? (
+                          (facts && identity) || (savedFacts && d.manifest_id && d.pos_product_key) ? (
                             <div className="flex flex-col gap-2" data-testid="draft-row-detail">
-                              <FactsPanel view={facts} identity={identity} wide />
+                              {facts && identity && <FactsPanel view={facts} identity={identity} wide />}
+                              {/* R27: the facts a person set - visible and editable, review + approved. */}
+                              {savedFacts && d.manifest_id && d.pos_product_key && (view === "draft" || view === "approved") && (
+                                <ProductFactsPanel
+                                  draftId={d.id}
+                                  manifestId={d.manifest_id}
+                                  productKey={d.pos_product_key}
+                                  saved={savedFacts.saved.get(savedFactsMapKey(d.manifest_id, d.pos_product_key)) ?? null}
+                                  readOk={savedFacts.ok && savedFacts.migrated}
+                                  returnManifest={focus.manifestId}
+                                  returnView={view}
+                                />
+                              )}
                             </div>
                           ) : null
                         }

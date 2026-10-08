@@ -339,6 +339,58 @@ export async function rebuildCutoverDeliveryAction(formData: FormData): Promise<
 }
 
 /**
+ * R27: "Publish the ready products" - on a receiving update held for a fact
+ * check, re-stage THAT delivery so only the flagged products stay off the
+ * menu and the register (fact-withhold-core) and everything else publishes.
+ * The version id comes from the form; the delivery is read from the stored
+ * row itself (never from the form) and must be a staged, receiving-origin,
+ * fact-held update (publishReadyEligible). Same permission as Publish.
+ */
+export async function publishReadyProductsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("menu.publish");
+  const dest = "/admin/publish";
+  const versionId = String(formData.get("versionId") ?? "").trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(versionId)) {
+    redirect(dest + "?error=" + encodeURIComponent("That update could not be found. Reload the page."));
+  }
+  const { publishReadyEligible, publishReadyNote } = await import("@/lib/pos/intake-version-copy-core");
+  const { data, error } = await createSupabaseAdminClient()
+    .from("menu_versions")
+    .select("id, status, import_id, summary_json")
+    .eq("id", versionId)
+    .maybeSingle();
+  if (error || !data) {
+    redirect(dest + "?error=" + encodeURIComponent(error ? `The update could not be read (${error.message}).` : "That update no longer exists. Reload the page."));
+  }
+  const manifestId = publishReadyEligible(data as { status: string | null; import_id: string | null; summary_json: unknown });
+  if (!manifestId) {
+    redirect(dest + "?error=" + encodeURIComponent("That update is no longer waiting for a fact check. The list below is up to date."));
+  }
+  const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
+  const outcome = await stageIntakeMenuVersionForManifest(manifestId, session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "menu_version.publish_ready_products",
+    entityType: "inbound_manifest",
+    entityId: manifestId,
+    after: {
+      heldVersionId: versionId,
+      staged: outcome.staged,
+      published: outcome.published,
+      newVersionId: outcome.versionId,
+      withheld: outcome.withheld ?? 0,
+      reason: outcome.reason ?? null,
+    },
+  });
+  revalidatePath(dest);
+  revalidatePath("/admin/menu-imports");
+  revalidatePath("/admin/inventory/drafts");
+  if (outcome.published) revalidatePublicMenuSurfaces();
+  redirect(dest + "?notice=" + encodeURIComponent(publishReadyNote(outcome)));
+}
+
+/**
  * T-327 (roadmap Slice 1) — BACKFILL compliance inventory lots for an import
  * that was published before the lot-creation feature existed (so it has a live
  * menu but no inventory_lots). Calls the idempotent backfillImportLots service,

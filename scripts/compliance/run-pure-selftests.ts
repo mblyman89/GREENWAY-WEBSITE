@@ -927,6 +927,8 @@ import { __runExtractionGroundingTests } from "../../src/lib/inventory/extractio
 import { __runContingencyManifestTests } from "../../src/lib/inventory/pdf-contingency-manifest-core";
 import { __runDocTransportTests } from "../../src/lib/inventory/doc-transport-core";
 import { __runInvoiceNumberCoreTests } from "../../src/lib/inventory/invoice-number-core";
+import { __runFactWithholdCoreTests } from "../../src/lib/pos/fact-withhold-core";
+import { __runWaTotalCannabinoidsTests } from "../../src/lib/inventory/wa-total-cannabinoids-core";
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -1925,7 +1927,7 @@ __runLiquidVolumeTests();
   // S01 self-describing intake versions: manifest header, persisted publish
   // outcome, humanised notes, legacy-row degradation. Floor just under the
   // measured count (51).
-  assertRan("intake-version-copy-core", __runIntakeVersionCopyCoreTests(), 48);
+  assertRan("intake-version-copy-core", __runIntakeVersionCopyCoreTests(), 87); // R27-1: withheld products
 
   // S02 deep links: UUID-validated ?draft= / ?manifest= onboarding URLs, the
   // pinned-row tab rule (F-060), Enrich-now by key only when live (F-008).
@@ -1970,7 +1972,7 @@ __runLiquidVolumeTests();
   // signature re-asks), fix/reject applied to the snapshot, the shared form
   // parsers, open-flag lookup, the narrow 0237 detector, held-copy retire.
   // Measured 136.
-  assertRan("intake-fact-review-core", __runIntakeFactReviewCoreTests(), 136);
+  assertRan("intake-fact-review-core", __runIntakeFactReviewCoreTests(), 176);
   // S31 fix-link contract: href parsing, Next.js route precedence, the
   // searchParams key reader (inline literal, alias, Record), anchors, and the
   // coloured-block gate finder. Measured 59.
@@ -2022,7 +2024,8 @@ __runLiquidVolumeTests();
   // R23: waiting-facts-core. Floor = the exact count.
   assertRan("waiting-facts-core", __runWaitingFactsCoreTests(), 72);
   // R23: approved-row-core. Floor = the exact count.
-  assertRan("approved-row-core", __runApprovedRowCoreTests(), 11);
+  // R27: +4 (withheld / held / no-hold leads, hold leads never claim live).
+  assertRan("approved-row-core", __runApprovedRowCoreTests(), 15);
   // R24 (S36): match-weights-core. Floor = the exact count.
   assertRan("match-weights-core", __runMatchWeightsCoreTests(), 130);
   // R25 A: intake lot facts (manifest received date + strain-type mirror).
@@ -2035,6 +2038,8 @@ __runLiquidVolumeTests();
   assertRan("pdf-contingency-manifest-core", __runContingencyManifestTests(), 21);
   assertRan("doc-transport-core", __runDocTransportTests(), 39); // R26: 39 (ground-before-merge + manifest-# grounding + drop de-dup)
   assertRan("invoice-number-core", __runInvoiceNumberCoreTests(), 18);
+  assertRan("fact-withhold-core", __runFactWithholdCoreTests(), 34); // R27-1: one flagged product no longer holds the delivery
+  assertRan("wa-total-cannabinoids-core", __runWaTotalCannabinoidsTests(), 19); // R27-1: WAC 314-55-102 total THC/CBD
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

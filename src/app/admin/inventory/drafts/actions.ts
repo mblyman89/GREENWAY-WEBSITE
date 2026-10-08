@@ -30,7 +30,7 @@ import {
   parseIntakeFactForm,
   type FactResultCode,
 } from "@/lib/pos/intake-fact-review-core";
-import { recordIntakeFactReview } from "@/lib/pos/fact-review-store";
+import { mirrorIntakeFixToLive, recordIntakeFactReview } from "@/lib/pos/fact-review-store";
 // R19 S13: batch manifest lookup (enqueue / stop; the cron does the work).
 import { enqueueManifestLookup, cancelManifestLookup } from "@/lib/catalog/lookup-job-server";
 
@@ -265,8 +265,10 @@ export async function resolveIntakeFactReview(formData: FormData) {
     const v = formData.get(name);
     return typeof v === "string" ? v : "";
   };
+  // R27: the Product facts panel also lives on the review tab - return there.
+  const returnView = get("return_view") === "draft" ? ("draft" as const) : ("approved" as const);
   const back = (manifestId: string | null, draftId: string | null, extra: Record<string, string>) =>
-    draftsHref({ status: "approved", manifestId, draftId, extra });
+    draftsHref({ status: returnView, manifestId, draftId, extra });
 
   const parsed = parseIntakeFactForm(get);
   if (!parsed.ok) {
@@ -308,6 +310,26 @@ export async function resolveIntakeFactReview(formData: FormData) {
       const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
       const outcome = await stageIntakeMenuVersionForManifest(form.manifestId, session.userId);
       code = factResultCode(outcome);
+      // R27: a product ALREADY on the menu is carried, never re-planned, so
+      // the re-stage alone cannot change it. Write the typed facts onto its
+      // live/staged cards and its lot (golden record) too - after the
+      // re-stage, so the version that just went live carries them as well.
+      if (form.action === "fix") {
+        const { data: draftRow } = await createSupabaseAdminClient()
+          .from("catalog_product_drafts")
+          .select("lot_id")
+          .eq("id", form.draftId)
+          .maybeSingle();
+        const mirror = await mirrorIntakeFixToLive({
+          sourceItemId: form.sourceItemId,
+          lotId: (draftRow as { lot_id: string | null } | null)?.lot_id ?? null,
+          correctedFacts: form.correctedFacts,
+        });
+        if (mirror.errors.length > 0) {
+          code = "error";
+          message = `Saved, but ${mirror.errors.join("; ")}. Save the facts again to retry.`;
+        }
+      }
     }
   } catch (err) {
     console.error("[drafts] resolveIntakeFactReview failed:", err);

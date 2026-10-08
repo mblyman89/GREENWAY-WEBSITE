@@ -204,11 +204,37 @@ export function latestDecisionByKey(decisions: readonly IntakeFactDecision[] | n
   return out;
 }
 
-/** True when `decision` answers exactly this flag (valid action + same signature). */
+/**
+ * R27: the signature an OWNER-SET facts record carries - facts typed on the
+ * product's own "Product facts" panel (Product Onboarding, review OR
+ * approved tab) before any flag existed, or edited later. Not a flag
+ * fingerprint (FLAG_SIGNATURE_RE never matches it), so it can never be
+ * mistaken for an answer to one specific question.
+ */
+export const OWNER_FACTS_SIGNATURE = "owner-facts-v1";
+
+/**
+ * True when an owner-set facts record states the package THC in mg - the
+ * figure every mg-dosed fact flag is about (draft-injection-core raises
+ * fact_extraction_review only when the engine could not VERIFY the package
+ * THC / serving arithmetic). A record without it answers nothing.
+ */
+export function ownerFactsAnswer(decision: IntakeFactDecision | null | undefined): boolean {
+  if (!decision || decision.action !== "fix") return false;
+  if (str(decision.flag_signature) !== OWNER_FACTS_SIGNATURE) return false;
+  return typeof sanitizeCorrectedFacts(decision.corrected_facts_json).packageThcMg === "number";
+}
+
+/**
+ * True when `decision` answers this flag: a valid action with the SAME
+ * signature, or (R27) owner-set facts that state the package THC.
+ */
 export function decisionAnswers(flag: unknown, decision: IntakeFactDecision | null | undefined): boolean {
   if (!decision || !isIntakeFactAction(decision.action)) return false;
   const sig = str(decision.flag_signature);
-  return sig !== null && sig === flagSignature(flag);
+  if (sig === null) return false;
+  if (sig === OWNER_FACTS_SIGNATURE) return ownerFactsAnswer(decision);
+  return sig === flagSignature(flag);
 }
 
 /** The FYI diagnostic a resolved flag becomes. */
@@ -434,6 +460,7 @@ export const FACT_REVIEW_HEADING = "A fact on this product needs your eyes";
 
 export const FACT_RESULT_CODES = [
   "published",
+  "published_partial",
   "held",
   "cutover",
   "staged",
@@ -448,9 +475,10 @@ export function factResultCode(outcome: {
   staged: boolean;
   published: boolean;
   reason?: string;
+  withheld?: number;
 } | null): FactResultCode {
   if (!outcome) return "saved";
-  if (outcome.published) return "published";
+  if (outcome.published) return (outcome.withheld ?? 0) > 0 ? "published_partial" : "published";
   if (!outcome.staged) return "saved";
   if (outcome.reason === "held-for-fact-review") return "held";
   if (outcome.reason === "held-for-cutover") return "cutover";
@@ -468,6 +496,8 @@ export function factResultCopy(code: FactResultCode, msg?: string | null): strin
   switch (code) {
     case "published":
       return "Saved \u2014 every flagged fact on this delivery is settled, so the menu update published itself.";
+    case "published_partial":
+      return "Saved \u2014 the menu update published. Products on this delivery whose facts are still not set stay off the menu (and the register) until you set them; everything else is live.";
     case "held":
       return "Saved \u2014 another product on this delivery still has a flagged fact, so the update is still waiting. Settle the next highlighted product.";
     case "cutover":
@@ -525,8 +555,11 @@ export function parseIntakeFactForm(
   const action = get("action").trim();
   if (!isUuid(manifestId) || !isUuid(draftId)) return { ok: false, error: "Missing or invalid delivery / product id." };
   if (!sourceItemId || sourceItemId.length > 200) return { ok: false, error: "Missing product key." };
-  if (!FLAG_SIGNATURE_RE.test(signature)) return { ok: false, error: "This review form is out of date \u2014 reload the page." };
   if (!isIntakeFactAction(action)) return { ok: false, error: "Unknown review action." };
+  // R27: owner-set facts (no flag yet, or an edit later) carry the owner
+  // signature - only ever with Fix (an approve/reject answers ONE flag).
+  const ownerFacts = signature === OWNER_FACTS_SIGNATURE && action === "fix";
+  if (!ownerFacts && !FLAG_SIGNATURE_RE.test(signature)) return { ok: false, error: "This review form is out of date \u2014 reload the page." };
   const noteRaw = get("note").trim();
   const note = noteRaw ? noteRaw.slice(0, NOTE_MAX) : null;
 
@@ -567,7 +600,10 @@ export function parseIntakeFactForm(
 // 6. Product Onboarding: which approved rows have an open flag
 // ---------------------------------------------------------------------------
 
-/** A staged intake version row, as the Onboarding page reads it (aliased columns). */
+/**
+ * An intake version row (staged OR published since R27), as the Onboarding
+ * page reads it (aliased columns). The name is kept for its many callers.
+ */
 export type StagedIntakeRow = {
   id: string;
   created_at: string | null;
@@ -576,7 +612,7 @@ export type StagedIntakeRow = {
   diagnostics: unknown;
 };
 
-/** The newest staged version per manifest (created_at desc; bad times lose). */
+/** The newest intake version per manifest (created_at desc; bad times lose). */
 export function latestStagedPerManifest(rows: readonly StagedIntakeRow[] | null | undefined): Map<string, StagedIntakeRow> {
   const out = new Map<string, StagedIntakeRow>();
   for (const r of rows ?? []) {
@@ -602,13 +638,25 @@ export type OpenFactFlag = {
   productName: string;
   reasons: string[];
   signature: string;
+  /**
+   * R27: true when ONLY this product was kept off the menu (the rest of the
+   * delivery published); false for a whole-delivery hold (pre-R27 rows, or
+   * nothing else on the delivery was ready).
+   */
+  withheld: boolean;
 };
 
+/** R27: context.withheld on a flag whose product was kept off the menu alone. */
+export function flagWithheld(flag: unknown): boolean {
+  return isObj(flag) && isObj(flag.context) && flag.context.withheld === true;
+}
+
 /**
- * Open flags per draft id, from the LATEST staged version of each delivery
- * that is still held for fact review, minus the decisions already saved for
- * that delivery. A delivery whose newest staged update is not held has no
- * open flags (an older held copy is superseded, never shown).
+ * Open flags per draft id, from the LATEST intake version of each delivery,
+ * minus the decisions already saved for that delivery. A flag is open when
+ * that version is held for fact review, or (R27) when its product alone was
+ * kept off a published update (context.withheld). A delivery whose newest
+ * update is neither has no open flags (an older held copy is superseded).
  */
 export function openFlagsByDraft(
   rows: readonly StagedIntakeRow[] | null | undefined,
@@ -616,10 +664,14 @@ export function openFlagsByDraft(
 ): Map<string, OpenFactFlag> {
   const out = new Map<string, OpenFactFlag>();
   for (const [m, row] of latestStagedPerManifest(rows)) {
-    if (row.state !== "held_for_fact_review") continue;
+    const held = row.state === "held_for_fact_review";
     const diags = Array.isArray(row.diagnostics) ? (row.diagnostics as FactDiagnostic[]) : [];
     const part = partitionFactFlags(diags, decisionsByManifest.get(m) ?? []);
     for (const f of part.unresolved) {
+      // R27: a flag is open when its delivery is held, OR when its product
+      // alone was kept off a published update (context.withheld).
+      const withheld = flagWithheld(f);
+      if (!held && !withheld) continue;
       const key = flagKey(f);
       const draftId = flagDraftId(f);
       if (!key || !draftId) continue;
@@ -632,10 +684,149 @@ export function openFlagsByDraft(
         productName: flagProductName(f),
         reasons: flagReasons(f),
         signature: flagSignature(f),
+        withheld,
       });
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// 6a. R27: the facts a person saved for a product - shown and editable
+// ---------------------------------------------------------------------------
+
+/**
+ * The owner's own saved facts for ONE product (the latest saved Fix for its
+ * lot key on its delivery). Before R27 a saved Fix vanished from the page
+ * the moment its flag closed ("no way to see or edit the facts I entered").
+ */
+export type SavedProductFacts = {
+  manifestId: string;
+  key: string;
+  facts: Partial<FactReviewFacts>;
+  note: string | null;
+  updatedAt: string | null;
+  /** True when the record was typed on the Product facts panel (owner signature). */
+  owner: boolean;
+};
+
+/**
+ * Saved facts per lot key, from a delivery's decisions: only the LATEST
+ * decision per key counts, and only when it is a Fix with at least one valid
+ * fact (an approve / reject carries no facts; a later approve means the
+ * extracted facts stand, so older typed numbers are NOT shown as current).
+ */
+export function savedFactsByKey(
+  manifestId: string,
+  decisions: readonly IntakeFactDecision[] | null | undefined,
+): Map<string, SavedProductFacts> {
+  const out = new Map<string, SavedProductFacts>();
+  for (const [key, d] of latestDecisionByKey(decisions)) {
+    if (d.action !== "fix") continue;
+    const facts = sanitizeCorrectedFacts(d.corrected_facts_json);
+    if (Object.keys(facts).length === 0) continue;
+    out.set(key, {
+      manifestId: manifestId.toLowerCase(),
+      key,
+      facts,
+      note: str(d.note),
+      updatedAt: str(d.updated_at),
+      owner: str(d.flag_signature) === OWNER_FACTS_SIGNATURE,
+    });
+  }
+  return out;
+}
+
+/**
+ * R27: the column patches a saved Fix writes STRAIGHT onto what is already
+ * live - the menu cards whose id is this lot key (live + staged versions) and
+ * the lot's golden record (inventory_lots). Needed because a product that is
+ * already on the menu is never re-planned (intake-menu-staging-core:
+ * draft_superseded_by_pos / intake_lot_already_live), so before R27 a fix
+ * made after it went live never reached the website or the register.
+ * Only the facts typed are written; each written column gets "reviewer"
+ * provenance (the reprocess pass never overwrites a reviewer value).
+ */
+export function intakeFixMirrorPatch(facts: Partial<FactReviewFacts> | null | undefined): {
+  item: Record<string, unknown>;
+  itemProvenance: Record<string, string>;
+  lot: Record<string, unknown>;
+  lotProvenance: Record<string, string>;
+} {
+  const item: Record<string, unknown> = {};
+  const itemProvenance: Record<string, string> = {};
+  const lot: Record<string, unknown> = {};
+  const lotProvenance: Record<string, string> = {};
+  const clean = sanitizeCorrectedFacts(facts ?? {});
+  for (const [k, v] of Object.entries(clean) as [keyof FactReviewFacts, unknown][]) {
+    if (v === undefined) continue;
+    const col = SNAPSHOT_FACT_COLUMN[k] as string;
+    item[col] = v;
+    itemProvenance[col] = REVIEWER_PROVENANCE;
+    if (LOT_COLUMNS.has(col)) {
+      lot[col] = v;
+      lotProvenance[col] = REVIEWER_PROVENANCE;
+    }
+  }
+  return { item, itemProvenance, lot, lotProvenance };
+}
+
+/** Label + display text for each saved fact, in the panel's field order. */
+export const SAVED_FACT_LABELS: readonly [keyof FactReviewFacts, string][] = [
+  ["thc", "THC (display)"],
+  ["cbd", "CBD (display)"],
+  ["ratioLabel", "Ratio"],
+  ["servingsPerPack", "Servings per pack"],
+  ["mgPerServing", "Mg per serving"],
+  ["packageThcMg", "Package THC (mg)"],
+  ["packageCbdMg", "Package CBD (mg)"],
+  ["netWeightGrams", "Net weight (g)"],
+  ["netVolumeMl", "Net volume (ml)"],
+  ["lowThcLiquid", "Low-THC beverage"],
+  ["unitThcMg", "THC mg per sealed container"],
+  ["otherwiseTaken", "Otherwise taken into the body"],
+  ["unitsPerPackage", "Individual units per package"],
+];
+
+/** [label, value] rows for the saved facts (booleans as Yes/No; nulls skipped). */
+export function savedFactLines(facts: Partial<FactReviewFacts>): [string, string][] {
+  const out: [string, string][] = [];
+  for (const [k, label] of SAVED_FACT_LABELS) {
+    const v = (facts as Record<string, unknown>)[k];
+    if (v === undefined || v === null) continue;
+    out.push([label, typeof v === "boolean" ? (v ? "Yes" : "No") : String(v)]);
+  }
+  return out;
+}
+
+/**
+ * R27: saved facts that reach a NEW card even when no flag asks for them -
+ * facts typed on the Product facts panel before approval, or for a product
+ * the engine never flagged. Every saved Fix (latest per key, valid facts
+ * only - savedFactsByKey) whose key is NOT already settled by a flag this
+ * run, shaped for applyFactDecisions (which reads only key + decision).
+ */
+export function savedFactsToApply(
+  manifestId: string,
+  decisions: readonly IntakeFactDecision[] | null | undefined,
+  alreadyResolvedKeys: ReadonlySet<string>,
+): ResolvedFlag[] {
+  const latest = latestDecisionByKey(decisions);
+  const out: ResolvedFlag[] = [];
+  for (const key of savedFactsByKey(manifestId, decisions).keys()) {
+    if (alreadyResolvedKeys.has(key)) continue;
+    const decision = latest.get(key);
+    if (!decision) continue;
+    out.push({ flag: { severity: "info", code: FACT_RESOLVED_CODE, message: "saved product facts", context: { pos_product_key: key } }, key, decision });
+  }
+  return out;
+}
+
+/** The fix-panel lead: what this ONE answer is holding (R27: say it truthfully). */
+export function factPanelLead(flag: Pick<OpenFactFlag, "key" | "withheld">): string {
+  return flag.withheld
+    ? `Lot key ${flag.key}. Only THIS product is kept off the menu and the register until its facts are set \u2014 the rest of the delivery is already live. Set the facts (or confirm them) and it goes live by itself.`
+    : `Lot key ${flag.key}. The delivery\u2019s menu update is waiting for this answer; once every flagged fact on it is settled it publishes itself.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -1081,6 +1272,82 @@ export function __runIntakeFactReviewCoreTests(): { passed: number; failed: numb
   ok(planHeldRetire(fresh, null).length === 0, "no candidates");
   ok(RETIRED_REASON_PREFIX === "superseded_by_fact_review:", "retire reason prefix");
   ok(FACT_REVIEW_MIGRATION === "0237_fact_review_for_versions.sql", "migration name");
+
+  // -- R27: owner-set facts ----------------------------------------------------------------
+  const own = (facts: unknown, action = "fix", sig: string | null = OWNER_FACTS_SIGNATURE): IntakeFactDecision => ({
+    source_item_id: "LOT-1", action, flag_signature: sig, corrected_facts_json: facts, updated_at: "2026-03-01T00:00:00Z",
+  });
+  ok(ownerFactsAnswer(own({ packageThcMg: 100 })), "owner facts with package THC answer");
+  ok(!ownerFactsAnswer(own({ servingsPerPack: 10 })), "owner facts WITHOUT package THC answer nothing");
+  ok(!ownerFactsAnswer(own({ packageThcMg: -1 })), "a negative package THC is dropped -> no answer");
+  ok(!ownerFactsAnswer(own({ packageThcMg: 100 }, "approve")), "owner signature only with fix");
+  ok(!ownerFactsAnswer(own({ packageThcMg: 100 }, "fix", "v1-3-0a1b2c3d")), "a flag signature is not owner facts");
+  ok(decisionAnswers(flag(), own({ packageThcMg: 100 })), "owner facts answer ANY flag on the lot");
+  ok(!decisionAnswers(flag(), own({ thc: "10mg" })), "owner facts without package THC leave the flag open");
+  const ownPart = partitionFactFlags([flag()], [own({ packageThcMg: 100 })]);
+  ok(ownPart.unresolved.length === 0 && ownPart.resolved.length === 1, "owner facts resolve the flag in the partition");
+  const formGet = (m: Record<string, string>) => (k: string) => m[k] ?? "";
+  const baseForm = { manifestId: MA, draftId: MA, sourceItemId: "LOT-1", flagSignature: OWNER_FACTS_SIGNATURE };
+  ok(parseIntakeFactForm(formGet({ ...baseForm, action: "fix", packageThcMg: "100" })).ok, "owner form with fix parses");
+  ok(!parseIntakeFactForm(formGet({ ...baseForm, action: "approve" })).ok, "owner signature + approve refused");
+  ok(!parseIntakeFactForm(formGet({ ...baseForm, action: "reject" })).ok, "owner signature + reject refused");
+  ok(!parseIntakeFactForm(formGet({ ...baseForm, flagSignature: "owner-facts-v2", action: "fix", packageThcMg: "1" })).ok, "unknown signature refused");
+
+  // -- R27: partial publish result --------------------------------------------------------
+  ok(factResultCode({ staged: true, published: true, withheld: 2 }) === "published_partial", "published with withheld -> partial");
+  ok(factResultCode({ staged: true, published: true, withheld: 0 }) === "published", "published, none withheld");
+  ok(factResultCode({ staged: true, published: true }) === "published", "published, withheld absent");
+  ok(factResultCopy("published_partial").includes("stay off the menu"), "partial copy says who stays off");
+  ok(parseFactResult("published_partial") === "published_partial", "partial parses");
+
+  // -- R27: withheld flags are open on a PUBLISHED version -------------------------------
+  const wFlag = flag({}, { withheld: true });
+  ok(flagWithheld(wFlag) && !flagWithheld(flag()) && !flagWithheld(null), "flagWithheld");
+  const pubRow = (diagnostics: unknown[]): StagedIntakeRow => ({ id: "P", created_at: "2026-03-02T00:00:00Z", manifest_id: MA, state: "auto_publish_attempted", diagnostics });
+  const openW = openFlagsByDraft([pubRow([wFlag])], new Map());
+  ok(openW.get("d1")?.withheld === true && openW.get("d1")?.versionId === "P", "a withheld flag on a published version is open");
+  ok(openFlagsByDraft([pubRow([flag()])], new Map()).size === 0, "a NOT-withheld flag on a published version is not open");
+  ok(openFlagsByDraft([pubRow([wFlag])], new Map([[MA, [own({ packageThcMg: 90 })]]])).size === 0, "owner facts close a withheld flag");
+  const heldRow: StagedIntakeRow = { ...pubRow([flag()]), state: "held_for_fact_review" };
+  ok(openFlagsByDraft([heldRow], new Map()).get("d1")?.withheld === false, "a whole-delivery hold is not withheld");
+
+  // -- R27: saved facts are visible ---------------------------------------------------------
+  const sv = savedFactsByKey(MA.toUpperCase(), [
+    { ...own({ packageThcMg: 100, servingsPerPack: 10, lowThcLiquid: false }), note: " checked pkg " },
+    { source_item_id: "LOT-2", action: "approve", flag_signature: "v1-3-0a1b2c3d", corrected_facts_json: null },
+    { source_item_id: "LOT-3", action: "fix", flag_signature: "v1-3-0a1b2c3d", corrected_facts_json: { bogus: 1 } },
+  ]);
+  ok(sv.size === 1 && sv.get("LOT-1")?.owner === true, "only fixes with facts are saved facts");
+  ok(sv.get("LOT-1")?.manifestId === MA.toLowerCase(), "manifest lower-cased");
+  ok(sv.get("LOT-1")?.note === "checked pkg", "note trimmed");
+  const later = savedFactsByKey(MA, [
+    own({ packageThcMg: 100 }),
+    { source_item_id: "LOT-1", action: "approve", flag_signature: "v1-3-0a1b2c3d", corrected_facts_json: null, updated_at: "2026-03-09T00:00:00Z" },
+  ]);
+  ok(later.size === 0, "a LATER approve supersedes older typed facts (never show stale numbers as current)");
+  const lines = savedFactLines({ packageThcMg: 100, lowThcLiquid: false, thc: "10mg", cbd: null });
+  ok(lines.map((l) => l.join("=")).join("|") === "THC (display)=10mg|Package THC (mg)=100|Low-THC beverage=No", "lines in field order: " + JSON.stringify(lines));
+  ok(SAVED_FACT_LABELS.length === Object.keys(SNAPSHOT_FACT_COLUMN).length, "every fact has a label");
+  ok(factPanelLead({ key: "K", withheld: true }).includes("Only THIS product"), "withheld lead");
+  ok(factPanelLead({ key: "K", withheld: false }).includes("waiting for this answer"), "held lead");
+  const mp = intakeFixMirrorPatch({ packageThcMg: 100, thc: "100mg", lowThcLiquid: false, servingsPerPack: -3 } as Partial<FactReviewFacts>);
+  ok(mp.item.package_thc_mg === 100 && mp.item.thc === "100mg" && mp.item.low_thc_liquid === false, "mirror item columns");
+  ok(!("servings_per_pack" in mp.item), "invalid numbers never mirrored");
+  ok(mp.lot.package_thc_mg === 100 && !("thc" in mp.lot) && !("low_thc_liquid" in mp.lot), "only golden-record columns reach the lot");
+  ok(mp.itemProvenance.package_thc_mg === "reviewer" && mp.lotProvenance.package_thc_mg === "reviewer", "reviewer provenance");
+  ok(Object.keys(intakeFixMirrorPatch(null).item).length === 0, "nothing typed -> nothing written");
+  // -- R27: saved facts reach a new card without a flag -----------------------------------
+  const sta = savedFactsToApply(MA, [
+    own({ packageThcMg: 100 }),
+    { source_item_id: "LOT-2", action: "fix", flag_signature: "v1-3-0a1b2c3d", corrected_facts_json: { servingsPerPack: 10 } },
+    { source_item_id: "LOT-3", action: "approve", flag_signature: "v1-3-0a1b2c3d", corrected_facts_json: null },
+  ], new Set(["LOT-2"]));
+  ok(sta.length === 1 && sta[0].key === "LOT-1", "only unflagged saved fixes are applied: " + JSON.stringify(sta.map((r) => r.key)));
+  ok(sta[0].decision.action === "fix", "carries the decision applyFactDecisions reads");
+  ok(savedFactsToApply(MA, null, new Set()).length === 0, "no decisions -> nothing");
+  const staItems = [{ source_item_id: "LOT-1", fact_provenance: {}, variants: [] }] as unknown as StagedSnapshotItem[];
+  applyFactDecisions(staItems, new Map(), sta);
+  ok((staItems[0] as unknown as Record<string, unknown>).package_thc_mg === 100, "applied to the new card");
 
   return { passed, failed };
 }

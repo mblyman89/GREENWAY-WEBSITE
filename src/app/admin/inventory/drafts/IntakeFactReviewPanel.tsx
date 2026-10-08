@@ -13,7 +13,7 @@
  * parseLowThcClassification / parseOtherwiseTakenClassification).
  */
 import { Button } from "@/components/admin/ui";
-import { FACT_REVIEW_HEADING, type OpenFactFlag } from "@/lib/pos/intake-fact-review-core";
+import { FACT_REVIEW_HEADING, factPanelLead, type OpenFactFlag } from "@/lib/pos/intake-fact-review-core";
 import { resolveIntakeFactReview } from "./actions";
 
 const inputCls =
@@ -70,10 +70,8 @@ export function IntakeFactReviewPanel({
           <li key={i}>{r}</li>
         ))}
       </ul>
-      <p className="mt-1 text-[11px] text-[var(--admin-text-faint)]">
-        Lot key {flag.key}. The delivery&apos;s menu update is waiting for this answer; once every flagged
-        fact on it is settled it publishes itself.
-      </p>
+      {/* R27: truthful lead - a withheld product holds back only itself. */}
+      <p className="mt-1 text-[11px] text-[var(--admin-text-faint)]">{factPanelLead(flag)}</p>
 
       <div className="mt-2 flex flex-wrap items-start gap-2">
         <form action={resolveIntakeFactReview} className="flex items-end gap-2">

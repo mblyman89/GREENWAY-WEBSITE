@@ -56,9 +56,21 @@ import {
   factHoldNote,
   partitionFactFlags,
   planHeldRetire,
+  savedFactsToApply,
+  type FactDiagnostic,
   type FactPartition,
   type HeldCandidate,
 } from "@/lib/pos/intake-fact-review-core";
+// R27-1: per-product withhold instead of a whole-delivery hold.
+import {
+  FACT_WITHHOLD_ENV,
+  WITHHELD_EVENT,
+  decideWithhold,
+  factWithholdEnabled,
+  markWithheld,
+  planFactWithhold,
+  withheldNote,
+} from "@/lib/pos/fact-withhold-core";
 import { mergeArchivedSummary } from "@/lib/pos/publish-archive-rule-core";
 import { shouldHoldForCutover } from "@/lib/pos/cutover-guard";
 import { CUTOVER_EVENT, CUTOVER_HOLD_COPY, CUTOVER_REASON } from "@/lib/inventory/cutover-guard-core";
@@ -126,6 +138,11 @@ export type IntakeStagingOutcome = {
   merged: number;
   /** Why nothing was staged (for the timeline note). */
   reason?: string;
+  /**
+   * R27-1: approved products kept OFF this update because a fact could not
+   * be verified (the rest of the delivery published). 0/absent = none.
+   */
+  withheld?: number;
 };
 
 /**
@@ -431,7 +448,7 @@ export async function stageIntakeMenuVersionForManifest(
     const ambiguousIdentities = mergeAmbiguousIdentities(firstPlan.diagnostics);
     const mergeDecisions =
       ambiguousIdentities.length > 0 ? await loadMergeDecisions(ambiguousIdentities) : new Map<string, MergeDecision>();
-    const plan =
+    let plan =
       mergeDecisions.size > 0
         ? buildIntakeStagedVersionPlan({
             publishedItems,
@@ -450,11 +467,70 @@ export async function stageIntakeMenuVersionForManifest(
     // is persisted, so what publishes is what the human decided. A failed
     // read (or 0237 not applied) resolves nothing: the update holds exactly
     // as before (fail closed - never publish an unverified fact).
-    const factPartition: FactPartition = plan.diagnostics.some((d) => d.code === FACT_FLAG_CODE)
-      ? partitionFactFlags(plan.diagnostics, (await listIntakeFactReviewsResult(manifestId)).reviews)
+    // R27: the decisions are read on EVERY staging (one bounded read), not
+    // only when a flag was raised - facts typed on the Product facts panel
+    // before approval (or for a product the engine never flagged) must reach
+    // the new card too (savedFactsToApply below).
+    const raisedFlag = plan.diagnostics.some((d) => d.code === FACT_FLAG_CODE);
+    const factReviews = (await listIntakeFactReviewsResult(manifestId)).reviews;
+    let factPartition: FactPartition = raisedFlag
+      ? partitionFactFlags(plan.diagnostics, factReviews)
       : { unresolved: [], resolved: [], diagnostics: plan.diagnostics };
+
+    // R27-1: ONE unanswered flag no longer holds the WHOLE delivery. The
+    // flagged lots are taken out and the delivery is planned again without
+    // them (fact-withhold-core): the rest publishes, each flagged product
+    // stays off the website and the register - listed, with its fix panel -
+    // until its facts are set. Nothing else new -> the update holds exactly
+    // as before. A failed decision read still fails closed: every flag is
+    // unresolved, so every flagged lot stays off.
+    let withheldFlags: FactDiagnostic[] = [];
+    let withheldDraftIds: string[] = [];
+    if (factPartition.unresolved.length > 0) {
+      const enabled = factWithholdEnabled(process.env[FACT_WITHHOLD_ENV]);
+      const wp = planFactWithhold({ unresolved: factPartition.unresolved, drafts });
+      const replan =
+        enabled && wp.unkeyed === 0 && wp.keepDrafts.length > 0
+          ? buildIntakeStagedVersionPlan({
+              publishedItems,
+              approvedDrafts: wp.keepDrafts,
+              enrichmentByDraftId,
+              vendorIds,
+              mergeDecisions,
+            })
+          : null;
+      const replanPartition = replan ? partitionFactFlags(replan.diagnostics, factReviews) : null;
+      const verdict = decideWithhold({
+        unresolvedCount: factPartition.unresolved.length,
+        enabled,
+        unkeyed: wp.unkeyed,
+        replanHasChanges: replan?.hasChanges ?? false,
+        replanUnresolved: replanPartition?.unresolved.length ?? 0,
+      });
+      if (verdict.kind === "withhold" && replan && replanPartition) {
+        withheldFlags = markWithheld(factPartition.unresolved);
+        withheldDraftIds = wp.withheldDraftIds;
+        plan = replan;
+        factPartition = {
+          unresolved: [],
+          resolved: replanPartition.resolved,
+          diagnostics: [...replanPartition.diagnostics, ...withheldFlags],
+        };
+      }
+    }
     if (factPartition.resolved.length > 0) {
       applyFactDecisions(plan.items, plan.lotFactsByKey, factPartition.resolved);
+    }
+    // R27: saved facts no flag asked for (typed before approval, or edited
+    // later) are applied the same way, with "reviewer" provenance. A key a
+    // flag already settled this run is skipped (applied once, above).
+    const savedExtra = savedFactsToApply(
+      manifestId,
+      factReviews,
+      new Set(factPartition.resolved.map((r) => r.key)),
+    );
+    if (savedExtra.length > 0) {
+      applyFactDecisions(plan.items, plan.lotFactsByKey, savedExtra);
     }
 
     // SLICE 62: persist the VERIFIED extraction facts on the source lots —
@@ -560,11 +636,17 @@ export async function stageIntakeMenuVersionForManifest(
           // "auto_publish_attempted" + status "published" = published
           // automatically, so the success path needs ZERO extra writes.
           manifest: manifestHeader,
-          publish_outcome: initialPublishOutcome(factFlags.length, new Date().toISOString(), { cutover: cutoverHold }),
+          publish_outcome: initialPublishOutcome(factFlags.length, new Date().toISOString(), {
+            cutover: cutoverHold,
+            withheld: withheldFlags.length,
+          }),
           // S17: which approved drafts this snapshot was built from, so a
           // later snapshot may replace it ONLY when it provably contains all
           // of them (planRestageReplace). Plus the batch size, when batched.
           approved_draft_ids: draftIdList(drafts.map((d) => d.id)),
+          // R27-1: the approved products kept OFF this update (a fact could
+          // not be verified) - listed on the Publish page, never dropped.
+          ...(withheldDraftIds.length > 0 ? { withheld_draft_ids: draftIdList(withheldDraftIds) } : {}),
           ...(opts.batchCount && opts.batchCount > 1 ? { batch_count: opts.batchCount } : {}),
         },
         notes:
@@ -657,6 +739,7 @@ export async function stageIntakeMenuVersionForManifest(
         added: plan.addedCount,
         merged: plan.mergedCount,
         reason: CUTOVER_REASON,
+        withheld: withheldFlags.length,
       };
     }
 
@@ -668,6 +751,21 @@ export async function stageIntakeMenuVersionForManifest(
       version.created_at ?? null,
     );
 
+    // R27-1: the update went live WITHOUT the flagged products - say so on
+    // the delivery's timeline, with where their facts are set.
+    if (publishedOk && withheldFlags.length > 0) {
+      try {
+        await admin.from("manifest_events").insert({
+          manifest_id: manifestId,
+          event_type: WITHHELD_EVENT,
+          note: withheldNote(withheldFlags.length),
+          actor_id: actorId,
+        });
+      } catch (err) {
+        console.error("[intake-menu-staging] withheld event insert failed:", err);
+      }
+    }
+
     return {
       staged: true,
       published: publishedOk,
@@ -675,6 +773,7 @@ export async function stageIntakeMenuVersionForManifest(
       carried: plan.carriedCount,
       added: plan.addedCount,
       merged: plan.mergedCount,
+      withheld: withheldFlags.length,
     };
   } catch (err) {
     console.error("[intake-menu-staging] staging failed:", err);

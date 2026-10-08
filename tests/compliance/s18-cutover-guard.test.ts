@@ -145,7 +145,7 @@ describe("S18 pure core", () => {
   it("the version-copy core self-tests pass with an exact count (S18 added 7)", () => {
     const r = __runIntakeVersionCopyCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(58);
+    expect(r.passed).toBe(87); // R27-1: +29 (withheld count, published-with-withheld copy, kept-off list, publish-ready)
   });
   it("the hold copy is bible S18.4 verbatim; event and outcome are bible S18.2", () => {
     expect(CUTOVER_HOLD_COPY).toBe(
@@ -482,7 +482,9 @@ describe("S18 wiring", () => {
   const staging = read("src/lib/pos/intake-menu-staging.ts");
   it("staging decides the hold BEFORE the insert, only when no fact hold applies", () => {
     const hold = staging.indexOf("const cutoverHold = factFlags.length === 0 && (await shouldHoldForCutover());");
-    const insert = staging.indexOf("publish_outcome: initialPublishOutcome(factFlags.length, new Date().toISOString(), { cutover: cutoverHold }),");
+    // R27 pin update (on purpose): the insert also records how many products
+    // were withheld, so the call spans lines; the order rule is unchanged.
+    const insert = staging.indexOf("publish_outcome: initialPublishOutcome(factFlags.length, new Date().toISOString(), {\n            cutover: cutoverHold,\n            withheld: withheldFlags.length,\n          }),");
     expect(hold).toBeGreaterThan(-1);
     expect(insert).toBeGreaterThan(hold);
   });

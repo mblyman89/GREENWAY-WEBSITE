@@ -489,8 +489,10 @@ describe("page wiring (ONBOARDING_V2_ROW)", () => {
     expect(row).toBeGreaterThan(formEnd);
     const props = page.slice(row, page.indexOf("approve={approveForm}", row));
     expect(props).toContain('data-testid="draft-row-detail"');
-    expect(props).toContain("<FactsPanel view={facts} identity={identity} wide />");
-    expect(props).toContain("facts && identity ? (");
+    // R27 pin update (on purpose): the facts zone also opens for the
+    // Product facts panel (facts a person set), so the condition grew.
+    expect(props).toContain("(facts && identity) || (savedFacts && d.manifest_id && d.pos_product_key) ? (");
+    expect(props).toContain("{facts && identity && <FactsPanel view={facts} identity={identity} wide />}");
     expect(props).toContain("lookup={lookupPanel}");
     // The zones are in reading order: facts -> lookup -> approve.
     expect(props.indexOf("facts={")).toBeLessThan(props.indexOf("lookup={lookupPanel}"));

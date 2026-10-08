@@ -27,6 +27,16 @@ export const APPROVED_TOGGLE_OPEN = "Show details";
 export const APPROVED_TOGGLE_CLOSE = "Collapse";
 export const APPROVED_ZONE_LEAD =
   "Approved - live on the website and sellable at the register. Attach any facts waiting in the AI lookup zone; finish photos and copy on Enrichment.";
+/**
+ * R27: the lead must not say "live" while a fact check keeps the product off.
+ * Withheld = only this product is off (the rest of its delivery is live);
+ * held = the whole delivery's update waits (a pre-R27 hold).
+ */
+export const APPROVED_ZONE_LEAD_WITHHELD =
+  "Approved - but NOT on the website or the register yet: a fact needs your answer (see the fact check on this row). Set or confirm the facts and it goes live by itself.";
+export const APPROVED_ZONE_LEAD_HELD =
+  "Approved - but NOT on the website or the register yet: this delivery's menu update is held for a fact check. Answer the flagged facts (or press Publish the ready products on Publish Menu).";
+export type ApprovedFactHold = "withheld" | "held" | null;
 export const APPROVED_BANNER_LINK_TEXT = "Open it on the Approved tab";
 
 export interface ApprovedRowInput {
@@ -34,6 +44,8 @@ export interface ApprovedRowInput {
   categoryLabel: string | null | undefined;
   strainLabel: string | null | undefined;
   houseType: string | null | undefined;
+  /** R27: an open fact check on this product (from the Onboarding flag loader). */
+  factHold?: ApprovedFactHold;
 }
 
 export interface ApprovedRowCopy {
@@ -56,7 +68,11 @@ export function approvedRowCopy(input: ApprovedRowInput): ApprovedRowCopy {
   if (h) lines.push(["Type", h]);
   const st = String(input.strainLabel ?? "").trim();
   if (st) lines.push(["Strain type", st]);
-  return { lead: APPROVED_ZONE_LEAD, lines };
+  const lead =
+    input.factHold === "withheld" ? APPROVED_ZONE_LEAD_WITHHELD
+      : input.factHold === "held" ? APPROVED_ZONE_LEAD_HELD
+        : APPROVED_ZONE_LEAD;
+  return { lead, lines };
 }
 
 /**
@@ -94,5 +110,11 @@ export function __runApprovedRowCoreTests(): { passed: number; failed: number } 
   ok(approvedBannerLink("not-a-uuid", M) === null && approvedBannerLink(undefined, M) === null && approvedBannerLink([D], M) === null, "bad id -> null");
   ok(APPROVED_TOGGLE_OPEN === "Show details" && APPROVED_TOGGLE_CLOSE === "Collapse", "toggle copy");
   ok(APPROVED_BANNER_LINK_TEXT === "Open it on the Approved tab", "link copy");
+  // R27: never "live" while a fact check keeps it off.
+  const base = { priceMinorUnits: 100, categoryLabel: null, strainLabel: null, houseType: null };
+  ok(approvedRowCopy({ ...base, factHold: "withheld" }).lead === APPROVED_ZONE_LEAD_WITHHELD, "withheld lead");
+  ok(approvedRowCopy({ ...base, factHold: "held" }).lead === APPROVED_ZONE_LEAD_HELD, "held lead");
+  ok(approvedRowCopy({ ...base, factHold: null }).lead === APPROVED_ZONE_LEAD, "no hold -> live lead");
+  ok(!/live on the website/.test(APPROVED_ZONE_LEAD_WITHHELD) && !/live on the website/.test(APPROVED_ZONE_LEAD_HELD), "hold leads never claim live");
   return { passed, failed };
 }
