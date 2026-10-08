@@ -343,3 +343,88 @@ export async function recordIntakeFactReview(
   }
   return { applied: true };
 }
+
+// ---------------------------------------------------------------------------
+// R27: a saved receiving Fix reaches what is ALREADY live
+// ---------------------------------------------------------------------------
+//
+// The staging re-plan above applies a decision only to products it builds
+// NOW. A product that is already on the menu is carried, never re-planned
+// (intake-menu-staging-core: draft_superseded_by_pos / intake_lot_already_live),
+// so before R27 a fix typed after it went live reached neither the website
+// nor the register. This writes the typed facts (and only those) onto:
+//   1. menu_items whose source_item_id IS the lot key, on the live and staged
+//      intake-origin versions (the cards the register and storefront read;
+//      archived history is never rewritten), with "reviewer" provenance;
+//   2. the lot's golden record (inventory_lots, by the draft's lot_id), the
+//      facts the inventory detail and the knowledge base read.
+// Every failure is REPORTED (the decision is already saved; the owner must
+// know the live copy did not update) - never swallowed.
+
+export type IntakeFixMirrorResult = { items: number; lot: boolean; errors: string[] };
+
+export async function mirrorIntakeFixToLive(input: {
+  sourceItemId: string;
+  lotId: string | null;
+  correctedFacts: Partial<FactReviewFacts> | null;
+}): Promise<IntakeFixMirrorResult> {
+  const { intakeFixMirrorPatch } = await import("@/lib/pos/intake-fact-review-core");
+  const patch = intakeFixMirrorPatch(input.correctedFacts);
+  const res: IntakeFixMirrorResult = { items: 0, lot: false, errors: [] };
+  if (Object.keys(patch.item).length === 0) return res;
+  const admin = createSupabaseAdminClient();
+
+  const versions = await admin
+    .from("menu_versions")
+    .select("id")
+    .is("import_id", null)
+    .in("status", ["published", "staged"]);
+  if (versions.error) {
+    res.errors.push(`the live menu could not be read (${versions.error.message})`);
+  } else {
+    const ids = ((versions.data ?? []) as { id: string }[]).map((v) => v.id).filter(Boolean);
+    if (ids.length > 0) {
+      const rows = await admin
+        .from("menu_items")
+        .select("id, fact_provenance")
+        .in("menu_version_id", ids)
+        .eq("source_item_id", input.sourceItemId);
+      if (rows.error) {
+        res.errors.push(`the live card could not be read (${rows.error.message})`);
+      } else {
+        for (const row of (rows.data ?? []) as { id: string; fact_provenance: unknown }[]) {
+          const existing =
+            row.fact_provenance && typeof row.fact_provenance === "object" && !Array.isArray(row.fact_provenance)
+              ? (row.fact_provenance as Record<string, string>)
+              : {};
+          const { error } = await admin
+            .from("menu_items")
+            .update({ ...patch.item, fact_provenance: { ...existing, ...patch.itemProvenance } })
+            .eq("id", row.id);
+          if (error) res.errors.push(`a live card was not updated (${error.message})`);
+          else res.items += 1;
+        }
+      }
+    }
+  }
+
+  if (input.lotId && Object.keys(patch.lot).length > 0) {
+    const lot = await admin.from("inventory_lots").select("id, fact_provenance").eq("id", input.lotId).maybeSingle();
+    if (lot.error) {
+      res.errors.push(`the inventory lot could not be read (${lot.error.message})`);
+    } else if (lot.data) {
+      const row = lot.data as { id: string; fact_provenance: unknown };
+      const existing =
+        row.fact_provenance && typeof row.fact_provenance === "object" && !Array.isArray(row.fact_provenance)
+          ? (row.fact_provenance as Record<string, string>)
+          : {};
+      const { error } = await admin
+        .from("inventory_lots")
+        .update({ ...patch.lot, fact_provenance: { ...existing, ...patch.lotProvenance } })
+        .eq("id", row.id);
+      if (error) res.errors.push(`the inventory lot was not updated (${error.message})`);
+      else res.lot = true;
+    }
+  }
+  return res;
+}

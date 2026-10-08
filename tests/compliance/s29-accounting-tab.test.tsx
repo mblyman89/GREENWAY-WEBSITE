@@ -118,7 +118,9 @@ describe("1. manifest-event-labels-core self-tests", () => {
   it("pins the embedded self-test count (42) with zero failures", () => {
     // R26 pin update (on purpose): 49 -> 50 — one assertion added for the new
     // invoice_number_detected event label (migration 0245 writer).
-    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 50, failed: 0 });
+    // R27 pin update (on purpose): 50 -> 51 - one assertion added for the
+    // menu_published_some_withheld event label (per-product withhold).
+    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 51, failed: 0 });
   });
   it("is registered in run-pure-selftests (import AND run)", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");

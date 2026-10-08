@@ -26,9 +26,13 @@ import { formatDateTime } from "@/lib/pos/format";
 import { factHoldHref } from "@/lib/pos/menu-waiting-link-core";
 import {
   describeIntakeVersion,
+  keptOffFromVersions,
   parseIntakeSummary,
+  publishReadyEligible,
   type IntakeVersionDescription,
 } from "@/lib/pos/intake-version-copy-core";
+import { draftsHref } from "@/lib/catalog/draft-deep-link-core";
+import { publishReadyProductsAction } from "@/app/admin/menu-imports/actions";
 import {
   buildPublishIssuesForVersion,
   issueChipLabel,
@@ -177,6 +181,9 @@ export default async function PublishCommandCenterPage({
   const queue = splitQueue(rows.map((r) => ({ ...r, freshness: r.version.freshness })));
   // S16: last 10 that went live by themselves, from the list already loaded.
   const recent = recentAutoPublished(allVersions);
+  // R27: every product kept off the menu ALONE (the rest of its delivery is
+  // live), newest version per delivery, from the list already loaded.
+  const keptOff = keptOffFromVersions(allVersions);
 
   // S28: one Issues model for the waiting rows, built ONLY from stored state
   // (summary_json.diagnostics + warning_count, F-117) — pure, no new read.
@@ -379,13 +386,31 @@ export default async function PublishCommandCenterPage({
                           ) : null;
                         })()}
                       </p>
-                      {canPublish ? (
-                        <Button href={action.href} size="sm" variant={v.freshness === "latest" ? "confirm" : "primary"}>
-                          {action.label}
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-white/40">A manager or admin publishes this.</span>
-                      )}
+                      <div className="flex flex-wrap items-center gap-3">
+                        {/* R27: a delivery held whole for a fact check (before
+                            per-product withholding) is rebuilt so ONLY the
+                            flagged products stay off; the rest goes live. A
+                            SECONDARY action - the row keeps exactly one
+                            primary Button (S16.6). */}
+                        {canPublish && publishReadyEligible(v) && (
+                          <form action={publishReadyProductsAction} data-testid="publish-ready-products">
+                            <input type="hidden" name="versionId" value={v.id} />
+                            <button
+                              type="submit"
+                              className="admin-focus text-xs font-semibold text-[var(--admin-accent)] underline-offset-2 hover:underline"
+                            >
+                              Publish the ready products
+                            </button>
+                          </form>
+                        )}
+                        {canPublish ? (
+                          <Button href={action.href} size="sm" variant={v.freshness === "latest" ? "confirm" : "primary"}>
+                            {action.label}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-white/40">A manager or admin publishes this.</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -428,6 +453,38 @@ export default async function PublishCommandCenterPage({
             </div>
           )}
         </section>
+
+        {/* R27: products kept off the menu and the register on their own. */}
+        {keptOff.length > 0 && (
+          <section data-testid="kept-off-menu" className="rounded-xl border border-[var(--admin-gold)]/30 bg-[#0a0a0a] p-5">
+            <h2 className="text-sm font-semibold text-white">
+              Kept off the menu until their facts are set ({keptOff.length})
+            </h2>
+            <p className="mt-1 text-xs text-white/50">
+              The rest of each delivery is already live. Open a product, type the facts from the
+              package and save {"\u2014"} it goes live on the website and the register by itself.
+            </p>
+            <ul className="mt-3 divide-y divide-white/5">
+              {keptOff.map((p) => (
+                <li key={`${p.versionId}:${p.draftId ?? p.key ?? p.name}`} className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
+                  <span className="text-white/80">
+                    {p.name}
+                    {p.source && <span className="text-white/40"> {"\u00b7"} {p.source}</span>}
+                    {p.reasons.length > 0 && (
+                      <span className="block text-white/50">{p.reasons.join("; ")}</span>
+                    )}
+                  </span>
+                  <Link
+                    href={draftsHref({ status: "approved", manifestId: p.manifestId, draftId: p.draftId })}
+                    className="text-[var(--admin-accent)] hover:underline"
+                  >
+                    Set the facts
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
           </>
         )}
 

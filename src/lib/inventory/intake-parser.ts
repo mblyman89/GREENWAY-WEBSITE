@@ -17,6 +17,7 @@
  */
 
 import { splitStrainField } from "@/lib/inventory/strain-fields-core";
+import { waTotalsFromPotency } from "@/lib/inventory/wa-total-cannabinoids-core";
 
 export type ParsedLab = {
   labtest_external_identifier: string | null;
@@ -337,6 +338,7 @@ function parseWciaLab(item: Obj): ParsedLab | null {
 
   const thca = potency["thca"] ?? null;
   const total = potency["total-cannabinoids"] ?? potency["total_cannabinoids"] ?? null;
+  const waTotals = waTotalsFromPotency(potency);
 
   return {
     labtest_external_identifier: asString(pick(data, ["lab_result_id"])),
@@ -346,9 +348,11 @@ function parseWciaLab(item: Obj): ParsedLab | null {
     cbd_pct: potency["cbd"] ?? null,
     thca_pct: thca,
     cbda_pct: potency["cbda"] ?? null,
-    // For WA, the "total THC" headline is typically the larger of THC and THCA.
-    total_thc_pct: total ?? (Math.max(potency["thc"] ?? 0, thca ?? 0) || null),
-    total_cbd_pct: potency["cbd"] ?? null,
+    // R27: WAC 314-55-102(3)(a)(ii) - the lab's reported total-thc/total-cbd,
+    // else THC + 0.877 x THCA (CBD + 0.877 x CBDA). Never total-cannabinoids
+    // (that put THC + CBD in the THC column: Apple Cardamom showed 0.7045%).
+    total_thc_pct: waTotals.totalThcPct,
+    total_cbd_pct: waTotals.totalCbdPct,
     total_cannabinoids_pct: total,
     potency_json: Object.keys(potency).length > 0 ? potency : null,
     terpenes_json: pick(data, ["terpenes", "terpene_profile"]) ?? null,

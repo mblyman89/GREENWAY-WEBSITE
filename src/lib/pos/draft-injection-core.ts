@@ -234,6 +234,31 @@ export function statusForOnHand(level: number | null): "in-stock" | "low-stock" 
 const COMPOUND_TYPES = new Set(["thc", "thca", "cbd", "cbda", "cbg", "cbn", "cbc", "cbdv"]);
 
 /**
+ * R27: the ONE call of the word-by-word extraction engine for an approved
+ * draft - used by the plan below AND by Product Onboarding to say, BEFORE
+ * approval, that this product's facts cannot be verified automatically (so
+ * the owner can set them on the first pass instead of being sent back from
+ * Publish). Same inputs either way, so the prediction cannot drift from
+ * what staging will decide. null for types the engine never examines.
+ */
+export function examineDraftFacts(d: {
+  name: string;
+  inventory_type?: string | null;
+  total_thc_pct?: number | null;
+  thc_pct?: number | null;
+  cbd_pct?: number | null;
+}): ReturnType<typeof crossExamineRow> | null {
+  const invType = (d.inventory_type ?? "").trim();
+  if (!MG_FACT_TYPES.has(invType)) return null;
+  return crossExamineRow({
+    productText: d.name,
+    inventoryType: invType,
+    thcColumn: d.total_thc_pct ?? d.thc_pct ?? null,
+    cbdColumn: d.cbd_pct ?? null,
+  });
+}
+
+/**
  * Plan the injection. Deterministic and pure: dedupes approved drafts by POS
  * key (newest updated_at wins), skips anything that can't be injected
  * honestly, and emits a diagnostic for every decision so the import review
@@ -373,14 +398,7 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
     let netWeightGrams: number | null = null;
     let netVolumeMl: number | null = null;
     const invType = (d.inventory_type ?? "").trim();
-    const exam = MG_FACT_TYPES.has(invType)
-      ? crossExamineRow({
-          productText: d.name,
-          inventoryType: invType,
-          thcColumn: d.total_thc_pct ?? d.thc_pct,
-          cbdColumn: d.cbd_pct,
-        })
-      : null;
+    const exam = examineDraftFacts(d);
     if (exam) {
       if (exam.needsReview) {
         diagnostics.push({

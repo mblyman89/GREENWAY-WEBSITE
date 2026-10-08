@@ -173,8 +173,10 @@ describe("R23 A. pure cores", () => {
   it("approved-row-core self-tests: exact count, registered at that floor", () => {
     const r = __runApprovedRowCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(11);
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("approved-row-core", __runApprovedRowCoreTests(), 11);');
+    // R27 pin update (on purpose): 11 -> 15 - the truthful leads for a
+    // product kept off the menu (withheld) or held for a fact check.
+    expect(r.passed).toBe(15);
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("approved-row-core", __runApprovedRowCoreTests(), 15);');
   });
   it("only THIS product's pending facts show, minus what a person already answered", () => {
     const rows: WaitingSuggestionRow[] = [

@@ -113,12 +113,13 @@ afterEach(() => {
 // === 1. Pure core =============================================================
 describe("S30 pure core", () => {
   it("self-tests pass with the exact count (a deleted check turns this red)", () => {
-    expect(__runIntakeFactReviewCoreTests()).toEqual({ passed: 136, failed: 0 });
+    // R27-1: +36 (owner facts, partial publish, withheld flags, saved facts, live mirror)
+    expect(__runIntakeFactReviewCoreTests()).toEqual({ passed: 176, failed: 0 });
   });
   it("is registered in the pure runner with its measured floor", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toContain('import { __runIntakeFactReviewCoreTests } from "../../src/lib/pos/intake-fact-review-core";');
-    expect(runner).toContain('assertRan("intake-fact-review-core", __runIntakeFactReviewCoreTests(), 136);');
+    expect(runner).toContain('assertRan("intake-fact-review-core", __runIntakeFactReviewCoreTests(), 176);');
   });
   it("S30.4 hold note is the bible's new copy, word for word", () => {
     expect(factHoldNote(2)).toBe(
@@ -443,7 +444,9 @@ describe("S30.5 staging executor (real staging, fake network)", () => {
     expect(variantInserts().filter((v) => String(v.source_variant_id ?? "").startsWith(KEY))).toHaveLength(0);
   });
 
-  it("no flag at all -> ZERO decision reads (the read is only paid when needed)", async () => {
+  // R27: the decisions are now read on every staging (one bounded read) so
+  // facts typed on the Product facts panel reach a card no flag asked about.
+  it("no flag at all -> ONE decision read, published straight through", async () => {
     world();
     net.route = ((base) => (r: Req) => {
       if (table(r) === "catalog_product_drafts") {
@@ -456,7 +459,7 @@ describe("S30.5 staging executor (real staging, fake network)", () => {
     const out = await stage();
     expect(out.staged).toBe(true);
     expect(diags().some((d) => d.code === FACT_FLAG_CODE)).toBe(false);
-    expect(net.reqs.filter((r) => table(r) === "pos_fact_reviews")).toHaveLength(0);
+    expect(net.reqs.filter((r) => table(r) === "pos_fact_reviews")).toHaveLength(1);
     expect(rpcs().length).toBeGreaterThan(0); // published straight through
   });
 });
@@ -553,7 +556,7 @@ describe("S30 resolveIntakeFactReview (server action)", () => {
 
 // === 6. Loader + page wiring ==================================================
 describe("S30 Onboarding loader + inline controls", () => {
-  it("reads ONE newest staged intake version per delivery with a named JSON-path select", async () => {
+  it("reads ONE newest intake version (any status - R27) per delivery with a named JSON-path select", async () => {
     const { loadOpenIntakeFactFlags, STAGED_FACT_ROW_SELECT } = await import("@/lib/pos/intake-fact-review-server");
     expect(STAGED_FACT_ROW_SELECT).not.toContain("*");
     const out = await loadOpenIntakeFactFlags([{ manifest_id: M }, { manifest_id: M.toUpperCase() }, { manifest_id: "junk" }, { manifest_id: null }]);
@@ -562,7 +565,8 @@ describe("S30 Onboarding loader + inline controls", () => {
     expect(reads).toHaveLength(1); // de-duplicated, junk dropped
     const q = reads[0].url.searchParams;
     expect(q.get("import_id")).toBe("is.null");
-    expect(q.get("status")).toBe("eq.staged");
+    // R27: 0236 archives older staged versions on ANY publish - no status filter.
+    expect(q.get("status")).toBeNull();
     expect(q.get("summary_json->>manifest_id")).toBe(`eq.${M}`);
     expect(q.get("limit")).toBe("1");
     expect(q.get("order")).toBe("created_at.desc,id.desc");
@@ -623,6 +627,7 @@ describe("S30 Onboarding loader + inline controls", () => {
       productName: "Kelly's Gummies",
       reasons: ["The name says 100mg THC but the potency columns are empty"],
       signature: "v1-3-0a1b2c3d",
+      withheld: false,
     };
     const html = renderToStaticMarkup(createElement(IntakeFactReviewPanel, { flag, draftId: DRAFT_ID, returnManifest: M }));
     expect(html).toContain(FACT_REVIEW_HEADING);

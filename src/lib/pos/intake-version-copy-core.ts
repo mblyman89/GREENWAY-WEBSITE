@@ -64,6 +64,11 @@ export type PersistedPublishOutcome = {
   error?: string;
   /** Present only on held_for_fact_review: how many products were flagged. */
   held_count?: number;
+  /**
+   * R27-1: present only when the update went ahead WITHOUT some flagged
+   * products (each kept off the menu until its facts are set).
+   */
+  withheld_count?: number;
 };
 
 export type PersistedManifestHeader = {
@@ -124,11 +129,13 @@ export function buildManifestHeader(
 export function initialPublishOutcome(
   heldCount: number,
   atIso: string,
-  opts: { cutover?: boolean } = {},
+  opts: { cutover?: boolean; withheld?: number } = {},
 ): PersistedPublishOutcome {
   if (heldCount > 0) return { state: "held_for_fact_review", at: atIso, held_count: heldCount };
-  if (opts.cutover === true) return { state: "held_for_cutover", at: atIso };
-  return { state: "auto_publish_attempted", at: atIso };
+  const w = typeof opts.withheld === "number" && Number.isFinite(opts.withheld) && opts.withheld > 0 ? Math.floor(opts.withheld) : 0;
+  const withheld = w > 0 ? { withheld_count: w } : {};
+  if (opts.cutover === true) return { state: "held_for_cutover", at: atIso, ...withheld };
+  return { state: "auto_publish_attempted", at: atIso, ...withheld };
 }
 
 /** The outcome written after an RPC failure (message trimmed, never empty). */
@@ -232,6 +239,7 @@ export function parseIntakeSummary(summaryJson: unknown): ParsedIntakeSummary {
       at: typeof o.at === "string" ? o.at : "",
       ...(typeof o.error === "string" ? { error: o.error } : {}),
       ...(typeof o.held_count === "number" ? { held_count: num(o.held_count) } : {}),
+      ...(typeof o.withheld_count === "number" && num(o.withheld_count) > 0 ? { withheld_count: num(o.withheld_count) } : {}),
     };
   }
   return {
@@ -266,6 +274,101 @@ export function heldProductsFrom(diagnostics: Diagnostic[]): HeldProduct[] {
     out.push({ name, reasons });
   }
   return out;
+}
+
+/**
+ * R27: the products a PUBLISHED update kept off the menu alone (their flags
+ * carry context.withheld = true, fact-withhold-core markWithheld), with the
+ * draft each one is fixed on. A flag answered since then is no longer a
+ * fact_extraction_review diagnostic on a newer re-stage; on THIS stored row
+ * it stays listed - the caller decides freshness (the newest version wins).
+ */
+export type WithheldProduct = HeldProduct & { draftId: string | null; key: string | null };
+
+export function withheldProductsFrom(diagnostics: Diagnostic[]): WithheldProduct[] {
+  const out: WithheldProduct[] = [];
+  for (const d of diagnostics) {
+    if (!isObj(d) || d.code !== "fact_extraction_review") continue;
+    const ctx = isObj(d.context) ? d.context : {};
+    if (ctx.withheld !== true) continue;
+    const [p] = heldProductsFrom([d]);
+    out.push({ ...p, draftId: clean(ctx.draft_id), key: clean(ctx.pos_product_key) });
+  }
+  return out;
+}
+
+/**
+ * R27: every product currently kept off the menu, across deliveries. Only the
+ * NEWEST intake version of each delivery counts (a re-stage after a fix
+ * supersedes the older copy, so a product whose facts were set drops off this
+ * list by itself); archived rows count too, because another delivery's
+ * publish archives a version without settling its products.
+ */
+export type KeptOffProduct = WithheldProduct & { manifestId: string; versionId: string; source: string | null };
+
+export function keptOffFromVersions(
+  versions: readonly { id: string; import_id: string | null; created_at: string | null; summary_json: unknown }[],
+): KeptOffProduct[] {
+  const newest = new Map<string, { id: string; at: number; summary: unknown }>();
+  for (const v of versions) {
+    if (!v || v.import_id !== null) continue;
+    const parsed = parseIntakeSummary(v.summary_json);
+    const m = (parsed.manifest?.id ?? parsed.manifestId ?? "").toLowerCase();
+    if (!m) continue;
+    const at = Date.parse(String(v.created_at ?? ""));
+    if (Number.isNaN(at)) continue;
+    const prev = newest.get(m);
+    if (!prev || at > prev.at) newest.set(m, { id: v.id, at, summary: v.summary_json });
+  }
+  const out: KeptOffProduct[] = [];
+  for (const [m, v] of newest) {
+    const parsed = parseIntakeSummary(v.summary);
+    for (const p of withheldProductsFrom(parsed.diagnostics)) {
+      out.push({ ...p, manifestId: m, versionId: v.id, source: describeSource(parsed.manifest) });
+    }
+  }
+  return out;
+}
+
+/**
+ * R27: "Publish the ready products" on a WHOLE-delivery fact hold (an update
+ * held before R27, or held because nothing else was new at the time). Only a
+ * staged, receiving-origin, fact-held version with a recorded delivery is
+ * eligible - the action re-stages THAT delivery, which now withholds just the
+ * flagged products.
+ */
+export function publishReadyEligible(v: {
+  status: string | null;
+  import_id: string | null;
+  summary_json: unknown;
+}): string | null {
+  if (!v || v.status !== "staged" || v.import_id !== null) return null;
+  const parsed = parseIntakeSummary(v.summary_json);
+  if (parsed.outcome?.state !== "held_for_fact_review") return null;
+  const m = (parsed.manifest?.id ?? parsed.manifestId ?? "").trim().toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(m) ? m : null;
+}
+
+/** The Publish page notice after "Publish the ready products". */
+export function publishReadyNote(outcome: {
+  staged: boolean;
+  published: boolean;
+  reason?: string;
+  withheld?: number;
+} | null): string {
+  if (!outcome) return "Nothing changed \u2014 the delivery could not be rebuilt. Try again.";
+  const kept = outcome.withheld ?? 0;
+  if (outcome.published) {
+    return kept > 0
+      ? `Published. ${plural(kept, "product stays", "products stay")} off the menu and the register until ${kept === 1 ? "its" : "their"} facts are set on Product Onboarding; everything else from this delivery is live.`
+      : "Published. Every product on this delivery is live.";
+  }
+  if (outcome.reason === "held-for-fact-review") {
+    return "Still waiting: every new product on this delivery has a fact that needs a second look, so there is nothing else to publish yet. Set the facts on Product Onboarding.";
+  }
+  if (outcome.reason === "held-for-cutover") return "Rebuilt \u2014 it is now waiting only for the one-time Cultivera menu to be published first.";
+  if (!outcome.staged) return "Nothing new to publish from this delivery \u2014 its products are already live.";
+  return "Rebuilt, but the automatic publish didn\u2019t finish. Press Publish on the update below.";
 }
 
 /** Count of approved drafts already on the menu under their POS card. */
@@ -374,6 +477,18 @@ export function describeIntakeVersion(v: IntakeVersionInput): IntakeVersionDescr
 
   if (v.status === "published") {
     if (state === "auto_publish_attempted") {
+      // R27: say plainly when products were kept off this update alone.
+      const kept = s.outcome?.withheld_count ?? withheldProductsFrom(s.diagnostics).length;
+      if (kept > 0) {
+        const names = withheldProductsFrom(s.diagnostics).slice(0, HELD_NAMED_MAX).map((p) => p.name);
+        return {
+          ...base,
+          tone: "live",
+          headline: `Published automatically${whenPart} \u00b7 ${plural(kept, "product", "products")} kept off until ${kept === 1 ? "its" : "their"} facts are set`,
+          detail: names.length > 0 ? `Kept off the menu and the register: ${names.join("; ")}${kept > names.length ? `; and ${kept - names.length} more` : ""}.` : null,
+          action: "Set the facts on Product Onboarding \u2192 Approved; each product goes live by itself.",
+        };
+      }
       return { ...base, tone: "live", headline: `Published automatically${whenPart}`, detail: null, action: null };
     }
     if (state === "held_for_fact_review") {
@@ -640,6 +755,56 @@ export function __runIntakeVersionCopyCoreTests(): { passed: number; failed: num
   ok(c1.tone === "waiting" && c1.headline === "Waiting: publish the Cultivera menu first", "cutover staged copy");
   ok((c1.detail ?? "").startsWith("Your one-time Cultivera menu is uploaded but not published yet."), "S18.4 copy on the card");
   ok(describeIntakeVersion(row("published", cut, t)).headline.startsWith("Published by hand"), "cutover published copy");
+
+  // R27: published with products kept off alone.
+  const wo = initialPublishOutcome(0, t, { withheld: 2 });
+  ok(wo.state === "auto_publish_attempted" && wo.withheld_count === 2, "withheld count persisted on auto publish");
+  ok(initialPublishOutcome(0, t, { withheld: 0 }).withheld_count === undefined, "zero withheld not written");
+  ok(initialPublishOutcome(0, t, { withheld: Number.NaN }).withheld_count === undefined, "NaN withheld not written");
+  ok(initialPublishOutcome(0, t, { withheld: 2.7 }).withheld_count === 2, "withheld floored");
+  ok(initialPublishOutcome(0, t, { cutover: true, withheld: 1 }).withheld_count === 1, "withheld kept on a cutover hold");
+  ok(initialPublishOutcome(3, t, { withheld: 1 }).withheld_count === undefined, "a whole-delivery hold has no withheld count");
+  ok(parseIntakeSummary({ publish_outcome: wo }).outcome?.withheld_count === 2, "withheld count parses");
+  ok(parseIntakeSummary({ publish_outcome: { state: "auto_publish_attempted", at: t, withheld_count: -1 } }).outcome?.withheld_count === undefined, "negative ignored");
+  const wflag = (name: string, draft: string) => ({ severity: "warning", code: "fact_extraction_review", message: "m", context: { displayName: name, draft_id: draft, pos_product_key: `K-${draft}`, reasons: ["r"], withheld: true } });
+  const wDiags = [wflag("Honeydew", "d1"), wflag("Raspberry", "d2"), flag("NotWithheld", ["r"])];
+  const wp = withheldProductsFrom(wDiags as Diagnostic[]);
+  ok(wp.length === 2 && wp[0].name === "Honeydew" && wp[0].draftId === "d1" && wp[0].key === "K-d1", "withheld products listed with draft + key");
+  const dw = describeIntakeVersion({ status: "published", published_at: t, created_at: t, summary_json: { diagnostics: wDiags, publish_outcome: wo } });
+  ok(dw.tone === "live" && dw.headline.includes("2 products kept off until their facts are set"), "published-with-withheld headline: " + dw.headline);
+  ok((dw.detail ?? "").includes("Honeydew; Raspberry"), "names the withheld products");
+  ok((dw.action ?? "").includes("Product Onboarding"), "says where to fix");
+  const dw1 = describeIntakeVersion({ status: "published", published_at: t, created_at: t, summary_json: { diagnostics: [wflag("Honeydew", "d1")], publish_outcome: initialPublishOutcome(0, t, { withheld: 1 }) } });
+  ok(dw1.headline.includes("1 product kept off until its facts are set"), "singular withheld");
+  ok(describeIntakeVersion(row("published", initialPublishOutcome(0, t), t)).action === null, "nothing withheld -> plain published");
+  const MX = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const MY = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const ver = (id: string, m: string, at: string, diagnostics: unknown[], import_id: string | null = null) => ({
+    id, import_id, created_at: at, summary_json: { manifest_id: m, diagnostics, publish_outcome: wo },
+  });
+  const ko = keptOffFromVersions([
+    ver("old", MX, "2026-03-01T00:00:00Z", [wflag("Stale", "d9")]),
+    ver("new", MX.toUpperCase(), "2026-03-02T00:00:00Z", [wflag("Honeydew", "d1")]),
+    ver("y", MY, "2026-03-01T00:00:00Z", [wflag("Sour", "d3"), flag("Held", ["r"])]),
+    ver("pos", MY, "2026-03-05T00:00:00Z", [wflag("Pos", "d4")], "imp-1"),
+    ver("bad", MY, "garbage", [wflag("Bad", "d5")]),
+  ]);
+  ok(ko.map((k) => `${k.versionId}:${k.name}`).sort().join(",") === "new:Honeydew,y:Sour", "kept off = newest intake version per delivery: " + JSON.stringify(ko.map((k) => k.name)));
+  ok(ko.find((k) => k.name === "Honeydew")?.manifestId === MX, "manifest lower-cased");
+  ok(keptOffFromVersions([ver("fixed", MX, "2026-03-03T00:00:00Z", []), ver("new", MX, "2026-03-02T00:00:00Z", [wflag("Honeydew", "d1")])]).length === 0, "a newer re-stage without the flag clears it");
+  const heldV = { status: "staged", import_id: null, summary_json: { manifest_id: MX, publish_outcome: h } };
+  ok(publishReadyEligible(heldV) === MX, "held staged receiving version eligible");
+  ok(publishReadyEligible({ ...heldV, status: "published" }) === null, "published not eligible");
+  ok(publishReadyEligible({ ...heldV, import_id: "imp" }) === null, "POS import not eligible");
+  ok(publishReadyEligible({ ...heldV, summary_json: { manifest_id: MX, publish_outcome: f } }) === null, "a failed publish is not a fact hold");
+  ok(publishReadyEligible({ ...heldV, summary_json: { manifest_id: "junk", publish_outcome: h } }) === null, "junk manifest refused");
+  ok(publishReadyNote({ staged: true, published: true, withheld: 3 }).startsWith("Published. 3 products stay off"), "ready note partial");
+  ok(publishReadyNote({ staged: true, published: true, withheld: 1 }).includes("1 product stays off the menu and the register until its facts"), "ready note singular");
+  ok(publishReadyNote({ staged: true, published: true }) === "Published. Every product on this delivery is live.", "ready note all");
+  ok(publishReadyNote({ staged: true, published: false, reason: "held-for-fact-review" }).startsWith("Still waiting"), "ready note still held");
+  ok(publishReadyNote({ staged: false, published: false, reason: "no-new-items" }).startsWith("Nothing new"), "ready note nothing new");
+  ok(publishReadyNote({ staged: true, published: false }).includes("didn\u2019t finish"), "ready note publish failed");
+  ok(publishReadyNote(null).startsWith("Nothing changed"), "ready note null");
 
   return { passed, failed };
 }
