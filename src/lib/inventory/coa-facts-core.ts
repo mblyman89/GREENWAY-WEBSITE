@@ -517,6 +517,31 @@ const TERPENE_TO_KB: Record<string, string> = {
   pulegone: "pulegone",
   guaiol: "guaiol",
 };
+/**
+ * R30: a terpene name (lab spelling, or a web lookup's "Beta Myrcene" /
+ * "β-caryophyllene") -> the KB terpene slug, or null when it is not one the
+ * KB knows (never invented). A name that IS a KB slug maps to itself.
+ */
+export function kbTerpeneSlug(name: unknown): string | null {
+  if (typeof name !== "string") return null;
+  const n = name
+    .trim()
+    .toLowerCase()
+    .replace(/β/g, "beta-")
+    .replace(/α/g, "alpha-")
+    .replace(/δ/g, "delta-")
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    // Common lab / model abbreviations: "a-pinene", "b-caryophyllene".
+    .replace(/^a-(?=[a-z]{3})/, "alpha-")
+    .replace(/^b-(?=[a-z]{3})/, "beta-");
+  if (!n) return null;
+  if (Object.prototype.hasOwnProperty.call(TERPENE_TO_KB, n)) return TERPENE_TO_KB[n];
+  const slugs = new Set(Object.values(TERPENE_TO_KB));
+  return slugs.has(n) ? n : null;
+}
+
 const CANNABINOID_TO_KB: Partial<Record<CannabinoidKey, string>> = {
   "d9-thc": "thc",
   thca: "thca",
@@ -758,5 +783,12 @@ export function __runCoaFactsCoreTests(fixtures: Record<string, string>): { pass
   ok(u.next.join(",") === "Myrcene,pinene,limonene,linalool" && u.added.join(",") === "limonene,linalool", "unionKbList fill-only");
   ok(readStoredCoaExtract(JSON.parse(JSON.stringify(extractFor(12))))?.status === "ok", "a stored extract reads back");
   ok(readStoredCoaExtract({ version: 99 }) === null && readStoredCoaExtract(null) === null && readStoredCoaExtract([]) === null, "foreign json refused");
+  // R30: kbTerpeneSlug - Gemini / lab terpene names -> the strain library vocabulary.
+  for (const [inp, want] of [
+    ["Beta Myrcene", "myrcene"], ["β-caryophyllene", "caryophyllene"], ["b-Caryophyllene", "caryophyllene"],
+    ["a-Pinene", "pinene"], ["alpha_pinene", "pinene"], ["d-Limonene", "limonene"], ["Limonene", "limonene"],
+    ["trans-Nerolidol", "nerolidol"], ["myrcene", "myrcene"], [" Terpinolene ", "terpinolene"],
+  ] as const) ok(kbTerpeneSlug(inp) === want, `kbTerpeneSlug(${inp}) -> ${want}`);
+  for (const inp of ["alpha-bulnesene", "b-", "", "   ", "thca", null, 42, undefined]) ok(kbTerpeneSlug(inp) === null, `kbTerpeneSlug(${String(inp)}) -> null`);
   return { passed, failed };
 }

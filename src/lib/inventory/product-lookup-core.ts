@@ -38,6 +38,7 @@ import {
   type LookupFactsFields,
 } from "@/lib/inventory/lookup-facts-core";
 import type { GreenwayStrainType } from "@/lib/leafly/types";
+import { kbTerpeneSlug } from "@/lib/inventory/coa-facts-core";
 
 /** Canonical strain-type values the picker + KB understand. */
 export const LOOKUP_STRAIN_TYPES: readonly GreenwayStrainType[] = [
@@ -96,6 +97,8 @@ export type RawProductLookup = {
   size?: string;
   /** Candidate PRODUCT image URLs from the web (reviewable; never auto-imported). */
   image_candidates?: string[];
+  /** R30: dominant terpene names the web reports (S06 terpenes field). */
+  terpenes?: string[];
 };
 
 /** The sanitized, UI-ready lookup result. */
@@ -153,6 +156,13 @@ export type ProductLookupResult = {
   size: string;
   /** Clean, deduped, http(s)-only candidate product image URLs (never .svg). */
   imageCandidates: string[];
+  /**
+   * R30: the web's terpene names mapped to the strain library vocabulary
+   * (coa-facts-core kbTerpeneSlug: "Beta Myrcene" -> "myrcene"), strongest
+   * first as reported, de-duplicated. Names the library does not list are
+   * dropped (never guessed into a slug).
+   */
+  terpenes: string[];
   /**
    * True when there is enrichment-worthy content to stage (a description,
    * short description, or at least one image candidate). Distinct from
@@ -452,6 +462,7 @@ export function postProcessLookup(
   const potencyRatio = coercePotencyRatio(raw?.potency_ratio);
   const size = String(raw?.size ?? "").trim().slice(0, 40);
   const imageCandidates = cleanImageCandidates(raw?.image_candidates);
+  const terpenes = cleanTerpenes(raw?.terpenes, extraBanned);
 
   // Autofill the strain type only when it is real AND clears the 90% bar.
   const autofillStrainType =
@@ -513,7 +524,22 @@ export function postProcessLookup(
     size,
     imageCandidates,
     hasEnrichmentDraft,
+    terpenes,
   };
+}
+
+/** R30: web terpene names -> KB slugs (compliance-linted, de-duplicated, max 12). */
+export function cleanTerpenes(input: unknown, extraBanned: ExtraBannedPhrase[] = []): string[] {
+  if (!Array.isArray(input)) return [];
+  const out: string[] = [];
+  for (const raw of input) {
+    const name = typeof raw === "string" ? raw : raw && typeof raw === "object" && typeof (raw as { name?: unknown }).name === "string" ? (raw as { name: string }).name : "";
+    if (!name.trim() || lintCopy(name, extraBanned).disposition === "block") continue;
+    const slug = kbTerpeneSlug(name);
+    if (slug && !out.includes(slug)) out.push(slug);
+    if (out.length >= 12) break;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -845,6 +871,16 @@ export function __runProductLookupTests(): { passed: number } {
   });
   assert(medDesc.description === "", "medical description dropped");
   assert(medDesc.hasEnrichmentDraft === false, "no enrichment draft when only medical copy");
+
+  // R30: web terpenes -> KB slugs (lint + vocabulary, never guessed).
+  assert(JSON.stringify(cleanTerpenes(["Myrcene", "β-Caryophyllene", { name: "a-Pinene" }, "myrcene", "unobtainium", 7, ""])) === '["myrcene","caryophyllene","pinene"]', "R30 cleanTerpenes maps + dedupes: " + JSON.stringify(cleanTerpenes(["Myrcene", "β-Caryophyllene", { name: "a-Pinene" }])));
+  assert(JSON.stringify(cleanTerpenes("myrcene")) === "[]" && JSON.stringify(cleanTerpenes(null)) === "[]", "R30 cleanTerpenes non-array -> []");
+  assert(cleanTerpenes(Array.from({ length: 30 }, () => ["myrcene", "limonene", "linalool", "pinene", "humulene", "terpinolene", "ocimene", "bisabolol", "caryophyllene", "nerolidol", "geraniol", "camphene", "eucalyptol", "guaiol"]).flat()).length <= 12, "R30 cleanTerpenes caps at 12");
+  assert(cleanTerpenes(["myrcene cures cancer", "limonene"]).join() === "limonene", "R30 cleanTerpenes drops a blocked claim: " + cleanTerpenes(["myrcene cures cancer", "limonene"]).join());
+  const tp = postProcessLookup({ strain_type: "unknown", strain_type_confidence: 0, summary: "", effects: [], aroma_notes: [], flavor_notes: [], lineage: "", found: true, terpenes: ["Limonene", "Linalool"] });
+  assert(JSON.stringify(tp.terpenes) === '["limonene","linalool"]', "R30 postProcessLookup carries terpenes");
+  const tpNone = postProcessLookup({ strain_type: "unknown", strain_type_confidence: 0, summary: "", effects: [], aroma_notes: [], flavor_notes: [], lineage: "", found: true });
+  assert(JSON.stringify(tpNone.terpenes) === "[]", "R30 absent terpenes -> []");
 
   return { passed };
 }

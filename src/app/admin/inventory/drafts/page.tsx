@@ -162,6 +162,9 @@ import {
 } from "@/lib/pos/intake-fact-review-core";
 import { IntakeFactReviewPanel } from "./IntakeFactReviewPanel";
 import { ProductFactsPanel } from "./ProductFactsPanel";
+import { loadLabViewsForDrafts } from "@/lib/catalog/lab-facts-attach";
+import { labPanelView } from "@/lib/catalog/lab-facts-attach-core";
+import { strainSlug } from "@/lib/catalog/slug-core";
 // R19 S13: "Look up all N products on this manifest" (server-side batch).
 import { lookupJobsOn, loadManifestLookup } from "@/lib/catalog/lookup-job-server";
 import { attachFactsV2Enabled } from "@/lib/catalog/fact-attach-policy-server";
@@ -456,7 +459,7 @@ export default async function CatalogDraftsPage({
   // the approved tab recalls memory too, so its opened row shows the facts.
   const rowsOpen = view === "draft" || view === "approved";
   const waitingKeys = new Map(drafts.map((d) => [d.id, waitingKeyForDraft(d)] as const));
-  const [{ suggestions: strainSuggestions, evidence: strainEvidence, sizeLabels: strainSizeLabels }, shadowSummary, productMemories, waitingRead] = await Promise.all([
+  const [{ suggestions: strainSuggestions, evidence: strainEvidence, sizeLabels: strainSizeLabels }, shadowSummary, productMemories, waitingRead, labViews] = await Promise.all([
     loadStrainTypeSignals(drafts),
     attachRing === 0 ? Promise.resolve(null) : loadShadowSummary(),
     kbFirst && rowsOpen
@@ -472,6 +475,9 @@ export default async function CatalogDraftsPage({
         )
       : Promise.resolve(null),
     rowsOpen ? loadWaitingSuggestions(Array.from(waitingKeys.values())) : Promise.resolve({ ok: true, rows: [] }),
+    // R30: each row's stored lab-certificate read (terpenes chip + the
+    // Product facts panel's lab block) and the strain library's terpenes.
+    rowsOpen ? loadLabViewsForDrafts(drafts) : Promise.resolve(null),
   ]);
   const shadowFooter = shadowFooterCopy(shadowSummary, attachRing);
 
@@ -1007,6 +1013,9 @@ export default async function CatalogDraftsPage({
                         totalThcPct: d.total_thc_pct,
                         thcPct: d.thc_pct,
                         labResultId: d.lab_result_id,
+                        coaTerpenes: labViews?.byDraft.get(d.id)?.coaTerpenes ?? null,
+                        coaRead: labViews?.byDraft.get(d.id)?.coaRead ?? false,
+                        strainTerpenes: labViews?.strainTerpenes.get(strainSlug(d.strain_name)) ?? null,
                       }))
                     : null;
                   const identity = v2Row && rowsOpen
@@ -1624,6 +1633,10 @@ export default async function CatalogDraftsPage({
                                   productKey={d.pos_product_key}
                                   saved={savedFacts.saved.get(savedFactsMapKey(d.manifest_id, d.pos_product_key)) ?? null}
                                   readOk={savedFacts.ok && savedFacts.migrated}
+                                  lab={labPanelView(
+                                    labViews?.byDraft.get(d.id)?.plan ?? null,
+                                    (savedFacts.saved.get(savedFactsMapKey(d.manifest_id, d.pos_product_key))?.facts as Record<string, unknown> | undefined) ?? null,
+                                  )}
                                   returnManifest={focus.manifestId}
                                   returnView={view}
                                 />

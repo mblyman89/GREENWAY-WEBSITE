@@ -939,6 +939,7 @@ import { __runCoaFactsCoreTests } from "../../src/lib/inventory/coa-facts-core";
 import { __runCoaExtractCoreTests } from "../../src/lib/inventory/coa-extract-core";
 import { __runCoaPanelCoreTests } from "../../src/lib/inventory/coa-panel-core";
 import { r28MakeExtract } from "../r28/coa-fixture-extract";
+import { __runLabFactsAttachCoreTests } from "../../src/lib/catalog/lab-facts-attach-core";
 import { __runCannabinoidProfileCoreTests } from "../../src/lib/menu/cannabinoid-profile-core";
 import { __runWciaLabJsonCoreTests } from "../../src/lib/inventory/wcia-lab-json-core";
 
@@ -1988,12 +1989,12 @@ __runLiquidVolumeTests();
   // 90->auto, missing->unknown, invalid values never auto, citations mapped
   // to a field only when unambiguous, v1 bridge, display + F-018 kept-confidence.
   // Measured 115.
-  assertRan("lookup-facts-core", __runLookupFactsCoreTests(), 113);
+  assertRan("lookup-facts-core", __runLookupFactsCoreTests(), 117);
   // S08 attached facts: FACT_SOURCES mirrors the 0235 CHECK, 0-100 -> 0..1
   // with no clamping, the provenance row builder mirrors every 0235 CHECK,
   // latest-per-field recall, and the "0235 not applied" detector is narrow.
   // Measured 76.
-  assertRan("attach-facts-core", __runAttachFactsCoreTests(), 89);
+  assertRan("attach-facts-core", __runAttachFactsCoreTests(), 98);
   assertRan("approve-attach-core", __runApproveAttachCoreTests(), 40);
   assertRan("slug-core", __runSlugCoreTests(), 30);
   // S10 fact-attach policy: FIELD_POLICY covers every lookup field, the
@@ -2002,7 +2003,7 @@ __runLiquidVolumeTests();
   assertRan("fact-attach-policy-core", __runFactAttachPolicyCoreTests(), 100);
   // SLICE S07: the single write door planner (attachProductFacts).
   // R23: +19 for the human-confirmed attach (case 26). Floor = the exact count.
-  assertRan("attach-plan-core", __runAttachPlanCoreTests(), 147);
+  assertRan("attach-plan-core", __runAttachPlanCoreTests(), 178);
   assertRan("onboarding-list-core", __runOnboardingListCoreTests(), 77);
   // S30 receiving fact review: flag signature, decision partition (stale
   // signature re-asks), fix/reject applied to the snapshot, the shared form
@@ -2018,7 +2019,7 @@ __runLiquidVolumeTests();
   // flag is on, no refresh, and memory is complete; a memory answer goes
   // through the same compliance gate and never decides strain type. Measured 109.
   assertRan("fact-memory-core", __runFactMemoryCoreTests(), 109);
-  assertRan("fact-chips-core", __runFactChipsCoreTests(), 119);
+  assertRan("fact-chips-core", __runFactChipsCoreTests(), 143);
   // R13a: the waiting-update link goes where the reason is fixed (fact hold
   // -> the delivery's flagged products, cutover -> cutover, else the
   // update's page), superseded rows are never "waiting", and the flagged
@@ -2078,9 +2079,10 @@ __runLiquidVolumeTests();
   assertRan("wa-total-cannabinoids-core", __runWaTotalCannabinoidsTests(), 19); // R27-1: WAC 314-55-102 total THC/CBD
   assertRan("wcia-lab-json-core", __runWciaLabJsonCoreTests(r28CoaFixtures(".wcia.json")), 99); // R28: the lab JSON behind lab_result_link
   assertRan("coa-pdf-text-core", __runCoaPdfTextCoreTests(r28CoaStems()), 292); // R28: COA PDF text (unpdf + layout + LlamaParse markdown)
-  assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 179); // R28: identity, agreement, edible facts, profile
+  assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 197); // R28: identity, agreement, edible facts, profile
   assertRan("coa-extract-core", __runCoaExtractCoreTests(r28CoaStems()), 113); // R28: allow-list, best reading, LlamaParse gate, KB fill
   assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 99); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors
+  assertRan("lab-facts-attach-core", __runLabFactsAttachCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 102); // R30: first-pass lab attach + strain terpene learning
   assertRan("cannabinoid-profile-core", __runCannabinoidProfileCoreTests(), 61); // R29: ratio slot, package totals, serving summary, minor merge, ratio-vs-mg
   console.log("ALL PURE SELF-TESTS PASSED");
 }

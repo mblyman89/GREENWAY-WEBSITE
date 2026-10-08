@@ -113,9 +113,9 @@ describe("S08 pure core", () => {
   it("embedded self-tests pass and are registered with a floor", () => {
     const r = __runAttachFactsCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(89);
+    expect(r.passed).toBe(98);
     expect(read("scripts/compliance/run-pure-selftests.ts")).toMatch(
-      /assertRan\("attach-facts-core", __runAttachFactsCoreTests\(\), 89\)/, // S11 raised the floor (section 6: the draft merge)
+      /assertRan\("attach-facts-core", __runAttachFactsCoreTests\(\), 98\)/, // S11 raised the floor (section 6: the draft merge); R30 -> 98 (lab survivorship: keptLab)
     );
   });
 });
@@ -360,9 +360,28 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
       // (who attached each field, how sure). Read-only; pinned by the S23 test below.
       .filter((f) => !f.endsWith(path.join("enrichment", "gap-vector-core.ts")))
       .filter((f) => !f.endsWith(path.join("enrichment", "gap-vector-server.ts")))
+      // R30: the first-pass lab attach writes the draft's facts + fact history
+      // through the core's constants only. Pinned by the R30 test below.
+      .filter((f) => !f.endsWith(path.join("catalog", "lab-facts-attach.ts")))
+      .filter((f) => !f.endsWith(path.join("catalog", "lab-facts-attach-core.ts")))
       .filter((f) => /attached_facts|product_fact_provenance/.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(ROOT, f));
     expect(hits).toEqual([]);
+  });
+
+  it("R30: the lab attach names the 0235 table/columns only through the core constants (never a literal), tolerates a missing 0235", () => {
+    const server = readFileSync(path.join(ROOT, "src/lib/catalog/lab-facts-attach.ts"), "utf8");
+    const core = readFileSync(path.join(ROOT, "src/lib/catalog/lab-facts-attach-core.ts"), "utf8");
+    const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    expect(server).toContain(".from(PROVENANCE_TABLE).insert(");
+    expect(server).toContain("${DRAFT_FACT_SELECT}");
+    expect(server).toContain("isMissingAttachedFactsError(");
+    for (const src of [server, core]) {
+      expect(code(src)).not.toMatch(/["'`]product_fact_provenance["'`]/);
+      expect(code(src)).not.toMatch(/["'`]attached_facts(_provenance)?["'`]/);
+    }
+    // The pure core never touches the database.
+    expect(code(core)).not.toMatch(/\.(from|insert|update|upsert|delete|rpc)\(/);
   });
 
   it("S12: the golden record only READS attached_facts (one named-column select; no write, no provenance)", () => {

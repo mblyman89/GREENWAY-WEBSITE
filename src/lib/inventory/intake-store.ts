@@ -39,6 +39,8 @@ import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
 import { extractCoasForManifest } from "@/lib/inventory/coa-extract";
 import { COA_EXTRACT_EVENT, coaExtractRunNote, isMissingColumnError } from "@/lib/inventory/coa-extract-core";
+import { attachLabFactsToManifestDrafts } from "@/lib/catalog/lab-facts-attach";
+import { LAB_FACTS_ATTACH_EVENT, labFactsAttachNote } from "@/lib/catalog/lab-facts-attach-core";
 import { promoteManifestToKb } from "@/lib/inventory/manifest-kb-bridge";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import {
@@ -1556,6 +1558,20 @@ export async function finalizeManifestDispositions(
       await linkKbProductsToDrafts(manifestId, draftsRes.value.lotIdentities, actorId, {
         restockHints: draftsRes.value.restockHints ?? 0,
       });
+    }
+    // R30: the FIRST-PASS lab attach. The certificate read (coasRes) and the
+    // draft seed (draftsRes) ran concurrently above, so this runs only after
+    // BOTH settled: it marries every stored certificate fact (terpenes,
+    // potency, cannabinoids, serving mg) to the manifest's onboarding rows and
+    // teaches the strain library the flower terpenes (fill-only). Never
+    // throws; the outcome lands on the manifest timeline.
+    if (draftsRes.status === "fulfilled") {
+      const labRun = await attachLabFactsToManifestDrafts(manifestId, actorId).catch((reason: unknown) => {
+        console.error("[intake-store] attachLabFactsToManifestDrafts failed:", reason);
+        return null;
+      });
+      const labNote = labRun ? labFactsAttachNote(labRun) : null;
+      if (labNote) await logManifestEvent(manifestId, LAB_FACTS_ATTACH_EVENT, labNote, actorId);
     }
     // Slice H15e: remember this vendor's usual carrier/driver/vehicle.
     if (transportRes.status === "rejected") {

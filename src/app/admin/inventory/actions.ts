@@ -1003,6 +1003,19 @@ export async function rereadLotCoaAction(lotId: string) {
     code = coaRereadCode(run);
     summary = { read: run.read, ok: run.ok, partial: run.partial, failed: run.failed, kbFilled: run.kbFilled, errors: run.errors.slice(0, 3) };
     if (run.read > 0 && run.manifestId) {
+      // R30: marry the fresh read to the delivery's onboarding rows (and the
+      // strain library) before the menu update is rebuilt. Never throws.
+      try {
+        const { attachLabFactsToManifestDrafts } = await import("@/lib/catalog/lab-facts-attach");
+        const { LAB_FACTS_ATTACH_EVENT, labFactsAttachNote } = await import("@/lib/catalog/lab-facts-attach-core");
+        const { logManifestEvent } = await import("@/lib/inventory/intake-store");
+        const labRun = await attachLabFactsToManifestDrafts(run.manifestId, session.userId);
+        summary.labAttach = { attached: labRun.attached, facts: labRun.facts, kept: labRun.kept, strainsUpdated: labRun.strainsUpdated, unmigrated: labRun.unmigrated, errors: labRun.errors.slice(0, 3) };
+        const labNote = labFactsAttachNote(labRun);
+        if (labNote) await logManifestEvent(run.manifestId, LAB_FACTS_ATTACH_EVENT, labNote, session.userId);
+      } catch (err) {
+        console.error("[inventory] COA re-read lab attach failed:", err);
+      }
       try {
         const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
         const outcome = await stageIntakeMenuVersionForManifest(run.manifestId, session.userId);

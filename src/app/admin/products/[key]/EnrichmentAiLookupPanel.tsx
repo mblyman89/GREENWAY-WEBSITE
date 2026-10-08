@@ -81,6 +81,9 @@ type Draft = {
   keepAroma: boolean;
   flavor: string; // comma-joined
   keepFlavor: boolean;
+  /** R30: terpene names, comma-joined. */
+  terpenes: string;
+  keepTerpenes: boolean;
   lineage: string;
   keepLineage: boolean;
   description: string;
@@ -108,6 +111,8 @@ function draftFromResult(d: Ok): Draft {
     keepAroma: d.aromaNotes.length > 0,
     flavor: d.flavorNotes.join(", "),
     keepFlavor: d.flavorNotes.length > 0,
+    terpenes: (d.terpenes ?? []).join(", "),
+    keepTerpenes: (d.terpenes ?? []).length > 0,
     lineage: d.lineage,
     keepLineage: d.lineage.length > 0,
     description: d.description,
@@ -208,6 +213,7 @@ export function EnrichmentAiLookupPanel({
       effects: draft.keepEffects ? splitList(draft.effects) : [],
       aromaNotes: draft.keepAroma ? splitList(draft.aroma) : [],
       flavorNotes: draft.keepFlavor ? splitList(draft.flavor) : [],
+      terpenes: draft.keepTerpenes ? splitList(draft.terpenes) : [],
       lineage: draft.keepLineage ? draft.lineage.trim() : "",
       sources: data.sources,
       posProductKey: productKey,
@@ -236,6 +242,7 @@ export function EnrichmentAiLookupPanel({
           effects: data.effects,
           aroma: data.aromaNotes,
           flavor: data.flavorNotes,
+          terpenes: data.terpenes ?? [],
           strainType: data.strainType,
         },
         {
@@ -244,6 +251,7 @@ export function EnrichmentAiLookupPanel({
           effects: draft.keepEffects ? splitList(draft.effects) : [],
           aroma: draft.keepAroma ? splitList(draft.aroma) : [],
           flavor: draft.keepFlavor ? splitList(draft.flavor) : [],
+          terpenes: draft.keepTerpenes ? splitList(draft.terpenes) : [],
           strainType: draft.keepStrainType ? draft.strainType : "unknown",
         },
       ),
@@ -258,6 +266,7 @@ export function EnrichmentAiLookupPanel({
     if (draft.keepEffects && draft.effects.trim()) n++;
     if (draft.keepAroma && draft.aroma.trim()) n++;
     if (draft.keepFlavor && draft.flavor.trim()) n++;
+    if (draft.keepTerpenes && draft.terpenes.trim()) n++;
     if (draft.keepLineage && draft.lineage.trim()) n++;
     if (draft.keepDescription && draft.description.trim()) n++;
     if (draft.keepShortDescription && draft.shortDescription.trim()) n++;
@@ -492,6 +501,21 @@ export function EnrichmentAiLookupPanel({
                   value={draft.flavor}
                   onChange={(e) => up("flavor", e.target.value)}
                   disabled={!draft.keepFlavor}
+                  className="h-7 w-full text-[11px]"
+                />
+              </FieldRow>
+
+              <FieldRow
+                label="Terpenes"
+                kept={draft.keepTerpenes}
+                onKeep={(v) => up("keepTerpenes", v)}
+                show={Boolean((data.terpenes ?? []).length || draft.terpenes)}
+                hint="comma-separated; the lab certificate outranks these"
+              >
+                <Input
+                  value={draft.terpenes}
+                  onChange={(e) => up("terpenes", e.target.value)}
+                  disabled={!draft.keepTerpenes}
                   className="h-7 w-full text-[11px]"
                 />
               </FieldRow>

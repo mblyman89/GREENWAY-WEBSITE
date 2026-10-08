@@ -106,6 +106,8 @@ export type LookupKbDraft = {
   aromaNotes: string[];
   flavorNotes: string[];
   lineage: string;
+  /** R30: terpene KB slugs the web reported (re-cleaned server-side on save). Optional for older clients. */
+  terpenes?: string[];
   sources: string[];
   // T-315: all-inclusive fields that feed ENRICHMENT (drafts only, human-approved).
   /** The POS product key this draft attaches to on the enrichment page (or ""). */
@@ -147,6 +149,8 @@ export type ProductLookupActionResult =
       aromaNotes: string[];
       flavorNotes: string[];
       lineage: string;
+      /** R30: terpene KB slugs the web reported. */
+      terpenes: string[];
       sources: string[];
       model: string;
       usedWebSearch: boolean;
@@ -352,6 +356,7 @@ export async function productLookupAction(
       aromaNotes: r.aromaNotes,
       flavorNotes: r.flavorNotes,
       lineage: r.lineage,
+      terpenes: r.terpenes,
       sources: outcome.sources,
       model: outcome.model,
       usedWebSearch: outcome.usedWebSearch,
@@ -377,6 +382,7 @@ export async function productLookupAction(
         aromaNotes: r.aromaNotes,
         flavorNotes: r.flavorNotes,
         lineage: r.lineage,
+        terpenes: r.terpenes,
         sources: outcome.sources,
         posProductKey,
         description: r.description,
@@ -445,6 +451,8 @@ export async function saveLookupToKbAction(formData: FormData): Promise<SaveLook
     aroma_notes: Array.isArray(payload.aromaNotes) ? payload.aromaNotes : [],
     flavor_notes: Array.isArray(payload.flavorNotes) ? payload.flavorNotes : [],
     lineage: String(payload.lineage ?? ""),
+    // R30: re-cleaned by postProcessLookup (lint + KB vocabulary), never trusted as sent.
+    terpenes: Array.isArray(payload.terpenes) ? payload.terpenes.filter((x): x is string => typeof x === "string") : [],
     found: true,
     description: String(payload.description ?? ""),
     short_description: String(payload.shortDescription ?? ""),
