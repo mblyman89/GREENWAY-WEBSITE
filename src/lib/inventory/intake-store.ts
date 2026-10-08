@@ -37,6 +37,8 @@ import { planTransportBackfill } from "@/lib/inventory/manifest-merge-core";
 import type { InboundManifest, ManifestTransportInput } from "@/lib/inventory/types";
 import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
+import { extractCoasForManifest } from "@/lib/inventory/coa-extract";
+import { COA_EXTRACT_EVENT, coaExtractRunNote, isMissingColumnError } from "@/lib/inventory/coa-extract-core";
 import { promoteManifestToKb } from "@/lib/inventory/manifest-kb-bridge";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import {
@@ -121,6 +123,9 @@ import {
   deriveManifestStatus,
   normalizePartialNote,
 } from "@/lib/inventory/intake-disposition-core";
+
+/** R28: the certificate read's share of the finalize (page maxDuration 300s). */
+const COA_EXTRACT_FINALIZE_BUDGET_MS = 120_000;
 
 /**
  * Memory ceiling for a full vendors scan. `vendors` held 1,775 rows when last
@@ -658,6 +663,8 @@ export async function stageManifest(
   }
   // Set once a lot insert proves 0234 is not applied: stop sending the column.
   let identityColumnsMissing = false;
+  // R28: set once a lab insert proves 0252 is not applied.
+  let labJsonUrlColumnMissing = false;
 
   // 2) per line: lab_result (if any) + quarantine lot
   for (const [lineIndex, line] of parsed.lines.entries()) {
@@ -667,9 +674,7 @@ export async function stageManifest(
       if (extId && labIdCache.has(extId)) {
         labId = labIdCache.get(extId)!;
       } else {
-        const { data: lData } = await admin
-          .from("lab_results")
-          .insert({
+        const labRow: Record<string, unknown> = {
             labtest_external_identifier: extId,
             lab_name: line.lab.lab_name,
             tested_on: line.lab.tested_on,
@@ -696,9 +701,17 @@ export async function stageManifest(
             raw_payload: line.lab.raw,
             created_by: actorId,
             updated_by: actorId,
-          })
-          .select("id")
-          .single();
+          };
+        // R28: keep the transfer's lab_result_link (the lab JSON) so the
+        // certificate reader can follow it. Sent only when present, and
+        // dropped once if the database predates 0252 (missing column).
+        if (line.lab.wcia_json_url && !labJsonUrlColumnMissing) labRow.wcia_json_url = line.lab.wcia_json_url;
+        let { data: lData, error: lErr } = await admin.from("lab_results").insert(labRow).select("id").single();
+        if (lErr && "wcia_json_url" in labRow && isMissingColumnError(lErr)) {
+          labJsonUrlColumnMissing = true;
+          delete labRow.wcia_json_url;
+          ({ data: lData, error: lErr } = await admin.from("lab_results").insert(labRow).select("id").single());
+        }
         labId = (lData as { id: string } | null)?.id ?? null;
         if (extId && labId) labIdCache.set(extId, labId);
       }
@@ -1468,7 +1481,20 @@ export async function finalizeManifestDispositions(
     const [draftsRes, coasRes, kbRes, transportRes, samplesRes, poRes] =
       await Promise.allSettled([
         seedDraftsForManifest(manifestId, actorId),
-        archiveCoasForManifest(manifestId),
+        // R28: archive the COA PDFs, THEN read every certificate (the read
+        // uses the archived copy when there is one). Chained inside one
+        // fan-out slot so it still overlaps the other chores. Never rejects:
+        // an archive failure is kept and the read still runs on the links.
+        (async () => {
+          const archive = await archiveCoasForManifest(manifestId).then(
+            () => null,
+            (reason: unknown) => reason,
+          );
+          const extract = await extractCoasForManifest(manifestId, actorId, { budgetMs: COA_EXTRACT_FINALIZE_BUDGET_MS }).catch(
+            (reason: unknown) => ({ thrown: reason }) as const,
+          );
+          return { archiveError: archive, extract };
+        })(),
         promoteManifestToKb(manifestId, actorId),
         rememberVendorUsualTransport(manifestId, actorId),
         seedIncomingSampleEvents(manifestId, actorId),
@@ -1491,7 +1517,26 @@ export async function finalizeManifestDispositions(
       console.error("[intake-store] seedDraftsForManifest failed:", draftsRes.reason);
     }
     if (coasRes.status === "rejected") {
-      console.error("[intake-store] archiveCoasForManifest failed:", coasRes.reason);
+      console.error("[intake-store] COA archive/read chain failed:", coasRes.reason);
+    } else {
+      if (coasRes.value.archiveError) {
+        console.error("[intake-store] archiveCoasForManifest failed:", coasRes.value.archiveError);
+      }
+      // R28: the certificate read lands on the manifest timeline (counts,
+      // what was deferred, what failed) so the owner sees it without logs.
+      const ex = coasRes.value.extract;
+      if ("thrown" in ex) {
+        console.error("[intake-store] extractCoasForManifest failed:", ex.thrown);
+        await logManifestEvent(
+          manifestId,
+          COA_EXTRACT_EVENT,
+          `Lab certificates could not be read: ${ex.thrown instanceof Error ? ex.thrown.message : String(ex.thrown)}. Press Re-read lab certificate on a lot to try again.`,
+          actorId,
+        );
+      } else {
+        const note = coaExtractRunNote(ex);
+        if (note) await logManifestEvent(manifestId, COA_EXTRACT_EVENT, note, actorId);
+      }
     }
     // Slice H11a: KB write-back (name/strain/category/vendor + COA potency)
     // as DRAFTS via the non-destructive merge. Best-effort.

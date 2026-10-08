@@ -94,7 +94,9 @@ describe("the code facts the COA roadmap cites (flip when S39/S40 ship)", () => 
   });
 
   it("the archive hook points S40 extends are the ones the roadmap names", () => {
-    expect(read("src/lib/inventory/intake-store.ts")).toContain("archiveCoasForManifest(manifestId),");
+    // R28 (pin updated on purpose): finalize archives, then reads the
+    // certificates (coa-extract.ts uses the archived copy first).
+    expect(read("src/lib/inventory/intake-store.ts")).toContain("const archive = await archiveCoasForManifest(manifestId).then(");
     expect(read("src/app/admin/inventory/intake/actions.ts")).toContain(
       "const count = await archiveCoasForManifest(manifestId);",
     );

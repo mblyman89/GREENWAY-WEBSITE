@@ -1,5 +1,6 @@
 "use server";
 
+import { safeFactReturnPath, PRODUCT_FACTS_ANCHOR } from "@/lib/inventory/coa-panel-core";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
@@ -267,8 +268,14 @@ export async function resolveIntakeFactReview(formData: FormData) {
   };
   // R27: the Product facts panel also lives on the review tab - return there.
   const returnView = get("return_view") === "draft" ? ("draft" as const) : ("approved" as const);
+  // R28: the same panel lives on the lot page and the KB product page. They
+  // send return_to; only a lot / KB product page by id is accepted
+  // (safeFactReturnPath) - anything else falls back to Product Onboarding.
+  const returnTo = safeFactReturnPath(get("return_to"));
   const back = (manifestId: string | null, draftId: string | null, extra: Record<string, string>) =>
-    draftsHref({ status: returnView, manifestId, draftId, extra });
+    returnTo
+      ? `${returnTo}?${new URLSearchParams(extra).toString()}#${PRODUCT_FACTS_ANCHOR}`
+      : draftsHref({ status: returnView, manifestId, draftId, extra });
 
   const parsed = parseIntakeFactForm(get);
   if (!parsed.ok) {
@@ -338,6 +345,7 @@ export async function resolveIntakeFactReview(formData: FormData) {
   }
   revalidatePath("/admin/inventory/drafts");
   revalidatePath("/admin/publish");
+  if (returnTo) revalidatePath(returnTo);
   const extra: Record<string, string> = { fact: code };
   if (code === "error" && message) extra.fact_msg = message.slice(0, 300);
   redirect(back(form.manifestId, form.draftId, extra));

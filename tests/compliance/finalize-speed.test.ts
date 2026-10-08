@@ -160,7 +160,13 @@ describe("SLICE 103 — finalize batching wiring pins (intake-store.ts)", () => 
   it("the six follow-up chores run concurrently via Promise.allSettled", () => {
     expect(src).toContain("await Promise.allSettled([");
     expect(src).toContain("seedDraftsForManifest(manifestId, actorId),");
-    expect(src).toContain("archiveCoasForManifest(manifestId),");
+    // R28 (pin updated on purpose): the COA slot now archives THEN reads the
+    // certificates, chained inside the SAME fan-out slot - still concurrent
+    // with the other chores, and it never rejects (both steps are caught).
+    const fan = src.slice(src.indexOf("await Promise.allSettled(["), src.indexOf("promoteManifestToKb(manifestId, actorId),"));
+    expect(fan).toContain("const archive = await archiveCoasForManifest(manifestId).then(");
+    expect(fan).toContain("const extract = await extractCoasForManifest(manifestId, actorId, { budgetMs: COA_EXTRACT_FINALIZE_BUDGET_MS }).catch(");
+    expect(fan).toContain("return { archiveError: archive, extract };");
     expect(src).toContain("promoteManifestToKb(manifestId, actorId),");
     expect(src).toContain("rememberVendorUsualTransport(manifestId, actorId),");
     expect(src).toContain("seedIncomingSampleEvents(manifestId, actorId),");

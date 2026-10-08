@@ -39,6 +39,12 @@ export type ParsedLab = {
   coa_url: string | null;
   coa_release_date: string | null;
   coa_expire_date: string | null;
+  /**
+   * R28: the WCIA item's `lab_result_link` - the lab's machine-readable
+   * certificate JSON (every cannabinoid, every terpene, the sample identity).
+   * Optional: only WCIA transfers carry it; null = not given.
+   */
+  wcia_json_url?: string | null;
   raw: unknown;
 };
 
@@ -283,6 +289,18 @@ export function looksLikeWciaTransferStrict(root: unknown): boolean {
   return Boolean(hasItems && transferId && fromLicense);
 }
 
+/**
+ * R28: the item's `lab_result_link`, kept ONLY when it is an https URL that
+ * is not the PDF itself (the PDF is coa_url). Verified on the owner transfer:
+ * 16 of 17 links are certs.conflabs.com/wcia/v2_1/<sample> (application/json)
+ * and one is a gglabs-j.github.io .json file.
+ */
+export function wciaJsonUrl(item: Obj): string | null {
+  const u = cleanUrl(pick(item, ["lab_result_link"]));
+  if (!u || !/^https:\/\//i.test(u) || /\.pdf(?:$|[?#])/i.test(u)) return null;
+  return u;
+}
+
 /** Parse a WCIA lab_result_data block into our ParsedLab. */
 function parseWciaLab(item: Obj): ParsedLab | null {
   const data = pick(item, ["lab_result_data"]);
@@ -308,6 +326,7 @@ function parseWciaLab(item: Obj): ParsedLab | null {
       coa_url: cleanUrl(pick(item, ["lab_result_link"])),
       coa_release_date: null,
       coa_expire_date: null,
+      wcia_json_url: wciaJsonUrl(item),
       raw: item,
     };
   }
@@ -361,6 +380,7 @@ function parseWciaLab(item: Obj): ParsedLab | null {
     coa_url: cleanUrl(pick(data, ["coa"])) ?? coaFromList,
     coa_release_date: coaRelease,
     coa_expire_date: coaExpire,
+    wcia_json_url: wciaJsonUrl(item),
     raw: data,
   };
 }

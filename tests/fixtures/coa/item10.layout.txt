@@ -1,0 +1,333 @@
+                                                                                    Medical Compliance Test Report
+
+
+
+
+ Origin                          Sample Demographics
+                                 Sample Name:                                                    Lab Sample ID: WA-260902-010
+ Firetree LLC                    Bucked Flower - Strawberry Push Pop - (g)
+ 3163 Goldie Rd Bldg D
+ Oak Harbor, Wa 98277            Product Type:                                    Date of Collection:       Serving / Package Wt:
+ License #: 418524               Flower                                           2026-09-01                N/A / N/A
+
+ Parent Batch ID:                Matrix Type:                                     Date of Receipt:          Sample Size:
+ GF41852405692450                GPM                                              2026-09-02                16 g
+
+ Origin Sample ID:               Category: Harvested Material                     Date of Completion:       Batch Pass/Fail:
+ GF41852405692467                Flower Lot                                       2026-09-04                ✔ PASS
+ Cannabinoid Analysis - summary
+     Total d9-THC:   25% 250mg/g              Total CBD:   0.056% 0.56mg/g                Total Cannabinoids:      30%
+
+ Terpene Analysis2 - summary
+  Total Terpenes: 3.1 %     Top Three:          Caryophyllene: 0.8 %     Limonene: 0.69 %                 Linalool: 0.36 %
+
+ Safety Analysis - summary
+ Foreign Matter      Heavy Metals         Microbial         Mycotoxins       Pesticides          Solvents           Water Activity
+    ✔ PASS             ✔ PASS             ✔ PASS             ✔ PASS          ✔ PASS                  NT               ✔ PASS
+ Cannabinoid Profile                                              Strain Compass
+
+
+
+
+Template Version: 8.0
+Document Created: 2026-09-04 09:39:27                      Page 1 of 5
+Auth: FJ3TGMuDIPUdmGYCPzUZlN
+                                                                                    Regulatory Compliance Testing
+
+                                                                               Certificate of Analysis
+                                                         Batch #: GF41852405692450, ID: WA-260902-010,
+                                        Sample Name: Bucked Flower - Strawberry Push Pop - (g), Type: Flower,
+                                                                  Origin: Firetree LLC (License No.: 418524)
+
+
+
+
+ Cannabinoids - Potency                                                                                          2026-09-04
+   Analyte Name               %                   mg/g               mg/serving            mg/package           LoQ (%)
+
+  Total Cannabinoids          30                   300                   N/A                    N/A               N/A
+
+      Total THC               25                   250                   N/A                    N/A               N/A
+
+      Total CBD              0.056                 0.56                  N/A                    N/A               N/A
+
+       d9-thc                0.19                  1.9                   N/A                    N/A              0.024
+
+       d9-thca                28                   280                   N/A                    N/A              0.024
+
+         cbd                  ND                   ND                    N/A                    N/A              0.024
+
+        cbda                 0.064                 0.64                  N/A                    N/A              0.024
+
+         cbc                  ND                   ND                    N/A                    N/A              0.047
+
+        cbca                 0.67                  6.7                   N/A                    N/A              0.047
+
+        cbdv                  ND                   ND                    N/A                    N/A              0.047
+
+        cbdva                 ND                   ND                    N/A                    N/A              0.047
+
+         cbg                 0.14                  1.4                   N/A                    N/A              0.047
+
+        cbga                   1                   10                    N/A                    N/A              0.047
+
+         cbl                  ND                   ND                    N/A                    N/A              0.047
+
+         cbn                  ND                   ND                    N/A                    N/A              0.047
+
+        cbna                  ND                   ND                    N/A                    N/A              0.047
+
+         cbt                  ND                   ND                    N/A                    N/A              0.047
+
+       d8-thc                 ND                   ND                    N/A                    N/A              0.047
+
+       d9-thcv                ND                   ND                    N/A                    N/A              0.047
+
+      d9-thcva               0.15                  1.5                   N/A                    N/A              0.047
+
+ Terpene Profile2
+
+
+
+
+Template Version: 8.0
+Document Created: 2026-09-04 09:39:27                     Page 2 of 5
+Auth: FJ3TGMuDIPUdmGYCPzUZlN
+                                                                                         Regulatory Compliance Testing
+
+                                                                                      Certificate of Analysis
+                                                         Batch #: GF41852405692450, ID: WA-260902-010,
+                                        Sample Name: Bucked Flower - Strawberry Push Pop - (g), Type: Flower,
+                                                                  Origin: Firetree LLC (License No.: 418524)
+
+
+
+
+ Terpenes2                                      2026-09-04       Terpenes continued
+Analyte                    Result        loq                    Analyte                          Result      loq
+Name                       (ppm)        (ppm)                   Name                             (ppm)      (ppm)
+
+                  1                                             limonene                          6900          95    PASS
+a-bisabolene                610          95         PASS
+                  1                                             linalool                          3600          95    PASS
+a-bulnesene                  ND          95         PASS
+              1                                                 m-cymene                           ND           95    PASS
+a-farnesene                 1100         95         PASS
+              1                                                 menthone                           ND           95    PASS
+a-maaliene                  630          95         PASS
+
+a-ocimene                    ND          95         PASS        myrcene                            420          380   PASS
+
+a-phellandrene               ND          95         PASS        o-cymene                           ND           95    PASS
+
+a-pinene                    600          95         PASS        p-cymene                           ND           95    PASS
+
+a-terpinene                  ND          95         PASS        piperitone                         ND           95    PASS
+
+b-farnesene                 640          190        PASS        pulegone                           ND           190   PASS
+
+              1                                                 safranal                           ND           95    PASS
+b-maaliene                  430          95         PASS
+                                                                              1
+b-ocimene                    ND          95         PASS        selinadiene                        680          95    PASS
+
+b-pinene                    1100         95         PASS        terpineol                          520          95    PASS
+
+bisabolol                   1000         95         PASS        terpinolene                        ND           95    PASS
+
+borneol                      ND          380        PASS        thymol                             ND           95    PASS
+                                                                                         1
+camphene                    160          95         PASS        trans-a-bergamotene                560          95    PASS
+                                                                                  1
+camphor                      ND          95         PASS        total terpenes                    31000         NA    PASS
+
+carene                       ND          95         PASS
+
+carvacrol                    ND          95         PASS
+
+carvone                      ND          95         PASS
+
+caryophyllene               8000         95         PASS
+
+cedrol                       ND          95         PASS
+
+citral                       ND          190        PASS
+
+eucalyptol                   ND          95         PASS
+
+fenchol                     720          190        PASS
+
+fenchone                     ND          95         PASS
+
+g-terpinene                  ND          95         PASS
+
+guaiol                       ND          95         PASS
+
+humulene                    2900         95         PASS
+
+isobornyl acetate            ND          95         PASS
+
+isopulegol                   ND          190        PASS
+
+
+
+Template Version: 8.0
+Document Created: 2026-09-04 09:39:27                   Page 3 of 5
+Auth: FJ3TGMuDIPUdmGYCPzUZlN
+                                                                                          Regulatory Compliance Testing
+
+                                                                                       Certificate of Analysis
+                                                         Batch #: GF41852405692450, ID: WA-260902-010,
+                                        Sample Name: Bucked Flower - Strawberry Push Pop - (g), Type: Flower,
+                                                                  Origin: Firetree LLC (License No.: 418524)
+
+
+
+
+Foreign Material                                      2026-09-04 oxamyl                             ND           0.08 / 1         Pass
+Analyte Name (Count)          Result     LoQ/AL         (Pass/Fail) paclobutrazol                   ND          0.08 / 0.4        Pass
+i.h.e. (count)                ND          N/A / 1          Pass     phosmet                         ND          0.08 / 0.2        Pass
+seeds & other (%)             ND          N/A / 2          Pass     piperonyl butoxide              ND           0.08 / 2         Pass
+stems (%)                     ND          N/A / 5          Pass     prallethrin                     ND          0.08 / 0.2        Pass
+GCMS Pesticides                                       2026-09-04 propiconazole                      ND          0.15 / 0.4        Pass
+                                                                    propoxur                        ND          0.08 / 0.2        Pass
+Analyte Name (ppm)            Result     LoQ/AL         (Pass/Fail)
+                                                                    pyrethrin i                     ND           0.08 / 1         Pass
+chlorfenapyr                  ND         0.75 / 1          Pass
+                                                                    pyrethrin ii                    ND           0.08 / 1         Pass
+chlorpyrifos                  ND        0.15 / 0.2         Pass
+                                                                    pyridaben                       ND          0.08 / 0.2        Pass
+cyfluthrin                    ND         0.75 / 1          Pass
+                                                                    spinosad a                      ND          0.04 / 0.2        Pass
+cypermethrin                  ND         0.75 / 1          Pass
+                                                                    spinosad d                      ND          0.04 / 0.2        Pass
+methyl parathion              ND        0.15 / 0.2         Pass
+                                                                    spiromesifen                    ND          0.08 / 0.2        Pass
+mgk 264 a                     ND        0.11 / 0.2         Pass
+                                                                    spirotetramat                   ND          0.08 / 0.2        Pass
+mgk 264 b                     ND         0.1 / 0.2         Pass
+                                                                    spiroxamine                     ND          0.08 / 0.4        Pass
+total mgk 264                 ND        N/A / 0.2          Pass
+                                                                    tebuconazole                    ND          0.08 / 0.4        Pass
+Heavy Metals                                          2026-09-04 thiacloprid                        ND          0.08 / 0.2        Pass
+Analyte Name (ppm)            Result     LoQ/AL         (Pass/Fail) thiamethoxam                    ND          0.08 / 0.2        Pass
+as                            ND           1/2             Pass     trans-permethrin                ND          0.08 / 0.2        Pass
+cd                            ND        0.4 / 0.82         Pass     trifloxystrobin                 ND          0.08 / 0.2        Pass
+hg                            ND         0.3 / 0.4         Pass     total abamectin                 ND          N/A / 0.5         Pass
+pb                            ND         0.8 / 1.2         Pass     total permethrins               ND          N/A / 0.2         Pass
+LCMS Pesticides                                       2026-09-04 total pyrethrins                   ND           N/A / 1          Pass
+Analyte Name (ppm)            Result     LoQ/AL         (Pass/Fail) total spinosads                 ND          N/A / 0.2         Pass
+acephate                      ND        0.08 / 0.4         Pass     Microbial                                                2026-09-04
+acequinocyl                   ND         0.74 / 2          Pass     Analyte Name (CFU/g)             Result      LoQ/AL        (Pass/Fail)
+acetamiprid                   ND        0.08 / 0.2         Pass     btgn                            ND        5000 / 10000        Pass
+aldicarb                      ND        0.08 / 0.4         Pass     e coli                          ND          N/A / N/A         Pass
+avermectin b1a                ND        0.08 / 0.5         Pass     salmonella                      ND          N/A / N/A         Pass
+avermectin b1b                ND        0.08 / 0.5         Pass     Mycotoxins                                               2026-09-04
+azoxystrobin                  ND        0.08 / 0.2         Pass     Analyte Name (ppb)               Result      LoQ/AL        (Pass/Fail)
+bifenazate                    ND        0.08 / 0.2         Pass
+                                                                    aflatoxin b1                    ND            5 / 20          Pass
+bifenthrin                    ND         0.1 / 0.2         Pass
+                                                                    aflatoxin b2                    ND            5 / 20          Pass
+boscalid                      ND        0.08 / 0.4         Pass
+                                                                    aflatoxin g1                    ND            5 / 20          Pass
+carbaryl                      ND        0.08 / 0.2         Pass
+                                                                    aflatoxin g2                    ND            5 / 20          Pass
+carbofuran                    ND        0.08 / 0.2         Pass
+                                                                    ochratoxin a                    ND           10 / 20          Pass
+chlorantraniliprole           ND        0.08 / 0.2         Pass
+                                                                    total aflatoxins                ND           N/A / 20         Pass
+cis-permethrin                ND        0.08 / 0.2         Pass
+clofentezine                  ND        0.08 / 0.2         Pass
+                                                                    Water Activity                                           2026-09-04
+                                                                    Analyte Name (aw)                Result      LoQ/AL        (Pass/Fail)
+daminozide                    ND         0.48 / 1          Pass
+diazinon                      ND        0.08 / 0.2         Pass     water activity                   0.58     0.35 / 0.65         Pass
+dichlorvos                    ND        0.074 / 0.1        Pass                              [ END OF ANALYTES ]
+dimethoate                    ND        0.08 / 0.2         Pass
+ethoprophos                   ND        0.08 / 0.2         Pass
+etofenprox                    ND        0.08 / 0.4         Pass
+etoxazole                     ND        0.08 / 0.2         Pass
+fenoxycarb                    ND        0.08 / 0.2         Pass
+fenpyroximate                 ND        0.08 / 0.4         Pass
+fipronil                      ND        0.08 / 0.4         Pass
+flonicamid                    ND         0.48 / 1          Pass
+fludioxonil                   ND        0.08 / 0.4         Pass
+hexythiazox                   ND         0.15 / 1          Pass
+imazalil                      ND        0.08 / 0.2         Pass
+imidacloprid                  ND        0.08 / 0.4         Pass
+kresoxim-methyl               ND        0.08 / 0.4         Pass
+malathion                     ND        0.08 / 0.2         Pass
+metalaxyl                     ND        0.08 / 0.2         Pass
+methiocarb                    ND        0.08 / 0.2         Pass
+methomyl                      ND        0.08 / 0.4         Pass
+myclobutanil                  ND        0.08 / 0.2         Pass
+naled                         ND        0.08 / 0.5         Pass
+
+
+Template Version: 8.0
+Document Created: 2026-09-04 09:39:27                      Page 4 of 5
+Auth: FJ3TGMuDIPUdmGYCPzUZlN
+                                                                                    Regulatory Compliance Testing
+
+                                                                               Certificate of Analysis
+                                                         Batch #: GF41852405692450, ID: WA-260902-010,
+                                        Sample Name: Bucked Flower - Strawberry Push Pop - (g), Type: Flower,
+                                                                  Origin: Firetree LLC (License No.: 418524)
+
+
+
+
+ Attestation & Accuracy Review
+
+These testing results are certified by scientific examination of a single sample provided by the Producer/Processor.
+Confidence Analytics and its agents did not observe or participate in the sample selection process, and cannot
+confirm the authenticity of the sample or its representativeness of the associated lot/batch. The sample, as received,
+was homogenized before subsamples were drawn for specific analyses.
+
+Pass/Fail criteria are defined in WAC 314-55-102 and WAC 314-55-108
+
+
+Calculations:
+
+Total THC = d9-THC + ( THC-A * 0.877 )
+Total CBD = CBD + ( CBD-A * 0.877 )
+Total Cannabinoid is a raw sum of all measured cannabinoids.
+In Traceability, Total Cannabinoid is a sum of Total THC and Total CBD.
+Figures may differ slightly from traceability due to rounding.
+
+Definitions:
+
+ND = Not Detected                                               GPM = Green Plant Material
+NT = Not Tested                                                 CONC = Concentrate
+LOQ = Lower Quantification Limit                                ISL = Infused Solid or Liquid
+AL = Action Limit                                               1Not included in A2LA scope of Accreditation
+N/A = Not Applicable                                            2WSDA Accreditation not available for this analyte
+
+
+
+Analytical Methods Used:
+
+Cannabinoids by UHPLC-DAD                                       Mycotoxins by LC-MS/MS
+Terpenes by HS-GC-FID/MS2                                       Microbes by Plate Counting
+Residual Solvents by HS-GC-MS                                   Heavy Metals by ICP-MS
+LCMS Pesticides by LC-MS/MS                                     Foreign Material by Macroscopic Inspection
+GCMS Pesticides by GC-MS/MS                                     Water Activity by HYGROMETER
+
+
+
+
+                             Certifying Scientist:
+
+
+
+ Material Amendments
+
+No material amendments recorded for this sample.
+
+
+
+
+Template Version: 8.0
+Document Created: 2026-09-04 09:39:27                   Page 5 of 5
+Auth: FJ3TGMuDIPUdmGYCPzUZlN
+

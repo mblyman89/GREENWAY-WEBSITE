@@ -282,10 +282,15 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
     // menu_items.kb_product_id and REFUSES with "migration 0234" on a missing
     // column, and the product page reads one card's kb_product_id and treats
     // any error as "not linked" (both pinned by the "R25 C" test below).
+    // R28 added the fifth guarded reader on purpose (pin updated on purpose):
+    // the lab-certificate KB fill reads inventory_lots.kb_product_id for the
+    // lots of ONE lab result; a missing 0234 column is "no link to follow"
+    // (0 filled), any other error is reported (pinned by the "R28" test below).
     expect(offenders.sort()).toEqual([
       "src/lib/catalog/attach-facts.ts",
       "src/lib/catalog/menu-kb-link-server.ts",
       "src/lib/enrichment/command-center.ts",
+      "src/lib/inventory/coa-extract.ts",
       "src/lib/products/masters-store.ts",
     ]);
   });
@@ -303,6 +308,19 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
     const cc = readFileSync(path.join(ROOT, "src/lib/enrichment/command-center.ts"), "utf8");
     expect(cc.match(sel) ?? []).toEqual(['.select("kb_product_id")']);
     expect(cc).toContain("if (error || !data) return null;");
+  });
+
+  it("R28: the lab-certificate KB fill and the KB product page read kb_product_id guarded for pre-0234", () => {
+    const sel = /\.select\([^)]*\b(identity_key|kb_product_id|restock_of_card_key)\b[^)]*\)/g;
+    const ex = readFileSync(path.join(ROOT, "src/lib/inventory/coa-extract.ts"), "utf8");
+    expect(ex.match(sel) ?? []).toEqual(['.select("kb_product_id")']);
+    expect(ex).toContain('if (isMissingIdentityColumnError("inventory_lots", lotsErr)) return { filled: 0, errors };');
+    expect(ex).toContain("knowledge base fill: the lots could not be read");
+    // the KB page filters by the column (no select of it); pre-0234 the
+    // filter fails and the lot-key read still lists the lots
+    const pg = readFileSync(path.join(ROOT, "src/lib/inventory/coa-panel-server.ts"), "utf8");
+    expect(pg.match(sel) ?? []).toEqual([]);
+    expect(pg).toContain('if (linked.error && !isMissingIdentityColumnError("inventory_lots", linked.error)) lotsOk = false;');
   });
 
   it("S35: the Masters page identity read is opt-in, bounded and guarded for pre-0234", () => {

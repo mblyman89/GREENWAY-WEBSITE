@@ -108,6 +108,12 @@ export type LabResult = {
   coa_storage_path: string | null;
   coa_archived_at: string | null;
   coa_file_bytes: number | null;
+  /** R28 (0252): the transfer's lab_result_link (the lab JSON). Absent before 0252. */
+  wcia_json_url?: string | null;
+  /** R28 (0252): the stored certificate read (coa-facts-core CoaExtract). */
+  coa_extract_json?: unknown | null;
+  coa_extract_status?: "ok" | "partial" | "failed" | null;
+  coa_extracted_at?: string | null;
   raw_payload: unknown | null;
   created_by: string | null;
   updated_by: string | null;

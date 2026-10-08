@@ -16,6 +16,7 @@
  */
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type { KbProductRow } from "@/lib/ai/kb/store";
 import type {
   MenuReadinessResult,
@@ -293,7 +294,14 @@ function Row({
               )}
             </div>
             <div className="min-w-0">
-              <div className="font-semibold text-[var(--admin-text)]">{p.display_name}</div>
+              {/* R28: the product page - lab certificate, cannabinoids, terpenes, facts. */}
+              <Link
+                href={`/admin/knowledge-base/products/${p.id}`}
+                className="font-semibold text-[var(--admin-text)] hover:text-[var(--admin-accent)] hover:underline"
+                data-testid="kb-product-link"
+              >
+                {p.display_name}
+              </Link>
               <div className="text-xs text-[var(--admin-text-faint)]">
                 {p.brand_slug}
                 {p.variant_label ? ` · ${p.variant_label}` : ""}

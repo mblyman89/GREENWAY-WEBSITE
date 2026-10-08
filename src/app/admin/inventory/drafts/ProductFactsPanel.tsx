@@ -57,6 +57,8 @@ export function ProductFactsPanel({
   readOk,
   returnManifest,
   returnView,
+  returnTo,
+  title,
 }: {
   draftId: string;
   manifestId: string;
@@ -67,11 +69,15 @@ export function ProductFactsPanel({
   readOk: boolean;
   returnManifest: string | null;
   returnView: "draft" | "approved";
+  /** R28: the lot / KB product page to come back to (validated server-side by safeFactReturnPath). */
+  returnTo?: string;
+  /** R28: heading override (the lot page shows the delivery it belongs to). */
+  title?: string;
 }) {
   const lines = saved ? savedFactLines(saved.facts) : [];
   return (
     <div className="mt-2 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-3 text-left" data-testid="product-facts-panel">
-      <p className="text-xs font-bold text-[var(--admin-text)]">Product facts you set</p>
+      <p className="text-xs font-bold text-[var(--admin-text)]">{title ?? "Product facts you set"}</p>
       {!readOk ? (
         <p className="mt-1 text-[11px] text-[var(--admin-danger)]">
           The saved facts could not be read right now. Reload the page before editing so nothing you set is overwritten.
@@ -105,6 +111,7 @@ export function ProductFactsPanel({
             <input type="hidden" name="action" value="fix" />
             <input type="hidden" name="return_view" value={returnView} />
             {returnManifest && <input type="hidden" name="return_manifest" value={returnManifest} />}
+            {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
             <p className="text-[11px] text-[var(--admin-text-muted)]">
               Take each figure from the package or the COA. What is filled in below is what gets saved {"\u2014"} clear a field to remove it.
             </p>

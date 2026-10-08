@@ -929,6 +929,41 @@ import { __runDocTransportTests } from "../../src/lib/inventory/doc-transport-co
 import { __runInvoiceNumberCoreTests } from "../../src/lib/inventory/invoice-number-core";
 import { __runFactWithholdCoreTests } from "../../src/lib/pos/fact-withhold-core";
 import { __runWaTotalCannabinoidsTests } from "../../src/lib/inventory/wa-total-cannabinoids-core";
+// R28 -- COA / lab-document extraction. These cores are pure; the RUNNER (not
+// the core) reads the real lab documents from tests/fixtures/coa and hands the
+// text in, so the cores stay free of node:fs.
+import { readFileSync as r28ReadFileSync, readdirSync as r28ReaddirSync } from "node:fs";
+import { join as r28Join } from "node:path";
+import { __runCoaPdfTextCoreTests } from "../../src/lib/inventory/coa-pdf-text-core";
+import { __runCoaFactsCoreTests } from "../../src/lib/inventory/coa-facts-core";
+import { __runCoaExtractCoreTests } from "../../src/lib/inventory/coa-extract-core";
+import { __runCoaPanelCoreTests } from "../../src/lib/inventory/coa-panel-core";
+import { r28MakeExtract } from "../r28/coa-fixture-extract";
+import { __runWciaLabJsonCoreTests } from "../../src/lib/inventory/wcia-lab-json-core";
+
+/** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
+function r28CoaFixtures(suffix: string): Record<string, string> {
+  const dir = r28Join(__dirname, "..", "..", "tests", "fixtures", "coa");
+  const out: Record<string, string> = {};
+  for (const f of r28ReaddirSync(dir)) {
+    if (!f.endsWith(suffix)) continue;
+    const m = f.match(/^(item\d\d)\./);
+    if (m) out[m[1]] = r28ReadFileSync(r28Join(dir, f), "utf8");
+  }
+  if (Object.keys(out).length === 0) throw new Error(`R28: no COA fixtures matching ${suffix}`);
+  return out;
+}
+/** Every COA fixture keyed by its stem: item12.unpdf, item12.layout, item12.wcia, transfer. */
+function r28CoaStems(): Record<string, string> {
+  const dir = r28Join(__dirname, "..", "..", "tests", "fixtures", "coa");
+  const out: Record<string, string> = {};
+  for (const f of r28ReaddirSync(dir)) {
+    const m = f.match(/^(item\d\d\.(?:unpdf|layout|wcia)|transfer)\.(?:txt|json)$/);
+    if (m) out[m[1]] = r28ReadFileSync(r28Join(dir, f), "utf8");
+  }
+  if (Object.keys(out).length < 52) throw new Error(`R28: expected 52 COA fixtures, found ${Object.keys(out).length}`);
+  return out;
+}
 
 // Helper for suites that return { passed, failed } without throwing on
 // failure: the runner must assert failed === 0 itself.
@@ -2040,6 +2075,11 @@ __runLiquidVolumeTests();
   assertRan("invoice-number-core", __runInvoiceNumberCoreTests(), 18);
   assertRan("fact-withhold-core", __runFactWithholdCoreTests(), 34); // R27-1: one flagged product no longer holds the delivery
   assertRan("wa-total-cannabinoids-core", __runWaTotalCannabinoidsTests(), 19); // R27-1: WAC 314-55-102 total THC/CBD
+  assertRan("wcia-lab-json-core", __runWciaLabJsonCoreTests(r28CoaFixtures(".wcia.json")), 99); // R28: the lab JSON behind lab_result_link
+  assertRan("coa-pdf-text-core", __runCoaPdfTextCoreTests(r28CoaStems()), 292); // R28: COA PDF text (unpdf + layout + LlamaParse markdown)
+  assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 179); // R28: identity, agreement, edible facts, profile
+  assertRan("coa-extract-core", __runCoaExtractCoreTests(r28CoaStems()), 113); // R28: allow-list, best reading, LlamaParse gate, KB fill
+  assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 95); // R28: lot/KB lab-certificate + product-facts panels
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
