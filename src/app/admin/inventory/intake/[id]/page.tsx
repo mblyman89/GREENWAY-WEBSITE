@@ -69,6 +69,10 @@ function toLocalInput(iso: string | null): string {
 }
 
 export const dynamic = "force-dynamic";
+// R28: finalize now also reads every lab certificate (lab JSON + COA PDF,
+// LlamaParse when the PDF text layer has no numbers), bounded to 120s inside
+// the finalize. Vercel Pro allows 300s, the same budget the drafts page uses.
+export const maxDuration = 300;
 
 function fmtQty(qty: number, unit: string): string {
   const n = Number.isInteger(qty) ? qty.toString() : qty.toFixed(2);

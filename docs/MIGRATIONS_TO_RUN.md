@@ -1791,3 +1791,51 @@ in Vercel.
   editor. It puts back exactly the old values, except where a person has
   changed the value again since (those are kept), and removes the 0251 audit
   rows.
+
+## R28 — 0252 — the lab certificates are read and saved
+
+- [ ] `0252_lab_coa_extract.sql` adds four columns to `lab_results`. Nothing
+  is deleted and no number you set is changed.
+  - `wcia_json_url` is the lab certificate as JSON (the transfer's
+    `lab_result_link`).
+  - `coa_extract_json` is what the system read from that JSON and from the
+    COA PDF, after checking the two against each other.
+  - `coa_extract_status` is `ok` (both read and they agree), `partial` (only
+    one read, or a check did not agree) or `failed` (nothing read).
+  - `coa_extracted_at` is when it was read.
+
+  Four check constraints protect the columns: the status is one of the
+  three, the read is always a JSON object, a read and its status always
+  come together, and the link must be `https://`.
+
+  The migration also fills `wcia_json_url` for lab results that are already
+  saved, using the transfers already stored. It only fills a link that is
+  empty, and only when that delivery's item has the same lab result id. The
+  link must be https, must not be a PDF, and there must be exactly one
+  candidate; when two links compete, nothing is written. After you run it,
+  each newly finalized delivery reads its certificates by itself. Every lot
+  page also has a **Re-read lab certificate** button.
+
+  Before this migration is run, the code skips the certificate step and says
+  so on the lot page ("missing migration 0252"). Everything else works as
+  before. Safe to re-run.
+
+  Verified on Postgres 15: all 252 migrations were applied in order. 0252 was
+  applied twice, every refusal was checked, then it was rolled back and
+  applied again. `scripts/recon/lab-coa-extract-pg-check.sql` passed. All 21
+  deliberate SQL mutations were caught by `scripts/r28/mutate_0252_sql.py`.
+
+  **Run it, then check:**
+
+  ```sql
+  select count(*) filter (where wcia_json_url is not null) as with_json_link,
+         count(*) filter (where coa_extract_status is not null) as read
+    from public.lab_results;
+  -- with_json_link = lab results whose JSON link is known; read starts at 0
+  -- and grows as deliveries are finalized or Re-read is pressed
+  ```
+
+  **Rollback (only if needed):** paste
+  `supabase/rollbacks/0252_lab_coa_extract.rollback.sql` into the SQL
+  editor. It drops the four columns and their constraints. The code then
+  goes back to skipping the certificate step.

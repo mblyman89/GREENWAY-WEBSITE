@@ -981,3 +981,52 @@ export async function restoreProductToSaleAction(formData: FormData) {
   params.set(result.ok ? "restored" : "restoreError", result.message);
   redirect(`${safeReturn}?${params.toString()}`);
 }
+
+/**
+ * R28 - "Re-read lab certificate" on the lot page. Reads the lot's lab JSON
+ * and COA PDF again (always through LlamaParse as well as the text layer, so
+ * the best reading wins), stores the read on lab_results, fills the KB
+ * product's empty cannabinoid/terpene fields, and - when something was read -
+ * rebuilds the delivery's menu update so a product held for a missing fact can
+ * go out with the certificate's figures. Never throws to the page: every
+ * outcome is a banner code (coa-panel-core coaRereadCode/coaRereadCopy).
+ */
+export async function rereadLotCoaAction(lotId: string) {
+  const session = await requirePermission("inventory.manage");
+  const { extractCoaForLot } = await import("@/lib/inventory/coa-extract");
+  const { coaRereadCode, LAB_CERT_ANCHOR } = await import("@/lib/inventory/coa-panel-core");
+  let code: string = "error";
+  let restaged = false;
+  let summary: Record<string, unknown> = {};
+  try {
+    const run = await extractCoaForLot(lotId, session.userId);
+    code = coaRereadCode(run);
+    summary = { read: run.read, ok: run.ok, partial: run.partial, failed: run.failed, kbFilled: run.kbFilled, errors: run.errors.slice(0, 3) };
+    if (run.read > 0 && run.manifestId) {
+      try {
+        const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
+        const outcome = await stageIntakeMenuVersionForManifest(run.manifestId, session.userId);
+        restaged = outcome.staged;
+        summary.restage = { staged: outcome.staged, published: outcome.published, reason: outcome.reason ?? null, withheld: outcome.withheld ?? 0 };
+      } catch (err) {
+        console.error("[inventory] COA re-read restage failed:", err);
+        summary.restage = { error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "inventory_lot.coa_reread",
+      entityType: "inventory_lot",
+      entityId: lotId,
+      after: { code, ...summary },
+    });
+  } catch (err) {
+    console.error("[inventory] rereadLotCoaAction failed:", err);
+    code = "error";
+  }
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory/drafts");
+  revalidatePath("/admin/knowledge-base/products");
+  redirect(`/admin/inventory/${lotId}?coa=${code}${restaged ? "&restaged=1" : ""}#${LAB_CERT_ANCHOR}`);
+}

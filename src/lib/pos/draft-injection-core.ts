@@ -31,6 +31,7 @@ import {
   extractNameFacts,
   MG_FACT_TYPES,
 } from "@/lib/inventory/fact-extraction-core";
+import { mergeCoaIntoExam, type CoaDraftFacts } from "@/lib/inventory/coa-facts-core";
 import {
   deriveNetVolumeMl,
   deriveNetWeightGrams,
@@ -126,6 +127,13 @@ export type DraftEnrichment = {
   goldenDescription?: PickedDescription | null;
   /** SLICE S12: the counted attached strain type (golden-record-core). */
   attachedStrainType?: PickedStrainType | null;
+  /**
+   * R28: the facts the SERVER derived from the lot's lab certificate
+   * (coa-facts-core deriveCoaDraftFacts over lab_results.coa_extract_json).
+   * Absent / null = no certificate was read = the name/column engine alone,
+   * exactly as before R28.
+   */
+  coaFacts?: CoaDraftFacts | null;
 };
 
 export type DraftInjectionInputs = {
@@ -241,21 +249,31 @@ const COMPOUND_TYPES = new Set(["thc", "thca", "cbd", "cbda", "cbg", "cbn", "cbc
  * Publish). Same inputs either way, so the prediction cannot drift from
  * what staging will decide. null for types the engine never examines.
  */
-export function examineDraftFacts(d: {
-  name: string;
-  inventory_type?: string | null;
-  total_thc_pct?: number | null;
-  thc_pct?: number | null;
-  cbd_pct?: number | null;
-}): ReturnType<typeof crossExamineRow> | null {
+export function examineDraftFacts(
+  d: {
+    name: string;
+    inventory_type?: string | null;
+    total_thc_pct?: number | null;
+    thc_pct?: number | null;
+    cbd_pct?: number | null;
+  },
+  /**
+   * R28: the lab certificate's facts for this draft's lot. The certificate
+   * fills what the name and the percent column cannot (mg per serving, the
+   * serving weight, minor cannabinoids); a verified name fact it contradicts
+   * becomes a conflict for a human, never silently replaced.
+   */
+  coaFacts?: CoaDraftFacts | null,
+): ReturnType<typeof crossExamineRow> | null {
   const invType = (d.inventory_type ?? "").trim();
   if (!MG_FACT_TYPES.has(invType)) return null;
-  return crossExamineRow({
+  const exam = crossExamineRow({
     productText: d.name,
     inventoryType: invType,
     thcColumn: d.total_thc_pct ?? d.thc_pct ?? null,
     cbdColumn: d.cbd_pct ?? null,
   });
+  return mergeCoaIntoExam(exam, coaFacts ?? null);
 }
 
 /**
@@ -371,7 +389,7 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       return r.value;
     };
     let thcPct = capped("THC", d.total_thc_pct ?? d.thc_pct);
-    const cbdPct = capped("CBD", d.cbd_pct);
+    let cbdPct = capped("CBD", d.cbd_pct);
     const compounds: PlannedInjectedItem["compounds_json"] = [];
     for (const [k, v] of Object.entries(d.potency_json ?? {})) {
       const type = k.trim().toLowerCase();
@@ -398,7 +416,25 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
     let netWeightGrams: number | null = null;
     let netVolumeMl: number | null = null;
     const invType = (d.inventory_type ?? "").trim();
-    const exam = examineDraftFacts(d);
+    const exam = examineDraftFacts(d, enrich.coaFacts ?? null);
+    if (exam && enrich.coaFacts?.usable) {
+      // R28: say plainly that the lab certificate supplied facts, and show
+      // every disclosure (arithmetic, serving weight, the name ratio).
+      diagnostics.push({
+        severity: "info",
+        code: "coa_facts_applied",
+        message: `"${d.name}": serving facts read from the lab certificate (COA).`,
+        context: {
+          draft_id: d.id,
+          pos_product_key: key,
+          productName: d.name,
+          servingWeightG: enrich.coaFacts.servingWeightG,
+          thcMgPerServing: enrich.coaFacts.thcMgPerServing?.value ?? null,
+          packageThcMg: enrich.coaFacts.packageThcMg?.value ?? null,
+          notes: enrich.coaFacts.notes,
+        },
+      });
+    }
     if (exam) {
       if (exam.needsReview) {
         diagnostics.push({
@@ -446,6 +482,23 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
           const cv = capIntakePotency(exam.packageCbdMg.value, unit, websiteCategory);
           packageCbdMg = cv.value;
           factProvenance.package_cbd_mg = exam.packageCbdMg.source;
+          // R28: same rule as transform.ts (the Cultivera path) - a VERIFIED
+          // package CBD total is what the card shows, never the raw percent
+          // column printed with an mg unit.
+          cbdPct = cv.value;
+        } else if (enrich.coaFacts?.usable && enrich.coaFacts.cbdNotDetected) {
+          // R28: the certificate says CBD was not detected (ND).
+          cbdPct = null;
+        }
+        // R28: the THC/CBD compound rows follow the verified package totals
+        // (the potency_json values are lab PERCENTS; in mg mode they would
+        // otherwise print as "0.12 mg").
+        for (const c of compounds) {
+          if (c.type === "thc" && packageThcMg !== null) c.value = String(Number(packageThcMg.toFixed(2)));
+          if (c.type === "cbd" && packageCbdMg !== null) c.value = String(Number(packageCbdMg.toFixed(2)));
+        }
+        if (enrich.coaFacts?.usable && enrich.coaFacts.cbdNotDetected) {
+          for (let i = compounds.length - 1; i >= 0; i--) if (compounds[i].type === "cbd") compounds.splice(i, 1);
         }
         if (exam.servingsPerPack?.confidence === "verified") {
           servingsPerPack = exam.servingsPerPack.value;
@@ -1230,6 +1283,59 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
       new Map([["d1", enrich({ attachedStrainType: { value: "indica", source: "human", confidence: null } })]]),
     );
     assert(p.items[0].strain_type === "sativa-hybrid", "S12: the approver's pick still wins");
+  }
+
+  // ---- R28: the lab certificate fills the facts the name cannot ------------
+  {
+    const name = "bytes - CBG:CBC:CBD:THC (2:2:2:1) - 10pk - Sour Mandarin - 50g";
+    const edible = draft({
+      name,
+      inventory_type: "Solid Edible",
+      thc_pct: 0.1206,
+      cbd_pct: 0.2219,
+      total_thc_pct: 0.1206,
+      potency_json: { thc: 0.1206, cbd: 0.2219 },
+    });
+    const coa: CoaDraftFacts = {
+      usable: true,
+      servingWeightG: 4.54,
+      thcMgPerServing: { value: 5.5, confidence: "verified", note: "0.1206% x 10 x 4.54 g = 5.48 mg" },
+      cbdMgPerServing: { value: 10, confidence: "verified", note: "c" },
+      cbdNotDetected: false,
+      servingsPerPack: 10,
+      packageThcMg: { value: 55, confidence: "verified", note: "5.5 x 10" },
+      packageCbdMg: { value: 100, confidence: "verified", note: "10 x 10" },
+      minors: [
+        { cannabinoid: "CBG", mgPerServing: 10, packageMg: 100 },
+        { cannabinoid: "CBC", mgPerServing: 9.5, packageMg: 95 },
+      ],
+      ratioCheck: null,
+      reasons: [],
+      notes: ["n"],
+    };
+    const ed = (c: CoaDraftFacts | null) =>
+      plan([edible], new Map([["d1", enrich({ websiteCategory: "edibles", coaFacts: c })]]));
+    const before = ed(null);
+    assert(before.diagnostics.some((x) => x.code === "fact_extraction_review"), "R28: without the COA the edible is held");
+    assert(before.items[0].package_thc_mg === null && before.items[0].mg_per_serving === null, "R28: without the COA nothing is filled");
+    const after = ed(coa);
+    const it = after.items[0];
+    assert(!after.diagnostics.some((x) => x.code === "fact_extraction_review"), "R28: the COA resolves the hold");
+    assert(after.diagnostics.some((x) => x.code === "coa_facts_applied"), "R28: the COA use is disclosed");
+    assert(it.package_thc_mg === 55 && it.mg_per_serving === 5.5 && it.servings_per_pack === 10 && it.package_cbd_mg === 100, "R28: facts filled");
+    assert(it.thc === "55mg" && it.cbd === "100mg", "R28: the card shows the package totals, not 0.12 mg");
+    assert(it.fact_provenance.package_thc_mg === "coa" && it.fact_provenance.mg_per_serving === "coa" && it.fact_provenance.servings_per_pack === "name", "R28: provenance coa/name");
+    const comp = it.compounds_json.map((c) => `${c.type}:${c.value}`).join(",");
+    assert(comp === "thc:55,cbd:100,cbg:100,cbc:95", "R28: compounds " + comp);
+    const held = ed({ ...coa, reasons: ["over 10 mg"] });
+    assert(held.diagnostics.some((x) => x.code === "fact_extraction_review" && x.message === "over 10 mg"), "R28: a COA reason holds the product");
+    assert(held.items[0].package_thc_mg === 55, "R28: held but the facts are still filled for the reviewer");
+    const nd = ed({ ...coa, packageCbdMg: null, cbdMgPerServing: null, cbdNotDetected: true });
+    assert(nd.items[0].cbd === null && !nd.items[0].compounds_json.some((c) => c.type === "cbd"), "R28: CBD not detected -> no CBD shown");
+    const unusable = ed({ ...coa, usable: false });
+    assert(unusable.items[0].package_thc_mg === null && unusable.diagnostics.some((x) => x.code === "fact_extraction_review"), "R28: an unusable extract changes nothing");
+    const flower = plan([draft({})], new Map([["d1", enrich({ coaFacts: coa })]]));
+    assert(flower.items[0].thc === "24.11%" && flower.items[0].package_thc_mg === null, "R28: percent products ignore COA mg facts");
   }
 
   return { passed };

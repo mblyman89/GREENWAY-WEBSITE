@@ -1,0 +1,163 @@
+                                                                                                   Medical Compliance Test Report
+
+
+
+
+ Origin                              Sample Demographics
+                                     Sample Name:                                                              Lab Sample ID: WA-260921-005
+ Firetree LLC                        Apple Cardamom CBN CBD THC - 5g
+ 3163 Goldie Rd Bldg D
+ Oak Harbor, Wa 98277                Product Type:                                              Date of Collection:       Serving / Package Wt:
+ License #: 418524                   Edible                                                     2026-09-18                4.61g / N/A
+
+ Parent Batch ID:                    Matrix Type:                                               Date of Receipt:          Sample Size:
+ GF41852405694998                    ISL                                                        2026-09-21                1 unit
+
+ Origin Sample ID:                   Category: End Product                                      Date of Completion:       Batch Pass/Fail:
+ GF41852405695003                    Solid Edible                                               2026-10-01                ✔ PASS
+ Cannabinoid Analysis - summary
+ Total d9-THC:    0.25% 11mg/serving            Total CBD:       0.46% 21mg/serving                     Total Cannabinoids:   1.2%
+ Safety Analysis - summary
+ Foreign Matter        Heavy Metals           Microbial            Mycotoxins              Pesticides          Solvents            Water Activity
+       NT                ✔ PASS                 NT                     NT                     NT                   NT                ✔ PASS
+ Cannabinoids - Potency                                                                                                                2026-09-22
+   Analyte Name                 %                         mg/g                mg/serving                mg/package                  LoQ (%)
+
+  Total Cannabinoids           1.2                         12                        54                      N/A                      N/A
+
+      Total THC                0.25                       2.5                        11                      N/A                      N/A
+
+      Total CBD                0.46                       4.6                        21                      N/A                      N/A
+
+       d9-thc                  0.25                       2.5                        11                      N/A                     0.0036
+
+       d9-thca                 ND                         ND                         N/A                     N/A                     0.0036
+
+         cbd                   0.46                       4.6                        21                      N/A                     0.0036
+
+        cbda                   ND                         ND                         N/A                     N/A                     0.0036
+
+         cbc                   ND                         ND                         N/A                     N/A                     0.0072
+
+        cbca                   ND                         ND                         N/A                     N/A                     0.0072
+
+        cbdv                   ND                         ND                         N/A                     N/A                     0.0072
+
+        cbdva                  ND                         ND                         N/A                     N/A                     0.0072
+
+         cbg                   ND                         ND                         N/A                     N/A                     0.0072
+
+        cbga                   ND                         ND                         N/A                     N/A                     0.0072
+
+         cbl                   ND                         ND                         N/A                     N/A                     0.0072
+
+         cbn                   0.46                       4.6                        21                      N/A                     0.0072
+
+        cbna                   ND                         ND                         N/A                     N/A                     0.0072
+
+         cbt                   ND                         ND                         N/A                     N/A                     0.0072
+
+       d8-thc                  ND                         ND                         N/A                     N/A                     0.0072
+
+       d9-thcv                 ND                         ND                         N/A                     N/A                     0.0072
+
+      d9-thcva                 ND                         ND                         N/A                     N/A                     0.0072
+
+                                                                 [End of Analytes]
+
+
+
+
+Template Version: 8.0
+Document Created: 2026-10-01 08:49:34                            Page 1 of 3
+Auth: FimHBh7RJFDD08taTkUCZA
+                                                                                    Regulatory Compliance Testing
+
+                                                                                Certificate of Analysis
+                                                          Batch #: GF41852405694998, ID: WA-260921-005,
+                                               Sample Name: Apple Cardamom CBN CBD THC - 5g, Type: Edible,
+                                                                    Origin: Firetree LLC (License No.: 418524)
+
+
+
+
+Heavy Metals                                          2026-10-01
+Analyte Name (ppm)           Result       LoQ/AL        (Pass/Fail)
+as                           ND             1/2            Pass
+cd                           ND          0.4 / 0.82        Pass
+hg                           ND           0.3 / 0.4        Pass
+pb                           ND           0.8 / 1.2        Pass
+Water Activity                                        2026-10-01
+Analyte Name (aw)            Result       LoQ/AL        (Pass/Fail)
+water activity               0.68      0.35 / 0.85         Pass
+                      [ END OF ANALYTES ]
+
+
+
+
+Template Version: 8.0
+Document Created: 2026-10-01 08:49:34                     Page 2 of 3
+Auth: FimHBh7RJFDD08taTkUCZA
+                                                                                  Regulatory Compliance Testing
+
+                                                                             Certificate of Analysis
+                                                       Batch #: GF41852405694998, ID: WA-260921-005,
+                                            Sample Name: Apple Cardamom CBN CBD THC - 5g, Type: Edible,
+                                                                 Origin: Firetree LLC (License No.: 418524)
+
+
+
+
+ Attestation & Accuracy Review
+
+These testing results are certified by scientific examination of a single sample provided by the Producer/Processor.
+Confidence Analytics and its agents did not observe or participate in the sample selection process, and cannot
+confirm the authenticity of the sample or its representativeness of the associated lot/batch. The sample, as received,
+was homogenized before subsamples were drawn for specific analyses.
+
+Pass/Fail criteria are defined in WAC 314-55-102 and WAC 314-55-108
+
+
+Calculations:
+
+Total THC = d9-THC + ( THC-A * 0.877 )
+Total CBD = CBD + ( CBD-A * 0.877 )
+Total Cannabinoid is a raw sum of all measured cannabinoids.
+In Traceability, Total Cannabinoid is a sum of Total THC and Total CBD.
+Figures may differ slightly from traceability due to rounding.
+
+Definitions:
+
+ND = Not Detected                                             GPM = Green Plant Material
+NT = Not Tested                                               CONC = Concentrate
+LOQ = Lower Quantification Limit                              ISL = Infused Solid or Liquid
+AL = Action Limit                                             1Not included in A2LA scope of Accreditation
+N/A = Not Applicable                                          2WSDA Accreditation not available for this analyte
+
+
+
+Analytical Methods Used:
+
+Cannabinoids by UHPLC-DAD                                     Mycotoxins by LC-MS/MS
+Terpenes by HS-GC-FID/MS2                                     Microbes by Plate Counting
+Residual Solvents by HS-GC-MS                                 Heavy Metals by ICP-MS
+LCMS Pesticides by LC-MS/MS                                   Foreign Material by Macroscopic Inspection
+GCMS Pesticides by GC-MS/MS                                   Water Activity by HYGROMETER
+
+
+
+
+                             Certifying Scientist:
+
+
+
+ Material Amendments
+2026-10-01: Version 2 amended from original report, Heavy Metals test added to the report
+
+
+
+
+Template Version: 8.0
+Document Created: 2026-10-01 08:49:34                 Page 3 of 3
+Auth: FimHBh7RJFDD08taTkUCZA
+

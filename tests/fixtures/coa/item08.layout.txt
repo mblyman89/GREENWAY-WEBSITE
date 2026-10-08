@@ -1,0 +1,264 @@
+                                                                                    Medical Compliance Test Report
+
+
+
+
+ Origin                          Sample Demographics
+                                 Sample Name:                                                   Lab Sample ID: WA-260923-113
+ Firetree LLC                    hashbreak - Infused Grind - Candy Mac X Glacier Falls - 1g
+ 3163 Goldie Rd Bldg D
+ Oak Harbor, Wa 98277            Product Type:                                   Date of Collection:       Serving / Package Wt:
+ License #: 418524               Infused Mix                                     2026-09-22                N/A / N/A
+
+ Parent Batch ID:                Matrix Type:                                    Date of Receipt:          Sample Size:
+ GF41852405695172                GPM                                             2026-09-23                1 unit
+
+ Origin Sample ID:               Category: End Product                           Date of Completion:       Batch Pass/Fail:
+ GF41852405695181                Cannabis Mix Infused                            2026-09-25                ✔ PASS
+ Cannabinoid Analysis - summary
+     Total d9-THC:   28% 280mg/g             Total CBD:   0.051% 0.51mg/g                Total Cannabinoids:    33%
+
+ Terpene Analysis2 - summary
+  Total Terpenes: 1.8 %     Top Three:      Caryophyllene: 0.42 %        Linalool: 0.21 %                Limonene: 0.19 %
+
+ Safety Analysis - summary
+ Foreign Matter      Heavy Metals        Microbial         Mycotoxins       Pesticides          Solvents            Water Activity
+       NT              ✔ PASS              NT                 NT               NT                   NT                   NT
+ Cannabinoid Profile                                               Strain Compass
+
+
+
+
+Template Version: 8.0
+Document Created: 2026-09-24 17:12:46                     Page 1 of 5
+Auth: QG9WNDUqMx5hZj5qNfXpJM
+                                                                                        Regulatory Compliance Testing
+
+                                                                                   Certificate of Analysis
+                                                             Batch #: GF41852405695172, ID: WA-260923-113,
+                       Sample Name: hashbreak - Infused Grind - Candy Mac X Glacier Falls - 1g, Type: Infused Mix,
+                                                                       Origin: Firetree LLC (License No.: 418524)
+
+
+
+
+ Cannabinoids - Potency                                                                                               2026-09-25
+   Analyte Name                 %                    mg/g                mg/serving            mg/package            LoQ (%)
+
+  Total Cannabinoids            33                    330                    N/A                    N/A                N/A
+
+      Total THC                 28                    280                    N/A                    N/A                N/A
+
+      Total CBD               0.051                   0.51                   N/A                    N/A                N/A
+
+       d9-thc                  1.2                     12                    N/A                    N/A               0.034
+
+       d9-thca                  31                    310                    N/A                    N/A               0.034
+
+         cbd                   ND                     ND                     N/A                    N/A               0.034
+
+        cbda                  0.058                   0.58                   N/A                    N/A               0.034
+
+         cbc                   ND                     ND                     N/A                    N/A               0.069
+
+        cbca                   0.27                   2.7                    N/A                    N/A               0.069
+
+        cbdv                   ND                     ND                     N/A                    N/A               0.069
+
+        cbdva                  ND                     ND                     N/A                    N/A               0.069
+
+         cbg                   0.2                     2                     N/A                    N/A               0.069
+
+        cbga                   0.72                   7.2                    N/A                    N/A               0.069
+
+         cbl                   ND                     ND                     N/A                    N/A               0.069
+
+         cbn                   ND                     ND                     N/A                    N/A               0.069
+
+        cbna                  0.082                   0.82                   N/A                    N/A               0.069
+
+         cbt                   ND                     ND                     N/A                    N/A               0.069
+
+       d8-thc                  ND                     ND                     N/A                    N/A               0.069
+
+       d9-thcv                 ND                     ND                     N/A                    N/A               0.069
+
+      d9-thcva                 0.21                   2.1                    N/A                    N/A               0.069
+
+ Terpene Profile2
+
+
+
+
+Template Version: 8.0
+Document Created: 2026-09-24 17:12:46                        Page 2 of 5
+Auth: QG9WNDUqMx5hZj5qNfXpJM
+                                                                                            Regulatory Compliance Testing
+
+                                                                                         Certificate of Analysis
+                                                            Batch #: GF41852405695172, ID: WA-260923-113,
+                      Sample Name: hashbreak - Infused Grind - Candy Mac X Glacier Falls - 1g, Type: Infused Mix,
+                                                                      Origin: Firetree LLC (License No.: 418524)
+
+
+
+
+ Terpenes2                                       2026-09-24         Terpenes continued
+Analyte                    Result         loq                      Analyte                          Result       loq
+Name                       (ppm)         (ppm)                     Name                             (ppm)       (ppm)
+
+                  1                                                limonene                          1900           140   PASS
+a-bisabolene                 490          140         PASS
+                  1                                                linalool                          2100           140   PASS
+a-bulnesene                 1100          140         PASS
+              1                                                    m-cymene                           ND            140   PASS
+a-farnesene                  350          140         PASS
+              1                                                    menthone                           ND            140   PASS
+a-maaliene                  1100          140         PASS
+
+a-ocimene                    ND           140         PASS         myrcene                            630           550   PASS
+
+a-phellandrene               ND           140         PASS         o-cymene                           ND            140   PASS
+
+a-pinene                     330          140         PASS         p-cymene                           ND            140   PASS
+
+a-terpinene                  ND           140         PASS         piperitone                         ND            140   PASS
+
+b-farnesene                  ND           270         PASS         pulegone                           ND            270   PASS
+
+              1                                                    safranal                           ND            140   PASS
+b-maaliene                   530          140         PASS
+                                                                                 1
+b-ocimene                    ND           140         PASS         selinadiene                        930           140   PASS
+
+b-pinene                     500          140         PASS         terpineol                          460           140   PASS
+
+bisabolol                    960          140         PASS         terpinolene                        ND            140   PASS
+
+borneol                      ND           550         PASS         thymol                             ND            140   PASS
+                                                                                            1
+camphene                     ND           140         PASS         trans-a-bergamotene                290           140   PASS
+                                                                                     1
+camphor                      ND           140         PASS         total terpenes                    18000          NA    PASS
+
+carene                       ND           140         PASS
+
+carvacrol                    ND           140         PASS
+
+carvone                      ND           140         PASS
+
+caryophyllene               4200          140         PASS
+
+cedrol                       ND           140         PASS
+
+citral                       ND           270         PASS
+
+eucalyptol                   ND           140         PASS
+
+fenchol                      550          270         PASS
+
+fenchone                     ND           140         PASS
+
+g-terpinene                  ND           140         PASS
+
+guaiol                       620          140         PASS
+
+humulene                    1300          140         PASS
+
+isobornyl acetate            ND           140         PASS
+
+isopulegol                   ND           270         PASS
+
+
+
+Template Version: 8.0
+Document Created: 2026-09-24 17:12:46                     Page 3 of 5
+Auth: QG9WNDUqMx5hZj5qNfXpJM
+                                                                                      Regulatory Compliance Testing
+
+                                                                                  Certificate of Analysis
+                                                            Batch #: GF41852405695172, ID: WA-260923-113,
+                      Sample Name: hashbreak - Infused Grind - Candy Mac X Glacier Falls - 1g, Type: Infused Mix,
+                                                                      Origin: Firetree LLC (License No.: 418524)
+
+
+
+
+Heavy Metals                                         2026-09-24
+Analyte Name (ppm)            Result      LoQ/AL        (Pass/Fail)
+as                           ND            1/2             Pass
+cd                           ND         0.4 / 0.82         Pass
+hg                           ND          0.3 / 0.4         Pass
+pb                           ND          0.8 / 1.2         Pass
+                      [ END OF ANALYTES ]
+
+
+
+
+Template Version: 8.0
+Document Created: 2026-09-24 17:12:46                     Page 4 of 5
+Auth: QG9WNDUqMx5hZj5qNfXpJM
+                                                                                       Regulatory Compliance Testing
+
+                                                                                  Certificate of Analysis
+                                                            Batch #: GF41852405695172, ID: WA-260923-113,
+                      Sample Name: hashbreak - Infused Grind - Candy Mac X Glacier Falls - 1g, Type: Infused Mix,
+                                                                      Origin: Firetree LLC (License No.: 418524)
+
+
+
+
+ Attestation & Accuracy Review
+
+These testing results are certified by scientific examination of a single sample provided by the Producer/Processor.
+Confidence Analytics and its agents did not observe or participate in the sample selection process, and cannot
+confirm the authenticity of the sample or its representativeness of the associated lot/batch. The sample, as received,
+was homogenized before subsamples were drawn for specific analyses.
+
+Pass/Fail criteria are defined in WAC 314-55-102 and WAC 314-55-108
+
+
+Calculations:
+
+Total THC = d9-THC + ( THC-A * 0.877 )
+Total CBD = CBD + ( CBD-A * 0.877 )
+Total Cannabinoid is a raw sum of all measured cannabinoids.
+In Traceability, Total Cannabinoid is a sum of Total THC and Total CBD.
+Figures may differ slightly from traceability due to rounding.
+
+Definitions:
+
+ND = Not Detected                                                  GPM = Green Plant Material
+NT = Not Tested                                                    CONC = Concentrate
+LOQ = Lower Quantification Limit                                   ISL = Infused Solid or Liquid
+AL = Action Limit                                                  1Not included in A2LA scope of Accreditation
+N/A = Not Applicable                                               2WSDA Accreditation not available for this analyte
+
+
+
+Analytical Methods Used:
+
+Cannabinoids by UHPLC-DAD                                          Mycotoxins by LC-MS/MS
+Terpenes by HS-GC-FID/MS2                                          Microbes by Plate Counting
+Residual Solvents by HS-GC-MS                                      Heavy Metals by ICP-MS
+LCMS Pesticides by LC-MS/MS                                        Foreign Material by Macroscopic Inspection
+GCMS Pesticides by GC-MS/MS                                        Water Activity by HYGROMETER
+
+
+
+
+                              Certifying Scientist:
+
+
+
+ Material Amendments
+
+No material amendments recorded for this sample.
+
+
+
+
+Template Version: 8.0
+Document Created: 2026-09-24 17:12:46                     Page 5 of 5
+Auth: QG9WNDUqMx5hZj5qNfXpJM
+

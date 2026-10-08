@@ -43,7 +43,12 @@ import {
   updateLotComplianceClassificationAction,
   linkLotProductAction,
   linkLotCoaAction,
+  rereadLotCoaAction,
 } from "../actions";
+// R28: the lab certificate the system read, and the product facts (view + edit).
+import { labCertificateView, coaFactsView, lotFactRows, coaRereadBanner, factSaveBanner } from "@/lib/inventory/coa-panel-core";
+import { loadLotFactsContext } from "@/lib/inventory/coa-panel-server";
+import { LabCertificatePanel, ProductFactsSection } from "@/components/admin/inventory/LabCertificatePanels";
 // S37: the two "fill only when empty" doors (product link, attach a lab result).
 import {
   productLinkEligibility,
@@ -79,6 +84,8 @@ import { pacificToday } from "@/lib/reports/timezone";
 import { migrationLotCallout, lotManifestHref } from "@/lib/inventory/migration-lot-fix-core";
 
 export const dynamic = "force-dynamic";
+// R28: "Re-read lab certificate" runs LlamaParse (up to 90 s) on this page.
+export const maxDuration = 300;
 
 function fmtMoney(minor: number | null): string {
   if (minor == null) return "—";
@@ -124,11 +131,11 @@ export default async function LotDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string; coa?: string; restaged?: string; fact?: string; fact_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { saved, error, back, coaSearch } = await searchParams;
+  const { saved, error, back, coaSearch, coa, restaged, fact, fact_msg } = await searchParams;
   // S31: vendors/[id] and products/[key] link here with ?back=<admin path>.
   // Validated with the same guard the media actions use (in-app /admin paths
   // only), so a crafted link can never make this an open redirect.
@@ -287,6 +294,14 @@ export default async function LotDetailPage({
     currentAfterTaxMinor != null ? baseFromAfterTax(currentAfterTaxMinor, priceCategory) : null;
 
   const expired = lot.expires_on != null && lot.expires_on < today;
+
+  // R28: what the system read from this lot's lab certificate, what that
+  // gives this product, the facts on the lot now, and the editable facts.
+  const labView = labCertificateView(lot.lab ?? null);
+  const coaFacts = coaFactsView(lot.lab ?? null, { name: lot.product_name ?? null, inventoryType: lot.inventory_type ?? null });
+  const lotFacts = lotFactRows(lot as unknown as Record<string, unknown>);
+  const factsCtx = await loadLotFactsContext(id);
+  const rereadAction = rereadLotCoaAction.bind(null, id);
 
   return (
     <div>
@@ -687,6 +702,12 @@ export default async function LotDetailPage({
               </div>
             )}
           </div>
+        </div>
+
+        {/* R28: the lab certificate read + the product facts (view and edit). */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <LabCertificatePanel view={labView} facts={coaFacts} rereadAction={lot.lab ? rereadAction : undefined} banner={coaRereadBanner(coa, restaged)} />
+          <ProductFactsSection lotFacts={lotFacts} ctx={factsCtx} returnTo={`/admin/inventory/${lot.id}`} banner={factSaveBanner(fact, fact_msg)} />
         </div>
 
         {/* SLICE 77 — correct the descriptive linkage (the ONLY legally

@@ -48,7 +48,7 @@ const CANNA = "THCV|THCA|THC|CBDV|CBDA|CBD|CBG|CBN|CBC";
 /** Inventory types whose potency is dosed in milligrams (incl. topicals — SLICE 56 wires display). */
 export const MG_FACT_TYPES = new Set(["Solid Edible", "Liquid Edible", "Tincture", "Topical Ointment"]);
 
-export type FactSource = "name" | "column" | "name+column" | "name-internal";
+export type FactSource = "name" | "column" | "name+column" | "name-internal" | "coa";
 export type FactConfidence = "verified" | "single-source" | "conflict";
 
 export type Fact<T> = {

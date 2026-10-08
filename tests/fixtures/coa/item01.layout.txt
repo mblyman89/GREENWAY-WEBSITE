@@ -1,0 +1,118 @@
+           SOURCE INFORMATION
+ ORIGINATION: BUDDY BOY FARMS                                                                  Certificate of Analysis
+ LICENSE:                        412053                                               Laboratory license: #0012 | (509) 981-2266 | 124 E. Rowan Spokane, WA
+ ADDRESS: 38278 ANGELS LANDING  RD N #A STE A,
+                          FORD, WA 990139524                                                                  www.greengrowerlabs.com
+ SAMPLE NAME:      Super Boof
+ TYPE:      Non-Solvent Based
+                  Concentrate
+                                                                              Sample ID:         GF41205305607131
+ CATEGORY:         EndProduct
+ SAMPLE DATE:
+               TESTING SUMMARY                                             POTENCY
+ DATE RECIEVED:                             10/17/2025
+ QTY RECIEVED(g):                                                     3
+                                                                                                                          Analyte                       Mass ( % )               Mass ( Mg / g)
+ DATE REPORTED:                             10/21/2025
+                                                                                                                      Δ9-THC                                       1.1                 11.00
+ PESTICIDES:                                                  PASS
+                                                                                                                      THCa                                       86.0                      860
+ MICROBIALS:                                                  PASS
+                                                                                                                      Total THC                                         77                 765
+ MYCOTOXINS:                                                  PASS                87                                  CBD                                    < 0.10                        0.00
+ HEAVY METALS:                                                PASS
+                                                                                                                      CBDA                                       0.22                      2.20
+                                                                                   Total
+                                                                                Cannabinoids                          Total CBD                                  0.19                      1.93
+                                                                                                                                          *Total cannabinoids : Sum of analytes mass (%)
+
+
+
+           COMMENT/NOTES:
+                                                                           MICROBIALS
+
+                                                                                                            Analyte                                     LIMIT                 UNIT
+
+                                                                                                      STEC (Shiga toxin-producing E. col)           NEGATIVE                 Negative
+                                                                                                      Salmonella                                    NEGATIVE                 Negative
+           ANALYTICAL METHODS
+                                                                                                      BTGN (Bile-Tolerant Gram-Negative Bacteria)   1,000     (CFU/g)            < 30
+» WATER ACTIVITY: ROTRONIC METER
+» PESTICIDES & MYCOTOXINS: LC-MS / MS
+» MICROBIALS: RT-qPCR & 3M PERIFILM
+» POTENCY: HPLC UV-VIS DETECTOR
+» HEAVY METALS: ICP-MS                                                     HEAVY METALS
+» RESIDUAL SOLVENTS: GC-MS
+
+                                                                                               Analyte                                  LIMIT (μg/g)            UNIT (μg/g)
+
+                                                                                               ARSENIC                                      2.0                  < 0.30               ND
+  This product has been tested by Green Grower
+ Labs using validated testing methodologies and                                                CADMIUM                                      0.82                 < 0.30               ND
+ a quality system as required by state law. Values                                             LEAD                                         1.2
+reported relate only to the product tested. Green
+                                                                                                                                                                 < 0.30               ND
+ Grower Labs makes no claims as to the efficacy,                                               MERCURY                                      0.40                 < 0.30               ND
+safety or other risks associated with any detected
+    or non-detected levels of any compounds
+   reported herein. This Certificate shall not be
+  reproduced except in full, without the written
+          approval of Green Grower Labs.
+
+Flower samples are separated for the required field of testing,
+   then homogenized before testing using liquid nitrogen.
+
+ Numerical values may exhibit minor differences as a result of rounding.
+
+
+
+
+                                                                                                                                                                             GGL Page 1 of 2
+                                                                       Certificate of Analysis
+                                                       Laboratory license: #0012 | (509) 981-2266 | 124 E. Rowan Spokane, WA
+                                                                               www.greengrowerlabs.com
+
+
+                                         Sample ID:                       GF41205305607131
+
+
+
+
+PESTICIDES & MYCOTOXINS
+  Analyte                       Limit(PPM) MASS (PPM)                                                          Limit(PPM) MASS (PPM)                                                     Limit(PPM) MASS (PPM)
+
+
+  Total Abamectine                 0.5      < 0.38                     ND           Dimethoate                0.20            < 0.15                           ND   Naled                  0.50     < 0.38         ND
+  Acephate                        0.4       < 0.30                     ND           Ethoprophos               0.20            < 0.15                           ND   Oxamyl                 1.0      < 0.75         ND
+  Acequinocyl                     2.0       < 1.5                      ND           Etofenprox                0.40            < 0.30                           ND   Paclobutrazol          0.40     < 0.30         ND
+  Acetamiprid                     0.2       < 0.15                     ND           Etoxazole                 0.20            < 0.15                           ND   Permethrins a          0.20     < 0.15         ND
+  Aldicarb                        0.40      < 0.30                     ND           Fenoxycarb                0.20            < 0.15                           ND   Phosmet                0.20     < 0.15         ND
+  Azoxystrobin                    0.20      < 0.15                     ND           Fenpyroximate             0.40            < 0.30                           ND   Piperonyl butoxide     0.20 < 1.5              ND
+  Bifenazate                      0.20      < 0.15                     ND           Fipronil                  0.40            < 0.30                           ND   Prallethrin            0.20     < 0.15         ND
+  Bifenthrin                      0.20      < 0.15                     ND           Flonicamid                1.0             < 0.75                           ND   Propiconazole          0.40     < 0.30         ND
+  Boscalid                        0.40      < 0.30                     ND           Fludioxonil               0.40            < 0.30                           ND   Propoxur               0.20     < 0.15         ND
+  Carbaryl                        0.20      < 0.15                     ND           Hexythiazox               1.0             < 0.75                           ND   Pyrethrins b           1.0      < 0.75         ND
+  Carbofuran                      0.20      < 0.15                     ND           Imazalil                  0.20            < 0.15                           ND   Pyridaben              0.20     < 0.15         ND
+  Chlorantraniliprole             0.20      < 0.15                     ND           Imidacloprid              0.40            < 0.30                           ND   Spinosad c             0.20     < 0.15         ND
+  Chlorfenapyr                    1.0       < 0.75                     ND           Kresoxim-methyl           0.40            < 0.30                           ND   Spiromesifen           0.20     < 0.15         ND
+  Chlorpyrifos                    0.20      < 0.15                     ND            Malathion                0.20            < 0.15                           ND   Spirotetramat          0.20     < 0.15         ND
+  Clofentezine                    0.20      < 0.15                     ND            Metalaxyl                0.20            < 0.15                           ND   Spiroxamine            0.40     < 0.30         ND
+  Cyfluthrin                      1.0       < 0.75                     ND            Methiocarb               0.20            < 0.15                           ND   Tebuconazole           0.40     < 0.30         ND
+  Cypermethrin                    1.0       < 0.75                     ND            Methomyl                 0.40            < 0.30                           ND   Thiacloprid            0.20     < 0.15         ND
+  Daminozide                      1.0       < 0.75                     ND            Methyl parathion         0.20            < 0.15                           ND   Thiamethoxam           0.20     < 0.15         ND
+  DDVP (Dichlorvos)               0.10      < 0.075                    ND            MGK-264                  0.20            < 0.15                           ND   Trifloxystrobin        0.20     < 0.15         ND
+  Diazinon                        0.20      < 0.15                     ND            Myclobutanil             0.20            < 0.15                           ND   Total Aflatoxins       20 ppb    < 15          ND
+                                                                                                         a Sum of Isomers: cis-Permethrin & trans-Permethrin
+                                                                                                                                                                    Ochratoxin A           20 ppb    < 15          ND
+                                                                                                         b Sum of Isomers: Pyrethrin I & Pyrethrin II
+  If a sample result shows a pesticide as detected and a numerical result as less than (example <0.02
+                                                                                                         c Sum of Isomers: Spinosyn A & Spinosyn D
+  ppm), this indicates the pesticide was detected, but not at a level that can be accurately measured.
+                                                                                                         d Sum of Aflatoxin ( B1, B2, G1, G2 )
+                                          ND = Not Detected                                              e Sum of Abamectin ( B1a, B1b )
+
+
+
+
+                                                                                                                                                                                                 GGL Page 2 of 2
+

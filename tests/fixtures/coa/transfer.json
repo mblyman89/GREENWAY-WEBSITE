@@ -1,0 +1,1166 @@
+{
+  "document_name": "WCIA Transfer Schema",
+  "document_schema_version": "2.2.0",
+  "document_origin": "https://go.growflow.com/wa/wcia/transfer?token=EAAAADTnyPeTi0Dh%2B6wTg1Vldr7YOCU3d3RayT0t%2Fg3599lbb6lrbmyIyaNgkucJLUX3CVe25iW3DHdPKIi39LF9FJMTB7kMYqznz19QUGhJrpJj",
+  "external_id": null,
+  "transfer_id": "GF41852400009455",
+  "from_license_number": "418524",
+  "from_license_name": "Firetree Llc",
+  "to_license_number": "413541",
+  "to_license_name": "Greenway Marijuana",
+  "to_license_type": "Retailer + Medical",
+  "transporter_name": "TERPENE TRANSIT",
+  "transporter_license": "426061",
+  "manifest_type": "transporter",
+  "created_at": "2026-09-28T16:50:50.738135Z",
+  "updated_at": "2026-10-06T16:25:53.5504213Z",
+  "transferred_at": "2026-10-06T16:25:48.5567306Z",
+  "est_departed_at": "2026-10-06T20:00:47.416Z",
+  "est_arrival_at": "2026-10-08T20:00:47.416Z",
+  "route": "Start: 3163 Goldie Rd Building D, Oak Harbor, WA 98277\nEnd: 4851 GEIGER RD SE, PORT ORCHARD, WA 98366\n\nDistance: 147 mi\nDuration: 2 hours 32 mins\n\nDirections:\n1) 358 ft - 1 min - Head north toward N Goldie Rd\n2) 322 ft - 1 min - Turn left onto N Goldie Rd\n3) 0.9 mi - 2 mins - Turn right onto W Ault Field Rd\n4) 4.5 mi - 6 mins - Turn left onto State Rte 20 E\n5) 7.9 mi - 12 mins - At the traffic circle, continue straight onto State Rte 20\n6) 0.6 mi - 1 min - At the traffic circle, take the 2nd exit onto State Rte 20 E\n7) 315 ft - 1 min - Slight right toward State Rte 20 E\n8) 6.9 mi - 9 mins - Merge onto State Rte 20 E\n9) 4.4 mi - 6 mins - Keep left to continue on State Rte 20 E/Avon Cutoff\n10) 88.5 mi - 1 hour 24 mins - Turn right to merge onto I-5 S toward Seattle\n11) 1.1 mi - 1 min - Keep right to stay on I-5 S\n12) 7.7 mi - 8 mins - Keep right to stay on I-5 S\n13) 23.0 mi - 22 mins - Take the exit onto WA-16 W\n14) 0.3 mi - 1 min - Take the WA-160 E/Sedgwick Rd exit toward Southworth Fy\n15) 0.4 mi - 1 min - Turn right onto State Rte 160 E/WA-160 E/SE Sedgwick Rd\n16) 177 ft - 1 min - Turn right onto Geiger Rd SE\n17) 180 ft - 1 min - Turn leftDestination will be on the left\n",
+  "inventory_transfer_items": [
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405695663",
+      "created_at": "2026-10-05T14:43:15.530865Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-01T16:50:13.277",
+      "qty": 10.00000,
+      "uom": "ea",
+      "unit_weight": 3.50000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405695663",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Torus - Flower - LA Kush Cake - 3.5g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "product_price": 17.33000,
+      "line_price": 173.30000,
+      "strain_name": "LA Kush Cake",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-75Gf8fFPPAcx-WA-260902-019.json",
+      "sample_source_id": "GF41852405695663",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405692470",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-75Gf8fFPPAcx-WA-260902-019.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.26030,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 30.12000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.06775,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 26.67554,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.05942,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 26.73496,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700773",
+      "created_at": "2026-10-05T14:48:57.4676742Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2025-10-17T17:19:50.452",
+      "qty": 3.00000,
+      "uom": "ea",
+      "unit_weight": 1.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700773",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "hashbreak - Rosin Cold Cure - Super Boof - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 20.00000,
+      "line_price": 60.00000,
+      "strain_name": "Super Boof",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://gglabs-j.github.io/2025/october/10.17.2025/buddyboy/GF41205305607131.json",
+      "sample_source_id": "GF41852405692726",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41205305607131",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://gglabs-j.github.io/2025/october/10.17.2025/buddyboy/GGL-GF41205305607131.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 1.10000,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 86.00000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.22000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 76.52200,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.19294,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 76.71494,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700770",
+      "created_at": "2026-10-05T14:44:20.265724Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-08-31T20:50:53.767",
+      "qty": 3.00000,
+      "uom": "ea",
+      "unit_weight": 1.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700770",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "hashbreak - Rosin Cold Cure - Pillow Talk - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 20.00000,
+      "line_price": 60.00000,
+      "strain_name": "Pillow Talk",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-fG8GpifokLbo-WA-260902-008.json",
+      "sample_source_id": "GF41852405692729",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405692314",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-fG8GpifokLbo-WA-260902-008.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 1.74700,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 76.44000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.17050,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 68.78488,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.14953,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 68.93441,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700769",
+      "created_at": "2026-10-05T14:44:15.6024334Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-07-01T21:54:48.535",
+      "qty": 3.00000,
+      "uom": "ea",
+      "unit_weight": 1.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700769",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Torus - Rosin Cold Cure - Lemon Heads - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "product_price": 25.00000,
+      "line_price": 75.00000,
+      "strain_name": "Lemon Heads",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-i8qA09jZ1o3Z-WA-260703-000.json",
+      "sample_source_id": "GF41852405693168",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852400159850",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-i8qA09jZ1o3Z-WA-260703-000.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.61050,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 76.02000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.15780,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 67.28004,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.13839,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 67.41843,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700764",
+      "created_at": "2026-10-05T14:43:05.463967Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-07T19:44:32.132",
+      "qty": 5.00000,
+      "uom": "ea",
+      "unit_weight": 1.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700764",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Torus - Ceramic Tip (Infused) - Strawberry Push Pop x Mint Milkshake - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Marijuana Mix Infused",
+      "product_price": 7.00000,
+      "line_price": 35.00000,
+      "strain_name": "Strawberry Push Pop x Mint Milkshake",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-oVg5PHt46uaU-WA-260909-107.json",
+      "sample_source_id": "GF41852405695636",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405693090",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-oVg5PHt46uaU-WA-260909-107.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.66930,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 32.67000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.07388,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 29.32089,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.06479,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 29.38568,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700774",
+      "created_at": "2026-10-05T14:49:36.5084478Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-17T20:16:03.335",
+      "qty": 5.00000,
+      "uom": "ea",
+      "unit_weight": 1.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700774",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Torus - Ceramic Tip (Infused) - Stuffed French Toast x Cherry Amaretto - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Marijuana Mix Infused",
+      "product_price": 7.00000,
+      "line_price": 35.00000,
+      "strain_name": "Stuffed French Toast x Cherry Amaretto",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-5bhzxMqYkShV-WA-260918-059.json",
+      "sample_source_id": "GF41852405695637",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405694782",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-5bhzxMqYkShV-WA-260918-059.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 1.10500,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 34.48000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.04389,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 31.34396,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.03849,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 31.38245,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700767",
+      "created_at": "2026-10-05T14:43:29.1339111Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-07T19:44:32.206",
+      "qty": 10.00000,
+      "uom": "ea",
+      "unit_weight": 1.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700767",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Torus - Glass Tip (Infused) - White Lobster x Mint Milkshake - 1g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Marijuana Mix Infused",
+      "product_price": 6.50000,
+      "line_price": 65.00000,
+      "strain_name": "White Lobster x Mint Milkshake",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-CSbvLwEsnivx-WA-260909-105.json",
+      "sample_source_id": "GF41852405695640",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405693091",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-CSbvLwEsnivx-WA-260909-105.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 1.59100,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 27.90000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.06584,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 26.05930,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.05774,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 26.11704,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700768",
+      "created_at": "2026-10-05T14:43:59.3588418Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-17T15:54:19.994",
+      "qty": 5.00000,
+      "uom": "ea",
+      "unit_weight": 3.50000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700768",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Torus - Pre Roll - Cherry Amaretto - 3.5g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "product_price": 13.00000,
+      "line_price": 65.00000,
+      "strain_name": "Cherry Amaretto",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-ldHBvN0Cfk7p-WA-260918-031.json",
+      "sample_source_id": "GF41852405695685",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405694735",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-ldHBvN0Cfk7p-WA-260918-031.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.45740,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 23.94000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.04517,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 21.45278,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.03961,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 21.49239,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700771",
+      "created_at": "2026-10-05T14:46:55.9174235Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-22T14:54:47.033",
+      "qty": 5.00000,
+      "uom": "ea",
+      "unit_weight": 3.50000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700771",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "hashbreak - Pre Rolls (Infused) - Boo-Berry Pie - 3.5g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Marijuana Mix Infused",
+      "product_price": 10.00000,
+      "line_price": 50.00000,
+      "strain_name": "Boo-Berry Pie",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-QG9WNDUqMx5h-WA-260923-113",
+      "sample_source_id": "GF41852405696015",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405695181",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-QG9WNDUqMx5h-WA-260923-113.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 1.19100,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 30.67000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.05812,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 28.08859,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.05097,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 28.13956,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700765",
+      "created_at": "2026-10-05T14:43:10.671511Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-08-18T15:35:36.735",
+      "qty": 10.00000,
+      "uom": "ea",
+      "unit_weight": 3.50000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700765",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Torus - Flower - Ginger Tea - 3.5g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "product_price": 17.33000,
+      "line_price": 173.30000,
+      "strain_name": "Ginger Tea",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-kpg5uvjn4zvl-WA-260819-012",
+      "sample_source_id": "GF41852405696290",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852400165453",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-kpg5uvjn4zvl-WA-260819-012.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.73400,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 23.67000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.05508,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 21.49259,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.04831,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 21.54090,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700766",
+      "created_at": "2026-10-05T14:43:19.9200044Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-01T16:50:12.935",
+      "qty": 10.00000,
+      "uom": "ea",
+      "unit_weight": 3.50000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700766",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Torus - Flower - Strawberry Push Pop - 3.5g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "product_price": 17.33000,
+      "line_price": 173.30000,
+      "strain_name": "Strawberry Push Pop",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-FJ3TGMuDIPUd-WA-260902-010.json",
+      "sample_source_id": "GF41852405696292",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405692467",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-FJ3TGMuDIPUd-WA-260902-010.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.19330,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 28.01000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.06395,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 24.75807,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.05608,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 24.81415,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700772",
+      "created_at": "2026-10-05T14:48:08.4169174Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-17T15:54:19.522",
+      "qty": 5.00000,
+      "uom": "ea",
+      "unit_weight": 3.50000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700772",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Torus - Pre Roll - Purple Octane - 3.5g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "product_price": 13.00000,
+      "line_price": 65.00000,
+      "strain_name": "Purple Octane",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-V3D7igdgA9f1-WA-260918-022",
+      "sample_source_id": "GF41852405696500",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405694731",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-V3D7igdgA9f1-WA-260918-022.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.31810,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 22.25000,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.04846,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 19.83135,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.04250,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 19.87385,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700760",
+      "created_at": "2026-10-05T14:42:32.4054093Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-29T16:21:00.441",
+      "qty": 10.00000,
+      "uom": "ea",
+      "unit_weight": 50.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700760",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "bytes - CBG:CBC:CBD:THC (2:2:2:1) - 10pk - Sour Mandarin - 50g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "product_price": 9.00000,
+      "line_price": 90.00000,
+      "strain_name": "Sour Mandarin",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-7mDLOjIpm5i3-WA-260921-006",
+      "sample_source_id": "GF41852405700711",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405696279",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-7mDLOjIpm5i3-WA-260921-006.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.12060,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 0.22190,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 0.12060,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.22190,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 0.34250,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700761",
+      "created_at": "2026-10-05T14:42:36.299431Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-29T16:21:00.536",
+      "qty": 10.00000,
+      "uom": "ea",
+      "unit_weight": 50.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700761",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "bytes - CBG:THC (3:1) - 10pk - Honeydew Melon - 50g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "product_price": 9.00000,
+      "line_price": 90.00000,
+      "strain_name": "Honeydew Melon",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-0MXgaICPuCOq-WA-260921-002",
+      "sample_source_id": "GF41852405700712",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405696280",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-0MXgaICPuCOq-WA-260921-002.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.22990,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 0.22990,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.00000,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 0.22990,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700762",
+      "created_at": "2026-10-05T14:42:39.3463304Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-29T16:21:00.649",
+      "qty": 10.00000,
+      "uom": "ea",
+      "unit_weight": 50.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700762",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "bytes - CBN:CBD:THC (2:2:1) - 10pk - Apple Cardamom - 50g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "product_price": 9.00000,
+      "line_price": 90.00000,
+      "strain_name": "Apple Cardamom",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-FimHBh7RJFDD-WA-260921-005",
+      "sample_source_id": "GF41852405700713",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405696281",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-FimHBh7RJFDD-WA-260921-005.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.24560,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 0.45890,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 0.24560,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.45890,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 0.70450,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700763",
+      "created_at": "2026-10-05T14:42:46.3146197Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-29T16:21:00.751",
+      "qty": 10.00000,
+      "uom": "ea",
+      "unit_weight": 50.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700763",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "bytes - CBN:THC (1:1) - 10pk - Concord Grape - 50g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "product_price": 9.00000,
+      "line_price": 90.00000,
+      "strain_name": "Concord Grape",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-wrJtNb5YPiOk-WA-260921-003",
+      "sample_source_id": "GF41852405700714",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405696282",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-wrJtNb5YPiOk-WA-260921-003.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.21920,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 0.20750,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 0.21920,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 0.20750,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 0.42670,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    },
+    {
+      "integrator_data": null,
+      "inventory_id": "GF41852405700759",
+      "created_at": "2026-10-05T14:42:28.9376727Z",
+      "updated_at": "2026-10-06T16:25:48.6416757Z",
+      "sample_collection_date": "2026-09-29T16:21:00.877",
+      "qty": 10.00000,
+      "uom": "ea",
+      "unit_weight": 50.00000,
+      "unit_weight_uom": "g",
+      "product_sku": "GF41852405700759",
+      "product_sample_type": null,
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "bytes - CBD:THC (5:1) - 10pk - Raspberry Peach - 50g",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "inventory_category": "EndProduct",
+      "inventory_type": "Solid Edible",
+      "product_price": 9.00000,
+      "line_price": 90.00000,
+      "strain_name": "Raspberry Peach",
+      "lab_result_passed": "pass",
+      "lab_result_link": "https://certs.conflabs.com/wcia/v2_1/WA-BgHc4KKtWpja-WA-260925-093.json",
+      "sample_source_id": "GF41852405700715",
+      "serving_weight": 0.00000,
+      "lab_result_data": {
+        "lab_result_id": "GF41852405696283",
+        "lab_result_status": "pass",
+        "lab_result_detail": null,
+        "coa": "https://certs.conflabs.com/full/WA-BgHc4KKtWpja-WA-260925-093.pdf",
+        "release_date": null,
+        "amended_date": null,
+        "expire_date": null,
+        "potency": [
+          {
+            "type": "thc",
+            "value": 0.22940,
+            "unit": "pct"
+          },
+          {
+            "type": "cbd",
+            "value": 1.07100,
+            "unit": "pct"
+          },
+          {
+            "type": "total-thc",
+            "value": 0.22940,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cbd",
+            "value": 1.07100,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 1.30040,
+            "unit": "pct"
+          }
+        ],
+        "is_medical": "1"
+      }
+    }
+  ]
+}

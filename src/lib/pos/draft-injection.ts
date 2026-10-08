@@ -32,6 +32,7 @@ import {
 } from "@/lib/pos/draft-injection-core";
 import { intakeDisplayName, lotPackageLabel } from "@/lib/pos/intake-mastering-core";
 // SLICE S12: the golden record (attached facts, compliance-cleared).
+import { loadCoaFactsForDrafts } from "@/lib/inventory/coa-facts-server";
 import { loadGoldenInputs } from "@/lib/catalog/golden-record-server";
 import { insertMenuItemsWithKbLink, logMenuKbLinkPlan, planMenuKbLinksForCards } from "@/lib/catalog/menu-kb-link-server";
 
@@ -215,6 +216,9 @@ export async function injectApprovedDraftsIntoVersion(
     // description linted server-side. Flag off / 0235 missing / read failed
     // = empty map = the placeholder sentence, exactly as before.
     const goldenByDraftId = await loadGoldenInputs(admin, drafts.map((d) => d.id));
+    // R28: the lab certificate's serving facts for every mg-dosed draft whose
+    // lot's certificate has been read (0252). Missing = engine as before.
+    const coaFactsByDraftId = await loadCoaFactsForDrafts(admin, drafts);
     const enrichmentByDraftId = new Map<string, DraftEnrichment>();
     drafts.forEach((d, i) => {
       const lot = d.lot_id ? lotById.get(d.lot_id) ?? null : null;
@@ -238,6 +242,7 @@ export async function injectApprovedDraftsIntoVersion(
         onHandQty: lot ? Number(lot.on_hand_qty ?? 0) : null,
         packageLabel: lotPackageLabel(lot),
         ...(goldenByDraftId.get(d.id) ?? {}),
+        coaFacts: coaFactsByDraftId.get(d.id) ?? null,
       });
     });
 
