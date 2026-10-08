@@ -360,7 +360,7 @@ describe("A. planner survivorship", () => {
   it("every incoming field appears in the receipt exactly once", () => {
     const p = planAttach(base({
       incoming: ATTACH_FIELDS.map((f) =>
-        inc(f, ["effects", "aroma", "flavor", "images"].includes(f) ? ["x"] : f === "strain_type" ? "hybrid" : "value", 95),
+        inc(f, ["effects", "aroma", "flavor", "images"].includes(f) ? ["x"] : f === "terpenes" ? ["myrcene"] : f === "strain_type" ? "hybrid" : "value", 95),
       ),
     }));
     const seen = allFields(p);
@@ -859,7 +859,7 @@ describe("S20. restock suggestions are filed on the live card", () => {
       spies.ring = 1;
       seedDraft({ restock_of_card_key: "CARD-7" });
       db.fail[
-        "catalog_product_drafts:select:id, name, brand_name, vendor_name, category, chosen_website_category, strain_name, lot_id, pos_product_key, restock_of_card_key"
+        "catalog_product_drafts:select:id, name, brand_name, vendor_name, category, chosen_website_category, strain_name, lot_id, pos_product_key, inventory_type, restock_of_card_key"
       ] = { code: "42703", message: 'column catalog_product_drafts.restock_of_card_key does not exist' };
       const res = await runDraft();
       expect(res.ok).toBe(true);
@@ -875,7 +875,7 @@ describe("S20. restock suggestions are filed on the live card", () => {
     try {
       seedDraft({ restock_of_card_key: "CARD-7" });
       db.fail[
-        "catalog_product_drafts:select:id, name, brand_name, vendor_name, category, chosen_website_category, strain_name, lot_id, pos_product_key, restock_of_card_key"
+        "catalog_product_drafts:select:id, name, brand_name, vendor_name, category, chosen_website_category, strain_name, lot_id, pos_product_key, inventory_type, restock_of_card_key"
       ] = { code: "42703", message: "column catalog_product_drafts.some_other_col does not exist" };
       const res = await runDraft();
       expect(res.ok).toBe(false);

@@ -148,10 +148,10 @@ beforeEach(() => {
 describe("S06 pure cores", () => {
   it("embedded self-tests pass (floors registered in the runner)", () => {
     expect(__runGroundingCoreTests().passed).toBeGreaterThanOrEqual(18);
-    expect(__runLookupFactsCoreTests().passed).toBeGreaterThanOrEqual(115);
+    expect(__runLookupFactsCoreTests().passed).toBe(117);
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toMatch(/assertRan\("grounding-core", __runGroundingCoreTests\(\), 17\)/);
-    expect(runner).toMatch(/assertRan\("lookup-facts-core", __runLookupFactsCoreTests\(\), 113\)/);
+    expect(runner).toMatch(/assertRan\("lookup-facts-core", __runLookupFactsCoreTests\(\), 117\)/);
   });
 
   it("bands: 89 -> review, 90 -> auto, missing -> unknown (spec test 1)", () => {

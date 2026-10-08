@@ -64,6 +64,7 @@ import { decideKbStrainTypeWrite } from "@/lib/inventory/strain-type-intel-core"
 import { suggestionConfidence } from "@/lib/inventory/lookup-facts-core";
 import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
 import { strainSlug } from "./product-identity-core";
+import { kbTerpeneSlug } from "@/lib/inventory/coa-facts-core";
 
 // --- 1. Flag ----------------------------------------------------------------
 
@@ -91,6 +92,7 @@ export const ATTACH_FIELDS = [
   "category",
   "size",
   "cannabinoids",
+  "terpenes",
 ] as const;
 export type AttachField = (typeof ATTACH_FIELDS)[number];
 
@@ -108,13 +110,14 @@ export const ATTACH_FIELD_LABEL: Readonly<Record<AttachField, string>> = Object.
   category: "category",
   size: "size",
   cannabinoids: "potency ratio",
+  terpenes: "terpenes",
 });
 
 /** Where a fact can land (shown in the receipt). */
 export type AttachTarget = "product record" | "strain library" | "Enrichment suggestions";
 
 /** Fields whose confidence the worksheet may send back (all 0-100). */
-export const CONFIDENCE_FIELDS = ["summary", "effects", "aroma", "flavor", "lineage", "strain_type"] as const;
+export const CONFIDENCE_FIELDS = ["summary", "effects", "aroma", "flavor", "lineage", "strain_type", "terpenes"] as const;
 export type ConfidenceField = (typeof CONFIDENCE_FIELDS)[number];
 export type FactConfidence = Partial<Record<ConfidenceField, number>>;
 
@@ -132,6 +135,8 @@ export interface ExistingStrain {
   aroma_notes: string[] | null;
   flavor_notes: string[] | null;
   effects?: string[] | null;
+  /** R30: kb_strains.terpenes (KB slugs). Absent = not read. */
+  terpenes?: string[] | null;
   status?: string | null;
   active?: boolean | null;
   source?: string | null;
@@ -143,6 +148,8 @@ export interface ExistingProduct {
   aroma_notes: string[] | null;
   flavor_notes: string[] | null;
   effects: string[] | null;
+  /** R30: kb_products.terpenes. Absent = not read. */
+  terpenes?: string[] | null;
 }
 
 export interface PendingSuggestion {
@@ -189,6 +196,14 @@ export interface PlanInput {
    */
   strainBlockedReason?: string | null;
   /**
+   * R30: may web-found terpenes teach the SHARED strain library? Only for
+   * plain flower inventory types (lab-facts-attach-core strainLearnsFromType):
+   * an infused pre-roll, vape or edible carries ADDED terpenes, so its
+   * terpene list describes the product, not the strain. Absent/false = the
+   * strain row's terpenes are never touched by this attach.
+   */
+  strainLearnsTerpenes?: boolean;
+  /**
    * R23 (owner: "I want to be able to attach as much as possible on
    * onboarding"): a PERSON pressed Attach on one waiting fact in the row's AI
    * card. The value was re-derived server-side (never from the browser) and
@@ -227,6 +242,8 @@ export interface KbProductFacts {
   aroma_notes?: string[];
   flavor_notes?: string[];
   effects?: string[];
+  /** R30: KB terpene slugs (only ever into an EMPTY product terpene list). */
+  terpenes?: string[];
 }
 
 export interface PlannedProvenance {
@@ -289,6 +306,15 @@ const isBlank = (s: string | null | undefined) => !s || !s.trim();
 
 /** Canonical value per field, or null when empty/invalid (never coerced into a guess). */
 function canonicalValue(field: AttachField, raw: unknown): unknown {
+  if (field === "terpenes") {
+    // KB vocabulary only: anything kbTerpeneSlug cannot map is dropped, never guessed.
+    const out: string[] = [];
+    for (const x of cleanList(raw)) {
+      const slug = kbTerpeneSlug(x);
+      if (slug && !out.includes(slug)) out.push(slug);
+    }
+    return out.length ? out : null;
+  }
   if (field === "effects" || field === "aroma" || field === "flavor" || field === "images") {
     const l = cleanList(raw);
     return l.length ? l : null;
@@ -311,8 +337,8 @@ function canonicalValue(field: AttachField, raw: unknown): unknown {
  */
 export function keptFactConfidence(
   own: Partial<Record<ConfidenceField, number | null>> | null | undefined,
-  ai: { summary: string; lineage: string; effects: string[]; aroma: string[]; flavor: string[]; strainType: string },
-  kept: { summary: string; lineage: string; effects: string[]; aroma: string[]; flavor: string[]; strainType: string },
+  ai: { summary: string; lineage: string; effects: string[]; aroma: string[]; flavor: string[]; strainType: string; terpenes?: string[] },
+  kept: { summary: string; lineage: string; effects: string[]; aroma: string[]; flavor: string[]; strainType: string; terpenes?: string[] },
 ): FactConfidence {
   const out: FactConfidence = {};
   if (!own) return out;
@@ -327,6 +353,7 @@ export function keptFactConfidence(
   put("aroma", lk(kept.aroma) === lk(ai.aroma), cleanList(kept.aroma).length > 0);
   put("flavor", lk(kept.flavor) === lk(ai.flavor), cleanList(kept.flavor).length > 0);
   put("strain_type", kept.strainType === ai.strainType, canonicalValue("strain_type", kept.strainType) !== null);
+  put("terpenes", lk(kept.terpenes ?? []) === lk(ai.terpenes ?? []), cleanList(kept.terpenes ?? []).length > 0);
   return out;
 }
 
@@ -336,6 +363,12 @@ const SKIP = {
   category: "The category check on the approve form decides this, so it was not saved here.",
   size: "Net size comes from the manifest and the approve form, so it was not saved here.",
   cannabinoids: "Potency comes from the lab certificate, never from a web lookup, so it was not saved.",
+  terpenes_lab_first:
+    "The strain library already lists terpenes for this strain (a lab certificate outranks the web), so the web's terpenes were not added there.",
+  terpenes_not_flower:
+    "Terpenes from an infused or processed product describe that product, not the strain, so the shared strain library was not taught them.",
+  terpenes_product_has:
+    "The product record already lists terpenes, and a web lookup never replaces them.",
   no_strain: "This product has no strain name on its record, so there is no strain to attach it to.",
   no_pos_key: "This product has no POS key yet, so there is nowhere to list it for review. Approve the draft first, then re-run the lookup.",
   existing_strain_kept: "The strain library already has this strain; only a fact at 90% or more (with auto-attach on) is added to a saved strain.",
@@ -422,7 +455,7 @@ export function planAttach(input: PlanInput): AttachPlan {
   }
 
   // ---- strain write -------------------------------------------------------
-  const STRAIN_FIELDS: AttachField[] = ["strain_type", "summary", "lineage", "aroma", "flavor", "effects"];
+  const STRAIN_FIELDS: AttachField[] = ["strain_type", "summary", "lineage", "aroma", "flavor", "effects", "terpenes"];
   const strainLanded = new Set<AttachField>();
   const strainNotes = new Map<AttachField, string>();
   let strain: StrainWrite | null = null;
@@ -434,6 +467,11 @@ export function planAttach(input: PlanInput): AttachPlan {
     const eligible = (f: AttachField): boolean => {
       if (!byField.has(f)) return false;
       if (f === "strain_type") return attachedSet.has(f);
+      // R30: only plain flower teaches the strain its terpenes (infused products carry added ones).
+      if (f === "terpenes" && !input.strainLearnsTerpenes) {
+        strainNotes.set(f, SKIP.terpenes_not_flower);
+        return false;
+      }
       if (!ex || exIsStaging) return true;
       return attachedSet.has(f);
     };
@@ -454,6 +492,7 @@ export function planAttach(input: PlanInput): AttachPlan {
         if (fields.includes("aroma")) row.aroma_notes = val("aroma");
         if (fields.includes("flavor")) row.flavor_notes = val("flavor");
         if (fields.includes("effects")) row.effects = val("effects");
+        if (fields.includes("terpenes")) row.terpenes = val("terpenes");
         strain = { action: "create", slug, row, fields };
         for (const f of fields) {
           strainLanded.add(f);
@@ -487,6 +526,26 @@ export function planAttach(input: PlanInput): AttachPlan {
           } else strainNotes.set(f, SKIP.already_present);
           continue;
         }
+        if (f === "terpenes") {
+          // Lab first (MDM source priority): the web fills an EMPTY strain
+          // terpene list only. A listed profile may be lab-measured
+          // (lab-facts-attach) and a web report never mixes into it.
+          // ex.terpenes === undefined = the column was not read -> never write blind.
+          if (ex.terpenes === undefined) {
+            strainNotes.set(f, SKIP.terpenes_lab_first);
+            continue;
+          }
+          const cur = cleanList(ex.terpenes);
+          if (cur.length === 0) {
+            patch.terpenes = val(f);
+            fields.push(f);
+          } else {
+            const want = (val(f) as string[]).map((x) => x.toLowerCase());
+            const have = new Set(cur.map((x) => x.toLowerCase()));
+            strainNotes.set(f, want.every((x) => have.has(x)) ? SKIP.already_present : SKIP.terpenes_lab_first);
+          }
+          continue;
+        }
         const col = f === "aroma" ? "aroma_notes" : f === "flavor" ? "flavor_notes" : "effects";
         const cur = cleanList((ex as unknown as Record<string, unknown>)[col]);
         const next = unionList(cur, val(f) as string[]);
@@ -511,9 +570,26 @@ export function planAttach(input: PlanInput): AttachPlan {
   const productOther = new Set<AttachField>();
   const ep = input.existingProduct ?? null;
   if (act && input.kbProductKeyKnown) {
-    for (const f of ["description", "short_description", "aroma", "flavor", "effects"] as const) {
+    for (const f of ["description", "short_description", "aroma", "flavor", "effects", "terpenes"] as const) {
       if (!attachedSet.has(f)) continue;
+      // R30: a person's attach stays inside KB_PRODUCT_FIELDS (terpenes are not offered there).
+      if (human && !KB_PRODUCT_FIELDS.has(f)) continue;
       const v = byField.get(f)!.value;
+      if (f === "terpenes") {
+        // Fill-only: an existing product terpene list (maybe lab-measured) is never mixed with a web one.
+        // existingProduct.terpenes === undefined = not read -> never write blind.
+        if (ep && ep.terpenes === undefined) continue;
+        const cur = cleanList(ep?.terpenes ?? []);
+        if (cur.length > 0) {
+          const have = new Set(cur.map((x) => x.toLowerCase()));
+          if ((v as string[]).every((x) => have.has(x.toLowerCase()))) productKept.add(f);
+          else productOther.add(f);
+          continue;
+        }
+        kb.terpenes = v as string[];
+        productLanded.add(f);
+        continue;
+      }
       // Survivorship: a populated prose slot is never replaced - the AI text
       // becomes a suggestion for a person instead (see "suggestions" below).
       if ((f === "description" || f === "short_description") && ep && !isBlank(ep[f])) {
@@ -567,12 +643,19 @@ export function planAttach(input: PlanInput): AttachPlan {
       if (needsSuggestion(f)) pushSugg(f, byField.get(f)!.value as string, legacyConf(f), [f]);
     }
     if (byField.has("images")) pushSugg("research_images", (byField.get("images")!.value as string[]).join("\n"), legacyConf("images"), ["images"]);
-    const sensoryFields = (["aroma", "flavor"] as const).filter(needsSuggestion);
+    // R30: terpenes ride the existing sensory suggestion (its JSON always had a
+    // terpenes slot; approving it unions them into kb_products.terpenes). Not
+    // when the record already has a different list (productOther): a lab
+    // profile is never put up against a web one.
+    const sensoryFields = (["aroma", "flavor", "terpenes"] as const).filter(
+      (f) => needsSuggestion(f) && !(f === "terpenes" && productOther.has(f)),
+    );
     if (sensoryFields.length) {
       const aroma = sensoryFields.includes("aroma") ? (byField.get("aroma")!.value as string[]) : [];
       const flavor = sensoryFields.includes("flavor") ? (byField.get("flavor")!.value as string[]) : [];
+      const terpenes = sensoryFields.includes("terpenes") ? (byField.get("terpenes")!.value as string[]) : [];
       const conf = Math.min(...sensoryFields.map(ownConf));
-      pushSugg("sensory", JSON.stringify({ aroma_notes: aroma, flavor_notes: flavor, terpenes: [] }), conf, [...sensoryFields]);
+      pushSugg("sensory", JSON.stringify({ aroma_notes: aroma, flavor_notes: flavor, terpenes }), conf, [...sensoryFields]);
     }
     if (needsSuggestion("effects")) pushSugg("effects", (byField.get("effects")!.value as string[]).join(", "), ownConf("effects"), ["effects"]);
   }
@@ -597,7 +680,9 @@ export function planAttach(input: PlanInput): AttachPlan {
     }
     if (staged.length > 0) {
       const v = verdicts.get(f)!;
-      const why = strainNotes.get(f) ?? (act ? v.reason : `${v.reason} Auto-attach is in preview, so it waits for you.`);
+      // R30: a terpene strain note that did NOT land (not flower / lab first) is not the queue's reason.
+      const note = f === "terpenes" && !strainLanded.has(f) ? undefined : strainNotes.get(f);
+      const why = note ?? (act ? v.reason : `${v.reason} Auto-attach is in preview, so it waits for you.`);
       receipt.queued.push({ field: f, to: staged, confidence: conf, reason: why });
       continue;
     }
@@ -618,6 +703,7 @@ export function planAttach(input: PlanInput): AttachPlan {
     else if (f === "category") reason = SKIP.category;
     else if (f === "size") reason = SKIP.size;
     else if (f === "cannabinoids") reason = SKIP.cannabinoids;
+    else if (f === "terpenes" && productOther.has(f)) reason = SKIP.terpenes_product_has;
     else if (strainNotes.has(f)) reason = strainNotes.get(f)!;
     else if ((f === "summary" || f === "lineage") && !slug) reason = noStrainReason;
     else if (f === "summary" || f === "lineage") reason = SKIP.existing_strain_kept;
@@ -756,6 +842,8 @@ export function buildAttachIncoming(
     category: string;
     size: string;
     potencyRatio: string;
+    /** R30: KB terpene slugs (postProcessLookup cleanTerpenes). Optional for older callers. */
+    terpenes?: readonly string[];
   },
   imageLines: readonly string[],
   factConfidence: Partial<Record<string, unknown>> | null | undefined,
@@ -776,6 +864,7 @@ export function buildAttachIncoming(
     { field: "category", value: safe.category, confidence: null },
     { field: "size", value: safe.size, confidence: null },
     { field: "cannabinoids", value: safe.potencyRatio, confidence: null },
+    { field: "terpenes", value: [...(safe.terpenes ?? [])], confidence: policyConfidence(fc.terpenes) },
   ];
 }
 
@@ -788,7 +877,7 @@ export function buildAttachIncoming(
  */
 export function verifyKbProductWrite(
   planned: KbProductFacts,
-  readBack: Partial<Record<"description" | "short_description" | "aroma_notes" | "flavor_notes" | "effects", unknown>> | null,
+  readBack: Partial<Record<"description" | "short_description" | "aroma_notes" | "flavor_notes" | "effects" | "terpenes", unknown>> | null,
 ): WriteFailure[] {
   const fields: AttachField[] = [];
   if (planned.description !== undefined) fields.push("description");
@@ -796,6 +885,7 @@ export function verifyKbProductWrite(
   if (planned.aroma_notes !== undefined) fields.push("aroma");
   if (planned.flavor_notes !== undefined) fields.push("flavor");
   if (planned.effects !== undefined) fields.push("effects");
+  if (planned.terpenes !== undefined) fields.push("terpenes");
   if (fields.length === 0) return [];
   if (!readBack) {
     return [{ target: "product record", fields, reason: "The product record could not be saved, so these were not attached." }];
@@ -810,7 +900,7 @@ export function verifyKbProductWrite(
   };
   if (planned.description !== undefined) prose("description");
   if (planned.short_description !== undefined) prose("short_description");
-  const list = (f: AttachField, col: "aroma_notes" | "flavor_notes" | "effects") => {
+  const list = (f: AttachField, col: "aroma_notes" | "flavor_notes" | "effects" | "terpenes") => {
     const want = planned[col];
     if (want === undefined) return;
     const have = new Set(cleanList(readBack[col]).map((x) => x.toLowerCase()));
@@ -819,6 +909,7 @@ export function verifyKbProductWrite(
   list("aroma", "aroma_notes");
   list("flavor", "flavor_notes");
   list("effects", "effects");
+  list("terpenes", "terpenes");
   const out: WriteFailure[] = [];
   if (blocked.length) {
     out.push({ target: "product record", fields: blocked, reason: "The compliance check stopped this text from going on the product record." });
@@ -1249,6 +1340,81 @@ export function __runAttachPlanCoreTests(): { passed: number; failed: number } {
     ok(JSON.stringify(union.kbProduct?.effects) === JSON.stringify(["relaxed", "happy"]), "human: incoming list passed for the writer's union");
     // Absent confirmedBy = exactly the AI path (shadow lands nothing).
     ok(planAttach(base({ mode: "shadow", confirmedBy: null, incoming: [inc("effects", ["calm"], 99)] })).kbProduct === null, "confirmedBy null = AI path");
+  }
+
+  // ---- R30: terpenes are an attach field (web lookup -> product record / strain library) ----
+  {
+    ok(ATTACH_FIELDS[ATTACH_FIELDS.length - 1] === "terpenes" && ATTACH_FIELD_LABEL.terpenes === "terpenes", "R30: terpenes is an attach field");
+    ok((CONFIDENCE_FIELDS as readonly string[]).includes("terpenes"), "R30: terpenes carries its own confidence");
+    const T = (v: unknown, c: number | null) => inc("terpenes", v, c);
+    // canonical: KB slugs only, unknown names dropped, never guessed
+    const canon = planAttach(base({ existingProduct: { description: null, short_description: null, aroma_notes: [], flavor_notes: [], effects: [], terpenes: [] }, incoming: [T(["Myrcene", "b-Caryophyllene", "unobtainium", "myrcene"], 95)] }));
+    ok(JSON.stringify(canon.kbProduct?.terpenes) === '["myrcene","caryophyllene"]', "R30: terpenes canonicalised to KB slugs, unknown dropped: " + JSON.stringify(canon.kbProduct?.terpenes));
+    const none = planAttach(base({ incoming: [T(["unobtainium"], 99)] }));
+    ok(!fieldsIn(none.receipt).includes("terpenes"), "R30: no mappable terpene -> field absent from the receipt");
+    // flower: a NEW strain row learns web terpenes (hidden draft rules unchanged)
+    const flowerNew = planAttach(base({ strainLearnsTerpenes: true, incoming: [T(["limonene"], 95)] }));
+    ok(flowerNew.strain?.action === "create" && JSON.stringify(flowerNew.strain.row.terpenes) === '["limonene"]', "R30: flower + new strain -> terpenes on the new row");
+    // flower: existing saved strain with an EMPTY list is filled (attach >= 90)
+    const exEmpty: ExistingStrain = { strain_type: "hybrid", summary: "S", lineage: "L", aroma_notes: [], flavor_notes: [], terpenes: [], status: "published", active: true };
+    const fillEmpty = planAttach(base({ strainLearnsTerpenes: true, existingStrain: exEmpty, incoming: [T(["limonene", "myrcene"], 95)] }));
+    ok(fillEmpty.strain?.action === "update" && JSON.stringify(fillEmpty.strain.patch.terpenes) === '["limonene","myrcene"]', "R30: empty strain terpene list filled");
+    ok(fillEmpty.receipt.attached.some((a) => a.field === "terpenes" && a.to.includes("strain library")), "R30: receipt says strain library");
+    // lab first: a listed profile (maybe lab-measured) is never mixed with the web's
+    const exLab: ExistingStrain = { ...exEmpty, terpenes: ["limonene", "linalool"] };
+    const labFirst = planAttach(base({ strainLearnsTerpenes: true, existingStrain: exLab, kbProductKeyKnown: false, posProductKey: null, incoming: [T(["myrcene"], 99)] }));
+    ok(labFirst.strain === null, "R30: listed strain terpenes never patched by the web");
+    ok(labFirst.receipt.skipped.find((x) => x.field === "terpenes")?.reason === SKIP.terpenes_lab_first, "R30: lab-first reason: " + JSON.stringify(labFirst.receipt.skipped));
+    const same = planAttach(base({ strainLearnsTerpenes: true, existingStrain: exLab, kbProductKeyKnown: false, posProductKey: null, incoming: [T(["Linalool"], 99)] }));
+    ok(same.receipt.skipped.find((x) => x.field === "terpenes")?.reason === SKIP.already_present, "R30: already listed -> already present");
+    // column not read -> never written blind
+    const notRead = planAttach(base({ strainLearnsTerpenes: true, existingStrain: { ...exEmpty, terpenes: undefined }, kbProductKeyKnown: false, posProductKey: null, incoming: [T(["myrcene"], 99)] }));
+    ok(notRead.strain === null, "R30: unread strain terpene column -> no write");
+    // not flower: the strain is never taught (infused products carry ADDED terpenes)
+    const infused = planAttach(base({ strainLearnsTerpenes: false, existingStrain: exEmpty, kbProductKeyKnown: false, posProductKey: null, incoming: [T(["myrcene"], 99)] }));
+    ok(infused.strain === null && infused.receipt.skipped.find((x) => x.field === "terpenes")?.reason === SKIP.terpenes_not_flower, "R30: infused -> strain untouched, reason says why");
+    const infusedNew = planAttach(base({ incoming: [T(["myrcene"], 99), inc("summary", "Sum.", 95)] }));
+    ok(infusedNew.strain?.action === "create" && !("terpenes" in infusedNew.strain.row), "R30: default (flag absent) never puts terpenes on a new strain");
+    // product record: fill-only
+    const ep = (t: string[] | undefined) => ({ description: null, short_description: null, aroma_notes: [], flavor_notes: [], effects: [], terpenes: t });
+    const pFill = planAttach(base({ strainName: null, existingProduct: ep([]), incoming: [T(["myrcene"], 92)] }));
+    ok(JSON.stringify(pFill.kbProduct?.terpenes) === '["myrcene"]' && pFill.receipt.attached.some((a) => a.field === "terpenes" && a.to.includes("product record")), "R30: empty product terpenes filled");
+    const pOther = planAttach(base({ strainName: null, existingProduct: ep(["linalool"]), incoming: [T(["myrcene"], 99)] }));
+    ok(pOther.kbProduct === null && pOther.receipt.skipped.find((x) => x.field === "terpenes")?.reason === SKIP.terpenes_product_has, "R30: populated product terpenes never replaced: " + JSON.stringify(pOther.receipt));
+    ok(!pOther.suggestions.some((x) => x.field_key === "sensory"), "R30: no web-vs-lab terpene suggestion");
+    const pKept = planAttach(base({ strainName: null, existingProduct: ep(["myrcene", "linalool"]), incoming: [T(["Myrcene"], 99)] }));
+    ok(pKept.receipt.skipped.find((x) => x.field === "terpenes")?.reason === SKIP.already_present, "R30: same list -> already present");
+    const pUnread = planAttach(base({ strainName: null, existingProduct: ep(undefined), incoming: [T(["myrcene"], 99)] }));
+    ok(pUnread.kbProduct === null, "R30: unread product terpene column -> never written blind");
+    // below the bar -> rides the existing sensory suggestion (approval unions into kb_products.terpenes)
+    const sugg = planAttach(base({ strainName: null, existingProduct: ep([]), incoming: [T(["myrcene"], 75), inc("aroma", ["pine"], 72)] }));
+    const sens = sugg.suggestions.find((x) => x.field_key === "sensory");
+    ok(!!sens && JSON.stringify(JSON.parse(sens.suggested_value).terpenes) === '["myrcene"]' && sens.fields.join() === "aroma,terpenes", "R30: sub-bar terpenes ride the sensory suggestion: " + sens?.suggested_value);
+    ok(sugg.receipt.queued.some((q) => q.field === "terpenes" && q.to.includes("Enrichment suggestions")), "R30: queued for review");
+    const noTerp = planAttach(base({ strainName: null, incoming: [inc("aroma", ["pine"], 72)] }));
+    ok(JSON.stringify(JSON.parse(noTerp.suggestions.find((x) => x.field_key === "sensory")!.suggested_value).terpenes) === "[]", "R30: sensory without terpenes keeps the empty slot");
+    // preview ring: nothing lands live
+    const shadow = planAttach(base({ mode: "shadow", strainName: null, existingProduct: ep([]), incoming: [T(["myrcene"], 99)] }));
+    ok(shadow.kbProduct === null, "R30: shadow ring writes no terpenes");
+    // a person's attach never writes terpenes (outside KB_PRODUCT_FIELDS)
+    const human = planAttach(base({ confirmedBy: "human", strainName: null, existingProduct: ep([]), incoming: [T(["myrcene"], null)] }));
+    ok(human.kbProduct === null && human.receipt.skipped.find((x) => x.field === "terpenes")?.reason === SKIP.human_scope, "R30: human scope excludes terpenes");
+    // buildAttachIncoming + keptFactConfidence + factConfidenceFromFacts
+    const bi = buildAttachIncoming({ description: "", shortDescription: "", summary: "", lineage: "", effects: [], aromaNotes: [], flavorNotes: [], strainType: "unknown", category: "", size: "", potencyRatio: "", terpenes: ["myrcene"] }, [], { terpenes: 93 }, {});
+    const bt = bi.find((x) => x.field === "terpenes");
+    ok(!!bt && JSON.stringify(bt.value) === '["myrcene"]' && bt.confidence === 93, "R30: incoming carries terpenes + own confidence");
+    const biOld = buildAttachIncoming({ description: "", shortDescription: "", summary: "", lineage: "", effects: [], aromaNotes: [], flavorNotes: [], strainType: "unknown", category: "", size: "", potencyRatio: "" }, [], {}, {});
+    ok(JSON.stringify(biOld.find((x) => x.field === "terpenes")?.value) === "[]", "R30: older callers -> empty terpenes");
+    const aiT = { summary: "", lineage: "", effects: [], aroma: [], flavor: [], strainType: "unknown", terpenes: ["myrcene", "limonene"] };
+    ok(keptFactConfidence({ terpenes: 94 }, aiT, { ...aiT }).terpenes === 94, "R30: untouched terpenes keep their confidence");
+    ok(keptFactConfidence({ terpenes: 94 }, aiT, { ...aiT, terpenes: ["myrcene"] }).terpenes === undefined, "R30: edited terpenes drop their confidence");
+    ok(keptFactConfidence({ terpenes: 94 }, aiT, { ...aiT, terpenes: [] }).terpenes === undefined, "R30: unchecked terpenes drop their confidence");
+    const fcf = factConfidenceFromFacts({ fields: { terpenes: { value: [{ name: "myrcene", pct: 0.8 }], confidence: 91 } } });
+    ok(fcf.terpenes === 91, "R30: v2 facts carry the terpene confidence");
+    // read-your-write covers terpenes
+    ok(verifyKbProductWrite({ terpenes: ["myrcene"] }, { terpenes: ["Myrcene", "pinene"] }).length === 0, "R30: terpenes landed -> no failure");
+    const tf = verifyKbProductWrite({ terpenes: ["myrcene"] }, { terpenes: ["linalool"] });
+    ok(tf.length === 1 && tf[0].fields.join() === "terpenes", "R30: terpenes missing after write -> failure");
   }
 
   return { passed, failed };

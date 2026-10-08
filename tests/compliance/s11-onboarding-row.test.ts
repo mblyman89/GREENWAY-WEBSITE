@@ -111,9 +111,9 @@ describe("S11 pure core (fact-chips-core)", () => {
   it("self-tests pass with an exact count and are registered with that floor", () => {
     const r = __runFactChipsCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(119);
+    expect(r.passed).toBe(143);
     expect(read("scripts/compliance/run-pure-selftests.ts")).toContain(
-      'assertRan("fact-chips-core", __runFactChipsCoreTests(), 119);',
+      'assertRan("fact-chips-core", __runFactChipsCoreTests(), 143);',
     );
   });
 
@@ -137,14 +137,16 @@ describe("S11 pure core (fact-chips-core)", () => {
     expect(isCountedSource("name", 99)).toBe(false);
   });
 
-  it("nine fields; empty row gives the bible's empty copy and lists all nine", () => {
-    expect(ROW_FACT_FIELDS.length).toBe(9);
+  it("ten fields (R30: terpenes is the tenth); empty row gives the bible's empty copy and lists all ten", () => {
+    expect(ROW_FACT_FIELDS.length).toBe(10);
+    expect(ROW_FACT_FIELDS[9]).toBe("terpenes");
     const v = buildFactChips(null, null, { mode: "act" });
     expect(v.emptyLine).toBe(EMPTY_FACTS_COPY);
     expect(EMPTY_FACTS_COPY).toBe(
       "Nothing attached yet \u2014 press Look up to fetch from the web, or approve and fill it in on Enrichment.",
     );
-    expect(v.countLabel).toBe("0/9");
+    expect(v.countLabel).toBe("0/10");
+    expect(v.missingLine?.endsWith(", images, terpenes")).toBe(true);
     expect(v.missingLine?.startsWith("Enrichment will ask for: category, strain type")).toBe(true);
     expect(v.modeNote).toBeNull();
   });
@@ -181,7 +183,7 @@ describe("S11 pure core (fact-chips-core)", () => {
     expect(by.category.sourceLabel).toBe("You");
     expect(by.category.also).toEqual(["Gemini 99%"]);
     expect(by.potency.sourceLabel).toBe("COA");
-    expect(v.countLabel).toBe("3/9");
+    expect(v.countLabel).toBe("3/10");
     expect(v.missing).not.toContain("description");
     expect(v.missing).toContain("aroma");
   });
@@ -248,7 +250,7 @@ describe("FactsPanel renders", () => {
     );
     const html = render(v);
     expect(html).toContain('data-testid="facts-panel"');
-    expect(html).toContain("1/9 facts");
+    expect(html).toContain("1/10 facts");
     expect(html.match(/data-testid="fact-chip"/g)?.length).toBe(2);
     expect(html).toContain('data-field="description" data-counted="true"');
     expect(html).toContain('data-field="category" data-counted="false"');

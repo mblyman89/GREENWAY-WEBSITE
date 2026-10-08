@@ -316,6 +316,12 @@ export interface DraftFactsMerge {
   written: string[];
   /** Fields left alone because a PERSON already set them on this draft. */
   keptHuman: string[];
+  /**
+   * R30: fields left alone because the LAB CERTIFICATE already set them
+   * (source "coa") and the incoming value is a lower-trust machine source
+   * (a web lookup, the KB, memory). MDM survivorship: source priority first.
+   */
+  keptLab: string[];
 }
 
 function asRecord(v: unknown): Record<string, unknown> {
@@ -343,6 +349,7 @@ export function mergeDraftAttachedFacts(input: {
   const prov = asRecord(input.existingProvenance);
   const written: string[] = [];
   const keptHuman: string[] = [];
+  const keptLab: string[] = [];
   const urls = cleanUrls(input.urls) ?? [];
   for (const l of input.landed) {
     if (!isFactFieldKey(l.field) || !isFactSource(l.source) || !isStoredConfidence(l.confidence ?? null)) continue;
@@ -360,15 +367,21 @@ export function mergeDraftAttachedFacts(input: {
       if (!keptHuman.includes(l.field)) keptHuman.push(l.field);
       continue;
     }
+    // R30: a lab-measured value is replaced only by a person or a newer read.
+    if (cur.source === "coa" && l.source !== "coa" && l.source !== "human") {
+      if (!keptLab.includes(l.field)) keptLab.push(l.field);
+      continue;
+    }
     facts[l.field] = { value, source: l.source, confidence: l.confidence ?? null, at: input.at } satisfies AttachedFact;
     prov[l.field] = { source: l.source, confidence: l.confidence ?? null, at: input.at, by: input.by, urls: [...urls] } satisfies FactProvenance;
     if (!written.includes(l.field)) written.push(l.field);
   }
-  if (written.length === 0) return { patch: null, written, keptHuman };
+  if (written.length === 0) return { patch: null, written, keptHuman, keptLab };
   return {
     patch: { [DRAFT_FACT_COLUMNS[0]]: facts, [DRAFT_FACT_COLUMNS[1]]: prov } as DraftFactsMerge["patch"],
     written,
     keptHuman,
+    keptLab,
   };
 }
 
@@ -587,6 +600,18 @@ export function __runAttachFactsCoreTests(): { passed: number; failed: number } 
   ok(JSON.stringify(existing.aroma.value) === JSON.stringify(["old"]), "inputs not mutated");
   const humanOverHuman = mergeDraftAttachedFacts({ existingFacts: existing, existingProvenance: null, landed: [{ field: "flavor", value: ["mine"], source: "human", confidence: null }], at: AT, by: BY, urls: [] });
   ok(humanOverHuman.written.join() === "flavor" && humanOverHuman.keptHuman.length === 0, "a person may replace their own value");
+  // R30: source priority - a lab value survives a web lookup; a person or a newer read replaces it.
+  const labFacts = { terpenes: { value: ["limonene 0.51%"], source: "coa", confidence: null, at: "2026-04-01T00:00:00Z" } };
+  const webOverLab = mergeDraftAttachedFacts({ existingFacts: labFacts, existingProvenance: null, landed: [{ field: "terpenes", value: ["myrcene"], source: "gemini", confidence: 0.99 }, { field: "aroma", value: ["citrus"], source: "gemini", confidence: 0.95 }], at: AT, by: null, urls: [] });
+  ok(webOverLab.keptLab.join() === "terpenes" && webOverLab.written.join() === "aroma", "a web lookup never replaces a lab value: " + webOverLab.written.join());
+  ok(JSON.stringify((webOverLab.patch as Record<string, Record<string, Record<string, unknown>>>).attached_facts.terpenes.value) === JSON.stringify(["limonene 0.51%"]), "lab value kept verbatim");
+  for (const src of ["kb_published", "kb_draft", "remembered", "cultivera", "manifest"] as const) {
+    ok(mergeDraftAttachedFacts({ existingFacts: labFacts, existingProvenance: null, landed: [{ field: "terpenes", value: ["x"], source: src, confidence: null }], at: AT, by: null, urls: [] }).keptLab.join() === "terpenes", `${src} never replaces a lab value`);
+  }
+  const newerRead = mergeDraftAttachedFacts({ existingFacts: labFacts, existingProvenance: null, landed: [{ field: "terpenes", value: ["limonene 0.6%"], source: "coa", confidence: null }], at: AT, by: null, urls: [] });
+  ok(newerRead.written.join() === "terpenes" && newerRead.keptLab.length === 0, "a newer lab read replaces the old one");
+  const personOverLab = mergeDraftAttachedFacts({ existingFacts: labFacts, existingProvenance: null, landed: [{ field: "terpenes", value: ["mine"], source: "human", confidence: null }], at: AT, by: BY, urls: [] });
+  ok(personOverLab.written.join() === "terpenes" && personOverLab.keptLab.length === 0, "a person may replace a lab value");
   const loop: Record<string, unknown> = {};
   loop.self = loop;
   ok(mergeDraftAttachedFacts({ existingFacts: [], existingProvenance: "x", landed: [{ field: "description", value: loop, source: "gemini", confidence: 0.9 }], at: AT, by: BY, urls: [] }).patch === null, "non-JSON value skipped; junk existing tolerated");

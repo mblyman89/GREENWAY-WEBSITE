@@ -667,6 +667,8 @@ export type V1RawShape = {
   potency_ratio?: string;
   size?: string;
   image_candidates?: string[];
+  /** R30: terpene NAMES (any band) - postProcessLookup maps them to KB slugs. */
+  terpenes?: string[];
 };
 
 /** "3.5g", "12 fl oz", "10pk", "100mg". Compact where the unit is short. */
@@ -702,6 +704,7 @@ export function factsToV1Raw(facts: LookupFacts): V1RawShape {
     potency_ratio: f.cannabinoids.value?.ratio ?? "",
     size: formatNetSize(f.size.value),
     image_candidates: f.images.value ?? [],
+    terpenes: (f.terpenes.value ?? []).map((t) => t.name),
   };
 }
 
@@ -1103,6 +1106,8 @@ export function __runLookupFactsCoreTests(): { passed: number; failed: number } 
   ok(JSON.stringify(b.image_candidates) === '["https://cdn.example.com/bd.jpg"]' && b.lineage === "Blueberry x Haze", "bridge images/lineage");
   const empty = factsToV1Raw(normalizeLookup({ schema: LOOKUP_V2_SCHEMA_ID, found: false }));
   ok(empty.strain_type === "unknown" && empty.strain_type_confidence === 0 && empty.description === "" && !("confidence" in empty), "honest v2 miss -> empty v1");
+  ok(JSON.stringify(empty.terpenes) === "[]", "R30: honest miss bridges no terpenes");
+  ok(JSON.stringify(v1.terpenes) === '["limonene"]', "R30: v1 bridge carries terpene names: " + JSON.stringify(v1.terpenes));
   ok(formatNetSize({ amount: 12, uom: "fl oz" }) === "12 fl oz" && formatNetSize({ amount: 10, uom: "pk" }) === "10pk" && formatNetSize(null) === "", "size formatting");
   // A strain type with no confidence of its own bridges at 0 (cannot autofill).
   const noConf = factsToV1Raw(normalizeLookup({ strain_type: "indica", overall_confidence: 100 }));

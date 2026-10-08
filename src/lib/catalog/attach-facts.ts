@@ -45,6 +45,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
 import { persistSuggestion } from "@/lib/ai/suggestions";
 import { writeBackProductFacts } from "@/lib/ai/kb/writeback";
+import { strainLearnsFromType } from "./lab-facts-attach-core";
 import { getPublishedVersion, getItemBySourceKey } from "@/lib/pos/menu-version";
 import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
 import { suggestionTargetKey } from "@/lib/enrichment/enrichment-identity-core";
@@ -132,7 +133,8 @@ export type AttachProductFactsResult =
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
-const STRAIN_BASE = "strain_type, summary, lineage, aroma_notes, flavor_notes, active";
+// R30: terpenes is a 0019 base column (text[] not null default '{}').
+const STRAIN_BASE = "strain_type, summary, lineage, aroma_notes, flavor_notes, terpenes, active";
 
 /** Which optional kb_strains columns exist (0071 effects; 0085 status/source). */
 interface StrainCols {
@@ -158,6 +160,11 @@ interface ServerFacts {
   manifestStrainType: string | null;
   draftId: string | null;
   lotId: string | null;
+  /**
+   * R30: the draft's WA CCRS inventory type (0026), or null (menu context /
+   * unknown). Only plain flower lets web terpenes teach the strain library.
+   */
+  inventoryType: string | null;
   /** Everything writeBackProductFacts needs, or null when the natural key is not known. */
   kb: {
     productName: string;
@@ -169,7 +176,7 @@ interface ServerFacts {
   } | null;
 }
 
-const DRAFT_FACTS_SELECT = "id, name, brand_name, vendor_name, category, chosen_website_category, strain_name, lot_id, pos_product_key";
+const DRAFT_FACTS_SELECT = "id, name, brand_name, vendor_name, category, chosen_website_category, strain_name, lot_id, pos_product_key, inventory_type";
 
 async function readDraftFacts(admin: Admin, draftId: string): Promise<ServerFacts | { error: string }> {
   // S20: also read the restock hint (0234). A database without it answers
@@ -195,6 +202,7 @@ async function readDraftFacts(admin: Admin, draftId: string): Promise<ServerFact
     strain_name: string | null;
     lot_id: string | null;
     pos_product_key: string | null;
+    inventory_type?: string | null;
     restock_of_card_key?: string | null;
   };
   const ownKey = (d.pos_product_key ?? "").trim() || null;
@@ -212,6 +220,7 @@ async function readDraftFacts(admin: Admin, draftId: string): Promise<ServerFact
     manifestStrainType: null,
     draftId: d.id,
     lotId: d.lot_id,
+    inventoryType: (d.inventory_type ?? "").trim() || null,
     kb: null,
   };
   if (!d.lot_id) return facts;
@@ -267,6 +276,7 @@ async function readMenuFacts(posProductKey: string, fallbackName: string): Promi
     manifestStrainType: null,
     draftId: null,
     lotId: null,
+    inventoryType: null,
     kb: null,
   };
   const published = await getPublishedVersion();
@@ -366,7 +376,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
     const k = kbNaturalKey({ brandName: sf.kb.brandName, productName: sf.kb.productName, variantLabel: sf.kb.variantLabel });
     const { data, error } = await admin
       .from("kb_products")
-      .select("description, short_description, aroma_notes, flavor_notes, effects")
+      .select("description, short_description, aroma_notes, flavor_notes, effects, terpenes")
       .eq("brand_slug", k.brand_slug)
       .eq("product_slug", k.product_slug)
       .eq("variant_label", k.variant_label)
@@ -404,6 +414,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
     kbProductKeyKnown: kbKnown,
     existingStrain,
     existingProduct,
+    strainLearnsTerpenes: strainLearnsFromType(sf.inventoryType),
     manifestStrainType: sf.manifestStrainType,
     pending,
     strainTypeConfidence: input.safe.strainTypeConfidence,
@@ -419,7 +430,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
 
   // ---- 3a. kb_products (gap-fill, read-your-write) ---------------------------
   if (plan.kbProduct && sf.kb) {
-    const kbFields = (["description", "short_description", "aroma", "flavor", "effects"] as const).filter((f) =>
+    const kbFields = (["description", "short_description", "aroma", "flavor", "effects", "terpenes"] as const).filter((f) =>
       plan.receipt.attached.some((a) => a.field === f && a.to.includes("product record")),
     );
     try {
@@ -434,6 +445,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
           aroma_notes: plan.kbProduct.aroma_notes ?? [],
           flavor_notes: plan.kbProduct.flavor_notes ?? [],
           effects: plan.kbProduct.effects ?? [],
+          terpenes: plan.kbProduct.terpenes ?? [],
           brandId: sf.kb.brandId,
           vendorId: sf.kb.vendorId,
           // The strain is written ONCE, below, by the planner's rules.
@@ -457,7 +469,7 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
         const k = kbNaturalKey({ brandName: sf.kb.brandName, productName: sf.kb.productName, variantLabel: sf.kb.variantLabel });
         const { data: back, error: backErr } = await admin
           .from("kb_products")
-          .select("id, description, short_description, aroma_notes, flavor_notes, effects")
+          .select("id, description, short_description, aroma_notes, flavor_notes, effects, terpenes")
           .eq("brand_slug", k.brand_slug)
           .eq("product_slug", k.product_slug)
           .eq("variant_label", k.variant_label)
@@ -621,6 +633,9 @@ export async function attachProductFacts(input: AttachProductFactsInput): Promis
         });
         if (merged.keptHuman.length > 0) {
           notes.push(`Kept your own ${merged.keptHuman.join(", ")} on this row; the lookup never replaces a person's answer.`);
+        }
+        if (merged.keptLab.length > 0) {
+          notes.push(`Kept the lab certificate's ${merged.keptLab.join(", ")} on this row; a web lookup never replaces a lab measurement.`);
         }
         if (merged.patch) {
           const { error } = await admin.from("catalog_product_drafts").update(merged.patch).eq("id", sf.draftId);

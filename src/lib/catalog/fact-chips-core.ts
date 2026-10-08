@@ -8,12 +8,19 @@
  * One chip per row fact, each with a source label (Manifest / COA / KB /
  * Gemini 94% / You / Remembered ...), a confidence, and a plain-English WHY.
  * Fields with no counted chip become the red line
- * "Enrichment will ask for: category, size" and the Facts column "7/9".
+ * "Enrichment will ask for: category, size" and the Facts column "7/10".
+ *
+ * R30: terpenes are the tenth fact. They come from the lab certificate (the
+ * stored COA read, coa-facts-core coaProfile - strongest first, ppm shown as
+ * % of weight), from the strain library (kb_strains.terpenes, which the COA
+ * read and the web lookup both fill, fill-only), or from a web lookup at
+ * >= 90%. A certificate that was read but carries no terpene panel (normal
+ * for edibles) shows a plain, uncounted chip saying so - never a guess.
  *
  * === WHERE EACH CHIP COMES FROM (verified, not assumed) ===
  *
  *   1. Records the row already holds (the page passes them in; pure helper
- *      rowRecordFacts() below derives them from data the page ALREADY reads):
+ *      rowRecordFacts() below derives them from data the page reads):
  *        category     the approver's pick (0141) or the resolver's answer
  *                     (website-category-resolver.ts ResolutionSource);
  *        strain type  the approver's pick (0146), else suggestStrainType()
@@ -28,7 +35,7 @@
  *
  * === WHAT "COUNTED" MEANS ===
  *
- * A chip is counted (it fills its slot in "7/9") only when its source is one
+ * A chip is counted (it fills its slot in "7/10") only when its source is one
  * the S10 policy would attach without a person: a person (You), a record the
  * shop holds (COA, manifest, approved KB, the live menu, the strain
  * library), or a web finding at >= ATTACH_AUTO_MIN_CONFIDENCE (90). A name
@@ -78,11 +85,12 @@ export function onboardingV2RowEnabled(raw: string | null | undefined): boolean 
 // --- 2. Vocabulary -----------------------------------------------------------------
 
 /**
- * The nine facts the Facts column counts, in display order. The first three
- * are classifying facts the approve form already shows; the last six are the
+ * The ten facts the Facts column counts, in display order. The first three
+ * are classifying facts the approve form already shows; the next six are the
  * descriptive facts the Enrichment page asks for (description, short line,
  * effects, aroma, flavor - the S09 MEMORY_TARGET_FIELDS - plus images, which
- * the S10 policy always leaves to a person).
+ * the S10 policy always leaves to a person). R30: the tenth is terpenes
+ * (lab certificate > strain library > web lookup at >= 90%).
  */
 export const ROW_FACT_FIELDS = [
   "category",
@@ -94,6 +102,7 @@ export const ROW_FACT_FIELDS = [
   "aroma",
   "flavor",
   "images",
+  "terpenes",
 ] as const;
 export type RowFactField = (typeof ROW_FACT_FIELDS)[number];
 
@@ -107,6 +116,7 @@ export const ROW_FACT_LABEL: Readonly<Record<RowFactField, string>> = Object.fre
   aroma: "aroma",
   flavor: "flavor",
   images: "images",
+  terpenes: "terpenes",
 });
 
 /** Bible S11.4 empty state, verbatim. */
@@ -212,6 +222,13 @@ export interface RowRecordFacts {
   category?: { value: string; label: string; via: CategoryVia } | null;
   strainType?: { value: string; label: string; via: "human" | "strain library" | "manifest" | "product name"; confidence: number | null } | null;
   potency?: { thcPct: number; hasLab: boolean } | null;
+  /**
+   * R30: terpenes the row already holds. `coa` = the stored certificate read
+   * of this lot (display strings, strongest first); `coaNoPanel` = the
+   * certificate was read and has NO terpene panel; `strainLibrary` = the
+   * kb_strains row of this product's strain.
+   */
+  terpenes?: { coa: string[]; coaNoPanel: boolean; strainLibrary: string[] } | null;
 }
 
 /** Inputs rowRecordFacts() reads - all already on the page (no new query). */
@@ -226,6 +243,41 @@ export interface RowRecordInput {
   totalThcPct: number | null | undefined;
   thcPct: number | null | undefined;
   labResultId: string | null | undefined;
+  /** R30: the lot's certificate profile (coaProfile), or null when unread / no lab. */
+  coaTerpenes?: readonly { name: string; ppm: number }[] | null;
+  /** R30: true when the certificate was read (identity ok) - with coaTerpenes empty that means "no terpene panel". */
+  coaRead?: boolean;
+  /** R30: kb_strains.terpenes of this product's strain. */
+  strainTerpenes?: readonly string[] | null;
+}
+
+/** R30: how many terpenes a chip / attached fact lists (strongest first). */
+export const TERPENE_PREVIEW_MAX = 6;
+
+/**
+ * "limonene 0.51%" - a lab terpene (ppm) as percent of weight, the unit the
+ * certificate's own "total terpenes %" line and most menus use
+ * (1% = 10,000 ppm). Two decimals, trailing zeros dropped; below 0.01% the
+ * name stands alone (a figure that rounds to 0 would mislead).
+ */
+export function terpeneDisplay(t: { name: string; ppm: number }): string {
+  const name = String(t.name ?? "").trim().toLowerCase();
+  if (!name) return "";
+  const pct = Number.isFinite(t.ppm) && t.ppm > 0 ? Math.round(t.ppm / 100) / 100 : 0;
+  return pct >= 0.01 ? `${name} ${pct}%` : name;
+}
+
+function cleanTerps(list: readonly string[] | null | undefined): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const x of list ?? []) {
+    if (typeof x !== "string") continue;
+    const t = x.trim().toLowerCase();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
 }
 
 const clean = (v: string | null | undefined) => String(v ?? "").trim();
@@ -250,6 +302,14 @@ export function rowRecordFacts(input: RowRecordInput): RowRecordFacts {
   }
   const thc = input.totalThcPct ?? input.thcPct;
   if (typeof thc === "number" && Number.isFinite(thc)) out.potency = { thcPct: thc, hasLab: Boolean(clean(input.labResultId)) };
+  const coa = (input.coaTerpenes ?? [])
+    .filter((t) => t && Number.isFinite(t.ppm) && t.ppm > 0)
+    .map(terpeneDisplay)
+    .filter((s) => s !== "")
+    .slice(0, TERPENE_PREVIEW_MAX);
+  const lib = cleanTerps(input.strainTerpenes).slice(0, TERPENE_PREVIEW_MAX);
+  const noPanel = input.coaRead === true && coa.length === 0;
+  if (coa.length > 0 || lib.length > 0 || noPanel) out.terpenes = { coa, coaNoPanel: noPanel, strainLibrary: lib };
   return out;
 }
 
@@ -281,7 +341,7 @@ export interface FactChipsView {
   chips: FactChip[];
   counted: number;
   total: number;
-  /** "7/9" - the Facts column. */
+  /** "7/10" - the Facts column. */
   countLabel: string;
   missing: RowFactField[];
   /** "Enrichment will ask for: category, size", or null when nothing is missing. */
@@ -392,6 +452,27 @@ function recordCandidates(records: RowRecordFacts): Candidate[] {
         ? cand("potency", v, "coa", null, "From the lab certificate (COA) linked to this lot.")
         : cand("potency", v, "draft", null, "On the draft, but no lab certificate is linked to it, so it is not counted."),
     );
+  }
+  const t = records.terpenes;
+  if (t) {
+    if (t.coa.length > 0) {
+      out.push(cand("terpenes", previewValue(t.coa), "coa", null, "Measured by the lab: the terpene panel on this lot's certificate (COA), strongest first, as % of weight."));
+    }
+    if (t.strainLibrary.length > 0) {
+      out.push(cand("terpenes", previewValue(t.strainLibrary), "strain_library", null, "The strain library lists these terpenes for this strain."));
+    }
+    if (t.coaNoPanel && t.coa.length === 0) {
+      out.push(
+        cand(
+          "terpenes",
+          "not tested",
+          "coa",
+          null,
+          "The lab certificate was read, but the lab did not run a terpene panel on this product (normal for edibles), so there is nothing to count. A web lookup or the strain library can still fill it.",
+          { counted: false },
+        ),
+      );
+    }
   }
   return out.filter((x): x is Candidate => x !== null);
 }
@@ -582,7 +663,8 @@ export function __runFactChipsCoreTests(): { passed: number; failed: number } {
   for (const v of ["off", "OFF", " 0 ", "false", "no", "disabled"]) ok(onboardingV2RowEnabled(v) === false, `flag off for ${v}`);
 
   // 2. Vocabulary.
-  ok(ROW_FACT_FIELDS.length === 9 && new Set(ROW_FACT_FIELDS).size === 9, "nine distinct fields");
+  ok(ROW_FACT_FIELDS.length === 10 && new Set(ROW_FACT_FIELDS).size === 10, "ten distinct fields");
+  ok(ROW_FACT_FIELDS[9] === "terpenes" && ROW_FACT_LABEL.terpenes === "terpenes", "R30: terpenes is the tenth fact");
   ok(ROW_FACT_FIELDS.every((f) => typeof ROW_FACT_LABEL[f] === "string" && ROW_FACT_LABEL[f] !== ""), "every field labelled");
   ok(EMPTY_FACTS_COPY === "Nothing attached yet \u2014 press Look up to fetch from the web, or approve and fill it in on Enrichment.", "empty copy verbatim");
   ok(NO_VENDOR_IDENTITY_COPY === "Cannot remember this product: manifest has no vendor", "no-vendor copy verbatim");
@@ -620,9 +702,9 @@ export function __runFactChipsCoreTests(): { passed: number; failed: number } {
 
   // 5. Empty.
   const empty = buildFactChips(null, null, SHADOW);
-  ok(empty.chips.length === 0 && empty.counted === 0 && empty.countLabel === "0/9", "empty count 0/9");
+  ok(empty.chips.length === 0 && empty.counted === 0 && empty.countLabel === "0/10", "empty count 0/10");
   ok(empty.emptyLine === EMPTY_FACTS_COPY, "empty state line");
-  ok(empty.missingLine === "Enrichment will ask for: category, strain type, potency, description, short line, effects, aroma, flavor, images", "missing all: " + empty.missingLine);
+  ok(empty.missingLine === "Enrichment will ask for: category, strain type, potency, description, short line, effects, aroma, flavor, images, terpenes", "missing all: " + empty.missingLine);
   ok(empty.modeNote !== null && empty.modeNote.includes("ATTACH_POLICY_RING=1"), "shadow note");
   ok(buildFactChips(null, null, ACT).modeNote === null, "act -> no note");
   ok((buildFactChips(null, null, { mode: "off" }).modeNote ?? "").includes("ATTACH_POLICY_RING=0"), "off note");
@@ -646,14 +728,14 @@ export function __runFactChipsCoreTests(): { passed: number; failed: number } {
   ok(rec.strainType?.via === "manifest" && rec.strainType.label === "Hybrid", "strain from manifest");
   ok(rec.potency?.thcPct === 24.123 && rec.potency.hasLab === true, "total THC preferred");
   const recView = buildFactChips(null, null, ACT, rec);
-  ok(recView.countLabel === "3/9", "3 records counted: " + recView.countLabel);
+  ok(recView.countLabel === "3/10", "3 records counted: " + recView.countLabel);
   const cat = recView.chips.find((c) => c.field === "category");
   ok(cat?.sourceLabel === "Manifest" && cat.value === "Flower" && cat.counted, "category chip manifest");
   ok((cat?.why ?? "").includes("LCB inventory type"), "category why");
   const pot = recView.chips.find((c) => c.field === "potency");
   ok(pot?.value === "24.12% THC" && pot.sourceLabel === "COA" && pot.counted, "potency chip: " + pot?.value);
   ok(recView.emptyLine === null, "no empty line with chips");
-  ok(recView.missingLine === "Enrichment will ask for: description, short line, effects, aroma, flavor, images", "missing descriptive: " + recView.missingLine);
+  ok(recView.missingLine === "Enrichment will ask for: description, short line, effects, aroma, flavor, images, terpenes", "missing descriptive: " + recView.missingLine);
   // Picks win and are "You".
   const picked = rowRecordFacts({
     chosenWebsiteCategory: "flower",
@@ -674,7 +756,7 @@ export function __runFactChipsCoreTests(): { passed: number; failed: number } {
   ok(pv.chips.find((c) => c.field === "category")?.sourceLabel === "You", "pick chip says You");
   const potNoLab = pv.chips.find((c) => c.field === "potency");
   ok(potNoLab?.counted === false && potNoLab.sourceLabel === "Draft" && potNoLab.why.includes("no lab certificate"), "no-lab potency not counted");
-  ok(pv.countLabel === "2/9" && pv.missing.includes("potency"), "no-lab potency stays missing");
+  ok(pv.countLabel === "2/10" && pv.missing.includes("potency"), "no-lab potency stays missing");
   // Guesses never count.
   const guess = rowRecordFacts({
     chosenWebsiteCategory: "",
@@ -695,7 +777,7 @@ export function __runFactChipsCoreTests(): { passed: number; failed: number } {
   ok(gv.counted === 0 && gv.chips.length === 2, "guesses shown, not counted");
   ok(gv.chips.every((c) => !c.counted && c.why.includes("not counted")), "guess why says not counted");
   ok(gv.chips.find((c) => c.field === "strain_type")?.why.includes("(60%)") === true, "name guess shows its %");
-  ok(gv.emptyLine === null && gv.missing.length === 9, "chips but all missing");
+  ok(gv.emptyLine === null && gv.missing.length === 10, "chips but all missing");
   ok(rowRecordFacts({ chosenWebsiteCategory: null, resolvedWebsiteCategory: "x", resolutionSource: "unmapped", categoryLabel: (v: string) => v, chosenStrainType: null, strainSuggestion: null, strainLabel: (v: string) => v, totalThcPct: null, thcPct: null, labResultId: null }).category === undefined, "unmapped -> no category");
   ok(rowRecordFacts({ chosenWebsiteCategory: null, resolvedWebsiteCategory: "flower", resolutionSource: "menu_item", categoryLabel: lab, chosenStrainType: null, strainSuggestion: { value: "sativa", confidence: 100, source: "strain library" }, strainLabel: (v) => v, totalThcPct: null, thcPct: null, labResultId: null }).strainType?.via === "strain library", "strain library via");
   const menuView = buildFactChips(null, null, ACT, { category: { value: "flower", label: "Flower", via: "menu_item" }, strainType: { value: "sativa", label: "Sativa", via: "strain library", confidence: 100 } });
@@ -722,7 +804,7 @@ export function __runFactChipsCoreTests(): { passed: number; failed: number } {
   ok(av.chips.find((c) => c.field === "flavor")?.sourceLabel === "You", "human attached -> You");
   ok(!av.chips.some((c) => (c.field as string) === "summary"), "non-row fields ignored");
   ok(!av.chips.some((c) => c.field === "short_description"), "blank value -> no chip");
-  ok(av.countLabel === "3/9", "3 attached counted: " + av.countLabel);
+  ok(av.countLabel === "3/10", "3 attached counted: " + av.countLabel);
   ok(av.missing.includes("aroma") && av.missing.includes("short_description"), "uncounted fields are missing");
   for (const s of ["coa", "manifest", "kb_published", "kb_draft", "remembered", "cultivera"] as const) {
     const one = buildFactChips({ description: { value: "x", source: s, confidence: null, at: "2026-05-01T00:00:00Z" } }, null, ACT);
@@ -756,7 +838,7 @@ export function __runFactChipsCoreTests(): { passed: number; failed: number } {
   ok(ma?.sourceLabel === "Remembered (Gemini 91%)" && ma.counted && ma.confidenceText === "91%", "history chip: " + ma?.sourceLabel);
   const mf = mv.chips.find((c) => c.field === "flavor");
   ok(mf?.sourceLabel === "KB draft" && !mf.counted && mf.why.startsWith("On file, but not counted:"), "kb draft memory not counted");
-  ok(mv.countLabel === "2/9", "memory counts covered only");
+  ok(mv.countLabel === "2/10", "memory counts covered only");
 
   // 9. Survivorship.
   const both = buildFactChips(
@@ -804,8 +886,57 @@ export function __runFactChipsCoreTests(): { passed: number; failed: number } {
     ACT,
     rec,
   );
-  ok(full.countLabel === "9/9" && full.missingLine === null && full.missing.length === 0, "9/9 -> no missing line: " + full.countLabel);
-  ok(full.chips.map((c) => c.field).join() === ROW_FACT_FIELDS.join(), "chips in field order");
+  ok(full.countLabel === "9/10" && full.missingLine === "Enrichment will ask for: terpenes", "9/10 without terpenes: " + full.countLabel);
+  const full10 = buildFactChips(
+    {
+      ...att,
+      aroma: { value: ["citrus"], source: "gemini", confidence: 0.95, at: "2026-05-01T10:00:00Z" },
+      short_description: { value: "Short.", source: "gemini", confidence: 0.95, at: "2026-05-01T10:00:00Z" },
+      images: { value: ["https://x/1.jpg"], source: "human", confidence: null, at: "2026-05-01T10:00:00Z" },
+    },
+    null,
+    ACT,
+    { ...rec, terpenes: { coa: ["limonene 0.51%"], coaNoPanel: false, strainLibrary: [] } },
+  );
+  ok(full10.countLabel === "10/10" && full10.missingLine === null && full10.missing.length === 0, "10/10 -> no missing line: " + full10.countLabel);
+  ok(full10.chips.map((c) => c.field).join() === ROW_FACT_FIELDS.join(), "chips in field order");
+
+  // 10b. R30 terpenes (the tenth fact).
+  ok(terpeneDisplay({ name: "Limonene", ppm: 5139 }) === "limonene 0.51%", "ppm -> % of weight: " + terpeneDisplay({ name: "Limonene", ppm: 5139 }));
+  ok(terpeneDisplay({ name: "myrcene", ppm: 17310 }) === "myrcene 1.73%", "1.73%");
+  ok(terpeneDisplay({ name: "myrcene", ppm: 10000 }) === "myrcene 1%", "trailing zeros dropped");
+  ok(terpeneDisplay({ name: "guaiol", ppm: 40 }) === "guaiol", "below 0.01% -> name only");
+  ok(terpeneDisplay({ name: " ", ppm: 100 }) === "", "blank name -> nothing");
+  const tBase = { chosenWebsiteCategory: null, resolvedWebsiteCategory: null, resolutionSource: null, categoryLabel: (v: string) => v, chosenStrainType: null, strainSuggestion: null, strainLabel: (v: string) => v, totalThcPct: null, thcPct: null, labResultId: null } as RowRecordInput;
+  const tr = rowRecordFacts({ ...tBase, coaTerpenes: [{ name: "limonene", ppm: 5139 }, { name: "myrcene", ppm: 4352 }, { name: "nd", ppm: 0 }], coaRead: true, strainTerpenes: [" Myrcene ", "myrcene", "pinene"] });
+  ok(tr.terpenes?.coa.join() === "limonene 0.51%,myrcene 0.44%", "coa terpenes, ND dropped: " + tr.terpenes?.coa.join());
+  ok(tr.terpenes?.strainLibrary.join() === "myrcene,pinene" && tr.terpenes.coaNoPanel === false, "library terpenes cleaned + deduped");
+  const tv = buildFactChips(null, null, ACT, tr);
+  const tc = tv.chips.find((c) => c.field === "terpenes");
+  ok(tc?.sourceLabel === "COA" && tc.counted && tc.value === "limonene 0.51%, myrcene 0.44%", "COA terpene chip counted: " + tc?.value);
+  ok(tc?.also.join() === "Strain library", "strain library listed under also");
+  ok((tc?.why ?? "").includes("terpene panel") && tv.countLabel === "1/10", "terpene why + 1/10");
+  const many = rowRecordFacts({ ...tBase, coaTerpenes: Array.from({ length: 9 }, (_, i) => ({ name: `t${i}`, ppm: 9000 - i * 100 })), coaRead: true });
+  ok(many.terpenes?.coa.length === TERPENE_PREVIEW_MAX && many.terpenes.coa[0] === "t0 0.9%", "capped at the strongest six");
+  const libOnly = buildFactChips(null, null, ACT, rowRecordFacts({ ...tBase, strainTerpenes: ["caryophyllene"] }));
+  ok(libOnly.chips[0]?.sourceLabel === "Strain library" && libOnly.chips[0].counted, "strain library alone counts");
+  const noPanel = rowRecordFacts({ ...tBase, coaTerpenes: [], coaRead: true });
+  ok(noPanel.terpenes?.coaNoPanel === true, "read certificate with no panel flagged");
+  const npv = buildFactChips(null, null, ACT, noPanel);
+  ok(npv.chips[0]?.value === "not tested" && npv.chips[0].counted === false && npv.missing.includes("terpenes"), "no panel -> shown, not counted, still missing");
+  ok(npv.chips[0]?.why.includes("did not run a terpene panel") === true, "no-panel why");
+  ok(rowRecordFacts({ ...tBase, coaTerpenes: [], coaRead: false }).terpenes === undefined, "unread certificate -> no terpene chip");
+  ok(rowRecordFacts({ ...tBase }).terpenes === undefined, "no inputs -> no terpenes");
+  const npLib = buildFactChips(null, null, ACT, rowRecordFacts({ ...tBase, coaTerpenes: [], coaRead: true, strainTerpenes: ["myrcene"] }));
+  ok(npLib.chips[0]?.sourceLabel === "Strain library" && npLib.chips[0].counted, "no panel but library -> library counts");
+  const gT = buildFactChips({ terpenes: { value: ["myrcene", "pinene"], source: "gemini", confidence: 0.92, at: "2026-05-01T00:00:00Z" } }, null, ACT, noPanel);
+  ok(gT.chips[0]?.sourceLabel === "Gemini 92%" && gT.chips[0].counted, "web lookup >= 90 beats the uncounted no-panel chip");
+  const gLow = buildFactChips({ terpenes: { value: ["myrcene"], source: "gemini", confidence: 0.8, at: "2026-05-01T00:00:00Z" } }, null, ACT, tr);
+  ok(gLow.chips[0]?.sourceLabel === "COA" && gLow.chips[0].also.includes("Gemini 80%"), "lab beats a web guess");
+  const attCoa = buildFactChips({ terpenes: { value: ["limonene 0.51%"], source: "coa", confidence: null, at: "2026-05-01T00:00:00Z" } }, null, ACT, tr);
+  ok(attCoa.chips[0]?.value === "limonene 0.51%" && attCoa.chips[0].why.includes("on 2026-05-01"), "attached COA terpenes (newest) win the tie");
+  const humanT = buildFactChips({ terpenes: { value: ["pinene"], source: "human", confidence: null, at: "2026-01-01T00:00:00Z" } }, null, ACT, tr);
+  ok(humanT.chips[0]?.sourceLabel === "You", "a person's terpenes beat the lab");
 
   // 11. Identity line.
   ok(identityLine("a|flower|b", {}, true).ok && identityLine("a|flower|b", {}, true).text.startsWith("Remembered as a|flower|b."), "identity on");
