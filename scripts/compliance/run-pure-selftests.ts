@@ -939,6 +939,7 @@ import { __runCoaFactsCoreTests } from "../../src/lib/inventory/coa-facts-core";
 import { __runCoaExtractCoreTests } from "../../src/lib/inventory/coa-extract-core";
 import { __runCoaPanelCoreTests } from "../../src/lib/inventory/coa-panel-core";
 import { r28MakeExtract } from "../r28/coa-fixture-extract";
+import { __runCannabinoidProfileCoreTests } from "../../src/lib/menu/cannabinoid-profile-core";
 import { __runWciaLabJsonCoreTests } from "../../src/lib/inventory/wcia-lab-json-core";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
@@ -2007,7 +2008,7 @@ __runLiquidVolumeTests();
   // signature re-asks), fix/reject applied to the snapshot, the shared form
   // parsers, open-flag lookup, the narrow 0237 detector, held-copy retire.
   // Measured 136.
-  assertRan("intake-fact-review-core", __runIntakeFactReviewCoreTests(), 176);
+  assertRan("intake-fact-review-core", __runIntakeFactReviewCoreTests(), 197);
   // S31 fix-link contract: href parsing, Next.js route precedence, the
   // searchParams key reader (inline literal, alias, Record), anchors, and the
   // coloured-block gate finder. Measured 59.
@@ -2079,7 +2080,8 @@ __runLiquidVolumeTests();
   assertRan("coa-pdf-text-core", __runCoaPdfTextCoreTests(r28CoaStems()), 292); // R28: COA PDF text (unpdf + layout + LlamaParse markdown)
   assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 179); // R28: identity, agreement, edible facts, profile
   assertRan("coa-extract-core", __runCoaExtractCoreTests(r28CoaStems()), 113); // R28: allow-list, best reading, LlamaParse gate, KB fill
-  assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 95); // R28: lot/KB lab-certificate + product-facts panels
+  assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 99); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors
+  assertRan("cannabinoid-profile-core", __runCannabinoidProfileCoreTests(), 61); // R29: ratio slot, package totals, serving summary, minor merge, ratio-vs-mg
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

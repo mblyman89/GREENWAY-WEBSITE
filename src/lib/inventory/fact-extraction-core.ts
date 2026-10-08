@@ -288,7 +288,24 @@ function fact<T>(value: T, source: FactSource, confidence: FactConfidence, note:
   return { value, source, confidence, note };
 }
 
+/**
+ * R29: a pack count WRITTEN in the name ("10 Pack", "10pk", "10ct") is a
+ * stated fact on its own. Before R29 it was only recorded on the strategy
+ * branches that also reconciled the mg - so "Const HRG CBN 1:1:1 Blueberry
+ * 10 Pack 300mg" (mg unreconciled) lost the pack count with it, and the
+ * per-serving line / Product facts had to retype a number the label prints.
+ * This post-pass fills ONLY an empty servingsPerPack, ONLY for mg types, and
+ * never touches mgPerServing (dividing an unconfirmed total would be a guess).
+ */
 export function crossExamineRow(row: RowFacts): CrossExamResult {
+  const result = crossExamineRowCore(row);
+  if (!result.percentMode && result.servingsPerPack === null && result.name.packCount !== null && result.name.packCount > 0) {
+    result.servingsPerPack = fact(result.name.packCount, "name", "verified", "pack count written in the name");
+  }
+  return result;
+}
+
+function crossExamineRowCore(row: RowFacts): CrossExamResult {
   const name = extractNameFacts(row.productText);
   const result: CrossExamResult = {
     name,
@@ -718,6 +735,20 @@ export function __runFactExtractionCoreTests(): void {
   ok(constHrg.minorCannabinoids.some((m) => m.cannabinoid === "CBN" && m.mg === 100), "Const HRG CBN 100");
   ok(constHrg.packageCbdMg?.value === 100, "Const HRG CBD 100 (Cbd column 9.1 within tolerance)");
   ok(constHrg.needsReview === false, "Const HRG fully reconciled");
+
+  // R29: with NO mg column (intake drafts carry lab percents, not mg) the
+  // written "10 Pack" still survives as a verified serving count; no mg is
+  // invented and the row still goes to a person.
+  const constNoCol = crossExamineRow({
+    productText: "Const HRG CBN 1:1:1 Blueberry 10 Pack 300mg",
+    inventoryType: "Solid Edible", thcColumn: null, cbdColumn: null,
+  });
+  ok(constNoCol.servingsPerPack?.value === 10 && constNoCol.servingsPerPack?.confidence === "verified", "R29 written pack count kept without columns");
+  ok(constNoCol.mgPerServing === null && constNoCol.packageThcMg === null, "R29 no mg invented from the pack count");
+  ok(constNoCol.needsReview === true, "R29 unreconciled mg still goes to review");
+  // Percent types never get a serving count from the name.
+  const flowerPack = crossExamineRow({ productText: "Prerolls 10 Pack", inventoryType: "Usable Marijuana", thcColumn: null, cbdColumn: null });
+  ok(flowerPack.servingsPerPack === null, "R29 percent type never gets servings from a pack count");
 
   // Yuzu: doses 50 CBN + 50mg CBD as the "1" parts of 2:1:1 → THC 100, Thc column 10 x 10-pack.
   const yuzu = crossExamineRow({

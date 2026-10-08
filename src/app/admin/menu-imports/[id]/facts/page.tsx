@@ -467,6 +467,9 @@ function FactLine({ row }: { row: FactReviewRow }) {
     f.mgPerServing !== null ? `${f.mgPerServing}mg each` : null,
     f.packageThcMg !== null ? `pkg THC ${f.packageThcMg}mg` : null,
     f.packageCbdMg !== null ? `pkg CBD ${f.packageCbdMg}mg` : null,
+    typeof f.packageCbgMg === "number" ? `pkg CBG ${f.packageCbgMg}mg` : null,
+    typeof f.packageCbnMg === "number" ? `pkg CBN ${f.packageCbnMg}mg` : null,
+    typeof f.packageCbcMg === "number" ? `pkg CBC ${f.packageCbcMg}mg` : null,
     f.ratioLabel !== null ? `ratio ${f.ratioLabel}` : null,
     f.netWeightGrams !== null ? `${f.netWeightGrams}g net` : null,
     f.netVolumeMl !== null ? `${f.netVolumeMl}ml net` : null,
@@ -584,14 +587,20 @@ function ReviewCard({
           <input type="hidden" name="sourceItemId" value={row.sourceItemId} />
           <input type="hidden" name="action" value="fix" />
           {focusFields}
+          <p className="text-[11px] text-white/50">
+            Package THC fills itself from servings × mg per serving when left blank. For ratio products (1:1, 2:2:2:1 CBG:CBC:CBD:THC) enter each cannabinoid’s PACKAGE total in mg — the menu shows these totals, never the lab percent.
+          </p>
           <div className="grid gap-3 sm:grid-cols-3">
             <FixField label="THC (display)" name="thc" placeholder={row.facts.thc ?? "e.g. 100mg"} />
             <FixField label="CBD (display)" name="cbd" placeholder={row.facts.cbd ?? "e.g. 100mg"} />
-            <FixField label="Ratio" name="ratioLabel" placeholder={row.facts.ratioLabel ?? "e.g. 1:1"} />
+            <FixField label="Ratio" name="ratioLabel" placeholder={row.facts.ratioLabel ?? "e.g. 1:1 THC:CBD"} />
             <FixField label="Servings per pack" name="servingsPerPack" placeholder={str(row.facts.servingsPerPack)} />
             <FixField label="Mg per serving" name="mgPerServing" placeholder={str(row.facts.mgPerServing)} />
             <FixField label="Package THC (mg)" name="packageThcMg" placeholder={str(row.facts.packageThcMg)} />
             <FixField label="Package CBD (mg)" name="packageCbdMg" placeholder={str(row.facts.packageCbdMg)} />
+            <FixField label="Package CBG (mg)" name="packageCbgMg" placeholder={str(row.facts.packageCbgMg ?? null)} />
+            <FixField label="Package CBN (mg)" name="packageCbnMg" placeholder={str(row.facts.packageCbnMg ?? null)} />
+            <FixField label="Package CBC (mg)" name="packageCbcMg" placeholder={str(row.facts.packageCbcMg ?? null)} />
             <FixField label="Net weight (g)" name="netWeightGrams" placeholder={str(row.facts.netWeightGrams)} />
             <FixField label="Net volume (ml)" name="netVolumeMl" placeholder={str(row.facts.netVolumeMl)} />
           </div>

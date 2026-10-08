@@ -734,6 +734,9 @@ describe("clicking a column header sorts the list", () => {
       "coa",
       "thc",
       "cbd",
+      "cbg", // R29
+      "cbn",
+      "cbc",
       "received",
       "onhand",
       "sold",

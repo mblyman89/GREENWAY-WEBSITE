@@ -38,10 +38,13 @@
  * (registered in scripts/compliance/run-pure-selftests.ts).
  */
 import {
+  parseCannabinoidProfileFacts,
   parseLowThcClassification,
   parseOtherwiseTakenClassification,
   type FactReviewFacts,
+  type ScalarFactKey,
 } from "@/lib/pos/fact-review-core";
+import { MINOR_FACT_KEYS, isMinorFactKey, mergeMinorMg, type MinorFactKey } from "@/lib/menu/cannabinoid-profile-core";
 import type { StagedSnapshotItem } from "@/lib/pos/intake-menu-staging-core";
 import type { LotFactBundle } from "@/lib/pos/intake-mastering-core";
 import { recordedDraftIds } from "@/lib/inventory/batch-staging-core";
@@ -298,7 +301,7 @@ export function partitionFactFlags(
  * makes a new FactReviewFacts field without a column a COMPILE error (same
  * guard as fact-review-store FACT_COLUMN, which targets the same columns).
  */
-export const SNAPSHOT_FACT_COLUMN: Record<keyof FactReviewFacts, keyof StagedSnapshotItem> = {
+export const SNAPSHOT_FACT_COLUMN: Record<ScalarFactKey, keyof StagedSnapshotItem> = {
   thc: "thc",
   cbd: "cbd",
   servingsPerPack: "servings_per_pack",
@@ -336,7 +339,8 @@ const LOT_COLUMNS = new Set<string>([
 export function sanitizeCorrectedFacts(raw: unknown): Partial<FactReviewFacts> {
   const out: Record<string, unknown> = {};
   if (!isObj(raw)) return out as Partial<FactReviewFacts>;
-  for (const key of Object.keys(SNAPSHOT_FACT_COLUMN) as (keyof FactReviewFacts)[]) {
+  // R29: the CBG / CBN / CBC package mg are numbers like the scalar facts.
+  for (const key of [...Object.keys(SNAPSHOT_FACT_COLUMN), ...MINOR_FACT_KEYS] as (keyof FactReviewFacts)[]) {
     if (!(key in raw)) continue;
     const v = raw[key];
     if (v === null) {
@@ -351,6 +355,20 @@ export function sanitizeCorrectedFacts(raw: unknown): Partial<FactReviewFacts> {
     }
   }
   return out as Partial<FactReviewFacts>;
+}
+
+/** R29: split sanitized facts into scalar-column entries and the CBG/CBN/CBC array patch. */
+function splitMinorFacts(all: [keyof FactReviewFacts, unknown][]): {
+  scalar: [ScalarFactKey, unknown][];
+  minors: Partial<Record<MinorFactKey, number | null>>;
+} {
+  const scalar: [ScalarFactKey, unknown][] = [];
+  const minors: Partial<Record<MinorFactKey, number | null>> = {};
+  for (const [k, v] of all) {
+    if (isMinorFactKey(k)) minors[k] = typeof v === "number" ? v : null;
+    else scalar.push([k as ScalarFactKey, v]);
+  }
+  return { scalar, minors };
 }
 
 const statusFor = (total: number): string => (total <= 0 ? "unavailable" : total <= 3 ? "low-stock" : "in-stock");
@@ -382,8 +400,10 @@ export function applyFactDecisions(
     const action = r.decision.action;
     if (action === "fix") {
       const facts = sanitizeCorrectedFacts(r.decision.corrected_facts_json);
-      const entries = Object.entries(facts) as [keyof FactReviewFacts, unknown][];
-      if (entries.length === 0) continue;
+      const all = Object.entries(facts) as [keyof FactReviewFacts, unknown][];
+      if (all.length === 0) continue;
+      const { scalar: entries, minors } = splitMinorFacts(all);
+      const hasMinors = Object.keys(minors).length > 0;
       const card = items.find((it) => it.source_item_id === r.key);
       if (card) {
         const target = card as unknown as Record<string, unknown>;
@@ -392,6 +412,11 @@ export function applyFactDecisions(
           const col = SNAPSHOT_FACT_COLUMN[k];
           target[col] = v;
           prov[col] = REVIEWER_PROVENANCE;
+        }
+        // R29: CBG / CBN / CBC merge into the card's compounds (mg rows).
+        if (hasMinors) {
+          card.compounds_json = mergeMinorMg(card.compounds_json, minors);
+          prov.compounds_json = REVIEWER_PROVENANCE;
         }
         card.fact_provenance = prov;
         res.fixed += 1;
@@ -406,6 +431,11 @@ export function applyFactDecisions(
           if (!LOT_COLUMNS.has(col)) continue;
           b[col] = v;
           prov[col] = REVIEWER_PROVENANCE;
+          touched = true;
+        }
+        if (hasMinors) {
+          bundle.minor_cannabinoids_json = mergeMinorMg(bundle.minor_cannabinoids_json ?? [], minors);
+          prov.minor_cannabinoids_json = REVIEWER_PROVENANCE;
           touched = true;
         }
         if (touched) {
@@ -575,10 +605,15 @@ export function parseIntakeFactForm(
       }
       (facts as Record<string, number>)[key] = value;
     }
-    for (const key of ["thc", "cbd", "ratioLabel"] as const) {
+    for (const key of ["thc", "cbd"] as const) {
       const raw = get(key).trim();
       if (raw !== "") (facts as Record<string, string>)[key] = raw;
     }
+    // R29: ratio (canonicalised), CBG / CBN / CBC, servings x mg arithmetic
+    // and the ratio-vs-mg check - the SHARED parser all three forms call.
+    const profile = parseCannabinoidProfileFacts(get, facts);
+    if (!profile.ok) return { ok: false, error: profile.error };
+    Object.assign(facts, profile.facts);
     const lowThc = parseLowThcClassification(get("lowThcLiquid"), get("unitThcMg"));
     if (!lowThc.ok) return { ok: false, error: lowThc.error };
     Object.assign(facts, lowThc.facts);
@@ -752,13 +787,24 @@ export function intakeFixMirrorPatch(facts: Partial<FactReviewFacts> | null | un
   itemProvenance: Record<string, string>;
   lot: Record<string, unknown>;
   lotProvenance: Record<string, string>;
+  /**
+   * R29: CBG / CBN / CBC package mg to MERGE (mergeMinorMg) into each card's
+   * compounds_json and the lot's minor_cannabinoids_json - the store reads the
+   * current array per row first (never a blind overwrite of THC/CBD rows).
+   */
+  minors: Partial<Record<MinorFactKey, number | null>>;
 } {
   const item: Record<string, unknown> = {};
   const itemProvenance: Record<string, string> = {};
   const lot: Record<string, unknown> = {};
   const lotProvenance: Record<string, string> = {};
   const clean = sanitizeCorrectedFacts(facts ?? {});
-  for (const [k, v] of Object.entries(clean) as [keyof FactReviewFacts, unknown][]) {
+  const { scalar, minors } = splitMinorFacts(Object.entries(clean) as [keyof FactReviewFacts, unknown][]);
+  if (Object.keys(minors).length > 0) {
+    itemProvenance.compounds_json = REVIEWER_PROVENANCE;
+    lotProvenance.minor_cannabinoids_json = REVIEWER_PROVENANCE;
+  }
+  for (const [k, v] of scalar) {
     if (v === undefined) continue;
     const col = SNAPSHOT_FACT_COLUMN[k] as string;
     item[col] = v;
@@ -768,7 +814,7 @@ export function intakeFixMirrorPatch(facts: Partial<FactReviewFacts> | null | un
       lotProvenance[col] = REVIEWER_PROVENANCE;
     }
   }
-  return { item, itemProvenance, lot, lotProvenance };
+  return { item, itemProvenance, lot, lotProvenance, minors };
 }
 
 /** Label + display text for each saved fact, in the panel's field order. */
@@ -780,6 +826,9 @@ export const SAVED_FACT_LABELS: readonly [keyof FactReviewFacts, string][] = [
   ["mgPerServing", "Mg per serving"],
   ["packageThcMg", "Package THC (mg)"],
   ["packageCbdMg", "Package CBD (mg)"],
+  ["packageCbgMg", "Package CBG (mg)"],
+  ["packageCbnMg", "Package CBN (mg)"],
+  ["packageCbcMg", "Package CBC (mg)"],
   ["netWeightGrams", "Net weight (g)"],
   ["netVolumeMl", "Net volume (ml)"],
   ["lowThcLiquid", "Low-THC beverage"],
@@ -1327,7 +1376,7 @@ export function __runIntakeFactReviewCoreTests(): { passed: number; failed: numb
   ok(later.size === 0, "a LATER approve supersedes older typed facts (never show stale numbers as current)");
   const lines = savedFactLines({ packageThcMg: 100, lowThcLiquid: false, thc: "10mg", cbd: null });
   ok(lines.map((l) => l.join("=")).join("|") === "THC (display)=10mg|Package THC (mg)=100|Low-THC beverage=No", "lines in field order: " + JSON.stringify(lines));
-  ok(SAVED_FACT_LABELS.length === Object.keys(SNAPSHOT_FACT_COLUMN).length, "every fact has a label");
+  ok(SAVED_FACT_LABELS.length === Object.keys(SNAPSHOT_FACT_COLUMN).length + MINOR_FACT_KEYS.length, "every fact has a label");
   ok(factPanelLead({ key: "K", withheld: true }).includes("Only THIS product"), "withheld lead");
   ok(factPanelLead({ key: "K", withheld: false }).includes("waiting for this answer"), "held lead");
   const mp = intakeFixMirrorPatch({ packageThcMg: 100, thc: "100mg", lowThcLiquid: false, servingsPerPack: -3 } as Partial<FactReviewFacts>);
@@ -1348,6 +1397,62 @@ export function __runIntakeFactReviewCoreTests(): { passed: number; failed: numb
   const staItems = [{ source_item_id: "LOT-1", fact_provenance: {}, variants: [] }] as unknown as StagedSnapshotItem[];
   applyFactDecisions(staItems, new Map(), sta);
   ok((staItems[0] as unknown as Record<string, unknown>).package_thc_mg === 100, "applied to the new card");
+
+  // -- R29: CBG / CBN / CBC + ratio through the intake facts path -------------------------
+  {
+    const s = sanitizeCorrectedFacts({ packageCbgMg: 100, packageCbnMg: -5, packageCbcMg: "95", packageCbdMg: 100 });
+    ok(s.packageCbgMg === 100 && !("packageCbnMg" in s) && !("packageCbcMg" in s) && s.packageCbdMg === 100, "sanitize keeps valid minors, drops negative / string: " + JSON.stringify(s));
+    ok(sanitizeCorrectedFacts({ packageCbnMg: null }).packageCbnMg === null, "sanitize keeps an explicit null minor (clear)");
+  }
+  {
+    const items = [item({ compounds_json: [{ type: "thc", value: "55", unit: "mg" }, { type: "cbg", value: "1.2", unit: "%" }, { type: "cbn", value: "5", unit: "mg" }] } as Partial<StagedSnapshotItem>)];
+    const lots = new Map([["LOT-1", { ...bundle(), minor_cannabinoids_json: [{ type: "cbn", value: "5", unit: "mg" }] }]]);
+    const r = applyFactDecisions(items, lots, resolvedOf(dec({ action: "fix", corrected_facts_json: { packageCbgMg: 100, packageCbnMg: null, packageCbcMg: 95 } })));
+    const rows = items[0].compounds_json as { type: string; value: string; unit: string }[];
+    const key = (a: { type: string; value: string; unit: string }[]) => a.map((x) => `${x.type}:${x.value}${x.unit}`).join(",");
+    ok(r.fixed === 1 && r.lotFactsFixed === 1, "minor-only fix counts card + golden record: " + JSON.stringify(r));
+    ok(key(rows) === "thc:55mg,cbg:1.2%,cbg:100mg,cbc:95mg", "card compounds merged (THC kept, % kept, CBN cleared, CBG/CBC added): " + key(rows));
+    ok(key(lots.get("LOT-1")!.minor_cannabinoids_json!) === "cbg:100mg,cbc:95mg", "lot minors merged: " + key(lots.get("LOT-1")!.minor_cannabinoids_json!));
+    ok(items[0].fact_provenance.compounds_json === REVIEWER_PROVENANCE && lots.get("LOT-1")!.fact_provenance.minor_cannabinoids_json === REVIEWER_PROVENANCE, "reviewer provenance on both arrays");
+    ok(!("packageCbgMg" in (items[0] as object)) && !("package_cbg_mg" in (items[0] as object)), "minors never written as invented scalar columns");
+  }
+  {
+    const items = [item()];
+    const lots = new Map([["LOT-1", bundle()]]);
+    applyFactDecisions(items, lots, resolvedOf(dec({ action: "fix", corrected_facts_json: { packageThcMg: 100 } })));
+    ok(lots.get("LOT-1")!.minor_cannabinoids_json === undefined, "a fix without minors never touches the minor arrays");
+  }
+  {
+    const mpm = intakeFixMirrorPatch({ packageCbgMg: 50, packageCbcMg: null, packageThcMg: 50 });
+    ok(mpm.minors.packageCbgMg === 50 && mpm.minors.packageCbcMg === null && !("packageCbnMg" in mpm.minors), "mirror patch carries minors (null = clear, absent = leave)");
+    ok(!("packageCbgMg" in mpm.item) && mpm.item.package_thc_mg === 50, "minors not in the scalar item patch");
+    ok(mpm.itemProvenance.compounds_json === "reviewer" && mpm.lotProvenance.minor_cannabinoids_json === "reviewer", "mirror provenance for the arrays");
+    ok(Object.keys(intakeFixMirrorPatch({ packageThcMg: 1 }).minors).length === 0, "no minors typed -> empty minors patch");
+  }
+  {
+    const ls = savedFactLines({ packageCbdMg: 100, packageCbgMg: 100, packageCbcMg: 95, ratioLabel: "2:2:2:1 CBG:CBC:CBD:THC" });
+    ok(ls.map((l) => l.join("=")).join("|") === "Ratio=2:2:2:1 CBG:CBC:CBD:THC|Package CBD (mg)=100|Package CBG (mg)=100|Package CBC (mg)=95", "saved minors listed in field order: " + JSON.stringify(ls));
+  }
+  {
+    const r = parseIntakeFactForm(form({ action: "fix", packageCbgMg: "100", packageCbcMg: "95", packageCbdMg: "100", packageThcMg: "55", ratioLabel: "2:2:2:1 cbg:cbc:cbd:thc" }));
+    ok(r.ok && r.form.correctedFacts!.packageCbgMg === 100 && r.form.correctedFacts!.packageCbcMg === 95, "form parses minors");
+    ok(r.ok && r.form.correctedFacts!.ratioLabel === "2:2:2:1 CBG:CBC:CBD:THC", "form canonicalises the ratio: " + (r.ok ? r.form.correctedFacts!.ratioLabel : r.error));
+    ok(r.ok && r.form.correctedFacts!.thc === "55mg" && r.form.correctedFacts!.cbd === "100mg", "blank display strings filled from package mg");
+  }
+  ok(!parseIntakeFactForm(form({ action: "fix", packageCbnMg: "5mg" })).ok, "unit-suffixed minor refused");
+  ok(!parseIntakeFactForm(form({ action: "fix", ratioLabel: "strong" })).ok, "unreadable ratio refused");
+  {
+    const r = parseIntakeFactForm(form({ action: "fix", servingsPerPack: "10", mgPerServing: "10" }));
+    ok(r.ok && r.form.correctedFacts!.packageThcMg === 100, "package THC computed from servings x mg");
+  }
+  {
+    const r = parseIntakeFactForm(form({ action: "fix", servingsPerPack: "10", mgPerServing: "10", packageThcMg: "0.25" }));
+    ok(!r.ok && r.error.includes("10 servings x 10 mg = 100 mg"), "a package THC that contradicts servings x mg is refused");
+  }
+  {
+    const r = parseIntakeFactForm(form({ action: "fix", ratioLabel: "1:1 THC:CBD", packageThcMg: "100", packageCbdMg: "10" }));
+    ok(!r.ok, "ratio vs typed mg disagreement refused");
+  }
 
   return { passed, failed };
 }

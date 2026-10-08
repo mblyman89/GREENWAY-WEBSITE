@@ -119,6 +119,8 @@ export const INVENTORY_COLUMN_SORTS: ColumnSortDef[] = [
   // R15a: COA figure first, else the Cultivera export's (lot-potency-core).
   { key: "thc", label: "THC", kind: "potency", firstClick: "desc", number: (l) => lotThcValue(l) },
   { key: "cbd", label: "CBD", kind: "potency", firstClick: "desc", number: (l) => lotCbdValue(l) },
+  // R29: CBG beside CBN / CBC (the owner's order: THC : CBD : CBG : CBN : CBC).
+  { key: "cbg", label: "CBG", kind: "number", firstClick: "desc", number: (l) => lotMinorValue(l, "cbg") },
   { key: "cbn", label: "CBN", kind: "number", firstClick: "desc", number: (l) => lotMinorValue(l, "cbn") },
   { key: "cbc", label: "CBC", kind: "number", firstClick: "desc", number: (l) => lotMinorValue(l, "cbc") },
   { key: "received", label: "Received", kind: "date", firstClick: "desc", date: (l) => l.received_on },

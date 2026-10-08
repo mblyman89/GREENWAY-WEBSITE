@@ -40,6 +40,12 @@
 import { cannabinoidTag, type Cannabinoid } from "@/lib/naming/convention-core";
 import { AVOIRDUPOIS_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 import type { GreenwayCannabinoid, GreenwayMenuItem } from "@/lib/leafly/types";
+import {
+  isRatioLedCategory,
+  ratioSlot,
+  servingSummary,
+  type RatioSlot,
+} from "@/lib/menu/cannabinoid-profile-core";
 
 /* ------------------------------------------------------------------ *
  *  Types
@@ -251,9 +257,13 @@ export function parseNetMeasure(label: string | null | undefined): { grams: numb
  * Returns null when no real measure is available.
  */
 export function deriveNetWeightLine(
-  item: Pick<GreenwayMenuItem, "totalThc" | "totalCbd" | "variants" | "posInventoryCategory">,
+  item: Pick<GreenwayMenuItem, "totalThc" | "totalCbd" | "variants" | "posInventoryCategory"> & { category?: string | null },
 ): string | null {
-  const isMg = item.totalThc?.unit === "mg" || item.totalCbd?.unit === "mg";
+  // R29: ratio-led categories (edibles, drinks, tinctures, topicals) are
+  // net-weight products whether or not a potency survived intake - a CBD/CBG
+  // topical with no THC row, or a row whose stale display was cleared, still
+  // owes the customer its net weight/volume (WAC 314-55-105).
+  const isMg = item.totalThc?.unit === "mg" || item.totalCbd?.unit === "mg" || isRatioLedCategory(item.category);
   if (!isMg) return null; // flower/concentrate use %/grams elsewhere — not here.
 
   // Use the first variant that carries a real measure.
@@ -278,10 +288,79 @@ export function deriveNetWeightLine(
  *  Top-level composer
  * ------------------------------------------------------------------ */
 
+/**
+ * R29 - the package columns outrank the display JSON.
+ *
+ * `package_thc_mg` / `package_cbd_mg` are the structured per-package totals
+ * (engine-verified from the name, read off the lab certificate, or set by a
+ * person in Product facts). Before R29 the intake copied lab PERCENTS into
+ * `totalThc`/`compounds` with an "mg" unit, so a 55 mg gummy read "THC: 0.12 mg".
+ * This adapter rewrites the THC/CBD totals (and their compound rows) from the
+ * package columns BEFORE the profile and boxes are derived, so every reader -
+ * boxes, profile tag, net-weight gate - agrees with the label arithmetic.
+ *
+ * Guard rails (never guess): only a POSITIVE package figure is used; a
+ * display value in "%" is never overwritten (flower/concentrates keep their
+ * lab totals); the item object is never mutated.
+ */
+export function withPackageTotals<T extends Pick<GreenwayMenuItem, "category" | "totalThc" | "totalCbd" | "compounds" | "packageThcMg" | "packageCbdMg">>(item: T): T {
+  const pos = (n: number | null | undefined) => (typeof n === "number" && Number.isFinite(n) && n > 0 ? n : null);
+  const thc = pos(item.packageThcMg);
+  const cbd = pos(item.packageCbdMg);
+  if (thc === null && cbd === null) return item;
+  const mgSlot = (c: GreenwayCannabinoid | null | undefined) => !c || c.unit === "mg";
+  // Package mg only means something for mg-dosed products; outside the four
+  // ratio-led categories it is used only where the display is already mg/empty
+  // AND that display is mg (never invents an mg box on a % product).
+  const allowed = (c: GreenwayCannabinoid | null | undefined) =>
+    mgSlot(c) && (isRatioLedCategory(item.category) || c?.unit === "mg");
+  const fmt = (n: number) => String(Number(n.toFixed(2)));
+  let totalThc = item.totalThc;
+  let totalCbd = item.totalCbd;
+  let compounds = item.compounds ?? [];
+  if (thc !== null && allowed(item.totalThc)) {
+    totalThc = { type: "thc", value: fmt(thc), unit: "mg" };
+    compounds = [...compounds.filter((c) => !(c.type === "thc" && c.unit === "mg")), { type: "thc", value: fmt(thc), unit: "mg" }];
+  }
+  if (cbd !== null && allowed(item.totalCbd)) {
+    totalCbd = { type: "cbd", value: fmt(cbd), unit: "mg" };
+    compounds = [...compounds.filter((c) => !(c.type === "cbd" && c.unit === "mg")), { type: "cbd", value: fmt(cbd), unit: "mg" }];
+  }
+  return { ...item, totalThc, totalCbd, compounds };
+}
+
+/**
+ * R29 - what the strain-type pill shows. Ratio-led products (edibles, drinks,
+ * tinctures, topicals) show their written ratio ("2:2:2:1 CBG:CBC:CBD:THC"),
+ * else the cannabinoids that have real mg ("CBD · CBG · THC"); everything else
+ * returns `{kind:"strain"}` and the caller keeps the strain type exactly as
+ * before. Non-cannabis items never get a slot.
+ */
+export function cardRatioSlot(item: GreenwayMenuItem): RatioSlot {
+  return ratioSlot(withPackageTotals(item));
+}
+
+/** R29 - "10 servings · each 10 mg THC · 10 mg CBD" or null (needs a known serving count > 1). */
+export function cardServingLine(item: GreenwayMenuItem): string | null {
+  if (!isRatioLedCategory(item.category)) return null;
+  return servingSummary(withPackageTotals(item));
+}
+
+/**
+ * R29 - the profile pill would only repeat what the ratio slot already says
+ * ("1:1 THC:CBD" twice), so it is suppressed whenever the slot carries a
+ * ratio or cannabinoid list. The SLICE 66 gate still applies otherwise.
+ */
+export function showProfilePillWithSlot(profile: CardProfile | null, slot: RatioSlot): boolean {
+  if (slot.kind !== "strain") return false;
+  return showProfilePill(profile);
+}
+
 export function cardCannabinoids(item: GreenwayMenuItem): CardCannabinoids {
+  const effective = withPackageTotals(item);
   return {
-    profile: deriveProfile(item),
-    boxes: deriveBoxes(item),
+    profile: deriveProfile(effective),
+    boxes: deriveBoxes(effective),
   };
 }
 
@@ -416,6 +495,75 @@ export function __runCardCannabinoidTests(): void {
   check("parse 100mg is null (potency)", parseNetMeasure("100mg") === null, parseNetMeasure("100mg"));
   check("parse 10pk is null", parseNetMeasure("10pk") === null, parseNetMeasure("10pk"));
   check("parse each is null", parseNetMeasure("each") === null, parseNetMeasure("each"));
+
+  // 10) R29 - the package columns outrank stale display JSON (lab % stored as mg).
+  const sourMandarin = mk({
+    category: "edible-solid",
+    totalThc: { type: "thc", value: "0.12", unit: "mg" },
+    totalCbd: { type: "cbd", value: "0.25", unit: "mg" },
+    compounds: [
+      { type: "thc", value: "0.12", unit: "mg" },
+      { type: "cbd", value: "0.25", unit: "mg" },
+      { type: "cbg", value: "100", unit: "mg" },
+      { type: "cbc", value: "95", unit: "mg" },
+    ],
+    packageThcMg: 55,
+    packageCbdMg: 100,
+    servingsPerPack: 10,
+    mgPerServing: 5.5,
+    ratioLabel: "2:2:2:1 CBG:CBC:CBD:THC",
+  });
+  const sm = cardCannabinoids(sourMandarin);
+  check("R29 stale 0.12 mg outranked by package 55", sm.boxes[0]?.label === "THC" && sm.boxes[0]?.display === "55 mg", sm.boxes);
+  check("R29 stale CBD outranked by package 100", sm.boxes[1]?.label === "CBD" && sm.boxes[1]?.display === "100 mg", sm.boxes);
+  check("R29 minors kept (CBG, CBC)", sm.boxes.map((x) => x.label).join(",") === "THC,CBD,CBG,CBC", sm.boxes);
+  check("R29 no sub-1 mg box anywhere", sm.boxes.every((x) => !/^0\./.test(x.display)), sm.boxes);
+  check("R29 input not mutated", sourMandarin.totalThc?.value === "0.12", sourMandarin.totalThc);
+  const smSlot = cardRatioSlot(sourMandarin);
+  check("R29 ratio slot shows the written ratio", smSlot.kind === "ratio" && smSlot.text === "2:2:2:1 CBG:CBC:CBD:THC", smSlot);
+  check("R29 profile pill suppressed beside a ratio", showProfilePillWithSlot(sm.profile, smSlot) === false, sm.profile);
+  check(
+    "R29 serving line",
+    cardServingLine(sourMandarin) === "10 servings · each 5.5 mg THC · 10 mg CBD · 10 mg CBG · 9.5 mg CBC",
+    cardServingLine(sourMandarin),
+  );
+
+  // Owner's example: 10 pieces x 10 mg of each of five cannabinoids = 100 mg each.
+  const fiveWay = mk({
+    category: "edible-solid",
+    totalThc: null,
+    totalCbd: null,
+    compounds: [
+      { type: "cbg", value: "100", unit: "mg" },
+      { type: "cbn", value: "100", unit: "mg" },
+      { type: "cbc", value: "100", unit: "mg" },
+    ],
+    packageThcMg: 100,
+    packageCbdMg: 100,
+    servingsPerPack: 10,
+    mgPerServing: 10,
+    ratioLabel: "1:1:1:1:1 THC:CBD:CBG:CBN:CBC",
+  });
+  const fw = cardCannabinoids(fiveWay);
+  check("R29 five-way: five 100 mg boxes", fw.boxes.length === 5 && fw.boxes.every((x) => x.display === "100 mg"), fw.boxes);
+  check("R29 five-way serving line", cardServingLine(fiveWay) === "10 servings · each 10 mg THC · 10 mg CBD · 10 mg CBG · 10 mg CBN · 10 mg CBC", cardServingLine(fiveWay));
+
+  // Flower: a % display is never overwritten by a package column.
+  const pctFlower = mk({ category: "flower", totalThc: { type: "thc", value: "24.1", unit: "%" }, packageThcMg: 999 });
+  check("R29 % flower untouched", cardCannabinoids(pctFlower).boxes[0]?.display === "24.1%", cardCannabinoids(pctFlower).boxes);
+  check("R29 flower keeps strain slot", cardRatioSlot(pctFlower).kind === "strain", null);
+  check("R29 flower has no serving line", cardServingLine({ ...pctFlower, servingsPerPack: 10 }) === null, null);
+  // THC-only gummy keeps its strain slot and its lone-THC pill gate.
+  const thcGummy = mk({ category: "edible-solid", strainType: "indica", packageThcMg: 100, servingsPerPack: 10, mgPerServing: 10 });
+  check("R29 THC-only gummy keeps strain slot", cardRatioSlot(thcGummy).kind === "strain", cardRatioSlot(thcGummy));
+  check("R29 THC-only gummy shows package box", cardCannabinoids(thcGummy).boxes[0]?.display === "100 mg", cardCannabinoids(thcGummy).boxes);
+  check("R29 THC-only gummy serving line", cardServingLine(thcGummy) === "10 servings · each 10 mg THC", cardServingLine(thcGummy));
+  // Topical with no potency still shows its net weight.
+  const balm = mk({ category: "topical", variants: [{ id: "v", label: "2oz", priceMinorUnits: 2500, inventoryLevel: 2, medical: false }] });
+  check("R29 topical net weight without potency", deriveNetWeightLine(balm) === "2 oz (56.7 g)", deriveNetWeightLine(balm));
+  // Zero / negative package figures are ignored (never a 0 mg box).
+  const zero = mk({ category: "edible-solid", packageThcMg: 0, totalThc: { type: "thc", value: "50", unit: "mg" } });
+  check("R29 zero package ignored", cardCannabinoids(zero).boxes[0]?.display === "50 mg", cardCannabinoids(zero).boxes);
 
   // Report
   const failed = results.filter(([, ok]) => !ok);

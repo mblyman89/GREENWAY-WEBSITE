@@ -180,7 +180,16 @@ describe("R28 a read certificate fills the facts the transfer never had (real st
     const c12 = itemInserts().find((i) => i.source_item_id === "LOT-12")!;
     expect(c12.package_thc_mg).toBeNull();
     expect(c12.mg_per_serving).toBeNull();
-    expect(c12.thc).toBe("0.12mg");
+    // R29 (deliberate change of the R28 pin): the 0.1206 on the transfer is a
+    // lab PERCENT (WCIA uom "pct"); it is never printed as "0.12mg" again.
+    // No figure is shown until the certificate or a person supplies the mg,
+    // and the ratio the name states is kept in canonical form.
+    expect(c12.thc).toBeNull();
+    expect(c12.cbd).toBeNull();
+    expect(c12.total_thc_json).toBeNull();
+    expect(c12.compounds_json).toEqual([]);
+    expect(c12.ratio_label).toBe("2:2:2:1 CBG:CBC:CBD:THC");
+    expect(diags().some((d) => d.code === "lab_percent_not_mg" && d.context?.pos_product_key === "LOT-12")).toBe(true);
   });
 
   it("read: Sour Mandarin publishes with the certificate's facts; ONLY Honeydew Melon is kept off, with the WA reason", async () => {
@@ -190,6 +199,14 @@ describe("R28 a read certificate fills the facts the transfer never had (real st
     const cards = itemInserts();
     expect(cards.map((c) => c.source_item_id)).toEqual(["LOT-12"]);
     expect(cards[0]).toMatchObject({ thc: "55mg", cbd: "100mg", package_thc_mg: 55, mg_per_serving: 5.5, servings_per_pack: 10 });
+    // R29: every cannabinoid the certificate measured, as a PACKAGE total.
+    expect(cards[0].compounds_json).toEqual([
+      { type: "thc", value: "55", unit: "mg" },
+      { type: "cbd", value: "100", unit: "mg" },
+      { type: "cbg", value: "100", unit: "mg" },
+      { type: "cbc", value: "95", unit: "mg" },
+    ]);
+    expect(cards[0].ratio_label).toBe("2:2:2:1 CBG:CBC:CBD:THC");
     expect(cards[0].fact_provenance).toMatchObject({ package_thc_mg: "coa", package_cbd_mg: "coa", mg_per_serving: "coa", servings_per_pack: "name" });
     const applied = diags().find((d) => d.code === "coa_facts_applied")!;
     expect(applied.context).toMatchObject({ pos_product_key: "LOT-12", servingWeightG: 4.54, thcMgPerServing: 5.5, packageThcMg: 55 });

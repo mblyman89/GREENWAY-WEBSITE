@@ -25,6 +25,7 @@
  */
 
 import type { PosMenuProduct } from "./sale-flow-core";
+import { normalizeRatioLabel, servingSummary } from "@/lib/menu/cannabinoid-profile-core";
 
 /**
  * Server-side cap for descriptions shipped in the bundle. Enough for a menu
@@ -94,10 +95,28 @@ export function buildProductInfo(product: PosMenuProduct): ProductInfoView {
   const rows: ProductInfoRow[] = [];
   const strain = strainTypeLabel(product.strainType);
   if (strain) rows.push({ label: "Type", value: strain });
-  const thc = (product.thc ?? "").trim();
-  if (thc) rows.push({ label: "THC", value: thc });
-  const cbd = (product.cbd ?? "").trim();
-  if (cbd) rows.push({ label: "CBD", value: cbd });
+  // R29 - a ratio product (edible/drink/tincture/topical) shows its written
+  // ratio and the per-PACKAGE mg of every cannabinoid it has, resolved
+  // server-side by the website card's function. Absent (pre-R29 bundle, or a
+  // flower/concentrate) -> the thc/cbd strings exactly as before.
+  const profile = (product.cannabinoidsMg ?? []).filter((c) => Number.isFinite(c.mg) && c.mg > 0);
+  const ratio = normalizeRatioLabel(product.ratioLabel);
+  if (ratio) rows.push({ label: "Ratio", value: ratio.label });
+  if (profile.length > 0) {
+    for (const c of profile) rows.push({ label: c.type.toUpperCase(), value: `${Number(c.mg.toFixed(2))} mg` });
+    const servings = servingSummary({
+      category: product.category,
+      servingsPerPack: product.servingsPerPack ?? null,
+      mgPerServing: product.mgPerServing ?? null,
+      compounds: profile.map((c) => ({ type: c.type, value: String(c.mg), unit: "mg" })),
+    });
+    if (servings) rows.push({ label: "Servings", value: servings });
+  } else {
+    const thc = (product.thc ?? "").trim();
+    if (thc) rows.push({ label: "THC", value: thc });
+    const cbd = (product.cbd ?? "").trim();
+    if (cbd) rows.push({ label: "CBD", value: cbd });
+  }
 
   const terpenes = (product.terpenes ?? [])
     .map((t) => t.trim())
@@ -193,6 +212,40 @@ export function __runProductInfoCoreTests(): void {
   const merchView = buildProductInfo(merch);
   ok(merchView.rows.length === 0, "merch: no potency rows invented");
   ok(merchView.terpenes.length === 0 && merchView.description === "", "merch: no terpenes/description");
+
+  // R29 - ratio product: Ratio + per-package mg rows + serving line; the stale
+  // pre-R29 thc string ("0.12mg") is never shown beside the real profile.
+  const gummy: PosMenuProduct = {
+    ...base,
+    name: "Bytes Sour Mandarin",
+    category: "edible-solid",
+    strainType: "unknown",
+    thc: "0.12mg",
+    cbd: "0.25mg",
+    ratioLabel: "CBG:CBC:CBD:THC (2:2:2:1)",
+    servingsPerPack: 10,
+    mgPerServing: 5.5,
+    cannabinoidsMg: [
+      { type: "thc", mg: 55 },
+      { type: "cbd", mg: 100 },
+      { type: "cbg", mg: 100 },
+      { type: "cbc", mg: 95 },
+    ],
+  };
+  const gv = buildProductInfo(gummy);
+  const labels = gv.rows.map((r) => r.label).join(",");
+  ok(labels === "Ratio,THC,CBD,CBG,CBC,Servings", `R29 ratio rows in order (${labels})`);
+  ok(gv.rows[0].value === "2:2:2:1 CBG:CBC:CBD:THC", "R29 ratio canonicalised");
+  ok(gv.rows[1].value === "55 mg" && gv.rows[4].value === "95 mg", "R29 package mg rows");
+  ok(gv.rows[5].value === "10 servings · each 5.5 mg THC · 10 mg CBD · 10 mg CBG · 9.5 mg CBC", "R29 serving line");
+  ok(!gv.rows.some((r) => r.value.includes("0.12")), "R29 stale 0.12mg never shown");
+  // Pre-R29 cached bundle (no profile) falls back to the strings.
+  const old = buildProductInfo({ ...gummy, cannabinoidsMg: undefined, ratioLabel: undefined });
+  ok(old.rows.map((r) => r.label).join(",") === "THC,CBD", "R29 old bundle falls back to thc/cbd strings");
+  // Garbage ratio is not shown; zero mg rows are dropped.
+  const junk = buildProductInfo({ ...gummy, ratioLabel: "THC:THC 1:1", cannabinoidsMg: [{ type: "thc", mg: 0 }] });
+  ok(!junk.rows.some((r) => r.label === "Ratio"), "R29 refused ratio not shown");
+  ok(junk.rows.map((r) => r.label).join(",") === "THC,CBD", "R29 all-zero profile falls back");
 
   console.log(`product-info-core: ${passed} passed, ${failed} failed`);
   if (failed > 0) {

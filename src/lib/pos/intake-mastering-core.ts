@@ -240,6 +240,13 @@ export type LotFactBundle = {
   net_weight_grams: number | null;
   net_volume_ml: number | null;
   fact_provenance: Record<string, string>;
+  /**
+   * R29: per-package mg of the non-THC/CBD cannabinoids (CBG, CBN, CBC, ...)
+   * for inventory_lots.minor_cannabinoids_json (0138). Present only when the
+   * card has mg rows for them (lab certificate or a person); staging writes
+   * it only when non-empty, so it never wipes a lot's existing minors.
+   */
+  minor_cannabinoids_json?: { type: string; value: string; unit: string }[];
 };
 
 export type IntakeMasteringPlan = {
@@ -316,8 +323,8 @@ function titleCase(value: string): string {
   return value
     .toLowerCase()
     .replace(/\b\w/g, (m) => m.toUpperCase())
-    .replace(/\bCbd\b/g, "CBD")
-    .replace(/\bThc\b/g, "THC");
+    // R29: same cannabinoid list as transform.ts titleCase (exact parity).
+    .replace(/\b(Cbd|Thc|Cbg|Cbn|Cbc|Thcv|Cbdv|Thca|Cbda)\b/g, (m) => m.toUpperCase());
 }
 
 /**
@@ -870,7 +877,11 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
   // inventory_lots regardless of how its card was mastered.
   const lotFactsByKey = new Map<string, LotFactBundle>();
   for (const it of injection.items) {
+    // R29: the card's mg rows for every cannabinoid other than THC / CBD (and
+    // their acids) are the lot's minors - same {type,value,unit} shape.
+    const minors = it.compounds_json.filter((c) => c.unit === "mg" && !["thc", "thca", "cbd", "cbda"].includes(c.type));
     if (
+      minors.length > 0 ||
       it.servings_per_pack !== null ||
       it.mg_per_serving !== null ||
       it.package_thc_mg !== null ||
@@ -890,6 +901,7 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
         net_weight_grams: it.net_weight_grams,
         net_volume_ml: it.net_volume_ml,
         fact_provenance: it.fact_provenance,
+        ...(minors.length > 0 ? { minor_cannabinoids_json: minors.map((c) => ({ ...c })) } : {}),
       });
     }
   }
@@ -1678,6 +1690,9 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     const fam = deriveFamily({ category: "flower", vendor: "X", name: "whatever", strainName: "Blue_Dream" });
     assert(!!fam && fam.display === "Blue Dream" && fam.family === "blue-dream", "family: strain-led");
     assert(familyFromName("Fairwinds 3.5g", "Fairwinds") === null, "family: strips to nothing → null");
+    // R29: cannabinoid abbreviations stay upper-case on the family display name.
+    assert(familyFromName("const hrg cbn:cbg 1:1 blueberry 10pk", "", true) === "Const Hrg CBN:CBG 1:1 Blueberry", "family: R29 CBN/CBG upper-case -> " + familyFromName("const hrg cbn:cbg 1:1 blueberry 10pk", "", true));
+    assert(collapseFamilyKeyPart("Const Hrg CBN 1:1") === collapseFamilyKeyPart("Const Hrg Cbn 1:1"), "family: R29 case change never moves identity");
     assert(
       familyFromName("Fairwinds LLC Healing Balm 300mg", ["", "Fairwinds LLC"]) === "Healing Balm",
       "family: vendor prefix strips (label list form)",
@@ -1852,15 +1867,71 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
       ],
       [["e1", enrich({ websiteCategory: "edible-solid", packageLabel: "10 Pack" })]],
     );
+    // R29 (supersedes the SLICE 62 "package THC 100mg" pin): an intake draft
+    // only has lab PERCENTS (WCIA uom "pct"), and reading total_thc_pct 10 as
+    // "10 mg per serving" was the guess behind the 0.12 mg menu cards. The
+    // bundle still carries what the NAME states (pack count, ratio); the mg
+    // waits for the lab certificate or a person (draft-injection-core pins
+    // both halves: no-COA -> null, COA -> 100 mg).
     const facts = p.lotFactsByKey.get("LOT-E1");
     assert(facts !== undefined, "lot facts: verified edible carries a fact bundle");
-    assert(facts!.package_thc_mg === 100, "lot facts: verified package THC 100mg");
+    assert(facts!.package_thc_mg === null, "lot facts: R29 lab percent never becomes package THC mg");
     assert(facts!.servings_per_pack === 10, "lot facts: verified servings 10");
     assert(facts!.ratio_label === "1:1:1", "lot facts: ratio label");
   }
   {
     const p = plan([draft({})], [["d1", enrich({})]]);
     assert(!p.lotFactsByKey.has("LOT-A"), "lot facts: flower has no mg bundle");
+    assert(p.lotFactsByKey.get("LOT-A")?.minor_cannabinoids_json === undefined, "lot facts: no minors key invented");
+  }
+  // R29: lab-certificate CBG / CBC mg reach the lot's golden record
+  // (inventory_lots.minor_cannabinoids_json) - THC / CBD stay in their columns.
+  {
+    const p = plan(
+      [
+        draft({
+          id: "m1",
+          pos_product_key: "LOT-M1",
+          name: "bytes - CBG:CBC:CBD:THC (2:2:2:1) - 10pk - Sour Mandarin - 50g",
+          inventory_type: "Solid Edible",
+          thc_pct: 0.1206,
+          cbd_pct: 0.2219,
+          total_thc_pct: 0.1206,
+          potency_json: { thc: 0.1206, cbd: 0.2219 },
+        }),
+      ],
+      [[
+        "m1",
+        enrich({
+          websiteCategory: "edibles",
+          coaFacts: {
+            usable: true,
+            servingWeightG: 4.54,
+            thcMgPerServing: { value: 5.5, confidence: "verified", note: "t" },
+            cbdMgPerServing: { value: 10, confidence: "verified", note: "c" },
+            cbdNotDetected: false,
+            servingsPerPack: 10,
+            packageThcMg: { value: 55, confidence: "verified", note: "5.5 x 10" },
+            packageCbdMg: { value: 100, confidence: "verified", note: "10 x 10" },
+            minors: [
+              { cannabinoid: "CBG", mgPerServing: 10, packageMg: 100 },
+              { cannabinoid: "CBC", mgPerServing: 9.5, packageMg: 95 },
+            ],
+            ratioCheck: null,
+            reasons: [],
+            notes: ["n"],
+          },
+        }),
+      ]],
+    );
+    const facts = p.lotFactsByKey.get("LOT-M1");
+    const minors = (facts?.minor_cannabinoids_json ?? []).map((c) => `${c.type}:${c.value}${c.unit}`).join(",");
+    assert(minors === "cbg:100mg,cbc:95mg", "R29 lot facts: minors from the COA -> " + minors);
+    assert(facts!.package_thc_mg === 55 && facts!.package_cbd_mg === 100, "R29 lot facts: THC / CBD stay in their columns");
+    const card = p.newCards.find((c) => c.source_item_id === "LOT-M1")!;
+    const cbgRow = card.compounds_json.find((c) => c.type === "cbg")!;
+    cbgRow.value = "999";
+    assert(facts!.minor_cannabinoids_json![0].value === "100", "R29 lot facts: minors are copies (card edits never leak)");
   }
 
   // --- S19: vendor-id identity (bible S19.5) ---------------------------------

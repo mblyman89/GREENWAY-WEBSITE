@@ -208,6 +208,15 @@ export type InventoryLot = {
   pos_potency_unit?: string | null;
   /** 0138: [{type:"cbn",value:"100",unit:"mg"}] — name-verified minors. */
   minor_cannabinoids_json?: unknown;
+  /**
+   * R29 (0138 columns, read by select("*")): the VERIFIED package mg totals
+   * of an mg-dosed lot. The inventory table shows these for edibles /
+   * drinks / tinctures / topicals instead of the lab PERCENT printed as mg.
+   */
+  package_thc_mg?: number | null;
+  package_cbd_mg?: number | null;
+  servings_per_pack?: number | null;
+  ratio_label?: string | null;
   status: string; // active | quarantine | recalled | sold_out | destroyed
   notes: string | null;
   created_by: string | null;

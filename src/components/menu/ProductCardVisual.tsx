@@ -3,7 +3,14 @@ import Link from "next/link";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { cardTypeLabel, websiteCategoryCardLabel } from "@/lib/menu/card-type-core";
-import { cardCannabinoids, deriveNetWeightLine, showProfilePill } from "@/lib/menu/card-cannabinoids";
+import {
+  cardCannabinoids,
+  cardRatioSlot,
+  cardServingLine,
+  deriveNetWeightLine,
+  showProfilePillWithSlot,
+} from "@/lib/menu/card-cannabinoids";
+import { isRatioLedCategory } from "@/lib/menu/cannabinoid-profile-core";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
 import { dohPillForItem } from "@/lib/menu/menu-doh-badge-core";
 // SLICE G: the card's reserved height is a SHARED constant with the loading
@@ -164,6 +171,21 @@ function displayStrain(item: GreenwayMenuItem): string | null {
   return strainTypeLabel(item.strainType);
 }
 
+/**
+ * R29 (owner: "in the strain type for these products, we should show the
+ * cannabinoid and the ratio"): edibles, drinks, tinctures and topicals put
+ * their written ratio - or the cannabinoids that have real mg - in the
+ * strain-type slot. Everything else (and a THC-only edible) keeps the strain
+ * type exactly as before. `title` is the spelled-out accessible reading.
+ */
+function strainSlot(item: GreenwayMenuItem): { text: string; title?: string; ratio: boolean } | null {
+  if (isNonCannabisItem(item)) return null;
+  const slot = cardRatioSlot(item);
+  if (slot.kind !== "strain") return { text: slot.text, title: slot.title, ratio: true };
+  const strain = displayStrain(item);
+  return strain ? { text: strain, ratio: false } : null;
+}
+
 function cardToneForItem(item: GreenwayMenuItem) {
   if (isNonCannabisItem(item)) return cardTones.unknown;
   if (item.strainType === "unknown") return cardTones.hybrid;
@@ -226,7 +248,8 @@ function ProductImageMockup({ item, tone }: { item: GreenwayMenuItem; tone: Card
   const label = categoryLabel(item).toUpperCase();
   // SLICE 43: the mockup's "X Formula" ribbon only prints a VALIDATED strain
   // type — never the category as a stand-in (owner rule: show real data or nothing).
-  const strain = displayStrain(item);
+  // R29: a ratio product prints its ratio instead ("2:2:2:1 CBG:CBC:CBD:THC").
+  const slot = strainSlot(item);
 
   if (nonCannabis) {
     return (
@@ -255,9 +278,12 @@ function ProductImageMockup({ item, tone }: { item: GreenwayMenuItem; tone: Card
         {/* Bottom ribbon: validated strain only. The category already prints in
             the top ribbon, so when strain is unknown the bottom ribbon hides
             rather than repeating the category (owner rule: real data or nothing). */}
-        {strain ? (
-          <div className="relative z-10 w-full rounded-md bg-black/16 px-1.5 py-1 text-center text-[0.58rem] font-black uppercase leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]">
-            {strain} Formula
+        {slot ? (
+          <div
+            title={slot.title}
+            className="relative z-10 w-full rounded-md bg-black/16 px-1.5 py-1 text-center text-[0.58rem] font-black uppercase leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]"
+          >
+            {slot.ratio ? slot.text : `${slot.text} Formula`}
           </div>
         ) : null}
       </div>
@@ -288,7 +314,12 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
   // (CBG/CBN/CBC/CBDV). All values are totals, never per-serving.
   const cannabinoids = showCannabinoids ? cardCannabinoids(item) : null;
   const netWeightLine = showCannabinoids ? deriveNetWeightLine(item) : null;
-  const strain = displayStrain(item);
+  // R29: ratio products carry their ratio in the strain slot, the per-serving
+  // breakdown under the totals, and every cannabinoid box their ratio names.
+  const strain = strainSlot(item);
+  const ratioSlotKind = showCannabinoids ? cardRatioSlot(item) : ({ kind: "strain" } as const);
+  const servingLine = showCannabinoids ? cardServingLine(item) : null;
+  const boxLimit = isRatioLedCategory(item.category) ? 6 : 4;
   // SLICE F (owner Michael): the on-card DOH pill. Michael locked in a BLUE
   // pill that says "DOH", living "with the other pills" (the 1:1 / CBD profile
   // pill). dohPillForItem returns null for non-compliant items so nothing shows
@@ -378,10 +409,12 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
               color still falls back to hybrid for unknown-strain cannabis). */}
           {strain ? (
             <span
-              className="flex min-h-9 w-full items-center justify-center rounded-md px-3 py-2 text-sm font-black uppercase leading-none text-white"
+              title={strain.title}
+              data-slot={strain.ratio ? "ratio" : "strain"}
+              className={`flex min-h-9 w-full items-center justify-center rounded-md px-3 py-2 font-black uppercase leading-none text-white ${strain.ratio ? "text-[0.78rem] tracking-[0.04em]" : "text-sm"}`}
               style={{ background: pillBackground(tone) }}
             >
-              {strain}
+              {strain.text}
             </span>
           ) : null}
           {/* SLICE F (owner Michael): the DOH pill. Same rounded-full shape as
@@ -421,7 +454,7 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
                   THC:CBD:CBN / CBD). SLICE 66 (owner C3): only rendered when
                   it ADDS information — a lone "THC" pill is redundant noise
                   and is suppressed by showProfilePill. */}
-              {showProfilePill(cannabinoids.profile) && cannabinoids.profile ? (
+              {showProfilePillWithSlot(cannabinoids.profile, ratioSlotKind) && cannabinoids.profile ? (
                 <span className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black/45 px-3 py-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-white/90 backdrop-blur-sm">
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--greenway)]" aria-hidden="true" />
                   {cannabinoids.profile.kind === "thc"
@@ -440,7 +473,7 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
                   When there is no validated data, NOTHING renders (no "--"). */}
               {cannabinoids.boxes.length > 0 ? (
                 <div className={`grid gap-2 ${cannabinoids.boxes.length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
-                  {cannabinoids.boxes.slice(0, 4).map((box) => (
+                  {cannabinoids.boxes.slice(0, boxLimit).map((box) => (
                     <span
                       key={box.label}
                       className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black"
@@ -449,6 +482,14 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
                     </span>
                   ))}
                 </div>
+              ) : null}
+
+              {/* R29: per-serving breakdown (WAC 314-55-105 label arithmetic) so a
+                  100 mg pack reads "10 servings · each 10 mg THC". */}
+              {servingLine ? (
+                <span data-slot="servings" className="text-center text-[0.62rem] font-bold uppercase tracking-[0.06em] text-white/80">
+                  {servingLine}
+                </span>
               ) : null}
 
               {/* Net weight/volume companion line for edibles/drinks (WAC 314-55-105). */}

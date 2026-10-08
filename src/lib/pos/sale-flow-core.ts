@@ -152,6 +152,19 @@ export type PosMenuProduct = {
   cbd?: string | null;
   terpenes?: string[];
   description?: string | null;
+  /**
+   * R29 - the cannabinoid profile of mg-dosed products (edibles, drinks,
+   * tinctures, topicals), resolved server-side by the SAME function the
+   * website card uses (cannabinoid-profile-core resolvePackageMg), so the
+   * budtender reads exactly what the shopper read. Shipped ONLY for those
+   * four categories (bundle stays small). All optional: a bundle cached
+   * before R29 parses and the card falls back to the thc/cbd strings.
+   */
+  ratioLabel?: string | null;
+  servingsPerPack?: number | null;
+  mgPerServing?: number | null;
+  /** Per-PACKAGE mg in display order (THC, CBD, CBG, CBN, CBC, CBDV, THCV). */
+  cannabinoidsMg?: { type: string; mg: number }[];
 };
 
 /** Owner's sales-limit settings as shipped to the device. */

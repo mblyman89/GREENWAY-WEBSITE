@@ -12,7 +12,7 @@ import {
   getManifestById,
 } from "@/lib/inventory/store";
 import { loadMenuCategoriesForKeys, resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
-import { lotPotencyLabel, lotTypeLabel } from "@/lib/inventory/lot-table-core";
+import { lotLabPercentLabel, lotPotencyLabel, lotTypeLabel } from "@/lib/inventory/lot-table-core";
 import { STRAIN_TYPE_OPTIONS } from "@/lib/inventory/lot-edit-core";
 import { listVendors, listAllBrands } from "@/lib/vendors/store";
 import { getEnrichment, mediaUrlsForIds } from "@/lib/enrichment/store";
@@ -611,22 +611,23 @@ export default async function LotDetailPage({
                   value={lot.lab.labtest_external_identifier ?? "—"}
                 />
                 <Row label="Lab" value={lot.lab.lab_name ?? "—"} />
-                {/* SLICE 61: mg-dosed types (edibles/drinks/topicals/tinctures) show mg, not "%". */}
+                {/* R29: lab figures are ALWAYS percent of weight (WCIA uom "pct"), whatever the
+                    product type - an edible's mg totals are on Product facts, never here. */}
                 <Row
                   label="Total THC"
-                  value={lotPotencyLabel(lot.lab.total_thc_pct, lot)}
+                  value={lotLabPercentLabel(lot.lab.total_thc_pct)}
                 />
                 <Row
                   label="THCA"
-                  value={lotPotencyLabel(lot.lab.thca_pct, lot)}
+                  value={lotLabPercentLabel(lot.lab.thca_pct)}
                 />
                 <Row
                   label="Total cannabinoids"
-                  value={lotPotencyLabel(lot.lab.total_cannabinoids_pct, lot)}
+                  value={lotLabPercentLabel(lot.lab.total_cannabinoids_pct)}
                 />
                 <Row
                   label="CBD"
-                  value={lotPotencyLabel(lot.lab.total_cbd_pct ?? lot.lab.cbd_pct, lot)}
+                  value={lotLabPercentLabel(lot.lab.total_cbd_pct ?? lot.lab.cbd_pct)}
                 />
                 <Row
                   label="Result"

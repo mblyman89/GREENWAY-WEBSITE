@@ -25,6 +25,7 @@ import {
   type CoaExtract,
 } from "@/lib/inventory/coa-facts-core";
 import type { CoaExtractRun } from "@/lib/inventory/coa-extract-core";
+import { MINOR_FACT_KEYS, MINOR_FACT_TYPES, minorMgFromCompounds } from "@/lib/menu/cannabinoid-profile-core";
 import { factResultCopy, parseFactResult } from "@/lib/pos/intake-fact-review-core";
 
 export const LAB_CERT_ANCHOR = "lab-certificate";
@@ -221,6 +222,24 @@ export function lotFactRows(lot: Record<string, unknown>): { label: string; valu
     const p = typeof prov[col] === "string" ? (prov[col] as string) : "";
     out.push({ label: lab, value: `${v}${unit}`, source: p ? FACT_SOURCE_LABEL[p] ?? p : "not recorded" });
   }
+  // R29: CBG / CBN / CBC package mg (inventory_lots.minor_cannabinoids_json,
+  // mg rows only - never a % row) sit right after THC / CBD, with the
+  // array's provenance.
+  const minors = minorMgFromCompounds(lot.minor_cannabinoids_json);
+  const mp = typeof prov.minor_cannabinoids_json === "string" ? (prov.minor_cannabinoids_json as string) : "";
+  const minorRows = MINOR_FACT_KEYS.flatMap((k) => {
+    const mg = minors[k];
+    if (mg === null) return [];
+    return [{ label: `${MINOR_FACT_TYPES[k].toUpperCase()} per package`, value: `${mg} mg`, source: mp ? FACT_SOURCE_LABEL[mp] ?? mp : "not recorded" }];
+  });
+  if (minorRows.length === 0) return out;
+  // After the last THC/CBD-per-package row (or the servings rows when neither is set).
+  const order = ["Servings per pack", "Mg per serving", "THC per package", "CBD per package"];
+  let at = 0;
+  out.forEach((r, i) => {
+    if (order.includes(r.label)) at = i + 1;
+  });
+  out.splice(at, 0, ...minorRows);
   return out;
 }
 
@@ -421,6 +440,19 @@ export function __runCoaPanelCoreTests(fixtures: Record<string, string>, makeExt
   ok(rows[2].source === "set by a person", "reviewer provenance");
   ok(lotFactRows({ package_thc_mg: 5, fact_provenance: "junk" })[0].source === "not recorded", "bad provenance -> not recorded");
   ok(lotFactRows({ package_thc_mg: 5, fact_provenance: { package_thc_mg: "weird" } })[0].source === "weird", "unknown provenance shown as stored");
+  {
+    const mr = lotFactRows({
+      servings_per_pack: 10, package_thc_mg: 55, package_cbd_mg: 100, ratio_label: "2:2:2:1 CBG:CBC:CBD:THC", net_weight_grams: 50,
+      minor_cannabinoids_json: [{ type: "cbc", value: "95", unit: "mg" }, { type: "cbg", value: "100", unit: "mg" }, { type: "cbn", value: "0.4", unit: "%" }],
+      fact_provenance: { minor_cannabinoids_json: "coa" },
+    });
+    const labels = mr.map((r) => r.label).join("|");
+    ok(labels === "Servings per pack|THC per package|CBD per package|CBG per package|CBC per package|Ratio|Net weight", "R29: minors after CBD, fixed CBG/CBN/CBC order, % rows ignored: " + labels);
+    ok(mr[3].value === "100 mg" && mr[3].source === "lab certificate" && mr[4].value === "95 mg", "R29: minor values + provenance");
+    const only = lotFactRows({ minor_cannabinoids_json: [{ type: "cbn", value: "50", unit: "mg" }] });
+    ok(only.length === 1 && only[0].label === "CBN per package" && only[0].source === "not recorded", "R29: minor alone, provenance not recorded");
+    ok(lotFactRows({ minor_cannabinoids_json: "junk" }).length === 0 && lotFactRows({ minor_cannabinoids_json: [] }).length === 0, "R29: junk / empty minors -> nothing");
+  }
 
   // ---- pickLotDraft ----
   const dr = (id: string, status: string, updated: string, m: string | null = "m1", k: string | null = "k1"): LotDraftRow => ({ id, manifest_id: m, pos_product_key: k, status, updated_at: updated });

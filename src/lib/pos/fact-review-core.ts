@@ -36,6 +36,15 @@ import type { MenuItemRow, PosImportDiagnostic } from "@/lib/pos/db-types";
 // rather than retyping means this screen's guard and the register's
 // qualifiesAsLowThcLiquid() can never disagree about what "low-THC" means.
 import { LOW_THC_UNIT_MAX_MG } from "@/lib/compliance/sales-limits-core";
+// R29: the ONE ratio canonicaliser + package arithmetic + minor-cannabinoid
+// array merge (pure) - shared with the menu card, the register and reprocess.
+import {
+  MINOR_FACT_KEYS,
+  minorMgFromCompounds,
+  normalizeRatioLabel,
+  packageMgFromServing,
+  ratioMgDisagreement,
+} from "@/lib/menu/cannabinoid-profile-core";
 
 // ---------------------------------------------------------------------------
 // Vocabulary
@@ -128,7 +137,21 @@ export type FactReviewFacts = {
    * qualify. One can is one unit; a 4-pack is four units.
    */
   unitThcMg: number | null;
+  /**
+   * R29 - per-PACKAGE mg of the minor cannabinoids edibles, drinks, tinctures
+   * and topicals are sold on ("1:1:1:1:1 THC:CBD:CBG:CBN:CBC"). No scalar
+   * column: every writer MERGES them into menu_items.compounds_json and
+   * inventory_lots.minor_cannabinoids_json (migration 0138) as mg rows - the
+   * arrays the card, register and lot page already read. Optional so stored
+   * decisions and fixtures from before R29 still type-check and parse.
+   */
+  packageCbgMg?: number | null;
+  packageCbnMg?: number | null;
+  packageCbcMg?: number | null;
 };
+
+/** R29 - the FactReviewFacts keys that map 1:1 onto a scalar column (the minors merge into arrays instead). */
+export type ScalarFactKey = Exclude<keyof FactReviewFacts, "packageCbgMg" | "packageCbnMg" | "packageCbcMg">;
 
 export type FactReviewRow = {
   /** menu source id ("pos-..."), or a synthetic "flag:<code>:<name>" for standalone flags. */
@@ -189,6 +212,10 @@ export type FactReviewItemInput = {
   unitThcMg: number | null;
   otherwiseTaken: boolean | null;
   unitsPerPackage: number | null;
+  /** R29 - read from compounds_json mg rows (optional: pre-R29 callers omit them). */
+  packageCbgMg?: number | null;
+  packageCbnMg?: number | null;
+  packageCbcMg?: number | null;
   factProvenance: Record<string, string>;
 };
 
@@ -253,8 +280,95 @@ export function menuItemRowToFactReviewItem(row: MenuItemRow): FactReviewItemInp
     unitThcMg: num(row.unit_thc_mg),
     otherwiseTaken: row.otherwise_taken,
     unitsPerPackage: num(row.units_per_package),
+    // R29: the minors live in compounds_json (mg rows only; % rows ignored).
+    ...minorMgFromCompounds(row.compounds_json),
     factProvenance: provenance,
   };
+}
+
+/**
+ * R29 - parse the cannabinoid-profile part of a facts form (Product facts
+ * panel, the intake fix form and the menu-import fix form all call this, so
+ * the three can never drift). Rules, each for a reason:
+ *
+ *  - CBG / CBN / CBC package mg: numbers >= 0, refused (never coerced) when
+ *    not a number. 0 is an explicit CLEAR (removes a wrong row).
+ *  - The ratio is stored in ONE canonical form ("CBG:CBC:CBD:THC (2:2:2:1)"
+ *    -> "2:2:2:1 CBG:CBC:CBD:THC") so the card, register and search agree.
+ *    Text that is not a recognisable ratio is refused with an example -
+ *    before R29 any text was stored and then shown on the menu verbatim.
+ *  - WAC 314-55-105 label arithmetic: when servings and mg per serving are
+ *    typed and package THC is blank, package THC = servings x mg (the owner's
+ *    "10 pieces x 10 mg = 100 mg"). A typed package THC that contradicts the
+ *    arithmetic by more than 5% is refused - one of the three is wrong.
+ *  - A ratio with names AND numbers is checked against the typed package mg
+ *    (cannabinoid-profile-core ratioMgDisagreement, 20% tolerance for label
+ *    rounding / lab drift); a contradiction is refused with the numbers.
+ *  - A typed package THC with no typed THC display fills the display
+ *    ("100mg") so feeds that read the display string (Leafly, syndication,
+ *    an old register bundle) say the same thing as the card.
+ *
+ * `existing` carries numbers ALREADY typed on this form's other fields
+ * (servings, mg/serving, package THC/CBD) - the caller parses those with its
+ * own number loop; this function adds to / checks them.
+ */
+export type ProfileFactsResult = { ok: true; facts: Partial<FactReviewFacts> } | { ok: false; error: string };
+
+export function parseCannabinoidProfileFacts(
+  get: (name: string) => string,
+  existing: Partial<FactReviewFacts>,
+): ProfileFactsResult {
+  const facts: Partial<FactReviewFacts> = {};
+  for (const key of MINOR_FACT_KEYS) {
+    const raw = get(key).trim();
+    if (raw === "") continue;
+    const v = Number(raw);
+    if (!Number.isFinite(v) || v < 0) return { ok: false, error: `"${raw}" is not a valid number for ${key}.` };
+    facts[key] = v;
+  }
+
+  const ratioRaw = get("ratioLabel").trim();
+  if (ratioRaw !== "") {
+    const ratio = normalizeRatioLabel(ratioRaw);
+    if (!ratio) {
+      return {
+        ok: false,
+        error: `"${ratioRaw}" is not a ratio this system can read. Write it like "1:1 THC:CBD", "2:2:2:1 CBG:CBC:CBD:THC" or "CBD:CBG".`,
+      };
+    }
+    facts.ratioLabel = ratio.label;
+  }
+
+  const servings = existing.servingsPerPack ?? null;
+  const perServing = existing.mgPerServing ?? null;
+  const computed = packageMgFromServing(perServing, servings);
+  if (computed !== null) {
+    const typed = existing.packageThcMg ?? null;
+    if (typed === null || typed === undefined) {
+      facts.packageThcMg = computed;
+    } else if (typed > 0 && Math.abs(typed - computed) / computed > 0.05) {
+      return {
+        ok: false,
+        error: `Package THC ${typed} mg does not equal ${servings} servings x ${perServing} mg = ${computed} mg. Correct one of the three.`,
+      };
+    }
+  }
+
+  const pkgThc = facts.packageThcMg ?? existing.packageThcMg ?? null;
+  const disagreement = ratioMgDisagreement(facts.ratioLabel ?? null, {
+    thc: pkgThc,
+    cbd: existing.packageCbdMg ?? null,
+    cbg: facts.packageCbgMg ?? null,
+    cbn: facts.packageCbnMg ?? null,
+    cbc: facts.packageCbcMg ?? null,
+  });
+  if (disagreement) return { ok: false, error: disagreement };
+
+  if (typeof pkgThc === "number" && pkgThc > 0 && !get("thc").trim()) facts.thc = `${Number(pkgThc.toFixed(2))}mg`;
+  if (typeof existing.packageCbdMg === "number" && existing.packageCbdMg > 0 && !get("cbd").trim()) {
+    facts.cbd = `${Number(existing.packageCbdMg.toFixed(2))}mg`;
+  }
+  return { ok: true, facts };
 }
 
 /**
@@ -526,6 +640,9 @@ function factsOf(item: FactReviewItemInput): FactReviewFacts {
     unitThcMg: item.unitThcMg,
     otherwiseTaken: item.otherwiseTaken,
     unitsPerPackage: item.unitsPerPackage,
+    packageCbgMg: item.packageCbgMg ?? null,
+    packageCbnMg: item.packageCbnMg ?? null,
+    packageCbcMg: item.packageCbcMg ?? null,
   };
 }
 
@@ -543,6 +660,9 @@ const EMPTY_FACTS: FactReviewFacts = {
   unitThcMg: null,
   otherwiseTaken: null,
   unitsPerPackage: null,
+  packageCbgMg: null,
+  packageCbnMg: null,
+  packageCbcMg: null,
 };
 
 export function buildFactReviewBuckets(
@@ -727,6 +847,17 @@ export const FACT_REVIEW_CSV_HEADER = [
   "Net Volume (ml)",
   "Low-THC Beverage",
   "THC mg per container",
+  // R29 (pre-existing defect fixed): the rows have emitted the SLICE 17
+  // otherwise-taken + units-per-package cells since SLICE 17, but the header
+  // never named them - so Confidence / Sources / Notes sat two columns to the
+  // right of their headings. Pinned now: header length == row cell count.
+  "Otherwise Taken",
+  "Units Per Package",
+  // R29 - appended after the existing fact columns (spreadsheets keyed on the
+  // earlier positions keep working).
+  "Package CBG (mg)",
+  "Package CBN (mg)",
+  "Package CBC (mg)",
   "Confidence",
   "Sources",
   "Notes",
@@ -776,6 +907,9 @@ export function buildFactReviewCsv(buckets: FactReviewBuckets): string {
               : "no",
         ),
         cell(row.facts.unitsPerPackage),
+        cell(row.facts.packageCbgMg ?? null),
+        cell(row.facts.packageCbnMg ?? null),
+        cell(row.facts.packageCbcMg ?? null),
         cell(row.confidence),
         cell(row.sources),
         cell(row.notes.join(" | ")),
@@ -792,7 +926,9 @@ export function buildFactReviewCsv(buckets: FactReviewBuckets): string {
 
 export function __runFactReviewCoreTests(): void {
   let failures = 0;
+  let assertions = 0;
   const ok = (cond: boolean, msg: string) => {
+    assertions += 1;
     if (!cond) {
       failures += 1;
       console.error(`  FACT-REVIEW FAIL: ${msg}`);
@@ -1105,6 +1241,66 @@ export function __runFactReviewCoreTests(): void {
     "sources column serialized unquoted (no commas -- never over-quote)",
   );
 
+  // R29: every CSV row has exactly as many cells as the header names (the
+  // SLICE 17 misalignment). Parsed with a tiny RFC 4180 splitter.
+  const splitCsv = (line: string): string[] => {
+    const out: string[] = [];
+    let cur = "";
+    let q = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (q) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i += 1; }
+        else if (ch === '"') q = false;
+        else cur += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ",") { out.push(cur); cur = ""; }
+      else cur += ch;
+    }
+    out.push(cur);
+    return out;
+  };
+  ok(lines.every((l) => splitCsv(l).length === FACT_REVIEW_CSV_HEADER.length), "R29 every CSV row aligns with the header");
+  const hdr = splitCsv(lines[0]);
+  const confIdx = hdr.indexOf("Confidence");
+  ok(lines.slice(1).every((l) => ["verified", "single-source", "needs-review", "rejected"].includes(splitCsv(l)[confIdx])), "R29 Confidence column holds a confidence");
+
+  // R29: the cannabinoid-profile form parser.
+  const form = (m: Record<string, string>) => (k: string) => m[k] ?? "";
+  const p1 = parseCannabinoidProfileFacts(form({ packageCbgMg: "100", packageCbnMg: "100", packageCbcMg: "100", ratioLabel: "thc:cbd:cbg:cbn:cbc (1:1:1:1:1)" }), {
+    servingsPerPack: 10, mgPerServing: 10, packageCbdMg: 100,
+  });
+  ok(p1.ok && p1.facts.packageThcMg === 100, "R29 package THC = 10 servings x 10 mg");
+  ok(p1.ok && p1.facts.ratioLabel === "1:1:1:1:1 THC:CBD:CBG:CBN:CBC", "R29 ratio canonicalised on save");
+  ok(p1.ok && p1.facts.packageCbgMg === 100 && p1.facts.packageCbcMg === 100, "R29 minors parsed");
+  ok(p1.ok && p1.facts.thc === "100mg" && p1.facts.cbd === "100mg", "R29 display strings follow the package mg");
+  const p2 = parseCannabinoidProfileFacts(form({ ratioLabel: "strawberry" }), {});
+  ok(!p2.ok && p2.error.includes("1:1 THC:CBD"), "R29 unreadable ratio refused with an example");
+  const p3 = parseCannabinoidProfileFacts(form({}), { servingsPerPack: 10, mgPerServing: 10, packageThcMg: 50 });
+  ok(!p3.ok && p3.error.includes("10 servings x 10 mg = 100 mg"), "R29 contradicting package THC refused");
+  const p4 = parseCannabinoidProfileFacts(form({ ratioLabel: "2:1 THC:CBD" }), { packageThcMg: 100, packageCbdMg: 100 });
+  ok(!p4.ok && p4.error.includes("2:1 THC:CBD"), "R29 ratio vs mg contradiction refused");
+  const p5 = parseCannabinoidProfileFacts(form({ packageCbgMg: "abc" }), {});
+  ok(!p5.ok && p5.error.includes("packageCbgMg"), "R29 non-number minor refused");
+  const p6 = parseCannabinoidProfileFacts(form({ packageCbnMg: "0" }), {});
+  ok(p6.ok && p6.facts.packageCbnMg === 0, "R29 0 is a clear");
+  const p7 = parseCannabinoidProfileFacts(form({ thc: "typed" }), { packageThcMg: 100 });
+  ok(p7.ok && p7.facts.thc === undefined, "R29 a typed display is never overwritten");
+  const p8 = parseCannabinoidProfileFacts(form({}), { servingsPerPack: 10, mgPerServing: 10, packageThcMg: 102 });
+  ok(p8.ok && p8.facts.packageThcMg === undefined, "R29 typed package within 5% stands");
+  const p9 = parseCannabinoidProfileFacts(form({}), {});
+  ok(p9.ok && Object.keys(p9.facts).length === 0, "R29 empty form adds nothing");
+  // DB adapter reads minors from compounds_json mg rows.
+  const adaptedMinors = menuItemRowToFactReviewItem({
+    source_item_id: "pos-m", name: "M", product_name: null, brand_name: "B", category: "edible-solid",
+    pos_inventory_type: "Solid Edible", hidden: false, hidden_reason: null, thc: null, cbd: null,
+    servings_per_pack: null, mg_per_serving: null, package_thc_mg: null, package_cbd_mg: null,
+    ratio_label: null, net_weight_grams: null, net_volume_ml: null, low_thc_liquid: null,
+    unit_thc_mg: null, otherwise_taken: null, units_per_package: null, fact_provenance: {},
+    compounds_json: [{ type: "cbg", value: "100", unit: "mg" }, { type: "cbn", value: "2", unit: "%" }],
+  } as unknown as MenuItemRow);
+  ok(adaptedMinors.packageCbgMg === 100 && adaptedMinors.packageCbnMg === null, "R29 adapter reads mg minors, ignores %");
+
   if (failures > 0) throw new Error(`fact-review-core self-tests: ${failures} failed`);
-  console.log("fact-review-core self-tests passed (44 assertions)");
+  console.log(`fact-review-core self-tests passed (${assertions} assertions)`);
 }

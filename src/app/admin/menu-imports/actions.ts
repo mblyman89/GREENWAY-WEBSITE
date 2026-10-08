@@ -42,6 +42,7 @@ import {
 import {
   parseLowThcClassification,
   parseOtherwiseTakenClassification,
+  parseCannabinoidProfileFacts,
   buildFactReviewBuckets,
   menuItemRowToFactReviewItem,
   posDiagnosticToFactReviewDiagnostic,
@@ -508,9 +509,21 @@ export async function resolveFactReview(formData: FormData): Promise<void> {
       }
       (facts as Record<string, number>)[key] = value;
     }
-    for (const key of ["thc", "cbd", "ratioLabel"] as const) {
+    for (const key of ["thc", "cbd"] as const) {
       const raw = String(formData.get(key) ?? "").trim();
       if (raw !== "") (facts as Record<string, string>)[key] = raw;
+    }
+
+    // ── R29: the cannabinoid profile (ratio, CBG / CBN / CBC, servings x mg) ──
+    // The SAME pure parser the intake facts panel and the Product facts panel
+    // call: the ratio is canonicalised (or refused with examples), package THC
+    // is computed from servings x mg (or a contradicting figure refused), and
+    // a ratio that disagrees with the typed mg is refused - never stored.
+    const profile = parseCannabinoidProfileFacts((k) => String(formData.get(k) ?? ""), facts);
+    if (!profile.ok) {
+      redirect(dest + "?error=" + encodeURIComponent(profile.error));
+    } else {
+      Object.assign(facts, profile.facts);
     }
 
     // ── SLICE 16: the low-THC beverage classification ──────────────────

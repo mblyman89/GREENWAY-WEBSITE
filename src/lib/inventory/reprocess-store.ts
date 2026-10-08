@@ -53,6 +53,42 @@ type LotRowRaw = Omit<
 };
 
 /**
+ * R29: the lab PERCENTS of every lot behind each published card (lots are keyed
+ * by pos_product_key = the card's source_item_id). The planner clears a
+ * displayed "0.12mg" only when it equals one of these exactly. A failed read
+ * returns an empty map - no evidence, nothing cleared (fail safe).
+ */
+async function labPercentsByKey(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  keys: readonly (string | null)[],
+): Promise<Map<string, { thc: (number | null)[]; cbd: (number | null)[] }>> {
+  const out = new Map<string, { thc: (number | null)[]; cbd: (number | null)[] }>();
+  const wanted = [...new Set(keys.filter((k): k is string => typeof k === "string" && k.trim() !== ""))];
+  for (let i = 0; i < wanted.length; i += 200) {
+    const { data, error } = await admin
+      .from("inventory_lots")
+      .select("pos_product_key, lab_results ( total_thc_pct, thc_pct, cbd_pct, total_cbd_pct )")
+      .in("pos_product_key", wanted.slice(i, i + 200));
+    if (error) {
+      console.error("[reprocess] lab percent read failed (nothing will be cleared):", error.message);
+      return new Map();
+    }
+    type Lab = { total_thc_pct: number | null; thc_pct: number | null; cbd_pct: number | null; total_cbd_pct: number | null };
+    for (const row of (data as unknown as { pos_product_key: string | null; lab_results: Lab | Lab[] | null }[] | null) ?? []) {
+      if (!row.pos_product_key) continue;
+      const labs = Array.isArray(row.lab_results) ? row.lab_results : row.lab_results ? [row.lab_results] : [];
+      const entry = out.get(row.pos_product_key) ?? { thc: [], cbd: [] };
+      for (const l of labs) {
+        entry.thc.push(l.total_thc_pct, l.thc_pct);
+        entry.cbd.push(l.cbd_pct, l.total_cbd_pct);
+      }
+      out.set(row.pos_product_key, entry);
+    }
+  }
+  return out;
+}
+
+/**
  * Re-run the intelligence engines (fact extraction, house-type labeler,
  * display-name builder) over existing lots and the published menu.
  */
@@ -113,16 +149,18 @@ export async function reprocessIntelligence(): Promise<ReprocessResult> {
       const { data, error } = await admin
         .from("menu_items")
         .select(
-          "id, name, product_name, brand_name, vendor_name, category, strain_type, strain_name, pos_inventory_type, pos_inventory_category, thc, servings_per_pack, mg_per_serving, package_thc_mg, package_cbd_mg, ratio_label, compounds_json, fact_provenance",
+          "id, source_item_id, name, product_name, brand_name, vendor_name, category, strain_type, strain_name, pos_inventory_type, pos_inventory_category, thc, cbd, total_thc_json, total_cbd_json, servings_per_pack, mg_per_serving, package_thc_mg, package_cbd_mg, ratio_label, compounds_json, fact_provenance",
         )
         .eq("menu_version_id", published.id)
         .order("sort_order", { ascending: true })
         .range(from, from + PAGE - 1);
       if (error) return fail(`Couldn't read the published menu items: ${error.message}`);
-      const rows = (data as unknown as MenuItemReprocessInput[] | null) ?? [];
+      const rows = (data as unknown as (MenuItemReprocessInput & { source_item_id: string | null })[] | null) ?? [];
+      const labPcts = await labPercentsByKey(admin, rows.map((r) => r.source_item_id));
       for (const r of rows) {
         itemsScanned += 1;
-        const patch = planMenuItemReprocess(r);
+        const pcts = r.source_item_id ? labPcts.get(r.source_item_id) : undefined;
+        const patch = planMenuItemReprocess({ ...r, lab_thc_pcts: pcts?.thc ?? [], lab_cbd_pcts: pcts?.cbd ?? [] });
         if (!patch) continue;
         const { error: uErr } = await admin
           .from("menu_items")
