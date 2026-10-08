@@ -1,8 +1,11 @@
 "use client";
 
 /**
- * ManifestLotDisposition — per-line Accept / Reject controls for a staged
- * manifest, with a reason dropdown that appears when Reject is chosen.
+ * ManifestLotDisposition — the per-line Reject control for a staged manifest,
+ * with a reason dropdown that appears when Reject is chosen. R31: there is no
+ * per-line Accept button; an undecided line is accepted by Finalize, so it
+ * shows a quiet "Will accept" chip. A rejected line keeps "accept instead"
+ * (the undo), and a line explicitly accepted earlier keeps "reject instead".
  *
  * Grounded in docs/ccrs-rejection-and-returns.md: rejecting = refuse-at-dock.
  * We record the reason locally and NEVER destroy or file anything with CCRS.
@@ -85,7 +88,7 @@ export function ManifestLotDisposition({
     );
   }
 
-  // Pending: show Accept + Reject; Reject expands the reason picker.
+  // Rejecting: the reason picker (a reason is required, WAC 314-55-085 records).
   if (mode === "rejecting") {
     return (
       <form action={rejectBound} className="flex flex-col gap-2">
@@ -126,13 +129,19 @@ export function ManifestLotDisposition({
     );
   }
 
+  // R31 — the walk: an untouched line needs NO click. Finalize accepts every
+  // line nobody rejected (finalizeManifestDispositions: anything that is not
+  // rejected_at_dock is accepted), so the old per-line "Accept" button was a
+  // click that changed nothing. The owner: "I don't want to have to push any
+  // buttons while I walk the page unless I have to." Only Reject remains.
   return (
-    <div className="flex items-center gap-2">
-      <form action={acceptBound} className="inline">
-        <Button type="submit" variant="save" size="sm">
-          ✓ Accept
-        </Button>
-      </form>
+    <div className="flex items-center gap-2" data-line-state="will-accept">
+      <span
+        className="rounded bg-[var(--admin-surface-2)] px-2 py-0.5 text-xs font-semibold text-[var(--admin-text-muted)]"
+        title="Nothing to press: Finalize accepts this line unless you reject it."
+      >
+        Will accept
+      </span>
       <button
         type="button"
         onClick={() => setMode("rejecting")}

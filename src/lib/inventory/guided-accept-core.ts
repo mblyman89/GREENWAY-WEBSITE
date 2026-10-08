@@ -71,14 +71,17 @@ export const GUIDED_STEP_LABELS = ["Arrived", "Verify counts", "Accept"] as cons
  */
 export function whatDoIDoHere(status: string, etaDate?: string | null): string {
   switch (status) {
+    // R31: Finalize marks the delivery received itself, so no stage asks for
+    // a "Mark in transit" / "Mark received" click any more. The one human job
+    // is the count; the one button is Finalize (its label names what it will do).
     case "pending":
-      return "This manifest is staged as a draft. Nothing to do until the truck is on its way — click “Mark in transit” when the vendor dispatches it.";
+      return "This manifest is staged. When the truck is here, count each line against the manifest, Reject only a line that is short or wrong, then press the Finalize button \u2014 it marks the delivery received and accepts everything else.";
     case "in_transit":
       return etaDate
-        ? `This truck is in transit — expected ${etaDate}. When it arrives, click “Mark received,” then check the counts.`
-        : "This truck is in transit. When it arrives, click “Mark received,” then check the counts.";
+        ? `This truck is in transit \u2014 expected ${etaDate}. When it arrives, count each line, Reject only what is short or wrong, then press Finalize (it marks the delivery received for you).`
+        : "This truck is in transit. When it arrives, count each line, Reject only what is short or wrong, then press Finalize (it marks the delivery received for you).";
     case "received":
-      return "It's here. Count each line against the manifest — the counts are the ONE thing only you can verify. Refuse any short or wrong line at the dock (mark it Reject), then click “Finalize intake.”";
+      return "It's here. Count each line against the manifest \u2014 the counts are the ONE thing only you can verify. Refuse any short or wrong line at the dock (press Reject on it); every other line is accepted when you press Finalize.";
     case "accepted":
       return "Done — this manifest is accepted and its lots are active. Nothing left to do here.";
     case "partially_accepted":
@@ -165,10 +168,10 @@ export const CONCIERGE_HINTS = {
   manifest_number: "The manifest / transfer ID from the signed source document. Legally validated for CCRS — no need to re-verify it.",
   invoice_number: "The vendor's order / invoice number, read from the transfer or the invoice text — what you'd quote on the phone. When the paperwork has no invoice # in any form, the manifest # is shown instead.",
   qty: "Shipped quantity from the manifest. Your ONE human job: confirm the physical count matches before accepting.",
-  decision: "Accept = it physically arrived correct. Reject = refuse at the dock; it leaves with the driver and never enters your inventory.",
+  decision: "Every line starts as Will accept — no click needed. Press Reject only to refuse a line at the dock; it leaves with the driver and never enters your inventory.",
   departed: "When the load left the vendor, from the transfer document (a draft — verify during review).",
   transporter: "Carrier that moved the load (WAC 314-55-085 chain-of-custody).",
-  finalize: "Activates every accepted lot (quarantine → active) and files the intake record. Undecided lines count as accepted. If any line is refused or held (a partial acceptance), the why-partial note is required for the audit trail.",
+  finalize: "One click does the whole receive: marks the delivery received, accepts every line you did not reject (quarantine → active), archives and reads the COAs, records the goods receipt and promotes KB drafts. If any line is refused or held (a partial acceptance), the why-partial note is required for the audit trail.",
 } as const;
 
 export type ConciergeHintKey = keyof typeof CONCIERGE_HINTS;

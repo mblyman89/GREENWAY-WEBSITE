@@ -70,13 +70,19 @@ describe("H15f — whatDoIDoHere (one plain-English action per stage)", () => {
   it("in transit weaves the ETA in when known", () => {
     expect(whatDoIDoHere("in_transit", "2025-03-13")).toContain("expected 2025-03-13");
     expect(whatDoIDoHere("in_transit", null)).not.toContain("expected");
-    expect(whatDoIDoHere("in_transit", null)).toContain("Mark received");
+    // R31 pin update (on purpose): the Mark received button is gone; Finalize
+    // marks the delivery received, so the copy names Finalize instead.
+    expect(whatDoIDoHere("in_transit", null)).toContain("Finalize");
+    expect(whatDoIDoHere("in_transit", null)).not.toContain("Mark received");
   });
 
   it("received tells the human their ONE job: verify counts, then finalize", () => {
     const line = whatDoIDoHere("received");
     expect(line).toContain("Count each line");
-    expect(line).toContain("Finalize intake");
+    // R31 pin update: the button label is now dynamic ("Accept All & Finalize"),
+    // so the copy says "Finalize" and promises the implicit accept.
+    expect(line).toContain("Finalize");
+    expect(line).toContain("every other line is accepted");
   });
 
   it("rejected explains dock refusal + the vendor's CCRS duty (no filing on our end)", () => {

@@ -4,7 +4,6 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, StickyActionBar } from "@/components/admin/ux";
-import { StatCard } from "@/components/admin/StatCard";
 import { Button, Field, Input, Textarea, Select, IssuesList, IssuesSummaryLine, PageTabs } from "@/components/admin/ui";
 // S28: the Issues tab (held lots, missing COAs, unmapped categories, waiting drafts).
 import { buildManifestIssues, manifestHeldAutoOpen, issuesTabBadge, summarizeIssues } from "@/lib/admin/issues-core";
@@ -16,7 +15,16 @@ import { getParseStatusForManifestNumber } from "@/lib/inbound-email/llamaparse-
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 // S02 (F-080): the accept/finalize banners open THIS delivery's drafts.
 import { draftsForManifestHref } from "@/lib/catalog/draft-deep-link-core";
-import { matchIntakeLinesToKb } from "@/lib/ai/kb/intake-strain-match-server";
+// R31: the old strain-name KB matcher is gone. Each line now gets ONE identity
+// chip keyed on product identity (brand + product + variant, the same key the
+// KB and the menu cards use) — see line-identity-chip-core.
+import { loadLineIdentityChips } from "@/lib/inventory/line-identity-server";
+import { summarizeLineChips } from "@/lib/inventory/line-identity-chip-core";
+// R31: the Finalize button names exactly what it will do ("Accept All & Finalize").
+import { planFinalize } from "@/lib/inventory/finalize-label-core";
+// R31: the Document AI card says whether pressing "Run AI extract" is worth it.
+import { adviseAiExtract } from "@/lib/inventory/ai-extract-advice-core";
+import { listManifestDocMeta } from "@/lib/inventory/manifest-docs";
 import { getVendorById } from "@/lib/vendors/store";
 import { listManifestLots, listManifestEvents, listLabFactsByIds } from "@/lib/inventory/intake-store";
 import { summarizeStagedIntake } from "@/lib/inventory/intake-review-adapter";
@@ -48,8 +56,6 @@ import { getManifestPoLinkState } from "@/lib/inventory/po-link-store";
 import { ManifestPoLinkPanel } from "@/components/admin/inventory/ManifestPoLinkPanel";
 import {
   rejectManifestAction,
-  archiveCoasAction,
-  setManifestLifecycleAction,
   updateManifestTransportAction,
   setLotDispositionAction,
   finalizeManifestAction,
@@ -136,7 +142,6 @@ export default async function ManifestReviewPage({
     capmsg,
     notified,
     finalized,
-    lot,
     held,
     kb,
     kbstrains,
@@ -251,14 +256,14 @@ export default async function ManifestReviewPage({
     lots.map((l, i) => [l.id, categoryResolutions[i]] as const),
   );
 
-  // Intelligent KB match suggestion per line (exact + near-exact). Drafts-only:
-  // this only suggests which known strain a product likely is; it never writes.
-  const kbMatches = await matchIntakeLinesToKb(
-    lots.map((l) => ({ strainName: l.strain_name, productName: l.product_name })),
+  // R31: one identity chip per line (on the menu / restocks a card / known in
+  // the KB / new — onboarding will build it). Keyed on product identity, the
+  // same brand+product+variant key the KB and the register use; never throws.
+  const identityChips = await loadLineIdentityChips(
+    id,
+    new Map(lots.map((l, i) => [l.id, categoryResolutions[i]?.websiteCategory ?? null] as const)),
   );
-  const kbMatchByLotId = new Map(
-    lots.map((l, i) => [l.id, kbMatches[i]] as const),
-  );
+  const identitySummary = summarizeLineChips(identityChips);
   const inProgress = manifest.status === "pending" || manifest.status === "in_transit" || manifest.status === "received";
 
   const withCoa = lots.filter((l) => l.lab_result_id).length;
@@ -267,22 +272,56 @@ export default async function ManifestReviewPage({
   // SLICE 101 — any line already marked refused makes this a PARTIAL finalize,
   // so the why-partial note field becomes required up front (the server also
   // validates, catching partials caused by dirty lots being held).
-  const hasRefusedLine = lots.some((l) => l.disposition === "rejected_at_dock");
+  // R31: the same per-line facts the server finalize uses (undecided = accept,
+  // the activation gate predicts holds). planFinalize names the button and the
+  // sticky-bar sentence; noteRequired is the server's partial-note rule.
+  const finalizePlan = planFinalize(
+    lots.map((l) => ({
+      id: l.id,
+      disposition: l.disposition,
+      gate: {
+        ccrsExternalId: l.ccrs_inventory_external_id,
+        hasLabResult: l.lab_result_id != null,
+        labPassed: l.lab_result_id ? (labFacts.get(l.lab_result_id)?.passed ?? null) : null,
+      },
+    })),
+  );
+  const hasRefusedLine = finalizePlan.noteRequired;
   const coaLinks = Array.isArray(manifest.coa_links) ? manifest.coa_links : [];
 
   const rejectAction = rejectManifestAction.bind(null, id);
   const poLinkAction = linkManifestPoAction.bind(null, id);
   const finalizeAction = finalizeManifestAction.bind(null, id);
   const notifyVendorAction = notifyVendorSampleCapAction.bind(null, id);
-  const archiveAction = archiveCoasAction.bind(null, id);
+  // R31: no Mark in transit / Mark received / Archive COAs buttons — Finalize
+  // does all of it. Promote-to-KB stays bound ONLY for the rare retry case.
   const promoteKbAction = promoteManifestToKbAction.bind(null, id);
-  const markInTransitAction = setManifestLifecycleAction.bind(null, id, "in_transit");
-  const markReceivedAction = setManifestLifecycleAction.bind(null, id, "received");
   const transportAction = updateManifestTransportAction.bind(null, id);
   const reExtractAiAction = reExtractManifestAiAction.bind(null, id);
   // PR-A: document-AI parse status for the plain-English statement in the
   // transport section (what LlamaParse read, or the honest reason it didn't).
   const parseStatus = await getParseStatusForManifestNumber(manifest.manifest_number);
+  // R31: what we already have vs. what the AI button would try to read, from
+  // which archived PDFs — so the owner knows whether pressing it is worth it.
+  const manifestDocs = await listManifestDocMeta(id);
+  const aiAdvice = adviseAiExtract({
+    docs: manifestDocs,
+    saved: {
+      transporter_name: manifest.transporter_name,
+      transporter_license: manifest.transporter_license,
+      driver_name: manifest.driver_name,
+      driver_license_number: manifest.driver_license_number,
+      vehicle_description: manifest.vehicle_description,
+      vehicle_plate: manifest.vehicle_plate,
+      vehicle_vin: manifest.vehicle_vin,
+      departed_at: manifest.departed_at,
+      eta_date: manifest.eta_date,
+      route_notes: manifest.route_notes,
+    },
+    invoiceNumberOverride: manifest.invoice_number_override ?? null,
+    invoiceNumberDetected: manifest.invoice_number_detected ?? null,
+    parse: { ok: parseStatus.ok, engine: parseStatus.engine, shortReason: parseStatus.shortReason },
+  });
   const hasTransport = Boolean(
     manifest.transporter_name ||
       manifest.driver_name ||
@@ -301,6 +340,9 @@ export default async function ManifestReviewPage({
     hasTransport,
     events,
   });
+  // R31: the KB retry button renders ONLY when finalize ran but no
+  // kb_writeback reached the timeline (the checklist's promote_kb todo).
+  const kbRetryNeeded = checklist.items.find((it) => it.id === "promote_kb")?.state === "todo";
 
   // S28: the Issues tab, from STORED state only. A lot finalize held back is
   // still `quarantine` with disposition `accepted` (intake-store finalize:
@@ -448,7 +490,7 @@ export default async function ManifestReviewPage({
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm text-[var(--admin-text-muted)]">
             {/* S31: confirmation for setManifestLifecycleAction's redirect. The
                 books result for "received" is on the Accounting tab. */}
-            {lifecycle === "received" ? "Marked received." : "Marked in transit."}
+            {lifecycle === "received" ? "Marked received." : "Marked in transit."} (Finalize now does this for you.)
           </div>
         )}
         {/* R23: ONE calm banner per outcome (finalize-banner-core). The old
@@ -491,12 +533,8 @@ export default async function ManifestReviewPage({
             PER held lot (what it is missing + Open lot), computed from the lot
             rows themselves, so it stays until each lot is fixed. `?held=N`
             only decides which tab opens first. */}
-        {lot && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm text-[var(--admin-text-muted)]">
-            Line marked <strong>{lot === "accepted" ? "accepted" : "rejected at dock"}</strong>. When
-            you&apos;ve decided every line, click <em>Finalize intake</em> below.
-          </div>
-        )}
+        {/* R31: the per-line "Line marked …" banner is gone — the line itself
+            now shows Will accept / Rejected, so a banner was just noise. */}
         {archived && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             Archived {archived} COA PDF{archived === "1" ? "" : "s"} to our records.
@@ -515,7 +553,7 @@ export default async function ManifestReviewPage({
             {filled && filled !== "0"
               ? `; filled ${filled} empty transport field${filled === "1" ? "" : "s"} (driver license / vehicle where present).`
               : "; no new transport fields to fill (already complete or not present)."}{" "}
-            See the AI status line in the transport section below for the engine and any honest reason.
+            See the Document AI card above for the engine and any honest reason.
           </div>
         )}
         {ai === "nodocs" && (
@@ -667,6 +705,62 @@ export default async function ManifestReviewPage({
         {/* S28 (D-R2-2): at most ONE line, only when something blocks. */}
         <IssuesSummaryLine summary={issueSummary} href={tabHref(pageBase, "issues", {}, [])} />
 
+        {/* R31: Document AI at the TOP, with an honest verdict: what we already
+            have, what the button would try to find, and from which archived
+            PDFs. The button only shows when there is something for it to read,
+            and it is purple (worth pressing) only when it can add facts. */}
+        <section
+          id="manifest-ai"
+          data-ai-verdict={aiAdvice.verdict}
+          className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-[var(--admin-text)]">
+                {parseStatus.badge === "llama" ? "\ud83e\udd99" : "\ud83d\udcc4"} Document AI {"\u2014"} {aiAdvice.headline}
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--admin-text-muted)]">{aiAdvice.detail}</p>
+            </div>
+            {aiAdvice.showButton && (
+              <form action={reExtractAiAction}>
+                <Button type="submit" variant={aiAdvice.buttonVariant} size="sm">
+                  🤖 Run AI extract
+                </Button>
+              </form>
+            )}
+          </div>
+          <dl className="mt-2 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+            {aiAdvice.have.length > 0 && (
+              <div>
+                <dt className="inline font-semibold text-[var(--admin-text-muted)]">Already have: </dt>
+                <dd className="inline text-[var(--admin-text)]">{aiAdvice.have.join(", ")}</dd>
+              </div>
+            )}
+            {aiAdvice.missing.length > 0 && (
+              <div>
+                <dt className="inline font-semibold text-[var(--admin-text-muted)]">Would try to find: </dt>
+                <dd className="inline text-[var(--admin-text)]">{aiAdvice.missing.join(", ")}</dd>
+              </div>
+            )}
+            {aiAdvice.reads.length > 0 && (
+              <div>
+                <dt className="inline font-semibold text-[var(--admin-text-muted)]">Reads: </dt>
+                <dd className="inline text-[var(--admin-text)]">{aiAdvice.reads.join(", ")}</dd>
+              </div>
+            )}
+            {aiAdvice.skips.length > 0 && (
+              <div>
+                <dt className="inline font-semibold text-[var(--admin-text-muted)]">Skips: </dt>
+                <dd className="inline text-[var(--admin-text-faint)]">{aiAdvice.skips.join(", ")}</dd>
+              </div>
+            )}
+          </dl>
+          <p className="mt-2 text-[11px] text-[var(--admin-text-faint)]">
+            Last read: {parseStatus.statement} The button only fills EMPTY transport fields and re-checks the
+            invoice/order # for this one delivery {"\u2014"} it never overwrites what you typed.
+          </p>
+        </section>
+
         {/* H15f — guided accept: ① Arrived → ② Verify counts → ③ Accept → ④ On menu,
             plain-English stage guidance + green "from the manifest" chips. */}
         <GuidedAcceptRibbon
@@ -690,42 +784,23 @@ export default async function ManifestReviewPage({
             entirely until migration 0102 is applied) */}
         {poLink.available && <ManifestPoLinkPanel state={poLink} linkAction={poLinkAction} />}
 
-        <div className="grid gap-4 sm:grid-cols-5">
-          <StatCard label="Lines" value={lots.length} accent="muted" />
-          <StatCard label="With COA" value={`${withCoa}/${lots.length}`} accent={missingCoa > 0 ? "orange" : "green"} />
-          <StatCard
-            label="COAs captured"
-            value={coaLinks.length}
-            accent={coaLinks.length > 0 ? "green" : "muted"}
-            hint="saved to KB"
-          />
-          <StatCard
-            label="Samples ($0)"
-            value={sampleCount}
-            accent={sampleCount > 0 ? "gold" : "muted"}
-            hint="not for resale"
-          />
-          <StatCard
-            label="Status"
-            value={manifestStatusBadge(manifest.status).label}
-            accent={
-              manifest.status === "accepted"
-                ? "green"
-                : manifest.status === "partially_accepted"
-                  ? "gold"
-                  : manifest.status === "rejected"
-                    ? "orange"
-                    : manifest.status === "pending"
-                      ? "gold"
-                      : "muted"
-            }
-            hint={
-              manifest.status === "partially_accepted"
-                ? `${manifest.accepted_lot_count ?? 0} in · ${manifest.rejected_lot_count ?? 0} refused`
-                : undefined
-            }
-          />
-        </div>
+        {/* R31: the five stat cards became ONE quiet line — the walk is the lines. */}
+        <p
+          data-testid="manifest-walk-summary"
+          className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-xs text-[var(--admin-text-muted)]"
+        >
+          <span className="font-semibold text-[var(--admin-text)]">{lots.length} line{lots.length === 1 ? "" : "s"}</span>
+          {" \u00b7 "}
+          <span className={missingCoa > 0 ? "text-[var(--admin-orange)]" : undefined}>
+            COA {withCoa}/{lots.length}
+          </span>
+          {sampleCount > 0 && <>{" \u00b7 "}{sampleCount} sample{sampleCount === 1 ? "" : "s"} ($0, not for resale)</>}
+          {" \u00b7 "}
+          {manifestStatusBadge(manifest.status).label}
+          {manifest.status === "partially_accepted" &&
+            ` (${manifest.accepted_lot_count ?? 0} in \u00b7 ${manifest.rejected_lot_count ?? 0} refused)`}
+          {identitySummary.text && <>{" \u00b7 "}{identitySummary.text}</>}
+        </p>
 
         {/* S28: "N lines have no COA" is an Issues row while receiving is open
             (Review the lines → #manifest-lines), not a banner. */}
@@ -771,41 +846,32 @@ export default async function ManifestReviewPage({
                       )}
                     </div>
                     {(() => {
-                      const m = kbMatchByLotId.get(l.id);
-                      if (!m) return null;
-                      // Confident auto-match → green "KB: <name>".
-                      if (m.best) {
-                        return (
-                          <div className="mt-1 text-[10px]">
-                            <span
-                              className="rounded bg-[var(--admin-accent-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-accent)]"
-                              title={`${m.best.reason} (${Math.round(m.best.score * 100)}%)`}
-                            >
-                              KB match: {m.best.strain.name}
-                            </span>
-                          </div>
-                        );
-                      }
-                      // Near-exact but ambiguous → amber "confirm?" with the top pick.
-                      const top = m.candidates[0];
-                      if (top) {
-                        return (
-                          <div className="mt-1 text-[10px]">
-                            <span
-                              className="rounded bg-[var(--admin-gold-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-gold)]"
-                              title={`${top.reason} (${Math.round(top.score * 100)}%). Confirm before relying on it.`}
-                            >
-                              KB: {top.strain.name}? · confirm
-                            </span>
-                          </div>
-                        );
-                      }
-                      // No plausible match → gray hint (KB can grow from here).
+                      // R31: ONE identity chip keyed on brand+product+variant.
+                      const chip = identityChips.get(l.id);
+                      if (!chip) return null;
+                      const tone =
+                        chip.tone === "accent"
+                          ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
+                          : chip.tone === "gold"
+                            ? "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]"
+                            : "bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]";
+                      const cls = `rounded px-1.5 py-0.5 font-semibold ${tone}`;
                       return (
-                        <div className="mt-1 text-[10px]">
-                          <span className="rounded bg-[var(--admin-surface-2)] px-1.5 py-0.5 font-semibold uppercase text-[var(--admin-text-faint)]">
-                            No KB match
-                          </span>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]" data-line-identity={chip.kind}>
+                          {chip.href ? (
+                            <Link href={chip.href} className={`${cls} hover:brightness-110`} title={chip.title}>
+                              {chip.label}
+                            </Link>
+                          ) : (
+                            <span className={cls} title={chip.title}>
+                              {chip.label}
+                            </span>
+                          )}
+                          {chip.kbHref && (
+                            <Link href={chip.kbHref} className="text-[var(--admin-accent)] underline hover:brightness-110">
+                              KB record {"\u2192"}
+                            </Link>
+                          )}
                         </div>
                       );
                     })()}
@@ -882,15 +948,11 @@ export default async function ManifestReviewPage({
               <h2 className="text-sm font-bold text-[var(--admin-text)]">
                 Certificates of analysis ({coaLinks.length})
               </h2>
-              <form action={archiveAction}>
-                <Button type="submit" variant="neutral" size="sm">
-                  📄 Archive COAs to records
-                </Button>
-              </form>
             </div>
             <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
               Pulled from the single transfer file — no need to open each product&apos;s COA link in the
-              email. We download and keep a copy on file so you can print them for LCB enforcement.
+              email. Finalize downloads and keeps a copy of each on file (so you can print them for LCB
+              enforcement) and reads the numbers into the lab results {"\u2014"} no button needed.
             </p>
             <div className="overflow-hidden rounded-[var(--admin-radius)] border border-[var(--admin-border)]">
               <table className="w-full text-sm">
@@ -945,35 +1007,8 @@ export default async function ManifestReviewPage({
             actually delivered this load and on what vehicle. Saved with the manifest so it
             prints with the intake record.
           </p>
-          {/* PR-A: honest document-AI status — what the parser read or why it didn't. */}
-          <div
-            className={
-              "mb-4 rounded-[var(--admin-radius)] border px-4 py-2 text-xs " +
-              (parseStatus.badge === "llama"
-                ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]"
-                : "border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]")
-            }
-          >
-            {parseStatus.badge === "llama" ? "🦙 " : "⚠️ "}
-            <span className="font-semibold">
-              Document AI: {parseStatus.badge === "llama" ? "LlamaParse vision" : `fallback — ${parseStatus.shortReason}`}
-            </span>{" "}
-            <span className="opacity-90">{parseStatus.statement}</span>
-          </div>
-          {/* Hybrid on-demand: re-read THIS manifest's archived PDFs with the document AI.
-              Scoped to a single manifestId — it never touches other rows in the table.
-              Fills only empty transport fields and re-scans the invoice/order number. */}
-          <form action={reExtractAiAction} className="mb-4 flex flex-wrap items-center gap-3">
-            <Button type="submit" variant="special" size="sm">
-              🤖 Run AI extract
-            </Button>
-            <span className="text-xs text-[var(--admin-text-muted)]">
-              Re-reads the PDFs archived for <span className="font-semibold">this</span> manifest
-              (manifest &amp; invoice) with LlamaParse, then fills only the empty transport fields
-              and re-checks the invoice/order #. Safe to run after the docs finish attaching — it
-              only touches this delivery, never the other orders in the table.
-            </span>
-          </form>
+          {/* R31: the Document AI status + "Run AI extract" moved to the top of
+              the Delivery tab (#manifest-ai), with a worth-pressing verdict. */}
           {transportSuggestion.usedUsual && (
             <div className="mb-4 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-xs text-[var(--admin-gold)]">
               💡 {describeSuggestion(vendorDisplay, transportSuggestion.suggestedFields)}{" "}
@@ -1118,43 +1153,26 @@ export default async function ManifestReviewPage({
             Manifest status
           </h2>
           <ManifestTimeline status={manifest.status} events={events} />
-          {inProgress ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--admin-border)] pt-4">
-              <span className="text-xs text-[var(--admin-text-faint)]">Update arrival progress:</span>
-              <form action={markInTransitAction}>
-                <Button type="submit" variant="neutral" size="sm">
-                  🚚 Mark in transit
-                </Button>
-              </form>
-              <form action={markReceivedAction}>
-                <Button type="submit" variant="neutral" size="sm">
-                  📦 Mark received
-                </Button>
-              </form>
-            </div>
-          ) : null}
+          {/* R31: no Mark in transit / Mark received buttons. Finalize stamps the
+              delivery received (received_at + the goods receipt) itself. */}
         </div>
 
-        {/* Slice H11a — Manifest → KB bridge (drafts-only, idempotent) */}
-        <div id="manifest-kb" className="flex scroll-mt-24 flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <div className="flex-1">
-            <h2 className="text-sm font-bold text-[var(--admin-text)]">
-              Promote to Knowledge Base{" "}
-              <span className="text-[var(--admin-text-faint)]">(drafts-only)</span>
-            </h2>
-            <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
-              Push this transfer&apos;s verified product facts — name, strain, category, vendor,
-              COA-backed potency — into KB product drafts for the crawler and AI to enrich. Runs
-              automatically when you finalize an accepted intake; use this for older manifests or to
-              re-run after fixing a vendor/brand link. Gap-fill only; nothing is published.
+        {/* Slice H11a → R31: KB promotion runs automatically at finalize. The
+            button exists ONLY in the exception case the checklist flags: the
+            delivery is finalized but no kb_writeback is on its timeline. */}
+        {kbRetryNeeded && (
+          <div id="manifest-kb" className="flex scroll-mt-24 flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-4">
+            <p className="flex-1 text-xs text-[var(--admin-text)]">
+              <strong>KB promotion didn&apos;t run.</strong> Finalize normally pushes this delivery&apos;s verified
+              facts into KB drafts, but nothing is on the timeline. Gap-fill only; nothing publishes; safe to repeat.
             </p>
+            <form action={promoteKbAction}>
+              <Button type="submit" variant="neutral" size="sm">
+                ⚡ Retry KB promotion
+              </Button>
+            </form>
           </div>
-          <form action={promoteKbAction}>
-            <Button type="submit" variant="neutral" size="sm">
-              ⚡ Promote to KB drafts
-            </Button>
-          </form>
-        </div>
+        )}
 
         {/* Accept / reject controls */}
         {inProgress ? (
@@ -1163,12 +1181,12 @@ export default async function ManifestReviewPage({
               id="ccrs-reject-guardrails"
               title="How rejecting product works (and stays compliant)"
               steps={[
-                "Mark each line Accept or Reject above. Only accepted lots enter inventory (quarantine → active).",
+                "Walk the lines above. Every line says Will accept — press ✕ Reject only on a line that is wrong. Only accepted lots enter inventory (quarantine → active).",
                 "Rejecting is 'refuse at the dock' — the product leaves with the driver and never becomes your reported inventory. Nothing is destroyed.",
                 "Decide BEFORE you accept. Refuse questionable product at the dock rather than accepting it and rejecting/returning it later — once a lot is accepted it briefly enters inventory.",
                 "Because refused product was never yours, you file NOTHING with CCRS. Ask the vendor to submit a CCRS manifest Update (to fix a quantity) or Delete (to remove a line) so their record matches what physically stayed.",
                 "Do NOT create a return manifest for driver-present refusals. Contingency manifests are discontinued (WSLCB, Nov 2025).",
-                "When every line is decided, click Finalize intake. A mix of accept + reject marks the manifest 'Partially Accepted' — and a note explaining WHY it's partial is required (it lands on the permanent timeline for the audit trail).",
+                "Then press the one Finalize button (it names what it will do, e.g. 'Accept All & Finalize'). It marks the delivery received, accepts every line you didn't reject, archives and reads the COAs, records the goods receipt, and promotes facts to KB drafts. A mix of accept + reject marks the manifest 'Partially Accepted' — and a note explaining WHY is required (it lands on the permanent timeline).",
               ]}
             >
               <p className="text-xs text-[var(--admin-text-faint)]">
@@ -1184,12 +1202,8 @@ export default async function ManifestReviewPage({
                 trail — the field rides in the same form so it submits with
                 the finalize; the server validates before touching any lot. */}
             <StickyActionBar
-              status={
-                hasRefusedLine
-                  ? "Partial acceptance — the note explaining why is required"
-                  : "Decide each line above, then finalize — undecided lines are accepted"
-              }
-              statusTone="warning"
+              status={finalizePlan.status}
+              statusTone={finalizePlan.tone === "warning" ? "warning" : "neutral"}
               align="between"
             >
               <form
@@ -1209,8 +1223,8 @@ export default async function ManifestReviewPage({
                   title="Saved to the manifest's permanent timeline. Required whenever some lines are refused or held — the audit trail's why."
                   className="w-full max-w-md rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-1.5 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] focus:border-[var(--admin-accent)] focus:outline-none"
                 />
-                <Button type="submit" variant="save" size="sm">
-                  ✓ Finalize intake
+                <Button type="submit" variant={finalizePlan.reject > 0 && finalizePlan.accept === 0 ? "danger" : "save"} size="sm">
+                  ✓ {finalizePlan.label}
                 </Button>
               </form>
             </StickyActionBar>

@@ -17,6 +17,7 @@ import {
 import { sendSampleCapVendorNotice } from "@/lib/compliance/sample-cap-notify";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
 import { receiptEventFor } from "@/lib/inventory/manifest-event-labels-core";
+import { shouldMarkArrivedOnFinalize } from "@/lib/inventory/finalize-label-core";
 import {
   parseCcrsManifestCsv,
   ccrsToParsedManifest,
@@ -869,6 +870,13 @@ export async function finalizeManifestAction(manifestId: string, formData?: Form
   // note (audit trail). The store validates BEFORE touching any lot; a missing
   // note on a partial redirects back with a specific, fixable error.
   const partialNote = (formData?.get("partial_note") as string | null) ?? null;
+  // R31 — ONE BUTTON. The owner: "every other button ... should be clicked and
+  // processed by the finalize manifest button." "Mark received" was the last
+  // step finalize did not do, so it is folded in here: a delivery still marked
+  // pending / in transit is stamped received (status + received_at + timeline)
+  // BEFORE the line decisions run, exactly as if the button had been pressed.
+  // Never blocks the finalize; see markArrivedOnFinalize below.
+  await markArrivedOnFinalize(manifestId, session.userId);
   const result = await finalizeManifestDispositions(manifestId, session.userId, { partialNote });
   revalidatePath(`/admin/inventory/intake/${manifestId}`);
   revalidatePath("/admin/inventory/intake");
@@ -922,6 +930,16 @@ export async function finalizeManifestAction(manifestId: string, formData?: Form
   // manifest_events, which the manifest page already renders as the permanent
   // timeline. The URL banner still fires for the person standing at the screen;
   // the timeline is what is still there tomorrow.
+  // R31 — the goods receipt (books-81) now rides finalize too. It runs AFTER
+  // the decisions, so lots refused at the dock are already "rejected" and are
+  // not capitalised, and BEFORE the vendor bill, so the bill finds the receipt
+  // in the ledger and credits Goods Received Not Invoiced (D-61) instead of
+  // debiting inventory a second time.
+  const receiptNote = await postReceiptOnFinalize(
+    manifestId,
+    session.userId,
+    result.activated + result.blocked.length,
+  );
   let booksNote = "";
   if (result.activated > 0) {
     try {
@@ -967,9 +985,76 @@ export async function finalizeManifestAction(manifestId: string, formData?: Form
     );
   }
 
+  // R31: one banner slot. A bill refusal wins (it is the newer fact); a receipt
+  // refusal shows when the bill had nothing to say against it. Both outcomes are
+  // on the durable timeline either way.
+  if (receiptNote && !booksNote.startsWith("&booksError=")) booksNote = receiptNote;
+
   redirect(
     `/admin/inventory/intake/${manifestId}?finalized=${result.derivedStatus}&accepted=${result.activated}&rejected=${result.rejected}&drafts=${result.draftsCreated}&held=${result.blocked.length}${booksNote}`,
   );
+}
+
+/**
+ * R31 — the "Mark received" half of finalize, step 1 (physical fact only).
+ *
+ * Only a delivery still marked pending / in transit is touched; one already
+ * received keeps its original received_at (the dock-to-shelf clock in
+ * dock-to-shelf-core starts there and must not move). Best-effort and never
+ * throws: setManifestLifecycle returns a result rather than throwing, and a
+ * failure is written to the timeline instead of costing the owner the finalize.
+ * The books half is postReceiptOnFinalize, after the line decisions.
+ */
+async function markArrivedOnFinalize(manifestId: string, userId: string | null): Promise<void> {
+  const { getManifestById } = await import("@/lib/inventory/store");
+  const m = await getManifestById(manifestId);
+  if (!m || !shouldMarkArrivedOnFinalize(m.status)) return;
+  const { setManifestLifecycle } = await import("@/lib/inventory/intake-store");
+  const flipped = await setManifestLifecycle(
+    manifestId,
+    "received",
+    userId,
+    "Marked received by Finalize (R31: one button does the whole receive).",
+  );
+  if (!flipped.ok) {
+    await logManifestEvent(manifestId, "note", `Finalize could not stamp the delivery received: ${flipped.error}`.slice(0, 2000), userId);
+  }
+}
+
+/**
+ * R31 — the "Mark received" half of finalize, step 2 (the books).
+ *
+ * Raises the goods-receipt journal for what was actually accepted (accepted +
+ * held lots; dock refusals excluded by receipt-service#receivableLots). Skipped
+ * when nothing was accepted (nothing arrived, nothing to capitalise) and when
+ * the ledger ALREADY holds this manifest's receipt (it was marked received the
+ * old way): re-posting a smaller set of lots under the same key would be a
+ * conflict, not a duplicate (posting-core's idempotency rule). Returns the URL
+ * fragment for a refusal, or "" — a success stays quiet because the vendor
+ * bill's line is the one the owner is waiting for.
+ */
+async function postReceiptOnFinalize(manifestId: string, userId: string | null, acceptedCount: number): Promise<string> {
+  if (acceptedCount <= 0) return "";
+  try {
+    const { getManifestById } = await import("@/lib/inventory/store");
+    const m = await getManifestById(manifestId);
+    const { findReceiptJournal } = await import("@/lib/accounting/receipt-evidence");
+    const evidence = await findReceiptJournal(m?.manifest_number ?? null, manifestId);
+    if (evidence.kind === "raised") return "";
+    const { postManifestReceipt } = await import("@/lib/accounting/receipt-service");
+    const { pacificParts } = await import("@/lib/reports/timezone");
+    const p = pacificParts(new Date());
+    const receivedDate = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+    const booked = await postManifestReceipt(manifestId, receivedDate);
+    const ev = receiptEventFor(booked);
+    await logManifestEvent(manifestId, ev.eventType, ev.note, userId);
+    return booked.ok ? "" : `&booksError=${encodeURIComponent(booked.message.slice(0, 300))}`;
+  } catch (err) {
+    const thrown = err instanceof Error ? err.message : String(err);
+    const ev = receiptEventFor({ thrown });
+    await logManifestEvent(manifestId, ev.eventType, ev.note, userId);
+    return `&booksError=${encodeURIComponent(ev.note.slice(0, 300))}`;
+  }
 }
 
 /**

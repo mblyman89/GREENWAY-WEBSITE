@@ -94,16 +94,16 @@ export function buildIntakeChecklist(input: {
 
   const items: IntakeChecklistItem[] = [];
 
-  // ① Physical arrival (pending → in transit → received).
+  // ① Physical arrival. R31: AUTOMATIC — Finalize marks the delivery received
+  // (status, received_at, goods receipt) before deciding the lines, so the old
+  // "Mark in transit" / "Mark received" buttons are gone from the page.
   items.push({
     id: "arrive",
     label: "Mark the delivery received",
-    state: arrived ? "done" : "todo",
+    state: arrived ? "done" : "auto",
     hint: arrived
       ? "The truck arrived and this manifest is marked received."
-      : status === "in_transit"
-        ? "The truck is on its way — click “Mark received” when it arrives."
-        : "Click “Mark in transit” when the vendor dispatches, then “Mark received” when it arrives.",
+      : "Automatic — Finalize marks the delivery received and records the goods receipt. No button needed.",
     detail: null,
     anchor: "#manifest-timeline",
   });
@@ -111,25 +111,17 @@ export function buildIntakeChecklist(input: {
   // ② Accept the products — count every line, decide accept/reject.
   items.push({
     id: "decide_lines",
-    label: "Verify counts & accept each product",
-    state: finished
-      ? "done"
-      : !arrived
-        ? "blocked"
-        : undecided === 0
-          ? "done"
-          : "todo",
+    label: "Walk the lines & verify counts",
+    state: finished ? "done" : undecided === 0 ? "done" : "todo",
     hint: finished
       ? "Every line was decided and the intake is finalized."
-      : !arrived
-        ? "Waiting on the truck — you can only verify counts once it's physically here."
-        : undecided === 0
-          ? "Every line is decided — you're clear to finalize."
-          : "Count each line against the manifest, then Accept it (or Reject short/wrong lines at the dock).",
+      : undecided === 0
+        ? "Every line is decided — you're clear to finalize."
+        : "Count each line against the manifest. Every line is accepted by Finalize; press Reject only on a line that is short, wrong or damaged.",
     detail:
       total === 0
         ? "No lines parsed on this manifest."
-        : finished || !arrived
+        : finished
           ? `${total} line${total === 1 ? "" : "s"} on this manifest.`
           : `${decided} of ${total} line${total === 1 ? "" : "s"} decided${
               undecided > 0
@@ -155,14 +147,12 @@ export function buildIntakeChecklist(input: {
   items.push({
     id: "finalize",
     label: "Finalize intake",
-    state: finished ? "done" : arrived ? "todo" : "blocked",
+    state: finished ? "done" : "todo",
     hint: finished
       ? rejectedWhole
         ? "Finalized — this manifest was refused at the dock."
         : "Finalized — accepted lots are active and everything downstream ran."
-      : arrived
-        ? "When every line is decided, click Finalize intake — it activates accepted lots and runs every automatic step below."
-        : "Unlocks once the delivery is marked received and the counts are verified.",
+      : "One click: Finalize marks the delivery received, accepts every line you did not reject, and runs every automatic step below.",
     detail: null,
     anchor: "#manifest-finalize",
   });
@@ -187,10 +177,10 @@ export function buildIntakeChecklist(input: {
     hint: kbPromoted
       ? "Done — this manifest's verified product facts were written to KB drafts (audited on the timeline)."
       : finished && !rejectedWhole
-        ? "Runs automatically at finalize, but no KB write-back is on this manifest's timeline yet — click “⚡ Promote to KB drafts” to run it now (safe to repeat)."
+        ? "Runs automatically at finalize, but no KB write-back is on this manifest's timeline yet — a “⚡ Retry KB promotion” button appears only in this case; press it to run it now (safe to repeat)."
         : "Automatic at finalize — pushes the manifest's verified facts (name, strain, category, vendor, COA potency) into KB drafts for enrichment. Drafts only; nothing publishes.",
     detail: null,
-    anchor: "#manifest-kb",
+    anchor: kbPromoted || !(finished && !rejectedWhole) ? null : "#manifest-kb",
   });
 
   const doneCount = items.filter((i) => i.state === "done").length;
@@ -218,8 +208,9 @@ export function __runIntakeChecklistCoreTests(): void {
     return item;
   };
 
-  // Fresh pending manifest: nothing arrived, lines blocked, finalize blocked,
-  // automation advertised as auto.
+  // Fresh pending manifest (R31): arrival is AUTOMATIC (Finalize marks it
+  // received), so nothing is blocked behind a button — walking the lines is
+  // the job and Finalize is always available.
   let c = buildIntakeChecklist({
     status: "pending",
     lotDispositions: [null, null],
@@ -227,24 +218,24 @@ export function __runIntakeChecklistCoreTests(): void {
     events: [],
   });
   ok(c.items.length === 6 && c.total === 6, "always six items");
-  ok(by(c, "arrive").state === "todo", "pending: arrive todo");
-  ok(by(c, "decide_lines").state === "blocked", "pending: lines blocked");
+  ok(by(c, "arrive").state === "auto", "pending: arrive auto (R31)");
+  ok(by(c, "decide_lines").state === "todo", "pending: lines todo (R31: not blocked)");
   ok(by(c, "verify_transport").state === "todo", "pending: transport todo");
-  ok(by(c, "finalize").state === "blocked", "pending: finalize blocked");
+  ok(by(c, "finalize").state === "todo", "pending: finalize todo (R31: not blocked)");
   ok(by(c, "mark_accepted").state === "auto", "pending: mark accepted auto");
   ok(by(c, "promote_kb").state === "auto", "pending: kb auto");
-  ok(c.nextAction?.id === "arrive", "pending: next action is arrival");
+  ok(c.nextAction?.id === "decide_lines", "pending: next action is walking the lines (R31)");
   ok(c.doneCount === 0 && c.finished === false, "pending: none done");
 
-  // In transit: arrival copy changes but stays todo.
+  // In transit (R31): arrival stays automatic; no button is named.
   c = buildIntakeChecklist({
     status: "in_transit",
     lotDispositions: [null],
     hasTransport: true,
     events: [],
   });
-  ok(by(c, "arrive").state === "todo", "in_transit: arrive todo");
-  ok(by(c, "arrive").hint.includes("Mark received"), "in_transit: hint says mark received");
+  ok(by(c, "arrive").state === "auto", "in_transit: arrive auto (R31)");
+  ok(by(c, "arrive").hint.includes("Finalize marks the delivery received") && !by(c, "arrive").hint.includes("click"), "in_transit: hint says Finalize does it");
   ok(by(c, "verify_transport").state === "done", "in_transit: transport done when recorded");
 
   // Received with undecided lines: counting is THE job; undecided detail warns
@@ -300,7 +291,7 @@ export function __runIntakeChecklistCoreTests(): void {
   });
   ok(by(c, "promote_kb").state === "todo", "finalized w/o writeback: kb todo");
   ok(
-    by(c, "promote_kb").hint.includes("Promote to KB drafts"),
+    by(c, "promote_kb").hint.includes("Retry KB promotion") && by(c, "promote_kb").anchor === "#manifest-kb",
     "finalized w/o writeback: hint names the manual button",
   );
   ok(c.nextAction?.id === "promote_kb", "finalized w/o writeback: kb is next");

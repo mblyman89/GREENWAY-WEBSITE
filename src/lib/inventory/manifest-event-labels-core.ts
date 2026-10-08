@@ -200,7 +200,7 @@ export function booksStepText(step: "receipt" | "bill", state: BooksStepState): 
   if (state === "refused") return `${name}: not recorded yet \u2014 see the reason below.`;
   if (state === "skipped") return `${name}: none needed \u2014 nothing was activated, so nothing is owed.`;
   return step === "receipt"
-    ? `${name}: not attempted yet \u2014 it is recorded when the delivery is marked received.`
+    ? `${name}: not attempted yet \u2014 it is recorded when the delivery is finalized (R31: finalize also marks it received).`
     : `${name}: not attempted yet \u2014 it is recorded when the delivery is finalized.`;
 }
 
@@ -220,13 +220,15 @@ export function booksResultText(code: string): string {
 
 /**
  * What the operator can do about a refusal, from facts on the page only.
- * While the delivery is still in progress, "Mark received" is on the page and
- * re-runs the receiving wire (idempotent per manifest). After finalize there
- * is no retry button on this page, so the copy does not promise one.
+ * R31: "Mark received" is no longer a separate button; Finalize marks the
+ * delivery received and records the goods receipt (idempotent per manifest).
+ * So while the delivery is still in progress the retry IS the finalize. After
+ * finalize there is no retry button on this page, so the copy does not
+ * promise one.
  */
 export function booksRefusalNextStep(inProgress: boolean): string {
   return inProgress
-    ? "Fix the reason, then use Mark received again \u2014 the entry is keyed to this manifest, so it can never be recorded twice."
+    ? "Fix the reason, then finalize \u2014 Finalize records the goods receipt, and the entry is keyed to this manifest, so it can never be recorded twice."
     : "Nothing was recorded, so no number is wrong. The reason above says what has to change; the owner follows it up in the books.";
 }
 
@@ -315,10 +317,10 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   ok(!/posted/i.test(booksStepText("bill", "posted")), "never says posted");
   ok(booksStepText("bill", "skipped").includes("nothing is owed"), "step skipped");
   ok(booksStepText("receipt", "refused").includes("not recorded yet"), "step refused");
-  ok(booksStepText("receipt", "none").includes("marked received") && booksStepText("bill", "none").includes("finalized"), "step none");
+  ok(booksStepText("receipt", "none").includes("finalized") && booksStepText("bill", "none").includes("finalized"), "step none (R31: receipt rides finalize)");
   ok(booksResultText("RECEIPT_OK").includes("goods receipt") && booksResultText("BILL_OK").includes("vendor bill"), "result by code");
   ok(booksResultText("WHATEVER") === "Books: recorded for this delivery.", "unknown code generic");
-  ok(booksRefusalNextStep(true).includes("Mark received again"), "in progress retry");
+  ok(booksRefusalNextStep(true).includes("then finalize") && !booksRefusalNextStep(true).includes("Mark received"), "in progress retry is the finalize (R31)");
   ok(!/finali[sz]e again|re-?finali/i.test(booksRefusalNextStep(false)), "no false re-finalize promise");
 
   // R19: booksNeedsAttention
