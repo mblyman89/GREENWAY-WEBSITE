@@ -149,6 +149,41 @@ export async function listManifestDocLinks(
   return out;
 }
 
+/** R31: what is archived for one manifest, WITHOUT downloading any bytes. */
+export type ManifestDocMeta = {
+  role: DocRole;
+  filename: string;
+  contentType: string | null;
+};
+
+/**
+ * R31: the archived documents for ONE manifest (role, filename, content type
+ * only), so the review page can say which PDFs "Run AI extract" would read
+ * before anyone presses it. Same table and order as downloadManifestDocs.
+ * Never throws: returns null when the read failed (the page then says it
+ * could not check, rather than claiming there are no documents).
+ */
+export async function listManifestDocMeta(manifestId: string): Promise<ManifestDocMeta[] | null> {
+  if (!isSupabaseServiceConfigured || !manifestId) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("manifest_documents")
+      .select("role, filename, content_type")
+      .eq("manifest_id", manifestId)
+      .order("created_at", { ascending: true });
+    if (error || !data) return null;
+    return (data as { role: DocRole; filename: string; content_type: string | null }[]).map((r) => ({
+      role: r.role,
+      filename: r.filename,
+      contentType: r.content_type,
+    }));
+  } catch (err) {
+    console.error("[manifest-docs] listManifestDocMeta failed:", err);
+    return null;
+  }
+}
+
 /** One archived document with its actual bytes (for re-parsing on demand). */
 export type ArchivedDoc = {
   role: DocRole;

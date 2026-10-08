@@ -36,6 +36,10 @@ import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core
 // read as 224 g on the discount side, granting a full-ounce tier to an
 // eighth). Pure: no I/O.
 import { __runWeightLabelTests } from "../../src/lib/compliance/weight-label-core";
+// R31: the one finalize button + the "should I press Run AI extract?" advice.
+import { __runFinalizeLabelCoreTests } from "../../src/lib/inventory/finalize-label-core";
+import { __runAiExtractAdviceCoreTests } from "../../src/lib/inventory/ai-extract-advice-core";
+import { __runLineIdentityChipCoreTests } from "../../src/lib/inventory/line-identity-chip-core";
 import { __runLiquidVolumeTests } from "../../src/lib/compliance/liquid-volume-core";
 import { __runLiquidVolumeDerivationTests } from "../../src/lib/compliance/liquid-volume-derivation-core";
 import { __runSalesLimitGateTests } from "../../src/lib/compliance/sales-limit-gate-core";
@@ -2084,6 +2088,9 @@ __runLiquidVolumeTests();
   assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 99); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors
   assertRan("lab-facts-attach-core", __runLabFactsAttachCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 102); // R30: first-pass lab attach + strain terpene learning
   assertRan("cannabinoid-profile-core", __runCannabinoidProfileCoreTests(), 61); // R29: ratio slot, package totals, serving summary, minor merge, ratio-vs-mg
+  assertRan("finalize-label-core", __runFinalizeLabelCoreTests(), 29); // R31: Accept All & Finalize / Accept x · Reject y
+  assertRan("ai-extract-advice-core", __runAiExtractAdviceCoreTests(), 26); // R31: press / don't press, from what PDFs
+  assertRan("line-identity-chip-core", __runLineIdentityChipCoreTests(), 22); // R31: identity-keyed line chip replaces the strain-name KB guesser
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

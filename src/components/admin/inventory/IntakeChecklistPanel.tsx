@@ -5,7 +5,7 @@
  * screen. Renders the six-item "everything this page needs" list computed by
  * intake-checklist-core (tested, pure):
  *
- *   ① Mark received → ② Verify counts & accept products → ③ Verify transport
+ *   ① Arrival (automatic — Finalize marks it received, R31) → ② Verify counts & accept products → ③ Verify transport
  *   → ④ Finalize → ⑤ Mark accepted (automatic) → ⑥ Promote to KB (automatic)
  *
  * Each row shows an honest done/todo/auto/blocked state derived from REAL

@@ -146,6 +146,19 @@ export type LotTranslation =
     };
 
 /**
+ * R31: lot statuses that were never received and so are never capitalised.
+ * Kept equal in VALUE to vendor-bill-service#BILL_EXCLUDED_LOT_STATUSES (a test
+ * asserts it), because a receipt that capitalised a refused lot the bill then
+ * left out would strand that cost in Goods Received Not Invoiced forever.
+ */
+export const RECEIPT_EXCLUDED_LOT_STATUSES = new Set(["rejected"]);
+
+/** R31: drop lots refused at the dock (pure; the status column is optional). */
+export function receivableLots<T extends { status?: string | null }>(rows: readonly T[]): T[] {
+  return rows.filter((r) => !RECEIPT_EXCLUDED_LOT_STATUSES.has((r.status ?? "").toLowerCase()));
+}
+
+/**
  * Turn database rows into receipt lines, or refuse.
  *
  * A lot whose cost is already known still contributes its cost: re-receiving
@@ -255,14 +268,20 @@ export async function postManifestReceipt(
 
   const { data: lotRows, error: lErr } = await admin
     .from("inventory_lots")
-    .select("id, lot_code, category, received_qty, unit_cost_minor_units")
+    .select("id, lot_code, category, received_qty, unit_cost_minor_units, status")
     .eq("manifest_id", manifestId);
 
   if (lErr) {
     return fail("RECEIPT_READ_FAILED", `Could not read the lots: ${lErr.message}`);
   }
 
-  const lots = (lotRows ?? []) as ManifestLotRow[];
+  // R31: the receipt now runs as part of finalize, AFTER the line decisions,
+  // so a lot refused at the dock already carries status "rejected". It never
+  // arrived, so it is never capitalised; the vendor bill drops the same lots
+  // (BILL_EXCLUDED_LOT_STATUSES), so receipt and bill agree on what was
+  // received. Before finalize nothing is "rejected" yet, so a receipt run from
+  // the old lifecycle path still sees every lot, exactly as before.
+  const lots = receivableLots((lotRows ?? []) as (ManifestLotRow & { status?: string | null })[]);
   const translated = translateLotsToReceiptLines(lots);
   if (translated.kind === "refused") {
     return fail(translated.code, translated.message);
