@@ -49,6 +49,8 @@ import {
   formatIntakePotency,
 } from "@/lib/pos/intake-potency-core";
 import { intakeDisplayName } from "@/lib/pos/intake-mastering-core";
+import { nameRatioParts } from "@/lib/inventory/coa-facts-core";
+import { canonicalRatioFromName } from "@/lib/menu/cannabinoid-profile-core";
 
 /** A planned row patch: SQL column -> new value, plus plain-English notes. */
 export type ReprocessPatch = {
@@ -95,7 +97,32 @@ export type MenuItemReprocessInput = {
   ratio_label: string | null;
   compounds_json: unknown;
   fact_provenance: unknown;
+  /**
+   * R29: the row's CBD display and the THC/CBD JSON, plus the lab PERCENTS of
+   * the lot it was made from (joined by pos_product_key in the store). When a
+   * displayed mg figure is EXACTLY the lab percent, it is the pre-R29 intake
+   * bug ("0.12mg" on a 55 mg gummy pack) and is cleared - evidence, not a
+   * guess. All optional: absent = nothing to compare = nothing cleared.
+   */
+  cbd?: string | null;
+  total_thc_json?: unknown;
+  total_cbd_json?: unknown;
+  /** Every THC lab percent (total + delta-9) of every lot with this source_item_id. */
+  lab_thc_pcts?: readonly (number | null)[];
+  /** Every CBD lab percent (cbd + total) of every lot with this source_item_id. */
+  lab_cbd_pcts?: readonly (number | null)[];
 };
+
+/**
+ * R29: true when `display` ("0.12mg") is exactly one of the lab percents
+ * printed with an mg unit (compared at the 2 decimals formatIntakePotency
+ * writes). Zero / missing values never match.
+ */
+export function isLabPercentAsMg(display: string | null | undefined, labPcts: readonly (number | null | undefined)[]): boolean {
+  const mg = parseMgDisplay(display);
+  if (mg === null || mg <= 0) return false;
+  return labPcts.some((p) => typeof p === "number" && Number.isFinite(p) && p > 0 && Number(p.toFixed(2)) === mg);
+}
 
 /** fact_provenance as a plain record ({} when malformed — never crash on data). */
 function provenanceRecord(raw: unknown): Record<string, string> {
@@ -160,6 +187,7 @@ function applyVerifiedFacts(
   update: Record<string, unknown>,
   provenancePatch: Record<string, string>,
   notes: string[],
+  productText: string,
 ): void {
   const canFill = (column: keyof FactCarrier): boolean =>
     row[column] === null && !(column in provenance);
@@ -187,9 +215,11 @@ function applyVerifiedFacts(
     notes.push(`per-serving ${exam.mgPerServing.value}mg (${exam.mgPerServing.source})`);
   }
   if (exam.ratioLabel?.value && canFill("ratio_label")) {
-    update.ratio_label = exam.ratioLabel.value;
+    // R29: the same canonical text intake writes ("2:2:2:1 CBG:CBC:CBD:THC").
+    const label = canonicalRatioFromName(exam.ratioLabel.value, nameRatioParts(productText, exam.ratioLabel.value));
+    update.ratio_label = label;
     provenancePatch.ratio_label = exam.ratioLabel.source;
-    notes.push(`ratio ${exam.ratioLabel.value}`);
+    notes.push(`ratio ${label}`);
   }
 }
 
@@ -210,10 +240,15 @@ export function planLotReprocess(lot: LotReprocessInput): ReprocessPatch | null 
     const exam = crossExamineRow({
       productText,
       inventoryType: invType,
-      thcColumn: lot.lab_total_thc_pct ?? lot.lab_thc_pct,
-      cbdColumn: lot.lab_cbd_pct,
+      // R29: lab_results numbers are PERCENT of weight (WCIA uom "pct"),
+      // never the per-serving / per-package mg column the engine
+      // corroborates against - the same rule draft-injection-core applies.
+      // The fields stay on the input (the store still joins them) so this
+      // can never silently start reading them again without a test failing.
+      thcColumn: null,
+      cbdColumn: null,
     });
-    applyVerifiedFacts(lot, provenance, exam, null, update, provenancePatch, notes);
+    applyVerifiedFacts(lot, provenance, exam, null, update, provenancePatch, notes, productText);
     // Minor cannabinoids (CBG/CBN/CBC/CBDV) — VERIFIED-only, fill-only when
     // the lot has none recorded yet (0138 minor_cannabinoids_json).
     if (compoundArray(lot.minor_cannabinoids_json).length === 0) {
@@ -262,19 +297,49 @@ export function planMenuItemReprocess(item: MenuItemReprocessInput): ReprocessPa
   // Fact extraction — mg-dosed LCB types only. The row's own displayed THC/CBD
   // mg numbers stand in for the potency columns (they came from those columns).
   if (examText && MG_FACT_TYPES.has(invType)) {
+    // R29: a displayed THC/CBD that is exactly the lot's lab PERCENT was
+    // printed by the pre-R29 intake with an mg unit. It is cleared (with the
+    // JSON and compound rows carrying the same number) and is never used as
+    // a corroborating mg column.
+    const thcPcts = item.lab_thc_pcts ?? [];
+    const cbdPcts = item.lab_cbd_pcts ?? [];
+    const thcIsPct = isLabPercentAsMg(item.thc, thcPcts);
+    const cbdIsPct = isLabPercentAsMg(item.cbd, cbdPcts);
+    let compoundsNow = compoundArray(item.compounds_json);
+    if (thcIsPct || cbdIsPct) {
+      if (thcIsPct) {
+        update.thc = null;
+        update.total_thc_json = null;
+        notes.push(`displayed THC ${item.thc} was the lab percent printed as mg - cleared`);
+      }
+      if (cbdIsPct) {
+        update.cbd = null;
+        update.total_cbd_json = null;
+        notes.push(`displayed CBD ${item.cbd} was the lab percent printed as mg - cleared`);
+      }
+      const kept = compoundsNow.filter((c) => {
+        if (c.unit !== "mg") return true;
+        const pcts = c.type === "thc" ? thcPcts : c.type === "cbd" ? cbdPcts : [];
+        return !isLabPercentAsMg(`${c.value}mg`, pcts);
+      });
+      if (kept.length !== compoundsNow.length) {
+        update.compounds_json = kept;
+        compoundsNow = kept;
+      }
+    }
     const exam = crossExamineRow({
       productText: examText,
       inventoryType: invType,
-      thcColumn: parseMgDisplay(item.thc),
+      thcColumn: thcIsPct ? null : parseMgDisplay(item.thc),
       cbdColumn: null,
     });
-    applyVerifiedFacts(item, provenance, exam, item.category, update, provenancePatch, notes);
+    applyVerifiedFacts(item, provenance, exam, item.category, update, provenancePatch, notes, examText);
 
     // Package-total-first: a VERIFIED package total corrects the displayed
     // THC (same policy as transform.ts and draft-injection-core for new rows).
     if (exam.packageThcMg?.confidence === "verified") {
       const cv = capIntakePotency(exam.packageThcMg.value, "mg", item.category);
-      const current = parseMgDisplay(item.thc);
+      const current = thcIsPct ? null : parseMgDisplay(item.thc);
       if (current !== cv.value) {
         update.thc = formatIntakePotency(cv.value, "mg");
         update.total_thc_json = {
@@ -286,9 +351,18 @@ export function planMenuItemReprocess(item: MenuItemReprocessInput): ReprocessPa
       }
     }
 
+    // R29: a cleared (percent-as-mg) CBD display is refilled only by a
+    // VERIFIED package CBD total - the same package-total-first rule.
+    if (cbdIsPct && exam.packageCbdMg?.confidence === "verified") {
+      const cv = capIntakePotency(exam.packageCbdMg.value, "mg", item.category);
+      update.cbd = formatIntakePotency(cv.value, "mg");
+      update.total_cbd_json = { type: "cbd", value: String(Number(cv.value.toFixed(2))), unit: "mg" };
+      notes.push(`displayed CBD -> ${formatIntakePotency(cv.value, "mg")} (verified package total)`);
+    }
+
     // Minor cannabinoids — VERIFIED-only, appended to compounds_json when the
     // compound type is not already present (same closed set as draft-injection).
-    const compounds = compoundArray(item.compounds_json);
+    const compounds = compoundsNow;
     const appended = exam.minorCannabinoids
       .filter(
         (m) =>
@@ -564,6 +638,99 @@ export function __runReprocessCoreTests(): void {
   ok(parseMgDisplay("22%") === null, "parseMgDisplay rejects percent");
   ok(parseMgDisplay("~21%") === null, "parseMgDisplay rejects estimates");
   ok(parseMgDisplay(null) === null, "parseMgDisplay null-safe");
+
+  // ---- R29: lab percents printed as mg (the pre-R29 intake bug) ----------
+  ok(isLabPercentAsMg("0.12mg", [0.1206, null]), "0.12mg == lab 0.1206 % (2 dp)");
+  ok(!isLabPercentAsMg("55mg", [0.1206]), "a real package total never matches");
+  ok(!isLabPercentAsMg("0.12mg", [0.13]), "a different percent never matches");
+  ok(!isLabPercentAsMg("0.12%", [0.12]) && !isLabPercentAsMg(null, [0.12]), "percent / null displays never match");
+  ok(!isLabPercentAsMg("0mg", [0]) && !isLabPercentAsMg("1mg", [null, undefined]), "zero / missing never match");
+
+  const sourMandarin = "bytes - CBG:CBC:CBD:THC (2:2:2:1) - 10pk - Sour Mandarin - 50g";
+  const bug = planMenuItemReprocess({
+    ...blankItem,
+    name: "Bytes Sour Mandarin",
+    product_name: sourMandarin,
+    category: "edible-solid",
+    pos_inventory_type: "Solid Edible",
+    pos_inventory_category: "Gummies",
+    thc: "0.12mg",
+    cbd: "0.22mg",
+    total_thc_json: { type: "thc", value: "0.12", unit: "mg" },
+    total_cbd_json: { type: "cbd", value: "0.22", unit: "mg" },
+    compounds_json: [
+      { type: "thc", value: "0.12", unit: "mg" },
+      { type: "cbd", value: "0.22", unit: "mg" },
+      { type: "cbg", value: "100", unit: "mg" },
+    ],
+    lab_thc_pcts: [0.1206, 0.1206],
+    lab_cbd_pcts: [0.2219, null],
+  });
+  ok(bug !== null && bug.update.thc === null && bug.update.total_thc_json === null, "R29: percent-as-mg THC cleared");
+  ok(bug!.update.cbd === null && bug!.update.total_cbd_json === null, "R29: percent-as-mg CBD cleared");
+  ok(JSON.stringify(bug!.update.compounds_json) === JSON.stringify([{ type: "cbg", value: "100", unit: "mg" }]), "R29: only the percent compound rows dropped; real CBG kept");
+  ok(bug!.update.ratio_label === "2:2:2:1 CBG:CBC:CBD:THC", "R29: canonical ratio filled");
+  ok(bug!.notes.some((n) => n.includes("lab percent printed as mg")), "R29: clean-up explained");
+  // Idempotent: after the patch the row has nothing left to clear.
+  const bugAgain = planMenuItemReprocess({
+    ...blankItem,
+    name: "Bytes Sour Mandarin",
+    product_name: sourMandarin,
+    category: "edible-solid",
+    pos_inventory_type: "Solid Edible",
+    pos_inventory_category: "Gummies",
+    thc: null,
+    cbd: null,
+    compounds_json: [{ type: "cbg", value: "100", unit: "mg" }],
+    ratio_label: "2:2:2:1 CBG:CBC:CBD:THC",
+    servings_per_pack: 10,
+    fact_provenance: { ratio_label: "name", servings_per_pack: "name" },
+    lab_thc_pcts: [0.1206],
+    lab_cbd_pcts: [0.2219],
+  });
+  ok(bugAgain === null, "R29: clean-up is idempotent");
+  // A real mg display that is NOT the lab percent is never touched.
+  const real = planMenuItemReprocess({
+    ...blankItem,
+    name: "Bytes Sour Mandarin",
+    product_name: sourMandarin,
+    category: "edible-solid",
+    pos_inventory_type: "Solid Edible",
+    pos_inventory_category: "Gummies",
+    thc: "55mg",
+    cbd: "100mg",
+    ratio_label: "2:2:2:1 CBG:CBC:CBD:THC",
+    servings_per_pack: 10,
+    fact_provenance: { ratio_label: "name", servings_per_pack: "name" },
+    lab_thc_pcts: [0.1206],
+    lab_cbd_pcts: [0.2219],
+  });
+  ok(real === null, "R29: real mg figures are left alone");
+  // Without the lab join (older callers) nothing is cleared - no evidence, no change.
+  const noLab = planMenuItemReprocess({
+    ...blankItem,
+    name: "Bytes Sour Mandarin",
+    product_name: sourMandarin,
+    category: "edible-solid",
+    pos_inventory_type: "Solid Edible",
+    pos_inventory_category: "Gummies",
+    thc: "0.12mg",
+    ratio_label: "x",
+    servings_per_pack: 10,
+    fact_provenance: { ratio_label: "reviewer", servings_per_pack: "name" },
+  });
+  ok(noLab === null, "R29: no lab percent to compare -> nothing cleared");
+  // Lots: the lab percent no longer verifies an mg fact (Gummies 100mg + 0.5 %
+  // used to verify "0.5 mg x 200 servings").
+  const pctLot = planLotReprocess({
+    ...blankLot,
+    product_name: "Brand - Gummies - 100mg THC - Mango",
+    inventory_type: "Solid Edible",
+    lab_total_thc_pct: 0.5,
+  });
+  ok(pctLot === null || (!("package_thc_mg" in pctLot.update) && !("servings_per_pack" in pctLot.update) && !("mg_per_serving" in pctLot.update)), "R29: lab percent never verifies lot mg facts");
+  const listLot = planLotReprocess({ ...blankLot, product_name: sourMandarin, inventory_type: "Solid Edible" });
+  ok(listLot!.update.ratio_label === "2:2:2:1 CBG:CBC:CBD:THC", "R29: lot ratio canonical");
 
   console.log(`reprocess-core self-tests: ${passed} assertions passed`);
 }

@@ -118,6 +118,13 @@ export function menuRowToGreenwayItem(row: MenuItemWithVariants): GreenwayMenuIt
     // `?? null` keeps a pre-0138 database reading as "unknown", never zero.
     netWeightGrams: row.net_weight_grams ?? null,
     netVolumeMl: row.net_volume_ml ?? null,
+    // R29: the cannabinoid profile of mg-dosed products (0138, select("*")).
+    // `?? null` keeps a pre-0138 row reading as "unknown", never zero.
+    ratioLabel: row.ratio_label ?? null,
+    servingsPerPack: row.servings_per_pack ?? null,
+    mgPerServing: row.mg_per_serving ?? null,
+    packageThcMg: row.package_thc_mg ?? null,
+    packageCbdMg: row.package_cbd_mg ?? null,
     totalThc: toCannabinoid(row.total_thc_json),
     totalCbd: toCannabinoid(row.total_cbd_json),
     compounds: toCompounds(row.compounds_json),

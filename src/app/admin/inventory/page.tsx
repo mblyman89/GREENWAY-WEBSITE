@@ -647,6 +647,8 @@ export default async function InventoryPage({
                   <SortableHeader columnKey="thc" label="THC" raw={sp as RawParams} align="right" />
                   {/* R15a: CBD / CBN / CBC beside THC. COA first, else the Cultivera export. */}
                   <SortableHeader columnKey="cbd" label="CBD" raw={sp as RawParams} align="right" />
+                  {/* R29: CBG joins CBN / CBC (verified package mg, minor_cannabinoids_json). */}
+                  <SortableHeader columnKey="cbg" label="CBG" raw={sp as RawParams} align="right" />
                   <SortableHeader columnKey="cbn" label="CBN" raw={sp as RawParams} align="right" />
                   <SortableHeader columnKey="cbc" label="CBC" raw={sp as RawParams} align="right" />
                   <SortableHeader columnKey="received" label="Received" raw={sp as RawParams} />
@@ -694,11 +696,14 @@ export default async function InventoryPage({
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
                         {/* SLICE 61: mg-dosed types (edibles/drinks/topicals/tinctures) show mg, not "%". */}
                         {/* R15a: COA figure when on file, else the Cultivera export's (0241). */}
-                        <span title={lotPotencySource(l) === "pos" ? "From the Cultivera export (not a COA)" : lotPotencySource(l) === "coa" ? "From the COA" : undefined}>
+                        <span title={lotPotencySource(l) === "pos" ? "From the Cultivera export (not a COA)" : lotPotencySource(l) === "coa" ? "From the COA" : lotPotencySource(l) === "package" ? "Verified package total" : undefined}>
                           {lotPotencyLabel(lotThcValue(l), l)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{lotPotencyLabel(lotCbdValue(l), l)}</td>
+                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
+                        {lotMinorValue(l, "cbg") == null ? "\u2014" : `${lotMinorValue(l, "cbg")} mg`}
+                      </td>
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
                         {lotMinorValue(l, "cbn") == null ? "\u2014" : `${lotMinorValue(l, "cbn")} mg`}
                       </td>

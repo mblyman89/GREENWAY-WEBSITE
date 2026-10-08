@@ -107,6 +107,21 @@ export type GreenwayMenuItem = {
    */
   netWeightGrams?: number | null;
   netVolumeMl?: number | null;
+  /**
+   * R29 - the cannabinoid profile of an mg-dosed product (migration 0138
+   * columns, already on the published row). All optional: absent = unknown.
+   *   ratioLabel      canonical "2:2:2:1 CBG:CBC:CBD:THC" (shown in the
+   *                   strain-type slot for edibles / drinks / tinctures /
+   *                   topicals - cannabinoid-profile-core ratioSlot)
+   *   servingsPerPack pieces / servings in one package
+   *   mgPerServing    THC mg in ONE serving
+   *   packageThcMg / packageCbdMg  VERIFIED package totals (outrank totalThc)
+   */
+  ratioLabel?: string | null;
+  servingsPerPack?: number | null;
+  mgPerServing?: number | null;
+  packageThcMg?: number | null;
+  packageCbdMg?: number | null;
   totalThc: GreenwayCannabinoid | null;
   totalCbd: GreenwayCannabinoid | null;
   compounds: GreenwayCannabinoid[];

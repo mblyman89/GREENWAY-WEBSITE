@@ -114,12 +114,13 @@ afterEach(() => {
 describe("S30 pure core", () => {
   it("self-tests pass with the exact count (a deleted check turns this red)", () => {
     // R27-1: +36 (owner facts, partial publish, withheld flags, saved facts, live mirror)
-    expect(__runIntakeFactReviewCoreTests()).toEqual({ passed: 176, failed: 0 });
+    // R29: +21 (CBG/CBN/CBC sanitize, apply merge, mirror minors, form ratio + servings x mg)
+    expect(__runIntakeFactReviewCoreTests()).toEqual({ passed: 197, failed: 0 });
   });
   it("is registered in the pure runner with its measured floor", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toContain('import { __runIntakeFactReviewCoreTests } from "../../src/lib/pos/intake-fact-review-core";');
-    expect(runner).toContain('assertRan("intake-fact-review-core", __runIntakeFactReviewCoreTests(), 176);');
+    expect(runner).toContain('assertRan("intake-fact-review-core", __runIntakeFactReviewCoreTests(), 197);');
   });
   it("S30.4 hold note is the bible's new copy, word for word", () => {
     expect(factHoldNote(2)).toBe(

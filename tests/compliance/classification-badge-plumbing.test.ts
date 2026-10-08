@@ -364,7 +364,7 @@ describe("18C plumbing — the detail page chip row (and the DOH gap it repairs)
   it("both detail pills use tone tokens from the cores, not literal colours", () => {
     const code = stripComments(read(PDP_PAGE));
     const start = code.indexOf("dohDetailPill ?");
-    const end = code.indexOf("showProfilePill(detailCannabinoids.profile)");
+    const end = code.indexOf("showProfilePillWithSlot(detailCannabinoids.profile, detailRatioSlot)");
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const block = code.slice(start, end);
@@ -379,7 +379,7 @@ describe("18C plumbing — the detail page chip row (and the DOH gap it repairs)
     const code = stripComments(read(PDP_PAGE));
     const dohAt = code.indexOf("dohDetailPill ?");
     const classAt = code.indexOf("classificationDetailPills.map");
-    const profileAt = code.indexOf("showProfilePill(detailCannabinoids.profile)");
+    const profileAt = code.indexOf("showProfilePillWithSlot(detailCannabinoids.profile, detailRatioSlot)");
     expect(dohAt).toBeLessThan(classAt);
     expect(classAt).toBeLessThan(profileAt);
   });

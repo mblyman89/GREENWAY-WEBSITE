@@ -96,14 +96,20 @@ export function IntakeFactReviewPanel({
           <p className="text-[11px] text-[var(--admin-text-muted)]">
             Only what you type is changed. Take each figure from the package or the COA.
           </p>
+          <p className="text-[11px] text-[var(--admin-text-muted)]">
+            Package THC fills itself from servings × mg per serving when left blank. For ratio products (1:1, 2:2:2:1 CBG:CBC:CBD:THC) enter each cannabinoid’s PACKAGE total in mg — the menu shows these totals, never the lab percent.
+          </p>
           <div className="grid gap-2 sm:grid-cols-3">
             <FixField label="THC (display)" name="thc" placeholder="e.g. 100mg" />
             <FixField label="CBD (display)" name="cbd" placeholder="e.g. 100mg" />
-            <FixField label="Ratio" name="ratioLabel" placeholder="e.g. 1:1" />
+            <FixField label="Ratio" name="ratioLabel" placeholder="e.g. 1:1 THC:CBD" />
             <FixField label="Servings per pack" name="servingsPerPack" />
             <FixField label="Mg per serving" name="mgPerServing" />
             <FixField label="Package THC (mg)" name="packageThcMg" />
             <FixField label="Package CBD (mg)" name="packageCbdMg" />
+            <FixField label="Package CBG (mg)" name="packageCbgMg" />
+            <FixField label="Package CBN (mg)" name="packageCbnMg" />
+            <FixField label="Package CBC (mg)" name="packageCbcMg" />
             <FixField label="Net weight (g)" name="netWeightGrams" />
             <FixField label="Net volume (ml)" name="netVolumeMl" />
           </div>

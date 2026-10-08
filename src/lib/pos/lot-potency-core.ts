@@ -155,25 +155,59 @@ export type PotencyLotFields = {
   pos_thc?: number | null;
   pos_cbd?: number | null;
   minor_cannabinoids_json?: unknown;
+  /** R29: verified package mg totals (0138) - the mg-dosed lot's real figures. */
+  package_thc_mg?: number | null;
+  package_cbd_mg?: number | null;
 };
 
-/** The THC number the table shows: the COA's when on file, else the POS export's. */
+const finiteOrNull = (v: unknown): number | null =>
+  v !== null && v !== undefined && Number.isFinite(Number(v)) ? Number(v) : null;
+const isMgLot = (l: PotencyLotFields) => MG_FACT_TYPES.has(collapse(l.inventory_type));
+
+/**
+ * The THC number the table shows.
+ *   percent lots (flower, concentrates): the COA's when on file, else the
+ *     POS export's - unchanged.
+ *   R29 mg lots (edibles, drinks, tinctures, topicals): the VERIFIED package
+ *     total, else the Cultivera export's mg figure. The COA's number is a
+ *     PERCENT of weight (0.12 on a 55 mg gummy pack) and is never shown in
+ *     an mg column; lotLabPercentLabel shows it, labelled "%".
+ */
 export function lotThcValue(l: PotencyLotFields): number | null {
-  const lab = l.lab?.total_thc_pct;
-  if (lab !== null && lab !== undefined && Number.isFinite(Number(lab))) return Number(lab);
-  const pos = l.pos_thc;
-  return pos !== null && pos !== undefined && Number.isFinite(Number(pos)) ? Number(pos) : null;
+  if (isMgLot(l)) return finiteOrNull(l.package_thc_mg) ?? finiteOrNull(l.pos_thc);
+  return finiteOrNull(l.lab?.total_thc_pct) ?? finiteOrNull(l.pos_thc);
 }
 
 export function lotCbdValue(l: PotencyLotFields): number | null {
-  const lab = l.lab?.total_cbd_pct;
-  if (lab !== null && lab !== undefined && Number.isFinite(Number(lab))) return Number(lab);
-  const pos = l.pos_cbd;
-  return pos !== null && pos !== undefined && Number.isFinite(Number(pos)) ? Number(pos) : null;
+  if (isMgLot(l)) return finiteOrNull(l.package_cbd_mg) ?? finiteOrNull(l.pos_cbd);
+  return finiteOrNull(l.lab?.total_cbd_pct) ?? finiteOrNull(l.pos_cbd);
 }
 
-/** Where the shown THC came from — "coa" | "pos" | null (for a tooltip). */
-export function lotPotencySource(l: PotencyLotFields): "coa" | "pos" | null {
+/**
+ * R29: the figure the inventory FILTER compares ("THC at least 20%", "has
+ * CBD"). The filter's chips are written in percent, so it keeps its
+ * pre-R29 meaning for every lot: the COA's percent first, else the POS
+ * export's figure. The table COLUMN and its sort use lotThcValue /
+ * lotCbdValue (package mg for mg lots) - what you see is what sorts - but
+ * a percent filter must never silently compare against milligrams, and a
+ * tincture with 12.4% CBD on its certificate still "has CBD" before anyone
+ * types its package mg.
+ */
+export function lotThcFilterValue(l: PotencyLotFields): number | null {
+  return finiteOrNull(l.lab?.total_thc_pct) ?? finiteOrNull(l.pos_thc);
+}
+
+export function lotCbdFilterValue(l: PotencyLotFields): number | null {
+  return finiteOrNull(l.lab?.total_cbd_pct) ?? finiteOrNull(l.pos_cbd);
+}
+
+/** Where the shown THC came from — "coa" | "pos" | "package" | null (for a tooltip). */
+export function lotPotencySource(l: PotencyLotFields): "coa" | "pos" | "package" | null {
+  if (isMgLot(l)) {
+    if (finiteOrNull(l.package_thc_mg) !== null || finiteOrNull(l.package_cbd_mg) !== null) return "package";
+    if (l.pos_thc != null || l.pos_cbd != null) return "pos";
+    return null;
+  }
   if (l.lab?.total_thc_pct != null || l.lab?.total_cbd_pct != null) return "coa";
   if (l.pos_thc != null || l.pos_cbd != null) return "pos";
   return null;
@@ -213,6 +247,15 @@ export function __runLotPotencyCoreTests(): { passed: number } {
   ok(!hasLotPotency(resolveLotPotency({ inventoryType: "Paraphernalia", productName: "Lighter", totalRaw: 5, thcRaw: 5, thcaRaw: null, cbdRaw: null, cbdaRaw: null })), "non-cannabis type stores nothing");
   // COA outranks POS.
   ok(lotThcValue({ inventory_type: "Usable Marijuana", lab: { total_thc_pct: 20, total_cbd_pct: null }, pos_thc: 25 }) === 20, "COA outranks POS");
+  // R29: an mg lot never shows the lab PERCENT in its mg column.
+  const bytes = { inventory_type: "Solid Edible", lab: { total_thc_pct: 0.1206, total_cbd_pct: 0.2219 }, pos_thc: null, pos_cbd: null };
+  ok(lotThcValue(bytes) === null && lotCbdValue(bytes) === null && lotPotencySource(bytes) === null, "R29: mg lot, lab percent only -> nothing in the mg column");
+  ok(lotThcValue({ ...bytes, package_thc_mg: 55, package_cbd_mg: 100 }) === 55 && lotCbdValue({ ...bytes, package_thc_mg: 55, package_cbd_mg: 100 }) === 100, "R29: mg lot shows the verified package totals");
+  ok(lotPotencySource({ ...bytes, package_thc_mg: 55 }) === "package", "R29: source says package total");
+  ok(lotThcValue({ ...bytes, pos_thc: 100 }) === 100 && lotPotencySource({ ...bytes, pos_thc: 100 }) === "pos", "R29: Cultivera mg figure is the fallback");
+  ok(lotThcValue({ inventory_type: "Usable Marijuana", lab: { total_thc_pct: 20, total_cbd_pct: null }, package_thc_mg: 99 }) === 20, "R29: percent lots ignore package mg");
+  ok(lotCbdFilterValue({ ...bytes, package_cbd_mg: 100 }) === 0.2219 && lotThcFilterValue({ ...bytes, package_thc_mg: 55 }) === 0.1206, "R29: the % filter compares the lab percent, never the package mg");
+  ok(lotThcFilterValue({ inventory_type: "Solid Edible", lab: null, pos_thc: 100 }) === 100 && lotCbdFilterValue({ inventory_type: "Solid Edible", lab: null }) === null, "R29: filter falls back to POS, never invents");
   ok(lotThcValue({ inventory_type: "Usable Marijuana", lab: null, pos_thc: 25 }) === 25 && lotMinorValue({ inventory_type: null, minor_cannabinoids_json: [{ type: "cbn", value: "100", unit: "mg" }] }, "cbn") === 100, "POS fallback + minor lookup");
   return { passed };
 }

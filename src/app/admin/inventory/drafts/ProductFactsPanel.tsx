@@ -115,14 +115,20 @@ export function ProductFactsPanel({
             <p className="text-[11px] text-[var(--admin-text-muted)]">
               Take each figure from the package or the COA. What is filled in below is what gets saved {"\u2014"} clear a field to remove it.
             </p>
+            <p className="text-[11px] text-[var(--admin-text-muted)]">
+              Package THC fills itself from servings × mg per serving when left blank. For ratio products (1:1, 2:2:2:1 CBG:CBC:CBD:THC) enter each cannabinoid’s PACKAGE total in mg — the menu shows these totals, never the lab percent.
+            </p>
             <div className="grid gap-2 sm:grid-cols-3">
               <Field id={draftId} saved={saved} label="THC (display)" name="thc" placeholder="e.g. 100mg" />
               <Field id={draftId} saved={saved} label="CBD (display)" name="cbd" placeholder="e.g. 100mg" />
-              <Field id={draftId} saved={saved} label="Ratio" name="ratioLabel" placeholder="e.g. 1:1" />
+              <Field id={draftId} saved={saved} label="Ratio" name="ratioLabel" placeholder="e.g. 1:1 THC:CBD" />
               <Field id={draftId} saved={saved} label="Servings per pack" name="servingsPerPack" />
               <Field id={draftId} saved={saved} label="Mg per serving" name="mgPerServing" />
               <Field id={draftId} saved={saved} label="Package THC (mg)" name="packageThcMg" />
               <Field id={draftId} saved={saved} label="Package CBD (mg)" name="packageCbdMg" />
+              <Field id={draftId} saved={saved} label="Package CBG (mg)" name="packageCbgMg" />
+              <Field id={draftId} saved={saved} label="Package CBN (mg)" name="packageCbnMg" />
+              <Field id={draftId} saved={saved} label="Package CBC (mg)" name="packageCbcMg" />
               <Field id={draftId} saved={saved} label="Net weight (g)" name="netWeightGrams" />
               <Field id={draftId} saved={saved} label="Net volume (ml)" name="netVolumeMl" />
             </div>

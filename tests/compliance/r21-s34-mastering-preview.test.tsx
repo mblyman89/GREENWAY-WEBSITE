@@ -118,7 +118,7 @@ describe("S34 core: the groups ARE the S19 dry run", () => {
   });
 
   it("exact self-test counts", () => {
-    expect(__runIntakeMasteringCoreTests().passed).toBe(206);
+    expect(__runIntakeMasteringCoreTests().passed).toBe(212); // R29: +6 (lot-bundle minors x4, cannabinoid upper-case x2)
     expect(__runMasteringPreviewCoreTests()).toEqual({ passed: 17, failed: 0 });
     const runner = read("scripts/compliance/run-pure-selftests.ts");
     expect(runner).toContain('assertRan("mastering-preview-core", __runMasteringPreviewCoreTests(), 17);');

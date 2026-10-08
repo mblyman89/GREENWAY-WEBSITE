@@ -21,7 +21,8 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { pagedAll } from "@/lib/supabase/chunked-in";
 import type { PosFactReview } from "@/lib/pos/db-types";
-import type { FactResolutionAction, FactResolutionInput, FactReviewFacts } from "@/lib/pos/fact-review-core";
+import type { FactResolutionAction, FactResolutionInput, FactReviewFacts, ScalarFactKey } from "@/lib/pos/fact-review-core";
+import { isMinorFactKey, mergeMinorMg, type MinorFactKey } from "@/lib/menu/cannabinoid-profile-core";
 import { isFactReviewMigrationMissing, type IntakeFactAction } from "@/lib/pos/intake-fact-review-core";
 import { mirrorTargetVersionIds, type MirrorVersionRow } from "@/lib/pos/publish-now-core";
 
@@ -120,8 +121,11 @@ export type RecordFactReviewInput = {
  * Record<keyof FactReviewFacts, string> is load-bearing: adding a field to
  * FactReviewFacts without adding it here is a COMPILE error, not a silent
  * drop. That is why a reviewer's low-THC decision cannot fail to persist.
+ * R29: the CBG / CBN / CBC package mg have no scalar column - they are mg
+ * rows MERGED into compounds_json (mergeMinorMg), so they are excluded here
+ * (ScalarFactKey) and handled by the minors branch below.
  */
-const FACT_COLUMN: Record<keyof FactReviewFacts, string> = {
+const FACT_COLUMN: Record<ScalarFactKey, string> = {
   thc: "thc",
   cbd: "cbd",
   servingsPerPack: "servings_per_pack",
@@ -188,28 +192,41 @@ export async function recordFactReview(input: RecordFactReviewInput): Promise<vo
   if (input.action === "fix" && input.correctedFacts) {
     const update: Record<string, unknown> = {};
     const provenancePatch: Record<string, string> = {};
+    const minors: Partial<Record<MinorFactKey, number | null>> = {};
     for (const [key, value] of Object.entries(input.correctedFacts)) {
-      const column = FACT_COLUMN[key as keyof FactReviewFacts];
-      if (!column || value === undefined) continue;
+      if (value === undefined) continue;
+      if (isMinorFactKey(key)) {
+        minors[key] = typeof value === "number" ? value : null;
+        continue;
+      }
+      const column = FACT_COLUMN[key as ScalarFactKey];
+      if (!column) continue;
       update[column] = value;
       provenancePatch[column] = "reviewer";
     }
-    if (Object.keys(update).length === 0) return;
-    // Merge provenance per row (read-modify-write; single-reviewer tool).
+    const hasMinors = Object.keys(minors).length > 0;
+    if (hasMinors) provenancePatch.compounds_json = "reviewer";
+    if (Object.keys(update).length === 0 && !hasMinors) return;
+    // Merge provenance (and, R29, the CBG/CBN/CBC mg rows of compounds_json)
+    // per row (read-modify-write; single-reviewer tool).
     const { data: rows, error: rErr } = await admin
       .from("menu_items")
-      .select("id, fact_provenance")
+      .select("id, fact_provenance, compounds_json")
       .in("menu_version_id", versionIds)
       .eq("source_item_id", input.sourceItemId);
     if (rErr) throw new Error(`Failed to load the staged item: ${rErr.message}`);
-    for (const row of (rows ?? []) as { id: string; fact_provenance: unknown }[]) {
+    for (const row of (rows ?? []) as { id: string; fact_provenance: unknown; compounds_json: unknown }[]) {
       const existing =
         row.fact_provenance && typeof row.fact_provenance === "object" && !Array.isArray(row.fact_provenance)
           ? (row.fact_provenance as Record<string, string>)
           : {};
       const { error: uErr } = await admin
         .from("menu_items")
-        .update({ ...update, fact_provenance: { ...existing, ...provenancePatch } })
+        .update({
+          ...update,
+          ...(hasMinors ? { compounds_json: mergeMinorMg(row.compounds_json, minors) } : {}),
+          fact_provenance: { ...existing, ...provenancePatch },
+        })
         .eq("id", row.id);
       if (uErr) throw new Error(`Failed to apply the fix to the staged item: ${uErr.message}`);
     }
@@ -371,7 +388,8 @@ export async function mirrorIntakeFixToLive(input: {
   const { intakeFixMirrorPatch } = await import("@/lib/pos/intake-fact-review-core");
   const patch = intakeFixMirrorPatch(input.correctedFacts);
   const res: IntakeFixMirrorResult = { items: 0, lot: false, errors: [] };
-  if (Object.keys(patch.item).length === 0) return res;
+  const hasMinors = Object.keys(patch.minors).length > 0;
+  if (Object.keys(patch.item).length === 0 && !hasMinors) return res;
   const admin = createSupabaseAdminClient();
 
   const versions = await admin
@@ -386,20 +404,25 @@ export async function mirrorIntakeFixToLive(input: {
     if (ids.length > 0) {
       const rows = await admin
         .from("menu_items")
-        .select("id, fact_provenance")
+        .select("id, fact_provenance, compounds_json")
         .in("menu_version_id", ids)
         .eq("source_item_id", input.sourceItemId);
       if (rows.error) {
         res.errors.push(`the live card could not be read (${rows.error.message})`);
       } else {
-        for (const row of (rows.data ?? []) as { id: string; fact_provenance: unknown }[]) {
+        for (const row of (rows.data ?? []) as { id: string; fact_provenance: unknown; compounds_json: unknown }[]) {
           const existing =
             row.fact_provenance && typeof row.fact_provenance === "object" && !Array.isArray(row.fact_provenance)
               ? (row.fact_provenance as Record<string, string>)
               : {};
           const { error } = await admin
             .from("menu_items")
-            .update({ ...patch.item, fact_provenance: { ...existing, ...patch.itemProvenance } })
+            .update({
+              ...patch.item,
+              // R29: merge CBG/CBN/CBC mg rows into THIS row's compounds (never a blind overwrite).
+              ...(hasMinors ? { compounds_json: mergeMinorMg(row.compounds_json, patch.minors) } : {}),
+              fact_provenance: { ...existing, ...patch.itemProvenance },
+            })
             .eq("id", row.id);
           if (error) res.errors.push(`a live card was not updated (${error.message})`);
           else res.items += 1;
@@ -408,19 +431,27 @@ export async function mirrorIntakeFixToLive(input: {
     }
   }
 
-  if (input.lotId && Object.keys(patch.lot).length > 0) {
-    const lot = await admin.from("inventory_lots").select("id, fact_provenance").eq("id", input.lotId).maybeSingle();
+  if (input.lotId && (Object.keys(patch.lot).length > 0 || hasMinors)) {
+    const lot = await admin
+      .from("inventory_lots")
+      .select("id, fact_provenance, minor_cannabinoids_json")
+      .eq("id", input.lotId)
+      .maybeSingle();
     if (lot.error) {
       res.errors.push(`the inventory lot could not be read (${lot.error.message})`);
     } else if (lot.data) {
-      const row = lot.data as { id: string; fact_provenance: unknown };
+      const row = lot.data as { id: string; fact_provenance: unknown; minor_cannabinoids_json: unknown };
       const existing =
         row.fact_provenance && typeof row.fact_provenance === "object" && !Array.isArray(row.fact_provenance)
           ? (row.fact_provenance as Record<string, string>)
           : {};
       const { error } = await admin
         .from("inventory_lots")
-        .update({ ...patch.lot, fact_provenance: { ...existing, ...patch.lotProvenance } })
+        .update({
+          ...patch.lot,
+          ...(hasMinors ? { minor_cannabinoids_json: mergeMinorMg(row.minor_cannabinoids_json, patch.minors) } : {}),
+          fact_provenance: { ...existing, ...patch.lotProvenance },
+        })
         .eq("id", row.id);
       if (error) res.errors.push(`the inventory lot was not updated (${error.message})`);
       else res.lot = true;

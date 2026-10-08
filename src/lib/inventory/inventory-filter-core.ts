@@ -40,7 +40,7 @@
  * PURE: no I/O, no React, no server-only. Self-tests registered in the pure
  * runner.
  */
-import { lotThcValue, lotCbdValue } from "@/lib/pos/lot-potency-core";
+import { lotThcFilterValue, lotCbdFilterValue } from "@/lib/pos/lot-potency-core";
 import {
   lotTypeLabel,
   lotStrainTypeLabel,
@@ -453,9 +453,10 @@ export function lotMatchesFilters(lot: FilterableLot, state: InventoryFilterStat
   if (state.hasStrainType && !matchesPresence(lot.strain_type, state.hasStrainType)) return false;
   if (state.labPassed && !matchesTriState(lot.lab?.passed ?? null, state.labPassed)) return false;
 
-  // R15a: COA figure first, else the POS export's (lotThcValue/lotCbdValue).
-  if (!inNumericRange(lotThcValue(lot), state.thcMin, state.thcMax)) return false;
-  if (!inNumericRange(lotCbdValue(lot), state.cbdMin, state.cbdMax)) return false;
+  // R15a: COA figure first, else the POS export's. R29: the *Filter* helpers
+  // keep that percent meaning for mg lots too (the column shows package mg).
+  if (!inNumericRange(lotThcFilterValue(lot), state.thcMin, state.thcMax)) return false;
+  if (!inNumericRange(lotCbdFilterValue(lot), state.cbdMin, state.cbdMax)) return false;
   if (!inNumericRange(lot.on_hand_qty, state.qtyMin, state.qtyMax)) return false;
   if (!inNumericRange(soldQty(lot), state.soldMin, state.soldMax)) return false;
   if (!inNumericRange(lot.unit_cost_minor_units, state.costMin, state.costMax)) return false;

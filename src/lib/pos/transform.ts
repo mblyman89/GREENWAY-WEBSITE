@@ -32,6 +32,8 @@ import { boilerplateDescription } from "@/lib/catalog/golden-record-core";
 // Rules 1.2/2.2/3.1). The KNOWN-INCONSISTENT Total column loses priority to a
 // verified package total.
 import { crossExamineRow, MG_FACT_TYPES, type CrossExamResult } from "@/lib/inventory/fact-extraction-core";
+import { nameRatioParts } from "@/lib/inventory/coa-facts-core";
+import { canonicalRatioFromName } from "@/lib/menu/cannabinoid-profile-core";
 // Type-only: the per-row lot source shape consumed by the compliance lot
 // planner (import-lot-core.ts). No runtime dependency — no import cycle.
 import type { ImportLotSource } from "@/lib/pos/import-lot-core";
@@ -265,7 +267,9 @@ function normalizeWhitespace(value: unknown) { return String(value ?? "").replac
 function comparableName(value: unknown) { return normalizeWhitespace(value).toLowerCase(); }
 function collapseKeyPart(value: unknown) { return comparableName(value).replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, "-"); }
 function stableId(...parts: unknown[]) { return crypto.createHash("sha1").update(parts.map((p) => collapseKeyPart(p)).join("|")).digest("hex").slice(0, 12); }
-function titleCase(value: string) { return value.toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase()).replace(/\bCbd\b/g, "CBD").replace(/\bThc\b/g, "THC"); }
+// R29: every cannabinoid abbreviation stays upper-case ("CBN 1:1:1", not "Cbn") - same list as
+// naming/convention-core; case only, so identity (collapseKeyPart lower-cases) never moves.
+function titleCase(value: string) { return value.toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase()).replace(/\b(Cbd|Thc|Cbg|Cbn|Cbc|Thcv|Cbdv|Thca|Cbda)\b/g, (m) => m.toUpperCase()); }
 function firstNonBlank(...values: unknown[]) { return values.map(normalizeWhitespace).find(Boolean) ?? ""; }
 function toNumber(value: unknown): number | null { const s = normalizeWhitespace(value).replace(/[$,]/g, ""); if (!s) return null; const n = Number(s); return Number.isFinite(n) ? n : null; }
 function toBool(value: unknown): boolean { return /^(true|t|yes|y|1)$/i.test(normalizeWhitespace(value)); }
@@ -1137,7 +1141,10 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
       factProvenance.mg_per_serving = exam.mgPerServing.source;
     }
   }
-  const ratioLabel = exam?.ratioLabel?.value ?? null;
+  // R29: one canonical ratio text on every write path ("2:2:2:1 CBG:CBC:CBD:THC"),
+  // the same canonicaliser the transfer intake and the reprocess sweep use.
+  const ratioText = firstAvailable?.productName ?? group.displayName;
+  const ratioLabel = exam?.ratioLabel?.value ? canonicalRatioFromName(exam.ratioLabel.value, nameRatioParts(ratioText, exam.ratioLabel.value)) : null;
   if (ratioLabel) factProvenance.ratio_label = exam!.ratioLabel!.source;
 
   // SLICE 56: net weight / net volume as structured fields, from the package
@@ -1559,6 +1566,7 @@ export function __runTransformCoreTests(): void {
     ok(stripVariantNoise("Blaze POG - 6oz Can - 100mg THC", "", "Beverage", true) === "Blaze Pog Can 100mg THC", "dose mode: package oz stripped, dose mg kept");
     ok(stripVariantNoise("Rainbow Chews 100 MG 10pk", "", "Gummies", true) === "Rainbow Chews 100mg", "dose mode: '100 MG' canonicalizes to '100mg', pack token still stripped");
     ok(stripVariantNoise("Bite_ind_peanut_butter_chip_1:1_10pk", "", "Edible", true) === "Bite Ind Peanut Butter Chip 1:1", "dose mode: ratio still preserved, pack stripped");
+    ok(stripVariantNoise("const hrg cbn:cbg:thc 1:1:1 10pk", "", "Edible", true) === "Const Hrg CBN:CBG:THC 1:1:1", "R29: cannabinoid names upper-case (CBN, not Cbn)");
     ok(stripVariantNoise("Fairwinds - Healing Balm 300mg", "Fairwinds", "Topical", true) === "Healing Balm 300mg", "dose mode: brand strips, dose stays");
     // Default (non-dose) mode is byte-for-byte UNCHANGED for flower-family names.
     ok(stripVariantNoise("Fairwinds - Healing Balm 300mg", "Fairwinds", "Topical") === "Healing Balm", "non-dose mode still strips mg (unchanged default)");

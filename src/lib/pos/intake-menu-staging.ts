@@ -562,6 +562,11 @@ export async function stageIntakeMenuVersionForManifest(
             net_weight_grams: facts.net_weight_grams,
             net_volume_ml: facts.net_volume_ml,
             fact_provenance: facts.fact_provenance,
+            // R29: CBG / CBN / CBC package mg on the golden record - only when
+            // the bundle has some (never wipes minors a COA or person set).
+            ...(facts.minor_cannabinoids_json && facts.minor_cannabinoids_json.length > 0
+              ? { minor_cannabinoids_json: facts.minor_cannabinoids_json }
+              : {}),
           })
           .eq("id", lotId);
         if (lfErr) {

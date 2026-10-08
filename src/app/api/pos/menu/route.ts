@@ -29,6 +29,7 @@ import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { getPosCashRoundingConfig } from "@/lib/pos/cash-rounding-store";
 import { getPosScanRequiredConfig } from "@/lib/pos/scan-required-store";
 import { trimDescription } from "@/lib/pos/product-info-core";
+import { isRatioLedCategory, resolvePackageMg } from "@/lib/menu/cannabinoid-profile-core";
 import { gramsFromVariantLabel } from "@/lib/pos/variant-grams-core";
 // SLICE L4 — label → millilitres, the fallback when a card predates the L3
 // intake volume plumbing.
@@ -352,6 +353,17 @@ async function handleGet(req: NextRequest): Promise<NextResponse> {
         cbd: item.cbd,
         terpenes: item.terpenes?.length ? item.terpenes : undefined,
         description: trimDescription(item.description) || undefined,
+        // R29 - ratio products carry their resolved package profile so the
+        // register's info card shows "THC 55 mg · CBD 100 mg · CBG 100 mg",
+        // never the pre-R29 "0.12mg" display string. Omitted elsewhere.
+        ...(isRatioLedCategory(item.category)
+          ? {
+              ratioLabel: item.ratioLabel ?? null,
+              servingsPerPack: item.servingsPerPack ?? null,
+              mgPerServing: item.mgPerServing ?? null,
+              cannabinoidsMg: resolvePackageMg(item),
+            }
+          : {}),
       });
     }
   }

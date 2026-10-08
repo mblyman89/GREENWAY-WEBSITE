@@ -13,7 +13,13 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { cardTypeLabel } from "@/lib/menu/card-type-core";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
-import { cardCannabinoids, deriveNetWeightLine, showProfilePill } from "@/lib/menu/card-cannabinoids";
+import {
+  cardCannabinoids,
+  cardRatioSlot,
+  cardServingLine,
+  deriveNetWeightLine,
+  showProfilePillWithSlot,
+} from "@/lib/menu/card-cannabinoids";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
 // SLICE 95: vendor-pure "More from" selection + honest heading scope.
 import { selectRelatedItems, type RelatedScope } from "@/lib/menu/related-products-core";
@@ -136,6 +142,19 @@ function displayStrain(item: GreenwayMenuItem): string | null {
   return strainTypeLabel(item.strainType);
 }
 
+/**
+ * R29: same slot rule as the menu card (ProductCardVisual strainSlot) - a
+ * ratio product shows its written ratio / cannabinoids in the strain chip, so
+ * the card and the page a shopper clicks through to always agree.
+ */
+function strainSlot(item: GreenwayMenuItem): { text: string; title?: string; ratio: boolean } | null {
+  if (isNonCannabisItem(item)) return null;
+  const slot = cardRatioSlot(item);
+  if (slot.kind !== "strain") return { text: slot.text, title: slot.title, ratio: true };
+  const strain = displayStrain(item);
+  return strain ? { text: strain, ratio: false } : null;
+}
+
 function categoryLabel(item: GreenwayMenuItem) {
   return categoryAliases[item.category] ?? formatWebsiteCategory(item.category);
 }
@@ -213,11 +232,17 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
         <div className="relative z-10 grid h-[5.35rem] w-[5.35rem] place-items-center rounded-full bg-black text-xl font-black uppercase text-white shadow-xl shadow-black/30">{initials}</div>
         {/* SLICE 43: validated strain only — the category already prints in the
             top ribbon, so an unknown strain hides this ribbon entirely. */}
-        {displayStrain(item) ? (
-          <div className="relative z-10 w-full rounded-md bg-black/16 px-2 py-1.5 text-center text-[0.68rem] font-black uppercase leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]">
-            {displayStrain(item)} Formula
-          </div>
-        ) : null}
+        {(() => {
+          const slot = strainSlot(item);
+          return slot ? (
+            <div
+              title={slot.title}
+              className="relative z-10 w-full rounded-md bg-black/16 px-2 py-1.5 text-center text-[0.68rem] font-black uppercase leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]"
+            >
+              {slot.ratio ? slot.text : `${slot.text} Formula`}
+            </div>
+          ) : null;
+        })()}
       </div>
     </div>
   );
@@ -390,6 +415,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // CBD). Keeps the detail page consistent with the product card.
   const detailCannabinoids = showCannabinoids ? cardCannabinoids(item) : null;
   const detailNetWeightLine = showCannabinoids ? deriveNetWeightLine(item) : null;
+  // R29: ratio slot + per-serving breakdown, identical to the menu card.
+  const detailStrainSlot = strainSlot(item);
+  const detailRatioSlot = showCannabinoids ? cardRatioSlot(item) : ({ kind: "strain" } as const);
+  const detailServingLine = showCannabinoids ? cardServingLine(item) : null;
 
   // Compliance-safe experiential + sensory descriptors from the KB (may be empty).
   const kbAroma = knowledge?.aromaNotes ?? [];
@@ -467,9 +496,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 <span className="inline-flex min-h-7 items-center bg-[var(--greenway)] px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
                   Greenway Merch
                 </span>
-              ) : displayStrain(item) ? (
-                <span className="inline-flex min-h-7 items-center px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-white" style={{ backgroundColor: tone.pill }}>
-                  {displayStrain(item)}
+              ) : detailStrainSlot ? (
+                <span
+                  title={detailStrainSlot.title}
+                  data-slot={detailStrainSlot.ratio ? "ratio" : "strain"}
+                  className="inline-flex min-h-7 items-center px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-white"
+                  style={{ backgroundColor: tone.pill }}
+                >
+                  {detailStrainSlot.text}
                 </span>
               ) : null}
               {/* SLICE 18C: the DOH pill on the DETAIL page.
@@ -505,7 +539,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               ))}
               {/* SLICE 66 (owner C3): pill only when informative — a lone
                   "THC" tag is suppressed by showProfilePill. */}
-              {showCannabinoids && detailCannabinoids?.profile && showProfilePill(detailCannabinoids.profile) ? (
+              {showCannabinoids && detailCannabinoids?.profile && showProfilePillWithSlot(detailCannabinoids.profile, detailRatioSlot) ? (
                 <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[0.66rem] font-black uppercase tracking-[0.1em] text-white/90">
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--greenway)]" aria-hidden="true" />
                   {detailCannabinoids.profile.kind === "thc"
@@ -524,6 +558,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     </span>
                   ))
                 : null}
+              {showCannabinoids && detailServingLine ? (
+                <span data-slot="servings" className="inline-flex min-h-7 items-center bg-black/40 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-[0.06em] text-white/80">
+                  {detailServingLine}
+                </span>
+              ) : null}
               {showCannabinoids && detailNetWeightLine ? (
                 <span className="inline-flex min-h-7 items-center bg-black/40 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-[0.06em] text-white/80">
                   {detailNetWeightLine}

@@ -124,7 +124,9 @@ export function lotStrainLabel(lot: Pick<LotTableFields, "strain_name">): string
 
 /**
  * SLICE 61 — potency label for the back-office THC/CBD columns, honest about
- * units. The lab *_pct columns hold the raw manifest NUMBERS, but for mg-dosed
+ * units. R29: use it ONLY for POS-export / package figures (mg for mg-dosed
+ * types); LAB figures are always percent - use lotLabPercentLabel. The
+ * original SLICE 61 note follows. The lab *_pct columns hold the raw manifest NUMBERS, but for mg-dosed
  * LCB inventory types ("Solid Edible", "Liquid Edible", "Tincture", "Topical
  * Ointment") those numbers are package-total MILLIGRAMS, not percentages —
  * rendering them with a "%" suffix produced the owner-reported "3000%"
@@ -148,6 +150,19 @@ export function lotPotencyLabel(
  * Full vocabulary: the big three plus the menu pipeline's hyphenated
  * hybrids and CBD ("indica-hybrid" → "Indica Hybrid", "cbd" → "CBD").
  */
+/**
+ * R29 - a LAB RESULT figure. The lab_results *_pct columns are always percent
+ * of weight (the WCIA lab result schema reports every cannabinoid with uom
+ * "pct"; the real transfer fixture is 96 of 96 "pct"), whatever the product
+ * type. Before R29 the lot page printed them through lotPotencyLabel, so a
+ * bytes gummy showed "Total THC 0.1206 mg". Only lotPotencyLabel's callers
+ * that hold an mg-or-percent POS / package figure keep using it.
+ */
+export function lotLabPercentLabel(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(Number(value))) return EM_DASH;
+  return `${Number(Number(value).toFixed(4))}%`;
+}
+
 export function lotStrainTypeLabel(lot: { strain_type?: string | null }): string {
   const t = String(lot.strain_type ?? "").trim().toLowerCase();
   if (t === "indica" || t === "sativa" || t === "hybrid") return t.charAt(0).toUpperCase() + t.slice(1);
@@ -243,6 +258,9 @@ export function __runLotTableCoreTests(): void {
   ok(lotPotencyLabel(500, { inventory_type: "Tincture" }) === "500 mg", "potency: tincture shows mg");
   ok(lotPotencyLabel(null, { inventory_type: "Solid Edible" }) === EM_DASH, "potency: null yields em-dash");
   ok(lotPotencyLabel(22, { inventory_type: null }) === "22%", "potency: unknown type defaults percent");
+  // R29: lab figures are percent whatever the product type.
+  ok(lotLabPercentLabel(0.1206) === "0.1206%", "R29: edible lab THC is a percent, never \"0.1206 mg\"");
+  ok(lotLabPercentLabel(24.11349) === "24.1135%" && lotLabPercentLabel(null) === EM_DASH && lotLabPercentLabel(Number.NaN) === EM_DASH, "R29: lab label rounding + blanks");
 
   // Strain type (SLICE 54): own column, display title-cased, never derived.
   ok(lotStrainTypeLabel({ strain_type: "indica" }) === "Indica", "strain type: indica title-cased");

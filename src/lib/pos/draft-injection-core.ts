@@ -31,7 +31,8 @@ import {
   extractNameFacts,
   MG_FACT_TYPES,
 } from "@/lib/inventory/fact-extraction-core";
-import { mergeCoaIntoExam, type CoaDraftFacts } from "@/lib/inventory/coa-facts-core";
+import { mergeCoaIntoExam, nameRatioParts, type CoaDraftFacts } from "@/lib/inventory/coa-facts-core";
+import { canonicalRatioFromName } from "@/lib/menu/cannabinoid-profile-core";
 import {
   deriveNetVolumeMl,
   deriveNetWeightGrams,
@@ -267,11 +268,20 @@ export function examineDraftFacts(
 ): ReturnType<typeof crossExamineRow> | null {
   const invType = (d.inventory_type ?? "").trim();
   if (!MG_FACT_TYPES.has(invType)) return null;
+  // R29: the intake draft's THC/CBD numbers are LAB PERCENTS (the WCIA lab
+  // result schema reports every cannabinoid metric with uom "pct"; all 96
+  // potency rows in the real transfer fixture are "pct"; catalog-drafts.ts
+  // copies lab_results.*_pct straight in). They are percent-of-weight, never
+  // milligrams, so they must NOT stand in for the Cultivera workbook's mg
+  // columns here: measured before R29, "Gummies - 100mg THC" with a 0.5 %
+  // lab figure came out as a VERIFIED 0.5 mg per serving and 200 servings,
+  // and the 0.12 % on a bytes 2:2:2:1 gummy reached the menu as "0.12mg".
+  // The name, the lab certificate (R28) and a person supply the mg facts.
   const exam = crossExamineRow({
     productText: d.name,
     inventoryType: invType,
-    thcColumn: d.total_thc_pct ?? d.thc_pct ?? null,
-    cbdColumn: d.cbd_pct ?? null,
+    thcColumn: null,
+    cbdColumn: null,
   });
   return mergeCoaIntoExam(exam, coaFacts ?? null);
 }
@@ -388,10 +398,14 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       if (r.capped) capNote(kind, raw, r.value);
       return r.value;
     };
-    let thcPct = capped("THC", d.total_thc_pct ?? d.thc_pct);
-    let cbdPct = capped("CBD", d.cbd_pct);
+    // R29: in mg mode the lab PERCENTS are never printed (see examineDraftFacts):
+    // the THC/CBD display and compound rows start empty and are filled only by
+    // a verified package total below. Percent-mode products are unchanged.
+    const labPctSetAside = unit === "mg" && [d.total_thc_pct, d.thc_pct, d.cbd_pct].some((v) => typeof v === "number" && v > 0);
+    let thcPct = unit === "mg" ? null : capped("THC", d.total_thc_pct ?? d.thc_pct);
+    let cbdPct = unit === "mg" ? null : capped("CBD", d.cbd_pct);
     const compounds: PlannedInjectedItem["compounds_json"] = [];
-    for (const [k, v] of Object.entries(d.potency_json ?? {})) {
+    for (const [k, v] of Object.entries(unit === "mg" ? {} : (d.potency_json ?? {}))) {
       const type = k.trim().toLowerCase();
       if (COMPOUND_TYPES.has(type) && typeof v === "number" && Number.isFinite(v)) {
         const cv = capIntakePotency(v, unit, websiteCategory);
@@ -459,18 +473,21 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
           if (cv.capped) capNote("THC", exam.packageThcMg.value, cv.value);
           packageThcMg = cv.value;
           factProvenance.package_thc_mg = exam.packageThcMg.source;
-          if (thcPct !== null && thcPct !== cv.value) {
+          // R29: the set-aside source is the lab PERCENT (mg mode never
+          // prints it); disclose it as what it is - a percent of weight.
+          const labThcPct = d.total_thc_pct ?? d.thc_pct ?? null;
+          if (labThcPct !== null && labThcPct > 0) {
             diagnostics.push({
               severity: "info",
               code: "thc_package_total_override",
               message:
-                "Displayed THC now uses the verified package total; the inconsistent source value was set aside.",
+                "Displayed THC now uses the verified package total; the lab percent (percent of weight, not milligrams) was set aside.",
               context: {
                 draft_id: d.id,
                 pos_product_key: key,
                 productName: d.name,
                 inventoryType: invType,
-                totalColumnDisplay: formatIntakePotency(thcPct, unit),
+                totalColumnDisplay: formatIntakePotency(Number(labThcPct.toFixed(4)), "%"),
                 verifiedPackageTotal: formatIntakePotency(cv.value, unit),
                 how: exam.packageThcMg.note,
               },
@@ -493,10 +510,10 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
         // R28: the THC/CBD compound rows follow the verified package totals
         // (the potency_json values are lab PERCENTS; in mg mode they would
         // otherwise print as "0.12 mg").
-        for (const c of compounds) {
-          if (c.type === "thc" && packageThcMg !== null) c.value = String(Number(packageThcMg.toFixed(2)));
-          if (c.type === "cbd" && packageCbdMg !== null) c.value = String(Number(packageCbdMg.toFixed(2)));
-        }
+        // R29: mg mode starts with NO compound rows (the lab percents are set
+        // aside), so the verified package totals ARE the THC/CBD rows.
+        if (packageThcMg !== null) compounds.push({ type: "thc", value: String(Number(packageThcMg.toFixed(2))), unit: "mg" });
+        if (packageCbdMg !== null) compounds.push({ type: "cbd", value: String(Number(packageCbdMg.toFixed(2))), unit: "mg" });
         if (enrich.coaFacts?.usable && enrich.coaFacts.cbdNotDetected) {
           for (let i = compounds.length - 1; i >= 0; i--) if (compounds[i].type === "cbd") compounds.splice(i, 1);
         }
@@ -518,8 +535,30 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
           compounds.push({ type, value: String(Number(minor.mg.toFixed(2))), unit: "mg" });
         }
       }
+      if (labPctSetAside && packageThcMg === null) {
+        // R29: say WHY the card carries no THC figure yet - the lab numbers
+        // are percent-of-weight, and printing them as mg is what showed
+        // "0.12mg" on a 55 mg gummy pack. Product facts / the COA fill it.
+        diagnostics.push({
+          severity: "info",
+          code: "lab_percent_not_mg",
+          message: `"${d.name}": the lab result is in percent of weight, not milligrams, so no THC/CBD mg is shown until the package totals are verified (lab certificate or Product facts).`,
+          context: {
+            draft_id: d.id,
+            pos_product_key: key,
+            productName: d.name,
+            labTotalThcPct: d.total_thc_pct ?? d.thc_pct ?? null,
+            labCbdPct: d.cbd_pct ?? null,
+          },
+        });
+      }
       if (exam.ratioLabel?.value) {
-        ratioLabel = exam.ratioLabel.value;
+        // R29: ONE canonical ratio text for every surface - the name's
+        // cannabinoid list joined to the numbers written beside it
+        // ("CBG:CBC:CBD:THC (2:2:2:1)" -> "2:2:2:1 CBG:CBC:CBD:THC"). A list
+        // and a number run of different lengths keeps the raw text (a person
+        // sees it on Product facts) rather than a repaired guess.
+        ratioLabel = canonicalRatioFromName(exam.ratioLabel.value, nameRatioParts(d.name, exam.ratioLabel.value));
         factProvenance.ratio_label = exam.ratioLabel.source;
       }
 
@@ -937,36 +976,56 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
 
   // --- SLICE 61: mg-aware potency (owner bug "THC: 3000%" on topicals) ---
 
-  // A 100 mg drink: unit derives from the edible-liquid category → "100mg".
+  // R29 (supersedes the SLICE 61 drink/topical pins): the intake draft's
+  // THC/CBD numbers are LAB PERCENTS (WCIA uom "pct"), so a mg-dosed product
+  // never prints them - "100" on a drink lab line is 100 % of weight, not
+  // 100 mg. SLICE 61 assumed they could be mg; the real transfer fixture
+  // (96 of 96 rows "pct") and the R28 bytes gummies ("0.12mg" on a 55 mg
+  // pack) proved otherwise. The mg comes from the name / COA / a person.
   {
     const p = plan(
-      [draft({ total_thc_pct: 100, thc_pct: null, cbd_pct: null, potency_json: { thc: 100 }, inventory_type: "Liquid Edible" })],
+      [draft({ name: "Drink - Lemon", total_thc_pct: 100, thc_pct: null, cbd_pct: null, potency_json: { thc: 100 }, inventory_type: "Liquid Edible" })],
       new Map([["d1", enrich({ websiteCategory: "edible-liquid" })]]),
     );
     const it = p.items[0];
-    assert(it.thc === "100mg", "mg drink displays 100mg (not 100%)");
-    assert(it.total_thc_json?.unit === "mg", "total_thc_json carries mg unit");
-    assert(it.compounds_json[0]?.unit === "mg", "compounds carry mg unit");
+    assert(it.thc === null, "R29: lab percent never printed as mg (was \"100mg\")");
+    assert(it.total_thc_json === null, "R29: no total_thc_json from a percent");
+    assert(it.compounds_json.length === 0, "R29: no mg compound rows from potency_json percents");
     assert(it.cbd === null, "no CBD value -> no CBD display");
+    assert(p.diagnostics.some((d) => d.code === "lab_percent_not_mg" && d.severity === "info"), "R29: set-aside disclosed");
   }
 
-  // A 3000 mg topical: under the 5000 mg topical ceiling → shown as mg, uncapped.
+  // A drink whose NAME states the dose: the name fills the mg, unit mg.
+  {
+    const p = plan(
+      [draft({ name: "Drink - 10 x 10mg - 100mg THC", total_thc_pct: 0.02, thc_pct: null, cbd_pct: null, potency_json: { thc: 0.02 }, inventory_type: "Liquid Edible" })],
+      new Map([["d1", enrich({ websiteCategory: "edible-liquid" })]]),
+    );
+    const it = p.items[0];
+    assert(it.thc === "100mg" && it.total_thc_json?.unit === "mg", "verified name total shown as mg");
+    assert(it.compounds_json.length === 1 && it.compounds_json[0].type === "thc" && it.compounds_json[0].value === "100" && it.compounds_json[0].unit === "mg", "THC compound = the package total");
+    assert(it.servings_per_pack === 10 && it.mg_per_serving === 10, "servings x dose persisted");
+    assert(!p.diagnostics.some((d) => d.code === "lab_percent_not_mg"), "no set-aside note once the mg is verified");
+    assert(p.diagnostics.some((d) => d.code === "thc_package_total_override" && String(d.context?.totalColumnDisplay) === "0.02%"), "override names the lab figure as a PERCENT");
+  }
+
+  // A topical with a lab figure of 3000: never a "3000mg" (or "3000%") card.
   {
     const p = plan(
       [draft({ total_thc_pct: 3000, thc_pct: null, potency_json: null, inventory_type: "Topical Ointment" })],
       new Map([["d1", enrich({ websiteCategory: "topical" })]]),
     );
-    assert(p.items[0].thc === "3000mg", "3000mg topical honest (was 3000%)");
-    assert(!p.diagnostics.some((d) => d.code === "draft_inject_potency_capped"), "sane mg not capped");
+    assert(p.items[0].thc === null, "R29: topical lab figure not printed as mg");
+    assert(!p.diagnostics.some((d) => d.code === "draft_inject_potency_capped"), "nothing to cap when nothing is printed");
   }
 
-  // The LCB inventory type alone flips to mg when the category is dose-blind.
+  // The LCB inventory type still decides the unit when the name fills a value.
   {
     const p = plan(
-      [draft({ total_thc_pct: 10, thc_pct: null, potency_json: null, inventory_type: "Solid Edible" })],
+      [draft({ name: "Gummy - Rainbow - 10 x 10mg - 100mg THC", total_thc_pct: 10, thc_pct: null, potency_json: null, inventory_type: "Solid Edible" })],
       new Map([["d1", enrich({ websiteCategory: "edible-solid" })]]),
     );
-    assert(p.items[0].total_thc_json?.unit === "mg", "Solid Edible type -> mg");
+    assert(p.items[0].total_thc_json?.unit === "mg" && p.items[0].total_thc_json?.value === "100", "Solid Edible type -> mg");
   }
 
   // A corrupt 3000 "%" on flower is hard-capped at 100 with a warning.
@@ -993,9 +1052,13 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
 
   // --- SLICE 62: word-by-word fact extraction at intake ---
 
-  // A fully reconcilable edible: name facts verified by column arithmetic —
-  // package total, servings, per-serving dose, minor cannabinoid — and the
-  // verified package total OVERRIDES the raw per-serving column value.
+  // R29 (supersedes the SLICE 62 Const HRG pin on THIS path): the name
+  // "CBN 1:1:1 ... 10 Pack 300mg" only reconciles against a per-serving mg
+  // COLUMN. The Cultivera workbook has one (fact-extraction-core self-test
+  // "Const HRG" keeps verifying it there); an intake draft only has lab
+  // PERCENTS, and reading "10 %" as "10 mg per serving" was the guess that
+  // printed 0.12 mg on the bytes gummies. So here nothing is invented: the
+  // ratio is kept, the pack count is kept, the mg goes to a person.
   {
     const p = plan(
       [
@@ -1011,25 +1074,41 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
       new Map([["d1", enrich({ websiteCategory: "edible-solid" })]]),
     );
     const it = p.items[0];
-    assert(it.package_thc_mg === 100, "verified package THC 100mg persisted");
-    assert(it.servings_per_pack === 10, "verified servings 10 persisted");
-    assert(it.mg_per_serving === 10, "verified 10mg per serving persisted");
-    assert(it.package_cbd_mg === 100, "verified package CBD 100mg persisted");
+    assert(it.package_thc_mg === null && it.package_cbd_mg === null, "R29: lab percents never verify a package total");
+    assert(it.thc === null && it.cbd === null, "R29: no mg printed from percents");
     assert(it.ratio_label === "1:1:1", "ratio label extracted from the name");
-    assert(it.thc === "100mg", "verified package total overrides the 10 column value");
+    assert(!it.compounds_json.some((c) => c.unit !== "mg"), "no percent rows in mg mode");
+    assert(p.diagnostics.some((d) => d.code === "fact_extraction_review"), "R29: unreconciled mg goes to a person");
+    assert(!p.diagnostics.some((d) => d.code === "thc_package_total_override"), "nothing overridden");
+  }
+
+  // The SAME product once the lab certificate is read (R28 COA facts): the
+  // per-serving mg is real, so the package totals and CBN verify.
+  {
+    const coa = {
+      usable: true,
+      servingWeightG: 5,
+      thcMgPerServing: { value: 10, confidence: "verified", note: "COA" },
+      cbdMgPerServing: { value: 10, confidence: "verified", note: "COA" },
+      cbdNotDetected: false,
+      servingsPerPack: 10,
+      packageThcMg: { value: 100, confidence: "verified", note: "COA" },
+      packageCbdMg: { value: 100, confidence: "verified", note: "COA" },
+      minors: [{ cannabinoid: "CBN", mgPerServing: 10, packageMg: 100 }],
+      ratioCheck: null,
+      reasons: [],
+      notes: [],
+    } satisfies CoaDraftFacts;
+    const p = plan(
+      [draft({ name: "Const HRG CBN 1:1:1 Blueberry 10 Pack 300mg", total_thc_pct: 10, thc_pct: null, cbd_pct: 9.1, potency_json: null, inventory_type: "Solid Edible" })],
+      new Map([["d1", enrich({ websiteCategory: "edible-solid", coaFacts: coa })]]),
+    );
+    const it = p.items[0];
+    assert(it.package_thc_mg === 100 && it.thc === "100mg", "COA: package THC 100mg");
+    assert(it.package_cbd_mg === 100 && it.cbd === "100mg", "COA: package CBD 100mg");
+    assert(it.servings_per_pack === 10 && it.mg_per_serving === 10, "COA: 10 x 10mg");
+    assert(it.compounds_json.some((c) => c.type === "cbn" && c.value === "100" && c.unit === "mg"), "COA: CBN 100mg surfaced");
     assert(typeof it.fact_provenance.package_thc_mg === "string", "provenance recorded");
-    assert(
-      it.compounds_json.some((c) => c.type === "cbn" && c.value === "100" && c.unit === "mg"),
-      "verified minor cannabinoid CBN 100mg surfaced",
-    );
-    assert(
-      p.diagnostics.some((d) => d.code === "thc_package_total_override"),
-      "override disclosed via diagnostic",
-    );
-    assert(
-      !p.diagnostics.some((d) => d.code === "fact_extraction_review"),
-      "fully reconciled row does NOT feed the review queue",
-    );
   }
 
   // An UNVERIFIABLE row (zero potency columns): the stated 100mg is only
