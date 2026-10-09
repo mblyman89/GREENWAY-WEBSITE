@@ -87,6 +87,7 @@ export function ProductFactsPanel({
   returnTo,
   title,
   lab,
+  category,
 }: {
   draftId: string;
   manifestId: string;
