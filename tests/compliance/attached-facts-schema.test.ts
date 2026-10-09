@@ -369,9 +369,26 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
       // its OWN terpene pills. Read-only; pinned by the R33 test below.
       .filter((f) => !f.endsWith(path.join("menu", "product-facts-overlay-core.ts")))
       .filter((f) => !f.endsWith(path.join("menu", "product-facts-overlay-server.ts")))
+      // R35 #6: the one-time effects/aroma backfill READS attached_facts of
+      // APPROVED drafts (fill-only into menu_items). Read-only; pinned below.
+      .filter((f) => !f.endsWith(path.join("pos", "menu-sensory-backfill-server.ts")))
       .filter((f) => /attached_facts|product_fact_provenance/.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(ROOT, f));
     expect(hits).toEqual([]);
+  });
+
+  it("R35 #6: the sensory backfill only READS attached_facts of APPROVED drafts (named select; writes only menu_items, fill-only; never the provenance table)", () => {
+    const src = readFileSync(path.join(ROOT, "src/lib/pos/menu-sensory-backfill-server.ts"), "utf8");
+    expect(src).toContain('.select("pos_product_key, attached_facts, updated_at")');
+    expect(src).toContain('.eq("status", "approved")');
+    expect(src).not.toMatch(/product_fact_provenance/);
+    // The only write is the fill-only menu_items update.
+    expect((src.match(/\.update\(/g) ?? []).length).toBe(1);
+    // PostgREST writes (Set.delete(id) on the local id set is not a write).
+    expect(src).not.toMatch(/\.(insert|upsert)\(|\.delete\(\s*\)/);
+    expect(src).toContain(".is(u.column, null)");
+    const writes = [...src.matchAll(/\.from\("([a-z_]+)"\)\s*\.update/g)].map((m) => m[1]);
+    expect(writes).toEqual(["menu_items"]);
   });
 
   it("R33: the product facts overlay only READS attached_facts->terpenes of APPROVED drafts (named select; no write, no provenance table)", () => {
