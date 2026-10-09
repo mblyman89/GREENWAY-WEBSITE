@@ -364,9 +364,27 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
       // through the core's constants only. Pinned by the R30 test below.
       .filter((f) => !f.endsWith(path.join("catalog", "lab-facts-attach.ts")))
       .filter((f) => !f.endsWith(path.join("catalog", "lab-facts-attach-core.ts")))
+      // R33: the website's product facts overlay READS the approved draft's
+      // counted lab terpenes (attached_facts->terpenes) so every product shows
+      // its OWN terpene pills. Read-only; pinned by the R33 test below.
+      .filter((f) => !f.endsWith(path.join("menu", "product-facts-overlay-core.ts")))
+      .filter((f) => !f.endsWith(path.join("menu", "product-facts-overlay-server.ts")))
       .filter((f) => /attached_facts|product_fact_provenance/.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(ROOT, f));
     expect(hits).toEqual([]);
+  });
+
+  it("R33: the product facts overlay only READS attached_facts->terpenes of APPROVED drafts (named select; no write, no provenance table)", () => {
+    const server = readFileSync(path.join(ROOT, "src/lib/menu/product-facts-overlay-server.ts"), "utf8");
+    const core = readFileSync(path.join(ROOT, "src/lib/menu/product-facts-overlay-core.ts"), "utf8");
+    expect(server).toContain('.select("id, pos_product_key, terpenes:attached_facts->terpenes, updated_at")');
+    expect(server).toMatch(/\.eq\("status", "approved"\)/);
+    for (const src of [server, core]) {
+      expect(src).not.toMatch(/\.(insert|update|upsert|delete|rpc)\(/);
+      expect(src).not.toMatch(/product_fact_provenance|PROVENANCE_TABLE/);
+    }
+    // Only COUNTED facts may reach a customer (record source, or banded >= 90%).
+    expect(core).toContain('import { countedAttachedFact } from "@/lib/catalog/golden-record-core";');
   });
 
   it("R30: the lab attach names the 0235 table/columns only through the core constants (never a literal), tolerates a missing 0235", () => {

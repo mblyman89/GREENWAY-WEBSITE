@@ -36,6 +36,11 @@ import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core
 // read as 224 g on the discount side, granting a full-ounce tier to an
 // eighth). Pure: no I/O.
 import { __runWeightLabelTests } from "../../src/lib/compliance/weight-label-core";
+// R33: lot strain/details push to the website, product's own lab terpenes, PDP size.
+import { __runLotStrainPropagationCoreTests } from "../../src/lib/inventory/lot-strain-propagation-core";
+import { __runLotDetailsPropagationCoreTests } from "../../src/lib/inventory/lot-details-propagation-core";
+import { __runProductFactsOverlayCoreTests } from "../../src/lib/menu/product-facts-overlay-core";
+import { __runPdpSizeCoreTests } from "../../src/lib/menu/pdp-size-core";
 // R32: truthful price fine print, onboarding recall (type + strain), inventory onboarding join.
 import { __runPriceExplainCoreTests } from "../../src/lib/inventory/price-explain-core";
 import { __runOnboardingRecallCoreTests } from "../../src/lib/inventory/onboarding-recall-core";
@@ -2098,6 +2103,10 @@ __runLiquidVolumeTests();
   assertRan("price-explain-core", __runPriceExplainCoreTests(), 66); // R32: 2x cost + tax, rounded up — explained, dynamic
   assertRan("onboarding-recall-core", __runOnboardingRecallCoreTests(), 59); // R32: remembered type/strain/shelf by identity
   assertRan("lot-onboarding-core", __runLotOnboardingCoreTests(), 35); // R32: inventory table onboarding join
+  assertRan("lot-strain-propagation-core", __runLotStrainPropagationCoreTests(), 39); // R33: lot strain type reaches the website (reviewer lock)
+  assertRan("lot-details-propagation-core", __runLotDetailsPropagationCoreTests(), 38); // R33: vendor/brand/strain name reach the website
+  assertRan("product-facts-overlay-core", __runProductFactsOverlayCoreTests(), 33); // R33: own lab terpenes + reviewer strain on the menu
+  assertRan("pdp-size-core", __runPdpSizeCoreTests(), 39); // R33: size line + JSON-LD weight + single-size panel
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
