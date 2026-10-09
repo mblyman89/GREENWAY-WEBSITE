@@ -107,8 +107,8 @@ afterEach(() => {
 describe("S19 pure cores", () => {
   it("self-tests pass with exact counts (a deleted check turns this red)", () => {
     expect(__runVendorIdentityCoreTests().passed).toBe(74);
-    expect(__runIntakeMasteringCoreTests().passed).toBe(212); // R29: +6 (lot-bundle minors x4, cannabinoid upper-case x2)
-    expect(__runIntakeMenuStagingCoreTests().passed).toBe(74);
+    expect(__runIntakeMasteringCoreTests().passed).toBe(218); // R29: +6 (lot-bundle minors x4, cannabinoid upper-case x2); R35 #6: +6 (effects/aroma rollup)
+    expect(__runIntakeMenuStagingCoreTests().passed).toBe(77); // R35 #6: +3 (effects/aroma carried)
     expect(__runRestockPreviewViewTests().passed).toBe(11);
   });
   it("both self-test suites are registered in the pure runner (CI runs them)", () => {
