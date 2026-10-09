@@ -123,6 +123,11 @@ do $$ begin
   assert public.inbound_manifest_identity('   ', 'X') is null;
   assert public.inbound_manifest_identity(null, 'X') is null;
   assert public.inbound_manifest_identity('A', null) = 'A|';
+  -- R36 parity with JS \s (measured: plain PG \s misses U+00A0 under C.UTF-8)
+  assert public.inbound_manifest_identity(e'wa\u00a0123', e'acme\u3000farms\ufeff') = 'WA 123|ACME FARMS';
+  assert public.inbound_manifest_identity(e'\u2028 x \t\n', e'v\u202f\u205fw') = 'X|V W';
+  -- zero-width space is NOT whitespace in JS either - must be kept
+  assert public.inbound_manifest_identity(e'a\u200bb', 'v') = e'A\u200bB|V';
   raise notice 'PASS identity normalization';
 end $$;
 

@@ -43,6 +43,8 @@ run already-dismissed "if lower(coalesce(v_dup.status, '')) = 'dismissed' then" 
 run drafts "update public.catalog_product_drafts set status = 'dismissed'" "update public.catalog_product_drafts set status = 'draft'"
 run event-keep "(p_keep, 'duplicate_merged'," "(p_dup, 'duplicate_merged',"
 run grant "revoke all on function public.dismiss_duplicate_manifest(uuid, uuid, uuid, text) from public, anon, authenticated;" "grant execute on function public.dismiss_duplicate_manifest(uuid, uuid, uuid, text) to authenticated;"
+run ws-parity-vendor "         || '|' || upper(btrim(regexp_replace(coalesce(p_vendor, ''), '[\\s\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]+', ' ', 'g')))" "         || '|' || upper(btrim(regexp_replace(coalesce(p_vendor, ''), '\\s+', ' ', 'g')))"
+run ws-parity-number "    else upper(btrim(regexp_replace(coalesce(p_number, ''), '[\\s\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]+', ' ', 'g')))" "    else upper(btrim(regexp_replace(coalesce(p_number, ''), '\\s+', ' ', 'g')))"
 # restore
 $DB -c "drop function if exists public.dismiss_duplicate_manifest(uuid, uuid, uuid, text)" >/dev/null 2>&1
 $DB -f "$MIG" >/dev/null 2>&1

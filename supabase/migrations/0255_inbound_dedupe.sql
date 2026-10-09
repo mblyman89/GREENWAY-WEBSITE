@@ -120,6 +120,11 @@ create index if not exists inbound_manifests_duplicate_of_idx
 --   7. writes a manifest_events row on BOTH manifests.
 -- Returns jsonb counts the app turns into the banner. Service role only.
 -- ---------------------------------------------------------------------------
+-- Whitespace class = EXACTLY JavaScript's \s (ECMA-262 WhiteSpace +
+-- LineTerminator), so this matches norm() in manifest-dedupe-core.ts. Plain
+-- Postgres \s under a C.UTF-8 collation does NOT match U+00A0 (no-break
+-- space) and friends - measured, R36 - which made the SQL guard refuse a pair
+-- the page had offered. Pinned by scripts/r36/dismiss-duplicate.selftest.sql.
 create or replace function public.inbound_manifest_identity(p_number text, p_vendor text)
 returns text
 language sql
@@ -127,9 +132,9 @@ immutable
 set search_path = public
 as $$
   select case
-    when nullif(btrim(regexp_replace(coalesce(p_number, ''), '\s+', ' ', 'g')), '') is null then null
-    else upper(btrim(regexp_replace(coalesce(p_number, ''), '\s+', ' ', 'g')))
-         || '|' || upper(btrim(regexp_replace(coalesce(p_vendor, ''), '\s+', ' ', 'g')))
+    when nullif(btrim(regexp_replace(coalesce(p_number, ''), '[\s\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+', ' ', 'g')), '') is null then null
+    else upper(btrim(regexp_replace(coalesce(p_number, ''), '[\s\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+', ' ', 'g')))
+         || '|' || upper(btrim(regexp_replace(coalesce(p_vendor, ''), '[\s\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+', ' ', 'g')))
   end
 $$;
 
