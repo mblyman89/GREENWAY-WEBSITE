@@ -647,7 +647,8 @@ describe("S30 Onboarding loader + inline controls", () => {
     const page = read("src/app/admin/inventory/drafts/page.tsx");
     expect(page).toContain('? await loadOpenIntakeFactFlags(focus.manifestId ? [{ manifest_id: focus.manifestId }, ...drafts] : drafts)');
     expect(page).toContain('view === "approved"');
-    expect(page).toContain("factResult ? factResultCopy(factResult, sp.fact_msg)");
+    // R35: the banner adds the WAC 314-55-095 save-with-warning words (codes only).
+    expect(page).toContain("factResult ? [factResultCopy(factResult, sp.fact_msg), factLimitWarn].filter(Boolean).join(\" \")");
     expect(page).toMatch(/view === "approved" && factFlags\?\.flags\.get\(d\.id\) && \(\s*<IntakeFactReviewPanel/);
     expect(page).toContain("FACT_REVIEW_MIGRATION_COPY");
     expect(page).not.toContain("fact review is scoped to\n// an import_id, which a manifest-sourced lot never has.");
