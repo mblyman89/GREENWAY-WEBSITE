@@ -11,6 +11,9 @@ import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 import { sortVariantsBySize } from "@/lib/menu/variant-sort";
 import { collapseVariantsForDisplay } from "@/lib/menu/variant-collapse-core";
 import { displayVariantLabel } from "@/lib/menu/weight-display-core";
+// R33 (T-329): a single-size product shows its size here too (no buttons
+// render for one size, so the customer was never told how much they buy).
+import { purchaseSizeLabel } from "@/lib/menu/pdp-size-core";
 // SLICE 18C: the shopper-facing allowance explainer. Pure derivation over the
 // four classification fields the item ALREADY carries (they are passed into
 // the cart below), so this adds no prop, no fetch and no migration.
@@ -84,6 +87,9 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
   // these two allowances are the ONLY ones that do NOT triple for a
   // DOH-database patient, which is why the copy never mentions a multiple.
   const allowanceDisclosures = classificationDisclosuresForItem(item);
+  // R33: only when there is exactly one REAL (non-synthetic) size.
+  const singleSizeLabel =
+    variants.length === 1 && item.variants.length > 0 ? purchaseSizeLabel(variants[0]?.label, item.category) : null;
 
   return (
     <div className="mt-4">
@@ -116,6 +122,14 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
               </button>
             );
           })}
+        </div>
+      ) : singleSizeLabel ? (
+        <div
+          data-testid="pdp-single-size"
+          className="inline-flex items-center gap-2 border border-white/25 bg-[#1a1a1a] px-3 py-2 text-[0.82rem] font-black uppercase leading-tight text-white"
+        >
+          <span className="text-[0.66rem] tracking-[0.12em] text-zinc-400">Size</span>
+          <span>{singleSizeLabel}</span>
         </div>
       ) : null}
 
@@ -209,7 +223,7 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
             unitVolumeMl: item.netVolumeMl ?? null,
           });
         }}
-        className="mt-3 flex h-14 w-full items-center justify-center rounded-md bg-[#d8e6c4] px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--greenway)] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        className="mt-3 flex h-14 w-full items-center justify-center rounded-md bg-[var(--greenway)] px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[#6bc746] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
       >
         Add to Cart - {formatMinorCurrency(subtotal)}
       </button>
