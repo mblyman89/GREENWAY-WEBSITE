@@ -82,6 +82,41 @@ export function applyCategoryOverrides(
 // ---------------------------------------------------------------------------
 // self-tests (pure, deterministic) — registered in the pure runner
 // ---------------------------------------------------------------------------
+/**
+ * R33 — the owner's per-product TYPE override (product_classification_overrides
+ * .house_type, set from the lot page's "Website Type & Category" section) on
+ * the live menu. Before R33 the override was saved, audited and shown back in
+ * the admin, but nothing on the customer site ever read it: the card and the
+ * product page kept the type stamped at onboarding.
+ *
+ * A house type is a merchandising LABEL ("Live Resin", "Popcorn Bud") that
+ * onboarding already writes into menu_items.pos_inventory_category
+ * (draft-injection-core: `pos_inventory_category: houseType`) and that
+ * cardTypeLabel / the menu's type filters read. So the override lands on the
+ * same field, read-time only (the database row is never written here).
+ *
+ * Rules: a blank / null override is "no override" (the onboarding type
+ * stays); same text (trimmed) is a no-op that keeps the item referentially
+ * identical; a real change recomputes filterCategories with the same fan-out
+ * as a category override, because the raw-label cross-listings (Blunt, RSO,
+ * Tincture ...) depend on this label. Labels are capped at 80 chars.
+ */
+export function applyHouseTypeOverrides(
+  items: GreenwayMenuItem[],
+  overrides: Map<string, string | null>,
+): GreenwayMenuItem[] {
+  if (overrides.size === 0) return items;
+  return items.map((item) => {
+    const raw = (overrides.get(item.id) ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!raw) return item;
+    if (raw === (item.posInventoryCategory ?? "").trim()) return item;
+    return {
+      ...item,
+      posInventoryCategory: raw,
+      filterCategories: filterCategoriesForOverride(item.category, raw),
+    };
+  });
+}
 
 export function __runMenuCategoryOverrideCoreTests(): { passed: number } {
   let passed = 0;
@@ -160,6 +195,21 @@ export function __runMenuCategoryOverrideCoreTests(): { passed: number } {
     "raw POS Blunt cross-lists",
   );
   eq(filterCategoriesForOverride("flower").sort(), ["flower"], "plain flower → self only");
+
+  // R33: house-type overrides (the TYPE half of the owner's re-file).
+  const typed = { ...base, category: "flower", posInventoryCategory: "Flower", filterCategories: ["flower"] } as GreenwayMenuItem;
+  ok(applyHouseTypeOverrides([typed], new Map())[0] === typed, "R33 empty type map → identity");
+  const popcorn = applyHouseTypeOverrides([typed], new Map([["SKU-1", "Popcorn Bud"]]));
+  eq(popcorn[0].posInventoryCategory, "Popcorn Bud", "R33 type override lands on posInventoryCategory");
+  eq(popcorn[0].category, "flower", "R33 type override never changes the website category");
+  ok(applyHouseTypeOverrides([typed], new Map([["SKU-1", null]]))[0] === typed, "R33 null type = no override");
+  ok(applyHouseTypeOverrides([typed], new Map([["SKU-1", "   "]]))[0] === typed, "R33 blank type = no override");
+  ok(applyHouseTypeOverrides([typed], new Map([["SKU-1", " Flower "]]))[0] === typed, "R33 same type (trimmed) = no-op");
+  ok(applyHouseTypeOverrides([typed], new Map([["OTHER", "Shake"]]))[0] === typed, "R33 other id untouched");
+  const blunt = applyHouseTypeOverrides([typed], new Map([["SKU-1", "Blunt"]]));
+  eq([...(blunt[0].filterCategories ?? [])].sort(), ["blunt", "flower"], "R33 type change recomputes the raw-label fan-out");
+  eq(applyHouseTypeOverrides([typed], new Map([["SKU-1", "x".repeat(200)]]))[0].posInventoryCategory?.length, 80, "R33 label capped at 80");
+  eq(applyHouseTypeOverrides([typed], new Map([["SKU-1", "Live   Resin"]]))[0].posInventoryCategory, "Live Resin", "R33 whitespace collapsed");
 
   return { passed };
 }
