@@ -2542,14 +2542,21 @@ export async function findDuplicateTwinsFor(
   try {
     const admin = createSupabaseAdminClient();
     const all: TwinRow[] = [];
+    const PAGE = 500;
     for (let i = 0; i < numbers.length; i += 100) {
-      const { data, error } = await admin
-        .from("inbound_manifests")
-        .select("id, manifest_number, vendor_label, status, created_at")
-        .in("manifest_number", numbers.slice(i, i + 100))
-        .limit(1000);
-      if (error) return new Map();
-      all.push(...((data as TwinRow[] | null) ?? []));
+      // Ordered paging on the unique id - never a silently truncated read.
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await admin
+          .from("inbound_manifests")
+          .select("id, manifest_number, vendor_label, status, created_at")
+          .in("manifest_number", numbers.slice(i, i + 100))
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) return new Map();
+        const page = (data as TwinRow[] | null) ?? [];
+        all.push(...page);
+        if (page.length < PAGE) break;
+      }
     }
     const wanted = new Set(rows.map((r) => r.id));
     const twins = findDuplicateTwins(all);

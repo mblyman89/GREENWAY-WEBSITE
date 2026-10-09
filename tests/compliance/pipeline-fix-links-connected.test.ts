@@ -585,6 +585,8 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     'danger\u2192error && error !== "sample_cap" && error !== "polink" && error !== "partial_note" && !error.startsWith("notify_")',
     'danger\u2192error === "polink"',
     "gold\u2192transportSuggestion.usedUsual", // hint on the transport form
+    "danger\u2192dismisserr", // R36: result of the Dismiss duplicate action
+    "gold\u2192twinKeepId", // R36: lit only while a live twin of this row exists
   ],
   "src/app/admin/inventory/drafts/page.tsx": [
     "gold\u2192if !isSupabaseServiceConfigured",

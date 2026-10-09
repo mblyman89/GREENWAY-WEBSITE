@@ -120,7 +120,9 @@ describe("1. manifest-event-labels-core self-tests", () => {
     // invoice_number_detected event label (migration 0245 writer).
     // R27 pin update (on purpose): 50 -> 51 - one assertion added for the
     // menu_published_some_withheld event label (per-product withhold).
-    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 51, failed: 0 });
+    // R36 pin update (on purpose): 51 -> 52 - one assertion added for the
+    // dismissed_duplicate / duplicate_merged labels (Dismiss duplicate).
+    expect(__runManifestEventLabelsCoreTests()).toEqual({ passed: 52, failed: 0 });
   });
   it("is registered in run-pure-selftests (import AND run)", () => {
     const runner = read("scripts/compliance/run-pure-selftests.ts");

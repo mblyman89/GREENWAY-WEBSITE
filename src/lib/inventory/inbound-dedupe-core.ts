@@ -328,12 +328,12 @@ export function isDeliveryKeyConflict(e: PgLikeError): boolean {
 export function dismissErrorMessage(e: PgLikeError): string {
   const msg = e && typeof e === "object" && typeof e.message === "string" ? e.message : "";
   const code = e && typeof e === "object" ? String(e.code ?? "") : "";
-  const m = /DISMISS:\s*(.+)$/s.exec(msg);
+  const m = /DISMISS:\s*([\s\S]+)$/.exec(msg);
   if (m) {
     const t = m[1].trim();
     return t.charAt(0).toUpperCase() + t.slice(1) + (/[.!?]$/.test(t) ? "" : ".");
   }
-  if (code === "PGRST202" || code === "42883" || /dismiss_duplicate_manifest/.test(msg) && /not find|does not exist/i.test(msg)) {
+  if (code === "PGRST202" || code === "42883" || (/dismiss_duplicate_manifest/.test(msg) && /not find|does not exist/i.test(msg))) {
     return "The Dismiss duplicate feature needs database migration 0255 - apply it in the Supabase SQL editor, then try again.";
   }
   return `The duplicate could not be dismissed - nothing was changed (${(msg || "unknown error").slice(0, 200)}).`;
