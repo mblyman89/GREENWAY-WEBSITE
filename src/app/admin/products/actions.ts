@@ -42,6 +42,7 @@ import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { runIdentityBackfill } from "@/lib/enrichment/enrichment-identity-server";
 import { runMenuKbLinkBackfill } from "@/lib/catalog/menu-kb-link-server";
 import { MENU_KB_LINK_BACKFILL_AUDIT_ACTION } from "@/lib/catalog/menu-kb-link-core";
+import { runMenuSensoryBackfill, MENU_SENSORY_BACKFILL_AUDIT_ACTION } from "@/lib/pos/menu-sensory-backfill-server";
 import { attachKbMatchFacts as attachKbMatchFactsServer, KB_MATCH_AUDIT_ACTION } from "@/lib/enrichment/kb-match-attach";
 
 const ALLOWED_TAGS = new Set([
@@ -133,6 +134,39 @@ export async function linkMenuCardsToKbAction(): Promise<void> {
     },
   });
   if (result.stamped > 0) revalidatePath("/admin/products");
+  redirect("/admin/products?linked=" + encodeURIComponent(result.message));
+}
+
+/**
+ * R35 #6 (migration 0254): fill the live cards' effects / aroma from each
+ * approved product's counted, compliance-cleared attached facts. New menus
+ * carry them as they are built; this catches up the cards already live.
+ * Fill-only (never overwrites a list) and safe to run again. Owner-pressed,
+ * audited.
+ */
+export async function fillMenuSensoryAction(): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const result = await runMenuSensoryBackfill();
+  if (!result.ok) {
+    redirect("/admin/products?error=" + encodeURIComponent(result.error));
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: MENU_SENSORY_BACKFILL_AUDIT_ACTION,
+    entityType: "menu_items",
+    entityId: null,
+    after: {
+      filled: result.filled,
+      alreadyFilled: result.alreadyFilled,
+      nothingCounted: result.nothingCounted,
+      failed: result.failed,
+    },
+  });
+  if (result.filled > 0) {
+    revalidatePath("/admin/products");
+    revalidatePublicMenuSurfaces();
+  }
   redirect("/admin/products?linked=" + encodeURIComponent(result.message));
 }
 

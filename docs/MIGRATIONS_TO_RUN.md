@@ -1839,3 +1839,75 @@ in Vercel.
   `supabase/rollbacks/0252_lab_coa_extract.rollback.sql` into the SQL
   editor. It drops the four columns and their constraints. The code then
   goes back to skipping the certificate step.
+
+## R34 — 0253 — expiration rules for lots that arrived without a date
+
+- [ ] `0253_inventory_expiry_rules.sql` adds the `inventory_expiry_rules`
+  table, which holds one rule per website category or inventory type. It
+  also adds `inventory_lots.expires_on_rule_id` and
+  `inventory_lots.expires_on_rule_note`, which record which rule produced a
+  date and how. Finally, it widens the `expires_on_source` check so it also
+  accepts `manifest` and `rule`.
+
+  It never writes a date itself. The app applies rules only after you
+  confirm a preview. It never replaces a date that came from a POS import,
+  a COA or a manifest. Safe to re-run.
+
+  **Run it, then check:**
+
+  ```sql
+  select count(*) from public.inventory_expiry_rules;   -- 0 until you add rules
+  select column_name from information_schema.columns
+   where table_name = 'inventory_lots' and column_name like 'expires_on_rule%';
+  -- expect 2 rows
+  ```
+
+  **Rollback (only if needed):** paste
+  `supabase/rollbacks/0253_inventory_expiry_rules.rollback.sql` into the SQL
+  editor.
+
+## R35 — 0254 — effects and aroma on the menu card
+
+- [ ] `0254_menu_item_effects_aroma.sql` adds two optional list columns to
+  `menu_items`:
+  - `effects`: experience words such as "relaxed" or "uplifted"
+  - `aroma_notes`: smell words such as "citrus" or "pine"
+
+  Each column has one check: a list is either empty (NULL) or holds 1 to 8
+  words, and never a blank entry. Nothing else changes. The migration
+  writes no data.
+
+  After you run it, an approved product's own effects and aroma travel onto
+  its menu card. Its product page then shows them instead of the
+  strain-library guess. The values that travel are the ones you entered,
+  the lab's, or an AI answer at 90% or higher. Every word passes the same
+  compliance check the knowledge base uses: experience words only, no
+  medical claims, and your banned phrases removed. The page re-checks them
+  each time it shows them.
+
+  Before this migration is run, the code saves menus without the two
+  columns and the product page keeps the knowledge-base wording, exactly as
+  before. Safe to re-run.
+
+  Verified on Postgres 15: all 254 migrations were applied in order, and
+  0254 was applied twice. Every accepted and refused shape was checked,
+  then the migration was rolled back and applied again.
+  `scripts/recon/menu-effects-aroma-pg-check.sql` passed. All 10 deliberate
+  SQL mutations were caught by `scripts/r35/pg-mutants.sh`.
+
+  **Run it, then press:** Products → **Fill effects and aroma on live
+  cards**. This fills the cards that were already live. It only fills empty
+  lists and is safe to press again.
+
+  **Check:**
+
+  ```sql
+  select count(*) filter (where effects is not null) as with_effects,
+         count(*) filter (where aroma_notes is not null) as with_aroma
+    from public.menu_items mi
+    join public.menu_versions mv on mv.id = mi.menu_version_id and mv.status = 'published';
+  ```
+
+  **Rollback (only if needed):** paste
+  `supabase/rollbacks/0254_menu_item_effects_aroma.rollback.sql` into the SQL
+  editor. The product pages then go back to the knowledge-base wording.

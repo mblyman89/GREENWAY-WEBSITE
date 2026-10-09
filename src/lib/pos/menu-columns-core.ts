@@ -40,6 +40,9 @@
  * egress to every menu load. The identity paths that need them (S05+) select
  * them explicitly behind a missing-column guard.
  *
+ * R35 #6 (migration 0254) drops `effects` and `aroma_notes` for the same
+ * reason: optional on the type, absent before the owner applies 0254.
+ *
  * `getVersionItems` still returns `MenuItemRow`; the dropped fields are
  * typed as present but arrive `undefined`. Every reader already treats them as
  * optional (`?? null`), and the self-test pins the exact dropped set so a
@@ -48,7 +51,18 @@
 import type { MenuItemRow, MenuVariantRow, MenuVersion } from "@/lib/pos/db-types";
 
 /** Columns on `menu_items` deliberately NOT fetched by the full-menu loaders. */
-export const MENU_ITEM_DROPPED_COLUMNS = ["fact_provenance", "identity_key", "kb_product_id"] as const;
+export const MENU_ITEM_DROPPED_COLUMNS = [
+  "fact_provenance",
+  "identity_key",
+  "kb_product_id",
+  // R35 #6 (migration 0254): same reason as the 0234 pair - naming a column
+  // that does not exist yet fails the WHOLE menu read (42703), and no
+  // full-menu consumer reads them. The product page fetches its ONE row's
+  // lists through its own guarded read (menu/product-sensory-server.ts), and
+  // the re-stage carry-forward uses select("*").
+  "effects",
+  "aroma_notes",
+] as const;
 export type MenuItemDroppedColumn = (typeof MENU_ITEM_DROPPED_COLUMNS)[number];
 
 /**
@@ -185,10 +199,15 @@ export function __runMenuColumnsCoreTests(): void {
   }
   // S04: the identity columns (0234) must never ride the full-menu select,
   // or the menu breaks for everyone until the owner runs the migration.
-  check(MENU_ITEM_DROPPED_COLUMNS.length === 3, "exactly three menu_items columns are dropped");
+  check(MENU_ITEM_DROPPED_COLUMNS.length === 5, "exactly five menu_items columns are dropped");
   for (const c of ["identity_key", "kb_product_id"]) {
     check((MENU_ITEM_DROPPED_COLUMNS as readonly string[]).includes(c), `${c} is in the dropped set`);
     check(!isMenuItemColumnFetched(c), `menu_items.${c} is not fetched (pre-0234 safety)`);
+  }
+  // R35 #6: the 0254 sensory columns never ride the full-menu select either.
+  for (const c of ["effects", "aroma_notes"]) {
+    check((MENU_ITEM_DROPPED_COLUMNS as readonly string[]).includes(c), `${c} is in the dropped set`);
+    check(!isMenuItemColumnFetched(c), `menu_items.${c} is not fetched (pre-0254 safety)`);
   }
 
   // The columns the money/limits/website paths depend on are ALL present.

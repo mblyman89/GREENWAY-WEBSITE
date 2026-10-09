@@ -125,6 +125,7 @@ import {
   logMenuKbLinkPlan,
   planMenuKbLinksForCards,
 } from "@/lib/catalog/menu-kb-link-server";
+import { sensoryRowFields } from "@/lib/pos/menu-sensory-core";
 
 export type IntakeStagingOutcome = {
   /** True when a staged version was created. */
@@ -1248,6 +1249,12 @@ async function loadCarryForwardItems(versionId: string): Promise<CarryForwardRea
       unit_thc_mg: it.unit_thc_mg,
       otherwise_taken: it.otherwise_taken,
       units_per_package: it.units_per_package,
+      // R35 #6 (0254): carry the card's own counted effects / aroma forward.
+      // `select("*")` already returns them once 0254 is applied; before it the
+      // keys are absent and this is null. A malformed value (not an array) is
+      // treated as nothing counted, never coerced.
+      effects: Array.isArray(it.effects) ? it.effects : null,
+      aroma_notes: Array.isArray(it.aroma_notes) ? it.aroma_notes : null,
       description: it.description,
       price_label: it.price_label,
       price_minor_units: it.price_minor_units,
@@ -1341,6 +1348,10 @@ async function persistSnapshotItems(
       unit_thc_mg: it.unit_thc_mg,
       otherwise_taken: it.otherwise_taken,
       units_per_package: it.units_per_package,
+      // R35 #6 (0254): effects / aroma - carried (re-stage) or the newly
+      // approved product's own counted lists. Keys only when a list exists;
+      // insertMenuItemsWithKbLink retries without them on a pre-0254 table.
+      ...sensoryRowFields(it.effects, it.aroma_notes),
       description: it.description,
       price_label: it.price_label,
       price_minor_units: it.price_minor_units,

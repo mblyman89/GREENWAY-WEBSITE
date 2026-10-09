@@ -1410,27 +1410,35 @@ describe("the migration list is ordered the way the database will see it", () =>
     // scope + key - plus inventory_lots.expires_on_rule_id / _rule_note and
     // the widened expires_on_source check that admits 'manifest' and
     // 'rule'). 253 .sql files, gapless. The owner applies it by hand.
-    expect(listed[listed.length - 1]).toMatch(/^0253_/);
+    // R35 #6 (owner-requested) added 0254_menu_item_effects_aroma.sql (two
+    // nullable text[] columns on menu_items - effects, aroma_notes - each
+    // with one shape check: NULL or 1..8 entries, no NULL element; no
+    // backfill in SQL). 254 .sql files, gapless. Verified by
+    // scripts/recon/menu-effects-aroma-pg-check.sql on Postgres 15 and 10
+    // SQL mutants all killed by scripts/r35/pg-mutants.sh. The owner applies
+    // it by hand.
+    expect(listed[listed.length - 1]).toMatch(/^0254_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0253_inventory_expiry_rules.sql");
-    expect(listed[listed.length - 2]).toBe("0252_lab_coa_extract.sql");
-    expect(listed[listed.length - 3]).toBe("0251_wa_total_thc_cbd_repair.sql");
-    expect(listed[listed.length - 4]).toBe("0250_obligation_waivers.sql");
-    expect(listed[listed.length - 5]).toBe("0249_ccrs_upload_lifecycle.sql");
-    expect(listed[listed.length - 6]).toBe("0248_ccrs_outbox.sql");
-    expect(listed[listed.length - 7]).toBe("0247_ccrs_ledger.sql");
-    expect(listed[listed.length - 8]).toBe("0246_ccrs_lot_external_id_passthrough.sql");
-    expect(listed[listed.length - 9]).toBe("0245_manifest_invoice_number_detected.sql");
-    expect(listed[listed.length - 10]).toBe("0244_intake_lot_received_date_strain_type_backfill.sql");
-    expect(listed[listed.length - 11]).toBe("0243_master_suggestions_v2.sql");
-    expect(listed[listed.length - 12]).toBe("0242_lookup_jobs.sql");
-    expect(listed[listed.length - 13]).toBe("0241_inventory_lot_pos_potency.sql");
-    expect(listed[listed.length - 14]).toBe("0240_factory_reset_scales.sql");
-    expect(listed[listed.length - 15]).toBe("0239_intake_merge_decisions.sql");
-    expect(listed[listed.length - 16]).toBe("0238_factory_reset_reaches_every_guard.sql");
-    expect(listed[listed.length - 17]).toBe("0237_fact_review_for_versions.sql");
-    expect(listed[listed.length - 18]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 1]).toBe("0254_menu_item_effects_aroma.sql");
+    expect(listed[listed.length - 2]).toBe("0253_inventory_expiry_rules.sql");
+    expect(listed[listed.length - 3]).toBe("0252_lab_coa_extract.sql");
+    expect(listed[listed.length - 4]).toBe("0251_wa_total_thc_cbd_repair.sql");
+    expect(listed[listed.length - 5]).toBe("0250_obligation_waivers.sql");
+    expect(listed[listed.length - 6]).toBe("0249_ccrs_upload_lifecycle.sql");
+    expect(listed[listed.length - 7]).toBe("0248_ccrs_outbox.sql");
+    expect(listed[listed.length - 8]).toBe("0247_ccrs_ledger.sql");
+    expect(listed[listed.length - 9]).toBe("0246_ccrs_lot_external_id_passthrough.sql");
+    expect(listed[listed.length - 10]).toBe("0245_manifest_invoice_number_detected.sql");
+    expect(listed[listed.length - 11]).toBe("0244_intake_lot_received_date_strain_type_backfill.sql");
+    expect(listed[listed.length - 12]).toBe("0243_master_suggestions_v2.sql");
+    expect(listed[listed.length - 13]).toBe("0242_lookup_jobs.sql");
+    expect(listed[listed.length - 14]).toBe("0241_inventory_lot_pos_potency.sql");
+    expect(listed[listed.length - 15]).toBe("0240_factory_reset_scales.sql");
+    expect(listed[listed.length - 16]).toBe("0239_intake_merge_decisions.sql");
+    expect(listed[listed.length - 17]).toBe("0238_factory_reset_reaches_every_guard.sql");
+    expect(listed[listed.length - 18]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 19]).toBe("0236_publish_archive_rule.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must
