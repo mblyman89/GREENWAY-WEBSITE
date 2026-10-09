@@ -11,6 +11,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { strainSlug } from "@/lib/catalog/slug-core";
 import { usableCount } from "@/lib/supabase/read-completeness-core";
+import { pagedAllChecked } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 // S14: the onboarding list's query plan, picker filter and counts (pure).
 import {
@@ -76,12 +77,24 @@ import {
 import { planClassificationMirror } from "@/lib/inventory/classification-mirror-core";
 import { LOT_STRAIN_TYPE_HUMAN_PROVENANCE, planLotStrainTypeMirror } from "@/lib/inventory/intake-lot-facts-core";
 import {
+  ONBOARDING_PICK_PROVENANCE,
+  ONBOARDING_PROVENANCE_KEYS,
+  effectiveHouseType,
+  effectiveStrainType,
+  planLotStrainFill,
+  recallOnboardingPicks,
+  submittedPickProvenance,
+  type EffectiveStrain,
+  type PriorOnboardingPick,
+} from "@/lib/inventory/onboarding-recall-core";
+import {
   resolveWebsiteCategories,
   resolveWebsiteCategoryForLot,
 } from "@/lib/inventory/website-category-resolver-server";
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 // SLICE 92: owner-created product types (inventory_types) are legal picks too.
 import { listInventoryTypes } from "@/lib/pos/types-store";
+import { INVENTORY_TYPE_CATALOG } from "@/lib/pos/inventory-type-catalog";
 // SLICE 93: strain-type intelligence - validate the approver's pick, fold the
 // kb/lot/name signals into one >=90% verdict, and gap-fill the strain library
 // so the type auto-attaches on future lots of the same strain.
@@ -440,7 +453,15 @@ export async function seedDraftsForManifest(
     }
 
     // Pricing: compute the 2× floor + a velocity-aware suggested price.
-    const velocity = await getVelocityForProduct(lot.pos_product_key, 60);
+    // R32 (T-328): widen the sales lookup to EVERY delivery of this same
+    // product (same identity_key + same size). Without a vendor SKU the
+    // pos_product_key is new on each delivery, so restocks used to read
+    // "no sales history". Identity is optional evidence: null → this key only.
+    const velocity = await getVelocityForProduct(lot.pos_product_key, 60, {
+      identityKey: identityByLot.get(lot.id)?.identityKey ?? null,
+      unitWeight: lot.unit_weight ?? null,
+      unitWeightUom: lot.unit_weight_uom ?? null,
+    });
     // T-319: pass the category so the auto price folds the RIGHT tax divisor
     // (cannabis 1.463 vs merch 1.093) and lands on a clean whole dollar.
     const suggestion = suggestPrice(
@@ -822,6 +843,69 @@ export async function listPriorClassifications(limit = 1000): Promise<PriorClass
   }));
 }
 
+/**
+ * R32 — every APPROVED draft's onboarding picks (shelf, product type, strain
+ * type) with the per-field provenance blob, newest first. Feeds
+ * recallOnboardingPicks() so a product that was typed once never shows
+ * "Needs type" again on its next delivery. A separate reader (not a wider
+ * listPriorClassifications select) so the SLICE 18F plumbing stays untouched.
+ * Any read failure (e.g. a missing column) degrades to "no memory".
+ */
+export async function listPriorOnboardingPicks(maxRows = 20000): Promise<PriorOnboardingPick[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  // PAGED (SLICE 5C): PostgREST clamps one response at db.max_rows (1000)
+  // with NO error, so a single .limit() read would silently forget every
+  // product approved before the newest thousand. Ordered newest-first with a
+  // stable id tiebreak so pages never skip or repeat a row.
+  const read = await pagedAllChecked<unknown>(
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("catalog_product_drafts")
+        .select(
+          "id, name, brand_name, vendor_name, category, chosen_website_category, chosen_house_type, chosen_strain_type, chosen_classification_provenance, updated_by, updated_at",
+        )
+        .eq("status", "approved")
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) console.error("[catalog-drafts] prior-onboarding-pick read failed:", error.message);
+      return { rows: (data as unknown[] | null) ?? [], ok: !error };
+    },
+    { maxRows },
+  );
+  // A failed page = no memory at all (never a half memory that could recall
+  // an OLDER decision because the newer one was on the page that failed).
+  if (read.verdict.reason === "read_failed") return [];
+  const data = read.rows;
+  type Row = {
+    id: string;
+    name: string | null;
+    brand_name: string | null;
+    vendor_name: string | null;
+    category: string | null;
+    chosen_website_category: string | null;
+    chosen_house_type: string | null;
+    chosen_strain_type: string | null;
+    chosen_classification_provenance: unknown;
+    updated_by: string | null;
+    updated_at: string | null;
+  };
+  return ((data as Row[] | null) ?? []).map((r) => ({
+    draftId: r.id,
+    vendorName: r.vendor_name,
+    brandName: r.brand_name,
+    productName: r.name,
+    category: r.category,
+    chosenWebsiteCategory: r.chosen_website_category ?? null,
+    chosenHouseType: r.chosen_house_type ?? null,
+    chosenStrainType: r.chosen_strain_type ?? null,
+    provenance: r.chosen_classification_provenance ?? null,
+    decidedAt: r.updated_at,
+    decidedBy: r.updated_by,
+  }));
+}
+
 export async function countCatalogDrafts(): Promise<{ draft: number; approved: number; dismissed: number }> {
   const empty = { draft: 0, approved: 0, dismissed: 0 };
   if (!isSupabaseServiceConfigured) return empty;
@@ -1073,8 +1157,38 @@ export async function approveDraftWithPrice(
     loadCategoryLabelMap(),
     listInventoryTypes({ includeInactive: false }),
   ]);
+  // R32: IDENTITY MEMORY. "I often see a yellow needs type warning, even
+  // after I have received the same product before and had it set before."
+  // Re-derived server-side from the approved history (never from the form):
+  // this product's own earlier human decisions (shelf, type, strain type),
+  // then the labeler, then a category with exactly one product type. The
+  // card shows the SAME effectiveHouseType verdict, so what the approver
+  // saw is what the gate enforces - including "Approve all priced".
+  const priorPicks = await listPriorOnboardingPicks();
+  const recall = recallOnboardingPicks({
+    candidate: { vendorName: row?.vendor_name ?? null, brandName: row?.brand_name ?? null, productName: row?.name ?? null },
+    resolvedWebsiteCategory: resolution.websiteCategory,
+    history: priorPicks,
+    allowedTypeLabels: new Set<string>([...ownerTypes.map((t) => t.label), ...INVENTORY_TYPE_CATALOG.map((e) => e.label)]),
+  });
+  const submittedCategory = classification?.chosenWebsiteCategory?.trim() || null;
+  const effectiveShelf = submittedCategory ?? resolution.websiteCategory ?? recall.websiteCategory?.value ?? null;
+  const effectiveType = effectiveHouseType({
+    labeler: {
+      houseType: assessment.house.houseType,
+      confidence: assessment.house.confidence,
+      autoAssigned: !assessment.needsTypePick,
+    },
+    recalled: recall.houseType,
+    websiteCategory: effectiveShelf,
+    ownerTypes: ownerTypes.map((t) => ({ label: t.label, websiteCategory: t.website_category })),
+  });
+  const gateAssessment = {
+    needsCategoryPick: assessment.needsCategoryPick && recall.websiteCategory === null,
+    needsTypePick: effectiveType.needsTypePick,
+  };
   const choice = validateClassificationChoice({
-    assessment,
+    assessment: gateAssessment,
     chosenWebsiteCategory: classification?.chosenWebsiteCategory ?? null,
     chosenHouseType: classification?.chosenHouseType ?? null,
     extraCategoryValues: Object.keys(registryLabels),
@@ -1104,7 +1218,7 @@ export async function approveDraftWithPrice(
   const complianceAssessment = assessReceivingClassification({
     productName: row?.name ?? null,
     inventoryType: row?.inventory_type ?? null,
-    resolvedWebsiteCategory: choice.chosenWebsiteCategory ?? resolution.websiteCategory,
+    resolvedWebsiteCategory: choice.chosenWebsiteCategory ?? resolution.websiteCategory ?? recall.websiteCategory?.value ?? null,
   });
   const compliance = validateReceivingClassificationChoice({
     assessment: complianceAssessment,
@@ -1145,7 +1259,7 @@ export async function approveDraftWithPrice(
   // drift apart.
   const derivedWeightGrams = deriveNetWeightGrams(derivedFacts.sizes);
   const volumeAssessment = assessReceivingVolume({
-    resolvedWebsiteCategory: choice.chosenWebsiteCategory ?? resolution.websiteCategory,
+    resolvedWebsiteCategory: choice.chosenWebsiteCategory ?? resolution.websiteCategory ?? recall.websiteCategory?.value ?? null,
     derivedVolumeMl: derivedVolume.netVolumeMl,
     derivedWeightGrams,
   });
@@ -1170,6 +1284,38 @@ export async function approveDraftWithPrice(
   if (choice.chosenHouseType !== null) update.chosen_house_type = choice.chosenHouseType;
   // SLICE 93 (migration 0146): the strain-type pick, only when made.
   if (strainChoice.value !== null) update.chosen_strain_type = strainChoice.value;
+
+  // R32: carry the KEPT verdicts onto the draft so they reach the menu
+  // (draft-injection reads chosen_* first) and the NEXT delivery's memory.
+  // Only remembered human decisions and the deterministic one-type-category
+  // verdict are persisted; a >=90 labeler verdict is re-derived by the menu
+  // exactly as before. Every value carries its provenance stamp below.
+  const onboardingProvenance: Record<string, string> = {};
+  if (choice.chosenWebsiteCategory !== null) {
+    onboardingProvenance[ONBOARDING_PROVENANCE_KEYS.websiteCategory] = submittedPickProvenance(choice.chosenWebsiteCategory, recall.websiteCategory);
+  } else if (!resolution.websiteCategory && recall.websiteCategory) {
+    update.chosen_website_category = recall.websiteCategory.value;
+    onboardingProvenance[ONBOARDING_PROVENANCE_KEYS.websiteCategory] = ONBOARDING_PICK_PROVENANCE.remembered;
+  }
+  if (choice.chosenHouseType !== null) {
+    onboardingProvenance[ONBOARDING_PROVENANCE_KEYS.houseType] = submittedPickProvenance(choice.chosenHouseType, recall.houseType);
+  } else if (effectiveType.value !== null && effectiveType.persistProvenance !== null) {
+    update.chosen_house_type = effectiveType.value;
+    onboardingProvenance[ONBOARDING_PROVENANCE_KEYS.houseType] = effectiveType.persistProvenance;
+  }
+  let effectiveStrain: EffectiveStrain | null = null;
+  if (strainChoice.value !== null) {
+    onboardingProvenance[ONBOARDING_PROVENANCE_KEYS.strainType] = submittedPickProvenance(strainChoice.value, recall.strainType);
+  } else {
+    const strainSignal = (await loadStrainTypeSignals([
+      { id: draftId, name: row?.name ?? "", strain_name: row?.strain_name ?? null, lot_id: row?.lot_id ?? null },
+    ])).suggestions.get(draftId) ?? null;
+    effectiveStrain = effectiveStrainType({ recalled: recall.strainType, suggestion: strainSignal });
+    if (effectiveStrain.persistOnDraft && effectiveStrain.value !== null) {
+      update.chosen_strain_type = effectiveStrain.value;
+      onboardingProvenance[ONBOARDING_PROVENANCE_KEYS.strainType] = ONBOARDING_PICK_PROVENANCE.remembered;
+    }
+  }
 
   // SLICE 18-0 (migration 0218): the compliance classification.
   //
@@ -1214,6 +1360,7 @@ export async function approveDraftWithPrice(
       };
     }
   }
+  classificationProvenance = { ...classificationProvenance, ...onboardingProvenance };
   update.chosen_classification_provenance = classificationProvenance;
   if (compliance.unitsPerPackage !== null) update.chosen_units_per_package = compliance.unitsPerPackage;
   // The low-THC pair stays absent when unanswered - here silence is safe (the
@@ -1374,6 +1521,9 @@ export async function approveDraftWithPrice(
     lotId: row?.lot_id ?? null,
     humanPick: strainChoice.value,
     actorId,
+    // R32: no pick -> fill an EMPTY lot with the effective (remembered or
+    // >=90 machine) value, machine provenance, never over an existing value.
+    machineFill: effectiveStrain,
   });
 
   // SLICE 93: "It should save to the kb as well so it auto attaches on that
@@ -1509,14 +1659,27 @@ export const LOT_STRAIN_TYPE_MIRROR_AUDIT_ACTION = "catalog_draft.strain_type_mi
  */
 export async function mirrorStrainTypePickToLot(
   admin: ReturnType<typeof createSupabaseAdminClient>,
-  input: { draftId: string; lotId: string | null; humanPick: string | null; actorId: string | null },
+  input: {
+    draftId: string;
+    lotId: string | null;
+    humanPick: string | null;
+    actorId: string | null;
+    /**
+     * R32: the approval's effective strain type when NO human pick was made
+     * (remembered decision for this product, else a >=90 machine verdict).
+     * Fill-only (planLotStrainFill): an empty lot gets it with machine
+     * provenance; a lot that already carries any value is never touched.
+     */
+    machineFill?: Pick<EffectiveStrain, "value" | "lotProvenance"> | null;
+  },
 ): Promise<{ written: boolean; code: string }> {
   let outcome: Record<string, unknown> = {};
   let result: { written: boolean; code: string } = { written: false, code: "not_run" };
   let before: string | null = null;
+  const fill = !input.humanPick && input.machineFill && input.machineFill.value ? input.machineFill : null;
   try {
     let lot: { strain_type: string | null; fact_provenance: unknown } | null = null;
-    if (input.lotId && input.humanPick) {
+    if (input.lotId && (input.humanPick || fill)) {
       const { data, error } = await admin
         .from("inventory_lots")
         .select("id, strain_type, fact_provenance")
@@ -1531,6 +1694,31 @@ export async function mirrorStrainTypePickToLot(
         result = { written: false, code: "lot_not_found" };
       } else {
         lot = data as { strain_type: string | null; fact_provenance: unknown };
+      }
+    }
+    if (result.code === "not_run" && fill) {
+      const fp = planLotStrainFill({
+        lotId: input.lotId,
+        effective: fill,
+        lotStrainType: lot?.strain_type ?? null,
+        lotFactProvenance: lot?.fact_provenance ?? null,
+      });
+      if (!fp.write) {
+        outcome = { lot_mirror_skipped: fp.code, reason: fp.reason, machine_fill: fill.value };
+        result = { written: false, code: fp.code };
+      } else {
+        before = lot?.strain_type ?? null;
+        const { error: wErr } = await admin
+          .from("inventory_lots")
+          .update({ ...fp.patch, updated_by: input.actorId })
+          .eq("id", fp.lotId);
+        if (wErr) {
+          outcome = { lot_row_write_failed: wErr.message };
+          result = { written: false, code: "write_failed" };
+        } else {
+          outcome = { lot_mirrored: fp.lotId, strain_type: fp.patch.strain_type, provenance: fp.patch.fact_provenance.strain_type, machine_fill: true };
+          result = { written: true, code: "filled" };
+        }
       }
     }
     if (result.code === "not_run") {

@@ -81,10 +81,20 @@ export function lotReceivedDate(
  * on screen, LCB under the hood — the lot detail page shows the raw values).
  */
 export function lotTypeLabel(
-  lot: Pick<LotTableFields, "category" | "inventory_type"> & { product_name?: string | null },
+  lot: Pick<LotTableFields, "category" | "inventory_type"> & {
+    product_name?: string | null;
+    /**
+     * R32: the product type the approver kept at Product Onboarding (the
+     * approved draft's chosen_house_type). Outranks the machine labeler —
+     * a person (or this product's remembered decision) already answered.
+     */
+    onboarding_house_type?: string | null;
+  },
 ): string {
   const category = String(lot.category ?? "").trim();
   if (category && !isCcrsCategoryBlob(category)) return category;
+  const onboarded = String(lot.onboarding_house_type ?? "").trim();
+  if (onboarded) return onboarded;
   const derived = deriveHouseType({
     productName: lot.product_name ?? null,
     inventoryType: lot.inventory_type ?? null,
@@ -163,8 +173,22 @@ export function lotLabPercentLabel(value: number | null | undefined): string {
   return `${Number(Number(value).toFixed(4))}%`;
 }
 
-export function lotStrainTypeLabel(lot: { strain_type?: string | null }): string {
-  const t = String(lot.strain_type ?? "").trim().toLowerCase();
+export function lotStrainTypeLabel(lot: {
+  strain_type?: string | null;
+  /**
+   * R32: the approved onboarding draft's strain type — the fallback for a lot
+   * row that is still blank (owner: "sometimes it shows as blank after
+   * intaking products even though it was set"). The lot's own value wins.
+   */
+  onboarding_strain_type?: string | null;
+}): string {
+  const own = strainTypeText(lot.strain_type);
+  if (own !== EM_DASH) return own;
+  return strainTypeText(lot.onboarding_strain_type);
+}
+
+function strainTypeText(raw: string | null | undefined): string {
+  const t = String(raw ?? "").trim().toLowerCase();
   if (t === "indica" || t === "sativa" || t === "hybrid") return t.charAt(0).toUpperCase() + t.slice(1);
   if (t === "indica-hybrid") return "Indica Hybrid";
   if (t === "sativa-hybrid") return "Sativa Hybrid";
@@ -273,5 +297,12 @@ export function __runLotTableCoreTests(): void {
   ok(lotStrainTypeLabel({ strain_type: "unknown" }) === EM_DASH, "strain type: unknown yields em-dash");
   ok(lotStrainTypeLabel({}) === EM_DASH, "strain type: absent field yields em-dash");
 
+  // R32: onboarding fallbacks (the lot's own value always wins).
+  ok(lotStrainTypeLabel({ strain_type: null, onboarding_strain_type: "indica-hybrid" }) === "Indica Hybrid", "R32: blank lot strain type falls back to onboarding");
+  ok(lotStrainTypeLabel({ strain_type: "sativa", onboarding_strain_type: "indica" }) === "Sativa", "R32: lot strain type wins over onboarding");
+  ok(lotStrainTypeLabel({ strain_type: "unknown", onboarding_strain_type: "unknown" }) === EM_DASH, "R32: unknown both -> em-dash");
+  ok(lotTypeLabel({ category: "EndProduct", inventory_type: "Usable Marijuana", product_name: "Blue Dream 3.5g", onboarding_house_type: "Flower" }) === "Flower", "R32: onboarding type outranks the labeler when the category is a CCRS blob");
+  ok(lotTypeLabel({ category: "Live Resin", inventory_type: null, onboarding_house_type: "Flower" }) === "Live Resin", "R32: a human category label still wins");
+  ok(lotTypeLabel({ category: null, inventory_type: "Usable Marijuana", product_name: "Blue Dream 3.5g", onboarding_house_type: "  " }) === "Usable Marijuana", "R32: blank onboarding type ignored");
   console.log(`lot-table-core: ${passed} assertions passed`);
 }

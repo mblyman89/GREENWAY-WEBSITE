@@ -135,6 +135,11 @@ export const INVENTORY_COLUMN_SORTS: ColumnSortDef[] = [
   },
   { key: "expires", label: "Expires", kind: "date", firstClick: "asc", date: (l) => l.expires_on },
   { key: "status", label: "Status", kind: "text", firstClick: "asc", text: (l) => l.status },
+  // R32 (T-328): onboarding columns (append only — URL contract).
+  { key: "price", label: "Price", kind: "number", firstClick: "desc", number: (l) => l.onboarding_price_minor ?? null },
+  { key: "margin", label: "Margin", kind: "number", firstClick: "desc", number: (l) => l.onboarding_margin_pct ?? null },
+  { key: "shelf", label: "Website category", kind: "text", firstClick: "asc", text: (l) => l.onboarding_shelf ?? null },
+  { key: "onboarded", label: "Onboarded", kind: "date", firstClick: "desc", date: (l) => l.onboarded_on ?? null },
 ];
 
 export function columnSortDef(key: string | undefined | null): ColumnSortDef | undefined {
