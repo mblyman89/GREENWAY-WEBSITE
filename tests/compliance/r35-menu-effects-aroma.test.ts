@@ -271,6 +271,14 @@ describe("C. insertMenuItemsWithKbLink: pre-0254 safety net", () => {
     expect(r.retriedWithoutSensory).toBe(false);
     expect(st.db.log.filter((q) => q.method === "POST")).toHaveLength(1);
   });
+  it("the PGRST204 / 42703 CODE alone is a missing-column signal (wording can change between PostgREST versions)", () => {
+    // Neither message matches the English wording regex; only the code does.
+    expect(core.isMissingSensoryColumnError({ code: "PGRST204", message: "'effects' is unknown in the schema cache" })).toBe(true);
+    expect(core.isMissingSensoryColumnError({ code: "42703", message: "aroma_notes: unknown column" })).toBe(true);
+    // Still needs OUR column named.
+    expect(core.isMissingSensoryColumnError({ code: "PGRST204", message: "'flavor_notes' is unknown in the schema cache" })).toBe(false);
+    expect(core.isMissingSensoryColumnError({ code: "23514", message: "'effects' is unknown in the schema cache" })).toBe(false);
+  });
   it("a missing-column error naming side_effects (not ours) is not retried", async () => {
     st.db.before = (req) =>
       req.method === "POST" ? { status: 400, body: { code: "PGRST204", message: "Could not find the 'side_effects' column of 'menu_items' in the schema cache" } } : undefined;
@@ -341,6 +349,19 @@ describe("D. product page: own list first, re-gated, KB fallback", () => {
     expect(get.url.searchParams.get("select")).toBe("effects,aroma_notes");
     expect(get.url.searchParams.get("menu_version_id")).toBe("eq.V1");
     expect(get.url.searchParams.get("source_item_id")).toBe("eq.P1");
+  });
+  it("a STAGED version's card is never shown (only the published version is read)", async () => {
+    // The staged version is listed first, so a read without the published
+    // filter would pick it and show lists nobody published yet.
+    st.db.rows("menu_versions").push({ id: "V0", status: "staged" });
+    st.db.rows("menu_versions").push({ id: "V1", status: "published" });
+    st.db.rows("menu_items").push({ id: "I0", menu_version_id: "V0", source_item_id: "P1", effects: ["unpublished"], aroma_notes: ["unpublished"] });
+    st.db.rows("menu_items").push({ id: "I1", menu_version_id: "V1", source_item_id: "P1", effects: ["relaxed"], aroma_notes: null });
+    const r = await page.resolvePageSensory("P1", kb);
+    expect(r.effects).toEqual(["relaxed"]);
+    expect(r.aroma).toEqual(["skunk"]);
+    const v = st.db.log.find((q) => q.table === "menu_versions")!;
+    expect(v.url.searchParams.get("status")).toBe("eq.published");
   });
   it("malformed stored values are treated as nothing (never coerced)", async () => {
     publish({ effects: "relaxed", aroma_notes: [42, ""] });
@@ -450,6 +471,23 @@ describe("E. Fill effects and aroma on live cards (fill-only backfill)", () => {
     expect(r).toEqual({ ok: false, error: expect.stringContaining("banned phrases") });
     expect(st.db.log.some((q) => q.method === "PATCH")).toBe(false);
   });
+  it("a failed live-menu read refuses with nothing written (never fills from a partial menu)", async () => {
+    st.db.rows("menu_items").push(card("I1", "P1"));
+    st.db.rows("catalog_product_drafts").push(approved("P1", { effects: fact(["calm"], "human") }));
+    st.db.before = (req) => (req.method === "GET" && req.table === "menu_items" ? { status: 500, body: { code: "XX000", message: "boom" } } : undefined);
+    const r = await backfill.runMenuSensoryBackfill(client());
+    expect(r).toEqual({ ok: false, error: expect.stringContaining("Could not read the whole live menu") });
+    expect(st.db.log.some((q) => q.method === "PATCH")).toBe(false);
+  });
+  it("a failed update is counted and reported (press again to retry), never reported as filled", async () => {
+    st.db.rows("menu_items").push(card("I1", "P1"));
+    st.db.rows("catalog_product_drafts").push(approved("P1", { effects: fact(["calm"], "human") }));
+    st.db.before = (req) => (req.method === "PATCH" ? { status: 500, body: { code: "XX000", message: "boom" } } : undefined);
+    const r = await backfill.runMenuSensoryBackfill(client());
+    expect(r).toMatchObject({ ok: true, filled: 0, failed: 1 });
+    if (r.ok) expect(r.message).toContain("1 could not be saved; press the button again to retry them.");
+    expect(st.db.rows("menu_items")[0].effects).toBeNull();
+  });
   it("no published menu refuses plainly", async () => {
     st.version = null;
     expect(await backfill.runMenuSensoryBackfill(client())).toEqual({ ok: false, error: expect.stringContaining("No published menu") });
@@ -485,10 +523,16 @@ describe("F. wiring pins", () => {
     expect(src).toMatch(/resolvePageSensory\(item\.id, \{ effects: knowledge\?\.effects \?\? \[\], aroma: knowledge\?\.aromaNotes \?\? \[\] \}\)/);
     expect(src).toMatch(/const kbEffects = pageSensory\.effects;/);
     expect(src).toMatch(/const kbAroma = pageSensory\.aroma;/);
+    // Merch (non-cannabis) never reads or shows effects / aroma.
+    expect(src).toContain("const pageSensory = isMerchItem(item)\n    ? { effects: [] as string[], aroma: [] as string[] }\n    : await resolvePageSensory(");
   });
   it("the owner action requires products.enrich, audits with the pinned action, and the button exists", () => {
     const a = read("src/app/admin/products/actions.ts");
-    const fn = a.slice(a.indexOf("export async function fillMenuSensoryAction"));
+    const at = a.indexOf("export async function fillMenuSensoryAction");
+    const next = a.indexOf("\nexport async function ", at + 10);
+    // Bounded to THIS action (the next action also requires products.enrich).
+    const fn = a.slice(at, next === -1 ? undefined : next);
+    expect(fn.match(/requirePermission\(/g)).toHaveLength(1);
     expect(fn).toMatch(/requirePermission\("products\.enrich"\)/);
     expect(fn).toMatch(/action: MENU_SENSORY_BACKFILL_AUDIT_ACTION/);
     expect(backfill.MENU_SENSORY_BACKFILL_AUDIT_ACTION).toBe("menu.sensory_backfill");
