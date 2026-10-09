@@ -135,11 +135,11 @@ export default async function LotDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string; coa?: string; restaged?: string; fact?: string; fact_msg?: string; lot_msg?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string; coa?: string; restaged?: string; fact?: string; fact_msg?: string; fact_warn?: string; lot_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { saved, error, back, coaSearch, coa, restaged, fact, fact_msg, lot_msg } = await searchParams;
+  const { saved, error, back, coaSearch, coa, restaged, fact, fact_msg, fact_warn, lot_msg } = await searchParams;
   // S31: vendors/[id] and products/[key] link here with ?back=<admin path>.
   // Validated with the same guard the media actions use (in-app /admin paths
   // only), so a crafted link can never make this an open redirect.
@@ -740,7 +740,7 @@ export default async function LotDetailPage({
         {/* R28: the lab certificate read + the product facts (view and edit). */}
         <div className="grid gap-6 lg:grid-cols-2">
           <LabCertificatePanel view={labView} facts={coaFacts} rereadAction={lot.lab ? rereadAction : undefined} banner={coaRereadBanner(coa, restaged)} />
-          <ProductFactsSection lotFacts={lotFacts} ctx={factsCtx} returnTo={`/admin/inventory/${lot.id}`} banner={factSaveBanner(fact, fact_msg)} />
+          <ProductFactsSection lotFacts={lotFacts} ctx={factsCtx} returnTo={`/admin/inventory/${lot.id}`} banner={factSaveBanner(fact, fact_msg, fact_warn)} />
         </div>
 
         {/* SLICE 77 — correct the descriptive linkage (the ONLY legally

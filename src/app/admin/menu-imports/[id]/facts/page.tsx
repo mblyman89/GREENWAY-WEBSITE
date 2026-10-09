@@ -22,6 +22,16 @@ import { posStateOf } from "@/lib/enrichment/product-visibility-core";
 import { hiddenItemFix } from "@/lib/pos/pos-import-fix-core";
 import { liveWithOpenReviewsCopy } from "@/lib/pos/publish-now-core";
 import {
+  PACKAGE_RULE,
+  SERVING_RULE,
+  WA_PACKAGE_MAX_THC_MG,
+  WA_SERVING_MAX_THC_MG,
+  parseServingLimitCodes,
+  servingLimitApplies,
+  servingLimitBannerText,
+  servingLimitWarnings,
+} from "@/lib/compliance/serving-limit-warning-core";
+import {
   parseFactFocus,
   filterByFocus,
   factsGroupHref,
@@ -49,7 +59,7 @@ export default async function FactReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; back?: string; group?: string; q?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; back?: string; group?: string; q?: string; fact_warn?: string }>;
 }) {
   await requirePermission("menu.import");
   const { id } = await params;
@@ -147,6 +157,12 @@ export default async function FactReviewPage({
         {sp.saved && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             Decision saved.
+          </div>
+        )}
+        {/* R35: a fix saved over a WAC 314-55-095 limit (codes only, fixed words). */}
+        {sp.saved && servingLimitBannerText(parseServingLimitCodes(sp.fact_warn)) && (
+          <div role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300" data-testid="facts-limit-warning">
+            {servingLimitBannerText(parseServingLimitCodes(sp.fact_warn))}
           </div>
         )}
         {/* R14a: the menu is live with rows still pending -- every decision here
@@ -513,6 +529,17 @@ function ReviewCard({
         </p>
       </div>
       <FactLine row={row} />
+      {/* R35: the facts as they stand, checked against WAC 314-55-095. */}
+      {servingLimitWarnings({
+        mgPerServing: row.facts.mgPerServing,
+        servingsPerPack: row.facts.servingsPerPack,
+        packageThcMg: row.facts.packageThcMg,
+        category: row.category || null,
+      }).map((w) => (
+        <p key={w.code} role="alert" className="mt-2 text-xs font-semibold text-red-300" data-testid="facts-row-limit-warning" data-code={w.code}>
+          {w.text}
+        </p>
+      ))}
       <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-[var(--admin-gold)]">
         {row.notes.map((n) => (
           <li key={n}>{n}</li>
@@ -568,6 +595,7 @@ function ReviewCard({
                 <input key={x.field} type="hidden" name={x.field} value={x.value} />
               ))}
               <input type="hidden" name="note" value={suggestionNote(named.suggestions)} />
+              {row.category && <input type="hidden" name="limit_category" value={row.category} />}
               {focusFields}
               <button type="submit" className={CHIP_ACTION} data-testid="facts-use-name-values">
                 Use these values
@@ -587,6 +615,12 @@ function ReviewCard({
           <input type="hidden" name="sourceItemId" value={row.sourceItemId} />
           <input type="hidden" name="action" value="fix" />
           {focusFields}
+          {row.category && <input type="hidden" name="limit_category" value={row.category} />}
+          {servingLimitApplies(row.category || null) && (
+            <p className="text-[11px] text-white/50" data-testid="facts-limit-hint">
+              Washington limits: at most {WA_SERVING_MAX_THC_MG} mg THC per serving ({SERVING_RULE}) and {WA_PACKAGE_MAX_THC_MG} mg THC per package ({PACKAGE_RULE}). A figure above a limit is saved with a warning {"\u2014"} check the package before it is sold.
+            </p>
+          )}
           <p className="text-[11px] text-white/50">
             Package THC fills itself from servings × mg per serving when left blank. For ratio products (1:1, 2:2:2:1 CBG:CBC:CBD:THC) enter each cannabinoid’s PACKAGE total in mg — the menu shows these totals, never the lab percent.
           </p>

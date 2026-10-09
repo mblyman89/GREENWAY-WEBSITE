@@ -33,11 +33,11 @@ export default async function KbProductDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ fact?: string; fact_msg?: string }>;
+  searchParams: Promise<{ fact?: string; fact_msg?: string; fact_warn?: string }>;
 }) {
   const session = await requirePermission("products.enrich");
   const { id } = await params;
-  const { fact, fact_msg } = await searchParams;
+  const { fact, fact_msg, fact_warn } = await searchParams;
   if (!isUuid(id)) notFound();
 
   const data = await loadKbProductPage(id);
@@ -148,7 +148,7 @@ export default async function KbProductDetailPage({
                 lotFacts={lotFactRows(lot as unknown as Record<string, unknown>)}
                 ctx={factsCtx}
                 returnTo={`/admin/knowledge-base/products/${product.id}`}
-                banner={factSaveBanner(fact, fact_msg)}
+                banner={factSaveBanner(fact, fact_msg, fact_warn)}
                 lotHref={{ href: `/admin/inventory/${lot.id}#lab-certificate`, label: lot.lot_code ?? "the newest lot" }}
                 canEdit={canManageInventory}
               />

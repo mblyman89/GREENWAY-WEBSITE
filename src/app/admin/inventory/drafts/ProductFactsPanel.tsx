@@ -17,6 +17,12 @@
  * The saved record is replaced as a whole on save (one row per delivery + lot
  * key), so every field is PRE-FILLED with what is saved: saving again keeps
  * what you did not touch; clearing a field removes it.
+ *
+ * R35 (#4): the form states Washington's WAC 314-55-095 serving / package
+ * THC limits up front, and any SAVED fact over a limit shows the warning
+ * (serving-limit-warning-core - the same constants the lab-certificate path
+ * holds on). A save over a limit is never refused: the person reads the
+ * physical package, and refusing would push them to type a false number.
  */
 import { Button } from "@/components/admin/ui";
 import {
@@ -25,6 +31,14 @@ import {
   type SavedProductFacts,
 } from "@/lib/pos/intake-fact-review-core";
 import type { LabPanelView } from "@/lib/catalog/lab-facts-attach-core";
+import {
+  PACKAGE_RULE,
+  SERVING_RULE,
+  WA_PACKAGE_MAX_THC_MG,
+  WA_SERVING_MAX_THC_MG,
+  servingLimitApplies,
+  servingLimitWarnings,
+} from "@/lib/compliance/serving-limit-warning-core";
 import { resolveIntakeFactReview } from "./actions";
 
 const inputCls =
@@ -89,8 +103,20 @@ export function ProductFactsPanel({
   title?: string;
   /** R30: what the stored lab certificate gives this product (lab-facts-attach-core labPanelView). */
   lab?: LabPanelView | null;
+  /** R35: the product's website category (narrows the WAC 314-55-095 check; unknown = checked). */
+  category?: string | null;
 }) {
   const lines = saved ? savedFactLines(saved.facts) : [];
+  // R35: the saved record checked against the WA limits (never blocks).
+  const limitWarnings = saved
+    ? servingLimitWarnings({
+        mgPerServing: saved.facts.mgPerServing ?? null,
+        servingsPerPack: saved.facts.servingsPerPack ?? null,
+        packageThcMg: saved.facts.packageThcMg ?? null,
+        category: category ?? null,
+      })
+    : [];
+  const limitsApply = servingLimitApplies(category ?? null);
   return (
     <div className="mt-2 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-3 text-left" data-testid="product-facts-panel">
       <p className="text-xs font-bold text-[var(--admin-text)]">{title ?? "Product facts you set"}</p>
@@ -113,6 +139,14 @@ export function ProductFactsPanel({
         </p>
       )}
       {saved?.note && <p className="mt-1 text-[11px] text-[var(--admin-text-faint)]">Note: {saved.note}</p>}
+      {limitWarnings.length > 0 && (
+        <div role="alert" className="mt-2 rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/50 bg-[var(--admin-danger-soft)] p-2" data-testid="product-facts-limit-warning">
+          <p className="text-[11px] font-bold text-[var(--admin-danger)]">Washington limit warning</p>
+          {limitWarnings.map((w) => (
+            <p key={w.code} className="mt-0.5 text-[11px] text-[var(--admin-text)]" data-code={w.code}>{w.text}</p>
+          ))}
+        </div>
+      )}
 
       {lab && lab.rows.length > 0 && (
         <div className="mt-2 rounded-[var(--admin-radius)] bg-[var(--admin-surface-2,var(--admin-surface))] p-2" data-testid="product-facts-lab">
@@ -156,12 +190,18 @@ export function ProductFactsPanel({
             <input type="hidden" name="return_view" value={returnView} />
             {returnManifest && <input type="hidden" name="return_manifest" value={returnManifest} />}
             {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
+            {category && <input type="hidden" name="limit_category" value={category} />}
             <p className="text-[11px] text-[var(--admin-text-muted)]">
               Take each figure from the package or the COA. What is filled in below is what gets saved {"\u2014"} clear a field to remove it.
             </p>
             <p className="text-[11px] text-[var(--admin-text-muted)]">
               Package THC fills itself from servings × mg per serving when left blank. For ratio products (1:1, 2:2:2:1 CBG:CBC:CBD:THC) enter each cannabinoid’s PACKAGE total in mg — the menu shows these totals, never the lab percent.
             </p>
+            {limitsApply && (
+              <p className="text-[11px] text-[var(--admin-text-muted)]" data-testid="product-facts-limit-hint">
+                Washington limits: at most {WA_SERVING_MAX_THC_MG} mg THC per serving ({SERVING_RULE}) and {WA_PACKAGE_MAX_THC_MG} mg THC per package ({PACKAGE_RULE}). A figure above a limit is saved with a warning {"\u2014"} check the package before it is sold.
+              </p>
+            )}
             <div className="grid gap-2 sm:grid-cols-3">
               <Field id={draftId} saved={saved} lab={lab} label="THC (display)" name="thc" placeholder="e.g. 100mg" />
               <Field id={draftId} saved={saved} lab={lab} label="CBD (display)" name="cbd" placeholder="e.g. 100mg" />

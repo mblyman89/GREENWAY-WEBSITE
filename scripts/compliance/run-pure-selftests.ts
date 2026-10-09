@@ -954,6 +954,7 @@ import { __runCoaPanelCoreTests } from "../../src/lib/inventory/coa-panel-core";
 import { r28MakeExtract } from "../r28/coa-fixture-extract";
 import { __runLabFactsAttachCoreTests } from "../../src/lib/catalog/lab-facts-attach-core";
 import { __runCannabinoidProfileCoreTests } from "../../src/lib/menu/cannabinoid-profile-core";
+import { __runServingLimitWarningCoreTests } from "../../src/lib/compliance/serving-limit-warning-core";
 import { __runWciaLabJsonCoreTests } from "../../src/lib/inventory/wcia-lab-json-core";
 import { __runExpiryResearchCoreTests } from "../../src/lib/inventory/expiry-research-core";
 import { __runExpiryRulesCoreTests } from "../../src/lib/inventory/expiry-rules-core";
@@ -2098,7 +2099,7 @@ __runLiquidVolumeTests();
   assertRan("coa-pdf-text-core", __runCoaPdfTextCoreTests(r28CoaStems()), 292); // R28: COA PDF text (unpdf + layout + LlamaParse markdown)
   assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 197); // R28: identity, agreement, edible facts, profile
   assertRan("coa-extract-core", __runCoaExtractCoreTests(r28CoaStems()), 113); // R28: allow-list, best reading, LlamaParse gate, KB fill
-  assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 99); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors
+  assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 101); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors; R35 +2 WAC 314-55-095 banner
   assertRan("lab-facts-attach-core", __runLabFactsAttachCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 102); // R30: first-pass lab attach + strain terpene learning
   assertRan("cannabinoid-profile-core", __runCannabinoidProfileCoreTests(), 61); // R29: ratio slot, package totals, serving summary, minor merge, ratio-vs-mg
   assertRan("finalize-label-core", __runFinalizeLabelCoreTests(), 29); // R31: Accept All & Finalize / Accept x · Reject y
@@ -2114,6 +2115,7 @@ __runLiquidVolumeTests();
   assertRan("expiry-research-core", __runExpiryResearchCoreTests(__r34Categories.map((c) => c.value as string)), 227); // R34: cited expiration suggestions
   assertRan("expiry-rules-core", __runExpiryRulesCoreTests(), 180); // R34: expiration rule engine
   assertRan("expiry-report-export", __runExpiryReportExportTests(), 14); // R34: expiration report export
+  assertRan("serving-limit-warning-core", __runServingLimitWarningCoreTests(), 53); // R35 #4: WAC 314-55-095 warning on the manual facts forms
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

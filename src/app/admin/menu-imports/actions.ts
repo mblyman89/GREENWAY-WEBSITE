@@ -65,6 +65,13 @@ import {
   TYPE_CHECK_REFILE_AUDIT,
 } from "@/lib/pos/cultivera-type-from-category-core";
 import { parseFactFocus, savedRedirectSuffix } from "@/lib/pos/fact-review-focus-core";
+import {
+  SERVING_LIMIT_PARAM,
+  limitCategoryFromForm,
+  servingLimitAudit,
+  servingLimitParam,
+  servingLimitWarnings,
+} from "@/lib/compliance/serving-limit-warning-core";
 
 const PRODUCTS_HINT = "PRODUCTS.xlsx";
 const INVENTORIES_HINT = "INVENTORIES.xlsx";
@@ -564,6 +571,15 @@ export async function resolveFactReview(formData: FormData): Promise<void> {
     }
     correctedFacts = facts;
   }
+  // R35 (#4): WAC 314-55-095 - saved WITH a warning, never refused.
+  const limitWarnings = correctedFacts
+    ? servingLimitWarnings({
+        mgPerServing: correctedFacts.mgPerServing ?? null,
+        servingsPerPack: correctedFacts.servingsPerPack ?? null,
+        packageThcMg: correctedFacts.packageThcMg ?? null,
+        category: limitCategoryFromForm(formData.get("limit_category")),
+      })
+    : [];
 
   try {
     await recordFactReview({
@@ -580,7 +596,7 @@ export async function resolveFactReview(formData: FormData): Promise<void> {
       action: `fact_review.${action}`,
       entityType: "pos_fact_review",
       entityId: `${importId}:${sourceItemId}`,
-      after: { note, correctedFacts },
+      after: { note, correctedFacts, servingLimitWarnings: servingLimitAudit(limitWarnings) },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Saving the review decision failed.";
@@ -596,8 +612,10 @@ export async function resolveFactReview(formData: FormData): Promise<void> {
   const focusSuffix = savedRedirectSuffix(
     parseFactFocus({ group: formData.get("focusGroup"), q: formData.get("focusQ") }),
   );
-  if (focusSuffix) redirect(dest + "?saved=1" + focusSuffix);
-  redirect(dest + "?saved=1");
+  const warnParam = servingLimitParam(limitWarnings);
+  const warnSuffix = warnParam ? `&${SERVING_LIMIT_PARAM}=${encodeURIComponent(warnParam)}` : "";
+  if (focusSuffix) redirect(dest + "?saved=1" + warnSuffix + focusSuffix);
+  redirect(dest + "?saved=1" + warnSuffix);
 }
 
 /**
