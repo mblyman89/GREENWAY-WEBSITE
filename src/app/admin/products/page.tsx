@@ -312,6 +312,18 @@ export default async function ProductsPage({
             {sp.error}
           </div>
         )}
+        {/* R36: the one-time catch-up buttons sit further down this page (below
+            the filters); this line jumps straight to them. */}
+        <p className="text-xs text-[var(--admin-text-muted)]" data-testid="one-time-tools-jump">
+          One-time catch-up buttons:{" "}
+          <a href="#fill-menu-sensory" className="font-semibold text-[var(--admin-accent)] underline">
+            Fill effects and aroma on live cards
+          </a>
+          {" \u00b7 "}
+          <a href="#link-menu-cards-kb" className="font-semibold text-[var(--admin-accent)] underline">
+            Link menu cards to the KB
+          </a>
+        </p>
         {/* Green helper box — how to enrich well, with quick links to the
             highest-impact gaps. Pinned to the TOP of the page (above the
             back-link + stage strip) so the guidance & one-click gap fixes are
@@ -593,6 +605,7 @@ export default async function ProductsPage({
             already live. */}
         <form
           action={linkMenuCardsToKbAction}
+          id="link-menu-cards-kb"
           data-testid="link-menu-cards-kb"
           className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3"
         >
@@ -611,6 +624,7 @@ export default async function ProductsPage({
             menus carry them as they are built; this fills the live cards. */}
         <form
           action={fillMenuSensoryAction}
+          id="fill-menu-sensory"
           data-testid="fill-menu-sensory"
           className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3"
         >
