@@ -318,6 +318,8 @@ function reviewLine(
     lotId: l.lotId,
     lotCode: l.lotCode,
     productName: l.productName,
+    // R34: the review shows an expiry chip; the fixture passes the lot's own date.
+    expiresOn: l.expiresOn ?? null,
     systemQty: c.systemQty,
     countedQty: c.countedQty,
     recountQty: c.recountQty ?? null,
