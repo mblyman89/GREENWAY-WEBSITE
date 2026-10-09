@@ -156,7 +156,7 @@ export function MerchDetailPanel({ def }: MerchDetailPanelProps) {
             quantity,
           })
         }
-        className="mt-3 flex h-14 w-full items-center justify-center rounded-md bg-[#d8e6c4] px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--greenway)]"
+        className="mt-3 flex h-14 w-full items-center justify-center rounded-md bg-[var(--greenway)] px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[#6bc746]"
       >
         Add to Cart - {formatMinorCurrency(subtotal)}
       </button>

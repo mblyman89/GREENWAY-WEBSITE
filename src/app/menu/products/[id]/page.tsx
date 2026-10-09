@@ -27,6 +27,7 @@ import { getLiveMenuItemByIdCached, loadLiveMenuItemsCached } from "@/lib/pos/li
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
+import { pdpSizeLine, productSchemaWeight } from "@/lib/menu/pdp-size-core";
 import { withDohCompliance } from "@/lib/menu/menu-doh-server";
 // SLICE 18C: the badge cores. dohPillForItem was previously only consumed by
 // ProductCardVisual, which is why the detail page silently dropped the pill.
@@ -420,6 +421,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // CBD). Keeps the detail page consistent with the product card.
   const detailCannabinoids = showCannabinoids ? cardCannabinoids(item) : null;
   const detailNetWeightLine = showCannabinoids ? deriveNetWeightLine(item) : null;
+  // R33: flower / concentrates / prerolls / carts had NO size anywhere on a
+  // single-size product page (the size buttons only render for 2+ sizes, and
+  // deriveNetWeightLine is ratio-led only). Same chip, real measures only.
+  const detailSizeLine = showCannabinoids && !detailNetWeightLine ? pdpSizeLine(item) : null;
   // R29: ratio slot + per-serving breakdown, identical to the menu card.
   const detailStrainSlot = strainSlot(item);
   const detailRatioSlot = showCannabinoids ? cardRatioSlot(item) : ({ kind: "strain" } as const);
@@ -444,6 +449,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             brand: item.brand,
             category: formatWebsiteCategory(item.category),
             priceMinorUnits: item.priceMinorUnits,
+            weight: isNonCannabisItem(item) ? null : productSchemaWeight(item),
             inStock:
               item.inventoryStatus !== "unavailable" &&
               (item.variants?.reduce((sum, variant) => sum + (variant.inventoryLevel ?? 0), 0) ?? 1) > 0,
@@ -571,6 +577,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               {showCannabinoids && detailNetWeightLine ? (
                 <span className="inline-flex min-h-7 items-center bg-black/40 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-[0.06em] text-white/80">
                   {detailNetWeightLine}
+                </span>
+              ) : null}
+              {detailSizeLine ? (
+                <span className="inline-flex min-h-7 items-center bg-black/40 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-[0.06em] text-white/80" data-testid="pdp-size-chip">
+                  {detailSizeLine}
                 </span>
               ) : null}
             </div>

@@ -175,6 +175,8 @@ type ProductSchemaInput = {
   priceMinorUnits?: number;
   inStock?: boolean;
   image?: string;
+  /** R33: schema.org QuantitativeValue (unitCode GRM) for a single-size product. */
+  weight?: { "@type": "QuantitativeValue"; value: number; unitCode: "GRM" } | null;
 };
 
 export function productSchema(item: ProductSchemaInput) {
@@ -188,6 +190,7 @@ export function productSchema(item: ProductSchemaInput) {
     category: item.category,
     ...(item.brand ? { brand: { "@type": "Brand", name: item.brand } } : {}),
     ...(item.image ? { image: absoluteUrl(item.image) } : {}),
+    ...(item.weight ? { weight: item.weight } : {}),
     offers: {
       "@type": "Offer",
       url,
