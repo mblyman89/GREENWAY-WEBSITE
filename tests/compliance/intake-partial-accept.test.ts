@@ -51,28 +51,29 @@ describe("SLICE 101 — intake table view filter", () => {
     { id: "6", status: "received" },
   ];
 
-  it("default view hides accepted + partially accepted; everything else stays", () => {
+  it("default view hides accepted + partially accepted + rejected (R36); everything else stays", () => {
     expect(resolveIntakeView(undefined)).toBe("action");
     expect(resolveIntakeView("bogus")).toBe("action");
     expect(resolveIntakeView("all")).toBe("all");
     const filtered = applyIntakeView(rows, "action");
-    expect(filtered.map((r) => r.id)).toEqual(["1", "3", "5", "6"]);
+    expect(filtered.map((r) => r.id)).toEqual(["1", "3", "6"]);
   });
 
   it("'all' shows every row with the open ones FIRST (order preserved per group)", () => {
     const all = applyIntakeView(rows, "all");
-    expect(all.map((r) => r.id)).toEqual(["1", "3", "5", "6", "2", "4"]);
+    expect(all.map((r) => r.id)).toEqual(["1", "3", "6", "2", "4", "5"]);
   });
 
-  it("isProcessedManifest: exactly accepted + partially_accepted (rejected stays visible)", () => {
+  it("isProcessedManifest: exactly the terminal stages - accepted, partially_accepted, rejected (R36: a rejected manifest leaves Needs attention)", () => {
     expect(isProcessedManifest("accepted")).toBe(true);
     expect(isProcessedManifest("partially_accepted")).toBe(true);
-    expect(isProcessedManifest("rejected")).toBe(false);
+    expect(isProcessedManifest("rejected")).toBe(true);
+    expect(isProcessedManifest(" Rejected ")).toBe(true);
     expect(isProcessedManifest("pending")).toBe(false);
     expect(isProcessedManifest("in_transit")).toBe(false);
     expect(isProcessedManifest("received")).toBe(false);
     expect(isProcessedManifest(null)).toBe(false);
-    expect(countProcessedRows(rows)).toBe(2);
+    expect(countProcessedRows(rows)).toBe(3);
   });
 });
 
