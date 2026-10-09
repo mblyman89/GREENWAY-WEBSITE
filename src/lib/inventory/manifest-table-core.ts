@@ -259,9 +259,11 @@ export function movingBadge(
 
 /**
  * The owner's filter for the Incoming (email) table: hide manifests that are
- * already fully processed (accepted OR partially accepted) so the rows that
- * still need attention are what staff see first. Rejected rows stay visible
- * ("I want all other manifests to be visible in the table first").
+ * already fully processed so the rows that still need attention are what
+ * staff see first. Processed = every TERMINAL stage: accepted, partially
+ * accepted, AND rejected (R36: the owner rejects a manifest and expects it to
+ * leave "Needs attention" - a rejected manifest needs nothing more; the vendor
+ * fixes it in CCRS). A dismissed duplicate (R36) is never listed at all.
  */
 export type IntakeTableView = "action" | "all";
 
@@ -269,15 +271,15 @@ export function resolveIntakeView(v: string | null | undefined): IntakeTableView
   return v === "all" ? "all" : "action";
 }
 
-/** True when the manifest is done processing (accepted or partially accepted). */
+/** True when the manifest is done processing (accepted, partially accepted, or rejected). */
 export function isProcessedManifest(status: string | null | undefined): boolean {
   const stage = normalizeStage(status);
-  return stage === "accepted" || stage === "partially_accepted";
+  return stage === "accepted" || stage === "partially_accepted" || stage === "rejected";
 }
 
 /**
  * Apply the view to the rows (PURE, order-preserving):
- *  - "action" (default): processed rows (accepted + partially accepted) hidden;
+ *  - "action" (default): processed rows (accepted, partially accepted, rejected) hidden;
  *  - "all": every row, but the still-open ones FIRST (each group keeps its
  *    newest-first order) — the owner's "all other manifests visible first".
  */

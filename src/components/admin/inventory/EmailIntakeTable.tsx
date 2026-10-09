@@ -114,7 +114,7 @@ export function EmailIntakeTable({
                 ? "bg-[var(--admin-accent)] text-black"
                 : "text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
             }`}
-            title="Hide manifests already accepted or partially accepted — only rows that still need attention."
+            title="Hide manifests already accepted, partially accepted, or rejected — only rows that still need attention."
           >
             Needs attention
           </Link>
@@ -125,7 +125,7 @@ export function EmailIntakeTable({
                 ? "bg-[var(--admin-accent)] text-black"
                 : "text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
             }`}
-            title="Show every manifest — open rows first, then accepted / partially accepted."
+            title="Show every manifest — open rows first, then accepted / partially accepted / rejected."
           >
             All{processedCount > 0 ? ` (+${processedCount} processed)` : ""}
           </Link>
