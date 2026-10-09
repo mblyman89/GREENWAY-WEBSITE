@@ -447,6 +447,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/inventory/cycle-counts",
       },
       {
+        q: "How do I give products without an expiration date one?",
+        a: "Inventory → Expiration rules lists every category and type from Settings → Types (new ones appear on their own). Set a rule (months or days after receiving, a fixed date, or does not expire), Save, then Preview and Apply. Dates from the manifest / JSON / COA are never changed; dates you typed by hand are only replaced when you turn Override on. Each row shows a research-based suggestion with its sources. Washington does not require an expiration date (WAC 314-55-105(8) makes a best-by date optional), so rule dates print as \"Best by\".",
+        href: "/admin/inventory/expiration-rules",
+      },
+      {
         q: "How do I record a return or destroy product lawfully?",
         a: "Returns & Destruction handles customer returns, samples, and lawful destruction with the documentation WA compliance requires.",
         href: "/admin/inventory/disposition",
@@ -654,6 +659,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: "How do I see profit / cost of goods sold?",
         a: "Reports → COGS shows cost of goods sold and inventory valuation/aging by type, with an assistant that explains any missing-cost gaps.",
         href: "/admin/reports/cogs",
+      },
+      {
+        q: "Which products are expiring soon?",
+        a: "Reports → Expiration shows on-hand stock by how soon it expires (lots and value at cost), a 12-month forecast, where each date came from, categories with undated stock, how much each rule dated, and a 90-day watchlist you can export to Excel or CSV.",
+        href: "/admin/reports/expiration",
       },
     ],
   },

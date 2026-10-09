@@ -22,10 +22,12 @@ import {
   type SheetSortKey,
 } from "@/lib/inventory/cycle-count-sheet-core";
 import { buildXlsx, buildCsv, type WorkbookSpec, type TableColumn } from "@/lib/reports/workbook";
+import { pacificToday } from "@/lib/reports/timezone";
 
 export const dynamic = "force-dynamic";
 
-const SORT_KEYS: SheetSortKey[] = ["product", "lot", "category", "vendor", "brand", "system", "counted", "variance"];
+const SORT_KEYS: SheetSortKey[] = ["product", "lot", "category", "vendor", "brand", "system", "counted", "variance", "expires"];
+const EXPIRY_FILTERS = ["all", "expired", "soon", "none"] as const;
 
 function safeName(s: string): string {
   return s.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "cycle-count";
@@ -47,6 +49,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     counted: (sp.get("counted") as SheetFilter["counted"]) ?? "all",
     sample: (sp.get("sample") as SheetFilter["sample"]) ?? "all",
     medical: (sp.get("medical") as SheetFilter["medical"]) ?? "all",
+    // R34: same expiry filter as the on-screen sheet (Pacific today).
+    expiry: (EXPIRY_FILTERS as readonly string[]).includes(sp.get("expiry") ?? "")
+      ? (sp.get("expiry") as SheetFilter["expiry"])
+      : "all",
+    today: pacificToday(),
   };
   const sortKeyRaw = sp.get("sort") ?? "product";
   const sort: SheetSort = {

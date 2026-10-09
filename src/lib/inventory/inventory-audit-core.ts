@@ -149,6 +149,11 @@ export type AuditLot = {
   priorVarianceCount: number;
   /** active | quarantine | recalled | sold_out | destroyed */
   status: string;
+  /**
+   * R34: expiration date (YYYY-MM-DD) or null. Optional and DISPLAY-ONLY:
+   * the engine never reads it, so no assessment / posting changes.
+   */
+  expiresOn?: string | null;
 };
 
 /** A line as it stands during or after a count session. */

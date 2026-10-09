@@ -157,6 +157,18 @@ export class FakePostgrest {
       return this.shape(hit.map((r) => pick(r, select)), objectAccept);
     }
 
+    // R34: DELETE with filters (a bare DELETE with no filter is refused, as
+    // a safety net - real code never deletes a whole table through PostgREST).
+    if (req.method === "DELETE") {
+      if (filters.length === 0) return { status: 400, body: { code: "21000", message: "DELETE requires a WHERE clause" } };
+      const hit = all.filter((r) => filters.every((f) => f(r)));
+      const keep = all.filter((r) => !hit.includes(r));
+      all.length = 0;
+      all.push(...keep);
+      if (!wantRows) return { status: 204, body: undefined };
+      return this.shape(hit.map((r) => pick(r, select)), objectAccept);
+    }
+
     return { status: 405, body: { code: "PGRST000", message: `method ${req.method} not emulated` } };
   }
 

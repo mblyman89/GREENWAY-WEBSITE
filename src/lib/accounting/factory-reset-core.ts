@@ -468,6 +468,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "inventory_audit_history", disposition: "WIPE", because: "The history of practice audits." },
   { table: "noncannabis_adjustments", disposition: "WIPE", because: "Test adjustments to non-cannabis stock." },
   { table: "inventory_types", disposition: "KEEP", because: "Your category definitions — configuration that the chart of accounts is built on." },
+  { table: "inventory_expiry_rules", disposition: "KEEP", because: "Your expiration rules per category / type — configuration, not history. Lots they dated are wiped with the lots." },
   { table: "website_category_types", disposition: "KEEP", because: "How categories appear on the website." },
 
   // ── Purchasing and vendor bills ───────────────────────────────────────────

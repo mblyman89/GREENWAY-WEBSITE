@@ -164,6 +164,9 @@ export type CycleCountSheetLine = {
   countedQty: number | null;
   isSample: boolean;
   isMedical: boolean;
+  /** R34: the lot's expiration date + its source (0215 columns). */
+  expiresOn: string | null;
+  expiresOnSource: string | null;
 };
 
 export async function getCycleCountSheetLines(countId: string): Promise<CycleCountSheetLine[]> {
@@ -172,7 +175,7 @@ export async function getCycleCountSheetLines(countId: string): Promise<CycleCou
   const { data } = await admin
     .from("cycle_count_lines")
     .select(
-      "id, lot_id, system_qty, counted_qty, lot:inventory_lots(lot_code, pos_product_key, product_name, strain_name, category, inventory_type, unit, is_sample, is_medical, vendor_id, brand_id)",
+      "id, lot_id, system_qty, counted_qty, lot:inventory_lots(lot_code, pos_product_key, product_name, strain_name, category, inventory_type, unit, is_sample, is_medical, vendor_id, brand_id, expires_on, expires_on_source)",
     )
     .eq("count_id", countId)
     .order("created_at", { ascending: true });
@@ -189,6 +192,8 @@ export async function getCycleCountSheetLines(countId: string): Promise<CycleCou
     is_medical: boolean | null;
     vendor_id: string | null;
     brand_id: string | null;
+    expires_on: string | null;
+    expires_on_source: string | null;
   };
   const rows =
     (data as unknown as {
@@ -237,6 +242,8 @@ export async function getCycleCountSheetLines(countId: string): Promise<CycleCou
       countedQty: r.counted_qty == null ? null : Number(r.counted_qty),
       isSample: Boolean(lot?.is_sample),
       isMedical: Boolean(lot?.is_medical),
+      expiresOn: lot?.expires_on ? String(lot.expires_on).slice(0, 10) : null,
+      expiresOnSource: lot?.expires_on_source ?? null,
     };
   });
 

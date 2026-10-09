@@ -29,6 +29,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import { getCountSheet } from "@/lib/inventory/audit-hub-store";
+import { pacificToday } from "@/lib/reports/timezone";
 import { LABELS } from "@/lib/inventory/inventory-audit-post-core";
 import { AuditCountSheet } from "../../AuditCountSheet";
 import { HubRefusal } from "../../HubRefusal";
@@ -92,6 +93,7 @@ export default async function CountPage({
           <AuditCountSheet
             sessionId={id}
             lines={sheet.data.lines}
+            today={pacificToday()}
             // Counting is only open while the session is in the counting stage.
             // Before that the scope has not been agreed; after it, the numbers
             // are evidence and editing them silently would destroy the trail.

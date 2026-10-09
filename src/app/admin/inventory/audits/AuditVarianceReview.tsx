@@ -29,6 +29,7 @@ import {
   findVarianceReason,
 } from "@/lib/inventory/audit-hub-guidance-core";
 import { saveReasonAction } from "./actions";
+import { expiryStatus } from "@/lib/inventory/expiry-rules-core";
 
 const CARD = "rounded-2xl border border-white/10 bg-white/[0.02] p-5";
 const P = "text-sm leading-relaxed text-[var(--admin-text-muted)]";
@@ -55,10 +56,13 @@ export function AuditVarianceReview({
   sessionId,
   lines,
   editable,
+  today,
 }: {
   sessionId: string;
   lines: readonly ReviewLine[];
   editable: boolean;
+  /** R34: Pacific today (YYYY-MM-DD) from the server, for the expiry badge. */
+  today?: string;
 }) {
   // Sort so the lines that need a decision are at the top. A reviewer should
   // never have to scroll past forty clean lines to find the one problem.
@@ -102,6 +106,19 @@ export function AuditVarianceReview({
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={toneFor(a.status)}>{a.status}</Badge>
+                  {today
+                    ? (() => {
+                        // R34: expired stock found in an audit should be quarantined
+                        // or destroyed, not just recounted.
+                        const st = expiryStatus(l.expiresOn, today);
+                        if (st.tone !== "expired" && st.tone !== "soon") return null;
+                        return (
+                          <span data-testid="audit-review-expiry">
+                            <Badge tone={st.tone === "expired" ? "danger" : "gold"}>{st.label}</Badge>
+                          </span>
+                        );
+                      })()
+                    : null}
                   {/* "scanned" is a claim about HOW A NUMBER ARRIVED, so it is
                       only shown when a number actually arrived. A line nobody
                       counted cannot have been scanned, and a badge saying so

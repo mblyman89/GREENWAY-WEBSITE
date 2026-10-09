@@ -87,6 +87,10 @@ export const AUDIT_LOT_COLUMNS = [
   // Inputs to the category resolver. Both added by 0024_pos_coa_potency.sql.
   "inventory_type",
   "category",
+  // R34: shown on the count sheet + review as an expired / expiring badge.
+  // Base column from 0023 (always present) - deliberately NOT expires_on_source
+  // (0215), so an un-run migration can never break the audit read.
+  "expires_on",
 ] as const;
 
 /** A raw `inventory_lots` row, named exactly as the database names it. */
@@ -102,6 +106,7 @@ export type AuditLotRow = {
   status: string | null;
   inventory_type: string | null;
   category: string | null;
+  expires_on: string | null;
 };
 
 /**
@@ -211,6 +216,7 @@ export async function enrichAuditLots(
     lastCountedAt: r.last_counted_at,
     priorVarianceCount: 0,
     status: r.status ?? "active",
+    expiresOn: r.expires_on ? String(r.expires_on).slice(0, 10) : null,
   }));
 }
 
@@ -261,6 +267,7 @@ export function __runAuditLotLoaderTests(): void {
     status: "active",
     inventory_type: "Usable Marijuana",
     category: null,
+    expires_on: null,
   };
   const rowKeys = new Set(Object.keys(sampleRow));
   ok(

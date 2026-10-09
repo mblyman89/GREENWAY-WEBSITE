@@ -13,6 +13,7 @@ import {
 } from "@/lib/inventory/store";
 import { loadMenuCategoriesForKeys, resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
 import { lotLabPercentLabel, lotPotencyLabel, lotTypeLabel } from "@/lib/inventory/lot-table-core";
+import { expiryProvenance, expiryStatus } from "@/lib/inventory/expiry-rules-core";
 import { STRAIN_TYPE_OPTIONS } from "@/lib/inventory/lot-edit-core";
 import { strainDrift } from "@/lib/inventory/lot-details-propagation-core";
 import { loadLotWebsiteStrainCards } from "@/lib/inventory/lot-propagation-store";
@@ -307,6 +308,9 @@ export default async function LotDetailPage({
     currentAfterTaxMinor != null ? baseFromAfterTax(currentAfterTaxMinor, priceCategory) : null;
 
   const expired = lot.expires_on != null && lot.expires_on < today;
+  // R34: where the expiration date came from (document vs owner rule) + countdown.
+  const expiryProv = expiryProvenance(lot as unknown as { expires_on: string | null; expires_on_source?: string | null; expires_on_rule_note?: string | null });
+  const expiryState = expiryStatus(lot.expires_on, today);
 
   // R28: what the system read from this lot's lab certificate, what that
   // gives this product, the facts on the lot now, and the editable facts.
@@ -562,6 +566,21 @@ export default async function LotDetailPage({
                 }
                 danger={expired}
               />
+              <div className="flex items-baseline justify-between gap-3" data-testid="lot-expiry-source">
+                <dt className="text-[var(--admin-text-faint)]">Expiry source</dt>
+                <dd className="text-right text-[var(--admin-text)]">
+                  {expiryProv.sourceLabel}
+                  {lot.expires_on ? <span className="ml-1 text-[var(--admin-text-faint)]">· {expiryState.label}</span> : null}
+                  {expiryProv.ruleNote ? (
+                    <span className="block text-xs text-[var(--admin-text-faint)]">{expiryProv.ruleNote}</span>
+                  ) : null}
+                  {expiryProv.source === "none" || expiryProv.isRule ? (
+                    <Link href="/admin/inventory/expiration-rules" className="block text-xs text-[var(--admin-accent)] underline">
+                      Expiration rules
+                    </Link>
+                  ) : null}
+                </dd>
+              </div>
               {lotManifestHref(lot.manifest_id) ? (
                 <div className="flex items-baseline justify-between gap-3">
                   <dt className="text-[var(--admin-text-faint)]">Manifest</dt>

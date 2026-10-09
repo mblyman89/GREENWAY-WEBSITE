@@ -398,6 +398,16 @@ export type ResolveOptions = {
    * catalog; server code passes a DB-overlaid map.
    */
   inventoryTypeMap?: Map<string, string>;
+  /**
+   * R34 - OPT-IN owner-created categories (value -> label) from the live
+   * website_category_types registry, accepted IN ADDITION to the built-in
+   * taxonomy. Omitted (the default everywhere else) = behaviour unchanged.
+   * The heuristic (c) can never produce one of these (it only knows built-in
+   * values), so a custom category is reached only through a human decision:
+   * a per-product override, a published menu category, or an owner type
+   * mapped to it in Settings -> Types.
+   */
+  extraCategories?: ReadonlyMap<string, string>;
 };
 
 export function resolveWebsiteCategory(
@@ -406,14 +416,17 @@ export function resolveWebsiteCategory(
 ): WebsiteCategoryResolution {
   const raw = lot.inventoryType ?? null;
   const map = opts.inventoryTypeMap ?? buildStaticInventoryTypeMap();
+  const extra = opts.extraCategories;
+  const isValid = (v: string) => VALID_CATEGORY.has(v) || Boolean(extra?.has(v));
+  const labelOf = (v: string) => (VALID_CATEGORY.has(v) ? websiteCategoryLabel(v) : extra?.get(v) || v);
 
   // (0) OWNER OVERRIDE — highest precedence. A human re-filed THIS product from
   // the Inventory Detail corrections section; honor it over everything else.
   const override = opts.overrideCategory ?? null;
-  if (override && VALID_CATEGORY.has(override)) {
+  if (override && isValid(override)) {
     return {
       websiteCategory: override,
-      label: websiteCategoryLabel(override),
+      label: labelOf(override),
       raw,
       source: "override",
       unmapped: false,
@@ -422,10 +435,10 @@ export function resolveWebsiteCategory(
 
   // (a) menu_items.category — authoritative.
   const fromMenu = opts.menuItemCategory ?? null;
-  if (fromMenu && VALID_CATEGORY.has(fromMenu)) {
+  if (fromMenu && isValid(fromMenu)) {
     return {
       websiteCategory: fromMenu,
-      label: websiteCategoryLabel(fromMenu),
+      label: labelOf(fromMenu),
       raw,
       source: "menu_item",
       unmapped: false,
@@ -442,10 +455,10 @@ export function resolveWebsiteCategory(
   // (b) inventory_types map by raw inventory_type label.
   if (raw && !multiCategory) {
     const mapped = map.get(inventoryTypeKey(raw));
-    if (mapped && VALID_CATEGORY.has(mapped)) {
+    if (mapped && isValid(mapped)) {
       return {
         websiteCategory: mapped,
-        label: websiteCategoryLabel(mapped),
+        label: labelOf(mapped),
         raw,
         source: "inventory_type",
         unmapped: false,
@@ -763,6 +776,22 @@ export function __runWebsiteCategoryResolverTests(): void {
   eq(websiteCategoryLabel("concentrate"), "Concentrate", "label concentrate");
   eq(websiteCategoryLabel("edible-solid"), "Edible (Solid)", "label edible-solid");
   eq(websiteCategoryLabel(null), "", "label null → empty");
+
+  // R34: opt-in owner-created categories.
+  const xmap = new Map([["bho", "functional"]]);
+  const plain = resolveWebsiteCategory({ posProductKey: "X", inventoryType: "BHO", productName: "Thing" }, { inventoryTypeMap: xmap });
+  ok(plain.websiteCategory !== "functional", "R34 default: custom category NOT accepted without extraCategories");
+  const xtra = new Map([["functional", "Functional Gummies"]]);
+  const viaType = resolveWebsiteCategory({ posProductKey: "X", inventoryType: "BHO", productName: "Thing" }, { inventoryTypeMap: xmap, extraCategories: xtra });
+  eq([viaType.websiteCategory, viaType.label, viaType.source], ["functional", "Functional Gummies", "inventory_type"], "R34 extra: owner type -> custom category");
+  const viaOv = resolveWebsiteCategory({ posProductKey: "X", inventoryType: "BHO", productName: "Thing" }, { overrideCategory: "functional", extraCategories: xtra });
+  eq([viaOv.websiteCategory, viaOv.source], ["functional", "override"], "R34 extra: override to custom category");
+  const viaMenu = resolveWebsiteCategory({ posProductKey: "X", inventoryType: null, productName: "Thing" }, { menuItemCategory: "functional", extraCategories: xtra });
+  eq(viaMenu.websiteCategory, "functional", "R34 extra: menu category custom");
+  const stillStatic = resolveWebsiteCategory({ posProductKey: "X", inventoryType: "BHO", productName: "Live Badder" }, { overrideCategory: "flower", extraCategories: xtra });
+  eq(stillStatic.label, "Flower", "R34 extra: built-in labels unchanged");
+  const unknown = resolveWebsiteCategory({ posProductKey: "X", inventoryType: null, productName: "Thing" }, { overrideCategory: "nope", extraCategories: xtra });
+  ok(unknown.websiteCategory !== "nope", "R34 extra: unknown value still refused");
 
   // -------------------------------------------------------------------------
   // SLICE 63 (owner bug B4): vape hardware under inhalation-concentrate LCB
