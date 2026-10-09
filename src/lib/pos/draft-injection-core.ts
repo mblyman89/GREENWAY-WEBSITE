@@ -45,8 +45,10 @@ import {
   goldenSourceText,
   resolveGoldenStrainType,
   type PickedDescription,
+  type PickedSensory,
   type PickedStrainType,
 } from "@/lib/catalog/golden-record-core";
+import { sensoryForStorage } from "@/lib/pos/menu-sensory-core";
 
 /** The approved draft columns injection needs (from catalog_product_drafts). */
 export type ApprovedDraftForInjection = {
@@ -129,6 +131,16 @@ export type DraftEnrichment = {
   /** SLICE S12: the counted attached strain type (golden-record-core). */
   attachedStrainType?: PickedStrainType | null;
   /**
+   * R35 #6 (migration 0254): the counted attached effects the SERVER already
+   * cleared through checkEffects() (+ kb_banned_phrases). Absent / null = the
+   * menu row's effects stay NULL and the product page uses the knowledge
+   * base, exactly as before R35. Same rule as goldenDescription: the planner
+   * never lints, so it must never be handed a list the server did not clear.
+   */
+  goldenEffects?: PickedSensory | null;
+  /** R35 #6: the counted attached aroma, cleared by lintTerms() (+ kb_banned_phrases). */
+  goldenAroma?: PickedSensory | null;
+  /**
    * R28: the facts the SERVER derived from the lot's lab certificate
    * (coa-facts-core deriveCoaDraftFacts over lab_results.coa_extract_json).
    * Absent / null = no certificate was read = the name/column engine alone,
@@ -203,6 +215,13 @@ export type PlannedInjectedItem = {
   unit_thc_mg: number | null;
   otherwise_taken: boolean | null;
   units_per_package: number | null;
+  /**
+   * R35 #6 (migration 0254): the product's counted, server-cleared effects
+   * and aroma (menu-sensory-core storage form). null = nothing counted; the
+   * writer then sends no key at all, so the row is byte-identical to before.
+   */
+  effects: string[] | null;
+  aroma_notes: string[] | null;
   description: string;
   price_label: string;
   price_minor_units: number;
@@ -780,6 +799,23 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
         context: { draft_id: d.id, pos_product_key: key, field: enrich.goldenDescription.field, source: enrich.goldenDescription.source },
       });
     }
+    // R35 #6: the product's own counted effects / aroma (server-cleared).
+    // Storage form re-applied here so a hand-built enrichment can never put
+    // an empty list (the 0254 CHECK refuses one) or a 9th entry on the row.
+    const goldenEffects = sensoryForStorage(enrich.goldenEffects?.values ?? null);
+    const goldenAroma = sensoryForStorage(enrich.goldenAroma?.values ?? null);
+    for (const [label, values, pick] of [
+      ["effects", goldenEffects, enrich.goldenEffects],
+      ["aroma", goldenAroma, enrich.goldenAroma],
+    ] as const) {
+      if (!values || !pick) continue;
+      diagnostics.push({
+        severity: "info",
+        code: "draft_inject_sensory_attached",
+        message: `“${d.name}” shows its own ${label} (${values.join(", ")}) — from ${goldenSourceText(pick.source, pick.confidence)} (attached at onboarding).`,
+        context: { draft_id: d.id, pos_product_key: key, field: label, count: values.length, source: pick.source },
+      });
+    }
     const priceLabel = [formatMoney(d.price_minor_units), enrich.packageLabel ?? ""]
       .filter(Boolean)
       .join(" ");
@@ -828,6 +864,8 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
       unit_thc_mg: d.chosen_unit_thc_mg ?? null,
       otherwise_taken: d.chosen_otherwise_taken ?? null,
       units_per_package: d.chosen_units_per_package ?? null,
+      effects: goldenEffects,
+      aroma_notes: goldenAroma,
       // Same copy shape as transform.ts genericDescription (verified :586),
       // now built in golden-record-core. SLICE S12: attached, server-cleared
       // copy replaces it (F-064).
@@ -1374,6 +1412,52 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
       new Map([["d1", enrich({ attachedStrainType: { value: "indica", source: "human", confidence: null } })]]),
     );
     assert(p.items[0].strain_type === "sativa-hybrid", "S12: the approver's pick still wins");
+  }
+
+  // ---- R35 #6: effects and aroma on the menu row (0254) -------------------
+  {
+    const p = plan([draft({})], new Map([["d1", enrich({})]]));
+    assert(p.items[0].effects === null && p.items[0].aroma_notes === null, "R35: nothing counted = NULL (KB fallback, as before)");
+    assert(!p.diagnostics.some((d) => d.code === "draft_inject_sensory_attached"), "R35: no sensory diagnostic without a value");
+  }
+  {
+    const p = plan(
+      [draft({})],
+      new Map([
+        [
+          "d1",
+          enrich({
+            goldenEffects: { values: ["relaxed", "happy"], source: "gemini", confidence: 0.93 },
+            goldenAroma: { values: ["citrus"], source: "human", confidence: null },
+          }),
+        ],
+      ]),
+    );
+    assert(p.items[0].effects?.join(",") === "relaxed,happy", "R35: cleared effects reach the row");
+    assert(p.items[0].aroma_notes?.join(",") === "citrus", "R35: cleared aroma reaches the row");
+    const ds = p.diagnostics.filter((d) => d.code === "draft_inject_sensory_attached");
+    assert(ds.length === 2, "R35: one disclosure per list");
+    assert(ds[0].message.includes("the AI lookup 93%") && ds[0].message.includes("relaxed, happy"), "R35: effects source + values disclosed");
+    assert(ds[1].message.includes("from you") && ds[1].context?.field === "aroma", "R35: aroma source disclosed");
+    assert(Object.keys(p.items[0].fact_provenance).length === 0, "R35: sensory never touches fact_provenance");
+    assert(p.items[0].description.endsWith("in Port Orchard."), "R35: sensory never changes the description");
+  }
+  {
+    const p = plan(
+      [draft({})],
+      new Map([
+        [
+          "d1",
+          enrich({
+            goldenEffects: { values: [], source: "human", confidence: null },
+            goldenAroma: { values: ["a", "b", "c", "d", "e", "f", "g", "h", "i"], source: "coa", confidence: null },
+          }),
+        ],
+      ]),
+    );
+    assert(p.items[0].effects === null, "R35: an empty list is NULL, never [] (0254 CHECK)");
+    assert(p.items[0].aroma_notes?.length === 8, "R35: capped at the 0254 CHECK's 8");
+    assert(p.diagnostics.filter((d) => d.code === "draft_inject_sensory_attached").length === 1, "R35: an empty list is not disclosed");
   }
 
   // ---- R28: the lab certificate fills the facts the name cannot ------------
