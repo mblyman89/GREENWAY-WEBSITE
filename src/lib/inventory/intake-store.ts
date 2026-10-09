@@ -93,10 +93,14 @@ import {
   mergeUsualTransport,
 } from "@/lib/inventory/vendor-transport-core";
 import {
+  BLOCKING_STATUSES,
   buildManifestIdentity,
+  dedupeKeyFor,
+  isBlockingStatus,
   findBlockingDuplicate,
   type ExistingManifestRow,
 } from "@/lib/inventory/manifest-dedupe-core";
+import { isDedupeKeyConflict } from "@/lib/inventory/inbound-dedupe-core";
 import { autoReceiveManifestPo } from "@/lib/inventory/po-receive-store";
 import { stageIntakeMenuVersionForManifest } from "@/lib/pos/intake-menu-staging";
 import { CUTOVER_HOLD_COPY, CUTOVER_REASON } from "@/lib/inventory/cutover-guard-core";
@@ -578,10 +582,14 @@ export async function stageManifest(
     vendor_label: parsed.vendor_label,
   });
   if (identity) {
+    // R36: created_at rides along so the OLDEST live twin is the target
+    // (the row the owner keeps), and the read is ordered so the 50-row cap
+    // can never hide the oldest one.
     const { data: dupRows } = await admin
       .from("inbound_manifests")
-      .select("id, manifest_number, vendor_label, status")
+      .select("id, manifest_number, vendor_label, status, created_at")
       .eq("manifest_number", parsed.manifest_number)
+      .order("created_at", { ascending: true })
       .limit(50);
     const existing = (dupRows as ExistingManifestRow[] | null) ?? [];
     const blockingId = findBlockingDuplicate(identity, existing);
@@ -602,23 +610,93 @@ export async function stageManifest(
   const coaLinks = extractCoaLinks(parsed);
 
   // 1) manifest (pending)
-  const { data: mData, error: mErr } = await admin
+  // R36 (migration 0255): dedupe_key is UNIQUE while the row is live, so two
+  // stagings of the same manifest racing each other (the owner's twin rows:
+  // a webhook retry arriving while the first delivery was still reading the
+  // PDFs) can no longer BOTH insert - the read-then-check above cannot close
+  // that window on its own. The loser gets 23505 and becomes the duplicate it
+  // is. Before 0255 is applied the column is missing: retry once without it
+  // (exactly the old behaviour).
+  const dedupeKey = dedupeKeyFor(identity);
+  const manifestRow: Record<string, unknown> = {
+    manifest_number: parsed.manifest_number,
+    vendor_id: vendorId,
+    vendor_label: parsed.vendor_label,
+    transfer_date: parsed.transfer_date,
+    raw_payload: rawPayload,
+    source_url: meta?.sourceUrl ?? null,
+    source_format: parsed.source_format,
+    coa_links: coaLinks,
+    status: "pending",
+    created_by: actorId,
+    updated_by: actorId,
+  };
+  if (dedupeKey) manifestRow.dedupe_key = dedupeKey;
+  let { data: mData, error: mErr } = await admin
     .from("inbound_manifests")
-    .insert({
-      manifest_number: parsed.manifest_number,
-      vendor_id: vendorId,
-      vendor_label: parsed.vendor_label,
-      transfer_date: parsed.transfer_date,
-      raw_payload: rawPayload,
-      source_url: meta?.sourceUrl ?? null,
-      source_format: parsed.source_format,
-      coa_links: coaLinks,
-      status: "pending",
-      created_by: actorId,
-      updated_by: actorId,
-    })
+    .insert(manifestRow)
     .select("id")
     .single();
+  if (mErr && "dedupe_key" in manifestRow && isMissingColumnError(mErr)) {
+    delete manifestRow.dedupe_key;
+    ({ data: mData, error: mErr } = await admin
+      .from("inbound_manifests")
+      .insert(manifestRow)
+      .select("id")
+      .single());
+  }
+  if (mErr && dedupeKey && isDedupeKeyConflict(mErr)) {
+    // Lost the race: the winner's row holds the key. Point the duplicate path
+    // at it (the caller then fills its invoice #, documents and transport).
+    let { data: winner } = await admin
+      .from("inbound_manifests")
+      .select("id, status")
+      .eq("dedupe_key", dedupeKey)
+      .maybeSingle();
+    // Self-heal: a key still held by a row that is no longer LIVE (rejected /
+    // dismissed by a path that did not release it) must not block a corrected
+    // re-send. Release it - only if that row is still not live - and retry
+    // the insert once.
+    const holder = winner as { id: string; status: string | null } | null;
+    if (holder && !isBlockingStatus(holder.status)) {
+      await admin
+        .from("inbound_manifests")
+        .update({ dedupe_key: null })
+        .eq("id", holder.id)
+        .eq("dedupe_key", dedupeKey)
+        .not("status", "in", `(${BLOCKING_STATUSES.join(",")})`);
+      ({ data: mData, error: mErr } = await admin
+        .from("inbound_manifests")
+        .insert(manifestRow)
+        .select("id")
+        .single());
+      if (mErr && isDedupeKeyConflict(mErr)) {
+        ({ data: winner } = await admin
+          .from("inbound_manifests")
+          .select("id, status")
+          .eq("dedupe_key", dedupeKey)
+          .maybeSingle());
+      }
+    }
+  }
+  if (mErr && dedupeKey && isDedupeKeyConflict(mErr)) {
+    const { data: winner } = await admin
+      .from("inbound_manifests")
+      .select("id")
+      .eq("dedupe_key", dedupeKey)
+      .maybeSingle();
+    const winnerId = (winner as { id: string } | null)?.id;
+    return {
+      ok: false,
+      duplicate: true,
+      ...(winnerId ? { existingManifestId: winnerId } : {}),
+      error: `Duplicate manifest ${parsed.manifest_number} from ${
+        parsed.vendor_label ?? "this vendor"
+      } was staged a moment ago by another delivery${
+        winnerId ? ` (manifest ${winnerId})` : ""
+      }; not staged again.`,
+    };
+  }
   if (mErr || !mData) {
     return { ok: false, error: mErr?.message ?? "Failed to create manifest." };
   }
@@ -877,6 +955,19 @@ export async function rejectManifest(
     })
     .eq("id", manifestId);
   if (error) return { ok: false, error: error.message };
+  // R36 (0255): a rejected manifest is no longer live - release its dedupe key
+  // so the vendor's corrected re-send can stage. Separate, best-effort write
+  // so a database without 0255 still rejects cleanly (missing column is the
+  // only expected failure; the staging path also self-heals a stale key).
+  {
+    const { error: keyErr } = await admin
+      .from("inbound_manifests")
+      .update({ dedupe_key: null })
+      .eq("id", manifestId);
+    if (keyErr && !isMissingColumnError(keyErr)) {
+      console.error("[intake-store] reject: dedupe key release failed:", keyErr.message);
+    }
+  }
   await logManifestEvent(
     manifestId,
     "rejected",
