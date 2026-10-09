@@ -238,7 +238,9 @@ describe("R23 fix 9 — home + specials resolve enrichment images like Shop", ()
     it(`${p} pipes the live menu through withResolvedImages`, () => {
       const s = read(p);
       expect(s).toContain('import { withResolvedImages } from "@/lib/enrichment/image-resolver";');
-      expect(s).toMatch(/withMenuProfile\(items\)\)\.then\(\(items\) => withResolvedImages\(items\)\)/);
+      // R33: the owner's category/type re-file (withCategoryOverride) sits
+      // between the profile and the image resolve; images still resolve last.
+      expect(s).toMatch(/withMenuProfile\(items\)\)\.then\(\(items\) => withCategoryOverride\(items\)\)\.then\(\(items\) => withResolvedImages\(items\)\)/);
     });
   }
 });
