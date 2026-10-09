@@ -955,6 +955,7 @@ import { r28MakeExtract } from "../r28/coa-fixture-extract";
 import { __runLabFactsAttachCoreTests } from "../../src/lib/catalog/lab-facts-attach-core";
 import { __runCannabinoidProfileCoreTests } from "../../src/lib/menu/cannabinoid-profile-core";
 import { __runServingLimitWarningCoreTests } from "../../src/lib/compliance/serving-limit-warning-core";
+import { __runMenuSensoryCoreTests } from "../../src/lib/pos/menu-sensory-core";
 import { __runWciaLabJsonCoreTests } from "../../src/lib/inventory/wcia-lab-json-core";
 import { __runExpiryResearchCoreTests } from "../../src/lib/inventory/expiry-research-core";
 import { __runExpiryRulesCoreTests } from "../../src/lib/inventory/expiry-rules-core";
@@ -2116,6 +2117,7 @@ __runLiquidVolumeTests();
   assertRan("expiry-rules-core", __runExpiryRulesCoreTests(), 180); // R34: expiration rule engine
   assertRan("expiry-report-export", __runExpiryReportExportTests(), 14); // R34: expiration report export
   assertRan("serving-limit-warning-core", __runServingLimitWarningCoreTests(), 53); // R35 #4: WAC 314-55-095 warning on the manual facts forms
+  assertRan("menu-sensory-core", __runMenuSensoryCoreTests(), 67); // R35 #6: effects and aroma on the menu row (0254)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -9,7 +9,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, resolveEnrichmentsForItems, computeGaps, type GapFlags } from "@/lib/enrichment/store";
 import { enrichmentFollowsIdentityOn } from "@/lib/enrichment/enrichment-identity-server";
-import { linkEnrichmentsToProducts, linkMenuCardsToKbAction } from "./actions";
+import { fillMenuSensoryAction, linkEnrichmentsToProducts, linkMenuCardsToKbAction } from "./actions";
 import { resolveMediaUrls } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { ProductGrid, type ProductGridCard } from "@/components/admin/products/ProductGrid";
@@ -604,6 +604,26 @@ export default async function ProductsPage({
           </p>
           <Button type="submit" variant="neutral" size="sm">
             Link menu cards to the KB
+          </Button>
+        </form>
+
+        {/* R35 #6 (migration 0254): effects and aroma on the menu row. New
+            menus carry them as they are built; this fills the live cards. */}
+        <form
+          action={fillMenuSensoryAction}
+          data-testid="fill-menu-sensory"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3"
+        >
+          <p className="max-w-3xl text-sm text-[var(--admin-text-muted)]">
+            <span className="font-bold text-[var(--admin-text)]">Effects and aroma on the menu card:</span> an approved
+            product&apos;s own effects and aroma (the ones you entered, the lab&apos;s, or an AI answer at 90% or
+            higher) now travel onto its menu card, so its page shows them instead of a strain-library guess. Every
+            menu built from now on carries them. Press once to fill the cards that are already live. It only fills
+            empty lists, never overwrites one, runs every word through the same compliance check (experience words
+            only, your banned phrases removed), and is safe to run again. Needs migration 0254.
+          </p>
+          <Button type="submit" variant="neutral" size="sm">
+            Fill effects and aroma on live cards
           </Button>
         </form>
 

@@ -154,6 +154,14 @@ export type MenuItemRow = {
    * units are physically separate items.
    */
   units_per_package: number | null;
+  /**
+   * R35 #6 (migration 0254): the product's own counted effects / aroma,
+   * already cleared by checkEffects / lintTerms (+ kb_banned_phrases) on the
+   * server. NULL = nothing counted (the product page uses the knowledge
+   * base). Optional: absent on a database that has not applied 0254 yet.
+   */
+  effects?: string[] | null;
+  aroma_notes?: string[] | null;
   package_cbd_mg: number | null;
   ratio_label: string | null;
   net_weight_grams: number | null;

@@ -35,6 +35,7 @@ import { intakeDisplayName, lotPackageLabel } from "@/lib/pos/intake-mastering-c
 import { loadCoaFactsForDrafts } from "@/lib/inventory/coa-facts-server";
 import { loadGoldenInputs } from "@/lib/catalog/golden-record-server";
 import { insertMenuItemsWithKbLink, logMenuKbLinkPlan, planMenuKbLinksForCards } from "@/lib/catalog/menu-kb-link-server";
+import { sensoryRowFields } from "@/lib/pos/menu-sensory-core";
 
 export type DraftInjectionResult = {
   injected: number;
@@ -295,6 +296,11 @@ export async function injectApprovedDraftsIntoVersion(
         unit_thc_mg: it.unit_thc_mg,
         otherwise_taken: it.otherwise_taken,
         units_per_package: it.units_per_package,
+        // R35 #6 (0254): the product's counted, server-cleared effects and
+        // aroma. Keys are present ONLY when a list exists, so a product with
+        // nothing counted writes byte-for-byte the row it wrote before 0254
+        // (and a pre-0254 table never sees the names).
+        ...sensoryRowFields(it.effects, it.aroma_notes),
         description: it.description,
         price_label: it.price_label,
         price_minor_units: it.price_minor_units,

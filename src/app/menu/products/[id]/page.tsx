@@ -34,6 +34,7 @@ import { withDohCompliance } from "@/lib/menu/menu-doh-server";
 import { dohPillForItem } from "@/lib/menu/menu-doh-badge-core";
 import { classificationPillsForItem } from "@/lib/menu/menu-classification-badge-core";
 import { resolveDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
+import { resolvePageSensory } from "@/lib/menu/product-sensory-server";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
 import { getEnrichmentForPublicItem } from "@/lib/enrichment/store";
 import { productSeoMetadata } from "@/lib/enrichment/seo-draft-core";
@@ -430,10 +431,17 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const detailRatioSlot = showCannabinoids ? cardRatioSlot(item) : ({ kind: "strain" } as const);
   const detailServingLine = showCannabinoids ? cardServingLine(item) : null;
 
-  // Compliance-safe experiential + sensory descriptors from the KB (may be empty).
-  const kbAroma = knowledge?.aromaNotes ?? [];
+  // Compliance-safe experiential + sensory descriptors (may be empty).
+  // R35 #6 (migration 0254): the product's OWN counted effects / aroma (its
+  // published menu row, re-gated at render time) win over the knowledge-base
+  // ladder, per list; with none (or before 0254) these are exactly the KB
+  // lists the page showed before. Merch never reads (non-cannabis).
+  const pageSensory = isMerchItem(item)
+    ? { effects: [] as string[], aroma: [] as string[] }
+    : await resolvePageSensory(item.id, { effects: knowledge?.effects ?? [], aroma: knowledge?.aromaNotes ?? [] });
+  const kbAroma = pageSensory.aroma;
   const kbFlavor = knowledge?.flavorNotes ?? [];
-  const kbEffects = knowledge?.effects ?? [];
+  const kbEffects = pageSensory.effects;
   // Terpenes: prefer the menu-build terpenes already on the item; fall back to KB.
   const kbTerpenes = (item.terpenes?.length ? item.terpenes : knowledge?.terpenes) ?? [];
   const hasSensory = kbAroma.length > 0 || kbFlavor.length > 0 || kbEffects.length > 0 || kbTerpenes.length > 0;

@@ -55,7 +55,10 @@ describe("menu-columns-core", () => {
   it("drops exactly the heavy jsonb columns and nothing the site or the money needs", () => {
     // S04: identity_key / kb_product_id (0234) are optional MenuItemRow
     // fields that must NOT be fetched, or the menu read fails pre-migration.
-    expect(MENU_ITEM_DROPPED_COLUMNS).toEqual(["fact_provenance", "identity_key", "kb_product_id"]);
+    // R35 #6: effects / aroma_notes (0254) join the dropped set for the same reason.
+    expect(MENU_ITEM_DROPPED_COLUMNS).toEqual(["fact_provenance", "identity_key", "kb_product_id", "effects", "aroma_notes"]);
+    expect(isMenuItemColumnFetched("effects")).toBe(false);
+    expect(isMenuItemColumnFetched("aroma_notes")).toBe(false);
     expect(isMenuItemColumnFetched("identity_key")).toBe(false);
     expect(isMenuItemColumnFetched("kb_product_id")).toBe(false);
     expect(MENU_VERSION_DROPPED_COLUMNS).toEqual(["summary_json"]);
