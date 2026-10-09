@@ -7,7 +7,7 @@ import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin
 import { StatCard } from "@/components/admin/StatCard";
 import { Field, Input, Textarea, Button } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
-import { listManifests, countManifestsByStatus } from "@/lib/inventory/intake-store";
+import { listManifests, countManifestsByStatus, findDuplicateTwinsFor } from "@/lib/inventory/intake-store";
 import { getParseStatusByManifestNumber } from "@/lib/inbound-email/llamaparse-status-server";
 import {
   listInboundEmails,
@@ -30,6 +30,7 @@ import {
   promoteManifestChunkToKbAction,
   reprocessIntelligenceAction,
   setInvoiceNumberAction,
+  dismissDuplicateManifestAction,
 } from "./actions";
 import { BatchTransferImport } from "@/components/admin/inventory/BatchTransferImport";
 import { KbBackfillPanel } from "@/components/admin/inventory/KbBackfillPanel";
@@ -65,6 +66,9 @@ export default async function IntakePage({
     back?: string;
     view?: string;
     invoice?: string;
+    /** R36: the Dismiss duplicate result (summary) or refusal (message). */
+    dismissed?: string;
+    dismisserr?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -81,6 +85,8 @@ export default async function IntakePage({
     back,
     view,
     invoice,
+    dismissed,
+    dismisserr,
   } = await searchParams;
 
   // SLICE 101 — the owner's table filter: default hides accepted + partially
@@ -122,6 +128,13 @@ export default async function IntakePage({
     countManifestsByStatus(),
     listInboundEmails(15),
   ]);
+
+  // R36 #2 - rows that are a second copy of the same manifest (same manifest
+  // # + vendor, both live): flagged "Duplicate" with a Dismiss button. Looked
+  // up across ALL rows with those numbers, not just the 200 listed.
+  const twinsById = await findDuplicateTwinsFor(
+    manifests.filter((m) => m.status !== "dismissed"),
+  );
 
   // Overdue in-transit manifests bubble up as a banner (the one summary the
   // single Incoming table doesn't call out on its own).
@@ -317,6 +330,25 @@ export default async function IntakePage({
             Invoice # correction cleared — this manifest is back to the value read from its documents.
           </div>
         )}
+        {/* R36 #2 - Dismiss duplicate result. Text comes from our own server
+            action (describeDismissResult / the SQL refusal), rendered as
+            text (React escapes it). */}
+        {dismissed && (
+          <div
+            data-testid="dismiss-banner"
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+          >
+            <strong>Duplicate dismissed.</strong> {dismissed}
+          </div>
+        )}
+        {dismisserr && (
+          <div
+            data-testid="dismiss-error"
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+          >
+            <strong>Not dismissed.</strong> {dismisserr}
+          </div>
+        )}
         {invoice === "error" && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Couldn&apos;t save that Invoice # correction. Please try again — if it keeps failing, the change did not persist.
@@ -340,6 +372,8 @@ export default async function IntakePage({
           setInvoiceAction={setInvoiceNumberAction}
           view={intakeView}
           processedCount={countProcessedRows(manifests)}
+          twinsById={twinsById}
+          dismissAction={dismissDuplicateManifestAction}
         />
 
         {/* The single "Incoming (email)" table above is the one source of

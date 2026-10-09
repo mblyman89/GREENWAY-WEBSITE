@@ -225,7 +225,8 @@ export async function backfillKbFromManifests(
       const { data, error } = await admin
         .from("inbound_manifests")
         .select("id, status")
-        .neq("status", "rejected")
+        // R36: a dismissed duplicate is not a manifest either.
+        .not("status", "in", "(rejected,dismissed)")
         .order("created_at", { ascending: true })
         // Unique tiebreak — `created_at` is not unique.
         .order("id", { ascending: true })

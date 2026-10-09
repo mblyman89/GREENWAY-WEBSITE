@@ -179,6 +179,9 @@ export function manifestStatusBadge(status: string): {
       return { tone: "gold", label: "Partially Accepted" };
     case "rejected":
       return { tone: "danger", label: "Rejected" };
+    // R36: a duplicate row the owner dismissed (not a rejection).
+    case "dismissed":
+      return { tone: "neutral", label: "Dismissed as a duplicate" };
     case "received":
       return { tone: "orange", label: "Received" };
     case "in_transit":

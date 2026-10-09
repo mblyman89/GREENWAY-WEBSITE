@@ -15,7 +15,9 @@
  *  - ⬇ Manifest / ⬇ Invoice download links come from the email's fetch trail
  *    (inbound_email_log.note), joined by manifest id.
  *  - No delete button, by design — the strict gate means nothing junky can
- *    land here to need deleting.
+ *    land here to need deleting. R36: the ONE exception is a duplicate row
+ *    (the same email delivered twice): a row with a live twin shows
+ *    "Dismiss duplicate", which removes the copy WITHOUT rejecting it.
  *
  * Presentational server component: all data is passed in; all logic lives in
  * the pure manifest-table-core module (unit-tested).
@@ -32,6 +34,7 @@ import {
 import { CONCIERGE_HINTS } from "@/lib/inventory/guided-accept-core";
 import type { ParseStatus } from "@/lib/inbound-email/llamaparse-status-core";
 import { InvoiceNumberCell } from "@/components/admin/inventory/InvoiceNumberCell";
+import { DismissDuplicateForm } from "@/components/admin/inventory/DismissDuplicateForm";
 
 export type ManifestDownloadLinks = {
   manifestUrl: string | null;
@@ -61,6 +64,8 @@ export function EmailIntakeTable({
   setInvoiceAction,
   view = "action",
   processedCount = 0,
+  twinsById,
+  dismissAction,
 }: {
   rows: InboundManifest[];
   /**
@@ -90,6 +95,18 @@ export function EmailIntakeTable({
   view?: "action" | "all";
   /** How many processed rows the "action" view hides (for the toggle label). */
   processedCount?: number;
+  /**
+   * R36: duplicate row id -> the row that would be KEPT. Rows in this map get
+   * a "Duplicate" flag and the Dismiss duplicate button.
+   */
+  twinsById?: Map<string, string>;
+  /** R36: dismissDuplicateManifestAction (bound per row inside the table). */
+  dismissAction?: (
+    duplicateId: string,
+    keepId: string,
+    back: "list" | "detail",
+    formData: FormData,
+  ) => void | Promise<void>;
 }) {
   return (
     <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-surface)]">
@@ -176,6 +193,7 @@ export function EmailIntakeTable({
                 const invoiceOverridden = Boolean((m.invoice_number_override ?? "").trim());
                 const links = linksByManifestId.get(m.id);
                 const eta = classifyEta(m.eta_date);
+                const keepId = twinsById?.get(m.id) ?? null;
                 return (
                   <tr
                     key={m.id}
@@ -189,6 +207,15 @@ export function EmailIntakeTable({
                       >
                         {m.manifest_number ?? "(no number)"}
                       </Link>
+                      {keepId && (
+                        <span
+                          className="ml-2 inline-block rounded bg-[var(--admin-gold-soft)] px-1.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide text-[var(--admin-gold)]"
+                          title="Another row has the same manifest # and vendor - the same email was delivered twice. Use Dismiss duplicate on the copy you don't want."
+                          data-testid="duplicate-flag"
+                        >
+                          Duplicate
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                       {setInvoiceAction ? (
@@ -289,6 +316,14 @@ export function EmailIntakeTable({
                         >
                           Open
                         </Link>
+                        {keepId && dismissAction && (
+                          <DismissDuplicateForm
+                            compact
+                            action={dismissAction.bind(null, m.id, keepId, "list")}
+                            keepId={keepId}
+                            keepLabel="the other copy of this manifest"
+                          />
+                        )}
                       </span>
                     </td>
                   </tr>
