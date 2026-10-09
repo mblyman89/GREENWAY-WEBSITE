@@ -36,6 +36,10 @@ import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core
 // read as 224 g on the discount side, granting a full-ounce tier to an
 // eighth). Pure: no I/O.
 import { __runWeightLabelTests } from "../../src/lib/compliance/weight-label-core";
+// R32: truthful price fine print, onboarding recall (type + strain), inventory onboarding join.
+import { __runPriceExplainCoreTests } from "../../src/lib/inventory/price-explain-core";
+import { __runOnboardingRecallCoreTests } from "../../src/lib/inventory/onboarding-recall-core";
+import { __runLotOnboardingCoreTests } from "../../src/lib/inventory/lot-onboarding-core";
 // R31: the one finalize button + the "should I press Run AI extract?" advice.
 import { __runFinalizeLabelCoreTests } from "../../src/lib/inventory/finalize-label-core";
 import { __runAiExtractAdviceCoreTests } from "../../src/lib/inventory/ai-extract-advice-core";
@@ -2091,6 +2095,9 @@ __runLiquidVolumeTests();
   assertRan("finalize-label-core", __runFinalizeLabelCoreTests(), 29); // R31: Accept All & Finalize / Accept x · Reject y
   assertRan("ai-extract-advice-core", __runAiExtractAdviceCoreTests(), 26); // R31: press / don't press, from what PDFs
   assertRan("line-identity-chip-core", __runLineIdentityChipCoreTests(), 22); // R31: identity-keyed line chip replaces the strain-name KB guesser
+  assertRan("price-explain-core", __runPriceExplainCoreTests(), 66); // R32: 2x cost + tax, rounded up — explained, dynamic
+  assertRan("onboarding-recall-core", __runOnboardingRecallCoreTests(), 59); // R32: remembered type/strain/shelf by identity
+  assertRan("lot-onboarding-core", __runLotOnboardingCoreTests(), 35); // R32: inventory table onboarding join
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

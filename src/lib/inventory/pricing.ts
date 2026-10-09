@@ -39,6 +39,14 @@ import {
   NON_CANNABIS_TAX_INCLUSIVE_DIVISOR,
   isNonCannabisCategory,
 } from "@/lib/orders/order-pricing-core";
+// R32 (T-328): the explainable price waterfall + identity-wide velocity plan.
+import {
+  computePriceFloorMinor,
+  explainPrice,
+  planVelocityKeys,
+  type PriceVelocityBasis,
+  type VelocityPriorLot,
+} from "@/lib/inventory/price-explain-core";
 
 /** One whole dollar in minor units. Menu prices round UP to this for clean numbers. */
 export const WHOLE_DOLLAR_MINOR = 100;
@@ -105,18 +113,29 @@ export function priceFloorMinor(
   category?: string | null,
 ): number | null {
   if (costMinor == null || costMinor <= 0) return null;
-  const base = costMinor * settings.min_markup_multiple; // pre-tax 2× markup
-  const taxInclusive = base * taxInclusiveDivisorFor(category); // fold tax on top
-  return roundUpToNextDollarMinor(taxInclusive); // clean whole-dollar shelf price
+  // R32: ONE implementation of the floor math, shared with the explanation
+  // the owner reads (price-explain-core.ts) so the number and the words can
+  // never disagree. Same formula as T-319: round UP(cost × multiple × divisor),
+  // with a float-noise guard so an exact whole dollar is not bumped a dollar.
+  return computePriceFloorMinor(costMinor, settings.min_markup_multiple, category);
 }
 
 export type VelocitySignal = {
   /** Units sold in the lookback window. */
   unitsSold: number;
-  /** Days the product has been available (age). */
+  /**
+   * Days the sales window really covers (R32: the HONEST window — days since
+   * the first same-size delivery, capped at the lookback — not a fixed 60).
+   */
   daysAvailable: number;
   /** Units currently on hand (slow movers tend to pile up). */
   onHand: number;
+  /** R32: "product" = summed over every delivery of this product; "delivery" = this POS key only. */
+  basis?: PriceVelocityBasis;
+  /** R32: how many deliveries (POS keys) the units were summed over. */
+  deliveriesCounted?: number;
+  /** R32: when the sales were read (stamped into the fine print). */
+  asOf?: string;
 };
 
 export type PriceSuggestion = {
@@ -143,52 +162,29 @@ export function suggestPrice(
   settings: PricingSettings = DEFAULT_PRICING,
   category?: string | null,
 ): PriceSuggestion {
-  const floor = priceFloorMinor(costMinor, settings, category);
-  if (floor == null) {
-    return {
-      floorMinor: null,
-      suggestedMinor: null,
-      rationale: "No vendor cost on this product yet — add the cost to enable pricing.",
-    };
-  }
-
-  const mult = settings.min_markup_multiple;
-  if (!velocity || velocity.daysAvailable <= 0) {
-    return {
-      floorMinor: floor,
-      suggestedMinor: floor,
-      rationale: `New product, no sales history yet — starting at the ${mult}× (tax-inclusive, rounded up to the next dollar) floor.`,
-    };
-  }
-
-  const perDay = velocity.unitsSold / Math.max(velocity.daysAvailable, 1);
-
-  // Velocity bands (units/day). Tunable; deliberately conservative.
-  let multiplier = 1.0;
-  let why: string;
-  if (perDay >= 3) {
-    multiplier = 1.25;
-    why = `High demand (~${perDay.toFixed(1)} sold/day) — raising price 25% over floor to capture margin.`;
-  } else if (perDay >= 1) {
-    multiplier = 1.12;
-    why = `Steady seller (~${perDay.toFixed(1)} sold/day) — +12% over floor.`;
-  } else if (perDay >= 0.25) {
-    multiplier = 1.05;
-    why = `Modest movement (~${perDay.toFixed(2)} sold/day) — +5% over floor.`;
-  } else {
-    multiplier = 1.0;
-    const aged = velocity.daysAvailable > 60;
-    why = aged
-      ? `Slow mover (~${perDay.toFixed(2)} sold/day, ${velocity.daysAvailable}d old) — hold at the ${mult}× floor to move it.`
-      : `Low movement so far — hold at the ${mult}× floor.`;
-  }
-
-  // Nudge above the floor, then round UP to the next whole dollar for a clean
-  // shelf number, and never below the floor.
-  let suggested = roundUpToNextDollarMinor(floor * multiplier);
-  if (suggested < floor) suggested = floor; // never below floor
-
-  return { floorMinor: floor, suggestedMinor: suggested, rationale: why };
+  // R32 (T-328): the suggestion AND its fine print come from ONE place, the
+  // price waterfall in price-explain-core.ts. The rationale now states the
+  // real rule with the real numbers ("2× cost ($5.00 → $10.00) + 46.3% tax =
+  // $14.63 tax-inclusive, rounded up to $15.00") and, when sales history
+  // moves the price, exactly which sales, over which window, from which
+  // deliveries. Bands are unchanged: ≥3/day +25%, ≥1 +12%, ≥0.25 +5%, else floor.
+  const asOf = velocity?.asOf ? new Date(velocity.asOf) : null;
+  const e = explainPrice({
+    costMinor,
+    multiple: settings.min_markup_multiple,
+    category,
+    velocity:
+      velocity && velocity.daysAvailable > 0
+        ? {
+            unitsSold: velocity.unitsSold,
+            windowDays: velocity.daysAvailable,
+            basis: velocity.basis ?? "delivery",
+            deliveriesCounted: velocity.deliveriesCounted ?? 1,
+          }
+        : null,
+    asOf,
+  });
+  return { floorMinor: e.floorMinor, suggestedMinor: e.suggestedMinor, rationale: e.rationale };
 }
 
 /** Validate an employee-entered price against the hard floor. */
@@ -231,17 +227,84 @@ export async function getPricingSettings(): Promise<PricingSettings> {
 }
 
 /**
- * Compute sales velocity for a POS product key from order_lines over a window.
- * Returns null if we have no signal at all.
+ * R32 (T-328): optional identity widening for the velocity lookup.
+ * identityKey = the lot's S03 product identity (vendor | category | family);
+ * the size fields keep a 1g and a 3.5g of the same product apart.
+ */
+export type VelocityIdentity = {
+  identityKey: string | null;
+  unitWeight: number | null;
+  unitWeightUom: string | null;
+};
+
+/** Prior deliveries of the same product identity (best-effort; [] pre-0234). */
+async function loadPriorDeliveriesForIdentity(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  identityKey: string,
+): Promise<VelocityPriorLot[]> {
+  try {
+    const { data, error } = await admin
+      .from("inventory_lots")
+      .select("pos_product_key, unit_weight, unit_weight_uom, received_on, created_at")
+      .eq("identity_key", identityKey)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) return []; // e.g. 0234 not applied: fall back to this delivery only
+    type Row = {
+      pos_product_key: string | null;
+      unit_weight: number | null;
+      unit_weight_uom: string | null;
+      received_on: string | null;
+      created_at: string | null;
+    };
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      pos_product_key: r.pos_product_key,
+      unit_weight: r.unit_weight,
+      unit_weight_uom: r.unit_weight_uom,
+      arrived_at: r.received_on ?? r.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Compute sales velocity for a product from order_lines over a window.
+ *
+ * R32 (T-328): when `identity` is given, sales are summed over EVERY delivery
+ * of the same product (same identity_key AND same package size), because the
+ * per-delivery pos_product_key changes on each restock when the vendor has no
+ * SKU — which is why restocks of best sellers used to read "New product, no
+ * sales history yet". The window is honest (days since the first same-size
+ * delivery, capped at `lookbackDays`).
+ *
+ * Returns null only when there is no signal at all (no deliveries to look up,
+ * or a single brand-new delivery with no sales). A product that HAS earlier
+ * deliveries but sold nothing returns unitsSold 0, so the fine print can say
+ * so truthfully instead of claiming it is new.
  */
 export async function getVelocityForProduct(
   posProductKey: string | null,
   lookbackDays = 60,
+  identity?: VelocityIdentity | null,
 ): Promise<VelocitySignal | null> {
-  if (!isSupabaseServiceConfigured || !posProductKey) return null;
+  if (!isSupabaseServiceConfigured) return null;
+  if (!posProductKey && !identity?.identityKey) return null;
   try {
     const admin = createSupabaseAdminClient();
-    const since = new Date(Date.now() - lookbackDays * 24 * 3600 * 1000).toISOString();
+    const now = new Date();
+    const priorLots = identity?.identityKey
+      ? await loadPriorDeliveriesForIdentity(admin, identity.identityKey)
+      : [];
+    const plan = planVelocityKeys({
+      currentKey: posProductKey,
+      current: { unit_weight: identity?.unitWeight ?? null, unit_weight_uom: identity?.unitWeightUom ?? null },
+      priorLots: identity ? priorLots : null,
+      lookbackDays,
+      now,
+    });
+    if (!plan) return null;
+    const since = new Date(now.getTime() - lookbackDays * 24 * 3600 * 1000).toISOString();
     // Mastering Slice 1: a lot sold from a mastered card carries the CARD's
     // product_id, but its variant_id encodes THIS lot's key ("-onboarded").
     // Count both shapes; dedupe by line id (a single-lot card's line matches
@@ -250,12 +313,15 @@ export async function getVelocityForProduct(
       admin
         .from("order_lines")
         .select("id, quantity, created_at")
-        .eq("product_id", posProductKey)
+        .in("product_id", plan.keys)
         .gte("created_at", since),
       admin
         .from("order_lines")
         .select("id, quantity, created_at")
-        .eq("variant_id", `${posProductKey}${ONBOARDED_VARIANT_SUFFIX}`)
+        .in(
+          "variant_id",
+          plan.keys.map((k) => `${k}${ONBOARDED_VARIANT_SUFFIX}`),
+        )
         .gte("created_at", since),
     ]);
     type Row = { id: string; quantity: number; created_at: string };
@@ -269,9 +335,17 @@ export async function getVelocityForProduct(
       seen.add(r.id);
       rows.push(r);
     }
-    if (rows.length === 0) return null;
+    // A single brand-new delivery with no sales = genuinely no history.
+    if (rows.length === 0 && plan.basis === "delivery") return null;
     const unitsSold = rows.reduce((s, r) => s + (r.quantity ?? 0), 0);
-    return { unitsSold, daysAvailable: lookbackDays, onHand: 0 };
+    return {
+      unitsSold,
+      daysAvailable: plan.windowDays,
+      onHand: 0,
+      basis: plan.basis,
+      deliveriesCounted: plan.deliveriesCounted,
+      asOf: now.toISOString(),
+    };
   } catch {
     return null;
   }

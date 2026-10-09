@@ -98,6 +98,17 @@ export type FilterableLot = LotTableFields & {
   pos_thc?: number | null;
   pos_cbd?: number | null;
   minor_cannabinoids_json?: unknown;
+  /**
+   * R32 (T-328): what Product Onboarding decided for this lot, joined from
+   * the APPROVED catalog draft (lot-onboarding-core). Optional — absent when
+   * the lot was never onboarded (Cultivera import, manual add).
+   */
+  onboarding_house_type?: string | null;
+  onboarding_strain_type?: string | null;
+  onboarding_shelf?: string | null;
+  onboarding_price_minor?: number | null;
+  onboarding_margin_pct?: number | null;
+  onboarded_on?: string | null;
 };
 
 /* ── Facets ──────────────────────────────────────────────────────────────── */
@@ -135,6 +146,10 @@ export const INVENTORY_FACETS: FacetDef[] = [
   { param: "fStatus", label: "Status", get: (l) => l.status },
   { param: "fLab", label: "Lab", get: (l) => l.lab?.lab_name ?? null },
   { param: "fRecvSource", label: "Received-date source", get: (l) => l.received_on_source },
+  // R32: the website category chosen at Product Onboarding.
+  { param: "fShelf", label: "Website category (onboarding)", get: (l) => l.onboarding_shelf ?? null },
+  // R32: has this lot been through Product Onboarding (approved)?
+  { param: "fOnboarded", label: "Onboarded", get: (l) => (l.onboarded_on ? "Onboarded" : "Not onboarded") },
 ];
 
 /** Display helpers return an em-dash for "nothing"; the facet wants null. */

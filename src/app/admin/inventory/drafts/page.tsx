@@ -14,13 +14,27 @@ import {
   countCatalogDrafts,
   loadStrainTypeSignals,
   listPriorClassifications,
+  listPriorOnboardingPicks,
 } from "@/lib/inventory/catalog-drafts";
+// R32 (T-328): identity memory for type / strain type / shelf (the SAME
+// survivorship the approval gate re-derives server-side).
+import {
+  effectiveHouseType,
+  effectiveStrainType,
+  recallOnboardingPicks,
+  rememberedStrainPlaceholder,
+  type OnboardingRecall,
+} from "@/lib/inventory/onboarding-recall-core";
+import { INVENTORY_TYPE_CATALOG } from "@/lib/pos/inventory-type-catalog";
 // S10: the fact-attach policy's shadow counters (one bounded audit read; no writes).
 import { attachPolicyMode, shadowFooterCopy } from "@/lib/catalog/fact-attach-policy-core";
 import { currentAttachPolicyRing, loadShadowSummary } from "@/lib/catalog/fact-attach-policy-server";
 // SLICE 93: strain-type intelligence - the picker's honest placeholder + the
 // canonical dropdown choices (strain-taxonomy, the single source of truth).
 import { strainTypePickerPlaceholder } from "@/lib/inventory/strain-type-intel-core";
+// R32 (T-328): the explainable price waterfall (accurate fine print + steps).
+import { PriceExplainNote } from "@/components/admin/catalog/PriceExplainNote";
+import { getPricingSettings } from "@/lib/inventory/pricing";
 // T-314: manual, web-grounded product/strain lookup on each row. The model is
 // whatever AI_MODEL_HEAVY names (Gemini google_search grounding when it starts
 // with "gemini", otherwise the OpenAI web_search tool) - see
@@ -253,6 +267,9 @@ export default async function CatalogDraftsPage({
   const pinned = focus.draftId ? listed.find((d) => d.id === focus.draftId) ?? null : null;
   const view = effectiveDraftView(focus, pinned);
   const drafts = listed.filter((d) => d.status === view);
+  // R32 (T-328): the CURRENT markup setting, so the price fine print is
+  // recomputed live (never a stale frozen sentence) and drift is flagged.
+  const pricingSettings = await getPricingSettings();
   const pinnedMissing = Boolean(focus.draftId) && !pinned;
   const pinnedMovedTab = Boolean(pinned) && view !== focus.view;
   // S14: paging copy, the focused delivery's header, the picker's choices.
@@ -345,7 +362,17 @@ export default async function CatalogDraftsPage({
   //
   // OPTION B (owner's decision): pre-fill the ANSWER, never the DECISION. The
   // pick below stays `required`, so the fail-permissive gate is not weakened.
-  const priorClassifications = await listPriorClassifications();
+  const [priorClassifications, priorOnboardingPicks] = await Promise.all([
+    listPriorClassifications(),
+    // R32: the approved history of shelf / type / strain-type picks.
+    listPriorOnboardingPicks(),
+  ]);
+  const allowedTypeLabels = new Set<string>([
+    ...INVENTORY_TYPE_CATALOG.map((e) => e.label),
+    ...ownerTypes.map((t) => t.label),
+  ]);
+  const ownerTypeShelves = ownerTypes.map((t) => ({ label: t.label, websiteCategory: t.website_category }));
+  const recalls = new Map<string, OnboardingRecall>();
   const memories = new Map<string, PriorClassification | null>();
   drafts.forEach((d, i) => {
     assessments.set(
@@ -397,6 +424,15 @@ export default async function CatalogDraftsPage({
           category: resolutions[i]?.websiteCategory ?? d.category,
         },
         history: priorClassifications,
+      }),
+    );
+    recalls.set(
+      d.id,
+      recallOnboardingPicks({
+        candidate: { vendorName: d.vendor_name, brandName: d.brand_name, productName: d.name },
+        resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
+        history: priorOnboardingPicks,
+        allowedTypeLabels,
       }),
     );
   });
@@ -966,13 +1002,31 @@ export default async function CatalogDraftsPage({
                   // machine default is deliberately not recalled.
                   const memory = memories.get(d.id) ?? null;
                   const prefill = prefillFromMemory(memory);
+                  // R32: this product's own earlier decisions (identity memory).
+                  const recall = recalls.get(d.id) ?? null;
                   const displayCategory =
-                    d.chosen_website_category ?? a?.resolvedWebsiteCategory ?? null;
-                  const autoType =
-                    a && a.house.houseType && !a.needsTypePick ? a.house.houseType : null;
+                    d.chosen_website_category ?? a?.resolvedWebsiteCategory ?? recall?.websiteCategory?.value ?? null;
+                  // R32: remembered > labeler >=90 > one-type category > ask.
+                  // The SAME function the server gate runs.
+                  const effType = effectiveHouseType({
+                    labeler: {
+                      houseType: a?.house.houseType ?? null,
+                      confidence: a?.house.confidence ?? 0,
+                      autoAssigned: Boolean(a && !a.needsTypePick),
+                    },
+                    recalled: recall?.houseType ?? null,
+                    websiteCategory: displayCategory,
+                    ownerTypes: ownerTypeShelves,
+                  });
+                  const autoType = effType.value;
                   const displayType = d.chosen_house_type ?? autoType;
-                  const needsCategoryPick = view === "draft" && Boolean(a?.needsCategoryPick);
-                  const needsTypePick = view === "draft" && Boolean(a?.needsTypePick);
+                  const needsCategoryPick =
+                    view === "draft" && Boolean(a?.needsCategoryPick) && !recall?.websiteCategory;
+                  const needsTypePick = view === "draft" && effType.needsTypePick;
+                  const effStrain = effectiveStrainType({
+                    recalled: recall?.strainType ?? null,
+                    suggestion: strainSuggestions.get(d.id) ?? null,
+                  });
                   // S14: the collapsed row's "what this one still needs" chips -
                   // the SAME flags that render the pickers below.
                   const rowChips = rowAttention({
@@ -1170,11 +1224,13 @@ export default async function CatalogDraftsPage({
                                   aria-label="Product type"
                                 >
                                   <option value="" disabled={needsTypePick}>
-                                    {typePickerPlaceholder({
-                                      needsTypePick,
-                                      autoType,
-                                      confidence: a?.house.confidence ?? 0,
-                                    })}
+                                    {effType.source === "auto"
+                                      ? typePickerPlaceholder({
+                                          needsTypePick,
+                                          autoType,
+                                          confidence: a?.house.confidence ?? 0,
+                                        })
+                                      : effType.placeholder}
                                   </option>
                                   {typeGroups.map((g) => (
                                     <optgroup key={g.category} label={g.categoryLabel}>
@@ -1216,7 +1272,9 @@ export default async function CatalogDraftsPage({
                                   aria-label="Strain type"
                                 >
                                   <option value="">
-                                    {strainTypePickerPlaceholder(strainSuggestions.get(d.id) ?? null)}
+                                    {recall?.strainType
+                                      ? rememberedStrainPlaceholder(recall.strainType)
+                                      : strainTypePickerPlaceholder(strainSuggestions.get(d.id) ?? null)}
                                   </option>
                                   {strainTypeDefinitions
                                     .filter((s) => s.value !== "unknown")
@@ -1466,6 +1524,8 @@ export default async function CatalogDraftsPage({
                               {displayType}
                               {d.chosen_house_type ? (
                                 <span className="text-[var(--admin-text-faint)]"> · your pick</span>
+                              ) : effType.source === "remembered" || effType.source === "category" ? (
+                                <span className="text-[var(--admin-text-faint)]" data-testid="draft-type-basis"> · {effType.basis}</span>
                               ) : a ? (
                                 <span className="text-[var(--admin-text-faint)]"> · {a.house.confidence}% confident</span>
                               ) : null}
@@ -1474,6 +1534,30 @@ export default async function CatalogDraftsPage({
                             <span className="font-semibold text-[var(--admin-gold)]">Needs type</span>
                           ) : (
                             <span className="text-[var(--admin-text-faint)]">—</span>
+                          )}
+                        </div>
+                        {/* R32: strain type with its basis (your pick / remembered / source). */}
+                        <div className="text-xs" data-testid="draft-strain-basis">
+                          {d.chosen_strain_type && d.chosen_strain_type !== "unknown" ? (
+                            <span>
+                              {strainTypeDefinitions.find((t) => t.value === d.chosen_strain_type)?.label ?? d.chosen_strain_type}
+                              <span className="text-[var(--admin-text-faint)]"> · your pick</span>
+                            </span>
+                          ) : effStrain.value ? (
+                            <span>
+                              {strainTypeDefinitions.find((t) => t.value === effStrain.value)?.label ?? effStrain.value}
+                              <span className="text-[var(--admin-text-faint)]">
+                                {" · "}
+                                {effStrain.source === "remembered"
+                                  ? recall?.strainType?.sourceText ?? "remembered"
+                                  : `${effStrain.source}, ${effStrain.confidence}%`}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-[var(--admin-text-faint)]">Strain type not set</span>
+                          )}
+                          {effStrain.conflict && (
+                            <div className="text-[10px] text-[var(--admin-gold)]">{effStrain.conflict}</div>
                           )}
                         </div>
                         {/* CCRS under the hood — fine print so the approver can decide. */}
@@ -1502,11 +1586,15 @@ export default async function CatalogDraftsPage({
                         <div className="text-[var(--admin-accent)]">
                           AI suggests {fmtMoney(d.suggested_price_minor_units)}
                         </div>
-                        {d.price_rationale && (
-                          <div className="mt-0.5 max-w-[16rem] text-[10px] leading-tight text-[var(--admin-text-faint)]">
-                            {d.price_rationale}
-                          </div>
-                        )}
+                        {/* R32 (T-328): accurate, explainable fine print + waterfall. */}
+                        <PriceExplainNote
+                          storedRationale={d.price_rationale}
+                          costMinor={d.unit_cost_minor_units}
+                          category={d.category}
+                          multiple={pricingSettings.min_markup_multiple}
+                          storedFloorMinor={d.price_floor_minor_units}
+                          storedSuggestedMinor={d.suggested_price_minor_units}
+                        />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col items-end gap-2">

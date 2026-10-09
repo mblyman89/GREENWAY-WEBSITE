@@ -49,6 +49,9 @@ import BulkFillPanel from "@/components/admin/inventory/BulkFillPanel";
 // Owner request: a LEAFLY badge in the Status column for products on Leafly.
 import { isLotOnLeafly } from "@/lib/inventory/leafly-badge-core";
 import { loadLeaflyBadgeData } from "@/lib/inventory/leafly-badge-server";
+// R32 (T-328): what Product Onboarding decided, joined onto every lot.
+import { loadLotOnboardingIndex } from "@/lib/inventory/lot-onboarding-server";
+import { attachLotOnboarding, fmtLotMoney, fmtLotMargin } from "@/lib/inventory/lot-onboarding-core";
 
 export const dynamic = "force-dynamic";
 
@@ -214,6 +217,10 @@ export default async function InventoryPage({
   // stock rule applies (read, never assumed). Started before the parallel
   // reads so it costs no extra round-trip; getTaxSettings never throws.
   const taxSettingsPromise = getTaxSettings();
+  // R32 (T-328): one paged read of the approved drafts linked to lots, started
+  // with the other reads (like taxSettingsPromise) so it costs no extra
+  // round-trip. Never throws; `complete: false` puts a notice above the table.
+  const onboardingPromise = loadLotOnboardingIndex();
   const [allLots, stats, intel, sellability, leafly] = await Promise.all([
     listAllLotsForFiltering(),
     computeInventoryStats(),
@@ -221,10 +228,15 @@ export default async function InventoryPage({
     getRegisterSellabilityReport(),
     loadLeaflyBadgeData(),
   ]);
+  const onboardingIndex = await onboardingPromise;
+  // R32: every lot carries its onboarding decision (type, strain type,
+  // website category, approved price, margin, KB + draft links) so the new
+  // columns, facets and sorts all read the same joined values.
+  const joinedLots = attachLotOnboarding(allLots, onboardingIndex.byLot);
 
   // Every knob — legacy and new — is parsed and applied by pure, tested code.
   const view = buildInventoryPage({
-    lots: allLots as PageLot[],
+    lots: joinedLots as PageLot[],
     params: sp as RawParams,
     page: rawPage,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -233,7 +245,9 @@ export default async function InventoryPage({
   });
   // Count on the Leafly tab: the same rule the badge and the tab use.
   const leaflyLotCount = countLeaflyLots(allLots as PageLot[], leafly.keys);
-  const lots = view.rows;
+  // R32: buildInventoryPage filters/sorts/pages the SAME objects it was given,
+  // so each row still carries its onboarding join (narrow the type back).
+  const lots = view.rows as typeof joinedLots;
   const total = view.total;
   const win = listWindow(total, view.page, DEFAULT_PAGE_SIZE);
   // SLICE 2 — banner text for lots with no evidenced received date. Returns
@@ -622,8 +636,23 @@ export default async function InventoryPage({
           />
         )}
 
+        {/* R32 (T-328): the onboarding columns are only as good as the read
+            behind them. A failed or truncated read is said out loud rather
+            than shown as blanks that look like "never onboarded". */}
+        {!onboardingIndex.complete && (
+          <div
+            data-testid="inventory-onboarding-incomplete"
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-2.5 text-xs text-[var(--admin-gold)]"
+          >
+            The onboarding columns (price, margin, website category, onboarded) could not be fully loaded,
+            so some lots may show &ldquo;&mdash;&rdquo; even though they were onboarded. Reload the page to try again.
+          </div>
+        )}
+
         {lots.length > 0 && (
-          <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
+          /* R32: 22 columns — scroll sideways inside the card instead of
+             clipping the right-hand columns off the screen. */
+          <div className="overflow-x-auto rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
             <table className="w-full text-sm">
               <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
                 {/* SLICE 50 (owner request): Received / Type / Size / Sold / Strain columns
@@ -654,6 +683,14 @@ export default async function InventoryPage({
                   <SortableHeader columnKey="received" label="Received" raw={sp as RawParams} />
                   <SortableHeader columnKey="onhand" label="On hand" raw={sp as RawParams} align="right" />
                   <SortableHeader columnKey="sold" label="Sold" raw={sp as RawParams} align="right" />
+                  {/* R32 (T-328): what onboarding decided + the money it implies.
+                      Unit cost = the lot's cost; Price = the APPROVED onboarding
+                      shelf price (tax-inclusive); Margin = pre-tax margin on it. */}
+                  <SortableHeader columnKey="cost" label="Unit cost" raw={sp as RawParams} align="right" />
+                  <SortableHeader columnKey="price" label="Price" raw={sp as RawParams} align="right" />
+                  <SortableHeader columnKey="margin" label="Margin" raw={sp as RawParams} align="right" />
+                  <SortableHeader columnKey="shelf" label="Website category" raw={sp as RawParams} />
+                  <SortableHeader columnKey="onboarded" label="Onboarded" raw={sp as RawParams} />
                   <SortableHeader columnKey="expires" label="Expires" raw={sp as RawParams} />
                   <SortableHeader columnKey="status" label="Status" raw={sp as RawParams} align="center" />
                 </tr>
@@ -679,6 +716,22 @@ export default async function InventoryPage({
                             <span className="ml-2 text-[var(--admin-orange)]">· unlinked</span>
                           )}
                         </div>
+                        {/* R32: one click to the product's identity (KB) and to the
+                            onboarding decision that put it on the menu. */}
+                        {(l.onboarding.kbHref || l.onboarding.draftHref) && (
+                          <div className="mt-0.5 flex gap-2 text-[11px]" data-testid="inventory-identity-links">
+                            {l.onboarding.kbHref && (
+                              <Link href={l.onboarding.kbHref} className="text-[var(--admin-accent)] hover:underline">
+                                KB product
+                              </Link>
+                            )}
+                            {l.onboarding.draftHref && (
+                              <Link href={l.onboarding.draftHref} className="text-[var(--admin-accent)] hover:underline">
+                                Onboarding
+                              </Link>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                         {l.vendor_name ?? l.vendor_id ?? "—"}
@@ -686,9 +739,26 @@ export default async function InventoryPage({
                           <span className="text-[var(--admin-text-faint)]"> · {l.brand_name}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotTypeLabel(l)}</td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">
+                        {lotTypeLabel(l)}
+                        {/* R32: name where an onboarding type came from — only when it is the one shown. */}
+                        {l.onboarding.houseTypeBasis && lotTypeLabel(l) === l.onboarding.houseType && (
+                          <div className="text-[11px] text-[var(--admin-text-faint)]" data-testid="inventory-type-basis">
+                            {l.onboarding.houseTypeBasis}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotStrainLabel(l)}</td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotStrainTypeLabel(l)}</td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">
+                        {lotStrainTypeLabel(l)}
+                        {/* R32: where the strain type came from (manifest, your pick,
+                            strain library, remembered, onboarding …). */}
+                        {l.onboarding.strainTypeBasis && (
+                          <div className="text-[11px] text-[var(--admin-text-faint)]" data-testid="inventory-strain-type-basis">
+                            {l.onboarding.strainTypeBasis}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotSizeLabel(l)}</td>
                       <td className="px-4 py-3 text-center">
                         {l.lab ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}
@@ -722,6 +792,18 @@ export default async function InventoryPage({
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
                         {fmtQty(lotSoldQty(l), l.unit)}
                       </td>
+                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtLotMoney(l.unit_cost_minor_units)}</td>
+                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]" title={l.onboarding_price_minor != null ? "Shelf price approved at Product Onboarding (tax included)" : undefined}>
+                        {fmtLotMoney(l.onboarding_price_minor)}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right ${l.onboarding_margin_pct != null && l.onboarding_margin_pct < 0 ? "font-semibold text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}
+                        title={l.onboarding_margin_pct != null ? "Pre-tax margin: (price before tax − unit cost) ÷ price before tax" : "Needs both an approved price and a unit cost"}
+                      >
+                        {fmtLotMargin(l.onboarding_margin_pct)}
+                      </td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{l.onboarding_shelf ?? "\u2014"}</td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{l.onboarded_on ?? "\u2014"}</td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                         {l.expires_on ? (
                           <span className={expired ? "font-semibold text-[var(--admin-danger)]" : ""}>
