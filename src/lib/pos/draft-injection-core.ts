@@ -762,6 +762,15 @@ export function buildDraftInjectionPlan(inputs: DraftInjectionInputs): DraftInje
         context: { draft_id: d.id, pos_product_key: key, strain_type: golden.value, source: enrich.attachedStrainType.source },
       });
     }
+    // R33: a PERSON's strain type (the approver's pick, or a person's
+    // attached answer) is stamped on the card's provenance so the website's
+    // render-time strain-library overlay never replaces it with the library's
+    // type for the strain NAME (attachStrainProfile + strainTypeSource). The
+    // same word the lot page's correction writes (lot-strain-propagation-core
+    // LOT_STRAIN_REVIEWER). Machine sources stay unstamped, as before.
+    if ((golden.source === "human" || golden.source === "attached_human") && golden.value !== "unknown") {
+      factProvenance.strain_type = "reviewer";
+    }
     const goldenCopy = enrich.goldenDescription?.text?.trim() || null;
     if (goldenCopy && enrich.goldenDescription) {
       diagnostics.push({
@@ -1285,6 +1294,7 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
       new Map([["d1", enrich({ strainType: "indica" })]]),
     );
     assert(p.items[0].strain_type === "sativa-hybrid", "human strain pick outranks the KB");
+    assert(p.items[0].fact_provenance.strain_type === "reviewer", "R33: a human strain pick is stamped reviewer on the card");
     assert(
       p.diagnostics.some((d) => d.code === "draft_inject_strain_type_human"),
       "human strain pick disclosed",
@@ -1295,6 +1305,7 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
   {
     const p = plan([draft({})], new Map([["d1", enrich({ strainType: "hybrid" })]]));
     assert(p.items[0].strain_type === "hybrid", "no pick = enrichment verdict");
+    assert(!("strain_type" in p.items[0].fact_provenance), "R33: a machine verdict is never stamped reviewer");
     assert(
       !p.diagnostics.some((d) => d.code === "draft_inject_strain_type_human"),
       "no strain diagnostic without a pick",
@@ -1355,6 +1366,7 @@ export function __runDraftInjectionCoreTests(): { passed: number } {
       new Map([["d1", enrich({ strainType: "hybrid", attachedStrainType: { value: "indica", source: "human", confidence: null } })]]),
     );
     assert(p.items[0].strain_type === "indica", "S12: a person's attached answer beats the enrichment verdict");
+    assert(p.items[0].fact_provenance.strain_type === "reviewer", "R33: a person's attached answer is stamped reviewer");
   }
   {
     const p = plan(

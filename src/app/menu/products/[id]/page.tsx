@@ -26,6 +26,7 @@ import { selectRelatedItems, type RelatedScope } from "@/lib/menu/related-produc
 import { getLiveMenuItemByIdCached, loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
+import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
 import { withDohCompliance } from "@/lib/menu/menu-doh-server";
 // SLICE 18C: the badge cores. dohPillForItem was previously only consumed by
 // ProductCardVisual, which is why the detail page silently dropped the pill.
@@ -287,7 +288,8 @@ async function relatedItemsFor(
   // the heading shows, never mixes vendors, ranks by purchasability →
   // same-category → price proximity (the add-to-cart enticement order), and
   // reports an honest scope for the heading when it must fall back.
-  const allItems = await withMenuProfile(await loadLiveMenuItemsCached());
+  // R33: the owner's per-product category/type re-file applies here too.
+  const allItems = await withCategoryOverride(await withMenuProfile(await loadLiveMenuItemsCached()));
   const selection = selectRelatedItems(item, allItems, 8);
   return { items: selection.items, scope: selection.scope };
 }
@@ -381,7 +383,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // card. Merch is non-cannabis → skip. Degrades to "no DOH" pre-migration.
   const [item] = isMerchItem(baseItem)
     ? [baseItem]
-    : await withDohCompliance(await withMenuProfile(await withResolvedImages([baseItem])));
+    : await withCategoryOverride(await withDohCompliance(await withMenuProfile(await withResolvedImages([baseItem]))));
+  // R33: withCategoryOverride - the owner's website Category/Type re-file
+  // (lot page) used to reach ONLY the shop grid; the product page kept the
+  // onboarding category + type label. Same overlay, same degrade-to-identity.
 
   // 7b.1: KB-first curated knowledge, compliance-filtered for public display.
   // Merch/accessories are non-cannabis → the helper returns an empty result.

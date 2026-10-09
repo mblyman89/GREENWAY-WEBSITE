@@ -26,6 +26,7 @@ import {
   type StrainTypeIndex,
   type TerpeneIndex,
 } from "@/lib/menu/strain-terpenes";
+import { withProductFacts } from "@/lib/menu/product-facts-overlay-server";
 
 /**
  * Build both effective indexes in a single KB read: the static curated sets as
@@ -149,6 +150,14 @@ export async function buildMenuIndexesCached(): Promise<{
  * populate from the knowledge base.
  */
 export async function withMenuProfile(items: GreenwayMenuItem[]): Promise<GreenwayMenuItem[]> {
-  const { terpeneIndex, strainTypeIndex } = await buildMenuIndexesCached();
-  return attachStrainProfile(items, terpeneIndex, strainTypeIndex);
+  // R33: the product's OWN facts first - its counted lab terpenes (approved
+  // onboarding draft) and a person's strain-type lock - so the strain library
+  // below only fills what the product itself does not carry. Before this,
+  // a product whose strain was not in the library showed no terpene pills
+  // even with a full lab panel attached. (product-facts-overlay-server.ts)
+  const [{ terpeneIndex, strainTypeIndex }, own] = await Promise.all([
+    buildMenuIndexesCached(),
+    withProductFacts(items),
+  ]);
+  return attachStrainProfile(own, terpeneIndex, strainTypeIndex);
 }
