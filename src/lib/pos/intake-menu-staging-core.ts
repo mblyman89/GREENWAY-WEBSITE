@@ -123,6 +123,15 @@ export type CarryForwardItem = {
   unit_thc_mg?: number | null;
   otherwise_taken?: boolean | null;
   units_per_package?: number | null;
+  /**
+   * R35 #6 (migration 0254): the card's counted effects / aroma, carried
+   * forward VERBATIM - the same defect class as SLICE 18G above: without it
+   * every re-stage would silently reset a product's own effects to NULL and
+   * its page would fall back to the knowledge base. Optional so historical
+   * fixtures and a pre-0254 read (column absent) keep working; missing = null.
+   */
+  effects?: string[] | null;
+  aroma_notes?: string[] | null;
   description: string;
   price_label: string;
   price_minor_units: number;
@@ -185,6 +194,13 @@ export type StagedSnapshotItem = {
   unit_thc_mg: number | null;
   otherwise_taken: boolean | null;
   units_per_package: number | null;
+  /**
+   * R35 #6 (migration 0254): required here for the same reason as the 18G
+   * flags - this is the shape the insert is built from, so a producer that
+   * forgets them is a type error, not a silently NULL column.
+   */
+  effects: string[] | null;
+  aroma_notes: string[] | null;
   description: string;
   price_label: string;
   price_minor_units: number;
@@ -327,6 +343,9 @@ function masteredToSnapshot(it: MasteredNewCard, sortOrder: number): StagedSnaps
     unit_thc_mg: it.unit_thc_mg,
     otherwise_taken: it.otherwise_taken,
     units_per_package: it.units_per_package,
+    // R35 #6: the approved product's counted, server-cleared lists.
+    effects: it.effects ?? null,
+    aroma_notes: it.aroma_notes ?? null,
     description: it.description,
     price_label: it.price_label,
     price_minor_units: it.price_minor_units,
@@ -414,6 +433,10 @@ function carryForward(item: CarryForwardItem, sortOrder: number): StagedSnapshot
     unit_thc_mg: item.unit_thc_mg ?? null,
     otherwise_taken: item.otherwise_taken ?? null,
     units_per_package: item.units_per_package ?? null,
+    // R35 #6: carried verbatim; `?? null` only normalises "absent" (a
+    // pre-0254 read) - a stored list is never altered or re-derived here.
+    effects: item.effects ?? null,
+    aroma_notes: item.aroma_notes ?? null,
     description: item.description,
     price_label: item.price_label,
     price_minor_units: item.price_minor_units,
@@ -897,6 +920,26 @@ export function __runIntakeMenuStagingCoreTests(): { passed: number } {
     assert(carryForwardIncompleteNote({ missing: null }).includes("could not be read completely"), "cf note: unknown");
     assert(carryForwardIncompleteNote({ missing: 0 }).includes("could not be read completely"), "cf note: zero missing reads as unknown");
     assert(carryForwardIncompleteNote({ missing: 1 }).includes("approvals are saved") && carryForwardIncompleteNote({ missing: 1 }).includes("Publish Menu"), "cf note: reassures + names the fix");
+  }
+
+  // --- R35 #6: effects / aroma survive every staging path (0254) ---------------
+  {
+    const plan = buildIntakeStagedVersionPlan({
+      publishedItems: [
+        published({ effects: ["calm"], aroma_notes: ["earthy", "pine"] }),
+        published({ source_item_id: "LIVE-2", name: "Live Edible" }),
+      ],
+      approvedDrafts: [draft({})],
+      enrichmentByDraftId: new Map([
+        ["d1", enrich({ goldenEffects: { values: ["happy"], source: "gemini", confidence: 0.95 }, goldenAroma: null })],
+      ]),
+    });
+    const live1 = plan.items.find((i) => i.source_item_id === "LIVE-1");
+    const live2 = plan.items.find((i) => i.source_item_id === "LIVE-2");
+    const added = plan.items.find((i) => i.source_item_id === "LOT-NEW-1");
+    assert(live1?.effects?.join(",") === "calm" && live1?.aroma_notes?.join(",") === "earthy,pine", "R35: a re-stage carries the live card's lists verbatim");
+    assert(live2?.effects === null && live2?.aroma_notes === null, "R35: a card without lists (or a pre-0254 read) carries NULL, never []");
+    assert(added?.effects?.join(",") === "happy" && added?.aroma_notes === null, "R35: a newly approved product brings its own lists");
   }
 
   return { passed };

@@ -16,13 +16,19 @@
  *      planner; a warn-only text is allowed (the owner's warn-only rule for
  *      borderline copy, compliance.ts lintCopy).
  *   3. The strain type pick (canonical, counted sources only).
+ *   4. R35 #6 (migration 0254): the counted attached EFFECTS and AROMA, each
+ *      through its own gate before the planner sees it - effects through
+ *      checkEffects() (the experiential allow-list + medical-claim filter +
+ *      kb_banned_phrases: the gate the KB writer and the AI lookup use) and
+ *      aroma through lintTerms() (+ kb_banned_phrases: the gate the product
+ *      page uses). A list with nothing left is null, never [].
  *
  * GOLDEN_RECORD_ON_APPROVE=off: no read, no lint, empty map (bible S12.7).
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { chunkedIn } from "@/lib/supabase/chunked-in";
-import { lintCopy } from "@/lib/ai/compliance";
+import { checkEffects, lintCopy, lintTerms } from "@/lib/ai/compliance";
 import { loadBannedPhrases } from "@/lib/ai/kb/retrieval";
 import { isMissingAttachedFactsError } from "@/lib/catalog/attach-facts-core";
 import {
@@ -30,14 +36,45 @@ import {
   GOLDEN_RECORD_ENV,
   goldenRecordEnabled,
   pickAttachedDescription,
+  pickAttachedSensory,
   pickAttachedStrainType,
   type PickedDescription,
+  type PickedSensory,
   type PickedStrainType,
 } from "@/lib/catalog/golden-record-core";
+import { sensoryForStorage } from "@/lib/pos/menu-sensory-core";
 
 export interface GoldenInputs {
   goldenDescription: PickedDescription | null;
   attachedStrainType: PickedStrainType | null;
+  /** R35 #6: counted effects, cleared by checkEffects (allowed only). */
+  goldenEffects: PickedSensory | null;
+  /** R35 #6: counted aroma, cleared by lintTerms (safe only). */
+  goldenAroma: PickedSensory | null;
+}
+
+type Banned = Awaited<ReturnType<typeof loadBannedPhrases>>;
+
+/**
+ * The server gate for the two lists (exported for the R35 tests). Never
+ * widens a list: only values the gate returns survive, in storage form.
+ */
+export function gateGoldenSensory(
+  effects: PickedSensory | null,
+  aroma: PickedSensory | null,
+  banned: Banned,
+): { goldenEffects: PickedSensory | null; goldenAroma: PickedSensory | null } {
+  let goldenEffects: PickedSensory | null = null;
+  if (effects) {
+    const v = sensoryForStorage(checkEffects(effects.values, banned).allowed);
+    if (v) goldenEffects = { ...effects, values: v };
+  }
+  let goldenAroma: PickedSensory | null = null;
+  if (aroma) {
+    const v = sensoryForStorage(lintTerms(aroma.values, banned).safe);
+    if (v) goldenAroma = { ...aroma, values: v };
+  }
+  return { goldenEffects, goldenAroma };
 }
 
 /** True unless GOLDEN_RECORD_ON_APPROVE is an off-word. */
@@ -78,9 +115,11 @@ export async function loadGoldenInputs(admin: Admin, draftIds: readonly string[]
     id: r.id,
     description: pickAttachedDescription(r.attached_facts),
     strain: pickAttachedStrainType(r.attached_facts),
+    effects: pickAttachedSensory(r.attached_facts, "effects"),
+    aroma: pickAttachedSensory(r.attached_facts, "aroma"),
   }));
-  const needsLint = picks.some((p) => p.description !== null);
-  let banned: Awaited<ReturnType<typeof loadBannedPhrases>> = [];
+  const needsLint = picks.some((p) => p.description !== null || p.effects !== null || p.aroma !== null);
+  let banned: Banned = [];
   if (needsLint) {
     try {
       banned = await loadBannedPhrases();
@@ -96,8 +135,9 @@ export async function loadGoldenInputs(admin: Admin, draftIds: readonly string[]
         goldenDescription = { ...p.description, text: lint.publicText };
       }
     }
-    if (goldenDescription || p.strain) {
-      out.set(p.id, { goldenDescription, attachedStrainType: p.strain });
+    const { goldenEffects, goldenAroma } = gateGoldenSensory(p.effects, p.aroma, banned);
+    if (goldenDescription || p.strain || goldenEffects || goldenAroma) {
+      out.set(p.id, { goldenDescription, attachedStrainType: p.strain, goldenEffects, goldenAroma });
     }
   }
   return out;

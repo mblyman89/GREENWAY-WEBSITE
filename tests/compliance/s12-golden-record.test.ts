@@ -83,14 +83,14 @@ afterEach(() => {
 });
 
 describe("S12 pure core", () => {
-  it("runs its embedded self-tests green (57 assertions)", () => {
+  it("runs its embedded self-tests green (67 assertions; R35 #6 added 10 for effects/aroma)", () => {
     const r = __runGoldenRecordCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(57);
+    expect(r.passed).toBe(67);
   });
   it("is registered in the pure runner", () => {
     const src = read("scripts/compliance/run-pure-selftests.ts");
-    expect(src).toMatch(/__runGoldenRecordCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 57\)/);
+    expect(src).toMatch(/__runGoldenRecordCoreTests\(\); if \(r\.failed > 0 \|\| r\.passed < 67\)/);
   });
   it("imports nothing server-only (pure)", () => {
     const src = read("src/lib/catalog/golden-record-core.ts");

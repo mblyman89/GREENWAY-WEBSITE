@@ -1167,6 +1167,14 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       description:
         sortedItems.map((gi) => gi.description).find((t) => !isBoilerplateDescription(t)) ??
         `${group.display} from ${normalizeWhitespace(base.brand_name) || group.vendor}${BOILERPLATE_TAIL}`,
+      // R35 #6 (0254): same rule as the description - the base lot's counted
+      // effects / aroma, else the first lot (smallest key first) that has a
+      // list. Per column, so one lot's effects never borrow another's aroma
+      // decision. Never merged across lots: each list is one product's
+      // counted, server-cleared answer, and a union could exceed what any
+      // source actually said.
+      effects: sortedItems.map((gi) => gi.effects).find((l) => Array.isArray(l) && l.length > 0) ?? null,
+      aroma_notes: sortedItems.map((gi) => gi.aroma_notes).find((l) => Array.isArray(l) && l.length > 0) ?? null,
       variants: sorted,
     });
     if (group.items.length > 1) {
@@ -2272,6 +2280,34 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
         "Blue Dream from Fairwinds. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
       "S12: rollup with no real copy keeps the placeholder, byte for byte",
     );
+    assert(p.newCards[0].effects === null && p.newCards[0].aroma_notes === null, "R35: rollup with nothing counted = NULL");
+  }
+
+  // R35 #6: effects / aroma ride through mastering (singleton via ...rest,
+  // rollup per column from the first lot that has a list).
+  {
+    const ge = { values: ["relaxed"], source: "gemini" as const, confidence: 0.95 };
+    const ga = { values: ["citrus", "pine"], source: "human" as const, confidence: null };
+    const p = plan([draft({})], [["d1", enrich({ goldenEffects: ge, goldenAroma: ga })]]);
+    assert(p.newCards[0].effects?.join(",") === "relaxed", "R35: singleton keeps its effects");
+    assert(p.newCards[0].aroma_notes?.join(",") === "citrus,pine", "R35: singleton keeps its aroma");
+  }
+  {
+    const p = plan(
+      [
+        draft({}),
+        draft({ id: "d2", pos_product_key: "LOT-B", name: "Blue Dream 3.5g", price_minor_units: 3500 }),
+        draft({ id: "d3", pos_product_key: "LOT-C", name: "Blue Dream 7g", price_minor_units: 6000 }),
+      ],
+      [
+        ["d1", enrich({ goldenAroma: { values: ["earthy"], source: "human", confidence: null } })],
+        ["d2", enrich({ packageLabel: "3.5g", goldenEffects: { values: ["happy"], source: "gemini", confidence: 0.91 }, goldenAroma: { values: ["pine"], source: "human", confidence: null } })],
+        ["d3", enrich({ packageLabel: "7g", goldenEffects: { values: ["calm"], source: "human", confidence: null } })],
+      ],
+    );
+    assert(p.newCards.length === 1, "R35: rollup still one card");
+    assert(p.newCards[0].aroma_notes?.join(",") === "earthy", "R35: rollup aroma = the base lot's");
+    assert(p.newCards[0].effects?.join(",") === "happy", "R35: rollup effects = the first lot that has them (per column)");
   }
 
   return { passed };

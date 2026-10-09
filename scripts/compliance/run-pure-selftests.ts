@@ -2051,7 +2051,7 @@ __runLiquidVolumeTests();
   { const r = __runCostFillCoreTests(); if (r.failed > 0 || r.passed < 24) throw new Error(`cost-fill-core: ${r.failed} failed, ${r.passed} passed`); }
   // S32: the match review (merge-review-core). Floor = the exact count.
   { const r = __runMergeReviewCoreTests(); if (r.failed > 0 || r.passed < 60) throw new Error(`merge-review-core: ${r.failed} failed, ${r.passed} passed`); console.log(`merge-review-core: ${r.passed} assertions passed`); }
-  { const r = __runGoldenRecordCoreTests(); if (r.failed > 0 || r.passed < 57) throw new Error(`golden-record-core: ${r.failed} failed, ${r.passed} passed`); console.log(`golden-record-core: ${r.passed} assertions passed`); }
+  { const r = __runGoldenRecordCoreTests(); if (r.failed > 0 || r.passed < 67) throw new Error(`golden-record-core: ${r.failed} failed, ${r.passed} passed`); console.log(`golden-record-core: ${r.passed} assertions passed`); }
   // R19 S13: batch manifest lookup (budget, lease, orphan, enqueue plan, copy, banner). Floor = the exact count.
   { const r = __runLookupJobCoreTests(); if (r.failed > 0 || r.passed < 119) throw new Error(`lookup-job-core: ${r.failed} failed, ${r.passed} passed`); console.log(`lookup-job-core: ${r.passed} assertions passed`); }
 

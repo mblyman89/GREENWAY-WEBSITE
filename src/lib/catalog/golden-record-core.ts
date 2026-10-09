@@ -48,6 +48,7 @@
 import { isFactSource, isStoredConfidence, type FactSource } from "./attach-facts-core";
 import { ATTACH_AUTO_MIN_CONFIDENCE } from "./fact-attach-policy-core";
 import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
+import { sensoryForStorage } from "../pos/menu-sensory-core";
 
 // --- 1. Flag ---------------------------------------------------------------------
 
@@ -166,6 +167,31 @@ export function pickAttachedStrainType(attachedFacts: unknown): PickedStrainType
   const c = canonicalStrainType(f.value);
   if (c === "unknown") return null;
   return { value: c, source: f.source, confidence: f.confidence };
+}
+
+// --- 5b. Effects and aroma (R35 #6, migration 0254) ---------------------------------
+
+/** The attached-fact field names (attach-plan-core AttachField) per menu column. */
+export const GOLDEN_SENSORY_FIELDS = { effects: "effects", aroma_notes: "aroma" } as const;
+
+export interface PickedSensory {
+  /** Storage form (menu-sensory-core sensoryForStorage): trimmed, deduped, <= 8, never empty. */
+  values: string[];
+  source: FactSource;
+  confidence: number | null;
+}
+
+/**
+ * The counted attached list for `field`, in storage form, or null. Same
+ * survivorship gate as the description (countedAttachedFact). The SERVER
+ * must still clear it: checkEffects() for effects, lintTerms() for aroma.
+ */
+export function pickAttachedSensory(attachedFacts: unknown, field: "effects" | "aroma"): PickedSensory | null {
+  const f = countedAttachedFact(attachedFacts, field);
+  if (!f) return null;
+  const values = sensoryForStorage(f.value);
+  if (!values) return null;
+  return { values, source: f.source, confidence: f.confidence };
 }
 
 export type GoldenStrainSource = "human" | "attached_human" | "enrichment" | "attached" | "unknown";
@@ -297,6 +323,19 @@ export function __runGoldenRecordCoreTests(): { passed: number; failed: number }
   ok(r5.value === "unknown" && r5.source === "unknown", "unknown only when nothing is known");
   const r6 = resolveGoldenStrainType({ chosen: null, attached: null, enrichment: "indica" });
   ok(r6.value === "indica" && r6.source === "enrichment", "pre-S12 order kept when nothing attached");
+
+  // R35 #6: effects / aroma pick
+  ok(GOLDEN_SENSORY_FIELDS.effects === "effects" && GOLDEN_SENSORY_FIELDS.aroma_notes === "aroma", "sensory field names");
+  ok(pickAttachedSensory(null, "effects") === null, "sensory: no facts");
+  const se = pickAttachedSensory({ effects: fact([" Relaxed ", "relaxed", "happy"], "gemini", 0.92) }, "effects");
+  ok(JSON.stringify(se?.values) === JSON.stringify(["Relaxed", "happy"]) && se?.source === "gemini" && se?.confidence === 0.92, "sensory: cleaned + source");
+  ok(pickAttachedSensory({ effects: fact(["relaxed"], "gemini", 0.89) }, "effects") === null, "sensory: 89% never travels");
+  ok(pickAttachedSensory({ aroma: fact(["pine"], "remembered") }, "aroma") === null, "sensory: remembered never travels");
+  ok(pickAttachedSensory({ aroma: fact(["pine"], "human") }, "aroma")?.values[0] === "pine", "sensory: a person's aroma travels");
+  ok(pickAttachedSensory({ aroma: fact(["pine"], "human") }, "effects") === null, "sensory: fields are not crossed");
+  ok(pickAttachedSensory({ aroma: fact([], "human") }, "aroma") === null, "sensory: empty list = null");
+  ok(pickAttachedSensory({ aroma: fact("pine", "human") }, "aroma") === null, "sensory: a string is not a list");
+  ok(pickAttachedSensory({ aroma: fact(["a", "b", "c", "d", "e", "f", "g", "h", "i"], "coa") }, "aroma")?.values.length === 8, "sensory: capped at 8");
 
   // source text
   ok(goldenSourceText("gemini", 0.94) === "the AI lookup 94%", "gemini label");

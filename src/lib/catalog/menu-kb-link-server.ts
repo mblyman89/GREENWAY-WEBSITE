@@ -15,12 +15,19 @@
  *     handling: it is never retried away.
  *   * Backfill writes are fill-only (`... is kb_product_id null`), so a
  *     re-run, or a racing writer, never overwrites a link.
+ *   * R35 #6: a pre-0254 menu_items table (no effects / aroma_notes) is the
+ *     same story for the two sensory columns (isMissingSensoryColumnError):
+ *     the batch is retried WITHOUT them, and the card page keeps using the
+ *     knowledge base. Both fallbacks compose: a database missing BOTH
+ *     migrations is retried at most twice, each time stripping only the set
+ *     the error actually named.
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, pagedAllChecked, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { isMissingIdentityColumnError, withoutIdentityColumns } from "@/lib/catalog/identity-columns-core";
+import { hasSensoryColumns, isMissingSensoryColumnError, withoutSensoryColumns } from "@/lib/pos/menu-sensory-core";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import {
   MENU_KB_LINK_LOT_COLUMNS,
@@ -91,28 +98,49 @@ export async function planMenuKbLinksForCards(admin: AdminClient, cards: MenuKbL
 /**
  * The shared menu_items insert. Stamps each row's link (when it has one) and
  * returns exactly what `.insert(rows).select("id, source_item_id")` returns.
+ *
+ * Pre-migration safety (Parallel Change): when the insert fails because a
+ * 0234 identity column or a 0254 sensory column does not exist yet, the batch
+ * is retried once per missing set, without exactly that set. Any other error
+ * is returned unchanged - never retried away.
  */
 export async function insertMenuItemsWithKbLink<R extends Record<string, unknown> & { source_item_id: string }>(
   admin: AdminClient,
   rows: R[],
   links: Map<string, string>,
-): Promise<{ data: { id: string; source_item_id: string }[] | null; error: DbError; retriedWithoutLink: boolean }> {
-  const linked: Record<string, unknown>[] = rows.map((r) => withMenuKbLink(r, links, r.source_item_id));
-  const first = await admin.from("menu_items").insert(linked).select("id, source_item_id");
-  const anyLink = linked.some((r) => Object.prototype.hasOwnProperty.call(r, "kb_product_id"));
-  if (first.error && anyLink && isMissingIdentityColumnError("menu_items", first.error)) {
-    const stripped: Record<string, unknown>[] = linked.map((r) => withoutIdentityColumns("menu_items", r));
-    const retry = await admin.from("menu_items").insert(stripped).select("id, source_item_id");
-    return {
-      data: (retry.data as { id: string; source_item_id: string }[] | null) ?? null,
-      error: retry.error,
-      retriedWithoutLink: true,
-    };
+): Promise<{
+  data: { id: string; source_item_id: string }[] | null;
+  error: DbError;
+  retriedWithoutLink: boolean;
+  retriedWithoutSensory: boolean;
+}> {
+  let payload: Record<string, unknown>[] = rows.map((r) => withMenuKbLink(r, links, r.source_item_id));
+  let retriedWithoutLink = false;
+  let retriedWithoutSensory = false;
+  let res = await admin.from("menu_items").insert(payload).select("id, source_item_id");
+  // At most one retry per migration set (0234, 0254), so never more than 3 calls.
+  for (let attempt = 0; attempt < 2 && res.error; attempt += 1) {
+    const anyLink = payload.some((r) => Object.prototype.hasOwnProperty.call(r, "kb_product_id"));
+    const anySensory = payload.some((r) => hasSensoryColumns(r));
+    if (!retriedWithoutLink && anyLink && isMissingIdentityColumnError("menu_items", res.error)) {
+      payload = payload.map((r) => withoutIdentityColumns("menu_items", r));
+      retriedWithoutLink = true;
+    } else if (!retriedWithoutSensory && anySensory && isMissingSensoryColumnError(res.error)) {
+      payload = payload.map((r) => withoutSensoryColumns(r));
+      retriedWithoutSensory = true;
+      console.warn(
+        "[menu-items] effects / aroma_notes columns are not in the database yet (migration 0254): this batch was saved without them; the product pages keep the knowledge-base wording.",
+      );
+    } else {
+      break;
+    }
+    res = await admin.from("menu_items").insert(payload).select("id, source_item_id");
   }
   return {
-    data: (first.data as { id: string; source_item_id: string }[] | null) ?? null,
-    error: first.error,
-    retriedWithoutLink: false,
+    data: (res.data as { id: string; source_item_id: string }[] | null) ?? null,
+    error: res.error,
+    retriedWithoutLink,
+    retriedWithoutSensory,
   };
 }
 
