@@ -40,16 +40,25 @@ import {
   type NormalizedInboundEmail,
 } from "@/lib/inbound-email/inbound-normalize-core";
 import {
+  claimInboundDelivery,
   logInboundEmail,
+  releaseInboundDelivery,
   stageManifestsFromEmail,
   type InboundDisposition,
 } from "@/lib/inbound-email/inbound-store";
+import { extractEmailIdFromWebhook } from "@/lib/inbound-email/resend-receiving-core";
+import { claimResponse, deliveryKey } from "@/lib/inventory/inbound-dedupe-core";
 import { enrichResendInbound } from "@/lib/inbound-email/resend-receiving-fetch";
 import { ingestFromText } from "@/lib/regulatory/regulatory-ingest";
 import { processMenuEmail } from "@/lib/purchasing/emailed-menu-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+// R36 #2: staging fetches attachments and may run LlamaParse, which can take
+// minutes. Give the function the same 300 s the intake pages have, so a slow
+// run is not killed half-way (a killed run is what left a broken twin row).
+// Duplicate deliveries are stopped by the delivery claim below, not by speed.
+export const maxDuration = 300;
 
 function resolveProvider(): InboundProvider {
   const raw = (process.env.INBOUND_EMAIL_PROVIDER ?? "resend").trim().toLowerCase();
@@ -134,8 +143,25 @@ async function handleResend(request: Request) {
   const isReceived = type.includes("received") || type.includes("inbound");
 
   if (isReceived) {
-    const enriched = await enrichResendInbound(raw);
-    return finish(enriched.email, signatureOk, enriched.fetchNote);
+    // R36 #2 - idempotency claim BEFORE any slow work. Svix retries a
+    // delivery that is not answered in time and keeps the same message id;
+    // the Resend email_id is the same on every retry and on a dashboard
+    // replay. Exactly one request may process this email.
+    const key = deliveryKey({ emailId: extractEmailIdFromWebhook(raw), svixId });
+    const claim = await claimInboundDelivery({ provider: "resend", key });
+    if (claim.kind === "duplicate") {
+      const res = claimResponse(claim.decision);
+      return NextResponse.json(res.body, { status: res.status });
+    }
+    const logId = claim.kind === "claimed" ? claim.logId : null;
+    try {
+      const enriched = await enrichResendInbound(raw);
+      return await finish(enriched.email, signatureOk, enriched.fetchNote, logId);
+    } catch (err) {
+      // Give the claim back so the provider's retry can take over at once.
+      if (logId) await releaseInboundDelivery(logId);
+      throw err;
+    }
   }
 
   // Non-received Resend payloads (or a bare data object): metadata-only path.
@@ -213,8 +239,22 @@ async function finish(
   email: NormalizedInboundEmail | null,
   signatureOk: boolean | null,
   fetchNote?: string,
+  /** R36 #2: the delivery-claim row to complete (null = no claim taken). */
+  logId: string | null = null,
 ) {
   if (!email) {
+    if (logId) {
+      // Close the claim so a retry of this delivery is answered "done".
+      await logInboundEmail({
+        email: { provider: "resend", from: "", to: [], subject: "", receivedAt: new Date().toISOString(), attachments: [] },
+        signatureOk,
+        toIntake: false,
+        disposition: "ignored",
+        manifestId: null,
+        note: "not an email payload",
+        logId,
+      });
+    }
     return NextResponse.json({ ok: true, ignored: "not-an-email" }, { status: 200 });
   }
 
@@ -230,6 +270,7 @@ async function finish(
         toIntake: false,
         disposition: "ignored",
         manifestId: null,
+        logId,
         note: res.ok
           ? `regulatory watch: ingested (${res.created ? "new" : "duplicate"}${res.analyzed ? ", analyzed" : ""})`
           : `regulatory watch: ${res.error}`,
@@ -250,6 +291,7 @@ async function finish(
         toIntake: false,
         disposition: "ignored",
         manifestId: null,
+        logId,
         note: `vendor menu: ${menu.outcome}${menu.snapshotId ? ` (snapshot ${menu.snapshotId})` : ""} — ${menu.note}${fetchNote ? ` — ${fetchNote}` : ""}`,
       });
       return NextResponse.json(
@@ -263,6 +305,7 @@ async function finish(
       toIntake: false,
       disposition: "ignored",
       manifestId: null,
+      logId,
       note: "not addressed to the intake mailbox",
     });
     return NextResponse.json({ ok: true, ignored: "not-intake-mailbox" }, { status: 200 });
@@ -301,6 +344,7 @@ async function finish(
     toIntake: true,
     disposition,
     manifestId: staged.manifestIds[0] ?? null,
+    logId,
     // Append the fetch trail (what we pulled from Resend's receiving API + any
     // invoice/manifest links) so a human reviewing the inbound panel can see
     // exactly what arrived even when nothing parsed into a manifest.
