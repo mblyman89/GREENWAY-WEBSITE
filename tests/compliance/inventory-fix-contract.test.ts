@@ -242,6 +242,18 @@ const RULES: readonly Rule[] = [
     controls: { "src/app/admin/purchasing/page.tsx": ['<Link href="/admin/purchasing/new">'] },
   },
   {
+    name: "Expiration rules -> Save rules, then Preview and Apply (R34)",
+    match: (h) => parseHref(h).path === "/admin/inventory/expiration-rules",
+    route: "src/app/admin/inventory/expiration-rules/page.tsx",
+    controls: {
+      "src/app/admin/inventory/expiration-rules/page.tsx": [
+        "<form action={saveExpiryRulesAction}",
+        "<form action={previewExpiryRulesAction}",
+        "<form action={applyExpiryRulesAction}",
+      ],
+    },
+  },
+  {
     name: "Cycle counts -> open a scoped count",
     match: (h) => parseHref(h).path === "/admin/inventory/cycle-counts",
     route: "src/app/admin/inventory/cycle-counts/page.tsx",
@@ -267,7 +279,8 @@ describe("S37 inventory fix contract — every fix button opens a page that can 
 
   it("collects the whole inventory link surface (a shrinking set would hide a gap)", () => {
     // Exact (measured): a new link must be classified here deliberately.
-    expect(hrefs.size).toBe(25);
+    // R34: +1 - the missing-expiry gap also links Expiration rules.
+    expect(hrefs.size).toBe(26);
     const all = [...hrefs.keys()];
     for (const must of [
       `/admin/inventory/${LOT}#product-link`,
@@ -277,6 +290,7 @@ describe("S37 inventory fix contract — every fix button opens a page that can 
       "/admin/inventory#register-blocked",
       "/admin/inventory#restore-to-sale",
       "/admin/inventory?needsReceivedDate=1",
+      "/admin/inventory/expiration-rules",
     ]) {
       expect(all, must).toContain(must);
     }

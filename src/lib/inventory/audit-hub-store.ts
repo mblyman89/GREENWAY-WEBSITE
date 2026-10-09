@@ -643,6 +643,8 @@ export type CountSheetLine = {
   lotCode: string | null;
   productName: string | null;
   categorySlug: string | null;
+  /** R34: expiration date (display badge only; not a quantity hint). */
+  expiresOn: string | null;
   /** What THEY entered. Shown back so they can see their own work. */
   countedQty: number | null;
   recountQty: number | null;
@@ -727,6 +729,7 @@ export async function getCountSheet(
       lotCode: lot?.lotCode ?? null,
       productName: lot?.productName ?? null,
       categorySlug: lot?.categorySlug ?? null,
+      expiresOn: lot?.expiresOn ?? null,
       countedQty: domainLine.countedQty,
       recountQty: domainLine.recountQty,
       reasonCode: r.reason_code,
@@ -754,6 +757,8 @@ export type ReviewLine = {
   lotId: string;
   lotCode: string | null;
   productName: string | null;
+  /** R34: expiration date, so the owner sees expired stock in the review. */
+  expiresOn: string | null;
   systemQty: number;
   countedQty: number | null;
   recountQty: number | null;
@@ -832,6 +837,7 @@ export async function getAuditReview(
       lotId: r.lot_id,
       lotCode: lot?.lotCode ?? null,
       productName: lot?.productName ?? null,
+      expiresOn: lot?.expiresOn ?? null,
       systemQty: domainLine.systemQty,
       countedQty: domainLine.countedQty,
       recountQty: domainLine.recountQty,

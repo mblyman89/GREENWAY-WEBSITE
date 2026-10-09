@@ -52,6 +52,8 @@ import {
   type VendorNameCandidate,
 } from "@/lib/inventory/vendor-resolve-core";
 import { chunkedIn, pagedAllChecked } from "@/lib/supabase/chunked-in";
+import { intakeExpirySource, intakeExpiryNote, isExpirySourceCheckViolation } from "@/lib/inventory/expiry-rules-core";
+import { applyExpiryRules } from "@/lib/inventory/expiry-rules-store";
 // RECEIVING INTAKE IS THE REAL PIPELINE (rule 11). Brand identity is decided by
 // the SHARED matcher so receiving and promotions can never drift apart again.
 import {
@@ -767,6 +769,9 @@ export async function stageManifest(
       unit: line.unit,
       unit_cost_minor_units: line.unit_cost_minor_units,
       expires_on: line.expires_on,
+      // R34 (0253): a date that arrived with the intake documents is a
+      // DOCUMENT date - expiration rules never replace it.
+      expires_on_source: intakeExpirySource(line.expires_on),
       // SLICE 18-0 — the compliance classification columns (migrations 0216 /
       // 0217) were added to inventory_lots but nothing on the receiving path
       // ever wrote them, so they were dead on every received lot. They are
@@ -786,7 +791,14 @@ export async function stageManifest(
       // S05 (0234): omitted entirely when the stamp is off or 0234 is missing.
       ...(identityKey === undefined ? {} : { identity_key: identityKey }),
     };
-    const { error: lotErr } = await admin.from("inventory_lots").insert(lotRow);
+    let { error: lotErr } = await admin.from("inventory_lots").insert(lotRow);
+    // R34: before 0253 the source CHECK has no "manifest" - retry once with
+    // no source (the pre-R34 row shape) so receiving never breaks over it.
+    if (lotErr && isExpirySourceCheckViolation(lotErr)) {
+      console.warn("[intake-store] migration 0253 not applied - lot staged without expires_on_source");
+      lotRow.expires_on_source = null;
+      ({ error: lotErr } = await admin.from("inventory_lots").insert(lotRow));
+    }
     if (lotErr && isMissingIdentityColumnError("inventory_lots", lotErr)) {
       identityColumnsMissing = true;
       console.warn("[intake-store] migration 0234 not applied - lots staged without identity_key");
@@ -1420,6 +1432,35 @@ export async function finalizeManifestDispositions(
         `The received date could not be saved on the accepted lots: ${err instanceof Error ? err.message : String(err)}`.slice(0, 400),
         actorId,
       );
+    }
+  }
+
+  // R34: EXPIRATION RULES. Lots that arrived with no document expiration date
+  // (manifest / JSON / COA) get the owner's category / type rule date the
+  // moment they are accepted. FILL-ONLY: only blank dates are written (the
+  // per-row WHERE guard is `.is("expires_on", null)`), so a vendor date, a
+  // typed date or any earlier rule date is never touched, and override is
+  // never used here. Best-effort and silent before migration 0253: the stock
+  // is already active, so a failure goes on the manifest timeline and the
+  // owner can re-run it from Inventory -> Expiration rules.
+  {
+    const expiryLotIds = [...activatedLotIds, ...heldLotIds];
+    if (expiryLotIds.length > 0) {
+      try {
+        const res = await applyExpiryRules(
+          { overrideManual: false, fillOnly: true, lotIds: expiryLotIds },
+          actorId,
+        );
+        const msg = intakeExpiryNote(
+          res.ok
+            ? { ok: true, written: res.written, changed: res.changed, failed: res.failed, considered: expiryLotIds.length }
+            : { ok: false, migrated: res.migrated, error: res.error },
+        );
+        if (msg) await logManifestEvent(manifestId, msg.event, msg.note, actorId);
+      } catch (err) {
+        const msg = intakeExpiryNote({ ok: false, migrated: true, error: err instanceof Error ? err.message : String(err) });
+        if (msg) await logManifestEvent(manifestId, msg.event, msg.note, actorId);
+      }
     }
   }
 

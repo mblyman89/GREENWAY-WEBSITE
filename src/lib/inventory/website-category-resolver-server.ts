@@ -23,7 +23,8 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
-import { listInventoryTypes } from "@/lib/pos/types-store";
+import { listInventoryTypes, listWebsiteCategoryTypes } from "@/lib/pos/types-store";
+import { websiteCategoryDefinitions } from "@/lib/pos/category-taxonomy";
 import { getOverridesForKeys } from "@/lib/pos/product-classification-overrides";
 import {
   buildStaticInventoryTypeMap,
@@ -95,8 +96,38 @@ export async function loadMenuCategoriesForKeys(
  */
 export async function resolveWebsiteCategories<T extends ResolvableLot>(
   lots: T[],
+  opts: ResolveManyOptions = {},
 ): Promise<WebsiteCategoryResolution[]> {
-  return (await resolveWebsiteCategoriesWithLiveKeys(lots)).resolutions;
+  return (await resolveWebsiteCategoriesWithLiveKeys(lots, opts)).resolutions;
+}
+
+export type ResolveManyOptions = {
+  /**
+   * R34 - also accept categories the owner created in Settings -> Types
+   * (active rows of website_category_types that are not built-in). Off by
+   * default so every existing caller behaves exactly as before.
+   */
+  includeCustomCategories?: boolean;
+};
+
+/**
+ * R34 - owner-created categories (value -> label): ACTIVE registry rows whose
+ * value is not a built-in taxonomy value. Empty on any failure (the registry
+ * read already falls back to the built-in taxonomy, which yields no extras).
+ */
+export async function loadCustomCategoryMap(): Promise<Map<string, string>> {
+  const builtIn = new Set<string>(websiteCategoryDefinitions.map((c) => c.value as string));
+  const out = new Map<string, string>();
+  try {
+    const rows = await listWebsiteCategoryTypes({ includeInactive: false });
+    for (const r of rows) {
+      const v = String(r.value ?? "").trim();
+      if (v && !builtIn.has(v)) out.set(v, String(r.label ?? "").trim() || v);
+    }
+  } catch (err) {
+    console.error("[website-category-resolver] loadCustomCategoryMap failed:", err);
+  }
+  return out;
 }
 
 /**
@@ -107,13 +138,15 @@ export async function resolveWebsiteCategories<T extends ResolvableLot>(
  */
 export async function resolveWebsiteCategoriesWithLiveKeys<T extends ResolvableLot>(
   lots: T[],
+  opts: ResolveManyOptions = {},
 ): Promise<{ resolutions: WebsiteCategoryResolution[]; liveKeys: Set<string> }> {
   if (lots.length === 0) return { resolutions: [], liveKeys: new Set() };
   const keys = lots.map((l) => l.posProductKey);
-  const [inventoryTypeMap, menuCategories, overrides] = await Promise.all([
+  const [inventoryTypeMap, menuCategories, overrides, extraCategories] = await Promise.all([
     loadInventoryTypeMap(),
     loadMenuCategoriesForKeys(keys),
     getOverridesForKeys(keys),
+    opts.includeCustomCategories ? loadCustomCategoryMap() : Promise.resolve(undefined),
   ]);
   const resolutions = lots.map((lot) =>
     resolveWebsiteCategory(lot, {
@@ -122,6 +155,7 @@ export async function resolveWebsiteCategoriesWithLiveKeys<T extends ResolvableL
         : null,
       menuItemCategory: lot.posProductKey ? menuCategories.get(lot.posProductKey) ?? null : null,
       inventoryTypeMap,
+      ...(extraCategories && extraCategories.size ? { extraCategories } : {}),
     }),
   );
   return { resolutions, liveKeys: new Set(menuCategories.keys()) };

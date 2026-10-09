@@ -52,6 +52,7 @@ const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "system", label: "System qty" },
   { value: "counted", label: "Counted qty" },
   { value: "variance", label: "Variance" },
+  { value: "expires", label: "Expiration date" },
 ];
 
 export function CycleCountSheetTools({
@@ -80,6 +81,7 @@ export function CycleCountSheetTools({
   const [counted, setCounted] = useState(sp.get("counted") ?? "all");
   const [sample, setSample] = useState(sp.get("sample") ?? "all");
   const [medical, setMedical] = useState(sp.get("medical") ?? "all");
+  const [expiry, setExpiry] = useState(sp.get("expiry") ?? "all");
   const [sort, setSort] = useState(sp.get("sort") ?? "product");
   const [dir, setDir] = useState(sp.get("dir") ?? "asc");
 
@@ -94,10 +96,11 @@ export function CycleCountSheetTools({
     if (counted !== "all") p.set("counted", counted);
     if (sample !== "all") p.set("sample", sample);
     if (medical !== "all") p.set("medical", medical);
+    if (expiry !== "all") p.set("expiry", expiry);
     if (sort !== "product") p.set("sort", sort);
     if (dir !== "asc") p.set("dir", dir);
     return p;
-  }, [q, category, lcbCategory, type, vendor, brand, counted, sample, medical, sort, dir]);
+  }, [q, category, lcbCategory, type, vendor, brand, counted, sample, medical, expiry, sort, dir]);
 
   function applyFilters() {
     const s = query.toString();
@@ -106,7 +109,7 @@ export function CycleCountSheetTools({
 
   function resetFilters() {
     setQ(""); setCategory(""); setLcbCategory(""); setType(""); setVendor(""); setBrand("");
-    setCounted("all"); setSample("all"); setMedical("all"); setSort("product"); setDir("asc");
+    setCounted("all"); setSample("all"); setMedical("all"); setExpiry("all"); setSort("product"); setDir("asc");
     router.push(pathname);
   }
 
@@ -239,6 +242,14 @@ export function CycleCountSheetTools({
             <option value="all">Include medical</option>
             <option value="exclude">Exclude medical</option>
             <option value="only">Only medical</option>
+          </Select>
+        </Field>
+        <Field label="Expiration" help="Expired lots should be pulled, not recounted">
+          <Select value={expiry} onChange={(e) => setExpiry(e.target.value)}>
+            <option value="all">Any expiration</option>
+            <option value="expired">Expired</option>
+            <option value="soon">Expiring within 30 days</option>
+            <option value="none">No expiration date</option>
           </Select>
         </Field>
         <Field label="Sort by">

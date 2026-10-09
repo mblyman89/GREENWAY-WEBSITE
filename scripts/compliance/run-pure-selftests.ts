@@ -955,6 +955,10 @@ import { r28MakeExtract } from "../r28/coa-fixture-extract";
 import { __runLabFactsAttachCoreTests } from "../../src/lib/catalog/lab-facts-attach-core";
 import { __runCannabinoidProfileCoreTests } from "../../src/lib/menu/cannabinoid-profile-core";
 import { __runWciaLabJsonCoreTests } from "../../src/lib/inventory/wcia-lab-json-core";
+import { __runExpiryResearchCoreTests } from "../../src/lib/inventory/expiry-research-core";
+import { __runExpiryRulesCoreTests } from "../../src/lib/inventory/expiry-rules-core";
+import { __runExpiryReportExportTests } from "../../src/lib/inventory/expiry-report-export";
+import { websiteCategoryDefinitions as __r34Categories } from "../../src/lib/pos/category-taxonomy";
 
 /** R28: tests/fixtures/coa files whose name matches `suffix`, keyed "itemNN". */
 function r28CoaFixtures(suffix: string): Record<string, string> {
@@ -2107,6 +2111,9 @@ __runLiquidVolumeTests();
   assertRan("lot-details-propagation-core", __runLotDetailsPropagationCoreTests(), 38); // R33: vendor/brand/strain name reach the website
   assertRan("product-facts-overlay-core", __runProductFactsOverlayCoreTests(), 33); // R33: own lab terpenes + reviewer strain on the menu
   assertRan("pdp-size-core", __runPdpSizeCoreTests(), 39); // R33: size line + JSON-LD weight + single-size panel
+  assertRan("expiry-research-core", __runExpiryResearchCoreTests(__r34Categories.map((c) => c.value as string)), 227); // R34: cited expiration suggestions
+  assertRan("expiry-rules-core", __runExpiryRulesCoreTests(), 180); // R34: expiration rule engine
+  assertRan("expiry-report-export", __runExpiryReportExportTests(), 14); // R34: expiration report export
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

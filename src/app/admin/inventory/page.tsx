@@ -350,9 +350,15 @@ export default async function InventoryPage({
         subtitle="Every lot tied to its vendor, brand, COA, and manifest — the traceability backbone most WA retailers don't have. Compliance reports are built on top of this real data, never re-entered."
         breadcrumbs={<Breadcrumbs items={[{ label: "Inventory" }]} />}
         action={
-          <Button href="/admin/inventory/intake" variant="save" size="sm">
-            + Import vendor JSON
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* R34: owner expiration rules (best-by dates for lots with no manufacturer date). */}
+            <Button href="/admin/inventory/expiration-rules" variant="neutral" size="sm">
+              Expiration rules
+            </Button>
+            <Button href="/admin/inventory/intake" variant="save" size="sm">
+              + Import vendor JSON
+            </Button>
+          </div>
         }
         help={
           <HelpPanel

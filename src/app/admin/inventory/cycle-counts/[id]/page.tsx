@@ -15,6 +15,8 @@ import {
 import { CycleCountScanner } from "@/components/admin/inventory/CycleCountScanner";
 import { CycleCountSheetTools } from "@/components/admin/inventory/CycleCountSheetTools";
 import { getCycleCountVarianceReview } from "@/lib/inventory/inventory-intel";
+import { pacificToday } from "@/lib/reports/timezone";
+import { expiryProvenance, expiryStatus } from "@/lib/inventory/expiry-rules-core";
 import {
   filterLines as filterSheetLines,
   sortLines as sortSheetLines,
@@ -30,7 +32,8 @@ import {
   cancelCycleCountAction,
 } from "../actions";
 
-const SHEET_SORT_KEYS: SheetSortKey[] = ["product", "lot", "category", "vendor", "brand", "system", "counted", "variance"];
+const SHEET_SORT_KEYS: SheetSortKey[] = ["product", "lot", "category", "vendor", "brand", "system", "counted", "variance", "expires"];
+const EXPIRY_FILTERS = ["all", "expired", "soon", "none"] as const;
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +66,7 @@ export default async function CycleCountDetailPage({
     counted?: string;
     sample?: string;
     medical?: string;
+    expiry?: string;
     sort?: string;
     dir?: string;
   }>;
@@ -83,6 +87,7 @@ export default async function CycleCountDetailPage({
 
   // Enriched lines drive the filter/sort tools + the export sheet.
   const sheetLines = await getCycleCountSheetLines(id);
+  const today = pacificToday();
   const filter: SheetFilter = {
     q: sp.q,
     // PRIMARY filter is OUR website category (Request B). Raw LCB category/type
@@ -95,6 +100,9 @@ export default async function CycleCountDetailPage({
     counted: (sp.counted as SheetFilter["counted"]) ?? "all",
     sample: (sp.sample as SheetFilter["sample"]) ?? "all",
     medical: (sp.medical as SheetFilter["medical"]) ?? "all",
+    // R34: expired / expiring soon / no date - counted against Pacific today.
+    expiry: (EXPIRY_FILTERS as readonly string[]).includes(sp.expiry ?? "") ? (sp.expiry as SheetFilter["expiry"]) : "all",
+    today,
   };
   const sort: SheetSort = {
     key: (SHEET_SORT_KEYS.includes((sp.sort ?? "") as SheetSortKey) ? sp.sort : "product") as SheetSortKey,
@@ -109,6 +117,8 @@ export default async function CycleCountDetailPage({
         raw: l.category,
         rawType: l.inventoryType,
         unmapped: l.categoryUnmapped,
+        expiresOn: l.expiresOn,
+        expiresOnSource: l.expiresOnSource,
       },
     ] as const),
   );
@@ -340,6 +350,21 @@ export default async function CycleCountDetailPage({
                             LCB: {cat.raw}
                           </span>
                         ) : null}
+                        {(() => {
+                          // R34: expiry badge - an expired lot found during a count
+                          // should be pulled (quarantine / destroy) rather than recounted.
+                          const st = expiryStatus(cat.expiresOn, today);
+                          if (st.tone === "none") return null;
+                          const prov = expiryProvenance({ expires_on: cat.expiresOn, expires_on_source: cat.expiresOnSource });
+                          return (
+                            <span title={`Expiry source: ${prov.sourceLabel}`} data-testid="count-line-expiry">
+                              <Badge tone={st.tone === "expired" ? "danger" : st.tone === "soon" ? "gold" : "neutral"}>
+                                {prov.isRule ? "Best by " : ""}
+                                {st.label}
+                              </Badge>
+                            </span>
+                          );
+                        })()}
                         {cat.unmapped ? (
                           <Link
                             href="/admin/settings/types"

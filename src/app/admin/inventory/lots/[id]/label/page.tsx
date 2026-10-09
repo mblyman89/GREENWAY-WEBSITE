@@ -13,6 +13,7 @@
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { getLotById } from "@/lib/inventory/store";
+import { expiryProvenance } from "@/lib/inventory/expiry-rules-core";
 import { getStoreProfile } from "@/lib/admin/store-profile-store";
 import { code128Svg } from "@/lib/printing/code128-core";
 import { LabelPrintControls } from "@/components/admin/inventory/LabelPrintControls";
@@ -114,7 +115,11 @@ export default async function LotLabelPage({
             </tr>
             {lot.expires_on ? (
               <tr>
-                <td style={{ color: "#444" }}>Expires</td>
+                {/* R34: a date from an owner expiration RULE is an estimate, not a
+                    document date, so the label says "Best by" rather than "Expires". */}
+                <td style={{ color: "#444" }}>
+                  {expiryProvenance(lot as unknown as { expires_on: string | null; expires_on_source?: string | null }).labelWord}
+                </td>
                 <td style={{ fontWeight: 700 }}>{lot.expires_on}</td>
               </tr>
             ) : null}

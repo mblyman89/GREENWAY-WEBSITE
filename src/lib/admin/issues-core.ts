@@ -307,6 +307,9 @@ export function gapBulkFillHref(key: string, href: string | undefined | null): s
   return `${href}${href.includes("?") ? "&" : "?"}bulk=1&bulkField=${field}`;
 }
 
+/** R34: the expiration-rules page (category / type rules that date undated lots). */
+export const EXPIRATION_RULES_HREF = "/admin/inventory/expiration-rules";
+
 /** Gap keys that mean "product that must not be sold may be on the floor" (stop-sale). */
 const BLOCKING_GAPS = new Set(["recalled", "expired"]);
 
@@ -348,6 +351,12 @@ export function buildInventoryIssues(input: InventoryIssueInput): Issue[] {
     // stays only as the fallback when the intel read produced none.
     if (g.key === "expired" && input.intelExpiredRows > 0) continue;
     const bulkHref = gapBulkFillHref(g.key, g.href);
+    // R34: lots with no expiry date can ALSO be dated by the owner's
+    // category / type expiration rules (any lot, not only Cultivera imports).
+    const extras = [
+      ...(bulkHref ? [{ href: bulkHref, label: "Bulk fill the Cultivera-import lots" }] : []),
+      ...(g.key === "missingExpiry" ? [{ href: EXPIRATION_RULES_HREF, label: "Date them with expiration rules" }] : []),
+    ];
     out.push({
       severity: BLOCKING_GAPS.has(g.key) ? "blocking" : "warning",
       code: `gap_${g.key}`,
@@ -355,9 +364,7 @@ export function buildInventoryIssues(input: InventoryIssueInput): Issue[] {
       meaning: GAP_MEANING[g.key] ?? "Open the list to see exactly which lots.",
       fixText: g.href ? "Open the filtered list; every lot on it has this gap." : null,
       fix: g.href ? { href: g.href, label: "Show these lots" } : null,
-      ...(bulkHref
-        ? { extra: [{ href: bulkHref, label: "Bulk fill the Cultivera-import lots" }] }
-        : {}),
+      ...(extras.length > 0 ? { extra: extras } : {}),
     });
   }
 
@@ -766,6 +773,8 @@ export function __runIssuesCoreTests(): { passed: number; failed: number } {
   ok(fillable.find((i) => i.code === "gap_missingProductLink")?.extra?.[0]?.href === "/admin/inventory?status=active&missingProductLink=1&bulk=1&bulkField=pos_product_key", "link bulk href");
   ok(fillable.find((i) => i.code === "gap_emptyActive")?.extra === undefined, "empty-active gets no bulk extra");
   ok(fillable.find((i) => i.code === "gap_missingExpiry")?.extra?.[0]?.label === "Bulk fill the Cultivera-import lots", "bulk label");
+  ok(fillable.find((i) => i.code === "gap_missingExpiry")?.extra?.[1]?.href === EXPIRATION_RULES_HREF, "R34: expiry gap also links the expiration rules");
+  ok(fillable.find((i) => i.code === "gap_unknownCost")?.extra?.length === 1, "R34: rules link only on the expiry gap");
   ok(gapBulkFillHref("missingExpiry", null) === null, "no href, no bulk link");
   ok(gapBulkFillHref("missingExpiry", "/x") === "/x?bulk=1&bulkField=expires_on", "bulk href without query");
   ok(gapBulkFillHref("expired", "/x?a=1") === null, "expired is not bulk-fillable");

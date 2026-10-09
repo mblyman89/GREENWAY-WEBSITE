@@ -46,12 +46,15 @@ import {
   type ScanLine,
 } from "@/lib/inventory/cycle-count-scan-core";
 import { saveCountAction } from "./actions";
+import { expiryStatus } from "@/lib/inventory/expiry-rules-core";
 
 export type SheetLine = {
   lotId: string;
   lotCode: string | null;
   productName: string | null;
   categorySlug: string | null;
+  /** R34: expiration date - an expired lot should be pulled, not just counted. */
+  expiresOn?: string | null;
   countedQty: number | null;
   recountQty: number | null;
   needsRecount: boolean;
@@ -67,10 +70,13 @@ export function AuditCountSheet({
   sessionId,
   lines,
   readOnly,
+  today,
 }: {
   sessionId: string;
   lines: readonly SheetLine[];
   readOnly: boolean;
+  /** R34: Pacific today (YYYY-MM-DD) from the server, for the expiry badge. */
+  today?: string;
 }) {
   const [focusLotId, setFocusLotId] = useState<string | null>(null);
   // HOW the number arrived is part of the evidence, not decoration. A count
@@ -326,7 +332,10 @@ export function AuditCountSheet({
                       focusLotId === l.lotId ? "bg-[var(--admin-accent)]/[0.07]" : ""
                     }`}
                   >
-                    <td className="py-2 pr-3 text-white/90">{l.productName ?? "Unnamed product"}</td>
+                    <td className="py-2 pr-3 text-white/90">
+                      {l.productName ?? "Unnamed product"}
+                      {today ? <ExpiryChip expiresOn={l.expiresOn ?? null} today={today} /> : null}
+                    </td>
                     <td className="py-2 pr-3 font-mono text-xs text-white/70">
                       {l.lotCode ?? <span className="text-[var(--admin-orange)]">NO LOT CODE</span>}
                     </td>
@@ -375,5 +384,16 @@ export function AuditCountSheet({
         </div>
       </section>
     </div>
+  );
+}
+
+/** R34: expired / expiring-soon chip (nothing shown for an ok or unknown date). */
+function ExpiryChip({ expiresOn, today }: { expiresOn: string | null; today: string }) {
+  const st = expiryStatus(expiresOn, today);
+  if (st.tone !== "expired" && st.tone !== "soon") return null;
+  return (
+    <span className="ml-2" data-testid="audit-line-expiry">
+      <Badge tone={st.tone === "expired" ? "danger" : "gold"}>{st.label}</Badge>
+    </span>
   );
 }

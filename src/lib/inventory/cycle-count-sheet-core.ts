@@ -20,6 +20,8 @@
  * and matching parsed rows to lines. The store/action layer does the DB writes.
  */
 
+import { expiryStatus } from "@/lib/inventory/expiry-rules-core";
+
 /** A count line enriched for filtering/sorting/exporting. */
 export type SheetLine = {
   lineId: string;
@@ -49,6 +51,13 @@ export type SheetLine = {
   countedQty: number | null;
   isSample: boolean;
   isMedical: boolean;
+  /**
+   * R34: the lot's expiration date (YYYY-MM-DD) and where it came from
+   * (manifest | coa | pos_import | owner_entered | rule | null). Optional so
+   * older callers / fixtures stay valid; absent = unknown, shown as "-".
+   */
+  expiresOn?: string | null;
+  expiresOnSource?: string | null;
 };
 
 /** Filter options for the count line list / export. */
@@ -71,6 +80,13 @@ export type SheetFilter = {
   counted?: "all" | "counted" | "uncounted";
   sample?: "all" | "only" | "exclude";
   medical?: "all" | "only" | "exclude";
+  /**
+   * R34: expiration filter. "expired" = date before today; "soon" = today ..
+   * today+30; "none" = no date on file. Needs `today` (Pacific YYYY-MM-DD);
+   * without it the filter is ignored rather than guessed.
+   */
+  expiry?: "all" | "expired" | "soon" | "none";
+  today?: string | null;
 };
 
 export type SheetSortKey =
@@ -81,7 +97,8 @@ export type SheetSortKey =
   | "brand"
   | "system"
   | "counted"
-  | "variance";
+  | "variance"
+  | "expires";
 
 export type SheetSort = { key: SheetSortKey; dir: "asc" | "desc" };
 
@@ -120,6 +137,13 @@ export function filterLines(lines: SheetLine[], f: SheetFilter): SheetLine[] {
 
     if (f.medical === "only" && !l.isMedical) return false;
     if (f.medical === "exclude" && l.isMedical) return false;
+
+    if (f.expiry && f.expiry !== "all" && f.today) {
+      const tone = expiryStatus(l.expiresOn ?? null, f.today).tone;
+      if (f.expiry === "expired" && tone !== "expired") return false;
+      if (f.expiry === "soon" && tone !== "soon") return false;
+      if (f.expiry === "none" && tone !== "none") return false;
+    }
 
     return true;
   });
@@ -167,6 +191,13 @@ export function sortLines(lines: SheetLine[], sort: SheetSort): SheetLine[] {
         cmp = (va ?? -Infinity) - (vb ?? -Infinity);
         break;
       }
+      case "expires": {
+        // Undated lots sort LAST ascending (soonest-to-expire first).
+        const ea = a.expiresOn ?? null;
+        const eb = b.expiresOn ?? null;
+        cmp = ea === eb ? 0 : ea == null ? 1 : eb == null ? -1 : ea.localeCompare(eb);
+        break;
+      }
     }
     if (cmp === 0) {
       // Deterministic tiebreak so exports are reproducible.
@@ -205,6 +236,7 @@ export const SHEET_HEADERS = [
   "Vendor",
   "Brand",
   "Unit",
+  "Expires",
   "Counted Qty",
 ] as const;
 
@@ -224,6 +256,8 @@ export function toExportRows(lines: SheetLine[]): Record<string, string | number
     Vendor: l.vendorName ?? "",
     Brand: l.brandName ?? "",
     Unit: l.unit ?? "",
+    // R34: reference only (never read back on import - not a header alias).
+    Expires: l.expiresOn ?? "",
     // Pre-fill any existing count so re-exports round-trip; blank otherwise.
     "Counted Qty": l.countedQty ?? "",
   }));
@@ -463,6 +497,24 @@ export function __runCycleCountSheetTests(): void {
   assert(rows[0]["LCB Type"] === "Usable Cannabis", "export keeps raw LCB Type");
   assert(rows[0]["LCB Category"] === "Usable Marijuana", "export keeps raw LCB Category");
   assert(rows[1]["Counted Qty"] === 5, "export prefills existing count");
+
+  // R34: expiry column, filter and sort.
+  assert(rows[0].Expires === "" && Object.keys(rows[0]).join("|") === SHEET_HEADERS.join("|"), "export Expires column in header order");
+  const dated: SheetLine[] = [
+    { ...lines[0], lineId: "E1", lotCode: "E1", expiresOn: "2026-05-01" },
+    { ...lines[0], lineId: "E2", lotCode: "E2", expiresOn: "2026-05-20" },
+    { ...lines[0], lineId: "E3", lotCode: "E3", expiresOn: null },
+    { ...lines[0], lineId: "E4", lotCode: "E4", expiresOn: "2027-01-01" },
+  ];
+  const TD = "2026-05-15";
+  assert(filterLines(dated, { expiry: "expired", today: TD }).map((l) => l.lineId).join() === "E1", "expiry filter expired");
+  assert(filterLines(dated, { expiry: "soon", today: TD }).map((l) => l.lineId).join() === "E2", "expiry filter soon");
+  assert(filterLines(dated, { expiry: "none", today: TD }).map((l) => l.lineId).join() === "E3", "expiry filter none");
+  assert(filterLines(dated, { expiry: "expired" }).length === 4, "expiry filter ignored without today (never guessed)");
+  assert(sortLines(dated, { key: "expires", dir: "asc" }).map((l) => l.lineId).join() === "E1,E2,E4,E3", "sort expires asc, undated last");
+  assert(toExportRows([dated[1]])[0].Expires === "2026-05-20", "export carries the date");
+  const withExp = buildImportPreview(lines, [{ "Lot Code": "ABC123", Expires: "2020-01-01", "Counted Qty": "4" }]);
+  assert(withExp.matched === 1 && withExp.invalid === 0, "Expires column is ignored on import");
 
   // import: match by lot code, alias headers, variance, unmatched, invalid
   const preview = buildImportPreview(lines, [

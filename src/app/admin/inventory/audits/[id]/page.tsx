@@ -41,6 +41,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Badge, Button } from "@/components/admin/ui";
 import { formatCents } from "@/lib/accounting/books-view-core";
 import { getAuditReview } from "@/lib/inventory/audit-hub-store";
+import { pacificToday } from "@/lib/reports/timezone";
 import {
   LABELS,
   type AuditSessionStatus,
@@ -289,7 +290,7 @@ export default async function AuditDetailPage({
       </section>
 
       {/* ── THE LINES ─────────────────────────────────────────────────── */}
-      <AuditVarianceReview sessionId={id} lines={lines} editable={isReview} />
+      <AuditVarianceReview sessionId={id} lines={lines} editable={isReview} today={pacificToday()} />
 
       {/* Teaching, below the work. */}
       <MaterialityPanel />
