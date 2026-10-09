@@ -26,7 +26,13 @@ import { planFinalize } from "@/lib/inventory/finalize-label-core";
 import { adviseAiExtract } from "@/lib/inventory/ai-extract-advice-core";
 import { listManifestDocMeta } from "@/lib/inventory/manifest-docs";
 import { getVendorById } from "@/lib/vendors/store";
-import { listManifestLots, listManifestEvents, listLabFactsByIds } from "@/lib/inventory/intake-store";
+import {
+  listManifestLots,
+  listManifestEvents,
+  listLabFactsByIds,
+  findDuplicateTwinsFor,
+} from "@/lib/inventory/intake-store";
+import { DismissDuplicateForm } from "@/components/admin/inventory/DismissDuplicateForm";
 import { summarizeStagedIntake } from "@/lib/inventory/intake-review-adapter";
 import { IntakeReviewFlagsPanel } from "@/components/admin/inventory/IntakeReviewFlagsPanel";
 import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline";
@@ -63,6 +69,7 @@ import {
   notifyVendorSampleCapAction,
   linkManifestPoAction,
   reExtractManifestAiAction,
+  dismissDuplicateManifestAction,
 } from "../actions";
 
 /** Format an ISO timestamp into the value a datetime-local input expects. */
@@ -121,6 +128,9 @@ export default async function ManifestReviewPage({
     booksError?: string;
     /** S28: Delivery | Issues; S29 adds Accounting. */
     tab?: string;
+    /** R36: Dismiss duplicate result / refusal. */
+    dismissed?: string;
+    dismisserr?: string;
   }>;
 }) {
   // S29: the session is kept so owner-only books links render only for a
@@ -154,6 +164,8 @@ export default async function ManifestReviewPage({
     books,
     booksError,
     tab,
+    dismissed,
+    dismisserr,
   } = await searchParams;
 
   const manifest = await getManifestById(id);
@@ -298,6 +310,11 @@ export default async function ManifestReviewPage({
   const promoteKbAction = promoteManifestToKbAction.bind(null, id);
   const transportAction = updateManifestTransportAction.bind(null, id);
   const reExtractAiAction = reExtractManifestAiAction.bind(null, id);
+  // R36 #2: is this row a second copy of a live manifest? Then offer Dismiss.
+  const isDismissed = manifest.status === "dismissed";
+  const twinKeepId = isDismissed
+    ? null
+    : ((await findDuplicateTwinsFor([manifest])).get(id) ?? null);
   // PR-A: document-AI parse status for the plain-English statement in the
   // transport section (what LlamaParse read, or the honest reason it didn't).
   const parseStatus = await getParseStatusForManifestNumber(manifest.manifest_number);
@@ -417,6 +434,62 @@ export default async function ManifestReviewPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {/* R36 #2 - dismiss result / refusal + the duplicate state. */}
+        {dismissed && (
+          <div
+            data-testid="dismiss-banner"
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+          >
+            <strong>Duplicate dismissed - this is the manifest that was kept.</strong> {dismissed}
+          </div>
+        )}
+        {dismisserr && (
+          <div
+            data-testid="dismiss-error"
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+          >
+            <strong>Not dismissed.</strong> {dismisserr}
+          </div>
+        )}
+        {isDismissed && (
+          <div
+            data-testid="dismissed-state"
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3 text-sm text-[var(--admin-text-muted)]"
+          >
+            <strong className="text-[var(--admin-text)]">Dismissed as a duplicate.</strong> This was a
+            second copy of a manifest that was already here (the same email delivered twice). It is
+            hidden from Receiving; its lines were never received and are not in Inventory.
+            {manifest.duplicate_of && (
+              <>
+                {" "}
+                <Link
+                  href={`/admin/inventory/intake/${manifest.duplicate_of}`}
+                  className="font-semibold text-[var(--admin-accent)] underline-offset-2 hover:underline"
+                >
+                  Open the manifest that was kept &rarr;
+                </Link>
+              </>
+            )}
+            {manifest.dismissed_reason ? <span className="block pt-1 text-xs">Note: {manifest.dismissed_reason}</span> : null}
+          </div>
+        )}
+        {twinKeepId && (
+          <div className="space-y-2 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]" data-testid="duplicate-warning">
+            <p>
+              <strong>Duplicate row.</strong> Another row in Receiving has the same manifest # and
+              vendor - the same email was delivered twice. Keep the one you want and dismiss the
+              other (dismissing is not a rejection).{" "}
+              <Link href={`/admin/inventory/intake/${twinKeepId}`} className="font-semibold underline-offset-2 hover:underline">
+                Open the other copy &rarr;
+              </Link>
+            </p>
+            <DismissDuplicateForm
+              action={dismissDuplicateManifestAction.bind(null, id, twinKeepId, "detail")}
+              keepId={twinKeepId}
+              keepLabel="the other copy of this manifest"
+            />
+          </div>
+        )}
         {/* W1 journey strip — where Receive sits in the pipeline, with the
             next stage (Onboard) one click away after accepting. */}
         <CatalogStageStrip current="intake" />

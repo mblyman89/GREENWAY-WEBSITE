@@ -13,6 +13,7 @@ import {
   gatherSampleCapNotice,
   logManifestEvent,
   setManifestInvoiceOverride,
+  dismissDuplicateManifest,
 } from "@/lib/inventory/intake-store";
 import { sendSampleCapVendorNotice } from "@/lib/compliance/sample-cap-notify";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
@@ -530,6 +531,43 @@ export async function rejectManifestAction(manifestId: string, formData: FormDat
 }
 
 /**
+ * R36 #2 - DISMISS a duplicate manifest row (the same email delivered twice).
+ * NOT a rejection: nothing is refused at the dock, nothing is filed with
+ * CCRS, and the duplicate's never-received lines are removed so they never
+ * clutter Inventory. The invoice #, documents and empty transport fields the
+ * duplicate carried move to the kept row. All checks + writes happen in ONE
+ * database transaction (migration 0255 dismiss_duplicate_manifest).
+ *
+ * `back` returns the owner to where he pressed it ("list" = the Receiving
+ * table; anything else = the KEPT manifest's review page).
+ */
+export async function dismissDuplicateManifestAction(
+  duplicateId: string,
+  keepId: string,
+  back: "list" | "detail",
+  formData: FormData,
+) {
+  const session = await requirePermission("inventory.manage");
+  const reasonRaw = formData.get("reason");
+  const reason = typeof reasonRaw === "string" ? reasonRaw : null;
+  const res = await dismissDuplicateManifest(duplicateId, keepId, session.userId, reason);
+  revalidatePath("/admin/inventory/intake");
+  revalidatePath(`/admin/inventory/intake/${duplicateId}`);
+  revalidatePath(`/admin/inventory/intake/${keepId}`);
+  revalidatePath("/admin/inventory");
+  const params = new URLSearchParams();
+  if (res.ok) {
+    params.set("dismissed", res.summary.slice(0, 400));
+  } else {
+    params.set("dismisserr", res.error.slice(0, 400));
+  }
+  if (back === "list") redirect(`/admin/inventory/intake?${params.toString()}`);
+  // Success lands on the KEPT row (the dismissed one is gone from the table);
+  // a refusal stays on the row the owner was looking at.
+  redirect(`/admin/inventory/intake/${res.ok ? keepId : duplicateId}?${params.toString()}`);
+}
+
+/**
  * Set a single lot's disposition. Reject requires a reason. Used by the
  * per-line accept/reject controls on the manifest review screen.
  */
@@ -799,7 +837,8 @@ export async function listKbBackfillManifestIdsAction(): Promise<
       const { data, error } = await admin
         .from("inbound_manifests")
         .select("id")
-        .neq("status", "rejected")
+        // R36: a dismissed duplicate is not a manifest either.
+        .not("status", "in", "(rejected,dismissed)")
         .order("created_at", { ascending: true })
         // Unique tiebreak — `created_at` is not unique.
         .order("id", { ascending: true })

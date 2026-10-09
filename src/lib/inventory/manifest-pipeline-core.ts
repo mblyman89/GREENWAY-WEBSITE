@@ -32,6 +32,11 @@ export const MANIFEST_STAGES = [
   "accepted",
   "partially_accepted",
   "rejected",
+  // R36: a duplicate row the owner dismissed (the same email delivered
+  // twice). NOT a rejection - nothing was refused at the dock; the row never
+  // was a separate arrival. Hidden from every Receiving view and count of
+  // real manifests; kept (not deleted) for the audit trail.
+  "dismissed",
 ] as const;
 
 export type ManifestStage = (typeof MANIFEST_STAGES)[number];
@@ -46,6 +51,7 @@ export const STAGE_ORDER: Record<string, number> = {
   accepted: 3,
   partially_accepted: 3,
   rejected: 3,
+  dismissed: 3,
 };
 
 /** Human labels + a short "what this means" line for staff. */
@@ -83,6 +89,11 @@ export const STAGE_META: Record<
     blurb: "Refused at the dock — never received (nothing destroyed; no CCRS filing).",
     tone: "danger",
   },
+  dismissed: {
+    label: "Dismissed duplicate",
+    blurb: "A second copy of a manifest that was already here (the same email delivered twice). Removed without rejecting - its lines never reached Inventory.",
+    tone: "neutral",
+  },
 };
 
 /** Return the normalized stage for any status string (unknown → pending). */
@@ -112,6 +123,8 @@ export type StageCounts = {
   accepted: number;
   partially_accepted: number;
   rejected: number;
+  /** R36: dismissed duplicate rows (not real manifests; never in `open`). */
+  dismissed: number;
   /** Convenience rollup: pending + in_transit + received. */
   open: number;
   /** Convenience: received-but-not-accepted (the intake queue). */
@@ -126,6 +139,7 @@ export function emptyStageCounts(): StageCounts {
     accepted: 0,
     partially_accepted: 0,
     rejected: 0,
+    dismissed: 0,
     open: 0,
     awaitingIntake: 0,
   };
@@ -213,6 +227,8 @@ export type GroupedPipeline<T extends PipelineRow> = {
   pending: T[];
   accepted: T[];
   rejected: T[];
+  /** R36: dismissed duplicates - kept apart so they never pose as rejections. */
+  dismissed: T[];
 };
 
 export function groupPipeline<T extends PipelineRow>(rows: T[]): GroupedPipeline<T> {
@@ -222,6 +238,7 @@ export function groupPipeline<T extends PipelineRow>(rows: T[]): GroupedPipeline
     pending: [],
     accepted: [],
     rejected: [],
+    dismissed: [],
   };
   for (const r of rows) {
     const s = normalizeStage(r.status);
@@ -230,6 +247,7 @@ export function groupPipeline<T extends PipelineRow>(rows: T[]): GroupedPipeline
     else if (s === "pending") out.pending.push(r);
     // Partially-accepted lives with accepted (it did enter inventory).
     else if (s === "accepted" || s === "partially_accepted") out.accepted.push(r);
+    else if (s === "dismissed") out.dismissed.push(r);
     else out.rejected.push(r);
   }
   return out;
@@ -299,12 +317,16 @@ export function __runManifestPipelineTests(): { passed: number; failed: number }
     "accepted",
     "rejected",
     "GARBAGE",
+    "dismissed",
   ]);
   ok(counts.pending === 3, "counts pending incl. garbage→pending"); // 2 + 1 garbage
   ok(counts.in_transit === 1, "counts in_transit");
   ok(counts.received === 3, "counts received");
   ok(counts.accepted === 1, "counts accepted");
   ok(counts.rejected === 1, "counts rejected");
+  ok(counts.dismissed === 1, "R36: counts dismissed separately");
+  ok(normalizeStage(" Dismissed ") === "dismissed", "R36: dismissed is a known stage");
+  ok(!isOpenStage("dismissed"), "R36: dismissed is not open");
   ok(counts.open === 3 + 1 + 3, "open rollup = pending+in_transit+received");
   ok(counts.awaitingIntake === 3, "awaitingIntake = received");
   const zero = countStages([]);
@@ -336,12 +358,14 @@ export function __runManifestPipelineTests(): { passed: number; failed: number }
     { id: "d", status: "accepted" },
     { id: "e", status: "rejected" },
     { id: "f", status: "received" },
+    { id: "g", status: "dismissed" },
   ]);
   ok(grouped.awaitingIntake.length === 2, "group awaitingIntake");
   ok(grouped.inTransit.length === 1, "group inTransit");
   ok(grouped.pending.length === 1, "group pending");
   ok(grouped.accepted.length === 1, "group accepted");
-  ok(grouped.rejected.length === 1, "group rejected");
+  ok(grouped.rejected.length === 1, "group rejected (a dismissed duplicate is NOT a rejection)");
+  ok(grouped.dismissed.length === 1 && grouped.dismissed[0].id === "g", "R36: group dismissed");
 
   // Stage meta completeness
   ok(MANIFEST_STAGES.every((s) => STAGE_META[s] !== undefined), "every stage has meta");

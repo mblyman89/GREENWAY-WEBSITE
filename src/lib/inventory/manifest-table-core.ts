@@ -249,6 +249,8 @@ export function movingBadge(
       return { emoji: "🟠", label: "Partially accepted", tone: "gold", overdue: false };
     case "rejected":
       return { emoji: "⚪", label: "Rejected", tone: "neutral", overdue: false };
+    case "dismissed":
+      return { emoji: "🗙", label: "Dismissed duplicate", tone: "neutral", overdue: false };
     case "pending":
     default:
       return { emoji: "🟡", label: "Pending", tone: "gold", overdue: false };
@@ -287,15 +289,25 @@ export function applyIntakeView<T extends { status: string | null }>(
   rows: readonly T[],
   view: IntakeTableView,
 ): T[] {
-  if (view === "action") return rows.filter((r) => !isProcessedManifest(r.status));
-  const open = rows.filter((r) => !isProcessedManifest(r.status));
-  const processed = rows.filter((r) => isProcessedManifest(r.status));
+  // R36: a dismissed duplicate is not a manifest - it is in NEITHER view.
+  const real = rows.filter((r) => !isDismissedManifest(r.status));
+  if (view === "action") return real.filter((r) => !isProcessedManifest(r.status));
+  const open = real.filter((r) => !isProcessedManifest(r.status));
+  const processed = real.filter((r) => isProcessedManifest(r.status));
   return [...open, ...processed];
+}
+
+/** R36: true for a duplicate row the owner dismissed. */
+export function isDismissedManifest(status: string | null | undefined): boolean {
+  return (status ?? "").trim().toLowerCase() === "dismissed";
 }
 
 /** How many rows the "action" view is hiding (for the toggle label). */
 export function countProcessedRows(rows: readonly { status: string | null }[]): number {
-  return rows.reduce((n, r) => n + (isProcessedManifest(r.status) ? 1 : 0), 0);
+  return rows.reduce(
+    (n, r) => n + (isProcessedManifest(r.status) && !isDismissedManifest(r.status) ? 1 : 0),
+    0,
+  );
 }
 
 // ── "Pulled in" timestamp ───────────────────────────────────────────────────

@@ -39,6 +39,11 @@ export type InboundManifest = {
   invoice_number_detected?: string | null;
   /** R26: provenance of invoice_number_detected ("role:how:document"). */
   invoice_number_source?: string | null;
+  /** R36 (0255): the duplicate row this manifest was dismissed as, if any. */
+  dismissed_at?: string | null;
+  dismissed_reason?: string | null;
+  /** R36 (0255): the row that was KEPT when this one was dismissed. */
+  duplicate_of?: string | null;
   // Denormalized lot rollups for the partial-accept badge (migration 0059).
   accepted_lot_count?: number;
   rejected_lot_count?: number;

@@ -317,3 +317,24 @@ export function isDedupeKeyConflict(e: PgLikeError): boolean {
 export function isDeliveryKeyConflict(e: PgLikeError): boolean {
   return isUniqueViolationOn(e, "inbound_email_log_delivery_key_uidx", "delivery_key");
 }
+
+/**
+ * Turn the dismiss RPC's error into the sentence the owner sees. The SQL
+ * function raises "DISMISS: <plain English>" (errcode P0001) for every
+ * refusal; anything else is an unexpected failure and is reported as such
+ * (never dressed up as a refusal). The function missing (migration 0255 not
+ * applied) gets its own message. PURE.
+ */
+export function dismissErrorMessage(e: PgLikeError): string {
+  const msg = e && typeof e === "object" && typeof e.message === "string" ? e.message : "";
+  const code = e && typeof e === "object" ? String(e.code ?? "") : "";
+  const m = /DISMISS:\s*(.+)$/s.exec(msg);
+  if (m) {
+    const t = m[1].trim();
+    return t.charAt(0).toUpperCase() + t.slice(1) + (/[.!?]$/.test(t) ? "" : ".");
+  }
+  if (code === "PGRST202" || code === "42883" || /dismiss_duplicate_manifest/.test(msg) && /not find|does not exist/i.test(msg)) {
+    return "The Dismiss duplicate feature needs database migration 0255 - apply it in the Supabase SQL editor, then try again.";
+  }
+  return `The duplicate could not be dismissed - nothing was changed (${(msg || "unknown error").slice(0, 200)}).`;
+}

@@ -60,6 +60,9 @@ export const MANIFEST_EVENT_LABELS: Readonly<Record<string, ManifestEventLabel>>
   transport: { label: "Transport details", group: "delivery", problem: false },
   invoice_number_override: { label: "Invoice # corrected", group: "delivery", problem: false },
   invoice_number_detected: { label: "Invoice # found in the documents", group: "delivery", problem: false },
+  // R36 (migration 0255 dismiss_duplicate_manifest writes both).
+  dismissed_duplicate: { label: "Dismissed as a duplicate row", group: "delivery", problem: false },
+  duplicate_merged: { label: "Duplicate row dismissed \u00b7 its facts kept here", group: "delivery", problem: false },
   note: { label: "Note", group: "delivery", problem: false },
   // Menu
   draft_seed_error: { label: "Onboarding drafts failed", group: "menu", problem: true },
@@ -268,7 +271,9 @@ export function __runManifestEventLabelsCoreTests(): { passed: number; failed: n
   ok(Object.values(MANIFEST_EVENT_LABELS).every((l) => l.label.length > 0 && groups.has(l.group)), "every label valid");
   // R26 pin update (on purpose): +invoice_number_detected (migration 0245 writer).
   // R27 pin update (on purpose): +menu_published_some_withheld (intake-menu-staging writer).
-  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 33, "33 known types (R27 adds menu_published_some_withheld)");
+  // R36 pin update (on purpose): +dismissed_duplicate, +duplicate_merged (0255 SQL writer).
+  ok(Object.keys(MANIFEST_EVENT_LABELS).length === 35, "35 known types (R36 adds dismissed_duplicate + duplicate_merged)");
+  ok(isKnownEventType("dismissed_duplicate") && isKnownEventType("duplicate_merged") && !labelForEvent("dismissed_duplicate").problem, "R36 dismiss events are known, non-problem delivery labels");
   ok(labelForEvent("menu_published_some_withheld").group === "menu" && labelForEvent("menu_published_some_withheld").problem, "R27 withheld publish is a menu problem (products still need facts)");
   ok(isKnownEventType("invoice_number_detected") && labelForEvent("invoice_number_detected").label === "Invoice # found in the documents" && labelForEvent("invoice_number_detected").group === "delivery" && !labelForEvent("invoice_number_detected").problem, "R26 invoice # found is a known delivery, non-problem label");
 

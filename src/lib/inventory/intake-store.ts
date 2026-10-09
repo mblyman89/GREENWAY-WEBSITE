@@ -100,7 +100,15 @@ import {
   findBlockingDuplicate,
   type ExistingManifestRow,
 } from "@/lib/inventory/manifest-dedupe-core";
-import { isDedupeKeyConflict } from "@/lib/inventory/inbound-dedupe-core";
+import {
+  checkDismiss,
+  describeDismissResult,
+  dismissErrorMessage,
+  findDuplicateTwins,
+  isDedupeKeyConflict,
+  type DismissCheckRow,
+  type TwinRow,
+} from "@/lib/inventory/inbound-dedupe-core";
 import { autoReceiveManifestPo } from "@/lib/inventory/po-receive-store";
 import { stageIntakeMenuVersionForManifest } from "@/lib/pos/intake-menu-staging";
 import { CUTOVER_HOLD_COPY, CUTOVER_REASON } from "@/lib/inventory/cutover-guard-core";
@@ -2469,4 +2477,85 @@ export async function listManifestEvents(manifestId: string) {
   return (
     (data as { id: string; event_type: string; note: string | null; created_at: string }[] | null) ?? []
   );
+}
+
+/**
+ * R36 #2 - DISMISS a duplicate manifest row (the same email delivered twice).
+ *
+ * Not a rejection: nothing was refused at the dock. One call into the
+ * migration-0255 SQL function public.dismiss_duplicate_manifest, which in ONE
+ * transaction (both rows locked) re-checks every guard, carries the invoice #,
+ * documents and empty transport fields to the kept row, deletes the
+ * duplicate's never-received lots (so nothing reaches Inventory), marks it
+ * "dismissed" and writes the audit events. The pure checkDismiss() runs first
+ * so the common refusals get a clear message without a round-trip; the SQL
+ * function is still the authority (a pair can change between the two).
+ */
+export async function dismissDuplicateManifest(
+  duplicateId: string,
+  keepId: string,
+  actorId: string | null,
+  reason: string | null,
+): Promise<{ ok: true; summary: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+  const { data: pair, error: readErr } = await admin
+    .from("inbound_manifests")
+    .select("id, manifest_number, vendor_label, status, created_at")
+    .in("id", [duplicateId, keepId]);
+  if (readErr) {
+    return { ok: false, error: `Could not read the two manifests - nothing was changed (${readErr.message}).` };
+  }
+  const rows = (pair as DismissCheckRow[] | null) ?? [];
+  const check = checkDismiss(
+    rows.find((r) => r.id === duplicateId) ?? null,
+    rows.find((r) => r.id === keepId) ?? null,
+  );
+  if (!check.ok) return { ok: false, error: check.reason };
+
+  const { data, error } = await admin.rpc("dismiss_duplicate_manifest", {
+    p_dup: duplicateId,
+    p_keep: keepId,
+    p_actor: actorId,
+    p_reason: (reason ?? "").trim().slice(0, 500) || null,
+  });
+  if (error) return { ok: false, error: dismissErrorMessage(error) };
+  return { ok: true, summary: describeDismissResult((data ?? {}) as Record<string, never>) };
+}
+
+/**
+ * R36 #2 - the live twin(s) of each listed manifest, for the Dismiss button.
+ * Reads every row sharing a manifest number with the given rows (not just the
+ * 200 the table shows), so a twin is found even when it is older than the
+ * page. Never throws: an unreadable answer means "no button", never a wrong
+ * one (the SQL function re-checks anyway).
+ */
+export async function findDuplicateTwinsFor(
+  rows: readonly TwinRow[],
+): Promise<Map<string, string>> {
+  const numbers = Array.from(
+    new Set(rows.map((r) => r.manifest_number).filter((n): n is string => Boolean(n && n.trim()))),
+  );
+  if (!isSupabaseServiceConfigured || numbers.length === 0) return new Map();
+  try {
+    const admin = createSupabaseAdminClient();
+    const all: TwinRow[] = [];
+    for (let i = 0; i < numbers.length; i += 100) {
+      const { data, error } = await admin
+        .from("inbound_manifests")
+        .select("id, manifest_number, vendor_label, status, created_at")
+        .in("manifest_number", numbers.slice(i, i + 100))
+        .limit(1000);
+      if (error) return new Map();
+      all.push(...((data as TwinRow[] | null) ?? []));
+    }
+    const wanted = new Set(rows.map((r) => r.id));
+    const twins = findDuplicateTwins(all);
+    return new Map(Array.from(twins).filter(([id]) => wanted.has(id)));
+  } catch (err) {
+    console.error("[intake-store] twin lookup failed:", err);
+    return new Map();
+  }
 }
