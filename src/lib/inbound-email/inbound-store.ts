@@ -36,6 +36,12 @@ import {
   backfillManifestTransport,
   recordInvoiceNumberDetected,
 } from "@/lib/inventory/intake-store";
+import { isMissingColumnError } from "@/lib/inventory/coa-extract-core";
+import {
+  decideClaim,
+  isDeliveryKeyConflict,
+  type ClaimDecision,
+} from "@/lib/inventory/inbound-dedupe-core";
 import type {
   NormalizedInboundEmail,
   NormalizedAttachment,
@@ -82,7 +88,7 @@ import {
   type InvoiceSourceDoc,
 } from "@/lib/inventory/invoice-number-core";
 import { archiveEmailedCoaForManifest } from "@/lib/inventory/coa-archive";
-import { archiveManifestDocuments } from "@/lib/inventory/manifest-docs";
+import { archiveManifestDocuments, listManifestDocMeta } from "@/lib/inventory/manifest-docs";
 import { classifyMinerKind, type MinerSource } from "@/lib/inventory/vendor-goldminer-core";
 import { enrichVendorFromIntakeDocs } from "@/lib/inventory/vendor-goldminer-store";
 
@@ -198,26 +204,174 @@ export async function logInboundEmail(params: {
   manifestId: string | null;
   note: string | null;
   rawHeaders?: Record<string, string> | null;
+  /**
+   * R36 #2: the delivery-claim row taken by claimInboundDelivery. When set,
+   * the claim row is COMPLETED (updated) instead of a second row being
+   * inserted - one email, one log row, and the final disposition is what
+   * tells a later retry "already done". Falls back to an insert if the
+   * update cannot be made, so the audit trail is never lost.
+   */
+  logId?: string | null;
 }): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  const row = {
+    provider: params.email.provider,
+    from_address: params.email.from || null,
+    to_addresses: params.email.to,
+    subject: params.email.subject || null,
+    received_at: params.email.receivedAt,
+    signature_ok: params.signatureOk,
+    to_intake: params.toIntake,
+    attachment_count: params.email.attachments.length,
+    disposition: params.disposition,
+    manifest_id: params.manifestId,
+    note: params.note,
+    raw_headers: params.rawHeaders ?? null,
+  };
+  try {
+    const admin = createSupabaseAdminClient();
+    if (params.logId) {
+      const { data, error } = await admin
+        .from("inbound_email_log")
+        .update(row)
+        .eq("id", params.logId)
+        .select("id");
+      if (!error && Array.isArray(data) && data.length === 1) return;
+      console.error("[inbound-email] could not complete the delivery claim row; inserting instead:", error);
+    }
+    await admin.from("inbound_email_log").insert(row);
+  } catch (err) {
+    console.error("[inbound-email] failed to write inbound_email_log:", err);
+  }
+}
+
+/** Outcome of claimInboundDelivery. */
+export type DeliveryClaim =
+  /** This request owns the email: process it, then finish with logId. */
+  | { kind: "claimed"; logId: string }
+  /** No usable key, migration 0255 not applied, or the claim could not be
+   * read - process exactly as before (no claim; never block real mail). */
+  | { kind: "unclaimed"; reason: string }
+  /** Another delivery of the SAME email owns it - answer `response`. */
+  | { kind: "duplicate"; decision: ClaimDecision };
+
+/**
+ * R36 #2 - the idempotency claim (the "insert-first" receiver pattern Svix
+ * and Stripe document for webhook consumers). Resend delivers through Svix,
+ * which retries any delivery that is not answered 2xx in time and keeps the
+ * same message id across retries. Our staging is slow (attachment fetch +
+ * LlamaParse), so a retry used to arrive while the first run was still
+ * working and staged the same manifest twice. Here the FIRST thing done for a
+ * delivery is an INSERT keyed on the provider's message id; the unique index
+ * (0255 inbound_email_log_delivery_key_uidx) lets exactly one request win.
+ * The losers read the winner's row and decideClaim says done / in flight /
+ * take over (the winner crashed). Never throws.
+ */
+export async function claimInboundDelivery(params: {
+  provider: NormalizedInboundEmail["provider"];
+  key: string | null;
+  now?: Date;
+}): Promise<DeliveryClaim> {
+  if (!params.key) return { kind: "unclaimed", reason: "no delivery id" };
+  if (!isSupabaseServiceConfigured) return { kind: "unclaimed", reason: "no database" };
+  const now = params.now ?? new Date();
+  try {
+    const admin = createSupabaseAdminClient();
+    const ins = await admin
+      .from("inbound_email_log")
+      .insert({
+        provider: params.provider,
+        disposition: "received",
+        delivery_key: params.key,
+        claimed_at: now.toISOString(),
+        note: "delivery claimed - processing",
+      })
+      .select("id")
+      .single();
+    if (!ins.error && ins.data && typeof (ins.data as { id?: unknown }).id === "string") {
+      return { kind: "claimed", logId: (ins.data as { id: string }).id };
+    }
+    if (ins.error && isMissingColumnError(ins.error)) {
+      return { kind: "unclaimed", reason: "migration 0255 not applied" };
+    }
+    if (!ins.error || !isDeliveryKeyConflict(ins.error)) {
+      console.error("[inbound-email] delivery claim insert failed; processing unclaimed:", ins.error);
+      return { kind: "unclaimed", reason: "claim insert failed" };
+    }
+    // Someone holds this email. Read their row and decide.
+    const cur = await admin
+      .from("inbound_email_log")
+      .select("id, disposition, claimed_at")
+      .eq("delivery_key", params.key)
+      .maybeSingle();
+    if (cur.error || !cur.data) {
+      // Cannot see the holder: be safe and let the provider retry later
+      // rather than risk a double stage.
+      return { kind: "duplicate", decision: { kind: "in_flight", ageMs: 0 } };
+    }
+    const holder = cur.data as { id: string; disposition: string | null; claimed_at: string | null };
+    const decision = decideClaim(holder, now);
+    if (decision.kind !== "take_over") return { kind: "duplicate", decision };
+    // Take over a dead claim - conditional on it still being the SAME dead
+    // claim, so two retries racing for one stale claim cannot both win.
+    let q = admin
+      .from("inbound_email_log")
+      .update({ claimed_at: now.toISOString(), note: "delivery claim taken over - processing" })
+      .eq("id", holder.id)
+      .eq("disposition", "received");
+    q = holder.claimed_at === null ? q.is("claimed_at", null) : q.eq("claimed_at", holder.claimed_at);
+    const upd = await q.select("id");
+    if (!upd.error && Array.isArray(upd.data) && upd.data.length === 1) {
+      return { kind: "claimed", logId: holder.id };
+    }
+    return { kind: "duplicate", decision: { kind: "in_flight", ageMs: 0 } };
+  } catch (err) {
+    console.error("[inbound-email] delivery claim failed; processing unclaimed:", err);
+    return { kind: "unclaimed", reason: "claim error" };
+  }
+}
+
+/**
+ * R36 #2 - a run that CRASHED gives its claim back (claimed_at := null), so
+ * the provider's next retry takes over at once instead of waiting out the
+ * stale window. Only an in-flight ("received") claim is released - a
+ * finished row is never reopened. Never throws.
+ */
+export async function releaseInboundDelivery(logId: string): Promise<void> {
   if (!isSupabaseServiceConfigured) return;
   try {
     const admin = createSupabaseAdminClient();
-    await admin.from("inbound_email_log").insert({
-      provider: params.email.provider,
-      from_address: params.email.from || null,
-      to_addresses: params.email.to,
-      subject: params.email.subject || null,
-      received_at: params.email.receivedAt,
-      signature_ok: params.signatureOk,
-      to_intake: params.toIntake,
-      attachment_count: params.email.attachments.length,
-      disposition: params.disposition,
-      manifest_id: params.manifestId,
-      note: params.note,
-      raw_headers: params.rawHeaders ?? null,
-    });
+    await admin
+      .from("inbound_email_log")
+      .update({ claimed_at: null, note: "delivery failed - released for the provider's retry" })
+      .eq("id", logId)
+      .eq("disposition", "received");
   } catch (err) {
-    console.error("[inbound-email] failed to write inbound_email_log:", err);
+    console.error("[inbound-email] could not release the delivery claim:", err);
+  }
+}
+
+/**
+ * R36 #2 - a re-sent (duplicate) email hands its documents to the existing
+ * manifest ONLY when that manifest has none archived. This is what lets
+ * "Run AI extract" on the surviving row read the invoice PDF and find the
+ * invoice number: before R36, the twin that came from a crashed/retried
+ * delivery kept the documents and the healthy row had nothing to read.
+ * A read failure (null) archives nothing - we never guess that it is empty -
+ * and a row that already has documents is never touched (no duplicate files).
+ * Never throws. Returns how many documents were archived.
+ */
+export async function archiveDocsToExistingIfNone(
+  existingManifestId: string,
+  attachments: NormalizedInboundEmail["attachments"],
+): Promise<number> {
+  try {
+    const meta = await listManifestDocMeta(existingManifestId);
+    if (meta === null || meta.length > 0 || attachments.length === 0) return 0;
+    return await archiveManifestDocuments(existingManifestId, attachments, "email");
+  } catch (err) {
+    console.warn("[inbound-email] duplicate-path document archive skipped:", err);
+    return 0;
   }
 }
 
@@ -437,6 +591,7 @@ export async function stageManifestsFromEmail(
           "re-sent vendor email",
         );
         await recordInvoiceNumberDetected(staged.existingManifestId, invoicePick, actorId);
+        await archiveDocsToExistingIfNone(staged.existingManifestId, email.attachments);
       }
       console.warn("[inbound-email] duplicate manifest skipped:", staged.error);
     } else {
@@ -594,6 +749,7 @@ export async function stageManifestsFromEmail(
             "re-sent vendor email (PDF)",
           );
           await recordInvoiceNumberDetected(staged.existingManifestId, invoicePick, actorId);
+          await archiveDocsToExistingIfNone(staged.existingManifestId, email.attachments);
         }
         console.warn("[inbound-email] duplicate manifest (pdf) skipped:", staged.error);
       } else {
