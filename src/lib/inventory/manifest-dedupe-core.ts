@@ -22,9 +22,19 @@
  *     staging proceeds so we never silently drop a real, distinct transfer.
  *
  * BLOCKING STATUS: a duplicate is blocked only when the existing row is still
- * "live" — pending | in_transit | accepted. A previously "rejected" manifest is
- * NOT blocking (the vendor may legitimately re-send a corrected transfer), so a
- * re-send after a rejection is allowed to stage again.
+ * "live" — pending | in_transit | received | accepted | partially_accepted.
+ * (R36: received and partially_accepted were missing, so a re-send of a
+ * manifest that had already been marked received - or partially accepted -
+ * staged a SECOND row; those stages are as live as accepted.) A previously
+ * "rejected" manifest is NOT blocking (the vendor may legitimately re-send a
+ * corrected transfer), and neither is a "dismissed" duplicate (R36: it never
+ * was a real arrival), so a re-send after either is allowed to stage again.
+ *
+ * WHICH ROW IS "THE" ONE (R36): when several live rows share the identity
+ * (the owner's duplicate pair), the OLDEST live row wins (created_at, then id)
+ * - the same row the owner's "Dismiss duplicate" keeps - so the invoice #,
+ * documents and transport a re-send carries always land on the row that stays,
+ * never on whichever row the database happened to return first.
  */
 
 /** The normalized identity used to detect a re-sent/duplicate manifest. */
@@ -58,13 +68,26 @@ export type ManifestStatus = "pending" | "in_transit" | "accepted" | "rejected" 
 
 /**
  * True when an EXISTING manifest row with the same identity should BLOCK
- * re-staging. Live states (pending/in_transit/accepted) block; a rejected row
- * does not (a corrected re-send is allowed). PURE.
+ * re-staging. Live states (BLOCKING_STATUSES) block; a rejected or dismissed
+ * row does not (a corrected re-send is allowed). PURE.
  */
 export function isBlockingStatus(status: ManifestStatus | null | undefined): boolean {
-  const s = (status ?? "").toLowerCase();
-  return s === "pending" || s === "in_transit" || s === "accepted";
+  const s = (status ?? "").trim().toLowerCase();
+  return (BLOCKING_STATUSES as readonly string[]).includes(s);
 }
+
+/**
+ * R36 - every LIVE stage. A row in one of these is a real, still-counted
+ * manifest. rejected (refused at the dock) and dismissed (a duplicate the
+ * owner dismissed) are the only non-live stages.
+ */
+export const BLOCKING_STATUSES = [
+  "pending",
+  "in_transit",
+  "received",
+  "accepted",
+  "partially_accepted",
+] as const;
 
 /** A candidate existing row (as selected from inbound_manifests). */
 export type ExistingManifestRow = {
@@ -72,28 +95,64 @@ export type ExistingManifestRow = {
   manifest_number: string | null;
   vendor_label: string | null;
   status: string | null;
+  /** R36: used to pick the OLDEST live twin. Optional for older callers. */
+  created_at?: string | null;
 };
 
 /**
  * Given the new manifest's identity and the set of existing rows that share its
- * manifest_number (already filtered by the DB query), return the id of the FIRST
- * blocking duplicate (same vendorKey + a live status), or null when none blocks.
- * PURE — lets the store decide with a testable rule instead of ad-hoc logic.
+ * manifest_number (already filtered by the DB query), return the id of the
+ * OLDEST blocking duplicate (same vendorKey + a live status; ties and missing
+ * timestamps broken by id), or null when none blocks. PURE — lets the store
+ * decide with a testable rule instead of ad-hoc logic. Input order no longer
+ * matters (R36: it used to return whichever row the query listed first).
  */
 export function findBlockingDuplicate(
   identity: ManifestIdentity,
   existing: ExistingManifestRow[],
 ): string | null {
+  let best: ExistingManifestRow | null = null;
   for (const row of existing) {
     const rowNumber = norm(row.manifest_number);
     if (rowNumber !== identity.manifestNumber) continue;
     const rowVendor = norm(row.vendor_label);
     // Same number + same vendor (or both vendor-less) + a live status => block.
-    if (rowVendor === identity.vendorKey && isBlockingStatus(row.status)) {
-      return row.id;
-    }
+    if (rowVendor !== identity.vendorKey || !isBlockingStatus(row.status)) continue;
+    if (!best || compareOldestFirst(row, best) < 0) best = row;
   }
-  return null;
+  return best ? best.id : null;
+}
+
+/** Epoch ms of an ISO timestamp, or +Infinity when missing/unparseable. PURE. */
+function tsMs(v: string | null | undefined): number {
+  const t = Date.parse(v ?? "");
+  return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Oldest-first ordering for manifest rows: created_at ascending (missing last),
+ * then id ascending so the answer is deterministic. PURE.
+ */
+export function compareOldestFirst(
+  a: { id: string; created_at?: string | null },
+  b: { id: string; created_at?: string | null },
+): number {
+  const ta = tsMs(a.created_at);
+  const tb = tsMs(b.created_at);
+  if (ta !== tb) return ta < tb ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/**
+ * R36 - the value stored in inbound_manifests.dedupe_key (migration 0255,
+ * UNIQUE while not null): "<MANIFEST #>|<VENDOR>" from the SAME normalization
+ * as the identity above, so the atomic DB guard and the read-then-check can
+ * never disagree. null when there is no identity (no manifest number) - such
+ * a manifest is never deduped. PURE.
+ */
+export function dedupeKeyFor(identity: ManifestIdentity | null): string | null {
+  if (!identity) return null;
+  return `${identity.manifestNumber}|${identity.vendorKey}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +182,10 @@ export function __runManifestDedupeTests(): { passed: number; failed: number } {
   ok(isBlockingStatus("pending") === true, "pending blocks");
   ok(isBlockingStatus("in_transit") === true, "in_transit blocks");
   ok(isBlockingStatus("accepted") === true, "accepted blocks");
+  ok(isBlockingStatus("received") === true, "R36: received blocks");
+  ok(isBlockingStatus("partially_accepted") === true, "R36: partially_accepted blocks");
+  ok(isBlockingStatus(" Received ") === true, "R36: status is trimmed + case-folded");
+  ok(isBlockingStatus("dismissed") === false, "R36: a dismissed duplicate does NOT block");
   ok(isBlockingStatus("rejected") === false, "rejected does NOT block (re-send allowed)");
   ok(isBlockingStatus(null) === false, "null status does not block");
 
@@ -168,6 +231,24 @@ export function __runManifestDedupeTests(): { passed: number; failed: number } {
     ]) === "r1",
     "skips rejected, blocks on the live accepted row",
   );
+
+  // R36: the OLDEST live twin wins, whatever order the query returned
+  ok(
+    findBlockingDuplicate(idLilac, [
+      { id: "b", manifest_number: "ORD-7208", vendor_label: "Lilac Labs", status: "in_transit", created_at: "2026-08-05T10:00:05Z" },
+      { id: "a", manifest_number: "ORD-7208", vendor_label: "Lilac Labs", status: "in_transit", created_at: "2026-08-05T10:00:00Z" },
+    ]) === "a",
+    "R36: oldest live twin is the duplicate target",
+  );
+  ok(
+    findBlockingDuplicate(idLilac, [
+      { id: "z", manifest_number: "ORD-7208", vendor_label: "Lilac Labs", status: "pending", created_at: null },
+      { id: "y", manifest_number: "ORD-7208", vendor_label: "Lilac Labs", status: "pending", created_at: null },
+    ]) === "y",
+    "R36: no timestamps -> lowest id (deterministic)",
+  );
+  ok(dedupeKeyFor(idLilac) === "ORD-7208|LILAC LABS", "R36: dedupe key = NUMBER|VENDOR");
+  ok(dedupeKeyFor(null) === null, "R36: no identity -> no dedupe key");
 
   if (failed === 0) console.log(`manifest-dedupe-core: all ${passed} tests passed`);
   return { passed, failed };
