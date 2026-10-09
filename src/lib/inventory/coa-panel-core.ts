@@ -27,6 +27,7 @@ import {
 import type { CoaExtractRun } from "@/lib/inventory/coa-extract-core";
 import { MINOR_FACT_KEYS, MINOR_FACT_TYPES, minorMgFromCompounds } from "@/lib/menu/cannabinoid-profile-core";
 import { factResultCopy, parseFactResult } from "@/lib/pos/intake-fact-review-core";
+import { parseServingLimitCodes, servingLimitBannerText } from "@/lib/compliance/serving-limit-warning-core";
 
 export const LAB_CERT_ANCHOR = "lab-certificate";
 export const PRODUCT_FACTS_ANCHOR = "product-facts";
@@ -251,6 +252,8 @@ export type LotDraftRow = {
   updated_at: string | null;
   name?: string | null;
   inventory_type?: string | null;
+  /** R35: the shelf a person chose at onboarding (0141) - narrows the WAC 314-55-095 warning. */
+  chosen_website_category?: string | null;
 };
 
 /**
@@ -326,12 +329,18 @@ export function coaRereadBanner(rawCode: unknown, rawRestaged: unknown): PanelBa
   return { text: coaRereadCopy(code, rawRestaged === "1"), tone };
 }
 
-/** The ?fact=... banner after a facts save from the lot / KB page. */
-export function factSaveBanner(rawCode: unknown, rawMsg: unknown): PanelBanner | null {
+/**
+ * The ?fact=... banner after a facts save from the lot / KB page. R35: a
+ * successful save over a WAC 314-55-095 limit (?fact_warn=codes) adds the
+ * fixed warning wording and turns the banner red - never free URL text.
+ */
+export function factSaveBanner(rawCode: unknown, rawMsg: unknown, rawWarn?: unknown): PanelBanner | null {
   const code = parseFactResult(rawCode);
   if (!code) return null;
   const tone: PanelBanner["tone"] = code === "published" ? "ok" : code === "error" || code === "migration" ? "bad" : "warn";
-  return { text: factResultCopy(code, typeof rawMsg === "string" ? rawMsg : null), tone };
+  const text = factResultCopy(code, typeof rawMsg === "string" ? rawMsg : null);
+  const warn = code === "error" || code === "migration" ? null : servingLimitBannerText(parseServingLimitCodes(rawWarn));
+  return warn ? { text: `${text} ${warn}`, tone: "bad" } : { text, tone };
 }
 
 const CANNABINOID_KEYS_FOR_TESTS: CannabinoidKey[] = ["d9-thc", "cbd", "cbg", "cbc"];
@@ -510,6 +519,10 @@ export function __runCoaPanelCoreTests(fixtures: Record<string, string>, makeExt
   ok(factSaveBanner("published", undefined)?.tone === "ok", "published -> ok");
   ok(factSaveBanner("error", "  the lot was not updated ")?.text === "the lot was not updated" && factSaveBanner("error", null)?.tone === "bad", "error shows the message");
   ok(factSaveBanner("migration", undefined)?.tone === "bad" && factSaveBanner("held", undefined)?.tone === "warn" && factSaveBanner("saved", undefined)?.tone === "warn", "migration bad; held/saved warn");
+  // R35: WAC 314-55-095 save-with-warning banner (codes only, fixed words).
+  const warned = factSaveBanner("published", undefined, "serving_over_limit");
+  ok(warned?.tone === "bad" && (warned?.text ?? "").includes("WAC 314-55-095(1)(a)") && (warned?.text ?? "").startsWith("Saved"), "R35: over-limit save -> red banner citing (1)(a)");
+  ok(factSaveBanner("published", undefined, "<b>hi</b>")?.tone === "ok" && factSaveBanner("error", "x", "package_over_limit")?.text === "x", "R35: junk codes ignored; an error never claims a save");
 
   return { passed, failed };
 }

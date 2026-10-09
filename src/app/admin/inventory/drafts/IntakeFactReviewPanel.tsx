@@ -11,9 +11,20 @@
  * are the SAME names and rules as the POS-import review
  * (menu-imports/[id]/facts/page.tsx; parsed by the shared
  * parseLowThcClassification / parseOtherwiseTakenClassification).
+ *
+ * R35 (#4): the Fix form states the WAC 314-55-095 serving / package limits
+ * (serving-limit-warning-core); the server action saves a figure over a limit
+ * WITH a warning (banner + audit), never a refusal.
  */
 import { Button } from "@/components/admin/ui";
 import { FACT_REVIEW_HEADING, factPanelLead, type OpenFactFlag } from "@/lib/pos/intake-fact-review-core";
+import {
+  PACKAGE_RULE,
+  SERVING_RULE,
+  WA_PACKAGE_MAX_THC_MG,
+  WA_SERVING_MAX_THC_MG,
+  servingLimitApplies,
+} from "@/lib/compliance/serving-limit-warning-core";
 import { resolveIntakeFactReview } from "./actions";
 
 const inputCls =
@@ -54,10 +65,13 @@ export function IntakeFactReviewPanel({
   flag,
   draftId,
   returnManifest,
+  category,
 }: {
   flag: OpenFactFlag;
   draftId: string;
   returnManifest: string | null;
+  /** R35: the product's website category (narrows the WAC 314-55-095 check; unknown = checked). */
+  category?: string | null;
 }) {
   return (
     <div
@@ -93,12 +107,18 @@ export function IntakeFactReviewPanel({
         <form action={resolveIntakeFactReview} className="mt-2 space-y-3">
           <Hidden flag={flag} draftId={draftId} returnManifest={returnManifest} />
           <input type="hidden" name="action" value="fix" />
+          {category && <input type="hidden" name="limit_category" value={category} />}
           <p className="text-[11px] text-[var(--admin-text-muted)]">
             Only what you type is changed. Take each figure from the package or the COA.
           </p>
           <p className="text-[11px] text-[var(--admin-text-muted)]">
             Package THC fills itself from servings × mg per serving when left blank. For ratio products (1:1, 2:2:2:1 CBG:CBC:CBD:THC) enter each cannabinoid’s PACKAGE total in mg — the menu shows these totals, never the lab percent.
           </p>
+          {servingLimitApplies(category ?? null) && (
+            <p className="text-[11px] text-[var(--admin-text-muted)]" data-testid="intake-fact-limit-hint">
+              Washington limits: at most {WA_SERVING_MAX_THC_MG} mg THC per serving ({SERVING_RULE}) and {WA_PACKAGE_MAX_THC_MG} mg THC per package ({PACKAGE_RULE}). A figure above a limit is saved with a warning {"\u2014"} check the package before it is sold.
+            </p>
+          )}
           <div className="grid gap-2 sm:grid-cols-3">
             <FixField label="THC (display)" name="thc" placeholder="e.g. 100mg" />
             <FixField label="CBD (display)" name="cbd" placeholder="e.g. 100mg" />

@@ -293,6 +293,7 @@ export function ProductFactsSection({
             returnManifest={null}
             returnView={ctx.draft.status === "approved" ? "approved" : "draft"}
             returnTo={returnTo}
+            category={ctx.draft.chosen_website_category ?? null}
           />
         )
       ) : null}

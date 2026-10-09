@@ -33,6 +33,13 @@ import {
 } from "@/lib/pos/intake-fact-review-core";
 import { mirrorIntakeFixToLive, recordIntakeFactReview } from "@/lib/pos/fact-review-store";
 import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
+import {
+  SERVING_LIMIT_PARAM,
+  limitCategoryFromForm,
+  servingLimitAudit,
+  servingLimitParam,
+  servingLimitWarnings,
+} from "@/lib/compliance/serving-limit-warning-core";
 // R19 S13: batch manifest lookup (enqueue / stop; the cron does the work).
 import { enqueueManifestLookup, cancelManifestLookup } from "@/lib/catalog/lookup-job-server";
 
@@ -285,6 +292,18 @@ export async function resolveIntakeFactReview(formData: FormData) {
     redirect(back(m || null, d || null, { fact: "error", fact_msg: parsed.error }));
   }
   const form = parsed.form;
+  // R35 (#4): WAC 314-55-095 - a fix over the serving / package limit is
+  // SAVED with a warning (never refused: the person reads the package), and
+  // the warning goes on the audit row and the result banner.
+  const limitWarnings =
+    form.action === "fix" && form.correctedFacts
+      ? servingLimitWarnings({
+          mgPerServing: form.correctedFacts.mgPerServing ?? null,
+          servingsPerPack: form.correctedFacts.servingsPerPack ?? null,
+          packageThcMg: form.correctedFacts.packageThcMg ?? null,
+          category: limitCategoryFromForm(get("limit_category")),
+        })
+      : [];
 
   let code: FactResultCode;
   let message = "";
@@ -313,6 +332,7 @@ export async function resolveIntakeFactReview(formData: FormData) {
           correctedFacts: form.correctedFacts,
           flagSignature: form.flagSignature,
           draftId: form.draftId,
+          servingLimitWarnings: servingLimitAudit(limitWarnings),
         },
       });
       const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
@@ -354,6 +374,8 @@ export async function resolveIntakeFactReview(formData: FormData) {
   if (returnTo) revalidatePath(returnTo);
   const extra: Record<string, string> = { fact: code };
   if (code === "error" && message) extra.fact_msg = message.slice(0, 300);
+  const warnParam = code !== "error" && code !== "migration" ? servingLimitParam(limitWarnings) : null;
+  if (warnParam) extra[SERVING_LIMIT_PARAM] = warnParam;
   redirect(back(form.manifestId, form.draftId, extra));
 }
 

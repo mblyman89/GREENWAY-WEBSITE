@@ -46,6 +46,13 @@ import {
   type WciaLabDoc,
 } from "./wcia-lab-json-core";
 import { agreesPrinted, parseCoaPdfText, potencyRow, type CoaCheck, type CoaPdfDoc } from "./coa-pdf-text-core";
+// R35: the WAC 314-55-095 limits live in ONE place, shared with the manual facts forms.
+import {
+  WA_OTHER_THC_EACH_MAX_MG,
+  WA_OTHER_THC_TOTAL_MAX_MG,
+  WA_PACKAGE_MAX_THC_MG,
+  WA_SERVING_MAX_THC_MG,
+} from "../compliance/serving-limit-warning-core";
 
 export const COA_EXTRACT_VERSION = 1;
 export type CoaExtractVia = "llamaparse" | "unpdf" | "none";
@@ -401,13 +408,13 @@ export function deriveCoaDraftFacts(
   }
 
   // ---- WA limits (printed figures; exact arithmetic disclosed) -------------
-  if (printedThc > 10) {
+  if (printedThc > WA_SERVING_MAX_THC_MG) {
     const exact = indepThc ? ` (exact: ${indepThc.pct}% x 10 x ${sw} g = ${r2(indepThc.pct * 10 * sw)} mg)` : "";
     out.reasons.push(
       `The COA prints ${printedThc} mg THC per serving${exact} - above Washington's 10 mg single-serving limit (WAC 314-55-095(1)(a)). The facts are filled from the certificate; confirm before it is sold.`,
     );
   }
-  if (out.packageThcMg && out.packageThcMg.value > 100) {
+  if (out.packageThcMg && out.packageThcMg.value > WA_PACKAGE_MAX_THC_MG) {
     out.reasons.push(
       `${printedThc} mg x ${out.servingsPerPack} servings = ${out.packageThcMg.value} mg THC in the package - above Washington's 100 mg package limit (WAC 314-55-095(1)(b)). Confirm before it is sold.`,
     );
@@ -417,11 +424,11 @@ export function deriveCoaDraftFacts(
     const row = potencyRow(pdf, k);
     if (!row || row.nd || row.mgPerServing === null) continue;
     otherThc += row.mgPerServing;
-    if (row.mgPerServing > 0.5) {
+    if (row.mgPerServing > WA_OTHER_THC_EACH_MAX_MG) {
       out.reasons.push(`The COA prints ${row.mgPerServing} mg ${k} per serving - above the 0.5 mg limit for any THC compound other than delta-9 (WAC 314-55-095(1)(a)).`);
     }
   }
-  if (otherThc > 1.0) {
+  if (otherThc > WA_OTHER_THC_TOTAL_MAX_MG) {
     out.reasons.push(`THC compounds other than delta-9 total ${r2(otherThc)} mg per serving - above the 1.0 mg combined limit (WAC 314-55-095(1)(a)).`);
   }
   return out;

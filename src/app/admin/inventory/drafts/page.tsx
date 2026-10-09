@@ -174,6 +174,7 @@ import {
   factResultCopy,
   parseFactResult,
 } from "@/lib/pos/intake-fact-review-core";
+import { parseServingLimitCodes, servingLimitBannerText } from "@/lib/compliance/serving-limit-warning-core";
 import { IntakeFactReviewPanel } from "./IntakeFactReviewPanel";
 import { ProductFactsPanel } from "./ProductFactsPanel";
 import { loadLabViewsForDrafts } from "@/lib/catalog/lab-facts-attach";
@@ -218,7 +219,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; lookup?: string; lookup_msg?: string; wf?: string; wf_msg?: string; approved_draft?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; wf?: string; wf_msg?: string; approved_draft?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -588,8 +589,13 @@ export default async function CatalogDraftsPage({
       : error === "price" ? "Enter a valid price before approving."
         : error ? "Something went wrong updating that draft."
           : null;
+  // R35: a save over a WAC 314-55-095 limit adds the fixed warning words.
+  const factLimitWarn =
+    factResult && factResult !== "error" && factResult !== "migration"
+      ? servingLimitBannerText(parseServingLimitCodes(sp.fact_warn))
+      : null;
   const banner =
-    factResult ? factResultCopy(factResult, sp.fact_msg)
+    factResult ? [factResultCopy(factResult, sp.fact_msg), factLimitWarn].filter(Boolean).join(" ")
     : batchDone ? batchResultCopy(batchDone)
     : approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
       : dismissed ? "Draft dismissed."
@@ -597,7 +603,7 @@ export default async function CatalogDraftsPage({
           : errorText;
   // R23 (item 5): where the product just approved went (validated UUID only).
   const approvedLink = approved ? approvedBannerLink(sp.approved_draft, focus.manifestId) : null;
-  const bannerTone = error || factResult === "error" ? "danger" : "accent";
+  const bannerTone = error || factResult === "error" || factLimitWarn ? "danger" : "accent";
 
   return (
     <div>
@@ -1694,6 +1700,7 @@ export default async function CatalogDraftsPage({
                                   flag={factFlags.flags.get(d.id)!}
                                   draftId={d.id}
                                   returnManifest={focus.manifestId}
+                                  category={displayCategory}
                                 />
                               )}
                             </>
@@ -1727,6 +1734,7 @@ export default async function CatalogDraftsPage({
                                   )}
                                   returnManifest={focus.manifestId}
                                   returnView={view}
+                                  category={displayCategory}
                                 />
                               )}
                             </div>

@@ -44,7 +44,7 @@ export async function loadLotFactsContext(lotId: string): Promise<LotFactsContex
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin
       .from("catalog_product_drafts")
-      .select("id, manifest_id, pos_product_key, status, updated_at, name, inventory_type")
+      .select("id, manifest_id, pos_product_key, status, updated_at, name, inventory_type, chosen_website_category")
       .eq("lot_id", lotId)
       .limit(50);
     if (error) {
