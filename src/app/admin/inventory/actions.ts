@@ -27,6 +27,16 @@ import { restoreProductToSale } from "@/lib/inventory/restore-to-sale-store";
 import { parseLotEditInput, brandMatchesVendor, buildLotEditSummary } from "@/lib/inventory/lot-edit-core";
 import { parseReceivedDateInput, buildReceivedDateSummary } from "@/lib/inventory/received-date-core";
 import { getVendorById, getBrandById } from "@/lib/vendors/store";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
+import { propagateLotCorrections } from "@/lib/inventory/lot-propagation-store";
+import { LOT_STRAIN_PROPAGATED_AUDIT } from "@/lib/inventory/lot-strain-propagation-core";
+import {
+  LOT_DETAILS_PROPAGATED_AUDIT,
+  changedNameFacts,
+  hasNameChange,
+  lotDetailsBanner,
+  strainTypeChanged,
+} from "@/lib/inventory/lot-details-propagation-core";
 // Option A: per-product website Type/Category override (migration 0150).
 import {
   parseClassificationEdit,
@@ -364,9 +374,104 @@ export async function updateLotDetailsAction(lotId: string, formData: FormData) 
     after: { changes: summary, patch },
   });
 
+  // R33: a lot edit used to stop at inventory_lots — the website card, the
+  // approved onboarding draft and the strain knowledge overlay never heard
+  // about it, so the customer site kept the old strain type / vendor / brand.
+  // Push the correction everywhere that shows it (the pure plans live in
+  // lot-strain-propagation-core + lot-details-propagation-core).
+  const strainChanged = strainTypeChanged(before.strain_type, patch.strain_type);
+  const names = changedNameFacts(
+    {
+      vendorName: before.vendor_name,
+      vendorId: before.vendor_id,
+      brandName: before.brand_name,
+      brandId: before.brand_id,
+      strainName: before.strain_name,
+    },
+    {
+      vendorName: vendor?.display_name ?? null,
+      vendorId: patch.vendor_id,
+      brandName: brand?.display_name ?? null,
+      brandId: patch.brand_id,
+      strainName: patch.strain_name,
+    },
+  );
+  let banner = "";
+  if (strainChanged || hasNameChange(names)) {
+    const outcome = await propagateLotCorrections({
+      lotId,
+      strainType: strainChanged ? { value: patch.strain_type } : null,
+      names,
+      target: { strainName: patch.strain_name, vendorId: patch.vendor_id, brandId: patch.brand_id },
+    });
+    if (outcome.strain) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: LOT_STRAIN_PROPAGATED_AUDIT,
+        entityType: "inventory_lot",
+        entityId: lotId,
+        before: { strain_type: before.strain_type },
+        after: { ...outcome.strain },
+      });
+    }
+    if (outcome.details) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: LOT_DETAILS_PROPAGATED_AUDIT,
+        entityType: "inventory_lot",
+        entityId: lotId,
+        before: { names },
+        after: { ...outcome.details },
+      });
+    }
+    if (outcome.websiteChanged) revalidatePublicMenuSurfaces();
+    banner = lotDetailsBanner(outcome.strain, outcome.details);
+  }
+
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
-  redirect(`/admin/inventory/${lotId}?saved=1`);
+  redirect(`/admin/inventory/${lotId}?saved=1` + (banner ? `&lot_msg=${encodeURIComponent(banner)}` : ""));
+}
+
+/**
+ * R33 — "Send to website": re-push THIS lot's current strain type to its
+ * website cards + approved drafts. Used by the drift notice on the lot page
+ * when the live card shows a different type than the lot (e.g. a card
+ * published before R33, when lot edits never reached the website).
+ */
+export async function pushLotStrainTypeAction(lotId: string) {
+  const session = await requirePermission("inventory.manage");
+  const lot = await getLotById(lotId);
+  if (!lot) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent("That lot no longer exists."));
+  }
+  if (!lot.strain_type) {
+    redirect(`/admin/inventory/${lotId}?error=` + encodeURIComponent("Pick a strain type for this lot first, then send it to the website."));
+  }
+  const outcome = await propagateLotCorrections({
+    lotId,
+    strainType: { value: lot.strain_type },
+    names: {},
+    target: { strainName: lot.strain_name, vendorId: lot.vendor_id, brandId: lot.brand_id },
+  });
+  if (outcome.strain) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: LOT_STRAIN_PROPAGATED_AUDIT,
+      entityType: "inventory_lot",
+      entityId: lotId,
+      before: { strain_type: lot.strain_type, trigger: "send_to_website" },
+      after: { ...outcome.strain },
+    });
+  }
+  if (outcome.websiteChanged) revalidatePublicMenuSurfaces();
+  const banner = lotDetailsBanner(outcome.strain, null);
+  revalidatePath(`/admin/inventory/${lotId}`);
+  revalidatePath("/admin/inventory");
+  redirect(`/admin/inventory/${lotId}?saved=1` + (banner ? `&lot_msg=${encodeURIComponent(banner)}` : ""));
 }
 
 /**
@@ -567,7 +672,9 @@ export async function updateLotWebsiteClassificationAction(lotId: string, formDa
   // refresh both surfaces.
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
-  revalidatePath("/menu");
+  // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
+  // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
+  revalidatePublicMenuSurfaces();
   redirect(`/admin/inventory/${lotId}?saved=1`);
 }
 
@@ -661,7 +768,9 @@ export async function updateLotAfterTaxPriceAction(lotId: string, formData: Form
   // the back office and the customer menu.
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
-  revalidatePath("/menu");
+  // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
+  // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
+  revalidatePublicMenuSurfaces();
   redirect(`/admin/inventory/${lotId}?saved=1`);
 }
 
@@ -787,7 +896,9 @@ export async function bulkFillLotsAction(formData: FormData) {
   });
 
   revalidatePath("/admin/inventory");
-  revalidatePath("/menu");
+  // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
+  // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
+  revalidatePublicMenuSurfaces();
   back({
     bulkDone: String(filled),
     bulkSkipped: String(plan.skip.length + raced),
@@ -939,7 +1050,9 @@ export async function updateLotComplianceClassificationAction(
 
   revalidatePath(`/admin/inventory/${lotId}`);
   revalidatePath("/admin/inventory");
-  revalidatePath("/menu");
+  // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
+  // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
+  revalidatePublicMenuSurfaces();
   redirect(`/admin/inventory/${lotId}?saved=1`);
 }
 
@@ -975,7 +1088,9 @@ export async function restoreProductToSaleAction(formData: FormData) {
   // The published menu is what the register, the website and the back office
   // all read, so every surface that could show the stale status is revalidated.
   revalidatePath("/admin/inventory");
-  revalidatePath("/menu");
+  // R33: the full public refresh (data tag + every page incl. /menu/products/[id]),
+  // not just "/menu" — a bare path left the 60s data cache and the PDP stale.
+  revalidatePublicMenuSurfaces();
 
   const params = new URLSearchParams();
   params.set(result.ok ? "restored" : "restoreError", result.message);

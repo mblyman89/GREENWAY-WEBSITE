@@ -32,6 +32,7 @@ import {
   type FactResultCode,
 } from "@/lib/pos/intake-fact-review-core";
 import { mirrorIntakeFixToLive, recordIntakeFactReview } from "@/lib/pos/fact-review-store";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 // R19 S13: batch manifest lookup (enqueue / stop; the cron does the work).
 import { enqueueManifestLookup, cancelManifestLookup } from "@/lib/catalog/lookup-job-server";
 
@@ -332,6 +333,11 @@ export async function resolveIntakeFactReview(formData: FormData) {
           lotId: (draftRow as { lot_id: string | null } | null)?.lot_id ?? null,
           correctedFacts: form.correctedFacts,
         });
+        // R33: the mirror writes the LIVE card directly — refresh the public
+        // site (data tag + every page) or the fix sits behind the 60 s menu
+        // cache and the prerendered product page. Staging refreshes on its
+        // own when it publishes; this covers the carried (already-live) card.
+        if (mirror.items > 0) revalidatePublicMenuSurfaces();
         if (mirror.errors.length > 0) {
           code = "error";
           message = `Saved, but ${mirror.errors.join("; ")}. Save the facts again to retry.`;

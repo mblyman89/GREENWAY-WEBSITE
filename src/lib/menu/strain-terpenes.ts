@@ -229,7 +229,9 @@ export function attachStrainProfile(
     }
 
     // Strain type (only a valid, different canonical type; never -> unknown).
-    const kbType = strainTypeForStrain(strainTypeIndex, item.strainName);
+    // R33: a person's answer for THIS product (reviewer provenance) is never
+    // replaced by the strain library's value for the strain NAME.
+    const kbType = item.strainTypeSource === "reviewer" ? null : strainTypeForStrain(strainTypeIndex, item.strainName);
     if (kbType && kbType !== "unknown") {
       const current = canonicalStrainType(item.strainType);
       if (kbType !== current) {
