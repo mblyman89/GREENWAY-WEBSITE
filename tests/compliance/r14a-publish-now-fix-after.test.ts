@@ -378,7 +378,11 @@ describe("R14a: every fact decision refreshes the public menu", () => {
     const b = body(name);
     const reval = b.lastIndexOf("revalidatePublicMenuSurfaces();");
     expect(reval).toBeGreaterThan(-1);
-    expect(reval).toBeLessThan(b.lastIndexOf('redirect(dest + "?saved=1");'));
+    // R35 #4: resolveFactReview's success redirect carries the WAC warning
+    // param (`+ warnSuffix`); resolveFactReviewGroup's is unchanged.
+    const ok = Math.max(b.lastIndexOf('redirect(dest + "?saved=1");'), b.lastIndexOf('redirect(dest + "?saved=1" + warnSuffix);'));
+    expect(ok).toBeGreaterThan(-1);
+    expect(reval).toBeLessThan(ok);
   });
 });
 

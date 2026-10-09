@@ -416,7 +416,9 @@ describe("R14b — wiring", () => {
   it("the fact decision keeps the focus after saving", () => {
     const a = read("src/app/admin/menu-imports/actions.ts");
     expect(a.replace(/\s+/g, " ")).toContain('savedRedirectSuffix( parseFactFocus({ group: formData.get("focusGroup"), q: formData.get("focusQ") }), )');
-    expect(a).toContain('if (focusSuffix) redirect(dest + "?saved=1" + focusSuffix);');
+    // R35 #4: the serving-limit warning param sits before the focus anchor
+    // (the "#..." fragment must stay last or the param is lost).
+    expect(a).toContain('if (focusSuffix) redirect(dest + "?saved=1" + warnSuffix + focusSuffix);');
     const facts = read("src/app/admin/menu-imports/[id]/facts/page.tsx");
     expect(facts).toContain("group?: string");
     expect(facts).toContain("q?: string");
