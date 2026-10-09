@@ -53,8 +53,13 @@ export const PUBLIC_MENU_SURFACES = [
  * and answered `x-vercel-cache: MISS` for all 811 sitemap URLs on production);
  * a publish or reset must clear every product page the same instant it clears
  * `/menu`, and this is the list that guarantees it.
+ *
+ * R33: `/menu/[category]` (prerendered via generateStaticParams, revalidate 60)
+ * joins the list. Its data already carries MENU_CACHE_TAG, so clearing the tag
+ * reaches it; naming the pattern makes the page-cache clear explicit instead
+ * of relying on implicit tag propagation, matching the product page.
  */
-export const PUBLIC_MENU_PAGE_PATTERNS = ["/menu/products/[id]"] as const;
+export const PUBLIC_MENU_PAGE_PATTERNS = ["/menu/products/[id]", "/menu/[category]"] as const;
 
 /**
  * Refresh every public menu-derived page so the next visit re-reads the

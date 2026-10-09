@@ -14,6 +14,8 @@ import {
 import { loadMenuCategoriesForKeys, resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
 import { lotLabPercentLabel, lotPotencyLabel, lotTypeLabel } from "@/lib/inventory/lot-table-core";
 import { STRAIN_TYPE_OPTIONS } from "@/lib/inventory/lot-edit-core";
+import { strainDrift } from "@/lib/inventory/lot-details-propagation-core";
+import { loadLotWebsiteStrainCards } from "@/lib/inventory/lot-propagation-store";
 import { listVendors, listAllBrands } from "@/lib/vendors/store";
 import { getEnrichment, mediaUrlsForIds } from "@/lib/enrichment/store";
 // PR-D1b: read the durable KB backbone (where vendor-menu saves land) KB-first,
@@ -37,6 +39,7 @@ import {
   adjustLotAction,
   setLotStatusAction,
   updateLotDetailsAction,
+  pushLotStrainTypeAction,
   updateLotWebsiteClassificationAction,
   updateLotAfterTaxPriceAction,
   updateLotReceivedDateAction,
@@ -131,11 +134,11 @@ export default async function LotDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string; coa?: string; restaged?: string; fact?: string; fact_msg?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; back?: string; coaSearch?: string; coa?: string; restaged?: string; fact?: string; fact_msg?: string; lot_msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { saved, error, back, coaSearch, coa, restaged, fact, fact_msg } = await searchParams;
+  const { saved, error, back, coaSearch, coa, restaged, fact, fact_msg, lot_msg } = await searchParams;
   // S31: vendors/[id] and products/[key] link here with ?back=<admin path>.
   // Validated with the same guard the media actions use (in-app /admin paths
   // only), so a crafted link can never make this an open redirect.
@@ -254,6 +257,16 @@ export default async function LotDetailPage({
   const adjustAction = adjustLotAction.bind(null, id);
   const statusAction = setLotStatusAction.bind(null, id);
   const detailsAction = updateLotDetailsAction.bind(null, id);
+  // R33: "the website shows a different strain type than this lot" check.
+  // Reads the PUBLISHED cards for this lot; [] (no notice) on any failure.
+  const strainDriftRows = strainDrift(lot.strain_type, await loadLotWebsiteStrainCards(lot.pos_product_key));
+  const pushStrainAction = pushLotStrainTypeAction.bind(null, id);
+  // R33: React 19 resets an uncontrolled <form> after its action resolves,
+  // and a <select defaultValue> then snaps back to the value it was FIRST
+  // rendered with (react#32362 / next.js#68232) - the "my strain type does
+  // not stick" symptom. Keying the form on the saved values remounts it with
+  // the fresh defaults after every save.
+  const detailsFormKey = [lot.vendor_id ?? "", lot.brand_id ?? "", lot.strain_name ?? "", lot.strain_type ?? "", lot.updated_at].join("|");
   const classificationAction = updateLotWebsiteClassificationAction.bind(null, id);
   const complianceAction = updateLotComplianceClassificationAction.bind(null, id);
   const priceAction = updateLotAfterTaxPriceAction.bind(null, id);
@@ -330,8 +343,8 @@ export default async function LotDetailPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {saved && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
-            Saved.
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]" data-testid="lot-saved-banner">
+            {lot_msg ? `Saved. ${lot_msg.slice(0, 600)}` : "Saved."}
           </div>
         )}
         {error && (
@@ -724,7 +737,24 @@ export default async function LotDetailPage({
               dates, COA) is compliance data and can only change through receiving or an
               audited adjustment. Every correction here is recorded in the audit trail.
             </p>
-            <form action={detailsAction} className="space-y-4">
+            {strainDriftRows.length > 0 && (
+              <div className="mb-4 rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] px-3 py-2 text-xs text-[var(--admin-text)]" data-testid="lot-strain-drift">
+                <p className="font-semibold">The website shows a different strain type than this lot.</p>
+                <ul className="mt-1 list-disc pl-4">
+                  {strainDriftRows.slice(0, 5).map((d, i) => (
+                    <li key={`${d.cardName}-${i}`}>
+                      {d.cardName}: website says {d.websiteType}, this lot says {d.lotType}.
+                    </li>
+                  ))}
+                </ul>
+                <form action={pushStrainAction} className="mt-2">
+                  <Button type="submit" variant="save" size="sm">
+                    Send {strainDriftRows[0].lotType} to the website
+                  </Button>
+                </form>
+              </div>
+            )}
+            <form key={detailsFormKey} action={detailsAction} className="space-y-4">
               <Field label="Vendor" help="Pick from your vendors database — this links the lot to the vendor's page." htmlFor="vendor_id">
                 <Select id="vendor_id" name="vendor_id" defaultValue={lot.vendor_id ?? ""}>
                   <option value="">— No vendor —</option>

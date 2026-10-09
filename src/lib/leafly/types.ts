@@ -60,6 +60,15 @@ export type GreenwayMenuItem = {
   posInventoryType?: string;
   posInventoryCategory?: string;
   strainType: GreenwayStrainType;
+  /**
+   * R33 - WHO set `strainType` when a person did. "reviewer" = a named human
+   * answer (the Inventory Detail correction, or the approver's onboarding
+   * pick), read from menu_items.fact_provenance.strain_type by the product
+   * facts overlay (product-facts-overlay-server.ts). attachStrainProfile never
+   * replaces a reviewer value with the strain library's guess. Absent = the
+   * value came from a file / the library and the library may correct it.
+   */
+  strainTypeSource?: "reviewer";
   strainName?: string;
   /**
    * Dominant terpene names attached to this item (e.g. ["myrcene","limonene"]).
