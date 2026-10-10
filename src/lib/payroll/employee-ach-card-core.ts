@@ -102,7 +102,7 @@ export function employeeAchCard(input: {
       authorizationState: null,
       accounts: [],
       historyCount,
-      needsSignedForm: true,
+      needsSignedForm: employeeActive,
     };
   }
 

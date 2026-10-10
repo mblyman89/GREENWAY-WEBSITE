@@ -887,6 +887,7 @@ import { __runAchAuthorizationCoreTests } from "../../src/lib/payments/ach-autho
 import { __runVaultReleaseNoticeCoreTests } from "../../src/lib/payments/vault-release-notice-core";
 import { __runVaultReleaseCoreTests } from "../../src/lib/payments/vault-release-core";
 import { __runVendorAchEnrollmentTests } from "../../src/lib/payments/vendor-ach-enrollment-core";
+import { __runEmployeeAchCardTests } from "../../src/lib/payroll/employee-ach-card-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
 import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
@@ -2146,6 +2147,7 @@ __runLiquidVolumeTests();
   assertRan("vault-release-notice-core", __runVaultReleaseNoticeCoreTests(), 17); // R39 S3: solo-release notice recipients, masking, escaping, phone reminder
   assertRan("vault-release-core", __runVaultReleaseCoreTests(), 22); // R39 S3: release form -> verdict, picked contact on file 90+ days, in person
   assertRan("vendor-ach-enrollment", __runVendorAchEnrollmentTests(), 49); // R39 S4: needs bank info / opted out card + 0258 CHECK planner
+  assertRan("employee-ach-card", __runEmployeeAchCardTests(), 29); // R39 S4: employee file card agrees with planPayrollEntries
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

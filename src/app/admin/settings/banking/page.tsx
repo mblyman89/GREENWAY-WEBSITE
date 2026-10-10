@@ -290,7 +290,7 @@ export default async function BankingVaultPage({
                   </section>
                 ) : vendors.length > 0 ? (
                   <p className="text-xs text-white/40">
-                    The "needs bank info" and "opted out" flags turn on after migration 0258 is applied.
+                    {"The \u201cneeds bank info\u201d and \u201copted out\u201d flags turn on after migration 0258 is applied."}
                   </p>
                 ) : null}
 
