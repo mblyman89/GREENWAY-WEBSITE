@@ -1,0 +1,326 @@
+                                                                                    Medical Compliance Test Report
+
+
+
+
+ Origin                          Sample Demographics
+                                 Sample Name:                                                    Lab Sample ID: WA-250213-073
+ Quality Green Trees             FREDDY'S Flower Lot - Blue Slushie
+ 26268 12 Trees Ln NW...
+ Poulsbo, Wa 98370               Product Type:                                    Date of Collection:       Serving / Package Wt:
+ License #: 413632               Flower                                           Unknown                   N/A / N/A
+
+ Parent Batch ID:                Matrix Type:                                     Date of Receipt:          Sample Size:
+ 15419925402748536               GPM                                              2025-02-13                8g
+
+ Origin Sample ID:               Category: Harvested Material                     Date of Completion:       Batch Pass/Fail:
+ 15419925402748536               Flower Lot                                       2025-02-15                ✔ PASS
+ Cannabinoid Analysis - summary
+     Total d9-THC:   21% 210mg/g              Total CBD:   0.047% 0.47mg/g                Total Cannabinoids:    25%
+ Terpene Analysis - summary
+  Total Terpenes: 3.8 %     Top Three:          Caryophyllene: 1 %       Limonene: 0.83 %                 Humulene: 0.38 %
+
+ Safety Analysis - summary
+ Foreign Matter      Heavy Metals         Microbial         Mycotoxins       Pesticides          Solvents          Water Activity
+    ✔ PASS             ✔ PASS             ✔ PASS             ✔ PASS          ✔ PASS                  NT              ✔ PASS
+ Cannabinoid Profile                                              Strain Compass
+
+
+
+
+Template Version: 7.0
+Document Created: 2025-02-15 13:25:23                      Page 1 of 5
+Auth: ZNP2v2woSBg4oqVur4WbMW
+                                                                             Regulatory Compliance Testing
+
+                                                                         Certificate of Analysis
+                                                  Batch #: 15419925402748536, ID: WA-250213-073,
+                                        Sample Name: FREDDY'S Flower Lot - Blue Slushie, Type: Flower,
+                                                     Origin: Quality Green Trees (License No.: 413632)
+
+
+
+
+ Cannabinoids - Potency                                                                                      2025-02-15
+   Analyte Name               %            mg/g               mg/serving            mg/package           LoD/LoQ (%)
+
+  Total Cannabinoids          25            250                    N/A                   N/A               N/A / N/A
+
+      Total THC               21            210                    N/A                   N/A               N/A / N/A
+
+      Total CBD              0.047          0.47                   N/A                   N/A               N/A / N/A
+
+       d9-thc                0.27           2.7                    N/A                   N/A             0.023 / 0.023
+
+       d9-thca                24            240                    N/A                   N/A             0.023 / 0.023
+
+         cbd                  ND             ND                    N/A                   N/A             0.023 / 0.023
+
+        cbda                 0.053          0.53                   N/A                   N/A             0.023 / 0.023
+
+         cbc                  ND             ND                    N/A                   N/A             0.023 / 0.045
+
+        cbca                 0.17           1.7                    N/A                   N/A             0.023 / 0.045
+
+        cbdv                  ND             ND                    N/A                   N/A             0.023 / 0.045
+
+        cbdva                 ND             ND                    N/A                   N/A             0.023 / 0.045
+
+         cbg                 <LOQ          <LOQ                    N/A                   N/A             0.023 / 0.045
+
+        cbga                 0.39           3.9                    N/A                   N/A             0.023 / 0.045
+
+         cbl                  ND             ND                    N/A                   N/A             0.023 / 0.045
+
+         cbn                  ND             ND                    N/A                   N/A             0.023 / 0.045
+
+        cbna                  ND             ND                    N/A                   N/A             0.023 / 0.045
+
+         cbt                  ND             ND                    N/A                   N/A             0.023 / 0.045
+
+       d8-thc                 ND             ND                    N/A                   N/A             0.023 / 0.045
+
+       d9-thcv                ND             ND                    N/A                   N/A             0.023 / 0.045
+
+      d9-thcva               0.076          0.76                   N/A                   N/A             0.023 / 0.045
+
+ Terpene Profile
+
+
+
+
+Template Version: 7.0
+Document Created: 2025-02-15 13:25:23              Page 2 of 5
+Auth: ZNP2v2woSBg4oqVur4WbMW
+                                                                                             Regulatory Compliance Testing
+
+                                                                                          Certificate of Analysis
+                                                             Batch #: 15419925402748536, ID: WA-250213-073,
+                                                   Sample Name: FREDDY'S Flower Lot - Blue Slushie, Type: Flower,
+                                                                Origin: Quality Green Trees (License No.: 413632)
+
+
+
+
+ Terpenes3                                          2025-02-15        Terpenes continued
+Analyte                    Result       lod/loq                     Analyte                          Result    lod/loq
+Name                       (ppm)         (ppm)                      Name                             (ppm)      (ppm)
+
+                  2                                                 isopulegol                         ND      90 / 180   PASS
+a-bisabolene                580          45 / 90        PASS
+                  2                                                 limonene                          8300      45 / 90   PASS
+a-bulnesene                 3600         45 / 90        PASS
+              2                                                     linalool                          3100      45 / 90   PASS
+a-farnesene                 350          45 / 90        PASS
+              2                                                     m-cymene                           ND       45 / 90   PASS
+a-maaliene                  990          45 / 90        PASS
+
+a-ocimene                    ND          45 / 90        PASS        menthone                          <LOQ      45 / 90   PASS
+
+a-phellandrene               ND          45 / 90        PASS        myrcene                            610     90 / 180   PASS
+
+a-pinene                    820          45 / 90        PASS        o-cymene                           ND       45 / 90   PASS
+
+a-terpinene                  ND          45 / 90        PASS        p-cymene                           ND       45 / 90   PASS
+
+a-thujone                    ND          45 / 90        PASS        piperitone                         ND       45 / 90   PASS
+
+b-farnesene                <LOQ         90 / 180        PASS        pulegone                           ND      90 / 180   PASS
+
+              2                                                     safranal                           ND       45 / 90   PASS
+b-maaliene                  420          45 / 90        PASS
+                                                                                  2
+b-ocimene                   170          45 / 90        PASS        selinadiene                        720      45 / 90   PASS
+
+b-pinene                    1200         45 / 90        PASS        terpineol                          630      45 / 90   PASS
+
+bisabolol                   590          45 / 90        PASS        terpinolene                        160      45 / 90   PASS
+
+borneol                      ND         180 / 360       PASS        thymol                            <LOQ      45 / 90   PASS
+                                                                                             2
+camphene                    220          45 / 90        PASS        trans-a-bergamotene                400      45 / 90   PASS
+                                                                                      2
+camphor                      ND          45 / 90        PASS        total terpenes                    38000     NA / NA   PASS
+
+carene                       ND          45 / 90        PASS
+
+carvacrol                    ND          45 / 90        PASS
+
+carvone                      ND          45 / 90        PASS
+
+caryophyllene              10000         45 / 90        PASS
+
+cedrol                       ND          45 / 90        PASS
+
+citral                       ND         90 / 180        PASS
+
+eucalyptol                   ND          45 / 90        PASS
+
+fenchol                     550         90 / 180        PASS
+
+fenchone                     95          45 / 90        PASS
+
+g-terpinene                  ND          45 / 90        PASS
+
+guaiol                       ND          45 / 90        PASS
+
+humulene                    3800         45 / 90        PASS
+
+isobornyl acetate            ND          45 / 90        PASS
+
+
+
+Template Version: 7.0
+Document Created: 2025-02-15 13:25:23                       Page 3 of 5
+Auth: ZNP2v2woSBg4oqVur4WbMW
+                                                                                              Regulatory Compliance Testing
+
+                                                                                           Certificate of Analysis
+                                                              Batch #: 15419925402748536, ID: WA-250213-073,
+                                                    Sample Name: FREDDY'S Flower Lot - Blue Slushie, Type: Flower,
+                                                                 Origin: Quality Green Trees (License No.: 413632)
+
+
+
+
+Foreign Material                                         2025-02-15 oxamyl                               ND         0.04 / 0.08 / 1         Pass
+Analyte Name (Boolean)       Result       LoD/LoQ/AL         (Pass/Fail) paclobutrazol                   ND        0.04 / 0.04 / 0.4        Pass
+i.h.e. (fail if detected)    ND           N/A / N/A / N/A       Pass     phosmet                         ND        0.04 / 0.08 / 0.2        Pass
+seeds & other (%)            ND            N/A / N/A / 2        Pass     piperonyl butoxide              ND         0.04 / 0.08 / 2         Pass
+stems (%)                    ND            N/A / N/A / 5        Pass     prallethrin                     ND        0.04 / 0.08 / 0.2        Pass
+GCMS Pesticides                                            2025-02-15 propiconazole                      ND        0.15 / 0.15 / 0.4        Pass
+                                                                         propoxur                        ND        0.08 / 0.08 / 0.2        Pass
+Analyte Name (ppm)           Result        LoD/LoQ/AL        (Pass/Fail)
+                                                                         pyrethrin i                     ND         0.08 / 0.08 / 1         Pass
+chlorfenapyr                 ND           0.48 / 0.48 / 1       Pass
+                                                                         pyrethrin ii                    ND         0.04 / 0.08 / 1         Pass
+chlorpyrifos                 ND          0.08 / 0.08 / 0.2      Pass
+                                                                         pyridaben                       ND        0.04 / 0.08 / 0.2        Pass
+cyfluthrin                   ND           0.48 / 0.48 / 1       Pass
+                                                                         spinosad a                      ND        0.02 / 0.04 / 0.2        Pass
+cypermethrin                 ND           0.75 / 0.75 / 1       Pass
+                                                                         spinosad d                      ND        0.02 / 0.04 / 0.2        Pass
+methyl parathion             ND          0.16 / 0.16 / 0.2      Pass
+                                                                         spiromesifen                    ND        0.04 / 0.08 / 0.2        Pass
+mgk 264 a                    ND          0.05 / 0.05 / 0.2      Pass
+                                                                         spirotetramat                   ND        0.04 / 0.08 / 0.2        Pass
+mgk 264 b                    ND          0.05 / 0.05 / 0.2      Pass
+                                                                         spiroxamine                     ND        0.04 / 0.08 / 0.4        Pass
+total mgk 264                ND           N/A / N/A / 0.2       Pass
+                                                                         tebuconazole                    ND        0.04 / 0.08 / 0.4        Pass
+Heavy Metals                                               2025-02-15 thiacloprid                        ND        0.04 / 0.08 / 0.2        Pass
+Analyte Name (ppm)           Result        LoD/LoQ/AL        (Pass/Fail) thiamethoxam                    ND        0.04 / 0.08 / 0.2        Pass
+as                           ND               1/1/2             Pass     trans-permethrin                ND        0.04 / 0.08 / 0.2        Pass
+cd                           ND           0.4 / 0.4 / 0.82      Pass     trifloxystrobin                 ND        0.08 / 0.08 / 0.2        Pass
+hg                           ND            0.3 / 0.3 / 0.4      Pass     total abamectin                 ND         N/A / N/A / 0.5         Pass
+pb                           ND            0.5 / 0.5 / 1.2      Pass     total permethrins               ND         N/A / N/A / 0.2         Pass
+LCMS Pesticides                                            2025-02-15 total pyrethrins                   ND          N/A / N/A / 1          Pass
+Analyte Name (ppm)           Result        LoD/LoQ/AL        (Pass/Fail) total spinosads                 ND         N/A / N/A / 0.2         Pass
+acephate                     ND          0.04 / 0.08 / 0.4     Pass     Microbial                                                      2025-02-15
+acequinocyl                  ND           0.48 / 0.48 / 2      Pass     Analyte Name (CFU/g)             Result      LoD/LoQ/AL          (Pass/Fail)
+acetamiprid                  ND          0.04 / 0.08 / 0.2     Pass     btgn                             ND       5000 / 5000 / 10000       Pass
+aldicarb                     ND          0.04 / 0.08 / 0.4     Pass     e coli                           ND         N/A / N/A / N/A         Pass
+avermectin b1a               ND          0.08 / 0.08 / 0.5     Pass     salmonella                       ND         N/A / N/A / N/A         Pass
+avermectin b1b               ND          0.08 / 0.08 / 0.5     Pass     Mycotoxins                                                     2025-02-15
+azoxystrobin                 ND          0.04 / 0.08 / 0.2     Pass     Analyte Name (ppb)               Result      LoD/LoQ/AL          (Pass/Fail)
+bifenazate                   ND          0.04 / 0.04 / 0.2     Pass
+                                                                        aflatoxin b1                     ND            5 / 5 / 20           Pass
+bifenthrin                   ND          0.02 / 0.04 / 0.2     Pass
+                                                                        aflatoxin b2                     ND            5 / 5 / 20           Pass
+boscalid                     ND          0.04 / 0.08 / 0.4     Pass
+carbaryl                     ND          0.04 / 0.08 / 0.2     Pass     aflatoxin g1                     ND            5 / 5 / 20           Pass
+carbofuran                   ND          0.04 / 0.08 / 0.2     Pass     aflatoxin g2                     ND            5 / 5 / 20           Pass
+chlorantraniliprole          ND          0.04 / 0.08 / 0.2     Pass     ochratoxin a                     ND           10 / 10 / 20          Pass
+cis-permethrin               ND          0.04 / 0.08 / 0.2     Pass     total aflatoxins                 ND          N/A / N/A / 20         Pass
+clofentezine                 ND          0.04 / 0.08 / 0.2     Pass     Water Activity                                                 2025-02-15
+daminozide                   ND           0.24 / 0.48 / 1      Pass     Analyte Name (aw)                Result      LoD/LoQ/AL          (Pass/Fail)
+diazinon                     ND          0.04 / 0.08 / 0.2     Pass     water activity                  0.42    0.35 / 0.35 / 0.65          Pass
+dichlorvos                   ND         0.075 / 0.075 / 0.1    Pass                              [ END OF ANALYTES ]
+dimethoate                   ND          0.04 / 0.08 / 0.2     Pass
+ethoprophos                  ND          0.04 / 0.08 / 0.2     Pass
+etofenprox                   ND          0.04 / 0.08 / 0.4     Pass
+etoxazole                    ND          0.04 / 0.08 / 0.2     Pass
+fenoxycarb                   ND          0.04 / 0.08 / 0.2     Pass
+fenpyroximate                ND          0.04 / 0.08 / 0.4     Pass
+fipronil                     ND          0.08 / 0.08 / 0.4     Pass
+flonicamid                   ND           0.24 / 0.48 / 1      Pass
+fludioxonil                  ND          0.04 / 0.08 / 0.4     Pass
+hexythiazox                  ND           0.08 / 0.16 / 1      Pass
+imazalil                     ND          0.04 / 0.08 / 0.2     Pass
+imidacloprid                 ND          0.04 / 0.04 / 0.4     Pass
+kresoxim-methyl              ND          0.08 / 0.08 / 0.4     Pass
+malathion                    ND          0.04 / 0.08 / 0.2     Pass
+metalaxyl                    ND          0.08 / 0.08 / 0.2     Pass
+methiocarb                   ND          0.04 / 0.08 / 0.2     Pass
+methomyl                     ND          0.04 / 0.08 / 0.4     Pass
+myclobutanil                 ND          0.04 / 0.04 / 0.2     Pass
+naled                        ND          0.04 / 0.08 / 0.5     Pass
+
+
+Template Version: 7.0
+Document Created: 2025-02-15 13:25:23                         Page 4 of 5
+Auth: ZNP2v2woSBg4oqVur4WbMW
+                                                                                  Regulatory Compliance Testing
+
+                                                                             Certificate of Analysis
+                                                       Batch #: 15419925402748536, ID: WA-250213-073,
+                                             Sample Name: FREDDY'S Flower Lot - Blue Slushie, Type: Flower,
+                                                          Origin: Quality Green Trees (License No.: 413632)
+
+
+
+
+ Attestation & Accuracy Review
+
+These testing results are certified by scientific examination of a single sample provided by the Producer/Processor.
+Confidence Analytics and its agents did not observe or participate in the sample selection process, and cannot
+confirm the authenticity of the sample or its representativeness of the associated lot/batch. The sample, as received,
+was homogenized before subsamples were drawn for specific analyses.
+
+Pass/Fail criteria are defined in WAC 314-55-102 and WAC 314-55-108
+
+
+Calculations:
+
+Total THC = d9-THC + ( THC-A * 0.877 )
+Total CBD = CBD + ( CBD-A * 0.877 )
+Total Cannabinoid is a raw sum of all measured cannabinoids.
+In Traceability, Total Cannabinoid is a sum of Total THC and Total CBD.
+Figures may differ slightly from traceability due to rounding.
+
+Definitions:
+
+ND = Not Detected                                             GPM = Green Plant Material
+NT = Not Tested                                               CONC = Concentrate
+LOD = Detection Limit                                         ISL = Infused Solid or Liquid
+LOQ = Lower Quantification Limit                              1Greater than ULOQ
+ULOQ = Upper Quantification Limit                             2Not included in A2LA scope of Accreditation
+AL = Action Limit                                             3WSDA Accreditation not available for this analyte
+N/A = Not Applicable
+
+Analytical Methods Used:
+
+Cannabinoids by UHPLC-DAD                                     Mycotoxins by LC-MS/MS
+Terpenes by HS-GC-FID/MS3                                     Microbes by Plate Counting
+Residual Solvents by HS-GC-MS                                 Heavy Metals by ICP-MS
+LCMS Pesticides by LC-MS/MS                                   Foreign Material by Macroscopic Inspection
+GCMS Pesticides by GC-MS/MS                                   Water Activity by HYGROMETER
+
+
+
+
+                             Certifying Scientist:
+
+
+
+ Material Amendments
+
+No material amendments recorded for this sample.
+
+
+
+
+Template Version: 7.0
+Document Created: 2025-02-15 13:25:23                 Page 5 of 5
+Auth: ZNP2v2woSBg4oqVur4WbMW
+

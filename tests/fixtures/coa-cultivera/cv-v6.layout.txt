@@ -1,0 +1,327 @@
+                                                                                              Medical Compliance Testing
+
+
+
+
+ Origin                           Sample Demographics
+                                  Name:
+ Quality Green Trees       FREDDY'S Flower Lot - Goldust
+ 26268 12 Trees Ln Nw #140
+ Poulsbo, Wa 98370         Product Type:                               Date of Collection:                     Serving / Package Wt:
+ License #: 413632         Flower                                      N/A                                     N/A / N/A
+
+ Parent Batch ID:                 Origin Sample ID:                    Date of Receipt:                        Density:
+ 15418535463517880                15418535463517880                    2024-09-05                              N/A
+
+ Parent Batch Size:               Lab Sample ID:                       Date of Completion:                     Batch Pass/Fail:
+ N/A                              WA-240906-049                        2024-09-09                              ✔ PASS
+
+ Cannabinoid Analysis - summary
+       Total d9-THC:   17% 170mg/g             Total CBD:   0.039% 0.39mg/g                  Total Cannabinoids:     20%
+ Terpene Analysis - summary
+  Total Terpenes: 2.8 %       Top Three:         Limonene: 0.58 %              Linalool: 0.4 %           Caryophyllene: 0.3 %
+
+ Safety Analysis - summary
+ Foreign Matter        Heavy Metals        Microbial         Mycotoxins        Pesticides           Solvents          Water Activity
+    ✔ PASS               ✔ PASS            ✔ PASS             ✔ PASS            ✔ PASS                NT                  ✔ PASS
+ Cannabinoid Profile                                               Strain Compass
+
+
+
+
+Template Version: 6.0
+Document Created: 2024-09-09 09:17:25                       Page 1 of 5
+Auth: It36uyLljYMkTikm51xJkk
+                                                                         Regulatory Compliance Testing
+
+                                                                    Certificate of Analysis
+                                               Batch #: 15418535463517880, ID: WA-240906-049,
+                                        Sample Name: FREDDY'S Flower Lot - Goldust, Type: Flower,
+                                                 Origin: Quality Green Trees (License No.: 413632)
+
+
+
+
+ Cannabinoids - Potency                                                                                  2024-09-09
+   Analyte Name               %         mg/g              mg/serving            mg/package           LoD/LoQ (%)
+
+  Total Cannabinoids          20        200                   N/A                    N/A               N/A / N/A
+
+      Total THC               17        170                   N/A                    N/A               N/A / N/A
+
+      Total CBD              0.039      0.39                  N/A                    N/A               N/A / N/A
+
+       d9-thc                0.97       9.7                   N/A                    N/A             0.022 / 0.022
+
+       d9-thca                19        190                   N/A                    N/A             0.022 / 0.022
+
+         cbd                  ND        ND                    N/A                    N/A             0.022 / 0.022
+
+        cbda                 0.045      0.45                  N/A                    N/A             0.022 / 0.022
+
+         cbc                  ND        ND                    N/A                    N/A             0.022 / 0.044
+
+        cbca                 0.13       1.3                   N/A                    N/A             0.022 / 0.044
+
+        cbdv                  ND        ND                    N/A                    N/A             0.022 / 0.044
+
+        cbdva                 ND        ND                    N/A                    N/A             0.022 / 0.044
+
+         cbg                 0.046      0.46                  N/A                    N/A             0.022 / 0.044
+
+        cbga                 0.29       2.9                   N/A                    N/A             0.022 / 0.044
+
+         cbl                  ND        ND                    N/A                    N/A             0.022 / 0.044
+
+         cbn                  ND        ND                    N/A                    N/A             0.022 / 0.044
+
+        cbna                 <LOQ       <LOQ                  N/A                    N/A             0.022 / 0.044
+
+         cbt                  ND        ND                    N/A                    N/A             0.022 / 0.044
+
+       d8-thc                 ND        ND                    N/A                    N/A             0.022 / 0.044
+
+       d9-thcv                ND        ND                    N/A                    N/A             0.022 / 0.044
+
+      d9-thcva               0.059      0.59                  N/A                    N/A             0.022 / 0.044
+
+ Terpene Profile
+
+
+
+
+Template Version: 6.0
+Document Created: 2024-09-09 09:17:25          Page 2 of 5
+Auth: It36uyLljYMkTikm51xJkk
+                                                                                            Regulatory Compliance Testing
+
+                                                                                         Certificate of Analysis
+                                                             Batch #: 15418535463517880, ID: WA-240906-049,
+                                                      Sample Name: FREDDY'S Flower Lot - Goldust, Type: Flower,
+                                                               Origin: Quality Green Trees (License No.: 413632)
+
+
+
+
+ Terpenes                                           2024-09-09      Terpenes continued
+Analyte                    Result       lod/loq                    Analyte                          Result    lod/loq
+Name                       (ppm)         (ppm)                     Name                             (ppm)      (ppm)
+
+                  2
+a-bisabolene                 ND          44 / 87       PASS        isopulegol                         ND       44 / 87   PASS
+                  2
+a-bulnesene                  ND          44 / 87       PASS        limonene                          5800      44 / 87   PASS
+              2
+a-farnesene                 570          44 / 87       PASS        linalool                          4000      44 / 87   PASS
+              2
+a-maaliene                  2100         44 / 87       PASS        m-cymene                           ND       44 / 87   PASS
+
+a-ocimene                    ND          44 / 87       PASS        menthone                          <LOQ      44 / 87   PASS
+
+a-phellandrene               ND          44 / 87       PASS        myrcene                            550      44 / 87   PASS
+
+a-pinene                    1700         44 / 87       PASS        o-cymene                           ND       44 / 87   PASS
+
+a-terpinene                  ND          44 / 87       PASS        p-cymene                           ND       44 / 87   PASS
+
+a-thujone                    ND          44 / 87       PASS        piperitone                         ND       44 / 87   PASS
+
+b-farnesene                 840          44 / 87       PASS        pulegone                           ND       44 / 87   PASS
+              2
+b-maaliene                  880          44 / 87       PASS        safranal                           ND       44 / 87   PASS
+                                                                                 2
+b-ocimene                   640          44 / 87       PASS        selinadiene                       1900      44 / 87   PASS
+
+b-pinene                    1400         44 / 87       PASS        terpineol                          870      44 / 87   PASS
+
+bisabolol                   720          44 / 87       PASS        terpinolene                        100      44 / 87   PASS
+
+borneol                    <LOQ         170 / 350      PASS        thymol                             ND       44 / 87   PASS
+                                                                                            2
+camphene                    200          44 / 87       PASS        trans-a-bergamotene                500      44 / 87   PASS
+                                                                                     2
+camphor                      ND          44 / 87       PASS        total terpenes                    28000     NA / NA   PASS
+
+carene                     <LOQ          44 / 87       PASS
+
+carvacrol                    ND          44 / 87       PASS
+
+carvone                      ND          44 / 87       PASS
+
+caryophyllene               3000         44 / 87       PASS
+
+cedrol                       ND          44 / 87       PASS
+
+citral                       ND          44 / 87       PASS
+
+eucalyptol                 <LOQ          44 / 87       PASS
+
+fenchol                     950          44 / 87       PASS
+
+fenchone                   <LOQ          44 / 87       PASS
+
+g-terpinene                  ND          44 / 87       PASS
+
+guaiol                       ND          44 / 87       PASS
+
+humulene                    1200         44 / 87       PASS
+
+isobornyl acetate            ND          44 / 87       PASS
+
+
+
+Template Version: 6.0
+Document Created: 2024-09-09 09:17:25                      Page 3 of 5
+Auth: It36uyLljYMkTikm51xJkk
+                                                                                              Regulatory Compliance Testing
+
+                                                                                           Certificate of Analysis
+                                                                Batch #: 15418535463517880, ID: WA-240906-049,
+                                                         Sample Name: FREDDY'S Flower Lot - Goldust, Type: Flower,
+                                                                  Origin: Quality Green Trees (License No.: 413632)
+
+
+
+
+Foreign Material                                         2024-09-09 paclobutrazol                        ND       0.033 / 0.033 / 0.4      Pass
+Analyte Name (Boolean)       Result       LoD/LoQ/AL         (Pass/Fail) phosmet                         ND       0.047 / 0.047 / 0.2      Pass
+i.h.e. (fail if detected)    ND           N/A / N/A / N/A       Pass     piperonyl butoxide              ND        0.019 / 0.06 / 2        Pass
+seeds & other (%)            ND            N/A / N/A / 2        Pass     prallethrin                     ND       0.035 / 0.035 / 0.2      Pass
+stems (%)                    ND            N/A / N/A / 5        Pass     propiconazole                   ND       0.087 / 0.087 / 0.4      Pass
+GCMS Pesticides                                            2024-09-09 propoxur                           ND       0.043 / 0.043 / 0.2      Pass
+                                                                         pyrethrin i                     ND        0.075 / 0.075 / 1       Pass
+Analyte Name (ppm)           Result        LoD/LoQ/AL        (Pass/Fail)
+                                                                         pyrethrin ii                    ND        0.019 / 0.04 / 1        Pass
+chlorfenapyr                 ND             0.4 / 0.4 / 1       Pass
+                                                                         pyridaben                       ND       0.034 / 0.034 / 0.2      Pass
+chlorpyrifos                 ND            0.1 / 0.1 / 0.2      Pass
+                                                                         spinosad a                      ND       0.019 / 0.038 / 0.2      Pass
+cyfluthrin                   ND             0.4 / 0.4 / 1       Pass
+                                                                         spinosad d                      ND       0.019 / 0.019 / 0.2      Pass
+cypermethrin                 ND           0.75 / 0.75 / 1       Pass
+                                                                         spiromesifen                    ND       0.064 / 0.064 / 0.2      Pass
+methyl parathion             ND            0.1 / 0.1 / 0.2      Pass
+                                                                         spirotetramat                   ND       0.047 / 0.047 / 0.2      Pass
+mgk 264 a                    ND          0.05 / 0.05 / 0.2      Pass
+                                                                         spiroxamine                     ND       0.038 / 0.038 / 0.4      Pass
+mgk 264 b                    ND          0.05 / 0.05 / 0.2      Pass
+                                                                         tebuconazole                    ND       0.056 / 0.056 / 0.4      Pass
+total mgk 264                ND           N/A / N/A / 0.2       Pass
+                                                                         thiacloprid                     ND       0.038 / 0.038 / 0.2      Pass
+Heavy Metals                                               2024-09-09 thiamethoxam                       ND       0.032 / 0.032 / 0.2      Pass
+Analyte Name (ppm)           Result        LoD/LoQ/AL        (Pass/Fail) trans-permethrin                ND       0.045 / 0.045 / 0.2      Pass
+as                           ND               1/1/2             Pass     trifloxystrobin                 ND        0.07 / 0.07 / 0.2       Pass
+cd                           ND           0.4 / 0.4 / 0.82      Pass     total abamectin                 ND         N/A / N/A / 0.5        Pass
+hg                           ND            0.3 / 0.3 / 0.4      Pass     total permethrins               ND         N/A / N/A / 0.2        Pass
+pb                           ND            0.5 / 0.5 / 1.2      Pass     total pyrethrins                ND          N/A / N/A / 1         Pass
+LCMS Pesticides                                            2024-09-09 total spinosads                    ND         N/A / N/A / 0.2        Pass
+Analyte Name (ppm)           Result        LoD/LoQ/AL        (Pass/Fail) Microbial                                                    2024-09-09
+acephate                     ND         0.028 / 0.028 / 0.4    Pass     Analyte Name (CFU/g)             Result      LoD/LoQ/AL         (Pass/Fail)
+acequinocyl                  ND           0.47 / 0.47 / 2      Pass     btgn                             ND       5000 / 5000 / 10000      Pass
+acetamiprid                  ND         0.038 / 0.038 / 0.2    Pass     e coli                           ND         N/A / N/A / N/A        Pass
+aldicarb                     ND         0.037 / 0.037 / 0.4    Pass     salmonella                       ND         N/A / N/A / N/A        Pass
+avermectin b1a               ND         0.075 / 0.075 / 0.5    Pass     Mycotoxins                                                    2024-09-09
+avermectin b1b               ND         0.075 / 0.075 / 0.5    Pass     Analyte Name (ppb)               Result      LoD/LoQ/AL         (Pass/Fail)
+azoxystrobin                 ND         0.047 / 0.047 / 0.2    Pass
+                                                                        aflatoxin b1                     ND            5 / 5 / 20          Pass
+bifenazate                   ND         0.019 / 0.046 / 0.2    Pass
+                                                                        aflatoxin b2                     ND            5 / 5 / 20          Pass
+bifenthrin                   ND         0.019 / 0.062 / 0.2    Pass
+                                                                        aflatoxin g1                     ND            5 / 5 / 20          Pass
+boscalid                     ND         0.037 / 0.069 / 0.4    Pass
+                                                                        aflatoxin g2                     ND            5 / 5 / 20          Pass
+carbaryl                     ND         0.028 / 0.028 / 0.2    Pass
+                                                                        ochratoxin a                     ND           10 / 10 / 20         Pass
+carbofuran                   ND         0.047 / 0.047 / 0.2    Pass
+                                                                        total aflatoxins                 ND          N/A / N/A / 20        Pass
+chlorantraniliprole          ND         0.031 / 0.031 / 0.2    Pass
+                                                                        Water Activity                                                2024-09-09
+cis-permethrin               ND         0.042 / 0.042 / 0.2    Pass
+                                                                        Analyte Name (aw)                Result      LoD/LoQ/AL         (Pass/Fail)
+clofentezine                 ND         0.059 / 0.059 / 0.2    Pass
+daminozide                   ND           0.19 / 0.19 / 1      Pass     water activity                  0.58    0.35 / 0.35 / 0.65         Pass
+diazinon                     ND         0.031 / 0.031 / 0.2    Pass                              [ END OF ANALYTES ]
+dichlorvos                   ND         0.035 / 0.035 / 0.1    Pass
+dimethoate                   ND         0.036 / 0.036 / 0.2    Pass
+ethoprophos                  ND          0.07 / 0.07 / 0.2     Pass
+etofenprox                   ND         0.054 / 0.054 / 0.4    Pass
+etoxazole                    ND         0.033 / 0.033 / 0.2    Pass
+fenoxycarb                   ND         0.044 / 0.044 / 0.2    Pass
+fenpyroximate                ND         0.046 / 0.046 / 0.4    Pass
+fipronil                     ND          0.11 / 0.11 / 0.4     Pass
+flonicamid                   ND          0.096 / 0.096 / 1     Pass
+fludioxonil                  ND         0.053 / 0.053 / 0.4    Pass
+hexythiazox                  ND           0.17 / 0.17 / 1      Pass
+imazalil                     ND         0.047 / 0.047 / 0.2    Pass
+imidacloprid                 ND         0.029 / 0.029 / 0.4    Pass
+kresoxim-methyl              ND         0.047 / 0.047 / 0.4    Pass
+malathion                    ND         0.047 / 0.047 / 0.2    Pass
+metalaxyl                    ND         0.035 / 0.035 / 0.2    Pass
+methiocarb                   ND         0.047 / 0.047 / 0.2    Pass
+methomyl                     ND          0.04 / 0.04 / 0.4     Pass
+myclobutanil                 ND         0.019 / 0.051 / 0.2    Pass
+naled                        ND          0.04 / 0.04 / 0.5     Pass
+oxamyl                       ND          0.027 / 0.027 / 1     Pass
+
+
+Template Version: 6.0
+Document Created: 2024-09-09 09:17:25                         Page 4 of 5
+Auth: It36uyLljYMkTikm51xJkk
+                                                                                Regulatory Compliance Testing
+
+                                                                           Certificate of Analysis
+                                                      Batch #: 15418535463517880, ID: WA-240906-049,
+                                               Sample Name: FREDDY'S Flower Lot - Goldust, Type: Flower,
+                                                        Origin: Quality Green Trees (License No.: 413632)
+
+
+
+
+ Attestation & Accuracy Review
+
+These testing results are certified by scientific examination of a single sample provided by the Producer/Processor.
+Confidence Analytics and its agents did not observe or participate in the sample selection process, and cannot
+confirm the authenticity of the sample or its representativeness of the associated lot/batch. The sample, as received,
+was homogenized before subsamples were drawn for specific analyses.
+
+Pass/Fail criteria are defined in WAC 314-55-102 and WAC 314-55-108
+
+
+Calculations:
+
+Total THC = d9-THC + ( THC-A * 0.877 )
+Total CBD = CBD + ( CBD-A * 0.877 )
+Total Cannabinoid is a raw sum of all measured cannabinoids.
+In Traceability, Total Cannabinoid is a sum of Total THC and Total CBD.
+Figures may differ slightly from traceability due to rounding.
+
+Definitions:
+
+ND = Not Detected                                           1Greater than ULOQ
+NT = Not Tested                                             2Not included in ISO scope
+LOD = Detection Limit
+LOQ = Lower Quantification Limit
+ULOQ = Upper Quantification Limit                           AL = Action Limit
+
+Analytical Methods Used:
+
+Cannabinoids by UHPLC-DAD                                   Mycotoxins by LC-MS/MS
+Terpenes by HS-GC-FID                                       Microbes by Plate Counting
+Residual Solvents by HS-GC-MS                               Heavy Metals by ICP-MS
+LC Pesticides by LC-MS/MS                                   Foreign Material by Macroscopic Inspection
+GC Pesticides by GC-MS/MS                                   Water Activity by HYGROMETER
+
+
+
+
+ Material Amendments
+
+No material amendments recorded for this sample.
+
+
+
+
+Template Version: 6.0
+Document Created: 2024-09-09 09:17:25               Page 5 of 5
+Auth: It36uyLljYMkTikm51xJkk
+
