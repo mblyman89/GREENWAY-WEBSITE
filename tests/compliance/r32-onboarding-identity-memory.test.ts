@@ -147,7 +147,8 @@ describe("R32 A - pure cores at their exact floors", () => {
     expect(params).toContain("fShelf");
     expect(params).toContain("fOnboarded");
     // Append-only: the R32 facets come last so existing URLs keep meaning the same.
-    expect(params.slice(-2)).toEqual(["fShelf", "fOnboarded"]);
+    // R38 S1 appended fShelfSource after them (still append-only).
+    expect(params.slice(-3)).toEqual(["fShelf", "fOnboarded", "fShelfSource"]);
   });
 
   it("joined lots sort by margin and fall back to the onboarding strain type", () => {

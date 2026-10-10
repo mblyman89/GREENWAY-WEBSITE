@@ -25,6 +25,7 @@ const st = vi.hoisted(() => ({
   published: { id: "v1" } as { id: string } | null,
   types: [] as Array<{ key: string; website_category: string | null }>,
   typesThrow: false,
+  customCats: [] as Array<{ value: string; label: string }>,
 }));
 
 vi.mock("server-only", () => ({}));
@@ -46,7 +47,7 @@ vi.mock("@/lib/pos/types-store", () => ({
     if (st.typesThrow) throw new Error("types down");
     return st.types;
   },
-  listWebsiteCategoryTypes: async () => [],
+  listWebsiteCategoryTypes: async () => st.customCats,
 }));
 
 const core = await import("@/lib/inventory/lot-website-category-core");
@@ -71,6 +72,7 @@ beforeEach(() => {
   st.published = { id: "v1" };
   st.types = [];
   st.typesThrow = false;
+  st.customCats = [];
 });
 
 // ─── A. pure core ───────────────────────────────────────────────────────────
@@ -177,6 +179,17 @@ describe("R38 S1 C - every lot gets the category the website uses", () => {
     expect(out.liveKeys.has("MENU")).toBe(true);
     // The blank-column bug: a never-onboarded, type-mapped lot is NOT blank.
     expect(by.type.website_category).toBeTruthy();
+  });
+
+  it("an owner-created category (Settings → Types) resolves with its own label", async () => {
+    st.customCats = [{ value: "functional", label: "Functional Gummies" }];
+    st.types = [{ key: "Wellness Chew", website_category: "functional" }];
+    const out = await catServer.attachLotWebsiteCategories([lot("c", { inventory_type: "Wellness Chew" })], new Map());
+    expect(out.lots[0]).toMatchObject({
+      website_category_value: "functional",
+      website_category: "Functional Gummies",
+      website_category_source: "inventory_type",
+    });
   });
 
   it("an empty lot list makes no reads", async () => {

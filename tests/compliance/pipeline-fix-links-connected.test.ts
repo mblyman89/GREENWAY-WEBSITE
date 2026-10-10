@@ -571,6 +571,7 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     "gold\u2192if !isSupabaseServiceConfigured", // setup screen
     "gold\u2192view.didYouMean", // search hint
     "gold\u2192!onboardingIndex.complete", // R32: onboarding read failed/truncated (result of the read, not a standing banner)
+    "gold\u2192!categorized.complete", // R38 S1: website-category resolve failed (result of the read, not a standing banner)
   ],
   "src/app/admin/inventory/intake/[id]/page.tsx": [
     "gold\u2192staged",
