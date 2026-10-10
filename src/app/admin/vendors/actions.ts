@@ -1061,3 +1061,31 @@ export async function mergeVendorsAction(formData: FormData): Promise<void> {
   const note = `Combined ${cards} cards into “${survivor!.display_name}”. ${summary.totalRowsRepointed} linked record${summary.totalRowsRepointed === 1 ? "" : "s"} moved over; the duplicate card${summary.duplicateIds.length === 1 ? " was" : "s were"} archived (nothing deleted).`;
   redirect(`${back}?saved=1&note=${encodeURIComponent(note)}`);
 }
+
+/**
+ * R37 S5 - the brand remembered for this vendor (vendors.default_brand_id,
+ * migration 0257). Intake fills it into manifest lines that carry no brand;
+ * Product onboarding sets it when a delivery is branded. Here the owner can
+ * pick it from the vendor's own brands, or clear it.
+ */
+export async function setVendorDefaultBrandAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect("/admin/vendors?error=" + encodeURIComponent("Missing vendor id."));
+  const raw = String(formData.get("default_brand_id") ?? "").trim();
+  const { setVendorDefaultBrand } = await import("@/lib/inventory/delivery-brand-store");
+  const { VENDOR_DEFAULT_BRAND_AUDIT } = await import("@/lib/inventory/delivery-brand-core");
+  const res = await setVendorDefaultBrand(id, raw || null);
+  if (!res.ok) redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(res.error) + "#default-brand");
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: VENDOR_DEFAULT_BRAND_AUDIT,
+    entityType: "vendor",
+    entityId: id,
+    after: { brandId: raw || null, from: "vendor_page" },
+  });
+  revalidatePath(`/admin/vendors/${id}`);
+  revalidatePath("/admin/inventory/drafts");
+  redirect(`/admin/vendors/${id}?saved=1#default-brand`);
+}

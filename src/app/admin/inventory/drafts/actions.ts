@@ -473,3 +473,94 @@ export async function rereadDeliveryCoasAction(manifestId: string, formData?: Fo
   revalidatePath("/admin/knowledge-base/products");
   redirect(backTo(formData, params) + "#batch-lookup");
 }
+
+/**
+ * R37 S5 - "Brand for this delivery": one brand for every product of the
+ * delivery (fill rows without one, or replace all), written to the drafts,
+ * the inventory lots, the menu cards (website + Leafly read
+ * menu_items.brand_name) and remembered on the delivery + the vendor
+ * (migration 0257) so the next delivery from that vendor fills itself.
+ * Decisions: delivery-brand-core (pure). Writes: delivery-brand-store.
+ */
+export async function setDeliveryBrandAction(manifestId: string, formData?: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const core = await import("@/lib/inventory/delivery-brand-core");
+  if (!isUuid(manifestId)) redirect(backTo(formData, core.deliveryBrandParams({ code: "refused", reason: "That delivery link is not valid." })) + "#batch-lookup");
+  const { setDeliveryBrand } = await import("@/lib/inventory/delivery-brand-store");
+  const mode = core.parseBrandMode(formData?.get("brand_mode"));
+  const run = await setDeliveryBrand({ manifestId, rawName: formData?.get("brand"), mode, actorId: session.userId });
+  if (run.code === "ok") {
+    try {
+      const { logManifestEvent } = await import("@/lib/inventory/intake-store");
+      await logManifestEvent(
+        manifestId,
+        core.DELIVERY_BRAND_EVENT,
+        core.deliveryBrandNote(run.brand ?? "", { changed: run.changed ?? 0, kept: run.kept ?? 0, already: run.already ?? 0 }, mode),
+        session.userId,
+      );
+    } catch (err) {
+      console.error("[drafts] delivery brand event failed:", err);
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: core.DELIVERY_BRAND_AUDIT,
+      entityType: "intake_manifest",
+      entityId: manifestId,
+      after: {
+        brand: run.brand,
+        brandId: run.brandId,
+        created: run.created ?? false,
+        adoptedByVendor: run.adopted ?? false,
+        mode,
+        changed: run.changed,
+        already: run.already,
+        kept: run.kept,
+        cards: run.cards,
+        remembered: run.remembered,
+        note: run.reason ?? null,
+      },
+    });
+    if (run.vendorId && run.remembered === true) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: core.VENDOR_DEFAULT_BRAND_AUDIT,
+        entityType: "vendor",
+        entityId: run.vendorId,
+        after: { brand: run.brand, brandId: run.brandId, from: "product_onboarding", manifestId },
+      });
+      revalidatePath(`/admin/vendors/${run.vendorId}`);
+    }
+    if ((run.cards ?? 0) > 0) revalidatePublicMenuSurfaces();
+  }
+  revalidatePath("/admin/inventory/drafts");
+  revalidatePath("/admin/inventory");
+  revalidatePath("/admin/vendors");
+  redirect(backTo(formData, core.deliveryBrandParams(run)) + "#batch-lookup");
+}
+
+/** R37 S5 - the brand of ONE product row (empty clears it). */
+export async function setDraftBrandAction(draftId: string, formData?: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const core = await import("@/lib/inventory/delivery-brand-core");
+  if (!isUuid(draftId)) redirect(backTo(formData, core.deliveryBrandParams({ code: "refused", reason: "That product link is not valid." })));
+  const { setDraftBrand } = await import("@/lib/inventory/delivery-brand-store");
+  const run = await setDraftBrand({ draftId, rawName: formData?.get("brand"), actorId: session.userId });
+  if (run.code === "ok" || (run.code === "cleared" && (run.changed ?? 0) > 0)) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: core.DRAFT_BRAND_AUDIT,
+      entityType: "catalog_product_draft",
+      entityId: draftId,
+      after: { brand: run.brand ?? null, brandId: run.brandId ?? null, created: run.created ?? false, adoptedByVendor: run.adopted ?? false, cards: run.cards, note: run.reason ?? null },
+    });
+    if ((run.cards ?? 0) > 0) revalidatePublicMenuSurfaces();
+  }
+  revalidatePath("/admin/inventory/drafts");
+  revalidatePath("/admin/inventory");
+  const anchor = onboardingV2RowOn() ? draftId : null;
+  const raw = formData?.get("return_manifest");
+  redirect(draftsHref({ manifestId: typeof raw === "string" && raw ? raw : run.manifestId ?? null, draftId: anchor, extra: core.deliveryBrandParams(run) }));
+}

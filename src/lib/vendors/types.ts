@@ -48,6 +48,8 @@ export type Vendor = {
   last_accepted_at: string | null;
   /** Vendor ID in the owner's Sage 50 company (migration 0091), e.g. "01-TWO HEADS". */
   sage_vendor_id?: string | null;
+  /** R37 S5 (0257): the brand remembered for this vendor; undefined before 0257. */
+  default_brand_id?: string | null;
   /**
    * H15e (migration 0100; nullable until applied): the vendor's usual
    * carrier/driver/vehicle, remembered from their last accepted manifest with

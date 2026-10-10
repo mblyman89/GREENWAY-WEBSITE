@@ -25,6 +25,7 @@ import {
   updateVendor,
   setVendorStatus,
   updateBrand,
+  setVendorDefaultBrandAction,
   researchVendorAction,
   acceptVendorSuggestionAction,
   rejectVendorSuggestionAction,
@@ -467,6 +468,39 @@ export default async function VendorEditPage({
               <StickyActionBar status="Edits are not saved until you press Save profile" statusTone="warning">
                 <Button type="submit" variant="primary">Save profile</Button>
               </StickyActionBar>
+            </form>
+
+            {/* R37 S5: the brand remembered for this vendor (0257). Intake
+                fills it into manifest lines with no brand; Product onboarding
+                sets it when a delivery is branded. */}
+            <form
+              id="default-brand"
+              action={setVendorDefaultBrandAction}
+              className="flex flex-wrap items-end gap-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-5"
+              data-testid="vendor-default-brand"
+            >
+              <input type="hidden" name="id" value={vendor.id} />
+              <label className="flex min-w-[16rem] flex-col gap-1">
+                <span className={label}>Default brand for deliveries</span>
+                {vendor.default_brand_id === undefined ? (
+                  <span className="text-xs text-white/50" data-testid="vendor-default-brand-migration">
+                    Needs database migration 0257_delivery_brand.sql. Until then, brands are still set on Product onboarding, but they are not remembered per vendor.
+                  </span>
+                ) : (
+                  <select name="default_brand_id" defaultValue={vendor.default_brand_id ?? ""} className={field}>
+                    <option value="">No default (each delivery names its own)</option>
+                    {brands.map((b: Brand) => (
+                      <option key={b.id} value={b.id}>{b.display_name}</option>
+                    ))}
+                  </select>
+                )}
+              </label>
+              {vendor.default_brand_id !== undefined && (
+                <Button type="submit" variant="neutral" size="sm">Save default brand</Button>
+              )}
+              <p className="w-full text-[11px] text-white/40">
+                Fills every product line of the next delivery that arrives with no brand of its own. It is set for you the first time you brand a delivery on Inventory → Product onboarding.
+              </p>
             </form>
 
             {/* Brands */}
