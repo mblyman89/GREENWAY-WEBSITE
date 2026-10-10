@@ -313,8 +313,9 @@ const WA_RULE_SERVING_MAX_MG = 10;
  * obvious that the product has 10 servings"). A VERIFIED package THC total
  * with NO serving count and NO per-serving figure: the servings are the
  * fewest the law allows, ceil(package / 10), and the per-serving dose is the
- * package divided by them. Only empty facts are filled, only on a verified
- * total (an unconfirmed total stays a question for a person), never for a
+ * package divided by them. Only empty facts are filled; the figures carry
+ * the total's own confidence (verified totals reach the menu, single-source
+ * totals stay a question for a person; a conflict is never divided); never for a
  * topical (WAC 314-55-095(1)(b) does not cover products applied to the skin
  * and a lotion has no dose). Exported for the R28 COA merge, which runs
  * after this and can replace the package total.
@@ -323,12 +324,15 @@ export function applyWaServingRule(result: CrossExamResult, inventoryType: strin
   if (result.percentMode) return result;
   if (/topical/i.test(String(inventoryType ?? ""))) return result;
   const pkg = result.packageThcMg;
-  if (!pkg || pkg.confidence !== "verified" || !(pkg.value > 0)) return result;
+  if (!pkg || pkg.confidence === "conflict" || !(pkg.value > 0)) return result;
   if (result.servingsPerPack !== null || result.mgPerServing !== null) return result;
   const servings = Math.max(1, Math.ceil(Math.round(pkg.value * 100) / 100 / WA_RULE_SERVING_MAX_MG - 1e-9));
   const why = `Washington caps a serving at ${WA_RULE_SERVING_MAX_MG} mg THC (WAC 314-55-095(1)(a)), so ${pkg.value} mg is ${servings} serving${servings === 1 ? "" : "s"}`;
-  result.servingsPerPack = fact(servings, "wa-rule", "verified", why);
-  result.mgPerServing = fact(Math.round((pkg.value / servings) * 100) / 100, "wa-rule", "verified", why);
+  // The rule is only as sure as the total it divides: a corroborated total
+  // gives verified figures (they reach the menu); a single-source total gives
+  // single-source figures (the panel shows them, a person confirms).
+  result.servingsPerPack = fact(servings, "wa-rule", pkg.confidence, why);
+  result.mgPerServing = fact(Math.round((pkg.value / servings) * 100) / 100, "wa-rule", pkg.confidence, why);
   return result;
 }
 
@@ -897,6 +901,40 @@ export function __runFactExtractionCoreTests(): void {
   });
   ok(flower.percentMode === true && flower.name.sizes.some((s) => s.quantity === 3.5 && s.unit === "g"), "flower percent-mode + 3.5g size");
   ok(flower.name.strainType === "indica", "flower (I) marker");
+
+  // ---- R37 S2: Washington's 10 mg serving rule (WAC 314-55-095(1)(a)) ----
+  const g100 = crossExamineRow({ productText: "Gummies - 100mg THC", inventoryType: "Solid Edible", thcColumn: 100, cbdColumn: null });
+  ok(g100.packageThcMg?.value === 100 && g100.servingsPerPack?.value === 10 && g100.mgPerServing?.value === 10, "R37: 100 mg package -> 10 servings of 10 mg");
+  ok(g100.servingsPerPack?.source === "wa-rule" && g100.servingsPerPack.confidence === "verified" && /WAC 314-55-095/.test(g100.servingsPerPack.note ?? ""), "R37: rule figures cite the WAC and are verified");
+  const ruleBase = (pkg: Fact<number> | null): CrossExamResult => ({
+    name: extractNameFacts("x"), percentMode: false, servingsPerPack: null, mgPerServing: null,
+    packageThcMg: pkg, packageCbdMg: null, minorCannabinoids: [], ratioLabel: null, needsReview: false, reviewReasons: [],
+  });
+  const r55 = applyWaServingRule(ruleBase(fact(55, "name", "verified", null)), "Solid Edible");
+  ok(r55.servingsPerPack?.value === 6 && r55.mgPerServing?.value === 9.17, "R37: 55 mg -> 6 servings (ceil), 9.17 mg each");
+  const r5 = applyWaServingRule(ruleBase(fact(5, "name", "verified", null)), "Liquid Edible");
+  ok(r5.servingsPerPack?.value === 1 && r5.mgPerServing?.value === 5, "R37: 5 mg -> 1 serving of 5 mg");
+  const r10 = applyWaServingRule(ruleBase(fact(10, "name", "verified", null)), "Tincture");
+  ok(r10.servingsPerPack?.value === 1 && r10.mgPerServing?.value === 10, "R37: exactly 10 mg -> 1 serving (no float creep)");
+  const r10p = applyWaServingRule(ruleBase(fact(10.004, "name", "verified", null)), "Tincture");
+  ok(r10p.servingsPerPack?.value === 1, "R37: 10.004 mg rounds to 10.00 -> 1 serving");
+  const r101 = applyWaServingRule(ruleBase(fact(10.1, "name", "verified", null)), "Tincture");
+  ok(r101.servingsPerPack?.value === 2, "R37: 10.1 mg -> 2 servings");
+  ok(applyWaServingRule(ruleBase(fact(100, "name", "verified", null)), "Topical Ointment").servingsPerPack === null, "R37: topicals never get a rule count");
+  const ss = applyWaServingRule(ruleBase(fact(100, "column", "single-source", null)), "Solid Edible");
+  ok(ss.servingsPerPack?.value === 10 && ss.servingsPerPack.confidence === "single-source" && ss.mgPerServing?.confidence === "single-source", "R37: a single-source total gives single-source rule figures (never verified)");
+  ok(applyWaServingRule(ruleBase(fact(100, "name", "conflict", null)), "Solid Edible").servingsPerPack === null, "R37: a conflicting total is never divided");
+  const nameOnly = crossExamineRow({ productText: "Gummies - 100mg THC", inventoryType: "Solid Edible", thcColumn: null, cbdColumn: null });
+  ok(nameOnly.servingsPerPack?.value === 10 && nameOnly.servingsPerPack.confidence === "single-source", "R37: name-only 100 mg -> 10 servings, held as single-source");
+  ok(applyWaServingRule(ruleBase(fact(0, "name", "verified", null)), "Solid Edible").servingsPerPack === null, "R37: zero total -> nothing");
+  ok(applyWaServingRule(ruleBase(null), "Solid Edible").servingsPerPack === null, "R37: no total -> nothing");
+  const kept = ruleBase(fact(100, "name", "verified", null));
+  kept.servingsPerPack = fact(20, "name", "verified", null);
+  ok(applyWaServingRule(kept, "Solid Edible").servingsPerPack?.value === 20 && kept.mgPerServing === null, "R37: a stated count is never replaced");
+  const keptDose = ruleBase(fact(100, "name", "verified", null));
+  keptDose.mgPerServing = fact(5, "name", "verified", null);
+  ok(applyWaServingRule(keptDose, "Solid Edible").servingsPerPack === null, "R37: a stated dose is never overridden by the rule");
+  ok(applyWaServingRule({ ...ruleBase(fact(100, "name", "verified", null)), percentMode: true }, "Solid Edible").servingsPerPack === null, "R37: percent products untouched");
 
   console.log(`fact-extraction-core: ${passed} assertions passed`);
 }

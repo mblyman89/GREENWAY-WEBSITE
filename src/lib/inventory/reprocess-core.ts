@@ -488,11 +488,16 @@ export function __runReprocessCoreTests(): void {
     lab_total_thc_pct: 4.7,
     lab_cbd_pct: 0.37,
     package_thc_mg: 100,
+    servings_per_pack: 10,
+    mg_per_serving: 10,
     ratio_label: "3:1",
     minor_cannabinoids_json: [{ type: "cbg", value: "300", unit: "mg" }],
-    fact_provenance: { package_thc_mg: "name-internal", ratio_label: "name" },
+    fact_provenance: { package_thc_mg: "name-internal", ratio_label: "name", servings_per_pack: "wa-rule", mg_per_serving: "wa-rule" },
   });
   ok(again === null, "already-filled lot is a no-op (idempotent)");
+  // R37 S2: a 100 mg package with no count gets 10 x 10 mg from WAC 314-55-095(1)(a).
+  ok(moxey!.update.servings_per_pack === 10 && moxey!.update.mg_per_serving === 10, "R37: Moxey 100 mg -> 10 servings of 10 mg (WA rule)");
+  ok((moxey!.update.fact_provenance as Record<string, string>).servings_per_pack === "wa-rule", "R37: the rule is recorded as the source");
 
   // Reviewer supremacy: a provenance key blocks the fill even when the column is NULL.
   const reviewed = planLotReprocess({

@@ -302,7 +302,7 @@ export function examineDraftFacts(
     thcColumn: null,
     cbdColumn: null,
   });
-  return mergeCoaIntoExam(exam, coaFacts ?? null);
+  return mergeCoaIntoExam(exam, coaFacts ?? null, invType);
 }
 
 /**
