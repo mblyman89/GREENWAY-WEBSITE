@@ -883,6 +883,7 @@ import { __runNonCannabisTests } from "../../src/lib/naming/noncannabis-core";
 import { __runNamingConventionTests } from "../../src/lib/naming/convention-core";
 import { __runCcrsProductNameCoreTests } from "../../src/lib/compliance/ccrs-product-name-core";
 import { __runNachaCoreTests } from "../../src/lib/payments/nacha-core";
+import { __runAchAuthorizationCoreTests } from "../../src/lib/payments/ach-authorization-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
 import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
@@ -2138,6 +2139,7 @@ __runLiquidVolumeTests();
   assertRan("lookup-history-core", __runLookupHistoryCoreTests(), 67); // R37 S6: search history + harvest verdict
   assertRan("inventory-metrics-core", __runInventoryMetricsTests(), 28); // R38 S2: ext cost/retail, sell-through, velocity, days of supply
   assertRan("inventory-table-core", __runInventoryTableCoreTests(), 61); // R38 S2-S4: column registry, presets, page size, pager, export
+  assertRan("ach-authorization-core", __runAchAuthorizationCoreTests(), 66); // R39 S1: FedACH days, prenote/NOC/return/reversal clocks, splits, release, retention, codes
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

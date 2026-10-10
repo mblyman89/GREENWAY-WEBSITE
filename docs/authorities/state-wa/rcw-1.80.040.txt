@@ -1,0 +1,16 @@
+Mirrored from rcw-1.80-ueta.txt (RCW chapter 1.80, https://app.leg.wa.gov/RCW/default.aspx?cite=1.80&full=true), section 1.80.040 only, split mechanically on the section heading. Text unchanged.
+
+RCW  
+1.80.040
+Use of electronic records and electronic signatures
+—
+Variation by agreement.
+(1) This chapter does not require a record or signature to be created, generated, sent, communicated, received, stored, or otherwise processed or used by electronic means or in electronic form.
+(2) This chapter applies only to transactions between parties each of which has agreed to conduct transactions by electronic means. Whether the parties agree to conduct a transaction by electronic means is determined from the context and surrounding circumstances, including the parties' conduct.
+(3) A party that agrees to conduct a transaction by electronic means may refuse to conduct other transactions by electronic means. The right granted by this subsection may not be waived by agreement.
+(4) Except as otherwise provided in this chapter, the effect of any of its provisions may be varied by agreement. The presence in certain provisions of this chapter of the words "unless otherwise agreed," or words of similar import, does not imply that the effect of other provisions may not be varied by agreement.
+(5) Whether an electronic record or electronic signature has legal consequences is determined by this chapter and other applicable law.
+[ 
+2020 c 57 s 5
+.]
+PDF

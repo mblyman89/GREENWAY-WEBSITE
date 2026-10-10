@@ -1,0 +1,13 @@
+Mirrored from rcw-1.80-ueta.txt (RCW chapter 1.80, https://app.leg.wa.gov/RCW/default.aspx?cite=1.80&full=true), section 1.80.060 only, split mechanically on the section heading. Text unchanged.
+
+RCW  
+1.80.060
+Legal recognition of electronic records, electronic signatures, and electronic contracts.
+(1) A record or signature may not be denied legal effect or enforceability solely because it is in electronic form.
+(2) A contract may not be denied legal effect or enforceability solely because an electronic record was used in its formation.
+(3) If a law requires a record to be in writing, an electronic record satisfies the law.
+(4) If a law requires a signature, an electronic signature satisfies the law.
+[ 
+2020 c 57 s 7
+.]
+PDF

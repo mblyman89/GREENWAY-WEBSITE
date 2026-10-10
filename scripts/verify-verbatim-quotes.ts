@@ -19,6 +19,12 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { GUIDANCE_AUTHORITIES } from "@/lib/accounting/books-guidance-core";
+import { ACH_PUBLICATION_FILES } from "@/lib/payments/ach-authorities";
+
+/** Escape a literal string for use inside a RegExp. */
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 const AUTHORITY_DIR = join(process.cwd(), "docs", "authorities");
 
@@ -197,6 +203,31 @@ const MIRRORED_CORPORA: ReadonlyArray<{
     re: /^WAC 192-310-010/,
     file: () => ["state-wa", "wac-192-310-010.txt"],
   },
+  /*
+   * R39. WAC 314-55-087 - the cannabis licensee recordkeeping rule (five-year
+   * retention, employee records). Narrow to the one section mirrored; any
+   * other WAC 314-55 section falls through to null and is reported as debt.
+   * MUST AGREE WITH THE sourceFileFor BRANCH BELOW.
+   */
+  {
+    name: "WAC 314-55-087 licensee records",
+    re: /^WAC 314-55-087\b/,
+    file: () => ["state-wa", "wac-314-55-087.txt"],
+  },
+  /*
+   * R39. ACH PUBLICATIONS - Nacha's public rule summaries and ODFI originator
+   * guides. These have no section-number grammar a regex could parse, so the
+   * route is an EXACT citation-prefix table that lives next to the authorities
+   * that use it (ACH_PUBLICATION_FILES). One row per publication, generated
+   * from that table, so a new publication cannot be added to the registry
+   * without also becoming routable - and a reworded citation stops matching
+   * and is reported, not silently skipped.
+   */
+  ...Object.entries(ACH_PUBLICATION_FILES).map(([prefix, file]) => ({
+    name: `ACH publication: ${prefix}`,
+    re: new RegExp(`^${escapeRe(prefix)}`),
+    file: () => file.split("/"),
+  })),
   {
     name: "IRS Publication",
     re: /^IRS Pub\. (\d+)(-[A-Z])? \((\d{4})\)/,
@@ -652,6 +683,22 @@ export function sourceFileFor(cite: string, dir: string = AUTHORITY_DIR): string
   if (/^WAC 192-310-010/.test(cite)) {
     const p = join(dir, "state-wa", "wac-192-310-010.txt");
     return existsSync(p) ? p : null;
+  }
+
+  // R39. WAC 314-55-087(1)(e) -> state-wa/wac-314-55-087.txt. Must agree with
+  // the MIRRORED_CORPORA row.
+  if (/^WAC 314-55-087\b/.test(cite)) {
+    const p = join(dir, "state-wa", "wac-314-55-087.txt");
+    return existsSync(p) ? p : null;
+  }
+
+  // R39. ACH publications, by exact citation prefix. Same table as the
+  // MIRRORED_CORPORA rows, so the two routers cannot disagree.
+  for (const [prefix, file] of Object.entries(ACH_PUBLICATION_FILES)) {
+    if (cite.startsWith(prefix)) {
+      const p = join(dir, ...file.split("/"));
+      return existsSync(p) ? p : null;
+    }
   }
 
   // IRS Pub. 15 (2026), section 8   ->  federal/irs-pub-15-2026.txt

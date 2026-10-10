@@ -105,6 +105,7 @@ import { FORM_W2_OWN_AUTHORITIES } from "@/lib/payroll/form-w2-authorities";
 import { FORM_941_AUTHORITIES } from "@/lib/payroll/form-941-authorities";
 import { WA_QUARTERLY_OWN_AUTHORITIES } from "@/lib/payroll/wa-quarterly-authorities";
 import { PAY_RUN_AUTHORITIES, type PayRunAuthority } from "@/lib/payroll/pay-run-authorities";
+import { ACH_AUTHORITIES, type AchAuthority } from "@/lib/payments/ach-authorities";
 import {
   WAGE_ORDER_ENTRY_AUTHORITIES,
   type WageOrderEntryAuthority,
@@ -157,7 +158,20 @@ export type GuidanceAuthorityKind =
   | "state_manual"
   | "legislative_history"
   | "auditing_standard"
-  | "internal_control_framework";
+  | "internal_control_framework"
+  /**
+   * R39. A published position of a PRIVATE body that sets the rules a bank
+   * enforces by contract - Nacha's own public rule summaries, and the
+   * originator guides an ODFI (Greenway's bank) publishes to its customers.
+   *
+   * ADDED RATHER THAN REUSING `agency_guidance` for the books-37 reason: that
+   * label renders as "Agency guidance", and Nacha is not a government agency.
+   * Telling Michael a bank brochure came from a regulator would be a false
+   * attribution. Weight 1: the Nacha Rules bind Greenway only through its
+   * origination agreement with Timberland, and these summaries are not the
+   * Rules themselves.
+   */
+  | "industry_guidance";
 
 export const ALL_GUIDANCE_AUTHORITY_KINDS: readonly GuidanceAuthorityKind[] = [
   "statute",
@@ -171,6 +185,7 @@ export const ALL_GUIDANCE_AUTHORITY_KINDS: readonly GuidanceAuthorityKind[] = [
   "legislative_history",
   "auditing_standard",
   "internal_control_framework",
+  "industry_guidance",
 ] as const;
 
 /** Human labels. Used by the UI so a badge never shows a raw enum. */
@@ -188,6 +203,7 @@ export const GUIDANCE_KIND_LABELS: Record<GuidanceAuthorityKind, string> = {
   legislative_history: "Legislative history",
   auditing_standard: "Auditing standard",
   internal_control_framework: "Internal control framework",
+  industry_guidance: "Industry / bank guidance",
 };
 
 /**
@@ -213,6 +229,9 @@ export const GUIDANCE_KIND_WEIGHT: Record<GuidanceAuthorityKind, 1 | 2 | 3> = {
   legislative_history: 1,
   auditing_standard: 1,
   internal_control_framework: 1,
+  // Persuasive only. Nacha's summaries and an ODFI brochure bind nobody by
+  // themselves; the obligation comes from the bank agreement.
+  industry_guidance: 1,
 };
 
 /** Plain-English explanation of each weight. Shown, not just stored. */
@@ -651,6 +670,22 @@ function fromPayRun(a: PayRunAuthority): GuidanceAuthority {
 }
 
 /**
+ * R39. Direct-deposit authorities. Same field renames as fromPayRun.
+ * `AchAuthority["kind"]` is a strict subset of GuidanceAuthorityKind, so a
+ * widened leaf kind fails tsc here instead of rendering an unlabelled badge.
+ */
+function fromAch(a: AchAuthority): GuidanceAuthority {
+  return {
+    id: a.id,
+    kind: a.kind,
+    cite: a.citation,
+    quote: a.quote,
+    soWhat: a.whatItMeansHere,
+    source: a.source,
+  };
+}
+
+/**
  * books-38. Wage order ENTRY - the duties that attach to receiving the paper,
  * as distinct from the arithmetic of applying it.
  *
@@ -929,6 +964,13 @@ export const ALL_SOURCE_REGISTRIES = [
   // who drops the scope clause gets one shareholder instead of four and a
   // \u00a76699 figure of $2,340 instead of $9,360.
   "shareholder-roster",
+  // R39. Direct deposit: account verification (prenote vs. test credit), the
+  // bank-detail change controls Nacha Fraud Monitoring Phase 2 requires of
+  // every originator, retention of the signed form, FedACH banking days, and
+  // the e-signature statutes that make an e-signed form as good as paper.
+  // Its own tag because none of the payroll registries answers "is this
+  // account real, and who said so".
+  "ach",
 ] as const;
 
 export type SourceRegistry = (typeof ALL_SOURCE_REGISTRIES)[number];
@@ -1271,6 +1313,13 @@ function taggedCandidates(): Array<{ tag: SourceRegistry; authority: GuidanceAut
     ...REPORTING_AUTHORITIES_NEW.map((a) => ({
       tag: "reporting" as const,
       authority: a,
+    })),
+    // R39. Direct deposit. Merged in the same commit that created the leaf
+    // registry (the books-27 lesson), and asserted reachable through
+    // GUIDANCE_AUTHORITIES by tests/compliance/r39-ach-authorities.test.ts.
+    ...ACH_AUTHORITIES.map((a) => ({
+      tag: "ach" as const,
+      authority: fromAch(a),
     })),
   ];
 }

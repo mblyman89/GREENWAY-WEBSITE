@@ -1,0 +1,146 @@
+{
+ "micro-entry-definition": {
+  "file": "ach/nacha-micro-entries-phase-1.txt",
+  "quote": "A Micro-Entry will be “a credit or debit Entry used by an Originator for the purpose of verifying a Receiver’s account or an individual's access to an account.”"
+ },
+ "micro-entry-under-one-dollar": {
+  "file": "ach/nacha-micro-entries-phase-1.txt",
+  "quote": "A credit Micro-Entry must be in the amount of less than $1.00 One or more debit Micro-Entries must not exceed, in total, the amount of the corresponding credit Micro-Entries"
+ },
+ "micro-entry-acctverify": {
+  "file": "ach/nacha-micro-entries-phase-1.txt",
+  "quote": "In the Company Entry Description field, the Rule requires the use of “ACCTVERIFY” A standard description makes Micro-Entries more easily identifiable, and better enable ODFIs to apply any desired processing routines or other controls"
+ },
+ "micro-entry-no-simultaneous-live": {
+  "file": "ach/nacha-micro-entries-phase-1.txt",
+  "quote": "An Originator using Micro-Entries may initiate future Entries to the Receiver’s account as soon as the Originator’s process for validating the amounts of the Micro-Entries has been completed The Originator is in the best position to know when the validation process is complete A future Entry may not be originated simultaneously with Micro-Entries"
+ },
+ "prenote-vs-micro-formatting": {
+  "file": "ach/nacha-micro-entries-phase-1.txt",
+  "quote": "Prenotification Entries can be easily identified by a unique transaction code and a dollar amount of zero. For these entries, a specific company entry description is not needed to identify these entries as an account validation tool, and Originators have discretion over the content of the company entry description field."
+ },
+ "fraud-phase-2-all-originators": {
+  "file": "ach/nacha-fraud-monitoring-phase-2.txt",
+  "quote": "(effective June 19, 2026) will eliminate the volume threshold and will require all non-consumer Originators, Third-Party Service Providers, and Third-Party Senders (regardless of origination or transmission volume) to comply with the fraud monitoring rules."
+ },
+ "fraud-phase-2-change-controls": {
+  "file": "ach/nacha-fraud-monitoring-phase-2.txt",
+  "quote": "Originators may be best placed to implement procedures to protect against account takeover or other vectors for initiating unauthorized transactions. Such procedures could include change controls regarding payment information and instructions for vendor and payroll payments."
+ },
+ "fraud-phase-2-annual-review": {
+  "file": "ach/nacha-fraud-monitoring-phase-2.txt",
+  "quote": "establish and implement risk-based processes and procedures, relevant to the role it plays in the authorization or Transmission of Entries, that are reasonably intended to identify Entries that are suspected of being unauthorized or authorized under False Pretenses; and review (at least annually) these processes and procedures and make appropriate updates to address evolving risks."
+ },
+ "false-pretenses": {
+  "file": "ach/nacha-fraud-monitoring-phase-2.txt",
+  "quote": "the inducement of a payment by a Person misrepresenting (a) that Person’s identity, (b) that Person’s association with or authority to act on behalf of another Person, or (c) the ownership of an account to be credited.”"
+ },
+ "only-consumer-debits-need-signed-writing": {
+  "file": "ach/nacha-meaningful-modernization.txt",
+  "quote": "Explicitly states that authorization of an ACH payment by any method allowed by law/regulation Only consumer debit authorizations require a writing that is signed or similarly authenticated"
+ },
+ "prenote-zero-dollar-not-ownership": {
+  "file": "ach/odfi-simmons-ach-origination-guidelines.txt",
+  "quote": "Prenotes are zero-dollar entries sent to a Receiver’s account to verify the account number is a valid account at the Receiving Bank (RDFI). Prenotes do not validate ownership of the account."
+ },
+ "prenote-three-banking-days": {
+  "file": "ach/odfi-simmons-ach-origination-guidelines.txt",
+  "quote": "After three (3) banking days of the Settlement Date of the prenote, provided the ODFI has not received a Return or Notification of Change (NOC), an Originator may initiate Entries to the Receiver’s account. If an NOC is received the Originator must make the correcting entries prior to initiating future Entries to the Receiver’s account. If an ACH Return is received the Originator must reach out to the Receiver for updated account information."
+ },
+ "returns-second-banking-day": {
+  "file": "ach/odfi-simmons-ach-origination-guidelines.txt",
+  "quote": "The RDFI must return the entry in time for Simmons Bank (ODFI) to receive it, by the opening of business on the second banking day following the settlement date."
+ },
+ "noc-six-banking-days": {
+  "file": "ach/odfi-simmons-ach-origination-guidelines.txt",
+  "quote": "If your company sends recurring payments (i.e., daily, bi-weekly, monthly), you are required to update the incorrect information before processing the next payment or within six banking days of receiving the Notification of Change information."
+ },
+ "reversal-five-banking-days": {
+  "file": "ach/odfi-simmons-ach-origination-guidelines.txt",
+  "quote": "An erroneous entry or file can contain the wrong amount, is a duplicate of a previous file/transaction or was sent to an unintended party. The reversal of these entries must be transmitted within five (5) banking days from the Settlement Date of the erroneous or duplicate entry or file."
+ },
+ "reversal-description": {
+  "file": "ach/odfi-simmons-ach-origination-guidelines.txt",
+  "quote": "As the Originator, you must make a reasonable attempt to notify the Receiver that a reversing entry has been sent to their account, with the reason for the reversal, no later than the Settlement Date of the reversing entry. When the reversal is originated the word “REVERSAL” (in all Caps) must appear in the Company Entry Description field in the Company/Batch Header Record."
+ },
+ "authorization-two-years-campus": {
+  "file": "ach/odfi-campus-federal-originator-responsibilities-2024.txt",
+  "quote": "Copies of authorizations are maintained for two years from the date the authorization is terminated and must be provided to the RDFI within ten banking days of the request."
+ },
+ "authorization-two-years-united": {
+  "file": "ach/odfi-access-united-nacha-updates-2024.txt",
+  "quote": "Authorization must be retained by the Originator for a period of two years following the termination or revocation of the authorization. In the case of a paper authorization that has been signed by the Receiver, the Originator must retain either the original or a copy of the signed authorization."
+ },
+ "prenotes-optional": {
+  "file": "ach/odfi-access-united-nacha-updates-2024.txt",
+  "quote": "A prenotification is a zero-dollar entry generated to validate an account held at a Receiving Depository Financial Institution (RDFI). Companies may originate prenotifications; however, they are not required under the Rules. A prenotification is a tool to ensure the account information given by the receiver is accurate prior to initiating a live dollar transaction. If the Originator chooses to initiate a prenotification, they must wait three (3) banking days prior to initiating the live dollar transaction."
+ },
+ "prenote-codes": {
+  "file": "ach/odfi-first-citizens-nacha-file-specs.txt",
+  "quote": "For Prenotes: 23 - Checking Credits; 33 - Savings Credits; 28 - Checking Debits; 38 - Savings Debits For Live Dollar: 22 - Checking Credits; 32 - Savings Credits; 27 - Checking Debits; 37 - Savings Debits"
+ },
+ "prenote-wait-history": {
+  "file": "ach/odfi-grand-valley-prenote-waiting-period.txt",
+  "quote": "In the past, Originators have had to wait six Banking Days before transmitting “live” entries following a Prenote. However, in today’s banking environment, that length of waiting time often appears excessive, making the use of a Prenote ineffective for many Originators. Responding to the financial industry’s support for shortening that period, the Rule will make the waiting period three banking days."
+ },
+ "payroll-description": {
+  "file": "ach/odfi-peoples-bank-2026-originators-newsletter.txt",
+  "quote": "The Company Entry Description field must contain PAYROLL, all capitalized, for PPD Credits paying wages, salaries and other similar types of compensation."
+ },
+ "verify-with-contact-on-file": {
+  "file": "ach/odfi-peoples-bank-2026-originators-newsletter.txt",
+  "quote": "If a long-time Receiver unexpectedly sends new account details, especially via email, text or fax, treat it as a red flag. The Originator should use the contact information on file, not the information in the change request message, to verify account changes. Apply “know your customer” practices to confirm the request is legitimate before proceeding. Your company is responsible for following up on any request to change a Receiver’s account information with a phone call to the number on file in your records, without relying on the contact information included in the request."
+ },
+ "noc-no-new-authorization": {
+  "file": "ach/odfi-peoples-bank-2026-originators-newsletter.txt",
+  "quote": "By complying with the NOC, your business can originate from future transactions without having to obtain a new authorization."
+ },
+ "fedach-saturday-sunday": {
+  "file": "ach/frbservices-holiday-schedule.txt",
+  "quote": "*For holidays falling on Saturday, Federal Reserve Banks and Branches will be open the preceding Friday. **For holidays falling on Sunday, Federal Reserve Banks and Branches will be closed the following Monday."
+ },
+ "plaid-same-day": {
+  "file": "ach/plaid-auth-same-day-micro-deposits.txt",
+  "quote": "Behind the scenes, Plaid sends a micro-deposit to the user's account that will post within one to two business days."
+ },
+ "sao-verify-by-phone": {
+  "file": "ach/wa-sao-vendor-master-file.txt",
+  "quote": "It's critical to independently verify any requests to change vendor information directly with your vendor. You should do this by phone, using contact information that is known, reliable and already on file."
+ },
+ "sao-segregate-duties": {
+  "file": "ach/wa-sao-vendor-master-file.txt",
+  "quote": "Just like payroll clerks should not be able to add new employees or edit the payroll master file, accounts payable clerks should not be able to add new vendors or change vendor information in the vendor master file."
+ },
+ "callback-manipulation": {
+  "file": "ach/disbursementcontrols-vendor-contact-change-risk.txt",
+  "quote": "Many organizations use callback procedures to validate banking changes or payment requests. If fraudsters successfully change vendor phone numbers or contact information, they may redirect validation calls directly to themselves. This allows criminals to defeat one of the most used fraud prevention controls by creating the illusion of independent verification. Organizations that rely solely on contact details provided within change requests may unknowingly validate fraudulent changes with the attackers themselves."
+ },
+ "wac-087-five-years": {
+  "file": "state-wa/wac-314-55-087.txt",
+  "quote": "(1) Cannabis licensees are responsible to keep records that clearly reflect all financial transactions and the financial condition of the business. The following records must be kept and maintained on the licensed premises for a five-year period and must be made available for inspection if requested by an employee of the LCB:"
+ },
+ "wac-087-employee-records": {
+  "file": "state-wa/wac-314-55-087.txt",
+  "quote": "(e) All employee records to include, but not limited to, training, payroll, and date of hire;"
+ },
+ "rcw-1-80-040-agreement": {
+  "file": "state-wa/rcw-1.80.040.txt",
+  "quote": "(2) This chapter applies only to transactions between parties each of which has agreed to conduct transactions by electronic means. Whether the parties agree to conduct a transaction by electronic means is determined from the context and surrounding circumstances, including the parties' conduct."
+ },
+ "rcw-1-80-060-signature": {
+  "file": "state-wa/rcw-1.80.060.txt",
+  "quote": "(1) A record or signature may not be denied legal effect or enforceability solely because it is in electronic form. (2) A contract may not be denied legal effect or enforceability solely because an electronic record was used in its formation. (3) If a law requires a record to be in writing, an electronic record satisfies the law. (4) If a law requires a signature, an electronic signature satisfies the law."
+ },
+ "rcw-1-80-080-attribution": {
+  "file": "state-wa/rcw-1.80.080.txt",
+  "quote": "(1) An electronic record or electronic signature is attributable to a person if it was the act of the person. The act of the person may be shown in any manner, including a showing of the efficacy of any security procedure applied to determine the person to which the electronic record or electronic signature was attributable."
+ },
+ "usc-7001-a": {
+  "file": "federal/usc-15-7001.txt",
+  "quote": "(1) a signature, contract, or other record relating to such transaction may not be denied legal effect, validity, or enforceability solely because it is in electronic form; and (2) a contract relating to such transaction may not be denied legal effect, validity, or enforceability solely because an electronic signature or electronic record was used in its formation."
+ },
+ "usc-7006-5": {
+  "file": "federal/usc-15-7006.txt",
+  "quote": "The term “ electronic signature ” means an electronic sound, symbol, or process, attached to or logically associated with a contract or other record and executed or adopted by a person with the intent to sign the record."
+ }
+}
