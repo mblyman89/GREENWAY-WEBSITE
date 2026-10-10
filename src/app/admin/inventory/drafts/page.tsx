@@ -55,7 +55,9 @@ import {
 } from "@/lib/catalog/approved-row-core";
 import { isAiConfigured } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
-import { approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, rereadDeliveryCoasAction, restoreDraftAction } from "./actions";
+import { approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
+import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
+import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
 import { DELIVERY_COA_BUTTON, deliveryCoaBanner, deliveryCoaHelp } from "@/lib/inventory/coa-reread-delivery-core";
 import { isLlamaParseConfigured } from "@/lib/inbound-email/llamaparse-provider";
 // S17: the batch result banner (the Approve-all button was removed in R37 S1).
@@ -215,7 +217,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; wf?: string; wf_msg?: string; approved_draft?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; brand_set?: string; brand_name?: string; brand_changed?: string; brand_already?: string; brand_kept?: string; brand_cards?: string; brand_new?: string; brand_mem?: string; brand_reason?: string; wf?: string; wf_msg?: string; approved_draft?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -279,6 +281,17 @@ export default async function CatalogDraftsPage({
   // button count are read on the server (never guessed).
   const batchLookupOn = Boolean(focus.manifestId) && view === "draft" && lookupJobsOn() && isAiConfigured;
   const batchLookup = batchLookupOn && focus.manifestId ? await loadManifestLookup(focus.manifestId) : null;
+  // R37 S5: the delivery's brand, the vendor's remembered brand, and what the
+  // field prefills with (delivery > vendor > the one brand the rows share).
+  const brandCtx = focus.manifestId && view !== "dismissed" ? await loadDeliveryBrandContext(focus.manifestId) : null;
+  const brandPrefill = brandCtx
+    ? deliveryBrandPrefill({
+        deliveryBrand: brandCtx.deliveryBrand,
+        vendorDefault: brandCtx.vendorDefault,
+        vendorName: brandCtx.vendorName,
+        rowBrands: drafts.map((d) => d.brand_name),
+      })
+    : null;
   const batchLookupJob = batchLookup?.state === "job" ? batchLookup.job : null;
   const batchLookupActive = batchLookupJob !== null && (batchLookupJob.status === "queued" || batchLookupJob.status === "running");
   const batchLookupEligible = batchLookup && (batchLookup.state === "job" || batchLookup.state === "none") ? batchLookup.eligible : null;
@@ -308,6 +321,8 @@ export default async function CatalogDraftsPage({
   const lookupResult = lookupBanner(sp.lookup, sp.lookup_msg) ?? waitingResultBanner(sp.wf, sp.wf_msg);
   // R37 S4: the outcome of "Re-read lab certificates (LlamaParse)".
   const coaAllBanner = deliveryCoaBanner(sp as Record<string, unknown>);
+  // R37 S5: the delivery brand field + its result banner.
+  const brandBanner = deliveryBrandBanner(sp as Record<string, unknown>);
   const headerTitle = onboardingHeaderTitle(
     focusManifest,
     focusManifest && picker?.countsComplete ? picker.counts.get(focusManifest.id) ?? null : null,
@@ -705,6 +720,22 @@ export default async function CatalogDraftsPage({
             {coaAllBanner.text}
           </div>
         )}
+        {brandBanner && (
+          <div
+            role={brandBanner.tone === "bad" ? "alert" : "status"}
+            data-testid="delivery-brand-result"
+            data-tone={brandBanner.tone}
+            className={
+              brandBanner.tone === "bad"
+                ? "rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-2 text-sm text-[var(--admin-danger)]"
+                : brandBanner.tone === "warn"
+                  ? "rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]"
+                  : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+            }
+          >
+            {brandBanner.text}
+          </div>
+        )}
 
         {/* S30: fact review cannot be saved until migration 0237 is applied. */}
         {factFlags && factFlags.flags.size > 0 && !factFlags.migrated && (
@@ -834,6 +865,60 @@ export default async function CatalogDraftsPage({
                 </span>
               </form>
             ) : null}
+            {/* R37 S5: ONE brand for the whole delivery (rows below can
+                override). Remembered for the vendor (0257). */}
+            {focus.manifestId && brandPrefill && (
+              <form
+                action={setDeliveryBrandAction.bind(null, focus.manifestId)}
+                className="flex flex-col gap-2 border-t border-[var(--admin-border)] pt-2"
+                data-testid="delivery-brand"
+                data-source={brandPrefill.source}
+              >
+                <input type="hidden" name="return_manifest" value={focus.manifestId} />
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="flex min-w-[14rem] flex-col gap-1">
+                    <span className="text-xs font-semibold text-[var(--admin-text)]">{"\u{1F3F7}\u{FE0F} "}Brand for this delivery</span>
+                    <input
+                      name="brand"
+                      defaultValue={brandPrefill.name}
+                      maxLength={120}
+                      placeholder="e.g. Phat Panda"
+                      list="delivery-brand-suggestions"
+                      className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-1.5 text-sm text-[var(--admin-text)]"
+                      data-testid="delivery-brand-input"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-[var(--admin-text-muted)]">Apply to</span>
+                    <select
+                      name="brand_mode"
+                      defaultValue="fill"
+                      className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-2 py-1.5 text-sm text-[var(--admin-text)]"
+                      data-testid="delivery-brand-mode"
+                    >
+                      <option value="fill">Products with no brand yet</option>
+                      <option value="replace">Every product (replace row brands)</option>
+                    </select>
+                  </label>
+                  <Button type="submit" variant="save" size="sm" data-testid="delivery-brand-button">Set brand</Button>
+                </div>
+                <span className="text-xs text-[var(--admin-text-muted)]" data-testid="delivery-brand-note">
+                  {brandPrefill.note} {DELIVERY_BRAND_HELP}
+                </span>
+                {brandCtx && brandCtx.vendorBrands.length > 0 && (
+                  <datalist id="delivery-brand-suggestions" data-testid="delivery-brand-suggestions">
+                    {brandCtx.vendorBrands.map((b) => (
+                      <option key={b} value={b} />
+                    ))}
+                  </datalist>
+                )}
+                {brandCtx && !brandCtx.migrated && (
+                  <span className="text-xs text-[var(--admin-text-muted)]" data-testid="delivery-brand-migration">
+                    Remembering it per vendor needs migration 0257_delivery_brand.sql; the brand is still set on the products without it.
+                  </span>
+                )}
+              </form>
+            )}
             {/* R37 S4: read every lab certificate of this delivery again with
                 LlamaParse, then fill the products below (fill-only). */}
             {focus.manifestId && (
@@ -1128,8 +1213,34 @@ export default async function CatalogDraftsPage({
                         attached: attachedFactsOf(d as unknown as Record<string, unknown>),
                       })
                     : null;
+                  // R37 S5: this product's own brand (overrides the delivery
+                  // brand). Only in the S41 layout, where this panel is
+                  // OUTSIDE the approve form (forms cannot nest).
+                  const rowBrandForm = v2Row && rowsOpen ? (
+                    <form
+                      action={setDraftBrandAction.bind(null, d.id)}
+                      className="flex flex-wrap items-end gap-2 text-xs"
+                      data-testid="row-brand"
+                    >
+                      {focus.manifestId && <input type="hidden" name="return_manifest" value={focus.manifestId} />}
+                      <label className="flex min-w-[12rem] flex-col gap-1">
+                        <span className="font-semibold text-[var(--admin-text-muted)]">Brand for this product</span>
+                        <input
+                          name="brand"
+                          defaultValue={d.brand_name ?? ""}
+                          maxLength={120}
+                          placeholder="Leave empty to clear"
+                          list={brandCtx && brandCtx.vendorBrands.length > 0 ? "delivery-brand-suggestions" : undefined}
+                          className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-2 py-1 text-sm text-[var(--admin-text)]"
+                          data-testid="row-brand-input"
+                        />
+                      </label>
+                      <Button type="submit" variant="neutral" size="sm" data-testid="row-brand-button">Save brand</Button>
+                    </form>
+                  ) : null;
                   const lookupPanel = (
                     <>
+                    {rowBrandForm}
                     {batchRowLine}
                     {waitingView && (
                       <WaitingFactsPanel

@@ -116,6 +116,8 @@ import { CUTOVER_HOLD_COPY, CUTOVER_REASON } from "@/lib/inventory/cutover-guard
 import { FACT_HOLD_CARRY_COPY } from "@/lib/pos/intake-fact-review-core";
 // S05 - stamp identity at the door.
 import { identityForLot } from "@/lib/catalog/product-identity-core";
+import { DELIVERY_BRAND_DEFAULT_EVENT, intakeBrandForLine } from "@/lib/inventory/delivery-brand-core";
+import { readVendorDefaultBrand } from "@/lib/inventory/delivery-brand-store";
 import {
   identityKeyForStorage,
   isMissingIdentityColumnError,
@@ -756,6 +758,13 @@ export async function stageManifest(
   // R28: set once a lab insert proves 0252 is not applied.
   let labJsonUrlColumnMissing = false;
 
+  // R37 S5: the brand remembered for this vendor (vendors.default_brand_id,
+  // migration 0257). It fills ONLY a line that carries no brand label - a
+  // label that named some other brand is never overwritten (pure rule:
+  // delivery-brand-core intakeBrandForLine). Unreadable / unmigrated = null.
+  const vendorDefaultBrand = await readVendorDefaultBrand(admin, vendorId);
+  let defaultBrandLines = 0;
+
   // 2) per line: lab_result (if any) + quarantine lot
   for (const [lineIndex, line] of parsed.lines.entries()) {
     let labId: string | null = null;
@@ -810,11 +819,15 @@ export async function stageManifest(
     // S05: the detailed resolve (same queries as resolveBrandId) also hands
     // back the brand's display name for the identity - no extra read.
     const brandRes = await resolveBrandIdDetailed(admin, line.brand_name, vendorId);
-    const brandId = brandRes.brandId;
+    const brandPick = intakeBrandForLine(brandRes.outcome, brandRes.brandId, vendorDefaultBrand?.id ?? null);
+    const brandId = brandPick.brandId;
+    if (brandPick.source === "vendor-default") defaultBrandLines += 1;
     const matchedBrand =
       brandRes.outcome.kind === "exact" || brandRes.outcome.kind === "squeezed"
         ? brandRes.outcome.matched
-        : null;
+        : brandPick.source === "vendor-default"
+          ? vendorDefaultBrand?.name ?? null
+          : null;
     const identityKey =
       stampOn && !identityColumnsMissing
         ? identityKeyForStorage(
@@ -897,6 +910,18 @@ export async function stageManifest(
       // longer silent.
       console.error("[intake-store] lot insert failed:", lotErr.message);
     }
+  }
+
+  // R37 S5: say where the brand came from, and remember it on the delivery.
+  if (defaultBrandLines > 0 && vendorDefaultBrand) {
+    await logManifestEvent(
+      manifestId,
+      DELIVERY_BRAND_DEFAULT_EVENT,
+      `Brand "${vendorDefaultBrand.name ?? "?"}" filled from the vendor's remembered brand on ${defaultBrandLines} line(s) with no brand on the manifest.`,
+      actorId,
+    );
+    const { error: brandErr } = await admin.from("inbound_manifests").update({ brand_id: vendorDefaultBrand.id }).eq("id", manifestId);
+    if (brandErr && !isMissingColumnError(brandErr)) console.error("[intake-store] delivery brand not remembered:", brandErr.message);
   }
 
   return { ok: true, manifestId };
