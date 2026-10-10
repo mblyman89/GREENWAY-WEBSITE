@@ -187,11 +187,6 @@ begin
   if new.otp_attempts < old.otp_attempts or new.otp_sends < old.otp_sends then
     raise exception 'VENDOR_ESIGN_COUNTERS: code counters of invite % only go up.', old.id;
   end if;
-  -- A signed form is frozen: only the countersign / reject facts may be added.
-  if old.state = 'signed'
-     and (to_jsonb(new) - frozen) is distinct from (to_jsonb(old) - frozen) then
-    raise exception 'VENDOR_ESIGN_SIGNED: the signed form of invite % cannot change.', old.id;
-  end if;
   if new.state is distinct from old.state then
     allowed := case old.state
       when 'sent'      then array['code_sent', 'cancelled']
@@ -203,6 +198,11 @@ begin
     if not (new.state = any (allowed)) then
       raise exception 'VENDOR_ESIGN_TRANSITION: % -> % is not allowed.', old.state, new.state;
     end if;
+  end if;
+  -- A signed form is frozen: only the countersign / reject facts may be added.
+  if old.state = 'signed'
+     and (to_jsonb(new) - frozen) is distinct from (to_jsonb(old) - frozen) then
+    raise exception 'VENDOR_ESIGN_SIGNED: the signed form of invite % cannot change.', old.id;
   end if;
   return new;
 end $$;
