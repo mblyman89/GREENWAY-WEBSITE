@@ -12,6 +12,7 @@ import { countActiveIn } from "@/lib/inventory/facet-typeahead-core";
 import {
   activeFilterChips,
   clearAllFiltersHref,
+  INVENTORY_DISPLAY_PARAMS,
   clearFacetHref,
   toggleFacetHref,
   type RawParams,
@@ -328,6 +329,12 @@ export function InventoryFilterPanel({
             )}
             {one("sc") && <input type="hidden" name="sc" value={one("sc")} />}
             {one("sd") && <input type="hidden" name="sd" value={one("sd")} />}
+            {/* R38: display choices (rows per page, columns, density) survive Apply. */}
+            {INVENTORY_DISPLAY_PARAMS.map((k) =>
+              (Array.isArray(raw[k]) ? (raw[k] as string[]) : raw[k] ? [raw[k] as string] : [])
+                .filter((v) => v !== "")
+                .map((v, i) => <input key={`${k}-${i}-${v}`} type="hidden" name={k} value={v} />),
+            )}
 
             {/* ── Search ─────────────────────────────────────────────────── */}
             <div>

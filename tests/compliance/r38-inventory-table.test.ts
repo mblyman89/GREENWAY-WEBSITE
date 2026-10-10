@@ -229,7 +229,7 @@ describe("R38 S1 E - the inventory page shows the connected category", () => {
   const inv = read("src/app/admin/inventory/page.tsx");
   it("joins the effective category onto every lot before filtering", () => {
     expect(inv).toContain("await attachLotWebsiteCategories(onboardedLots, onboardingIndex.byLot)");
-    expect(inv).toContain("const joinedLots = categorized.lots;");
+    expect(inv).toContain("const joinedLots = attachInventoryMetrics(categorized.lots, {");
     expect(inv.indexOf("attachLotWebsiteCategories(onboardedLots")).toBeLessThan(inv.indexOf("buildInventoryPage({"));
   });
   it("the cell shows the value, Unmapped in orange, and the source chip", () => {
