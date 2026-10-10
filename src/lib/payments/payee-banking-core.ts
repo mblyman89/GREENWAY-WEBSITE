@@ -139,6 +139,16 @@ export function detectBankTamper(params: {
 /** Payment-time gate: may this vault record be paid to right now? */
 export type VaultPayVerdict = { ok: true } | { ok: false; refusal: string };
 
+/** Every status vendor_bank_details may hold (0258 status check). */
+export const VAULT_STATUSES = ["active", "on_hold", "revoked", "archived"] as const;
+export type VaultStatus = (typeof VAULT_STATUSES)[number];
+
+/**
+ * FAIL CLOSED (R39 S3): only "active" pays. Before R39 the table could only
+ * say active or on_hold, so refusing on_hold was enough; 0258 added revoked
+ * and archived, and an allow-list is the only shape that cannot be widened
+ * into paying a revoked account by a future status nobody handled.
+ */
 export function canPayWithVaultRecord(rec: {
   status: string;
   routing: string;
@@ -153,8 +163,23 @@ export function canPayWithVaultRecord(rec: {
   if (rec.status === "on_hold") {
     return {
       ok: false,
-      refusal: `${vendorName}'s banking is ON HOLD pending verification. Confirm the details with the vendor by phone (using a number you already have on file), then release the hold in Admin → Banking.`,
+      refusal: `${vendorName}'s banking is ON HOLD pending verification. Confirm the details with the vendor by phone (using a number you already have on file) or in person, then release the hold in Admin → Banking.`,
     };
+  }
+  if (rec.status === "revoked") {
+    return {
+      ok: false,
+      refusal: `${vendorName}'s ACH authorization was REVOKED. Pay another way, or get a new signed form and re-enter the banking (it will go on hold until verified).`,
+    };
+  }
+  if (rec.status === "archived") {
+    return {
+      ok: false,
+      refusal: `${vendorName}'s banking is ARCHIVED. Re-open it in Admin → Banking (it goes on hold until verified) before paying.`,
+    };
+  }
+  if (rec.status !== "active") {
+    return { ok: false, refusal: `${vendorName}'s banking has an unknown status ("${rec.status}"). Nothing is paid until an admin fixes it.` };
   }
   if (!rec.routing || !rec.accountNumber) {
     return {
@@ -163,6 +188,42 @@ export function canPayWithVaultRecord(rec: {
     };
   }
   return { ok: true };
+}
+
+/**
+ * Did the BANK details really change? Compares DECRYPTED, normalised values.
+ * encv1 ciphertext is different on every save (random IV), so comparing the
+ * stored columns would call every save a change and put every vendor on hold
+ * each time someone edited a note. Bank NAME is a label, not a payment
+ * instruction, and does not count (routing identifies the bank).
+ */
+export function bankDetailsChanged(
+  before: { routing: string; accountNumber: string; accountType: string } | null,
+  after: { routing: string; accountNumber: string; accountType: string },
+): boolean {
+  if (!before) return true;
+  const n = (v: string) => v.replace(/[\s-]/g, "");
+  return (
+    n(before.routing) !== n(after.routing) ||
+    n(before.accountNumber) !== n(after.accountNumber) ||
+    before.accountType !== after.accountType
+  );
+}
+
+/**
+ * What a save will do, decided before any write. The database (0259) enforces
+ * the same outcome; this lets the screen say it plainly and lets the store
+ * leave the encrypted columns alone when nothing changed.
+ */
+export function planVaultSave(
+  before: { routing: string; accountNumber: string; accountType: string; status: string } | null,
+  after: { routing: string; accountNumber: string; accountType: string },
+): { writeBankColumns: boolean; resultingStatus: VaultStatus | "unchanged"; holdReason: string | null } {
+  if (!before) return { writeBankColumns: true, resultingStatus: "on_hold", holdReason: "New banking added" };
+  if (bankDetailsChanged(before, after)) {
+    return { writeBankColumns: true, resultingStatus: "on_hold", holdReason: "Bank details changed" };
+  }
+  return { writeBankColumns: false, resultingStatus: "unchanged", holdReason: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +289,30 @@ export function __runPayeeBankingCoreTests(): void {
   ok(hold.ok === false && !hold.ok && /ON HOLD/.test(hold.refusal), "on_hold refusal explains the verification step");
   ok(canPayWithVaultRecord({ status: "active", routing: "", accountNumber: "1234" }, "Acme").ok === false, "incomplete record blocks");
   ok(canPayWithVaultRecord({ status: "active", routing: "021000021", accountNumber: "1234" }, "Acme").ok === true, "active complete record pays");
+  // R39 S3: fail closed on every non-active status
+  ok(canPayWithVaultRecord({ status: "revoked", routing: "021000021", accountNumber: "1234" }, "Acme").ok === false, "revoked blocks");
+  ok(canPayWithVaultRecord({ status: "archived", routing: "021000021", accountNumber: "1234" }, "Acme").ok === false, "archived blocks");
+  ok(canPayWithVaultRecord({ status: "paused", routing: "021000021", accountNumber: "1234" }, "Acme").ok === false, "unknown status blocks");
+  ok(canPayWithVaultRecord({ status: "", routing: "021000021", accountNumber: "1234" }, "Acme").ok === false, "empty status blocks");
+  const rv = canPayWithVaultRecord({ status: "revoked", routing: "021000021", accountNumber: "1234" }, "Acme");
+  ok(!rv.ok && /REVOKED/.test(rv.refusal), "revoked refusal names the status");
+  const ar = canPayWithVaultRecord({ status: "archived", routing: "021000021", accountNumber: "1234" }, "Acme");
+  ok(!ar.ok && /ARCHIVED/.test(ar.refusal), "archived refusal names the status");
+
+  // bankDetailsChanged / planVaultSave (decrypted comparison)
+  const b0 = { routing: "021000021", accountNumber: "12345678", accountType: "checking", status: "active" };
+  ok(bankDetailsChanged(null, b0) === true, "no prior record = change");
+  ok(bankDetailsChanged(b0, { ...b0 }) === false, "same values = no change");
+  ok(bankDetailsChanged(b0, { ...b0, routing: "021-000-021", accountNumber: "1234 5678" }) === false, "formatting only = no change");
+  ok(bankDetailsChanged(b0, { ...b0, routing: "325081403" }) === true, "routing only = change");
+  ok(bankDetailsChanged(b0, { ...b0, accountNumber: "12345679" }) === true, "account only = change");
+  ok(bankDetailsChanged(b0, { ...b0, accountType: "savings" }) === true, "type only = change");
+  const pNew = planVaultSave(null, b0);
+  ok(pNew.writeBankColumns && pNew.resultingStatus === "on_hold" && pNew.holdReason === "New banking added", "new banking plan");
+  const pSame = planVaultSave(b0, b0);
+  ok(!pSame.writeBankColumns && pSame.resultingStatus === "unchanged" && pSame.holdReason === null, "no-change plan keeps columns + status");
+  const pChg = planVaultSave(b0, { ...b0, accountNumber: "999999" });
+  ok(pChg.writeBankColumns && pChg.resultingStatus === "on_hold" && pChg.holdReason === "Bank details changed", "change plan re-holds");
 
   if (failed > 0) throw new Error(`payee-banking-core: ${failed} test(s) failed`);
   console.log(`payee-banking-core: ${passed} passed, 0 failed`);
