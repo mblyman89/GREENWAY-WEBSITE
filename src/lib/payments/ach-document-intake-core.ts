@@ -346,6 +346,47 @@ function requestFrom(n: boolean, c: boolean, x: boolean, warnings: string[]): Ba
 }
 
 /**
+ * Flatten pdf.js getFieldObjects() output ({ name: [widget, ...] }) into the
+ * plain map draftFromAcroForm reads. Only text, checkbox and radio widgets
+ * count (signature widgets are ignored). When a name has several widgets, the
+ * first one that is filled / ticked wins; a name whose widgets DISAGREE
+ * (two different filled values) is reported, never resolved by guessing.
+ */
+export function fieldsFromFieldObjects(raw: unknown): { fields: Record<string, string | boolean>; conflicts: string[] } {
+  const fields: Record<string, string | boolean> = {};
+  const conflicts: string[] = [];
+  if (!raw || typeof raw !== "object") return { fields, conflicts };
+  for (const [name, widgets] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(widgets) || !/^[A-Za-z0-9_]{1,64}$/.test(name)) continue;
+    const seen: (string | boolean)[] = [];
+    for (const w of widgets) {
+      const o = (w ?? {}) as { type?: unknown; value?: unknown };
+      if (o.type !== "text" && o.type !== "checkbox" && o.type !== "radiobutton") continue;
+      const v = o.value;
+      if (typeof v === "boolean") { if (v) seen.push(true); continue; }
+      if (typeof v !== "string") continue;
+      const t = v.trim();
+      if (t === "" || t === "Off") continue;
+      seen.push(t.slice(0, 200));
+    }
+    if (seen.length === 0) continue;
+    if (new Set(seen.map(String)).size > 1) conflicts.push(name);
+    else fields[name] = seen[0];
+  }
+  return { fields, conflicts };
+}
+
+/** Which of OUR fillable forms these fields came from (by field names), or null. */
+export function acroFormKind(raw: unknown): PayeeType | null {
+  if (!raw || typeof raw !== "object") return null;
+  const names = Object.keys(raw as object);
+  const emp = ["e_legal_name", "e_a1_rtn", "e_a1_acct"].every((n) => names.includes(n));
+  const ven = ["v_legal_name", "v_rtn", "v_acct", "v_acct2"].every((n) => names.includes(n));
+  if (emp === ven) return null;
+  return emp ? "employee" : "vendor";
+}
+
+/**
  * Map the AcroForm fields of OUR fillable forms (field names read from
  * Greenway-Employee-Direct-Deposit-Authorization-FILLABLE.pdf and
  * Greenway-Vendor-ACH-Authorization-FILLABLE.pdf) into a draft. Every
