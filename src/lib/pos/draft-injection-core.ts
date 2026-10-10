@@ -36,7 +36,6 @@ import { canonicalRatioFromName } from "@/lib/menu/cannabinoid-profile-core";
 import {
   deriveNetVolumeMl,
   deriveNetWeightGrams,
-  LIQUID_VOLUME_TYPES,
 } from "@/lib/compliance/liquid-volume-derivation-core";
 import { deriveHouseType, HOUSE_TYPE_MIN_AUTO_CONFIDENCE } from "@/lib/inventory/house-type-core";
 import { categoryToBucket } from "@/lib/compliance/sales-limits-core";

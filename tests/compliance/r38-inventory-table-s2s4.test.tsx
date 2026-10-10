@@ -302,6 +302,13 @@ describe("R38 S4 D — export route (real cores + real CSV/XLSX renderer)", () =
     expect(st.audits[0].after).toMatchObject({ scope: "view", columns: "visible", format: "csv", rows: 15, fields: 5 });
   });
 
+  it("scope=view with MORE matches than one page still exports them all (30 lots at 25 per page, viewing page 1)", async () => {
+    const res = await exportGET(new Request("http://x/admin/inventory/export?format=csv&per=25&cols=product"));
+    const body = lotsSection(await res.text()).slice(1).filter((l) => !l.startsWith("Total"));
+    expect(body).toHaveLength(30);
+    expect(st.audits[0].after).toMatchObject({ scope: "view", rows: 30 });
+  });
+
   it("scope=page exports only the page being looked at (page 2 at 25 per page)", async () => {
     const res = await exportGET(new Request("http://x/admin/inventory/export?format=csv&scope=page&per=25&page=2&sc=product&sd=asc&cols=product"));
     const body = lotsSection(await res.text()).slice(1).filter((l) => !l.startsWith("Total"));
