@@ -598,6 +598,7 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     'gold\u2192: coaAllBanner.tone === "warn"', // R37 S4: same result, partly read
     'danger\u2192brandBanner.tone === "bad"', // R37 S5: result of Set brand / Save brand (closed set, deliveryBrandBanner)
     'gold\u2192: brandBanner.tone === "warn"', // R37 S5: brand set but memory/cards partly saved
+    'gold\u2192: harvest.tone === "wait"', // R37 S6: the search-history verdict "not worth paying for again yet" (closed set, summarizeDeliveryHarvest)
   ],
 };
 
