@@ -34,6 +34,11 @@
  *     header "... mg/package LoD/LoQ (%)", limit cells "0.02 / 0.04", cells
  *     "<LOQ" (detected below the limit of quantitation: no number, never 0),
  *     terpene table "Result (ppm) lod/loq (ppm)" with "40 / 80" limits.
+ *   - "testing-technologies" (R36): Testing Technologies, Poulsbo (WSLCB lab
+ *     #7). One results table "Test Results I-502 Limits Status Method";
+ *     cannabinoids in percent only ("D9-THC 83.0 % UHPLC-DAD"), no per-serving
+ *     column, no lab sample id - the sample is the printed "WSLCB Inventory
+ *     ID". Verified on the 4 real certificates in tests/fixtures/coa-cultivera.
  *   - "ggl": Green Grower Labs. Its PDF draws the potency numbers as vector
  *     art: unpdf returns NO numbers (verified), pdftotext -layout does. The
  *     reader takes the numbers when present and otherwise says so - the GGL
@@ -48,8 +53,9 @@
  */
 
 import { cannabinoidKey, type CannabinoidKey } from "./wcia-lab-json-core";
+import { WA_ACID_FACTOR } from "./wa-total-cannabinoids-core";
 
-export type CoaTemplate = "confidence-8" | "confidence-7" | "ggl";
+export type CoaTemplate = "confidence-8" | "confidence-7" | "ggl" | "testing-technologies";
 export type CoaTotalRow = "total-cannabinoids" | "total-thc" | "total-cbd";
 
 export type CoaPotencyRow = {
@@ -197,6 +203,9 @@ export function detectCoaTemplate(text: string): CoaTemplate | null {
   }
   if (POTENCY_HEADER_7.test(text) && /Confidence Analytics/i.test(text)) return "confidence-7";
   if (/Green Grower Labs/i.test(text) || /greengrowerlabs\.com/i.test(text)) return "ggl";
+  if (/Testing Technologies/.test(text) && /CERTIFICATE OF ANALYSIS/.test(text) && /Test Results I-502 Limits Status Method/.test(text)) {
+    return "testing-technologies";
+  }
   return null;
 }
 
@@ -533,6 +542,93 @@ function parseGgl(text: string): CoaPdfDoc {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Testing Technologies (R36)
+// ---------------------------------------------------------------------------
+
+/** The decarboxylation factor of WAC 314-55-102(3)(a)(ii) (one source of truth). */
+const DECARB = WA_ACID_FACTOR;
+
+function parseTestingTech(text: string): CoaPdfDoc {
+  const warnings: string[] = [];
+  const checks: CoaCheck[] = [];
+  const potency: CoaPotencyRow[] = [];
+  // A label is matched only as a whole token: "CBD" never inside "CBD-A" or
+  // "Total CBD"; each value must be the ONLY one printed for that label.
+  const rows: [string, CannabinoidKey | CoaTotalRow][] = [
+    [String.raw`(?<![\w-])D9-THC`, "d9-thc"],
+    [String.raw`(?<![\w-])THC-A`, "thca"],
+    [String.raw`Total THC`, "total-thc"],
+    [String.raw`(?<![\w-])CBN`, "cbn"],
+    [String.raw`(?<![\w-]|Total )CBD(?![\w-])`, "cbd"],
+    [String.raw`(?<![\w-])CBD-A`, "cbda"],
+    [String.raw`Total CBD`, "total-cbd"],
+    [String.raw`Total Cannabinoids`, "total-cannabinoids"],
+  ];
+  for (const [label, key] of rows) {
+    const m = uniqueMatch(text, new RegExp(String.raw`${label} (${NUM}|ND|N\.D\.) %`), warnings, label.replace(/\(\?<?[!=][^)]*\)/g, ""));
+    if (!m) continue;
+    const nd = m[1] === "ND" || m[1] === "N.D.";
+    const v = nd ? 0 : Number(m[1]);
+    potency.push({ label: key, key, pct: v, mgPerG: null, mgPerServing: null, mgPerPackage: null, loqPct: null, nd });
+  }
+  const pct = (k: CannabinoidKey | CoaTotalRow) => potency.find((r) => r.key === k)?.pct ?? null;
+  // The lab prints one decimal; each input is +/-0.05, so the computed total
+  // may differ from the printed one by up to 0.05 x (1 + 0.877) + 0.05.
+  const TOL = 0.05 * (1 + DECARB) + 0.05 + 1e-9;
+  for (const [tot, neutral, acid] of [["total-thc", "d9-thc", "thca"], ["total-cbd", "cbd", "cbda"]] as const) {
+    const t = pct(tot);
+    const n = pct(neutral);
+    const a = pct(acid);
+    if (t === null || n === null || a === null) continue;
+    const exact = n + DECARB * a;
+    checks.push({
+      what: `${tot} = ${neutral} + 0.877 x ${acid}`,
+      ok: Math.abs(exact - t) <= TOL,
+      detail: `${n}% + 0.877 x ${a}% = ${round3(exact)}%; printed ${t}%`,
+    });
+  }
+  if (potency.length === 0) warnings.push("No cannabinoid rows could be read from this Testing Technologies certificate.");
+  const inv = text.match(/Inventory ID: (?:[^0-9]{0,80}?)?(\d{16,})/);
+  const name = text.match(/Product Name: (.+?) (?=D9-THC|THC-A|Total THC|Water Activity)/);
+  const type = text.match(/Sample Type: (?:CBD-A [^ ]+ % UHPLC-DAD )?(.+?) (?=Sample Name:|Total|Client|THC|CBD)/);
+  const pass = /\bfail\b/i.test(text) ? "fail" : /\bpass\b/.test(text) ? "pass" : null;
+  return {
+    template: "testing-technologies",
+    labName: "Testing Technologies",
+    labSampleId: null,
+    batchId: inv ? inv[1] : null,
+    sampleName: name ? name[1].trim() : null,
+    productType: type ? type[1].trim() : null,
+    matrixType: null,
+    servingWeightG: null,
+    packageWeightG: null,
+    batchPass: pass,
+    auth: null,
+    templateVersion: null,
+    documentCreated: null,
+    potencyDate: null,
+    amended: null,
+    amendmentText: null,
+    potency,
+    summary: {
+      totalThcPct: pct("total-thc"),
+      totalThcMgPerServing: null,
+      totalThcMgPerG: null,
+      totalCbdPct: pct("total-cbd"),
+      totalCbdMgPerServing: null,
+      totalCbdMgPerG: null,
+      totalCannabinoidsPct: pct("total-cannabinoids"),
+    },
+    terpenes: [],
+    totalTerpenesPpm: null,
+    terpeneSummary: { totalPct: null, top: [] },
+    potencyReadable: potency.some((r) => r.pct !== null),
+    checks,
+    warnings,
+  };
+}
+
 /** Parse COA text (unpdf, pdftotext -layout or LlamaParse markdown). */
 export function parseCoaPdfText(raw: string): CoaPdfParse {
   if (typeof raw !== "string" || raw.trim().length < 40) return { ok: false, reason: "The COA text is empty." };
@@ -544,7 +640,10 @@ export function parseCoaPdfText(raw: string): CoaPdfParse {
       reason: "This certificate layout is not one the reader knows yet - its facts were not read. Enter them by hand or send it to the developer.",
     };
   }
-  return { ok: true, doc: t === "confidence-8" ? parseConfidence(text) : t === "confidence-7" ? parseConfidence(text, "7") : parseGgl(text) };
+  if (t === "confidence-8") return { ok: true, doc: parseConfidence(text) };
+  if (t === "confidence-7") return { ok: true, doc: parseConfidence(text, "7") };
+  if (t === "testing-technologies") return { ok: true, doc: parseTestingTech(text) };
+  return { ok: true, doc: parseGgl(text) };
 }
 
 export function potencyRow(doc: Pick<CoaPdfDoc, "potency">, key: CannabinoidKey | CoaTotalRow): CoaPotencyRow | null {
