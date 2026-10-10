@@ -55,13 +55,23 @@ commit + push after every task (the sandbox is unstable), no drift.
       package / servings, no cap); sources: owner > COA > name > derived;
       every derived figure labelled with its arithmetic + the WAC rule; wired
       into the facts panel prefill, COA attach and the saved record.
-- [ ] **S3 Volume ml / fl oz** (#2): unit select, exact US fl oz = 29.5735295625
+- [x] **S3 Volume ml / fl oz** (#2): unit select, exact US fl oz = 29.5735295625
       ml (NIST HB44), stored canonically in ml, conversion line on the form.
-- [ ] **S4 Re-read COAs button** (#4): delivery-level, forced LlamaParse,
+- [x] **S4 Re-read COAs button** (#4): delivery-level, forced LlamaParse,
       budgeted, then lab attach + restage; audited; banner with counts.
-- [ ] **S5 Brand for the delivery / row** (#5): migration 0257 (vendor default
+- [x] **S5 Brand for the delivery / row** (#5): migration 0257 (vendor default
       brand + manifest brand), server actions, vendor page, flow to drafts,
       lots, enrichment, menu, cards, Leafly.
+      DONE: delivery-brand-core (51 self-tests, pure decisions: find / adopt
+      unlinked / create / refuse another vendor's brand; fill vs replace;
+      vendor default fills ONLY label-less intake lines; prefill order
+      delivery > vendor > single shared row brand). delivery-brand-store:
+      complete paged reads (a partial read refuses), drafts + lots + R33
+      propagateLotCorrections (published + staged cards, sibling-safe), memory
+      on inbound_manifests.brand_id + vendors.default_brand_id (0257; before
+      it, applied but "not remembered"). Vendor page "Remembered brand" form.
+      Tests: r37-delivery-brand.test.ts (23, real store over a strict fake
+      DB), PG check for 0257, SQL mutants 9/9, store/core mutants 14/14.
 - [ ] **S6 Lookup history + clearer Search-all bar** (#6).
 - [ ] **S7 Wrap-up**: full suite, tsc, eslint, PG, TEST-PLAN, bible, PR,
       merge, report.
