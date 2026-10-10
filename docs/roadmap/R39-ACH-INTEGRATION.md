@@ -106,7 +106,26 @@ commit + push after every task, no drift.
         unreachable sum backstop, kept as defense in depth.
       - Full compliance vitest: 821 files passed. Pure self-tests: ALL PASSED.
         S3 typecheck clean. Lint: 0 errors.
-- [ ] S4 vault UI (active / hidden inactive), vendor ACH card, employee card
+- [x] S4 vault UI (active / hidden inactive), vendor ACH card, employee card
+      - Vendor page ACH card (vendor-ach-enrollment-core): flag "needs bank
+        info", or tick "opted out" with a reason (5+ chars) and a confirm box;
+        opt back in. Mirrors 0258 CHECKs vendors_ach_opt_out_shape and
+        vendors_ach_flags_exclusive (exhaustive sweep test). Compare-and-set
+        update, so two people cannot overwrite each other; audited.
+      - Paying an opted-out vendor by ACH is refused with a plain sentence
+        (manual check payments are not affected).
+      - Banking vault: "Vendors to follow up" list in urgency order; employees
+        tab hides inactive people behind a button (Q11).
+      - Employee file ACH card (employee-ach-card-core) runs planPayrollEntries
+        on a $1,000 sample, so the card cannot disagree with payroll; masked
+        split table; past authorizations behind a button; read errors shown.
+      - A surviving mutant found a real bug: sample amounts were matched by
+        position, but allocateSplit puts the remainder last. Fixed by matching
+        on routing|account|type; regression tests added.
+      - Mutants: 14/14 (vendor) and 12/13 (employee card; the survivor is an
+        equivalent key encoding). Self-tests 49 + 29 (runner floors).
+      - Full compliance vitest: 823 files passed. Pure self-tests: ALL PASSED.
+        Typecheck clean.
 - [ ] S5 drop-only upload, AcroForm / LlamaParse draft, blind re-key
 - [ ] S6 e-sign (E-SIGN Act / UETA consent, intent, OTP, hash, certificate)
 - [ ] S7 returns / NOC log + notifications, prenote file, retention / legal
