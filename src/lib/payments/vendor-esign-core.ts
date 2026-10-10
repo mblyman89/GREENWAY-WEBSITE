@@ -794,6 +794,8 @@ export function vendorEsignDbErrorMessage(message: string | null | undefined, au
     [/VENDOR_ESIGN_AUTH/, "The authorization is not waiting for acceptance (was it put on hold or revoked?).", "Greenway is still verifying."],
     [/VENDOR_ESIGN_REASON|vesign_rejected_shape/, "Say why the form is rejected (10 characters or more).", "Greenway is still verifying."],
     [/vesign_cancelled_shape/, "Say why the link is cancelled (5 characters or more).", "This link was cancelled."],
+    [/VENDOR_ESIGN_KEEP/, "A signed invite is evidence and is kept; it cannot be deleted.", "This form has already been submitted."],
+    [/VENDOR_ESIGN_IMMUTABLE/, "Who the link went to, and when, cannot be changed. Cancel it and send a new link.", "This link cannot be changed. Ask Greenway for a new one."],
     [/VENDOR_ESIGN_ACTOR/, "Sign in again: the Greenway signer must be recorded.", "Greenway is still verifying."],
     [/VENDOR_ESIGN_STATE|VENDOR_ESIGN_TRANSITION|VENDOR_ESIGN_FINAL|VENDOR_ESIGN_SIGNED/, "This link has moved on (signed, cancelled or finished). Reload the page.", "This form has already been submitted or the link is closed. Reload the page."],
     [/VENDOR_ESIGN_NOT_FOUND/, "That link no longer exists. Reload the page.", "This link is not valid. Ask Greenway for a new one."],
