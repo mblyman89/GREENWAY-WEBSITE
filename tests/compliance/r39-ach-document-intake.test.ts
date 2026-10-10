@@ -245,6 +245,44 @@ describe("amount parsing never guesses", () => {
   });
 });
 
+describe("gaps found by mutation testing", () => {
+  it("100% and over never parse (the 2-digit regex caps it; the bp >= 10000 check is a backstop)", () => {
+    for (const t of ["100%", "100.00%", "150%"]) expect(parseAmountRule(t).ok).toBe(false);
+  });
+  it("PDF needs all five header bytes including the dash", () => {
+    expect(sniffDocMime(enc("%PDF1.7"))).toBeNull();
+    expect(sniffDocMime(enc("%PDF-"))).toBe("application/pdf");
+  });
+  it("JPEG needs FF D8 FF, not just FF D8", () => {
+    expect(sniffDocMime(new Uint8Array([0xff, 0xd8, 0x00, 0xe0]))).toBeNull();
+  });
+  it("hidden inner extensions are caught in any letter case", () => {
+    expect(checkOriginalFilename("invoice.PHP.pdf").ok).toBe(false);
+    expect(checkOriginalFilename("check.Html.jpg").ok).toBe(false);
+  });
+  it("amount AND remainder on one row is warned and leaves the rule empty", () => {
+    const d = draftFromAcroForm("employee", { e_a1_rtn: RTN, e_a1_acct: "1234", e_a1_chk: "Yes", e_a1_amt: "$50", e_a1_rem: "Yes" });
+    expect(d.warnings.some((w) => w.includes("both an amount and"))).toBe(true);
+    expect(d.accounts[0].rule).toBeNull();
+  });
+  it("vendor account confirmation mismatch is warned", () => {
+    const d = draftFromAcroForm("vendor", { v_rtn: RTN, v_acct: "12345678", v_acct2: "12345687", v_at_chk: "Yes" });
+    expect(d.warnings).toContain("The account number and its confirmation on the form do not match.");
+  });
+  it("only check-digit-valid 9-digit runs are routing candidates", () => {
+    expect(draftFromParsedText("routing 123456789").accounts).toHaveLength(0);
+  });
+  it("a complete draft WITH warnings still needs a second blind entry", () => {
+    const d = draftFromAcroForm("employee", {
+      e_pay_chk: "Yes", e_a1_rtn: RTN, e_a1_acct: "12345678", e_a1_chk: "Yes", e_a1_rem: "Yes",
+    });
+    expect(d.accounts.every((a) => a.routing && a.account && a.accountType && a.rule)).toBe(true);
+    expect(d.warnings.length).toBeGreaterThan(0);
+    const A: RekeyAccount = { routing: RTN, account: "12345678", accountType: "checking", rule: { kind: "remainder" } };
+    expect(rekeyVerdict(d, [{ byId: "s", accounts: [A] }])).toMatchObject({ ok: false, need: "second_entry" });
+  });
+});
+
 describe("LlamaParse text draft", () => {
   it("never fills an account number and is never usable alone", () => {
     const d = draftFromParsedText(`Pay to ... \u2446${RTN}\u2446 000123456789\u2448 1001`);
