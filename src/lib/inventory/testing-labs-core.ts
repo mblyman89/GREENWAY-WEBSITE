@@ -33,7 +33,8 @@
  * public (isPublicAddress).
  */
 
-export type LabStatus = "active" | "historical" | "owner_added";
+/** platform = not a lab (Cultivera re-hosts lab certificates); 0256 refuses a lab # on it. */
+export type LabStatus = "active" | "historical" | "owner_added" | "platform";
 
 export type TestingLab = {
   labNumber: number | null;
@@ -48,29 +49,61 @@ export type TestingLab = {
   certValidThrough: string | null;
   source: string;
   website: string | null;
+  /** Hosts this lab's certificates are served from (0256 testing_labs.coa_hosts). */
+  coaHosts: readonly string[];
 };
+
+/** Most hosts one row may carry (0256 testing_labs_hosts_chk). */
+export const MAX_HOSTS_PER_LAB = 20;
 
 const SRC_2026 = "WSLCB Lab List 2026-08-04 (lcb.wa.gov/records/frequently-requested-lists)";
 const SRC_2021 = "WSLCB Lab List 2021-08-02 (historical; absent from the 2026 list)";
 
 /**
- * Every row copied from the two LCB spreadsheets (values verbatim; the 2021
- * "19834 Vicking Ave NW" is the LCB's typo - the lab's own certificate prints
- * "19834 Viking Ave NW Ste A", so the certificate spelling is used).
+ * Every row copied from the two LCB spreadsheets (values verbatim) with ONE
+ * correction: the 2021 list spells lab #7's street "19834 Vicking Ave NW",
+ * "Ste B"; the lab's own certificates (fixtures cv31-cv34) print "Viking", so
+ * that spelling is used. The suite stays as the LCB lists it (Ste B) - the
+ * certificates print "Ste A"; the regulator's list is the record kept here.
  */
 export const WA_TESTING_LABS: readonly TestingLab[] = [
-  { labNumber: 3, name: "Confidence Analytics", address: "14797 NE 95th St", city: "Redmond", zip: "98052", phone: "206-743-8843", status: "active", certStart: "June 18, 2014", certCurrent: "July 23, 2026", certValidThrough: "July 2027", source: SRC_2026, website: "https://conflabs.com" },
-  { labNumber: 9, name: "Integrity Labs, LLC", address: "2747 Pacific Ave SE Ste B21", city: "Olympia", zip: "98501", phone: "360-951-3220", status: "active", certStart: "Aug 19, 2014", certCurrent: "Oct 29, 2025", certValidThrough: "Oct 2026", source: SRC_2026, website: null },
-  { labNumber: 12, name: "Green Grower Labs", address: "124 E. Rowan Ave Ste B", city: "Spokane", zip: "99207", phone: "509-981-2266", status: "active", certStart: "Sept 23, 2014", certCurrent: "Nov 21, 2025", certValidThrough: "Nov 2026", source: SRC_2026, website: null },
-  { labNumber: 18, name: "Medicine Creek Analytics", address: "3700 Pacific Hwy E Ste 400", city: "Fife", zip: "98424", phone: "253-382-6900", status: "active", certStart: "May 25, 2016", certCurrent: "July 21, 2026", certValidThrough: "July 2027", source: SRC_2026, website: "https://medicinecreekanalytics.com" },
-  { labNumber: 4, name: "Analytical 360, LLC", address: "31 N 1st Avenue", city: "Yakima", zip: "98902", phone: "509-571-1102", status: "historical", certStart: "2014-05-27", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null },
-  { labNumber: 6, name: "True Northwest, Inc.", address: "4139 Libby Rd. NE", city: "Olympia", zip: "98506", phone: "360-352-8688", status: "historical", certStart: "2014-07-10", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null },
-  { labNumber: 7, name: "Testing Technologies, Inc.", address: "19834 Viking Ave NW Ste B", city: "Poulsbo", zip: "98370", phone: "360-340-1251", status: "historical", certStart: "2016-10-26", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null },
-  { labNumber: 8, name: "G.O.A.T. Labs", address: "5501 NE 109th Ct Ste N", city: "Vancouver", zip: "98662", phone: "360-513-9377", status: "historical", certStart: "2014-07-23", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null },
-  { labNumber: 21, name: "Treeline Analytics, LLC", address: "5373 Guide Meridian Ste F-201", city: "Bellingham", zip: "98226", phone: "360-306-3601", status: "historical", certStart: "2018-08-17", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null },
-  { labNumber: 22, name: "Capitol Analysis", address: "3011 Pacific Ave SE", city: "Olympia", zip: "98501", phone: "360-918-8795", status: "historical", certStart: "2016-11-09", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null },
-  { labNumber: 25, name: "Pacific Botanicals Laboratory", address: "3927 Aurora Ave N", city: "Seattle", zip: "98103", phone: "206-566-3526", status: "historical", certStart: "2020-03-23", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null },
+  { labNumber: 3, name: "Confidence Analytics", address: "14797 NE 95th St", city: "Redmond", zip: "98052", phone: "206-743-8843", status: "active", certStart: "June 18, 2014", certCurrent: "July 23, 2026", certValidThrough: "July 2027", source: SRC_2026, website: "https://conflabs.com", coaHosts: ["certs.conflabs.com"] },
+  { labNumber: 9, name: "Integrity Labs, LLC", address: "2747 Pacific Ave SE Ste B21", city: "Olympia", zip: "98501", phone: "360-951-3220", status: "active", certStart: "Aug 19, 2014", certCurrent: "Oct 29, 2025", certValidThrough: "Oct 2026", source: SRC_2026, website: null, coaHosts: [] },
+  { labNumber: 12, name: "Green Grower Labs", address: "124 E. Rowan Ave Ste B", city: "Spokane", zip: "99207", phone: "509-981-2266", status: "active", certStart: "Sept 23, 2014", certCurrent: "Nov 21, 2025", certValidThrough: "Nov 2026", source: SRC_2026, website: null, coaHosts: ["gglabs-j.github.io"] },
+  { labNumber: 18, name: "Medicine Creek Analytics", address: "3700 Pacific Hwy E Ste 400", city: "Fife", zip: "98424", phone: "253-382-6900", status: "active", certStart: "May 25, 2016", certCurrent: "July 21, 2026", certValidThrough: "July 2027", source: SRC_2026, website: "https://medicinecreekanalytics.com", coaHosts: [] },
+  { labNumber: 4, name: "Analytical 360, LLC", address: "31 N 1st Avenue", city: "Yakima", zip: "98902", phone: "509-571-1102", status: "historical", certStart: "2014-05-27", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null, coaHosts: [] },
+  { labNumber: 6, name: "True Northwest, Inc.", address: "4139 Libby Rd. NE", city: "Olympia", zip: "98506", phone: "360-352-8688", status: "historical", certStart: "2014-07-10", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null, coaHosts: [] },
+  { labNumber: 7, name: "Testing Technologies, Inc.", address: "19834 Viking Ave NW Ste B", city: "Poulsbo", zip: "98370", phone: "360-340-1251", status: "historical", certStart: "2016-10-26", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null, coaHosts: [] },
+  { labNumber: 8, name: "G.O.A.T. Labs", address: "5501 NE 109th Ct Ste N", city: "Vancouver", zip: "98662", phone: "360-513-9377", status: "historical", certStart: "2014-07-23", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null, coaHosts: [] },
+  { labNumber: 21, name: "Treeline Analytics, LLC", address: "5373 Guide Meridian Ste F-201", city: "Bellingham", zip: "98226", phone: "360-306-3601", status: "historical", certStart: "2018-08-17", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null, coaHosts: [] },
+  { labNumber: 22, name: "Capitol Analysis", address: "3011 Pacific Ave SE", city: "Olympia", zip: "98501", phone: "360-918-8795", status: "historical", certStart: "2016-11-09", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null, coaHosts: [] },
+  { labNumber: 25, name: "Pacific Botanicals Laboratory", address: "3927 Aurora Ave N", city: "Seattle", zip: "98103", phone: "206-566-3526", status: "historical", certStart: "2020-03-23", certCurrent: null, certValidThrough: null, source: SRC_2021, website: null, coaHosts: [] },
 ];
+
+/**
+ * Cultivera is NOT a lab: it is the vendors' seed-to-sale platform, and it
+ * re-hosts the lab's own certificate PDF on files.cultivera.com (R36: 70 of 70
+ * lab links in the owner's sample transfers). Listed so the page can show
+ * where that host comes from. 0256 seeds the same row.
+ */
+export const CULTIVERA_PLATFORM: TestingLab = {
+  labNumber: null,
+  name: "Cultivera (vendor platform, not a lab)",
+  address: null,
+  city: null,
+  zip: null,
+  phone: null,
+  status: "platform",
+  certStart: null,
+  certCurrent: null,
+  certValidThrough: null,
+  source: "R36: 70 of 70 lab links in the owner's sample transfers are on files.cultivera.com (35 certificates read live)",
+  website: "https://cultivera.com",
+  coaHosts: ["files.cultivera.com"],
+};
+
+/** Exactly the rows 0256 seeds (a test pins the migration to this). */
+export const SEEDED_LAB_ROWS: readonly TestingLab[] = [...WA_TESTING_LABS, CULTIVERA_PLATFORM];
 
 export type LabHost = {
   host: string;
@@ -228,15 +261,47 @@ export function validateLabForm(f: LabForm, existing: readonly { name: string; l
   return { ok: true, lab: { name, labNumber, city: clean(f.city, 100), phone, website, notes: clean(f.notes, 1000) } };
 }
 
-/** Built-in hosts first, then the owner's (enabled) hosts, de-duplicated. */
-export function mergeHosts(owner: readonly { host: string; enabled: boolean }[]): string[] {
+/**
+ * The full allow-list: built-in hosts first, then every valid host on any
+ * lab row (testing_labs.coa_hosts), lower-cased and de-duplicated. A host
+ * that fails normalizeLabHost (should be impossible past the 0256 check) is
+ * dropped, never trusted.
+ */
+export function mergeHosts(rows: readonly { coaHosts: readonly string[] | null | undefined }[]): string[] {
   const out = BUILT_IN_COA_HOSTS.map((h) => h.host);
-  for (const h of owner) {
-    if (!h.enabled) continue;
-    const n = normalizeLabHost(h.host);
-    if (n.ok && !out.includes(n.host)) out.push(n.host);
+  for (const r of rows) {
+    for (const raw of r.coaHosts ?? []) {
+      const n = normalizeLabHost(raw);
+      if (n.ok && !out.includes(n.host)) out.push(n.host);
+    }
   }
   return out;
+}
+
+/** True when the host is one of the always-allowed built-ins. */
+export function isBuiltInHost(host: string): boolean {
+  return BUILT_IN_COA_HOSTS.some((h) => h.host === host);
+}
+
+/**
+ * Add one host (or a pasted certificate link) to a lab's coa_hosts. Refuses
+ * an invalid host, one already on this lab, one already a built-in, and a
+ * row that is full. Returns the new array (the store writes it).
+ */
+export function addHostToLab(current: readonly string[], raw: string): { ok: true; host: string; hosts: string[] } | { ok: false; error: string } {
+  const n = normalizeLabHost(raw);
+  if (!n.ok) return { ok: false, error: n.reason };
+  if (isBuiltInHost(n.host)) return { ok: false, error: `${n.host} is already built in - certificates from it are always read.` };
+  if (current.includes(n.host)) return { ok: false, error: `${n.host} is already on this lab.` };
+  if (current.length >= MAX_HOSTS_PER_LAB) return { ok: false, error: `A lab can have at most ${MAX_HOSTS_PER_LAB} hosts.` };
+  return { ok: true, host: n.host, hosts: [...current, n.host] };
+}
+
+/** Remove one host from a lab's coa_hosts (an error if it is not there). */
+export function removeHostFromLab(current: readonly string[], host: string): { ok: true; hosts: string[] } | { ok: false; error: string } {
+  const h = String(host ?? "").trim().toLowerCase();
+  if (!current.includes(h)) return { ok: false, error: `${h || "That host"} is not on this lab.` };
+  return { ok: true, hosts: current.filter((x) => x !== h) };
 }
 
 // ---------------------------------------------------------------------------
@@ -323,9 +388,28 @@ export function __runTestingLabsCoreTests(): { passed: number; failed: number } 
   ok(!validateLabForm({ ...base, labNumber: "3a" }, []).ok && !validateLabForm({ ...base, labNumber: "0" }, []).ok, "bad lab # refused");
   ok(!validateLabForm({ ...base, phone: "call me" }, []).ok, "bad phone refused");
   ok(!validateLabForm({ ...base, website: "javascript:alert(1)" }, []).ok, "javascript: website refused");
+  // seed rows
+  ok(SEEDED_LAB_ROWS.length === 12 && SEEDED_LAB_ROWS[11] === CULTIVERA_PLATFORM, "seeded = 11 labs + the Cultivera platform row");
+  ok(CULTIVERA_PLATFORM.status === "platform" && CULTIVERA_PLATFORM.labNumber === null && CULTIVERA_PLATFORM.coaHosts.join() === "files.cultivera.com", "Cultivera row: platform, no lab #, files.cultivera.com");
+  ok(WA_TESTING_LABS.filter((l) => l.coaHosts.length > 0).map((l) => `${l.labNumber}:${l.coaHosts.join("|")}`).join(",") === "3:certs.conflabs.com,12:gglabs-j.github.io", "only #3 and #12 carry a host");
+  ok(SEEDED_LAB_ROWS.flatMap((l) => l.coaHosts).sort().join() === BUILT_IN_COA_HOSTS.map((h) => h.host).sort().join(), "seeded hosts == built-in hosts");
   // mergeHosts
-  const m = mergeHosts([{ host: "Certs.Newlab.com", enabled: true }, { host: "files.cultivera.com", enabled: true }, { host: "off.newlab.com", enabled: false }, { host: "127.0.0.1", enabled: true }]);
-  ok(m.join(",") === "certs.conflabs.com,gglabs-j.github.io,files.cultivera.com,certs.newlab.com", "merge: built-ins first, owner added, dupes/disabled/invalid dropped");
-  ok(mergeHosts([]).length === 3, "no owner hosts -> the 3 built-ins");
+  const m = mergeHosts([{ coaHosts: ["Certs.Newlab.com", "files.cultivera.com"] }, { coaHosts: null }, { coaHosts: ["127.0.0.1", "certs.newlab.com", "two.newlab.com"] }]);
+  ok(m.join(",") === "certs.conflabs.com,gglabs-j.github.io,files.cultivera.com,certs.newlab.com,two.newlab.com", "merge: built-ins first, owner added, dupes/invalid dropped");
+  ok(mergeHosts([]).length === 3, "no rows -> the 3 built-ins");
+  ok(mergeHosts(SEEDED_LAB_ROWS).length === 3, "seed rows add nothing beyond the built-ins");
+  // addHostToLab / removeHostFromLab
+  const a1 = addHostToLab([], "https://certs.newlab.com/coa/1.pdf");
+  ok(a1.ok && a1.host === "certs.newlab.com" && a1.hosts.join() === "certs.newlab.com", "add from a pasted link");
+  ok(!addHostToLab(["certs.newlab.com"], "CERTS.newlab.com").ok, "add refuses a host already on the lab");
+  const a2 = addHostToLab([], "files.cultivera.com");
+  ok(!a2.ok && a2.error.includes("built in"), "add refuses a built-in host");
+  ok(!addHostToLab([], "10.0.0.1").ok, "add refuses an IP");
+  const full = Array.from({ length: MAX_HOSTS_PER_LAB }, (_, i) => `h${i}.lab.com`);
+  ok(!addHostToLab(full, "x.lab.com").ok && addHostToLab(full.slice(1), "x.lab.com").ok, "add refuses the 21st host, allows the 20th");
+  const r1 = removeHostFromLab(["a.lab.com", "b.lab.com"], " A.lab.com ");
+  ok(r1.ok && r1.hosts.join() === "b.lab.com", "remove a host (trim + lower)");
+  ok(!removeHostFromLab(["a.lab.com"], "c.lab.com").ok, "remove refuses a host not on the lab");
+  ok(isBuiltInHost("files.cultivera.com") && !isBuiltInHost("files.cultivera.org"), "isBuiltInHost");
   return { passed, failed };
 }

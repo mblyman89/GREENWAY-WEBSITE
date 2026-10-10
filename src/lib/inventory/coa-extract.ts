@@ -22,6 +22,8 @@
  * database without 0252 is reported as `migrated: false` (no writes).
  */
 import "server-only";
+import { lookup } from "node:dns/promises";
+import { loadOwnerCoaHosts } from "@/lib/inventory/testing-labs-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isMissingIdentityColumnError } from "@/lib/catalog/identity-columns-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -30,8 +32,12 @@ import { isLlamaParseConfigured, parsePdf } from "@/lib/inbound-email/llamaparse
 import {
   COA_FETCH_TIMEOUT_MS,
   COA_JSON_MAX_BYTES,
+  COA_MAX_REDIRECTS,
   COA_PDF_MAX_BYTES,
   buildCoaExtract,
+  dnsAnswerOk,
+  needsDnsCheck,
+  nextRedirectHop,
   contentTypeOk,
   type CoaExtractRun,
   isMissingColumnError,
@@ -68,25 +74,71 @@ type LabRow = {
 
 const emptyRun = (migrated: boolean): CoaExtractRun => ({ migrated, pending: 0, deferred: 0, read: 0, ok: 0, partial: 0, failed: 0, kbFilled: 0, errors: [] });
 
+/**
+ * The owner's extra certificate hosts (testing_labs.coa_hosts, 0256), read
+ * once per pass. Missing table / failed read -> built-in hosts only.
+ */
+export type HostContext = { extraHosts: readonly string[] };
+const BUILT_INS_ONLY: HostContext = { extraHosts: [] };
+
+export async function loadHostContext(): Promise<HostContext> {
+  const { hosts } = await loadOwnerCoaHosts();
+  return { extraHosts: hosts };
+}
+
+/**
+ * OWASP SSRF guard for an owner-added host: every address it resolves to
+ * must be public (a name pointing at 10.x / 169.254.169.254 / ::1 is
+ * refused). Built-in hosts were verified by hand and skip this.
+ */
+async function dnsGuard(url: string): Promise<string | null> {
+  if (!needsDnsCheck(url)) return null;
+  const host = new URL(url).hostname;
+  try {
+    const answers = await lookup(host, { all: true, verbatim: true });
+    const r = dnsAnswerOk(host, answers.map((a) => a.address));
+    return r.ok ? null : r.reason;
+  } catch (err) {
+    return `${host} did not resolve (${err instanceof Error ? err.message : String(err)})`;
+  }
+}
+
 async function fetchBounded(
   raw: string | null,
   kind: "json" | "pdf",
+  ctx: HostContext = BUILT_INS_ONLY,
 ): Promise<{ bytes: Uint8Array | null; error: string | null }> {
-  const safe = safeCoaUrl(raw);
+  const safe = safeCoaUrl(raw, ctx.extraHosts);
   if (!safe.ok) return { bytes: null, error: safe.reason };
   const max = kind === "pdf" ? COA_PDF_MAX_BYTES : COA_JSON_MAX_BYTES;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), COA_FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(safe.url, {
-      redirect: "follow",
-      signal: controller.signal,
-      headers: { Accept: kind === "pdf" ? "application/pdf" : "application/json" },
-      cache: "no-store",
-    });
+    // Redirects are followed BY HAND (R36): each hop is re-checked against
+    // the allow-list (and DNS for owner hosts) BEFORE it is requested, so a
+    // lab link can never bounce the server onto an internal address.
+    let url = safe.url;
+    let res: Response | null = null;
+    for (let hop = 0; hop <= COA_MAX_REDIRECTS; hop += 1) {
+      const dnsErr = await dnsGuard(url);
+      if (dnsErr) return { bytes: null, error: dnsErr };
+      res = await fetch(url, {
+        redirect: "manual",
+        signal: controller.signal,
+        headers: { Accept: kind === "pdf" ? "application/pdf" : "application/json" },
+        cache: "no-store",
+      });
+      if (res.status < 300 || res.status > 399) break;
+      if (hop === COA_MAX_REDIRECTS) return { bytes: null, error: `more than ${COA_MAX_REDIRECTS} redirects` };
+      const next = nextRedirectHop(url, res.headers.get("location"), ctx.extraHosts);
+      if (!next.ok) return { bytes: null, error: next.reason };
+      url = next.url;
+    }
+    if (!res) return { bytes: null, error: "no answer" };
     if (!res.ok) return { bytes: null, error: `the lab answered HTTP ${res.status}` };
-    // A redirect must land on an allowed host too.
-    if (res.url && !safeCoaUrl(res.url).ok) return { bytes: null, error: `redirected off the lab host (${new URL(res.url).hostname})` };
+    // Belt and braces: a runtime that followed a redirect anyway must still
+    // have landed on an allowed host.
+    if (res.url && !safeCoaUrl(res.url, ctx.extraHosts).ok) return { bytes: null, error: `redirected off the lab host (${new URL(res.url).hostname})` };
     if (!contentTypeOk(kind, res.headers.get("content-type"))) {
       return { bytes: null, error: `unexpected content type ${res.headers.get("content-type") ?? "(none)"}` };
     }
@@ -104,7 +156,7 @@ async function fetchBounded(
   }
 }
 
-async function pdfBytesFor(lab: LabRow): Promise<{ bytes: Uint8Array | null; error: string | null }> {
+async function pdfBytesFor(lab: LabRow, ctx: HostContext): Promise<{ bytes: Uint8Array | null; error: string | null }> {
   if (lab.coa_storage_path) {
     try {
       const admin = createSupabaseAdminClient();
@@ -117,7 +169,7 @@ async function pdfBytesFor(lab: LabRow): Promise<{ bytes: Uint8Array | null; err
       // fall through to the link
     }
   }
-  const got = await fetchBounded(lab.coa_url, "pdf");
+  const got = await fetchBounded(lab.coa_url, "pdf", ctx);
   if (got.bytes && !looksLikePdf(got.bytes)) return { bytes: null, error: "the COA link did not return a PDF" };
   return got;
 }
@@ -125,13 +177,14 @@ async function pdfBytesFor(lab: LabRow): Promise<{ bytes: Uint8Array | null; err
 /** Read one lab row's certificate (both documents). Never throws. */
 export async function readCoaForLab(
   lab: LabRow,
-  opts: { actorId: string | null; alwaysLlama?: boolean } = { actorId: null },
+  opts: { actorId: string | null; alwaysLlama?: boolean; hosts?: HostContext } = { actorId: null },
 ): Promise<CoaExtract> {
-  const jsonGot = lab.wcia_json_url ? await fetchBounded(lab.wcia_json_url, "json") : { bytes: null, error: null };
+  const ctx = opts.hosts ?? (await loadHostContext());
+  const jsonGot = lab.wcia_json_url ? await fetchBounded(lab.wcia_json_url, "json", ctx) : { bytes: null, error: null };
   const jsonText = jsonGot.bytes ? new TextDecoder("utf-8").decode(jsonGot.bytes) : null;
 
   const candidates: PdfTextCandidate[] = [];
-  const pdfGot = lab.coa_url || lab.coa_storage_path ? await pdfBytesFor(lab) : { bytes: null, error: "no COA link" };
+  const pdfGot = lab.coa_url || lab.coa_storage_path ? await pdfBytesFor(lab, ctx) : { bytes: null, error: "no COA link" };
   if (pdfGot.bytes) {
     // 1) The PDF's own text layer (free, about a second). Confident Cannabis
     //    certificates carry every number in it.
@@ -221,6 +274,8 @@ async function runForLabs(
   }
   const rows = ((data as LabRow[] | null) ?? []).filter((r) => opts.force || r.coa_extract_status !== "ok");
   run.pending = rows.length;
+  // The owner's extra certificate hosts, read ONCE for the whole pass.
+  const hosts = rows.length ? await loadHostContext() : BUILT_INS_ONLY;
   // Bounded concurrency: 4 certificates at a time, inside the time budget.
   for (let i = 0; i < rows.length; i += 4) {
     if (Date.now() - started > (opts.budgetMs ?? COA_EXTRACT_BUDGET_MS)) {
@@ -230,7 +285,7 @@ async function runForLabs(
     await Promise.all(
       rows.slice(i, i + 4).map(async (lab) => {
         try {
-          const extract = await readCoaForLab(lab, { actorId: opts.actorId, alwaysLlama: opts.alwaysLlama });
+          const extract = await readCoaForLab(lab, { actorId: opts.actorId, alwaysLlama: opts.alwaysLlama, hosts });
           const { error: upErr } = await admin.from("lab_results").update(labExtractPatch(extract)).eq("id", lab.id);
           if (upErr) {
             run.errors.push(`${lab.id}: ${upErr.message}`);
