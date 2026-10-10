@@ -889,6 +889,7 @@ import { __runVaultReleaseCoreTests } from "../../src/lib/payments/vault-release
 import { __runVendorAchEnrollmentTests } from "../../src/lib/payments/vendor-ach-enrollment-core";
 import { __runEmployeeAchCardTests } from "../../src/lib/payroll/employee-ach-card-core";
 import { __runAchDocumentIntakeTests } from "../../src/lib/payments/ach-document-intake-core";
+import { __runKeyedHashTests } from "../../src/lib/security/keyed-hash";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
 import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
@@ -2150,6 +2151,7 @@ __runLiquidVolumeTests();
   assertRan("vendor-ach-enrollment", __runVendorAchEnrollmentTests(), 49); // R39 S4: needs bank info / opted out card + 0258 CHECK planner
   assertRan("employee-ach-card", __runEmployeeAchCardTests(), 29); // R39 S4: employee file card agrees with planPayrollEntries
   assertRan("ach-document-intake", __runAchDocumentIntakeTests(), 90); // R39 S5: OWASP drop-only upload, AcroForm draft, blind re-key
+  assertRan("keyed-hash", __runKeyedHashTests(), 9); // R39 S5: HKDF-separated HMAC keys (RFC 5869 / RFC 4231 vectors)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
