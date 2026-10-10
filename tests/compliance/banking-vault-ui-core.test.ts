@@ -141,3 +141,40 @@ describe("vaultSecurityPosture — honesty", () => {
     expect(items[1].detail).toContain("0143_payee_banking_vault.sql");
   });
 });
+
+describe("vendorBankingBadge — R39 S3 statuses (allow-list)", () => {
+  const base = { hasRecord: true, verifiedAt: "2026-01-15T00:00:00Z", accountNumber: "9876543210" };
+  it("revoked and archived beat verified and never read as payable", () => {
+    for (const status of ["revoked", "archived"]) {
+      const b = vendorBankingBadge({ ...base, status });
+      expect(b.state).toBe(status);
+      expect(b.tone).not.toBe("green");
+      expect(b.detail).toMatch(/No payments/);
+    }
+  });
+  it("only exact 'active' can show verified/unverified; anything else is blocked", () => {
+    for (const status of ["Active", "ACTIVE", " active", "paused", "", null, undefined]) {
+      const b = vendorBankingBadge({ ...base, status });
+      expect(b.state).toBe("blocked_unknown");
+      expect(b.tone).toBe("orange");
+    }
+    expect(vendorBankingBadge({ ...base, status: "active" }).state).toBe("verified");
+  });
+  it("the badge's payable states agree with canPayWithVaultRecord for every vault status", async () => {
+    const { VAULT_STATUSES, canPayWithVaultRecord } = await import("@/lib/payments/payee-banking-core");
+    for (const status of [...VAULT_STATUSES, "bogus"]) {
+      const badge = vendorBankingBadge({ ...base, status });
+      const badgeSaysPayable = badge.state === "verified" || badge.state === "unverified";
+      const pay = canPayWithVaultRecord({ status, routing: "021000021", accountNumber: "9876543210" }, "Test Vendor");
+      expect({ status, payable: badgeSaysPayable }).toEqual({ status, payable: pay.ok });
+    }
+  });
+  it("coverage line reports revoked/archived and stays quiet when zero", () => {
+    expect(vendorCoverageLine({ vendorsTotal: 5, withBanking: 4, onHold: 1, unverified: 0, inactive: 2 })).toBe(
+      "4 of 5 vendors have banking on file (1 on hold, 2 revoked or archived)",
+    );
+    expect(vendorCoverageLine({ vendorsTotal: 5, withBanking: 4, onHold: 0, unverified: 0, inactive: 0 })).toBe(
+      "4 of 5 vendors have banking on file",
+    );
+  });
+});

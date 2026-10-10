@@ -43,7 +43,14 @@ export function resolveVaultTab(param: string | null | undefined): VaultTab {
 // Badges
 // ---------------------------------------------------------------------------
 
-export type VaultBadgeState = "none" | "unverified" | "verified" | "on_hold";
+export type VaultBadgeState =
+  | "none"
+  | "unverified"
+  | "verified"
+  | "on_hold"
+  | "revoked"
+  | "archived"
+  | "blocked_unknown";
 
 export type VaultBadge = {
   state: VaultBadgeState;
@@ -62,7 +69,7 @@ export type VaultBadge = {
  */
 export function vendorBankingBadge(input: {
   hasRecord: boolean;
-  status?: "active" | "on_hold" | string | null;
+  status?: "active" | "on_hold" | "revoked" | "archived" | string | null;
   verifiedAt?: string | null;
   accountNumber?: string | null;
   bankName?: string | null;
@@ -85,6 +92,33 @@ export function vendorBankingBadge(input: {
       label: "Banking ON HOLD",
       tone: "orange",
       detail: `${where} — payments are blocked until the hold is released in the vault.`,
+    };
+  }
+  if (input.status === "revoked") {
+    return {
+      state: "revoked",
+      label: "Banking REVOKED",
+      tone: "orange",
+      detail: `${where} — the payee revoked this authorization. No payments; re-open it on hold only with a new signed form.`,
+    };
+  }
+  if (input.status === "archived") {
+    return {
+      state: "archived",
+      label: "Banking archived",
+      tone: "neutral",
+      detail: `${where} — archived (kept for the record, never deleted). No payments; re-open it on hold to use it again.`,
+    };
+  }
+  // R39 S3: allow-list. Anything that isn't plainly "active" (a typo, a status
+  // added later, a missing value) shows as blocked, never as payable — the
+  // same rule canPayWithVaultRecord() enforces at pay time.
+  if (input.status !== "active") {
+    return {
+      state: "blocked_unknown",
+      label: "Banking blocked",
+      tone: "orange",
+      detail: `${where} — status "${String(input.status ?? "missing")}" isn't one the vault knows, so payments are blocked. Check the vault.`,
     };
   }
   if (input.verifiedAt) {
@@ -145,10 +179,13 @@ export function vendorCoverageLine(input: {
   withBanking: number;
   onHold: number;
   unverified: number;
+  /** R39 S3: revoked + archived rows (kept, never deleted, never paid). */
+  inactive?: number;
 }): string {
   const extras: string[] = [];
   if (input.onHold > 0) extras.push(`${input.onHold} on hold`);
   if (input.unverified > 0) extras.push(`${input.unverified} not yet verified`);
+  if ((input.inactive ?? 0) > 0) extras.push(`${input.inactive} revoked or archived`);
   const tail = extras.length > 0 ? ` (${extras.join(", ")})` : "";
   return `${input.withBanking} of ${input.vendorsTotal} vendors have banking on file${tail}`;
 }
@@ -209,7 +246,7 @@ export function vaultSecurityPosture(input: {
       ok: true,
       label: "Audited",
       detail:
-        "Every add, change, hold, release, verification, and delete writes a who-did-what audit entry with masked old → new values.",
+        "Every add, change, hold, release, verification, and archive writes a who-did-what audit entry with masked old → new values. Banking is never deleted — the database refuses it.",
     },
     {
       ok: true,
@@ -274,8 +311,25 @@ export function __runBankingVaultUiTests(): void {
   ok(unverified.state === "unverified" && unverified.tone === "gold", "unverified → gold");
   ok(/verify/i.test(unverified.detail), "unverified detail tells the phone-verification step");
 
+  // R39 S3: revoked / archived / unknown are all non-payable and say so.
+  const revoked = vendorBankingBadge({ hasRecord: true, status: "revoked", verifiedAt: "2026-01-15T10:00:00Z", accountNumber: "123456789" });
+  ok(revoked.state === "revoked" && revoked.tone === "orange", "revoked → orange, beats verified");
+  ok(/No payments/.test(revoked.detail), "revoked says no payments");
+  const archived = vendorBankingBadge({ hasRecord: true, status: "archived", verifiedAt: "2026-01-15T10:00:00Z", accountNumber: "123456789" });
+  ok(archived.state === "archived" && archived.tone === "neutral", "archived → neutral, beats verified");
+  ok(/never deleted/.test(archived.detail) && /No payments/.test(archived.detail), "archived says kept + no payments");
+  const typo = vendorBankingBadge({ hasRecord: true, status: "Active", verifiedAt: "2026-01-15T10:00:00Z", accountNumber: "123456789" });
+  ok(typo.state === "blocked_unknown", "unknown status (case typo) → blocked, never verified");
+  const missing = vendorBankingBadge({ hasRecord: true, status: null, verifiedAt: "2026-01-15T10:00:00Z", accountNumber: "123456789" });
+  ok(missing.state === "blocked_unknown" && missing.detail.includes("missing"), "missing status → blocked");
+  ok(
+    vendorCoverageLine({ vendorsTotal: 5, withBanking: 4, onHold: 0, unverified: 0, inactive: 2 }) ===
+      "4 of 5 vendors have banking on file (2 revoked or archived)",
+    "coverage line counts revoked/archived",
+  );
+
   // LEAK GUARD: a full account number must NEVER appear in any badge output.
-  for (const badge of [hold, verified, unverified]) {
+  for (const badge of [hold, verified, unverified, revoked, archived, typo, missing]) {
     const s = JSON.stringify(badge);
     ok(!s.includes("123456789") && !s.includes("987654321"), `no full number leaks (${badge.state})`);
   }
