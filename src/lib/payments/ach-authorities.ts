@@ -82,6 +82,7 @@ export type AchAuthorityId =
   | "ach-sao-verify-by-phone"
   | "ach-sao-segregate-duties"
   | "ach-callback-manipulation"
+  | "ach-unc-verbal-in-person-or-phone"
   | "ach-wac-087-five-years"
   | "ach-wac-087-employee-records"
   | "ach-rcw-1-80-040-agreement"
@@ -121,6 +122,7 @@ export const ALL_ACH_AUTHORITY_IDS: readonly AchAuthorityId[] = [
   "ach-sao-verify-by-phone",
   "ach-sao-segregate-duties",
   "ach-callback-manipulation",
+  "ach-unc-verbal-in-person-or-phone",
   "ach-wac-087-five-years",
   "ach-wac-087-employee-records",
   "ach-rcw-1-80-040-agreement",
@@ -149,6 +151,7 @@ export const ACH_PUBLICATION_FILES: Readonly<Record<string, string>> = {
   "Plaid Docs, Auth - Same Day Micro-deposits": "ach/plaid-auth-same-day-micro-deposits.txt",
   "Washington State Auditor's Office, Protect your vendor master file from fraudsters": "ach/wa-sao-vendor-master-file.txt",
   "Disbursement Controls, Vendor Contact Change Risks": "ach/disbursementcontrols-vendor-contact-change-risk.txt",
+  "UNC-Chapel Hill Finance, Safely Updating Vendor Bank Accounts (June 15, 2020)": "ach/unc-finance-safely-updating-vendor-bank-accounts.txt",
 };
 
 export const ACH_AUTHORITIES: readonly AchAuthority[] = [
@@ -627,6 +630,26 @@ export const ACH_AUTHORITIES: readonly AchAuthority[] = [
     "asks for the bank change, then answers the callback. That is why a contact change within the " +
     "look-back window before a bank change raises the risk and forces the callback to an older " +
     "number on file.",
+  },
+  {
+    id: "ach-unc-verbal-in-person-or-phone",
+    kind: "industry_guidance",
+    citation: "UNC-Chapel Hill Finance, Safely Updating Vendor Bank Accounts (June 15, 2020)",
+    sourceFile: "ach/unc-finance-safely-updating-vendor-bank-accounts.txt",
+    source: "https://finance.unc.edu/news/2020/06/15/safely-updating-vendor-bank-accounts",
+    quote:
+    "Therefore, it is critical to validate vendor bank accounts by communicating verbally (in " +
+    "person or by telephone) with a known contact. This must be done by calling the company’s " +
+    "accounting, billing, or accounts receivable department at a phone number from an independent " +
+    "source . This information should not be validated with a phone number provided by an emailed " +
+    "request to update banking information.",
+    whatItMeansHere:
+    "A university accounts-payable policy that says what the release screen asks for: the payee " +
+    "confirms the bank details verbally, either face to face or on a phone call to a number found " +
+    "independently, never one from the email that asked for the change. That is why the release " +
+    "form offers two methods, phone or in person. A phone callback must use a number on file for " +
+    "the 90-day look-back; an in-person confirmation involves no phone number, so the look-back " +
+    "does not apply, but a written note of who confirmed it is still required.",
   },
   {
     id: "ach-wac-087-five-years",

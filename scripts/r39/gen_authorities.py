@@ -26,6 +26,7 @@ URL = {
     "ach/plaid-auth-same-day-micro-deposits.txt": "https://plaid.com/docs/auth/coverage/same-day/",
     "ach/wa-sao-vendor-master-file.txt": "https://sao.wa.gov/the-audit-connection-blog/protect-your-vendor-master-file-fraudsters",
     "ach/disbursementcontrols-vendor-contact-change-risk.txt": "https://www.disbursementcontrols.com/vendor-contact-change-risk",
+    "ach/unc-finance-safely-updating-vendor-bank-accounts.txt": "https://finance.unc.edu/news/2020/06/15/safely-updating-vendor-bank-accounts",
     "state-wa/wac-314-55-087.txt": "https://app.leg.wa.gov/WAC/default.aspx?cite=314-55-087",
     "state-wa/rcw-1.80.040.txt": "https://app.leg.wa.gov/RCW/default.aspx?cite=1.80.040",
     "state-wa/rcw-1.80.060.txt": "https://app.leg.wa.gov/RCW/default.aspx?cite=1.80.060",
@@ -51,6 +52,7 @@ CITE = {
     "ach/plaid-auth-same-day-micro-deposits.txt": "Plaid Docs, Auth - Same Day Micro-deposits",
     "ach/wa-sao-vendor-master-file.txt": "Washington State Auditor's Office, Protect your vendor master file from fraudsters",
     "ach/disbursementcontrols-vendor-contact-change-risk.txt": "Disbursement Controls, Vendor Contact Change Risks",
+    "ach/unc-finance-safely-updating-vendor-bank-accounts.txt": "UNC-Chapel Hill Finance, Safely Updating Vendor Bank Accounts (June 15, 2020)",
 }
 
 # id, kind, citation-suffix (appended to CITE prefix; for statutes the full cite), meaning
@@ -163,6 +165,11 @@ META = {
         "The trap a plain callback falls into: the fraudster first changes the phone number, then asks for the bank change, then answers the "
         "callback. That is why a contact change within the look-back window before a bank change raises the risk and forces the callback to an "
         "older number on file."),
+    "unc-verbal-in-person-or-phone": ("industry_guidance", None,
+        "A university accounts-payable policy that says what the release screen asks for: the payee confirms the bank details verbally, either "
+        "face to face or on a phone call to a number found independently, never one from the email that asked for the change. That is why the "
+        "release form offers two methods, phone or in person. A phone callback must use a number on file for the 90-day look-back; an in-person "
+        "confirmation involves no phone number, so the look-back does not apply, but a written note of who confirmed it is still required."),
     "wac-087-five-years": ("state_law", "WAC 314-55-087(1)",
         "The Washington cannabis rule. Bank statements, financial transaction records and employee records must be kept on the licensed premises "
         "for five years and shown to the LCB on request. A signed ACH authorization is a record of a financial arrangement and part of the "

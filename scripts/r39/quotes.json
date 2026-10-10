@@ -115,6 +115,10 @@
   "file": "ach/disbursementcontrols-vendor-contact-change-risk.txt",
   "quote": "Many organizations use callback procedures to validate banking changes or payment requests. If fraudsters successfully change vendor phone numbers or contact information, they may redirect validation calls directly to themselves. This allows criminals to defeat one of the most used fraud prevention controls by creating the illusion of independent verification. Organizations that rely solely on contact details provided within change requests may unknowingly validate fraudulent changes with the attackers themselves."
  },
+ "unc-verbal-in-person-or-phone": {
+  "file": "ach/unc-finance-safely-updating-vendor-bank-accounts.txt",
+  "quote": "Therefore, it is critical to validate vendor bank accounts by communicating verbally (in person or by telephone) with a known contact. This must be done by calling the company’s accounting, billing, or accounts receivable department at a phone number from an independent source . This information should not be validated with a phone number provided by an emailed request to update banking information."
+ },
  "wac-087-five-years": {
   "file": "state-wa/wac-314-55-087.txt",
   "quote": "(1) Cannabis licensees are responsible to keep records that clearly reflect all financial transactions and the financial condition of the business. The following records must be kept and maintained on the licensed premises for a five-year period and must be made available for inspection if requested by an employee of the LCB:"

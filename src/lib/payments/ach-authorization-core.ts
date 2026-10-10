@@ -395,12 +395,24 @@ export function stateAfterBankChange(current: AuthorizationState): Authorization
 // ───────────────────────────────────────────────────────────────────────────
 
 export const MIN_SOLO_REASON_CHARS = 20;
+/** Who was spoken to, and when: "Spoke with Maria in AR, she read back ...4821". */
+export const MIN_CALLBACK_NOTE_CHARS = 10;
+
+/**
+ * How the payee confirmed the details. "phone": a call to a number on file for
+ * the look-back window (ach-sao-verify-by-phone). "in_person": the payee
+ * confirmed face to face (UNC Finance, 2020: validate "verbally (in person or
+ * by telephone) with a known contact"); no phone number is involved, so the
+ * look-back does not apply, but the note is still required.
+ */
+export type CallbackMethod = "phone" | "in_person";
 
 export type ReleaseInput = {
   actorUserId: string;
   actorCanManage: boolean; // holds settings.manage (owner or admin)
-  changeEnteredByUserId: string;
-  callback: { done: boolean; numberUnchangedForDays: number | null };
+  /** null for legacy holds entered before the change log existed. */
+  changeEnteredByUserId: string | null;
+  callback: { done: boolean; method?: CallbackMethod; numberUnchangedForDays: number | null; note?: string };
   reason: string;
 };
 
@@ -420,13 +432,27 @@ export type ReleaseVerdict =
 export function releaseVerdict(input: ReleaseInput, lookBackDays: number = CONTACT_LOOKBACK_DAYS): ReleaseVerdict {
   if (!input.actorCanManage) return { ok: false, refusal: "Only Michael or Stephen (settings.manage) can release a banking hold." };
   if (!input.callback.done) return { ok: false, refusal: "Call the payee first, at a number already on file, and record the call." };
-  if (input.callback.numberUnchangedForDays === null || input.callback.numberUnchangedForDays < lookBackDays) {
+  if ((input.callback.note ?? "").trim().length < MIN_CALLBACK_NOTE_CHARS) {
+    return {
+      ok: false,
+      refusal: `Write who confirmed the details and how (at least ${MIN_CALLBACK_NOTE_CHARS} characters), e.g. "Maria in AR read back the last 4".`,
+    };
+  }
+  const method: CallbackMethod = input.callback.method ?? "phone";
+  if (
+    method === "phone" &&
+    (input.callback.numberUnchangedForDays === null || input.callback.numberUnchangedForDays < lookBackDays)
+  ) {
     return {
       ok: false,
       refusal: `The number you called changed within the last ${lookBackDays} days. Verify in person or by a number on file longer than that.`,
     };
   }
-  if (input.actorUserId !== input.changeEnteredByUserId) return { ok: true, mode: "dual", notifyOther: false };
+  // Unknown author (a hold from before the change log) is treated as the
+  // strict case: a reason and a notice, never a silent dual release.
+  if (input.changeEnteredByUserId !== null && input.actorUserId !== input.changeEnteredByUserId) {
+    return { ok: true, mode: "dual", notifyOther: false };
+  }
   if (input.reason.trim().length < MIN_SOLO_REASON_CHARS) {
     return { ok: false, refusal: `Releasing your own change needs a written reason (at least ${MIN_SOLO_REASON_CHARS} characters).` };
   }
@@ -706,7 +732,14 @@ export function __runAchAuthorizationCoreTests(): { passed: number; failed: numb
   ok(!canTransition("archived", "active") && !canTransition("revoked", "active"), "no resurrection");
   ok(stateAfterBankChange("active") === "on_hold", "change -> hold");
   throws(() => stateAfterBankChange("archived"), "cannot edit archived");
-  const base: ReleaseInput = { actorUserId: "m", actorCanManage: true, changeEnteredByUserId: "s", callback: { done: true, numberUnchangedForDays: 400 }, reason: "" };
+  const base: ReleaseInput = { actorUserId: "m", actorCanManage: true, changeEnteredByUserId: "s", callback: { done: true, numberUnchangedForDays: 400, note: "Maria in AR read back 4821" }, reason: "" };
+  ok(!releaseVerdict({ ...base, callback: { ...base.callback, note: "ok" } }).ok, "callback without a real note refused");
+  ok(releaseVerdict({ ...base, callback: { done: true, method: "in_person", numberUnchangedForDays: null, note: "Vendor rep at the store, ID seen" } }).ok, "in-person needs no phone look-back");
+  ok(!releaseVerdict({ ...base, callback: { done: true, method: "phone", numberUnchangedForDays: null, note: "Called the number in the email" } }).ok, "phone with unknown number age refused");
+  const unknownAuthor = releaseVerdict({ ...base, changeEnteredByUserId: null });
+  ok(!unknownAuthor.ok, "unknown author without reason refused (treated as solo)");
+  const unknownWithReason = releaseVerdict({ ...base, changeEnteredByUserId: null, reason: "Legacy hold from before the change log" });
+  ok(unknownWithReason.ok && unknownWithReason.mode === "solo", "unknown author with reason = solo + notify");
   ok(releaseVerdict(base).ok && (releaseVerdict(base) as { mode: string }).mode === "dual", "other person releases");
   ok(!releaseVerdict({ ...base, changeEnteredByUserId: "m" }).ok, "solo without reason refused");
   const solo = releaseVerdict({ ...base, changeEnteredByUserId: "m", reason: "Stephen is on vacation until the 20th" });

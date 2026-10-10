@@ -25,6 +25,7 @@ labelled as one; it is not the rule text.
 | odfi-grand-valley-prenote-waiting-period.txt | https://www.grandvalleybank.com/assets/files/ip5QIqAu | ODFI summary of the 2014 rule that cut the prenote wait from six to three banking days; return/NOC by opening of business on the second banking day |
 | wa-sao-vendor-master-file.txt | https://sao.wa.gov/the-audit-connection-blog/protect-your-vendor-master-file-fraudsters | WA State Auditor: verify changes by phone with contact info already on file |
 | disbursementcontrols-vendor-contact-change-risk.txt | https://www.disbursementcontrols.com/vendor-contact-change-risk | Callback manipulation: a changed phone number redirects the callback |
+| unc-finance-safely-updating-vendor-bank-accounts.txt | https://finance.unc.edu/news/2020/06/15/safely-updating-vendor-bank-accounts | University AP policy (fetched 2026-10-10 for R39 S3): validate bank details verbally, in person or by phone to an independently sourced number; the basis for the in-person release method |
 
 Also mirrored in this round:
 

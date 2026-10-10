@@ -72,6 +72,8 @@ SPECS = [
      "Just like payroll clerks should not be able to add new employees", "change vendor information in the vendor master file."),
     ("callback-manipulation", "ach/disbursementcontrols-vendor-contact-change-risk.txt",
      "Many organizations use callback procedures to validate banking changes", "may unknowingly validate fraudulent changes with the attackers themselves."),
+    ("unc-verbal-in-person-or-phone", "ach/unc-finance-safely-updating-vendor-bank-accounts.txt",
+     "Therefore, it is critical to validate vendor bank accounts by communicating verbally", "provided by an emailed request to update banking information."),
     ("wac-087-five-years", "state-wa/wac-314-55-087.txt",
      "(1) Cannabis licensees are responsible to keep records", "if requested by an employee of the LCB:"),
     ("wac-087-employee-records", "state-wa/wac-314-55-087.txt",

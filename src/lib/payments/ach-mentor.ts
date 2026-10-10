@@ -212,9 +212,10 @@ export const ACH_FUNCTION_LESSONS: readonly AchLesson[] = [
     plain:
       "Michael or Stephen may release. Ideally the person who did NOT enter the change releases it. Either of you " +
       "may release your own change alone when needed, but you must write why, and the other person is told " +
-      "automatically. In every case you must first call the payee at a number that has been on file for at least " +
-      "90 days - never a number from the change request itself.",
-    authorities: ["ach-sao-verify-by-phone", "ach-sao-segregate-duties", "ach-verify-with-contact-on-file", "ach-callback-manipulation"],
+      "automatically. In every case the payee must confirm the details first: by a call to a number that has been on " +
+      "file for at least 90 days (never a number from the change request itself), or face to face. Either way you " +
+      "write down who confirmed it.",
+    authorities: ["ach-sao-verify-by-phone", "ach-sao-segregate-duties", "ach-verify-with-contact-on-file", "ach-callback-manipulation", "ach-unc-verbal-in-person-or-phone"],
   },
   {
     key: "callbackEligibleContacts",
