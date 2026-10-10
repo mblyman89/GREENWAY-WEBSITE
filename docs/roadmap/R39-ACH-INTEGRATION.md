@@ -66,3 +66,8 @@ commit + push after every task, no drift.
 
 ## Status
 - [x] S0 fresh clone, request recorded
+- [x] S1 authorities (36 verbatim, `industry_guidance` kind, verifier routes),
+      pure `ach-authorization-core.ts` (FedACH banking days 2026-2030,
+      prenote / return / NOC / reversal clocks, splits <= 3, release
+      verdicts, retention, return / NOC codes), mentor + gates. Full
+      compliance suite: 815 files, 21,665 tests green.
