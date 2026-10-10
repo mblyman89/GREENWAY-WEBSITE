@@ -47,9 +47,9 @@ commit + push after every task (the sandbox is unstable), no drift.
   (`recallForDraft`) already reads the KB ladder + provenance.
 
 ## Slices (one at a time, each: code -> tests -> mutation -> commit/push)
-- [ ] **S1 Approve-all removed** (#3): button + form gone from the page; the
+- [x] **S1 Approve-all removed** (#3): button + form gone from the page; the
       action stays unreachable from the UI; pin test that it never renders.
-- [ ] **S2 Serving facts derived** (#1): pure `serving-derive-core.ts`
+- [x] **S2 Serving facts derived** (#1): pure `serving-derive-core.ts`
       (package / per-serving / servings, any two give the third; package only
       -> servings = ceil(package / 10) at the WA cap; minors per serving =
       package / servings, no cap); sources: owner > COA > name > derived;
