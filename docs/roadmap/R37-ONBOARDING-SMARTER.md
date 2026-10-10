@@ -55,7 +55,7 @@ commit + push after every task (the sandbox is unstable), no drift.
       package / servings, no cap); sources: owner > COA > name > derived;
       every derived figure labelled with its arithmetic + the WAC rule; wired
       into the facts panel prefill, COA attach and the saved record.
-- [x] **S3 Volume ml / fl oz** (#2): unit select, exact US fl oz = 29.5735295625
+- [x] **S3 Volume ml / fl oz** (#2): unit select, US fl oz = 29.5735 (owner ruling over NIST 29.5735295625)
       ml (NIST HB44), stored canonically in ml, conversion line on the form.
 - [x] **S4 Re-read COAs button** (#4): delivery-level, forced LlamaParse,
       budgeted, then lab attach + restage; audited; banner with counts.
