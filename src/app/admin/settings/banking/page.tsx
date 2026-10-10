@@ -30,19 +30,20 @@ import {
   vaultSecurityPosture,
   vendorCoverageLine,
   employeeCoverageLine,
+  splitVaultRecords,
   type VaultTab,
 } from "@/lib/payments/banking-vault-ui-core";
-import { listVendorBankDetails } from "@/lib/payments/payee-banking-store";
+import { listAllVendorContacts, listVendorBankDetails } from "@/lib/payments/payee-banking-store";
+import { resolveStaffNames } from "@/lib/promotions/promotions-store";
+import { pacificToday } from "@/lib/reports/timezone";
 import { listEmployeeBanking, listEmployees } from "@/lib/staffing/store";
 import { listVendors } from "@/lib/vendors/store";
 import {
   clearEmployeeBankingAction,
-  deleteVendorBankingAction,
-  markVendorBankVerifiedAction,
   saveEmployeeBankingAction,
   saveVendorBankingAction,
-  setVendorBankHoldAction,
 } from "./vault-actions";
+import { VendorVaultCard } from "./VendorVaultCard";
 
 export const dynamic = "force-dynamic";
 
@@ -63,19 +64,26 @@ function tabCls(active: boolean): string {
 export default async function BankingVaultPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; msg?: string; error?: string; edit?: string }>;
+  searchParams: Promise<{ tab?: string; msg?: string; error?: string; edit?: string; show?: string }>;
 }) {
-  await requirePermission("settings.manage");
+  const session = await requirePermission("settings.manage");
   const sp = await searchParams;
   const tab: VaultTab = resolveVaultTab(sp.tab);
 
-  const [vault, vendors, employees, employeeBanking, achSettings] = await Promise.all([
+  const [vault, vendors, employees, employeeBanking, achSettings, vendorContacts] = await Promise.all([
     listVendorBankDetails(),
     listVendors(),
     listEmployees({ includeInactive: true }),
     listEmployeeBanking(),
     getAchCompanySettings().catch(() => null),
+    listAllVendorContacts(),
   ]);
+  const today = pacificToday();
+  const split = splitVaultRecords(vault.records);
+  const showInactive = sp.show === "inactive";
+  const staffNames = await resolveStaffNames(
+    vault.records.flatMap((r) => [r.change_entered_by, r.released_by, r.archived_by]).filter((x): x is string => Boolean(x)),
+  );
 
   const bankingByEmployee = new Map(employeeBanking.map((b) => [b.employee_id, b]));
   const vaultByVendor = new Map(vault.records.map((r) => [r.vendor_id, r]));
@@ -93,7 +101,8 @@ export default async function BankingVaultPage({
     vendorsTotal: vendors.length,
     withBanking: vault.records.length,
     onHold: vault.records.filter((r) => r.status === "on_hold").length,
-    unverified: vault.records.filter((r) => r.status !== "on_hold" && !r.verified_at).length,
+    unverified: vault.records.filter((r) => r.status === "active" && !r.verified_at).length,
+    inactive: split.inactive.length,
   });
   const employeeLine = employeeCoverageLine({
     activeTotal: activeEmployees.length,
@@ -140,8 +149,10 @@ export default async function BankingVaultPage({
             steps={[
               "Only the owner and admins can see or edit this page — the vendor vault table refuses everyone else at the database itself, even with a direct connection.",
               "Vendor ACH payments and payroll runs pull banking FROM the vault. The pay screens have no bank-number fields to tamper with.",
-              "When a vendor emails you 'new bank details', save them here, then put the record ON HOLD and call the vendor at a number you ALREADY have (not one from the email). Record the verification, release the hold, then pay. That one phone call defeats nearly all vendor-impersonation fraud.",
-              "Every add, change, hold, release, and delete is written to the audit log with masked numbers — a permanent who-changed-what trail.",
+              "New or changed bank numbers go ON HOLD automatically — the database itself enforces it. To release, call the vendor at a number that has been on file at least 90 days (never one from the email asking for the change), or confirm in person, and write who you spoke with.",
+              "Stephen or Michael can release. If the same person who typed the numbers releases them, that's a SOLO release: it needs a written reason, and the other owner and the store are emailed and listed to call.",
+              "Banking is never deleted. Archive stops payments and keeps the record and its history; archived and revoked banking can only come back on hold.",
+              "Every add, change, hold, release, archive, and contact change is written to the audit log with masked numbers — a permanent who-changed-what trail.",
               "My banking (third tab) holds YOUR originating bank and the NACHA IDs your bank assigns — set once, shared by Payroll and Accounts Payable.",
               "The security readout at the top tells the truth: if at-rest encryption isn't active yet, it says so and names the exact fix.",
             ]}
@@ -225,103 +236,96 @@ export default async function BankingVaultPage({
               </div>
             ) : (
               <>
-                {/* Existing vault records */}
+                {!vault.controlsReady ? (
+                  <div className="rounded-[var(--admin-radius)] border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-200">
+                    <span className="font-semibold">One-time setup needed:</span> apply{" "}
+                    <code className="rounded bg-black/30 px-1">supabase/migrations/0259_vendor_vault_change_control.sql</code>{" "}
+                    (after 0258) in the Supabase SQL editor, then refresh. Until then, holds and releases still work and are
+                    fully audited, but the database can&apos;t yet enforce the callback rules, record who released, or archive.
+                  </div>
+                ) : null}
+
+                {/* Working vault records: active + on hold */}
                 <section>
-                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/50">
-                    Banking on file
-                  </h2>
-                  {vault.records.length === 0 ? (
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-white/50">
+                      Banking on file ({split.working.length})
+                    </h2>
+                    {split.inactive.length > 0 ? (
+                      <Link
+                        href={showInactive ? "/admin/settings/banking?tab=vendors" : "/admin/settings/banking?tab=vendors&show=inactive"}
+                        className={btnGhost}
+                      >
+                        {showInactive ? "Hide" : "Show"} revoked & archived ({split.inactive.length})
+                      </Link>
+                    ) : null}
+                  </div>
+                  {split.unknown.length > 0 ? (
+                    <p className="mb-3 rounded-[var(--admin-radius)] border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-200">
+                      {split.unknown.length} record(s) have a status the vault doesn&apos;t know. They are blocked from payment
+                      and shown at the bottom.
+                    </p>
+                  ) : null}
+                  {split.working.length === 0 ? (
                     <p className="text-sm text-white/50">
-                      No vendor banking saved yet. Add the first record below — after that,
-                      vendor ACH payments will pull straight from the vault.
+                      No active vendor banking. Add a record below — it starts on hold until a callback releases it.
                     </p>
                   ) : (
-                    <div className="overflow-x-auto rounded-[var(--admin-radius)] border border-white/10">
-                      <table className="w-full text-left text-sm">
-                        <thead className="bg-white/[0.04] text-xs uppercase tracking-wide text-white/50">
-                          <tr>
-                            <th className="px-4 py-3">Vendor</th>
-                            <th className="px-4 py-3">Bank</th>
-                            <th className="px-4 py-3">Routing</th>
-                            <th className="px-4 py-3">Account</th>
-                            <th className="px-4 py-3">Type</th>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="px-4 py-3">Verified</th>
-                            <th className="px-4 py-3">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {vault.records.map((r) => (
-                            <tr key={r.id} className="align-top">
-                              <td className="px-4 py-3 font-semibold text-white">
-                                <Link href={`/admin/vendors/${r.vendor_id}`} className="hover:underline">
-                                  {r.vendor_name}
-                                </Link>
-                              </td>
-                              <td className="px-4 py-3 text-white/70">{r.bank_name || "—"}</td>
-                              <td className="px-4 py-3 font-mono text-white/70">{maskAccountTail(r.routing)}</td>
-                              <td className="px-4 py-3 font-mono text-white/70">{maskAccountTail(r.account_number)}</td>
-                              <td className="px-4 py-3 text-white/70">{r.account_type}</td>
-                              <td className="px-4 py-3">
-                                {r.status === "on_hold" ? (
-                                  <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-300">
-                                    ON HOLD
-                                  </span>
-                                ) : (
-                                  <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-300">
-                                    active
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 text-xs text-white/50">
-                                {r.verified_at ? (
-                                  <span title={r.verified_note ?? undefined}>
-                                    ✅ {new Date(r.verified_at).toLocaleDateString()}
-                                  </span>
-                                ) : (
-                                  <span className="text-amber-300/80">not yet</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex flex-wrap gap-2">
-                                  <Link href={`/admin/settings/banking?tab=vendors&edit=${r.vendor_id}`} className={btnGhost}>
-                                    Edit
-                                  </Link>
-                                  <form action={setVendorBankHoldAction}>
-                                    <input type="hidden" name="vendor_id" value={r.vendor_id} />
-                                    <input type="hidden" name="status" value={r.status === "on_hold" ? "active" : "on_hold"} />
-                                    <button type="submit" className={btnGhost}>
-                                      {r.status === "on_hold" ? "Release hold" : "Put on hold"}
-                                    </button>
-                                  </form>
-                                  <form action={deleteVendorBankingAction}>
-                                    <input type="hidden" name="vendor_id" value={r.vendor_id} />
-                                    <button type="submit" className="rounded-[var(--admin-radius)] px-3 py-1.5 text-xs font-semibold text-[var(--admin-danger)] hover:underline">
-                                      Remove
-                                    </button>
-                                  </form>
-                                </div>
-                                {!r.verified_at ? (
-                                  <form action={markVendorBankVerifiedAction} className="mt-2 flex gap-2">
-                                    <input type="hidden" name="vendor_id" value={r.vendor_id} />
-                                    <input
-                                      name="note"
-                                      placeholder="Verified with… (name + phone)"
-                                      className="w-52 rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-white placeholder:text-white/30"
-                                    />
-                                    <button type="submit" className={btnGhost}>
-                                      Mark verified
-                                    </button>
-                                  </form>
-                                ) : null}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="space-y-3">
+                      {split.working.map((r) => (
+                        <VendorVaultCard
+                          key={r.id}
+                          record={r}
+                          contacts={vendorContacts.byVendor.get(r.vendor_id) ?? []}
+                          contactsReady={vendorContacts.tableReady}
+                          controlsReady={vault.controlsReady}
+                          staffNames={staffNames}
+                          actorUserId={session.profile.id}
+                          today={today}
+                        />
+                      ))}
                     </div>
                   )}
                 </section>
+
+                {showInactive && split.inactive.length > 0 ? (
+                  <section>
+                    <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/40">
+                      Revoked & archived ({split.inactive.length}) — kept for the record, never paid
+                    </h2>
+                    <div className="space-y-3 opacity-80">
+                      {split.inactive.map((r) => (
+                        <VendorVaultCard
+                          key={r.id}
+                          record={r}
+                          contacts={vendorContacts.byVendor.get(r.vendor_id) ?? []}
+                          contactsReady={vendorContacts.tableReady}
+                          controlsReady={vault.controlsReady}
+                          staffNames={staffNames}
+                          actorUserId={session.profile.id}
+                          today={today}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                {split.unknown.length > 0 ? (
+                  <section className="space-y-3">
+                    {split.unknown.map((r) => (
+                      <VendorVaultCard
+                        key={r.id}
+                        record={r}
+                        contacts={vendorContacts.byVendor.get(r.vendor_id) ?? []}
+                        contactsReady={vendorContacts.tableReady}
+                        controlsReady={vault.controlsReady}
+                        staffNames={staffNames}
+                        actorUserId={session.profile.id}
+                        today={today}
+                      />
+                    ))}
+                  </section>
+                ) : null}
 
                 {/* Add / edit form */}
                 <section className="max-w-xl rounded-[var(--admin-radius)] border border-white/10 bg-white/[0.02] p-5">
@@ -331,6 +335,9 @@ export default async function BankingVaultPage({
                   <p className="mb-4 text-xs text-white/40">
                     Take the numbers from a voided check, a bank letter on the vendor&apos;s
                     letterhead, or a verified phone call — never from an unverified email.
+                    New banking, or a change to the routing, account or type, goes ON HOLD until
+                    someone releases it after a callback. Changing only the bank name or notes
+                    keeps the current status.
                   </p>
                   <form action={saveVendorBankingAction} className="space-y-4">
                     {editRecord ? (
