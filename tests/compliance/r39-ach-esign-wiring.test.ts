@@ -154,3 +154,22 @@ describe("R39 S6 entry point on the employee file", () => {
     expect(EMP_PAGE).toMatch(/\{bankBadge && \(\s*<EmployeeAchCard/);
   });
 });
+
+describe("R39 S6 mutation evidence is current", () => {
+  for (const [script, log, floor] of [
+    ["scripts/r39/mutate-ach-esign-store.py", "scripts/r39/mutate-ach-esign-store.last.log", 43],
+    ["scripts/r39/mutate-ach-esign-wiring.py", "scripts/r39/mutate-ach-esign-wiring.last.log", 21],
+  ] as const) {
+    it(`${log}: every mutant killed, and the log covers the script's full list`, () => {
+      const s = read(script);
+      const l = read(log);
+      const listed = s.slice(s.indexOf("M = ["), s.indexOf("\n]\n")).split("\n").filter((x) => /^\s{4}\(/.test(x)).length;
+      const m = /total (\d+) killed (\d+) survivors \[\]\nEXIT 0/.exec(l);
+      expect(m, "clean summary line").not.toBeNull();
+      expect(Number(m![1])).toBe(listed);
+      expect(Number(m![2])).toBe(listed);
+      expect(listed).toBeGreaterThanOrEqual(floor);
+      expect(l).not.toMatch(/SURVIVED|ANCHOR MISSING/);
+    });
+  }
+});
