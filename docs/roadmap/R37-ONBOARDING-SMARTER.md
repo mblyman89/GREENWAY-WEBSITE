@@ -97,5 +97,10 @@ commit + push after every task (the sandbox is unstable), no drift.
   (againDraftIds + the marker + refresh), actions.ts lookupAgainAction,
   drafts/page.tsx. Tests: r37-search-history.test.ts (19, real postgrest-js),
   33/33 mutants killed.
-- [ ] **S7 Wrap-up**: full suite, tsc, eslint, PG, TEST-PLAN, bible, PR,
-      merge, report.
+- [x] **S7 Wrap-up**: full suite, tsc, eslint, PG, TEST-PLAN, bible, PR,
+      merge, report. DONE: full vitest 810/810 files, 21,552 tests (2 skipped);
+      4 older source pins updated on purpose for S6 (5/5 pin mutants killed);
+      scoped tsc clean; eslint only the 4 pre-R37 warnings; PG reset applies
+      all 257 migrations, 0257 re-applies cleanly; TEST-PLAN T-337..T-342 and
+      the test manual (generator output spliced, no unrelated churn); bible R37
+      section. Owner: apply 0255, 0256, 0257 in the Supabase SQL editor.
