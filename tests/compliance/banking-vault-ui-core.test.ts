@@ -9,6 +9,8 @@
  *   - badge lifecycle (none / unverified / verified / on hold)
  *   - security posture honesty (never claims encryption/RLS that isn't live)
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -19,6 +21,8 @@ import {
   vaultSecurityPosture,
   vendorBankingBadge,
   vendorCoverageLine,
+  vaultRowActions,
+  splitVaultRecords,
 } from "@/lib/payments/banking-vault-ui-core";
 
 describe("banking-vault-ui-core embedded self-tests", () => {
@@ -176,5 +180,49 @@ describe("vendorBankingBadge — R39 S3 statuses (allow-list)", () => {
     expect(vendorCoverageLine({ vendorsTotal: 5, withBanking: 4, onHold: 0, unverified: 0, inactive: 0 })).toBe(
       "4 of 5 vendors have banking on file",
     );
+  });
+});
+
+describe("vaultRowActions — only the moves the 0259 trigger allows", () => {
+  const sql = readFileSync(join(process.cwd(), "supabase/migrations/0259_vendor_vault_change_control.sql"), "utf8");
+  it("archived offers re-open only (trigger: archived -> on_hold only)", () => {
+    expect(sql).toContain("if old.status = 'archived' and new.status <> 'on_hold' then");
+    expect(vaultRowActions("archived", true)).toEqual(["reopen"]);
+    expect(vaultRowActions("archived", false)).toEqual(["reopen"]);
+  });
+  it("revoked offers re-open or archive (trigger: revoked -> on_hold | archived)", () => {
+    expect(sql).toContain("if old.status = 'revoked' and new.status not in ('on_hold', 'archived') then");
+    expect(vaultRowActions("revoked", true)).toEqual(["reopen", "archive"]);
+  });
+  it("release is offered ONLY from on_hold, never from active/revoked/archived", () => {
+    for (const st of ["active", "revoked", "archived", "bogus"]) {
+      for (const v of [true, false]) expect(vaultRowActions(st, v)).not.toContain("release");
+    }
+    expect(vaultRowActions("on_hold", false)).toContain("release");
+  });
+  it("hold (not re-open) from active only; re-open from revoked/archived only", () => {
+    expect(vaultRowActions("active", true)).toContain("hold");
+    expect(vaultRowActions("on_hold", true)).not.toContain("hold");
+    expect(vaultRowActions("active", true)).not.toContain("reopen");
+  });
+  it("verify only on active + unverified", () => {
+    expect(vaultRowActions("active", false)).toContain("verify");
+    for (const st of ["active", "on_hold", "revoked", "archived"]) expect(vaultRowActions(st, true)).not.toContain("verify");
+    expect(vaultRowActions("on_hold", false)).not.toContain("verify");
+  });
+  it("unknown status offers nothing", () => {
+    expect(vaultRowActions("", false)).toEqual([]);
+    expect(vaultRowActions("ACTIVE", true)).toEqual([]);
+  });
+});
+
+describe("splitVaultRecords — hidden inactive table (owner answer Q11)", () => {
+  it("routes every status, loses nothing", () => {
+    const rows = ["active", "on_hold", "revoked", "archived", "weird", "active"].map((status, i) => ({ status, i }));
+    const s = splitVaultRecords(rows);
+    expect(s.working.map((r) => r.i)).toEqual([0, 1, 5]);
+    expect(s.inactive.map((r) => r.i)).toEqual([2, 3]);
+    expect(s.unknown.map((r) => r.i)).toEqual([4]);
+    expect(s.working.length + s.inactive.length + s.unknown.length).toBe(rows.length);
   });
 });

@@ -167,6 +167,56 @@ export function employeeBankingBadge(input: {
 }
 
 // ---------------------------------------------------------------------------
+// R39 S3 — what each vault status may do next (mirrors the 0259 trigger)
+// ---------------------------------------------------------------------------
+
+export type VaultRowAction = "release" | "hold" | "reopen" | "archive" | "verify";
+
+/**
+ * Buttons the vault page offers for a record, in the only directions the 0259
+ * trigger allows:
+ *   active   → put on hold, archive, mark verified (if not yet)
+ *   on_hold  → release (callback), archive
+ *   revoked  → re-open on hold, archive
+ *   archived → re-open on hold
+ *   anything else → nothing (the page says the status is unknown)
+ */
+export function vaultRowActions(status: string, verified: boolean): VaultRowAction[] {
+  switch (status) {
+    case "active":
+      return verified ? ["hold", "archive"] : ["verify", "hold", "archive"];
+    case "on_hold":
+      return ["release", "archive"];
+    case "revoked":
+      return ["reopen", "archive"];
+    case "archived":
+      return ["reopen"];
+    default:
+      return [];
+  }
+}
+
+/**
+ * Owner answer Q11: inactive payees go in a hidden table behind a button.
+ * Active and on-hold rows are the working list; revoked, archived and any
+ * unknown status go to the hidden list. Unknown stays visible in a count so
+ * it is never silently lost.
+ */
+export function splitVaultRecords<T extends { status: string }>(
+  records: readonly T[],
+): { working: T[]; inactive: T[]; unknown: T[] } {
+  const working: T[] = [];
+  const inactive: T[] = [];
+  const unknown: T[] = [];
+  for (const r of records) {
+    if (r.status === "active" || r.status === "on_hold") working.push(r);
+    else if (r.status === "revoked" || r.status === "archived") inactive.push(r);
+    else unknown.push(r);
+  }
+  return { working, inactive, unknown };
+}
+
+// ---------------------------------------------------------------------------
 // Coverage lines
 // ---------------------------------------------------------------------------
 
@@ -327,6 +377,16 @@ export function __runBankingVaultUiTests(): void {
       "4 of 5 vendors have banking on file (2 revoked or archived)",
     "coverage line counts revoked/archived",
   );
+
+  // vaultRowActions mirror the 0259 trigger's allowed moves.
+  ok(vaultRowActions("active", false).join() === "verify,hold,archive", "active unverified → verify, hold, archive");
+  ok(vaultRowActions("active", true).join() === "hold,archive", "active verified → hold, archive");
+  ok(vaultRowActions("on_hold", true).join() === "release,archive", "on_hold → release, archive");
+  ok(vaultRowActions("revoked", false).join() === "reopen,archive", "revoked → reopen, archive");
+  ok(vaultRowActions("archived", true).join() === "reopen", "archived → reopen only");
+  ok(vaultRowActions("Active", true).length === 0, "unknown status → no actions");
+  const split = splitVaultRecords([{ status: "active" }, { status: "on_hold" }, { status: "revoked" }, { status: "archived" }, { status: "x" }]);
+  ok(split.working.length === 2 && split.inactive.length === 2 && split.unknown.length === 1, "split: 2 working, 2 inactive, 1 unknown");
 
   // LEAK GUARD: a full account number must NEVER appear in any badge output.
   for (const badge of [hold, verified, unverified, revoked, archived, typo, missing]) {
