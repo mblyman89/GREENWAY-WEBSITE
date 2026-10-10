@@ -55,17 +55,9 @@ import {
 } from "@/lib/catalog/approved-row-core";
 import { isAiConfigured } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
-import { approveAllPricedAction, approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, restoreDraftAction } from "./actions";
-// S17: "Approve all N priced" for one delivery (one menu update per batch).
-import {
-  BATCH_BUTTON_HELP,
-  BATCH_STAGING_ENV,
-  batchButtonLabel,
-  batchResultCopy,
-  batchStagingEnabled,
-  parseBatchResult,
-  pricedInReview,
-} from "@/lib/inventory/batch-staging-core";
+import { approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, restoreDraftAction } from "./actions";
+// S17: the batch result banner (the Approve-all button was removed in R37 S1).
+import { batchResultCopy, parseBatchResult } from "@/lib/inventory/batch-staging-core";
 import { draftsWhatDoIDoHere } from "@/lib/catalog/next-action-core";
 import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
 import { resolveWebsiteCategoriesWithLiveKeys } from "@/lib/inventory/website-category-resolver-server";
@@ -277,11 +269,6 @@ export default async function CatalogDraftsPage({
   const paged = listPage.plan.mode === "paged";
   const pager = pageWindow(listPage.total, list.page, list.pageSize, drafts.length, listPage.pastEnd);
   const focusManifest = focus.manifestId ? picker?.manifests.find((m) => m.id === focus.manifestId) ?? null : null;
-  // S17: the batch button - focused delivery, review tab, flag on, and an
-  // EXACT priced count (unknown counts hide the button: never guess a number).
-  const batchPriced =
-    focusManifest && picker?.countsComplete ? pricedInReview(picker.counts.get(focusManifest.id) ?? null) : null;
-  const batchOn = batchStagingEnabled(process.env[BATCH_STAGING_ENV]);
   const batchDone = parseBatchResult(sp);
   // R19 S13: the batch lookup for the focused delivery (review tab only).
   // Hidden when the flag is off or AI is not set up; the job and the exact
@@ -753,18 +740,10 @@ export default async function CatalogDraftsPage({
           </section>
         )}
 
-        {/* S17: approve the whole delivery's priced products at once, then
-            update the menu ONCE (bible S17.2 / S17.4). */}
-        {focus.manifestId && view === "draft" && batchOn && batchPriced !== null && batchPriced > 0 && (
-          <form
-            action={approveAllPricedAction.bind(null, focus.manifestId)}
-            className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm"
-          >
-            <input type="hidden" name="return_manifest" value={focus.manifestId} />
-            <Button type="submit" variant="save" size="sm">✓ {batchButtonLabel(batchPriced)}</Button>
-            <span className="text-xs text-[var(--admin-text-muted)]">{BATCH_BUTTON_HELP}</span>
-          </form>
-        )}
+        {/* R37 S1: the S17 approve-every-priced-row button was removed at the
+            owner's request - each product is approved on its own row. The
+            server action stays (tests + any bookmarked form), but the page
+            never renders it. */}
         {/* R19 S13 (bible S13.4): look up the whole delivery on the server.
             The press only writes a job; the every-minute worker
             (/api/cron/lookup-jobs) does the lookups, so closing this tab
