@@ -2142,3 +2142,56 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0260_ach_document_intake.rollback.sql`
   (drops the two functions only; no data is touched).
+
+## R39 — 0261 — ACH e-sign in person (session, consent, certificate)
+
+- [ ] `0261_ach_esign.sql` adds **one table** (`ach_esign_sessions`) and
+  **one function** (`ach_esign_complete`). Together they let an employee sign
+  the GW-ACH-E direct-deposit form **electronically, in person**, with Michael
+  or Stephen at the counter:
+  - Michael or Stephen opens a session and records that they checked the
+    employee's **photo ID**: the type and, at most, the last 4 characters or
+    the expiry date. The database refuses five or more digits in a row, so a
+    full ID number cannot be stored.
+  - The employee gets a **6-digit code** by email. It shows they can open
+    electronic records, as federal E-SIGN 15 U.S.C. 7001(c)(1)(C)(ii)
+    requires. The database stores only a keyed hash of the code. The code
+    expires in 10 minutes, allows 5 tries and 3 sends, and the counters can
+    never go down.
+  - The employee reads the E-SIGN disclosure (paper option, right to
+    withdraw, scope, how to get a paper copy) and ticks **I agree**. The
+    disclosure version and its SHA-256 are kept.
+  - The employee types the accounts twice, then types their legal name as
+    the signature. **One step** files the signed record PDF and the signing
+    certificate PDF, creates the *signed* authorization (method `esign`) and
+    its 1-3 accounts (encrypted, *unverified*), and closes the session. If
+    anything fails, nothing is saved. Payroll still will **not** pay until
+    the accounts are verified (prenote or $1 test credit).
+  - A signed session can never be edited or deleted. A cancelled session can
+    never be reopened. A session older than 30 minutes cannot be signed.
+    Each employee can have only one open session at a time.
+  - Only the server can call the function, using the service role. Staff
+    browsers cannot.
+
+  Apply it **AFTER 0258, 0259 and 0260**. Safe to re-run.
+
+  **Without it:** the **Sign electronically** button says "One-time setup
+  needed". Paper forms (upload and Accept) still work.
+
+  **Run it, then:** run the **Check** below.
+
+  **Check:**
+
+  ```sql
+  select to_regclass('public.ach_esign_sessions') is not null as table_ok,
+         exists (select 1 from pg_proc where proname = 'ach_esign_complete') as fn_ok;
+  -- table_ok | fn_ok
+  -- t        | t
+  ```
+
+  For the full proof, paste `scripts/recon/ach-esign-0261-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0261 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0261_ach_esign.rollback.sql`.
+  It **refuses** once any session has been signed, because signed records
+  are kept (RCW 1.80.110). Otherwise it drops the table and the function.

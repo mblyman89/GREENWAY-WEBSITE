@@ -890,6 +890,8 @@ import { __runVendorAchEnrollmentTests } from "../../src/lib/payments/vendor-ach
 import { __runEmployeeAchCardTests } from "../../src/lib/payroll/employee-ach-card-core";
 import { __runAchDocumentIntakeTests } from "../../src/lib/payments/ach-document-intake-core";
 import { __runKeyedHashTests } from "../../src/lib/security/keyed-hash";
+import { __runPdfTextCoreTests } from "../../src/lib/payments/pdf-text-core";
+import { __runAchEsignCoreTests } from "../../src/lib/payments/ach-esign-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
 import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
@@ -2152,6 +2154,8 @@ __runLiquidVolumeTests();
   assertRan("employee-ach-card", __runEmployeeAchCardTests(), 29); // R39 S4: employee file card agrees with planPayrollEntries
   assertRan("ach-document-intake", __runAchDocumentIntakeTests(), 122); // R39 S5: OWASP drop-only upload, AcroForm draft, blind re-key
   assertRan("keyed-hash", __runKeyedHashTests(), 9); // R39 S5: HKDF-separated HMAC keys (RFC 5869 / RFC 4231 vectors)
+  assertRan("pdf-text-core", __runPdfTextCoreTests(), 28); // R39 S6: deterministic PDF 1.4 writer (xref offsets, WinAnsi)
+  assertRan("ach-esign-core", __runAchEsignCoreTests(), 61); // R39 S6: E-SIGN 7001(c) disclosure, OTP rules, record + certificate
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

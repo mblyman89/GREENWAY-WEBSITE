@@ -125,6 +125,7 @@ export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] =
   { file: "scripts/recon/ach-authorizations-pg-check.sql", mustPrint: "ACH 0258 CHECK PASSED" },
   { file: "scripts/recon/vendor-vault-0259-pg-check.sql", mustPrint: "VAULT 0259 CHECK PASSED" },
   { file: "scripts/recon/ach-intake-0260-pg-check.sql", mustPrint: "ACH 0260 CHECK PASSED" },
+  { file: "scripts/recon/ach-esign-0261-pg-check.sql", mustPrint: "ACH 0261 CHECK PASSED" },
 ];
 
 /** Decide whether one post-apply check passed, from its exit and its output. */
