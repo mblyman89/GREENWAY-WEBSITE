@@ -698,6 +698,103 @@ export function exportFilename(scope: ExportScope, today: string): string {
   return `greenway-inventory-${scope === "all" ? "all-lots" : scope === "page" ? "page" : "view"}-${d}`;
 }
 
+/**
+ * The workbook as plain data (the route hands it to the server-only exceljs
+ * helper). Shapes match src/lib/reports/workbook.ts WorkbookSpec exactly;
+ * kept structural here so this core stays pure and testable.
+ *
+ * Sheets: "Lots" (the data, totals row), "Summary" (what was exported, the
+ * filters in plain words, value totals, on-hand by unit), "Columns" (a data
+ * dictionary — every header and what it means).
+ */
+export type ExportWorkbook = {
+  filename: string;
+  title: string;
+  sheets: Array<{
+    name: string;
+    caption?: string;
+    columns: Array<{ key: string; header: string; type?: ExportType; width?: number }>;
+    rows: Array<Record<string, string | number | null>>;
+    totals?: Record<string, string | number | null>;
+  }>;
+};
+
+export function buildInventoryExport(input: {
+  lots: readonly TableLot[];
+  scope: ExportScope;
+  columnIds: readonly string[];
+  ctx: TableContext;
+  today: string;
+  generatedAt: string;
+  filterLines: readonly string[];
+  sortLine: string | null;
+  byUnit: Record<string, number>;
+  /** Text cells are formula-guarded for BOTH formats (CSV and Excel). */
+  guard?: boolean;
+}): ExportWorkbook {
+  const fields = exportFieldsFor(input.columnIds);
+  const raw = exportRows(input.lots, fields, input.ctx);
+  const guard = input.guard !== false;
+  const rows = raw.map((r) => {
+    if (!guard) return r;
+    const out: Record<string, string | number | null> = {};
+    for (const [k, v] of Object.entries(r)) out[k] = typeof v === "string" ? neutralizeFormula(v) : v;
+    return out;
+  });
+  const totals = exportTotals(rows, fields);
+  const scopeText =
+    input.scope === "all" ? "Every lot (filters and tabs ignored)" : input.scope === "page" ? "Only the rows on the current page" : "The filtered view, every page";
+  const money = exportRows(input.lots, exportFieldsFor(["extcost", "extretail"]), input.ctx);
+  const summaryRows: Array<Record<string, string | number | null>> = [
+    { item: "Generated", value: input.generatedAt },
+    { item: "Lots exported", value: input.lots.length },
+    { item: "Which lots", value: scopeText },
+    { item: "Columns", value: `${fields.length} fields from ${input.columnIds.length} table columns` },
+    { item: "Sorted by", value: input.sortLine ?? "Default order" },
+    ...(input.scope === "all"
+      ? []
+      : input.filterLines.length > 0
+        ? input.filterLines.map((f, i) => ({ item: i === 0 ? "Filters" : "", value: f }))
+        : [{ item: "Filters", value: "None" }]),
+    { item: "Inventory value at cost", value: `$${(money.reduce((s, r) => s + (typeof r.ext_cost === "number" ? r.ext_cost : 0), 0) / 100).toFixed(2)}` },
+    { item: "Lots with stock but no unit cost", value: input.lots.filter((l) => Number(l.on_hand_qty) > 0 && l.inv_metrics?.extCostMinor == null).length },
+    { item: "Inventory value at retail", value: `$${(money.reduce((s, r) => s + (typeof r.ext_retail === "number" ? r.ext_retail : 0), 0) / 100).toFixed(2)}` },
+    { item: "Lots with stock but no approved price", value: input.lots.filter((l) => Number(l.on_hand_qty) > 0 && l.inv_metrics?.extRetailMinor == null).length },
+    ...Object.entries(input.byUnit)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([u, q]) => ({ item: `On hand (${u})`, value: q })),
+  ].map((r) => ({ item: r.item, value: typeof r.value === "string" && guard ? neutralizeFormula(r.value) : r.value }));
+  return {
+    filename: exportFilename(input.scope, input.today),
+    title: "Greenway inventory",
+    sheets: [
+      {
+        name: "Lots",
+        caption: `${input.lots.length} lots \u00b7 ${scopeText}`,
+        columns: fields.map((f) => ({ key: f.key, header: f.header, type: f.type })),
+        rows,
+        totals,
+      },
+      {
+        name: "Summary",
+        columns: [
+          { key: "item", header: "Item", type: "text", width: 36 },
+          { key: "value", header: "Value", type: "text", width: 60 },
+        ],
+        rows: summaryRows,
+      },
+      {
+        name: "Columns",
+        columns: [
+          { key: "header", header: "Column", type: "text", width: 28 },
+          { key: "meaning", header: "What it means", type: "text", width: 90 },
+        ],
+        rows: fields.map((f) => ({ header: f.header, meaning: f.meaning })),
+      },
+    ],
+  };
+}
+
 /** Sort keys every sortable registry column points at (must all exist). */
 export function registrySortKeys(): string[] {
   return INVENTORY_TABLE_COLUMNS.map((c) => c.sortKey).filter((k): k is string => Boolean(k));
@@ -800,6 +897,23 @@ export function __runInventoryTableCoreTests(): { passed: number; failed: number
   ok(exportFilename("all", "2026-03-31") === "greenway-inventory-all-lots-2026-03-31" && exportFilename("view", "bad") === "greenway-inventory-view-export", "filename");
   ok(parseExportScope("page") === "page" && parseExportScope("x") === "view" && parseExportColumns("all") === "all" && parseExportColumns(null) === "visible", "export params");
   ok(multiParam({ a: ["x, y", "z"] }, "a").join() === "x,y,z", "multiParam");
+
+  // Workbook.
+  const wb = buildInventoryExport({
+    lots: [lot], scope: "view", columnIds: ["product", "cost", "extcost", "extretail"], ctx: {}, today: "2026-03-31",
+    generatedAt: "2026-03-31 09:00", filterLines: ["Vendor: =evil"], sortLine: "Ext. cost, highest first", byUnit: { ea: 4 },
+  });
+  ok(wb.sheets.map((x) => x.name).join() === "Lots,Summary,Columns", "three sheets");
+  ok(wb.sheets[0].rows[0].product === "'=HYPERLINK(\"x\")", "data cells formula-guarded");
+  ok(wb.sheets[0].columns.find((c) => c.key === "ext_cost")?.type === "currency", "money typed as currency");
+  const sv = Object.fromEntries(wb.sheets[1].rows.map((r) => [r.item, r.value]));
+  ok(sv["Inventory value at cost"] === "$20.00" && sv["Lots with stock but no approved price"] === 1 && sv["On hand (ea)"] === 4, `summary values (got ${JSON.stringify(sv)})`);
+  ok(sv["Filters"] === "Vendor: =evil", "filter line written (does not start with =, so not altered)");
+  ok(wb.sheets[2].rows.length === wb.sheets[0].columns.length, "dictionary covers every column");
+  const all = buildInventoryExport({ lots: [lot], scope: "all", columnIds: ["product"], ctx: {}, today: "2026-03-31", generatedAt: "x", filterLines: ["Vendor: A"], sortLine: null, byUnit: {} });
+  ok(!all.sheets[1].rows.some((r) => r.item === "Filters") && all.filename.endsWith("all-lots-2026-03-31"), "scope=all lists no filters");
+  const raw2 = buildInventoryExport({ lots: [lot], scope: "page", columnIds: ["product"], ctx: {}, today: "d", generatedAt: "x", filterLines: [], sortLine: null, byUnit: {}, guard: false });
+  ok(raw2.sheets[0].rows[0].product === "=HYPERLINK(\"x\")" && raw2.sheets[1].rows.some((r) => r.item === "Filters" && r.value === "None"), "guard off + no filters = None");
 
   return { passed, failed };
 }

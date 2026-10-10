@@ -2137,7 +2137,7 @@ __runLiquidVolumeTests();
   assertRan("delivery-brand-core", __runDeliveryBrandCoreTests(), 51); // R37 S5: delivery-wide brand, vendor memory
   assertRan("lookup-history-core", __runLookupHistoryCoreTests(), 67); // R37 S6: search history + harvest verdict
   assertRan("inventory-metrics-core", __runInventoryMetricsTests(), 28); // R38 S2: ext cost/retail, sell-through, velocity, days of supply
-  assertRan("inventory-table-core", __runInventoryTableCoreTests(), 52); // R38 S2-S4: column registry, presets, page size, pager, export
+  assertRan("inventory-table-core", __runInventoryTableCoreTests(), 60); // R38 S2-S4: column registry, presets, page size, pager, export
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
