@@ -9,6 +9,15 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   __runAchDocumentIntakeTests,
+  acceptChecks,
+  canDropDocuments,
+  canReviewDocuments,
+  checkSignedOn,
+  draftIsUsable,
+  entryFromForm,
+  last4,
+  planAccountRows,
+  validateRekeyEntry,
   ALLOWED_EXTS,
   canMoveIntake,
   checkDocumentUpload,
@@ -419,5 +428,112 @@ describe("server rekeyStep agrees with rekeyVerdict (two passes, fingerprints on
     expect(parseFingerprint({ v: 1, byId: "s", accounts: [{ routing: "1", account: "2", type: "3", amount: "4" }] })).toBeNull();
     expect(parseFingerprint({ v: 1, byId: "s", accounts: new Array(4).fill({ routing: "a".repeat(64), account: "a".repeat(64), type: "a".repeat(64), amount: "a".repeat(64) }) })).toBeNull();
     expect(parseFingerprint(null)).toBeNull();
+  });
+});
+
+describe("S5 helpers: gaps found by the second mutation run", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { createHmac } = require("node:crypto") as typeof import("node:crypto");
+  const hm = (x: string) => createHmac("sha256", "test-key").update(x).digest("hex");
+  const A: RekeyAccount = { routing: RTN, account: "12345678", accountType: "checking", rule: { kind: "remainder" } };
+  const full = { bankName: "", routing: RTN, account: "12345678", accountType: "checking" as const, rule: { kind: "remainder" as const } };
+
+  it("draftIsUsable: needs a machine source, at least one account, and EVERY account complete", () => {
+    expect(draftIsUsable({ ...EMPTY_DRAFT, source: "acroform", accounts: [full] })).toBe(true);
+    expect(draftIsUsable({ ...EMPTY_DRAFT, source: "none", accounts: [full] })).toBe(false);
+    expect(draftIsUsable({ ...EMPTY_DRAFT, source: "acroform", accounts: [] })).toBe(false);
+    expect(draftIsUsable({ ...EMPTY_DRAFT, source: "acroform", accounts: [full, { ...full, account: "" }] })).toBe(false);
+    expect(draftIsUsable({ ...EMPTY_DRAFT, source: "acroform", accounts: [full], warnings: ["x"] })).toBe(false);
+  });
+  it("fingerprints ignore spaces and dashes, like the comparison does", () => {
+    const first = rekeyStep(EMPTY_DRAFT, null, { byId: "s", accounts: [{ ...A, account: "1234 5678", routing: "0210-00021" }] }, hm);
+    const pending = !first.ok && "keepPending" in first ? (first.keepPending as EntryFingerprint) : null;
+    expect(rekeyStep(EMPTY_DRAFT, pending, { byId: "m", accounts: [A] }, hm)).toMatchObject({ ok: true, basis: "two_blind_entries" });
+  });
+  it("parseFingerprint refuses an unknown version", () => {
+    const fp = fingerprintEntry({ byId: "s", accounts: [A] }, hm);
+    expect(parseFingerprint(fp)).not.toBeNull();
+    expect(parseFingerprint({ ...fp, v: 2 })).toBeNull();
+  });
+  it("after a mismatch the LATEST entry becomes pending (two consecutive agreeing entries)", () => {
+    const x = { byId: "s", accounts: [{ ...A, account: "11111111" }] };
+    const y = { byId: "m", accounts: [A] };
+    const s1 = rekeyStep(EMPTY_DRAFT, null, x, hm);
+    const p1 = !s1.ok && "keepPending" in s1 ? (s1.keepPending as EntryFingerprint) : null;
+    const s2 = rekeyStep(EMPTY_DRAFT, p1, y, hm);
+    expect(s2.ok).toBe(false);
+    const p2 = !s2.ok && "keepPending" in s2 ? (s2.keepPending as EntryFingerprint) : null;
+    expect(rekeyStep(EMPTY_DRAFT, p2, { ...y, byId: "s" }, hm)).toMatchObject({ ok: true, basis: "two_blind_entries" });
+  });
+  it("the note says whether the same person or two people entered it", () => {
+    const s1 = rekeyStep(EMPTY_DRAFT, null, { byId: "s", accounts: [A] }, hm);
+    const p = !s1.ok && "keepPending" in s1 ? (s1.keepPending as EntryFingerprint) : null;
+    const same = rekeyStep(EMPTY_DRAFT, p, { byId: "s", accounts: [A] }, hm);
+    const diff = rekeyStep(EMPTY_DRAFT, p, { byId: "m", accounts: [A] }, hm);
+    expect(same.ok && same.note).toContain("same person");
+    expect(diff.ok && diff.note).toContain("different people");
+  });
+
+  const form = (o: Record<string, string>) => (k: string) => o[k] ?? "";
+  it("entryFromForm: a vendor has one row; extra rows are ignored", () => {
+    const r = entryFromForm(form({ a1_rtn: RTN, a1_acct: "12345678", a1_type: "checking", a2_rtn: RTN, a2_acct: "999999", a2_type: "savings", a2_how: "remainder" }), "vendor");
+    expect(r).toMatchObject({ ok: true });
+    if (r.ok) expect(r.accounts).toHaveLength(1);
+  });
+  it("entryFromForm: percent typed without the % sign is accepted", () => {
+    const r = entryFromForm(form({ a1_rtn: RTN, a1_acct: "12345678", a1_type: "checking", a1_how: "percent", a1_amt: "20" }), "employee");
+    expect(r.ok && r.accounts[0].rule).toEqual({ kind: "percent", basisPoints: 2000 });
+  });
+  it("entryFromForm: an amount that does not match the chosen kind is refused", () => {
+    const r = entryFromForm(form({ a1_rtn: RTN, a1_acct: "12345678", a1_type: "checking", a1_how: "fixed", a1_amt: "20%" }), "employee");
+    expect(r.ok).toBe(false);
+  });
+  it("entryFromForm: a row with only a routing number is kept (so validation flags it), never silently dropped", () => {
+    const r = entryFromForm(form({ a1_rtn: RTN, a1_type: "checking", a1_how: "remainder" }), "employee");
+    expect(r.ok && r.accounts).toHaveLength(1);
+    if (r.ok) expect(validateRekeyEntry(r.accounts).join(" ")).toContain("4-17 digits");
+  });
+
+  it("acceptChecks: duplicates (including leading zeros), remainder count, 100% total, vendor rules", () => {
+    const fixed = (c: number): RekeyAccount => ({ ...A, account: `5555${c}`, rule: { kind: "fixed", cents: c } });
+    expect(acceptChecks("employee", [A, { ...A, rule: { kind: "fixed", cents: 100 } }]).join(" ")).toContain("listed twice");
+    expect(acceptChecks("employee", [A, { ...A, account: "0012345678", rule: { kind: "fixed", cents: 100 } }]).join(" ")).toContain("listed twice");
+    expect(acceptChecks("employee", [fixed(100)]).join(" ")).toContain("remainder");
+    const pct = (acct: string, bp: number): RekeyAccount => ({ ...A, account: acct, rule: { kind: "percent", basisPoints: bp } });
+    expect(acceptChecks("employee", [pct("44444444", 5000), pct("33333333", 5000), A]).join(" ")).toContain("100%");
+    expect(acceptChecks("employee", [pct("44444444", 4999), pct("33333333", 5000), A])).toEqual([]);
+    expect(acceptChecks("vendor", [{ ...A, rule: { kind: "fixed", cents: 100 } }]).join(" ")).toContain("whole payment");
+    expect(acceptChecks("vendor", [A])).toEqual([]);
+  });
+  it("checkSignedOn: today ok, impossible dates and pre-2000 refused", () => {
+    expect(checkSignedOn("2025-06-01", "2025-06-01T12:00:00Z")).toEqual({ ok: true, date: "2025-06-01" });
+    expect(checkSignedOn("2025-06-02", "2025-06-01T12:00:00Z").ok).toBe(false);
+    expect(checkSignedOn("2024-02-30", "2025-06-01").ok).toBe(false);
+    expect(checkSignedOn("2024-02-29", "2025-06-01").ok).toBe(true);
+    expect(checkSignedOn("1999-12-31", "2025-06-01").ok).toBe(false);
+    expect(checkSignedOn("2000-01-01", "2025-06-01").ok).toBe(true);
+  });
+  it("planAccountRows: both numbers must encrypt, HMAC must be hex, priority from 1, last-4 from the end", () => {
+    const hk = () => "a".repeat(64);
+    const enc = (s: string) => `encv1:x:${s.length}`;
+    const two = [{ ...A, account: "1234-5678", rule: { kind: "fixed" as const, cents: 500 } }, { ...A, account: "87654321" }];
+    const r = planAccountRows(two, ["Bank A", ""], { encrypt: enc, hmacKey: hk });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.rows.map((x) => x.priority)).toEqual([1, 2]);
+      expect(r.rows[0].routing_last4).toBe(RTN.slice(-4));
+      expect(r.rows[0].account_last4).toBe("5678");
+      expect(r.rows[0]).toMatchObject({ rule_kind: "fixed", fixed_cents: 500, basis_points: null });
+    }
+    const onlyRouting = (s: string) => (s.length === 9 ? `encv1:${s}` : s);
+    expect(planAccountRows([A], [""], { encrypt: onlyRouting, hmacKey: hk }).ok).toBe(false);
+    expect(planAccountRows([A], [""], { encrypt: enc, hmacKey: () => "not-hex" }).ok).toBe(false);
+    expect(last4("12-34")).toBe("1234");
+  });
+  it("only managers and up may drop documents; only owner/admin may review", () => {
+    for (const r of ["owner", "admin", "manager"]) expect(canDropDocuments(r)).toBe(true);
+    for (const r of ["content_editor", "budtender", "", null]) expect(canDropDocuments(r)).toBe(false);
+    expect(canReviewDocuments("manager")).toBe(false);
+    expect(canReviewDocuments("admin")).toBe(true);
   });
 });
