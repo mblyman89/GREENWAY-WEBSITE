@@ -72,7 +72,7 @@ MUTANTS = {
         (EXTRACT, 'if (u.protocol !== "https:")', 'if (false)'),
         (EXTRACT, 'if (u.username || u.password)', 'if (false)'),
         (EXTRACT, 'if (u.port && u.port !== "443")', 'if (false)'),
-        (EXTRACT, 'if (!(COA_HOST_ALLOW as readonly string[]).includes(host))', 'if (false)'),
+        (EXTRACT, '  if (!allow.includes(host)) {', '  if (false) {'),
         (EXTRACT, 'ct.includes("application/pdf") || ct.includes("application/octet-stream")', 'true'),
         (EXTRACT, 'return ct.includes("json") || ct.includes("text/plain");', 'return true;'),
         (EXTRACT, 'bytes[4] === 0x2d', 'true'),
