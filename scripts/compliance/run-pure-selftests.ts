@@ -45,6 +45,7 @@ import { __runPdpSizeCoreTests } from "../../src/lib/menu/pdp-size-core";
 import { __runPriceExplainCoreTests } from "../../src/lib/inventory/price-explain-core";
 import { __runOnboardingRecallCoreTests } from "../../src/lib/inventory/onboarding-recall-core";
 import { __runLotOnboardingCoreTests } from "../../src/lib/inventory/lot-onboarding-core";
+import { __runLotWebsiteCategoryTests } from "../../src/lib/inventory/lot-website-category-core";
 // R31: the one finalize button + the "should I press Run AI extract?" advice.
 import { __runFinalizeLabelCoreTests } from "../../src/lib/inventory/finalize-label-core";
 import { __runAiExtractAdviceCoreTests } from "../../src/lib/inventory/ai-extract-advice-core";
@@ -2116,6 +2117,7 @@ __runLiquidVolumeTests();
   assertRan("price-explain-core", __runPriceExplainCoreTests(), 66); // R32: 2x cost + tax, rounded up — explained, dynamic
   assertRan("onboarding-recall-core", __runOnboardingRecallCoreTests(), 59); // R32: remembered type/strain/shelf by identity
   assertRan("lot-onboarding-core", __runLotOnboardingCoreTests(), 35); // R32: inventory table onboarding join
+  assertRan("lot-website-category-core", __runLotWebsiteCategoryTests(), 21); // R38 S1: effective website category
   assertRan("lot-strain-propagation-core", __runLotStrainPropagationCoreTests(), 39); // R33: lot strain type reaches the website (reviewer lock)
   assertRan("lot-details-propagation-core", __runLotDetailsPropagationCoreTests(), 38); // R33: vendor/brand/strain name reach the website
   assertRan("product-facts-overlay-core", __runProductFactsOverlayCoreTests(), 33); // R33: own lab terpenes + reviewer strain on the menu

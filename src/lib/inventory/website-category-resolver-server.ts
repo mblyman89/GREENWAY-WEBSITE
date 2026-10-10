@@ -22,6 +22,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { listInventoryTypes, listWebsiteCategoryTypes } from "@/lib/pos/types-store";
 import { websiteCategoryDefinitions } from "@/lib/pos/category-taxonomy";
@@ -68,21 +69,31 @@ export async function loadMenuCategoriesForKeys(
     const published = await getPublishedVersion();
     if (!published) return out;
     const admin = createSupabaseAdminClient();
-    const CHUNK = 300;
-    for (let i = 0; i < unique.length; i += CHUNK) {
-      const slice = unique.slice(i, i + CHUNK);
-      const { data, error } = await admin
-        .from("menu_items")
-        .select("source_item_id, category")
-        .eq("menu_version_id", published.id)
-        .in("source_item_id", slice);
-      if (error) {
-        console.error("[website-category-resolver] menu_items lookup error:", error.message);
-        continue;
-      }
-      for (const row of (data as Array<{ source_item_id: string; category: string | null }> | null) ?? []) {
-        if (row.source_item_id && row.category) out.set(row.source_item_id, row.category);
-      }
+    // R38 S1: chunked AND paged. menu_items has no unique (version, source)
+    // constraint (0002 only indexes it), so a 300-key chunk is not provably
+    // under PostgREST's silent 1,000-row cap. The inventory table now resolves
+    // EVERY lot through here, so the read must never truncate.
+    const rows = await chunkedIn<string, { source_item_id: string; category: string | null }>(
+      unique,
+      async (chunk, from, to) => {
+        const { data, error } = await admin
+          .from("menu_items")
+          .select("source_item_id, category")
+          .eq("menu_version_id", published.id)
+          .in("source_item_id", chunk)
+          .order("source_item_id", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) {
+          console.error("[website-category-resolver] menu_items lookup error:", error.message);
+          return [];
+        }
+        return (data as Array<{ source_item_id: string; category: string | null }> | null) ?? [];
+      },
+      { chunkSize: 300, concurrency: MENU_READ_CONCURRENCY },
+    );
+    for (const row of rows) {
+      if (row.source_item_id && row.category && !out.has(row.source_item_id)) out.set(row.source_item_id, row.category);
     }
   } catch (err) {
     console.error("[website-category-resolver] loadMenuCategoriesForKeys failed:", err);

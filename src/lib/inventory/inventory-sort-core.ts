@@ -42,7 +42,7 @@
 import { intakePotencyUnit } from "@/lib/pos/intake-potency-core";
 import { lotThcValue, lotCbdValue, lotMinorValue } from "@/lib/pos/lot-potency-core";
 import { lotTypeLabel, lotStrainTypeLabel } from "@/lib/inventory/lot-table-core";
-import type { FilterableLot } from "@/lib/inventory/inventory-filter-core";
+import { lotWebsiteCategoryOf, type FilterableLot } from "@/lib/inventory/inventory-filter-core";
 
 export type SortDirection = "asc" | "desc";
 
@@ -138,7 +138,7 @@ export const INVENTORY_COLUMN_SORTS: ColumnSortDef[] = [
   // R32 (T-328): onboarding columns (append only — URL contract).
   { key: "price", label: "Price", kind: "number", firstClick: "desc", number: (l) => l.onboarding_price_minor ?? null },
   { key: "margin", label: "Margin", kind: "number", firstClick: "desc", number: (l) => l.onboarding_margin_pct ?? null },
-  { key: "shelf", label: "Website category", kind: "text", firstClick: "asc", text: (l) => l.onboarding_shelf ?? null },
+  { key: "shelf", label: "Website category", kind: "text", firstClick: "asc", text: (l) => lotWebsiteCategoryOf(l) },
   { key: "onboarded", label: "Onboarded", kind: "date", firstClick: "desc", date: (l) => l.onboarded_on ?? null },
 ];
 
