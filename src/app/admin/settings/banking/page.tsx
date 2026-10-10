@@ -38,6 +38,7 @@ import { resolveStaffNames } from "@/lib/promotions/promotions-store";
 import { pacificToday } from "@/lib/reports/timezone";
 import { listEmployeeBanking, listEmployees } from "@/lib/staffing/store";
 import { listVendors } from "@/lib/vendors/store";
+import { readVendorAchFlags, vendorFollowUpList } from "@/lib/payments/vendor-ach-enrollment-core";
 import {
   clearEmployeeBankingAction,
   saveEmployeeBankingAction,
@@ -89,6 +90,17 @@ export default async function BankingVaultPage({
   const vaultByVendor = new Map(vault.records.map((r) => [r.vendor_id, r]));
   const vendorsWithoutBanking = vendors.filter((v) => !vaultByVendor.has(v.id));
   const editRecord = sp.edit ? vaultByVendor.get(sp.edit) ?? null : null;
+  // R39 S4: vendors to chase (needs bank info, on hold, unverified, not set up,
+  // or flags that contradict the vault). Flags ride on listVendors' select *.
+  const vendorFlags = vendors.map((v) => ({ v, flags: readVendorAchFlags(v as unknown as Record<string, unknown>) }));
+  const flagsReady = vendorFlags.length > 0 && vendorFlags.every((x) => x.flags.columnsReady);
+  const followUp = vendorFollowUpList(
+    vendorFlags.map(({ v, flags }) => {
+      const rec = vaultByVendor.get(v.id) ?? null;
+      return { id: v.id, name: v.display_name, flags, vault: { hasRecord: Boolean(rec), status: rec?.status ?? null, verifiedAt: rec?.verified_at ?? null } };
+    }),
+  );
+  const optedOutCount = vendorFlags.filter((x) => x.flags.optedOut).length;
 
   // Honest coverage lines for the tab strip.
   const employeesWithBanking = employees.filter((e) => {
@@ -243,6 +255,43 @@ export default async function BankingVaultPage({
                     (after 0258) in the Supabase SQL editor, then refresh. Until then, holds and releases still work and are
                     fully audited, but the database can&apos;t yet enforce the callback rules, record who released, or archive.
                   </div>
+                ) : null}
+
+                {/* R39 S4: vendors to follow up (owner: "flagged or known to me in some way") */}
+                {flagsReady ? (
+                  <section className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/25 bg-[var(--admin-orange)]/[0.04] p-4">
+                    <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-white/60">
+                      Vendors to follow up ({followUp.length})
+                    </h2>
+                    <p className="mb-3 text-xs text-white/50">
+                      Most urgent first. {optedOutCount > 0 ? `${optedOutCount} vendor${optedOutCount === 1 ? "" : "s"} opted out of ACH (not listed). ` : ""}
+                      Flag or opt out a vendor on its own page.
+                    </p>
+                    {followUp.length === 0 ? (
+                      <p className="text-sm text-white/60">Nothing to chase. Every vendor is ACH-ready or opted out.</p>
+                    ) : (
+                      <ul className="divide-y divide-white/5">
+                        {followUp.map((r) => (
+                          <li key={r.vendorId} className="flex flex-wrap items-start justify-between gap-2 py-2">
+                            <div className="min-w-0">
+                              <Link href={`/admin/vendors/${r.vendorId}`} className="text-sm font-semibold text-white hover:underline">
+                                {r.name}
+                              </Link>
+                              <p className="text-xs text-white/50">{r.nextStep}</p>
+                              {r.warnings.map((w) => (
+                                <p key={w} className="text-xs text-[var(--admin-orange)]">{w}</p>
+                              ))}
+                            </div>
+                            <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-xs text-white/70">{r.label}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                ) : vendors.length > 0 ? (
+                  <p className="text-xs text-white/40">
+                    The "needs bank info" and "opted out" flags turn on after migration 0258 is applied.
+                  </p>
                 ) : null}
 
                 {/* Working vault records: active + on hold */}
