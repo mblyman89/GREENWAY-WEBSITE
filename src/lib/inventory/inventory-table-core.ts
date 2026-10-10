@@ -32,7 +32,7 @@ import { intakePotencyUnit } from "@/lib/pos/intake-potency-core";
 import { lotWebsiteCategoryOf, websiteCategorySourceLabel, type FilterableLot } from "@/lib/inventory/inventory-filter-core";
 import { receivedOnSourceLabel } from "@/lib/inventory/received-date-core";
 import { columnSortDef } from "@/lib/inventory/inventory-sort-core";
-import { paramsFrom, type RawParams } from "@/lib/inventory/inventory-url-core";
+import { paramsFrom, INVENTORY_DISPLAY_PARAMS, type RawParams } from "@/lib/inventory/inventory-url-core";
 
 /* ── Lot shape the table reads ───────────────────────────────────────────── */
 
@@ -915,5 +915,7 @@ export function __runInventoryTableCoreTests(): { passed: number; failed: number
   const raw2 = buildInventoryExport({ lots: [lot], scope: "page", columnIds: ["product"], ctx: {}, today: "d", generatedAt: "x", filterLines: [], sortLine: null, byUnit: {}, guard: false });
   ok(raw2.sheets[0].rows[0].product === "=HYPERLINK(\"x\")" && raw2.sheets[1].rows.some((r) => r.item === "Filters" && r.value === "None"), "guard off + no filters = None");
 
+  // The filter panel / Clear all keep exactly these display params.
+  ok(DISPLAY_PARAMS.join(",") === INVENTORY_DISPLAY_PARAMS.join(","), "display params agree with url-core");
   return { passed, failed };
 }

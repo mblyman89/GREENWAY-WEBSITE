@@ -274,11 +274,23 @@ export function clearParamHref(raw: RawParams, param: string): string {
  * control above the panel and yanking the tab out from under the owner when
  * they hit "clear filters" would be surprising.
  */
+/**
+ * R38: params that choose HOW the table is shown (rows per page, column
+ * view / custom columns, density) rather than WHICH lots match. Applying or
+ * clearing filters keeps them, so the owner's chosen layout never resets
+ * itself. inventory-table-core's DISPLAY_PARAMS must equal this list (its
+ * self-test checks).
+ */
+export const INVENTORY_DISPLAY_PARAMS = ["per", "view", "cols", "density"] as const;
+
 export function clearAllFiltersHref(raw: RawParams): string {
   const params = paramsFrom(raw);
   const keep = new URLSearchParams();
   const status = params.get("status");
   if (status) keep.set("status", status);
+  for (const k of INVENTORY_DISPLAY_PARAMS) {
+    for (const v of params.getAll(k)) if (v) keep.append(k, v);
+  }
   return hrefFrom(keep);
 }
 

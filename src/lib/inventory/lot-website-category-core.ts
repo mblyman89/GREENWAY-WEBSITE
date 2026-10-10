@@ -145,7 +145,7 @@ export type LotWebsiteCategoryFields = {
 };
 
 /** Attach the effective category to each lot (pure; input never mutated). */
-export function attachLotWebsiteCategory<L extends { onboarding?: unknown }>(
+export function attachLotWebsiteCategory<L extends object>(
   lots: readonly L[],
   resolutions: ReadonlyArray<ResolverAnswer | null | undefined>,
   picks: ReadonlyArray<string | null | undefined>,
