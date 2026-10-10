@@ -40,6 +40,7 @@ import {
   servingLimitApplies,
   servingLimitWarnings,
 } from "@/lib/compliance/serving-limit-warning-core";
+import { VolumeField } from "@/components/admin/inventory/VolumeField";
 import { resolveIntakeFactReview } from "./actions";
 
 const inputCls =
@@ -249,7 +250,19 @@ export function ProductFactsPanel({
               <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Package CBN (mg)" name="packageCbnMg" />
               <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Package CBC (mg)" name="packageCbcMg" />
               <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Net weight (g)" name="netWeightGrams" />
-              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Net volume (ml)" name="netVolumeMl" />
+              {(() => {
+                // R37 S3: ml or fl oz, converted on the server, stored in ml.
+                const own = val(saved, "netVolumeMl");
+                const fromLab = own === "" ? lab?.prefill.netVolumeMl ?? "" : "";
+                return (
+                  <VolumeField
+                    id={`pf-${draftId}-netVolumeMl`}
+                    defaultMl={own || fromLab}
+                    prefill={fromLab ? "coa" : undefined}
+                    hint={fromLab ? "from the lab certificate" : null}
+                  />
+                );
+              })()}
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div>

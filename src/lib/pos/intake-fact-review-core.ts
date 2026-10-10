@@ -49,6 +49,7 @@ import type { StagedSnapshotItem } from "@/lib/pos/intake-menu-staging-core";
 import type { LotFactBundle } from "@/lib/pos/intake-mastering-core";
 import { recordedDraftIds } from "@/lib/inventory/batch-staging-core";
 import { isUuid } from "@/lib/catalog/draft-deep-link-core";
+import { parseVolumeInput } from "@/lib/compliance/volume-input-core";
 
 // ---------------------------------------------------------------------------
 // Vocabulary
@@ -563,7 +564,7 @@ const NUMBER_FIELDS: (keyof FactReviewFacts)[] = [
   "packageThcMg",
   "packageCbdMg",
   "netWeightGrams",
-  "netVolumeMl",
+  // R37 S3: netVolumeMl is parsed with its unit (ml / fl oz) below.
 ];
 
 export const NOTE_MAX = 500;
@@ -605,6 +606,10 @@ export function parseIntakeFactForm(
       }
       (facts as Record<string, number>)[key] = value;
     }
+    // R37 S3: the volume is typed in ml or US fl oz and stored in ml.
+    const vol = parseVolumeInput(get("netVolumeMl"), get("netVolumeUnit"));
+    if (!vol.ok) return { ok: false, error: vol.error };
+    if (vol.ml !== null) facts.netVolumeMl = vol.ml;
     for (const key of ["thc", "cbd"] as const) {
       const raw = get(key).trim();
       if (raw !== "") (facts as Record<string, string>)[key] = raw;
