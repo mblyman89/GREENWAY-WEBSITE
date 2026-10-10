@@ -82,8 +82,6 @@ const hrefOf = (html: string, testId: string) => {
   const tag = m?.[0] ?? "";
   return amp(tag.match(/href="([^"]*)"/)?.[1] ?? "");
 };
-const allHrefs = (html: string, testId: string) =>
-  [...html.matchAll(new RegExp(`<a[^>]*data-testid="${testId}"[^>]*>`, "g"))].map((m) => amp(m[0].match(/href="([^"]*)"/)?.[1] ?? ""));
 const hidden = (html: string, name: string) =>
   [...html.matchAll(new RegExp(`type="hidden" name="${name}" value="([^"]*)"`, "g"))].map((m) => amp(m[1]));
 const formHidden = (html: string, action: string) => {
