@@ -70,13 +70,18 @@ describe("SLICE 67 — reprocess planner", () => {
     const patch = planLotReprocess(input);
     expect(patch?.update.package_thc_mg).toBe(100);
     expect(patch?.update.ratio_label).toBe("3:1");
+    // R37 S2: a verified 100 mg total gets 10 x 10 mg (WAC 314-55-095(1)(a)).
+    expect(patch?.update.servings_per_pack).toBe(10);
+    expect(patch?.update.mg_per_serving).toBe(10);
     // Apply the patch conceptually: with the facts present, second pass is a no-op.
     const second = planLotReprocess({
       ...input,
       package_thc_mg: 100,
+      servings_per_pack: 10,
+      mg_per_serving: 10,
       ratio_label: "3:1",
       minor_cannabinoids_json: [{ type: "cbg", value: "300", unit: "mg" }],
-      fact_provenance: { package_thc_mg: "name-internal", ratio_label: "name" },
+      fact_provenance: { package_thc_mg: "name-internal", ratio_label: "name", servings_per_pack: "wa-rule", mg_per_serving: "wa-rule" },
     });
     expect(second).toBeNull();
   });

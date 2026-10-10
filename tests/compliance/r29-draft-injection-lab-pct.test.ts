@@ -66,8 +66,14 @@ describe("R29 - lab percents are never read as milligrams at draft injection", (
   it("fact engine: a 0.5 % lab figure does not become a verified 0.5 mg serving / 200 servings", () => {
     const e = examineDraftFacts(GUMMY_100)!;
     expect(e).not.toBeNull();
-    expect(e.mgPerServing).toBeNull();
-    expect(e.servingsPerPack).toBeNull();
+    // R37 S2: the only serving figures are Washington's 10 mg rule on the
+    // name's 100 mg (10 x 10 mg), held single-source like the total they
+    // divide - never the 0.5 mg / 200 servings the lab percent produced.
+    expect(e.mgPerServing?.value).toBe(10);
+    expect(e.mgPerServing?.source).toBe("wa-rule");
+    expect(e.mgPerServing?.confidence).toBe("single-source");
+    expect(e.servingsPerPack?.value).toBe(10);
+    expect(e.servingsPerPack?.confidence).toBe("single-source");
     // The name's "100mg" survives, sourced from the name alone, never "name+column".
     expect(e.packageThcMg?.value).toBe(100);
     expect(e.packageThcMg?.source).toBe("name");

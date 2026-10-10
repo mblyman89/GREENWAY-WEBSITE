@@ -155,7 +155,7 @@ export function __runServingFactsViewTests(): { passed: number; failed: number }
   ok(a?.prefill.servingsPerPack?.value === "10" && a.prefill.mgPerServing?.value === "10", "name 100mg THC -> 10 x 10");
   ok(!("packageThcMg" in (a?.prefill ?? {})), "the stated name total is not re-filled");
   ok(a!.headline.includes("worked out for you"), "headline: worked out");
-  ok(a!.derivation.servingsPerPack.source === "wa-rule" && a!.derivation.packageThcMg.source === "name", "R37: engine rule figures are not mistaken for printed name facts");
+  ok(a!.derivation.servingsPerPack?.source === "wa-rule" && a!.derivation.packageThcMg?.source === "name", "R37: engine rule figures are not mistaken for printed name facts");
 
   // Name pack + ratio, no mg, unit weight + lab % -> lab-weight package then arithmetic.
   const b = servingFactsView({ ...base, name: "bytes - CBG:CBC:CBD:THC (2:2:2:1) - 10pk - Sour Mandarin - 50g", labThcPct: 0.1206, labCbdPct: 0.2219 });
