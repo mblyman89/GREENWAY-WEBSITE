@@ -26,6 +26,7 @@ import {
   buildInventoryPage,
   countLeaflyLots,
   LEAFLY_STATUS_TAB,
+  withDefaultStatus,
   type PageLot,
 } from "@/lib/inventory/inventory-page-core";
 import { InventoryFilterPanel } from "@/components/admin/inventory/InventoryFilterPanel";
@@ -161,7 +162,12 @@ export default async function InventoryPage({
   }>;
 }) {
   await requirePermission("inventory.manage");
-  const sp = await searchParams;
+  // R36 #3: a bare arrival opens on the Active tab. `sp` carries the
+  // effective status explicitly from here on, so every tab, chip, pager,
+  // filter form and bulk return link agrees with what the table shows
+  // (deep links that scope by q / vendor / worklist / fStatus still mean all
+  // statuses - see effectiveInventoryStatus).
+  const sp = withDefaultStatus(await searchParams) as Awaited<typeof searchParams>;
   const { status, back, page } = sp;
   const activeStatus = status ?? "all";
   const rawPage = parsePageParam(page);
@@ -299,7 +305,8 @@ export default async function InventoryPage({
   const statusHref = (key: string) => {
     const params = filterParams();
     params.delete("status");
-    if (key !== "all") params.set("status", key);
+    // R36 #3: "all" must be explicit now - a bare URL means Active.
+    params.set("status", key);
     const qs = params.toString();
     return `/admin/inventory${qs ? `?${qs}` : ""}`;
   };
@@ -525,7 +532,7 @@ export default async function InventoryPage({
               Open vendor page →
             </Link>
             <Link
-              href="/admin/inventory"
+              href="/admin/inventory?status=all"
               className="font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
             >
               ✕ Clear filter (show all lots)

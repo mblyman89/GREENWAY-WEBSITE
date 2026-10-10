@@ -79,6 +79,45 @@ export const LEAFLY_STATUS_TAB = "leafly";
  * A lot as this page sees it: everything the filters read, plus the raw
  * `lab_result_id` the legacy COA predicate was written against.
  */
+/**
+ * R36 #3 - the owner: "for the inventory table, it should show only active
+ * products when you first arrive there."
+ *
+ * A BARE arrival (no `status` in the URL) lands on the Active tab. Deep links
+ * that other features build WITHOUT a status keep meaning "every status",
+ * because they rely on it (measured, R36):
+ *   - `q`                 product / menu-import / migration-lot search links;
+ *                         migration-lot-fix-core deliberately sends a
+ *                         quarantined lot as `?q=` only so it is not hidden;
+ *   - `vendor`            the vendor page's "everything in Inventory" link;
+ *   - `needsReceivedDate` the received-date worklist (all non-destroyed lots);
+ *   - `fStatus`           the Status facet already chose the statuses.
+ * Once the page renders, the effective status is written into every link and
+ * form (withDefaultStatus feeds them all), so applying a filter never flips
+ * the view, and the All tab carries `status=all` explicitly. PURE.
+ */
+export const DEFAULT_INVENTORY_STATUS = "active";
+export const INVENTORY_DEEP_LINK_SCOPES = ["q", "vendor", "needsReceivedDate", "fStatus"] as const;
+
+function present(v: string | string[] | undefined): boolean {
+  if (Array.isArray(v)) return v.some((x) => typeof x === "string" && x.trim() !== "");
+  return typeof v === "string" && v.trim() !== "";
+}
+
+/** The status a URL means once the R36 default is applied. PURE. */
+export function effectiveInventoryStatus(params: RawParams): string {
+  const raw = one(params, "status");
+  if (typeof raw === "string" && raw.trim() !== "") return raw;
+  return INVENTORY_DEEP_LINK_SCOPES.some((k) => present(params[k])) ? "all" : DEFAULT_INVENTORY_STATUS;
+}
+
+/** The params with `status` made explicit (input is never mutated). PURE. */
+export function withDefaultStatus(params: RawParams): RawParams {
+  const raw = one(params, "status");
+  if (typeof raw === "string" && raw.trim() !== "") return params;
+  return { ...params, status: effectiveInventoryStatus(params) };
+}
+
 export type PageLot = FilterableLot & { lab_result_id: string | null };
 
 /** The legacy knobs, parsed. Kept separate so their behaviour is auditable. */
@@ -395,6 +434,22 @@ export function __runInventoryPageCoreTests(): void {
 
   // ---- legacy param parsing matches the page's old rules exactly
   ok(parseLegacyFilters({}).status === "all", "absent status means all");
+  // R36 #3: a bare arrival lands on Active; deep-link scopes keep every status.
+  ok(effectiveInventoryStatus({}) === "active", "bare arrival -> active");
+  ok(effectiveInventoryStatus({ sort: "newest", page: "2", sc: "thc" }) === "active", "sort/page alone -> active");
+  ok(effectiveInventoryStatus({ status: "all" }) === "all", "explicit all is kept");
+  ok(effectiveInventoryStatus({ status: "recalled", q: "x" }) === "recalled", "explicit status wins over scope");
+  ok(effectiveInventoryStatus({ q: "WA123" }) === "all", "search link -> all");
+  ok(effectiveInventoryStatus({ vendor: "v" }) === "all", "vendor link -> all");
+  ok(effectiveInventoryStatus({ needsReceivedDate: "1" }) === "all", "worklist -> all");
+  ok(effectiveInventoryStatus({ fStatus: ["quarantine"] }) === "all", "status facet -> all");
+  ok(effectiveInventoryStatus({ q: "   " }) === "active", "blank q is not a scope");
+  ok(effectiveInventoryStatus({ status: "" }) === "active", "blank status is absent");
+  const r36in: RawParams = { q: undefined, page: "3" };
+  const w = withDefaultStatus(r36in);
+  ok(w.status === "active" && w.page === "3" && r36in.page === "3" && !("status" in r36in), "withDefaultStatus copies, never mutates");
+  const keep = { status: "sold_out" };
+  ok(withDefaultStatus(keep) === keep, "explicit status returned as-is");
   ok(parseLegacyFilters({ vendor: "not-a-uuid" }).vendorId === undefined, "junk vendor is off");
   const UUID = "0123abcd-0123-0123-0123-0123456789ab";
   ok(parseLegacyFilters({ vendor: UUID }).vendorId === UUID, "uuid vendor accepted");
