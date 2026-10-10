@@ -46,6 +46,7 @@ import { __runPriceExplainCoreTests } from "../../src/lib/inventory/price-explai
 import { __runOnboardingRecallCoreTests } from "../../src/lib/inventory/onboarding-recall-core";
 import { __runLotOnboardingCoreTests } from "../../src/lib/inventory/lot-onboarding-core";
 import { __runLotWebsiteCategoryTests } from "../../src/lib/inventory/lot-website-category-core";
+import { __runInventoryMetricsTests } from "../../src/lib/inventory/inventory-metrics-core";
 // R31: the one finalize button + the "should I press Run AI extract?" advice.
 import { __runFinalizeLabelCoreTests } from "../../src/lib/inventory/finalize-label-core";
 import { __runAiExtractAdviceCoreTests } from "../../src/lib/inventory/ai-extract-advice-core";
@@ -2134,6 +2135,7 @@ __runLiquidVolumeTests();
   assertRan("coa-reread-delivery-core", __runCoaRereadDeliveryTests(), 21); // R37 S4: delivery-level LlamaParse re-read banner
   assertRan("delivery-brand-core", __runDeliveryBrandCoreTests(), 51); // R37 S5: delivery-wide brand, vendor memory
   assertRan("lookup-history-core", __runLookupHistoryCoreTests(), 67); // R37 S6: search history + harvest verdict
+  assertRan("inventory-metrics-core", __runInventoryMetricsTests(), 28); // R38 S2: ext cost/retail, sell-through, velocity, days of supply
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
