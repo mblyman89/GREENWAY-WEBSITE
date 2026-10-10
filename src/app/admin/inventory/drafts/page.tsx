@@ -182,7 +182,7 @@ import { strainSlug } from "@/lib/catalog/slug-core";
 import { lookupJobsOn, loadManifestLookup } from "@/lib/catalog/lookup-job-server";
 // R37 S6: past web searches per product + the harvest verdict for the bar.
 import { loadDeliveryLookupHistory } from "@/lib/catalog/lookup-history-server";
-import { HARVEST_BAR_PURPOSE, HARVEST_FIELDS, harvestBarTitle, searchAgainLabel, summarizeDeliveryHarvest } from "@/lib/catalog/lookup-history-core";
+import { HARVEST_BAR_PURPOSE, HARVEST_FIELDS, harvestBarTitle, rowSearchChip, searchAgainLabel, summarizeDeliveryHarvest } from "@/lib/catalog/lookup-history-core";
 import { attachFactsV2Enabled } from "@/lib/catalog/fact-attach-policy-server";
 import {
   LOOKUP_ALL_HELP,
@@ -1815,6 +1815,17 @@ export default async function CatalogDraftsPage({
                           <div className="text-[10px] text-[var(--admin-text-faint)]">
                             {facts.missing.length === 0 ? "all attached" : `${facts.missing.length} to fill`}
                           </div>
+                          {/* R37 S6: this product's web-search history at a glance (full line on hover + in the bar). */}
+                          {harvestById.get(d.id) && (
+                            <div
+                              className="mt-0.5 text-[10px] text-[var(--admin-text-faint)]"
+                              data-testid="draft-row-search-history"
+                              data-status={harvestById.get(d.id)!.status}
+                              title={harvestById.get(d.id)!.line}
+                            >
+                              {rowSearchChip(harvestById.get(d.id)!, now)}
+                            </div>
+                          )}
                         </td>
                       )}
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">

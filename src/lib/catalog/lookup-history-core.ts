@@ -315,6 +315,16 @@ export function searchAgainLabel(n: number): string {
   return n === 1 ? "Search again: 1 product still missing facts" : `Search again: ${n} products still missing facts`;
 }
 
+/** The short chip under a row's facts count: "\u{1F50E} never searched" / "\u{1F50E} searched 12 days ago \u00b7 worth again". */
+export function rowSearchChip(p: Pick<ProductHistory, "status" | "lastAt" | "recommend" | "retryAfter">, now: Date): string {
+  if (p.status === "harvested") return p.lastAt ? `\u{1F50E} searched ${agoText(p.lastAt, now)} \u00b7 all harvested` : "\u{1F50E} all harvested";
+  if (!p.lastAt) return "\u{1F50E} never searched";
+  const when = `\u{1F50E} searched ${agoText(p.lastAt, now)}`;
+  if (p.status === "unknown") return when;
+  if (p.recommend) return `${when} \u00b7 worth searching again`;
+  return p.retryAfter ? `${when} \u00b7 again after ${shortDate(p.retryAfter)}` : when;
+}
+
 /** Closed set the action accepts back from the form (uuid-shaped, de-duplicated, capped). */
 export function parseAgainIds(raw: readonly unknown[], cap = 200): string[] {
   const re = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -602,6 +612,11 @@ export function __runLookupHistoryCoreTests(): { passed: number; failed: number 
     ok("assembly found by key", b.found.length === 1 && b.found[0].field === "aroma");
     ok("again marker", isAgainMarker(AGAIN_MARKER) && !isAgainMarker({ again: true, outcome: "attached" }) && !isAgainMarker(null) && !isAgainMarker([]) && !isAgainMarker({ again: "yes" }));
   }
+  ok("chip never", rowSearchChip({ status: "never", lastAt: null, recommend: true, retryAfter: null }, now) === "\u{1F50E} never searched");
+  ok("chip harvested", rowSearchChip(harvested, now) === "\u{1F50E} all harvested" && rowSearchChip({ ...harvested, lastAt: daysAgo(3) }, now).endsWith("searched 3 days ago \u00b7 all harvested"));
+  ok("chip productive", rowSearchChip(productive, now).endsWith("searched 3 days ago \u00b7 worth searching again"));
+  ok("chip saturated", rowSearchChip(sat, now).includes("\u00b7 again after "));
+  ok("chip unknown", rowSearchChip({ status: "unknown", lastAt: daysAgo(1), recommend: false, retryAfter: null }, now) === "\u{1F50E} searched yesterday");
   // labels + parsing
   ok("gemini label", harvestBarTitle("gemini-2.5-pro").endsWith("Google Gemini with Google Search"));
   ok("non-gemini label never claims gemini", searchEngineLabel("gpt-4o") === "AI web search (gpt-4o)" && searchEngineLabel(null) === "AI web search");

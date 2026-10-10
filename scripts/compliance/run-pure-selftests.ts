@@ -2131,7 +2131,7 @@ __runLiquidVolumeTests();
   assertRan("volume-input-core", __runVolumeInputTests(), 24); // R37 S3: net volume in ml or fl oz, stored in ml
   assertRan("coa-reread-delivery-core", __runCoaRereadDeliveryTests(), 21); // R37 S4: delivery-level LlamaParse re-read banner
   assertRan("delivery-brand-core", __runDeliveryBrandCoreTests(), 51); // R37 S5: delivery-wide brand, vendor memory
-  assertRan("lookup-history-core", __runLookupHistoryCoreTests(), 60); // R37 S6: search history + harvest verdict
+  assertRan("lookup-history-core", __runLookupHistoryCoreTests(), 65); // R37 S6: search history + harvest verdict
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
