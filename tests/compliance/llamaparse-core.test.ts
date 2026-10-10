@@ -147,3 +147,14 @@ describe("llamaparse-core: bundled self-tests", () => {
     expect(r.passed).toBeGreaterThan(0);
   });
 });
+
+describe("R39 S5: LlamaParse upload content type", () => {
+  it("defaults to pdf and keeps only the four allowed types", () => {
+    expect(buildParseRequest().mimeType).toBe("application/pdf");
+    expect(buildParseRequest({ mimeType: "image/jpeg" }).mimeType).toBe("image/jpeg");
+    expect(buildParseRequest({ mimeType: "image/png" }).mimeType).toBe("image/png");
+    expect(buildParseRequest({ mimeType: " IMAGE/HEIC " }).mimeType).toBe("image/heic");
+    expect(buildParseRequest({ mimeType: "application/x-msdownload" }).mimeType).toBe("application/pdf");
+    expect(buildParseRequest({ mimeType: "" }).mimeType).toBe("application/pdf");
+  });
+});

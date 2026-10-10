@@ -169,7 +169,7 @@ export async function parsePdf(
   try {
     // 1) Upload the file + parse options as multipart/form-data.
     const form = new FormData();
-    const blob = new Blob([bytes.slice()], { type: "application/pdf" });
+    const blob = new Blob([bytes.slice()], { type: plan.mimeType });
     form.append("file", blob, plan.filename);
     for (const [k, v] of Object.entries(plan.fields)) form.append(k, v);
 

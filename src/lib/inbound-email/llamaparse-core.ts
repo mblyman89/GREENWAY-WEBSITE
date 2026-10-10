@@ -94,6 +94,12 @@ export type BuildParseOptions = {
    * Language hint(s). WA manifests are English; leave undefined to auto-detect.
    */
   language?: string;
+  /**
+   * R39 S5: content type of the uploaded part. LlamaParse reads jpg/png/heic
+   * as well as pdf (developers.llamaindex.ai, Supported Document Types).
+   * Only these four are sent; anything else falls back to application/pdf.
+   */
+  mimeType?: string;
 };
 
 /**
@@ -108,7 +114,13 @@ export type ParseRequestPlan = {
   tier: LlamaParseTier;
   /** Suggested filename for the multipart part. */
   filename: string;
+  /** Content type of the multipart file part (R39 S5). */
+  mimeType: ParseMimeType;
 };
+
+/** Upload types we send to LlamaParse (R39 S5). */
+export const PARSE_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/heic"] as const;
+export type ParseMimeType = (typeof PARSE_MIME_TYPES)[number];
 
 /**
  * Shape a LlamaCloud parse request from our options. Pure — returns the exact
@@ -129,6 +141,9 @@ export function buildParseRequest(opts: BuildParseOptions = {}): ParseRequestPla
     fields,
     tier,
     filename: opts.filename?.trim() || "document.pdf",
+    mimeType: (PARSE_MIME_TYPES as readonly string[]).includes(String(opts.mimeType ?? "").trim().toLowerCase())
+      ? (String(opts.mimeType).trim().toLowerCase() as ParseMimeType)
+      : "application/pdf",
   };
 }
 
@@ -328,6 +343,11 @@ export function __runLlamaparseCoreTests(): { passed: number; failed: number } {
   ok(req.fields.do_not_cache === "false", "caching ON by default (public docs)");
   ok(req.filename === "document.pdf", "default filename");
   ok(!("language" in req.fields), "no language field unless provided");
+  ok(req.mimeType === "application/pdf", "default mime is pdf");
+  ok(buildParseRequest({ mimeType: " Image/HEIC " }).mimeType === "image/heic", "heic mime kept (normalised)");
+  ok(buildParseRequest({ mimeType: "image/jpeg" }).mimeType === "image/jpeg", "jpeg mime kept");
+  ok(buildParseRequest({ mimeType: "image/png" }).mimeType === "image/png", "png mime kept");
+  ok(buildParseRequest({ mimeType: "text/html" }).mimeType === "application/pdf", "unknown mime falls back to pdf");
 
   const req2 = buildParseRequest({
     tier: "fast",
