@@ -2101,7 +2101,7 @@ __runLiquidVolumeTests();
   assertRan("wa-total-cannabinoids-core", __runWaTotalCannabinoidsTests(), 19); // R27-1: WAC 314-55-102 total THC/CBD
   assertRan("wcia-lab-json-core", __runWciaLabJsonCoreTests(r28CoaFixtures(".wcia.json")), 99); // R28: the lab JSON behind lab_result_link
   assertRan("coa-pdf-text-core", __runCoaPdfTextCoreTests(r28CoaStems()), 292); // R28: COA PDF text (unpdf + layout + LlamaParse markdown)
-  assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 204); // R28: identity, agreement, edible facts, profile; R37 +7 COA outranks the 10 mg rule
+  assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 205); // R28: identity, agreement, edible facts, profile; R37 +8 COA outranks the 10 mg rule
   assertRan("coa-extract-core", __runCoaExtractCoreTests(r28CoaStems()), 132); // R28: allow-list, best reading, LlamaParse gate, KB fill; R36: Cultivera, owner hosts, redirect hops, DNS answers
   assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 101); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors; R35 +2 WAC 314-55-095 banner
   assertRan("lab-facts-attach-core", __runLabFactsAttachCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 102); // R30: first-pass lab attach + strain terpene learning

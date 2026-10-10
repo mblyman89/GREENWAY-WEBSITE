@@ -875,6 +875,14 @@ export function __runCoaFactsCoreTests(fixtures: Record<string, string>): { pass
   ok(coaPkgOnly.packageThcMg?.value === 55 && coaPkgOnly.servingsPerPack?.source === "wa-rule" && coaPkgOnly.servingsPerPack.value === 6, "R37: a COA package total alone gets the rule count");
   const coaTopical = mergeCoaIntoExam(exam, { ...f12, thcMgPerServing: null, servingsPerPack: null }, "Topical Ointment");
   ok(coaTopical.servingsPerPack === null && coaTopical.mgPerServing === null, "R37: topicals never get a rule count after the merge");
+  const staleRule: CrossExamResult = {
+    ...exam,
+    packageThcMg: { value: 100, source: "name", confidence: "single-source", note: "x" },
+    servingsPerPack: { value: 10, source: "wa-rule", confidence: "single-source", note: "rule" },
+    mgPerServing: { value: 10, source: "wa-rule", confidence: "single-source", note: "rule" },
+  };
+  const replaced = mergeCoaIntoExam(staleRule, { ...f12, thcMgPerServing: null, servingsPerPack: null }, "Solid Edible");
+  ok(replaced.packageThcMg?.value === 55 && replaced.servingsPerPack?.value === 6 && replaced.mgPerServing?.value === 9.17, "R37: rule figures from an unconfirmed name total are re-worked on the certificate's 55 mg (never 10 x 10)");
 
   // ---- profile ---------------------------------------------------------------
   const p0 = coaProfile(extractFor(0))!;
