@@ -56,6 +56,7 @@ import {
 import {
   canPayWithVaultRecord,
   detectBankTamper,
+  vaultPayDisplay,
 } from "@/lib/payments/payee-banking-core";
 import { listVendorBankDetails } from "@/lib/payments/payee-banking-store";
 import { maskAccountTail } from "@/lib/security/at-rest-crypto";
@@ -104,6 +105,14 @@ export type PayableOption = {
     accountType: string;
     status: string;
     verified: boolean;
+    /**
+     * R39 S3: computed server-side by the SAME gate the pay action uses
+     * (canPayWithVaultRecord) and the vault badge — the client only shows
+     * them, so the form can never call revoked/archived/unknown "payable".
+     */
+    payable: boolean;
+    statusLabel: string;
+    blockedReason: string | null;
   } | null;
 };
 
@@ -143,6 +152,7 @@ export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
       accountType: rec.account_type,
       status: rec.status,
       verified: !!rec.verified_at,
+      ...vaultPayDisplay(rec),
     };
   };
   const manifestOptions: PayableOption[] = rows.map((r) => ({

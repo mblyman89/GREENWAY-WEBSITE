@@ -22,6 +22,7 @@ import {
   maskedBankSnapshot,
   planVaultSave,
   validatePayeeBankInput,
+  vaultPayDisplay,
 } from "@/lib/payments/payee-banking-core";
 
 describe("payee-banking-core embedded self-tests", () => {
@@ -247,5 +248,39 @@ describe("R39 S3: a save only counts as a bank change when the DECRYPTED numbers
     const { readFileSync } = await import("node:fs");
     const sql = readFileSync("supabase/migrations/0259_vendor_vault_change_control.sql", "utf8");
     expect(sql).toContain("then 'New banking added' else 'Bank details changed' end");
+  });
+});
+
+describe("vaultPayDisplay — the pay form can never disagree with the pay gate (R39 S3)", () => {
+  const rec = (status: string, over: Partial<{ routing: string; account_number: string; verified_at: string | null }> = {}) => ({
+    status,
+    routing: "021000021",
+    account_number: "12345678",
+    verified_at: "2026-01-15T00:00:00Z",
+    vendor_name: "Acme Farms",
+    ...over,
+  });
+  it("payable exactly when canPayWithVaultRecord says ok, for every status and incomplete numbers", () => {
+    const cases = [
+      ...[...VAULT_STATUSES, "bogus", ""].map((s) => rec(s)),
+      rec("active", { routing: "" }),
+      rec("active", { account_number: "" }),
+    ];
+    for (const r of cases) {
+      const gate = canPayWithVaultRecord({ status: r.status, routing: r.routing, accountNumber: r.account_number }, r.vendor_name);
+      const d = vaultPayDisplay(r);
+      expect({ status: r.status, payable: d.payable }).toEqual({ status: r.status, payable: gate.ok });
+      expect(d.blockedReason).toBe(gate.ok ? null : (gate as { refusal: string }).refusal);
+    }
+  });
+  it("names revoked and archived; never shows verified when blocked", () => {
+    expect(vaultPayDisplay(rec("revoked")).statusLabel).toMatch(/^REVOKED/);
+    expect(vaultPayDisplay(rec("archived")).statusLabel).toMatch(/^ARCHIVED/);
+    expect(vaultPayDisplay(rec("on_hold")).statusLabel).toMatch(/^ON HOLD/);
+    for (const s of ["on_hold", "revoked", "archived", "bogus"]) expect(vaultPayDisplay(rec(s)).statusLabel).not.toMatch(/verified/);
+  });
+  it("active shows verified vs not yet verified", () => {
+    expect(vaultPayDisplay(rec("active")).statusLabel).toBe("✓ verified");
+    expect(vaultPayDisplay(rec("active", { verified_at: null })).statusLabel).toBe("not yet verified");
   });
 });

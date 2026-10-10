@@ -191,6 +191,36 @@ export function canPayWithVaultRecord(rec: {
 }
 
 /**
+ * R39 S3: what the vendor-payments form shows for a vault record. Built ON
+ * canPayWithVaultRecord, so the screen and the pay action can never disagree:
+ * if the gate refuses, the form says blocked and shows the gate's own reason.
+ */
+export function vaultPayDisplay(rec: {
+  status: string;
+  routing: string;
+  account_number: string;
+  verified_at: string | null;
+  vendor_name: string;
+}): { payable: boolean; statusLabel: string; blockedReason: string | null } {
+  const verdict = canPayWithVaultRecord(
+    { status: rec.status, routing: rec.routing, accountNumber: rec.account_number },
+    rec.vendor_name,
+  );
+  if (!verdict.ok) {
+    const label =
+      rec.status === "on_hold"
+        ? "ON HOLD — payment blocked"
+        : rec.status === "revoked"
+          ? "REVOKED — payment blocked"
+          : rec.status === "archived"
+            ? "ARCHIVED — payment blocked"
+            : "BLOCKED";
+    return { payable: false, statusLabel: label, blockedReason: verdict.refusal };
+  }
+  return { payable: true, statusLabel: rec.verified_at ? "✓ verified" : "not yet verified", blockedReason: null };
+}
+
+/**
  * Did the BANK details really change? Compares DECRYPTED, normalised values.
  * encv1 ciphertext is different on every save (random IV), so comparing the
  * stored columns would call every save a change and put every vendor on hold
@@ -307,6 +337,16 @@ export function __runPayeeBankingCoreTests(): void {
   ok(bankDetailsChanged(b0, { ...b0, routing: "325081403" }) === true, "routing only = change");
   ok(bankDetailsChanged(b0, { ...b0, accountNumber: "12345679" }) === true, "account only = change");
   ok(bankDetailsChanged(b0, { ...b0, accountType: "savings" }) === true, "type only = change");
+  // vaultPayDisplay agrees with canPayWithVaultRecord for every status.
+  const vd = (status: string, verified_at: string | null = null) =>
+    vaultPayDisplay({ status, routing: "021000021", account_number: "12345678", verified_at, vendor_name: "V" });
+  ok(vd("active", "2026-01-01").payable && vd("active", "2026-01-01").statusLabel === "✓ verified", "active verified → payable");
+  ok(vd("active").payable && vd("active").statusLabel === "not yet verified", "active unverified → payable, says not verified");
+  for (const st of ["on_hold", "revoked", "archived", "Active", ""]) {
+    const d = vd(st, "2026-01-01");
+    ok(!d.payable && d.blockedReason !== null && /blocked|BLOCKED/.test(d.statusLabel), `${st || "(empty)"} → blocked with reason`);
+  }
+  ok(vd("revoked").statusLabel.startsWith("REVOKED") && vd("archived").statusLabel.startsWith("ARCHIVED"), "revoked/archived named");
   const pNew = planVaultSave(null, b0);
   ok(pNew.writeBankColumns && pNew.resultingStatus === "on_hold" && pNew.holdReason === "New banking added", "new banking plan");
   const pSame = planVaultSave(b0, b0);

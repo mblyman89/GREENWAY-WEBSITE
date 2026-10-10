@@ -175,13 +175,17 @@ export function VendorAchForm({
                           · routing <span className="font-mono">{p.vaultBank.routingTail}</span>{" "}
                           · acct <span className="font-mono">{p.vaultBank.accountTail}</span>{" "}
                           · {p.vaultBank.accountType}
-                          {p.vaultBank.status === "on_hold" ? (
-                            <span className="ml-2 font-semibold text-[var(--admin-gold)]">ON HOLD — payment blocked</span>
-                          ) : p.vaultBank.verified ? (
-                            <span className="ml-2 text-[var(--admin-accent)]">✓ verified</span>
-                          ) : (
-                            <span className="ml-2 text-[var(--admin-gold)]">not yet verified</span>
-                          )}
+                          {/* R39 S3: label + payable come from the server's
+                              canPayWithVaultRecord gate (vaultPayDisplay), so
+                              revoked / archived / unknown never look payable. */}
+                          <span
+                            className={`ml-2 ${p.vaultBank.payable && p.vaultBank.verified ? "text-[var(--admin-accent)]" : "font-semibold text-[var(--admin-gold)]"}`}
+                          >
+                            {p.vaultBank.statusLabel}
+                          </span>
+                          {p.vaultBank.blockedReason ? (
+                            <span className="mt-1 block text-[var(--admin-gold)]">{p.vaultBank.blockedReason}</span>
+                          ) : null}
                         </div>
                       ) : (
                         <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-3 py-2 text-xs text-[var(--admin-gold)]">
