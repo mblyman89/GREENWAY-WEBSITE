@@ -469,6 +469,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "noncannabis_adjustments", disposition: "WIPE", because: "Test adjustments to non-cannabis stock." },
   { table: "inventory_types", disposition: "KEEP", because: "Your category definitions — configuration that the chart of accounts is built on." },
   { table: "inventory_expiry_rules", disposition: "KEEP", because: "Your expiration rules per category / type — configuration, not history. Lots they dated are wiped with the lots." },
+  { table: "testing_labs", disposition: "KEEP", because: "The Washington testing-lab list (from the WSLCB lab lists) plus any lab you added, and the hosts their certificates may be read from — reference data." },
   { table: "website_category_types", disposition: "KEEP", because: "How categories appear on the website." },
 
   // ── Purchasing and vendor bills ───────────────────────────────────────────
