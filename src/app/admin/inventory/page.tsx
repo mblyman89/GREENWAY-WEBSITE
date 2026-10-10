@@ -34,8 +34,24 @@ import { SortableHeader } from "@/components/admin/inventory/SortableHeader";
 import { paramsFrom, clearAllFiltersHref, type RawParams } from "@/lib/inventory/inventory-url-core";
 import { lotReceivedDate, lotTypeLabel, lotSizeLabel, lotSoldQty, lotStrainLabel, lotStrainTypeLabel, lotPotencyLabel } from "@/lib/inventory/lot-table-core";
 import { lotThcValue, lotCbdValue, lotMinorValue, lotPotencySource } from "@/lib/pos/lot-potency-core";
-import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
-import { ListPager } from "@/components/admin/ux/ListPager";
+import { listWindow, parsePageParam } from "@/lib/admin/list-window-core";
+// R38 S2-S4: enterprise table — column registry, numbered pager, toolbar, metrics, totals.
+import { InventoryTablePager } from "@/components/admin/inventory/InventoryTablePager";
+import { InventoryTableToolbar } from "@/components/admin/inventory/InventoryTableToolbar";
+import { attachInventoryMetrics, inventoryTotals } from "@/lib/inventory/inventory-metrics-core";
+import {
+  parseColumnView,
+  parsePageSize,
+  effectivePageSize,
+  complianceFlags,
+  packFactLines,
+  costSourceLabel,
+  expirySourceLabel,
+  dispositionLabel,
+  type TableLot,
+} from "@/lib/inventory/inventory-table-core";
+import { receivedOnSourceLabel } from "@/lib/inventory/received-date-core";
+import { lotManifestHref } from "@/lib/inventory/migration-lot-fix-core";
 import { inventoryGapInsights } from "@/lib/insight/inventory";
 import { describeCostIncompleteness } from "@/lib/inventory/lot-gap-core";
 import { getInventoryCommandCenter } from "@/lib/inventory/inventory-intel";
@@ -246,14 +262,28 @@ export default async function InventoryPage({
   // for every lot (override > live menu > onboarding pick > type map > product
   // name), with its source, so the column, its filter and its sort all agree.
   const categorized = await attachLotWebsiteCategories(onboardedLots, onboardingIndex.byLot);
-  const joinedLots = categorized.lots;
+  // R38 S2: derived metrics (age, sell-through, velocity, days of supply,
+  // extended cost/retail, ABC, on-menu) computed ONCE per lot, so the cells,
+  // the sorts, the totals footer and the export all read the same number.
+  const joinedLots = attachInventoryMetrics(categorized.lots, {
+    today: pacificToday(),
+    liveKeys: categorized.liveKeys,
+    abcByLot: intel.center.abcByLot,
+  });
+  // R38 S3: rows per page — 25 / 50 / 100 (default) / 250 / all.
+  const pageChoice = parsePageSize(sp as RawParams);
+  const pageSize = effectivePageSize(pageChoice, joinedLots.length);
+  // R38 S2: which columns are on screen (view preset or custom cols=).
+  const columnView = parseColumnView(sp as RawParams);
+  const show = (id: string) => columnView.ids.includes(id);
+  const compact = (sp as RawParams).density === "compact";
 
   // Every knob — legacy and new — is parsed and applied by pure, tested code.
   const view = buildInventoryPage({
     lots: joinedLots as PageLot[],
     params: sp as RawParams,
     page: rawPage,
-    pageSize: DEFAULT_PAGE_SIZE,
+    pageSize,
     now: new Date(),
     leaflyKeys: leafly.keys,
   });
@@ -263,7 +293,9 @@ export default async function InventoryPage({
   // so each row still carries its onboarding join (narrow the type back).
   const lots = view.rows as typeof joinedLots;
   const total = view.total;
-  const win = listWindow(total, view.page, DEFAULT_PAGE_SIZE);
+  const win = listWindow(total, view.page, pageSize);
+  // R38 S2: totals over EVERY matching lot (all pages), not just this page.
+  const totals = inventoryTotals(view.matched as unknown as TableLot[]);
   // SLICE 2 — banner text for lots with no evidenced received date. Returns
   // null when there is nothing to flag, so a clean store shows no badge at all
   // rather than a green "0 problems" row that trains the eye to skip it.
@@ -291,12 +323,8 @@ export default async function InventoryPage({
     params.delete("page");
     return params;
   };
-  const pageHref = (p: number) => {
-    const params = filterParams();
-    if (p > 1) params.set("page", String(p));
-    const qs = params.toString();
-    return `/admin/inventory${qs ? `?${qs}` : ""}`;
-  };
+  // R38 S3: page links are built by the numbered pager (pageNumberHref in
+  // inventory-table-core), which carries every param the same way.
   /**
    * SLICE 8 — bulk-fill mode. Only the literal "1" enters it, matching the
    * `parseGapFlag` discipline (junk params silently mean "off").
@@ -650,8 +678,18 @@ export default async function InventoryPage({
           </div>
         )}
 
-        {/* GW-033: exact result count + pager (server-side pagination). */}
-        <ListPager window={win} total={total} noun="lot" makeHref={pageHref} />
+        {/* R38 S2-S4: views, columns, density and export, then the numbered
+            pager (top). GW-033's exact result count lives in the pager. */}
+        <div id="inventory-table-top" className="scroll-mt-4" />
+        <InventoryTableToolbar
+          raw={sp as RawParams}
+          view={columnView}
+          density={compact ? "compact" : "comfortable"}
+          matchedCount={total}
+          pageCount={lots.length}
+          allCount={joinedLots.length}
+        />
+        <InventoryTablePager window={win} total={total} raw={sp as RawParams} pageSize={pageChoice} position="top" topAnchorId="inventory-table-top" />
 
         {stats.total === 0 && (
           <EmptyState
@@ -686,10 +724,15 @@ export default async function InventoryPage({
 
         {lots.length > 0 && (
           /* R32: 22 columns — scroll sideways inside the card instead of
-             clipping the right-hand columns off the screen. */
+             clipping the right-hand columns off the screen.
+             R38 S2: up to 39 columns. The inner frame scrolls BOTH ways so the
+             header row stays pinned while scrolling down and the Product / lot
+             column stays pinned while scrolling right (enterprise data-grid
+             convention: sticky header + frozen first column). */
           <div className="overflow-x-auto rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
-            <table className="w-full text-sm">
-              <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+            <div className="max-h-[78vh] overflow-auto" data-table-scroll data-testid="inventory-table-scroll">
+            <table className="w-full text-sm" data-testid="inventory-table">
+              <thead className="sticky top-0 z-20 bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)] shadow-[0_1px_0_var(--admin-border)]">
                 {/* SLICE 50 (owner request): Received / Type / Size / Sold / Strain columns
                     added beside the existing ones. Received = the lot's true arrival date
                     (import backdates created_at to the POS Received date); Sold = received
@@ -698,47 +741,73 @@ export default async function InventoryPage({
                 {/* SLICE 13: every header is now a link that sorts the list.
                     Click once for the sensible direction (names A→Z, dates
                     newest-first, numbers highest-first), again to reverse,
-                    again to turn the sort off. */}
+                    again to turn the sort off.
+                    R38 S2: the order and the set come from the column registry
+                    (inventory-table-core); `show(id)` honours the chosen view. */}
                 <tr>
-                  <SortableHeader columnKey="product" label="Product / lot" raw={sp as RawParams} />
-                  <SortableHeader columnKey="vendor" label="Vendor · brand" raw={sp as RawParams} />
-                  <SortableHeader columnKey="type" label="Type" raw={sp as RawParams} />
-                  <SortableHeader columnKey="strain" label="Strain" raw={sp as RawParams} />
+                  <SortableHeader columnKey="product" label="Product / lot" raw={sp as RawParams} className="sticky left-0 z-30 min-w-[15rem] bg-[var(--admin-surface-2)]" />
+                  {show("ids") && <SortableHeader columnKey="lotcode" label="IDs" raw={sp as RawParams} />}
+                  {show("vendor") && <SortableHeader columnKey="vendor" label="Vendor · brand" raw={sp as RawParams} />}
+                  {show("type") && <SortableHeader columnKey="type" label="Type" raw={sp as RawParams} />}
+                  {show("strain") && <SortableHeader columnKey="strain" label="Strain" raw={sp as RawParams} />}
                   {/* SLICE 54: strain TYPE from its own column (migration 0138, Rule 1.4). */}
-                  <SortableHeader columnKey="strainType" label="Strain Type" raw={sp as RawParams} />
-                  <SortableHeader columnKey="size" label="Size" raw={sp as RawParams} />
-                  <SortableHeader columnKey="coa" label="COA" raw={sp as RawParams} align="center" />
-                  <SortableHeader columnKey="thc" label="THC" raw={sp as RawParams} align="right" />
+                  {show("strainType") && <SortableHeader columnKey="strainType" label="Strain Type" raw={sp as RawParams} />}
+                  {show("size") && <SortableHeader columnKey="size" label="Size" raw={sp as RawParams} />}
+                  {show("pack") && <th className="px-4 py-3 text-left">Pack facts</th>}
+                  {show("coa") && <SortableHeader columnKey="coa" label="COA" raw={sp as RawParams} align="center" />}
+                  {show("thc") && <SortableHeader columnKey="thc" label="THC" raw={sp as RawParams} align="right" />}
                   {/* R15a: CBD / CBN / CBC beside THC. COA first, else the Cultivera export. */}
-                  <SortableHeader columnKey="cbd" label="CBD" raw={sp as RawParams} align="right" />
+                  {show("cbd") && <SortableHeader columnKey="cbd" label="CBD" raw={sp as RawParams} align="right" />}
                   {/* R29: CBG joins CBN / CBC (verified package mg, minor_cannabinoids_json). */}
-                  <SortableHeader columnKey="cbg" label="CBG" raw={sp as RawParams} align="right" />
-                  <SortableHeader columnKey="cbn" label="CBN" raw={sp as RawParams} align="right" />
-                  <SortableHeader columnKey="cbc" label="CBC" raw={sp as RawParams} align="right" />
-                  <SortableHeader columnKey="received" label="Received" raw={sp as RawParams} />
-                  <SortableHeader columnKey="onhand" label="On hand" raw={sp as RawParams} align="right" />
-                  <SortableHeader columnKey="sold" label="Sold" raw={sp as RawParams} align="right" />
+                  {show("cbg") && <SortableHeader columnKey="cbg" label="CBG" raw={sp as RawParams} align="right" />}
+                  {show("cbn") && <SortableHeader columnKey="cbn" label="CBN" raw={sp as RawParams} align="right" />}
+                  {show("cbc") && <SortableHeader columnKey="cbc" label="CBC" raw={sp as RawParams} align="right" />}
+                  {show("lab") && <SortableHeader columnKey="lab" label="Lab" raw={sp as RawParams} />}
+                  {show("coaexp") && <SortableHeader columnKey="coaexp" label="COA expiry" raw={sp as RawParams} />}
+                  {show("received") && <SortableHeader columnKey="received" label="Received" raw={sp as RawParams} />}
+                  {show("age") && <SortableHeader columnKey="age" label="Age" raw={sp as RawParams} align="right" />}
+                  {show("onhand") && <SortableHeader columnKey="onhand" label="On hand" raw={sp as RawParams} align="right" />}
+                  {show("sold") && <SortableHeader columnKey="sold" label="Sold" raw={sp as RawParams} align="right" />}
+                  {show("sellthrough") && <SortableHeader columnKey="sellthrough" label="Sell-through" raw={sp as RawParams} align="right" />}
+                  {show("velocity") && <SortableHeader columnKey="velocity" label="Velocity" raw={sp as RawParams} align="right" />}
+                  {show("supply") && <SortableHeader columnKey="supply" label="Days of supply" raw={sp as RawParams} align="right" />}
+                  {show("abc") && <SortableHeader columnKey="abc" label="ABC" raw={sp as RawParams} align="center" />}
+                  {show("counted") && <SortableHeader columnKey="counted" label="Last counted" raw={sp as RawParams} />}
                   {/* R32 (T-328): what onboarding decided + the money it implies.
                       Unit cost = the lot's cost; Price = the APPROVED onboarding
                       shelf price (tax-inclusive); Margin = pre-tax margin on it. */}
-                  <SortableHeader columnKey="cost" label="Unit cost" raw={sp as RawParams} align="right" />
-                  <SortableHeader columnKey="price" label="Price" raw={sp as RawParams} align="right" />
-                  <SortableHeader columnKey="margin" label="Margin" raw={sp as RawParams} align="right" />
-                  <SortableHeader columnKey="shelf" label="Website category" raw={sp as RawParams} />
-                  <SortableHeader columnKey="onboarded" label="Onboarded" raw={sp as RawParams} />
-                  <SortableHeader columnKey="expires" label="Expires" raw={sp as RawParams} />
-                  <SortableHeader columnKey="status" label="Status" raw={sp as RawParams} align="center" />
+                  {show("cost") && <SortableHeader columnKey="cost" label="Unit cost" raw={sp as RawParams} align="right" />}
+                  {show("extcost") && <SortableHeader columnKey="extcost" label="Ext. cost" raw={sp as RawParams} align="right" />}
+                  {show("price") && <SortableHeader columnKey="price" label="Price" raw={sp as RawParams} align="right" />}
+                  {show("margin") && <SortableHeader columnKey="margin" label="Margin" raw={sp as RawParams} align="right" />}
+                  {show("extretail") && <SortableHeader columnKey="extretail" label="Ext. retail" raw={sp as RawParams} align="right" />}
+                  {show("shelf") && <SortableHeader columnKey="shelf" label="Website category" raw={sp as RawParams} />}
+                  {show("onboarded") && <SortableHeader columnKey="onboarded" label="Onboarded" raw={sp as RawParams} />}
+                  {show("menu") && <SortableHeader columnKey="menu" label="On menu" raw={sp as RawParams} align="center" />}
+                  {show("expires") && <SortableHeader columnKey="expires" label="Expires" raw={sp as RawParams} />}
+                  {show("compliance") && <th className="px-4 py-3 text-left">Compliance</th>}
+                  {show("disposition") && <th className="px-4 py-3 text-left">Disposition</th>}
+                  {show("notes") && <th className="px-4 py-3 text-left">Notes</th>}
+                  {show("updated") && <SortableHeader columnKey="updated" label="Updated" raw={sp as RawParams} />}
+                  {show("status") && <SortableHeader columnKey="status" label="Status" raw={sp as RawParams} align="center" />}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--admin-border)]">
+              <tbody className="divide-y divide-[var(--admin-border)] tabular-nums">
                 {lots.map((l) => {
                   const expired = l.expires_on != null && l.expires_on < today;
+                  // R38: the extra 0138/0191/0215/0059 fields are on the row
+                  // (select("*")) but not on LotWithDetail's declared type.
+                  const t = l as unknown as TableLot;
+                  const m = l.inv_metrics;
+                  const td = `${compact ? "px-3 py-1.5" : "px-4 py-3"} align-top`;
+                  const sub = "text-[11px] text-[var(--admin-text-faint)]";
+                  const manifestHref = lotManifestHref(t.manifest_id);
                   return (
                     <tr
                       key={l.id}
-                      className="bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]"
+                      className="group bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]"
                     >
-                      <td className="px-4 py-3">
+                      <td className={`${td} sticky left-0 z-10 bg-[var(--admin-surface)] group-hover:bg-[var(--admin-surface-hover)]`}>
                         <Link
                           href={`/admin/inventory/${l.id}`}
                           className="font-medium text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
@@ -768,111 +837,345 @@ export default async function InventoryPage({
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">
-                        {l.vendor_name ?? l.vendor_id ?? "—"}
-                        {l.brand_name && (
-                          <span className="text-[var(--admin-text-faint)]"> · {l.brand_name}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">
-                        {lotTypeLabel(l)}
-                        {/* R32: name where an onboarding type came from — only when it is the one shown. */}
-                        {l.onboarding.houseTypeBasis && lotTypeLabel(l) === l.onboarding.houseType && (
-                          <div className="text-[11px] text-[var(--admin-text-faint)]" data-testid="inventory-type-basis">
-                            {l.onboarding.houseTypeBasis}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotStrainLabel(l)}</td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">
-                        {lotStrainTypeLabel(l)}
-                        {/* R32: where the strain type came from (manifest, your pick,
-                            strain library, remembered, onboarding …). */}
-                        {l.onboarding.strainTypeBasis && (
-                          <div className="text-[11px] text-[var(--admin-text-faint)]" data-testid="inventory-strain-type-basis">
-                            {l.onboarding.strainTypeBasis}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotSizeLabel(l)}</td>
-                      <td className="px-4 py-3 text-center">
-                        {l.lab ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
-                        {/* SLICE 61: mg-dosed types (edibles/drinks/topicals/tinctures) show mg, not "%". */}
-                        {/* R15a: COA figure when on file, else the Cultivera export's (0241). */}
-                        <span title={lotPotencySource(l) === "pos" ? "From the Cultivera export (not a COA)" : lotPotencySource(l) === "coa" ? "From the COA" : lotPotencySource(l) === "package" ? "Verified package total" : undefined}>
-                          {lotPotencyLabel(lotThcValue(l), l)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{lotPotencyLabel(lotCbdValue(l), l)}</td>
-                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
-                        {lotMinorValue(l, "cbg") == null ? "\u2014" : `${lotMinorValue(l, "cbg")} mg`}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
-                        {lotMinorValue(l, "cbn") == null ? "\u2014" : `${lotMinorValue(l, "cbn")} mg`}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
-                        {lotMinorValue(l, "cbc") == null ? "\u2014" : `${lotMinorValue(l, "cbc")} mg`}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotReceivedDate(l)}</td>
-                      <td className="px-4 py-3 text-right font-medium text-[var(--admin-text)]">
-                        {fmtQty(l.on_hand_qty, l.unit)}
-                        {l.is_sample && (
-                          <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-text-faint)]">
-                            sample
+                      {show("ids") && (
+                        <td className={`${td} text-xs text-[var(--admin-text-muted)]`} data-testid="inventory-ids">
+                          <div title="POS product key">{l.pos_product_key ?? "\u2014"}</div>
+                          {t.ccrs_inventory_external_id && <div className={sub} title="CCRS inventory ID">CCRS {t.ccrs_inventory_external_id}</div>}
+                          {manifestHref && (
+                            <Link href={manifestHref} className="text-[11px] text-[var(--admin-accent)] hover:underline">
+                              Manifest
+                            </Link>
+                          )}
+                        </td>
+                      )}
+                      {show("vendor") && (
+                        <td className={`${td} text-[var(--admin-text-muted)]`}>
+                          {l.vendor_name ?? l.vendor_id ?? "—"}
+                          {l.brand_name && (
+                            <span className="text-[var(--admin-text-faint)]"> · {l.brand_name}</span>
+                          )}
+                        </td>
+                      )}
+                      {show("type") && (
+                        <td className={`${td} text-[var(--admin-text-muted)]`}>
+                          {lotTypeLabel(l)}
+                          {/* R32: name where an onboarding type came from — only when it is the one shown. */}
+                          {l.onboarding.houseTypeBasis && lotTypeLabel(l) === l.onboarding.houseType && (
+                            <div className="text-[11px] text-[var(--admin-text-faint)]" data-testid="inventory-type-basis">
+                              {l.onboarding.houseTypeBasis}
+                            </div>
+                          )}
+                        </td>
+                      )}
+                      {show("strain") && <td className={`${td} text-[var(--admin-text-muted)]`}>{lotStrainLabel(l)}</td>}
+                      {show("strainType") && (
+                        <td className={`${td} text-[var(--admin-text-muted)]`}>
+                          {lotStrainTypeLabel(l)}
+                          {/* R32: where the strain type came from (manifest, your pick,
+                              strain library, remembered, onboarding …). */}
+                          {l.onboarding.strainTypeBasis && (
+                            <div className="text-[11px] text-[var(--admin-text-faint)]" data-testid="inventory-strain-type-basis">
+                              {l.onboarding.strainTypeBasis}
+                            </div>
+                          )}
+                        </td>
+                      )}
+                      {show("size") && <td className={`${td} whitespace-nowrap text-[var(--admin-text-muted)]`}>{lotSizeLabel(l)}</td>}
+                      {show("pack") && (
+                        <td className={`${td} whitespace-nowrap text-xs text-[var(--admin-text-muted)]`} data-testid="inventory-pack-facts">
+                          {packFactLines(t).length > 0 ? packFactLines(t).map((line) => <div key={line}>{line}</div>) : "\u2014"}
+                        </td>
+                      )}
+                      {show("coa") && (
+                        <td className={`${td} text-center`}>
+                          {l.lab ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}
+                        </td>
+                      )}
+                      {show("thc") && (
+                        <td className={`${td} text-right text-[var(--admin-text-muted)]`}>
+                          {/* SLICE 61: mg-dosed types (edibles/drinks/topicals/tinctures) show mg, not "%". */}
+                          {/* R15a: COA figure when on file, else the Cultivera export's (0241). */}
+                          <span title={lotPotencySource(l) === "pos" ? "From the Cultivera export (not a COA)" : lotPotencySource(l) === "coa" ? "From the COA" : lotPotencySource(l) === "package" ? "Verified package total" : undefined}>
+                            {lotPotencyLabel(lotThcValue(l), l)}
                           </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
-                        {fmtQty(lotSoldQty(l), l.unit)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtLotMoney(l.unit_cost_minor_units)}</td>
-                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]" title={l.onboarding_price_minor != null ? "Shelf price approved at Product Onboarding (tax included)" : undefined}>
-                        {fmtLotMoney(l.onboarding_price_minor)}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right ${l.onboarding_margin_pct != null && l.onboarding_margin_pct < 0 ? "font-semibold text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}
-                        title={l.onboarding_margin_pct != null ? "Pre-tax margin: (price before tax − unit cost) ÷ price before tax" : "Needs both an approved price and a unit cost"}
-                      >
-                        {fmtLotMargin(l.onboarding_margin_pct)}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]" title={l.website_category_info.sourceTitle} data-testid="inventory-website-category">
-                        {l.website_category_info.unmapped ? (
-                          <span className="font-semibold text-[var(--admin-orange)]">Unmapped</span>
-                        ) : (
-                          l.website_category ?? "\u2014"
-                        )}
-                        <div className="text-[11px] text-[var(--admin-text-faint)]" data-testid="inventory-website-category-source">
-                          {l.website_category_info.sourceText}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{l.onboarded_on ?? "\u2014"}</td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">
-                        {l.expires_on ? (
-                          <span className={expired ? "font-semibold text-[var(--admin-danger)]" : ""}>
-                            {l.expires_on}
-                            {expired && " (expired)"}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center">
+                        </td>
+                      )}
+                      {show("cbd") && <td className={`${td} text-right text-[var(--admin-text-muted)]`}>{lotPotencyLabel(lotCbdValue(l), l)}</td>}
+                      {show("cbg") && (
+                        <td className={`${td} text-right text-[var(--admin-text-muted)]`}>
+                          {lotMinorValue(l, "cbg") == null ? "\u2014" : `${lotMinorValue(l, "cbg")} mg`}
+                        </td>
+                      )}
+                      {show("cbn") && (
+                        <td className={`${td} text-right text-[var(--admin-text-muted)]`}>
+                          {lotMinorValue(l, "cbn") == null ? "\u2014" : `${lotMinorValue(l, "cbn")} mg`}
+                        </td>
+                      )}
+                      {show("cbc") && (
+                        <td className={`${td} text-right text-[var(--admin-text-muted)]`}>
+                          {lotMinorValue(l, "cbc") == null ? "\u2014" : `${lotMinorValue(l, "cbc")} mg`}
+                        </td>
+                      )}
+                      {show("lab") && (
+                        <td className={`${td} text-xs text-[var(--admin-text-muted)]`} data-testid="inventory-lab">
+                          {l.lab ? (
+                            <>
+                              <div>{l.lab.lab_name ?? "Lab not named"}</div>
+                              <div className={sub}>
+                                {l.lab.tested_on ? `tested ${l.lab.tested_on.slice(0, 10)}` : "test date \u2014"}
+                                {l.lab.total_cannabinoids_pct != null && ` · total ${l.lab.total_cannabinoids_pct}%`}
+                              </div>
+                              {l.lab.passed != null && (
+                                <div className={l.lab.passed ? sub : "text-[11px] font-semibold text-[var(--admin-danger)]"}>
+                                  {l.lab.passed ? "PASS" : "FAIL"}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            "\u2014"
+                          )}
+                        </td>
+                      )}
+                      {show("coaexp") && (
+                        <td className={`${td} whitespace-nowrap text-xs text-[var(--admin-text-muted)]`} data-testid="inventory-coa-expiry">
+                          {l.lab?.coa_expire_date ? (
+                            <span className={m.coaDaysToExpiry != null && m.coaDaysToExpiry < 0 ? "font-semibold text-[var(--admin-danger)]" : ""}>
+                              {l.lab.coa_expire_date.slice(0, 10)}
+                            </span>
+                          ) : (
+                            "\u2014"
+                          )}
+                          {m.coaDaysToExpiry != null && (
+                            <div className={sub}>{m.coaDaysToExpiry < 0 ? `expired ${-m.coaDaysToExpiry} d ago` : `${m.coaDaysToExpiry} d left`}</div>
+                          )}
+                          {l.lab?.coa_storage_path ? (
+                            <a href={`/admin/inventory/coa/${l.lab.id}`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--admin-accent)] hover:underline">
+                              COA PDF (archived)
+                            </a>
+                          ) : l.lab?.coa_url ? (
+                            <a href={l.lab.coa_url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--admin-accent)] hover:underline">
+                              COA PDF (lab)
+                            </a>
+                          ) : null}
+                        </td>
+                      )}
+                      {show("received") && (
+                        <td className={`${td} whitespace-nowrap text-[var(--admin-text-muted)]`}>
+                          {lotReceivedDate(l)}
+                          {l.received_on_source && <div className={sub}>{receivedOnSourceLabel(l.received_on_source)}</div>}
+                        </td>
+                      )}
+                      {show("age") && (
+                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`} data-testid="inventory-age">
+                          {m.ageDays == null ? "\u2014" : `${m.ageDays} d`}
+                          {m.agingBucket && (
+                            <div className={m.agingBucket === "90+" ? "text-[11px] font-semibold text-[var(--admin-orange)]" : sub}>{m.agingBucket} days</div>
+                          )}
+                        </td>
+                      )}
+                      {show("onhand") && (
+                        <td className={`${td} whitespace-nowrap text-right font-medium text-[var(--admin-text)]`}>
+                          {fmtQty(l.on_hand_qty, l.unit)}
+                          {l.is_sample && (
+                            <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-text-faint)]">
+                              sample
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      {show("sold") && (
+                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`}>
+                          {fmtQty(lotSoldQty(l), l.unit)}
+                          <div className={sub}>of {fmtQty(l.received_qty, l.unit)}</div>
+                        </td>
+                      )}
+                      {show("sellthrough") && (
+                        <td className={`${td} text-right text-[var(--admin-text-muted)]`} data-testid="inventory-sell-through">
+                          {m.sellThroughPct == null ? "\u2014" : `${m.sellThroughPct}%`}
+                          {m.sellThroughPct != null && (
+                            <div className="ml-auto mt-1 h-1 w-16 rounded bg-white/10" aria-hidden="true">
+                              <div className="h-1 rounded bg-[var(--admin-accent)]" style={{ width: `${Math.min(100, Math.max(0, m.sellThroughPct))}%` }} />
+                            </div>
+                          )}
+                        </td>
+                      )}
+                      {show("velocity") && (
+                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`} title="Units sold per day since received (7-day minimum age)">
+                          {m.velocityPerDay == null ? "\u2014" : `${m.velocityPerDay}/day`}
+                        </td>
+                      )}
+                      {show("supply") && (
+                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`} title="On hand ÷ velocity">
+                          {m.daysOfSupply == null ? "\u2014" : `${m.daysOfSupply} d`}
+                        </td>
+                      )}
+                      {show("abc") && (
+                        <td className={`${td} text-center`} title="ABC class by on-hand value among active lots (A = top 80%)">
+                          {m.abc ? (
+                            <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--admin-text)]">{m.abc}</span>
+                          ) : (
+                            <span className="text-[var(--admin-text-faint)]">{"\u2014"}</span>
+                          )}
+                        </td>
+                      )}
+                      {show("counted") && (
+                        <td className={`${td} whitespace-nowrap text-xs text-[var(--admin-text-muted)]`}>
+                          {t.last_counted_at ? t.last_counted_at.slice(0, 10) : "never"}
+                          {(t.count_times_total ?? 0) > 0 && <div className={sub}>{t.count_times_total}× counted</div>}
+                        </td>
+                      )}
+                      {show("cost") && (
+                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`}>
+                          {fmtLotMoney(l.unit_cost_minor_units)}
+                          {costSourceLabel(t.unit_cost_source) && <div className={sub}>{costSourceLabel(t.unit_cost_source)}</div>}
+                        </td>
+                      )}
+                      {show("extcost") && (
+                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`} title="On hand × unit cost">
+                          {m.extCostMinor == null ? "\u2014" : fmtMoney(m.extCostMinor)}
+                        </td>
+                      )}
+                      {show("price") && (
+                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`} title={l.onboarding_price_minor != null ? "Shelf price approved at Product Onboarding (tax included)" : undefined}>
+                          {fmtLotMoney(l.onboarding_price_minor)}
+                        </td>
+                      )}
+                      {show("margin") && (
+                        <td
+                          className={`${td} text-right ${l.onboarding_margin_pct != null && l.onboarding_margin_pct < 0 ? "font-semibold text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}
+                          title={l.onboarding_margin_pct != null ? "Pre-tax margin: (price before tax − unit cost) ÷ price before tax" : "Needs both an approved price and a unit cost"}
+                        >
+                          {fmtLotMargin(l.onboarding_margin_pct)}
+                        </td>
+                      )}
+                      {show("extretail") && (
+                        <td className={`${td} whitespace-nowrap text-right text-[var(--admin-text-muted)]`} title="On hand × approved shelf price (tax included)">
+                          {m.extRetailMinor == null ? "\u2014" : fmtMoney(m.extRetailMinor)}
+                        </td>
+                      )}
+                      {show("shelf") && (
+                        <td className={`${td} text-[var(--admin-text-muted)]`} title={l.website_category_info.sourceTitle} data-testid="inventory-website-category">
+                          {l.website_category_info.unmapped ? (
+                            <span className="font-semibold text-[var(--admin-orange)]">Unmapped</span>
+                          ) : (
+                            l.website_category ?? "\u2014"
+                          )}
+                          <div className="text-[11px] text-[var(--admin-text-faint)]" data-testid="inventory-website-category-source">
+                            {l.website_category_info.sourceText}
+                          </div>
+                        </td>
+                      )}
+                      {show("onboarded") && <td className={`${td} whitespace-nowrap text-[var(--admin-text-muted)]`}>{l.onboarded_on ?? "\u2014"}</td>}
+                      {show("menu") && (
+                        <td className={`${td} text-center text-xs`} data-testid="inventory-on-menu" title="Has a card on the published menu">
+                          {m.onMenu ? (
+                            <span className="font-semibold text-[var(--admin-accent)]">Live</span>
+                          ) : (
+                            <span className="text-[var(--admin-text-faint)]">Not on menu</span>
+                          )}
+                        </td>
+                      )}
+                      {show("expires") && (
+                        <td className={`${td} whitespace-nowrap text-[var(--admin-text-muted)]`}>
+                          {l.expires_on ? (
+                            <span className={expired ? "font-semibold text-[var(--admin-danger)]" : ""}>
+                              {l.expires_on}
+                              {expired && " (expired)"}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                          {m.daysToExpiry != null && m.daysToExpiry >= 0 && <div className={sub}>{m.daysToExpiry} d left</div>}
+                          {expirySourceLabel(t.expires_on_source) && <div className={sub}>{expirySourceLabel(t.expires_on_source)}</div>}
+                        </td>
+                      )}
+                      {show("compliance") && (
+                        <td className={`${td} text-xs`} data-testid="inventory-compliance">
+                          {complianceFlags(t).length > 0 ? (
+                            <div className="flex max-w-[14rem] flex-wrap gap-1">
+                              {complianceFlags(t).map((f) => (
+                                <span key={f} className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--admin-text-muted)]">
+                                  {f}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[var(--admin-text-faint)]">{"\u2014"}</span>
+                          )}
+                        </td>
+                      )}
+                      {show("disposition") && (
+                        <td className={`${td} text-xs text-[var(--admin-text-muted)]`}>
+                          {dispositionLabel(t.disposition) ?? "\u2014"}
+                          {t.reject_reason && <div className={sub}>{t.reject_reason}</div>}
+                        </td>
+                      )}
+                      {show("notes") && (
+                        <td className={`${td} text-xs text-[var(--admin-text-muted)]`} title={l.notes ?? undefined}>
+                          <div className="line-clamp-2 max-w-[16rem]">{l.notes ?? "\u2014"}</div>
+                        </td>
+                      )}
+                      {show("updated") && (
+                        <td className={`${td} whitespace-nowrap text-xs text-[var(--admin-text-muted)]`}>
+                          {l.updated_at ? l.updated_at.slice(0, 10) : "\u2014"}
+                          {l.created_at && <div className={sub}>created {l.created_at.slice(0, 10)}</div>}
+                        </td>
+                      )}
+                      {show("status") && (
+                      <td className={`${td} text-center`}>
                         <div className="flex flex-col items-center gap-1">
                           <StatusBadge status={l.status} />
                           {isLotOnLeafly(l.pos_product_key, leafly.keys) && <LeaflyBadge title={leafly.title} />}
                         </div>
                       </td>
+                      )}
                     </tr>
                   );
                 })}
               </tbody>
+              {/* R38 S2: totals over EVERY matching lot (all pages), so the
+                  footer answers "what is this filtered view worth", not just
+                  this page. Units are never mixed into one number. */}
+              <tfoot className="sticky bottom-0 z-20 bg-[var(--admin-surface-2)] text-xs text-[var(--admin-text)] shadow-[0_-1px_0_var(--admin-border)]" data-testid="inventory-totals">
+                <tr>
+                  {columnView.ids.map((id) => (
+                    <td
+                      key={id}
+                      className={`${compact ? "px-3 py-1.5" : "px-4 py-2"} align-top tabular-nums ${id === "product" ? "sticky left-0 z-30 bg-[var(--admin-surface-2)] font-semibold" : "text-right"}`}
+                    >
+                      {id === "product" && (
+                        <>
+                          Totals · {totals.lots} lot{totals.lots === 1 ? "" : "s"}
+                          <div className="font-normal text-[var(--admin-text-faint)]">{win.totalPages > 1 ? "across all pages" : "this view"}</div>
+                        </>
+                      )}
+                      {id === "onhand" &&
+                        Object.entries(totals.onHandByUnit)
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([u, q]) => <div key={u} className="whitespace-nowrap">{fmtQty(q, u)}</div>)}
+                      {id === "extcost" && (
+                        <>
+                          <div className="whitespace-nowrap font-semibold">{fmtMoney(totals.extCostMinor)}</div>
+                          {totals.extCostUnknown > 0 && <div className="text-[var(--admin-text-faint)]">{totals.extCostUnknown} without cost</div>}
+                        </>
+                      )}
+                      {id === "extretail" && (
+                        <>
+                          <div className="whitespace-nowrap font-semibold">{fmtMoney(totals.extRetailMinor)}</div>
+                          {totals.extRetailUnknown > 0 && <div className="text-[var(--admin-text-faint)]">{totals.extRetailUnknown} without price</div>}
+                        </>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
             </table>
+            </div>
           </div>
         )}
-        {win.totalPages > 1 && (
-          <ListPager window={win} total={total} noun="lot" makeHref={pageHref} />
+        {/* R38 S3: the numbered pager again at the bottom, with Back to top. */}
+        {lots.length > 0 && (
+          <InventoryTablePager window={win} total={total} raw={sp as RawParams} pageSize={pageChoice} position="bottom" topAnchorId="inventory-table-top" />
         )}
         {lots.length === 0 && stats.total > 0 && (
           /*
