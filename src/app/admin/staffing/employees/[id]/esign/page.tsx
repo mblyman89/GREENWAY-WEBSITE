@@ -143,7 +143,7 @@ export default async function EsignPage({
 
   return (
     <div>
-      <AdminPageHeader title="Sign direct deposit form (in person)" description={`${file.employee.full_name} · form ${ACH_E_TERMS.formId} ${ACH_E_TERMS.formRev}`} />
+      <AdminPageHeader title="Sign direct deposit form (in person)" subtitle={`${file.employee.full_name} · form ${ACH_E_TERMS.formId} ${ACH_E_TERMS.formRev}`} />
       <div className="mx-auto max-w-3xl space-y-5 px-5 py-6 sm:px-8">
         <Link href={back} className="text-xs font-semibold text-[var(--admin-accent)] hover:underline">← Back to the employee file</Link>
         {sp.error ? <Notice tone="error">{sp.error}</Notice> : null}

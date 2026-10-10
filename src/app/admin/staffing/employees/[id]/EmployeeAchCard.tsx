@@ -29,9 +29,14 @@ export function EmployeeAchCard({
           <h2 className="text-sm font-semibold text-white">Direct deposit (ACH)</h2>
           {card ? <Badge tone={card.tone}>{card.label}</Badge> : <Badge tone="orange">Could not load</Badge>}
         </div>
-        <Link href="/admin/settings/banking?tab=employees" className="text-xs font-semibold text-[var(--admin-accent)] hover:underline">
-          Open in the vault →
-        </Link>
+        <div className="flex flex-wrap items-center gap-4">
+          <Link href={`/admin/staffing/employees/${employeeId}/esign`} className="text-xs font-semibold text-[var(--admin-accent)] hover:underline">
+            Sign electronically (in person) →
+          </Link>
+          <Link href="/admin/settings/banking?tab=employees" className="text-xs font-semibold text-[var(--admin-accent)] hover:underline">
+            Open in the vault →
+          </Link>
+        </div>
       </div>
 
       {readError ? (
