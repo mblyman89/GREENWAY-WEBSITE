@@ -2155,7 +2155,7 @@ __runLiquidVolumeTests();
   assertRan("ach-document-intake", __runAchDocumentIntakeTests(), 122); // R39 S5: OWASP drop-only upload, AcroForm draft, blind re-key
   assertRan("keyed-hash", __runKeyedHashTests(), 9); // R39 S5: HKDF-separated HMAC keys (RFC 5869 / RFC 4231 vectors)
   assertRan("pdf-text-core", __runPdfTextCoreTests(), 28); // R39 S6: deterministic PDF 1.4 writer (xref offsets, WinAnsi)
-  assertRan("ach-esign-core", __runAchEsignCoreTests(), 61); // R39 S6: E-SIGN 7001(c) disclosure, OTP rules, record + certificate
+  assertRan("ach-esign-core", __runAchEsignCoreTests(), 77); // R39 S6: E-SIGN 7001(c) disclosure, OTP rules, record + certificate
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -39,7 +39,8 @@
  */
 import { ACH_E_TERMS, ACH_E_TERMS_SHA256 } from "@/lib/payments/ach-esign-terms";
 import type { PdfLine } from "@/lib/payments/pdf-text-core";
-import { acceptChecks, last4, validateRekeyEntry, type RekeyAccount } from "@/lib/payments/ach-document-intake-core";
+import { acceptChecks, entryFromForm, last4, validateRekeyEntry, type RekeyAccount } from "@/lib/payments/ach-document-intake-core";
+import { escapeHtml } from "@/lib/payments/vault-release-notice-core";
 
 // ---------------------------------------------------------------------------
 // Disclosure (E-SIGN 7001(c)(1)(B) and (C)(i))
@@ -383,6 +384,122 @@ export function certificateLines(c: CertificateInput): PdfLine[] {
 }
 
 // ---------------------------------------------------------------------------
+// Server helpers that are still pure: form parsing, messages, emails
+// ---------------------------------------------------------------------------
+/**
+ * The signing screen's account rows: the same field names as the re-key form
+ * (a1_rtn, a1_acct, a1_type, a1_how, a1_amt, a1_bank) plus a1_rtn2 / a1_acct2,
+ * the second typing of each number.
+ */
+export function esignAccountsFromForm(get: (k: string) => string): { ok: true; accounts: EsignAccountInput[] } | { ok: false; errors: string[] } {
+  const entry = entryFromForm(get, "employee");
+  if (!entry.ok) return entry;
+  // entryFromForm skips blank rows; walk the same rows to pair each with its second typing.
+  const rows: number[] = [];
+  for (let i = 1; i <= 3; i += 1) {
+    const d = (k: string) => String(get(k) ?? "").replace(/\D/g, "");
+    if (d(`a${i}_rtn`) || d(`a${i}_acct`)) rows.push(i);
+  }
+  if (rows.length !== entry.accounts.length) return { ok: false, errors: ["The account rows could not be read. Reload the page and type them again."] };
+  const accounts: EsignAccountInput[] = entry.accounts.map((a, j) => ({
+    ...a,
+    bankName: entry.bankNames[j] ?? "",
+    routingAgain: String(get(`a${rows[j]}_rtn2`) ?? ""),
+    accountAgain: String(get(`a${rows[j]}_acct2`) ?? ""),
+  }));
+  const errs = checkEsignAccounts(accounts);
+  return errs.length ? { ok: false, errors: errs } : { ok: true, accounts };
+}
+
+/** Database refusals (0261 / 0258) in words the person at the counter can act on. */
+export function esignDbErrorMessage(message: string | null | undefined): string {
+  const m = String(message ?? "");
+  if (/ach_esign_sessions|ach_esign_complete|PGRST202|PGRST205|42P01/.test(m) && /does not exist|Could not find|PGRST20[25]|42P01/.test(m)) {
+    return "One-time setup needed: apply migration 0261 (docs/MIGRATIONS_TO_RUN.md), then try again.";
+  }
+  const table: [RegExp, string][] = [
+    [/ach_esign_one_live_per_employee/, "This employee already has a signing in progress. Finish or cancel it first."],
+    [/ACH_ESIGN_EXPIRED/, "This signing is older than 30 minutes. Cancel it and start again."],
+    [/ACH_ESIGN_STATE|ACH_ESIGN_TRANSITION|ACH_ESIGN_FINAL/, "This signing has moved on (or was finished or cancelled). Reload the page."],
+    [/ACH_ESIGN_NAME/, "The typed signature must be the employee's full legal name, exactly as entered at the start."],
+    [/ACH_ESIGN_NOT_FOUND/, "That signing no longer exists. Reload the page."],
+    [/ACH_ESIGN_FILES/, "The signed record could not be filed. Nothing was saved; try Sign again."],
+    [/ACH_ESIGN_COUNTERS|otp_attempts_check|otp_sends_check/, "Too many codes or tries. Cancel this signing and start again."],
+    [/id_detail_check/, "Only the last 4 of the ID number and its expiry date, please."],
+    [/esign_cancelled_shape/, "Say why the signing is cancelled (at least 5 characters)."],
+    [/ACH_INTAKE_OPEN_EXISTS/, "This employee already has an open direct deposit authorization. Tick \"Replace the current authorization\" to archive it and use this one."],
+    [/ACH_INTAKE_ACCOUNTS|ACH_ACCOUNT_LIMIT/, "The accounts could not be saved (1 to 3 accounts, in order)."],
+    [/ach_acct_no_duplicate_account/, "The same account is listed twice."],
+  ];
+  for (const [re, text] of table) if (re.test(m)) return text;
+  return `The database refused the change: ${m.slice(0, 300)}`;
+}
+
+/** Which screen a session is on. */
+export type EsignStep = "send_code" | "enter_code" | "sign" | "done" | "cancelled" | "expired";
+export function esignStep(state: EsignState, startedAtIso: string, nowMs: number): EsignStep {
+  if (state === "signed") return "done";
+  if (state === "cancelled") return "cancelled";
+  if (sessionExpired(startedAtIso, nowMs)) return "expired";
+  if (state === "started") return "send_code";
+  if (state === "code_sent") return "enter_code";
+  return "sign";
+}
+
+/** The email with the code. No bank details, no links: the code is typed on the store device. */
+export function otpEmail(code: string): { subject: string; html: string; text: string } {
+  if (!/^\d{6}$/.test(code)) throw new Error("otpEmail: code must be 6 digits");
+  const text =
+    `Your Greenway Marijuana signing code is ${code}.\n\n` +
+    "Type it on the store device to show you can open email from Greenway. It expires in 10 minutes.\n\n" +
+    "If you are not signing a direct deposit form at Greenway right now, do not share this code and tell Stephen or Michael " +
+    "(stephen@greenwaymarijuana.com, michael@greenwaymarijuana.com, or the store at 360-443-6988).";
+  const html =
+    `<p>Your Greenway Marijuana signing code is <strong style="font-size:20px;letter-spacing:3px">${code}</strong>.</p>` +
+    "<p>Type it on the store device to show you can open email from Greenway. It expires in 10 minutes.</p>" +
+    "<p>If you are not signing a direct deposit form at Greenway right now, do not share this code and tell Stephen or Michael " +
+    "(stephen@greenwaymarijuana.com, michael@greenwaymarijuana.com, or the store at 360-443-6988).</p>";
+  return { subject: "Your Greenway signing code", html, text };
+}
+
+export type SignedNoticeInput = {
+  employeeName: string;
+  accountsLast4: readonly string[];
+  checkedBy: string;
+  whenPacific: string;
+  replacedPrevious: boolean;
+};
+
+/**
+ * After signing: one notice to the employee (a change of deposit account is
+ * the classic payroll-diversion fraud, so the account holder hears about it)
+ * and one to Stephen, Michael and the store. Last 4 only.
+ */
+export function signedNotices(i: SignedNoticeInput): { employee: { subject: string; html: string }; owners: { subject: string; html: string } } {
+  const name = escapeHtml(i.employeeName);
+  const tails = i.accountsLast4.map((t) => `&bull;&bull;&bull;&bull;${escapeHtml(t)}`).join(", ");
+  const by = escapeHtml(i.checkedBy);
+  const when = escapeHtml(i.whenPacific);
+  return {
+    employee: {
+      subject: "You signed your Greenway direct deposit form",
+      html:
+        `<p>Hi ${name},</p><p>You signed your Employee Direct Deposit Authorization (GW-ACH-E) electronically on ${when}, with ${by}. ` +
+        `Account(s) ending ${tails}.</p>` +
+        "<p>Greenway will verify the account(s) before the first deposit. You can ask for a paper copy at any time, free of charge.</p>" +
+        "<p>If you did not sign this, tell Stephen or Michael right away (stephen@greenwaymarijuana.com, michael@greenwaymarijuana.com, or the store at 360-443-6988).</p>",
+    },
+    owners: {
+      subject: `Direct deposit e-signed: ${i.employeeName.replace(/[\r\n]/g, " ").slice(0, 80)}`,
+      html:
+        `<p>${name} e-signed a direct deposit authorization on ${when}. Photo ID checked by ${by}.</p>` +
+        `<p>Account(s) ending ${tails}. ${i.replacedPrevious ? "This replaced the previous authorization (archived, kept)." : "First authorization on file."}</p>` +
+        "<p>Payroll will not pay these accounts until each is verified (prenote or $1 test credit) in Settings &rarr; Banking.</p>",
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
 export function __runAchEsignCoreTests(): { passed: number; failed: number } {
@@ -467,6 +584,33 @@ export function __runAchEsignCoreTests(): { passed: number; failed: number } {
   const certText = cert.map((l) => ("text" in l ? l.text : "")).join("\n");
   ok(certText.includes("r".repeat(64)) && certText.includes("203.0.113.5") && certText.includes("Passport (1234)") && certText.includes("5678"), "certificate evidence");
   ok(!certText.includes("12345678") && !certText.includes("021000021"), "certificate has no bank numbers");
+  // server helpers
+  const form = (m: Record<string, string>) => (k: string) => m[k] ?? "";
+  const f1 = { a1_rtn: "021000021", a1_rtn2: "021000021", a1_acct: "12345678", a1_acct2: "1234 5678", a1_type: "checking", a1_how: "remainder", a1_bank: "Bank" };
+  const p1 = esignAccountsFromForm(form(f1));
+  ok(p1.ok && p1.accounts.length === 1 && p1.accounts[0].accountAgain === "1234 5678", "form: one account, second typing paired");
+  const p2 = esignAccountsFromForm(form({ ...f1, a1_acct2: "12345679" }));
+  ok(!p2.ok && p2.errors.some((e) => /two account numbers/.test(e)), "form: mismatch refused");
+  const p3 = esignAccountsFromForm(form({ a2_rtn: "021000021", a2_rtn2: "021000021", a2_acct: "12345678", a2_acct2: "12345678", a2_type: "savings", a2_how: "remainder", a2_bank: "B" }));
+  ok(p3.ok && p3.accounts[0].accountType === "savings", "form: row 2 alone pairs with row 2's second typing");
+  ok(!esignAccountsFromForm(form({})).ok, "form: nothing typed refused");
+  ok(/0261/.test(esignDbErrorMessage('relation "public.ach_esign_sessions" does not exist')), "db: missing table -> setup");
+  ok(/0261/.test(esignDbErrorMessage("Could not find the function public.ach_esign_complete")), "db: missing fn -> setup");
+  ok(/in progress/.test(esignDbErrorMessage('duplicate key value violates unique constraint "ach_esign_one_live_per_employee"')), "db: one live");
+  ok(/30 minutes/.test(esignDbErrorMessage("ACH_ESIGN_EXPIRED: x")) && /legal name/.test(esignDbErrorMessage("ACH_ESIGN_NAME: x")), "db: expired, name");
+  ok(/Replace/.test(esignDbErrorMessage("ACH_INTAKE_OPEN_EXISTS: x")), "db: open exists");
+  ok(esignDbErrorMessage("weird").startsWith("The database refused"), "db: unknown passes through");
+  const t0s = "2026-01-15T10:00:00Z";
+  ok(esignStep("started", t0s, t0) === "send_code" && esignStep("code_sent", t0s, t0) === "enter_code" && esignStep("consented", t0s, t0) === "sign", "steps");
+  ok(esignStep("signed", t0s, t0 + 9e9) === "done" && esignStep("cancelled", t0s, t0) === "cancelled" && esignStep("consented", t0s, t0 + SESSION_TTL_MS + 1) === "expired", "terminal + expired");
+  const em = otpEmail("012345");
+  ok(em.html.includes("012345") && em.text.includes("012345") && !em.subject.includes("012345"), "otp email carries the code, not in the subject");
+  let threwE = false;
+  try { otpEmail("12345"); } catch { threwE = true; }
+  ok(threwE, "otp email refuses a bad code");
+  const sn = signedNotices({ employeeName: "Jane <b>Q</b>", accountsLast4: ["5678"], checkedBy: "Michael", whenPacific: "Jan 15, 2026", replacedPrevious: true });
+  ok(sn.employee.html.includes("Jane &" + "lt;b&" + "gt;Q") && !sn.employee.html.includes("<b>Q"), "notice escapes names");
+  ok(sn.owners.html.includes("5678") && /replaced/.test(sn.owners.html) && sn.employee.html.includes("did not sign"), "notices: last 4, replaced, fraud line");
   console.log(`ach-esign-core: ${passed} passed, ${failed} failed`);
   return { passed, failed };
 }
