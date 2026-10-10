@@ -90,9 +90,20 @@ const sameUrl = (a: string | null, b: string | null): boolean => {
  */
 export function rehostedCopyProof(
   labCoaUrl: string | null,
-  pdf: Pick<CoaPdfDoc, "auth" | "labSampleId"> | null,
+  pdf: Pick<CoaPdfDoc, "auth" | "labSampleId" | "template" | "batchId"> | null,
+  json: Pick<WciaLabDoc, "labResultId" | "sampleId"> | null = null,
 ): { auth: string; sample: string } | null {
-  if (!labCoaUrl || !pdf || !pdf.auth || !pdf.labSampleId) return null;
+  if (!pdf) return null;
+  // Testing Technologies prints no auth code; its certificate names the
+  // sample by its WSLCB inventory id, and the lab JSON carries the same id as
+  // BOTH labresult_id and sample.id (measured on the 4 real certificates).
+  if (pdf.template === "testing-technologies") {
+    const inv = pdf.batchId;
+    if (!json || !inv || !/^\d{16,}$/.test(inv)) return null;
+    if (json.sampleId !== inv || json.labResultId !== inv) return null;
+    return { auth: "(none printed - WSLCB inventory id)", sample: inv };
+  }
+  if (!labCoaUrl || !pdf.auth || !pdf.labSampleId) return null;
   const m = labCoaUrl.match(/WA-([A-Za-z0-9]{8,})-(WA-\d{6}-\d{3})(?:\.pdf)?(?:$|[?#])/);
   if (!m) return null;
   if (!pdf.auth.startsWith(m[1]) || pdf.labSampleId !== m[2]) return null;
@@ -137,7 +148,7 @@ export function assembleCoaExtract(input: {
     // the lab's own link carries the certificate's authentication code and lab
     // sample id (WA-<auth>-<WA-yymmdd-nnn>), and the PDF that was actually read
     // must print BOTH. Measured on 31 real re-hosted Confidence certificates.
-    const rehost = same ? null : rehostedCopyProof(json.coaUrl, pdf);
+    const rehost = same ? null : rehostedCopyProof(json.coaUrl, pdf, json);
     identity.push({
       what: "the lab JSON names the same COA as the transfer",
       ok: same || rehost !== null,
