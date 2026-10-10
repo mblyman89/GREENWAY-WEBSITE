@@ -231,6 +231,9 @@ export default async function BankingVaultPage({
           <Link href="/admin/settings/banking?tab=company" className={tabCls(tab === "company")}>
             My banking {achComplete ? "✓" : "⚠"}
           </Link>
+          <Link href="/admin/settings/banking/documents" className={tabCls(false)}>
+            Documents to review
+          </Link>
         </div>
         <p className="mb-6 text-xs text-white/40">
           {tab === "vendors" ? vendorLine : tab === "employees" ? employeeLine : "Your originating bank & company ACH details — shared by Payroll and Accounts Payable."}
