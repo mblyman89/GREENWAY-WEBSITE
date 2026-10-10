@@ -51,8 +51,6 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 const M = "11111111-1111-4111-8111-111111111111";
 
 // -- Fake network for the REAL postgrest client -------------------------------
-type Req = { method: string; url: URL; body: unknown };
-type Reply = { status: number; body: unknown };
 const net = vi.hoisted(() => ({
   reqs: [] as Array<{ method: string; url: URL; body: unknown }>,
   replies: [] as Array<(r: { method: string; url: URL; body: unknown }) => { status: number; body: unknown }>,
@@ -428,7 +426,6 @@ function bodyOf(src: string, sig: string): string {
 describe("S17 wiring", () => {
   const staging = read("src/lib/pos/intake-menu-staging.ts");
   const drafts = read("src/lib/inventory/catalog-drafts.ts");
-  const actions = read("src/app/admin/inventory/drafts/actions.ts");
   const page = read("src/app/admin/inventory/drafts/page.tsx");
 
   it("testing the test: bodyOf returns real bodies (not a parameter or return type)", () => {
