@@ -242,7 +242,9 @@ export function deriveServingFacts(input: ServingDerivationInput): ServingDeriva
         pkg.assumed,
       );
       arithmetic();
-      if (per && per.derived) per = { ...per, source: per.assumed ? "assumed" : "wa-rule", how: `${per.how} (${SERVING_RULE})` };
+      // arithmetic() sets `per` through its closure; TS narrowed it to null above.
+      const perNow = per as DerivedFact | null;
+      if (perNow && perNow.derived) per = { ...perNow, source: perNow.assumed ? "assumed" : "wa-rule", how: `${perNow.how} (${SERVING_RULE})` };
     }
     // A package that is NOT a whole number of the stated per-serving dose:
     // the rule still decides the servings (never more than 10 mg each).
@@ -372,7 +374,7 @@ export function __runServingDerivationTests(): { passed: number; failed: number 
   // 3. Arithmetic beats the rule: bytes Sour Mandarin COA 5.5 mg x 10 pk (owner fixture item12).
   const c = deriveServingFacts({ category: "edible-solid", mgPerServing: k(5.5, "coa"), servingsPerPack: k(10, "name") });
   ok(c.packageThcMg?.value === 55 && c.packageThcMg.source === "arithmetic", "5.5 x 10 = 55 (arithmetic)");
-  ok(c.complete && !c.packageThcMg.assumed, "item12 complete, not assumed");
+  ok(c.complete && c.packageThcMg !== null && !c.packageThcMg.assumed, "item12 complete, not assumed");
   const c2 = deriveServingFacts({ packageThcMg: k(55, "coa"), mgPerServing: k(5.5, "coa") });
   ok(c2.servingsPerPack?.value === 10 && c2.servingsPerPack.source === "arithmetic", "55 / 5.5 = 10 servings (arithmetic, not the rule's 6)");
   const c3 = deriveServingFacts({ packageThcMg: k(100), servingsPerPack: k(20) });
