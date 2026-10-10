@@ -485,13 +485,20 @@ const coaFact = (f: CoaFact): Fact<number> => ({ value: f.value, source: "coa", 
  * VERIFIED name fact is kept; when the COA disagrees with it, that is a
  * conflict for a human.
  */
-export function mergeCoaIntoExam(exam: CrossExamResult, facts: CoaDraftFacts | null): CrossExamResult {
+export function mergeCoaIntoExam(exam: CrossExamResult, facts: CoaDraftFacts | null, inventoryType?: string | null): CrossExamResult {
   if (!facts || !facts.usable || exam.percentMode) return exam;
   const nameVerified = exam.packageThcMg?.confidence === "verified";
   if (nameVerified && facts.packageThcMg) {
     if (approx(exam.packageThcMg!.value, facts.packageThcMg.value)) {
       const reasons = facts.reasons;
-      return { ...exam, needsReview: exam.needsReview || reasons.length > 0, reviewReasons: [...exam.reviewReasons, ...reasons.filter((r) => !exam.reviewReasons.includes(r))] };
+      const agreed: CrossExamResult = { ...exam, needsReview: exam.needsReview || reasons.length > 0, reviewReasons: [...exam.reviewReasons, ...reasons.filter((r) => !exam.reviewReasons.includes(r))] };
+      // R37 S2: the name gave only a package total, so the engine filled the
+      // count from the 10 mg rule. A certificate that prints its own count or
+      // dose outranks the rule: take the printed figure and work the other out.
+      if ((agreed.servingsPerPack?.source === "wa-rule" || agreed.mgPerServing?.source === "wa-rule") && (facts.servingsPerPack !== null || facts.thcMgPerServing)) {
+        return coaServingsOverRule(agreed, facts, inventoryType);
+      }
+      return agreed;
     }
     const reason = `The name gives ${exam.packageThcMg!.value} mg THC per package; the lab certificate gives ${facts.packageThcMg.value} mg - confirm which is right.`;
     return {
@@ -528,7 +535,34 @@ export function mergeCoaIntoExam(exam: CrossExamResult, facts: CoaDraftFacts | n
   if (merged.servingsPerPack?.source === "wa-rule" && facts.thcMgPerServing) merged.servingsPerPack = null;
   if (merged.mgPerServing?.source === "wa-rule") merged.mgPerServing = null;
   if (merged.servingsPerPack?.source === "wa-rule") merged.servingsPerPack = null;
-  return applyWaServingRule(merged, null);
+  return applyWaServingRule(merged, inventoryType);
+}
+
+/**
+ * R37 S2: replace 10 mg rule figures with what the certificate prints. A
+ * printed count gives the dose (package / count) and a printed dose gives the
+ * count (package / dose) when it divides into a whole number of servings;
+ * otherwise the printed figure stands alone and the other stays unknown.
+ */
+function coaServingsOverRule(exam: CrossExamResult, facts: CoaDraftFacts, inventoryType?: string | null): CrossExamResult {
+  const out: CrossExamResult = { ...exam };
+  const pkg = out.packageThcMg?.value ?? null;
+  const count = facts.servingsPerPack;
+  const dose = facts.thcMgPerServing;
+  out.servingsPerPack = count !== null ? { value: count, source: "name", confidence: "verified", note: "pack count written in the name" } : null;
+  out.mgPerServing = dose ? coaFact(dose) : null;
+  if (pkg !== null && pkg > 0) {
+    if (out.servingsPerPack && !out.mgPerServing) {
+      out.mgPerServing = { value: Math.round((pkg / out.servingsPerPack.value) * 100) / 100, source: "coa", confidence: "verified", note: `${pkg} mg over ${out.servingsPerPack.value} servings` };
+    } else if (out.mgPerServing && !out.servingsPerPack && out.mgPerServing.value > 0) {
+      const q = pkg / out.mgPerServing.value;
+      const r = Math.round(q);
+      if (r >= 1 && Math.abs(pkg - out.mgPerServing.value * r) <= Math.max(0.5, pkg * 0.01)) {
+        out.servingsPerPack = { value: r, source: "coa", confidence: out.mgPerServing.confidence, note: `${pkg} mg at ${out.mgPerServing.value} mg a serving` };
+      }
+    }
+  }
+  return applyWaServingRule(out, inventoryType);
 }
 
 // ---------------------------------------------------------------------------
@@ -821,6 +855,26 @@ export function __runCoaFactsCoreTests(fixtures: Record<string, string>): { pass
   const conflict = mergeCoaIntoExam({ ...verifiedName, packageThcMg: { value: 100, source: "name", confidence: "verified", note: null } }, f12);
   ok(conflict.needsReview && conflict.packageThcMg?.confidence === "conflict" && conflict.packageThcMg.value === 100, "a verified name fact the COA contradicts -> conflict, never overwritten");
   ok(mergeCoaIntoExam({ ...exam, percentMode: true }, f12).percentMode === true, "percent products are never merged");
+  // R37 S2: the 10 mg rule never outranks what the certificate prints.
+  const ruleName: CrossExamResult = {
+    ...verifiedName,
+    servingsPerPack: { value: 6, source: "wa-rule", confidence: "verified", note: "rule" },
+    mgPerServing: { value: 9.17, source: "wa-rule", confidence: "verified", note: "rule" },
+  };
+  const overRule = mergeCoaIntoExam(ruleName, f12, "Solid Edible");
+  ok(overRule.servingsPerPack?.value === 10 && overRule.mgPerServing?.value === 5.5 && overRule.mgPerServing.source === "coa", "R37: COA 10 x 5.5 mg replaces the rule's 6 x 9.17");
+  ok(overRule.packageThcMg?.source === "name-internal", "R37: the agreed name total is kept");
+  const noPackCoa = { ...f12, servingsPerPack: null };
+  const doseOnly = mergeCoaIntoExam(ruleName, noPackCoa, "Solid Edible");
+  ok(doseOnly.mgPerServing?.value === 5.5 && doseOnly.servingsPerPack?.value === 10, "R37: COA dose only -> count worked out 55 / 5.5 = 10");
+  const oddDose = mergeCoaIntoExam(ruleName, { ...noPackCoa, thcMgPerServing: { value: 4, confidence: "verified", note: "x" } }, "Solid Edible");
+  ok(oddDose.mgPerServing?.value === 4 && oddDose.servingsPerPack === null, "R37: a dose that does not divide whole leaves the count unknown (never the rule)");
+  const ruleOnly = mergeCoaIntoExam(ruleName, { ...noPackCoa, thcMgPerServing: null }, "Solid Edible");
+  ok(ruleOnly.servingsPerPack?.source === "wa-rule" && ruleOnly.servingsPerPack.value === 6, "R37: COA states nothing about servings -> the rule stands");
+  const coaPkgOnly = mergeCoaIntoExam(exam, { ...f12, thcMgPerServing: null, servingsPerPack: null }, "Solid Edible");
+  ok(coaPkgOnly.packageThcMg?.value === 55 && coaPkgOnly.servingsPerPack?.source === "wa-rule" && coaPkgOnly.servingsPerPack.value === 6, "R37: a COA package total alone gets the rule count");
+  const coaTopical = mergeCoaIntoExam(exam, { ...f12, thcMgPerServing: null, servingsPerPack: null }, "Topical Ointment");
+  ok(coaTopical.servingsPerPack === null && coaTopical.mgPerServing === null, "R37: topicals never get a rule count after the merge");
 
   // ---- profile ---------------------------------------------------------------
   const p0 = coaProfile(extractFor(0))!;

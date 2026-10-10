@@ -949,6 +949,8 @@ import { readFileSync as r28ReadFileSync, readdirSync as r28ReaddirSync } from "
 import { join as r28Join } from "node:path";
 import { __runCoaPdfTextCoreTests } from "../../src/lib/inventory/coa-pdf-text-core";
 import { __runCoaFactsCoreTests } from "../../src/lib/inventory/coa-facts-core";
+import { __runServingDerivationTests } from "../../src/lib/compliance/serving-derivation-core";
+import { __runServingFactsViewTests } from "../../src/lib/catalog/serving-facts-view-core";
 import { __runCoaExtractCoreTests } from "../../src/lib/inventory/coa-extract-core";
 import { __runCoaPanelCoreTests } from "../../src/lib/inventory/coa-panel-core";
 import { r28MakeExtract } from "../r28/coa-fixture-extract";
@@ -2099,7 +2101,7 @@ __runLiquidVolumeTests();
   assertRan("wa-total-cannabinoids-core", __runWaTotalCannabinoidsTests(), 19); // R27-1: WAC 314-55-102 total THC/CBD
   assertRan("wcia-lab-json-core", __runWciaLabJsonCoreTests(r28CoaFixtures(".wcia.json")), 99); // R28: the lab JSON behind lab_result_link
   assertRan("coa-pdf-text-core", __runCoaPdfTextCoreTests(r28CoaStems()), 292); // R28: COA PDF text (unpdf + layout + LlamaParse markdown)
-  assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 197); // R28: identity, agreement, edible facts, profile
+  assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 204); // R28: identity, agreement, edible facts, profile; R37 +7 COA outranks the 10 mg rule
   assertRan("coa-extract-core", __runCoaExtractCoreTests(r28CoaStems()), 132); // R28: allow-list, best reading, LlamaParse gate, KB fill; R36: Cultivera, owner hosts, redirect hops, DNS answers
   assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 101); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors; R35 +2 WAC 314-55-095 banner
   assertRan("lab-facts-attach-core", __runLabFactsAttachCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 102); // R30: first-pass lab attach + strain terpene learning
@@ -2120,6 +2122,8 @@ __runLiquidVolumeTests();
   assertRan("serving-limit-warning-core", __runServingLimitWarningCoreTests(), 53); // R35 #4: WAC 314-55-095 warning on the manual facts forms
   assertRan("menu-sensory-core", __runMenuSensoryCoreTests(), 67); // R35 #6: effects and aroma on the menu row (0254)
   assertRan("testing-labs-core", __runTestingLabsCoreTests(), 109); // R36 #4: WA labs + certificate hosts (SSRF allow-list)
+  assertRan("serving-derivation-core", __runServingDerivationTests(), 60); // R37 S2: WAC 314-55-095 10 mg serving solver
+  assertRan("serving-facts-view-core", __runServingFactsViewTests(), 20); // R37 S2: product-facts panel prefill view
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
