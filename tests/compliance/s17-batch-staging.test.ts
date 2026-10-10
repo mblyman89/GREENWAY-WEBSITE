@@ -502,16 +502,17 @@ describe("S17 wiring", () => {
     expect(net.calls[net.calls.length - 1]).toBe("redirect:/admin/inventory/drafts?error=floor&msg=switched+off");
   });
 
-  it("the page shows the button only on a focused delivery's review tab, flag on, exact count > 0", () => {
-    expect(page).toContain("approveAllPricedAction.bind(null, focus.manifestId)");
-    expect(page).toContain('{focus.manifestId && view === "draft" && batchOn && batchPriced !== null && batchPriced > 0 && (');
-    expect(page).toContain("focusManifest && picker?.countsComplete ? pricedInReview(picker.counts.get(focusManifest.id) ?? null) : null");
-    expect(page).toContain("batchStagingEnabled(process.env[BATCH_STAGING_ENV])");
-    expect(page).toContain("{batchButtonLabel(batchPriced)}");
-    expect(page).toContain("{BATCH_BUTTON_HELP}");
+  it("R37 S1: the page never renders the Approve-all-priced button (owner removed it)", () => {
+    expect(page).not.toContain("approveAllPricedAction");
+    expect(page).not.toContain("batchButtonLabel");
+    expect(page).not.toContain("BATCH_BUTTON_HELP");
+    expect(page).not.toContain("batchPriced");
+    expect(page).not.toMatch(/Approve all/);
+    expect(page).toContain("R37 S1: the S17 approve-every-priced-row button was removed");
+    // The result banner (a bookmarked form) still reads honestly.
     expect(page).toContain("batchDone ? batchResultCopy(batchDone)");
     // The per-row Approve stays.
-    expect(page).toContain("✓ Approve</Button>");
+    expect(page).toContain("\u2713 Approve</Button>");
   });
 
   it("the pure runner registers the core", () => {
