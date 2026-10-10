@@ -8,7 +8,6 @@ import { vendorBankingBadge } from "@/lib/payments/banking-vault-ui-core";
 import { readVendorAchFlags, vendorAchCard } from "@/lib/payments/vendor-ach-enrollment-core";
 import { resolveStaffNames } from "@/lib/promotions/promotions-store";
 import { VendorAchCard } from "./VendorAchCard";
-import { Badge } from "@/components/admin/ui";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, StickyActionBar } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
