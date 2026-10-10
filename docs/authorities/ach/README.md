@@ -21,6 +21,8 @@ labelled as one; it is not the rule text.
 | odfi-peoples-bank-2026-originators-newsletter.txt | https://www.mypeoples.bank/uploads/userfiles/files/documents/2026%20Originators%20newsletter.pdf | 2026 PAYROLL description; verify account changes by calling the number on file; return codes R23/R29 |
 | frbservices-holiday-schedule.txt | https://www.frbservices.org/about/holiday-schedules | FedACH holidays 2026-2030 (banking-day math) |
 | plaid-auth-same-day-micro-deposits.txt | https://plaid.com/docs/auth/coverage/same-day/ | Plaid same-day micro-deposits post in one to two business days |
+| odfi-first-citizens-nacha-file-specs.txt | https://www.firstcitizens.com/content/dam/firstcitizens/pdfs/commercial/commercial-advantage/nacha-file-specs.pdf | ODFI file spec (Rev 02/2024): transaction codes 22/32 live credits, 23/33 prenote credits (cross-checked against Hancock Whitney's NACHA-FORMAT.pdf, same codes) |
+| odfi-grand-valley-prenote-waiting-period.txt | https://www.grandvalleybank.com/assets/files/ip5QIqAu | ODFI summary of the 2014 rule that cut the prenote wait from six to three banking days; return/NOC by opening of business on the second banking day |
 | wa-sao-vendor-master-file.txt | https://sao.wa.gov/the-audit-connection-blog/protect-your-vendor-master-file-fraudsters | WA State Auditor: verify changes by phone with contact info already on file |
 | disbursementcontrols-vendor-contact-change-risk.txt | https://www.disbursementcontrols.com/vendor-contact-change-risk | Callback manipulation: a changed phone number redirects the callback |
 

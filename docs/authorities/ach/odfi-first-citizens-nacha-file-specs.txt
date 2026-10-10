@@ -1,0 +1,472 @@
+TREASURY MANAGEMENT SERVICES
+
+
+
+First Citizens Bank NACHA File Specifications
+PPD, CCD, and CTX with Addenda
+Published 02/2024
+
+Member FDIC
+Contents
+File Header Record - Number ONE Record ....................................................................................................................................................... 2
+Company / Batch Header - Number FIVE Record .............................................................................................................................................. 3
+PPD Entry Detail - Number SIX Record ............................................................................................................................................................. 4
+PPD Entry Detail Addenda (optional)- Number SEVEN Record ......................................................................................................................... 5
+CCD Entry Detail - Number SIX Record ............................................................................................................................................................. 6
+CCD Entry Detail Addenda (optional)- Number SEVEN Record ........................................................................................................................ 7
+CTX Entry Detail - Number SIX Record .............................................................................................................................................................. 8
+CTX Entry Detail Addenda (optional)- Number SEVEN Record ......................................................................................................................... 9
+Company / Batch Control Record - Number EIGHT Record ............................................................................................................................ 10
+File Control Record - Number NINE Record ..................................................................................................................................................... 11
+Best Practices ................................................................................................................................................................................................... 12
+Miscellaneous Data .......................................................................................................................................................................................... 12
+   Standard Entry Class Codes ......................................................................................................................................................................... 12
+   Transaction Codes ........................................................................................................................................................................................ 12
+   Sample File ................................................................................................................................................................................................... 13
+   Check Digit Computation .............................................................................................................................................................................. 14
+
+
+
+
+M= Mandatory, R= Required, O= Optional                                                                         1                                                                                                 Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+ File Header Record - Number ONE Record
+ 01-01              1
+ 02-03              01
+ 04-04              Blank Space
+ 05-13              053100300
+ 14-14              Blank Space
+ 15-23              ######### Company Tax ID (9 digits)
+ 24-29              YYMMDD (File Creation Date)
+ 30-33              HHMM (File Creation Time)
+ 34-34              A (or any character uppercase A-Z or numeric 0-9)*
+ 35-37              094
+ 38-39              10
+ 40-40              1
+ 41-63              First Citizens Bank
+ 64-86              Company Name
+ 87-94              Usually Blank – Optional
+
+   Data        Record     Priority     Immediate         Immediate      File       File          File ID       Record   Blocking   Format Immediate     Immediate    Reference
+ Element        Type       Code        Destination         Origin     Creation   Creation       Modifier        Size     Factor     Code Destination      Origin       Code
+  Name          Code                                                    Date      Time                                                      Name          Name
+
+Field       M             R            M                 M            M          O              M              M        M          M       O            O             O
+Requirement
+Contents    ‘1’           Numeric      bTTTTAAAAC        bNumeric     YYMMDD     HHMM           UPPERCASE      ‘094’    ‘10’       ‘1’     Alphameric   Alphameric    Alphameric
+                                                                                                A-Z, Numeric
+                                                                                                0-9
+Length         1          2            10                10           6          4              1              3        2          1       23           23            8
+Position       01-01      02-03        04-13             14-23        24-29      30-33          34-34          35-37    38-39      40-40   41-63        64-86         87-94
+EXAMPLE        1          01           FCB RT            First        161221     1006           A              094      10         1       First        Company
+                                       number            character                                                                         Citizens     Name
+                                                         blank then                                                                        Bank
+                                                         9-digit CO
+                                                         TAX ID
+
+ 101 053100300 7777777771612211006A094101FIRST CITIZENS BANK                                                                                XYZC SPECIAL COMPANY
+
+
+ * File ID Modifier – Used to differentiate multiple files sent in the same day.
+
+
+ M= Mandatory, R= Required, O= Optional                                                     2                                                                        Member FDIC
+ NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+ Company / Batch Header - Number FIVE Record
+ 01-01                 5
+ 02-04                 220 (Credits) or 225 (Debits)
+ 05-20                 Company Name (Ex: Acme Company)
+ 21-40                 Company Discretionary Data – Optional (Ex: Dir Dep, Payroll, Drafts, etc.)
+ 41-50                 Company ID (Your Tax ID preceded by a specific value, which will be provided by First Citizens Bank)
+ 51-53                 Standard Entry Class Code (Ex: PPD, CCD, CTX, etc.)
+ 54-63                 Company Entry Description (Ex: Dir Dep, Payroll, Drafts, etc.)
+ 64-69                 Company Descriptive Date – Optional (Ex: YYMMDD)
+ 70-75                 YYMMDD (Effective Entry Date) **
+ 76-78                 Must Be BLANK
+ 79-79                 1
+ 80-87                 05310030
+ 88-94                 ####### Batch Number (This is a consecutive number when there are multiple batches within one file)
+
+Data             Record     Service      Company         Company       Company     Standard     Company       Company      Effectiv   Settlement    Originat    Originating    Batch
+Element           Type       Class        Name          Discretionar     ID       Entry Class     Entry      Descriptive   e Entry       Date       or Status     DFI ID      Number
+Name              Code       Code                          y Data                    Code       Descriptio      Date        Date       (Julian)       Code
+                                                                                                    n
+Field            M          M           M               O              M          M             M            O             R          Inserted by   M           M             M
+Requirement                                                                                                                           ACH
+                                                                                                                                      Operator
+Contents         ‘5’        Numeric     Alphameric      Alphameric     Alphameric Alphameric    Alphameric   Alphameric    YYMMD      Numeric       Alphameri TTTTAAAA        Numeric
+                                                                                                                           D                        c
+Length           1          3           16              20             10         3             10           6             6          3             1         8               7
+Position         01-01      02-04       05-20           21-40          41-50      51-53         54-63        64-69         70-75      76-78         79-79     80-87           88-94
+EXAMPLE          5          220         Company         Payroll        CO ID      PPD           Payroll                    161221                   1         FCB RT          0000001
+                                        Name
+
+ 5220XYZC SPECIAL COM                   1777777777PPDPAYROLL 161221161223                            1053100300000001
+
+
+
+ ** SAME DAY ACH – If file creation date and effective date are current day and file is submitted before same day file processing cutoff, all
+ qualifying transactions within that file will be considered same day transactions.
+
+
+
+
+ M= Mandatory, R= Required, O= Optional                                                     3                                                                           Member FDIC
+ NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+PPD Entry Detail - Number SIX Record
+01-01              6
+02-03              Transaction Code
+                   For Prenotes: 23 - Checking Credits; 33 - Savings Credits; 28 - Checking Debits; 38 - Savings Debits
+                   For Live Dollar: 22 - Checking Credits; 32 - Savings Credits; 27 - Checking Debits; 37 - Savings Debits
+04-11              First 8 digits of the Receiving Bank Routing Number.
+12-12               Number Check Digit. (See Check Digit Computation for additional information).
+13-29              ################# (Receiving Bank Account Number. Left justified and space filled.)
+30-39              $$$$$$$$¢¢ (Dollar Amount. Right justified and zero filled with no decimal and no dollar signs.)
+40-54              ############## (Individual ID Number. Can be Employee #, Customer #, or other value.)
+55-76              Individual's Name.
+77-78              Must be BLANK.
+79-79              0 if there is no Addenda Record accompanying this entry 1 if an Addenda Record accompanies this entry.
+80-94              05310030####### (Item number assigned in ascending order.)
+
+  Data           Record      Transaction        Receiving          Check      DFI Acct         Amount    Individual   Individual   Discretionary       Addenda       Trace
+Element           Type          Code             DFI ID             Digit     Number                    ID number       Name           Data             Record      Number
+ name             Code                                                                                                                                 Indicator
+
+Field             M          M                M                    M          R            M            O             R            O               M               M
+Requirement
+
+Contents          ‘6’        Numeric          TTTTAAAA             Numeric    Alphameric   $$$$$$$$¢¢ Alphameric      Alphameric   Alphameric      Numeric         Numeric
+
+Length            1          2                8                    1          17           10           15            22           2               1               15
+Position          01-01      02-03            04-11                12-12      13-29        30-39        40-54         55-76        77-78           79-79           80-94
+EXAMPLE           6          22               Receiving            Last of    Receiving    No decimal
+                                              bank RT              RT digit   acct #
+
+6220531025861111111111 0000466391A0100015                                     BBBBBB           BRENDA           0053100300000001
+
+
+
+
+M= Mandatory, R= Required, O= Optional                                                         4                                                                   Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+PPD Entry Detail Addenda (optional) - Number SEVEN Record
+Each PPD entry is limited to a single addenda record.
+01-01              7
+02-03              05
+04-83              Free form addenda (80 positions, alphanumeric.)
+84-87              #### Addenda sequence number (This number is always 0001 for PPD addenda records.)
+88-94              ####### Entry detail sequence number (This number is the same as the last seven digits of the trace number of the related
+                   Entry Detail record.)
+
+
+     Data Element          Record              Addenda Type              Payment     Addenda Sequence      Entry Detail
+        Name              Type Code               Code                   Related         Number         Sequence Number
+                                                                       Information
+
+ Field Requirement       M                 M                       O                 M                  M
+
+
+ Contents                ‘7’               ‘05’                    Alphameric        Numeric            Numeric
+
+ Length                  1                 2                       80                4                  7
+ Position                01-01             02-03                   04-83             84-87              88-94
+ EXAMPLE                 7                 05                      Addenda Free      001
+                                                                   Form detail
+
+
+
+705addenda detail free form here                  00100000001
+
+
+
+
+M= Mandatory, R= Required, O= Optional                                                   5                                                 Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+CCD Entry Detail - Number SIX Record
+01-01                6
+02-03                Transaction Code:
+                     For Prenotes: 23 - Checking Credits; 33 - Savings Credits; 28 - Checking Debits; 38 - Savings Debits.
+                     For Live Dollar: 22 - Checking Credits; 32 - Savings Credits; 27 - Checking Debits; 37 - Savings Debits.
+04-11                First 8 digits of the Receiving Bank Routing Number.
+12-12                Routing Number Check Digit. (See Check Digit Computation for additional information.)
+13-29                ################# (Receiving Bank Account Number. Left justified and space filled.)
+30-39                $$$$$$$$¢¢ (Dollar Amount. Right justified and zero filled with no decimal and no dollar signs.)
+40-54                ############### (Receiving Company ID Number.)
+55-76                Receiving Company Name.
+77-78                Must be BLANK.
+79-79                0 if there is no Addenda Record accompanying this entry 1 if an Addenda Record accompanies this entry.
+80-94                05310030####### (Item number assigned in ascending order.)
+
+  Data           Record      Transaction       Receiving DFI           Check     DFI Acct         Amount   ID Number   Receiving    Discretionary       Addenda         Trace
+Element           Type          Code                ID                  Digit    Number                                Company          Data             Record        Number
+ Name             Code                                                                                                  Name                            Indicator
+
+Field            M           M                M                    M             R            M            O           R            O               M                 M
+Requirement
+
+Contents         ‘6’         Numeric          TTTTAAAA             Numeric       Alphameric   $$$$$$$$¢¢ Alphameric    Alphameric   Alphameric      Numeric           Numeric
+
+Length           1           2                8                    1             17           10           15          22           2               1                 15
+Position         01-01       02-03            04-11                12-12         13-29        30-39        40-54       55-76        77-78           79-79             80-94
+EXAMPLE          6           22               Receiving            Last of rt    Receivin     No decimal
+                                              bank RT              digit         g acct #
+
+6220531025861111111111 0000466391B9999999999                                    ABC COMPANY           0053100300000001
+
+
+
+
+M= Mandatory, R= Required, O= Optional                                                        6                                                                     Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+CCD Entry Detail Addenda (optional) - Number SEVEN Record
+Each CCD entry is limited to a single addenda record.
+01-02              7
+02-03              05
+04-83              Free form addenda. (80 positions, alphanumeric.)
+84-87              #### Addenda sequence number. (This number is always 0001 for CCD addenda records.)
+88-94              ####### Entry detail sequence number. (This number is the same as the last seven digits of the trace number of the related
+                   Entry Detail record.)
+
+
+      Data Element           Record Type         Addenda Type          Payment Related       Addenda Sequence       Entry Detail
+         Name                   Code                Code                 Information             Number          Sequence Number
+
+
+ Field Requirement          M                  M                   O                     M                      M
+
+
+ Contents                   ‘7’                 ‘05’               Alphameric            Numeric                Numeric
+
+ Length                     1                   2                  80                    4                      7
+ Position                   01-01               02-03              04-83                 84-87                  88-94
+ EXAMPLE                    7                   05                 Addenda Free          001
+                                                                   Form detail
+
+
+
+705addenda detail free form here                00100000001
+
+
+
+
+M= Mandatory, R= Required, O= Optional                                                   7                                                  Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+  CTX Entry Detail - Number SIX Record
+  01-01               6
+  02-03               Transaction Code
+                      For Prenotes:               23 - Checking Credits; 33 - Savings Credits; 28 - Checking Debits; 38 - Savings Debits
+                      For Live Dollar:            22 - Checking Credits; 32 - Savings Credits; 27 - Checking Debits; 37 - Savings Debits
+  04-11               First 8 digits of the Receiving Bank Routing Number.
+  12-12               Routing Number Check Digit. (See Check Digit Computation for additional information.)
+  13-29               ################# (Receiving Bank Account Number. Left justified and space filled.)
+  30-39               $$$$$$$$¢¢ (Dollar Amount. Right justified and zero filled with no decimal and no dollar signs.)
+  40-54               ############### (Receiving Company ID Number.)
+  55-58               #### (The number of addenda records accompanying the CTX entry detail record.)
+  59-74               Name of Receiver.
+  75-76               Must be BLANK.
+  77-78               Must be BLANK.
+  79-79               0 if there is no Addenda Record(s) accompanying this entry 1 if Addenda Record(s) accompany this entry.
+  80-94               05310030####### (Item number assigned in ascending order.)
+
+Data Element     Record    Transaction    Receiving        Check        DFI           Total       ID Number    Number     Receiving   Reserved   Discretionary   Addenda        Trace
+   Name           Type        Code         DFI ID           Digit     Account        Amount                       of      Company                    Data         Record       Number
+                  Code                                                Number                                   Addenda    Name/ID                                indicator
+                                                                                                               Records     Number
+
+Field           M          M             M                M          R           M                O            M         R            N/A        O               M             M
+Requirement
+
+Contents        ‘6’        Numeric       TTTTAAAA         Numeric    Alphameric $$$$$$$$¢¢        Alphameric   Numeric   Alphameric   Blank      Alphameric      Numeric       Numeric
+
+Length          1          2             8                1          17          10               15           4         16           2          2               1             15
+Position        01-01      02-03         04-11            12-12      13-29       30-39            40-54        55-58     59-74        75-76      77-78           79-79         80-94
+EXAMPLE         6          22            Receiving        Last of    Receiving   No decimal
+                                         bank RT          RT digit   acct #
+
+
+  6220531025861111111111 0000466391C8888888888                              0005ABC COMPANY INC                    1053100300000001
+
+
+
+
+  M= Mandatory, R= Required, O= Optional                                                      8                                                                              Member FDIC
+  NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+CTX Entry Detail Addenda (optional) - Number SEVEN Record
+Each CTX entry can have multiple addenda records, up to a maximum of 9,999 records.
+01-03              7
+02-03              05
+04-83              Free form addenda. (80 positions, alphanumeric)
+84-87              #### Addenda sequence number.
+88-94              ####### Entry detail sequence number.
+
+
+     Data Element          Record          Addenda Type              Payment         Addenda           Entry Detail
+        Name              Type Code           Code                   Related     Sequence Number    Sequence Number
+                                                                   Information
+
+ Field Requirement       M               M                    O                  M                 M
+
+
+ Contents                ‘7’              ‘05’                Alphameric         Numeric           Numeric
+
+ Length                  1                2                   80                 4                 7
+ Position                01-01            02-03               04-83              84-87             88-94
+ EXAMPLE                 7                05                  Addenda Free
+                                                              Form detail
+
+  705addenda detail free form here line                                    1                                          00010000001
+  705addenda detail free form here line                                    2                                          00020000001
+  705addenda detail free form here line                                    3                                          00030000001
+  705addenda detail free form here line                                    4                                          00040000001
+  705addenda detail free form here line                                    5                                          00050000001
+
+
+
+
+M= Mandatory, R= Required, O= Optional                                                     9                                  Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+Company / Batch Control Record - Number EIGHT Record
+01-01              8
+02-04              220 (Credits) or 225 (Debits).
+05-10              ###### (Sum of entry detail / addenda records.)
+11-20              ########## (Hash Total.)
+21-32              $$$$$$$$$$¢¢ (Sum of debit entries.)
+33-44              $$$$$$$$$$¢¢ (Sum of credit entries.)
+45-54              Company ID. (Your Tax ID preceded by a specific value, which will be provided by First Citizens Bank).
+55-73              Must be BLANK.
+74-79              Must be BLANK.
+80-87              05310030
+88-94              ####### Batch Number. (This is a consecutive number when there are multiple batches within one file and must match the Batch
+                   Number in the Company Batch Header record.)
+
+ Data Element       Record      Service       Entry/        Entry   Total Debit        Total Credit    Company       Message        Reserved   Origination    Batch
+    Name             Type        Class       Addenda        Hash    Entry Dollar       Entry Dollar       ID       Authentication                DFI ID      Number
+                     Code        Code         Count                  Amount             Amount                         Code
+
+ Field             M            M            M            M         M              M                  R            O                N/A        M             M
+ Requirement
+
+ Contents          ‘8’          Numeric      Numeric      Numeric   $$$$$$$$$$¢¢ $$$$$$$$$$¢¢         Alphameric   Alphameric       Blank      TTTTAAAA      Numeric
+
+ Length            1            3            6            10        12             12                 10           19               6          8             7
+ Position          01-01        02-04        05-10        11-20     21-32          33-44              45-54        55-73            74-79      80-87         88-94
+ EXAMPLE           8            220                                                                   CO ID        BLANK            Blank      FCB RT
+                                                                                                      given by                                 number
+                                                                                                      FCB
+
+
+822000000900477819910000000000000000050003551777777777                                                                                             053100300000001
+
+
+
+
+M= Mandatory, R= Required, O= Optional                                                     10                                                                    Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+File Control Record - Number NINE Record
+01-01              9
+02-07              ###### (Sum of Company Batch Header Records.)
+08-13              ###### (Sum of 1,5,6,7,8,9 records rounded up to the nearest multiple of ten and then divided by 10.)
+14-21              ######## (Sum of entry detail / addenda records.)
+22-31              ########## (Hash Total.)
+32-43              $$$$$$$$$$¢¢ (Sum of debit entry amounts.)
+44-55              $$$$$$$$$$¢¢ (Sum of credit entry amounts.)
+56-94              SPACE FILLED
+
+
+    Data Element          Record               Batch       Block      Entry /          Entry    Total Debit      Total Credit    Reserved
+       Name              Type Code             Count       Count   Addenda Count       Hash     Entry Dollar     Entry Dollar
+                                                                                               Amount in File   Amount in File
+
+ Field                  M                  M             M         M               M           M                M                N/A
+ Requirement
+
+ Contents               ‘9’                Numeric       Numeric   Numeric         Numeric     $$$$$$$$$$¢¢     $$$$$$$$$$¢¢     Blank
+
+ Length                 1                  6             6         8               10          12               12               39
+ Position               01-01              02-07         08-13     14-21           22-31       32-43            44-55            56-94
+ EXAMPLE                9                  000002
+
+
+
+9000001000002000000090047781991000000000000000005000355
+
+
+
+
+M= Mandatory, R= Required, O= Optional                                                  11                                                  Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+Best Practices
+        After the file control record is written, verify the file is padded with 9's creating a block ten count.
+        ALL numeric fields must be RIGHT justified, with no decimals, no dollar signs, and zero filled.
+        ALL alphanumeric fields must be LEFT justified, and space filled.
+        ALL amount fields must not include decimals and dollar signs.
+        File length must be fixed at 94 characters ending with carriage return and line feed.
+        * File ID Modifier – Used to differentiate multiple files sent in the same day.
+        ** SAME DAY ACH – If file creation date and effective date are current day and file is submitted before same day file processing cutoff,
+         all qualifying transactions within that file will be considered same day transactions.
+
+
+
+Miscellaneous Data
+Standard Entry Class Codes
+CCD                Cash Concentration or Disbursement
+CTX                Corporate Trade Exchange
+PPD                Prearranged payment and Deposit Entry
+TEL                Telephone Initiated Entry
+WEB                Internet/Mobile Initiated Entry
+
+Transaction Codes
+Positions 02-03 in the 6th record
+Demand Credit Records (for checking and share draft accounts)
+ 22 - Automated Deposit
+ 23 - Prenotification of demand Credit Authorization; Death Notification (non-dollar); Automated Enrollment Entry (non-dollar)
+ 24 - Zero dollar with remittance data (for CCD and CTX Entries only); Acknowledgement Entries
+       (ACK and ATX entries only)
+
+Demand Debit Records (for checking and share draft accounts)
+ 27 - Automated Payment
+ 28 - Prenotification of Demand Debit Authorization (non-dollar)
+ 29 - Zero dollar with remittance data (for CCD and CTX entries only)
+
+
+
+M= Mandatory, R= Required, O= Optional                                     12                                                               Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+Savings Account Credit Records
+ 32 - Automated Deposit
+ 33 - Prenotification of Savings Credit Authorization; Death Notification (non-dollar); Automated enrollment Entry (non-dollar)
+ 34 - Zero dollar with remittance data (for CCD and CTX Entries only); Acknowledgement Entries (ACK and ATX entries only)
+
+Savings Account Debit Records
+ 37 - Automated Payment
+ 38 - Prenotification of Savings Debit Authorization (non-dollar)
+ 39 - Zero dollar with remittance data (for CCD and CTX Entries only)
+
+Sample File
+
+
+
+
+M= Mandatory, R= Required, O= Optional                                   13                                                       Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+Check Digit Computation
+The Check Digit is computed using the Routing Modulus 10 as follows:
+    1. Multiply each digit in the Routing Number by a weighing factor. The weighting factors for each digit/position are as follows:
+
+            Position          1    2    3    4   5    6    7       8
+            Weight            3    7    1    3   7    1    3       7
+
+    2. Add the results of the eight multiplications.
+    3. Subtract the sum from the next highest multiple of 10. The result is the Check Digit.
+         Example:
+         R&T              0                  7       6                 4    0        1         2   5
+         Times(x)         3                  7       1                 3    7        1         3   7
+         Sum              0                 49       6                 12   0        1         6   35       = 109
+         Check Digit = 1, which is 110 (the next highest multiple of 10 from 109) MINUS 109 (the result above)
+
+
+
+
+M= Mandatory, R= Required, O= Optional                                          14                                                     Member FDIC
+NACHA File Specifications First Citizens Bank Data (Rev 02/2024)
+

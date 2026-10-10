@@ -1,0 +1,49 @@
+Prenotification Entries: Reduction in Waiting Period
+for Live Entries
+In the past, Originators have had to wait six Banking Days before transmitting “live” entries following a Prenote. However, in
+today’s banking environment, that length of waiting time often appears excessive, making the use of a Prenote ineffective for
+many Originators. Responding to the financial industry’s support for shortening that period, the Rule will make the waiting
+period three banking days. This means that if an Originating Depository Financial Institution (ODFI) does not receive a
+Return Entry or a Notification of Change (NOC) in response to a Prenote, the Originator is free to originate new “live” entries
+more quickly after the Prenote than previously allowed. The shortening of the timeframe for a Prenote could be the first step
+toward account validation for the ACH Network.
+
+Shortening the Live Entry Waiting Period After Prenotification
+ODFI, Originator
+Impact for ODFIs
+
+
+        Understand the deadlines for receiving a Return Entry or NOC in response to a Prenote. If the ODFI receives one
+         of these by the opening of business on the second banking day following the settlement date of the Prenotification
+         (that is, a timely return of a NOC), the Originator should not be permitted to transmit subsequent entries to the
+         Receiver’s account until it has remedied the reason for the return or made the correction requested by the NOC.
+        Apply new waiting time to ODFI self-originations, such as in the cases of mortgages or car loans, allowing faster
+         “live” entry transmission.
+
+Impact for Originators
+
+
+        Upon transmission of a Prenote, wait three banking days before originating “live” entries.
+        Maintain the Originator’s obligation to act on return entries and NOCs before originating subsequent “live” entries
+         after a Prenotification. If a return or NOC is transmitted to the Originator’s ODFI in a timely fashion (by the opening
+         of business on the second banking day after the settlement date of the Prenote), the Originator must rectify that
+         situation before originating new entries.
+              o If the Originator’s ODFI receives an untimely NOC in response to a Prenote (after the second banking
+                   day deadline), the Originator must make the requested correction within six banking days or prior to
+                   initiating a subsequent entry to the Receiver’s account, whichever is later.
+
+
+        Revise ODFI’s or Originator’s agreements, policies or procedures to accommodate the reduced waiting time for
+         entries following Prenotes.
+
+Friday, September 19, 2014
+
+
+        Revises Article Two, Subsection 2.6.2 (Six Banking Days’ Delay; Return Entries and Notifications of Change) by
+         modifying the text and title to reduce the aforementioned waiting period.
+        Revises Article Two, Subsection 2.11.1 (ODFI and Originator Action on Notification of Change (NOC)) by adding a
+         new bullet, (n), that requires an Originator to take action if it receives a timely NOC related to a Prenotification
+         Entry.
+        Prenotification (“Prenote”) is defined as a non-dollar Entry– a message, for instance– that is transmitted through
+         the ACH Network by an Originator to a Receiving Depository Financial Institution(RDFI).
+
