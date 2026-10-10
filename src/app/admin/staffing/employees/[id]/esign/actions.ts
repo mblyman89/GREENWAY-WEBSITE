@@ -192,7 +192,8 @@ export async function signEsignAction(fd: FormData): Promise<void> {
   revalidatePath(page(employeeId));
   revalidatePath(`/admin/staffing/employees/${employeeId}`);
   revalidatePath("/admin/settings/banking");
-  back(employeeId, "ok", `Signed. The record and certificate are filed. Notices: ${mailed}. Verify each account (prenote or $1 test credit) before payroll pays it.`);
+  const okMsg = `Signed. The record and certificate are filed. Notices: ${mailed}. Verify each account (prenote or $1 test credit) before payroll pays it.`;
+  redirect(`${page(employeeId)}?done=${encodeURIComponent(s.id)}&ok=${encodeURIComponent(okMsg.slice(0, 600))}`);
 }
 
 export async function cancelEsignAction(fd: FormData): Promise<void> {

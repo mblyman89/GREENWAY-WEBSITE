@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
@@ -37,7 +38,7 @@ export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-function Notice({ tone, children }: { tone: "ok" | "error" | "info"; children: React.ReactNode }) {
+function Notice({ tone, children }: { tone: "ok" | "error" | "info"; children: ReactNode }) {
   const cls =
     tone === "error"
       ? "border-red-500/40 bg-red-500/10 text-red-300"
@@ -47,7 +48,7 @@ function Notice({ tone, children }: { tone: "ok" | "error" | "info"; children: R
   return <div role={tone === "error" ? "alert" : "status"} className={`rounded-lg border px-4 py-3 text-sm ${cls}`}>{children}</div>;
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
       <h2 className="mb-3 text-sm font-semibold text-white">{title}</h2>
