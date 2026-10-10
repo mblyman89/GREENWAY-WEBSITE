@@ -147,11 +147,15 @@ async function applyBrandToRows(admin: Admin, rows: BrandRow[], brand: { id: str
     const lot = r.lotId ? lots.get(r.lotId) : undefined;
     if (!lot || doneLots.has(lot.id)) continue;
     doneLots.add(lot.id);
-    if (lot.brand_id === brand.id) continue;
-    const { error: lotErr } = await admin.from("inventory_lots").update({ brand_id: brand.id }).eq("id", lot.id);
-    if (lotErr) {
-      out.errors.push(`an inventory lot kept its old brand (${lotErr.message})`);
-      continue;
+    // The lot write is skipped when already right, but the card push is NOT:
+    // a card can still carry a stale brand_name (the plan is idempotent and
+    // leaves a card that already matches untouched).
+    if (lot.brand_id !== brand.id) {
+      const { error: lotErr } = await admin.from("inventory_lots").update({ brand_id: brand.id }).eq("id", lot.id);
+      if (lotErr) {
+        out.errors.push(`an inventory lot kept its old brand (${lotErr.message})`);
+        continue;
+      }
     }
     const prop = await propagateLotCorrections({
       lotId: lot.id,
@@ -169,15 +173,31 @@ async function applyBrandToRows(admin: Admin, rows: BrandRow[], brand: { id: str
 }
 
 async function readManifestDrafts(admin: Admin, manifestId: string): Promise<{ ok: true; rows: BrandRow[] } | { ok: false; error: string }> {
-  let cols = "id, lot_id, brand_id, brand_name, status";
-  let res = await admin.from("catalog_product_drafts").select(cols).eq("manifest_id", manifestId).in("status", ["draft", "approved"]).order("id").range(0, 999);
-  if (res.error && isMissingColumnError(res.error)) {
-    cols = "id, lot_id, brand_name, status";
-    res = await admin.from("catalog_product_drafts").select(cols).eq("manifest_id", manifestId).in("status", ["draft", "approved"]).order("id").range(0, 999);
-  }
-  if (res.error) return { ok: false, error: res.error.message };
-  const rows = ((res.data ?? []) as unknown as DraftRow[]).map((d): BrandRow => ({ draftId: d.id, lotId: d.lot_id, brandId: d.brand_id ?? null, brandName: d.brand_name }));
-  return { ok: true, rows };
+  const read = async (cols: string) => {
+    let lastError: string | null = null;
+    let missingColumn = false;
+    const { rows, verdict } = await pagedAllChecked<DraftRow>(async (from, to) => {
+      const { data, error } = await admin
+        .from("catalog_product_drafts")
+        .select(cols)
+        .eq("manifest_id", manifestId)
+        .in("status", ["draft", "approved"])
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        lastError = error.message;
+        missingColumn = isMissingColumnError(error);
+        return { rows: [], ok: false };
+      }
+      return { rows: (data ?? []) as unknown as DraftRow[], ok: true };
+    }, { maxRows: 10_000 });
+    return { rows, complete: verdict.complete, lastError: lastError as string | null, missingColumn };
+  };
+  let res = await read("id, lot_id, brand_id, brand_name, status");
+  if (!res.complete && res.missingColumn) res = await read("id, lot_id, brand_name, status");
+  // Never act on a partial list: a half-branded delivery that LOOKS done is worse than a refusal.
+  if (!res.complete) return { ok: false, error: res.lastError ?? "the product list could not be read completely" };
+  return { ok: true, rows: res.rows.map((d): BrandRow => ({ draftId: d.id, lotId: d.lot_id, brandId: d.brand_id ?? null, brandName: d.brand_name })) };
 }
 
 /** Remember the brand on the delivery and the vendor. null = migration 0257 missing. */
