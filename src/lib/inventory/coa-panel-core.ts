@@ -198,6 +198,7 @@ export const FACT_SOURCE_LABEL: Record<string, string> = {
   column: "transfer potency column",
   "name+column": "product name + potency column",
   "name-internal": "product name",
+  "wa-rule": "Washington 10 mg serving rule",
   reviewer: "set by a person",
   human: "set by a person",
 };

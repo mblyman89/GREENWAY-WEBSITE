@@ -171,6 +171,8 @@ import { IntakeFactReviewPanel } from "./IntakeFactReviewPanel";
 import { ProductFactsPanel } from "./ProductFactsPanel";
 import { loadLabViewsForDrafts } from "@/lib/catalog/lab-facts-attach";
 import { labPanelView } from "@/lib/catalog/lab-facts-attach-core";
+// R37 S2: the serving facts worked out from the WA 10 mg rule.
+import { servingFactsView } from "@/lib/catalog/serving-facts-view-core";
 import { strainSlug } from "@/lib/catalog/slug-core";
 // R19 S13: "Look up all N products on this manifest" (server-side batch).
 import { lookupJobsOn, loadManifestLookup } from "@/lib/catalog/lookup-job-server";
@@ -483,7 +485,7 @@ export default async function CatalogDraftsPage({
   // the approved tab recalls memory too, so its opened row shows the facts.
   const rowsOpen = view === "draft" || view === "approved";
   const waitingKeys = new Map(drafts.map((d) => [d.id, waitingKeyForDraft(d)] as const));
-  const [{ suggestions: strainSuggestions, evidence: strainEvidence, sizeLabels: strainSizeLabels }, shadowSummary, productMemories, waitingRead, labViews] = await Promise.all([
+  const [{ suggestions: strainSuggestions, evidence: strainEvidence, sizeLabels: strainSizeLabels, unitWeightsG: lotUnitWeightsG }, shadowSummary, productMemories, waitingRead, labViews] = await Promise.all([
     loadStrainTypeSignals(drafts),
     attachRing === 0 ? Promise.resolve(null) : loadShadowSummary(),
     kbFirst && rowsOpen
@@ -1714,6 +1716,16 @@ export default async function CatalogDraftsPage({
                                   returnManifest={focus.manifestId}
                                   returnView={view}
                                   category={displayCategory}
+                                  serving={servingFactsView({
+                                    name: d.name,
+                                    inventoryType: d.inventory_type,
+                                    category: displayCategory,
+                                    saved: (savedFacts.saved.get(savedFactsMapKey(d.manifest_id, d.pos_product_key))?.facts as Record<string, unknown> | undefined) ?? null,
+                                    coa: labViews?.byDraft.get(d.id)?.plan.dosed ?? null,
+                                    labThcPct: d.total_thc_pct ?? d.thc_pct,
+                                    labCbdPct: d.cbd_pct,
+                                    unitWeightG: lotUnitWeightsG.get(d.id) ?? null,
+                                  })}
                                 />
                               )}
                             </div>

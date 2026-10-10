@@ -6,6 +6,7 @@
  * edit path is the Product Onboarding facts action (resolveIntakeFactReview),
  * so the website, the register and the back office read the same numbers.
  */
+import { servingFactsView } from "@/lib/catalog/serving-facts-view-core";
 import Link from "next/link";
 import { Button } from "@/components/admin/ui";
 import { ProductFactsPanel } from "@/app/admin/inventory/drafts/ProductFactsPanel";
@@ -294,6 +295,13 @@ export function ProductFactsSection({
             returnView={ctx.draft.status === "approved" ? "approved" : "draft"}
             returnTo={returnTo}
             category={ctx.draft.chosen_website_category ?? null}
+            serving={servingFactsView({
+              name: ctx.draft.name ?? null,
+              inventoryType: ctx.draft.inventory_type ?? null,
+              category: ctx.draft.chosen_website_category ?? null,
+              saved: (ctx.saved?.facts as Record<string, unknown> | undefined) ?? null,
+              coa: null,
+            })}
           />
         )
       ) : null}
