@@ -451,3 +451,28 @@ describe("signer's copy", () => {
     if (!r.ok) expect(r.error).toMatch(/SHA-256/);
   });
 });
+
+describe("page view (the clock is read in the data layer)", () => {
+  it("shows the live session's step; a done= id for ANOTHER employee is ignored", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(T0 + 2000);
+      expect(await store.esignPageView(EMP, null)).toMatchObject({ ready: true, session: null, step: null });
+      const s = await started();
+      const v = await store.esignPageView(EMP, null);
+      expect(v.session?.id).toBe(s.id);
+      expect(v.step).toBe("send_code");
+      vi.setSystemTime(T0 + 31 * 60_000);
+      expect((await store.esignPageView(EMP, null)).step).toBe("expired");
+      // Another employee's finished session named in the URL is not shown here.
+      await store.cancelEsignSession({ session: s, reason: "testing view", nowMs: T0 + 5 });
+      const other = "2f8fad5b-d9cb-469f-a165-70867728950e";
+      (st.db.tables.get("employees") as Row[]).push({ id: other, active: true });
+      expect((await store.esignPageView(other, s.id)).session).toBeNull();
+      // The same id for the right employee is shown (the cancelled card / signed card path).
+      expect((await store.esignPageView(EMP, s.id)).step).toBe("cancelled");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

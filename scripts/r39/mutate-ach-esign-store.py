@@ -52,6 +52,9 @@ M = [
     ('if (reason.length < 5) return', 'if (false) return'),
     ('.in("state", ["started", "code_sent", "consented"])\n    .select("id");', '.select("id");'),
     ('cancel_reason: reason', 'cancel_reason: input.reason'),
+    # page view
+    ('const session = live.session ?? (done && done.employee_id === employeeId ? done : null);', 'const session = live.session ?? done;'),
+    ('const step = session ? esignStep(session.state, session.started_at, Date.now()) : null;', 'const step = session ? esignStep(session.state, session.started_at, 0) : null;'),
     # signer copy
     ('if (got !== row.sha256) return', 'if (false) return'),
     ('if (session.state !== "signed" || !session.record_document_id) return', 'if (!session.record_document_id) return'),
