@@ -197,10 +197,10 @@ describe("R37 S6 pure core", () => {
   it("self-tests pass with the exact count", () => {
     const r = __runLookupHistoryCoreTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBe(65);
+    expect(r.passed).toBe(67);
   });
   it("the pure runner pins the same floor", () => {
-    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("lookup-history-core", __runLookupHistoryCoreTests(), 65)');
+    expect(read("scripts/compliance/run-pure-selftests.ts")).toContain('assertRan("lookup-history-core", __runLookupHistoryCoreTests(), 67)');
   });
   it("the core is pure (no imports, no env)", () => {
     const src = read("src/lib/catalog/lookup-history-core.ts");

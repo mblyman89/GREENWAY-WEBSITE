@@ -522,6 +522,7 @@ export function __runLookupHistoryCoreTests(): { passed: number; failed: number 
   ok("known is not a yield", buildProductHistory({ draftId: "g", name: "G", searches: [s(1, "known")], found: [], missing: ["aroma"] }, now).status === "saturated");
   ok("review is a yield", buildProductHistory({ draftId: "g", name: "G", searches: [s(1, "review", "this row", 0, 2)], found: [], missing: ["aroma"] }, now).status === "productive");
   ok("unknown facts -> no advice", buildProductHistory({ draftId: "h", name: "H", searches: [s(1, "found")], found: [], missing: null }, now).status === "unknown");
+  ok("unknown beats failed (no advice when facts were not counted)", buildProductHistory({ draftId: "h", name: "H", searches: [s(1, "failed")], found: [], missing: null }, now).status === "unknown");
   ok("unknown never searched -> still never", buildProductHistory({ draftId: "h", name: "H", searches: [], found: [], missing: null }, now).status === "never");
 
   // line content
@@ -545,6 +546,7 @@ export function __runLookupHistoryCoreTests(): { passed: number; failed: number 
   ok("go tone", go.tone === "go" && go.headline.startsWith("Recommended: run the search"));
   ok("go reasons", go.headline.includes("1 product has never been searched") && go.headline.includes("1 product is still turning up new facts"));
   ok("againIds = recommended AND already done here (case-insensitive)", go.againIds.join() === "p2");
+  ok("againIds never offers a harvested / saturated product", summarizeDeliveryHarvest([mk("p1", [s(3, "found")], []), mk("p2", [s(3, "nothing_new")], ["aroma"]), mk("p3", [s(3, "found")], ["aroma"])], now, { doneInThisDelivery: new Set(["p1", "p2", "p3"]) }).againIds.join() === "p3");
   ok("counts", go.counts.never === 1 && go.counts.productive === 1 && go.counts.harvested === 1 && go.recommendCount === 2 && go.searchedBefore === 1);
   ok("detail mentions search again", go.detail.includes("use Search again"));
   const done = summarizeDeliveryHarvest([mk("p1", [s(1, "found")], []), mk("p2", [], [])], now);
