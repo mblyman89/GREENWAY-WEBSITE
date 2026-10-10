@@ -289,8 +289,8 @@ export function summarizeDeliveryHarvest(
     headline = "The facts on these rows could not be counted, so there is no recommendation either way.";
   }
   const detail =
-    `${plural(searchedBefore, "of", "of")} ${total} searched before`.replace(/^(\d+) of/, "$1 of") +
-    ` \u00b7 ${counts.harvested} fully harvested \u00b7 ${plural(recommendCount, "worth searching now", "worth searching now")}` +
+    `${searchedBefore} of ${total} searched before` +
+    ` \u00b7 ${counts.harvested} fully harvested \u00b7 ${recommendCount} worth searching now` +
     (againIds.length > 0 ? ` (${againIds.length} already searched once on this delivery - use Search again)` : "") +
     "." +
     incomplete;
