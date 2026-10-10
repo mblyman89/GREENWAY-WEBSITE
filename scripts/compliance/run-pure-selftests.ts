@@ -2145,7 +2145,7 @@ __runLiquidVolumeTests();
   assertRan("ach-authorization-core", __runAchAuthorizationCoreTests(), 66); // R39 S1: FedACH days, prenote/NOC/return/reversal clocks, splits, release, retention, codes
   assertRan("vault-release-notice-core", __runVaultReleaseNoticeCoreTests(), 17); // R39 S3: solo-release notice recipients, masking, escaping, phone reminder
   assertRan("vault-release-core", __runVaultReleaseCoreTests(), 22); // R39 S3: release form -> verdict, picked contact on file 90+ days, in person
-  assertRan("vendor-ach-enrollment", __runVendorAchEnrollmentTests(), 46); // R39 S4: needs bank info / opted out card + 0258 CHECK planner
+  assertRan("vendor-ach-enrollment", __runVendorAchEnrollmentTests(), 49); // R39 S4: needs bank info / opted out card + 0258 CHECK planner
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

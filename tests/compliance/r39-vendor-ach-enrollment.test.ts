@@ -14,6 +14,7 @@ import {
   planVendorAchFlagChange,
   readVendorAchFlags,
   vendorAchCard,
+  vendorFollowUpList,
   type VendorAchFlags,
   type VendorAchFlagPatch,
 } from "@/lib/payments/vendor-ach-enrollment-core";
@@ -179,10 +180,44 @@ describe("readVendorAchFlags / optOutPayRefusal", () => {
   });
 });
 
+describe("vendorFollowUpList (vault: vendors to chase)", () => {
+  const none = { hasRecord: false, status: null, verifiedAt: null };
+  const v = (status: string, verifiedAt: string | null = NOW) => ({ hasRecord: true, status, verifiedAt });
+  it("lists only vendors needing action, most urgent first", () => {
+    const rows = vendorFollowUpList([
+      { id: "a", name: "Ready Co", flags: F(), vault: v("active") },
+      { id: "b", name: "Not Set", flags: F(), vault: none },
+      { id: "c", name: "Need Info", flags: F({ needsBankInfo: true }), vault: none },
+      { id: "d", name: "Held", flags: F(), vault: v("on_hold") },
+      { id: "e", name: "Weird", flags: F(), vault: v("paused") },
+      { id: "f", name: "Unverified", flags: F(), vault: v("active", null) },
+      { id: "g", name: "Gone", flags: F(), vault: v("archived") },
+      { id: "h", name: "Opted", flags: F({ optedOut: true, optedOutReason: "checks" }), vault: none },
+    ]);
+    expect(rows.map((r) => r.state)).toEqual(["blocked_unknown", "on_hold", "needs_bank_info", "unverified", "inactive", "not_set_up"]);
+    expect(rows.map((r) => r.vendorId)).toEqual(["e", "d", "c", "f", "g", "b"]);
+  });
+  it("shows opted-out vendors only when they contradict the vault", () => {
+    const rows = vendorFollowUpList([{ id: "h", name: "Opted", flags: F({ optedOut: true, optedOutReason: "checks" }), vault: v("active") }]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].warnings[0]).toMatch(/ACTIVE bank record/);
+  });
+  it("is empty before 0258 rather than listing every vendor", () => {
+    expect(vendorFollowUpList([{ id: "x", name: "X", flags: F({ columnsReady: false }), vault: none }])).toEqual([]);
+  });
+  it("sorts ties by name", () => {
+    const rows = vendorFollowUpList([
+      { id: "1", name: "Bravo", flags: F(), vault: none },
+      { id: "2", name: "Alpha", flags: F(), vault: none },
+    ]);
+    expect(rows.map((r) => r.name)).toEqual(["Alpha", "Bravo"]);
+  });
+});
+
 describe("embedded self-tests", () => {
   it("all pass with the floor", () => {
     const r = __runVendorAchEnrollmentTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(46);
+    expect(r.passed).toBeGreaterThanOrEqual(49);
   });
 });

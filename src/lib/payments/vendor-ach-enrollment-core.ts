@@ -272,6 +272,34 @@ export function optOutPayRefusal(flags: VendorAchFlags, vendorName: string): str
   return `${vendorName} opted out of ACH (${flags.optedOutReason ?? "no reason recorded"}). Pay another way, or un-check "opted out" on the vendor's page first.`;
 }
 
+/** Most urgent first. Unknown states sort last (and still show). */
+const FOLLOW_UP_ORDER: readonly VendorAchState[] = ["blocked_unknown", "on_hold", "needs_bank_info", "unverified", "inactive", "not_set_up"];
+
+export type VendorFollowUpRow = { vendorId: string; name: string; state: VendorAchState; label: string; nextStep: string; warnings: string[] };
+
+/**
+ * The vault's "Vendors to follow up" list: every vendor whose card says
+ * followUp (or has a warning), most urgent first, then by name.
+ * Opted-out and ACH-ready vendors are left out unless something disagrees.
+ * Before 0258 (flags not ready) it returns [] so the page shows no false list.
+ */
+export function vendorFollowUpList(
+  vendors: readonly { id: string; name: string; flags: VendorAchFlags; vault: VendorAchVault }[],
+): VendorFollowUpRow[] {
+  const rows: VendorFollowUpRow[] = [];
+  for (const v of vendors) {
+    const card = vendorAchCard(v.flags, v.vault);
+    if (card.state === "not_ready") continue;
+    if (!card.followUp && card.warnings.length === 0) continue;
+    rows.push({ vendorId: v.id, name: v.name, state: card.state, label: card.label, nextStep: card.nextStep, warnings: card.warnings });
+  }
+  const rank = (s: VendorAchState) => {
+    const i = FOLLOW_UP_ORDER.indexOf(s);
+    return i === -1 ? FOLLOW_UP_ORDER.length : i;
+  };
+  return rows.sort((a, b) => rank(a.state) - rank(b.state) || a.name.localeCompare(b.name));
+}
+
 export function __runVendorAchEnrollmentTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -352,6 +380,20 @@ export function __runVendorAchEnrollmentTests(): { passed: number; failed: numbe
   ok(!patchSatisfiesConstraints({ ach_needs_bank_info: true, ach_opted_out: true, ach_opted_out_reason: "x", ach_opted_out_by: null, ach_opted_out_at: now }), "exclusive enforced");
   ok(!patchSatisfiesConstraints({ ach_needs_bank_info: false, ach_opted_out: true, ach_opted_out_reason: " ", ach_opted_out_by: null, ach_opted_out_at: now }), "blank reason fails shape");
   ok(!patchSatisfiesConstraints({ ach_needs_bank_info: false, ach_opted_out: false, ach_opted_out_reason: null, ach_opted_out_by: null, ach_opted_out_at: now }), "stamp without opt out fails shape");
+
+  // follow-up list
+  const fl = vendorFollowUpList([
+    { id: "1", name: "Zed", flags: F(), vault: none },
+    { id: "2", name: "Amy", flags: F({ needsBankInfo: true }), vault: none },
+    { id: "3", name: "Bob", flags: F(), vault: act() },
+    { id: "4", name: "Cat", flags: F({ optedOut: true, optedOutReason: "checks" }), vault: none },
+    { id: "5", name: "Dan", flags: F(), vault: { hasRecord: true, status: "on_hold", verifiedAt: null } },
+    { id: "6", name: "Eve", flags: F({ optedOut: true, optedOutReason: "checks" }), vault: act() },
+    { id: "7", name: "Fay", flags: F({ columnsReady: false }), vault: none },
+  ]);
+  ok(fl.map((r) => r.name).join() === "Dan,Amy,Zed,Eve", "follow-up order + filter");
+  ok(fl.find((r) => r.name === "Eve")?.warnings.length === 1, "opted out with active vault listed for its warning");
+  ok(vendorFollowUpList([{ id: "a", name: "B", flags: F(), vault: none }, { id: "b", name: "A", flags: F(), vault: none }]).map((r) => r.name).join() === "A,B", "ties by name");
 
   // pay refusal
   ok(optOutPayRefusal(F(), "Acme") === null, "not opted out -> no refusal");
