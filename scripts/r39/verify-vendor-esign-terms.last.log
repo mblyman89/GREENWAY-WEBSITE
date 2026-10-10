@@ -1,0 +1,7 @@
+source: /workspace/ach/vendor-fillable.html
+source sha256: 06e7ddb97ac487d3db99cc8177c1d289171c67251ce73ab3d9c68b5987bf9f65
+terms sha256 (pinned): b447f6fccf3c9841c3aad9dc97fc689b6b7a54229a58016c2603f8db472daa6d
+form id/rev line in source: True
+term headings 1..22 in order: True
+paragraphs: 93 checked, 93 found verbatim, 0 missing, 0 out of order
+RESULT: PASS
