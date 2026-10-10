@@ -123,6 +123,7 @@ export function explainRelationError(message: string): string | null {
  */
 export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] = [
   { file: "scripts/recon/ach-authorizations-pg-check.sql", mustPrint: "ACH 0258 CHECK PASSED" },
+  { file: "scripts/recon/vendor-vault-0259-pg-check.sql", mustPrint: "VAULT 0259 CHECK PASSED" },
 ];
 
 /** Decide whether one post-apply check passed, from its exit and its output. */

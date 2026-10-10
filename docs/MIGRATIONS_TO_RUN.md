@@ -2052,3 +2052,54 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0258_ach_authorizations.rollback.sql`.
   It **refuses** once any authorization has been signed or any document has
   been uploaded, because those are records you are required to keep.
+
+## R39 — 0259 — Vendor banking vault change control (hold, release, archive)
+
+- [ ] `0259_vendor_vault_change_control.sql` adds columns to
+  `vendor_bank_details`. It records who entered a bank change, who released
+  the hold, how the payee confirmed the details (phone or in person) with a
+  note, and why banking was put on hold or archived. A trigger then makes the
+  database enforce the rules even if a screen or the SQL editor forgets them:
+  - New banking, or any change to the routing number, account number or
+    account type, goes **on hold** automatically. It also records who made
+    the change.
+  - Releasing a hold needs a fresh release record: who released it, phone or
+    in person, and a note of at least 10 characters.
+  - If the person releasing is the person who entered the change, it is a
+    **solo** release and needs a written reason of at least 20 characters. The
+    other owner is notified by email and phone. If someone else releases it,
+    it is a **dual** release.
+  - Banking is **never deleted**, only archived. This also stops a vendor
+    delete from silently erasing its banking history.
+  - Archived or revoked banking can only come back by going on hold first.
+
+  Existing on-hold or archived rows get the wording "(no reason was
+  recorded)". Nothing is invented. Apply it **AFTER 0258**. Safe to re-run.
+
+  **Without it:** the vault still works as it does today, and the app applies
+  the same rules on its own side. However, someone using the SQL editor could
+  skip the hold or the release record, and the new Archive / Release screens
+  will say "One-time setup needed".
+
+  **Run it, then:** nothing to click. Every existing active row stays active.
+  Run the check below.
+
+  **Check:**
+
+  ```sql
+  select count(*) as new_columns from information_schema.columns
+   where table_schema = 'public' and table_name = 'vendor_bank_details'
+     and column_name in ('hold_reason','change_entered_by','change_entered_at','released_by',
+                         'released_at','release_mode','release_callback_method','release_callback_note',
+                         'release_reason','archived_at','archived_by','archive_reason');
+  -- 12
+  select tgname from pg_trigger where tgname = 'trg_vendor_bank_guard';
+  -- trg_vendor_bank_guard
+  ```
+
+  For the full proof, paste `scripts/recon/vendor-vault-0259-pg-check.sql`.
+  It rolls itself back and ends with `VAULT 0259 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0259_vendor_vault_change_control.rollback.sql`.
+  It **refuses** once any change, release or archive has been recorded,
+  because that is the audit trail for a payment-instruction change.

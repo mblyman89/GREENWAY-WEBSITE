@@ -405,7 +405,8 @@ export const MIN_CALLBACK_NOTE_CHARS = 10;
  * by telephone) with a known contact"); no phone number is involved, so the
  * look-back does not apply, but the note is still required.
  */
-export type CallbackMethod = "phone" | "in_person";
+export const CALLBACK_METHODS = ["phone", "in_person"] as const;
+export type CallbackMethod = (typeof CALLBACK_METHODS)[number];
 
 export type ReleaseInput = {
   actorUserId: string;
