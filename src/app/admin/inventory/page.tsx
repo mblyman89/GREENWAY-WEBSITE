@@ -362,6 +362,10 @@ export default async function InventoryPage({
             <Button href="/admin/inventory/expiration-rules" variant="neutral" size="sm">
               Expiration rules
             </Button>
+            {/* R36: the Washington testing labs + the hosts lab certificates are read from. */}
+            <Button href="/admin/inventory/labs" variant="neutral" size="sm" data-testid="inventory-testing-labs-button">
+              Testing labs
+            </Button>
             <Button href="/admin/inventory/intake" variant="save" size="sm">
               + Import vendor JSON
             </Button>
