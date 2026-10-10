@@ -109,6 +109,14 @@ export type FilterableLot = LotTableFields & {
   onboarding_price_minor?: number | null;
   onboarding_margin_pct?: number | null;
   onboarded_on?: string | null;
+  /**
+   * R38 S1: the EFFECTIVE website category (lot-website-category-core) —
+   * override > live menu > onboarding pick > type map > product name — and
+   * where it came from. Optional: absent in tests and pre-R38 callers, which
+   * fall back to the onboarding pick.
+   */
+  website_category?: string | null;
+  website_category_source?: string | null;
 };
 
 /* ── Facets ──────────────────────────────────────────────────────────────── */
@@ -147,10 +155,36 @@ export const INVENTORY_FACETS: FacetDef[] = [
   { param: "fLab", label: "Lab", get: (l) => l.lab?.lab_name ?? null },
   { param: "fRecvSource", label: "Received-date source", get: (l) => l.received_on_source },
   // R32: the website category chosen at Product Onboarding.
-  { param: "fShelf", label: "Website category (onboarding)", get: (l) => l.onboarding_shelf ?? null },
+  // R38 S1: the category the WEBSITE uses (any source), not only the pick.
+  { param: "fShelf", label: "Website category", get: (l) => lotWebsiteCategoryOf(l) },
   // R32: has this lot been through Product Onboarding (approved)?
   { param: "fOnboarded", label: "Onboarded", get: (l) => (l.onboarded_on ? "Onboarded" : "Not onboarded") },
+  // R38 S1: where the website category came from — "unmapped" is the worklist.
+  { param: "fShelfSource", label: "Website category source", get: (l) => websiteCategorySourceLabel(l.website_category_source) },
 ];
+
+/**
+ * R38 S1: the displayed website category. Prefers the effective value; a row
+ * without one (pre-R38 caller / test) falls back to the onboarding pick.
+ */
+export function lotWebsiteCategoryOf(l: Pick<FilterableLot, "website_category" | "onboarding_shelf">): string | null {
+  const v = (l.website_category ?? l.onboarding_shelf ?? "").trim();
+  return v || null;
+}
+
+const WEBSITE_CATEGORY_SOURCE_LABELS: Record<string, string> = {
+  override: "Your override",
+  menu_item: "Live menu",
+  onboarding: "Onboarding pick",
+  inventory_type: "Type map",
+  heuristic: "Product name",
+  unmapped: "Unmapped",
+};
+
+/** Facet label for a website-category source (null when not resolved). */
+export function websiteCategorySourceLabel(source: string | null | undefined): string | null {
+  return source ? WEBSITE_CATEGORY_SOURCE_LABELS[source] ?? null : null;
+}
 
 /** Display helpers return an em-dash for "nothing"; the facet wants null. */
 function nullIfDash(s: string): string | null {

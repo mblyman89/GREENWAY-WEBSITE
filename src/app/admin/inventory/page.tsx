@@ -53,6 +53,8 @@ import { loadLeaflyBadgeData } from "@/lib/inventory/leafly-badge-server";
 // R32 (T-328): what Product Onboarding decided, joined onto every lot.
 import { loadLotOnboardingIndex } from "@/lib/inventory/lot-onboarding-server";
 import { attachLotOnboarding, fmtLotMoney, fmtLotMargin } from "@/lib/inventory/lot-onboarding-core";
+// R38 S1: the effective website category (any source), joined onto every lot.
+import { attachLotWebsiteCategories } from "@/lib/inventory/lot-website-category-server";
 
 export const dynamic = "force-dynamic";
 
@@ -238,7 +240,13 @@ export default async function InventoryPage({
   // R32: every lot carries its onboarding decision (type, strain type,
   // website category, approved price, margin, KB + draft links) so the new
   // columns, facets and sorts all read the same joined values.
-  const joinedLots = attachLotOnboarding(allLots, onboardingIndex.byLot);
+  const onboardedLots = attachLotOnboarding(allLots, onboardingIndex.byLot);
+  // R38 S1: the Website category column was blank for every lot whose category
+  // was never hand-picked at onboarding. Resolve the category the WEBSITE uses
+  // for every lot (override > live menu > onboarding pick > type map > product
+  // name), with its source, so the column, its filter and its sort all agree.
+  const categorized = await attachLotWebsiteCategories(onboardedLots, onboardingIndex.byLot);
+  const joinedLots = categorized.lots;
 
   // Every knob — legacy and new — is parsed and applied by pure, tested code.
   const view = buildInventoryPage({
@@ -661,8 +669,18 @@ export default async function InventoryPage({
             data-testid="inventory-onboarding-incomplete"
             className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-2.5 text-xs text-[var(--admin-gold)]"
           >
-            The onboarding columns (price, margin, website category, onboarded) could not be fully loaded,
+            The onboarding columns (price, margin, onboarded, and onboarding website-category picks) could not be fully loaded,
             so some lots may show &ldquo;&mdash;&rdquo; even though they were onboarded. Reload the page to try again.
+          </div>
+        )}
+
+        {!categorized.complete && (
+          <div
+            data-testid="inventory-website-category-incomplete"
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-2.5 text-xs text-[var(--admin-gold)]"
+          >
+            The website categories could not be fully resolved, so some lots may show &ldquo;Unmapped&rdquo; or an
+            onboarding pick instead of their live-menu category. Reload the page to try again.
           </div>
         )}
 
@@ -819,7 +837,16 @@ export default async function InventoryPage({
                       >
                         {fmtLotMargin(l.onboarding_margin_pct)}
                       </td>
-                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{l.onboarding_shelf ?? "\u2014"}</td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]" title={l.website_category_info.sourceTitle} data-testid="inventory-website-category">
+                        {l.website_category_info.unmapped ? (
+                          <span className="font-semibold text-[var(--admin-orange)]">Unmapped</span>
+                        ) : (
+                          l.website_category ?? "\u2014"
+                        )}
+                        <div className="text-[11px] text-[var(--admin-text-faint)]" data-testid="inventory-website-category-source">
+                          {l.website_category_info.sourceText}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">{l.onboarded_on ?? "\u2014"}</td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                         {l.expires_on ? (
