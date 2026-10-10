@@ -594,6 +594,8 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     "gold\u2192pinned", // the deep-linked draft's own highlight
     "gold\u2192factWorklist.length > 0", // Round 13: open fact flags for the pinned delivery
     'danger\u2192lookupResult.tone === "error"', // R19 S13: result of pressing Look up all / Stop (closed set, lookupBanner)
+    'danger\u2192coaAllBanner.tone === "bad"', // R37 S4: result of pressing Re-read lab certificates (closed set, deliveryCoaBanner)
+    'gold\u2192: coaAllBanner.tone === "warn"', // R37 S4: same result, partly read
   ],
 };
 
