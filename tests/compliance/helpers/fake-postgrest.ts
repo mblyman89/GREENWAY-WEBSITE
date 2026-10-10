@@ -236,6 +236,10 @@ function parseFilters(url: URL): Array<(r: Row) => boolean> {
       else if (val === "true") out.push((r) => r[col] === true);
       else if (val === "false") out.push((r) => r[col] === false);
       else throw new Error(`is.${val} not emulated`);
+    } else if (op === "not" && val.startsWith("in.")) {
+      // R39 S6: .not(col, "in", "(a,b)"): SQL NOT (col IN (...)); NULL is not kept.
+      const set = new Set(parseList(val.slice(3)));
+      out.push((r) => r[col] !== null && r[col] !== undefined && !set.has(String(r[col])));
     } else if (op === "not" && val === "is.null") {
       // R24 S12: .not(col, "is", null)
       out.push((r) => r[col] !== null && r[col] !== undefined);
