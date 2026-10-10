@@ -19,7 +19,7 @@
  * partial predicate (23505), "missing table" mode (PGRST205, as PostgREST
  * answers for a table that is not in its schema cache), (R24) upsert via
  * Prefer resolution=merge-duplicates + on_conflict, and (R24 S12) HEAD probes
- * and the not.is.null filter.
+ * and the not.is.null filter, and (R39 S5) eq on a JSON text path (col->>key).
  */
 
 export type Row = Record<string, unknown>;
@@ -212,6 +212,20 @@ function parseFilters(url: URL): Array<(r: Row) => boolean> {
     const dot = raw.indexOf(".");
     const op = raw.slice(0, dot);
     const val = raw.slice(dot + 1);
+    // R39 S5: JSON text path filters (detail->>document_id), as PostgREST.
+    const jp = /^([a-z_][a-z0-9_]*)->>([A-Za-z0-9_]+)$/.exec(col);
+    if (jp) {
+      const [, base, key] = jp;
+      const get = (r: Row): unknown => {
+        const o = r[base];
+        if (!o || typeof o !== "object") return null;
+        const v = (o as Record<string, unknown>)[key];
+        return v === undefined || v === null ? null : typeof v === "object" ? JSON.stringify(v) : String(v);
+      };
+      if (op === "eq") out.push((r) => get(r) !== null && get(r) === val);
+      else throw new Error(`json filter ${op} not emulated (column ${col})`);
+      continue;
+    }
     if (op === "eq") out.push((r) => r[col] !== null && r[col] !== undefined && String(r[col]) === val);
     else if (op === "neq") out.push((r) => r[col] !== null && r[col] !== undefined && String(r[col]) !== val);
     else if (op === "in") {
