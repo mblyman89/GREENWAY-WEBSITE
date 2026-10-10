@@ -111,6 +111,16 @@ begin
   update public.vendor_bank_details set notes = 'net 30', vendor_name = 'Renamed' where vendor_id = ven;
   select status into r from public.vendor_bank_details where vendor_id = ven;
   assert r.status = 'active', 'non-bank edit keeps status';
+  -- a routing-only change (account + type untouched) also re-holds
+  update public.vendor_bank_details set bank_routing = 'encv1:r2', updated_by = u_m where vendor_id = ven;
+  select * into r from public.vendor_bank_details where vendor_id = ven;
+  assert r.status = 'on_hold', 'routing-only change must re-hold';
+  assert r.change_entered_by = u_m, 'routing change author stamped';
+  update public.vendor_bank_details set status = 'active', released_by = u_s, released_at = now() + interval '1.5 seconds',
+    release_mode = 'dual', release_callback_method = 'phone', release_callback_note = 'Maria in AR read back 4821', release_reason = null
+    where vendor_id = ven;
+  select status into r from public.vendor_bank_details where vendor_id = ven;
+  assert r.status = 'active', 're-released after routing change';
 
   -- a stale release record cannot be replayed
   update public.vendor_bank_details set status = 'on_hold', hold_reason = 'Odd email asking to change bank' where vendor_id = ven;

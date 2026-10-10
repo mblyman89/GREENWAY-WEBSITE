@@ -67,7 +67,7 @@ run null-author-is-dual "    is_solo := new.change_entered_by is null or new.cha
 run solo-mislabel-ok "      raise exception 'VAULT_RELEASE: the person who entered the change (or an unknown author) releasing it is a SOLO release.';" "      null;"
 run dual-mislabel-ok "      raise exception 'VAULT_RELEASE: a release by a different person is a DUAL release.';" "      null;"
 run solo-reason-short "    if is_solo and coalesce(length(trim(new.release_reason)), 0) < 20 then" "    if is_solo and coalesce(length(trim(new.release_reason)), 0) < 5 then"
-run hold-same-reason "      raise exception 'VAULT_HOLD: putting banking on hold needs a new reason.';" "      null;"
+run hold-same-reason "    raise exception 'VAULT_HOLD: putting banking on hold needs a new reason.';" "      null;"
 run hold-reason-check "  check (status <> 'on_hold' or coalesce(length(trim(hold_reason)), 0) > 0);" "  check (true);"
 run archived-check "  check (status <> 'archived' or (archived_at is not null and coalesce(length(trim(archive_reason)), 0) > 0));" "  check (true);"
 run no-archive-stamp "    new.archived_at := coalesce(new.archived_at, now());" "    null;"
