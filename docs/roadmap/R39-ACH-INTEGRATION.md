@@ -155,7 +155,50 @@ commit + push after every task, no drift.
       - Full compliance vitest: 828 files, 21,932 tests passed. Pure
         self-tests: ALL PASSED. Typecheck EXIT 0. Lint on all S5 files:
         0 errors, 0 warnings.
-- [ ] S6 e-sign (E-SIGN Act / UETA consent, intent, OTP, hash, certificate)
+- [x] S6 e-sign (E-SIGN Act / UETA consent, intent, OTP, hash, certificate)
+      - Basis: Reg E 12 CFR 1005.10(b) and its comment 10(b)-5. It allows a
+        "similarly authenticated" authorization by complying with E-SIGN
+        (15 U.S.C. 7001). Security codes are named as an example. The process
+        must "evidence the consumer's identity and assent", and the payee must
+        give the consumer a copy of the terms. These are mapped as follows.
+        Identity: the photo ID is checked in person by Stephen or Michael,
+        recording the type plus last 4 and expiry only. Assent: the email code
+        (6 digits, crypto.randomInt), then E-SIGN 7001(c)(1) consent bound to
+        the SHA-256 of the exact disclosure shown, then the typed name and an
+        intent tick (RCW 1.80). Copy: an open/print button on the last screen,
+        plus the employee email. Comment 10(e)(2)-1 (employee chooses the
+        bank) is kept by the form's "You choose the bank or credit union" and
+        the paper check option.
+      - 0261: ach_esign_sessions and the ach_esign_complete function, done in
+        one transaction. The state machine guard holds the counters
+        (up only), refuses to delete a signed session (ACH_ESIGN_KEEP), and
+        allows one live session per employee. pg-check is wired into CI;
+        mutation run 42/42; parity test 14.
+      - Terms: GW-ACH-E verified verbatim against the paper form (51/51,
+        scripts/r39/verify-esign-terms.py). Record and certificate PDFs are
+        read back with unpdf (16 tests).
+      - Store (src/lib/payments/ach-esign-store.ts):
+        - The OTP is stored only as an HKDF-keyed digest (esignOtp) and the
+          email only encrypted.
+        - A send is counted before the email goes out; a wrong code is
+          counted before the answer is given.
+        - Optimistic concurrency on otp_sends, otp_attempts and otp_digest.
+        - Files are stored with upsert:false. If the RPC fails, both files
+          are removed, so no orphans are left.
+        - The signer's copy is re-hashed before it is served.
+        - Behaviour: 28 tests using real postgrest-js over FakePostgrest
+          (which gained a not.in filter). Mutation run 43/43, with 1 mutant
+          documented as equivalent.
+      - UI: /admin/staffing/employees/[id]/esign covers the five steps
+        (settings.manage only, with an ownership check on every action),
+        plus a no-store, nosniff signer's-copy route and a link on the
+        employee ACH card. Wiring: 24 tests, mutation run 21/21. A test
+        fails if either mutation log is stale.
+      - The factory reset keeps ach_esign_sessions (KEEP 146 / WIPE 139);
+        schema-tables regenerated (285 tables, 261 migrations).
+      - Full compliance vitest: 832 files, 22,014 tests passed. Pure
+        self-tests: ALL PASSED. Typecheck EXIT 0. Lint on all S6 files:
+        0 problems.
 - [ ] S7 returns / NOC log + notifications, prenote file, retention / legal
       hold, annual review reminder
 - [ ] S8 docs, test plan, PR, merge, production verification
