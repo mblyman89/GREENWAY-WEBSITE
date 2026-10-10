@@ -248,7 +248,8 @@ export function planVendorAchFlagChange(input: {
       if (!current.optedOut) return { ok: false, error: "This vendor isn't marked opted out." };
       return {
         ok: true,
-        patch: { ach_needs_bank_info: current.needsBankInfo, ach_opted_out: false, ach_opted_out_reason: null, ach_opted_out_by: null, ach_opted_out_at: null },
+        // needs-info is always false while opted out (vendors_ach_flags_exclusive), so it stays false.
+        patch: { ach_needs_bank_info: false, ach_opted_out: false, ach_opted_out_reason: null, ach_opted_out_by: null, ach_opted_out_at: null },
         summary: "Un-checked opted out. The vendor can be set up for ACH again.",
       };
     default:
