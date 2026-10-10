@@ -88,6 +88,7 @@ begin
   perform pg_temp.must_fail(format(call, '', ven, quote_literal(repeat('e', 64)), u_m, $t$now() - interval '1 second'$t$, quote_literal(enc), ''), 'vesign_expiry_window');
   perform pg_temp.must_fail(format(call, ', state', ven, quote_literal(repeat('e', 64)), u_m, $t$now() + interval '1 day'$t$, quote_literal(enc), ', ''code_sent'''), 'vesign_code_sent_shape');
   perform pg_temp.must_fail(format(call, ', state, cancelled_at, cancel_reason', ven, quote_literal(repeat('e', 64)), u_m, $t$now() + interval '1 day'$t$, quote_literal(enc), ', ''cancelled'', now(), ''no'''), 'vesign_cancelled_shape');
+  perform pg_temp.must_fail(format(call, ', state', ven, quote_literal(repeat('e', 64)), u_m, $t$now() + interval '1 day'$t$, quote_literal(enc), ', ''opened'''), 'vendor_esign_invites_state_check');
   perform pg_temp.must_fail(format(call, ', otp_sends', ven, quote_literal(repeat('e', 64)), u_m, $t$now() + interval '1 day'$t$, quote_literal(enc), ', 6'), 'vendor_esign_invites_otp_sends_check');
 
   insert into public.vendor_esign_invites (vendor_id, token_hash, invited_by, expires_at, email_enc, email_masked, recipient_name)
@@ -118,6 +119,13 @@ begin
          disclosure_version = 'GW-VESIGN-1', disclosure_sha256 = repeat('c', 64) where id = i1;
   -- proof shape: all or nothing; proof must be in a vendor folder
   perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set proof_storage_path = %L where id = %L$q$, pre || 'p.pdf', i1), 'vesign_proof_shape');
+  perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set proof_storage_path = %L, proof_byte_size = 1, proof_mime = 'application/pdf', proof_kind = 'voided_check' where id = %L$q$, pre || 'p.pdf', i1), 'vesign_proof_shape');
+  perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set proof_storage_path = %L, proof_sha256 = %L, proof_byte_size = 26214401, proof_mime = 'application/pdf', proof_kind = 'voided_check' where id = %L$q$, pre || 'p.pdf', repeat('5', 64), i1), 'vendor_esign_invites_proof_byte_size_check');
+  perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set bank_routing_enc = '021000021' where id = %L$q$, i1), 'vendor_esign_invites_bank_routing_enc_check');
+  perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set bank_account_enc = '123456789' where id = %L$q$, i1), 'vendor_esign_invites_bank_account_enc_check');
+  perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set account_last4 = '123456789' where id = %L$q$, i1), 'vendor_esign_invites_account_last4_check');
+  -- signed by hand (not through the function) without the evidence is refused
+  perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set state = 'signed', signed_at = now() where id = %L$q$, i1), 'vesign_signed_shape');
   perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set proof_storage_path = 'ach-docs/employee/x/p.pdf', proof_sha256 = %L, proof_byte_size = 1, proof_mime = 'application/pdf', proof_kind = 'voided_check' where id = %L$q$, repeat('5', 64), i1), 'vendor_esign_invites_proof_storage_path_check');
   perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set proof_storage_path = %L, proof_sha256 = %L, proof_byte_size = 1, proof_mime = 'application/pdf', proof_kind = 'signed_form' where id = %L$q$, pre || 'p.pdf', repeat('5', 64), i1), 'vendor_esign_invites_proof_kind_check');
 
@@ -144,6 +152,10 @@ begin
     jsonb_build_object('storage_path', format('ach-docs/vendor/%s/r.pdf', ven2), 'sha256', repeat('9', 64), 'byte_size', 1), cert1), 'VENDOR_ESIGN_FILES');
   perform pg_temp.must_fail(format(call, i1, 'now()', 'Pat Vendor', 'Owner', form, bank, rec1,
     jsonb_build_object('storage_path', format('ach-docs/employee/%s/c.pdf', ven), 'sha256', repeat('9', 64), 'byte_size', 1)), 'VENDOR_ESIGN_FILES');
+  -- the proof file must sit in THIS vendor's folder too
+  update public.vendor_esign_invites set proof_storage_path = format('ach-docs/vendor/%s/proof1.pdf', ven2) where id = i1;
+  perform pg_temp.must_fail(format(call, i1, 'now()', 'Pat Vendor', 'Owner', form, bank, rec1, cert1), 'VENDOR_ESIGN_FILES');
+  update public.vendor_esign_invites set proof_storage_path = pre || 'proof1.pdf' where id = i1;
   -- a 0258 CHECK failure mid-way (byte_size 0) rolls the whole call back
   perform pg_temp.must_fail(format(call, i1, 'now()', 'Pat Vendor', 'Owner', form, bank, rec1, jsonb_set(cert1, '{byte_size}', '0')), 'byte_size');
   select count(*) into n from public.ach_authorization_documents where vendor_id = ven;
@@ -186,6 +198,8 @@ begin
   perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set signer_ip = '1.1.1.1' where id = %L$q$, i1), 'VENDOR_ESIGN_SIGNED');
   perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set form = '{}' where id = %L$q$, i1), 'VENDOR_ESIGN_SIGNED');
   perform pg_temp.must_fail(format($q$delete from public.vendor_esign_invites where id = %L$q$, i1), 'VENDOR_ESIGN_KEEP');
+  perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set state = 'countersigned' where id = %L$q$, i1), 'vesign_countersigned_shape');
+  perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set state = 'rejected', rejected_at = now(), rejected_by = %L, reject_reason = 'short' where id = %L$q$, u_s, i1), 'vesign_rejected_shape');
   perform pg_temp.must_fail(format($q$update public.vendor_esign_invites set state = 'cancelled', cancelled_at = now(), cancel_reason = 'changed mind' where id = %L$q$, i1), 'VENDOR_ESIGN_TRANSITION');
   perform pg_temp.must_fail(format(call, i1, 'now()', 'Pat Vendor', 'Owner', form, bank, rec2, cert2), 'VENDOR_ESIGN_STATE');
   perform pg_temp.must_fail(format($q$insert into public.vendor_esign_invites (vendor_id, token_hash, invited_by, expires_at, email_enc, email_masked, recipient_name) values (%L, %L, %L, now() + interval '1 day', %L, 'ap***@v.test', 'Pat Vendor')$q$, ven, repeat('6', 64), u_m, enc), 'vendor_esign_one_open_per_vendor');
@@ -195,7 +209,17 @@ begin
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, null, 'ok', %L)$q$, i1, acc1), 'VENDOR_ESIGN_ACTOR');
   -- releasing the vault: the sender releasing alone is SOLO (0259)
   perform pg_temp.must_fail(format($q$update public.vendor_bank_details set status = 'active', released_by = %L, released_at = now() + interval '1 second', release_mode = 'dual', release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = %L$q$, u_m, ven), 'SOLO');
-  -- a released vault whose banking was changed after signing does not count
+  -- a release dated BEFORE the signing does not count (the vendor signed after it)
+  update public.vendor_bank_details set status = 'active', released_by = u_s, released_at = now() - interval '1 minute', release_mode = 'dual',
+         release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
+  perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_NOT_RELEASED');
+  -- a released vault whose routing was changed after signing does not count
+  update public.vendor_bank_details set bank_routing = 'encv1:r2:x', updated_by = u_s where vendor_id = ven;
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '1 second', release_mode = 'dual',
+         release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
+  perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_NOT_RELEASED');
+  update public.vendor_bank_details set bank_routing = 'encv1:r1:x', updated_by = u_s where vendor_id = ven;
+  -- a released vault whose account was changed after signing does not count
   update public.vendor_bank_details set bank_account_number = 'encv1:a2:x', updated_by = u_s where vendor_id = ven;
   update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '1 second', release_mode = 'dual',
          release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
@@ -209,6 +233,15 @@ begin
   -- acceptance file must be in this vendor's folder
   perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s,
     jsonb_build_object('storage_path', format('ach-docs/vendor/%s/a.pdf', ven2), 'sha256', repeat('8', 64), 'byte_size', 1)), 'VENDOR_ESIGN_FILES');
+  -- a later manual hold (same banking, release time kept) blocks countersigning
+  update public.vendor_bank_details set status = 'on_hold', hold_reason = 'Owner paused: second look at bank letter' where vendor_id = ven;
+  perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_NOT_RELEASED');
+  update public.vendor_bank_details set status = 'active', released_by = u_s, released_at = now() + interval '3 seconds', release_mode = 'dual',
+         release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
+  -- an authorization put on hold is not waiting for acceptance; verifying is
+  update public.ach_authorizations set state = 'on_hold', hold_reason = 'Owner review' where id = auth1;
+  perform pg_temp.must_fail(format($q$select public.vendor_esign_countersign(%L, %L, 'ok', %L)$q$, i1, u_s, acc1), 'VENDOR_ESIGN_AUTH');
+  update public.ach_authorizations set state = 'verifying' where id = auth1;
   perform public.vendor_esign_countersign(i1, u_s, 'Callback ok, dual approval', acc1);
   select * into r from public.ach_authorizations where id = auth1;
   assert r.state = 'active' and r.annual_review_due_on = ((now() at time zone 'America/Los_Angeles')::date + interval '1 year')::date and r.updated_by = u_s,
@@ -246,24 +279,33 @@ begin
   perform pg_temp.must_fail(format($q$delete from public.vendor_esign_invites where id = %L$q$, i2), 'VENDOR_ESIGN_KEEP');
 
   -- reject after a release puts the vault back on hold ----------------------
-  i3 := pg_temp.ready_invite(ven, u_m, repeat('8', 64), repeat('9', 64));
+  i3 := pg_temp.ready_invite(ven, u_s, repeat('8', 64), repeat('9', 64));
   perform public.vendor_esign_complete(i3, now(), '', '', 'Pat Vendor', 'Owner', form,
     jsonb_set(jsonb_set(bank, '{account_enc}', '"encv1:a4:x"'), '{account_key_hmac}', to_jsonb(repeat('c', 64))),
     jsonb_build_object('storage_path', pre || 'r3.pdf', 'sha256', repeat('a', 64), 'byte_size', 10),
     jsonb_build_object('storage_path', pre || 'c3.pdf', 'sha256', repeat('b', 64), 'byte_size', 10));
-  update public.vendor_bank_details set status = 'active', released_by = u_s, released_at = now() + interval '3 seconds', release_mode = 'dual',
+  select * into r from public.vendor_bank_details where vendor_id = ven;
+  assert r.change_entered_by = u_s and r.updated_by = u_s and r.created_by = u_m,
+    format('the vault change is authored by THIS invite''s sender, not the row creator: %s', r.change_entered_by);
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '4 seconds', release_mode = 'dual',
          release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
   perform public.vendor_esign_reject(i3, u_s, 'Owner review: bank letter name does not match vendor');
   select status into r from public.vendor_bank_details where vendor_id = ven;
   assert r.status = 'on_hold', 'reject after release re-holds the vault';
 
+  -- re-signing the SAME banking while the vault is active still re-holds it
+  update public.vendor_bank_details set status = 'active', released_by = u_m, released_at = now() + interval '5 seconds', release_mode = 'dual',
+         release_callback_method = 'phone', release_callback_note = 'Called 360-555-0101 from 2024 invoice' where vendor_id = ven;
   -- the same proof file as an earlier document is reused, not duplicated ---
   i4 := pg_temp.ready_invite(ven, u_m, repeat('a', 64), repeat('5', 64));
-  perform public.vendor_esign_complete(i4, now(), '', '', 'Pat Vendor', 'Owner', form, bank,
+  perform public.vendor_esign_complete(i4, now(), '', '', 'Pat Vendor', 'Owner', form,
+    jsonb_set(jsonb_set(bank, '{account_enc}', '"encv1:a4:x"'), '{account_key_hmac}', to_jsonb(repeat('c', 64))),
     jsonb_build_object('storage_path', pre || 'r4.pdf', 'sha256', repeat('c', 64), 'byte_size', 10),
     jsonb_build_object('storage_path', pre || 'c4.pdf', 'sha256', repeat('e', 64), 'byte_size', 10));
   select count(*) into n from public.ach_authorization_documents where vendor_id = ven and sha256 = repeat('5', 64);
   assert n = 1, 'reused proof stays one document';
+  select * into r from public.vendor_bank_details where vendor_id = ven;
+  assert r.status = 'on_hold' and r.hold_reason like 'Vendor e-signed%', format('same banking re-signed must be on hold again: %s', r.status);
   select proof_document_id into r from public.vendor_esign_invites where id = i4;
   assert r.proof_document_id = (select id from public.ach_authorization_documents where vendor_id = ven and sha256 = repeat('5', 64)), 'invite points at the reused proof';
 
