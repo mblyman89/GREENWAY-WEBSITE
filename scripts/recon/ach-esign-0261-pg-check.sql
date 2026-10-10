@@ -77,6 +77,8 @@ begin
   perform pg_temp.must_fail(format($q$update public.ach_esign_sessions set legal_name = 'Someone Else' where id = %L$q$, s1), 'ACH_ESIGN_IMMUTABLE');
   update public.ach_esign_sessions set state = 'code_sent', email_enc = enc, email_masked = 'es***@x.test', otp_digest = hx, otp_sent_at = now(), otp_sends = 1 where id = s1;
   update public.ach_esign_sessions set otp_attempts = 2 where id = s1;
+  -- still one live session while a code is out
+  perform pg_temp.must_fail(format($q$insert into public.ach_esign_sessions (employee_id, started_by, id_type, id_detail, legal_name) values (%L, %L, 'passport', '1234', 'Esign Probe')$q$, emp, u_m), 'ach_esign_one_live_per_employee');
   perform pg_temp.must_fail(format($q$update public.ach_esign_sessions set otp_attempts = 0 where id = %L$q$, s1), 'ACH_ESIGN_COUNTERS');
   perform pg_temp.must_fail(format($q$update public.ach_esign_sessions set otp_sends = 4 where id = %L$q$, s1), 'ach_esign_sessions_otp_sends_check');
   perform pg_temp.must_fail(format($q$update public.ach_esign_sessions set otp_attempts = 6 where id = %L$q$, s1), 'ach_esign_sessions_otp_attempts_check');
@@ -85,6 +87,8 @@ begin
   perform pg_temp.must_fail(format($q$update public.ach_esign_sessions set state = 'consented', code_verified_at = now(), consented_at = now() where id = %L$q$, s1), 'esign_consented_shape');
   update public.ach_esign_sessions set state = 'consented', code_verified_at = now(), consented_at = now(),
          disclosure_version = 'GW-ESIGN-1', disclosure_sha256 = hx where id = s1;
+  -- and while consented, waiting for the signature
+  perform pg_temp.must_fail(format($q$insert into public.ach_esign_sessions (employee_id, started_by, id_type, id_detail, legal_name) values (%L, %L, 'passport', '1234', 'Esign Probe')$q$, emp, u_m), 'ach_esign_one_live_per_employee');
   perform pg_temp.must_fail(format($q$update public.ach_esign_sessions set email_enc = 'encv1:other:x' where id = %L$q$, s1), 'ACH_ESIGN_IMMUTABLE');
   -- going back to code_sent is not a move
   perform pg_temp.must_fail(format($q$update public.ach_esign_sessions set state = 'code_sent' where id = %L$q$, s1), 'ACH_ESIGN_TRANSITION');
@@ -95,6 +99,11 @@ begin
   perform pg_temp.must_fail(format(call, s1, u_m, $t$now() + interval '1 day'$t$, 'Esign Probe', acct, rec1, cert1), 'ACH_ESIGN_TIME');
   perform pg_temp.must_fail(format(call, s1, u_m, 'now()', 'Esign Probe', '[]', rec1, cert1), 'ACH_INTAKE_ACCOUNTS');
   perform pg_temp.must_fail(format(call, s1, u_m, 'now()', 'Esign Probe', two || two, rec1, cert1), 'ACH_INTAKE_ACCOUNTS');
+  -- four accounts with valid priorities 1..4: refused by the count rule itself
+  perform pg_temp.must_fail(format(call, s1, u_m, 'now()', 'Esign Probe',
+    jsonb_build_array(jsonb_set(two->0, '{priority}', '1'), jsonb_set(jsonb_set(two->0, '{priority}', '2'), '{account_key_hmac}', to_jsonb(repeat('c', 64))),
+                      jsonb_set(jsonb_set(two->0, '{priority}', '3'), '{account_key_hmac}', to_jsonb(repeat('e', 64))), jsonb_set(two->1, '{priority}', '4')),
+    rec1, cert1), 'an authorization has 1 to 3 accounts');
   perform pg_temp.must_fail(format(call, s1, u_m, 'now()', 'Esign Probe', acct, rec1, rec1), 'ACH_ESIGN_FILES');
   perform pg_temp.must_fail(format(call, s1, u_m, 'now()', 'Esign Probe', acct, jsonb_build_object('storage_path', 'ach-docs/vendor/x/r.pdf', 'sha256', repeat('9', 64), 'byte_size', 1), cert1), 'ACH_ESIGN_FILES');
   perform pg_temp.must_fail(format(call, gen_random_uuid(), u_m, 'now()', 'Esign Probe', acct, rec1, cert1), 'ACH_ESIGN_NOT_FOUND');
