@@ -83,6 +83,7 @@ import {
   type JobStatus,
   type JobSummary,
 } from "./lookup-job-core";
+import { AGAIN_MARKER, isAgainMarker, parseAgainIds } from "./lookup-history-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
 
@@ -97,6 +98,9 @@ export type EnqueueResult =
   | { ok: true; kind: "created"; jobId: string; total: number; skippedDone: number; truncated: number }
   | { ok: true; kind: "exists"; jobId: string }
   | { ok: false; code: "nothing" | "migration" | "invalid" | "db"; message: string };
+
+/** R37 S6: "Search again" with nothing left to search (every chosen product left review or the list was empty). */
+export const AGAIN_NONE_COPY = "None of those products are still in Needs review on this delivery, so there was nothing to search again.";
 
 /** Draft ids for the manifest that are still in Needs review (status 'draft'), oldest first. */
 async function reviewDraftIds(admin: Admin, manifestId: string): Promise<string[] | null> {
@@ -164,9 +168,16 @@ async function alreadyDoneDraftIds(admin: Admin, manifestId: string): Promise<st
 export async function enqueueManifestLookup(
   manifestId: string,
   actor: { userId: string | null; email: string | null },
+  opts: { againDraftIds?: readonly unknown[] } = {},
 ): Promise<EnqueueResult> {
+  // R37 S6 "Search again": ONLY the chosen products that are still in Needs
+  // review on THIS delivery, even if an earlier batch already did them; each
+  // item is marked so the worker forces a fresh web search (the row panel's
+  // Refresh). Still one active job per delivery (the same lock).
+  const again = opts.againDraftIds !== undefined ? parseAgainIds(opts.againDraftIds) : null;
   if (!isUuid(manifestId)) return { ok: false, code: "invalid", message: "That delivery link is not valid. Pick the delivery again." };
   if (!isSupabaseServiceConfigured) return { ok: false, code: "db", message: "The database is not configured." };
+  if (again !== null && again.length === 0) return { ok: false, code: "nothing", message: AGAIN_NONE_COPY };
   try {
     const admin = createSupabaseAdminClient();
     const active = await activeJobId(admin, manifestId);
@@ -180,8 +191,11 @@ export async function enqueueManifestLookup(
     if (review === null || done === null) {
       return { ok: false, code: "db", message: "The products on this delivery could not be read just now. Try again." };
     }
-    const plan = planEnqueue({ reviewDraftIds: review, alreadyDoneDraftIds: done, activeJobId: null });
-    if (plan.kind === "nothing") return { ok: false, code: "nothing", message: plan.reason };
+    const againSet = again ? new Set(again.map((x) => x.toLowerCase())) : null;
+    const plan = againSet
+      ? planEnqueue({ reviewDraftIds: review.filter((id) => againSet.has(id.toLowerCase())), alreadyDoneDraftIds: [], activeJobId: null })
+      : planEnqueue({ reviewDraftIds: review, alreadyDoneDraftIds: done, activeJobId: null });
+    if (plan.kind === "nothing") return { ok: false, code: "nothing", message: againSet ? AGAIN_NONE_COPY : plan.reason };
     if (plan.kind === "exists") return { ok: true, kind: "exists", jobId: plan.jobId };
 
     const ins = await admin
@@ -200,7 +214,13 @@ export async function enqueueManifestLookup(
       return { ok: false, code: "db", message: "The batch lookup could not be started just now. Try again." };
     }
     const jobId = (ins.data as { id: string }).id;
-    const rows = plan.draftIds.map((draftId, position) => ({ job_id: jobId, draft_id: draftId, position, status: "queued" }));
+    const rows = plan.draftIds.map((draftId, position) => ({
+      job_id: jobId,
+      draft_id: draftId,
+      position,
+      status: "queued",
+      ...(againSet ? { result_json: AGAIN_MARKER } : {}),
+    }));
     const items = await admin.from(LOOKUP_JOB_ITEMS_TABLE).insert(rows);
     if (items.error) {
       // Never leave an empty active job blocking the button: cancel it.
@@ -213,7 +233,7 @@ export async function enqueueManifestLookup(
       action: "catalog_draft.batch_lookup_enqueued",
       entityType: "inbound_manifests",
       entityId: manifestId,
-      after: { jobId, total: plan.total, skippedDone: plan.skippedDone, truncated: plan.truncated },
+      after: { jobId, total: plan.total, skippedDone: plan.skippedDone, truncated: plan.truncated, ...(againSet ? { again: true } : {}) },
     });
     return { ok: true, kind: "created", jobId, total: plan.total, skippedDone: plan.skippedDone, truncated: plan.truncated };
   } catch (err) {
@@ -437,7 +457,12 @@ export async function runOneItem(
   admin: Admin,
   draftId: string,
   actor: { userId: string | null; email: string | null },
+  opts: { refresh?: boolean } = {},
 ): Promise<ItemRunOutcome> {
+  // R37 S6: a "Search again" item forces a fresh web search, exactly like
+  // the row panel's Refresh (ai-lookup-actions: refresh skips the memory
+  // short-cut and the already-known prompt block).
+  const refresh = opts.refresh === true;
   const { data, error } = await admin
     .from("catalog_product_drafts")
     .select("id, name, brand_name, vendor_name, pos_product_key, inventory_type, category, strain_name, chosen_website_category, status")
@@ -451,7 +476,7 @@ export async function runOneItem(
   const banned = await loadBannedPhrases();
   const kbFirst = kbFirstOnboardingEnabled(process.env[KB_FIRST_ONBOARDING_ENV]);
   const memory = kbFirst ? await recallForDraft(draftId) : null;
-  const skipWeb = shouldSkipGemini({ enabled: kbFirst, refresh: false, memory });
+  const skipWeb = shouldSkipGemini({ enabled: kbFirst, refresh, memory });
 
   let aiCalls = 0;
   let outcome: Awaited<ReturnType<typeof lookupProduct>> | null = null;
@@ -469,7 +494,7 @@ export async function runOneItem(
         vendorOrBrand: q.vendorOrBrand,
         extraBanned: banned,
         context: { entityType: "catalog_drafts", entityId: draftId, actorId: actor.userId, actorEmail: actor.email },
-        alreadyKnown: alreadyKnownPromptBlock(memory),
+        alreadyKnown: refresh ? "" : alreadyKnownPromptBlock(memory),
       });
     } catch (err) {
       // Budget / not-configured are refused BEFORE any request (provider.ts).
@@ -510,7 +535,7 @@ export async function runOneItem(
   };
 }
 
-type ItemRow = { id: string; draft_id: string; status: string; attempts: number | null };
+type ItemRow = { id: string; draft_id: string; status: string; attempts: number | null; result_json?: unknown };
 
 /**
  * One cron tick. Picks the oldest open job, takes its lease by CAS, sweeps
@@ -604,7 +629,7 @@ export async function runLookupJobsTick(deps: {
     while (canStartItem({ elapsedMs: now() - t0, startedThisTick: out.started, maxPerTick })) {
       const { data: next, error: nErr } = await admin
         .from(LOOKUP_JOB_ITEMS_TABLE)
-        .select("id, draft_id, status, attempts")
+        .select("id, draft_id, status, attempts, result_json")
         .eq("job_id", job.id)
         .eq("status", "queued")
         .order("position", { ascending: true })
@@ -630,7 +655,7 @@ export async function runLookupJobsTick(deps: {
 
       let patch: Record<string, unknown>;
       try {
-        const r = await runItem(admin, item.draft_id, actor);
+        const r = await runItem(admin, item.draft_id, actor, { refresh: isAgainMarker(item.result_json) });
         out.aiCalls += r.aiCalls;
         out.done += 1;
         patch = { status: "done", result_json: r.result, ai_calls: r.aiCalls, error: null };
