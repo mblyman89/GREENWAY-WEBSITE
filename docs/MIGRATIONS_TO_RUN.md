@@ -1911,3 +1911,66 @@ in Vercel.
   **Rollback (only if needed):** paste
   `supabase/rollbacks/0254_menu_item_effects_aroma.rollback.sql` into the SQL
   editor. The product pages then go back to the knowledge-base wording.
+
+## R36 — 0255 — one email, one manifest row (and a Dismiss button for duplicates)
+
+- [ ] `0255_inbound_dedupe.sql` stops the "two identical rows" problem and
+  adds the **Dismiss duplicate** button's database step. It adds columns and
+  functions only. No new table, nothing dropped, and it writes no data.
+  - `inbound_email_log.delivery_key` / `claimed_at`: each incoming email is
+    claimed (unique key) before any work starts. If the email provider sends
+    the same email again because our first answer was slow, the second copy is
+    answered "already received" and stages nothing.
+  - `inbound_manifests.dedupe_key`: the manifest # + vendor, unique while
+    the row is live. Two copies of the same manifest can no longer both be
+    staged at the same moment. The key is released when a row is rejected or
+    dismissed, so a corrected re-send can still come in.
+  - `dismissed_at` / `dismissed_reason` / `duplicate_of` and the function
+    `dismiss_duplicate_manifest(...)`: in one transaction it moves the
+    duplicate's invoice #, documents and transport details to the row you keep
+    (fill-only), deletes the duplicate's never-received lots (so nothing
+    reaches Inventory), and marks it **Dismissed**, which is not Rejected.
+
+  Until you run it, receiving works exactly as before and the Dismiss button
+  explains that 0255 is needed. Safe to re-run.
+
+  **Run it, then:** on **Receiving**, a row that has a live twin shows a
+  **Duplicate** badge and a **Dismiss duplicate** button. Press it on the
+  broken row. The healthy row then keeps the invoice # the broken one had.
+
+  **Check:**
+
+  ```sql
+  select status, count(*) from public.inbound_manifests group by 1 order by 1;
+  select count(*) from public.inbound_email_log where delivery_key is not null;
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0255_inbound_dedupe.rollback.sql`.
+
+## R36 — 0256 — the Washington testing labs list (Inventory → Testing labs)
+
+- [ ] `0256_testing_labs.sql` creates ONE table, `testing_labs`, seeded with
+  the 11 labs on the WSLCB lab lists (4 certified now, 7 historical) plus a
+  "Cultivera (vendor platform, not a lab)" row. Each row has a `coa_hosts`
+  list: the web hosts the certificate reader is allowed to open. The database
+  refuses anything that is not a plain host name, and a row can hold at most
+  20 hosts. A factory reset keeps this table, because it is reference data.
+
+  **You do not need this to read Cultivera certificates.** files.cultivera.com
+  is built into the code, so the "not a known lab host" error is fixed without
+  it. The migration is what makes the **Testing labs** page work, and lets you
+  add a lab or a host there. Until you run it, that page shows a "One-time
+  setup needed" card. Safe to re-run (`on conflict do nothing`).
+
+  **Run it, then:** open **Inventory** and press **Testing labs** (top right,
+  next to Expiration rules).
+
+  **Check:**
+
+  ```sql
+  select status, count(*) from public.testing_labs group by 1 order by 1;
+  -- active 4, historical 7, platform 1
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0256_testing_labs.rollback.sql`
+  (the certificate reader goes back to the built-in hosts only).
