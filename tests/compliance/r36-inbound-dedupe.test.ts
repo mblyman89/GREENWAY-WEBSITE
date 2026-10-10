@@ -412,6 +412,21 @@ describe("wiring", () => {
     expect(detail).toMatch(/data-testid="duplicate-warning"/);
     expect(table).toMatch(/data-testid="duplicate-flag"/);
   });
+  it("a successful dismissal is written to Settings -> Audit log (and only a successful one)", () => {
+    const start = actions.indexOf("export async function dismissDuplicateManifestAction");
+    const a = actions.slice(start, actions.indexOf("\n}\n", start));
+    const okAt = a.indexOf("if (res.ok) {");
+    const elseAt = a.indexOf("} else {", okAt);
+    const auditAt = a.indexOf("await recordAudit({");
+    expect(okAt).toBeGreaterThan(0);
+    // inside the success branch, before the refusal branch
+    expect(auditAt).toBeGreaterThan(okAt);
+    expect(auditAt).toBeLessThan(elseAt);
+    expect(a).toMatch(/action: "manifest\.dismiss_duplicate"/);
+    expect(a).toMatch(/entityId: duplicateId/);
+    expect(a).toMatch(/duplicateOf: keepId/);
+    expect(a).toMatch(/actorId: session\.userId/);
+  });
   it("the KB bridge and intake scans skip dismissed rows like rejected ones", () => {
     expect(read("src/lib/inventory/manifest-kb-bridge.ts")).toMatch(/\.not\("status", "in", "\(rejected,dismissed\)"\)/);
     expect((actions.match(/\.not\("status", "in", "\(rejected,dismissed\)"\)/g) ?? []).length).toBe(1);
