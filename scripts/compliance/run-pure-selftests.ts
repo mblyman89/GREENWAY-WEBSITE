@@ -959,6 +959,7 @@ import { __runMenuSensoryCoreTests } from "../../src/lib/pos/menu-sensory-core";
 import { __runWciaLabJsonCoreTests } from "../../src/lib/inventory/wcia-lab-json-core";
 import { __runExpiryResearchCoreTests } from "../../src/lib/inventory/expiry-research-core";
 import { __runExpiryRulesCoreTests } from "../../src/lib/inventory/expiry-rules-core";
+import { __runTestingLabsCoreTests } from "../../src/lib/inventory/testing-labs-core";
 import { __runExpiryReportExportTests } from "../../src/lib/inventory/expiry-report-export";
 import { websiteCategoryDefinitions as __r34Categories } from "../../src/lib/pos/category-taxonomy";
 
@@ -2118,6 +2119,7 @@ __runLiquidVolumeTests();
   assertRan("expiry-report-export", __runExpiryReportExportTests(), 14); // R34: expiration report export
   assertRan("serving-limit-warning-core", __runServingLimitWarningCoreTests(), 53); // R35 #4: WAC 314-55-095 warning on the manual facts forms
   assertRan("menu-sensory-core", __runMenuSensoryCoreTests(), 67); // R35 #6: effects and aroma on the menu row (0254)
+  assertRan("testing-labs-core", __runTestingLabsCoreTests(), 83); // R36 #4: WA labs + certificate hosts (SSRF allow-list)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
