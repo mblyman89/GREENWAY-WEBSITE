@@ -16,9 +16,8 @@ import {
   ID_TYPE_LABELS,
   OTP_MAX_ATTEMPTS,
   OTP_MAX_SENDS,
-  esignStep,
 } from "@/lib/payments/ach-esign-core";
-import { currentDisclosureSha256, getEsignSession, liveEsignSession } from "@/lib/payments/ach-esign-store";
+import { currentDisclosureSha256, esignPageView } from "@/lib/payments/ach-esign-store";
 import { cancelEsignAction, sendEsignCodeAction, signEsignAction, startEsignAction, verifyEsignCodeAction } from "./actions";
 
 /**
@@ -135,10 +134,11 @@ export default async function EsignPage({
   }
   const file = await getEmployeeFile(employeeId);
   if (!file) notFound();
-  const live = await liveEsignSession(employeeId);
-  const done = sp.done && UUID.test(sp.done) ? await getEsignSession(sp.done) : null;
-  const s = live.session ?? (done && done.employee_id === employeeId ? done : null);
-  const step = s ? esignStep(s.state, s.started_at, Date.now()) : null;
+  // The ownership check for done= lives in esignPageView (done.employee_id === employeeId).
+  const view = await esignPageView(employeeId, sp.done && UUID.test(sp.done) ? sp.done : null);
+  const live = { ready: view.ready, error: view.error, session: view.live };
+  const s = view.session;
+  const step = view.step;
   const back = `/admin/staffing/employees/${employeeId}`;
 
   return (

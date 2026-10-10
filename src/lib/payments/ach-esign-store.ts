@@ -44,6 +44,7 @@ import {
   clampUserAgent,
   disclosureBody,
   esignDbErrorMessage,
+  esignStep,
   makeOtp,
   maskEmail,
   otpDigest,
@@ -54,6 +55,7 @@ import {
   sessionExpired,
   signatureMatches,
   type EsignAccountInput,
+  type EsignStep,
   type EsignState,
   type IdType,
 } from "@/lib/payments/ach-esign-core";
@@ -125,6 +127,22 @@ export async function liveEsignSession(employeeId: string): Promise<{ ready: boo
     return { ready: !/0261/.test(msg), session: null, error: msg };
   }
   return { ready: true, session: (data as EsignSession | null) ?? null, error: null };
+}
+
+/**
+ * The page's view: the live session (or the just-signed one named by done=)
+ * and its step. The clock is read HERE, in the data layer, so the page render
+ * stays pure (react-hooks/purity), as registers/oversight.ts does.
+ */
+export async function esignPageView(
+  employeeId: string,
+  doneId: string | null,
+): Promise<{ ready: boolean; error: string | null; live: EsignSession | null; session: EsignSession | null; step: EsignStep | null }> {
+  const live = await liveEsignSession(employeeId);
+  const done = !live.session && doneId ? await getEsignSession(doneId) : null;
+  const session = live.session ?? (done && done.employee_id === employeeId ? done : null);
+  const step = session ? esignStep(session.state, session.started_at, Date.now()) : null;
+  return { ready: live.ready, error: live.error, live: live.session, session, step };
 }
 
 // ---------------------------------------------------------------- start ----

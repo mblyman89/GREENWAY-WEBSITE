@@ -81,7 +81,9 @@ describe("R39 S6 page: what the employee and the checker see", () => {
     expect(PAGE).toMatch(/if \(!UUID\.test\(employeeId\)\) notFound\(\);/);
   });
   it("a done= session is shown only if it belongs to this employee", () => {
-    expect(PAGE).toContain("done && done.employee_id === employeeId ? done : null");
+    const STORE = read("src/lib/payments/ach-esign-store.ts");
+    expect(PAGE).toContain("await esignPageView(employeeId, sp.done && UUID.test(sp.done) ? sp.done : null)");
+    expect(STORE).toContain("done && done.employee_id === employeeId ? done : null");
   });
   it("posts the disclosure hash the screen was rendered with", () => {
     expect(PAGE).toContain('<input type="hidden" name="disclosure_sha256" value={currentDisclosureSha256()} />');
