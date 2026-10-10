@@ -885,6 +885,7 @@ import { __runCcrsProductNameCoreTests } from "../../src/lib/compliance/ccrs-pro
 import { __runNachaCoreTests } from "../../src/lib/payments/nacha-core";
 import { __runAchAuthorizationCoreTests } from "../../src/lib/payments/ach-authorization-core";
 import { __runVaultReleaseNoticeCoreTests } from "../../src/lib/payments/vault-release-notice-core";
+import { __runVaultReleaseCoreTests } from "../../src/lib/payments/vault-release-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
 import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
@@ -2142,6 +2143,7 @@ __runLiquidVolumeTests();
   assertRan("inventory-table-core", __runInventoryTableCoreTests(), 61); // R38 S2-S4: column registry, presets, page size, pager, export
   assertRan("ach-authorization-core", __runAchAuthorizationCoreTests(), 66); // R39 S1: FedACH days, prenote/NOC/return/reversal clocks, splits, release, retention, codes
   assertRan("vault-release-notice-core", __runVaultReleaseNoticeCoreTests(), 17); // R39 S3: solo-release notice recipients, masking, escaping, phone reminder
+  assertRan("vault-release-core", __runVaultReleaseCoreTests(), 22); // R39 S3: release form -> verdict, picked contact on file 90+ days, in person
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
