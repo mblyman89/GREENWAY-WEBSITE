@@ -81,6 +81,24 @@ const sameUrl = (a: string | null, b: string | null): boolean => {
   return n(a) === n(b);
 };
 
+/**
+ * R36: proof that a PDF read from another host is the lab's own certificate.
+ * The lab link (Confidence: /full/WA-<auth 12>-<WA-yymmdd-nnn>.pdf) carries
+ * the start of the authentication code and the lab sample id; the PDF prints
+ * the full code ("Auth: ...") and the sample id. Both must match. Anything
+ * less (a link without the code, a PDF without an auth line) is no proof.
+ */
+export function rehostedCopyProof(
+  labCoaUrl: string | null,
+  pdf: Pick<CoaPdfDoc, "auth" | "labSampleId"> | null,
+): { auth: string; sample: string } | null {
+  if (!labCoaUrl || !pdf || !pdf.auth || !pdf.labSampleId) return null;
+  const m = labCoaUrl.match(/WA-([A-Za-z0-9]{8,})-(WA-\d{6}-\d{3})(?:\.pdf)?(?:$|[?#])/);
+  if (!m) return null;
+  if (!pdf.auth.startsWith(m[1]) || pdf.labSampleId !== m[2]) return null;
+  return { auth: pdf.auth, sample: pdf.labSampleId };
+}
+
 /** Stage 1: both documents, identity and agreement. */
 export function assembleCoaExtract(input: {
   jsonUrl: string | null;
@@ -112,10 +130,20 @@ export function assembleCoaExtract(input: {
   // ---- identity: is everything the SAME certificate? -----------------------
   const identity: CoaCheck[] = [];
   if (json && input.transferCoaUrl) {
+    const same = sameUrl(json.coaUrl, input.transferCoaUrl);
+    // R36: a vendor's seed-to-sale system (Cultivera: files.cultivera.com) can
+    // RE-HOST the lab's PDF, so the transfer link differs from the link the lab
+    // JSON names. The copy is accepted only on proof, never on the host name:
+    // the lab's own link carries the certificate's authentication code and lab
+    // sample id (WA-<auth>-<WA-yymmdd-nnn>), and the PDF that was actually read
+    // must print BOTH. Measured on 31 real re-hosted Confidence certificates.
+    const rehost = same ? null : rehostedCopyProof(json.coaUrl, pdf);
     identity.push({
       what: "the lab JSON names the same COA as the transfer",
-      ok: sameUrl(json.coaUrl, input.transferCoaUrl),
-      detail: `JSON coa ${json.coaUrl ?? "(none)"}; transfer coa ${input.transferCoaUrl}`,
+      ok: same || rehost !== null,
+      detail: rehost
+        ? `re-hosted copy of the lab's certificate: transfer coa ${input.transferCoaUrl}; the PDF prints auth ${rehost.auth} and sample ${rehost.sample}, the code and sample in the lab's link ${json.coaUrl}`
+        : `JSON coa ${json.coaUrl ?? "(none)"}; transfer coa ${input.transferCoaUrl}`,
     });
   }
   if (pdf && json && pdf.labSampleId && json.labResultId && /^WA-\d{6}-\d{3}$/.test(json.labResultId)) {
