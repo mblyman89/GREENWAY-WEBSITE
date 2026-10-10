@@ -888,6 +888,7 @@ import { __runVaultReleaseNoticeCoreTests } from "../../src/lib/payments/vault-r
 import { __runVaultReleaseCoreTests } from "../../src/lib/payments/vault-release-core";
 import { __runVendorAchEnrollmentTests } from "../../src/lib/payments/vendor-ach-enrollment-core";
 import { __runEmployeeAchCardTests } from "../../src/lib/payroll/employee-ach-card-core";
+import { __runAchDocumentIntakeTests } from "../../src/lib/payments/ach-document-intake-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
 import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
@@ -2148,6 +2149,7 @@ __runLiquidVolumeTests();
   assertRan("vault-release-core", __runVaultReleaseCoreTests(), 22); // R39 S3: release form -> verdict, picked contact on file 90+ days, in person
   assertRan("vendor-ach-enrollment", __runVendorAchEnrollmentTests(), 49); // R39 S4: needs bank info / opted out card + 0258 CHECK planner
   assertRan("employee-ach-card", __runEmployeeAchCardTests(), 29); // R39 S4: employee file card agrees with planPayrollEntries
+  assertRan("ach-document-intake", __runAchDocumentIntakeTests(), 62); // R39 S5: OWASP drop-only upload, AcroForm draft, blind re-key
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
