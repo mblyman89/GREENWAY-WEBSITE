@@ -176,7 +176,9 @@ export const ACH_AUTHORITIES: readonly AchAuthority[] = [
     quote:
     "A credit Micro-Entry must be in the amount of less than $1.00 One or more debit " +
     "Micro-Entries must not exceed, in total, the amount of the corresponding credit " +
-    "Micro-Entries",
+    "Micro-Entries This definition accommodates the existing practices of offsetting the amounts " +
+    "of credit Micro-Entries with one or more debits, which nets the total verification practice " +
+    "to $0;",
     whatItMeansHere:
     "The test credit must be under one dollar, so the system refuses any verification credit of " +
     "$1.00 or more. The second sentence is about offsetting debits, which Greenway never sends - " +
@@ -190,9 +192,7 @@ export const ACH_AUTHORITIES: readonly AchAuthority[] = [
     sourceFile: "ach/nacha-micro-entries-phase-1.txt",
     source: "https://www.nacha.org/micro-entries",
     quote:
-    "In the Company Entry Description field, the Rule requires the use of “ACCTVERIFY” A standard " +
-    "description makes Micro-Entries more easily identifiable, and better enable ODFIs to apply " +
-    "any desired processing routines or other controls",
+    "In the Company Entry Description field, the Rule requires the use of “ACCTVERIFY”",
     whatItMeansHere:
     "If Greenway ever sends a test credit, the batch description must read ACCTVERIFY, not VENDOR " +
     "PAY or PAYROLL. The system stamps that word itself so nobody has to remember it, and so the " +
@@ -208,7 +208,9 @@ export const ACH_AUTHORITIES: readonly AchAuthority[] = [
     "An Originator using Micro-Entries may initiate future Entries to the Receiver’s account as " +
     "soon as the Originator’s process for validating the amounts of the Micro-Entries has been " +
     "completed The Originator is in the best position to know when the validation process is " +
-    "complete A future Entry may not be originated simultaneously with Micro-Entries",
+    "complete A future Entry may not be originated simultaneously with Micro-Entries ODFIs are " +
+    "not required to review or inspect files to enforce this In Phase 2 of the Rule risk " +
+    "management requirements will be applied to Originators.",
     whatItMeansHere:
     "The real payment must wait until the payee has confirmed the test amount. The system " +
     "therefore keeps a payee in Pending Verification until the confirmed amount is recorded, and " +

@@ -372,9 +372,26 @@ describe("no quotation is cut off mid-sentence", () => {
    * tips must be included even when there were not enough employee funds to
    * collect the tax on them.
    */
+  /**
+   * R39. Registry quotations that end a LIST ITEM or TABLE CELL which the source
+   * itself prints without closing punctuation. Whitespace normalisation flattens
+   * the line break, so the generic rule sees the next heading ("Consistency",
+   * "04-11 ...") as a continuation. Closed and named: each entry must (a) still
+   * be needed - the generic rule must still flag it - and (b) be followed in
+   * the RAW source by a newline, so the exemption cannot cover a real mid-line
+   * cut. Both are asserted below.
+   */
+  const LIST_ITEM_ENDS: Readonly<Record<string, string>> = {
+    "ach-only-consumer-debits-need-signed-writing":
+      "A bullet under Nacha's \"Flexibility\" heading; the next line is the heading \"Consistency\".",
+    "ach-prenote-codes":
+      "A cell of First Citizens' record-6 table; the next line is field 04-11.",
+  };
+
   it("no registry authority quotation is cut off mid-sentence", () => {
     const corpora = new Map<string, string>();
     const offences: string[] = [];
+    const exemptUsed = new Set<string>();
     let checked = 0;
 
     for (const a of GUIDANCE_AUTHORITIES) {
@@ -399,6 +416,20 @@ describe("no quotation is cut off mid-sentence", () => {
       if (endsASentence(a.quote)) continue;
       const rest = flat.slice(at + last.length).replace(/^\s+/, "");
       if (/[A-Za-z0-9]/.test(rest.slice(0, 1))) {
+        if (a.id in LIST_ITEM_ENDS) {
+          const raw = readFileSync(file, "utf8");
+          // The registry quote is whitespace-flattened; its last 30 characters
+          // contain no line break in either exempted source, so they locate it raw.
+          const tail = a.quote.trimEnd().slice(-30);
+          const idx = raw.indexOf(tail);
+          expect(idx, `${a.id}: exempted quote must appear verbatim in the raw source`).toBeGreaterThan(-1);
+          expect(
+            raw.slice(idx + tail.length).match(/^[ \t\u00a0]*\n/),
+            `${a.id}: exempted as a list item, but the raw source does not break the line after it`,
+          ).not.toBeNull();
+          exemptUsed.add(a.id);
+          continue;
+        }
         offences.push(
           `${a.id} (${a.cite}): the quotation ends "...${a.quote.trimEnd().slice(-45)}" but the ` +
             `source continues "${rest.slice(0, 60)}...". A quotation that stops mid-sentence can ` +
@@ -418,6 +449,8 @@ describe("no quotation is cut off mid-sentence", () => {
         "so one of them is skipping quotations silently",
     ).toBeGreaterThan(300);
     expect(offences, offences.join("\n\n")).toEqual([]);
+    // Guard the guard: an exemption that no longer fires is dead and must go.
+    expect([...exemptUsed].sort()).toEqual(Object.keys(LIST_ITEM_ENDS).sort());
     console.log(`quote-truncation: ${checked} registry authorities checked for truncation`);
   });
 

@@ -300,7 +300,14 @@ describe("verify-verbatim-quotes cite mapping — the new corpora", () => {
     // The honest skip: a court case has no mirrored text, and pretending to
     // verify it would be theatre.
     expect(sourceFileFor("Harborside Health Center v. Commissioner, 151 T.C. 11 (2018)")).toBeNull();
-    expect(expectedCorpusFile("WAC 314-55-087")).toBeNull();
+    // R39 mirrored WAC 314-55-087 (licensee records), so it is no longer the
+    // example of an unmirrored WAC; -083 (security) is not mirrored.
+    expect(expectedCorpusFile("WAC 314-55-083")).toBeNull();
+    expect(expectedCorpusFile("WAC 314-55-087")?.path).toBe(
+      join(AUTHORITY_DIR, "state-wa", "wac-314-55-087.txt"),
+    );
+    // Narrow route: a longer section number sharing the prefix stays unmirrored.
+    expect(expectedCorpusFile("WAC 314-55-0870")).toBeNull();
   });
 
   it("maps an IRS Publication citation to the mirrored publication", () => {
