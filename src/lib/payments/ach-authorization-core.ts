@@ -605,7 +605,25 @@ export const ACH_NOTIFY_PUBLIC: Readonly<Record<"stephen" | "michael" | "store",
   store: { name: "Greenway store", phone: "360-443-6988", email: "contact@greenwaymarijuana.com" },
 };
 
-const US_PHONE = /^\d{3}-\d{3}-\d{4}$/;
+/**
+ * A US/NANP phone in any everyday format (360-555-0100, 3605550100,
+ * (360) 555-0100, (360)-555-0100, 360.555.0100, 360 555 0100, +1 360 555
+ * 0100, 1-360-555-0100) -> "360-555-0100"; anything else -> null.
+ * NANP numbers are NXX-NXX-XXXX, N = 2-9 (North American Numbering Plan;
+ * cnac.ca/npa_codes/na_numbering_plan.htm), so a code starting with 0 or 1
+ * is a typo, not a number. Letters (vanity numbers, "ext") are refused
+ * rather than guessed at.
+ */
+export function normalizeUsPhone(raw: string | null | undefined): string | null {
+  const v = String(raw ?? "").trim();
+  if (!v || !/^[+\d\s().-]+$/.test(v)) return null;
+  if ((v.match(/\+/g) ?? []).length > 1 || (v.includes("+") && !v.startsWith("+"))) return null;
+  let d = v.replace(/\D/g, "");
+  if (d.length === 11 && d.startsWith("1")) d = d.slice(1);
+  else if (v.startsWith("+")) return null; // +<not 1> is not a US number
+  if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(d)) return null;
+  return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+}
 
 /**
  * Resolve the full contact list from configuration. A missing or malformed
@@ -624,11 +642,12 @@ export function resolveNotifyContacts(env: Readonly<Record<string, string | unde
       problems.push(`${key} is not set; notices will go by email only.`);
       return null;
     }
-    if (!US_PHONE.test(v)) {
-      problems.push(`${key} must look like 360-555-0100.`);
+    const n = normalizeUsPhone(v);
+    if (!n) {
+      problems.push(`${key} is not a 10-digit US phone number (any format works, for example 360-555-0100 or (360) 555-0100).`);
       return null;
     }
-    return v;
+    return n;
   };
   return {
     contacts: {
@@ -778,7 +797,13 @@ export function __runAchAuthorizationCoreTests(): { passed: number; failed: numb
   const rc = resolveNotifyContacts({ ACH_NOTIFY_STEPHEN_PHONE: "360-555-0100" });
   ok(rc.contacts.stephen.phone === "360-555-0100" && rc.contacts.michael.phone === null, "phone from env; missing -> null");
   ok(rc.problems.length === 1 && rc.problems[0].includes("ACH_NOTIFY_MICHAEL_PHONE"), "missing phone reported");
-  ok(resolveNotifyContacts({ ACH_NOTIFY_STEPHEN_PHONE: "3605550100", ACH_NOTIFY_MICHAEL_PHONE: "360-555-0101" }).problems.length === 1, "malformed phone reported");
+  const fmts = ["360-555-0100", "3605550100", "(360)555-0100", "(360) 555-0100", "(360)-555-0100", "360.555.0100", "360 555 0100", "+1 360 555 0100", "+13605550100", "1-360-555-0100", "1 (360) 555-0100", " 360-555-0100 "];
+  ok(fmts.every((f) => normalizeUsPhone(f) === "360-555-0100"), "every everyday phone format -> 360-555-0100");
+  const bad = ["", "555-0100", "36055501000", "060-555-0100", "160-555-0100", "360-055-0100", "360-155-0100", "+44 20 7946 0958", "+2 360 555 0100", "360-555-01OO", "1-800-FLOWERS", "360-555-0100 ext 2", "360+555-0100", "2-360-555-0100"];
+  ok(bad.every((f) => normalizeUsPhone(f) === null), "short/long/0-1 codes/foreign/letters/ext refused");
+  const both = resolveNotifyContacts({ ACH_NOTIFY_STEPHEN_PHONE: "(360) 555-0100", ACH_NOTIFY_MICHAEL_PHONE: "360.555.0101" });
+  ok(both.problems.length === 0 && both.contacts.stephen.phone === "360-555-0100" && both.contacts.michael.phone === "360-555-0101", "any format in env -> normalised, no problem");
+  ok(resolveNotifyContacts({ ACH_NOTIFY_STEPHEN_PHONE: "555-0100", ACH_NOTIFY_MICHAEL_PHONE: "360-555-0101" }).problems.length === 1, "malformed phone reported");
 
   return { passed, failed };
 }
