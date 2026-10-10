@@ -166,13 +166,23 @@ export async function editLabHost(
   if (expectedUpdatedAt && got.row.updated_at !== expectedUpdatedAt) {
     return { ok: false, error: `${got.row.name} was changed since you opened this page - reload and try again. Nothing was changed.` };
   }
-  const plan = op === "add" ? addHostToLab(before, rawHost) : removeHostFromLab(before, rawHost);
-  if (!plan.ok) return plan;
-  const host = op === "add" ? (plan as { host: string }).host : String(rawHost).trim().toLowerCase();
+  let host: string;
+  let next: string[];
+  if (op === "add") {
+    const plan = addHostToLab(before, rawHost);
+    if (!plan.ok) return plan;
+    host = plan.host;
+    next = plan.hosts;
+  } else {
+    const plan = removeHostFromLab(before, rawHost);
+    if (!plan.ok) return plan;
+    host = String(rawHost).trim().toLowerCase();
+    next = plan.hosts;
+  }
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("testing_labs")
-    .update({ coa_hosts: plan.hosts })
+    .update({ coa_hosts: next })
     .eq("id", id)
     .eq("updated_at", got.row.updated_at)
     .select("id");
@@ -184,5 +194,5 @@ export async function editLabHost(
   if (!((data as unknown[] | null) ?? []).length) {
     return { ok: false, error: `${got.row.name} was changed at the same moment - reload and try again. Nothing was changed.` };
   }
-  return { ok: true, id, host, before, after: plan.hosts };
+  return { ok: true, id, host, before, after: next };
 }
