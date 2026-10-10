@@ -907,6 +907,57 @@ export function planAccountRows(
   return { ok: true, rows };
 }
 
+// ------------------------------------------------------- server helpers ----
+
+/**
+ * The pending first entry for one document, from its event log (newest last).
+ * Only document_rekey_mismatch events carry a fingerprint; a mismatch event
+ * with fingerprint null (form_disagrees) RESETS the pairing. Anything that is
+ * not a well-formed fingerprint is ignored (parseFingerprint), never trusted.
+ */
+export function pendingFromEvents(
+  events: readonly { event_kind: string; detail: unknown }[],
+  documentId: string,
+): EntryFingerprint | null {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const e = events[i];
+    const d = (e.detail ?? {}) as { document_id?: unknown; fingerprint?: unknown };
+    if (d.document_id !== documentId) continue;
+    if (e.event_kind !== INTAKE_EVENTS.rekeyMismatch) continue;
+    return parseFingerprint(d.fingerprint);
+  }
+  return null;
+}
+
+/** Sentences for the errors 0258 / 0260 raise. Unknown errors are passed on, not hidden. */
+export function intakeDbErrorMessage(message: string | null | undefined): string {
+  const m = String(message ?? "");
+  if (/function public\.ach_intake_|Could not find the function|PGRST202/i.test(m)) {
+    return "One-time setup needed: apply migration 0260 (docs/MIGRATIONS_TO_RUN.md), then try again.";
+  }
+  const table: [RegExp, string][] = [
+    [/ACH_INTAKE_OPEN_EXISTS/, "This employee already has an open direct deposit authorization. Tick \"Replace the current authorization\" to archive it and use this form."],
+    [/ACH_INTAKE_STATE/, "This document has already been decided (accepted, rejected or archived). Reload the page."],
+    [/ACH_INTAKE_KIND/, "Only a signed authorization form can set up direct deposit. A voided check or bank letter is supporting evidence."],
+    [/ACH_INTAKE_SIGNED_ON/, "The signed date is missing or in the future."],
+    [/ACH_INTAKE_REASON/, "Say why the document is rejected (at least 10 characters)."],
+    [/ACH_INTAKE_NOT_FOUND/, "That document no longer exists. Reload the page."],
+    [/ACH_INTAKE_ACCOUNTS/, "The accounts could not be saved (1 to 3 accounts, in order)."],
+    [/ACH_ACCOUNT_LIMIT/, "An authorization may have at most 3 accounts."],
+    [/ach_acct_no_duplicate_account/, "The same account is listed twice."],
+    [/ach_doc_sha_per_payee/, "This exact file was already dropped for this person or vendor."],
+  ];
+  for (const [re, text] of table) if (re.test(m)) return text;
+  return `The database refused the change: ${m.slice(0, 300)}`;
+}
+
+/** Where to send the person back to after an action: only our own admin pages. */
+export function safeReturnPath(raw: string | null | undefined, fallback: string): string {
+  const t = String(raw ?? "").trim();
+  if (!/^\/admin\/[A-Za-z0-9/_\-]*$/.test(t) || t.includes("//")) return fallback;
+  return t;
+}
+
 // ------------------------------------------------------------ self-tests ----
 
 export function __runAchDocumentIntakeTests(): { passed: number; failed: number } {
@@ -1092,6 +1143,35 @@ export function __runAchDocumentIntakeTests(): { passed: number; failed: number 
   const fv = entryFromForm(post({ a1_rtn: goodRtn, a1_acct: "1234", a1_type: "savings", a2_rtn: goodRtn, a2_acct: "5", a2_type: "checking" }), "vendor");
   ok(fv.ok && fv.accounts.length === 1 && fv.accounts[0].rule.kind === "remainder", "vendor: one row, whole payment");
 
+  // server helpers
+  {
+    const fpx = (c: string) => ({ v: 1, byId: "s", accounts: [{ routing: c.repeat(64), account: c.repeat(64), type: c.repeat(64), amount: c.repeat(64) }] });
+    const D = "doc-1";
+    ok(pendingFromEvents([], D) === null, "no events -> no pending");
+    ok(pendingFromEvents([{ event_kind: "document_rekey_mismatch", detail: { document_id: D, fingerprint: fpx("a") } }], D)?.accounts[0].routing === "a".repeat(64), "pending found");
+    ok(pendingFromEvents([
+      { event_kind: "document_rekey_mismatch", detail: { document_id: D, fingerprint: fpx("a") } },
+      { event_kind: "document_rekey_mismatch", detail: { document_id: D, fingerprint: fpx("b") } },
+    ], D)?.accounts[0].routing === "b".repeat(64), "newest pending wins");
+    ok(pendingFromEvents([
+      { event_kind: "document_rekey_mismatch", detail: { document_id: D, fingerprint: fpx("a") } },
+      { event_kind: "document_rekey_mismatch", detail: { document_id: D, fingerprint: null } },
+    ], D) === null, "null fingerprint resets");
+    ok(pendingFromEvents([{ event_kind: "document_rekey_mismatch", detail: { document_id: "other", fingerprint: fpx("a") } }], D) === null, "other document ignored");
+    ok(pendingFromEvents([
+      { event_kind: "document_rekey_mismatch", detail: { document_id: D, fingerprint: fpx("a") } },
+      { event_kind: "document_extracted", detail: { document_id: D } },
+    ], D)?.accounts[0].routing === "a".repeat(64), "other kinds skipped");
+    ok(pendingFromEvents([{ event_kind: "document_rekey_mismatch", detail: { document_id: D, fingerprint: { v: 1, byId: "s", accounts: [{ routing: "1234" }] } } }], D) === null, "malformed fingerprint ignored");
+    ok(intakeDbErrorMessage("function public.ach_intake_finish(uuid) does not exist").startsWith("One-time setup needed"), "missing 0260 -> setup");
+    ok(intakeDbErrorMessage("ACH_INTAKE_OPEN_EXISTS: x").includes("Replace"), "open exists -> replace hint");
+    ok(intakeDbErrorMessage("weird").includes("weird"), "unknown passed on");
+    ok(safeReturnPath("/admin/staffing/employees/abc", "/admin") === "/admin/staffing/employees/abc", "admin path ok");
+    ok(safeReturnPath("https://evil.example/admin/x", "/admin") === "/admin", "absolute URL refused");
+    ok(safeReturnPath("//evil.example/admin/", "/admin") === "/admin", "protocol-relative refused");
+    ok(safeReturnPath("/admin/x?y=1", "/admin") === "/admin", "query refused");
+    ok(safeReturnPath("/admin/../login", "/admin") === "/admin", "dots refused");
+  }
   console.log(`ach-document-intake: ${passed} passed, ${failed} failed`);
   return { passed, failed };
 }
