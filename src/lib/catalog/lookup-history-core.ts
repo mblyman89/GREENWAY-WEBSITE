@@ -360,6 +360,121 @@ export function outcomeFromAudit(after: unknown): SearchOutcome | null {
   return null;
 }
 
+// --- Assembly (the server reads rows; this joins them, pure) ---------------------
+
+/** Marker written into a queued lookup_job_items.result_json by "Search again": the worker forces a fresh web search for it. */
+export const AGAIN_MARKER = Object.freeze({ again: true });
+
+/** Was this queued item created by "Search again"? (a finished item's result never carries it) */
+export function isAgainMarker(raw: unknown): boolean {
+  return Boolean(raw) && typeof raw === "object" && !Array.isArray(raw) && (raw as Record<string, unknown>).again === true && !("outcome" in (raw as Record<string, unknown>));
+}
+
+export interface HistoryTarget {
+  draftId: string;
+  /** Every identity key the product may be stamped under (blank ignored). */
+  keys: readonly string[];
+}
+export interface SiblingRow {
+  id: string;
+  identity_key: string | null;
+  manifest_id: string | null;
+}
+export interface ItemRow {
+  draft_id: string;
+  status: unknown;
+  result_json: unknown;
+  finished_at: string | null;
+}
+export interface AuditRow {
+  entity_id: string | null;
+  after_json: unknown;
+  created_at: string | null;
+}
+export interface ProvenanceRow {
+  identity_key: string | null;
+  field: string | null;
+  created_at: string | null;
+}
+
+const lc = (x: string) => x.trim().toLowerCase();
+
+/**
+ * Joins every past search to the products on this page:
+ *   - the row itself ("this row"),
+ *   - another row of THIS delivery with the same identity ("this delivery"),
+ *   - the same identity on an earlier delivery ("earlier delivery").
+ * Found facts are the gemini provenance rows under any of the product's keys.
+ */
+export function assembleLookupHistory(input: {
+  manifestId: string | null;
+  targets: readonly HistoryTarget[];
+  siblings: readonly SiblingRow[];
+  items: readonly ItemRow[];
+  audits: readonly AuditRow[];
+  provenance: readonly ProvenanceRow[];
+}): Map<string, { searches: PastSearch[]; found: FoundFact[] }> {
+  const out = new Map<string, { searches: PastSearch[]; found: FoundFact[] }>();
+  const targetIds = new Set<string>();
+  const byKey = new Map<string, string[]>();
+  for (const t of input.targets) {
+    if (typeof t.draftId !== "string" || !t.draftId.trim()) continue;
+    const id = lc(t.draftId);
+    if (out.has(id)) continue;
+    out.set(id, { searches: [], found: [] });
+    targetIds.add(id);
+    for (const k of t.keys) {
+      if (typeof k !== "string" || !k.trim()) continue;
+      const list = byKey.get(k.trim()) ?? [];
+      if (!list.includes(id)) list.push(id);
+      byKey.set(k.trim(), list);
+    }
+  }
+  const manifest = input.manifestId ? lc(input.manifestId) : null;
+  // draft id -> [(target, where)]
+  const route = new Map<string, { target: string; where: SearchWhere }[]>();
+  for (const id of targetIds) route.set(id, [{ target: id, where: "this row" }]);
+  for (const s of input.siblings) {
+    if (typeof s.id !== "string" || !s.id.trim()) continue;
+    const sid = lc(s.id);
+    if (targetIds.has(sid)) continue;
+    const key = typeof s.identity_key === "string" ? s.identity_key.trim() : "";
+    const targets = key ? byKey.get(key) ?? [] : [];
+    if (targets.length === 0) continue;
+    const where: SearchWhere = manifest !== null && typeof s.manifest_id === "string" && lc(s.manifest_id) === manifest ? "this delivery" : "earlier delivery";
+    const list = route.get(sid) ?? [];
+    for (const t of targets) if (!list.some((r) => r.target === t)) list.push({ target: t, where });
+    route.set(sid, list);
+  }
+  for (const it of input.items) {
+    if (typeof it.draft_id !== "string") continue;
+    const outcome = outcomeFromItem(it.status, it.result_json && typeof it.result_json === "object" ? (it.result_json as Record<string, unknown>).outcome : null);
+    if (outcome === null || ms(it.finished_at) === null) continue;
+    const r = it.result_json && typeof it.result_json === "object" ? (it.result_json as Record<string, unknown>) : {};
+    const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+    for (const dest of route.get(lc(it.draft_id)) ?? []) {
+      out.get(dest.target)!.searches.push({ at: it.finished_at as string, kind: "batch", where: dest.where, outcome, attached: n(r.attached), queued: n(r.queued) });
+    }
+  }
+  for (const a of input.audits) {
+    if (typeof a.entity_id !== "string") continue;
+    const outcome = outcomeFromAudit(a.after_json);
+    if (outcome === null || ms(a.created_at) === null) continue;
+    for (const dest of route.get(lc(a.entity_id)) ?? []) {
+      out.get(dest.target)!.searches.push({ at: a.created_at as string, kind: "row", where: dest.where, outcome, attached: 0, queued: 0 });
+    }
+  }
+  for (const p of input.provenance) {
+    const key = typeof p.identity_key === "string" ? p.identity_key.trim() : "";
+    if (!key || typeof p.field !== "string" || !p.field || ms(p.created_at) === null) continue;
+    for (const t of byKey.get(key) ?? []) {
+      const bucket = out.get(t)!;
+      if (!bucket.found.some((f) => f.field === p.field && f.at === p.created_at)) bucket.found.push({ field: p.field, at: p.created_at as string });
+    }
+  }
+  return out;
+}
+
 // --- Self-tests -------------------------------------------------------------------
 
 export function __runLookupHistoryCoreTests(): { passed: number; failed: number } {
@@ -437,6 +552,56 @@ export function __runLookupHistoryCoreTests(): { passed: number; failed: number 
   })());
   ok("detail counts", go.detail.startsWith("1 of 3 searched before \u00b7 1 fully harvested \u00b7 2 worth searching now"));
 
+  // assembly
+  {
+    const T1 = "11111111-1111-4111-8111-111111111111";
+    const T2 = "22222222-2222-4222-8222-222222222222";
+    const SIB = "33333333-3333-4333-8333-333333333333";
+    const OLD = "44444444-4444-4444-8444-444444444444";
+    const M = "99999999-9999-4999-8999-999999999999";
+    const h = assembleLookupHistory({
+      manifestId: M,
+      targets: [{ draftId: T1, keys: ["v|flower|gelato", "raw|gelato"] }, { draftId: T2, keys: ["v|vape|other"] }, { draftId: T1.toUpperCase(), keys: ["x"] }],
+      siblings: [
+        { id: SIB, identity_key: "v|flower|gelato", manifest_id: M.toUpperCase() },
+        { id: OLD, identity_key: "raw|gelato", manifest_id: "88888888-8888-4888-8888-888888888888" },
+        { id: T2, identity_key: "v|flower|gelato", manifest_id: M },
+        { id: "55555555-5555-4555-8555-555555555555", identity_key: "nobody", manifest_id: null },
+      ],
+      items: [
+        { draft_id: T1, status: "done", result_json: { outcome: "attached", attached: 3, queued: 1 }, finished_at: daysAgo(2) },
+        { draft_id: OLD, status: "done", result_json: { outcome: "nothing_new" }, finished_at: daysAgo(100) },
+        { draft_id: SIB, status: "failed", result_json: null, finished_at: daysAgo(1) },
+        { draft_id: T1, status: "canceled", result_json: null, finished_at: daysAgo(1) },
+        { draft_id: T1, status: "done", result_json: { outcome: "attached" }, finished_at: null },
+        { draft_id: T2, status: "queued", result_json: AGAIN_MARKER, finished_at: null },
+      ],
+      audits: [
+        { entity_id: OLD.toUpperCase(), after_json: { found: true }, created_at: daysAgo(101) },
+        { entity_id: T2, after_json: { found: false }, created_at: daysAgo(5) },
+        { entity_id: T2, after_json: { nope: 1 }, created_at: daysAgo(5) },
+      ],
+      provenance: [
+        { identity_key: "raw|gelato", field: "effects", created_at: daysAgo(100) },
+        { identity_key: "raw|gelato", field: "effects", created_at: daysAgo(100) },
+        { identity_key: "v|vape|other", field: "aroma", created_at: daysAgo(5) },
+        { identity_key: "elsewhere", field: "aroma", created_at: daysAgo(5) },
+        { identity_key: "raw|gelato", field: "flavor", created_at: "bad" },
+      ],
+    });
+    const a = h.get(T1.toLowerCase())!;
+    const b = h.get(T2.toLowerCase())!;
+    ok("assembly targets deduped", h.size === 2);
+    ok("assembly T1 searches", a.searches.length === 4);
+    ok("assembly own row", a.searches.some((x) => x.where === "this row" && x.kind === "batch" && x.attached === 3 && x.queued === 1 && x.outcome === "found"));
+    ok("assembly sibling this delivery (case-insensitive manifest)", a.searches.some((x) => x.where === "this delivery" && x.outcome === "failed"));
+    ok("assembly earlier delivery batch + row", a.searches.filter((x) => x.where === "earlier delivery").map((x) => x.kind).sort().join() === "batch,row");
+    ok("assembly a target is never its own sibling", !b.searches.some((x) => x.where !== "this row"));
+    ok("assembly T2 row audit only", b.searches.length === 1 && b.searches[0].kind === "row" && b.searches[0].outcome === "not_found");
+    ok("assembly found dedup + bad time dropped", a.found.length === 1 && a.found[0].field === "effects");
+    ok("assembly found by key", b.found.length === 1 && b.found[0].field === "aroma");
+    ok("again marker", isAgainMarker(AGAIN_MARKER) && !isAgainMarker({ again: true, outcome: "attached" }) && !isAgainMarker(null) && !isAgainMarker([]) && !isAgainMarker({ again: "yes" }));
+  }
   // labels + parsing
   ok("gemini label", harvestBarTitle("gemini-2.5-pro").endsWith("Google Gemini with Google Search"));
   ok("non-gemini label never claims gemini", searchEngineLabel("gpt-4o") === "AI web search (gpt-4o)" && searchEngineLabel(null) === "AI web search");
