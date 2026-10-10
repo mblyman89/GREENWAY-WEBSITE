@@ -1456,33 +1456,41 @@ describe("the migration list is ordered the way the database will see it", () =>
     // 0258, re-applied cleanly, scripts/recon/vendor-vault-0259-pg-check.sql
     // passed, 31/31 SQL mutants killed by scripts/r39/mutate-0259-sql.sh.
     // The owner applies it by hand.
-    expect(listed[listed.length - 1]).toMatch(/^0259_/);
+    // R39 S5 (owner-requested) added 0260_ach_document_intake.sql (no new
+    // tables: ach_intake_accept_employee + ach_intake_finish do the document
+    // accept / reject in ONE transaction, service_role only, not security
+    // definer). The tripwire FIRED and was HONOURED: 260 .sql files, gapless.
+    // Applied on Postgres 15 after 0259, re-applied cleanly, scripts/recon/
+    // ach-intake-0260-pg-check.sql passed, 29/29 SQL mutants killed by
+    // scripts/r39/mutate-0260-sql.sh. The owner applies it by hand.
+    expect(listed[listed.length - 1]).toMatch(/^0260_/);
     // Exact name, not just a prefix (S08 mutation M58: a loosened prefix
     // regex such as /^023[56]_/ still passed while the file was last).
-    expect(listed[listed.length - 1]).toBe("0259_vendor_vault_change_control.sql");
-    expect(listed[listed.length - 2]).toBe("0258_ach_authorizations.sql");
-    expect(listed[listed.length - 3]).toBe("0257_delivery_brand.sql");
-    expect(listed[listed.length - 4]).toBe("0256_testing_labs.sql");
-    expect(listed[listed.length - 5]).toBe("0255_inbound_dedupe.sql");
-    expect(listed[listed.length - 6]).toBe("0254_menu_item_effects_aroma.sql");
-    expect(listed[listed.length - 7]).toBe("0253_inventory_expiry_rules.sql");
-    expect(listed[listed.length - 8]).toBe("0252_lab_coa_extract.sql");
-    expect(listed[listed.length - 9]).toBe("0251_wa_total_thc_cbd_repair.sql");
-    expect(listed[listed.length - 10]).toBe("0250_obligation_waivers.sql");
-    expect(listed[listed.length - 11]).toBe("0249_ccrs_upload_lifecycle.sql");
-    expect(listed[listed.length - 12]).toBe("0248_ccrs_outbox.sql");
-    expect(listed[listed.length - 13]).toBe("0247_ccrs_ledger.sql");
-    expect(listed[listed.length - 14]).toBe("0246_ccrs_lot_external_id_passthrough.sql");
-    expect(listed[listed.length - 15]).toBe("0245_manifest_invoice_number_detected.sql");
-    expect(listed[listed.length - 16]).toBe("0244_intake_lot_received_date_strain_type_backfill.sql");
-    expect(listed[listed.length - 17]).toBe("0243_master_suggestions_v2.sql");
-    expect(listed[listed.length - 18]).toBe("0242_lookup_jobs.sql");
-    expect(listed[listed.length - 19]).toBe("0241_inventory_lot_pos_potency.sql");
-    expect(listed[listed.length - 20]).toBe("0240_factory_reset_scales.sql");
-    expect(listed[listed.length - 21]).toBe("0239_intake_merge_decisions.sql");
-    expect(listed[listed.length - 22]).toBe("0238_factory_reset_reaches_every_guard.sql");
-    expect(listed[listed.length - 23]).toBe("0237_fact_review_for_versions.sql");
-    expect(listed[listed.length - 24]).toBe("0236_publish_archive_rule.sql");
+    expect(listed[listed.length - 1]).toBe("0260_ach_document_intake.sql");
+    expect(listed[listed.length - 2]).toBe("0259_vendor_vault_change_control.sql");
+    expect(listed[listed.length - 3]).toBe("0258_ach_authorizations.sql");
+    expect(listed[listed.length - 4]).toBe("0257_delivery_brand.sql");
+    expect(listed[listed.length - 5]).toBe("0256_testing_labs.sql");
+    expect(listed[listed.length - 6]).toBe("0255_inbound_dedupe.sql");
+    expect(listed[listed.length - 7]).toBe("0254_menu_item_effects_aroma.sql");
+    expect(listed[listed.length - 8]).toBe("0253_inventory_expiry_rules.sql");
+    expect(listed[listed.length - 9]).toBe("0252_lab_coa_extract.sql");
+    expect(listed[listed.length - 10]).toBe("0251_wa_total_thc_cbd_repair.sql");
+    expect(listed[listed.length - 11]).toBe("0250_obligation_waivers.sql");
+    expect(listed[listed.length - 12]).toBe("0249_ccrs_upload_lifecycle.sql");
+    expect(listed[listed.length - 13]).toBe("0248_ccrs_outbox.sql");
+    expect(listed[listed.length - 14]).toBe("0247_ccrs_ledger.sql");
+    expect(listed[listed.length - 15]).toBe("0246_ccrs_lot_external_id_passthrough.sql");
+    expect(listed[listed.length - 16]).toBe("0245_manifest_invoice_number_detected.sql");
+    expect(listed[listed.length - 17]).toBe("0244_intake_lot_received_date_strain_type_backfill.sql");
+    expect(listed[listed.length - 18]).toBe("0243_master_suggestions_v2.sql");
+    expect(listed[listed.length - 19]).toBe("0242_lookup_jobs.sql");
+    expect(listed[listed.length - 20]).toBe("0241_inventory_lot_pos_potency.sql");
+    expect(listed[listed.length - 21]).toBe("0240_factory_reset_scales.sql");
+    expect(listed[listed.length - 22]).toBe("0239_intake_merge_decisions.sql");
+    expect(listed[listed.length - 23]).toBe("0238_factory_reset_reaches_every_guard.sql");
+    expect(listed[listed.length - 24]).toBe("0237_fact_review_for_versions.sql");
+    expect(listed[listed.length - 25]).toBe("0236_publish_archive_rule.sql");
 
     // STRENGTHENED in 18-0: pinning only the last filename lets a slice bump
     // this line while leaving a hole earlier in the sequence. The numbers must

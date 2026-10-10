@@ -2103,3 +2103,42 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0259_vendor_vault_change_control.rollback.sql`.
   It **refuses** once any change, release or archive has been recorded,
   because that is the audit trail for a payment-instruction change.
+
+## R39 — 0260 — ACH document intake (accept / reject in one step)
+
+- [ ] `0260_ach_document_intake.sql` adds two database functions and **no
+  tables or columns**. They are what the **Accept** and **Reject** buttons on
+  a dropped ACH document call:
+  - **Accept (employee):** creates the new *signed* authorization (wet-ink
+    upload), its 1-3 accounts (encrypted, *unverified*), links the document
+    and writes the event log, all in **one step**. If anything fails, nothing
+    is saved. Payroll still will **not** pay those accounts until they are
+    verified (prenote or $1 test credit) and the authorization is active.
+  - If the employee already has an open authorization, Accept refuses unless
+    you tick **Replace**. Then the old one is archived (kept, never deleted)
+    with the reason "Superseded by a new signed form".
+  - **Accept (vendor):** the bank numbers go into the vendor vault, which puts
+    them **on hold** until the callback (0259). The function marks the document
+    accepted and logs it.
+  - **Reject:** needs a reason of at least 10 characters. The document is kept.
+  - Only the server can call them, using the service role. Staff browsers
+    cannot.
+
+  Apply it **AFTER 0258 and 0259**. Safe to re-run.
+
+  **Without it:** documents can still be dropped and re-keyed, but Accept /
+  Reject say "One-time setup needed".
+
+  **Check:**
+
+  ```sql
+  select proname from pg_proc where proname in ('ach_intake_accept_employee', 'ach_intake_finish') order by 1;
+  -- ach_intake_accept_employee
+  -- ach_intake_finish
+  ```
+
+  For the full proof, paste `scripts/recon/ach-intake-0260-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0260 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0260_ach_document_intake.rollback.sql`
+  (drops the two functions only; no data is touched).
