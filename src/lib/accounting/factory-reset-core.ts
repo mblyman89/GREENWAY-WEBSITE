@@ -494,6 +494,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   // (ACH_ESIGN_KEEP) and the session points at the kept documents with
   // on delete restrict, so a reset that tried to wipe it would fail part-way.
   { table: "ach_esign_sessions", disposition: "KEEP", because: "The in-person e-sign record for each signed ACH form: ID check, consent, code proof. Kept with the authorization it created." },
+  { table: "vendor_esign_invites", disposition: "KEEP", because: "The remote vendor e-sign record for each signed vendor ACH form: link, code, consent, signer, bank-proof evidence. Signed invites cannot be deleted and reference the kept documents." },
   { table: "payee_contacts", disposition: "KEEP", because: "Payee phone numbers and emails with the date each was first on file, used for fraud callbacks." },
   { table: "vendor_platform_map", disposition: "KEEP", because: "Which vendor corresponds to which menu platform." },
   { table: "brands", disposition: "KEEP", because: "Your brand list, used to match products on every vendor menu." },

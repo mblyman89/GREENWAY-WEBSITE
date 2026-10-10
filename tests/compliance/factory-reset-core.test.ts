@@ -1289,7 +1289,10 @@ describe("D-65 — the connections survive the reset", () => {
     //   +1  R39 / 0261: ach_esign_sessions (a signed session cannot be
     //       deleted, ACH_ESIGN_KEEP, and it references the kept documents
     //       with on delete restrict)
-    expect(plan.keep.length).toBe(146);
+    //   +1  R39 / 0262: vendor_esign_invites (a signed vendor invite cannot be
+    //       deleted, VENDOR_ESIGN_KEEP, and it references the kept documents
+    //       with on delete restrict)
+    expect(plan.keep.length).toBe(147);
     expect(plan.wipe.length).toBe(139);
   });
 

@@ -17,6 +17,9 @@ describe("keyed-hash", () => {
       achAccountKey: "greenway/r39/ach-account-key-hmac/v1",
       achRekeyFingerprint: "greenway/r39/ach-rekey-fingerprint/v1",
       esignOtp: "greenway/r39/esign-otp/v1",
+      vendorEsignToken: "greenway/r39/vendor-esign-token/v1",
+      vendorEsignOtp: "greenway/r39/vendor-esign-otp/v1",
+      vendorEsignBrowser: "greenway/r39/vendor-esign-browser/v1",
     });
   });
   it("a fixed key gives a fixed fingerprint (detects any change to salt, label or algorithm)", () => {
@@ -32,6 +35,18 @@ describe("keyed-hash", () => {
     // R39 S6: the e-sign code digest (input as otpDigest() builds it).
     expect(keyedHasher("esignOtp", "fixed-test-key")!("esign-otp|S1|123456")).toBe(
       "abc3f51c2208c45cc0d793432c4bbdec06aff4aa63a6bf09429fd89c914a4063",
+    );
+    // R39 S7: vendor e-sign link token, code and browser binding (inputs as
+    // vendor-esign-core builds them). Golden values from the same independent
+    // Python RFC 5869 implementation, which also reproduces the esignOtp value.
+    expect(keyedHasher("vendorEsignToken", "fixed-test-key")!("vesign-token|" + "A".repeat(43))).toBe(
+      "8c66fb7001549ab223c381897f71d2db8cafdc317270f199fc1cc60080dec7e0",
+    );
+    expect(keyedHasher("vendorEsignOtp", "fixed-test-key")!("vesign-otp|I1|123456")).toBe(
+      "52934928fbccb900b33e6867235b7f3a258cd2279653db39bd67ecd3c0c5f21f",
+    );
+    expect(keyedHasher("vendorEsignBrowser", "fixed-test-key")!("vesign-browser|I1|BBBB")).toBe(
+      "fe1f88501e4bf47befa17a3deda58a2f305827e756b7e0687dd684fe571f8de6",
     );
     expect(deriveKey("achAccountKey", "fixed-test-key")!.length).toBe(32);
   });

@@ -28,6 +28,13 @@ export const KEYED_HASH_PURPOSES = {
   achRekeyFingerprint: "greenway/r39/ach-rekey-fingerprint/v1",
   // R39 S6: the e-sign one-time code is stored only as this keyed hash.
   esignOtp: "greenway/r39/esign-otp/v1",
+  // R39 S7: the vendor e-sign link token, its one-time code and the browser
+  // cookie that binds the link to the device that consented. Each is stored
+  // only as its keyed hash (its own HKDF key, so one cannot stand in for
+  // another).
+  vendorEsignToken: "greenway/r39/vendor-esign-token/v1",
+  vendorEsignOtp: "greenway/r39/vendor-esign-otp/v1",
+  vendorEsignBrowser: "greenway/r39/vendor-esign-browser/v1",
 } as const;
 export type KeyedHashPurpose = keyof typeof KEYED_HASH_PURPOSES;
 

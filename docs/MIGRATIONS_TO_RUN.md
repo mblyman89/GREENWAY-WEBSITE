@@ -2195,3 +2195,65 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0261_ach_esign.rollback.sql`.
   It **refuses** once any session has been signed, because signed records
   are kept (RCW 1.80.110). Otherwise it drops the table and the function.
+
+## R39 — 0262 — Vendor ACH e-sign by link (invite, consent, countersign)
+
+- [ ] `0262_vendor_ach_esign.sql` adds **one table** (`vendor_esign_invites`)
+  and **three functions** (`vendor_esign_complete`, `vendor_esign_countersign`,
+  `vendor_esign_reject`). Together they let a vendor sign the GW-ACH-V
+  vendor ACH form **electronically, from their own office**, with no paper,
+  no printer and no blank checks:
+  - Michael or Stephen clicks **Send e-sign link** on the vendor page. The
+    vendor's AR contact gets an email with a one-time link. The link expires
+    in at most 30 days. The database stores only a keyed hash of the link,
+    so a database copy cannot be used to sign.
+  - The vendor opens the link and gets a **6-digit code**, sent only to the
+    email address the invite was sent to. That proves they control the inbox,
+    and it is the E-SIGN check that they can open electronic records. The
+    code is stored as a keyed hash; sends and tries are capped and can never
+    go down.
+  - The vendor reads the e-sign disclosure and ticks **I agree**. That binds
+    the link to their browser, so a forwarded link cannot be used to sign.
+  - The vendor fills in the form, attaches a voided check or bank letter, and
+    types their name and title as the signature. **One step** files the signed
+    record PDF, the signing certificate PDF and the bank proof, and creates the
+    *signed* authorization (method `esign`). It puts the banking in the vault
+    **ON HOLD**, authored by whoever sent the link. If anything fails, nothing
+    is saved.
+  - **Nothing pays yet.** You call the vendor back on a number you already
+    had (not one they typed), then release the vault hold. The 0259 two-person
+    rule applies: if the person who sent the link releases it, the release is
+    recorded as SOLO. Then you click **Countersign**, which makes the
+    authorization active and sets the annual review date. Countersign is
+    refused if the vault is not released, was released before the vendor
+    signed, or holds different banking from what the vendor signed.
+  - **Reject** revokes the authorization and puts the vault back on hold.
+  - A signed invite can never be edited or deleted. A countersigned,
+    rejected or cancelled invite is final. Each vendor can have only one open
+    invite at a time.
+  - Only the server can call the functions, using the service role. Staff
+    browsers and the public cannot.
+
+  Apply it **AFTER 0258, 0259, 0260 and 0261**. Safe to re-run.
+
+  **Without it:** the **Send e-sign link** button says "One-time setup
+  needed". Paper vendor forms (upload and Accept) still work.
+
+  **Run it, then:** run the **Check** below.
+
+  **Check:**
+
+  ```sql
+  select to_regclass('public.vendor_esign_invites') is not null as table_ok,
+         (select count(*) from pg_proc where proname in
+           ('vendor_esign_complete', 'vendor_esign_countersign', 'vendor_esign_reject')) as fns;
+  -- table_ok | fns
+  -- t        | 3
+  ```
+
+  For the full proof, paste `scripts/recon/vendor-esign-0262-pg-check.sql`.
+  It rolls itself back and ends with `VENDOR 0262 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0262_vendor_ach_esign.rollback.sql`.
+  It **refuses** once any invite has been signed, because signed records are
+  kept (RCW 1.80.110). Otherwise it drops the table and the three functions.
