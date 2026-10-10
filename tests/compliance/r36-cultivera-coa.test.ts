@@ -227,3 +227,42 @@ describe("R36 5. '<LOQ' is reported, never a number", () => {
     expect(missing.sort()).toEqual(["cv14:cbga", "cv20:cbn", "cv21:cbg", "cv24:cbn", "cv26:cbc", "cv28:cbg"]);
   });
 });
+
+describe("R36 6. the readers' finer points (mutation-found gaps)", () => {
+  const row = (stem: string, key: string) => {
+    const r = parseCoaPdfText(text(stem));
+    if (!r.ok) throw new Error(stem);
+    return r.doc.potency.find((p) => p.key === key);
+  };
+
+  it("Template 6.0/7.0 'LoD / LoQ' column: the LoQ (second number) is kept, never the LoD", () => {
+    // cv00 prints "cbc ND ND N/A N/A 0.022 / 0.044"; cv28 "cbg <LOQ <LOQ N/A N/A 0.023 / 0.045"
+    expect(text("cv00")).toContain("cbc ND ND N/A N/A 0.022 / 0.044");
+    expect(row("cv00", "cbc")?.loqPct).toBe(0.044);
+    expect(row("cv00", "d9-thc")?.loqPct).toBe(0.022);
+    expect(text("cv28")).toContain("cbg <LOQ <LOQ N/A N/A 0.023 / 0.045");
+    expect(row("cv28", "cbg")?.loqPct).toBe(0.045);
+  });
+
+  it("Testing Technologies totals are cross-checked: the real ones pass, a printed Total THC 0.3 off fails", () => {
+    for (const stem of ["cv31", "cv32", "cv33", "cv34"]) {
+      const r = parseCoaPdfText(text(stem));
+      if (!r.ok) throw new Error(stem);
+      expect(r.doc.checks.length, stem).toBe(2);
+      expect(r.doc.checks.every((c) => c.ok), stem).toBe(true);
+    }
+    expect(text("cv31")).toContain("Total THC 23.1 %");
+    // 0.9 + 0.877 x 25.3 = 23.088; the printed one-decimal value may be off by the rounding only
+    for (const [printed, ok] of [["23.1", true], ["23.2", true], ["23.4", false], ["22.8", false]] as const) {
+      const r = parseCoaPdfText(text("cv31").replace("Total THC 23.1 %", `Total THC ${printed} %`));
+      if (!r.ok) throw new Error("cv31 tampered");
+      expect(r.doc.checks.find((c) => c.what.startsWith("total-thc"))?.ok, printed).toBe(ok);
+    }
+  });
+
+  it("Testing Technologies is detected only with its results table header", () => {
+    expect(detectCoaTemplate(text("cv31"))).toBe("testing-technologies");
+    expect(detectCoaTemplate(text("cv31").replace(/Test Results I-502 Limits Status Method/g, "Results"))).toBeNull();
+    expect(detectCoaTemplate("Testing Technologies CERTIFICATE OF ANALYSIS D9-THC 0.9 %")).toBeNull();
+  });
+});

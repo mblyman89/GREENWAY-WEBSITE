@@ -30,6 +30,7 @@ EX = "src/lib/inventory/coa-extract-core.ts"
 PT = "src/lib/inventory/coa-pdf-text-core.ts"
 FC = "src/lib/inventory/coa-facts-core.ts"
 SV = "src/lib/inventory/coa-extract.ts"
+ST = "src/lib/inventory/testing-labs-store.ts"
 
 MUTANTS = {
     "core": [
@@ -65,7 +66,8 @@ MUTANTS = {
         # lab form
         (TL, "if (existing.some((e) => e.name.trim().toLowerCase() === key)) return", "if (existing.some((e) => e.name === name)) return"),
         (TL, "if (labNumber !== null && existing.some((e) => e.labNumber === labNumber)) return", "if (false) return"),
-        (TL, 'if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error("x");', ""),
+        (TL, 'if (u.protocol !== "https:" && u.protocol !== "http:") return { ok: false, error: "The website must be an http or https link." };', ""),
+        (TL, "if (!/^[a-z][a-z0-9+.-]*:/i.test(website) ||", "if (true ||"),
         # seed
         (TL, 'status: "historical", certStart: "2016-10-26"', 'status: "active", certStart: "2016-10-26"'),
         (TL, 'status: "platform",', 'status: "owner_added",'),
@@ -73,7 +75,8 @@ MUTANTS = {
     "readers": [
         # template detection + Confidence 7
         (PT, 'if (POTENCY_HEADER_7.test(text) && /Confidence Analytics/i.test(text)) return "confidence-7";', ""),
-        (PT, 'tok === "NA" || tok === LOQ_TOKEN) return { v: null, nd: false };', 'tok === "NA") return { v: null, nd: false };'),
+        # (EQUIVALENT, not run: dropping `tok === LOQ_TOKEN` from cell() changes
+        #  nothing - Number("<LOQ") is NaN, which cell() already maps to null.)
         (PT, 'const seg = variant === "7" ? seg0.replace(LIMIT_PAIR_7, "$2") : seg0;', 'const seg = variant === "7" ? seg0.replace(LIMIT_PAIR_7, "$1") : seg0;'),
         (PT, "if (m[2] === LOQ_TOKEN) belowLoq.push(key);", ""),
         # Testing Technologies
@@ -99,6 +102,20 @@ MUTANTS = {
         (SV, "  const hosts = rows.length ? await loadHostContext() : BUILT_INS_ONLY;", "  const hosts = BUILT_INS_ONLY;"),
         (SV, "if (hop === COA_MAX_REDIRECTS) return { bytes: null, error: `more than ${COA_MAX_REDIRECTS} redirects` };", ""),
         (SV, "      if (res.status < 300 || res.status > 399) break;", "      break;"),
+        (SV, "    const answers = await lookup(host, { all: true, verbatim: true });", "    const answers = [await lookup(host)];"),
+        (SV, "  if (!needsDnsCheck(url)) return null;", "  return null;"),
+    ],
+    "store": [
+        (ST, "    .eq(\"updated_at\", got.row.updated_at)\n", ""),
+        (ST, "  if (expectedUpdatedAt && got.row.updated_at !== expectedUpdatedAt) {", "  if (false) {"),
+        (ST, "  if (!((data as unknown[] | null) ?? []).length) {", "  if (false) {"),
+        (ST, "    return { hosts: all.filter((h) => !builtIns.includes(h)), note: null };", "    return { hosts: all, note: null };"),
+        (ST, "    if (error) return { hosts: [], note: isMissingLabsSchema(error) ? null :", "    if (error) return { hosts: [], note: true ? null :"),
+        (ST, "  return (missingTable || missingColumn) && msg.includes(\"testing_labs\");", "  return missingTable || missingColumn;"),
+        (ST, "      status: \"owner_added\",\n", "      status: \"active\",\n"),
+        (ST, "  if (!/^[0-9a-f-]{36}$/i.test(id)) return", "  if (false) return"),
+        (ST, "    if (String(error.code ?? \"\") === \"23514\") return", "    if (false) return"),
+        (ST, "    .range(0, MAX_ROWS - 1);\n  if (error) {\n    if (isMissingLabsSchema(error)) return { ok: false, migrated: false", "    .limit(MAX_ROWS);\n  if (error) {\n    if (isMissingLabsSchema(error)) return { ok: false, migrated: false"),
     ],
 }
 

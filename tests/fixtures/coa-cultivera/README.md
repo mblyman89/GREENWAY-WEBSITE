@@ -25,3 +25,18 @@ Every file was served 200 with `application/pdf` / `application/json`, no
 redirect. Two of the four Testing Technologies JSON links arrive doubled
 (`https://files.cultivera.com/https://files.cultivera.com/...`); the doubled
 form answers 403, the collapsed form 200 (cleanUrl in intake-parser).
+
+## File names
+
+Every certificate is `cvNN` (cv00-cv34, in the order of `sources.json`).
+`*.layout.txt` exists only for cv00, cv13, cv28 and cv32 (one per layout, plus
+cv28, the certificate with a `<LOQ` cell); production never reads it.
+
+| Layout | Stems |
+|---|---|
+| Confidence Analytics Template 6.0 | cv00, cv01, cv02, cv03, cv04, cv05, cv06, cv07, cv08, cv10 |
+| Confidence Analytics Template 7.0 | cv09, cv11, cv12, cv13, cv14, cv15, cv16, cv17, cv18, cv19, cv20, cv21, cv22, cv23, cv24, cv25, cv26, cv27, cv28, cv29, cv30 |
+| Testing Technologies | cv31, cv32, cv33, cv34 |
+
+Tested by `tests/compliance/r36-cultivera-coa.test.ts` (every PDF number is
+compared with the lab JSON: 270 of 270 agree).
