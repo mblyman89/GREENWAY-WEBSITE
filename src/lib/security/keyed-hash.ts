@@ -26,6 +26,8 @@ import { createHmac, hkdfSync } from "node:crypto";
 export const KEYED_HASH_PURPOSES = {
   achAccountKey: "greenway/r39/ach-account-key-hmac/v1",
   achRekeyFingerprint: "greenway/r39/ach-rekey-fingerprint/v1",
+  // R39 S6: the e-sign one-time code is stored only as this keyed hash.
+  esignOtp: "greenway/r39/esign-otp/v1",
 } as const;
 export type KeyedHashPurpose = keyof typeof KEYED_HASH_PURPOSES;
 

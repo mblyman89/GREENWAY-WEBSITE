@@ -16,6 +16,7 @@ describe("keyed-hash", () => {
     expect(KEYED_HASH_PURPOSES).toEqual({
       achAccountKey: "greenway/r39/ach-account-key-hmac/v1",
       achRekeyFingerprint: "greenway/r39/ach-rekey-fingerprint/v1",
+      esignOtp: "greenway/r39/esign-otp/v1",
     });
   });
   it("a fixed key gives a fixed fingerprint (detects any change to salt, label or algorithm)", () => {
@@ -27,6 +28,10 @@ describe("keyed-hash", () => {
     expect(v).toBe("17d9a52133ae388bdf3f59dbd1563d2f7d1496fc52d9a16926d01510fdf8bcd0");
     expect(keyedHasher("achRekeyFingerprint", "fixed-test-key")!("021000021:12345678:checking")).toBe(
       "ce1e7fd340b91d0c03387687bf4acce7b1b9b6617add8b82f0333718020b4fb8",
+    );
+    // R39 S6: the e-sign code digest (input as otpDigest() builds it).
+    expect(keyedHasher("esignOtp", "fixed-test-key")!("esign-otp|S1|123456")).toBe(
+      "abc3f51c2208c45cc0d793432c4bbdec06aff4aa63a6bf09429fd89c914a4063",
     );
     expect(deriveKey("achAccountKey", "fixed-test-key")!.length).toBe(32);
   });
