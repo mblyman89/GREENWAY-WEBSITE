@@ -50,7 +50,7 @@ describe("R39 S5 ach-document-intake-core self-tests", () => {
   it("all pass", () => {
     const r = __runAchDocumentIntakeTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(73);
+    expect(r.passed).toBeGreaterThanOrEqual(84);
   });
 });
 
@@ -332,10 +332,20 @@ describe("blind re-key", () => {
     expect(v.ok).toBe(false);
     if (!v.ok && v.need === "second_entry") expect(v.differences[0]).toContain("number of accounts");
   });
-  it("second entry compares to the FIRST entry, not the draft", () => {
-    const wrongDraft = draftFromAcroForm("vendor", { v_rtn: RTN, v_acct: "77777777", v_acct2: "77777777", v_at_chk: "Yes" });
-    const v = rekeyVerdict(wrongDraft, [{ byId: "s", accounts: [A] }, { byId: "m", accounts: [A] }]);
+  it("with no usable draft, the second entry compares to the FIRST entry", () => {
+    const scan = draftFromParsedText(`${RTN}`); // LlamaParse draft: never usable alone
+    const v = rekeyVerdict(scan, [{ byId: "s", accounts: [A] }, { byId: "m", accounts: [A] }]);
     expect(v).toMatchObject({ ok: true, basis: "two_blind_entries" });
+  });
+  it("two agreeing entries that disagree with OUR signed form are refused (the form is what was authorized)", () => {
+    const form = draftFromAcroForm("vendor", { v_rtn: RTN, v_acct: "77777777", v_acct2: "77777777", v_at_chk: "Yes" });
+    const v = rekeyVerdict(form, [{ byId: "s", accounts: [A] }, { byId: "m", accounts: [A] }]);
+    expect(v).toMatchObject({ ok: false, need: "form_disagrees", differences: ["account 1 account number"] });
+    expect(JSON.stringify(v)).not.toContain("77777777");
+  });
+  it("a wrong first entry, then a second that matches the form, is accepted on the form", () => {
+    const v = rekeyVerdict(vendorDraft, [{ byId: "s", accounts: [{ ...A, account: "12345670" }] }, { byId: "s", accounts: [A] }]);
+    expect(v).toMatchObject({ ok: true, basis: "matches_form" });
   });
   it("no entries -> asks for details", () => {
     expect(rekeyVerdict(EMPTY_DRAFT, [])).toMatchObject({ ok: false, need: "fix_entry" });

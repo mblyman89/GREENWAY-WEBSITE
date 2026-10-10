@@ -505,7 +505,8 @@ export function validateRekeyEntry(accounts: readonly RekeyAccount[]): string[] 
 export type RekeyVerdict =
   | { ok: true; basis: "matches_form" | "two_blind_entries"; accounts: RekeyAccount[]; note: string }
   | { ok: false; need: "fix_entry"; errors: string[] }
-  | { ok: false; need: "second_entry"; reason: string; differences: string[] };
+  | { ok: false; need: "second_entry"; reason: string; differences: string[] }
+  | { ok: false; need: "form_disagrees"; reason: string; differences: string[] };
 
 /**
  * The blind re-key rule (S5):
@@ -553,9 +554,27 @@ export function rekeyVerdict(draft: BankDraft, entries: readonly RekeyEntry[]): 
     };
   }
   const second = entries[entries.length - 1];
+  // A later blind entry that matches a usable form is verified on its own.
+  if (draftUsable && rekeyDifferences(second.accounts, draft.accounts).length === 0) {
+    return { ok: true, basis: "matches_form", accounts: second.accounts, note: "Second blind entry matched the form field for field." };
+  }
   const d = rekeyDifferences(first.accounts, second.accounts);
   if (d.length) {
     return { ok: false, need: "second_entry", reason: "The two blind entries do not match. Check the document and try again.", differences: d };
+  }
+  // Our own fillable form is what the payee signed. If two people agree with
+  // each other but not with the form's fields, the form wins: do not store
+  // numbers the payee never authorized.
+  if (draftUsable) {
+    const vsForm = rekeyDifferences(second.accounts, draft.accounts);
+    if (vsForm.length) {
+      return {
+        ok: false,
+        need: "form_disagrees",
+        reason: "Both entries agree with each other, but the form's own filled-in fields say something different. Check the form; if the form itself is wrong, reject it and ask the payee for a new one.",
+        differences: vsForm,
+      };
+    }
   }
   const same = first.byId === second.byId;
   return {
@@ -564,6 +583,90 @@ export function rekeyVerdict(draft: BankDraft, entries: readonly RekeyEntry[]): 
     accounts: second.accounts,
     note: same ? "Two blind entries by the same person matched." : "Two blind entries by different people matched.",
   };
+}
+
+/** Roles allowed to drop documents: mirrors public.is_manager() (0130). */
+export const DROP_ROLES = ["owner", "admin", "manager"] as const;
+/** Roles allowed to read, re-key and accept: mirrors public.is_admin() (0001). */
+export const REVIEW_ROLES = ["owner", "admin"] as const;
+export function canDropDocuments(role: string | null | undefined): boolean {
+  return (DROP_ROLES as readonly string[]).includes(String(role ?? ""));
+}
+export function canReviewDocuments(role: string | null | undefined): boolean {
+  return (REVIEW_ROLES as readonly string[]).includes(String(role ?? ""));
+}
+
+/**
+ * A pending blind entry is stored ENCRYPTED between the two passes. These
+ * turn it into a string and back, refusing anything that is not exactly a
+ * valid entry (never trusting stored JSON blindly).
+ */
+export function serializeEntry(e: RekeyEntry): string {
+  return JSON.stringify({ v: 1, byId: e.byId, accounts: e.accounts });
+}
+export function parseEntry(raw: string): RekeyEntry | null {
+  let j: unknown;
+  try {
+    j = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!j || typeof j !== "object") return null;
+  const o = j as { v?: unknown; byId?: unknown; accounts?: unknown };
+  if (o.v !== 1 || typeof o.byId !== "string" || !Array.isArray(o.accounts)) return null;
+  const accounts: RekeyAccount[] = [];
+  for (const a of o.accounts as unknown[]) {
+    if (!a || typeof a !== "object") return null;
+    const x = a as Record<string, unknown>;
+    const r = x.rule as Record<string, unknown> | undefined;
+    if (typeof x.routing !== "string" || typeof x.account !== "string") return null;
+    if (x.accountType !== "checking" && x.accountType !== "savings") return null;
+    let rule: SplitRule;
+    if (r?.kind === "remainder") rule = { kind: "remainder" };
+    else if (r?.kind === "fixed" && Number.isSafeInteger(r.cents)) rule = { kind: "fixed", cents: r.cents as number };
+    else if (r?.kind === "percent" && Number.isInteger(r.basisPoints)) rule = { kind: "percent", basisPoints: r.basisPoints as number };
+    else return null;
+    accounts.push({ routing: x.routing, account: x.account, accountType: x.accountType, rule });
+  }
+  return { byId: o.byId, accounts };
+}
+
+/**
+ * Read one blind entry from a form post. Fields per row i (1..3):
+ * a{i}_rtn, a{i}_acct, a{i}_type (checking|savings), a{i}_how
+ * (remainder|fixed|percent), a{i}_amt. A row with no routing and no account
+ * is skipped. Problems are sentences; nothing is guessed.
+ */
+export function entryFromForm(get: (k: string) => string, payeeType: PayeeType): { ok: true; accounts: RekeyAccount[]; bankNames: string[] } | { ok: false; errors: string[] } {
+  const errors: string[] = [];
+  const accounts: RekeyAccount[] = [];
+  const bankNames: string[] = [];
+  const rows = payeeType === "vendor" ? 1 : MAX_ACCOUNTS_PER_PAYEE;
+  for (let i = 1; i <= rows; i += 1) {
+    const routing = digits(get(`a${i}_rtn`));
+    const account = digits(get(`a${i}_acct`));
+    if (!routing && !account) continue;
+    const label = `Account ${i}`;
+    const type = get(`a${i}_type`).trim();
+    const how = payeeType === "vendor" ? "remainder" : get(`a${i}_how`).trim();
+    let rule: SplitRule | null = null;
+    if (how === "remainder") rule = { kind: "remainder" };
+    else if (how === "fixed" || how === "percent") {
+      const raw = get(`a${i}_amt`).trim();
+      const parsed = parseAmountRule(how === "percent" && raw && !raw.endsWith("%") ? `${raw}%` : raw);
+      if (!parsed.ok) errors.push(`${label}: ${parsed.error}`);
+      else if (!parsed.rule) errors.push(`${label}: enter the amount.`);
+      else if (parsed.rule.kind !== how) errors.push(`${label}: the amount does not match "${how === "fixed" ? "fixed dollar amount" : "percentage"}".`);
+      else rule = parsed.rule;
+    } else errors.push(`${label}: pick how much goes to this account.`);
+    if (type !== "checking" && type !== "savings") errors.push(`${label}: pick checking or savings.`);
+    if (rule && (type === "checking" || type === "savings")) {
+      accounts.push({ routing, account, accountType: type, rule });
+      bankNames.push(get(`a${i}_bank`).trim());
+    }
+  }
+  if (errors.length) return { ok: false, errors };
+  return { ok: true, accounts, bankNames };
 }
 
 // ---------------------------------------------------------------- accept ----
@@ -805,6 +908,33 @@ export function __runAchDocumentIntakeTests(): { passed: number; failed: number 
   ok(rowsOk.ok && rowsOk.rows[0].account_last4 === "5678" && rowsOk.rows[0].routing_last4 === "0021" && rowsOk.rows[1].priority === 2 && rowsOk.rows[1].bank_name === "", "row last4 + priority");
   ok(!planAccountRows([A], [], { encrypt: (s) => s, hmacKey: () => "a".repeat(64) }).ok, "plaintext refused (no key)");
   ok(!planAccountRows([A], [], { encrypt: (s) => `encv1:${s}`, hmacKey: () => "nothex" }).ok, "bad hmac refused");
+
+  // form wins over two agreeing entries
+  const vf = rekeyVerdict(emp, [{ byId: "s", accounts: [{ ...A, account: "11" + A.account }, B] }, { byId: "m", accounts: [{ ...A, account: "11" + A.account }, B] }]);
+  ok(!vf.ok && vf.need === "form_disagrees" && vf.differences.join() === "account 1 account number", "form disagrees");
+  const vfOk = rekeyVerdict(emp, [{ byId: "s", accounts: [{ ...A, account: "11111111" }, B] }, { byId: "m", accounts: [A, B] }]);
+  ok(vfOk.ok && vfOk.basis === "matches_form", "second entry matching form after a wrong first is fine");
+
+  // roles mirror is_manager / is_admin
+  ok(canDropDocuments("manager") && canDropDocuments("owner") && !canDropDocuments("content_editor") && !canDropDocuments("staff") && !canDropDocuments(null), "drop roles");
+  ok(canReviewDocuments("admin") && !canReviewDocuments("manager"), "review roles");
+
+  // entry round trip
+  const ent: RekeyEntry = { byId: "u1", accounts: [A, { ...B, rule: { kind: "percent", basisPoints: 2500 } }] };
+  const back = parseEntry(serializeEntry(ent));
+  ok(back !== null && JSON.stringify(back) === JSON.stringify(ent), "entry round trip");
+  ok(parseEntry("{") === null && parseEntry('{"v":2,"byId":"x","accounts":[]}') === null && parseEntry('{"v":1,"byId":"x","accounts":[{"routing":"1","account":"2","accountType":"loan","rule":{"kind":"remainder"}}]}') === null, "entry parse refuses junk");
+
+  // form post
+  const post = (o: Record<string, string>) => (k: string) => o[k] ?? "";
+  const fe = entryFromForm(post({ a1_rtn: goodRtn, a1_acct: "1234-5678", a1_type: "checking", a1_how: "fixed", a1_amt: "200", a2_rtn: goodRtn, a2_acct: "999999", a2_type: "savings", a2_how: "remainder" }), "employee");
+  ok(fe.ok && fe.accounts.length === 2 && fe.accounts[0].account === "12345678" && fe.accounts[0].rule.kind === "fixed", "form entry");
+  const fp = entryFromForm(post({ a1_rtn: goodRtn, a1_acct: "1234", a1_type: "checking", a1_how: "percent", a1_amt: "25" }), "employee");
+  ok(fp.ok && fp.accounts[0].rule.kind === "percent" && (fp.accounts[0].rule as { basisPoints: number }).basisPoints === 2500, "percent without % sign");
+  ok(!entryFromForm(post({ a1_rtn: goodRtn, a1_acct: "1234", a1_type: "checking", a1_how: "fixed", a1_amt: "25%" }), "employee").ok, "fixed with % refused");
+  ok(!entryFromForm(post({ a1_rtn: goodRtn, a1_acct: "1234", a1_how: "remainder" }), "employee").ok, "type required");
+  const fv = entryFromForm(post({ a1_rtn: goodRtn, a1_acct: "1234", a1_type: "savings", a2_rtn: goodRtn, a2_acct: "5", a2_type: "checking" }), "vendor");
+  ok(fv.ok && fv.accounts.length === 1 && fv.accounts[0].rule.kind === "remainder", "vendor: one row, whole payment");
 
   console.log(`ach-document-intake: ${passed} passed, ${failed} failed`);
   return { passed, failed };
