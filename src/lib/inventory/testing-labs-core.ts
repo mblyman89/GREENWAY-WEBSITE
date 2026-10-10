@@ -404,7 +404,7 @@ export function __runTestingLabsCoreTests(): { passed: number; failed: number } 
   ok(!validateLabForm({ ...base, website: "javascript:alert(1)" }, []).ok, "javascript: website refused");
   const web = (w: string) => {
     const r = validateLabForm({ ...base, website: w }, []);
-    return r.ok ? r.lab.website : `ERR ${r.error}`;
+    return r.ok ? (r.lab.website ?? "NULL") : `ERR ${r.error}`;
   };
   ok(web("ftp://files.lab.com") === "ERR The website must be an http or https link.", "ftp: refused (never rewritten to https://ftp//)");
   ok(web("data:text/html,hi").startsWith("ERR") && web("mailto:a@b.com").startsWith("ERR"), "data: / mailto: refused");
