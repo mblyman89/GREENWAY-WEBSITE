@@ -396,6 +396,26 @@ export async function lookupAllAction(manifestId: string, formData?: FormData) {
   redirect(backTo(formData, { lookup: "error", lookup_msg: res.message }));
 }
 
+/**
+ * R37 S6 - "Search again" (owner: "maybe the vendor added new info online
+ * about these products and it may be worth rerunning the search to find new
+ * facts"). Queues a fresh web search for ONLY the products the history panel
+ * recommends that an earlier batch of this delivery already did (the plain
+ * press skips those). The ids come back from the form as hidden fields and
+ * are re-validated by the server (uuid-shaped, still in Needs review on THIS
+ * delivery, capped); nothing else on the page can be queued this way.
+ */
+export async function lookupAgainAction(manifestId: string, formData?: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const ids = formData ? formData.getAll("again_id") : [];
+  const res = await enqueueManifestLookup(manifestId, { userId: session.userId, email: session.email }, { againDraftIds: ids });
+  revalidatePath("/admin/inventory/drafts");
+  if (res.ok) redirect(backTo(formData, { lookup: res.kind === "created" ? "started" : "exists" }));
+  if (res.code === "migration") redirect(backTo(formData, { lookup: "migration" }));
+  if (res.code === "nothing") redirect(backTo(formData, { lookup: "nothing", lookup_msg: res.message }));
+  redirect(backTo(formData, { lookup: "error", lookup_msg: res.message }));
+}
+
 /** R19 S13: stop a batch. Products not started yet are canceled; the one in flight finishes. */
 export async function cancelLookupAction(jobId: string, formData?: FormData) {
   const session = await requirePermission("inventory.manage");
