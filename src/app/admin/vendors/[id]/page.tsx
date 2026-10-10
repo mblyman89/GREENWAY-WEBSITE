@@ -5,6 +5,9 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { getVendorBankDetails } from "@/lib/payments/payee-banking-store";
 import { vendorBankingBadge } from "@/lib/payments/banking-vault-ui-core";
+import { readVendorAchFlags, vendorAchCard } from "@/lib/payments/vendor-ach-enrollment-core";
+import { resolveStaffNames } from "@/lib/promotions/promotions-store";
+import { VendorAchCard } from "./VendorAchCard";
 import { Badge } from "@/components/admin/ui";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, StickyActionBar } from "@/components/admin/ux";
@@ -130,6 +133,20 @@ export default async function VendorEditPage({
         bankName: vendorVault.record?.bank_name ?? null,
       })
     : null;
+  // R39 S4: the ACH card (needs bank info / opted out). The flags ride on the
+  // vendors row we already loaded with select *; before 0258 they are absent
+  // and the card says so instead of pretending.
+  const achFlags = canSeeVault ? readVendorAchFlags(vendor as unknown as Record<string, unknown>) : null;
+  const achCard =
+    achFlags && vaultBadge
+      ? vendorAchCard(achFlags, {
+          hasRecord: Boolean(vendorVault.record),
+          status: vendorVault.record?.status ?? null,
+          verifiedAt: vendorVault.record?.verified_at ?? null,
+        })
+      : null;
+  const optedOutByName =
+    achFlags?.optedOutBy ? ((await resolveStaffNames([achFlags.optedOutBy])).get(achFlags.optedOutBy) ?? null) : null;
 
   const brandLogos = new Map<string, string | null>();
   for (const b of brands) brandLogos.set(b.id, await logoUrlForMediaId(b.logo_media_id));
@@ -694,20 +711,15 @@ export default async function VendorEditPage({
             {/* SLICE 94: banking-vault badge — visible to owner/admin only.
                 Masked tail only; full numbers never reach this page. Editing
                 happens in the vault (Admin → Banking), never here. */}
-            {vaultBadge && (
-              <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold text-white">Banking (vault)</h2>
-                  <Badge tone={vaultBadge.tone}>{vaultBadge.label}</Badge>
-                </div>
-                <p className="text-xs text-white/50">{vaultBadge.detail}</p>
-                <Link
-                  href={`/admin/settings/banking?tab=vendors${vendorVault.record ? `&edit=${vendor.id}` : ""}`}
-                  className="mt-2 inline-block text-xs font-semibold text-[var(--admin-accent)] hover:underline"
-                >
-                  {vendorVault.record ? "Open in the vault →" : "Add banking in the vault →"}
-                </Link>
-              </section>
+            {vaultBadge && achCard && achFlags && (
+              <VendorAchCard
+                vendorId={vendor.id}
+                card={achCard}
+                flags={achFlags}
+                vaultBadge={vaultBadge}
+                hasVaultRecord={Boolean(vendorVault.record)}
+                optedOutByName={optedOutByName}
+              />
             )}
             <CompletenessMeter result={completeness} />
             <div>

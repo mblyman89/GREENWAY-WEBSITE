@@ -59,6 +59,8 @@ import {
   vaultPayDisplay,
 } from "@/lib/payments/payee-banking-core";
 import { listVendorBankDetails } from "@/lib/payments/payee-banking-store";
+import { optOutPayRefusal } from "@/lib/payments/vendor-ach-enrollment-core";
+import { listVendorAchFlags } from "@/lib/payments/vendor-ach-enrollment-store";
 import { maskAccountTail } from "@/lib/security/at-rest-crypto";
 
 export type PayableOption = {
@@ -357,6 +359,10 @@ export async function buildVendorAchAction(
   // manual-entry path below runs unchanged.
   const vault = await listVendorBankDetails();
   const vaultMap = new Map(vault.records.map((v) => [v.vendor_id, v]));
+  // R39 S4: a vendor marked "opted out" on its page is never paid by ACH,
+  // whatever the vault says (check/cash/wire still work via the manual path).
+  // Empty before 0258, so nothing changes until the columns exist.
+  const achFlags = await listVendorAchFlags();
 
   // Resolve every referenced payable (fresh owed/paid at submit time).
   // Task N: a row may reference an accepted manifest OR a non-cannabis paper
@@ -461,6 +467,12 @@ export async function buildVendorAchAction(
       } else if (row.accountNumber.length > 17) {
         problems.push({ index: row.index, vendorName: payable.vendorName, message: "Account number exceeds 17 characters." });
       }
+    }
+
+    if (payable.vendorId) {
+      const flags = achFlags.byVendor.get(payable.vendorId);
+      const refusal = flags ? optOutPayRefusal(flags, payable.vendorName) : null;
+      if (refusal) problems.push({ index: row.index, vendorName: payable.vendorName, message: refusal });
     }
 
     // THE GUARDRAIL: payable status + over/under check (source-appropriate).
