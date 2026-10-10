@@ -24,11 +24,27 @@ import {
   validatePayeeBankInput,
 } from "@/lib/payments/payee-banking-core";
 import {
-  deleteVendorBankDetails,
+  addVendorContact,
+  archiveVendorBankDetails,
+  getVendorBankDetails,
+  holdVendorBank,
+  listVendorContacts,
   markVendorBankVerified,
+  releaseVendorBankHold,
+  retireVendorContact,
   saveVendorBankDetails,
-  setVendorBankStatus,
 } from "@/lib/payments/payee-banking-store";
+import { planVaultRelease } from "@/lib/payments/vault-release-core";
+import {
+  buildSoloReleaseNotice,
+  phoneReminder,
+  soloNoticeRecipients,
+} from "@/lib/payments/vault-release-notice-core";
+import { resolveNotifyContacts } from "@/lib/payments/ach-authorization-core";
+import { sendStaffAlertEmail } from "@/lib/orders/staff-alert-email";
+import { can } from "@/lib/auth/roles";
+import { maskAccountTail } from "@/lib/security/at-rest-crypto";
+import { pacificToday } from "@/lib/reports/timezone";
 import { listEmployeeBanking, listEmployees } from "@/lib/staffing/store";
 import { saveEmployeeBanking } from "@/lib/payroll/payroll-store";
 import { listVendors } from "@/lib/vendors/store";
@@ -98,15 +114,15 @@ export async function saveVendorBankingAction(formData: FormData): Promise<void>
   });
   if (!res.ok) back("vendors", { error: res.error });
 
-  // Audit with masked tails only. New/changed banking goes ON HOLD in the
-  // caller's mind — we surface a reminder to verify out-of-band.
+  // Audit with masked tails only. The status in the "after" snapshot is what
+  // the save really did (R39 S3): a bank change lands on hold.
   const before = snap(res.before);
   const after = maskedBankSnapshot({
     bankName: parsed.value.bankName,
     routing: parsed.value.routing,
     accountNumber: parsed.value.accountNumber,
     accountType: parsed.value.accountType,
-    status: res.before?.status ?? "active",
+    status: res.plan.resultingStatus === "unchanged" ? (res.before?.status ?? "on_hold") : res.plan.resultingStatus,
   });
   await recordAudit({
     actorId: session.profile.id,
@@ -115,39 +131,138 @@ export async function saveVendorBankingAction(formData: FormData): Promise<void>
     entityType: "vendor_bank_details",
     entityId: vendorId,
     before,
-    after: { ...after, changes: describeBankChange(before, after) },
+    after: { ...after, changes: describeBankChange(before, after), bank_columns_rewritten: res.plan.writeBankColumns, hold_reason: res.plan.holdReason },
   }).catch(() => {});
 
   back("vendors", {
-    msg: `${vendor.display_name}'s banking saved. Before paying against it, verify the numbers with the vendor by PHONE using a number you already have on file — never one from the email that sent them.`,
+    msg: res.plan.writeBankColumns
+      ? `${vendor.display_name}'s banking saved and put ON HOLD. Call the vendor at a number already on file (never one from the email that sent the change), or confirm in person, then release the hold.`
+      : `${vendor.display_name}'s details saved. The bank numbers did not change, so the status stays ${res.before?.status === "active" ? "active" : (res.before?.status ?? "on hold").replace("_", " ")}.`,
   });
 }
 
-export async function setVendorBankHoldAction(formData: FormData): Promise<void> {
+/** Put banking on hold, or re-open archived / revoked banking on hold. */
+export async function holdVendorBankAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
   const vendorId = String(formData.get("vendor_id") ?? "").trim();
-  const status = String(formData.get("status") ?? "") === "on_hold" ? "on_hold" : "active";
+  const reason = String(formData.get("hold_reason") ?? "").trim();
   if (!vendorId) back("vendors", { error: "Missing vendor." });
 
-  const res = await setVendorBankStatus({ vendorId, status, actorId: session.profile.id });
+  const res = await holdVendorBank({ vendorId, reason, actorId: session.profile.id });
   if (!res.ok) back("vendors", { error: res.error });
 
   await recordAudit({
     actorId: session.profile.id,
     actorEmail: session.email,
-    action: status === "on_hold" ? "payee_banking.vendor.hold" : "payee_banking.vendor.release",
+    action: res.before.status === "active" ? "payee_banking.vendor.hold" : "payee_banking.vendor.reopen",
     entityType: "vendor_bank_details",
     entityId: vendorId,
     before: snap(res.before),
-    after: { status },
+    after: { status: "on_hold", hold_reason: reason, reason_stored_on_row: res.reasonStored },
   }).catch(() => {});
 
   back("vendors", {
-    msg:
-      status === "on_hold"
-        ? "Banking put ON HOLD — payments to this vendor are blocked until you release it."
-        : "Hold released — this vendor can be paid again.",
+    msg: "Banking put ON HOLD. Payments to this vendor are blocked until the hold is released after a callback.",
   });
+}
+
+/**
+ * Release a hold (R39 S3). Gated by planVaultRelease -> releaseVerdict: a
+ * phone number picked from the vendor's contacts on file 90+ days (or in
+ * person), a note, and for a solo release a written reason plus a notice to
+ * the other owner and the store. The database (0259) checks the same rules.
+ */
+export async function releaseVendorBankHoldAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const vendorId = String(formData.get("vendor_id") ?? "").trim();
+  if (!vendorId) back("vendors", { error: "Missing vendor." });
+
+  const [vault, contacts] = await Promise.all([getVendorBankDetails(vendorId), listVendorContacts(vendorId)]);
+  if (!vault.tableReady) back("vendors", { error: "The banking vault table is not ready — apply migration 0143 first." });
+
+  const plan = planVaultRelease({
+    form: {
+      method: String(formData.get("callback_method") ?? ""),
+      contactId: String(formData.get("contact_id") ?? ""),
+      note: String(formData.get("callback_note") ?? ""),
+      reason: String(formData.get("release_reason") ?? ""),
+      confirmedCall: formData.get("confirmed") === "yes",
+    },
+    record: vault.record ? { status: vault.record.status, change_entered_by: vault.record.change_entered_by } : null,
+    contacts: contacts.contacts,
+    actorUserId: session.profile.id,
+    actorCanManage: can(session.profile.role, "settings.manage"),
+    today: pacificToday(),
+  });
+  if (!plan.ok) back("vendors", { error: plan.refusal });
+
+  const res = await releaseVendorBankHold({
+    vendorId,
+    actorId: session.profile.id,
+    mode: plan.verdict.mode,
+    method: plan.method,
+    note: plan.note,
+    reason: plan.reason,
+  });
+  if (!res.ok) back("vendors", { error: res.error });
+
+  // Solo release: tell the other owner and the store (owner answer Q9).
+  let notice: { emailed: boolean; detail: string; call: string[]; missingPhones: string[] } | null = null;
+  if (plan.verdict.mode === "solo") {
+    const book = resolveNotifyContacts(process.env);
+    const recipients = soloNoticeRecipients(session.email, book.contacts);
+    const msg = buildSoloReleaseNotice({
+      vendorName: res.before.vendor_name,
+      accountTail: maskAccountTail(res.before.account_number),
+      releasedByLabel: session.profile.full_name || session.email,
+      method: plan.method,
+      callbackNote: plan.note,
+      reason: plan.reason ?? "",
+      whenPacific: new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Los_Angeles" }),
+    });
+    const apiKey = process.env.RESEND_API_KEY ?? "";
+    const from = process.env.ORDER_EMAIL_FROM ?? "";
+    const sent =
+      apiKey && from
+        ? await sendStaffAlertEmail({ apiKey, from, to: recipients.map((r) => r.email), subject: msg.subject, html: msg.html })
+        : ({ ok: false, detail: "RESEND_API_KEY or ORDER_EMAIL_FROM is not set", didTimeout: false } as const);
+    const pr = phoneReminder(recipients);
+    notice = { emailed: sent.ok, detail: sent.ok ? `emailed ${recipients.length}` : sent.detail, call: pr.call, missingPhones: pr.missing };
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: plan.verdict.mode === "solo" ? "payee_banking.vendor.release_solo" : "payee_banking.vendor.release",
+    entityType: "vendor_bank_details",
+    entityId: vendorId,
+    before: snap(res.before),
+    after: {
+      status: "active",
+      release_mode: plan.verdict.mode,
+      callback_method: plan.method,
+      // Masked: the contact id and the last 4 of the number called.
+      called_contact_id: plan.calledContact?.id ?? null,
+      called_number_tail: plan.calledContact ? maskAccountTail(plan.calledContact.value.replace(/\D/g, "")) : null,
+      called_number_on_file_since: plan.calledContact?.onFileSince ?? null,
+      callback_note: plan.note,
+      release_reason: plan.reason,
+      record_stored_on_row: res.recordStored,
+      notice,
+    },
+  }).catch(() => {});
+
+  if (notice) {
+    const parts = [
+      notice.emailed
+        ? "Hold released (solo). Stephen/Michael and the store were emailed."
+        : `Hold released (solo), but the notice email FAILED (${notice.detail}). Tell the other owner yourself now.`,
+    ];
+    if (notice.call.length) parts.push(`Also call: ${notice.call.join("; ")}.`);
+    if (notice.missingPhones.length) parts.push(`No phone set for ${notice.missingPhones.join(", ")} (ACH_NOTIFY_*_PHONE).`);
+    back("vendors", { msg: parts.join(" ") });
+  }
+  back("vendors", { msg: "Hold released (second-person check). This vendor can be paid again." });
 }
 
 export async function markVendorBankVerifiedAction(formData: FormData): Promise<void> {
@@ -177,24 +292,99 @@ export async function markVendorBankVerifiedAction(formData: FormData): Promise<
   back("vendors", { msg: "Verification recorded — nice work closing the loop." });
 }
 
-export async function deleteVendorBankingAction(formData: FormData): Promise<void> {
+/** Archive (owner answer Q7: delete becomes archive). The row and its history stay. */
+export async function archiveVendorBankingAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
   const vendorId = String(formData.get("vendor_id") ?? "").trim();
+  const reason = String(formData.get("archive_reason") ?? "").trim();
   if (!vendorId) back("vendors", { error: "Missing vendor." });
 
-  const res = await deleteVendorBankDetails({ vendorId });
+  const res = await archiveVendorBankDetails({ vendorId, reason, actorId: session.profile.id });
   if (!res.ok) back("vendors", { error: res.error });
 
   await recordAudit({
     actorId: session.profile.id,
     actorEmail: session.email,
-    action: "payee_banking.vendor.delete",
+    action: "payee_banking.vendor.archive",
     entityType: "vendor_bank_details",
     entityId: vendorId,
     before: snap(res.before),
+    after: { status: "archived", archive_reason: reason },
   }).catch(() => {});
 
-  back("vendors", { msg: "Banking removed from the vault." });
+  back("vendors", { msg: "Banking archived. It is kept with its history, and payments to it are refused." });
+}
+
+// ---------------------------------------------------------------------------
+// Vendor callback contacts (payee_contacts, 0258)
+// ---------------------------------------------------------------------------
+
+export async function addVendorContactAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const vendorId = String(formData.get("vendor_id") ?? "").trim();
+  const kind = String(formData.get("contact_kind") ?? "") === "email" ? "email" : "phone";
+  const raw = String(formData.get("contact_value") ?? "").trim();
+  const today = pacificToday();
+  const onFileSince = String(formData.get("on_file_since") ?? "").trim() || today;
+  const sourceRaw = String(formData.get("source") ?? "existing_record");
+  const source = (["existing_record", "signed_form", "in_person", "onboarding"] as const).find((x) => x === sourceRaw) ?? "existing_record";
+  if (!vendorId) back("vendors", { error: "Missing vendor." });
+  let value = raw;
+  if (kind === "phone") {
+    const d = raw.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+    if (d.length !== 10) back("vendors", { error: "Phone numbers are 10 digits, like 360-555-0100." });
+    value = `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  } else {
+    value = raw.toLowerCase();
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(onFileSince) || onFileSince > today) {
+    back("vendors", { error: "The on-file date must be a real date, today or earlier." });
+  }
+
+  const res = await addVendorContact({ vendorId, kind, value, onFileSince, source, actorId: session.profile.id });
+  if (!res.ok) back("vendors", { error: res.error });
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "payee_contact.vendor.add",
+    entityType: "payee_contacts",
+    entityId: res.id,
+    after: {
+      vendor_id: vendorId,
+      kind,
+      // Contacts are not secret, but the audit keeps only a tail by habit.
+      value_tail: kind === "phone" ? value.slice(-4) : value.replace(/^[^@]*/, "…"),
+      on_file_since: onFileSince,
+      backdated: onFileSince < today,
+      source,
+    },
+  }).catch(() => {});
+
+  back("vendors", {
+    msg:
+      onFileSince < today
+        ? `Contact added, on file since ${onFileSince} (backdated; this is recorded in the audit log).`
+        : "Contact added. A phone number can be used for a release callback once it has been on file 90 days; until then, confirm in person.",
+  });
+}
+
+export async function retireVendorContactAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const vendorId = String(formData.get("vendor_id") ?? "").trim();
+  const contactId = String(formData.get("contact_id") ?? "").trim();
+  if (!vendorId || !contactId) back("vendors", { error: "Missing contact." });
+  const res = await retireVendorContact({ contactId, vendorId });
+  if (!res.ok) back("vendors", { error: res.error });
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "payee_contact.vendor.retire",
+    entityType: "payee_contacts",
+    entityId: contactId,
+    after: { vendor_id: vendorId },
+  }).catch(() => {});
+  back("vendors", { msg: "Contact retired. It stays in the history and can no longer be used for a callback." });
 }
 
 // ---------------------------------------------------------------------------
