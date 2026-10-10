@@ -953,6 +953,7 @@ import { __runServingDerivationTests } from "../../src/lib/compliance/serving-de
 import { __runServingFactsViewTests } from "../../src/lib/catalog/serving-facts-view-core";
 import { __runVolumeInputTests } from "../../src/lib/compliance/volume-input-core";
 import { __runCoaRereadDeliveryTests } from "../../src/lib/inventory/coa-reread-delivery-core";
+import { __runDeliveryBrandCoreTests } from "../../src/lib/inventory/delivery-brand-core";
 import { __runCoaExtractCoreTests } from "../../src/lib/inventory/coa-extract-core";
 import { __runCoaPanelCoreTests } from "../../src/lib/inventory/coa-panel-core";
 import { r28MakeExtract } from "../r28/coa-fixture-extract";
@@ -2128,6 +2129,7 @@ __runLiquidVolumeTests();
   assertRan("serving-facts-view-core", __runServingFactsViewTests(), 21); // R37 S2: product-facts panel prefill view
   assertRan("volume-input-core", __runVolumeInputTests(), 24); // R37 S3: net volume in ml or fl oz, stored in ml
   assertRan("coa-reread-delivery-core", __runCoaRereadDeliveryTests(), 21); // R37 S4: delivery-level LlamaParse re-read banner
+  assertRan("delivery-brand-core", __runDeliveryBrandCoreTests(), 51); // R37 S5: delivery-wide brand, vendor memory
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
