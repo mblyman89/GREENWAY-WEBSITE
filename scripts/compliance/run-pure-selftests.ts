@@ -47,6 +47,7 @@ import { __runOnboardingRecallCoreTests } from "../../src/lib/inventory/onboardi
 import { __runLotOnboardingCoreTests } from "../../src/lib/inventory/lot-onboarding-core";
 import { __runLotWebsiteCategoryTests } from "../../src/lib/inventory/lot-website-category-core";
 import { __runInventoryMetricsTests } from "../../src/lib/inventory/inventory-metrics-core";
+import { __runInventoryTableCoreTests } from "../../src/lib/inventory/inventory-table-core";
 // R31: the one finalize button + the "should I press Run AI extract?" advice.
 import { __runFinalizeLabelCoreTests } from "../../src/lib/inventory/finalize-label-core";
 import { __runAiExtractAdviceCoreTests } from "../../src/lib/inventory/ai-extract-advice-core";
@@ -2136,6 +2137,7 @@ __runLiquidVolumeTests();
   assertRan("delivery-brand-core", __runDeliveryBrandCoreTests(), 51); // R37 S5: delivery-wide brand, vendor memory
   assertRan("lookup-history-core", __runLookupHistoryCoreTests(), 67); // R37 S6: search history + harvest verdict
   assertRan("inventory-metrics-core", __runInventoryMetricsTests(), 28); // R38 S2: ext cost/retail, sell-through, velocity, days of supply
+  assertRan("inventory-table-core", __runInventoryTableCoreTests(), 52); // R38 S2-S4: column registry, presets, page size, pager, export
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -140,6 +140,20 @@ export const INVENTORY_COLUMN_SORTS: ColumnSortDef[] = [
   { key: "margin", label: "Margin", kind: "number", firstClick: "desc", number: (l) => l.onboarding_margin_pct ?? null },
   { key: "shelf", label: "Website category", kind: "text", firstClick: "asc", text: (l) => lotWebsiteCategoryOf(l) },
   { key: "onboarded", label: "Onboarded", kind: "date", firstClick: "desc", date: (l) => l.onboarded_on ?? null },
+  // R38 S2: enterprise columns (append only \u2014 URL contract). Each reads the
+  // ONE computed value in inv_metrics, so the cell, the sort and the export agree.
+  { key: "age", label: "Age", kind: "number", firstClick: "desc", number: (l) => l.inv_metrics?.ageDays ?? null },
+  { key: "sellthrough", label: "Sell-through", kind: "number", firstClick: "desc", number: (l) => l.inv_metrics?.sellThroughPct ?? null },
+  { key: "velocity", label: "Velocity", kind: "number", firstClick: "desc", number: (l) => l.inv_metrics?.velocityPerDay ?? null },
+  { key: "supply", label: "Days of supply", kind: "number", firstClick: "asc", number: (l) => l.inv_metrics?.daysOfSupply ?? null },
+  { key: "extcost", label: "Ext. cost", kind: "number", firstClick: "desc", number: (l) => l.inv_metrics?.extCostMinor ?? null },
+  { key: "extretail", label: "Ext. retail", kind: "number", firstClick: "desc", number: (l) => l.inv_metrics?.extRetailMinor ?? null },
+  { key: "abc", label: "ABC", kind: "text", firstClick: "asc", text: (l) => l.inv_metrics?.abc ?? null },
+  { key: "menu", label: "On menu", kind: "number", firstClick: "desc", number: (l) => (l.inv_metrics ? (l.inv_metrics.onMenu ? 1 : 0) : null) },
+  { key: "lab", label: "Lab", kind: "text", firstClick: "asc", text: (l) => l.lab?.lab_name ?? null },
+  { key: "coaexp", label: "COA expires in", kind: "number", firstClick: "asc", number: (l) => l.inv_metrics?.coaDaysToExpiry ?? null },
+  { key: "counted", label: "Last counted", kind: "date", firstClick: "asc", date: (l) => l.last_counted_at ?? null },
+  { key: "updated", label: "Updated", kind: "date", firstClick: "desc", date: (l) => l.updated_at ?? null },
 ];
 
 export function columnSortDef(key: string | undefined | null): ColumnSortDef | undefined {
