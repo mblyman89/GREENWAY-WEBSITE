@@ -566,6 +566,104 @@ export function rekeyVerdict(draft: BankDraft, entries: readonly RekeyEntry[]): 
   };
 }
 
+// ---------------------------------------------------------------- accept ----
+
+/** Payee-specific checks before anything is written. */
+export function acceptChecks(payeeType: PayeeType, accounts: readonly RekeyAccount[]): string[] {
+  const errs: string[] = [];
+  if (payeeType === "vendor") {
+    if (accounts.length !== 1) errs.push("A vendor is paid into exactly one account.");
+    if (accounts[0] && accounts[0].rule.kind !== "remainder") errs.push("A vendor's single account receives the whole payment.");
+    return errs;
+  }
+  const keys = accounts.map((a) => `${digits(a.routing)}|${digits(a.account).replace(/^0+(?=.)/, "")}|${a.accountType}`);
+  if (new Set(keys).size !== keys.length) errs.push("The same account is listed twice.");
+  if (accounts.filter((a) => a.rule.kind === "remainder").length !== 1) errs.push("Exactly one account must receive the remainder of net pay.");
+  let bp = 0;
+  for (const a of accounts) {
+    if (a.rule.kind === "fixed" && (!Number.isSafeInteger(a.rule.cents) || a.rule.cents <= 0)) errs.push("A fixed amount must be more than $0.");
+    if (a.rule.kind === "percent") {
+      if (!Number.isInteger(a.rule.basisPoints) || a.rule.basisPoints < 1 || a.rule.basisPoints > 9999) errs.push("A percentage must be between 0.01% and 99.99%.");
+      bp += a.rule.basisPoints;
+    }
+  }
+  if (bp >= 10000) errs.push("Percentages add up to 100% or more, leaving nothing for the remainder account.");
+  return errs;
+}
+
+/**
+ * The date the payee signed (YYYY-MM-DD). Not in the future, not before 2000
+ * (0258: ended_on >= signed_on, retention counts from it).
+ */
+export function checkSignedOn(raw: string | null | undefined, todayIso: string): { ok: true; date: string } | { ok: false; error: string } {
+  const t = String(raw ?? "").trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  if (!m) return { ok: false, error: "Enter the date the form was signed (YYYY-MM-DD)." };
+  const d = new Date(`${t}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== t) return { ok: false, error: `"${t}" is not a real date.` };
+  if (t > todayIso.slice(0, 10)) return { ok: false, error: "The signed date cannot be in the future." };
+  if (Number(m[1]) < 2000) return { ok: false, error: "The signed date is too far in the past; check the form." };
+  return { ok: true, date: t };
+}
+
+/** Last 4 of the account for display (0258: ^[0-9A-Za-z]{1,4}$). */
+export function last4(s: string): string {
+  return digits(s).slice(-4);
+}
+
+export type AccountRow = {
+  priority: number;
+  rule_kind: "fixed" | "percent" | "remainder";
+  fixed_cents: number | null;
+  basis_points: number | null;
+  bank_name: string;
+  routing_enc: string;
+  account_enc: string;
+  account_type: AccountType;
+  account_last4: string;
+  routing_last4: string;
+  account_key_hmac: string;
+};
+
+/**
+ * Map accepted accounts to ach_authorization_accounts rows, satisfying the
+ * 0258 CHECKs (rule shape, encv1 ciphertext, last-4 shapes, hex HMAC). The
+ * caller passes the crypto so this stays pure and testable.
+ */
+export function planAccountRows(
+  accounts: readonly RekeyAccount[],
+  bankNames: readonly string[],
+  crypto: { encrypt: (s: string) => string; hmacKey: (routing: string, account: string, type: AccountType) => string },
+): { ok: true; rows: AccountRow[] } | { ok: false; error: string } {
+  const rows: AccountRow[] = [];
+  for (let i = 0; i < accounts.length; i += 1) {
+    const a = accounts[i];
+    const routing = digits(a.routing);
+    const account = digits(a.account);
+    const routingEnc = crypto.encrypt(routing);
+    const accountEnc = crypto.encrypt(account);
+    if (!routingEnc.startsWith("encv1:") || !accountEnc.startsWith("encv1:")) {
+      return { ok: false, error: "Bank numbers cannot be stored: DATA_ENCRYPTION_KEY is not set on the server." };
+    }
+    const hmac = crypto.hmacKey(routing, account, a.accountType);
+    if (!isSha256Hex(hmac)) return { ok: false, error: "Could not fingerprint the account (HMAC)." };
+    rows.push({
+      priority: i + 1,
+      rule_kind: a.rule.kind,
+      fixed_cents: a.rule.kind === "fixed" ? a.rule.cents : null,
+      basis_points: a.rule.kind === "percent" ? a.rule.basisPoints : null,
+      bank_name: (bankNames[i] ?? "").trim().slice(0, 120),
+      routing_enc: routingEnc,
+      account_enc: accountEnc,
+      account_type: a.accountType,
+      account_last4: last4(account),
+      routing_last4: routing.slice(-4),
+      account_key_hmac: hmac,
+    });
+  }
+  return { ok: true, rows };
+}
+
 // ------------------------------------------------------------ self-tests ----
 
 export function __runAchDocumentIntakeTests(): { passed: number; failed: number } {
@@ -692,6 +790,21 @@ export function __runAchDocumentIntakeTests(): { passed: number; failed: number 
   ok(!rekeyVerdict(empBad, [{ byId: "s", accounts: [A] }]).ok, "draft with warnings is not usable alone");
   const v7 = rekeyVerdict(EMPTY_DRAFT, [{ byId: "s", accounts: [A] }, { byId: "s", accounts: [A] }]);
   ok(v7.ok && v7.note.includes("same person"), "same person recorded");
+
+  // accept
+  ok(acceptChecks("vendor", [B]).length === 0 && acceptChecks("vendor", [A]).length === 1 && acceptChecks("vendor", [B, B]).length >= 1, "vendor one remainder account");
+  ok(acceptChecks("employee", [A, B]).length === 0, "employee split ok");
+  ok(acceptChecks("employee", [B, { ...B, account: "0999999" }]).some((e) => e.includes("twice")), "leading zero is the same account");
+  ok(acceptChecks("employee", [A]).some((e) => e.includes("remainder")), "employee needs a remainder");
+  ok(acceptChecks("employee", [{ ...A, rule: { kind: "percent", basisPoints: 6000 } }, { ...A, account: "77777", rule: { kind: "percent", basisPoints: 4000 } }, B]).some((e) => e.includes("100%")), "percent sum");
+  ok(checkSignedOn("2026-02-30", "2026-03-01T00:00:00Z").ok === false && checkSignedOn("2026-03-02", "2026-03-01").ok === false, "signed date real + not future");
+  const sd = checkSignedOn(" 2026-03-01 ", "2026-03-01T10:00:00Z");
+  ok(sd.ok && sd.date === "2026-03-01" && !checkSignedOn("1999-12-31", "2026-01-01").ok, "signed date today ok / too old");
+  const rowsOk = planAccountRows([A, B], ["Bank A"], { encrypt: (s) => `encv1:x:${s.length}`, hmacKey: () => "a".repeat(64) });
+  ok(rowsOk.ok && rowsOk.rows[0].fixed_cents === 20000 && rowsOk.rows[0].basis_points === null && rowsOk.rows[1].rule_kind === "remainder" && rowsOk.rows[1].fixed_cents === null, "row rule shape");
+  ok(rowsOk.ok && rowsOk.rows[0].account_last4 === "5678" && rowsOk.rows[0].routing_last4 === "0021" && rowsOk.rows[1].priority === 2 && rowsOk.rows[1].bank_name === "", "row last4 + priority");
+  ok(!planAccountRows([A], [], { encrypt: (s) => s, hmacKey: () => "a".repeat(64) }).ok, "plaintext refused (no key)");
+  ok(!planAccountRows([A], [], { encrypt: (s) => `encv1:${s}`, hmacKey: () => "nothex" }).ok, "bad hmac refused");
 
   console.log(`ach-document-intake: ${passed} passed, ${failed} failed`);
   return { passed, failed };

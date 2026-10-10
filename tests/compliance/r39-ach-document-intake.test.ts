@@ -50,7 +50,7 @@ describe("R39 S5 ach-document-intake-core self-tests", () => {
   it("all pass", () => {
     const r = __runAchDocumentIntakeTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(62);
+    expect(r.passed).toBeGreaterThanOrEqual(73);
   });
 });
 
