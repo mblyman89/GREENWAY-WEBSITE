@@ -8,6 +8,9 @@ import { employeeBankingBadge } from "@/lib/payments/banking-vault-ui-core";
 import { employeeAchCard, type EmployeeAchCard as EmployeeAchCardModel } from "@/lib/payroll/employee-ach-card-core";
 import { getEmployeeAchOverview, type EmployeeAuthHistoryRow } from "@/lib/payroll/employee-deposit-plans-store";
 import { EmployeeAchCard } from "./EmployeeAchCard";
+import { AchDocumentDropCard } from "@/components/admin/ach/AchDocumentDropCard";
+import { listAchDocuments } from "@/lib/payments/ach-document-store";
+import { canDropDocuments } from "@/lib/payments/ach-document-intake-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState, StickyActionBar } from "@/components/admin/ux";
@@ -56,7 +59,7 @@ export default async function EmployeeFilePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; ok?: string; back?: string; ach?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; back?: string; ach?: string; achdocs?: string }>;
 }) {
   const session = await requirePermission("staffing.manage");
   // SLICE 94: only owner/admin (settings.manage) may see the banking badge —
@@ -126,6 +129,10 @@ export default async function EmployeeFilePage({
       achError = e instanceof Error ? e.message : String(e);
     }
   }
+
+  // R39 S5: ACH document drop (managers + admins). Status only, no numbers.
+  const canDropAch = canDropDocuments(session.profile.role);
+  const achDocs = canDropAch ? await listAchDocuments({ payeeType: "employee", payeeId: id }) : null;
 
   const phases: OnboardingPhase[] = ["hiring", "paperwork", "compliance", "ready"];
 
@@ -255,6 +262,19 @@ export default async function EmployeeFilePage({
             history={achHistory}
             showHistory={sp.ach === "history"}
             readError={achError}
+          />
+        )}
+
+        {achDocs && (
+          <AchDocumentDropCard
+            payeeType="employee"
+            payeeId={id}
+            returnTo={`/admin/staffing/employees/${id}`}
+            documents={achDocs.documents}
+            canReview={canSeeVault}
+            tableReady={achDocs.tableReady}
+            showAll={sp.achdocs === "all"}
+            toggleHref={`/admin/staffing/employees/${id}${sp.achdocs === "all" ? "" : "?achdocs=all"}`}
           />
         )}
 

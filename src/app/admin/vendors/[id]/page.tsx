@@ -8,6 +8,9 @@ import { vendorBankingBadge } from "@/lib/payments/banking-vault-ui-core";
 import { readVendorAchFlags, vendorAchCard } from "@/lib/payments/vendor-ach-enrollment-core";
 import { resolveStaffNames } from "@/lib/promotions/promotions-store";
 import { VendorAchCard } from "./VendorAchCard";
+import { AchDocumentDropCard } from "@/components/admin/ach/AchDocumentDropCard";
+import { listAchDocuments } from "@/lib/payments/ach-document-store";
+import { canDropDocuments } from "@/lib/payments/ach-document-intake-core";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, StickyActionBar } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
@@ -91,7 +94,7 @@ export default async function VendorEditPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; note?: string; from?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; note?: string; from?: string; ok?: string; achdocs?: string }>;
 }) {
   const session = await requirePermission("vendors.manage");
   // SLICE 94: only owner/admin (settings.manage) may see the banking badge —
@@ -110,6 +113,8 @@ export default async function VendorEditPage({
 
   const vendor = await getVendorById(id);
   if (!vendor) notFound();
+  // R39 S5: ACH document drop (managers + admins). Status only, no numbers.
+  const achDocs = canDropDocuments(session.profile.role) ? await listAchDocuments({ payeeType: "vendor", payeeId: id }) : null;
   const [brands, vendorLogo, pendingSuggestions, vendorLots] = await Promise.all([
     listBrandsForVendor(id),
     logoUrlForMediaId(vendor.logo_media_id),
@@ -192,6 +197,9 @@ export default async function VendorEditPage({
       <div className="px-5 py-6 sm:px-8">
         {sp.error && (
           <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{decodeURIComponent(sp.error)}</div>
+        )}
+        {sp.ok && (
+          <div className="mb-6 rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">{decodeURIComponent(sp.ok)}</div>
         )}
         {sp.saved && (
           <div className="mb-6 rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
@@ -718,6 +726,18 @@ export default async function VendorEditPage({
                 vaultBadge={vaultBadge}
                 hasVaultRecord={Boolean(vendorVault.record)}
                 optedOutByName={optedOutByName}
+              />
+            )}
+            {achDocs && (
+              <AchDocumentDropCard
+                payeeType="vendor"
+                payeeId={vendor.id}
+                returnTo={`/admin/vendors/${vendor.id}`}
+                documents={achDocs.documents}
+                canReview={canSeeVault}
+                tableReady={achDocs.tableReady}
+                showAll={sp.achdocs === "all"}
+                toggleHref={`/admin/vendors/${vendor.id}${sp.achdocs === "all" ? "" : "?achdocs=all"}`}
               />
             )}
             <CompletenessMeter result={completeness} />
