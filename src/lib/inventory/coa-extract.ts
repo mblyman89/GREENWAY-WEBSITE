@@ -328,3 +328,48 @@ export async function extractCoaForLot(lotId: string, actorId: string | null): P
   if (!lot?.lab_result_id) return { ...emptyRun(true), errors: ["this lot has no lab result"], manifestId: lot?.manifest_id ?? null };
   return { ...(await runForLabs([lot.lab_result_id], { force: true, actorId, alwaysLlama: true })), manifestId: lot.manifest_id };
 }
+
+/**
+ * R37 S4 - every certificate of a delivery, read AGAIN on demand (the
+ * Product Onboarding "Re-read lab certificates (LlamaParse)" button). Lab
+ * ids come from the delivery's onboarding rows (catalog_product_drafts
+ * .lab_result_id - present before anything is received) AND its lots, so a
+ * delivery still in review is covered. Forced (already-read rows too) and
+ * always asks LlamaParse when it is configured; bounded by the run's own
+ * cap (COA_EXTRACT_MAX_PER_RUN) and the caller's time budget - the rest is
+ * reported as deferred, never silently dropped.
+ */
+export async function rereadCoasForManifest(
+  manifestId: string,
+  actorId: string | null,
+  opts: { budgetMs?: number } = {},
+): Promise<{ run: CoaExtractRun; labs: number }> {
+  if (!isSupabaseServiceConfigured) return { run: emptyRun(true), labs: 0 };
+  const admin = createSupabaseAdminClient();
+  const ids = new Set<string>();
+  const errors: string[] = [];
+  const drafts = await admin
+    .from("catalog_product_drafts")
+    .select("lab_result_id")
+    .eq("manifest_id", manifestId)
+    .not("lab_result_id", "is", null)
+    .order("id", { ascending: true })
+    .range(0, 499);
+  if (drafts.error) errors.push(`onboarding rows: ${drafts.error.message}`);
+  for (const r of (drafts.data as { lab_result_id: string | null }[] | null) ?? []) if (r.lab_result_id) ids.add(r.lab_result_id);
+  const lots = await admin
+    .from("inventory_lots")
+    .select("lab_result_id")
+    .eq("manifest_id", manifestId)
+    .not("lab_result_id", "is", null)
+    .order("id", { ascending: true })
+    .range(0, 499);
+  if (lots.error) errors.push(`lots: ${lots.error.message}`);
+  for (const r of (lots.data as { lab_result_id: string | null }[] | null) ?? []) if (r.lab_result_id) ids.add(r.lab_result_id);
+  const labIds = Array.from(ids);
+  const run = await runForLabs(labIds, { force: true, actorId, alwaysLlama: true, budgetMs: opts.budgetMs });
+  // Certificates past the per-run cap are deferred, said out loud.
+  if (labIds.length > COA_EXTRACT_MAX_PER_RUN) run.deferred += labIds.length - COA_EXTRACT_MAX_PER_RUN;
+  run.errors.unshift(...errors);
+  return { run, labs: labIds.length };
+}

@@ -22,7 +22,7 @@ import { validateInventoryTypeDraft } from "@/lib/pos/type-registry-core";
 // S02: after an action, return to the SAME delivery filter the approver was
 // working in (hidden `return_manifest` field, re-validated as a UUID by
 // draftsHref — the form is never trusted).
-import { draftsHref } from "@/lib/catalog/draft-deep-link-core";
+import { draftsHref, isUuid } from "@/lib/catalog/draft-deep-link-core";
 // S11: row-level error anchoring rides the redesigned-row flag.
 import { onboardingV2RowOn } from "@/lib/catalog/onboarding-row-flag";
 // S30: inline fact review for receiving-origin products (bible S30.2).
@@ -402,4 +402,74 @@ export async function cancelLookupAction(jobId: string, formData?: FormData) {
   const res = await cancelManifestLookup(jobId, { userId: session.userId, email: session.email });
   revalidatePath("/admin/inventory/drafts");
   redirect(backTo(formData, { lookup: res.ok ? "stopped" : "stop_error", lookup_msg: res.message }));
+}
+
+/**
+ * R37 S4 - "Re-read lab certificates (LlamaParse)" in the AI section at the
+ * top of Product Onboarding (owner: "add a button that allows me to rerun
+ * llama parse on the onboarding page to re read the COA's"). Reads every
+ * certificate of the delivery again (forced, LlamaParse + the PDF text, best
+ * reading wins), attaches the facts to the onboarding rows (R30; fill-only -
+ * a person's figure is never replaced), rebuilds the delivery's menu update,
+ * logs a delivery event and an audit row. Never throws to the page: every
+ * outcome is a banner (coa-reread-delivery-core deliveryCoaBanner).
+ */
+export async function rereadDeliveryCoasAction(manifestId: string, formData?: FormData) {
+  const session = await requirePermission("inventory.manage");
+  if (!isUuid(manifestId)) redirect(backTo(formData, { coa_all: "error" }));
+  const { rereadCoasForManifest } = await import("@/lib/inventory/coa-extract");
+  const core = await import("@/lib/inventory/coa-reread-delivery-core");
+  let params: Record<string, string> = { coa_all: "error" };
+  try {
+    // Leave room inside the page's 300 s for the attach + restage.
+    const { run, labs } = await rereadCoasForManifest(manifestId, session.userId, { budgetMs: 200_000 });
+    const code = core.deliveryCoaCode(run, labs);
+    let factsAttached = 0;
+    let restaged = false;
+    const summary: Record<string, unknown> = { labs, read: run.read, ok: run.ok, partial: run.partial, failed: run.failed, deferred: run.deferred, kbFilled: run.kbFilled, errors: run.errors.slice(0, 5) };
+    if (run.read > 0) {
+      try {
+        const { attachLabFactsToManifestDrafts } = await import("@/lib/catalog/lab-facts-attach");
+        const { LAB_FACTS_ATTACH_EVENT, labFactsAttachNote } = await import("@/lib/catalog/lab-facts-attach-core");
+        const { logManifestEvent } = await import("@/lib/inventory/intake-store");
+        const labRun = await attachLabFactsToManifestDrafts(manifestId, session.userId);
+        factsAttached = labRun.facts;
+        summary.labAttach = { attached: labRun.attached, facts: labRun.facts, kept: labRun.kept, strainsUpdated: labRun.strainsUpdated, unmigrated: labRun.unmigrated, errors: labRun.errors.slice(0, 3) };
+        const labNote = labFactsAttachNote(labRun);
+        if (labNote) await logManifestEvent(manifestId, LAB_FACTS_ATTACH_EVENT, labNote, session.userId);
+      } catch (err) {
+        console.error("[drafts] delivery COA re-read lab attach failed:", err);
+      }
+      try {
+        const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
+        const outcome = await stageIntakeMenuVersionForManifest(manifestId, session.userId);
+        restaged = outcome.staged;
+        summary.restage = { staged: outcome.staged, published: outcome.published, reason: outcome.reason ?? null, withheld: outcome.withheld ?? 0 };
+      } catch (err) {
+        console.error("[drafts] delivery COA re-read restage failed:", err);
+        summary.restage = { error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+    try {
+      const { logManifestEvent } = await import("@/lib/inventory/intake-store");
+      await logManifestEvent(manifestId, core.DELIVERY_COA_EVENT, `Lab certificates read again with LlamaParse: ${run.read} of ${labs} (${run.ok} ok, ${run.partial} partial, ${run.failed} failed).`, session.userId);
+    } catch (err) {
+      console.error("[drafts] delivery COA re-read event failed:", err);
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: core.DELIVERY_COA_AUDIT,
+      entityType: "intake_manifest",
+      entityId: manifestId,
+      after: { code, ...summary },
+    });
+    params = core.deliveryCoaParams({ code, labs, run, factsAttached, restaged });
+  } catch (err) {
+    console.error("[drafts] rereadDeliveryCoasAction failed:", err);
+    params = { coa_all: "error" };
+  }
+  revalidatePath("/admin/inventory/drafts");
+  revalidatePath("/admin/knowledge-base/products");
+  redirect(backTo(formData, params) + "#batch-lookup");
 }

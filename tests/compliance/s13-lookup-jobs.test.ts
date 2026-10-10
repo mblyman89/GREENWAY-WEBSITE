@@ -942,7 +942,8 @@ describe("S13 wiring", () => {
     const src = read("src/app/admin/inventory/drafts/actions.ts");
     const body = src.slice(src.indexOf("export async function lookupAllAction"));
     expect(body).not.toMatch(/process\.env/);
-    expect(body.match(/requirePermission\("inventory\.manage"\)/g)?.length).toBe(2);
+    // R37 S4: rereadDeliveryCoasAction (appended after these two) also requires it.
+    expect(body.match(/requirePermission\("inventory\.manage"\)/g)?.length).toBe(3);
   });
   it("lookupAllAction (behavioural): enqueues and redirects with lookup=started, then lookup=exists", async () => {
     seedDrafts(state.db, 2);

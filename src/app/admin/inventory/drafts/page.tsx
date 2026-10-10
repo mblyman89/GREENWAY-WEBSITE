@@ -55,7 +55,9 @@ import {
 } from "@/lib/catalog/approved-row-core";
 import { isAiConfigured } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
-import { approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, restoreDraftAction } from "./actions";
+import { approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, rereadDeliveryCoasAction, restoreDraftAction } from "./actions";
+import { DELIVERY_COA_BUTTON, deliveryCoaBanner, deliveryCoaHelp } from "@/lib/inventory/coa-reread-delivery-core";
+import { isLlamaParseConfigured } from "@/lib/inbound-email/llamaparse-provider";
 // S17: the batch result banner (the Approve-all button was removed in R37 S1).
 import { batchResultCopy, parseBatchResult } from "@/lib/inventory/batch-staging-core";
 import { draftsWhatDoIDoHere } from "@/lib/catalog/next-action-core";
@@ -213,7 +215,7 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; wf?: string; wf_msg?: string; approved_draft?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string; manifest?: string; draft?: string; q?: string; vendor?: string; page?: string; size?: string; rows?: string; batch_ok?: string; batch_skip?: string; batch_more?: string; batch_why?: string; fact?: string; fact_msg?: string; fact_warn?: string; lookup?: string; lookup_msg?: string; coa_all?: string; coa_n?: string; coa_read?: string; coa_ok?: string; coa_partial?: string; coa_failed?: string; coa_facts?: string; coa_more?: string; restaged?: string; wf?: string; wf_msg?: string; approved_draft?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
@@ -304,6 +306,8 @@ export default async function CatalogDraftsPage({
         )
       : [];
   const lookupResult = lookupBanner(sp.lookup, sp.lookup_msg) ?? waitingResultBanner(sp.wf, sp.wf_msg);
+  // R37 S4: the outcome of "Re-read lab certificates (LlamaParse)".
+  const coaAllBanner = deliveryCoaBanner(sp as Record<string, unknown>);
   const headerTitle = onboardingHeaderTitle(
     focusManifest,
     focusManifest && picker?.countsComplete ? picker.counts.get(focusManifest.id) ?? null : null,
@@ -685,6 +689,23 @@ export default async function CatalogDraftsPage({
           </div>
         )}
 
+        {coaAllBanner && (
+          <div
+            role={coaAllBanner.tone === "bad" ? "alert" : "status"}
+            data-testid="coa-reread-all-result"
+            data-tone={coaAllBanner.tone}
+            className={
+              coaAllBanner.tone === "bad"
+                ? "rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]"
+                : coaAllBanner.tone === "warn"
+                  ? "rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]"
+                  : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]"
+            }
+          >
+            {coaAllBanner.text}
+          </div>
+        )}
+
         {/* S30: fact review cannot be saved until migration 0237 is applied. */}
         {factFlags && factFlags.flags.size > 0 && !factFlags.migrated && (
           <p className="text-xs text-[var(--admin-text-muted)]" data-testid="fact-review-migration">
@@ -813,6 +834,21 @@ export default async function CatalogDraftsPage({
                 </span>
               </form>
             ) : null}
+            {/* R37 S4: read every lab certificate of this delivery again with
+                LlamaParse, then fill the products below (fill-only). */}
+            {focus.manifestId && (
+              <form
+                action={rereadDeliveryCoasAction.bind(null, focus.manifestId)}
+                className="flex flex-wrap items-center gap-3 border-t border-[var(--admin-border)] pt-2"
+                data-testid="coa-reread-all"
+              >
+                <input type="hidden" name="return_manifest" value={focus.manifestId} />
+                <Button type="submit" variant="neutral" size="sm" data-testid="coa-reread-all-button">
+                  {"\u{1F9EA} "}{DELIVERY_COA_BUTTON}
+                </Button>
+                <span className="text-xs text-[var(--admin-text-muted)]">{deliveryCoaHelp(isLlamaParseConfigured())}</span>
+              </form>
+            )}
           </section>
         )}
         {pinned && (
