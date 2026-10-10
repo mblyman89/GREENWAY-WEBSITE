@@ -372,9 +372,28 @@ describe("S08 - no app change until S07/S11 (acceptance)", () => {
       // R35 #6: the one-time effects/aroma backfill READS attached_facts of
       // APPROVED drafts (fill-only into menu_items). Read-only; pinned below.
       .filter((f) => !f.endsWith(path.join("pos", "menu-sensory-backfill-server.ts")))
+      // R37 S6: the Gemini search-history bar READS product_fact_provenance
+      // (source gemini) to show what earlier searches found. Read-only; the
+      // core only names it in comments. Pinned by the R37 S6 test below.
+      .filter((f) => !f.endsWith(path.join("catalog", "lookup-history-core.ts")))
+      .filter((f) => !f.endsWith(path.join("catalog", "lookup-history-server.ts")))
       .filter((f) => /attached_facts|product_fact_provenance/.test(readFileSync(f, "utf8")))
       .map((f) => path.relative(ROOT, f));
     expect(hits).toEqual([]);
+  });
+
+  it("R37 S6: the search-history reader only READS product_fact_provenance (named select, no writes, never attached_facts)", () => {
+    const srv = readFileSync(path.join(ROOT, "src/lib/catalog/lookup-history-server.ts"), "utf8");
+    expect(srv).toContain('import { PROVENANCE_TABLE, isMissingAttachedFactsError } from "@/lib/catalog/attach-facts-core";');
+    expect(srv).toContain(".from(PROVENANCE_TABLE)");
+    expect(srv).toContain('.eq("source", "gemini")');
+    expect(srv).toContain('.select("id, identity_key, field, created_at")');
+    expect(srv).not.toMatch(/\.(insert|update|upsert|delete)\(/);
+    expect(srv).not.toContain("attached_facts");
+    expect(srv).not.toMatch(/select\("\*"\)/);
+    const core = readFileSync(path.join(ROOT, "src/lib/catalog/lookup-history-core.ts"), "utf8");
+    expect(core).not.toMatch(/^\s*import\s/m);
+    expect(core).not.toMatch(/\.from\((["'`]|[A-Z_]+\))/); // no table reads (Array.from is fine)
   });
 
   it("R35 #6: the sensory backfill only READS attached_facts of APPROVED drafts (named select; writes only menu_items, fill-only; never the provenance table)", () => {

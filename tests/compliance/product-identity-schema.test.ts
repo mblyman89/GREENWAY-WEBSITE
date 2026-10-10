@@ -286,8 +286,13 @@ describe("S04 - the menu keeps working before 0234 is applied", () => {
     // the lab-certificate KB fill reads inventory_lots.kb_product_id for the
     // lots of ONE lab result; a missing 0234 column is "no link to follow"
     // (0 filled), any other error is reported (pinned by the "R28" test below).
+    // R37 S6 added the sixth guarded reader on purpose (pin updated on
+    // purpose): the search-history bar reads catalog_product_drafts.identity_key
+    // for this delivery's sibling rows; a missing 0234 column is "no siblings,
+    // complete" (pinned by r37-search-history "pre-0234 column missing").
     expect(offenders.sort()).toEqual([
       "src/lib/catalog/attach-facts.ts",
+      "src/lib/catalog/lookup-history-server.ts",
       "src/lib/catalog/menu-kb-link-server.ts",
       "src/lib/enrichment/command-center.ts",
       "src/lib/inventory/coa-extract.ts",

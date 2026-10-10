@@ -204,8 +204,14 @@ describe("R21 B — flag off is the previous markup", () => {
     expect(read("src/app/admin/inventory/drafts/AiLookupPanel.tsx")).toContain('${wide ? "w-full" : "w-80"}');
     expect(onboardingColumns(false).map((c) => c.label)).toEqual(["Product", "Category & Type", "THC", "Cost", "Pricing", "Actions"]);
     // The previous row's form still sits inside <details>, with the lookup inside it.
-    const close = page.indexOf("</details>");
-    expect(page.slice(page.lastIndexOf("<details", close), close)).toContain("{!v2Row && approveForm}");
+    // R37 S6 put the harvest-history <details> earlier on the page, so anchor
+    // on the form itself: the nearest <details> before it is still open there.
+    const at = page.indexOf("{!v2Row && approveForm}");
+    expect(at).toBeGreaterThan(0);
+    const open = page.lastIndexOf("<details", at);
+    expect(open).toBeGreaterThan(0);
+    expect(page.slice(open, at)).not.toContain("</details>");
+    expect(page.indexOf("</details>", at)).toBeGreaterThan(at);
     expect(page).toContain("{!v2Row && lookupPanel}");
   });
 });
