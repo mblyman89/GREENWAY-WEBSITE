@@ -279,7 +279,10 @@ begin
   -- Feb 29: Postgres interval clamps to Feb 28, same as addYears() in the core
   assert (date '2024-02-29' + interval '6 years')::date = date '2030-02-28', 'Feb 29 clamps to Feb 28';
 
-  -- terminal states
+  -- terminal states (revoking needs the date it ended: retention runs from it)
+  perform pg_temp.must_fail(format(
+    $q$update public.ach_authorizations set state = 'revoked', ended_reason = 'employee left' where id = %L$q$, auth_e),
+    'ach_auth_ended_has_date');
   update public.ach_authorizations set state = 'revoked', ended_on = '2026-10-09', ended_reason = 'employee left' where id = auth_e;
   perform pg_temp.must_fail(format($q$update public.ach_authorizations set state = 'active' where id = %L$q$, auth_e), 'ACH_AUTH_TRANSITION');
   update public.ach_authorizations set state = 'archived' where id = auth_e;
