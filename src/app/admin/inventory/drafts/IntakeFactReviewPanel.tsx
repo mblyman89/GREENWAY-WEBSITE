@@ -25,6 +25,7 @@ import {
   WA_SERVING_MAX_THC_MG,
   servingLimitApplies,
 } from "@/lib/compliance/serving-limit-warning-core";
+import { VolumeField } from "@/components/admin/inventory/VolumeField";
 import { resolveIntakeFactReview } from "./actions";
 
 const inputCls =
@@ -131,7 +132,7 @@ export function IntakeFactReviewPanel({
             <FixField label="Package CBN (mg)" name="packageCbnMg" />
             <FixField label="Package CBC (mg)" name="packageCbcMg" />
             <FixField label="Net weight (g)" name="netWeightGrams" />
-            <FixField label="Net volume (ml)" name="netVolumeMl" />
+            <VolumeField id="fact-netVolumeMl" />
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <div>

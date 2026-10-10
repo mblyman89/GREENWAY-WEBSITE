@@ -951,6 +951,7 @@ import { __runCoaPdfTextCoreTests } from "../../src/lib/inventory/coa-pdf-text-c
 import { __runCoaFactsCoreTests } from "../../src/lib/inventory/coa-facts-core";
 import { __runServingDerivationTests } from "../../src/lib/compliance/serving-derivation-core";
 import { __runServingFactsViewTests } from "../../src/lib/catalog/serving-facts-view-core";
+import { __runVolumeInputTests } from "../../src/lib/compliance/volume-input-core";
 import { __runCoaExtractCoreTests } from "../../src/lib/inventory/coa-extract-core";
 import { __runCoaPanelCoreTests } from "../../src/lib/inventory/coa-panel-core";
 import { r28MakeExtract } from "../r28/coa-fixture-extract";
@@ -2124,6 +2125,7 @@ __runLiquidVolumeTests();
   assertRan("testing-labs-core", __runTestingLabsCoreTests(), 109); // R36 #4: WA labs + certificate hosts (SSRF allow-list)
   assertRan("serving-derivation-core", __runServingDerivationTests(), 60); // R37 S2: WAC 314-55-095 10 mg serving solver
   assertRan("serving-facts-view-core", __runServingFactsViewTests(), 21); // R37 S2: product-facts panel prefill view
+  assertRan("volume-input-core", __runVolumeInputTests(), 24); // R37 S3: net volume in ml or fl oz, stored in ml
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
