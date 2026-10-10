@@ -2002,3 +2002,53 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0257_delivery_brand.rollback.sql`
   (brands already written onto products stay; only the memory is forgotten).
+
+## R39 — 0258 — ACH authorizations (signed forms, up to 3 accounts, verification, returns)
+
+- [ ] `0258_ach_authorizations.sql` creates seven tables, all empty:
+  `ach_authorizations` (one signed authorization per employee or vendor),
+  `ach_authorization_accounts` (up to 3 bank accounts each, stored only
+  encrypted), `ach_authorization_documents` (the signed form or voided check,
+  pinned by its SHA-256 fingerprint), `ach_authorization_events` (an audit
+  trail that can only be added to), `ach_verifications` (prenote or test-credit
+  results), `ach_return_notices` (returns and change notices from Timberland)
+  and `payee_contacts` (phone and email, each with the date it was first on
+  file, for the fraud call-back). It also adds **Needs bank info** and **Opted
+  out of ACH** to `vendors`, lets `vendor_bank_details` hold **revoked** and
+  **archived**, and creates a private storage bucket, `ach-docs`. Managers can
+  drop files into the bucket. Only owners and admins can read them.
+
+  The database itself enforces these rules:
+  - A bank number that is not encrypted (`encv1:`) is refused.
+  - A fourth account is refused.
+  - The bank details on an account cannot be edited. You add a new account and
+    archive the old one.
+  - The audit trail cannot be edited or deleted.
+  - A signed authorization or document cannot be deleted until 6 years after
+    it ends, or ever while it is on legal hold.
+
+  The table grants are written out explicitly. Supabase stops exposing new
+  tables automatically from 2026-10-30 (changelog 45329), so this migration
+  works both before and after that date. A factory reset KEEPS all seven
+  tables. Safe to re-run.
+
+  **Without it:** nothing changes today. The current Banking vault keeps
+  working exactly as it does now. The ACH screens built in the next R39 slices
+  will show a "One-time setup needed" card until it is run.
+
+  **Run it, then:** nothing to click yet. Run the check below.
+
+  **Check:**
+
+  ```sql
+  select count(*) as ach_tables from pg_tables where schemaname = 'public'
+   and tablename in ('ach_authorizations','ach_authorization_accounts','ach_authorization_documents',
+                     'ach_authorization_events','ach_verifications','ach_return_notices','payee_contacts');
+  -- 7
+  select id, public from storage.buckets where id = 'ach-docs';
+  -- ach-docs | false
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0258_ach_authorizations.rollback.sql`.
+  It **refuses** once any authorization has been signed or any document has
+  been uploaded, because those are records you are required to keep.

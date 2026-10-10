@@ -110,6 +110,54 @@ export function explainRelationError(message: string): string | null {
   );
 }
 
+/**
+ * R39: behavioural checks that run AFTER every migration is applied. Running a
+ * migration proves only that it parses. Each script here proves the guards
+ * REFUSE what they must and ACCEPT the valid row beside them, in one
+ * rolled-back transaction. Each must print its all-clear line. A script that
+ * exits 0 without printing it has not proven anything, so it FAILS (rule 48).
+ *
+ * This lives here and not as a new workflow step because CI already runs this
+ * file against the bootstrapped Postgres, and the automation's token is not
+ * allowed to edit .github/workflows.
+ */
+export const POST_APPLY_CHECKS: readonly { file: string; mustPrint: string }[] = [
+  { file: "scripts/recon/ach-authorizations-pg-check.sql", mustPrint: "ACH 0258 CHECK PASSED" },
+];
+
+/** Decide whether one post-apply check passed, from its exit and its output. */
+export function judgePostApplyCheck(
+  check: { file: string; mustPrint: string },
+  result: { exitedOk: boolean; output: string },
+): string | null {
+  if (!result.exitedOk) {
+    const line = result.output.split("\n").find((l) => /ERROR:/i.test(l));
+    return (line ?? result.output).trim() || "psql exited non-zero with no output";
+  }
+  if (!result.output.includes(check.mustPrint)) {
+    return `exited 0 but never printed "${check.mustPrint}", so nothing was proven`;
+  }
+  return null;
+}
+
+function runPostApplyCheck(pgurl: string, check: { file: string; mustPrint: string }): string | null {
+  let output = "";
+  let exitedOk = true;
+  try {
+    // psql prints RAISE NOTICE on stderr; merge both streams.
+    output = execFileSync(
+      "sh",
+      ["-c", 'psql -v ON_ERROR_STOP=1 -X -f "$1" "$2" 2>&1', "sh", path.resolve(__dirname, "../..", check.file), pgurl],
+      { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
+    );
+  } catch (err) {
+    exitedOk = false;
+    const e = err as { stdout?: string; stderr?: string; message?: string };
+    output = `${e.stdout ?? ""}${e.stderr ?? ""}` || (e.message ?? String(err));
+  }
+  return judgePostApplyCheck(check, { exitedOk, output });
+}
+
 /** Run one SQL file. Returns null on success, or the first ERROR line. */
 function applyFile(pgurl: string, file: string): string | null {
   try {
@@ -168,6 +216,17 @@ function main(): void {
     const again = applyFile(pgurl, last);
     if (again) {
       failures.push({ file: `${last} (SECOND run - idempotency)`, message: again });
+    }
+  }
+
+  if (failures.length === 0) {
+    for (const check of POST_APPLY_CHECKS) {
+      const bad = runPostApplyCheck(pgurl, check);
+      if (bad) {
+        failures.push({ file: `${check.file} (post-apply scenario check)`, message: bad });
+      } else {
+        console.log(`  post-apply check passed: ${check.file}`);
+      }
     }
   }
 
