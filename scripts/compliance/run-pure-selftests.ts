@@ -1653,7 +1653,7 @@ __runLiquidVolumeTests();
   assertRan("nacha-core", __runNachaCoreTests(), 41);
   assertNoFailures("vendor-ach-core", __runVendorAchTests());
   __runPayeeBankingCoreTests();
-  assertNoFailures("payroll-core", __runPayrollCoreTests());
+  assertRan("payroll-core", __runPayrollCoreTests(), 34);
   assertNoFailures("payroll-guardrails-core", __runPayrollGuardrailsCoreTests());
   __runPayrollReconcileCoreTests();
   __runPayrollUiCoreTests();
