@@ -72,6 +72,30 @@ commit + push after every task (the sandbox is unstable), no drift.
       it, applied but "not remembered"). Vendor page "Remembered brand" form.
       Tests: r37-delivery-brand.test.ts (23, real store over a strict fake
       DB), PG check for 0257, SQL mutants 9/9, store/core mutants 14/14.
-- [ ] **S6 Lookup history + clearer Search-all bar** (#6).
+- [x] **S6 Lookup history + clearer Search-all bar** (#6). DONE.
+  The bar is now titled "Search the web for every product on this delivery -
+  Google Gemini with Google Search" (the engine is named from the configured
+  model; it never claims Gemini when it is not), says what it is for, and
+  shows a verdict before anything is paid for: "Recommended: run the search -
+  N products have never been searched; M are still turning up new facts" /
+  "Not worth paying for again yet ... try again after <date>" / "Nothing left
+  to harvest". A product-by-product list says, for every product, how many
+  times it was searched, when, where (this row / another row of this delivery
+  / the SAME product on an earlier delivery, joined by the S03 identity key),
+  what the last search did, which facts the web has given, and what is still
+  missing. Each row's Facts cell carries a short chip ("searched 12 days ago
+  - worth searching again"). Rule (Akeneo-style completeness + a 90-day
+  re-enrichment cadence): search until every web-fillable fact (strain type,
+  description, short line, effects, aroma, flavor, terpenes) is on file; a
+  search that still yields is worth repeating; one that found nothing new is
+  not worth repeating for 90 days. "Search again" queues a FRESH web search
+  (the row panel's Refresh: no memory short-cut, no already-known block) for
+  only the recommended products an earlier batch on this delivery already
+  did, still one active job per delivery. Files: lookup-history-core.ts (pure,
+  67 assertions), lookup-history-server.ts (paged, chunked, checked reads;
+  missing tables = no history; outage = said on screen), lookup-job-server.ts
+  (againDraftIds + the marker + refresh), actions.ts lookupAgainAction,
+  drafts/page.tsx. Tests: r37-search-history.test.ts (19, real postgrest-js),
+  33/33 mutants killed.
 - [ ] **S7 Wrap-up**: full suite, tsc, eslint, PG, TEST-PLAN, bible, PR,
       merge, report.
