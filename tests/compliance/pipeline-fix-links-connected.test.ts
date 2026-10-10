@@ -596,6 +596,8 @@ const COLOUR_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
     'danger\u2192lookupResult.tone === "error"', // R19 S13: result of pressing Look up all / Stop (closed set, lookupBanner)
     'danger\u2192coaAllBanner.tone === "bad"', // R37 S4: result of pressing Re-read lab certificates (closed set, deliveryCoaBanner)
     'gold\u2192: coaAllBanner.tone === "warn"', // R37 S4: same result, partly read
+    'danger\u2192brandBanner.tone === "bad"', // R37 S5: result of Set brand / Save brand (closed set, deliveryBrandBanner)
+    'gold\u2192: brandBanner.tone === "warn"', // R37 S5: brand set but memory/cards partly saved
   ],
 };
 
