@@ -474,6 +474,17 @@ export default async function BankingVaultPage({
               entered or changed — the payroll run screen shows it read-only, so nobody can
               redirect a paycheck at pay time.
             </div>
+            {/* R39 S4 (owner Q11): inactive employees sit behind a button. */}
+            {employees.some((e) => !e.active) ? (
+              <div className="flex justify-end">
+                <Link
+                  href={showInactive ? "/admin/settings/banking?tab=employees" : "/admin/settings/banking?tab=employees&show=inactive"}
+                  className={btnGhost}
+                >
+                  {showInactive ? "Hide" : "Show"} inactive employees ({employees.filter((e) => !e.active).length})
+                </Link>
+              </div>
+            ) : null}
             <div className="overflow-x-auto rounded-[var(--admin-radius)] border border-white/10">
               <table className="w-full text-left text-sm">
                 <thead className="bg-white/[0.04] text-xs uppercase tracking-wide text-white/50">
@@ -486,7 +497,7 @@ export default async function BankingVaultPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {employees.map((e) => {
+                  {employees.filter((e) => e.active || showInactive).map((e) => {
                     const b = bankingByEmployee.get(e.id);
                     const has = !!(b && (b.bank_routing || b.bank_account_number));
                     return (

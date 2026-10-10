@@ -102,7 +102,7 @@ export function employeeAchCard(input: {
       authorizationState: null,
       accounts: [],
       historyCount,
-      needsSignedForm: employeeActive,
+      needsSignedForm: true,
     };
   }
 
@@ -127,17 +127,15 @@ export function employeeAchCard(input: {
     sampleCents: null,
   }));
   if (sample.ok) {
-    // Entries come out in priority order with $0 legs skipped; match by account.
-    let k = 0;
-    for (let i = 0; i < plan.accounts.length; i += 1) {
-      const e = sample.entries[k];
-      if (e && e.accountNumber === plan.accounts[i].accountNumber && e.routing === plan.accounts[i].routing && e.accountType === plan.accounts[i].accountType) {
-        accounts[i].sampleCents = e.amountCents;
-        k += 1;
-      } else {
-        accounts[i].sampleCents = 0;
-      }
-    }
+    // Match each account to its entry by exact (routing, account, type).
+    // NOT by position: allocateSplit always puts the remainder account last,
+    // whatever its priority, and $0 legs are skipped. validateSplits forbids
+    // the same account twice, so the key is unique.
+    const key = (r: string, a: string, t: string) => `${r}|${a}|${t}`;
+    const got = new Map(sample.entries.map((e) => [key(e.routing, e.accountNumber, e.accountType), e.amountCents]));
+    plan.accounts.forEach((a, i) => {
+      accounts[i].sampleCents = got.get(key(a.routing, a.accountNumber, a.accountType)) ?? 0;
+    });
     return {
       state: "payable",
       label: plan.accounts.length > 1 ? `Split deposit · ${plan.accounts.length} accounts` : "Direct deposit active",
@@ -229,6 +227,17 @@ export function __runEmployeeAchCardTests(): { passed: number; failed: number } 
       ],
     },
   });
+  const remFirst = employeeAchCard({
+    ...base,
+    plan: {
+      state: "active",
+      accounts: [
+        acct({ priority: 1, rule: { kind: "remainder" }, accountNumber: "11112222" }),
+        acct({ priority: 2, rule: { kind: "fixed", cents: 25000 }, accountNumber: "55556666" }),
+      ],
+    },
+  });
+  ok(remFirst.accounts.map((a) => a.sampleCents).join() === "75000,25000", "remainder at priority 1 still gets its share");
   ok(zeroLeg.state === "payable" && zeroLeg.accounts.map((a) => a.sampleCents).join() === "100000,0", "$0 leg shown as 0");
 
   const held = employeeAchCard({ ...base, plan: { state: "on_hold", accounts: [acct()] } });

@@ -92,6 +92,37 @@ describe("employeeAchCard states", () => {
     expect(c.historyCount).toBe(3);
     expect(c.label).toBe("Split deposit · 2 accounts");
   });
+  it("remainder account at priority 1 is shown its share (allocateSplit puts it last)", () => {
+    const c = employeeAchCard({
+      ...base,
+      plan: {
+        state: "active",
+        accounts: [
+          acct({ priority: 1, rule: { kind: "remainder" }, accountNumber: "7001" }),
+          acct({ priority: 2, rule: { kind: "fixed", cents: 25_000 }, accountNumber: "7002" }),
+        ],
+      },
+    });
+    expect(c.accounts.map((a) => [a.priority, a.sampleCents])).toEqual([[1, 75_000], [2, 25_000]]);
+  });
+  it("a skipped $0 leg before a same-number account of another type is not mis-matched", () => {
+    const c = employeeAchCard({
+      ...base,
+      plan: {
+        state: "active",
+        accounts: [
+          acct({ priority: 1, rule: { kind: "fixed", cents: 200_000 }, accountNumber: "8001", accountType: "checking" }),
+          acct({ priority: 2, rule: { kind: "percent", basisPoints: 1000 }, accountNumber: "8002", accountType: "savings" }),
+          acct({ priority: 3, rule: { kind: "remainder" }, accountNumber: "8001", accountType: "savings" }),
+        ],
+      },
+    });
+    expect(c.accounts.map((a) => a.sampleCents)).toEqual([100_000, 0, 0]);
+  });
+  it("past authorizations are counted even with no open authorization", () => {
+    expect(employeeAchCard({ ...base, legacy, historyCount: 2 }).historyCount).toBe(2);
+    expect(employeeAchCard({ ...base, historyCount: 1 }).historyCount).toBe(1);
+  });
   it("the same account number on two types still matches its own row", () => {
     const c = employeeAchCard({
       ...base,
