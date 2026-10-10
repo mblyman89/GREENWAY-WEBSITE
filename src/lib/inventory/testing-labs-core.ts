@@ -247,14 +247,20 @@ export function validateLabForm(f: LabForm, existing: readonly { name: string; l
   if (labNumber !== null && existing.some((e) => e.labNumber === labNumber)) return { ok: false, error: `Lab #${labNumber} is already on the list.` };
   let website = clean(f.website, 300);
   if (website) {
-    if (!/^https?:\/\//i.test(website)) website = `https://${website}`;
+    // A link with its own scheme keeps it (so "ftp://..." or "javascript:..."
+    // is REFUSED below, never turned into "https://ftp//..."); a bare
+    // "example.com" becomes https://example.com. The page renders this as a
+    // link, so only http(s) may ever be saved.
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(website) || /^[^:/]+\.[^:/]+:\d+(?:[/?#]|$)/.test(website)) website = `https://${website}`;
+    let u: URL;
     try {
-      const u = new URL(website);
-      if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error("x");
-      website = u.toString();
+      u = new URL(website);
     } catch {
       return { ok: false, error: "The website does not look like a link." };
     }
+    if (u.protocol !== "https:" && u.protocol !== "http:") return { ok: false, error: "The website must be an http or https link." };
+    if (u.username || u.password) return { ok: false, error: "The website link cannot contain a user name or password." };
+    website = u.toString();
   }
   const phone = clean(f.phone, 40);
   if (phone && !/^[0-9()+\-. x]{7,40}$/i.test(phone)) return { ok: false, error: "The phone number can contain only digits, spaces and ( ) - + ." };
@@ -367,6 +373,14 @@ export function __runTestingLabsCoreTests(): { passed: number; failed: number } 
     ok(!n(bad).ok, `refused: ${why}`);
   }
   ok(n("http://x.com").ok === false && (n("http://x.com") as { reason: string }).reason.includes("https"), "http reason names https");
+  // the REASON is the owner's guidance, so it must name the real problem
+  const why = (s: string) => {
+    const r = n(s);
+    return r.ok ? "" : r.reason;
+  };
+  for (const ip of ["127.0.0.1", "10.0.0.1", "2130706433", "0x7f000001", "https://169.254.169.254/latest", "8.8.8.8"]) ok(why(ip).startsWith("IP addresses are not allowed"), `IP reason for ${ip}`);
+  ok(why("*.cultivera.com").startsWith("Wildcards are not allowed") && why("https://*.cultivera.com/x").startsWith("Wildcards"), "wildcard reason");
+  ok(why("lab").startsWith("A host needs a domain") && why("printer.local").startsWith("Internal or reserved") && why("lab.c0m").startsWith("The host must end"), "domain / internal / tld reasons");
   // isPublicAddress
   for (const ip of ["8.8.8.8", "140.82.112.3", "52.84.150.39", "2606:4700::6810:84e5", "2a00:1450:4001:82a::200e"]) ok(isPublicAddress(ip), `public ${ip}`);
   for (const ip of [
@@ -388,6 +402,15 @@ export function __runTestingLabsCoreTests(): { passed: number; failed: number } 
   ok(!validateLabForm({ ...base, labNumber: "3a" }, []).ok && !validateLabForm({ ...base, labNumber: "0" }, []).ok, "bad lab # refused");
   ok(!validateLabForm({ ...base, phone: "call me" }, []).ok, "bad phone refused");
   ok(!validateLabForm({ ...base, website: "javascript:alert(1)" }, []).ok, "javascript: website refused");
+  const web = (w: string) => {
+    const r = validateLabForm({ ...base, website: w }, []);
+    return r.ok ? r.lab.website : `ERR ${r.error}`;
+  };
+  ok(web("ftp://files.lab.com") === "ERR The website must be an http or https link.", "ftp: refused (never rewritten to https://ftp//)");
+  ok(web("data:text/html,hi").startsWith("ERR") && web("mailto:a@b.com").startsWith("ERR"), "data: / mailto: refused");
+  ok(web("https://u:p@lab.com").startsWith("ERR The website link cannot contain"), "credentials in the website refused");
+  ok(web("lab.com:8443/x") === "https://lab.com:8443/x" && web("Example.com") === "https://example.com/" && web("http://lab.com") === "http://lab.com/", "bare host / host:port / http kept as links");
+  ok(web("not a link") === "ERR The website does not look like a link.", "unreadable website refused");
   // seed rows
   ok(SEEDED_LAB_ROWS.length === 12 && SEEDED_LAB_ROWS[11] === CULTIVERA_PLATFORM, "seeded = 11 labs + the Cultivera platform row");
   ok(CULTIVERA_PLATFORM.status === "platform" && CULTIVERA_PLATFORM.labNumber === null && CULTIVERA_PLATFORM.coaHosts.join() === "files.cultivera.com", "Cultivera row: platform, no lab #, files.cultivera.com");

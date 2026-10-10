@@ -57,4 +57,40 @@ The owner can add any host from the new **Testing labs** page (Inventory → Tes
 
 ## A separate limit: the certificate *layout* reader
 
-Fetching is one step. Reading the numbers is another. `detectCoaTemplate` (coa-pdf-text-core.ts) currently knows two verified layouts: Confident Cannabis (used by Confidence Analytics) and Green Grower Labs. A certificate from another lab will now be **fetched and archived**, but its potency table may still be reported as "a layout the reader does not know yet" until a real sample of that lab's PDF is used to teach the reader. Nothing is guessed in the meantime.
+Fetching a certificate is one step; reading its numbers is another.
+`detectCoaTemplate` (coa-pdf-text-core.ts) knows these layouts, each verified
+on real certificates:
+
+| Lab | Layout | Verified on |
+|---|---|---|
+| #3 Confidence Analytics | Template 8.0 (Confident Cannabis) | R26/R28 owner transfer (certs.conflabs.com) |
+| #3 Confidence Analytics | Template 6.0 and 7.0 | 31 Cultivera re-hosted certificates (cv00-cv30), 20 potency rows each |
+| #7 Testing Technologies | one-page results table | 4 Cultivera re-hosted certificates (cv31-cv34), 8 potency rows each |
+| #12 Green Grower Labs | image certificate - numbers come from the lab JSON | R28 owner transfer |
+
+All 270 PDF numbers in the 35 Cultivera certificates equal the lab's own JSON
+(`tests/compliance/r36-cultivera-coa.test.ts`). A certificate from any other
+lab is still fetched and archived, but its potency table is reported as "a
+layout the reader does not know yet" until a real sample is used to teach the
+reader. Nothing is guessed.
+
+## Where it is stored (migration 0256)
+
+One table, `public.testing_labs`: the 11 WSLCB labs above plus one
+`platform` row for Cultivera (not a lab, no lab #). Each row has a `coa_hosts`
+array: the certificate reader's allow-list is the three built-in hosts plus
+every valid host on any row. The database refuses a host that is not a plain
+DNS name (`testing_lab_hosts_valid`) and more than 20 hosts per row. The
+factory reset keeps this table (it is reference data, not store data).
+
+## SSRF design (OWASP SSRF Prevention Cheat Sheet)
+
+- Exact-host allow-list, https only, port 443 only, no credentials, no IP literals.
+- An owner-added host is DNS-resolved before every request and every address
+  must be public (no 10/8, 172.16/12, 192.168/16, 127/8, 169.254/16, 100.64/10,
+  ::1, fc00::/7, fe80::/10, IPv4-mapped private addresses).
+- Redirects are followed by hand (`redirect: "manual"`), at most 5; every hop
+  is re-checked against the allow-list and DNS **before** it is requested.
+- Known limit: the address is not pinned between the DNS check and the
+  connection (a DNS-rebinding window). The exact-host allow-list, chosen by
+  the owner from a real certificate link, keeps that risk small.
