@@ -62,4 +62,4 @@ commit + push after every task, no drift.
 - [x] S3 pager + page size + toolbar
 - [x] S4 export
 - [x] S5 lint warnings
-- [ ] S6 full suite, PG reset, PR, merge
+- [x] S6 full suite (812 files, 21,586 tests), tsc, eslint, PG reset (257 migrations); PR + merge
