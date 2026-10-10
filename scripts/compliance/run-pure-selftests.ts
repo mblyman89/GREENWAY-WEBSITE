@@ -2100,7 +2100,7 @@ __runLiquidVolumeTests();
   assertRan("wcia-lab-json-core", __runWciaLabJsonCoreTests(r28CoaFixtures(".wcia.json")), 99); // R28: the lab JSON behind lab_result_link
   assertRan("coa-pdf-text-core", __runCoaPdfTextCoreTests(r28CoaStems()), 292); // R28: COA PDF text (unpdf + layout + LlamaParse markdown)
   assertRan("coa-facts-core", __runCoaFactsCoreTests(r28CoaStems()), 197); // R28: identity, agreement, edible facts, profile
-  assertRan("coa-extract-core", __runCoaExtractCoreTests(r28CoaStems()), 113); // R28: allow-list, best reading, LlamaParse gate, KB fill
+  assertRan("coa-extract-core", __runCoaExtractCoreTests(r28CoaStems()), 132); // R28: allow-list, best reading, LlamaParse gate, KB fill; R36: Cultivera, owner hosts, redirect hops, DNS answers
   assertRan("coa-panel-core", __runCoaPanelCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 101); // R28: lot/KB lab-certificate + product-facts panels; R29 +4 lot minors; R35 +2 WAC 314-55-095 banner
   assertRan("lab-facts-attach-core", __runLabFactsAttachCoreTests(r28CoaStems(), r28MakeExtract(r28CoaStems())), 102); // R30: first-pass lab attach + strain terpene learning
   assertRan("cannabinoid-profile-core", __runCannabinoidProfileCoreTests(), 61); // R29: ratio slot, package totals, serving summary, minor merge, ratio-vs-mg
@@ -2119,7 +2119,7 @@ __runLiquidVolumeTests();
   assertRan("expiry-report-export", __runExpiryReportExportTests(), 14); // R34: expiration report export
   assertRan("serving-limit-warning-core", __runServingLimitWarningCoreTests(), 53); // R35 #4: WAC 314-55-095 warning on the manual facts forms
   assertRan("menu-sensory-core", __runMenuSensoryCoreTests(), 67); // R35 #6: effects and aroma on the menu row (0254)
-  assertRan("testing-labs-core", __runTestingLabsCoreTests(), 83); // R36 #4: WA labs + certificate hosts (SSRF allow-list)
+  assertRan("testing-labs-core", __runTestingLabsCoreTests(), 96); // R36 #4: WA labs + certificate hosts (SSRF allow-list)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

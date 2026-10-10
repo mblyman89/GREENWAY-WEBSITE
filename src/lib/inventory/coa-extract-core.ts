@@ -7,7 +7,10 @@
  *
  *   1. safeCoaUrl       - which links may be fetched at all (https only, an
  *                         allow-list of lab hosts verified on the owner's own
- *                         transfer, no credentials, no odd ports, no IPs).
+ *                         transfer + hosts the owner added (R36), no
+ *                         credentials, no odd ports, no IPs). R36 adds
+ *                         nextRedirectHop (every redirect hop re-checked) and
+ *                         dnsAnswerOk (owner hosts must resolve public only).
  *   2. pickPdfText      - LlamaParse markdown vs the PDF's own text layer:
  *                         both are parsed and the one that actually READ the
  *                         potency table wins; a tie keeps LlamaParse (the
@@ -33,14 +36,22 @@ import {
 } from "@/lib/inventory/coa-facts-core";
 import { MG_FACT_TYPES } from "@/lib/inventory/fact-extraction-core";
 import { parseCoaPdfText } from "@/lib/inventory/coa-pdf-text-core";
+import { BUILT_IN_COA_HOSTS, isBuiltInHost, isPublicAddress, mergeHosts } from "@/lib/inventory/testing-labs-core";
 
 /**
- * Hosts a lab certificate may be fetched from. Verified on the owner transfer
- * (curl, R26/R28): certs.conflabs.com (Confidence Analytics, JSON + PDF) and
- * gglabs-j.github.io (Green Grower Labs, JSON + PDF). Add a lab here only after
- * seeing its real documents - an unknown host is reported, never fetched.
+ * Hosts a lab certificate may ALWAYS be fetched from - testing-labs-core
+ * BUILT_IN_COA_HOSTS, each verified by fetching real certificates:
+ * certs.conflabs.com (Confidence Analytics, JSON + PDF, R26/R28),
+ * gglabs-j.github.io (Green Grower Labs, R28) and files.cultivera.com (the
+ * Cultivera platform that re-hosts lab PDFs + JSON - 70 of 70 links in the
+ * owner's sample transfers, R36). Hosts the owner adds on
+ * /admin/inventory/labs are passed in as `extraHosts` (added, never
+ * replacing). An unknown host is reported, never fetched.
  */
-export const COA_HOST_ALLOW = ["certs.conflabs.com", "gglabs-j.github.io"] as const;
+export const COA_HOST_ALLOW: readonly string[] = BUILT_IN_COA_HOSTS.map((h) => h.host);
+
+/** Redirect hops followed (each one re-checked) before giving up. */
+export const COA_MAX_REDIRECTS = 5;
 
 /** Size caps: the real JSON is ~10-40 KB, the real PDFs ~0.2-1.1 MB. */
 export const COA_JSON_MAX_BYTES = 2 * 1024 * 1024;
@@ -49,7 +60,12 @@ export const COA_FETCH_TIMEOUT_MS = 20_000;
 
 export type SafeUrl = { ok: true; url: string } | { ok: false; reason: string };
 
-export function safeCoaUrl(raw: string | null | undefined): SafeUrl {
+/**
+ * May this link be fetched? https only, no credentials, port 443 only, and the
+ * host must be a built-in lab host or one of `extraHosts` (each re-validated
+ * by testing-labs-core normalizeLabHost; a value that fails it is ignored).
+ */
+export function safeCoaUrl(raw: string | null | undefined, extraHosts: readonly string[] = []): SafeUrl {
   const s = (raw ?? "").trim();
   if (!s) return { ok: false, reason: "no link" };
   let u: URL;
@@ -62,10 +78,53 @@ export function safeCoaUrl(raw: string | null | undefined): SafeUrl {
   if (u.username || u.password) return { ok: false, reason: "links with credentials are not read" };
   if (u.port && u.port !== "443") return { ok: false, reason: `port ${u.port} is not read` };
   const host = u.hostname.toLowerCase();
-  if (!(COA_HOST_ALLOW as readonly string[]).includes(host)) {
-    return { ok: false, reason: `${host} is not a known lab host (known: ${COA_HOST_ALLOW.join(", ")})` };
+  const allow = mergeHosts([{ coaHosts: extraHosts }]);
+  if (!allow.includes(host)) {
+    return { ok: false, reason: `${host} is not a known lab host (known: ${allow.join(", ")}; add it on Inventory -> Testing labs)` };
   }
   return { ok: true, url: u.toString() };
+}
+
+/** Does this already-safe URL's host need the DNS public-address check? (owner-added hosts do) */
+export function needsDnsCheck(url: string): boolean {
+  try {
+    return !isBuiltInHost(new URL(url).hostname.toLowerCase());
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Where does a 3xx answer send us? Resolves a relative Location against the
+ * current URL, then re-checks it with safeCoaUrl. A missing Location is an error.
+ */
+export function nextRedirectHop(current: string, location: string | null, extraHosts: readonly string[] = []): SafeUrl {
+  if (!location) return { ok: false, reason: "redirect with no Location" };
+  let next: string;
+  try {
+    next = new URL(location, current).toString();
+  } catch {
+    return { ok: false, reason: "redirect to an unreadable link" };
+  }
+  const s = safeCoaUrl(next, extraHosts);
+  if (!s.ok) {
+    let h = next;
+    try {
+      h = new URL(next).hostname;
+    } catch {
+      /* keep the raw link */
+    }
+    return { ok: false, reason: `redirected off the lab host (${h}): ${s.reason}` };
+  }
+  return s;
+}
+
+/** Every resolved address must be public; none = refused (a DNS-rebinding / internal-name guard). */
+export function dnsAnswerOk(host: string, addresses: readonly string[]): { ok: true } | { ok: false; reason: string } {
+  if (addresses.length === 0) return { ok: false, reason: `${host} did not resolve` };
+  const bad = addresses.filter((a) => !isPublicAddress(a));
+  if (bad.length) return { ok: false, reason: `${host} resolves to a non-public address (${bad.join(", ")}) - not fetched` };
+  return { ok: true };
 }
 
 /** A response is trusted only with the content type the lab really sends. */
@@ -323,6 +382,32 @@ export function __runCoaExtractCoreTests(fixtures: Record<string, string>): { pa
   const up = safeCoaUrl("  HTTPS://CERTS.CONFLABS.COM/full/WA-x.pdf ");
   ok(up.ok && up.url === "https://certs.conflabs.com/full/WA-x.pdf", "trimmed + host lower-cased");
   ok(safeCoaUrl("https://certs.conflabs.com:443/x").ok, "explicit 443 allowed");
+
+  // ---- R36: Cultivera built in, owner hosts added, redirects + DNS ----
+  const cv = "https://files.cultivera.com/435553542D5753353031/Coas/WA-1BXA5DQ1Z-WA-251230-005.pdf";
+  ok(safeCoaUrl(cv).ok, "files.cultivera.com is built in (the owner's 'not a known lab host' error)");
+  ok(COA_HOST_ALLOW.join() === "certs.conflabs.com,gglabs-j.github.io,files.cultivera.com", "built-in allow-list = the three verified hosts");
+  const unk = safeCoaUrl("https://certs.newlab.com/x.pdf");
+  ok(!unk.ok && unk.reason.includes("Testing labs"), "unknown host reason tells the owner where to add it");
+  ok(safeCoaUrl("https://certs.newlab.com/x.pdf", ["certs.newlab.com"]).ok, "an owner host is allowed when passed in");
+  ok(safeCoaUrl("https://CERTS.NEWLAB.com/x.pdf", ["certs.newlab.com"]).ok, "owner host match is case-insensitive");
+  ok(!safeCoaUrl("https://x.certs.newlab.com/x.pdf", ["certs.newlab.com"]).ok, "an owner host does not allow its sub-domains");
+  ok(!safeCoaUrl("https://127.0.0.1/x.pdf", ["127.0.0.1"]).ok, "an IP passed as an extra host is still refused");
+  ok(!safeCoaUrl("http://certs.newlab.com/x.pdf", ["certs.newlab.com"]).ok, "an owner host is https-only too");
+  ok(safeCoaUrl(cv, ["certs.newlab.com"]).ok, "extra hosts never replace the built-ins");
+  ok(!needsDnsCheck(cv) && needsDnsCheck("https://certs.newlab.com/x") && needsDnsCheck("::bad"), "DNS check only for non-built-in hosts (and unreadable links)");
+  const hop = nextRedirectHop("https://files.cultivera.com/a/b.pdf", "/c/d.pdf");
+  ok(hop.ok && hop.url === "https://files.cultivera.com/c/d.pdf", "relative redirect resolved against the current link");
+  const hop2 = nextRedirectHop("https://files.cultivera.com/a", "https://evil.example/x");
+  ok(!hop2.ok && hop2.reason.includes("redirected off the lab host (evil.example)"), "redirect off-list refused with its host");
+  ok(!nextRedirectHop("https://files.cultivera.com/a", "http://files.cultivera.com/a").ok, "redirect https -> http refused");
+  ok(!nextRedirectHop("https://files.cultivera.com/a", null).ok, "redirect without Location refused");
+  ok(nextRedirectHop("https://files.cultivera.com/a", "https://certs.newlab.com/x", ["certs.newlab.com"]).ok, "redirect onto an owner host allowed");
+  ok(dnsAnswerOk("x.com", ["52.84.150.39", "2606:4700::6810:84e5"]).ok, "all-public DNS answer ok");
+  const d1 = dnsAnswerOk("x.com", ["52.84.150.39", "10.0.0.5"]);
+  ok(!d1.ok && d1.reason.includes("10.0.0.5"), "one private address in the answer refuses the host");
+  ok(!dnsAnswerOk("x.com", []).ok, "no addresses refused");
+  ok(!dnsAnswerOk("x.com", ["169.254.169.254"]).ok, "cloud metadata address refused");
 
   // ---- content types + magic bytes ----
   ok(contentTypeOk("pdf", "application/pdf") && contentTypeOk("json", "application/json; charset=utf-8"), "real content types");
