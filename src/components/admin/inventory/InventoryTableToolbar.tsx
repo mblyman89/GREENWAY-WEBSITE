@@ -45,6 +45,8 @@ export function InventoryTableToolbar({
   allCount: number;
 }) {
   const visible = new Set(view.ids);
+  const rawPage = Array.isArray(raw.page) ? raw.page[0] : raw.page;
+  const currentPage = Number.isInteger(Number(rawPage)) && Number(rawPage) > 1 ? Number(rawPage) : 1;
   const visibleFields = exportFieldsFor(view.ids).length;
   const allFields = exportFieldsFor(INVENTORY_TABLE_COLUMNS.map((c) => c.id)).length;
   const chip = "rounded-full px-3 py-1 text-xs font-semibold transition";
@@ -124,6 +126,9 @@ export function InventoryTableToolbar({
             {carryFields(raw, ["scope", "columns", "format"]).map(([k, v], i) => (
               <input key={`${k}-${i}`} type="hidden" name={k} value={v} />
             ))}
+            {/* carryFields drops `page` (right for every table link, which resets
+                to page 1) — but "Only the rows on this page" needs it. */}
+            {currentPage > 1 && <input type="hidden" name="page" value={String(currentPage)} />}
             <fieldset>
               <legend className="mb-1 font-semibold text-[var(--admin-text)]">Which lots</legend>
               <label className="flex items-center gap-2 py-0.5">

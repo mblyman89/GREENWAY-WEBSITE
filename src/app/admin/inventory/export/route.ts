@@ -56,7 +56,9 @@ function rawFrom(url: URL): RawParams {
 export async function GET(request: Request) {
   const session = await requirePermission("inventory.manage");
   const url = new URL(request.url);
-  const format = parseFormat(url.searchParams.get("format"));
+  // The export panel's default is Excel (it carries the Summary + Columns
+  // sheets); a bare link gets the same file, not a different default.
+  const format = parseFormat(url.searchParams.get("format") ?? "xlsx");
   const scope = parseExportScope(url.searchParams.get("scope"));
   const columns = parseExportColumns(url.searchParams.get("columns"));
   if (!isSupabaseServiceConfigured) {
