@@ -13,10 +13,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   validatePayrollRun,
-  linesToAchEntries,
+  planPayrollEntries,
   type PayrollLineInput,
 } from "@/lib/payroll/payroll-core";
 import { buildNachaFile, type AchOriginator } from "@/lib/payments/nacha-core";
+import { listEmployeeDepositPlans } from "@/lib/payroll/employee-deposit-plans-store";
 import {
   evaluatePayrollGuardrails,
   guardrailsPermitGeneration,
@@ -452,7 +453,17 @@ export async function evaluateRunGuardrails(
 }
 
 export type GenerateResult =
-  | { ok: true; filename: string; file: string; totalCents: number; entryCount: number }
+  | {
+      ok: true;
+      filename: string;
+      file: string;
+      totalCents: number;
+      entryCount: number;
+      /** R39 S3: split-deposit notes (single-account fallback, $0 legs, shared accounts). */
+      notes: string[];
+      /** R39 S3: false before migration 0258 (every employee paid to one account). */
+      splitsReady: boolean;
+    }
   | { ok: false; error: string };
 
 /**
@@ -516,10 +527,22 @@ export async function generatePayrollNacha(
     originatingDfi: settings.originating_dfi,
   };
 
+  // R39 S3: split deposits. One line per employee (validated above); up to
+  // three entries per line from the employee's signed authorization.
+  const deposit = await listEmployeeDepositPlans(detail.lines.map((l) => l.employee_id).filter((x): x is string => !!x));
+  const planned = planPayrollEntries(lines, deposit.plans);
+  if (!planned.ok) return { ok: false, error: planned.errors.join(" ") };
+  const notes = deposit.tableReady
+    ? planned.notes
+    : [
+        "Split deposits are not set up yet (migration 0258). Every employee is paid to the single account on their employee record.",
+        ...planned.notes.filter((n) => !/no signed ACH authorization/.test(n)),
+      ];
+
   const effectiveDate = new Date(`${detail.run.pay_date}T00:00:00Z`);
   const built = buildNachaFile({
     originator,
-    entries: linesToAchEntries(lines),
+    entries: planned.entries,
     secCode: "PPD",
     companyEntryDescription: settings.entry_description || "PAYROLL",
     effectiveDate,
@@ -548,7 +571,7 @@ export async function generatePayrollNacha(
     })
     .eq("id", runId);
 
-  return { ok: true, filename, file: built.file, totalCents: built.totalCents, entryCount: built.entryCount };
+  return { ok: true, filename, file: built.file, totalCents: built.totalCents, entryCount: built.entryCount, notes, splitsReady: deposit.tableReady };
 }
 
 // ---------------------------------------------------------------------------

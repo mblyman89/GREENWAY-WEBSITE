@@ -147,9 +147,12 @@ export async function generateRunAction(runId: string, formData: FormData): Prom
     entityType: "payroll_run",
     entityId: runId,
     after: res.ok
-      ? { entryCount: res.entryCount, totalCents: res.totalCents, overrideWarnings, overrideReason }
+      ? { entryCount: res.entryCount, totalCents: res.totalCents, overrideWarnings, overrideReason, splitsReady: res.splitsReady, notes: res.notes }
       : { error: res.error, overrideWarnings },
   }).catch(() => {});
   revalidatePath(`${ROOT}/${runId}`);
-  redirect(res.ok ? `${ROOT}/${runId}?msg=${encodeURIComponent("ACH file ready to download.")}` : `${ROOT}/${runId}?error=${encodeURIComponent(res.error)}`);
+  // R39 S3: split-deposit notes ride along with the success message so a
+  // single-account fallback or a shared account is never silent (rule 48).
+  const okMsg = ["ACH file ready to download.", ...(res.ok ? res.notes : [])].join(" ");
+  redirect(res.ok ? `${ROOT}/${runId}?msg=${encodeURIComponent(okMsg)}` : `${ROOT}/${runId}?error=${encodeURIComponent(res.error)}`);
 }

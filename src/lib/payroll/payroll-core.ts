@@ -13,6 +13,14 @@
 
 import type { AchEntry } from "@/lib/payments/nacha-core";
 import { isValidRouting } from "@/lib/payments/nacha-core";
+import {
+  allocateSplit,
+  normalizeAccountKey,
+  payable as authorizationPayable,
+  AUTHORIZATION_STATES,
+  type AuthorizationState,
+  type SplitRule,
+} from "@/lib/payments/ach-authorization-core";
 
 /** Parse a user-typed dollar amount ("$1,234.56", "1234.5", "") into integer
  * cents. Returns null when the field is blank; throws-free — bad input → null. */
@@ -160,6 +168,180 @@ export function linesToAchEntries(lines: PayrollLineInput[]): AchEntry[] {
 }
 
 // ---------------------------------------------------------------------------
+// R39 S3 — split deposits (owner answers Q4 + Q11: credits only, up to 3
+// accounts per employee). One payroll LINE per employee (the duplicate guard
+// above stays); the NACHA file may carry up to 3 ENTRIES for that line.
+// ---------------------------------------------------------------------------
+
+/** One deposit account on an employee's signed ACH authorization (decrypted, server-side only). */
+export type SplitDepositAccount = {
+  priority: number;
+  rule: SplitRule;
+  routing: string;
+  accountNumber: string;
+  accountType: "checking" | "savings";
+  verificationStatus: string;
+};
+
+/** An employee's authorization as payroll sees it (null = none on file). */
+export type EmployeeDepositPlan = {
+  state: string;
+  accounts: SplitDepositAccount[];
+};
+
+export type PlannedEntries =
+  | {
+      ok: true;
+      entries: AchEntry[];
+      /** Plain notes for the screen (single-account fallback, $0 legs skipped, shared accounts). */
+      notes: string[];
+      /** Per employee: how many entries went in the file. */
+      perEmployee: { employeeId: string; entries: number; split: boolean }[];
+    }
+  | { ok: false; errors: string[] };
+
+/**
+ * Turn validated payroll lines into NACHA entries, honouring split deposits.
+ *
+ *  - No authorization on file: one entry to the account on the employee
+ *    record (today's behaviour), and a note says so — never silent.
+ *  - Authorization on file: it must be payable (only "active"; the same
+ *    payable() the rest of R39 uses) and EVERY account on it must be
+ *    verified. Then allocateSplit() divides net pay; $0 legs are skipped.
+ *    Anything else blocks THAT employee with a reason a person can act on.
+ *  - The same bank account receiving money for two different employees is a
+ *    payroll-fraud red flag (Nacha/WA auditor guidance); it is reported as a
+ *    note, not a block, because spouses can share an account.
+ *
+ * The result always sums to the run's net total exactly, or it refuses.
+ */
+export function planPayrollEntries(
+  lines: readonly PayrollLineInput[],
+  plans: ReadonlyMap<string, EmployeeDepositPlan>,
+): PlannedEntries {
+  const errors: string[] = [];
+  const notes: string[] = [];
+  const entries: AchEntry[] = [];
+  const perEmployee: { employeeId: string; entries: number; split: boolean }[] = [];
+  const owners = new Map<string, Set<string>>(); // account key -> employee names
+  const own = (key: string, name: string) => {
+    const set = owners.get(key) ?? new Set<string>();
+    set.add(name);
+    owners.set(key, set);
+  };
+
+  for (const l of lines) {
+    const id = l.employeeId.slice(0, 15);
+    const plan = plans.get(l.employeeId) ?? null;
+    if (!plan) {
+      entries.push({ accountType: l.accountType, routing: l.routing, accountNumber: l.accountNumber, amountCents: l.netPayCents, name: l.employeeName, idNumber: id });
+      own(normalizeAccountKey(l.routing, l.accountNumber, l.accountType), l.employeeName);
+      perEmployee.push({ employeeId: l.employeeId, entries: 1, split: false });
+      notes.push(`${l.employeeName}: no signed ACH authorization in the vault yet, so pay goes to the single account on their employee record.`);
+      continue;
+    }
+    const known = (AUTHORIZATION_STATES as readonly string[]).includes(plan.state);
+    if (!known) {
+      errors.push(`${l.employeeName}: authorization status "${plan.state}" is not one payroll knows. Nothing is paid until an admin fixes it.`);
+      continue;
+    }
+    const pay = authorizationPayable(plan.state as AuthorizationState);
+    if (!pay.ok) {
+      errors.push(`${l.employeeName}: ${pay.reason}`);
+      continue;
+    }
+    const unverified = plan.accounts.filter((a) => a.verificationStatus !== "verified");
+    if (unverified.length > 0) {
+      errors.push(`${l.employeeName}: ${unverified.length} deposit account(s) not verified yet (prenote, test credit or callback). Verify them in the vault first.`);
+      continue;
+    }
+    const bad = plan.accounts.find((a) => !isValidRouting(a.routing) || !a.accountNumber.replace(/\s/g, ""));
+    if (bad) {
+      errors.push(`${l.employeeName}: a deposit account has an invalid routing number or no account number (could the encryption key be missing?).`);
+      continue;
+    }
+    const keyed = plan.accounts.map((a) => ({ ...a, accountKey: normalizeAccountKey(a.routing, a.accountNumber, a.accountType) }));
+    const alloc = allocateSplit(l.netPayCents, keyed.map((a) => ({ accountKey: a.accountKey, priority: a.priority, rule: a.rule })));
+    if (!alloc.ok) {
+      errors.push(`${l.employeeName}: ${alloc.errors.join(" ")}`);
+      continue;
+    }
+    let sent = 0;
+    for (const leg of alloc.lines) {
+      const acct = keyed.find((a) => a.accountKey === leg.accountKey)!;
+      if (!leg.send) {
+        notes.push(`${l.employeeName}: the account ending ${acct.accountNumber.slice(-4)} gets $0.00 this run (net pay was used up by higher-priority accounts), so it is left out of the file.`);
+        continue;
+      }
+      entries.push({ accountType: acct.accountType, routing: acct.routing, accountNumber: acct.accountNumber, amountCents: leg.cents, name: l.employeeName, idNumber: id });
+      own(acct.accountKey, l.employeeName);
+      sent += 1;
+    }
+    perEmployee.push({ employeeId: l.employeeId, entries: sent, split: plan.accounts.length > 1 });
+  }
+
+  for (const [key, names] of owners) {
+    if (names.size > 1) {
+      notes.push(`The account ending ${key.split(":")[1].slice(-4)} receives pay for ${[...names].join(" and ")}. Confirm this is intended (a shared account is a common payroll-fraud sign).`);
+    }
+  }
+  if (errors.length) return { ok: false, errors };
+
+  const want = lines.reduce((t, l) => t + l.netPayCents, 0);
+  const got = entries.reduce((t, e) => t + e.amountCents, 0);
+  if (want !== got) {
+    return { ok: false, errors: [`Internal check failed: entries add up to ${centsToDollars(got)} but net pay is ${centsToDollars(want)}. No file was built.`] };
+  }
+  return { ok: true, entries, notes, perEmployee };
+}
+
+export type DepositAuthRow = { id: string; employee_id: string; state: string };
+export type DepositAcctRow = {
+  authorization_id: string;
+  priority: number;
+  rule_kind: "fixed" | "percent" | "remainder";
+  fixed_cents: number | null;
+  basis_points: number | null;
+  routing_enc: string;
+  account_enc: string;
+  account_type: "checking" | "savings";
+  verification_status: string;
+};
+
+/** Pure: 0258 rows -> plans (decrypt injected). One open authorization per employee or it throws. */
+export function rowsToDepositPlans(auths: readonly DepositAuthRow[], accts: readonly DepositAcctRow[], decrypt: (s: string) => string): Map<string, EmployeeDepositPlan> {
+  const byAuth = new Map<string, SplitDepositAccount[]>();
+  for (const a of accts) {
+    const rule: SplitDepositAccount["rule"] =
+      a.rule_kind === "fixed"
+        ? { kind: "fixed", cents: Number(a.fixed_cents) }
+        : a.rule_kind === "percent"
+          ? { kind: "percent", basisPoints: Number(a.basis_points) }
+          : { kind: "remainder" };
+    const list = byAuth.get(a.authorization_id) ?? [];
+    list.push({
+      priority: a.priority,
+      rule,
+      routing: decrypt(a.routing_enc),
+      accountNumber: decrypt(a.account_enc),
+      accountType: a.account_type,
+      verificationStatus: a.verification_status,
+    });
+    byAuth.set(a.authorization_id, list);
+  }
+  const plans = new Map<string, EmployeeDepositPlan>();
+  for (const auth of auths) {
+    if (plans.has(auth.employee_id)) {
+      // 0258 allows only one open authorization per employee; two means the
+      // index is missing. Refuse rather than guess which one is real.
+      throw new Error(`Employee ${auth.employee_id} has more than one open ACH authorization. Fix the vault before running payroll.`);
+    }
+    plans.set(auth.employee_id, { state: auth.state, accounts: (byAuth.get(auth.id) ?? []).sort((x, y) => x.priority - y.priority) });
+  }
+  return plans;
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
 export function __runPayrollCoreTests(): { passed: number; failed: number } {
@@ -226,6 +408,44 @@ export function __runPayrollCoreTests(): { passed: number; failed: number } {
   const entries = linesToAchEntries([good]);
   ok(entries.length === 1 && entries[0].amountCents === 150000 && entries[0].name === "Jane Doe", "lines→ach entries");
   ok(entries[0].accountType === "checking" && entries[0].routing === "021000021", "ach entry banking mapped");
+
+  // R39 S3: split deposits
+  const acct = (priority: number, rule: SplitRule, accountNumber: string, verificationStatus = "verified"): SplitDepositAccount => ({
+    priority,
+    rule,
+    routing: "021000021",
+    accountNumber,
+    accountType: "checking",
+    verificationStatus,
+  });
+  const jane: PayrollLineInput = { ...good, grossPayCents: null, taxesCents: null, deductionsCents: null, netPayCents: 123457 };
+  const three: EmployeeDepositPlan = {
+    state: "active",
+    accounts: [acct(1, { kind: "fixed", cents: 10000 }, "111"), acct(2, { kind: "percent", basisPoints: 1000 }, "222"), acct(3, { kind: "remainder" }, "333")],
+  };
+  const sp = planPayrollEntries([jane], new Map([["e1", three]]));
+  ok(sp.ok && sp.entries.map((e) => e.amountCents).join() === "10000,12345,101112", "3-way split amounts");
+  ok(sp.ok && sp.entries.every((e) => e.name === "Jane Doe" && e.idNumber === "e1"), "split legs carry the employee");
+  ok(sp.ok && sp.perEmployee[0].entries === 3 && sp.perEmployee[0].split, "perEmployee counts legs");
+  const none = planPayrollEntries([jane], new Map());
+  ok(none.ok && none.entries.length === 1 && none.entries[0].accountNumber === "123456789", "no plan → single account on file");
+  ok(none.ok && none.notes.some((n) => /no signed ACH authorization/.test(n)), "single-account fallback is visible");
+  const held = planPayrollEntries([jane], new Map([["e1", { ...three, state: "on_hold" }]]));
+  ok(!held.ok && /On hold/.test(held.errors[0]), "on_hold authorization blocks the employee");
+  const weird = planPayrollEntries([jane], new Map([["e1", { ...three, state: "ACTIVE" }]]));
+  ok(!weird.ok && /not one payroll knows/.test(weird.errors[0]), "unknown state blocks");
+  const unv = planPayrollEntries([jane], new Map([["e1", { state: "active", accounts: [acct(1, { kind: "remainder" }, "9", "pending")] }]]));
+  ok(!unv.ok && /not verified/.test(unv.errors[0]), "unverified account blocks");
+  const small = planPayrollEntries([{ ...jane, netPayCents: 5000 }], new Map([["e1", three]]));
+  ok(small.ok && small.entries.length === 1 && small.entries[0].amountCents === 5000, "$0 legs skipped, total intact");
+  ok(small.ok && small.notes.filter((n) => /gets \$0.00/.test(n)).length === 2, "each skipped leg noted");
+  const shared = planPayrollEntries(
+    [jane, { ...jane, employeeId: "e2", employeeName: "John Roe" }],
+    new Map(),
+  );
+  ok(shared.ok && shared.notes.some((n) => /Jane Doe and John Roe/.test(n)), "shared account across employees flagged");
+  const four = planPayrollEntries([jane], new Map([["e1", { state: "active", accounts: [...three.accounts, acct(4, { kind: "fixed", cents: 1 }, "444")] }]]));
+  ok(!four.ok && /At most 3/.test(four.errors[0]), "4 accounts refused");
 
   console.log(`payroll-core: ${passed} passed, ${failed} failed`);
   return { passed, failed };
