@@ -46,7 +46,11 @@ const MUTANTS: Mutant[] = [
   { name: "classifier: code not checked", file: CORE, old: '  if (String(e.code ?? "") !== "23505") return false;\n  const t = errText(e);', neu: "  const t = errText(e);", cmd: VT },
   { name: "dismiss msg: missing fn not named", file: CORE, old: 'if (code === "PGRST202" || code === "42883" ||', neu: 'if (code === "PGRST202" ||', cmd: VT },
   // --- twins / dismiss check ---
-  { name: "twins: dismissed rows take part", file: CORE, old: '    if ((r.status ?? "").trim().toLowerCase() === "dismissed") continue;\n    const k = groupKey(r);', neu: "    const k = groupKey(r);", cmd: VT },
+  // (Removing the explicit "dismissed" skip is an EQUIVALENT mutant - a
+  // dismissed row is neither live nor dismissable, so it can never be offered
+  // or kept; measured R36: it survives for that reason. The skip stays as
+  // defence in depth. Replaced by a mutant that changes behaviour:)
+  { name: "twins: rows with no manifest # grouped", file: CORE, old: "    const k = groupKey(r);\n    if (!k) continue;\n    const g = groups.get(k);", neu: "    const k = groupKey(r) ?? \"\";\n    const g = groups.get(k);", cmd: VT },
   { name: "twins: keep may be itself", file: CORE, old: "const keep = live.find((l) => l.id !== r.id);", neu: "const keep = live[0];", cmd: VT },
   { name: "twins: keep newest, not oldest", file: CORE, old: ".filter((r) => isBlockingStatus(r.status)).sort(compareOldestFirst);", neu: ".filter((r) => isBlockingStatus(r.status)).sort((a, b) => compareOldestFirst(b, a));", cmd: VT },
   { name: "dismissable: accepted allowed", file: CORE, old: 'export const DISMISSABLE_STATUSES = ["pending", "in_transit", "received", "rejected"] as const;', neu: 'export const DISMISSABLE_STATUSES = ["pending", "in_transit", "received", "rejected", "accepted"] as const;', cmd: VT },
@@ -55,7 +59,7 @@ const MUTANTS: Mutant[] = [
   { name: "describe: invoice carry not reported", file: CORE, old: 'if (r.invoice_carried) parts.push("invoice # moved to the kept manifest");', neu: "", cmd: VT },
   // --- staging dedupe ---
   { name: "dedupe: first-listed twin, not oldest", file: DEDUPE, old: "    if (!best || compareOldestFirst(row, best) < 0) best = row;", neu: "    if (!best) best = row;", cmd: VT },
-  { name: "dedupe: received not blocking", file: DEDUPE, old: '"pending", "in_transit", "received", "accepted", "partially_accepted"', neu: '"pending", "in_transit", "accepted", "partially_accepted"', cmd: VT },
+  { name: "dedupe: received not blocking", file: DEDUPE, old: '  "in_transit",\n  "received",\n  "accepted",', neu: '  "in_transit",\n  "accepted",', cmd: VT },
   // --- webhook wiring ---
   { name: "route: no maxDuration", file: ROUTE, old: "export const maxDuration = 300;", neu: "", cmd: VT },
   { name: "route: claim after the slow fetch", file: ROUTE, old: "    const claim = await claimInboundDelivery({ provider: \"resend\", key });\n    if (claim.kind === \"duplicate\") {\n      const res = claimResponse(claim.decision);\n      return NextResponse.json(res.body, { status: res.status });\n    }\n    const logId = claim.kind === \"claimed\" ? claim.logId : null;\n    try {\n      const enriched = await enrichResendInbound(raw);", neu: "    const enriched = await enrichResendInbound(raw);\n    const claim = await claimInboundDelivery({ provider: \"resend\", key });\n    if (claim.kind === \"duplicate\") {\n      const res = claimResponse(claim.decision);\n      return NextResponse.json(res.body, { status: res.status });\n    }\n    const logId = claim.kind === \"claimed\" ? claim.logId : null;\n    try {", cmd: VT },
@@ -74,7 +78,7 @@ const MUTANTS: Mutant[] = [
   { name: "table: rejected stays in Needs attention", file: TABLE, old: 'return stage === "accepted" || stage === "partially_accepted" || stage === "rejected";', neu: 'return stage === "accepted" || stage === "partially_accepted";', cmd: VT },
   { name: "table: partial stays in Needs attention", file: TABLE, old: 'return stage === "accepted" || stage === "partially_accepted" || stage === "rejected";', neu: 'return stage === "accepted" || stage === "rejected";', cmd: VT },
   { name: "table: dismissed counted as hidden", file: TABLE, old: "(n, r) => n + (isProcessedManifest(r.status) && !isDismissedManifest(r.status) ? 1 : 0),", neu: "(n, r) => n + (isProcessedManifest(r.status) || isDismissedManifest(r.status) ? 1 : 0),", cmd: VT },
-  { name: "pipeline: dismissed folded into pending", file: PIPE, old: '  "dismissed",\n', neu: "", cmd: VT },
+  { name: "pipeline: dismissed folded into pending", file: PIPE, old: '  // real manifests; kept (not deleted) for the audit trail.\n  "dismissed",\n', neu: "  // real manifests; kept (not deleted) for the audit trail.\n", cmd: VT },
   { name: "actions: scan still includes dismissed", file: ACT, old: '.not("status", "in", "(rejected,dismissed)")', neu: '.neq("status", "rejected")', cmd: VT },
 ];
 
