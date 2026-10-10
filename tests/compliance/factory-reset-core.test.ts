@@ -1275,6 +1275,41 @@ describe("D-65 — the connections survive the reset", () => {
     expect(plan.ok).toBe(true);
     if (!plan.ok) return;
     expect(plan.wipe.length).toBeGreaterThan(120);
-    expect(plan.wipe.length).toBeGreaterThan(plan.keep.length);
+    // R39 S2 retired "wipe > keep" and put something STRONGER in its place.
+    // The seven 0258 tables hold signed ACH authorizations: real, not
+    // rehearsal, records that Nacha and WAC 314-55-087 require you to keep. They
+    // are KEEP, and with them KEEP (145) outnumbers WIPE (139). A ratio test
+    // only fires when the balance tips over. An exact count fires on EVERY new
+    // carve-out, so each one needs a deliberate edit here with its reason
+    // written beside it.
+    //   138 before R39
+    //   +7  R39 / 0258: ach_authorizations, ach_authorization_accounts,
+    //       ach_authorization_documents, ach_authorization_events,
+    //       ach_verifications, ach_return_notices, payee_contacts
+    expect(plan.keep.length).toBe(145);
+    expect(plan.wipe.length).toBe(139);
+  });
+
+  it("every R39 carve-out says WHY it survives the reset (retention, not convenience)", () => {
+    const r39 = [
+      "ach_authorizations",
+      "ach_authorization_accounts",
+      "ach_authorization_documents",
+      "ach_authorization_events",
+      "ach_verifications",
+      "ach_return_notices",
+      "payee_contacts",
+    ];
+    for (const t of r39) {
+      const c = classifyTable(t);
+      expect(c, `${t} must be classified`).not.toBeNull();
+      expect(c!.disposition, `${t} must survive the reset`).toBe("KEEP");
+      expect(c!.source, `${t} needs its own rule, not a prefix family`).toBe("table");
+    }
+    // The authorization row itself carries the citations, so the reset screen
+    // tells him the legal reason it is kept.
+    const auth = TABLE_RULES.find((r) => r.table === "ach_authorizations")!;
+    expect(auth.because).toContain("Nacha");
+    expect(auth.because).toContain("WAC 314-55-087");
   });
 });

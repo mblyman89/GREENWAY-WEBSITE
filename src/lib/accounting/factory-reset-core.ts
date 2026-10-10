@@ -481,6 +481,16 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "vendors", disposition: "KEEP", because: "Your vendor list. Real suppliers you will buy from on November 1st." },
   { table: "vendor_aliases", disposition: "KEEP", because: "The alternate spellings that let imports match your vendors." },
   { table: "vendor_bank_details", disposition: "KEEP", because: "Vendor banking for ACH — real payment instructions." },
+  // R39 (0258). Signed ACH authorizations are evidence Nacha and WAC 314-55-087
+  // require you to keep; the database refuses to delete them inside the
+  // retention window, so a reset that tried would fail part-way.
+  { table: "ach_authorizations", disposition: "KEEP", because: "Signed ACH authorizations. Nacha and WAC 314-55-087 require keeping them for years after they end." },
+  { table: "ach_authorization_accounts", disposition: "KEEP", because: "The bank accounts each signed authorization pays into (encrypted)." },
+  { table: "ach_authorization_documents", disposition: "KEEP", because: "Signed ACH forms, voided checks and e-sign certificates, pinned by hash." },
+  { table: "ach_authorization_events", disposition: "KEEP", because: "The append-only audit trail of every ACH authorization change." },
+  { table: "ach_verifications", disposition: "KEEP", because: "Prenote and test-credit results that prove each account was verified." },
+  { table: "ach_return_notices", disposition: "KEEP", because: "Returns and change notices from Timberland, part of the payment record." },
+  { table: "payee_contacts", disposition: "KEEP", because: "Payee phone numbers and emails with the date each was first on file, used for fraud callbacks." },
   { table: "vendor_platform_map", disposition: "KEEP", because: "Which vendor corresponds to which menu platform." },
   { table: "brands", disposition: "KEEP", because: "Your brand list, used to match products on every vendor menu." },
   { table: "brand_aliases", disposition: "KEEP", because: "Alternate brand spellings for matching." },
