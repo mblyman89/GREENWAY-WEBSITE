@@ -23,10 +23,15 @@ import {
   MAX_DOC_BYTES,
   parseAmountRule,
   planDocumentPath,
+  rekeyStep,
   rekeyVerdict,
+  fingerprintEntry,
+  parseFingerprint,
   sniffDocMime,
   STORAGE_EXT,
   UPLOADABLE_DOC_KINDS,
+  type BankDraft,
+  type EntryFingerprint,
   type IntakeStatus,
   type RekeyAccount,
 } from "@/lib/payments/ach-document-intake-core";
@@ -50,7 +55,7 @@ describe("R39 S5 ach-document-intake-core self-tests", () => {
   it("all pass", () => {
     const r = __runAchDocumentIntakeTests();
     expect(r.failed).toBe(0);
-    expect(r.passed).toBeGreaterThanOrEqual(84);
+    expect(r.passed).toBeGreaterThanOrEqual(90);
   });
 });
 
@@ -357,5 +362,62 @@ describe("blind re-key", () => {
   it("more than 3 accounts refused", () => {
     const four = [1, 2, 3, 4].map((i) => ({ ...A, account: `1000${i}` }));
     expect(rekeyVerdict(EMPTY_DRAFT, [{ byId: "s", accounts: four }])).toMatchObject({ ok: false, need: "fix_entry" });
+  });
+});
+
+describe("server rekeyStep agrees with rekeyVerdict (two passes, fingerprints only)", () => {
+  // Real HMAC-SHA256 so the parity check uses the same primitive as the server.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { createHmac } = require("node:crypto") as typeof import("node:crypto");
+  const hm = (x: string) => createHmac("sha256", "test-key").update(x).digest("hex");
+  const A: RekeyAccount = { routing: RTN, account: "12345678", accountType: "checking", rule: { kind: "fixed", cents: 20000 } };
+  const B: RekeyAccount = { routing: "011000015", account: "999999", accountType: "savings", rule: { kind: "remainder" } };
+  const variants: RekeyAccount[][] = [
+    [A, B],
+    [{ ...A, account: "12345679" }, B],
+    [A, { ...B, accountType: "checking" }],
+    [{ ...A, rule: { kind: "percent", basisPoints: 2000 } }, B],
+    [B],
+    [{ ...A, routing: "011000015" }, B],
+  ];
+  const drafts: [string, BankDraft][] = [
+    ["none", EMPTY_DRAFT],
+    ["form", draftFromAcroForm("employee", { e_a1_rtn: RTN, e_a1_acct: "12345678", e_a1_chk: "Yes", e_a1_amt: "$200", e_a2_rtn: "011000015", e_a2_acct: "999999", e_a2_sav: "Yes", e_a2_rem: "Yes" })],
+    ["scan", draftFromParsedText(RTN)],
+  ];
+  const summary = (v: { ok: boolean } & Record<string, unknown>) =>
+    v.ok ? `ok:${v.basis}` : `${v.need}:${JSON.stringify(v.differences ?? v.errors)}`;
+
+  it("single pass", () => {
+    for (const [, d] of drafts) for (const x of variants) {
+      const a = rekeyVerdict(d, [{ byId: "s", accounts: x }]);
+      const b = rekeyStep(d, null, { byId: "s", accounts: x }, hm);
+      expect(summary(b)).toBe(summary(a));
+    }
+  });
+  it("two passes, every pair, every draft", () => {
+    let n = 0;
+    for (const [, d] of drafts) for (const x of variants) for (const y of variants) {
+      const first = rekeyStep(d, null, { byId: "s", accounts: x }, hm);
+      if (first.ok) continue; // accepted on pass 1, no second pass happens
+      const pending = "keepPending" in first ? (first.keepPending as EntryFingerprint) : null;
+      expect(pending).not.toBeNull();
+      const stored = parseFingerprint(JSON.parse(JSON.stringify(pending)));
+      const b = rekeyStep(d, stored, { byId: "m", accounts: y }, hm);
+      const a = rekeyVerdict(d, [{ byId: "s", accounts: x }, { byId: "m", accounts: y }]);
+      expect(summary(b)).toBe(summary(a));
+      n += 1;
+    }
+    expect(n).toBeGreaterThan(60);
+  });
+  it("the stored fingerprint never contains a bank number", () => {
+    const fp = fingerprintEntry({ byId: "s", accounts: [A, B] }, hm);
+    const txt = JSON.stringify(fp);
+    for (const secret of ["12345678", "999999", RTN, "011000015", "20000"]) expect(txt).not.toContain(secret);
+  });
+  it("a tampered pending record is ignored, not trusted", () => {
+    expect(parseFingerprint({ v: 1, byId: "s", accounts: [{ routing: "1", account: "2", type: "3", amount: "4" }] })).toBeNull();
+    expect(parseFingerprint({ v: 1, byId: "s", accounts: new Array(4).fill({ routing: "a".repeat(64), account: "a".repeat(64), type: "a".repeat(64), amount: "a".repeat(64) }) })).toBeNull();
+    expect(parseFingerprint(null)).toBeNull();
   });
 });

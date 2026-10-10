@@ -502,6 +502,16 @@ export function validateRekeyEntry(accounts: readonly RekeyAccount[]): string[] 
   return errs;
 }
 
+/** A draft is usable alone only if it has no warnings and every account is complete. */
+export function draftIsUsable(draft: BankDraft): boolean {
+  return (
+    draft.source !== "none" &&
+    draft.warnings.length === 0 &&
+    draft.accounts.length > 0 &&
+    draft.accounts.every((a) => Boolean(a.routing && a.account && a.accountType && a.rule))
+  );
+}
+
 export type RekeyVerdict =
   | { ok: true; basis: "matches_form" | "two_blind_entries"; accounts: RekeyAccount[]; note: string }
   | { ok: false; need: "fix_entry"; errors: string[] }
@@ -526,11 +536,7 @@ export function rekeyVerdict(draft: BankDraft, entries: readonly RekeyEntry[]): 
     if (errs.length) return { ok: false, need: "fix_entry", errors: errs };
   }
   const first = entries[0];
-  const draftUsable =
-    draft.source !== "none" &&
-    draft.warnings.length === 0 &&
-    draft.accounts.length > 0 &&
-    draft.accounts.every((a) => a.routing && a.account && a.accountType && a.rule);
+  const draftUsable = draftIsUsable(draft);
   if (entries.length === 1) {
     if (!draftUsable) {
       return {
@@ -585,6 +591,134 @@ export function rekeyVerdict(draft: BankDraft, entries: readonly RekeyEntry[]): 
   };
 }
 
+/**
+ * The FIRST blind entry is kept between passes only as keyed fingerprints
+ * (one HMAC per field), never as numbers. ach_authorization_events is
+ * append-only and can never be deleted, so plaintext or even ciphertext bank
+ * numbers there would outlive the retention period. A fingerprint lets the
+ * second pass name which FIELD differs without anyone being able to read it.
+ */
+export type EntryFingerprint = { v: 1; byId: string; accounts: { routing: string; account: string; type: string; amount: string }[] };
+
+function canonicalFields(a: { routing: string; account: string; accountType: AccountType | null; rule: SplitRule | null }) {
+  return { routing: digits(a.routing), account: digits(a.account), type: String(a.accountType), amount: ruleKey(a.rule) };
+}
+
+export function fingerprintEntry(e: RekeyEntry, hmac: (s: string) => string): EntryFingerprint {
+  return {
+    v: 1,
+    byId: e.byId,
+    accounts: e.accounts.map((a, i) => {
+      const c = canonicalFields(a);
+      return {
+        routing: hmac(`rekey|${i}|routing|${c.routing}`),
+        account: hmac(`rekey|${i}|account|${c.account}`),
+        type: hmac(`rekey|${i}|type|${c.type}`),
+        amount: hmac(`rekey|${i}|amount|${c.amount}`),
+      };
+    }),
+  };
+}
+
+export function parseFingerprint(raw: unknown): EntryFingerprint | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as { v?: unknown; byId?: unknown; accounts?: unknown };
+  if (o.v !== 1 || typeof o.byId !== "string" || !Array.isArray(o.accounts) || o.accounts.length > MAX_ACCOUNTS_PER_PAYEE) return null;
+  const accounts: EntryFingerprint["accounts"] = [];
+  for (const a of o.accounts as unknown[]) {
+    const x = (a ?? {}) as Record<string, unknown>;
+    const ks = ["routing", "account", "type", "amount"] as const;
+    if (!ks.every((k) => typeof x[k] === "string" && isSha256Hex(x[k] as string))) return null;
+    accounts.push({ routing: x.routing as string, account: x.account as string, type: x.type as string, amount: x.amount as string });
+  }
+  return { v: 1, byId: o.byId, accounts };
+}
+
+export function fingerprintDifferences(a: EntryFingerprint, b: EntryFingerprint): string[] {
+  const diffs: string[] = [];
+  if (a.accounts.length !== b.accounts.length) diffs.push(`number of accounts (${a.accounts.length} vs ${b.accounts.length})`);
+  const n = Math.min(a.accounts.length, b.accounts.length);
+  for (let i = 0; i < n; i += 1) {
+    const label = `account ${i + 1}`;
+    if (a.accounts[i].routing !== b.accounts[i].routing) diffs.push(`${label} routing number`);
+    if (a.accounts[i].account !== b.accounts[i].account) diffs.push(`${label} account number`);
+    if (a.accounts[i].type !== b.accounts[i].type) diffs.push(`${label} checking/savings`);
+    if (a.accounts[i].amount !== b.accounts[i].amount) diffs.push(`${label} amount`);
+  }
+  return diffs;
+}
+
+export type RekeyStep =
+  | RekeyVerdict
+  | { ok: false; need: "second_entry"; reason: string; differences: string[]; keepPending: EntryFingerprint };
+
+/**
+ * One pass of the blind re-key, as the server runs it: `pending` is the
+ * fingerprint of the previous unmatched entry (or null). Same rules as
+ * rekeyVerdict (a parity test runs both over the same scenarios):
+ *   - an entry that matches a usable draft is accepted on "matches_form";
+ *   - otherwise it must match the previous entry; if it does not, it becomes
+ *     the new pending entry (two CONSECUTIVE agreeing entries are needed);
+ *   - two agreeing entries that disagree with a usable draft are refused.
+ */
+export function rekeyStep(
+  draft: BankDraft,
+  pending: EntryFingerprint | null,
+  current: RekeyEntry,
+  hmac: (s: string) => string,
+): RekeyStep {
+  const errs = validateRekeyEntry(current.accounts);
+  if (errs.length) return { ok: false, need: "fix_entry", errors: errs };
+  const usable = draftIsUsable(draft);
+  if (usable && rekeyDifferences(current.accounts, draft.accounts).length === 0) {
+    return {
+      ok: true,
+      basis: "matches_form",
+      accounts: current.accounts,
+      note: pending ? "Second blind entry matched the form field for field." : "Blind entry matched the form field for field.",
+    };
+  }
+  const fp = fingerprintEntry(current, hmac);
+  if (!pending) {
+    if (!usable) {
+      return {
+        ok: false,
+        need: "second_entry",
+        reason: draft.source === "none"
+          ? "There is no machine-read draft to check against. Enter the details a second time, without looking at the first entry."
+          : "The machine-read draft is incomplete or has warnings. Enter the details a second time, without looking at the first entry.",
+        differences: [],
+        keepPending: fp,
+      };
+    }
+    return {
+      ok: false,
+      need: "second_entry",
+      reason: "Your entry does not match the form. Look at the document again and enter the details a second time.",
+      differences: rekeyDifferences(current.accounts, draft.accounts),
+      keepPending: fp,
+    };
+  }
+  const d = fingerprintDifferences(pending, fp);
+  if (d.length) {
+    return { ok: false, need: "second_entry", reason: "The two blind entries do not match. Check the document and try again.", differences: d, keepPending: fp };
+  }
+  if (usable) {
+    return {
+      ok: false,
+      need: "form_disagrees",
+      reason: "Both entries agree with each other, but the form's own filled-in fields say something different. Check the form; if the form itself is wrong, reject it and ask the payee for a new one.",
+      differences: rekeyDifferences(current.accounts, draft.accounts),
+    };
+  }
+  return {
+    ok: true,
+    basis: "two_blind_entries",
+    accounts: current.accounts,
+    note: pending.byId === current.byId ? "Two blind entries by the same person matched." : "Two blind entries by different people matched.",
+  };
+}
+
 /** Roles allowed to drop documents: mirrors public.is_manager() (0130). */
 export const DROP_ROLES = ["owner", "admin", "manager"] as const;
 /** Roles allowed to read, re-key and accept: mirrors public.is_admin() (0001). */
@@ -594,41 +728,6 @@ export function canDropDocuments(role: string | null | undefined): boolean {
 }
 export function canReviewDocuments(role: string | null | undefined): boolean {
   return (REVIEW_ROLES as readonly string[]).includes(String(role ?? ""));
-}
-
-/**
- * A pending blind entry is stored ENCRYPTED between the two passes. These
- * turn it into a string and back, refusing anything that is not exactly a
- * valid entry (never trusting stored JSON blindly).
- */
-export function serializeEntry(e: RekeyEntry): string {
-  return JSON.stringify({ v: 1, byId: e.byId, accounts: e.accounts });
-}
-export function parseEntry(raw: string): RekeyEntry | null {
-  let j: unknown;
-  try {
-    j = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (!j || typeof j !== "object") return null;
-  const o = j as { v?: unknown; byId?: unknown; accounts?: unknown };
-  if (o.v !== 1 || typeof o.byId !== "string" || !Array.isArray(o.accounts)) return null;
-  const accounts: RekeyAccount[] = [];
-  for (const a of o.accounts as unknown[]) {
-    if (!a || typeof a !== "object") return null;
-    const x = a as Record<string, unknown>;
-    const r = x.rule as Record<string, unknown> | undefined;
-    if (typeof x.routing !== "string" || typeof x.account !== "string") return null;
-    if (x.accountType !== "checking" && x.accountType !== "savings") return null;
-    let rule: SplitRule;
-    if (r?.kind === "remainder") rule = { kind: "remainder" };
-    else if (r?.kind === "fixed" && Number.isSafeInteger(r.cents)) rule = { kind: "fixed", cents: r.cents as number };
-    else if (r?.kind === "percent" && Number.isInteger(r.basisPoints)) rule = { kind: "percent", basisPoints: r.basisPoints as number };
-    else return null;
-    accounts.push({ routing: x.routing, account: x.account, accountType: x.accountType, rule });
-  }
-  return { byId: o.byId, accounts };
 }
 
 /**
@@ -919,11 +1018,27 @@ export function __runAchDocumentIntakeTests(): { passed: number; failed: number 
   ok(canDropDocuments("manager") && canDropDocuments("owner") && !canDropDocuments("content_editor") && !canDropDocuments("staff") && !canDropDocuments(null), "drop roles");
   ok(canReviewDocuments("admin") && !canReviewDocuments("manager"), "review roles");
 
-  // entry round trip
+  // fingerprints + server step (parity with rekeyVerdict)
+  const hm = (x: string) => {
+    let h = 0;
+    for (let i = 0; i < x.length; i += 1) h = (h * 31 + x.charCodeAt(i)) >>> 0;
+    return h.toString(16).padStart(8, "0").repeat(8);
+  };
   const ent: RekeyEntry = { byId: "u1", accounts: [A, { ...B, rule: { kind: "percent", basisPoints: 2500 } }] };
-  const back = parseEntry(serializeEntry(ent));
-  ok(back !== null && JSON.stringify(back) === JSON.stringify(ent), "entry round trip");
-  ok(parseEntry("{") === null && parseEntry('{"v":2,"byId":"x","accounts":[]}') === null && parseEntry('{"v":1,"byId":"x","accounts":[{"routing":"1","account":"2","accountType":"loan","rule":{"kind":"remainder"}}]}') === null, "entry parse refuses junk");
+  const fpr = fingerprintEntry(ent, hm);
+  ok(!JSON.stringify(fpr).includes("12345678") && !JSON.stringify(fpr).includes(goodRtn), "fingerprint holds no numbers");
+  ok(parseFingerprint(JSON.parse(JSON.stringify(fpr))) !== null && parseFingerprint({ v: 1, byId: "x", accounts: [{ routing: "zz" }] }) === null, "fingerprint parse");
+  ok(fingerprintDifferences(fpr, fingerprintEntry({ byId: "u2", accounts: [{ ...A, account: "1234 5678" }, { ...B, rule: { kind: "percent", basisPoints: 2500 } }] }, hm)).length === 0, "fingerprint ignores spaces");
+  ok(fingerprintDifferences(fpr, fingerprintEntry({ byId: "u2", accounts: [{ ...A, accountType: "savings" }, B] }, hm)).join() === "account 1 checking/savings,account 2 amount", "fingerprint names fields");
+  const s1 = rekeyStep(EMPTY_DRAFT, null, { byId: "s", accounts: [A] }, hm);
+  ok(!s1.ok && s1.need === "second_entry" && "keepPending" in s1, "step 1 keeps pending");
+  const s2 = rekeyStep(EMPTY_DRAFT, "keepPending" in s1 ? s1.keepPending : null, { byId: "m", accounts: [A] }, hm);
+  ok(s2.ok && s2.basis === "two_blind_entries" && s2.note.includes("different"), "step 2 matches");
+  const s3 = rekeyStep(emp, null, { byId: "s", accounts: [A, B] }, hm);
+  ok(s3.ok && s3.basis === "matches_form", "step matches form");
+  const s4a = rekeyStep(emp, null, { byId: "s", accounts: [{ ...A, account: "11111111" }, B] }, hm);
+  const s4 = rekeyStep(emp, "keepPending" in s4a ? s4a.keepPending : null, { byId: "s", accounts: [{ ...A, account: "11111111" }, B] }, hm);
+  ok(!s4.ok && s4.need === "form_disagrees", "step form disagrees");
 
   // form post
   const post = (o: Record<string, string>) => (k: string) => o[k] ?? "";
