@@ -282,6 +282,20 @@ describe("blind re-key and accept (employee)", () => {
     for (const n of ["12345679", ...NUMBERS]) expect(everythingWritten()).not.toContain(n);
   });
 
+  it("the account-key HMAC is over the normalised key (leading zeros and spacing do not create a second identity)", async () => {
+    st.fieldObjects = fx("employee-blank");
+    const d = await drop();
+    const Z1 = { ...A1, account: "0012 345-678" };
+    expect(await store.rekeyAndMaybeAccept({ ...base, doc: d, actorId: ACTOR, accounts: [Z1, A2] })).toMatchObject({ ok: true, done: false });
+    expect(await store.rekeyAndMaybeAccept({ ...base, doc: d, actorId: ACTOR2, accounts: [Z1, A2] })).toMatchObject({ ok: true, done: true });
+    const rows = st.rpc[0].body.p_accounts as Row[];
+    const { keyedHasher } = await import("@/lib/security/keyed-hash");
+    const { normalizeAccountKey } = await import("@/lib/payments/ach-authorization-core");
+    const ak = keyedHasher("achAccountKey")!;
+    expect(rows[0].account_key_hmac).toBe(ak(normalizeAccountKey("021000021", "12345678", "checking")));
+    expect(rows[0].account_key_hmac).not.toBe(ak("021000021:0012 345-678:checking"));
+  });
+
   it("no usable draft: two agreeing blind entries are needed, then accept on two_blind_entries", async () => {
     st.fieldObjects = fx("employee-blank");
     const d = await drop();
@@ -296,7 +310,9 @@ describe("blind re-key and accept (employee)", () => {
   it("refuses before any write: no key, bad split, future date, supporting document, decided document", async () => {
     const d = await drop();
     delete process.env.DATA_ENCRYPTION_KEY;
-    expect((await store.rekeyAndMaybeAccept({ ...base, doc: d, actorId: ACTOR, accounts: [A1, A2] })).ok).toBe(false);
+    const noKey = await store.rekeyAndMaybeAccept({ ...base, doc: d, actorId: ACTOR, accounts: [A1, A2] });
+    expect(noKey).toMatchObject({ ok: false });
+    expect((noKey as { error: string }).error).toMatch(/DATA_ENCRYPTION_KEY is not set/);
     process.env.DATA_ENCRYPTION_KEY = "behaviour-test-key-0123456789abcdef";
     expect((await store.rekeyAndMaybeAccept({ ...base, doc: d, actorId: ACTOR, accounts: [A1] })).ok).toBe(false); // no remainder
     expect((await store.rekeyAndMaybeAccept({ ...base, signedOnRaw: "2999-01-01", doc: d, actorId: ACTOR, accounts: [A1, A2] })).ok).toBe(false);
