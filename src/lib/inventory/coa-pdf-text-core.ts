@@ -28,6 +28,12 @@
  *   - "confidence-8": Confidence Analytics, "Template Version: 8.0". Potency
  *     table "Analyte Name % mg/g mg/serving mg/package LoQ (%)" (16 of 17
  *     owner documents), terpene table "Result (ppm) loq (ppm)".
+ *   - "confidence-7" (R36): Confidence Analytics "Template Version: 6.0" and
+ *     "7.0" - the layout of the 31 Confidence certificates the owner's vendor
+ *     re-hosts on files.cultivera.com (tests/fixtures/coa-cultivera). Potency
+ *     header "... mg/package LoD/LoQ (%)", limit cells "0.02 / 0.04", cells
+ *     "<LOQ" (detected below the limit of quantitation: no number, never 0),
+ *     terpene table "Result (ppm) lod/loq (ppm)" with "40 / 80" limits.
  *   - "ggl": Green Grower Labs. Its PDF draws the potency numbers as vector
  *     art: unpdf returns NO numbers (verified), pdftotext -layout does. The
  *     reader takes the numbers when present and otherwise says so - the GGL
@@ -43,7 +49,7 @@
 
 import { cannabinoidKey, type CannabinoidKey } from "./wcia-lab-json-core";
 
-export type CoaTemplate = "confidence-8" | "ggl";
+export type CoaTemplate = "confidence-8" | "confidence-7" | "ggl";
 export type CoaTotalRow = "total-cannabinoids" | "total-thc" | "total-cbd";
 
 export type CoaPotencyRow = {
@@ -128,7 +134,7 @@ const CELL = String.raw`(?:${NUM}|ND|N\/A|NT|NA)`;
 /** One table cell: number, ND (0, detected=false) or N/A / NT / NA (null). */
 function cell(tok: string): { v: number | null; nd: boolean } {
   if (tok === "ND") return { v: 0, nd: true };
-  if (tok === "N/A" || tok === "NT" || tok === "NA") return { v: null, nd: false };
+  if (tok === "N/A" || tok === "NT" || tok === "NA" || tok === LOQ_TOKEN) return { v: null, nd: false };
   const n = Number(tok);
   return Number.isFinite(n) ? { v: n, nd: false } : { v: null, nd: false };
 }
@@ -189,6 +195,7 @@ export function detectCoaTemplate(text: string): CoaTemplate | null {
   if (/Analyte Name % mg\/g mg\/serving mg\/package LoQ \(%\)/i.test(text) && /Confidence Analytics/i.test(text)) {
     return "confidence-8";
   }
+  if (POTENCY_HEADER_7.test(text) && /Confidence Analytics/i.test(text)) return "confidence-7";
   if (/Green Grower Labs/i.test(text) || /greengrowerlabs\.com/i.test(text)) return "ggl";
   return null;
 }
@@ -198,6 +205,17 @@ export function detectCoaTemplate(text: string): CoaTemplate | null {
 // ---------------------------------------------------------------------------
 
 const POTENCY_HEADER = /Analyte Name % mg\/g mg\/serving mg\/package LoQ \(%\)/i;
+/** R36: Confidence Template 6.0 / 7.0 prints LoD AND LoQ in the last column. */
+const POTENCY_HEADER_7 = /Analyte Name % mg\/g mg\/serving mg\/package LoD\/LoQ \(%\)/i;
+/** "<LOQ": detected, below the limit of quantitation - no number. */
+const LOQ_TOKEN = "<LOQ";
+const CELL_7 = String.raw`(?:${NUM}|ND|N\/A|NT|NA|<LOQ)`;
+/** "lod / loq" pair -> the LoQ alone, so the Template 8 row shape applies. */
+const LIMIT_PAIR_7 = new RegExp(String.raw`(?<=\s|^)(${NUM}|N\/A|NA) \/ (${NUM}|N\/A|NA)(?=\s|$)`, "g");
+const POTENCY_ROW_7 = new RegExp(
+  String.raw`(Total Cannabinoids|Total THC|Total CBD|[a-z][a-z0-9]*(?:-[a-z0-9]+)*)\s+(${CELL_7})\s+(${CELL_7})\s+(${CELL_7})\s+(${CELL_7})\s+(${CELL_7})(?=\s|$)`,
+  "gi",
+);
 const POTENCY_END = /\[End of Analytes\]|Terpene Profile|Template Version:|Regulatory Compliance Testing/i;
 const POTENCY_ROW = new RegExp(
   String.raw`(Total Cannabinoids|Total THC|Total CBD|[a-z][a-z0-9]*(?:-[a-z0-9]+)*)\s+(${CELL})\s+(${CELL})\s+(${CELL})\s+(${CELL})\s+(${CELL})(?=\s|$)`,
@@ -219,7 +237,7 @@ export function terpeneName(raw: string): string {
     .replace(/^g-/, "gamma-");
 }
 
-function parseConfidence(text: string): CoaPdfDoc {
+function parseConfidence(text: string, variant: "8" | "7" = "8"): CoaPdfDoc {
   const warnings: string[] = [];
   const checks: CoaCheck[] = [];
 
@@ -285,16 +303,19 @@ function parseConfidence(text: string): CoaPdfDoc {
   // --- potency table
   const potency: CoaPotencyRow[] = [];
   let potencyDate: string | null = null;
-  const hIdx = text.search(POTENCY_HEADER);
+  const header = variant === "7" ? POTENCY_HEADER_7 : POTENCY_HEADER;
+  const hIdx = text.search(header);
   if (hIdx >= 0) {
     const before = text.slice(Math.max(0, hIdx - 40), hIdx);
     const d = before.match(/(\d{4}-\d{2}-\d{2})\s*$/);
     potencyDate = d ? d[1] : null;
-    const afterHeader = text.slice(hIdx).replace(POTENCY_HEADER, "");
+    const afterHeader = text.slice(hIdx).replace(header, "");
     const endIdx = afterHeader.search(POTENCY_END);
-    const seg = endIdx >= 0 ? afterHeader.slice(0, endIdx) : afterHeader;
+    const seg0 = endIdx >= 0 ? afterHeader.slice(0, endIdx) : afterHeader;
+    const seg = variant === "7" ? seg0.replace(LIMIT_PAIR_7, "$2") : seg0;
     const seen = new Set<string>();
-    for (const m of seg.matchAll(POTENCY_ROW)) {
+    const belowLoq: string[] = [];
+    for (const m of seg.matchAll(variant === "7" ? POTENCY_ROW_7 : POTENCY_ROW)) {
       const key = rowKey(m[1]);
       if (!key) {
         warnings.push(`Potency row "${m[1]}" is not a known cannabinoid - shown, not used.`);
@@ -305,6 +326,7 @@ function parseConfidence(text: string): CoaPdfDoc {
         continue;
       }
       seen.add(key);
+      if (m[2] === LOQ_TOKEN) belowLoq.push(key);
       const [pct, mgg, mgs, mgp, loq] = [m[2], m[3], m[4], m[5], m[6]].map(cell);
       potency.push({
         label: m[1],
@@ -318,6 +340,9 @@ function parseConfidence(text: string): CoaPdfDoc {
       });
     }
     if (potency.length === 0) warnings.push("The potency table header was found but no rows could be read.");
+    if (belowLoq.length > 0) {
+      warnings.push(`Below the lab's limit of quantitation (<LOQ), so no number was taken: ${belowLoq.join(", ")}.`);
+    }
   } else {
     warnings.push("No potency table in the text.");
   }
@@ -331,7 +356,7 @@ function parseConfidence(text: string): CoaPdfDoc {
   // footer; "total terpenes" can sit mid-stream in the two-column layout, so
   // it is read as a row, never used as the end marker. Footnote digits ("1")
   // can never be a row: a row name must start with a letter.
-  const tIdx = text.search(/Terpenes2? \d{4}-\d{2}-\d{2}(?: Terpenes continued)? Analyte /);
+  const tIdx = text.search(variant === "7" ? /Terpenes\d? \d{4}-\d{2}-\d{2}(?: Terpenes continued)? Analyte / : /Terpenes2? \d{4}-\d{2}-\d{2}(?: Terpenes continued)? Analyte /);
   if (tIdx >= 0) {
     const seg0 = text.slice(tIdx);
     const tEnd = seg0.search(/Template Version:|Page \d+ of \d+/);
@@ -342,8 +367,17 @@ function parseConfidence(text: string): CoaPdfDoc {
       .replace(/Analyte Name Result \(ppm\) loq \(ppm\)/g, " ")
       .replace(/Analyte Result loq Analyte Result loq Name \(ppm\) \(ppm\) Name \(ppm\) \(ppm\)/g, " ")
       .replace(/\s+/g, " ");
+    const clean7 =
+      variant === "7"
+        ? clean
+            .replace(/Terpenes\d? \d{4}-\d{2}-\d{2}/g, " ")
+            .replace(/Analyte Name Result \(ppm\) lod\/loq \(ppm\)/g, " ")
+            .replace(/Analyte Result lod\/loq Analyte Result lod\/loq Name \(ppm\) \(ppm\) Name \(ppm\) \(ppm\)/g, " ")
+            .replace(LIMIT_PAIR_7, "$2")
+            .replace(/\s+/g, " ")
+        : clean;
     const seen = new Set<string>();
-    for (const m of clean.matchAll(TERP_ROW)) {
+    for (const m of clean7.matchAll(TERP_ROW)) {
       const name = terpeneName(m[1]);
       const val = m[2] === "ND" ? { v: 0, nd: true } : { v: Number(m[2]), nd: false };
       const loq = m[3] === "NA" || m[3] === "N/A" ? null : Number(m[3]);
@@ -395,7 +429,7 @@ function parseConfidence(text: string): CoaPdfDoc {
   }
 
   return {
-    template: "confidence-8",
+    template: variant === "7" ? "confidence-7" : "confidence-8",
     labName: "Confidence Analytics",
     labSampleId,
     batchId,
@@ -510,7 +544,7 @@ export function parseCoaPdfText(raw: string): CoaPdfParse {
       reason: "This certificate layout is not one the reader knows yet - its facts were not read. Enter them by hand or send it to the developer.",
     };
   }
-  return { ok: true, doc: t === "confidence-8" ? parseConfidence(text) : parseGgl(text) };
+  return { ok: true, doc: t === "confidence-8" ? parseConfidence(text) : t === "confidence-7" ? parseConfidence(text, "7") : parseGgl(text) };
 }
 
 export function potencyRow(doc: Pick<CoaPdfDoc, "potency">, key: CannabinoidKey | CoaTotalRow): CoaPotencyRow | null {
