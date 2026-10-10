@@ -37,7 +37,9 @@
 36 killed if (reason.length < 5) return
 37 killed .in("state", ["started", "code_sent", "consented"])     .select("id");
 38 killed cancel_reason: reason
-39 killed if (got !== row.sha256) return
-40 killed if (session.state !== "signed" || !session.record_document_id) return
-total 41 killed 41 survivors []
+39 killed const session = live.session ?? (done && done.employee_id === employee
+40 killed const step = session ? esignStep(session.state, session.started_at, Da
+41 killed if (got !== row.sha256) return
+42 killed if (session.state !== "signed" || !session.record_document_id) return
+total 43 killed 43 survivors []
 EXIT 0
