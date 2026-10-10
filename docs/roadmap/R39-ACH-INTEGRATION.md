@@ -71,3 +71,25 @@ commit + push after every task, no drift.
       prenote / return / NOC / reversal clocks, splits <= 3, release
       verdicts, retention, return / NOC codes), mentor + gates. Full
       compliance suite: 815 files, 21,665 tests green.
+- [x] S2 migration 0258 (7 tables, vendor needs-info / opted-out, vault
+      revoked/archived, private `ach-docs` bucket, explicit least-privilege
+      grants for Supabase changelog 45329). All 258 migrations applied on
+      PG15 with the CI bootstrap, and 0258 re-applied cleanly. Proven by:
+      - `scripts/recon/ach-authorizations-pg-check.sql`: every refusal beside
+        an accepted row, RLS as staff/manager/admin, exact grant counts. It
+        now runs in CI via `POST_APPLY_CHECKS` in verify-migrations-execute.ts
+        and must print its all-clear line.
+      - 60/60 SQL mutants killed.
+      - The SQL<->core parity test, with 5/5 mutants killed.
+      - The 840-case retention matrix, core vs SQL, with 0 mismatches.
+      - The rollback, tested twice and on fresh apply. It refuses once
+        anything is signed or uploaded.
+      Factory reset KEEPs all 7 tables, with exact keep/wipe counts.
+- [ ] S3 store/vault hardening (save -> on_hold, delete -> archive, solo
+      release + notify, splits), payroll multi-entry + prenote Nacha
+- [ ] S4 vault UI (active / hidden inactive), vendor ACH card, employee card
+- [ ] S5 drop-only upload, AcroForm / LlamaParse draft, blind re-key
+- [ ] S6 e-sign (E-SIGN Act / UETA consent, intent, OTP, hash, certificate)
+- [ ] S7 returns / NOC log + notifications, prenote file, retention / legal
+      hold, annual review reminder
+- [ ] S8 docs, test plan, PR, merge, production verification
