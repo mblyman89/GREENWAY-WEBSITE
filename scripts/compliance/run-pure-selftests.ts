@@ -1650,7 +1650,7 @@ __runLiquidVolumeTests();
   __runNonCannabisTests();
   __runNamingConventionTests();
   __runCcrsProductNameCoreTests();
-  assertNoFailures("nacha-core", __runNachaCoreTests());
+  assertRan("nacha-core", __runNachaCoreTests(), 41);
   assertNoFailures("vendor-ach-core", __runVendorAchTests());
   __runPayeeBankingCoreTests();
   assertNoFailures("payroll-core", __runPayrollCoreTests());

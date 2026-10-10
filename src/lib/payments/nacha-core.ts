@@ -114,7 +114,20 @@ export type AchEntry = {
   name: string;
   /** Optional identification number (e.g. employee id). */
   idNumber?: string | null;
+  /**
+   * R39 S3: a prenotification (prenote) — a zero-dollar entry that checks the
+   * account exists before the first live credit. Transaction code 23
+   * (checking) / 33 (savings), amount field all zeros. Nacha: prenotes are
+   * optional, but an Originator that sends one must wait 3 banking days
+   * before the first live entry (see PRENOTE_WAIT_BANKING_DAYS).
+   * Sources: Nacha ACH Developer Guide, "Transaction Codes"; Hancock Whitney
+   * NACHA format guide ("Enter 10 zeros for prenotes").
+   */
+  prenote?: boolean;
 };
+
+/** Nacha: wait this many banking days after a prenote before a live entry. */
+export const PRENOTE_WAIT_BANKING_DAYS = 3;
 
 export type BuildNachaInput = {
   originator: AchOriginator;
@@ -140,6 +153,19 @@ const TXN_CODE: Record<AchEntry["accountType"], string> = {
   checking: "22",
   savings: "32",
 };
+// Credit prenote codes (zero-dollar account checks).
+const PRENOTE_TXN_CODE: Record<AchEntry["accountType"], string> = {
+  checking: "23",
+  savings: "33",
+};
+
+/** Transaction code for an entry (live credit or credit prenote). */
+export function transactionCode(e: Pick<AchEntry, "accountType" | "prenote">): string {
+  const table = e.prenote ? PRENOTE_TXN_CODE : TXN_CODE;
+  const code = table[e.accountType];
+  if (!code) throw new Error(`Unknown account type "${String(e.accountType)}".`);
+  return code;
+}
 
 // ---------------------------------------------------------------------------
 // Builder
@@ -161,8 +187,36 @@ export function buildNachaFile(input: BuildNachaInput): BuildNachaResult {
     if (!e.accountNumber || e.accountNumber.replace(/\s/g, "").length === 0) {
       return { ok: false, error: `Entry ${i + 1} (${e.name || "?"}): account number is required.` };
     }
-    if (!Number.isInteger(e.amountCents) || e.amountCents <= 0) {
+    if (e.accountType !== "checking" && e.accountType !== "savings") {
+      return { ok: false, error: `Entry ${i + 1} (${e.name || "?"}): account type must be checking or savings.` };
+    }
+    if (e.prenote) {
+      if (e.amountCents !== 0) {
+        return { ok: false, error: `Entry ${i + 1} (${e.name || "?"}): a prenote must be $0.00.` };
+      }
+    } else if (!Number.isInteger(e.amountCents) || e.amountCents <= 0) {
       return { ok: false, error: `Entry ${i + 1} (${e.name || "?"}): amount must be a positive whole number of cents.` };
+    }
+  }
+
+  // A prenote and a live credit to the SAME account in one file would skip
+  // the Nacha 3-banking-day wait. Refuse it (and a doubled prenote).
+  const acctKey = (e: AchEntry) =>
+    `${e.routing.replace(/\D/g, "")}:${e.accountNumber.replace(/[\s-]/g, "").toUpperCase().replace(/^0+(?=.)/, "")}:${e.accountType}`;
+  const prenoted = new Map<string, number>();
+  for (const e of entries) {
+    if (e.prenote) prenoted.set(acctKey(e), (prenoted.get(acctKey(e)) ?? 0) + 1);
+  }
+  for (const [k, n] of prenoted) {
+    if (n > 1) return { ok: false, error: `The same account (ending ${k.split(":")[1].slice(-4)}) has ${n} prenotes in this file.` };
+  }
+  for (let i = 0; i < entries.length; i += 1) {
+    const e = entries[i];
+    if (!e.prenote && prenoted.has(acctKey(e))) {
+      return {
+        ok: false,
+        error: `Entry ${i + 1} (${e.name || "?"}): this account is being prenoted in the same file. Nacha requires ${PRENOTE_WAIT_BANKING_DAYS} banking days between a prenote and the first live credit.`,
+      };
     }
   }
 
@@ -218,7 +272,7 @@ export function buildNachaFile(input: BuildNachaInput): BuildNachaResult {
     const traceSeq = idx + 1;
     lines.push(
       "6" +
-        TXN_CODE[e.accountType] + // 2-3 transaction code
+        transactionCode(e) + // 2-3 transaction code (22/32 live, 23/33 prenote)
         numeric(rDfi8, 8) + // 4-11 receiving DFI id
         numeric(check, 1) + // 12 check digit
         alpha(e.accountNumber, 17) + // 13-29 DFI account number (left-justified)
@@ -375,6 +429,65 @@ export function __runNachaCoreTests(): { passed: number; failed: number } {
     effectiveDate: new Date(),
   });
   ok(!zeroAmt.ok, "zero amount rejected");
+
+  // R39 S3: prenotes (23 checking / 33 savings, $0)
+  const O = { destinationRouting: "125000105", destinationName: "T", immediateOrigin: "1", companyName: "G", companyId: "1", originatingDfi: "125000105" };
+  const pre = buildNachaFile({
+    originator: O,
+    entries: [
+      { accountType: "checking", routing: "021000021", accountNumber: "111", amountCents: 0, name: "A", prenote: true },
+      { accountType: "savings", routing: "011401533", accountNumber: "222", amountCents: 0, name: "B", prenote: true },
+      { accountType: "checking", routing: "021000021", accountNumber: "333", amountCents: 5000, name: "C" },
+    ],
+    secCode: "PPD",
+    companyEntryDescription: "PAYROLL",
+    effectiveDate: new Date("2026-03-02T00:00:00Z"),
+  });
+  ok(pre.ok, "prenote file builds");
+  if (pre.ok) {
+    const sx = pre.file.split("\n").filter((r) => r[0] === "6");
+    ok(sx[0].startsWith("623") && sx[1].startsWith("633") && sx[2].startsWith("622"), "prenote codes 23/33, live 22");
+    ok(sx[0].slice(29, 39) === "0000000000" && sx[1].slice(29, 39) === "0000000000", "prenote amount field is 10 zeros");
+    ok(pre.totalCents === 5000 && pre.entryCount === 3, "prenotes count as entries, add $0");
+    ok(pre.file.split("\n").every((r) => r === "" || r.length === 94), "prenote file stays 94 wide");
+  }
+  const preNonZero = buildNachaFile({ originator: O, entries: [{ accountType: "checking", routing: "021000021", accountNumber: "1", amountCents: 1, name: "X", prenote: true }], secCode: "PPD", companyEntryDescription: "P", effectiveDate: new Date() });
+  ok(!preNonZero.ok && /prenote must be \$0/.test(preNonZero.error), "a prenote with money is refused");
+  const sameFile = buildNachaFile({
+    originator: O,
+    entries: [
+      { accountType: "checking", routing: "021000021", accountNumber: "00123", amountCents: 0, name: "X", prenote: true },
+      { accountType: "checking", routing: "021-000-021", accountNumber: "123", amountCents: 100, name: "X" },
+    ],
+    secCode: "PPD",
+    companyEntryDescription: "P",
+    effectiveDate: new Date(),
+  });
+  ok(!sameFile.ok && /3 banking days/.test(sameFile.error), "prenote + live to the same account (formatting ignored) refused");
+  const otherType = buildNachaFile({
+    originator: O,
+    entries: [
+      { accountType: "checking", routing: "021000021", accountNumber: "123", amountCents: 0, name: "X", prenote: true },
+      { accountType: "savings", routing: "021000021", accountNumber: "123", amountCents: 100, name: "X" },
+    ],
+    secCode: "PPD",
+    companyEntryDescription: "P",
+    effectiveDate: new Date(),
+  });
+  ok(otherType.ok, "prenote checking + live savings at the same number are different accounts");
+  const dupPre = buildNachaFile({
+    originator: O,
+    entries: [
+      { accountType: "checking", routing: "021000021", accountNumber: "123", amountCents: 0, name: "X", prenote: true },
+      { accountType: "checking", routing: "021000021", accountNumber: "123", amountCents: 0, name: "X", prenote: true },
+    ],
+    secCode: "PPD",
+    companyEntryDescription: "P",
+    effectiveDate: new Date(),
+  });
+  ok(!dupPre.ok && /2 prenotes/.test(dupPre.error), "doubled prenote refused");
+  ok(transactionCode({ accountType: "checking" }) === "22" && transactionCode({ accountType: "savings", prenote: true }) === "33", "transactionCode table");
+  ok(PRENOTE_WAIT_BANKING_DAYS === 3, "Nacha prenote wait is 3 banking days");
 
   console.log(`nacha-core: ${passed} passed, ${failed} failed`);
   return { passed, failed };
