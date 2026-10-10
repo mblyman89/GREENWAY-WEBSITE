@@ -2123,7 +2123,7 @@ __runLiquidVolumeTests();
   assertRan("menu-sensory-core", __runMenuSensoryCoreTests(), 67); // R35 #6: effects and aroma on the menu row (0254)
   assertRan("testing-labs-core", __runTestingLabsCoreTests(), 109); // R36 #4: WA labs + certificate hosts (SSRF allow-list)
   assertRan("serving-derivation-core", __runServingDerivationTests(), 60); // R37 S2: WAC 314-55-095 10 mg serving solver
-  assertRan("serving-facts-view-core", __runServingFactsViewTests(), 20); // R37 S2: product-facts panel prefill view
+  assertRan("serving-facts-view-core", __runServingFactsViewTests(), 21); // R37 S2: product-facts panel prefill view
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
