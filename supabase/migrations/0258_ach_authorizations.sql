@@ -569,6 +569,18 @@ drop policy if exists payee_contacts_admin on public.payee_contacts;
 create policy payee_contacts_admin on public.payee_contacts
   for all using (public.is_admin()) with check (public.is_admin());
 
+-- Explicit grants. Supabase stops granting new public tables to the API roles
+-- automatically ("Breaking Change: Tables not exposed to Data and GraphQL API
+-- automatically", changelog 45329, enforced on ALL existing projects on
+-- October 30, 2026). The app's server reaches these tables through the Data
+-- API as service_role, so without these lines the tables would exist and be
+-- unreachable. Least privilege per role:
+--   anon           nothing.
+--   authenticated  select / insert / update, narrowed by the RLS above to
+--                  admins (and the two manager drop-only inserts). No delete:
+--                  retention disposal is a server (service_role) job.
+--   service_role   full; it bypasses RLS, and the triggers still refuse
+--                  edits to evidence and deletes inside retention.
 revoke all on table public.ach_authorizations          from anon;
 revoke all on table public.ach_authorization_accounts  from anon;
 revoke all on table public.ach_authorization_documents from anon;
@@ -576,6 +588,17 @@ revoke all on table public.ach_authorization_events    from anon;
 revoke all on table public.ach_verifications           from anon;
 revoke all on table public.ach_return_notices          from anon;
 revoke all on table public.payee_contacts              from anon;
+
+revoke delete on table public.ach_authorizations, public.ach_authorization_accounts,
+  public.ach_authorization_documents, public.ach_authorization_events, public.ach_verifications,
+  public.ach_return_notices, public.payee_contacts from authenticated;
+grant select, insert, update on table public.ach_authorizations, public.ach_authorization_accounts,
+  public.ach_authorization_documents, public.ach_authorization_events, public.ach_verifications,
+  public.ach_return_notices, public.payee_contacts to authenticated;
+grant select, insert, update, delete on table public.ach_authorizations, public.ach_authorization_accounts,
+  public.ach_authorization_documents, public.ach_authorization_events, public.ach_verifications,
+  public.ach_return_notices, public.payee_contacts to service_role;
+grant usage, select on sequence public.ach_authorization_events_id_seq to authenticated, service_role;
 
 comment on table public.ach_authorizations is
   'R39: one ACH credit authorization per payee (employee or vendor). States mirror ach-authorization-core.ts; deletes refused inside the retention window (6y after end and after signing; Nacha 2y, WAC 314-55-087 5y).';
