@@ -557,6 +557,19 @@ export async function dismissDuplicateManifestAction(
   revalidatePath("/admin/inventory");
   const params = new URLSearchParams();
   if (res.ok) {
+    // R36 #2: the owner-visible audit row (Settings -> Audit log), in addition
+    // to the manifest_events written inside the SQL transaction. Only on
+    // success: a refusal changed nothing, so there is nothing to audit.
+    const { recordAudit } = await import("@/lib/auth/audit");
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "manifest.dismiss_duplicate",
+      entityType: "inbound_manifest",
+      entityId: duplicateId,
+      before: { status: "live duplicate", keptManifestId: keepId },
+      after: { status: "dismissed", duplicateOf: keepId, reason, summary: res.summary },
+    });
     params.set("dismissed", res.summary.slice(0, 400));
   } else {
     params.set("dismisserr", res.error.slice(0, 400));
