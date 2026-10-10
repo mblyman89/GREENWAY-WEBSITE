@@ -14,7 +14,9 @@ M = [
     ('if (sessionExpired(s.started_at, input.nowMs)) return { ok: false, error: esignDbErrorMessage("ACH_ESIGN_EXPIRED") };\n  const em', 'const em'),
     ('if (!em.ok) return { ok: false, error: em.error };', ''),
     ('if (!can.ok) return { ok: false, error: can.error };', ''),
-    ('if (!h) return { ok: false, error: NO_KEY };\n  const emailEnc', 'const emailEnc'),
+    # EQUIVALENT (not run): removing `if (!h) return NO_KEY` in sendEsignCode. keyedHasher is
+    # null only when DATA_ENCRYPTION_KEY is unset, and then encryptSecret returns plain text, so
+    # the very next guard returns the same NO_KEY. The behaviour test pins that outcome.
     ('email_enc: emailEnc,', 'email_enc: em.email,'),
     ('otp_digest: otpDigest(h, s.id, code),', 'otp_digest: code,'),
     ('otp_sends: s.otp_sends + 1,', 'otp_sends: s.otp_sends,'),

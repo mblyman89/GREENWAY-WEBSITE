@@ -220,6 +220,13 @@ describe("send code", () => {
     expect(r).toEqual({ ok: false, error: "Another device changed this signing. Reload the page." });
     expect(row(s.id).otp_sends).toBe(1);
   });
+  it("refuses to send for a consented or cancelled session (state message, nothing changed)", async () => {
+    const s = await consented();
+    const r = await store.sendEsignCode({ session: s, email: EMAIL, nowMs: T0 + 200_000, mail: mailer });
+    expect(r).toEqual({ ok: false, error: core.esignDbErrorMessage("ACH_ESIGN_STATE") });
+    expect(row(s.id)).toMatchObject({ state: "consented", otp_sends: 1 });
+    expect(mails).toHaveLength(1);
+  });
   it("refuses after the 30-minute session expiry and with a bad email", async () => {
     const s = await started();
     expect((await store.sendEsignCode({ session: s, email: EMAIL, nowMs: T0 + 31 * 60_000, mail: mailer })).ok).toBe(false);
@@ -277,6 +284,28 @@ describe("verify code + consent", () => {
     expect((await store.verifyCodeAndConsent({ session: s, typedCode: code, agreed: true, disclosureSha256Shown: "0".repeat(64), nowMs: T0 + 60_000 })).ok).toBe(false);
     expect((await store.verifyCodeAndConsent({ session: s, typedCode: code, agreed: true, disclosureSha256Shown: sha, nowMs: T0 + 1000 + 11 * 60_000 })).ok).toBe(false);
     expect(row(s.id)).toMatchObject({ state: "code_sent", otp_attempts: 0 });
+  });
+  it("a right, unexpired code still fails once the 30-minute session has expired", async () => {
+    const s = await started();
+    const sent = await store.sendEsignCode({ session: s, email: EMAIL, nowMs: T0 + 29 * 60_000, mail: mailer });
+    expect(sent.ok).toBe(true);
+    const r = await store.verifyCodeAndConsent({ session: await fresh(s.id), typedCode: lastCode(), agreed: true, disclosureSha256Shown: store.currentDisclosureSha256(), nowMs: T0 + 31 * 60_000 });
+    expect(r).toEqual({ ok: false, error: core.esignDbErrorMessage("ACH_ESIGN_EXPIRED") });
+    expect(row(s.id).state).toBe("code_sent");
+  });
+  it("verify on an already-consented session gives the state message", async () => {
+    const s = await consented();
+    const r = await store.verifyCodeAndConsent({ session: s, typedCode: "123456", agreed: true, disclosureSha256Shown: store.currentDisclosureSha256(), nowMs: T0 + 70_000 });
+    expect(r).toEqual({ ok: false, error: core.esignDbErrorMessage("ACH_ESIGN_STATE") });
+  });
+  it("a stale copy with the OLD code cannot consent after a resend replaced it (optimistic otp_digest)", async () => {
+    const stale = await codeSent();
+    const old = lastCode();
+    await store.sendEsignCode({ session: stale, email: EMAIL, nowMs: T0 + 70_000, mail: mailer });
+    expect(row(stale.id).otp_digest).not.toBe(stale.otp_digest);
+    const r = await store.verifyCodeAndConsent({ session: stale, typedCode: old, agreed: true, disclosureSha256Shown: store.currentDisclosureSha256(), nowMs: T0 + 80_000 });
+    expect(r).toEqual({ ok: false, error: "Another device changed this signing. Reload the page." });
+    expect(row(stale.id).state).toBe("code_sent");
   });
   it("an old code stops working after a resend", async () => {
     let s = await codeSent();
@@ -364,7 +393,8 @@ describe("sign", () => {
     ]);
     const s = await consented();
     const r = await store.signEsignSession(signInput(s));
-    expect(r.ok && r.replacedPrevious).toBe(false);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.replacedPrevious).toBe(false);
   });
 });
 
@@ -409,14 +439,15 @@ describe("signer's copy", () => {
       expect(new TextDecoder().decode(r.bytes.slice(0, 5))).toBe("%PDF-");
     }
   });
-  it("refuses a tampered file and an unsigned session", async () => {
+  it("refuses an unsigned session (even with a record id), and a tampered file", async () => {
     const { sess, rec } = await signedWithDoc();
+    const unsigned = await store.signedRecordBytes({ ...sess, state: "consented" });
+    expect(unsigned).toEqual({ ok: false, error: "This signing is not finished." });
     const key = [...st.objects.keys()].find((k) => rec.storage_path.endsWith(k))!;
     const b = st.objects.get(key)!;
     b[b.length - 2] ^= 1;
     const r = await store.signedRecordBytes(sess);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/SHA-256/);
-    expect((await store.signedRecordBytes({ ...sess, state: "consented" })).ok).toBe(false);
   });
 });
