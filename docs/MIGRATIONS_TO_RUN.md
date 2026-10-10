@@ -1974,3 +1974,31 @@ in Vercel.
 
   **Rollback (only if needed):** `supabase/rollbacks/0256_testing_labs.rollback.sql`
   (the certificate reader goes back to the built-in hosts only).
+
+## R37 — 0257 — one brand per delivery, remembered per vendor (Product onboarding)
+
+- [ ] `0257_delivery_brand.sql` adds two empty columns and nothing else:
+  `vendors.default_brand_id` (the brand remembered for that vendor) and
+  `inbound_manifests.brand_id` (the brand you chose for one delivery). Both
+  point at the brands list. Deleting a brand only clears them; it never
+  deletes a vendor or a delivery. Nothing is filled in for existing vendors.
+  Safe to re-run.
+
+  **Without it** the **Brand for this delivery** field on Product onboarding
+  still sets the brand on the products, lots and menu cards. It just cannot
+  remember it for the vendor yet, and the banner says so.
+
+  **Run it, then:** open a delivery on **Inventory → Product onboarding**,
+  type the brand once in the AI section and press **Set brand**. The next
+  delivery from that vendor fills itself, and the vendor's page on
+  **Admin → Vendors** shows it as the default brand.
+
+  **Check:**
+
+  ```sql
+  select count(*) filter (where default_brand_id is not null) as vendors_with_brand from public.vendors;
+  select count(*) filter (where brand_id is not null) as deliveries_with_brand from public.inbound_manifests;
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0257_delivery_brand.rollback.sql`
+  (brands already written onto products stay; only the memory is forgotten).
