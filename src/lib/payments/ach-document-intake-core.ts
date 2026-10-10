@@ -958,6 +958,84 @@ export function safeReturnPath(raw: string | null | undefined, fallback: string)
   return t;
 }
 
+// ------------------------------------------------------- store helpers ----
+
+/** Signed links to a stored document live this long (seconds). Short on purpose. */
+export const SIGNED_URL_SECONDS = 120;
+
+/** "ach-docs/employee/<id>/<uuid>.pdf" -> the key inside the bucket, or null. */
+export function objectKeyFromStoragePath(path: string): string | null {
+  const m = /^ach-docs\/((?:employee|vendor)\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:pdf|jpg|png|heic))$/.exec(String(path ?? ""));
+  return m ? m[1] : null;
+}
+
+/**
+ * Which documents may set up banking. Employees: only the signed form (0260
+ * enforces the same). Vendors: also only the signed Greenway vendor form; a
+ * voided check or bank letter is supporting evidence, not an authorization.
+ */
+export function canAcceptKind(kind: string): boolean {
+  return kind === "signed_form";
+}
+
+/**
+ * What the append-only event log keeps about a machine read: never a bank
+ * number. Warnings are built by draftFromAcroForm / draftFromParsedText and
+ * name fields, not values (pinned by a test over the real fixtures).
+ */
+export function extractedEventDetail(documentId: string, draft: BankDraft, conflicts: readonly string[], formKind: PayeeType | null): Record<string, unknown> {
+  return {
+    document_id: documentId,
+    source: draft.source,
+    form_kind: formKind,
+    accounts: draft.accounts.length,
+    usable: draftIsUsable(draft) && conflicts.length === 0,
+    payee_name_found: draft.payeeName !== "",
+    signed_on: draft.signedOn && /^\d{4}-\d{2}-\d{2}$/.test(draft.signedOn) ? draft.signedOn : null,
+    request: draft.request,
+    warnings: draft.warnings.slice(0, 20).map((w) => w.slice(0, 200)),
+    conflicts: conflicts.slice(0, 20),
+  };
+}
+
+/** Fingerprints of OCR routing candidates (hints), so the log holds no number. */
+export function ocrRoutingFingerprints(candidates: readonly string[], hmac: (s: string) => string): string[] {
+  return candidates.filter((r) => /^\d{9}$/.test(r)).slice(0, 5).map((r) => hmac(`ocr|routing|${r}`));
+}
+
+/**
+ * Advice only (never blocks): does an entered routing number match one the
+ * scan read? Returns sentences naming the account, not the numbers.
+ */
+export function ocrRoutingAdvice(fingerprints: readonly string[], accounts: readonly RekeyAccount[], hmac: (s: string) => string): string[] {
+  if (fingerprints.length === 0) return [];
+  const out: string[] = [];
+  accounts.forEach((a, i) => {
+    if (!fingerprints.includes(hmac(`ocr|routing|${digits(a.routing)}`))) {
+      out.push(`Account ${i + 1}: the routing number you entered is not one the scan read. Look at the document once more.`);
+    }
+  });
+  return out;
+}
+
+/** The newest OCR routing fingerprints recorded for one document. */
+export function ocrFingerprintsFromEvents(events: readonly { event_kind: string; detail: unknown }[], documentId: string): string[] {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const d = (events[i].detail ?? {}) as { document_id?: unknown; routing_fingerprints?: unknown; source?: unknown };
+    if (events[i].event_kind !== INTAKE_EVENTS.extracted || d.document_id !== documentId || d.source !== "llamaparse") continue;
+    return Array.isArray(d.routing_fingerprints) ? (d.routing_fingerprints as unknown[]).filter((x): x is string => typeof x === "string" && isSha256Hex(x)) : [];
+  }
+  return [];
+}
+
+/** One line for the page after a re-key attempt. Field names only, never values. */
+export function rekeyMessage(step: RekeyStep): string {
+  if (step.ok) return step.note;
+  if (step.need === "fix_entry") return step.errors.join(" ");
+  const d = step.differences.length ? ` Different: ${step.differences.join(", ")}.` : "";
+  return `${step.reason}${d}`;
+}
+
 // ------------------------------------------------------------ self-tests ----
 
 export function __runAchDocumentIntakeTests(): { passed: number; failed: number } {
@@ -1171,6 +1249,37 @@ export function __runAchDocumentIntakeTests(): { passed: number; failed: number 
     ok(safeReturnPath("//evil.example/admin/", "/admin") === "/admin", "protocol-relative refused");
     ok(safeReturnPath("/admin/x?y=1", "/admin") === "/admin", "query refused");
     ok(safeReturnPath("/admin/../login", "/admin") === "/admin", "dots refused");
+  }
+  // store helpers
+  {
+    const hm2 = hm;
+    ok(objectKeyFromStoragePath("ach-docs/employee/0f8fad5b-d9cb-469f-a165-70867728950e/7c9e6679-7425-40de-944b-e07fc1f90ae7.pdf") === "employee/0f8fad5b-d9cb-469f-a165-70867728950e/7c9e6679-7425-40de-944b-e07fc1f90ae7.pdf", "object key from path");
+    ok(objectKeyFromStoragePath("ach-docs/../secrets/x.pdf") === null && objectKeyFromStoragePath("other/employee/a/b.pdf") === null, "bad path refused");
+    ok(objectKeyFromStoragePath("ach-docs/vendor/0f8fad5b-d9cb-469f-a165-70867728950e/7c9e6679-7425-40de-944b-e07fc1f90ae7.exe") === null, "bad ext refused");
+    ok(canAcceptKind("signed_form") && !canAcceptKind("voided_check") && !canAcceptKind("bank_letter") && !canAcceptKind("other"), "only signed form accepts");
+    const dd: BankDraft = { source: "acroform", payeeName: "X", signedOn: "2025-01-02", request: "new", accounts: [{ bankName: "B", routing: "021000021", account: "12345678", accountType: "checking", rule: { kind: "remainder" } }], warnings: [] };
+    const ed = extractedEventDetail("d1", dd, [], "employee");
+    ok(!JSON.stringify(ed).includes("12345678") && !JSON.stringify(ed).includes("021000021"), "extracted detail holds no numbers");
+    ok(ed.usable === true && ed.accounts === 1 && ed.signed_on === "2025-01-02" && ed.payee_name_found === true, "extracted detail summary");
+    ok(extractedEventDetail("d1", dd, ["e_a1_rtn"], "employee").usable === false, "conflict makes it unusable");
+    ok(extractedEventDetail("d1", { ...dd, signedOn: "Jan 2" }, [], null).signed_on === null, "non-ISO signed date dropped");
+    const fps = ocrRoutingFingerprints(["021000021", "12345", "011000015"], hm2);
+    ok(fps.length === 2 && !fps.join().includes("021000021"), "ocr fingerprints: 9 digits only, no numbers");
+    const accA: RekeyAccount = { routing: "021000021", account: "1234", accountType: "checking", rule: { kind: "remainder" } };
+    ok(ocrRoutingAdvice(fps, [accA], hm2).length === 0, "ocr advice: match is silent");
+    ok(ocrRoutingAdvice(fps, [{ ...accA, routing: "026009593" }], hm2)[0]?.startsWith("Account 1:") === true, "ocr advice: mismatch named");
+    ok(ocrRoutingAdvice([], [{ ...accA, routing: "026009593" }], hm2).length === 0, "ocr advice: no read, no advice");
+    const ev = [
+      { event_kind: "document_extracted", detail: { document_id: "d1", source: "llamaparse", routing_fingerprints: ["a".repeat(64)] } },
+      { event_kind: "document_extracted", detail: { document_id: "d1", source: "llamaparse", routing_fingerprints: ["b".repeat(64), "zz"] } },
+      { event_kind: "document_extracted", detail: { document_id: "d2", source: "llamaparse", routing_fingerprints: ["c".repeat(64)] } },
+      { event_kind: "document_extracted", detail: { document_id: "d1", source: "acroform" } },
+    ];
+    ok(ocrFingerprintsFromEvents(ev, "d1").join() === "b".repeat(64), "ocr fps: newest llamaparse read for this doc, junk dropped");
+    ok(ocrFingerprintsFromEvents(ev, "d3").length === 0, "ocr fps: none");
+    ok(rekeyMessage({ ok: false, need: "fix_entry", errors: ["a.", "b."] }) === "a. b.", "message: fix entry");
+    ok(rekeyMessage({ ok: false, need: "form_disagrees", reason: "R.", differences: ["account 1 amount"] }) === "R. Different: account 1 amount.", "message: differences");
+    ok(rekeyMessage({ ok: true, basis: "matches_form", accounts: [], note: "N." }) === "N.", "message: ok");
   }
   console.log(`ach-document-intake: ${passed} passed, ${failed} failed`);
   return { passed, failed };

@@ -2150,7 +2150,7 @@ __runLiquidVolumeTests();
   assertRan("vault-release-core", __runVaultReleaseCoreTests(), 22); // R39 S3: release form -> verdict, picked contact on file 90+ days, in person
   assertRan("vendor-ach-enrollment", __runVendorAchEnrollmentTests(), 49); // R39 S4: needs bank info / opted out card + 0258 CHECK planner
   assertRan("employee-ach-card", __runEmployeeAchCardTests(), 29); // R39 S4: employee file card agrees with planPayrollEntries
-  assertRan("ach-document-intake", __runAchDocumentIntakeTests(), 105); // R39 S5: OWASP drop-only upload, AcroForm draft, blind re-key
+  assertRan("ach-document-intake", __runAchDocumentIntakeTests(), 122); // R39 S5: OWASP drop-only upload, AcroForm draft, blind re-key
   assertRan("keyed-hash", __runKeyedHashTests(), 9); // R39 S5: HKDF-separated HMAC keys (RFC 5869 / RFC 4231 vectors)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
