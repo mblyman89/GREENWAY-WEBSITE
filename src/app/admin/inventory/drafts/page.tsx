@@ -53,9 +53,9 @@ import {
   approvedBannerLink,
   approvedRowCopy,
 } from "@/lib/catalog/approved-row-core";
-import { isAiConfigured } from "@/lib/inventory/product-lookup-ai";
+import { isAiConfigured, productLookupModelId } from "@/lib/inventory/product-lookup-ai";
 import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
-import { approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
+import { approveDraftAction, cancelLookupAction, dismissDraftAction, lookupAllAction, lookupAgainAction, rereadDeliveryCoasAction, restoreDraftAction, setDeliveryBrandAction, setDraftBrandAction } from "./actions";
 import { DELIVERY_BRAND_HELP, deliveryBrandBanner, deliveryBrandPrefill } from "@/lib/inventory/delivery-brand-core";
 import { loadDeliveryBrandContext } from "@/lib/inventory/delivery-brand-store";
 import { DELIVERY_COA_BUTTON, deliveryCoaBanner, deliveryCoaHelp } from "@/lib/inventory/coa-reread-delivery-core";
@@ -180,6 +180,9 @@ import { servingFactsView } from "@/lib/catalog/serving-facts-view-core";
 import { strainSlug } from "@/lib/catalog/slug-core";
 // R19 S13: "Look up all N products on this manifest" (server-side batch).
 import { lookupJobsOn, loadManifestLookup } from "@/lib/catalog/lookup-job-server";
+// R37 S6: past web searches per product + the harvest verdict for the bar.
+import { loadDeliveryLookupHistory } from "@/lib/catalog/lookup-history-server";
+import { HARVEST_BAR_PURPOSE, HARVEST_FIELDS, harvestBarTitle, searchAgainLabel, summarizeDeliveryHarvest } from "@/lib/catalog/lookup-history-core";
 import { attachFactsV2Enabled } from "@/lib/catalog/fact-attach-policy-server";
 import {
   LOOKUP_ALL_HELP,
@@ -591,6 +594,72 @@ export default async function CatalogDraftsPage({
     ? await loadSavedProductFacts(focus.manifestId ? [{ manifest_id: focus.manifestId }, ...drafts] : drafts)
     : null;
 
+  // S11: what is attached to each row (records + attached facts + S09
+  // memory), one chip per field. Computed ONCE here so the row and the R37 S6
+  // search-history bar can never disagree about what is still missing.
+  const factsByDraft = new Map<string, ReturnType<typeof buildFactChips>>();
+  if (v2Row && rowsOpen) {
+    drafts.forEach((d, i) => {
+      factsByDraft.set(
+        d.id,
+        buildFactChips(attachedFactsOf(d as unknown as Record<string, unknown>), productMemories?.get(d.id) ?? null, { mode: policyMode }, rowRecordFacts({
+          chosenWebsiteCategory: d.chosen_website_category,
+          resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
+          resolutionSource: resolutions[i]?.source ?? null,
+          categoryLabel: (v) => websiteCategoryLabel(v) ?? v,
+          chosenStrainType: d.chosen_strain_type,
+          strainSuggestion: strainSuggestions.get(d.id) ?? null,
+          strainLabel: (v) => strainTypeDefinitions.find((t) => t.value === v)?.label ?? v,
+          totalThcPct: d.total_thc_pct,
+          thcPct: d.thc_pct,
+          labResultId: d.lab_result_id,
+          coaTerpenes: labViews?.byDraft.get(d.id)?.coaTerpenes ?? null,
+          coaRead: labViews?.byDraft.get(d.id)?.coaRead ?? false,
+          strainTerpenes: labViews?.strainTerpenes.get(strainSlug(d.strain_name)) ?? null,
+        })),
+      );
+    });
+  }
+
+  // R37 S6: what past web searches found for the products on this page -
+  // this row, another row of this delivery, or the SAME product on an
+  // earlier delivery (S03 identity) - and whether another search is worth
+  // paying for (lookup-history-core: completeness of the web-fillable facts
+  // + a 90-day refresh cadence). Only where the search bar shows (one
+  // delivery, Needs review). Never throws; an incomplete read is said.
+  const lookupHistory =
+    batchLookupOn && focus.manifestId && drafts.length > 0
+      ? await loadDeliveryLookupHistory(
+          focus.manifestId,
+          drafts.map((d, i) => ({
+            draftId: d.id,
+            keys: [identityForDraft(d, { websiteCategory: resolutions[i]?.websiteCategory ?? null }).identityKey, identityForDraft(d).identityKey, d.identity_key ?? ""],
+          })),
+        )
+      : null;
+  const harvest =
+    lookupHistory && lookupHistory.ok
+      ? summarizeDeliveryHarvest(
+          drafts.map((d) => {
+            const h = lookupHistory.byDraft.get(d.id.toLowerCase());
+            const f = factsByDraft.get(d.id);
+            return {
+              draftId: d.id,
+              name: d.name || "Unnamed product",
+              searches: h?.searches ?? [],
+              found: h?.found ?? [],
+              missing: f ? f.missing.filter((m) => (HARVEST_FIELDS as readonly string[]).includes(m)) : null,
+            };
+          }),
+          now,
+          {
+            doneInThisDelivery: batchLookup && (batchLookup.state === "job" || batchLookup.state === "none") ? batchLookup.doneDraftIds : new Set<string>(),
+            complete: lookupHistory.complete,
+          },
+        )
+      : null;
+  const harvestById = new Map((harvest?.products ?? []).map((p) => [p.draftId, p] as const));
+
   // One error sentence for the banner AND (S11, F-033) the failed row itself.
   const errorText =
     error === "floor" ? (msg || "Price is below the cost floor.")
@@ -808,9 +877,65 @@ export default async function CatalogDraftsPage({
             aria-labelledby="batch-lookup-title"
             data-testid="batch-lookup"
             data-entry={batchEntry.kind}
-            className="flex scroll-mt-24 flex-col gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-surface)] px-4 py-3 text-sm"
+            className="flex scroll-mt-24 flex-col gap-2 rounded-[var(--admin-radius)] border-2 border-[var(--admin-accent)]/60 bg-[var(--admin-surface)] px-4 py-3 text-sm shadow-sm"
           >
-            <p id="batch-lookup-title" className="font-semibold text-[var(--admin-text)]">{"\u2728 "}Look up a whole delivery with AI</p>
+            {/* R37 S6: the bar says what it is and what it is for (owner: "make
+                it more obvious it's there and what it is meant to do"). The
+                engine is named from the configured model - "Google Gemini"
+                only when it really is Gemini. */}
+            <p id="batch-lookup-title" className="text-base font-semibold text-[var(--admin-text)]">{"\u{1F50E} "}{harvestBarTitle(productLookupModelId)}</p>
+            <p className="text-xs text-[var(--admin-text-muted)]" data-testid="batch-lookup-purpose">{HARVEST_BAR_PURPOSE}</p>
+            {/* R37 S6: what past searches found, before paying for another. */}
+            {harvest && harvest.total > 0 && (
+              <div
+                data-testid="harvest-verdict"
+                data-tone={harvest.tone}
+                className={`flex flex-col gap-1 rounded-[var(--admin-radius)] border px-3 py-2 ${
+                  harvest.tone === "go"
+                    ? "border-[var(--admin-purple)]/50 bg-[var(--admin-purple-soft)]"
+                    : harvest.tone === "wait"
+                      ? "border-[var(--admin-gold)]/50 bg-[var(--admin-gold-soft)]"
+                      : harvest.tone === "done"
+                        ? "border-[var(--admin-accent)]/50 bg-[var(--admin-accent-soft)]"
+                        : "border-[var(--admin-border)] bg-[var(--admin-surface-2)]"
+                }`}
+              >
+                <p className="font-semibold text-[var(--admin-text)]">{harvest.headline}</p>
+                <p className="text-xs text-[var(--admin-text-muted)]">{harvest.detail}</p>
+                {harvest.total > 0 ? (
+                  <details data-testid="harvest-history" className="text-xs">
+                    <summary className="cursor-pointer font-semibold text-[var(--admin-text)]">
+                      What earlier searches found, product by product ({harvest.searchedBefore} of {harvest.total} searched before)
+                    </summary>
+                    <ul className="mt-2 flex flex-col gap-1.5">
+                      {harvest.products.map((p) => (
+                        <li key={p.draftId} data-testid="harvest-product" data-status={p.status} className="flex flex-col">
+                          <span className="font-semibold text-[var(--admin-text)]">
+                            {p.recommend ? "\u25B6 " : p.status === "harvested" ? "\u2713 " : "\u23F8 "}
+                            {p.name}
+                          </span>
+                          <span className="text-[var(--admin-text-muted)]">{p.line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+                {focus.manifestId && harvest.againIds.length > 0 && !batchLookupActive && (
+                  <form action={lookupAgainAction.bind(null, focus.manifestId)} className="flex flex-wrap items-center gap-3" data-testid="harvest-again">
+                    <input type="hidden" name="return_manifest" value={focus.manifestId} />
+                    {harvest.againIds.map((id) => (
+                      <input key={id} type="hidden" name="again_id" value={id} />
+                    ))}
+                    <Button type="submit" variant="special" size="sm">
+                      {"\u{1F501} "}{searchAgainLabel(harvest.againIds.length)}
+                    </Button>
+                    <span className="text-xs text-[var(--admin-text-muted)]">
+                      A fresh web search for only these (an earlier batch on this delivery already did them, so the main button skips them).
+                    </span>
+                  </form>
+                )}
+              </div>
+            )}
             {focus.manifestId && batchLookupJob && (
               <div data-testid="batch-lookup-progress" aria-live="polite">
                 <p className="font-semibold text-[var(--admin-text)]">{jobHeadline(batchLookupJob.status, batchLookupJob.summary)}</p>
@@ -1163,23 +1288,8 @@ export default async function CatalogDraftsPage({
                     : null;
                   // S11: what is attached (records the row holds + the draft's
                   // attached facts + the S09 memory), one chip per field.
-                  const facts = v2Row && rowsOpen
-                    ? buildFactChips(attachedFactsOf(d as unknown as Record<string, unknown>), productMemories?.get(d.id) ?? null, { mode: policyMode }, rowRecordFacts({
-                        chosenWebsiteCategory: d.chosen_website_category,
-                        resolvedWebsiteCategory: resolutions[i]?.websiteCategory ?? null,
-                        resolutionSource: resolutions[i]?.source ?? null,
-                        categoryLabel: (v) => websiteCategoryLabel(v) ?? v,
-                        chosenStrainType: d.chosen_strain_type,
-                        strainSuggestion: strainSuggestions.get(d.id) ?? null,
-                        strainLabel: (v) => strainTypeDefinitions.find((t) => t.value === v)?.label ?? v,
-                        totalThcPct: d.total_thc_pct,
-                        thcPct: d.thc_pct,
-                        labResultId: d.lab_result_id,
-                        coaTerpenes: labViews?.byDraft.get(d.id)?.coaTerpenes ?? null,
-                        coaRead: labViews?.byDraft.get(d.id)?.coaRead ?? false,
-                        strainTerpenes: labViews?.strainTerpenes.get(strainSlug(d.strain_name)) ?? null,
-                      }))
-                    : null;
+                  // S11: computed once above (factsByDraft) - the R37 S6 search bar reads the same view.
+                  const facts = factsByDraft.get(d.id) ?? null;
                   const identity = v2Row && rowsOpen
                     ? identityLine(identityForDraft(d, { websiteCategory: resolutions[i]?.websiteCategory ?? null }).identityKey, d, kbFirst)
                     : null;
