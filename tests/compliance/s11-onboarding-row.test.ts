@@ -466,8 +466,12 @@ describe("page wiring (ONBOARDING_V2_ROW)", () => {
   });
 
   it("chips are built from the three sources the page already holds", () => {
-    const at = page.indexOf("const facts = v2Row");
-    const call = page.slice(at, page.indexOf("const identity = v2Row", at));
+    // R37 S6 hoisted the chips into factsByDraft (computed once, shared by the
+    // row and the search-history bar); the row reads that same map.
+    const at = page.indexOf("const factsByDraft = new Map");
+    expect(at).toBeGreaterThan(0);
+    const call = page.slice(at, page.indexOf("// R37 S6: what past web searches", at));
+    expect(page).toContain("const facts = factsByDraft.get(d.id) ?? null;");
     expect(call).toContain("buildFactChips(attachedFactsOf(d as unknown as Record<string, unknown>), productMemories?.get(d.id) ?? null, { mode: policyMode }, rowRecordFacts({");
     for (const k of [
       "chosenWebsiteCategory: d.chosen_website_category,",
