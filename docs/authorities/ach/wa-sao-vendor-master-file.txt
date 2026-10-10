@@ -1,0 +1,119 @@
+
+Protect your vendor master file from fraudsters | Office of the Washington State Auditor
+      Skip to main content
+MENU
+Protect your vendor master file from fraudsters
+Sign up for e-newsletters
+« back to Audit Connection Home
+Categorized in: 
+Center for Government Innovation
+•
+Local governments
+•
+Procurement management
+                  Apr 6, 2023
+Automated Clearing House (ACH) and other types of payment fraud are on the rise, and bad actors are using vendor master files to do it. It starts with a simple request to change a vendor's contact information, payment address or banking details, and ends it with thousands or even millions of dollars in public funds being redirected to fraudulent accounts.
+Since 2021, governments reported $6.8 million in vendor-related payment losses to SAO, although some funds were later recovered. Local governments are often susceptible to these schemes because of weak internal controls over their vendor master files.
+Governments use vendor master files to issue purchase orders to vendors and pay invoices. Like the payroll master file, it contains a set of names and addresses for payees. However, the vendor master file can easily grow into an unwieldy beast due to the high number of vendors needed to support an organization, as well as frequent changes to the vendor records.
+Weak internal controls over the vendor master file can lead to other types of losses, too. For example, if the vendor master file contains duplicate vendor accounts, you are more at risk for paying vendors twice for the same goods or services—a common problem for organizations. According to industry experts, an organization's duplicate payments can range from .8 to 2 percent of their total payments.
+With strong internal controls, you can protect your vendor master file and reduce the potential for errors and losses. Here are some things you can do to safeguard your government, and some resources that can help:
+Verify new vendors
+. You need a process to vet new vendors before you add them to your vendor master file. Some possible steps could include obtaining a W-9 form, validating information provided using the IRS Tax Identification Number Matching application, checking for licensure or registration with the state, running a credit report, or conducting other internet research. For ideas on how to ensure new vendors are legitimate, see page 5 in our 
+Accounts Payable Guide
+.
+Validate change requests.
+ It's critical to independently verify any requests to change vendor information directly with your vendor. You should do this by phone, using contact information that is known, reliable and already on file. Learn more on page 5 in our 
+Best Practices for ACH Electronic Payments resource
+.
+Manage and clean your vendor master file
+. At least once per year, you should evaluate the cleanliness of your vendor master file and take steps to better organize it. This should include clearing out duplicates, as well as inactivating and archiving unused vendors. For steps you can take to clean up your vendor master file, see page 14 in our 
+Accounts Payable Guide
+.
+Segregate duties.
+ Just like payroll clerks should not be able to add new employees or edit the payroll master file, accounts payable clerks should not be able to add new vendors or change vendor information in the vendor master file. Learn more on page 22 in our 
+Segregation of Duties Guide
+. Appendix A in the guide also has ideas for governments that do not have the staffing resources to segregate duties.
+For help
+Remember, we are here to help. If you have specific technical accounting questions, please submit them using our 
+HelpDesk
+ in the client portal.
+We also have financial management specialists at SAO's Center for Government Innovation available to talk with you about best practices, resources or internal controls. For assistance, reach out to us at 
+Center@sao.wa.gov
+.
+      Share this on social!
+Share on facebook
+Share on X
+Share on LinkedIn
+« back to Audit Connection Home
+Categorized in: 
+Center for Government Innovation
+•
+Local governments
+•
+Procurement management
+Reports & Data
+Report Types
+Audit Reports
+Financial Intelligence Tool (FIT)
+Energy Reports
+Performance Reports
+Whistleblower & Fraud Reports
+Use of Deadly Force Investigation Reports
+Other Annual Reports
+Performance Audits
+Featured Performance Audit Report
+About Performance Audits
+Search Performance Reports
+Performance Audits in Progress
+About Audits
+Find Your Audit Team
+Anatomy of an Audit
+About State Government Audits
+About Local Government Audits
+About IT Audits
+About Performance Audits
+About Use of Deadly Force Audits
+About Police Training and Certification Audits
+About Energy Compliance Examinations
+The Audit Dispute Process
+Improving Government
+The Center for Government Innovation
+Lean Services
+Teambuilding Workshops
+#BeCyberSmart Program
+Financial Intelligence Tool
+Resource Library
+Technical Advice
+#Gov101
+Improvement Training Videos
+Preventing Fraud
+BARS & Annual Filing
+BARS GAAP Manual
+BARS Cash Manual
+BARS Reporting Templates
+BARS & Annual Report Filing FAQs
+Training and Workshops
+Local Government Advisory Committee
+Report a Concern
+How to Report a Concern
+The Citizen Hotline
+Fraud Program
+Whistleblower Program
+Whistleblower FAQs
+About SAO
+What We Do
+State Auditor Pat McCarthy
+Legislative Priorities
+SAO Navigator for Government Employees
+Office Locations
+Sign Up for News & Alerts
+Contact SAO
+Who Audits the Auditor
+Careers and Culture
+Job Openings and Internships
+Contract for the State Auditor
+About Public Records
+The Audit Connection Blog
+Careers
+Public Records
+Client Login

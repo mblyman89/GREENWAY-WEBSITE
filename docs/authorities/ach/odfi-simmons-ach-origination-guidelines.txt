@@ -1,0 +1,472 @@
+ACH Origination Guidelines
+ACH Transaction Information
+
+
+Standard Entry Class (SEC) Codes
+
+Standard Entry Class (SEC) Codes are used to determine which ACH application is being used. Each
+application has a unique SEC code which identifies:
+
+    •   The nature of the transaction and whether it is single-entry or recurring.
+    •   The ACH Rules governing the transaction, including the method for obtaining authorizations.
+    •   The format to use to transmit the payment and payment-related information.
+
+It is of the utmost importance to understand and know which SEC code to use for an ACH entry. The
+SEC Code defines the posting and return procedures, and as mentioned above, the method for obtaining
+authorizations.
+
+Below are a few commonly used SEC Codes:
+
+ SEC Code     SEC Code Description         Use of Application
+                                           PPD is a debit or credit to a consumer’s account. It can be a
+                                           single-entry or standing order. Direct Deposit can be used to
+                                           disburse funds to consumers such as payroll, reimbursements,
+              Prearranged Payment &
+ PPD                                       and interest payments to name a few. Direct Payment can be
+              Deposit
+                                           used to collect funds from consumers’ accounts for things
+                                           such as utility payments, memberships, and loan payments to
+                                           name a few.
+                                           CCD Entries can be debits or credits used to facilitate business-
+                                           to-business (B2B) ACH payments. The CCD application
+                                           provides a way for companies to disburse or consolidate funds
+ CCD          Corporate Credit or Debit
+                                           quickly. It can also be used to transfer funds among companies
+                                           in the payment of goods or services and can support a limited
+                                           amount of payment information.
+                                           CTX provides a way to collect and disburse funds between
+                                           companies. It is generally used by businesses paying one
+ CTX          Corporate Trade Exchange
+                                           another for goods or services and can support a large amount
+                                           of payment information.
+                                           TEL provides businesses a way to initiate ACH debits
+                                           to consumers’ accounts for the purchase of goods and
+                                           services. This is used when an oral authorization is obtained
+                                           over the telephone. TEL can be set up for either single or
+ TEL          Telephone-Initiated Entry    recurring payments. A TEL entry may only be transmitted in
+                                           circumstances in which (1) there is an existing relationship
+                                           between the Originator and the consumer, or (2) there is not an
+                                           existing relationship, but the consumer initiated the telephone
+                                           call to the Originator.
+                                           WEB provides businesses a way to initiate ACH debits to
+                                           consumers’ accounts for the purchase of goods or services.
+              Internet-Initiated/Mobile
+ WEB                                       This is used when authorization is obtained over the Internet
+              Entry
+                                           or Wireless Network. WEB can be set up for either single or
+                                           recurring payments.
+July 2024                                                                                                      1
+ACH Origination Guidelines
+ACH Transaction Information
+
+
+
+Note: If you are receiving account information, to debit a consumer’s account over the Internet, Wireless
+Network, or verbally over the phone, but do not have access to the WEB and/or TEL SEC Code please
+reach out to your Treasury Management Officer for assistance.
+
+Standard Company Entry Description
+Effective March 20, 2026
+
+Your company uses the Company Entry Description field to describe the purpose of the payment initiated.
+Currently, the ACH Rules determine what goes in this field in certain situations (i.e., RETRY PYMT if you are
+reinitiating a payment returned for insufficient funds).
+
+This amendment requires companies initiating (1) PPD credits related to wages/salaries to input a
+description of “PAYROLL” in the Company Entry Description and (2) e-commerce/online retail purchases
+(WEB debits) to use “PURCHASE”.
+
+    •   In preparation, your organization may need to update systems, policies, and procedures
+        regarding Company Entry Descriptions.
+
+
+Authorization Requirements
+
+ SEC Code       Entry Type              Authorization Requirement
+ PPD            Debits                  Written, signed, or Similarly Authenticated. *
+ PPD            Credits                 Oral or non-written means (i.e., voided check) accepted.
+                                        Agreement is required for transfers between companies; written
+                                        authorization is implied. Authorizations for ACH debits are
+ CCD            Debits/Credits
+                                        frequently embodied in the agreements or contracts between
+                                        business partners.
+                                        Agreement is required for transfers between companies; written
+                                        authorization is implied. Authorizations for ACH debits are
+ CTX            Debits/Credits
+                                        frequently embodied in the agreements or contracts between
+                                        business partners.
+                                        For Single Entry, you must either record the Receiver’s oral
+                                        authorization or provide written notice to the consumer confirming
+ TEL            Debits                  the oral authorization, prior to settlement date.
+                                        For Recurring Entries, you must record the Receiver’s oral
+                                        authorization and provide written notice to the consumer.
+                                        Similarly Authenticated authorization is required due to the nature
+ WEB            Debits
+                                        of the Internet.*
+
+
+*Written authorizations may be in accordance with the Electronic Signatures in Global and National
+Commerce (E-Sign) Act. Electronic signatures include but are not limited to, digital signatures and
+security codes.
+
+July 2024                                                                                                     2
+ACH Origination Guidelines
+ACH Transaction Information
+
+
+Proof of Authorization
+
+A Receiving Depository Financial Institution (RDFI) may request, in writing, proof of authorization for all
+entries. If a request is received, Simmons Bank must be able to provide proof of authorization to the RDFI
+within 10 banking days from the date of the request.
+
+You as the ACH Originator must be able to provide Simmons Bank (ODFI) with the following:
+
+    •   For consumer entries, your company must provide a copy of the authorization.
+    •   For corporate entries, you are required to provide either a copy of the authorization or contact
+        information, including a contact name and phone number or email address for inquiries.
+
+
+Origination Fraud Monitoring
+
+Phase 1 Effective March 20, 2026
+Companies Originating 6M+ Transactions in 2023
+
+Phase 2 Effective June 19, 2026
+All Companies Regardless of Annual Origination Activity
+
+Currently, the ACH Rules require companies initiating WEB debit transactions and micro-entries to
+use commercially reasonable means to identify and detect potential fraud. Nacha’s Board of Directors
+has issued a policy statement “urging all participants to implement adequate controls and/or systems
+to detect and prevent fraud.” However, a policy statement is not an enforceable rule. It is a strongly
+recommended practice that ACH participants should follow.
+
+With this amendment, your company is required to establish and implement risk-based processes and
+procedures to identify entries suspected of being unauthorized or authorized under “false pretenses”
+(i.e., business email compromise, vendor impersonation, payroll impersonation, account takeover). Fraud
+monitoring is required regardless of the Standard Entry Class (SEC) code, or payment type, initiated and is
+intended to reduce the incidence of successful fraud attempts.
+
+    •   In preparation, your organization may need to update policies and risk-based procedures to
+        identify fraudulent transactions.
+
+
+
+Retention of Authorizations
+
+ SEC Code       Entry Type              Retention Requirements
+                                        The originator must retain a copy of the Receiver’s authorization
+ PPD            Debits/Credits          for up to two (2) years from the termination or revocation of the
+                                        authorization.
+ CCD & CTX      Debits/Credits          The agreement should contain authorization requirements.
+
+
+
+
+July 2024                                                                                                     3
+ACH Origination Guidelines
+ACH Returns and Notices of Change (NOCs)
+
+
+                                        The originator must retain a copy of the recording of the Receiver’s
+ TEL            Debits - Single Entry   oral authorization or a copy of the written notice for two (2) years
+                                        from the date of the authorization.
+                                        The originator must retain a copy of the recording of the Receiver’s
+                Debits - Standing
+ TEL                                    oral authorization or a copy of the written notice for two (2) years
+                Order
+                                        from the termination or revocation of the standing order.
+                                        The originator must retain a copy of the recording of the Receiver’s
+                Debits - Recurring
+ TEL                                    oral authorization and a copy of the written notice for two (2) years
+                Entries
+                                        from the date of the authorization.
+                                        The originator must retain a copy of the authorization and a record
+ WEB            Debits
+                                        of the authentication.
+
+
+
+Standing Authorization/Subsequent Entry
+
+Standing Authorization is an advance authorization of future Entries, given by the Receiver, to debit the
+Receiver’s Consumer Account. Further action is required by the Receiver to initiate future entries.
+
+A Subsequent Entry is an Entry initiated, by the Receiver in accordance with the terms of the Standing
+Authorization.
+
+SEC Codes for Subsequent Entries:
+
+ Standing Authorization      Instruction by Receiver                                           SEC Code
+                             The receiver’s instruction to debit was given over the Internet   PPD or WEB
+ Written Authorization       The receiver’s instruction to debit was given over the
+                                                                                               PPD or TEL
+                             Telephone
+                             The receiver’s instruction to debit was given over the Internet   WEB
+ An authorization received
+ over the Internet           The receiver’s instruction to debit was given over the
+                                                                                               WEB or TEL
+                             Telephone
+                             The receiver’s instruction to debit was given over the Internet   TEL or WEB
+ Authorization received
+ over the Telephone          The receiver’s instruction to debit was given over the
+                                                                                               TEL
+                             Telephone
+
+
+
+ACH Returns
+
+An ACH Return is an ACH entry that was unable to post to Receiver’s account and was returned by the
+Receiving Depository Financial Institution (RDFI) for reasons defined below. The RDFI must return the
+entry in time for Simmons Bank (ODFI) to receive it, by the opening of business on the second banking day
+following the settlement date. Your company should receive the ACH return notices the same day they are
+received by the ODFI. These notices will describe the reason for the return. Note: There are some return
+reason codes that allow extended deadlines.
+
+
+July 2024                                                                                                       4
+ACH Origination Guidelines
+ACH Returns and Notices of Change (NOCs)
+
+
+Below are some of the more common ACH Return Codes:
+
+ Return Code   Description of Return        Action by Originator
+                                            May originate a new ACH entry within 180 days of the Settlement
+ R01           Insufficient Funds           Date of the original entry. Entry must contain the words “RETRY
+                                            PYMT” (all Caps) in the Company Entry Description.
+
+                                            Stop the origination of entries with the same invalid account
+                                            information. Reach out to your customer/employee to obtain
+ R02           Account Closed
+                                            updated information. A new authorization must be obtained for
+                                            debit originations.
+
+                                            Stop the origination of entries with the same invalid account
+               No Account/Unable to         information. Reach out to your customer/employee to obtain
+ R03
+               Locate Account               updated information. A new authorization must be obtained for
+                                            debit originations.
+
+                                            Stop the origination of entries with the same invalid account
+                                            information. Reach out to your customer/employee to obtain
+ R04           Invalid Account Number
+                                            updated information. A new authorization must be obtained for
+                                            debit originations.
+
+                                            Stop the origination of entries unless a new authorization can be
+ R07           Authorization Revoked        obtained. Disagreements should be handled OUTSIDE of the ACH
+                                            Network.
+
+                                            Stop the origination of entries until a new consumer authorization
+ R08           Payment Stopped
+                                            is obtained.
+
+                                            May originate a new ACH entry within 180 days of the Settlement
+ R09           Uncollected Funds            Date of the original entry. Entry must contain the words “RETRY
+                                            PYMT” (all Caps) in the Company Entry Description.
+
+                                            Stop the origination of entries unless a new authorization can be
+               Customer Advised Not
+ R10                                        obtained. Disagreements should be handled OUTSIDE of the ACH
+               Authorized
+                                            Network.
+
+               Customer Advises Entry
+                                            May originate a new entry to correct the error. Corrected entry
+ R11           Not in Accordance with
+                                            must be originated within 60 days of the original Settlement Date
+               Terms of the Authorization
+
+                                            Stop the origination of entries until a new authorization is
+               Corporate Customer
+ R29                                        obtained. If your authorization is valid, then your company may
+               Advises Not Authorized
+                                            have recourse OUTSIDE of the ACH Network.
+
+
+
+
+                                                                                      Continued on next page
+
+July 2024                                                                                                        5
+ACH Origination Guidelines
+Erroneous or Duplicate Transaction/File
+
+
+Monitoring ACH Return Activity
+
+Simmons Bank monitors the ACH returns for debit transactions of its ACH Originators. The monitoring
+includes Unauthorized Returns, Administrative Returns, and Overall Returns that exceed the allowed
+thresholds established by NACHA.
+
+Established thresholds are outlined below:
+
+    •   Unauthorized Return Rate Threshold = 0.05%. Unauthorized Return Codes are:
+           o R05, R07, R10 and R29
+    •   Administrative Return Rate Threshold = 3.00%. Administrative Return Codes are:
+           o R02, R03 & R04
+    •   Overall Return Rate Threshold = 15.00%.
+
+Overall returns apply to all debit entries that are returned for any reason.
+
+You must stay within these established thresholds and act on any return notifications or notifications of
+change being delivered to you for entries originated.
+
+
+
+ACH Notices of Change (NOCs)
+
+An NOC is not a return but a zero-dollar transaction, sent by the RDFI, to notify you that the information
+used to originate the transaction is no longer valid. If the RDFI can recognize the intended account, it will
+post the entry to the Receiver’s account and notify your company of any necessary changes. Many NOCs
+are the result of merger or consolidation at the RDFI, which requires changes to the Receiver’s account
+information.
+
+Below are some of the more common NOC Codes:
+
+ NOC Code       Description of NOC                    Action by Originator
+                The account number is incorrect       Change the Receiver’s account number to the correct
+ C01
+                or is formatted incorrectly           information.
+                The routing number that was           Change the Receiver’s routing number to the correct
+ C02
+                once valid must be changed            information.
+                The routing Number and Account        Change the Receiver’s routing number and account
+ C03
+                Number are incorrect                  number to the correct information.
+                Transaction Code is incorrect.
+                Example: An entry was sent as a
+ C05                                                  Change the type of account.
+                DDA transaction but is going to a
+                Savings account, or vice versa.
+
+
+
+
+July 2024                                                                                                       6
+ACH Origination Guidelines
+Verifying a Receiver’s Account Number
+
+
+Action on Notification of Change
+Effective Date: June 21, 2024
+
+If the account information your company receives from a payee (i.e., employee, customer, vendor) is
+correct, the payment will automatically be processed in the payee’s account. If account information is
+incorrect, the payee’s financial institution may manually process the payment and send and Notification of
+Change (NOC). A Notification of Change Report shows the information made in error with the corrected
+information and will be provided by the financial institution.
+
+If your company sends recurring payments (i.e., daily, bi-weekly, monthly), you are required to update
+the incorrect information before processing the next payment or within six banking days of receiving the
+Notification of Change information.
+
+If your company initiates a single or one-time payment to a payee’s account, at your discretion, make the
+changes noted in the Notification of Change. Any type of one-time originated payment is covered under
+this amendment.
+
+    •   In preparation, your organization may need to update policies and procedures regarding
+        Notification of Change Reports.
+
+
+Reversals
+
+An erroneous entry or file can contain the wrong amount, is a duplicate of a previous file/transaction or
+was sent to an unintended party. The reversal of these entries must be transmitted within five (5) banking
+days from the Settlement Date of the erroneous or duplicate entry or file.
+
+Note: This is an attempt to pull back funds and not a guarantee. There is a chance a reversal can be
+returned due to insufficient or uncollected funds.
+
+As the Originator, you must make a reasonable attempt to notify the Receiver that a reversing entry has
+been sent to their account, with the reason for the reversal, no later than the Settlement Date of the
+reversing entry.
+
+When the reversal is originated the word “REVERSAL” (in all Caps) must appear in the Company Entry
+Description field in the Company/Batch Header Record.
+
+Improper use of a reversing entry would include:
+
+    •   The Originator or Third-Party Sender failed to provide funding for the original entry.
+    •   Initiating a reversing entry outside of the five (5) banking days of the settlement date.
+
+Reversal reasons can include:
+
+    •   Duplicate payment
+    •   Incorrect payment recipient
+    •   Incorrect payment amount
+    •   Payment date earlier than intended (debit only)
+    •   Payment date later than intended (credit only)
+
+July 2024                                                                                                    7
+ACH Origination Guidelines
+
+
+Retry/Reinitiate Return Entries
+
+Containing below information Returned ACH Transactions can only be reinitiated only if:
+
+    •    The item was returned as insufficient funds.
+    •    The item was returned due to uncollected funds.
+    •    The item is within 180 days after the settlement date of the original entry.
+    •    The item has not been returned insufficient or uncollected more than two (2) times following the
+         return of the original entry.
+             o Note: The Company Entry Description filed must contain the word “RETRY PMT” (all caps)
+                 and the contents of the Company Name, Company Identification, and the Amount fields
+                 of the reinitiated entry must be identical to the original entry.
+
+
+Before initiating the first debit or credit to a Receiver’s account, an Originator may use one of the following
+methods to verify that the Recipient’s account number is valid:
+
+
+Prenotification Entries (Prenotes)
+
+Prenotes are zero-dollar entries sent to a Receiver’s account to verify the account number is a valid
+account at the Receiving Bank (RDFI). Prenotes do not validate ownership of the account. Typically,
+prenotes are only sent prior to transmitting the first credit or debit payment to the Receiver’s account. A
+recent rule change removes the language limiting prenotes to this use. Therefore, your company may send
+prenotifications at its discretion.
+
+After three (3) banking days of the Settlement Date of the prenote, provided the ODFI has not received a
+Return or Notification of Change (NOC), an Originator may initiate Entries to the Receiver’s account.
+
+If an NOC is received the Originator must make the correcting entries prior to initiating future Entries
+to the Receiver’s account. If an ACH Return is received the Originator must reach out to the Receiver for
+updated account information.
+
+    •    Language limiting prenotes to this use has been removed. Your company may send prenotes as
+         required by your financial institution or at your discretion.
+
+
+Micro-Entries:
+
+    a. May be credit or debits
+    b. May initiate one or more to a Receiver’s account
+    c. Entries must be less than $1.00
+    d. One or more debit micro-entries may NOT exceed the total amount of credit micro-entries
+           i. Whether originating debit or credit micro-entries settlement must occur at the same time.
+    b. The Company Name must be recognizable by the Receiver & the same (or similar) to that for future
+
+The Company Entry Description field must contain “ACCTVERIFY” (all caps)
+
+
+
+July 2024                                                                                                     8
+ACH Origination Guidelines
+
+
+Note: If originating micro-entries, you must conduct commercially reasonable fraud detection by
+monitoring forward and return volumes.
+
+
+
+For more information regarding the ACH Rules please visit Nacha - Homepage | Nacha
+
+
+
+
+July 2024                                                                                         9
+

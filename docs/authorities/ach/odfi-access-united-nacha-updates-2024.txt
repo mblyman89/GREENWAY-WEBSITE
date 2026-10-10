@@ -1,0 +1,280 @@
+                Nacha Operating Rules Updates and Reminders 2024
+Each company sending ACH transactions is required to comply with the Nacha Operating Rules as stated within the
+ACH Origination Services Agreement between United Bank and the company. The National Automated Clearing
+House Association (Nacha) is the rule making body governing the ACH network; therefore, all participants of the ACH
+network must comply with these Rules. To ensure the Bank communicates the Rules effectively, we have provided
+these specific Originator (Corporate Customer) and Third Party Sender requirements of the Rules. Nacha updates
+the Rules with changes, additions, and deletions on an annual basis. United Bank will communicate annually to
+educate our customers of any updates and/or changes to the Rules.
+
+                                     Nacha Operating Rules Reminders
+
+Below are some reminders of the most researched ACH Rules; however, they do not constitute all of the required
+Nacha Operating Rules.
+
+Data Security
+
+It is the responsibility of the company to protect his/her current cash management system and implement best
+business practices to assist in the protection of its account. Some best business practices may include (1) ensuring
+computer updates regularly (2) initiating ACH entries under dual control (with two systems) – one individual will
+input the ACH debit and/or credit while another individual will approve the debit and/or credit from another
+computer (3) implementing a security policy that enforces no social networking sites to be accessed on the same
+computer as the cash management system (4) monitoring and reconciling your accounts daily (5) implementing a
+procedure that enforces “red-flag” activity (i.e. the cash management system’s color scheme not looking the same
+as before, “system down” warnings, etc.), and (6) educating staff on protecting the cash management system.
+
+Company Name Identification
+
+The Originator is required under the Rules to ensure a clear source identification of an ACH transaction. Specifically,
+the Rules require the Originator to populate the Company Name Field with the name by which it is known and readily
+recognized by the Receiver of the entry. When this company name appears on the account holder’s statement, it
+should be easily recognizable by the account holder and receiver of the debit/credit transaction.
+
+Proper Use of Standard Entry Class Code
+
+The authorization requirements specified within the Rules address the minimum requirements needed for
+authorization of various types of ACH transactions. In the case of United Bank customers, we allow our Originators
+to initiate PPD (Prearranged Payments and Deposit) and CCD (Corporate Credits and Debit) entries. A PPD Entry is
+originated by an organization to or from a consumer account and a CCD Entry is originated by an organization to or
+from a non-consumer account. Any other standard entry class codes will require approval from United Bank.
+
+Authorization Retention
+
+An authorization for a debit or credit entry must be in writing, and signed or similarly authenticated by the Receiver.
+Authorization must be retained by the Originator for a period of two years following the termination or revocation
+of the authorization. In the case of a paper authorization that has been signed by the Receiver, the Originator must
+retain either the original or a copy of the signed authorization. This authorization may be obtained in an electronic
+
+
+                                                     Page 1 of 6
+format that (1) accurately reflects the information in the record, and (2) is capable of being accurately reproduced
+for later reference, whether by transmission, print or otherwise.
+
+Authorization Requirements for Consumer Entries (PPD)
+
+For PPD entries, the Originator should ensure that an authorization is clear and readily understandable by the
+consumer account holder. The authorization should also include the account number and routing number of the
+consumer account holder (i.e. a copy of the account holder’s check ensures the numbers are accurately obtained).
+The consumer account holder must date and sign, or similarly authenticate the authorization to validate the
+company’s authorization to initiate transactions on their account. Authorizations should include directions on how
+to revoke the authorization, the amount of the debit entry, and the date on which the debit(s) will occur. According
+to the Rules, Companies are responsible for ensuring the authorization contains “clear and readily understandable
+terms.” An authorization that is not clear and readily understandable as to its terms (including the amount or timing
+of debits) does not satisfy the requirements of the Rules and will be considered an invalid authorization. Each
+Company should review their authorizations to ensure the requirements of the Nacha Operating Rules are met.
+Obtaining appropriate authorizations will help protect your company as the Originator in the event of a return sent
+back as “unauthorized.” Authorization must be retained by the Originator for a period of two years following the
+termination or revocation of the authorization.
+
+Authorization Requirements for Corporate Entries (CCD)
+
+As with PPD entries, the Originator must obtain authorization for all credit and debit CCD entries. The Originator
+must enter an agreement with each Receiver of the CCD entry, under which the Receiver has agreed to be bound by
+the Nacha Operating Rules. The agreement should clearly state the representation of credits and/or debits to the
+corporate customer account.
+
+Notice of Change in Amount/Change in Debiting Date for Recurring Debits
+
+For recurring debits, when the debit amount changes, the Rules require the Originator to notify the account
+holder/receiver within ten (10) calendar days before the scheduled transfer date. An Originator that changes the
+scheduled date in which debit entries are to be initiated to the Receiver must notify the account holder in writing at
+least seven (7) calendar days before the first entry is scheduled to be debited from their account. Variations in
+debiting dates due to Saturdays, Sundays, or holidays are not considered to be changes in the scheduled dates.
+
+Prenotes
+
+A prenotification is a zero-dollar entry generated to validate an account held at a Receiving Depository Financial
+Institution (RDFI). Companies may originate prenotifications; however, they are not required under the Rules. A
+prenotification is a tool to ensure the account information given by the receiver is accurate prior to initiating a live
+dollar transaction. If the Originator chooses to initiate a prenotification, they must wait three (3) banking days prior
+to initiating the live dollar transaction.
+
+Notifications of Change Requirements
+
+A Notification of Change (NOC) is a zero-dollar entry sent by the RDFI to the Originating Depository Financial
+Institution (ODFI) to alert the Originator of changes to the Receiver’s account. Under the Nacha Operating Rules,
+the Originator is required to make the changes specified in the NOC within six (6) banking days of receipt of the NOC
+information or prior to initiating another entry to the Receiver’s account.
+
+
+
+
+                                                     Page 2 of 6
+Receiving ACH Returns and Re-initiation of Entries
+
+Under the Nacha Operating Rules, an Originator or ODFI may re-initiate an entry that was previously returned if (1)
+the entry has been returned for insufficient or uncollected funds; (2) the entry has been returned for stopped
+payment and re-initiation has been authorized by the account holder; or (3) the ODFI (United Bank) has taken
+corrective action to remedy the reason for the return. As a corporate customer, any returns received should be
+resolved immediately and re-initiation of the same entry should not be transmitted unless one of the three reasons
+above has occurred.
+
+The Nacha Operating Rules state that only NSF and Uncollected Funds (Return Reason Code R01 and R09) may be
+re-initiated after the Settlement Date of the original entry. An Originator must submit re-initiated entries as a
+separate batch that contains the word “RETRY PYMT” in the Company Entry Description field. The contents of the
+Company name, Company identification, and amount fields of the re-initiated entry must be identical to the contents
+of the original entry. An Originator must not re-initiate an entry that has been returned for insufficient or uncollected
+funds more than two times following the return of the original entry.
+
+Stop Payments Made by a Consumer or Corporate Customer
+
+A stop payment may be placed on the RDFI’s system for all future transactions relating to one Originator for all
+incoming transactions. Originators or Third Party Senders (Corporate Customers) should train their internal staff
+accordingly to ensure the understanding that multiple stop payments could be returned. Stop payments should not
+be re-initiated into the system unless a new authorization has been obtained.
+
+Unauthorized/Revoked Entries by a Consumer or Corporate Customer
+
+An unauthorized or revoked entry may be returned if the customer believes that he/she did not authorize a payment.
+According to the Rules, a new authorization should be obtained prior to re-initiating an entry that you received back
+as unauthorized or revoked.
+
+Reversing an ACH File or an ACH Entry
+
+ An Originator may reverse a file if the file is erroneous or duplicate. The Originator may transmit the reversing file
+within five (5) banking days after the Settlement Date for the entries within the duplicate or erroneous file. The
+word “REVERSAL” should be placed in the Company Batch Header Field and the Originator must initiate a correcting
+file along with the reversing file. A reversal is commonly used in situations of fraud whereby the Originator and/or
+Third Party Sender attempts to recover fraudulent funds initiated and should be initiated within 24 hours of the
+discovery of the error. Only an Originator may reverse an entry. The Originator should notify the account
+holder/receiver of the reversing entry and give the reason for the reversing entry no later than the Settlement Date
+of the reversing entry. A file or entry that (1) is a duplicate of an entry previously initiated by the Originator or ODFI;
+(2) orders payment to or from a Receiver different than the Receiver intended to be credited or debited by the
+Originator; (3) orders payment in an amount different than was intended by the Originator; or (4) is a PPD credit
+entry satisfying each of the following criteria: (i) the PPD credit entry is for funds related to a Receiver’s employment;
+(ii) the value of the PPD credit is fully included in the amount of a check delivered to the same Receiver at or prior
+to the Receiver’s separation from employment; or (iii) the PPD credit entry was transmitted by the Originator prior
+to the delivery of the check to the Receiver.
+
+International ACH Transactions (IAT)
+
+Certain ACH payments that are classified as domestic transactions may be classified as international payments, also
+known as IAT transactions. As a result, an ACH transaction that is originated today may need to be originated as an
+
+                                                      Page 3 of 6
+IAT transaction under this Rule. The ACH transaction may be classified as an international payment (IAT transaction)
+if your company (1) is a subsidiary of a multi-national corporation; (2) has foreign subsidiaries; (3) buys or sells to
+organizations or individuals outside of the territorial jurisdiction of the United States; or (4) sends payroll, pension
+or benefit payments via the ACH Network to individuals that have permanent resident addresses outside the
+territorial jurisdiction of the United States. As an Originator, the Rules may affect you as a Corporate Customer.
+Corporations are required to comply with OFAC obligations. The penalties for ignoring these obligations can be both
+criminal and civil and may include both jail time and fines ranging from $10,000 to $10,000,000 per occurrence. If
+these fines are levied against the financial institution, they may be passed back to the corporate originator depending
+on the specifics of the case and the details of their contract with the financial institution. The fines are levied by the
+U.S. government and funds collected are the property of the government, not the financial institution. Note: United
+Bank does not allow its Originators to initiate IAT transactions.
+
+Same Day ACH
+
+As of March 18, 2022, the per-transaction dollar limit for Same Day ACH increased to $1,000,000 per item. This
+includes credit and debit transactions.
+
+United Bank will offer Same Day ACH by request for contingency purposes only. Fees may be applied upon request
+of Same Day ACH access.
+
+Requirement to Complete a Third Party Sender Audit
+
+
+A third party sender is an intermediary between the bank and the entity’s (Third Party Sender’s) customers. The
+Rules require all Third Party Senders to conduct an audit of its ACH operation no later than December 31st of each
+year. As this is a Rule requirement, United Bank will be requesting confirmation of such audit. This Rule change was
+created to help reduce risk by requiring Third Party Senders to conduct annual Rules compliance audits to identify
+and correct any shortcomings in their processes as they relate to compliance with the Nacha Operating Rules.
+Documentation and proof of completion of an audit must be retained for six (6) years from the date of the audit.
+This Rule applies only to Third Party Senders.
+
+Third Party Sender audits required upon request by Nacha - This Rule reinforces a Third Party Sender's existing
+obligation to monitor and assess limitations on their customer's origination and return activities in the same manner
+as the Originating Depository Financial Institution (ODFI) does today. This Rule also requires that a Third Party
+Service Provider or Third Party Sender provide proof of completion of its Rules compliance audit to its ODFI upon
+request, in order to fulfill a request from Nacha. Failure to comply with this requirement may result in a Nacha Class
+II Rules violation and fines up to $100,000 per month until resolved.
+
+Requirement to Register Third Party Senders
+
+The Rules required United Bank to register each Third Party Sender with Nacha providing the following information:
+    • The bank’s name and contact information;
+    • The name and principal business location of the Third-Party Sender;
+    • The bank’s routing numbers used in ACH transactions originated for the Third-Party Sender; and
+    • The Company Identification(s) of the Third-Party Sender.
+Note: This Rule applies only to Third Party Senders.
+
+
+
+
+                                                      Page 4 of 6
+Risk Management and Assessment Requirements of United Bank
+
+This change updates the Rules to codify additional risk management practices regarding (1) the performance of due
+diligence with respect to Originators and Third Party Senders; (2) the assessment of the nature of the Originator’s or
+Third Party Sender’s ACH activity and the risk it presents; and (3) the establishment of procedures to monitor an
+Originator or a Third Party Sender’s origination and return activity and to enforce exposure limits and restrictions on
+the types of ACH transactions that may be originated. Originators should understand the necessity of the risk
+management changes that have been applied to the Rules. United Bank, as an ODFI, may establish additional risk
+management procedures such as requiring an audit of its Originator’s activity be performed, closely monitoring the
+return volume of its originators, and assessing the risk associated with the type of ACH activity performed by each
+Originator. United Bank may also limit the types of standard entry class codes which can be originated using United
+Bank’s routing number.
+
+Return Rate Reminders
+
+
+Unauthorized Return Rate Threshold - The current return rate threshold for unauthorized debit Entries (Return
+Reason Codes R05, R07, R10, R11*, R29 and R51) is 0.5 % of the total Entries originated.
+
+*Information related to the Return Reason Code R11 – Customer Advises Entry Not in Accordance with the Terms of
+the Authorization. An Originator that has received a Return Entry using Return Reason Code R11 may correct, if
+possible, the error or defect in the original Entry and Transmit a new Entry that conforms to the terms of the original
+authorization, without the need for re-authorization by the Receiver. Originators must Transmit the new Entry
+within 60 days after the Settlement Date of the Return Entry.
+
+Administrative and Overall Debit Return Rates - This Rule established a guideline for an Originator's administrative
+return rate of 3% or below of the total Entries originated. The guideline applies to debit Entries returned due to
+administrative or account data errors (Return Reason Codes R02, R03 and R04). Additionally, this Rule also
+establishes an acceptable guideline for an Originator's overall debit Entry return rate of 15% or below of the total
+Entries originated (excluding RCK entries).
+
+Return rates that exceed these guidelines may prompt an inquiry and review process by Nacha and the engagement
+of an industry review panel to evaluate the facts behind an Originator's ACH activity. Return rates above these levels
+may provoke a Nacha evaluation but may not result in a Rules violation or a Rules enforcement proceeding.
+
+NOTE: We suggest a prudent review of unauthorized, administrative and overall debit return Entries and return
+rates within your company. Ongoing monitoring of your returns and return rates will ensure your company’s
+compliance with the Rules. If you have any questions or concerns regarding your company’s return rates, please
+contact United Bank.
+
+Nacha Enforcement Authority - This Rule adds more options for which Nacha may begin an initial investigation or
+Rules enforcement proceeding when an entity originates an excessive number of unauthorized Entries. This could
+result in increased investigations of Originator activity, and could ultimately result in fines passed on to those
+Originators.
+
+
+
+                                                     Page 5 of 6
+NOTE: We suggest that you review existing Nacha Rules regarding authorization requirements pertaining to
+originating ACH Entries to ensure your organization's compliance with the Rules.
+
+Clarification on Prenotification Entries and Addenda Records - This Rule revises the Nacha Operating Rules to clarify
+that, apart from an IAT (International ACH Transaction) Entry; the Prenote Entry does not need to include addenda
+records that are associated with the subsequent live Entry. The Rules require that the format of a Prenote Entry be
+the same as the live Entry. Some differences between Prenotes and live Entries to which the Prenote relates include:
+
+   The dollar amount of a Prenote Entry must be zero;
+   A Prenote Entry is identified by a unique transaction code; and
+   Addenda records associated with a live Entry are not required with a Prenote (unless the Prenote relates to an
+    IAT Entry).
+
+NOTE: While the Rules do not prohibit an Originator from transmitting addenda records with a Prenote Entry, an
+Originator should have no expectation that a Receiving Depository Financial Institution (RDFI) will do any
+processing or verification of remittance data contained within. Originators wishing to validate proper formatting
+of remittance data for future entries to a non-consumer account should, instead, transmit a zero dollar Entry using
+the appropriate zero dollar transaction code.
+
+If you have any questions regarding the impact of the Rules, please contact United Bank. You may also obtain a copy
+of the Nacha Operating Rules by visiting https://www.Nacha.org/store.
+
+
+
+
+                                                    Page 6 of 6
+

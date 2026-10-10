@@ -1,0 +1,530 @@
+ORIGINATING ACH ENTRIES QUICK REFERENCE GUIDE
+The following information has been provided so that customers can be familiar with their requirements under the NACHA
+Operating Rules (The Rules). This quick reference guide is one of the Operating Instructions referred to in the Tompkins
+Treasury Management Terms and Conditions (the "Master Agreement") and was developed to give customers an
+overview of important information you should be aware of as an originator of ACH transactions. This document does not
+cover all of the NACHA Operating Rules, and is not intended to be legal advice. Customers can visit NAHCA.org for a
+complete version of the Operating Rules.
+
+GENERAL INFORMATION
+-   ACH entries are categorized as “consumer’ or “corporate”
+-   ACH is a batch system (not real time)
+-   Once sent to the ACH Operator, entries are final
+-   ACH is capable of crediting or debiting checking or savings accounts
+-   Most banks and credit unions receive ACH entries
+-   An ACH Originator is an entity or person that creates an ACH transaction
+
+COMPLIANCE WITH RULES AND APPLICABLE LAW
+As an ACH Originator, a customer is required to abide by the current NACHA Operating Rules, the Agreement (as
+defined in the Master Agreement) and all applicable laws and regulations. The Originator can request a copy of the Rules
+from the Bank at any time. As part of the Agreement, an originator agrees to comply with and be bound by the NACHA
+Operating Rules, agrees to comply with applicable state and federal law or regulations and warrants that it will not
+transmit any Entry or File that violates the laws of the United States, including regulations of and sanctions enforced by
+the Office of Foreign Asset Control (OFAC). It is the responsibility of the Originator to obtain information regarding
+such enforced sanctions. OFAC information may be obtained directly from the OFAC Compliance Hotline at (800) 540-
+OFAC.
+
+ORIGINATOR RESPONSIBILITIES
+It is the responsibility of the Originator of ACH payments to:
+ - Protect any banking information received;
+ - Send entries on the proper date according to the effective date of payments;
+ - Make necessary changes to payee account information within 6 banking days of notification of a returned ACH item
+      or a notification of change (NOC). The bank will provide any returned item or NOC information to you;
+ - Cease subsequent entries when appropriate;
+ - Ensure proper authorization for all payments originated (see Originator Requirements for authorization rules);
+ - Ensure all payments comply with NACHA Operating Rules, and all applicable regulations.
+
+NOTIFICATION OF CHANGE (NOC)
+-   The bank will notify you of any NOCs received on your behalf
+-   When ACH information is incorrect, a notification of change (NOC) is sent by the receiving bank requesting that
+    future entries contain corrected information. ACH Rules require you to make the change within six (6) banking days
+    of receiving the information from the bank.
+-   The receiving bank warrants that the information they provide is correct.
+
+
+AUTHORIZATION
+In general, the Originator must obtain the Receiver’s written authorization to initiate entries through the ACH network to
+the Receivers account.
+
+The authorization must;
+- Be readily identifiable as an ACH authorization;
+- Have clear and readily understandable terms; and
+- Provide that the receiver may revoke the authorization by notifying the originator in the manner specified by the
+    authorization.
+- Be signed or similarly authenticated by the Receiver.
+
+The originator must retain an original or copy of the written authorization for a period of two years following the
+termination or revocation of the authorization and provide the receiver a copy within NACHA time frames.
+
+ORIGINATOR REQUIREMENTS
+Originators that use the various ACH applications (SEC Codes) must be sure to comply with the requirements associated
+with the particular application (SEC Code). Each Entry type has specific conditions that must be met in order for the entry
+to be considered properly authorized under the NACHA Operating Rules (the Rules).
+
+        ACH Origination Services Offered: The following are bank approved ACH Standard Entry Class (SEC) Codes
+        and include “Additional Originator Obligations” for each Standard Entry Class Code:
+
+        PPD – Prearranged Payment and Deposit Entry
+
+        CCD – Corporate Credit and Debit Entry
+
+        ARC – Accounts Receivable Entry
+
+        BOC – Back Office Conversion Entry
+
+        POP – Point-of-Purchase
+
+        RCK – Re-Presented Check Entry
+
+        TEL – Telephone-Initiated Entry
+
+        WEB – Internet-Initiated Entry
+
+
+ORIGINATING PPD ENTRIES:
+The PPD SEC Code is used for debit or credit entries. Direct Deposit (credit) is a credit application that transfers funds
+into a consumer’s account at the Receiving Bank (RDFI). Direct Payment is a debit transaction where a consumer
+authorizes a corporate originator to initiate a debit, either one time or recurring, to his or her account.
+
+Authorization for a Direct Deposit credit entry can be verbal. Authorization for a Direct Payment debit entry is obtained
+by collecting a written authorization from the Receiver.
+
+When Originating a PPD Credit entry to a consumer account, the Originator must:
+  • Obtain an authorization from the Receiver that is readily identifiable as an authorization and has clear and readily
+      understandable terms. Authorization for a PPD Credit entry is not required to be in writing.
+
+
+When originating a PPD Debit entry (direct payment) to a consumer account, an Originator must:
+  • Provide the Receiver with a written authorization that is readily identifiable as an ACH debit authorization and
+      contains clear and readily understandable terms;
+
+    •   Obtain the Receiver’s agreement to the terms of the authorization via his/her signature; and
+
+    •   Obtain the Receiver’s authorization for a return free entry originated using the PPD SEC Code by either (1)
+        obtaining the Receiver’s written authorization, or (2) providing the Receiver with the required notice.
+
+
+ORIGINATING CCD ENTRIES:
+The CCD SEC Code is used for credit or debit entries where funds are transferred between unrelated corporate entities, or
+transmitted as intra-company cash concentration and disbursement transactions.
+
+Authorization for CCD entries is based on an agreement between the corporate Originator and Receiver, which binds each
+entity to the ACH rules.
+
+When originating a CCD entry to a non-consumer account, an Originator must:
+  • Obtain the corporate Receiver’s authorization to originate entries to the Receiver’s account; and
+
+    •   Obtain the corporate Receiver’s agreement to be bound by the NACHA operating rules.
+
+
+ORIGINATING ARC ENTRIES:
+The ARC Sec Code is used when an Originator is converting an eligible check received via the US mail or delivery
+service, at a dropbox location, or in person for payment of a bill at a manned location to a single-entry ACH Debit.
+
+Authorization for an ARC entry is obtained through notice provided to the Receiver by the Payee and the Receiver’s
+going forward with the transaction.
+
+When originating an ARC entry, and Originator must:
+  • Prior to accepting each check, provide the Receiver with a conspicuous notice that has clearly and readily
+      understandable terms;
+    •   Provide a copy of the notice, or language that is substantially similar, to the Receiver at the time of the transaction
+        when the source document for the ARC entry is provided by the Receiver in-person for payment of a bill at a
+        manned location;
+
+    •   Obtain an eligible source document (i.e., a check) via the US mail, dropbox, delivery service or in person for
+        payment of a bill at a manned location;
+    •   Use a reading device to capture MICR information;
+
+    •   Retain a copy of the front of the eligible source document (i.e., a check) for 2 years, and provide it to the ODFI
+        (bank) upon request, and;
+
+    •   Securely store the eligible source document until destroyed.
+
+Originator Warranties:
+   1. The Originator warrants that only eligible items will be converted into electronic transactions.
+       Ineligible items include:
+           a. Checks that include an Auxiliary On-us field in the MICR line;
+           b. Checks in the amount greater than $25,000;
+           c. Third party checks;
+           d. Remotely created checks as defined by Regulation CC;
+           e. Credit card checks;
+           f. Money orders;
+           g. Obligations of financial institutions (cashier’s checks, official checks, traveler’s checks);
+           h. Treasury checks, federal, state or local government checks, Federal Reserve or Federal Home Loan Bank
+               checks;
+           i. Checks drawn on an investment Third Party Sender;
+           j. Checks drawn on home equity lines of credit; and
+           k. Checks payable in a medium other than U.S. currency.
+   2. The Originator warrants that they will only convert items that were received at a lockbox or drop box location.
+   3. The Originator warrants that it has notified the Receiver, in advance of receiving the source document, in a clear
+       and conspicuous manner, that receipt of the item will authorize an ACH debit to the Receiver’s account. This
+       must be done for every transaction.
+   4. During initial processing the Originator will not key-enter information that was read off the MICR line. (If there
+       are errors in the MICR line those may be corrected after the first pass.)
+   5. Each item converted by the Originator must include a preprinted serial number and must be signed by the
+       Receiver.
+   6. The Originator warrants that the information used to create the ACH debit is accurate and that the item itself will
+       not be presented for payment unless returned by the RDFI.
+   7. The source documents will be securely stored in a locked, secure location until destruction. Destruction will occur
+       in accordance with the Rules by shredding or other reasonable means to ensure the item cannot be reconstructed.
+   8. The Originator must retain a reproducible, legible image or copy of the front of the source document for a period
+       of two years from the settlement date of the entry.
+   9. Upon receipt of a written request, the Originator will produce and send a copy of a source document to the
+       requesting financial institution within 10 banking days.
+
+ORIGINATING BOC ENTRIES:
+The BOC SEC Code is used when an Originator converts, during back office processing, an eligible check received at the
+point of purchase or manned bill payment location to a single entry ACH Debit.
+
+Authorization for a BOC entry is obtained through a notice provided by the Originator at the point of purchase or manned
+bill payment location and the Receiver’s going forward with the transaction.
+
+When originating a BOC entry, and Originator must:
+  • Provide the Receiver with a conspicuous notice that has clear and readily understandable terms;
+
+    •   Provide a copy of the notice or substantially similar language to the Receiver at the time of the transaction;
+
+    •   Obtain an eligible source document (i.e., a check) at the point of the in-person transaction;
+
+    •   Verify the identity of the Receiver;
+
+    •   Use a reading device to capture the MICR information;
+
+    •   Retain a copy of the front of the eligible source document for 2 years, and provide it to the ODFI (Bank) upon
+        request;
+
+    •   Securely store the eligible source document until destroyed; and
+
+    •   Maintain a telephone number for customer inquiries.
+
+Originator Warranties:
+   1. The Originator warrants that only eligible items will be converted into electronic transactions.
+       Ineligible items include:
+            a. Checks that include an Auxiliary On-Us field in the MICR line;
+            b. Checks that have not been encoded in magnetic ink;
+            c. Checks in the amount greater than $25,000;
+            d. Third party checks;
+            e. Remotely created checks, as defined by Regulation CC;
+            f. Credit card checks;
+            g. Money orders;
+            h. Obligations of financial institutions (cashier’s checks, official checks, traveler’s checks);
+            i. Treasury checks, federal, state or local government checks, Federal Reserve or Federal Home Loan Bank
+                checks;
+            j. Checks drawn on an investment Third Party Sender;
+            k. Checks drawn on home equity lines of credit;
+            l. Checks payable in a medium other than U.S. currency.
+   2. The Originator warrants that they will only convert items that were received at the point of purchase and then
+       converted in the back office.
+   3. The Originator warrants that it has notified the Receiver, in advance of receiving the Receiver’s source document,
+       in a clear and conspicuous manner, that receipt of the item will authorize an ACH debit to the Receiver’s account.
+       This must be done for every transaction.
+    4. The Originator must establish and maintain a working customer service telephone number that is answered during
+        normal business hours. This number must be displayed on the notice.
+    5. During initial processing, the Originator must use a reading device to capture the information off the MICR line.
+        (If there are errors in the MICR line, those may be corrected after the first pass.)
+    6. Each item converted by the Originator must include a preprinted serial number and must be signed by the
+        Receiver.
+    7. The Originator warrants that the information used to create the ACH debit is accurate and that the item itself will
+        not be presented for payment unless returned by the RDFI.
+    8. The source documents will be securely stored in a locked, secure location until destruction. Destruction will occur
+        in accordance with the Rules by shredding or other reasonable means to ensure the Item cannot be reconstructed.
+    9. The Originator must retain a reproducible, legible image or copy of the front of the source document for a period
+        of two years from the settlement date of the entry.
+    10. Upon receipt of a written request, the Originator will produce and send a copy of a source document to the
+        requesting financial institution within 10 banking days.
+    11. The Originator must employ a commercially reasonable process to verify the identity of the Receiver.
+
+
+ORIGINATING POP ENTRIES:
+The POP is a single-entry debit application based on a written authorization from the Receiver and notice provided by the
+Originator at the point of purchase or manned bill payment location.
+
+Authorization for POP entries is based on the notice to the customer and the signed authorization, and the customer going
+forward with the transaction. The source document (i.e., check), which is voided by the merchant and returned to the
+Receiver at the point of purchase, is used to collect the Receiver’s routing number, account number, and check serial
+number to generate the debit entry to the Receiver’s account.
+
+When originating a POP entry, an Originator must:
+   • Provide the Receiver with a conspicuous notice that has clear and readily understandable terms;
+
+    •   Obtain an eligible source document at the point of the in-person transaction;
+
+    •   Use a reading device to capture MICR information;
+
+    •   Void the eligible source document and return it to the Receiver;
+
+    •   Obtain a written, signed authorization; and
+
+    •   Provide a copy of the notice at the time of the transaction.
+
+Originator Warranties:
+   1. The Originator warrants that only eligible items will be converted into electronic transactions.
+       Ineligible items include:
+           a. Checks that include an Auxiliary On-Us field in the MICR line;
+           b. Checks that have not been encoded in magnetic ink;
+           c. Checks in the amount greater than $25,000;
+           d. Third party checks;
+            e. Remotely created checks, as defined by Regulation CC;
+            f. Credit card checks;
+            g. Money orders;
+            h. Obligations of financial institutions (cashier’s checks, official checks, traveler’s checks);
+            i. Treasury checks, federal, state or local government checks, Federal Reserve or Federal Home Loan Bank
+               checks;
+           j. Checks drawn on an investment Third Party Sender;
+           k. Checks drawn on home equity lines of credit;
+           l. Checks payable in a medium other than U.S. currency.
+    2. The source document provided to the Originator for use in obtaining the Receiver’s routing number, account
+       number, and check serial number for the initiation of the entry is (1) returned voided to the Receiver, and (2) has
+       not been provided by the Receiver for use in any prior transaction.
+    3. An Originator of POP entries must provide each Receiver with a receipt that contains the required information
+       with respect to each POP entry initiated to the Receiver’s account. That information must include:
+           a. Merchant’s name (Originator name)
+           b. Originator phone number
+           c. Date of the transaction
+           d. Source document serial number
+           e. Merchant number (an identifier so the merchant can determine where the transaction transpired)
+           f. Terminal City
+           g. Terminal
+           h. State
+
+    4. Prior to the receipt of each source document, the Originator warrants that it has notified the Receiver, in a clear
+       and conspicuous manner, that receipt of the item may authorize an ACH debit to the Receiver’s account. This
+       must be done for every transaction.
+    5. The Originator must be able to produce a copy of a signed authorization for any entry generated as a POP entry
+       for two years after the date of the transaction. (Usually on the sales receipt).
+
+
+ORIGINATING RCK ENTRIES:
+The RCK SEC Code is used when an Originator creates a single entry debit transaction to re-present a check that has been
+processed through the check collection system and returned because of insufficient or uncollected funds.
+
+Authorization for an RCK entry requires written notice to the Receiver prior to receipt of each source document (i.e.,
+check) that any check returned for insufficient or uncollected funds may be re-presented electronically via ACH.
+
+When originating a RCK entry to a consumer account, an Originator must:
+  • Agree with its ODFI (Originating Bank) that any restrictive endorsement made by the Originator or its agent on
+      the item to which the RCK entry relates is void or ineffective upon initiation of the RCK entry;
+
+    •   Provide the Receiver with a conspicuous notice that has clear and readily understandable terms;
+
+    •   Use an eligible item;
+    •   Retain a copy of the front and back of the eligible item for 7 years, and provide it to the ODFI upon request. If the
+        item has been paid, the copy provided to the ODFI must be so marked;
+
+    •   Not reinitiate an RCK entry more than one time within 180 days of the settlement date of the original entry,
+        provided that the terms item to which the RCK relates has been presented no more than one time through the
+        check collection system, and one time as an RCK entry.
+
+Originator Warranties:
+   1. The Originator warrants that they will only originate an RCK item if the following conditions are met:
+           a. The item is a consumer check under $2,500
+           b. It was returned as NSF or uncollected funds
+           c. The Originator has Good Title -- ODFI is entitled to or is authorized to obtain payment for the returned
+               item
+           d. The signature is genuine -- all signatures on the returned item are authentic and authorized
+           e. The check has not been altered
+           f. There are no defenses -- there are no claims against the ODFI for the item.
+           g. There is no knowledge of insolvency
+           h. The RCK entry is accurate -- item is drawn on RDFI; amount, item number, and account number match
+               information on item
+           i. The item itself will not be presented; the item to which the RCK entry relates will not be presented to the
+               RDFI for payment
+           j. Encoding of the item is correct -- the information encoded after issue in magnetic ink on the item is
+               correct
+           k. Restrictive endorsements are void -- any restrictive endorsement made by the Originator or its agent on
+               the item is void or ineffective upon initiation of the RCK entry
+           l. A copy of the item may be requested -- RDFI may request a copy of the front and back of the item within
+               7 years. ODFI warrants that the Originator is maintaining copy of front and back and that it can be
+               provided within 10 days.
+           m. The Entry information is accurate.
+   2. The Originator must provide the consumer with a notice that clearly and conspicuously states the terms of the
+       represented check entry policy in advance of receiving the item to which the RCK entry relates.
+   3. The RCK entry is processed for the face value of the returned item (any return item fee collected must be
+       authorized and processed separately).
+
+
+ORIGINATING TEL ENTRIES:
+The TEL SEC Code is used to originate a debit entry to a consumer’s account based on an oral authorization obtained
+from the consumer via the telephone. This type of transaction may only be originated when (1) there is an existing
+relationship between the Originator and the Receiver, or (2) where no relationship exists between the Originator and the
+Receiver, but the Receiver has initiated the telephone call.
+
+Authorization for a TEL entry is obtained orally via the telephone, where the Originator must clearly state that the
+Receiver is authorizing an ACH debit to the Receiver’s account, and the Receiver must explicitly consent.
+
+When originating a TEL entry to a consumer account, an Originator must:
+    •   Obtain oral authorization from the Receiver via the telephone. The authorization must be readily identifiable as an
+        authorization and must have clear and readily understandable terms;
+    •   Provide the required minimum information as part of the authorization;
+    •   For Single-Entry TEL entries, make an audio recording of the oral authorization, or provide the Receiver with
+        written confirmation of the oral authorization prior to the settlement date of the entry. The Originator must also
+        retain a reproducible copy of the recording or written confirmation for 2 years from the date of the authorization;
+
+    •   For recurring TEL entries, make an audio recording of the oral authorization and provide the Receiver with
+        written confirmation of the oral authorization prior to the settlement date of the first entry. The Originator must
+        also retain for 2 years from termination or revocation of the authorization (1) the original or a duplicate audio
+        recording of the oral authorization and (2) evidence that a copy of the authorization was provided to the Receiver;
+
+    •   Verify the identity of the Receiver; and
+
+    •   Verify that the routing number is valid.
+
+
+Originator Warranties:
+   1. Originator has employed commercially reasonable procedures to verify the identity of the Receiver.
+   2. Originator has utilized commercially reasonable procedures to verify that routing numbers are valid.
+   3. The Originator warrants that the receiving consumer has orally authorized a single or recurring transaction. The
+       authorization must be readily identifiable as an authorization and must clearly state its terms. A TEL entry may
+       only be used when there is an Existing Relationship between the Originator and the Receiver, or, when there is
+       not an Existing Relationship between the Originator and the Receiver, when the Receiver initiates the telephone
+       call.
+
+        The following minimum information must be included as part of the single entry authorization:
+           o The date on or after which the debit will occur
+           o The amount of the entry
+           o The consumer’s name
+           o The account to be debited
+           o A phone number for inquiries that is answered during normal business hours
+           o The date of the oral authorization
+           o A statement by the Originator that the authorization was obtained from the consumer for a single-entry
+                ACH debit
+
+        The following minimum information must be included as part of an authorization for recurring entries:
+           o The timing (including the start date), number and/or frequency the debits will occur
+           o The amount of the recurring entry
+           o The consumers name
+           o The account to be debited
+           o A phone number for inquiries that is answered during normal business hours
+           o The date of the oral authorization
+
+    4. For single entry TEL entries, the Originator warrants that the authorization is either tape recorded, or a notice is
+       sent to the consumer prior to the settlement date of the debit. For recurring TEL entries, the authorization must be
+       recorded and a copy of the authorization must be sent to the consumer.
+ORIGINATING WEB ENTRIES:
+The WEB SEC Code is used for internet initiated/Mobile entries. These debit or credit entries are transmitted to a
+consumer Receiver’s account. WEB entries can be either single or recurring.
+
+Debit WEB Entries – Debit WEB Entries are used by non-consumer Originators to debit a consumer based on an
+authorization that is communicated, other than by an oral communication, from the Receiver to the Originator via the
+Internet or wireless network.
+
+Credit WEB Entries – Credit WEB Entries, also known as Person to Person (P2P) transactions, are used when payments
+are exchanged between consumers.
+
+Authorization for a WEB entry is obtained via a written authorization from the Receiver (1) via the internet or a wireless
+network; or (2) in any manner permissible under the Rules, if the Receiver’s instruction for the initiation of a debit entry is
+designed by the Originator to be communicated, other than by an oral communication, via a wireless network.
+
+When originating a debit WEB entry to a consumer account, an Originator must:
+  • Obtain written authorization from the Receiver (1) via the internet or a wireless network; or (2) in any manner
+      permissible under the Rules, if the Receiver’s instruction for the initiation of a debit entry is designed by the
+      Originator to be communicated, other than by an oral communication, via a wireless network;
+
+    •   Use a commercially reasonable fraudulent transaction detection system to screen each debit WEB entry that, at a
+        minimum, validates the account to be debited for the first use of such account number, and for each subsequent
+        change to such account number (acceptable methods of validating an account number include the use of a ACH
+        micro-transaction verification, use of a commercially available validation service provided by an ODFI or a third-
+        party and use of account validation capabilities or services enabled by APIs);
+            o If using ‘Micro-Entries’ originators must use “ACCTVERIFY” in the company entry description field.
+            o Company name must be easily recognizable to Receivers and the same or similar to what will be used in
+                subsequent entries.
+
+    •   Verify the Receiver’s identity;
+
+    •   Verify the routing number associated with that entry is valid;
+
+    •   Conduct annually an audit of data security practices for Receiver’s financial information.
+
+Originator Warranties:
+   1. The Originator will employ a commercially reasonable method of authentication to verify the identity of the
+       consumer.
+   2. The Originator will employ a commercially reasonable fraudulent transaction detection system to screen each
+       entry that, at a minimum, validates the account to be debited for the first use of such account number, and for each
+       subsequent change to such account number.
+   3. The Originator will employ commercially reasonable procedures to verify the routing number used in the entry is
+       valid.
+4. The Originator will conduct an audit annually, and share this audit with the financial institution, to ensure that the
+   financial information it obtains from Receivers is protected by security practices and procedures that include, at a
+   minimum, adequate levels of:
+       a) Physical security to protect against theft, tampering, or damage;
+       b) Personnel and access controls to protect against unauthorized access and use; and
+       c) Network security to ensure secure capture, storage and distribution.
+The following sample authorizations are provided only as a sample of an ACH authorization, and is not
+intended as legal advice. To ensure compliance with the rules please review your authorization and your
+requirements under the NACHA Operating Rules.
+
+
+
+
+              AUTHORIZATION AGREEMENT FOR DIRECT DEPOSITS (ACH CREDITS)
+
+Company Name                                                             Company ID Number
+I (we) hereby authorize                                    , hereinafter called COMPANY, to initiate credit entries to my
+(our)  Checking Account /  Savings account (select one) indicated below at the depository financial institution named
+below, hereinafter called DEPOSITORY, and to credit the same to such account and to initiate, if necessary, debit
+entries/adjustments for any credit entries in error the same to such account. I (we) acknowledge the origination of ACH
+Transactions to my (our) account must comply with the provisions of U.S. Law.
+
+Depository Name                                                          Branch
+
+
+City                                                                     State                    Zip
+
+
+Routing Number                                                           Account Number
+
+Payment Type:
+Single Payment          Multiple Payment        Recurring Payment
+
+
+Amount to be Debited                                                     Frequency (Week/Month/etc.)
+
+
+This authority is to remain if full force and effect until COMPANY has received written notification from me (or either of
+us) of its termination in such time and in such manner as to afford COMPANY and DEPOSITORY a reasonable
+opportunity to act on it.
+
+Name(s)                                                                  ID Number
+
+
+
+Date                                            Signature
+The following sample authorizations are provided only as a sample of an ACH authorization, and is not
+intended as legal advice. To ensure compliance with the rules please review your authorization and your
+requirements under the NACHA Operating Rules.
+
+
+
+
+              AUTHORIZATION AGREEMENT FOR DIRECT PAYMENTS (ACH DEBITS)
+
+Company Name                                                               Company ID Number
+I (we) hereby authorize                                       , hereinafter called COMPANY, to initiate debit entries, for the
+purpose below, to my (our)  Checking Account /  Savings account (select one) indicated below at the depository
+financial institution named below, hereinafter called DEPOSITORY, and to credit the same to such account and to
+initiate, if necessary, debit entries/adjustments for any credit entries in error the same to such account. I (we) acknowledge
+the origination of ACH Transactions to my (our) account must comply with the provisions of U.S. Law.
+
+Depository Name                                                            Branch
+
+
+City                                                                       State                    Zip
+
+
+Routing Number                                                             Account Number
+
+Payment Type:
+Single Payment           Multiple Payment         Recurring Payment
+
+
+Amount to be Debited                                                       Frequency (Week/Month/etc.)
+
+This authority is to remain if full force and effect until COMPANY has received written notification from me (or either of
+us) of its termination in such time and in such manner as to afford COMPANY and DEPOSITORY a reasonable
+opportunity to act on it.
+
+Name(s)                                                                    ID Number
+
+
+Date                                              Signature
+

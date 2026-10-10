@@ -1,0 +1,190 @@
+
+Micro-Entries (Phase 1) | Nacha
+×
+You are using a browser that will not provide the best experience on our website. Please upgrade your browser to Microsoft Edge, or switch over to Google Chrome or Mozilla Firefox.
+Skip to main content
+Nacha Operating Rules
+Details
+Technical
+Impact
+FAQs
+RFC Summary
+Effective Date
+September 16, 2022
+Rule Status
+Rule Status
+Archived Rule Changes
+Micro-Entries (Phase 1)
+This Rule defines and standardizes practices and formatting of Micro-Entries, which are used by some ACH Originators as a method of account validation.
+The term Micro-Entry is defined, and Originators are required to use the standard Company and Description and follow origination practices.
+Download our one-page overview of the Micro-Entry Rule and what it means to you.
+Download our Micro-Entry Return Scenario chart for additional information on return handling.
+See also Micro-Entries (Phase 2)
+Details
+Details
+This Rule defines and standardizes practices and formatting of Micro-Entries, which are used by some ACH Originators as a method of account validation
+Phase 1 of the Rule will:
+Defines “Micro-Entries” as ACH credits of less than $1 and any offsetting ACH debits, used for the purpose of verifying a Receiver’s account
+Standardizes the Company Entry Description and Company Name requirements for Micro-Entries
+Establishes other Micro-Entry origination practices
+Phase 2 of the Rule will be effective March 17, 2023
+Originators of Micro-Entries will be required to use commercially reasonable fraud detection, including the monitoring of Micro-Entry forward and return volumes
+Technical
+Technical
+The Rule defines “Micro-Entry” as a type of ACH Entry
+A Micro-Entry will be “a credit or debit Entry used by an Originator for the purpose of verifying a Receiver’s account or an individual's access to an account.”
+A credit Micro-Entry must be in the amount of less than $1.00
+One or more debit Micro-Entries must not exceed, in total, the amount of the corresponding credit Micro-Entries
+This definition accommodates the existing practices of offsetting the amounts of credit Micro-Entries with one or more debits, which nets the total verification practice to $0; and permits a debit offset to be greater than $1.00 only to offset the amounts of credit Micro-Entries
+The Rule will standardize formatting for Micro-Entries
+In the Company Entry Description field, the Rule requires the use of “ACCTVERIFY”
+A standard description makes Micro-Entries more easily identifiable, and better enable ODFIs to apply any desired processing routines or other controls
+Like other rules for the standardized use of the Company Entry Description, ODFIs are not required to review, validate or correct an Originator’s formatting
+The Company Name must be readily recognizable to the Receiver, and be the same or similar to the Company Name that will be used in future Entries
+Permitted to have minor variations to accommodate processing needs
+Mirrors the Company Name requirement from the recently approved rule on Reversals
+The Rule will establish other origination requirements
+An Originator that is using debit Micro-Entry offsets must send the debits and the corresponding credit Micro-Entries simultaneously for settlement at the same time
+Better enables the simultaneous delivery of credit Micro-Entries and corresponding debit Micro-Entry offsets to RDFIs in the same file
+The total amount of the credit Micro-Entry(ies) must equal to or greater than the value of the debit Micro-Entry(ies)
+The aggregate total of the debits and credits cannot result in a net debit to the Receiver’s account
+An Originator using Micro-Entries may initiate future Entries to the Receiver’s account as soon as the Originator’s process for validating the amounts of the Micro-Entries has been completed
+The Originator is in the best position to know when the validation process is complete
+A future Entry may not be originated simultaneously with Micro-Entries
+ODFIs are not required to review or inspect files to enforce this
+In Phase 2 of the Rule risk management requirements will be applied to Originators.
+An Originator of Micro-Entries must conduct commercially reasonable fraud detection on its use of Micro-Entries, including by monitoring of forward and return volumes of Micro-Entries
+The use of commercially reasonable fraud detection is intended to minimize the incidence of fraud schemes that make use of Micro-Entries
+Monitoring forward and return volumes, at a minimum, establishes a baseline of normal activity
+An Originator would not be required to perform an entry-by-entry review
+Impact
+Impact
+Benefits
+For RDFIs and their Receivers
+Better enables identification of individual Micro-Entries
+Better enables RDFIs to apply desirable processing routines and other controls
+Better enables the receipt of corresponding debit and credit Micro-Entries to the same account at the same time
+Reduces the potential of receiving fraudulently-initiated Micro-Entries
+For ODFIs and their Originators
+Better effectiveness of the Micro-Entry process for account validation
+Better customer experience due to standardization of some aspects of the process and the standardization of the description
+For the ACH Network as a whole
+A more effective Micro-Entry process for account validation through the ACH Network
+Addressing pain points of Originators, ODFIs and RDFIs
+Improve the quality of this type of Entry in the ACH Network
+Impacts
+Originators
+Originators will adopt the formatting conventions for Micro-Entries
+Company Entry Description of “ACCTVERIFY”
+Company Name requirement
+Originators will observe the required timing and waiting periods
+Must send credit and corresponding debit Micro-Entries (if using) simultaneously
+Must wait to originate future Entries until the verification process is complete
+Originators will need to conduct commercially reasonable fraud detection for Micro-Entries 
+(Phase 2)
+Monitoring forward and return volumes of Micro-Entries
+Other desired velocity checks or anomaly detection
+RDFIs should consider:
+Incorporating incoming micro-entry activity into existing fraud detection, AML, and money mule detection 
+Treating corresponding credit and debit Micro-Entries the same when making post/no-post decisions (i.e., post both or return both)
+Automating return processing, especially for administrative return reasons such as account closed or no account 
+FAQs Section
+FAQs Section
+How does the requirement for simultaneous transmission and settlement of credit and offsetting debit Micro Entries impact the Originator’s processing?
+An Originator that transmits a credit Micro Entry with an offsetting debit Micro Entry to a Receiver’s account must use the same value in the Effective Entry Date field for both Micro-Entries. The files containing those entries for the same Receiver must be submitted simultaneously, so that the entries may be submitted into the same processing window. If the Originator’s process separates the files for debits and credits, those files must be submitted one immediately following the other, as soon as possible. A slight difference in submission time (for example, seconds between) can be considered reasonable if the files are submitted close together and allows for the transactions to be submitted to the ACH Operator in the same processing window.
+The new rule requires Micro-Entry credits and offsetting debits to be transmitted by the Originator simultaneously for settlement at the same time. Is it still possible that the debits and credits may post to the Receiver’s account at different times?
+Yes.  Although the intent of this rule is to provide credit and offsetting debit Micro Entries to the RDFI within the same distributed file so that the RDFI can control the impact to the Receiver’s account, differences in RDFIs’ posting systems may result in credit and offsetting debit Micro Entries being posted to the Receiver’s account at different times. The Originator has nevertheless met its obligation by transmitting these transactions simultaneously for the same settlement date.
+Are Micro-Entries required to be authorized? What are the minimum authorization requirements?
+As with any other ACH credit or debit entry, the Originator must obtain the Receiver’s authorization to transmit Micro Entries to the Receiver’s account. The minimum authorization requirements are based upon the type of entry (consumer or corporate), method of authorization (internet, telephone, paper, etc.), and any applicable requirements specific to the Standard Entry Class (SEC) Code for the Micro-Entry. (See the Nacha Operating Rules Section 2.3 Authorization and Notice of Entries for general authorization requirements and Section 2.5 Provisions for Specific Types of Entries of the Nacha Operating Rules for requirements specific to SEC Code.)
+Based upon the practice of Micro-Entry verification, the Originator may not wish to provide the specific dollar amount to the Receiver up front in the authorization. However, to meet the Rule obligations and to ensure that the Receiver is clear about the transaction(s) being authorized, Originators must provide a description of how the Micro Entries will be used, and the general dollar amounts that can be expected (e.g., credit entries in amounts less than $1.00, and any offsetting debits not to exceed the total amount of such credits).
+What Standard Entry Class (SEC) Code should be used for Micro-Entries?
+The new rule provides a standardized description for Micro-Entries (ACCTVERIFY), but it does not define the use of a specific SEC Code. As with any other ACH entry, the SEC Code is determined by the account type of Receiver and the manner in which authorization is obtained. See the Nacha Operating Rules Section 2.5 Provisions for Specific Types of Entries for requirements specific to SEC Code.
+What is expected of Originators, who must apply commercially reasonable fraud detection standards (which includes monitoring of forward and return volumes) to Micro-Entries as of March 17, 2023?
+The rule requires an organization using Micro-Entries to use reasonable methods to recognize and prevent suspicious activity. This requirement is different from the WEB Debit account validation requirement in that the account number for a Micro-Entry does not need to be individually validated, and Originators are not required to perform an entry-by-entry review. However, at a minimum, Originators should understand forward and return volumes to establish a baseline of normal Micro-Entry activity. Velocity monitoring, recognizing the number of times an account number is used (in various formats), in addition to the number of transactions, can also be an important tool in Originator’s fraud monitoring efforts.
+Does the requirement for an Originator to use commercially reasonable fraud detection methods and monitor forward and return entry volumes for Micro-Entries affect existing requirements for return rate monitoring?
+No. The fraud detection requirements for Micro-Entries are in addition to and distinct from the return rate threshold monitoring required under Article Two, Subsection 2.17.2. The new rule does not impose a specific return threshold for Micro-Entries but instead requires Originators to understand and establish a baseline for normal forward and return volumes and to recognize and react to activity outside of those levels.
+To what extent must an ODFI apply its own commercially reasonable fraud detection standards (e.g., forward and return entry monitoring, velocity checks, anomaly detection) to Micro-Entries specifically?
+An ODFI is ultimately responsible for its Originators’ compliance with the Nacha Operating Rules. While the rule imposes the requirement for commercially reasonable Micro-Entry fraud detection directly on the Originator, the ODFI should also follow the current language in Article Two, Subsection 2.2.3 regarding monitoring origination and return activity for Originators and Third-Party Senders. ODFIs may want to have ACH Origination Agreements reviewed by their compliance area along with the Rules language to determine if any additional steps need to be taken.
+What action must the Receiver take to complete the Micro-Entry validation process before the Originator is permitted to transmit future entries to the Receiver’s account?
+The Micro-Entry rule permits an Originator to initiate future entries to the Receiver’s account as soon as the Originator’s process for verifying the amounts of the Micro-Entries has been completed.  Although the Rules allow the Originator to determine the specific requirements and manner in which the Receiver must confirm with the Originator the required Micro-Entry transaction information, the expectation is that the Receiver must validate the information with the Originator, who will know whether the information was correctly provided.  If the Originator has not received a response from the Receiver, the verification process is not complete, and the Originator is not permitted to originate future entries. If a return has been received, future entries cannot be originated without remedying the reason for the return.
+If the Receiver fails to complete the Originator’s process to validate the Micro-Entries, can the Originator assume “no news is good news” and still initiate live entries if the Micro-Entries are not returned by the RDFI within the 2-day return period?
+No. Completion of the Originator’s validation process requires the Receiver’s validation of the Micro-Entry information or the return of the entry. If there has been no response from the Receiver and no return, the verification process is not complete and future entries cannot be originated. If a return has been received, future entries cannot be originated without remedying the reason for the return.
+If the Originator informs the Receiver that a Third-Party Service Provider will send Micro-Entries on the Originator’s behalf, is it okay if the Company Name field includes the Third-Party’s name if it is recognizable to the Receiver?
+No. The rules for Micro-Entries require the name of the Originator in a Micro-Entry (as identified in the Company Name field or the Originator Name field) to reflect the same Originator that will be identified in future Entry(ies) to the Receiver’s account. The Originator may make minor variations to the content of the Company Name field or Originator Name field, such as for accounting or tracking purposes, provided that the name of the Originator remains readily recognizable to the Receiver. The Originator of a Micro-Entry must be the same entity entering into an agreement with the Receiver for future ACH entries.
+Will a Micro-Entry be rejected by the ACH Operator due to non-compliance with the formatting rules?
+No. An ACH Operator will not reject a Micro-Entry solely because it does not comply with the formatting requirements specific to Micro-Entries (example: the Micro-Entry contains an incorrect company entry description or an invalid dollar amount). Additionally, ACH Operators will not match offsetting Micro-Entries. However, RDFIs may return an improper Micro-Entry and may choose to submit Micro-Entry rule violations to Nacha’s rules enforcement process.
+Does the Rule require an RDFI to treat credit Micro-Entries and any offsetting debit Micro-Entries in the same manner when one type of entry cannot be posted while the other can?
+No, however the subject continues to be reviewed for the future. RDFIs may consider providing equal treatment to credit and offsetting debit Micro-Entries in posting and return decisions, where possible. RDFIs may consider, if repairing credit Micro-Entries, also repairing corresponding debit Micro-Entries or returning both entry types.
+What return reason code should an RDFI use to return a credit Micro-Entry(ies) when it has also returned the offsetting debit Micro-Entry(ies)?
+There are not dedicated Return Reason Codes (RRC) for Micro-Entries; RDFIs should follow the existing requirement to utilize the RRC that most closely resembles the reason for return. The chart 
+attached
+ provides guidance to RDFIs under certain circumstances, and Originators and ODFIs may also find it useful in interpreting returned Micro-Entries.
+Can a Micro-Entry to a Receiver’s account be returned as Unauthorized?
+Yes. Debit Micro-Entries that are not properly authorized may be returned as unauthorized in accordance with the Nacha Operating Rules (as R10 within 60 days with WSUD for entries to consumer accounts, and as R29 within 2 banking days for entries to non-consumer accounts). The RDFI may return an unauthorized Micro-Entry credit using Return Reason Code R23.
+Is it okay for an RDFI to return an improper Micro-Entry (e.g., the offsetting debit Micro-Entry amount(s) exceeds the corresponding credit Micro-Entries, or the entry is improperly formatted)? If so, what is the best return reason code to use?
+If a consumer Receiver recognizes the issues with a Micro-Entry transaction, the RDFI may return the improper Micro-Entry within 60 days using Return Reason Code R11 with the completion of a Written Statement of Unauthorized Debit. If a business Receiver recognizes that the Micro-Entry is improper, or if the RDFI identifies an improper Micro-Entry to any Receiver’s account, the RDFI may return the entry as R17 within the standard, two-day return time frame.
+Is an Originator permitted to transmit credit Micro-Entries only, without offsetting debit Micro-Entries?
+Yes.
+Is an Originator permitted to transmit debit Micro-Entries only, without corresponding credit Micro-Entries?
+No. By rule, the use of Micro-Entries cannot result in a net debit to the Receiver’s account, and one or more debit Micro-Entries may not be transmitted without simultaneous transmission for settlement at the same time one or more credit Micro-Entries that, in aggregate value, are equal to or greater than the amount of the debit micro-entry(ies).
+Is it okay for an Originator to use the ACH Network to transmit offsetting debit Micro-Entries when it uses a different payment channel (card network, real-time payment, statement credit, etc.) to credit the Receiver?
+No. By rule, ACH debit Micro-Entries are permitted only in tandem with ACH credit Micro-Entries. Debits to offset non-ACH credits would be “regular” (i.e., non-Micro-Entry) ACH debits and require the Receiver’s express authorization for such entries and compliance with the terms of the Originator’s ACH Origination Agreement.
+Micro-Entries and Prenotifications are both ACH entries used to validate an account. Do they have the same formatting requirements?
+No. Although both types of entries can be used to validate a Receiver’s account, they function slightly differently, and each has unique formatting requirements that ensure its proper identification as an account validation tool.
+Prenotification Entries can be easily identified by a unique transaction code and a dollar amount of zero. For these entries, a specific company entry description is not needed to identify these entries as an account validation tool, and Originators have discretion over the content of the company entry description field.
+By contrast, Micro-Entries are like any other live transaction that posts to the Receiver’s account. Unlike prenotes, Micro-Entries do not have a unique set of transaction codes to distinguish them from other live transactions and require the use of other means to flag them as account validation transactions. For clear identification of these payments as an account validation tool, Originators are required to include the specific descriptive statement “ACCTVERIFY” in the company entry description field.
+RFC Summary
+RFC Summary
+In 2020 Nacha issued for comment a set of proposals to amend the Nacha Rules to improve the capabilities of the ACH Network to validate and correct account information.  This package included proposals to standardize practices and formatting for the use of Micro-Entries.
+75% of respondents supported the Micro-Entries portion of the proposal, to define, standardize and establish practices for Micro-Entries
+More than 63% of RDFIs believe that standardization of Micro-Entries for account validation will benefit their institution and customers
+Areas of comments/concern included:
+The proposed description
+The challenge for an ODFI to prohibit an Originator from sending live Entries prior to the Receiver validating the Micro-Entries
+The need for monitoring and prevention of large quantities of fraudulent Micro-Entries
+Changes from the RFC
+The definition of “Micro-Entry” has been modified to more fully accommodate the practice of offsetting debits for a net $0 process
+The standardized Company Entry Description has been changed from “VALIDATION” to “ACCTVERIFY”
+The Company Name requirement allows for minor variations, and mirrors the requirement recently adopted in the rule on Reversals
+A provision has been added requiring Originators that use debit Micro-Entries to send the debits and credits simultaneously in the same file
+A provision has been added requiring Originators to use commercially reasonable fraud detection in relation to these transactions
+This Rule 
+does not 
+require:
+Originators to use Micro-Entries as a method of account validation
+Originators that are using credit Micro-Entries to use offsetting debit Micro-Entries
+ODFIs to actively monitor or inspect Originators’ files of Micro-Entries for compliance with the origination requirements
+Related Content
+Conference
+Payments Legal & Compliance Summit 2027
+December 1–2, 2027
+ACH
+Payments Consulting
+Blog
+Bringing ACH Processing In-House: Managing Risk, Cost, and Compliance
+September 30, 2026
+Alliance Members
+Payments Innovation Alliance Spring Meeting - June 2027
+June 7–8, 2027
+ACH
+Blog
+Technology Optimization: The Missing Link Between ACH Compliance and Scalable Growth
+August 12, 2026
+ACH
+ACH Statistics
+Business to Business
+Same Day ACH
+Press Release
+Same Day ACH Gains Lead to First Quarter ACH Network Growth
+April 20, 2026
+Press Release
+Phixius by Nacha and Kinexys by J.P. Morgan Integration Goes Live, Expanding Multi-Responder Account Validation Network
+February 5, 2026
+Blog
+From New Rules to a New Accreditation and More, a Busy 2026 Ahead at Nacha
+January 29, 2026
+Nacha Operating Rules
+Risk Management
+Blog
+Next Steps for the New Nacha Risk Management Rules 
+April 3, 2026

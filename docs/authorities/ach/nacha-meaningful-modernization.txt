@@ -1,0 +1,242 @@
+
+Meaningful Modernization Becomes Effective Sept. 17, 2021 | Nacha
+×
+You are using a browser that will not provide the best experience on our website. Please upgrade your browser to Microsoft Edge, or switch over to Google Chrome or Mozilla Firefox.
+Skip to main content
+Nacha Operating Rules
+Details
+Technical
+Impact
+FAQs
+Effective Date
+September 17, 2021
+Rule Status
+Rule Status
+Archived Rule Changes
+Meaningful Modernization
+Overview
+These Rules intend to improve and simplify the ACH user-experience by
+Facilitating the adoption of new technologies and channels for the authorization and initiation of ACH payments
+Reducing barriers to use of the ACH
+Providing clarity and increasing consistency around certain ACH authorization processes; and
+Reducing certain administrative burdens related to ACH authorizations
+Details
+Details
+Standing Authorization
+This rule will define a “Standing Authorization”
+A Standing Authorization will be defined as an advance authorization by a consumer of future debits at various intervals
+Under a Standing Authorization, future debits may be initiated by the consumer through some further action, as distinct from recurring entries which require no further action and occur at regular intervals
+In addition to defining a Standing Authorization, other aspects of the rule include:
+A Standing Authorization may be obtained in writing or orally (Oral Authorizations)
+Individual payments initiated based on the Standing Authorization will be defined as Subsequent Entries
+Individual Subsequent Entries may be initiated in any manner identified in the Standing Authorization
+This rule also will allow Originators some flexibility in the use of SEC codes for individual Subsequent Entries
+Allows an Originator to use the TEL or WEB codes for Subsequent Entries when initiated by either a telephone call or via the Internet/wireless network, respectively, regardless of how the Standing Authorization was obtained
+In such cases, the Originator will not need to meet the authorization requirements of TEL or WEB, but will need to meet the risk management and security requirements associated with those codes
+Oral Authorization
+This rule will define and allow “Oral Authorization” as a valid authorization method for consumer debits distinct from a telephone call
+Currently, only the TEL transaction type has requirements and addresses risks specific to an oral authorization; but it is specific to a telephone call
+Many newer methods and channels make use of verbal interactions and voice-related technologies
+Other Authorization Proposals
+In conjunction with the other authorization rules (Standing Authorizations and Oral Authorizations), this Rule includes other modifications and re-organizations of the general authorization rules for purposes of clarity, flexibility and consistency
+Clarity
+Re-organizes the general authorization rules to better incorporate Standing Authorizations, Oral Authorizations, and other changes described below
+Defines “Recurring Entry” to complement the existing definition of Single Entry and the proposed new definition of Subsequent Entry, and align with terms in Regulation E
+Flexibility
+Explicitly states that authorization of an ACH payment by any method allowed by law/regulation
+Only consumer debit authorizations require a writing that is signed or similarly authenticated
+Consistency
+Applies the standards of “readily identifiable” and “clear and readily understandable terms” to all authorizations
+For all consumer debit authorizations, applies the minimum data element standards that are currently stated only in the TEL rules (i.e., what will be in a consumer authorization)
+Alternative to Proof of Authorization
+This Rule will allow an ODFI to agree to accept the return of an entry as an alternative to providing proof of authorization
+Example – An RDFI requests proof of authorization for a PPD debit; the ODFI will have the option within 10 banking days to either provide proof or agree to accept a return. If the ODFI chooses to accept the return, the RDFI will have 10 banking days to make that return
+In situations in which the ODFI has accepted, or agreed to accept, a return in lieu of providing proof of authorization, but the RDFI still needs such proof, the RDFI will still retain the ability to obtain it from the ODFI. The ODFI must provide proof within 10 banking days of the RDFI’s subsequent request
+Example – After an ODFI and RDFI agree on the return of a debit, the RDFI needs to obtain the proof of authorization as part of litigation
+Written Statement of Unauthorized Debit via Electronic or Oral Methods
+This Rule clarifies and makes explicit that an RDFI may obtain a consumer’s Written Statement of Unauthorized Debit (WSUD) electronically or orally
+The same formats/methods permissible for obtaining a consumer debit authorization are permissible for obtaining a consumer’s statement of unauthorized debit
+Although these formats/methods for obtaining a WSUD are not prohibited by the current Rules, there is confusion in the marketplace today; an explicit reference that they are permissible will increase the industry’s consideration of them
+An additional clarification will be made that a consumer is permitted to sign a WSUD with an Electronic Signature
+Technical
+Technical
+These Rule amendments includes changes to the following sections of the Nacha Operating Rules.
+Article Two Section 2.3 Authorization and Notice of Entries
+Section 2.4 General Warranties and Liabilities of ODFIs
+Section 2.5 Provisions for Specific Types of Entries (TEL and WEB subsections)
+Article Three
+Section 3.12 Written Statement of Unauthorized Debit
+Article Eight definitions
+Appendix Three – ACH Record Format Specifications
+Appendix Four – Return Entries
+Impact
+Impact
+Benefits
+Standing Authorization
+The rule will make it easier to use ACH payments in many situations
+Enables the authorization and initiation of ACH payments across a broader set of business models, including the ability to switch among various technologies and channels
+Provides some flexibility in the use of certain consumer SEC Codes (among PPD, TEL, and WEB) to better accommodate variations in Originator’s practices and systems
+Provides a clearer understanding of what will be included in an authorization in scenarios that aren’t addressed in existing rules for single and recurring entries
+Provides an authorization framework under which Originators can add new payment initiation methods and channels
+Oral Authorization
+This rule will expand the use of oral authorizations for consumer ACH payments, without changing how existing TEL transactions are currently used and authorized
+It will also accommodate new technologies and channels for conducting commerce and initiating payments that make use of use voice commands and interactions
+The rule clarifies the use of SEC Codes and risk management requirements related to oral authorizations
+Other Authorization Proposals
+Overall, this Rule is intended to improve the clarity and consistency of authorization requirements and methods, while providing some additional flexibility for authorizations for ACH payments other than consumer debits
+Better clarity and consistency ultimately will lead to easier and better understanding of the Rules
+Less ambiguity and better understanding of the authorization rules will improve the quality of authorizations
+Alternative to Proof of Authorization
+This Rule will reduce an administrative burden on ODFIs and their Originators for providing proof of authorization in every instance in which it is requested by an RDFI
+By allowing an alternative, the rule will reduce the costs and time needed to resolve some exceptions in which proof of authorization is requested
+The rule provides some additional flexibility to parties in the ACH Network on how to handle these exception cases
+Written Statement of Unauthorized Debit via Electronic or Oral Communications
+This Rule will address an administrative burden on RDFIs and their consumer Receivers
+Currently, anecdotal evidence suggests that the significant majority of WSUDs are still obtained by paper/wet signature
+Accepting WSUDs electronically and or orally increases flexibility for RDFIs and can reduce administrative burdens
+These options and increased flexibility will reduce exception costs and resolution time
+Increased adoption of electronically and orally provided WSUDs will improve consumers’ experiences in interacting with their financial institutions
+Impacts
+Standard Authorization
+ODFIs and Originators may choose to make use of Standing Authorizations and Subsequent Entries, but will not be required to
+Originators that want to make use of this authorization method will need to modify or add to their authorization practices and language
+RDFIs will experience no impacts on the receipt and posting of Entries
+Some volume of Subsequent Entries will have a different SEC Code than under the existing rules – i.e., related to the method/channel used for payment initiation, rather than the method/channel used for authorization (for example, WEB if initiated online instead of PPD if authorized via paper)
+Impact on the application of risk management practices specific to SEC codes
+Impact on the tracking of SEC Code volume, returns, and return rates
+Oral Authorizations
+ODFIs and Originators may choose to make use of the expanded applicability of Oral Authorizations, but will not be required to
+Originators that choose to make use of oral authorizations will need meet all requirements for oral authorizations
+This may result in the storage and provision of larger numbers of oral authorizations
+RDFIs will have no impacts to their receipt and posting of Entries
+Some volume of existing TEL entries may migrate to WEB
+Impact on the application of risk management practices specific to SEC codes
+Impact on the tracking of SEC Code volume, returns, and return rates
+Other Authorization Proposals
+ODFIs and Originators will need to review authorizations regarding the standards of “readily identifiable” and “clear and readily understandable terms”
+ODFIs and Originators will need to review consumer debit authorization language regarding the minimum data elements
+RDFIs will have no impacts to their receipt and posting of Entries
+Alternative to Proof of Authorization
+ODFIs and their Originators that want to take advantage of this alternative will have to modify business processes
+RDFIs may receive different responses to their requests for proof of authorization
+Written Statement of Unauthorized Debit via Electronic or Oral Communications
+RDFIs that want to take advantage of accepting WSUDs by electronic and oral forms need to incorporate new procedures and technology
+RDFIs taking advantage of accepting WSUDs by electronic and oral forms need to be able to meet the requirement to provide a copy upon request
+ODFIs who request copies of WSUDs will receive these documents in various formats
+FAQs Section
+FAQs Section
+To what types of payments do the rules on Standing Authorizations and Oral Authorizations apply (e.g., consumer versus non-consumer; credits versus debits)?
+The recent changes related to Standing Authorizations and Oral Authorizations are specific to debit entries to Consumer Accounts.
+However, additional changes to authorization language make clear that Originators of consumer credit entries, and Originators of any entries to non-consumer accounts, may obtain the Receiver’s authorization in any manner permitted by applicable legal requirements. This language is broad and does not preclude the potential use of standing and oral authorizations for consumer credit entries or entries between business trading partners where legal requirements permit.
+What is the difference between Single Entries, Recurring Entries, and Subsequent Entries?
+A Single Entry is a credit or debit initiated by an Originator in accordance with the Receiver’s authorization for a one-time transfer of funds.
+A Recurring Entry is an entry to a consumer account that recurs at substantially regular intervals, without further affirmative action by the Receiver to initiate the entries.
+A Subsequent Entry is an entry to a consumer account that is initiated by a Receiver’s affirmative action in accordance with the terms of a Standing Authorization.
+Does an Originator have to adopt the use of Standing Authorizations or Oral Authorizations?
+No. The decision to obtain consumers’ authorizations as Standing Authorizations, or to accept authorizations orally, is a business decision, at the discretion of the Originator.
+Can an Originator obtain a consumer Receiver’s Standing Authorization via the Internet?
+Yes. As with any authorization obtained from the Receiver via an unsecured electronic network, the Originator must comply with the data security requirements defined by Article One, Section 1.7 (Secure Transmission of ACH Information via Unsecured Electronic Networks).
+What impact, if any, do the new rules on Standing Authorizations and Oral Authorizations have on the RDFI?
+In general, the changes regarding Standing and Oral authorizations will have minimal impact on RDFIs. RDFIs will continue to receive and post entries, as normal.
+However, since the requirement for an Originator to include a Payment Type Code for WEB and TEL entries has been relaxed (it will now be discretionary on the part of the ODFI to include any value within this field), RDFIs may lose some transparency as to whether an entry is a Single Entry, a Recurring Entry, or a Subsequent entry that is initiated as part of a Standing Authorization. RDFIs will no longer be able to rely on the presence of a specific value within the Payment Type Code Indicator field.
+Does the expansion of the rules governing Oral Authorizations change the requirements for TEL entries?
+No. The rules for TEL entries – debits to consumer accounts authorized by the receiver orally via a telephone call – remain intact. However, since some of the specifications currently associated with TEL entries also now apply more broadly to all consumer debit authorizations, some aspects of the current TEL authorization requirements will be moved to the general authorization language within section 2.3 (Authorization and Notice of Entries) of the rules.
+What happens if the communication channels for the Standing Authorization and the Receiver’s affirmative action to initiate the Subsequent Entry are different?  Which SEC Code does the Originator use?
+At its discretion (and except as noted below), an Originator may identify a Subsequent Entry using the Standard Entry Class Code appropriate either to (a) the manner in which the Standing Authorization was obtained from the Receiver, or (b) the manner in which the Receiver’s affirmative action to initiate the Subsequent Entry was communicated to the Originator.
+Exception: An Originator that obtains the Receiver’s Standing Authorization as an Oral Authorization via a telephone call, or via the Internet or a Wireless Network, may not identify a Subsequent Entry using the PPD Standard Entry Class Code.
+Example:
+An Originator obtains the Receiver’s Standing Authorization orally via a telephone call. The Standing Authorization specifies that the Receiver may affirmatively authorize a Subsequent Entry via an instruction provided via the Internet. In this case, the Originator may identify Subsequent Entries using either the TEL or WEB SEC Codes.
+What Standard Entry Class Code is appropriate for an Originator use when it obtains the consumer Receiver’s Oral Authorization via a telephone call?
+Recurring Entry Debits and Single Entry Debits
+Where an Originator has obtained an oral authorization from a consumer via a telephone call for debit Recurring Entries or a debit Single Entry, the Originator must identify these debits using the TEL Standard Entry Class Code.
+Subsequent Entries Initiated in Accordance with a Standing Authorization
+Where an Originator has obtained a Standing Authorization from a consumer orally via a telephone call, the Originator has the option to identify Subsequent Entries as either TEL entries or, if the terms of the Standing Authorization permit the Receiver to initiate the Subsequent Entries via the Internet or Wireless Network, as WEB entries. (Note: An Originator may not identify these Subsequent Entries as PPD entries.)
+What SEC Code must an Originator use when it obtains a consumer’s authorization orally over the internet, such as through the use of a virtual assistant (Alexa; Siri, etc.), via Skype or FaceTime, or similar technology?
+Recurring Entry Debits and Single Entry Debits
+Where a consumer’s oral authorization for a Recurring or Single Entry debit is communicated to the Originator via the Internet or Wireless Network, the Originator must identify these entries as WEB debit entries.
+Subsequent Entries Initiated in Accordance with a Standing Authorization
+Where an Originator has obtained a consumer’s Standing Authorization orally via the Internet or a Wireless Network (e.g., via a virtual assistant such as Alexa, Cortana, or Siri; or via a Skype or FaceTime session), the Originator has the option to identify Subsequent Entries as either WEB entries or, if the terms of the Standing Authorization permit the Receiver to initiate the Subsequent Entries via a telephone call, as TEL entries. (Note: An Originator may not identify these Subsequent Entries as PPD entries.)
+What Standard Entry Class Code is appropriate when a Subsequent Entry is initiated via an electronic terminal?
+A Subsequent Entry to a Consumer Account initiated at an “electronic terminal,” as that term is defined in Regulation E, must be identified using the POS or MTE SEC Code, as applicable, regardless of the manner in which the Standing Authorization was obtained.
+If the Receiver varies the method for initiating each Subsequent Entry, must the Originator modify the SEC Code used each time?
+Not necessarily. The Rules permit the Originator some flexibility in the choice of Standard Entry Class Code for the initiation of Subsequent Entries. In most cases, the choice to modify the SEC Code is optional, at the discretion of the Originator, except where Subsequent Entries are initiated at an electronic terminal (see Question #24, above).
+What are the requirements and retention period for an oral authorization?
+An Originator may obtain a Consumer Receiver’s Oral Authorization for a debit Entry, provided that the Oral Authorization meets the minimum standards for a debit authorization in Subsections 2.3.2.2 (Debit Entries) and 2.3.2.3 (Form of Authorization), and (b) meets the additional requirements, including use of the appropriate Standard Entry Class Code and security requirements, for the communication channel used to obtain the Oral Authorization.
+Oral Authorization of Single Entries
+For a Single Entry authorized by the Receiver orally, the Originator must (a) make an audio recording of the Oral Authorization or provide the Receiver with written notice confirming the Oral Authorization prior to the settlement of the Entry; and (b) retain the original or a duplicate audio recording of the Oral Authorization, or the original or a copy of the written notice confirming the Oral Authorization, for two years from the date of the authorization.
+Oral Authorization of Recurring Entries
+For a recurring Entry authorized by the Receiver orally, the Originator must (a) comply with the requirements of Regulation E for the authorization of preauthorized transfers, including the requirement to send a copy of the authorization to the Receiver, and (b) retain for two years from the termination or revocation of the authorization (i) the original or a duplicate audio recording of the Oral Authorization, and (ii) evidence that a copy of the authorization was provided to the Receiver in compliance with Regulation E.
+Standing Authorizations Obtained Orally
+For a Standing Authorization that is an Oral Authorization, the Originator must (a) make an audio recording of the Oral Authorization or provide the Receiver with written notice confirming the Oral Authorization prior to the settlement of the first Subsequent Entry; and (b) retain the original or duplicate audio recording of the Oral Authorization, or the original or copy of the written notice confirming the Oral Authorization, for two years from the termination or revocation of the Standing Authorization
+Does the proposed rule to require the Originator to provide a copy of the authorization to the Receiver apply to oral authorizations?
+Yes.
+Are there new security requirements for TEL &amp; WEB?
+No. However, the new rules clarify the existing data security requirements as they apply to Oral Authorizations and Standing Authorizations when these authorizations are communicated via the Internet or other unsecured electronic network.
+Are there new data security requirements for Oral Authorizations?
+Yes. In any situation where a consumer Receiver’s Oral Authorization is conveyed to the Originator via the Internet or other unsecured electronic network (e.g., as a conversation with Alexa or Siri, or via Skype, FaceTime, etc.), the Originator must ensure that the banking information is encrypted or transmitted via a secure session, as required by Article One, Section 1.7 (Secure Transmission of ACH Information via Unsecured Electronic Networks).
+Can a subsequent entry be a recurring entry?
+No. Once set up, Recurring Entries require no additional action to be taken by the Receiver in order for the payments to be initiated. Subsequent Entries initiated in accordance with the terms of a Standing Authorization require an affirmative action to be taken by the Receiver for the initiation of each individual payment.
+For a Standing Authorization obtained orally or on paper, if the first entry is initiated via the Internet as a WEB debit entry, does the Originator have to perform the required account validation?
+Yes.
+If a Standing Authorization is obtained via the Internet, but the first Subsequent Entry is initiated using the TEL SEC Code, is the Originator subject to the WEB debit account validation requirement?
+No.
+What should an RDFI expect when it requests proof of authorization for an entry?
+An RDFI that requests proof of authorization should be prepared to receive different types of responses to these requests from ODFIs. For example, an ODFI may provide an RDFI with copies of authorizations in a variety of media (e.g., in hard copy format, as an electronic format, as an audio file, etc.) In some cases, rather than providing a copy of the Receiver’s authorization, the ODFI may agree to accept the return of the entry in lieu of providing the requested proof of authorization. RDFIs should be prepared to accommodate these returns, with written documentation from the ODFI, by returning the entries using Return Reason Code R06 (ODFI Request for Return).
+Where the ODFI has agreed to accept a return in lieu of providing the requested proof of authorization, and the RDFI still has need for a copy of the authorization, the RDFI will need to issue a subsequent written request to the ODFI. The ODFI must then provide proof of authorization within ten banking days.
+If the ODFI agrees to accept a return, can the RDFI still request proof of authorization from the ODFI?
+Yes. An RDFI that has a need for a proof of authorization can still request the ODFI to provide it, even if the ODFI has accepted (or agreed to accept) the return entry. An RDFI will need to re-confirm its request to the ODFI.
+If the ODFI has agreed to accept a return, but the RDFI still requires Proof of Authorization, is the RDFI required to provide a reason to the ODFI?
+No.
+If an RDFI still requires a copy of the Receiver’s authorization after the ODFI has agreed to accept a return of an entry in lieu of providing the authorization, must the RDFI’s subsequent request to the ODFI made in writing?
+Yes.
+When the Payment Type Code field becomes optional, how can an RDFI know whether the ODFI will be required to make changes it requested in an NOC?
+For entries not expressly identifiable as a Single Entry, an Originator will be expected to make each change requested via an NOC unless the authorization for the entry in question clearly identifies the entry as a one-time payment.
+Will RDFIs be required to offer electronic options to their customers (including by oral means) to obtain Written Statements of Unauthorized Debits?
+No. The new rules simply reinforce existing rule language, which already permits any written record to be obtained or retained in electronic form, and permits documents required to be signed or similarly authenticated to be signed with an electronic signature in conformance with the requires of the E-Sign Act. The changes to language are intended to make clear that Written Statements of Unauthorized Debit may be obtained via electronic means, including via oral communication. RDFIs are encouraged to adopt electronic options for obtaining these documents as a customer service and to improve process efficiency.
+If an RDFI obtains a Written Statement of Unauthorized Debit orally/electronically, is it still required to store and provide on request?
+Yes. An RDFI that obtains WSUDs electronically (including orally) must retain the electronic records in a form that accurately reflects the information in the record and that can be accurately reproduced. The RDFI must provide copies to the ODFI upon request.
+What constitutes a proper electronic Written Statement of Unauthorized Debit?
+An electronic version of a Written Statement of Unauthorized Debit must satisfy all minimum criteria defined within Article Three, subsection 3.12 (Written Statements of Unauthorized Debit), and must be capable of being stored and accurately reproduced for later reference.
+If an Originator’s authorizations for existing ACH payments do not fully conform to the new minimum standards, is the Originator required to get new authorizations for those entries?
+No. Existing authorizations are not impacted by the new changes. However, as of the effective date of these changes, whenever a new authorization is executed or an existing authorization is updated, it must conform to the revised minimum standards for consumer debit authorizations.
+Do all the authorization proposals become effective at the same time?
+Yes. All changes related to authorization share the same implementation date of September 17, 2021.
+Are all ACH Network participants required to make these changes?
+It depends…  Although all ACH Network participants are required to comply with the Nacha Operating Rules, including the changes included within the Meaningful Modernization ballots, many of the new changes will impact Originators, ODFIs, and RDFIs on a discretionary basis.
+To the extent that an Originator chooses to offer consumer Receivers the option to authorize ACH payments orally, or to the extent that an Originator chooses to establish Standing Authorizations with its consumer Receivers, the Originator must comply with the new rules governing Oral Authorizations and Standing Authorizations. However, the Rules do not require an Originator to offer these authorization options to its customers, and whether it does so is at the discretion of the Originator. Nevertheless, Originators will be required to meet the new minimum data standards for all authorizations for consumer debit entries, regardless of the channels or methods used to obtain them.
+To the extent that an ODFI wants the flexibility to choose to accept a late return in lieu of providing the RDFI with a copy of the Receiver’s authorization, the ODFI must comply with the new rules. An ODFI need not agree to accept a late return, but it must continue to provide all requested proofs of authorization to the RDFI in a timely manner.
+RDFIs may choose (but are not required) to obtain Written Statements of Unauthorized Debit in an electronic form and should consider their business needs and the customer service experience when determining whether to offer electronic options to obtain these documents. With respect to RDFI requests for proof of authorization, RDFIs should prepare for the possibility that some ODFIs will grant permission for a late return instead of providing copies of authorizations. In cases where the RDFI still has need for proof of authorization after the ODFI’s agreement to accept a return, the RDFI will need to establish procedures to issue a subsequent request for a copy of the authorization.
+Related Content
+Conference
+Payments Legal & Compliance Summit 2027
+December 1–2, 2027
+ACH
+Payments Consulting
+Blog
+Bringing ACH Processing In-House: Managing Risk, Cost, and Compliance
+September 30, 2026
+Alliance Members
+Payments Innovation Alliance Spring Meeting - June 2027
+June 7–8, 2027
+ACH
+Blog
+Technology Optimization: The Missing Link Between ACH Compliance and Scalable Growth
+August 12, 2026
+ACH
+ACH Statistics
+Business to Business
+Same Day ACH
+Press Release
+Same Day ACH Gains Lead to First Quarter ACH Network Growth
+April 20, 2026
+Press Release
+Phixius by Nacha and Kinexys by J.P. Morgan Integration Goes Live, Expanding Multi-Responder Account Validation Network
+February 5, 2026
+Blog
+From New Rules to a New Accreditation and More, a Busy 2026 Ahead at Nacha
+January 29, 2026
+Nacha Operating Rules
+Risk Management
+Blog
+Next Steps for the New Nacha Risk Management Rules 
+April 3, 2026

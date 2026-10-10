@@ -1,0 +1,85 @@
+
+	WAC 314-55-087: 
+Home
+ / 
+State laws and rules
+ / 
+WACs
+ / 
+Title 314
+ / 
+Chapter 314-55
+ / 
+Section 314-55-087
+Print
+314-55-086
+  << 
+        314-55-087 >>  
+314-55-089
+PDF
+WAC 314-55-087
+Recordkeeping requirements for cannabis licensees.
+Agency filings affecting this section
+(1) Cannabis licensees are responsible to keep records that clearly reflect all financial transactions and the financial condition of the business. The following records must be kept and maintained on the licensed premises for a five-year period and must be made available for inspection if requested by an employee of the LCB:
+(a) Purchase invoices and supporting documents, to include the items and/or services purchased, from whom the items were purchased, and the date of purchase;
+(b) Bank statements and canceled checks for any accounts relating to the licensed business;
+(c) Accounting and tax records related to the licensed business and each true party of interest;
+(d) Records of all financial transactions related to the licensed business, including contracts and/or agreements for services performed or received that relate to the licensed business;
+(e) All employee records to include, but not limited to, training, payroll, and date of hire;
+(f) Records of each daily application of pesticides applied to the cannabis plants or growing medium. For each application, the producer shall record the following information on the same day the application is made:
+(i) Full name of each employee who applied the pesticide;
+(ii) The date the pesticide was applied;
+(iii) The name of the pesticide or product name listed on the registration label which was applied;
+(iv) The concentration and total amount of pesticide per plant; and
+(v) For outdoor production, the concentration of pesticide that was applied to the field. Liquid applications may be recorded as, but are not limited to, amount of product per 100 gallons of liquid spray, gallons per acre of output volume, ppm, percent product in tank mix (e.g., one percent). For chemigation applications, record "inches of water applied" or other appropriate measure.
+(g) Soil amendment, fertilizers, or other crop production aids applied to the growing medium or used in the process of growing cannabis;
+(h) Production and processing records, including harvest and curing, weighing, destruction of cannabis, creating batches of cannabis-infused products and packaging into lots and units;
+(i) Records of each batch of extracts or infused cannabis products made, including at a minimum, the lots of useable cannabis or trim, leaves, and other plant matter used (including the total weight of the base product used), any solvents or other compounds utilized, and the product type and the total weight of the end product produced, such as hash oil, shatter, tincture, infused dairy butter, etc.;
+(j) Transportation records as described in WAC  
+314-55-085
+;
+(k) Inventory records;
+(l) All samples sent to an independent testing lab and the quality assurance test results;
+(m) All free samples provided to another licensee for purposes of negotiating a sale;
+(n) All samples used for testing for quality by the producer or processor;
+(o) Sample jars containing useable cannabis provided to retailers;
+(p) Records of any theft of cannabis seedlings, clones, plants, trim or other plant material, extract, cannabis-infused product, or other item containing cannabis;
+(q) Records of any cannabis product provided free of charge to qualifying patients or designated providers;
+(r) Detailed sale records including, but not limited to, date of sale, sale price, item sold, and taxes assessed;
+(s) Records for medical cannabis patient excise tax exemptions as required in WAC  
+314-55-090
+.
+(2) If the cannabis licensee keeps records within an automated data processing (ADP) and/or point-of-sale (POS) system, the system must include a method for producing legible records that will provide the same information required of that type of record within this section. The ADP and/or POS system is acceptable if it complies with the following guidelines:
+(a) Provides an audit trail so that details (invoices and vouchers) underlying the summary accounting data may be identified and made available upon request.
+(b) Provides the opportunity to trace any transaction back to the original source or forward to a final total. If printouts of transactions are not made when they are processed, the system must have the ability to reconstruct these transactions.
+(c) Has available a full description of the ADP and/or POS portion of the accounting system. This should show the applications being performed, the procedures employed in each application, and the controls used to ensure accurate and reliable processing.
+(3) The provisions contained in subsections (1) and (2) of this section do not eliminate the requirement to maintain source documents, but they do allow the source documents to be maintained in some other location.
+[Statutory Authority: RCW  
+69.50.342
+,  
+69.50.345
+, and  
+69.50.535
+. WSR 24-19-040, s 314-55-087, filed 9/11/24, effective 10/12/24. Statutory Authority: RCW  
+69.50.342
+ and 2022 c 16 § 168. WSR 22-14-111, § 314-55-087, filed 7/6/22, effective 8/6/22. Statutory Authority: RCW  
+69.50.325
+,  
+69.50.342
+,  
+69.50.345
+, and  
+69.50.369
+. WSR 18-22-055, § 314-55-087, filed 10/31/18, effective 12/1/18. Statutory Authority: RCW  
+69.50.342
+ and  
+69.50.345
+. WSR 16-11-110, § 314-55-087, filed 5/18/16, effective 6/18/16. Statutory Authority: RCW  
+69.50.325
+,  
+69.50.331
+,  
+69.50.342
+,  
+69.50.345
+. WSR 13-21-104, § 314-55-087, filed 10/21/13, effective 11/21/13.]
