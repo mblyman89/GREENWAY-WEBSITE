@@ -85,8 +85,27 @@ commit + push after every task, no drift.
       - The rollback, tested twice and on fresh apply. It refuses once
         anything is signed or uploaded.
       Factory reset KEEPs all 7 tables, with exact keep/wipe counts.
-- [ ] S3 store/vault hardening (save -> on_hold, delete -> archive, solo
+- [x] S3 store/vault hardening (save -> on_hold, delete -> archive, solo
       release + notify, splits), payroll multi-entry + prenote Nacha
+      Evidence (branch r39-ach-integration):
+      - Vault page: VendorVaultCard shows status, history, and only the
+        buttons the 0259 trigger allows (vaultRowActions; tests read the SQL).
+        Release needs a callback to a contact on file 90+ days, a note, a solo
+        reason when solo, and a confirm. Archive replaces Remove. Revoked and
+        archived rows sit in a hidden table behind a button.
+      - Pay form shows vault status via vaultPayDisplay, built on the same
+        canPayWithVaultRecord gate (parity test).
+      - nacha-core prenotes: codes 23/33, amount 10 zeros, 3-banking-day wait
+        enforced by refusing prenote + live to one account in one file.
+      - Payroll split deposits: an active authorization with every account
+        verified gives up to 3 entries per employee (allocateSplit). $0 legs
+        are skipped with a note. With no authorization, payroll falls back to
+        the employee record and says so. A shared account is flagged. One
+        blocked employee blocks the whole file.
+      - Mutants: 3/3, 4/4, 3/3, 5/5 and 11/12 killed. The survivor is the
+        unreachable sum backstop, kept as defense in depth.
+      - Full compliance vitest: 821 files passed. Pure self-tests: ALL PASSED.
+        S3 typecheck clean. Lint: 0 errors.
 - [ ] S4 vault UI (active / hidden inactive), vendor ACH card, employee card
 - [ ] S5 drop-only upload, AcroForm / LlamaParse draft, blind re-key
 - [ ] S6 e-sign (E-SIGN Act / UETA consent, intent, OTP, hash, certificate)
