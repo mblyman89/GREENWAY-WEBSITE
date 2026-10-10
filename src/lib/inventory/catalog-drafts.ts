@@ -7,6 +7,7 @@
  * never auto-live — drafts must be approved by a human.
  */
 import "server-only";
+import { unitWeightGrams } from "@/lib/catalog/serving-facts-view-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { strainSlug } from "@/lib/catalog/slug-core";
@@ -992,16 +993,23 @@ export async function loadStrainTypeSignals(
    * (lotPackageLabel). Absent = no lot / no unit weight / read failed.
    */
   sizeLabels: Map<string, string>;
+  /**
+   * R37 S2: each draft's lot unit weight in GRAMS (g / mg / oz converted),
+   * from the SAME lot read - the serving solver divides it by the lab's
+   * serving weight. Absent = unknown or not a weight.
+   */
+  unitWeightsG: Map<string, number>;
 }> {
   const out = new Map<string, ReturnType<typeof suggestStrainType>>();
   const evidence = new Map<string, StrainTypeEvidence>();
   const sizeLabels = new Map<string, string>();
+  const unitWeightsG = new Map<string, number>();
   if (!isSupabaseServiceConfigured || drafts.length === 0) {
     for (const d of drafts) {
       out.set(d.id, suggestStrainType({ productName: d.name }));
       evidence.set(d.id, { kb: null, manifest: null });
     }
-    return { suggestions: out, evidence, sizeLabels };
+    return { suggestions: out, evidence, sizeLabels, unitWeightsG };
   }
   const admin = createSupabaseAdminClient();
 
@@ -1023,6 +1031,7 @@ export async function loadStrainTypeSignals(
   const lotIds = Array.from(new Set(drafts.map((d) => d.lot_id).filter((v): v is string => Boolean(v))));
   const lotTypeById = new Map<string, string>();
   const lotSizeById = new Map<string, string>();
+  const lotGramsById = new Map<string, number>();
   if (lotIds.length > 0) {
     const { data } = await admin
       .from("inventory_lots")
@@ -1034,6 +1043,8 @@ export async function loadStrainTypeSignals(
       if (l.strain_type) lotTypeById.set(l.id, l.strain_type);
       const size = lotPackageLabel(l);
       if (size) lotSizeById.set(l.id, size);
+      const grams = unitWeightGrams(l.unit_weight, l.unit_weight_uom);
+      if (grams !== null) lotGramsById.set(l.id, grams);
     }
   }
 
@@ -1052,8 +1063,10 @@ export async function loadStrainTypeSignals(
     evidence.set(d.id, { kb, manifest });
     const size = d.lot_id ? lotSizeById.get(d.lot_id) : undefined;
     if (size) sizeLabels.set(d.id, size);
+    const grams = d.lot_id ? lotGramsById.get(d.lot_id) : undefined;
+    if (grams !== undefined) unitWeightsG.set(d.id, grams);
   }
-  return { suggestions: out, evidence, sizeLabels };
+  return { suggestions: out, evidence, sizeLabels, unitWeightsG };
 }
 
 /**

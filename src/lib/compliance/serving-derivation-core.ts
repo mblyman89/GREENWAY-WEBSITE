@@ -32,7 +32,13 @@
  *   3. lab weight - the certificate's serving weight divides the package's
  *                 net weight into a whole number of servings (50 g / 5 g = 10),
  *                 or the lab THC percent x the net weight gives the package mg
- *                 (percent of weight x 10 x grams = mg);
+ *                 (percent of weight x 10 x grams = mg). MEASURED on the real
+ *                 owner fixture (bytes Sour Mandarin, item 12): the lab weighed
+ *                 ONE 4.54 g piece of a 50 g 10-pack, so 50 / 4.54 = 11.01
+ *                 reads as 11 servings - wrong. And 0.1206% x 10 x 50 g =
+ *                 60.3 mg against the true 55 mg. Pieces vary, so anything
+ *                 worked out from lab weights is flagged `assumed` ("check
+ *                 the package"): it fills the form, never the menu by itself;
  *   4. WA rule  - a package THC total with nothing else: the FEWEST servings
  *                 the law allows, ceil(package / 10). 100 mg -> 10 x 10 mg,
  *                 55 mg -> 6 x 9.17 mg, 8 mg -> 1 x 8 mg. This is the owner's
@@ -193,13 +199,14 @@ export function deriveServingFacts(input: ServingDerivationInput): ServingDeriva
     }
   }
 
+  // Arithmetic on an assumed figure is itself assumed (never laundered).
   const arithmetic = () => {
     if (pkg && per && !serv) {
       const s = wholeServings(pkg.value, per.value);
-      if (s !== null) serv = made(s, "arithmetic", `${fmt(pkg.value)} mg in the package / ${fmt(per.value)} mg per serving = ${s} servings`);
+      if (s !== null) serv = made(s, "arithmetic", `${fmt(pkg.value)} mg in the package / ${fmt(per.value)} mg per serving = ${s} servings`, pkg.assumed || per.assumed);
     }
-    if (serv && per && !pkg) pkg = made(r2(per.value * serv.value), "arithmetic", `${serv.value} servings x ${fmt(per.value)} mg = ${fmt(per.value * serv.value)} mg THC in the package`);
-    if (serv && pkg && !per) per = made(r2(pkg.value / serv.value), "arithmetic", `${fmt(pkg.value)} mg / ${serv.value} servings = ${fmt(pkg.value / serv.value)} mg THC per serving`);
+    if (serv && per && !pkg) pkg = made(r2(per.value * serv.value), "arithmetic", `${serv.value} servings x ${fmt(per.value)} mg = ${fmt(per.value * serv.value)} mg THC in the package`, serv.assumed || per.assumed);
+    if (serv && pkg && !per) per = made(r2(pkg.value / serv.value), "arithmetic", `${fmt(pkg.value)} mg / ${serv.value} servings = ${fmt(pkg.value / serv.value)} mg THC per serving`, serv.assumed || pkg.assumed);
   };
   arithmetic();
 
@@ -207,7 +214,7 @@ export function deriveServingFacts(input: ServingDerivationInput): ServingDeriva
   if (!serv) {
     const s = servingsFromWeight(input.packageNetWeightG, input.servingWeightG);
     if (s !== null) {
-      serv = made(s, "lab-weight", `${fmt(input.packageNetWeightG as number)} g package / the lab's ${fmt(input.servingWeightG as number)} g serving = ${s} servings`);
+      serv = made(s, "lab-weight", `${fmt(input.packageNetWeightG as number)} g package / the lab's ${fmt(input.servingWeightG as number)} g serving = ${s} servings (the lab weighed one piece; pieces vary)`, true);
       arithmetic();
     }
   }
@@ -217,7 +224,7 @@ export function deriveServingFacts(input: ServingDerivationInput): ServingDeriva
     const pct = pos(input.labThcPct);
     const net = pos(input.packageNetWeightG);
     if (pct !== null && net !== null) {
-      pkg = made(r2(pct * 10 * net), "lab-weight", `the lab's ${fmt(pct)}% THC x 10 x the ${fmt(net)} g package = ${fmt(pct * 10 * net)} mg THC`);
+      pkg = made(r2(pct * 10 * net), "lab-weight", `the lab's ${fmt(pct)}% THC x 10 x the ${fmt(net)} g package = ${fmt(pct * 10 * net)} mg THC (a percent of one sample; pieces vary)`, true);
       arithmetic();
     }
   }
@@ -228,19 +235,20 @@ export function deriveServingFacts(input: ServingDerivationInput): ServingDeriva
       const s = minServingsForPackage(pkg.value);
       serv = made(
         s,
-        "wa-rule",
+        pkg.assumed ? "assumed" : "wa-rule",
         s === 1
           ? `${fmt(pkg.value)} mg THC is within one 10 mg serving (${SERVING_RULE}), so the package is 1 serving`
           : `Washington caps a serving at ${WA_SERVING_MAX_THC_MG} mg THC (${SERVING_RULE}), so ${fmt(pkg.value)} mg is ${s} servings`,
+        pkg.assumed,
       );
       arithmetic();
-      if (per && per.derived) per = { ...per, source: "wa-rule", how: `${per.how} (${SERVING_RULE})` };
+      if (per && per.derived) per = { ...per, source: per.assumed ? "assumed" : "wa-rule", how: `${per.how} (${SERVING_RULE})` };
     }
     // A package that is NOT a whole number of the stated per-serving dose:
     // the rule still decides the servings (never more than 10 mg each).
     if (pkg && per && !serv) {
       const s = Math.max(minServingsForPackage(pkg.value), Math.round(pkg.value / per.value) || 1);
-      serv = made(s, "wa-rule", `${fmt(pkg.value)} mg / ${fmt(per.value)} mg is not a whole number; the nearest whole count that keeps each serving at or under ${WA_SERVING_MAX_THC_MG} mg is ${s} servings - check the package`);
+      serv = made(s, "wa-rule", `${fmt(pkg.value)} mg / ${fmt(per.value)} mg is not a whole number; the nearest whole count that keeps each serving at or under ${WA_SERVING_MAX_THC_MG} mg is ${s} servings - check the package`, true);
     }
     // Assumed maxima: only one per-serving / servings figure and no package anywhere.
     if (per && !pkg && !serv) {
@@ -264,7 +272,7 @@ export function deriveServingFacts(input: ServingDerivationInput): ServingDeriva
     if (!mp && !ms) {
       const pct = pos(input.labMinorPct?.[c]);
       const net = pos(input.packageNetWeightG);
-      if (pct !== null && net !== null) mp = made(r2(pct * 10 * net), "lab-weight", `the lab's ${fmt(pct)}% ${label} x 10 x the ${fmt(net)} g package = ${fmt(pct * 10 * net)} mg ${label}`);
+      if (pct !== null && net !== null) mp = made(r2(pct * 10 * net), "lab-weight", `the lab's ${fmt(pct)}% ${label} x 10 x the ${fmt(net)} g package = ${fmt(pct * 10 * net)} mg ${label} (a percent of one sample)`, true);
     }
     if (sv) {
       const tag = (src: ServingSource): ServingSource => (sv.assumed || src === "assumed" ? "assumed" : "arithmetic");
@@ -372,8 +380,11 @@ export function __runServingDerivationTests(): { passed: number; failed: number 
 
   // 4. Lab weights: 50 g package / 5 g serving = 10 servings; then 5.5 x 10.
   const d = deriveServingFacts({ mgPerServing: k(5.5, "coa"), servingWeightG: 5, packageNetWeightG: 50 });
-  ok(d.servingsPerPack?.value === 10 && d.servingsPerPack.source === "lab-weight", "50 g / 5 g = 10 (lab-weight)");
-  ok(d.packageThcMg?.value === 55 && d.packageThcMg.source === "arithmetic" && !d.packageThcMg.assumed, "then 55 mg (arithmetic)");
+  ok(d.servingsPerPack?.value === 10 && d.servingsPerPack.source === "lab-weight" && d.servingsPerPack.assumed, "50 g / 5 g = 10 (lab-weight, flagged check-the-package)");
+  ok(d.packageThcMg?.value === 55 && d.packageThcMg.source === "arithmetic" && d.packageThcMg.assumed, "then 55 mg (arithmetic on an assumed count stays assumed)");
+  // The real fixture that proves why: item 12 lab piece 4.54 g of a 50 g 10-pack.
+  const real = deriveServingFacts({ mgPerServing: k(5.5, "coa"), servingWeightG: 4.54, packageNetWeightG: 50 });
+  ok(real.servingsPerPack?.value === 11 && real.servingsPerPack.assumed, "item 12 weights read 11 (truth 10) -> assumed, never trusted");
   ok(servingsFromWeight(50, 4.54) === 11, "50 / 4.54 = 11.01 -> 11");
   ok(servingsFromWeight(50, 7) === 7, "50 / 7 = 7.14 -> 7 (within 10%)");
   ok(servingsFromWeight(50, 40) === null, "50 / 40 = 1.25 -> not a whole count (25% off)");
@@ -382,8 +393,8 @@ export function __runServingDerivationTests(): { passed: number; failed: number 
   ok(servingsFromWeight(5000, 1) === null, "over 500 servings is not a package");
   // Lab THC percent x net weight (no per-serving figure): 0.2% x 10 x 50 g = 100 mg -> rule 10.
   const e = deriveServingFacts({ labThcPct: 0.2, packageNetWeightG: 50 });
-  ok(e.packageThcMg?.value === 100 && e.packageThcMg.source === "lab-weight", "0.2% x 10 x 50 g = 100 mg (lab-weight)");
-  ok(e.servingsPerPack?.value === 10 && e.servingsPerPack.source === "wa-rule", "then 10 servings by the rule");
+  ok(e.packageThcMg?.value === 100 && e.packageThcMg.source === "lab-weight" && e.packageThcMg.assumed, "0.2% x 10 x 50 g = 100 mg (lab-weight, assumed)");
+  ok(e.servingsPerPack?.value === 10 && e.servingsPerPack.source === "assumed" && e.servingsPerPack.assumed, "then 10 servings, assumed because the total is");
   // A printed per-serving figure outranks the percent route.
   const e2 = deriveServingFacts({ mgPerServing: k(5.5, "coa"), labThcPct: 0.1206, packageNetWeightG: 50, servingWeightG: 5 });
   ok(e2.packageThcMg?.value === 55, "per-serving x weight servings beats percent x weight (55, not 60.3)");
@@ -425,7 +436,7 @@ export function __runServingDerivationTests(): { passed: number; failed: number 
   ok(i.servingsPerPack?.value === 10 && i.servingsPerPack.source === "arithmetic", "200 / 20 = 10 (arithmetic)");
   ok(i.warnings.some((w) => w.code === "serving_over_limit") && i.warnings.some((w) => w.code === "package_over_limit"), "over-limit figures warn");
   const j = deriveServingFacts({ packageThcMg: k(100), mgPerServing: k(7) });
-  ok(j.servingsPerPack?.value === 14 && j.servingsPerPack.source === "wa-rule" && j.servingsPerPack.how.includes("not a whole number"), "100 / 7 -> nearest whole count 14");
+  ok(j.servingsPerPack?.value === 14 && j.servingsPerPack.source === "wa-rule" && j.servingsPerPack.assumed && j.servingsPerPack.how.includes("not a whole number"), "100 / 7 -> nearest whole count 14 (check the package)");
   const j2 = deriveServingFacts({ packageThcMg: k(100), mgPerServing: k(30) });
   ok(j2.servingsPerPack?.value === 10, "100 / 30 -> never fewer than the rule's 10");
 

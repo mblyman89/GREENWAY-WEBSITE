@@ -39,7 +39,7 @@
  * still filled, so one click on the Product facts panel releases it.
  */
 
-import { extractNameFacts, MG_FACT_TYPES, type Cannabinoid, type CrossExamResult, type Fact, type MinorFact } from "./fact-extraction-core";
+import { applyWaServingRule, extractNameFacts, MG_FACT_TYPES, type Cannabinoid, type CrossExamResult, type Fact, type MinorFact } from "./fact-extraction-core";
 import {
   parseWciaLabJson,
   type CannabinoidKey,
@@ -508,7 +508,7 @@ export function mergeCoaIntoExam(exam: CrossExamResult, facts: CoaDraftFacts | n
     confidence: m.packageMg !== null ? "verified" : "single-source",
     note: `${m.mgPerServing} mg per serving on the COA`,
   }));
-  return {
+  const merged: CrossExamResult = {
     ...exam,
     servingsPerPack:
       facts.servingsPerPack !== null
@@ -521,6 +521,14 @@ export function mergeCoaIntoExam(exam: CrossExamResult, facts: CoaDraftFacts | n
     needsReview: facts.reasons.length > 0,
     reviewReasons: [...facts.reasons],
   };
+  // R37 S2: a name-only rule figure must not survive a certificate that
+  // states its own: drop rule figures the COA left alone when the COA gave a
+  // per-serving dose (the count then comes from the arithmetic, or stays a
+  // question), and re-apply the rule only to a certificate package total.
+  if (merged.servingsPerPack?.source === "wa-rule" && facts.thcMgPerServing) merged.servingsPerPack = null;
+  if (merged.mgPerServing?.source === "wa-rule") merged.mgPerServing = null;
+  if (merged.servingsPerPack?.source === "wa-rule") merged.servingsPerPack = null;
+  return applyWaServingRule(merged, null);
 }
 
 // ---------------------------------------------------------------------------

@@ -44,10 +44,13 @@ describe("S34 lot size labels from the strain-signal read", () => {
     expect([...out.sizeLabels.entries()]).toEqual([["a", "3.5 g"], ["b", "1"]]);
     expect(out.evidence.get("a")).toEqual({ kb: null, manifest: "hybrid" });
     expect(out.evidence.get("c")).toEqual({ kb: null, manifest: "indica" });
+    // R37 S2: grams from the SAME read, only for a real weight unit.
+    expect([...out.unitWeightsG.entries()]).toEqual([["a", 3.5]]);
   });
 
   it("no drafts -> empty labels, no read", async () => {
     const out = await loadStrainTypeSignals([]);
     expect(out.sizeLabels.size).toBe(0);
+    expect(out.unitWeightsG.size).toBe(0);
   });
 });

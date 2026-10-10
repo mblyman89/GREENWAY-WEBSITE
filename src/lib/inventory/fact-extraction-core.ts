@@ -48,7 +48,7 @@ const CANNA = "THCV|THCA|THC|CBDV|CBDA|CBD|CBG|CBN|CBC";
 /** Inventory types whose potency is dosed in milligrams (incl. topicals — SLICE 56 wires display). */
 export const MG_FACT_TYPES = new Set(["Solid Edible", "Liquid Edible", "Tincture", "Topical Ointment"]);
 
-export type FactSource = "name" | "column" | "name+column" | "name-internal" | "coa";
+export type FactSource = "name" | "column" | "name+column" | "name-internal" | "coa" | "wa-rule";
 export type FactConfidence = "verified" | "single-source" | "conflict";
 
 export type Fact<T> = {
@@ -302,6 +302,33 @@ export function crossExamineRow(row: RowFacts): CrossExamResult {
   if (!result.percentMode && result.servingsPerPack === null && result.name.packCount !== null && result.name.packCount > 0) {
     result.servingsPerPack = fact(result.name.packCount, "name", "verified", "pack count written in the name");
   }
+  return applyWaServingRule(result, row.inventoryType);
+}
+
+/** WAC 314-55-095(1)(a): at most 10 mg active delta-9 THC in one serving. */
+const WA_RULE_SERVING_MAX_MG = 10;
+
+/**
+ * R37 S2 (owner: "if a product has 100mg thc in it, it becomes blatantly
+ * obvious that the product has 10 servings"). A VERIFIED package THC total
+ * with NO serving count and NO per-serving figure: the servings are the
+ * fewest the law allows, ceil(package / 10), and the per-serving dose is the
+ * package divided by them. Only empty facts are filled, only on a verified
+ * total (an unconfirmed total stays a question for a person), never for a
+ * topical (WAC 314-55-095(1)(b) does not cover products applied to the skin
+ * and a lotion has no dose). Exported for the R28 COA merge, which runs
+ * after this and can replace the package total.
+ */
+export function applyWaServingRule(result: CrossExamResult, inventoryType: string | null | undefined): CrossExamResult {
+  if (result.percentMode) return result;
+  if (/topical/i.test(String(inventoryType ?? ""))) return result;
+  const pkg = result.packageThcMg;
+  if (!pkg || pkg.confidence !== "verified" || !(pkg.value > 0)) return result;
+  if (result.servingsPerPack !== null || result.mgPerServing !== null) return result;
+  const servings = Math.max(1, Math.ceil(Math.round(pkg.value * 100) / 100 / WA_RULE_SERVING_MAX_MG - 1e-9));
+  const why = `Washington caps a serving at ${WA_RULE_SERVING_MAX_MG} mg THC (WAC 314-55-095(1)(a)), so ${pkg.value} mg is ${servings} serving${servings === 1 ? "" : "s"}`;
+  result.servingsPerPack = fact(servings, "wa-rule", "verified", why);
+  result.mgPerServing = fact(Math.round((pkg.value / servings) * 100) / 100, "wa-rule", "verified", why);
   return result;
 }
 

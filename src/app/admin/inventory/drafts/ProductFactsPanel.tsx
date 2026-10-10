@@ -31,6 +31,7 @@ import {
   type SavedProductFacts,
 } from "@/lib/pos/intake-fact-review-core";
 import type { LabPanelView } from "@/lib/catalog/lab-facts-attach-core";
+import type { ServingFactsView } from "@/lib/catalog/serving-facts-view-core";
 import {
   PACKAGE_RULE,
   SERVING_RULE,
@@ -55,23 +56,37 @@ function yesNo(saved: SavedProductFacts | null, k: string): "" | "yes" | "no" {
   return v === true ? "yes" : v === false ? "no" : "";
 }
 
-function Field({ id, label, name, saved, placeholder, lab }: { id: string; label: string; name: string; saved: SavedProductFacts | null; placeholder?: string; lab?: LabPanelView | null }) {
+function Field({ id, label, name, saved, placeholder, lab, serving }: { id: string; label: string; name: string; saved: SavedProductFacts | null; placeholder?: string; lab?: LabPanelView | null; serving?: ServingFactsView | null }) {
   // R30: an EMPTY field is pre-filled from the lab certificate (labelled);
   // a value the person saved always wins (labPanelView never pre-fills it).
+  // R37 S2: a field still empty after that is pre-filled with the figure the
+  // serving solver worked out (WA 10 mg rule / arithmetic / lab weights),
+  // with the sentence that shows how - nothing is left to type by hand.
   const own = val(saved, name);
   const fromLab = own === "" ? lab?.prefill[name] ?? "" : "";
+  const worked = own === "" && fromLab === "" ? serving?.prefill[name] ?? null : null;
   return (
     <div>
       <label className={labelCls} htmlFor={`pf-${id}-${name}`}>{label}</label>
       <input
         id={`pf-${id}-${name}`}
         name={name}
-        defaultValue={own || fromLab}
+        defaultValue={own || fromLab || worked?.value || ""}
         placeholder={placeholder}
         className={inputCls}
-        data-prefill={fromLab ? "coa" : undefined}
+        data-prefill={fromLab ? "coa" : worked ? (worked.assumed ? "assumed" : "derived") : undefined}
       />
       {fromLab && <span className="mt-0.5 block text-[10px] text-[var(--admin-accent)]">from the lab certificate</span>}
+      {worked && (
+        <span
+          className={`mt-0.5 block text-[10px] ${worked.assumed ? "text-[var(--admin-warning,var(--admin-danger))]" : "text-[var(--admin-accent)]"}`}
+          data-testid="product-facts-worked"
+          title={worked.how}
+        >
+          {worked.assumed ? "assumed \u2014 check the package: " : "worked out: "}
+          {worked.how}
+        </span>
+      )}
     </div>
   );
 }
@@ -88,6 +103,7 @@ export function ProductFactsPanel({
   title,
   lab,
   category,
+  serving,
 }: {
   draftId: string;
   manifestId: string;
@@ -106,6 +122,8 @@ export function ProductFactsPanel({
   lab?: LabPanelView | null;
   /** R35: the product's website category (narrows the WAC 314-55-095 check; unknown = checked). */
   category?: string | null;
+  /** R37 S2: the serving facts the solver works out (serving-facts-view-core). */
+  serving?: ServingFactsView | null;
 }) {
   const lines = saved ? savedFactLines(saved.facts) : [];
   // R35: the saved record checked against the WA limits (never blocks).
@@ -177,8 +195,24 @@ export function ProductFactsPanel({
         </div>
       )}
 
+      {serving && (
+        <div className="mt-2 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 p-2" data-testid="product-facts-serving">
+          <p className="text-[11px] font-semibold text-[var(--admin-text)]">Serving facts {"\u2014"} worked out from Washington{"\u2019"}s {WA_SERVING_MAX_THC_MG} mg rule</p>
+          <p className="mt-0.5 text-[11px] text-[var(--admin-text-muted)]" data-testid="product-facts-serving-headline">{serving.headline}</p>
+          {serving.derivation.conflicts.map((c) => (
+            <p key={c} className="mt-0.5 text-[11px] text-[var(--admin-danger)]">{c}</p>
+          ))}
+          {serving.minorLines.length > 0 && (
+            <p className="mt-0.5 text-[10px] text-[var(--admin-text-faint)]">{serving.minorLines.join(" \u00b7 ")}</p>
+          )}
+          <p className="mt-0.5 text-[10px] text-[var(--admin-text-faint)]">
+            Only THC is capped ({SERVING_RULE}: {WA_SERVING_MAX_THC_MG} mg a serving). CBD, CBG, CBN and CBC are simply the package total divided by the servings.
+          </p>
+        </div>
+      )}
+
       {readOk && (
-        <details className="mt-2" open={lines.length === 0 && Object.keys(lab?.prefill ?? {}).length > 0}>
+        <details className="mt-2" open={lines.length === 0 && (Object.keys(lab?.prefill ?? {}).length > 0 || Object.keys(serving?.prefill ?? {}).length > 0)}>
           <summary className="cursor-pointer text-xs font-semibold text-[var(--admin-accent)]">
             {lines.length > 0 ? "Edit the facts\u2026" : "Set the facts\u2026"}
           </summary>
@@ -204,18 +238,18 @@ export function ProductFactsPanel({
               </p>
             )}
             <div className="grid gap-2 sm:grid-cols-3">
-              <Field id={draftId} saved={saved} lab={lab} label="THC (display)" name="thc" placeholder="e.g. 100mg" />
-              <Field id={draftId} saved={saved} lab={lab} label="CBD (display)" name="cbd" placeholder="e.g. 100mg" />
-              <Field id={draftId} saved={saved} lab={lab} label="Ratio" name="ratioLabel" placeholder="e.g. 1:1 THC:CBD" />
-              <Field id={draftId} saved={saved} lab={lab} label="Servings per pack" name="servingsPerPack" />
-              <Field id={draftId} saved={saved} lab={lab} label="Mg per serving" name="mgPerServing" />
-              <Field id={draftId} saved={saved} lab={lab} label="Package THC (mg)" name="packageThcMg" />
-              <Field id={draftId} saved={saved} lab={lab} label="Package CBD (mg)" name="packageCbdMg" />
-              <Field id={draftId} saved={saved} lab={lab} label="Package CBG (mg)" name="packageCbgMg" />
-              <Field id={draftId} saved={saved} lab={lab} label="Package CBN (mg)" name="packageCbnMg" />
-              <Field id={draftId} saved={saved} lab={lab} label="Package CBC (mg)" name="packageCbcMg" />
-              <Field id={draftId} saved={saved} lab={lab} label="Net weight (g)" name="netWeightGrams" />
-              <Field id={draftId} saved={saved} lab={lab} label="Net volume (ml)" name="netVolumeMl" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="THC (display)" name="thc" placeholder="e.g. 100mg" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="CBD (display)" name="cbd" placeholder="e.g. 100mg" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Ratio" name="ratioLabel" placeholder="e.g. 1:1 THC:CBD" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Servings per pack" name="servingsPerPack" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Mg per serving" name="mgPerServing" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Package THC (mg)" name="packageThcMg" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Package CBD (mg)" name="packageCbdMg" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Package CBG (mg)" name="packageCbgMg" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Package CBN (mg)" name="packageCbnMg" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Package CBC (mg)" name="packageCbcMg" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Net weight (g)" name="netWeightGrams" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Net volume (ml)" name="netVolumeMl" />
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
@@ -226,7 +260,7 @@ export function ProductFactsPanel({
                   <option value="no">No - regular infused liquid (72 oz limit)</option>
                 </select>
               </div>
-              <Field id={draftId} saved={saved} lab={lab} label="THC mg per SEALED CONTAINER" name="unitThcMg" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="THC mg per SEALED CONTAINER" name="unitThcMg" />
               <div>
                 <label className={labelCls} htmlFor={`pf-${draftId}-otherwiseTaken`}>Otherwise taken into the body (10 unit limit)?</label>
                 <select id={`pf-${draftId}-otherwiseTaken`} name="otherwiseTaken" defaultValue={yesNo(saved, "otherwiseTaken")} className={inputCls}>
@@ -235,7 +269,7 @@ export function ProductFactsPanel({
                   <option value="no">No - smoked, eaten, or applied to the skin</option>
                 </select>
               </div>
-              <Field id={draftId} saved={saved} lab={lab} label="Individual units per PACKAGE" name="unitsPerPackage" />
+              <Field id={draftId} saved={saved} lab={lab} serving={serving} label="Individual units per PACKAGE" name="unitsPerPackage" />
             </div>
             <div>
               <label className={labelCls} htmlFor={`pf-${draftId}-note`}>Note (how you verified - e.g. &ldquo;checked the physical package&rdquo;)</label>
