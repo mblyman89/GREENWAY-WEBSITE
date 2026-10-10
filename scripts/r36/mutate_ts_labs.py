@@ -50,7 +50,8 @@ MUTANTS = {
         (TL, 'if (labels.length < 2) return', 'if (labels.length < 1) return'),
         (TL, 'if (host === "localhost" || INTERNAL_SUFFIXES.some((x) => host.endsWith(x)))', 'if (host === "localhost")'),
         (TL, 'if (/[*]/.test(s)) return', 'if (false) return'),
-        (TL, 'if (u.username || u.password) return', 'if (false) return'),
+        (TL, 'if (u.username || u.password) return { ok: false, reason:', 'if (false) return { ok: false, reason:'),
+        (TL, 'if (u.username || u.password) return { ok: false, error:', 'if (false) return { ok: false, error:'),
         # public-address
         (TL, "if (x === 169 && y === 254) return false;", ""),
         (TL, "if (x === 172 && y >= 16 && y <= 31) return false;", "if (x === 172 && y >= 16 && y <= 32) return false;"),
@@ -71,6 +72,11 @@ MUTANTS = {
         # seed
         (TL, 'status: "historical", certStart: "2016-10-26"', 'status: "active", certStart: "2016-10-26"'),
         (TL, 'status: "platform",', 'status: "owner_added",'),
+    ],
+    "creds": [
+        (TL, 'if (u.username || u.password) return { ok: false, reason:', 'if (false) return { ok: false, reason:'),
+        (TL, 'if (u.username || u.password) return { ok: false, error:', 'if (false) return { ok: false, error:'),
+        (TL, "if (!/^[a-z][a-z0-9+.-]*:/i.test(website) ||", "if (true ||"),
     ],
     "readers": [
         # template detection + Confidence 7
