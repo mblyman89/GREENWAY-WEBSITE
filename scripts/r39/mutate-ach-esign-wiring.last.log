@@ -1,0 +1,23 @@
+0 killed actions.ts export async function cancelEsignAction(fd: FormData): Promi
+1 killed actions.ts if (!s || s.employee_id !== employeeId) back(
+2 killed actions.ts if (str(fd, "id_seen") !== "on") back(
+3 killed actions.ts ?done=${encodeURIComponent(s.id)}&ok=
+4 killed actions.ts action: "ach_esign.cancel"
+5 killed actions.ts to: [book.stephen.email, book.michael.email, book.store.emai
+6 killed actions.ts   const s = await sessionFor(fd, employeeId);   const res = 
+7 killed actions.ts after: { state: "cancelled", reason: reason.slice(0, 500) },
+8 killed page.tsx await requirePermission("settings.manage");
+9 killed ach-esign-store.ts done && done.employee_id === employeeId ? done : null
+10 killed page.tsx await esignPageView(employeeId, sp.done && UUID.test(sp.done
+11 killed page.tsx <input type="hidden" name="disclosure_sha256" value={current
+12 killed page.tsx <AccountRow i={3} />
+13 killed page.tsx name={`a${i}_acct2`}
+14 killed page.tsx name="typed_name"
+15 killed page.tsx {ACH_E_TERMS.terms.map(
+16 killed route.ts "Cache-Control": "no-store, private"
+17 killed route.ts if (!s || s.employee_id !== employeeId) return new Response(
+18 killed route.ts await requirePermission("settings.manage");
+19 killed route.ts "X-Content-Type-Options": "nosniff", 
+20 killed EmployeeAchCard.tsx Sign electronically (in person)
+total 21 killed 21 survivors []
+EXIT 0
