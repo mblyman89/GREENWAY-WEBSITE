@@ -126,7 +126,35 @@ commit + push after every task, no drift.
         equivalent key encoding). Self-tests 49 + 29 (runner floors).
       - Full compliance vitest: 823 files passed. Pure self-tests: ALL PASSED.
         Typecheck clean.
-- [ ] S5 drop-only upload, AcroForm / LlamaParse draft, blind re-key
+- [x] S5 drop-only upload, AcroForm / LlamaParse draft, blind re-key
+      - Managers (owner/admin/manager) drop a file on the employee file or the
+        vendor page. They see its status only and cannot reopen it (Q2).
+        Owner/admin review it at Settings -> Banking -> Documents to review.
+      - Store (ach-document-store.ts): content sniff + allow-list, random
+        object key, upsert false, sha256 kept and re-checked on every read,
+        duplicate refused per payee, orphan object removed if the row insert
+        fails, every action logged.
+      - Draft: our fillable PDFs are read locally (unpdf AcroForm). Scans go
+        to LlamaParse only when the reviewer ticks the box (Q6), and only
+        routing fingerprints come back. No bank number is ever shown or stored
+        from a machine read.
+      - Blind re-key: the entry form is never prefilled. Accepting needs
+        either the entry to match the form fields (HMAC compare) or two
+        different people's blind entries to agree. A pending first entry is
+        kept only as a per-field HKDF/HMAC fingerprint
+        (security/keyed-hash.ts, RFC 5869 vectors).
+      - Employee accept is one all-or-nothing Postgres call (0260,
+        ach_intake_accept_employee): pg-check plus 29/29 SQL mutants. Vendor
+        accept goes through the 0259 vault (on hold) first.
+      - Tests: the intake core has 122 self-assertions (two mutation runs,
+        32/32). The fixtures are real pdf.js field dumps. Wiring has 20
+        source pins (16/16 mutants). Behaviour has 17 tests running real
+        postgrest-js over FakePostgrest (24/24 mutants,
+        scripts/r39/mutate-ach-document-store.py). Every write is scanned for
+        leaked bank numbers.
+      - Full compliance vitest: 828 files, 21,932 tests passed. Pure
+        self-tests: ALL PASSED. Typecheck EXIT 0. Lint on all S5 files:
+        0 errors, 0 warnings.
 - [ ] S6 e-sign (E-SIGN Act / UETA consent, intent, OTP, hash, certificate)
 - [ ] S7 returns / NOC log + notifications, prenote file, retention / legal
       hold, annual review reminder

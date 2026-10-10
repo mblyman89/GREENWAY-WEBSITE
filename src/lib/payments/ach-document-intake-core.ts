@@ -137,7 +137,6 @@ export type FilenameCheck =
  */
 export function checkOriginalFilename(raw: string | null | undefined): FilenameCheck {
   const name = String(raw ?? "");
-  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(name)) return { ok: false, refusal: "The file name has hidden control characters. Rename the file and try again." };
   // OWASP: "reject any filename containing a colon" - checked on the raw name,
   // so a Windows path (C:\...) or an NTFS stream (x.pdf:evil) is refused too.
