@@ -407,7 +407,7 @@ export function __runDeliveryBrandCoreTests(): { passed: number; failed: number 
   ok("error banner bad", deliveryBrandBanner({ brand_set: "error" })?.tone === "bad");
   ok("unknown code null", deliveryBrandBanner({ brand_set: "zzz" }) === null);
   ok("absent null", deliveryBrandBanner({}) === null);
-  ok("cleared text", deliveryBrandBanner(deliveryBrandParams({ code: "cleared", changed: 2 }))?.text.startsWith("Brand cleared on 2 products."));
+  ok("cleared text", deliveryBrandBanner(deliveryBrandParams({ code: "cleared", changed: 2 }))?.text.startsWith("Brand cleared on 2 products.") === true);
   ok("reason on ok warns", deliveryBrandBanner(deliveryBrandParams({ code: "ok", brand: "X", changed: 1, reason: "1 card skipped." }))?.tone === "warn");
   ok("note", deliveryBrandNote("X", { changed: 2, kept: 1, already: 0 }, "fill").includes("rows without a brand"));
   return { passed, failed };
