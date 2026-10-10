@@ -490,6 +490,10 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "ach_authorization_events", disposition: "KEEP", because: "The append-only audit trail of every ACH authorization change." },
   { table: "ach_verifications", disposition: "KEEP", because: "Prenote and test-credit results that prove each account was verified." },
   { table: "ach_return_notices", disposition: "KEEP", because: "Returns and change notices from Timberland, part of the payment record." },
+  // R39 (0261). The database refuses to delete a signed e-sign session
+  // (ACH_ESIGN_KEEP) and the session points at the kept documents with
+  // on delete restrict, so a reset that tried to wipe it would fail part-way.
+  { table: "ach_esign_sessions", disposition: "KEEP", because: "The in-person e-sign record for each signed ACH form: ID check, consent, code proof. Kept with the authorization it created." },
   { table: "payee_contacts", disposition: "KEEP", because: "Payee phone numbers and emails with the date each was first on file, used for fraud callbacks." },
   { table: "vendor_platform_map", disposition: "KEEP", because: "Which vendor corresponds to which menu platform." },
   { table: "brands", disposition: "KEEP", because: "Your brand list, used to match products on every vendor menu." },

@@ -1286,7 +1286,10 @@ describe("D-65 — the connections survive the reset", () => {
     //   +7  R39 / 0258: ach_authorizations, ach_authorization_accounts,
     //       ach_authorization_documents, ach_authorization_events,
     //       ach_verifications, ach_return_notices, payee_contacts
-    expect(plan.keep.length).toBe(145);
+    //   +1  R39 / 0261: ach_esign_sessions (a signed session cannot be
+    //       deleted, ACH_ESIGN_KEEP, and it references the kept documents
+    //       with on delete restrict)
+    expect(plan.keep.length).toBe(146);
     expect(plan.wipe.length).toBe(139);
   });
 
@@ -1299,6 +1302,7 @@ describe("D-65 — the connections survive the reset", () => {
       "ach_verifications",
       "ach_return_notices",
       "payee_contacts",
+      "ach_esign_sessions",
     ];
     for (const t of r39) {
       const c = classifyTable(t);
