@@ -40,6 +40,7 @@
  * PURE: no I/O, no React, no server-only. Self-tests registered in the pure
  * runner.
  */
+import type { InventoryMetrics } from "@/lib/inventory/inventory-metrics-core";
 import { lotThcFilterValue, lotCbdFilterValue } from "@/lib/pos/lot-potency-core";
 import {
   lotTypeLabel,
@@ -117,6 +118,13 @@ export type FilterableLot = LotTableFields & {
    */
   website_category?: string | null;
   website_category_source?: string | null;
+  /**
+   * R38 S2: derived per-lot metrics (inventory-metrics-core) and the audit
+   * fields the enterprise table sorts by. Optional: absent in older callers.
+   */
+  inv_metrics?: InventoryMetrics;
+  last_counted_at?: string | null;
+  updated_at?: string | null;
 };
 
 /* ── Facets ──────────────────────────────────────────────────────────────── */

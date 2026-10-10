@@ -94,6 +94,12 @@ export type InventoryListResult<T> = {
   totalPages: number;
   /** True when results came from the typo-tolerant fallback. */
   didYouMean: boolean;
+  /**
+   * R38: EVERY matching row in display order, before pagination \u2014 what the
+   * totals footer sums and what "export this view" writes. Same objects as
+   * `rows` (rows is a slice of it).
+   */
+  matched: T[];
 };
 
 /**
@@ -135,6 +141,7 @@ export function buildInventoryList<T extends FilterableLot>(
     page,
     totalPages,
     didYouMean: found.didYouMean,
+    matched: rows,
   };
 }
 
