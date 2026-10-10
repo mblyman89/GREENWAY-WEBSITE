@@ -1,0 +1,43 @@
+0 killed if (!id.ok) return { ok: false, error: id.error };
+1 killed if (!emp.data) return { ok: false, error: "That employee no longer exi
+2 killed .in("state", ["started", "code_sent", "consented"])     .maybeSingle()
+3 killed if (s.state !== "started" && s.state !== "code_sent") return
+4 killed if (sessionExpired(s.started_at, input.nowMs)) return { ok: false, err
+5 killed if (!em.ok) return { ok: false, error: em.error };
+6 killed if (!can.ok) return { ok: false, error: can.error };
+7 killed email_enc: emailEnc,
+8 killed otp_digest: otpDigest(h, s.id, code),
+9 killed otp_sends: s.otp_sends + 1,
+10 killed .eq("otp_sends", s.otp_sends)
+11 killed const sent = await input.mail(em.email, { subject: msg.subject, html: 
+12 killed if (s.state !== "code_sent") return { ok: false, error: esignDbErrorMe
+13 killed if (!input.agreed) return
+14 killed if (input.disclosureSha256Shown !== shown) return
+15 killed if (v.countAttempt) {
+16 killed otp_attempts: Math.min(OTP_MAX_ATTEMPTS, s.otp_attempts + 1)
+17 killed .eq("otp_attempts", s.otp_attempts)         .select("id");
+18 killed disclosure_sha256: shown,
+19 killed disclosure_version: ESIGN_DISCLOSURE_VERSION,
+20 killed .eq("otp_digest", s.otp_digest as string)
+21 killed if (s.state !== "consented") return
+22 killed if (!input.intentChecked) return
+23 killed if (!signatureMatches(input.typedName, s.legal_name)) return
+24 killed if (open.data && !input.replaceOpen) return
+25 killed .not("state", "in", "(revoked,archived)")
+26 killed upsert: false });   if (up1.error)
+27 killed     await bucket.remove([recPath.objectKey]); 
+28 killed     await bucket.remove([recPath.objectKey, certPath.objectKey]); 
+29 killed p_replace_open: input.replaceOpen,
+30 killed p_record: { storage_path: recPath.storagePath, sha256: recordSha,
+31 killed p_ip: input.ip ?? "",
+32 killed replacedPrevious: Boolean(open.data)
+33 killed emailTo = checkEmail(plain).ok ? plain : null;
+34 killed hmacKey: (r, a, t) => ak(normalizeAccountKey(r, a, t))
+35 killed const tails = input.accounts.map((a) => last4(a.account));
+36 killed if (reason.length < 5) return
+37 killed .in("state", ["started", "code_sent", "consented"])     .select("id");
+38 killed cancel_reason: reason
+39 killed if (got !== row.sha256) return
+40 killed if (session.state !== "signed" || !session.record_document_id) return
+total 41 killed 41 survivors []
+EXIT 0
