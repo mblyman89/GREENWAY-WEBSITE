@@ -1,0 +1,25 @@
+0 killed .eq("sha256", sha256)
+1 killed if (dup.data) return
+2 killed upsert: false
+3 killed     await admin.storage.from(BUCKET).remove([path.objectKey]
+4 killed !== doc.sha256
+5 killed .eq("detail->>document_id", doc.id)
+6 killed if (local.draft.source === "none" && input.useLlamaParse)
+7 killed routing_fingerprints: ocrRoutingFingerprints(candidates, hm)
+8 killed const { error } = await admin.from("ach_authorization_docume
+9 killed   if (!fp || !ak) return { ok: false, error: NO_KEY }; 
+10 killed if (!canAcceptKind(doc.kind)) return
+11 killed if (pre.length) return
+12 killed if (!signed.ok) return { ok: false, error: signed.error };
+13 killed const pending = pendingFromEvents(events, doc.id);
+14 killed fingerprint: "keepPending" in step ? step.keepPending : null
+15 killed p_basis: step.basis
+16 killed p_replace_open: input.replaceOpen
+17 killed hmacKey: (r, a, t) => ak(normalizeAccountKey(r, a, t))
+18 killed if (!saved.ok) return { ok: false, error: saved.error };
+19 killed p_outcome: "rejected"
+20 killed if (error) return { ok: false, error: intakeDbErrorMessage(e
+21 killed vendorName = String((vendor.data as { display_name?: string 
+22 killed account_last4: [rows.rows[0].account_last4]
+23 killed if (doc.archived_at || (doc.intake_status !== "received" && 
+survivors []

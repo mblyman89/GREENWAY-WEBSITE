@@ -312,7 +312,8 @@ describe("blind re-key and accept (employee)", () => {
     delete process.env.DATA_ENCRYPTION_KEY;
     const noKey = await store.rekeyAndMaybeAccept({ ...base, doc: d, actorId: ACTOR, accounts: [A1, A2] });
     expect(noKey).toMatchObject({ ok: false });
-    expect((noKey as { error: string }).error).toMatch(/DATA_ENCRYPTION_KEY is not set/);
+    // The store's own guard (before any read), not the later planAccountRows backstop.
+    expect((noKey as { error: string }).error).toMatch(/cannot be fingerprinted or stored/);
     process.env.DATA_ENCRYPTION_KEY = "behaviour-test-key-0123456789abcdef";
     expect((await store.rekeyAndMaybeAccept({ ...base, doc: d, actorId: ACTOR, accounts: [A1] })).ok).toBe(false); // no remainder
     expect((await store.rekeyAndMaybeAccept({ ...base, signedOnRaw: "2999-01-01", doc: d, actorId: ACTOR, accounts: [A1, A2] })).ok).toBe(false);
