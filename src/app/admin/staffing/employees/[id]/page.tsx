@@ -5,6 +5,9 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { listEmployeeBanking } from "@/lib/staffing/store";
 import { employeeBankingBadge } from "@/lib/payments/banking-vault-ui-core";
+import { employeeAchCard, type EmployeeAchCard as EmployeeAchCardModel } from "@/lib/payroll/employee-ach-card-core";
+import { getEmployeeAchOverview, type EmployeeAuthHistoryRow } from "@/lib/payroll/employee-deposit-plans-store";
+import { EmployeeAchCard } from "./EmployeeAchCard";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState, StickyActionBar } from "@/components/admin/ux";
@@ -53,7 +56,7 @@ export default async function EmployeeFilePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; ok?: string; back?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; back?: string; ach?: string }>;
 }) {
   const session = await requirePermission("staffing.manage");
   // SLICE 94: only owner/admin (settings.manage) may see the banking badge —
@@ -99,6 +102,30 @@ export default async function EmployeeFilePage({
         accountType: banking?.bank_account_type ?? null,
       })
     : null;
+
+  // R39 S4: the ACH card. Same plan read as payroll; a failed read is shown on
+  // the card (never hidden, never treated as "no authorization").
+  let achCard: EmployeeAchCardModel | null = null;
+  let achHistory: EmployeeAuthHistoryRow[] = [];
+  let achError: string | null = null;
+  if (canSeeVault) {
+    try {
+      const ov = await getEmployeeAchOverview(id);
+      achHistory = ov.history;
+      achCard = employeeAchCard({
+        tableReady: ov.tableReady,
+        employeeActive: Boolean(employee.active),
+        employeeName: employee.full_name,
+        plan: ov.plan,
+        historyCount: ov.history.length,
+        legacy: banking
+          ? { routing: banking.bank_routing ?? null, accountNumber: banking.bank_account_number ?? null, accountType: banking.bank_account_type ?? null }
+          : null,
+      });
+    } catch (e) {
+      achError = e instanceof Error ? e.message : String(e);
+    }
+  }
 
   const phases: OnboardingPhase[] = ["hiring", "paperwork", "compliance", "ready"];
 
@@ -222,23 +249,13 @@ export default async function EmployeeFilePage({
         {/* SLICE 94: direct-deposit badge — visible to owner/admin only.
             Masked tail only; editing happens in the vault (Admin → Banking). */}
         {bankBadge && (
-          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <h2 className="text-sm font-semibold text-white">Direct deposit (vault)</h2>
-                <Badge tone={bankBadge.tone}>{bankBadge.label}</Badge>
-              </div>
-              <Link
-                href="/admin/settings/banking?tab=employees"
-                className="text-xs font-semibold text-[var(--admin-accent)] hover:underline"
-              >
-                {banking && (banking.bank_routing || banking.bank_account_number)
-                  ? "Open in the vault →"
-                  : "Add banking in the vault →"}
-              </Link>
-            </div>
-            <p className="mt-2 text-xs text-white/50">{bankBadge.detail}</p>
-          </div>
+          <EmployeeAchCard
+            employeeId={id}
+            card={achCard}
+            history={achHistory}
+            showHistory={sp.ach === "history"}
+            readError={achError}
+          />
         )}
 
         <div className="grid gap-6 lg:grid-cols-3">

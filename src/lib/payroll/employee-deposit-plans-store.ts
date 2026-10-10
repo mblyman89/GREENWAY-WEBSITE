@@ -55,3 +55,34 @@ export async function listEmployeeDepositPlans(
   if (accts.error) throw new Error(`ach_authorization_accounts read failed: ${accts.error.message}`);
   return { tableReady: true, plans: rowsToDepositPlans(authRows, (accts.data as DepositAcctRow[] | null) ?? [], (s) => decryptSecret(s)) };
 }
+
+export type EmployeeAuthHistoryRow = {
+  id: string;
+  state: string;
+  signed_on: string | null;
+  ended_on: string | null;
+  ended_reason: string | null;
+  signature_method: string | null;
+};
+
+/**
+ * R39 S4 — one employee's ACH picture for their file page: the open plan (same
+ * read as payroll) and the revoked / archived authorizations kept for the
+ * record (owner Q11: shown behind a button). Throws on real read errors.
+ */
+export async function getEmployeeAchOverview(
+  employeeId: string,
+): Promise<{ tableReady: boolean; plan: EmployeeDepositPlan | null; history: EmployeeAuthHistoryRow[] }> {
+  const open = await listEmployeeDepositPlans([employeeId]);
+  if (!open.tableReady) return { tableReady: false, plan: null, history: [] };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("ach_authorizations")
+    .select("id,state,signed_on,ended_on,ended_reason,signature_method")
+    .eq("payee_type", "employee")
+    .eq("employee_id", employeeId)
+    .in("state", ["revoked", "archived"])
+    .order("ended_on", { ascending: false, nullsFirst: false });
+  if (error) throw new Error(`ach_authorizations history read failed: ${error.message}`);
+  return { tableReady: true, plan: open.plans.get(employeeId) ?? null, history: (data as EmployeeAuthHistoryRow[] | null) ?? [] };
+}
