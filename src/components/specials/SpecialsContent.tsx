@@ -526,7 +526,10 @@ export function SpecialsContent({
           />
         ) : (
         /* Top hero — short + wide, matching the home / shop page proportions. */
-        <div className={`relative isolate flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:min-h-[10.5rem] ${heroJustifyClass} ${heroColumnItemsClass}`}>
+        <div
+          className={`relative isolate flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:min-h-[10.5rem] ${heroJustifyClass} ${heroColumnItemsClass}`}
+          {...(content?.editable ? { "data-gw-edit-owner": "specials:hero" } : {})}
+        >
           {/* SLICE 118 (P1b): optional editable hero image (Pages builder). When
               set it sits BEHIND the dark fade below, so the eyebrow/title/subtitle
               stay readable over any photo. When absent, nothing renders here and
@@ -600,7 +603,11 @@ export function SpecialsContent({
         {/* Canonical 7-day rules reference (kept as the deal explainer).
             SLICE 106: staff can hide the whole grid via presentation settings. */}
         {pres.showWeeklyGrid && deals.length ? (
-          <section aria-labelledby="daily-deals-title" className="mt-8 md:mt-12">
+          <section
+            aria-labelledby="daily-deals-title"
+            className="mt-8 md:mt-12"
+            {...(content?.editable ? { "data-gw-edit-area": "specials-cards" } : {})}
+          >
             <div className="mb-5 flex flex-col gap-2 md:mb-7 md:flex-row md:items-end md:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--greenway)]">Daily discounts</p>

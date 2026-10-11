@@ -34,7 +34,14 @@ function gradientClass(textAlign: RenderSlide["textAlign"]): string {
  * never renders blank. Each slide auto-rotates; arrows + dots allow manual
  * control; hovering pauses autoplay.
  */
-export function Hero({ slides }: { slides: RenderSlide[] }) {
+export function Hero({
+  slides,
+  editable = false,
+}: {
+  slides: RenderSlide[];
+  /** R43: staff preview only — tags the carousel for its green ✎ Edit button. */
+  editable?: boolean;
+}) {
   const safeSlides = slides.length > 0 ? slides : [];
   const count = safeSlides.length;
 
@@ -81,6 +88,7 @@ export function Hero({ slides }: { slides: RenderSlide[] }) {
     >
       <div className="mx-auto max-w-[88rem]">
         <div
+          {...(editable ? { "data-gw-edit-area": "home-carousel" } : {})}
           className="relative isolate overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40"
           role="region"
           aria-roledescription="carousel"

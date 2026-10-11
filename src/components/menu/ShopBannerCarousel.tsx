@@ -247,7 +247,10 @@ export function SlideView({
   return (
     <>
       {/* MOBILE (own art + focus, ~3:1). */}
-      <div className="relative aspect-[3/1] overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:hidden">
+      <div
+        className="relative aspect-[3/1] overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:hidden"
+        {...(designOwner ? { "data-gw-edit-owner": designOwner } : {})}
+      >
         <SlideBody
           pres={presentation}
           image={presentation.imageMobile || presentation.image}
@@ -258,7 +261,10 @@ export function SlideView({
         />
       </div>
       {/* DESKTOP (own art + focus, wide/short). */}
-      <div className="relative hidden min-h-[8.5rem] overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:block md:min-h-[10.5rem]">
+      <div
+        className="relative hidden min-h-[8.5rem] overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:block md:min-h-[10.5rem]"
+        {...(designOwner ? { "data-gw-edit-owner": designOwner } : {})}
+      >
         <SlideBody
           pres={presentation}
           image={presentation.image}

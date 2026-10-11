@@ -115,7 +115,10 @@ export function PromoGrid({
           />
 
           {tiles.length > 0 ? (
-          <div className={typeCardGridClass(tiles.length)}>
+          <div
+            className={typeCardGridClass(tiles.length)}
+            {...(content?.editable ? { "data-gw-edit-area": "home-typecards" } : {})}
+          >
             {tiles.map((lane, index) => {
               const tone = glowToneByIndex(index);
               // Owner-uploaded product photo for this card, or "" -> clean

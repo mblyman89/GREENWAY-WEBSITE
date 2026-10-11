@@ -173,7 +173,10 @@ export function SectionBanner({
       : {};
 
   return (
-    <div className="relative isolate overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30">
+    <div
+      className="relative isolate overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30"
+      {...(editable && designOwner ? { "data-gw-edit-owner": designOwner } : {})}
+    >
       <div className="absolute inset-0" {...editAttrs("image")}>
         <Image
           src={imageSrc}

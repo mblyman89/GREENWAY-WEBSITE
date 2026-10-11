@@ -151,7 +151,7 @@ export default async function Home() {
     <main>
       <SiteBackground />
       <Header />
-      <Hero slides={slides} />
+      <Hero slides={slides} editable={preview} />
       <HomeDailyDeals items={dealItems} count={dailyDealsCount} />
       <PromoGrid
         vendors={vendors}
