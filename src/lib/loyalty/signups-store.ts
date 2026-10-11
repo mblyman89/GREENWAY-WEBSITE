@@ -173,6 +173,26 @@ export async function createLoyaltySignup(
   return { id: data.id, isDuplicate: Boolean(dedupeOf) };
 }
 
+/**
+ * R41 S5: has migration 0264 been applied? A zero-row select of the new
+ * columns errors when they don't exist. Returns null when the DB isn't
+ * configured or the answer is unknown for another reason (never guessed).
+ */
+export async function consentColumnsApplied(): Promise<boolean | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("loyalty_signups")
+      .select("consent_text, consent_text_sha256")
+      .limit(0);
+    if (!error) return true;
+    return isMissingConsentColumnError(error) ? false : null;
+  } catch {
+    return null;
+  }
+}
+
 export type ListLoyaltyFilter = {
   status?: LoyaltyStatus | "all";
   search?: string;

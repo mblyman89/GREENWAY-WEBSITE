@@ -12,8 +12,10 @@
  * SCOPE GUARD: these actions only accept the Loyalty page's curated copy blocks
  * (defined in the pure core @/lib/loyalty/loyalty-content-core). A form that
  * posts any other block_key is rejected — the generic Site Content editor
- * handles everything else, and the LEGAL consent text + LIVE register
- * numbers/tiers are never content blocks at all.
+ * handles everything else, and the LIVE register numbers/tiers are never
+ * content blocks at all. R41 S5: the consent wording IS a block now (owner
+ * directive R41 Q9); publishing it is refused only when the saved draft is
+ * empty (checkConsentText().blocking).
  *
  * SLICE 106 LESSON: a "use server" module may ONLY export async functions, so
  * every block-key constant / helper lives in the plain pure core, NOT here.
@@ -29,6 +31,7 @@ import {
   restoreContentRevisionToDraft,
 } from "@/lib/cms/content-store";
 import { isLoyaltyContentBlock } from "@/lib/loyalty/loyalty-content-core";
+import { LOYALTY_CONSENT_BLOCK, checkConsentText } from "@/lib/loyalty/loyalty-consent-core";
 import { LOYALTY_HERO_PRESENTATION_BLOCK } from "@/lib/loyalty/loyalty-hero-core";
 
 function backTo(flag: string): string {
@@ -65,6 +68,15 @@ export async function publishLoyaltyAction(formData: FormData): Promise<void> {
 
   const block = await getContentBlock(blockKey);
   if (!block) redirect("/admin/loyalty-page");
+
+  // R41 S5: never publish an empty consent paragraph. publishContentBlock
+  // promotes the SAVED draft (draft ?? published ?? ""), so check that value.
+  if (
+    blockKey === LOYALTY_CONSENT_BLOCK &&
+    checkConsentText(block.draft_value ?? block.published_value ?? "").blocking
+  ) {
+    redirect("/admin/loyalty-page?error=consent_empty");
+  }
 
   await publishContentBlock(blockKey, session.userId, { actorEmail: session.email });
   await recordAudit({
