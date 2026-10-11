@@ -95,7 +95,10 @@ export default async function SpecialsPage() {
           // only hero (today's default look).
           image: presentation.heroBannerImage || hero?.image || undefined,
           imageFocus: hero?.imageFocus,
-          buttons: hero?.buttons,
+          // R41 S4: once the owner saves hero buttons in the Specials editor
+          // (heroButtonsSet), those win, and an empty saved list means no
+          // buttons. Until then the legacy specials.hero row buttons render.
+          buttons: presentation.heroButtonsSet ? presentation.heroButtons : hero?.buttons,
           extraSections: banners.extras,
           editable: preview,
         }}

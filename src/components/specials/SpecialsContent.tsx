@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { SpecialsDailyDeals } from "@/components/specials/SpecialsDailyDeals";
+import { DesignedBanner } from "@/components/site/DesignedBanner";
 import {
   SectionBanner,
   type SectionBannerButton,
@@ -502,7 +503,28 @@ export function SpecialsContent({
       <div className="noise-overlay" />
 
       <div className="relative mx-auto max-w-[88rem] px-4 py-5 md:px-8 md:py-8">
-        {/* Top hero — short + wide, matching the home / shop page proportions. */}
+        {/* R41 S4: owner's Banner Studio design for the TOP hero. The classic
+            hero below stays verbatim in the else-branch. */}
+        {pres.heroDesign?.enabled ? (
+          <DesignedBanner
+            design={pres.heroDesign}
+            imageSrc={content?.image?.trim() || ""}
+            imageAlt=""
+            legacy={{
+              eyebrow: content?.eyebrow || "Deals every day",
+              title: content?.title || "Cannabis Specials",
+              subtitle:
+                content?.subtitle ||
+                "Check out our latest deals and save on premium cannabis products. New specials added regularly.",
+            }}
+            headingLevel={1}
+            priority
+            editable={content?.editable}
+            owner="specials:hero"
+            blockKeyPrefix="specials.hero"
+          />
+        ) : (
+        /* Top hero — short + wide, matching the home / shop page proportions. */
         <div className={`relative isolate flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:min-h-[10.5rem] ${heroJustifyClass} ${heroColumnItemsClass}`}>
           {/* SLICE 118 (P1b): optional editable hero image (Pages builder). When
               set it sits BEHIND the dark fade below, so the eyebrow/title/subtitle
@@ -572,6 +594,7 @@ export function SpecialsContent({
             ) : null}
           </div>
         </div>
+        )}
 
         {/* Canonical 7-day rules reference (kept as the deal explainer).
             SLICE 106: staff can hide the whole grid via presentation settings. */}
@@ -602,6 +625,7 @@ export function SpecialsContent({
             textAlign={pres.todaysDealsBannerTextAlign}
             verticalAlign={pres.todaysDealsBannerVerticalAlign}
             imageFocus={pres.todaysDealsBannerImageFocus}
+            design={pres.todaysDealsDesign}
           />
         ) : null}
 
