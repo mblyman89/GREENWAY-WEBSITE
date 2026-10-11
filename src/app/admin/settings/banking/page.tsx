@@ -46,6 +46,7 @@ import {
 } from "./vault-actions";
 import { VendorVaultCard } from "./VendorVaultCard";
 import { VendorParticipationPanel } from "./VendorParticipationPanel";
+import { BankingHelpTabs } from "./BankingHelpTabs";
 import { participationRows } from "@/lib/payments/vendor-esign-store";
 
 export const dynamic = "force-dynamic";

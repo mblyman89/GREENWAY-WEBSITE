@@ -19,6 +19,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Badge } from "@/components/admin/ui";
+import { BankingHelpTabs } from "../BankingHelpTabs";
 import { pacificToday } from "@/lib/reports/timezone";
 import { listEmployees } from "@/lib/staffing/store";
 import { listVendors } from "@/lib/vendors/store";
@@ -92,6 +93,9 @@ export default async function AchOperationsPage({ searchParams }: { searchParams
         <p className="text-xs text-white/40">
           <Link href="/admin/settings/banking" className="hover:underline">← Back to Banking</Link> · Today (Pacific): {today}
         </p>
+        <div className="flex flex-wrap gap-2">
+          <BankingHelpTabs />
+        </div>
 
         {/* 1. Notices */}
         <section id="notices" className={card}>
