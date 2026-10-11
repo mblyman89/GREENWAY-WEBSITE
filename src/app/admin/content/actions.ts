@@ -14,7 +14,9 @@ import {
   restoreContentRevisionToDraft,
   publishAllDrafts,
   discardAllDrafts,
+  saveContentDraftChecked,
 } from "@/lib/cms/content-store";
+import { EXPECTED_FIELD, conflictFlash, parseExpectedVersion } from "@/lib/cms/edit-conflict-core";
 import {
   generateContentSuggestion,
   isAiConfigured,
@@ -281,7 +283,25 @@ export async function saveContentDraftAction(formData: FormData): Promise<void> 
     }
   }
 
-  await saveContentDraft(blockKey, draftValue, session.userId);
+  // R45-S2: edit-conflict protection. The editor sends the version it opened;
+  // if someone saved since, nothing is overwritten and the owner is told.
+  const outcome = await saveContentDraftChecked(
+    blockKey,
+    draftValue,
+    session.userId,
+    parseExpectedVersion(formData.get(EXPECTED_FIELD)),
+  );
+  if (outcome !== "saved") {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "content.draft_conflict",
+      entityType: "content_block",
+      entityId: blockKey,
+      after: { outcome },
+    });
+    redirect(returnWithFlash(formData, conflictFlash(blockKey)));
+  }
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
