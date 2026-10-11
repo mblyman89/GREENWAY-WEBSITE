@@ -142,3 +142,16 @@ export type RenderSection = {
 
 /** Editor-facing view: the raw row plus a `dirty` flag (draft != published). */
 export type SectionAdminVM = PageSectionRow & { dirty: boolean };
+
+/**
+ * R41 S6: only a non-"center" image focus pins the image. "center" is the seed
+ * default, and builder banners have always used the classic rule (image hugs
+ * the side opposite the text) — keep that look until the owner picks a side,
+ * so honoring the saved focus never shifts a live image by surprise. Shared by
+ * every page that renders builder banners (Home, Specials, Shop, Vendors).
+ */
+export function pinnedImageFocus(
+  focus: SectionImageFocus | undefined | null,
+): Exclude<SectionImageFocus, "center"> | undefined {
+  return focus && focus !== "center" ? focus : undefined;
+}

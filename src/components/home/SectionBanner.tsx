@@ -27,6 +27,13 @@ export type SectionBannerData = {
   /** R41 S2: optional custom design (Banner Studio) + its owner id. */
   design?: BannerDesign | null;
   designOwner?: string;
+  /**
+   * R41 S6: the builder's "Text align" + "Image focus" for this banner, so the
+   * classic (non-custom) layout honors them on every page, not just Home.
+   * Optional: absent = the classic look exactly as before.
+   */
+  textAlign?: "left" | "center" | "right";
+  imageFocus?: "center" | "top" | "bottom" | "left" | "right";
 };
 
 /**

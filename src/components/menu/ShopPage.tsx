@@ -5,6 +5,7 @@ import { Footer } from "@/components/site/Footer";
 import { SiteBackground } from "@/components/site/SiteBackground";
 import { InteractiveMenuBrowser } from "@/components/menu/InteractiveMenuBrowser";
 import { SectionBanner } from "@/components/home/SectionBanner";
+import { pinnedImageFocus } from "@/lib/cms/page-sections-types";
 import { ShopBannerCarousel } from "@/components/menu/ShopBannerCarousel";
 import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
@@ -120,6 +121,8 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
                 title={s.title}
                 subtitle={s.subtitle}
                 buttons={s.buttons}
+                textAlign={s.textAlign}
+                imageFocus={pinnedImageFocus(s.imageFocus)}
                 design={s.design}
                 designOwner={s.designOwner}
               />
