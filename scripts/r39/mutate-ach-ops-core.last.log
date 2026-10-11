@@ -1,0 +1,59 @@
+0 killed return nextBankingDayOnOrAfter(addCalendarDays(todayIso, 1));
+1 killed if (d <= todayIso) return
+2 killed if (!isFedAchBankingDay(d)) return
+3 killed if (daysBetween(todayIso, d) > MAX_EFFECTIVE_DAYS_AHEAD) return
+4 killed new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) !== d) {
+5 killed if (checks.length === 0) return
+6 killed if (c.method !== method) return
+7 killed if (c.status !== "planned") return
+8 killed if (seen.has(c.verificationId)) return
+9 killed if (!isValidRouting(c.routing)) return { ok: false, error: `${c.payeeN
+10 killed if (!v.ok) return { ok: false, error: `${c.payeeName}: ${v.error}` };
+11 killed } else if (c.microCents !== null) {
+12 killed amountCents: method === "prenote" ? 0 : (c.microCents as number),
+13 killed prenote: method === "prenote", 
+14 killed companyEntryDescription: method === "prenote" ? PAYROLL_DESCRIPTION : 
+15 killed companyEntryDescription: method === "prenote" ? PAYROLL_DESCRIPTION : 
+16 killed const eligible = method === "prenote" ? prenoteLiveEligibleDate(settle
+17 killed const eligible = method === "prenote" ? prenoteLiveEligibleDate(settle
+18 killed ids: checks.map((c) => c.verificationId),
+19 killed const c = 1 + randomBelow(99);
+20 killed if (!Number.isInteger(c) || c < 1 || c > 99) throw
+21 killed return todayIso >= r.eligible_on       ? { kind: "pass_prenote"
+22 killed return todayIso >= r.eligible_on     ? { kind: "ask_amount"
+23 killed if (r.method === "voided_check_callback") return { kind: "call"
+24 killed if (/^\d{1,2}$/.test(s)) return Number(s);
+25 killed const m = /^0?\.(\d{2})$/.exec(s);
+26 killed if (cents === null || cents < 1) return
+27 killed if (i.method === "voided_check_callback" && note.length < MIN_CALLBACK
+28 killed } else if (note.length < 5) {
+29 killed if (i.outcome !== "passed" && i.outcome !== "failed" && i.outcome !== 
+30 killed if (!(CALLBACK_METHODS as readonly string[]).includes(method)) return
+31 killed if (note.length < MIN_CALLBACK_NOTE_CHARS) return { ok: false, error: 
+32 killed const solo = i.holdEnteredBy === null || i.holdEnteredBy === i.actorId
+33 killed const solo = i.holdEnteredBy === null || i.holdEnteredBy === i.actorId
+34 killed if (solo && reason.length < MIN_SOLO_REASON_CHARS) {
+35 killed for (const t of [note, reason]) if
+36 killed if (r.state !== "active") continue;
+37 killed if (days < 0) out.push
+38 killed else if (days <= REVIEW_SOON_DAYS) out.push
+39 killed const rank = { missing_date: 0, overdue: 1, due_soon: 2 } as const;
+40 killed if (note.length < 10) return { ok: false, error: 'Say what was checked
+41 killed if (reason.length < 10) return { ok: false, error: "Give the reason
+42 killed const v: RetentionVerdict = retentionVerdict({ signedOn: i.signedOn, e
+43 killed r.method === "micro_entry" && r.status !== "planned"
+44 killed && !(r.status === "cancelled" && !r.result_code)
+45 killed const d30 = addCalendarDays(todayIso, -30);
+46 killed const in30 = micro.filter((r) => r.on > d30 && r.on <= todayIso);
+47 killed const busy = [...perAcct.values()].filter((n) => n > MAX_TESTS_PER_ACC
+48 killed const shared = [...payeesByAcct.values()].filter((s) => s.size > 1).le
+49 killed for (const r of rows) {     const s = payeesByAcct
+50 killed returned30: in30.filter(returned).length
+51 killed if (OPS_FUNCTIONS.test(m) && /does not exist|Could not find|PGRST20[25
+52 killed [/ACH_VERIFICATION_EARLY/, 
+53 killed [/ACH_RELEASE_SOLO/, 
+54 killed [/ach_ver_one_open_per_account/, 
+55 killed [/ACH_NOTICE_FINAL/, 
+56 killed [/ACH_AUTH_TRANSITION|ach_auth_guard/, 
+57 killed [/ACH_VERIFICATION_NOTE|ach_ver_note_shape/, 
+total 58 killed 58 survivors []
