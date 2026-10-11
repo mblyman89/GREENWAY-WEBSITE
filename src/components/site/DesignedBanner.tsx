@@ -14,6 +14,9 @@ import {
 } from "@/lib/cms/banner-design-core";
 import { linkKindOf } from "@/lib/cms/link-target-core";
 import { BannerMedia } from "./BannerMedia";
+// R44: a video wrapper must stay visible to assistive tech (its pause button);
+// the <video> itself is aria-hidden inside BannerVideo.
+import { isVideoSrc } from "@/lib/media/upload-policy-core";
 
 /**
  * R41 S2 — renders a banner from its custom design (bible PART 5.3).
@@ -92,7 +95,7 @@ export function DesignedBanner({
                 lazy: browsers skip display:none lazy images, so each device
                 downloads only the picture it shows. */}
             {imageSrc ? (
-              <div className="gw-dimg-d absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
+              <div className="gw-dimg-d absolute inset-0 overflow-hidden" aria-hidden={imageAlt || isVideoSrc(imageSrc) ? undefined : true}>
                 <BannerMedia
                   src={imageSrc}
                   alt={imageAlt}
@@ -104,7 +107,7 @@ export function DesignedBanner({
                 />
               </div>
             ) : null}
-            <div className="gw-dimg-m absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
+            <div className="gw-dimg-m absolute inset-0 overflow-hidden" aria-hidden={imageAlt || isVideoSrc(phoneSrc) ? undefined : true}>
               <BannerMedia
                 src={phoneSrc}
                 alt={imageAlt}
@@ -117,7 +120,7 @@ export function DesignedBanner({
             </div>
           </>
         ) : imageSrc ? (
-          <div className="absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
+          <div className="absolute inset-0 overflow-hidden" aria-hidden={imageAlt || isVideoSrc(imageSrc) ? undefined : true}>
             <BannerMedia
               src={imageSrc}
               alt={imageAlt}
