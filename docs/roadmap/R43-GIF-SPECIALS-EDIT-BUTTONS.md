@@ -149,4 +149,4 @@ These come from `link-target-core`, which is also the source for "Pick a link…
 - [x] Overlay pills on, hub navigation, cheat sheet
 - [x] GIF pass-through + honest 4 MB cap
 - [x] Self-tests registered (edit-target-core floor 300, gif-core floor 21)
-- [ ] PR merged + Vercel green (recorded in PR)
+- [x] PR #1332 opened; CI build + compliance + migrations green on d83f32de (merge + Vercel recorded in the PR)
