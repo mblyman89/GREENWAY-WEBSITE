@@ -549,6 +549,9 @@ begin
   if not found then
     raise exception 'ACH_VERIFICATION_NOT_FOUND: verification %.', p_id using errcode = 'check_violation';
   end if;
+  if v.status in ('passed', 'failed', 'cancelled') then
+    raise exception 'ACH_VERIFICATION_FINAL: verification % is already %.', v.id, v.status using errcode = 'check_violation';
+  end if;
   select * into acct from public.ach_authorization_accounts where id = v.account_id for update;
   select * into a from public.ach_authorizations where id = acct.authorization_id for update;
   if p_outcome = 'passed' then
