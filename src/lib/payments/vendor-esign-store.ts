@@ -783,7 +783,7 @@ export async function vendorSignedCopy(token: string, cookie: string | null): Pr
 // -------------------------------------------------------- participation ----
 
 /** One row per vendor for the banking page's "how close are we to no checks" panel. */
-export async function participationRows(nowMs: number): Promise<{ ready: boolean; rows: (ParticipationRow & { email: string | null; active: boolean })[] }> {
+export async function participationRows(nowMs: number = Date.now()): Promise<{ ready: boolean; rows: (ParticipationRow & { email: string | null; active: boolean })[] }> {
   if (!isSupabaseServiceConfigured) return { ready: false, rows: [] };
   const admin = createSupabaseAdminClient();
   const [vendors, vault, invites] = await Promise.all([
@@ -809,4 +809,39 @@ export async function participationRows(nowMs: number): Promise<{ ready: boolean
     };
   });
   return { ready, rows };
+}
+
+// ------------------------------------------------------------- admin card ----
+
+export type VendorEsignCardData = {
+  ready: boolean;
+  error: string | null;
+  invites: VendorInvite[];
+  /** Readiness of the newest signed invite (null when none waits). */
+  countersign: CountersignReadinessView | null;
+  names: Record<string, string>;
+  nowMs: number;
+};
+export type CountersignReadinessView = { inviteId: string; ready: boolean; message: string | null };
+
+/** Everything the vendor-page card shows. Clock read here (react-hooks/purity). */
+export async function vendorEsignCard(vendorId: string): Promise<VendorEsignCardData> {
+  const nowMs = Date.now();
+  const list = await listVendorInvites(vendorId);
+  if (!list.ready || list.error) return { ready: list.ready, error: list.error, invites: [], countersign: null, names: {}, nowMs };
+  const admin = createSupabaseAdminClient();
+  const waiting = list.invites.find((i) => i.state === "signed") ?? null;
+  let countersign: CountersignReadinessView | null = null;
+  if (waiting) {
+    const vb = await admin.from("vendor_bank_details").select("status, released_at, bank_routing, bank_account_number, bank_account_type").eq("vendor_id", vendorId).maybeSingle();
+    const rd = countersignReadiness(waiting, (vb.data as Parameters<typeof countersignReadiness>[1]) ?? null);
+    countersign = { inviteId: waiting.id, ready: rd.ready, message: rd.ready ? null : rd.message };
+  }
+  const ids = Array.from(new Set(list.invites.flatMap((i) => [i.invited_by, i.countersigned_by, i.rejected_by, i.cancelled_by]).filter((x): x is string => Boolean(x))));
+  const names: Record<string, string> = {};
+  if (ids.length) {
+    const sp = await admin.from("staff_profiles").select("id, full_name, email").in("id", ids);
+    for (const r of (sp.data as { id: string; full_name: string | null; email: string }[] | null) ?? []) names[r.id] = r.full_name || r.email;
+  }
+  return { ready: true, error: null, invites: list.invites, countersign, names, nowMs };
 }

@@ -45,6 +45,8 @@ import {
   saveVendorBankingAction,
 } from "./vault-actions";
 import { VendorVaultCard } from "./VendorVaultCard";
+import { VendorParticipationPanel } from "./VendorParticipationPanel";
+import { participationRows } from "@/lib/payments/vendor-esign-store";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +82,8 @@ export default async function BankingVaultPage({
     listAllVendorContacts(),
   ]);
   const today = pacificToday();
+  // R39 S7: vendor online sign-up participation (vendors tab only).
+  const participation = tab === "vendors" ? await participationRows() : null;
   const split = splitVaultRecords(vault.records);
   const showInactive = sp.show === "inactive";
   const staffNames = await resolveStaffNames(
@@ -259,6 +263,8 @@ export default async function BankingVaultPage({
                     fully audited, but the database can&apos;t yet enforce the callback rules, record who released, or archive.
                   </div>
                 ) : null}
+
+                {participation ? <VendorParticipationPanel ready={participation.ready} rows={participation.rows} /> : null}
 
                 {/* R39 S4: vendors to follow up (owner: "flagged or known to me in some way") */}
                 {flagsReady ? (

@@ -8,6 +8,8 @@ import { vendorBankingBadge } from "@/lib/payments/banking-vault-ui-core";
 import { readVendorAchFlags, vendorAchCard } from "@/lib/payments/vendor-ach-enrollment-core";
 import { resolveStaffNames } from "@/lib/promotions/promotions-store";
 import { VendorAchCard } from "./VendorAchCard";
+import { VendorEsignCard } from "./VendorEsignCard";
+import { vendorEsignCard } from "@/lib/payments/vendor-esign-store";
 import { AchDocumentDropCard } from "@/components/admin/ach/AchDocumentDropCard";
 import { listAchDocuments } from "@/lib/payments/ach-document-store";
 import { canDropDocuments } from "@/lib/payments/ach-document-intake-core";
@@ -149,6 +151,8 @@ export default async function VendorEditPage({
           verifiedAt: vendorVault.record?.verified_at ?? null,
         })
       : null;
+  // R39 S7: online sign-up card (owner/admin only, like the vault badge).
+  const esignCard = canSeeVault ? await vendorEsignCard(id) : null;
   const optedOutByName =
     achFlags?.optedOutBy ? ((await resolveStaffNames([achFlags.optedOutBy])).get(achFlags.optedOutBy) ?? null) : null;
 
@@ -726,6 +730,15 @@ export default async function VendorEditPage({
                 vaultBadge={vaultBadge}
                 hasVaultRecord={Boolean(vendorVault.record)}
                 optedOutByName={optedOutByName}
+              />
+            )}
+            {esignCard && (
+              <VendorEsignCard
+                vendorId={vendor.id}
+                vendorEmail={vendor.email ?? null}
+                vendorName={vendor.legal_name || vendor.display_name}
+                optedOut={Boolean(achFlags?.optedOut)}
+                data={esignCard}
               />
             )}
             {achDocs && (
