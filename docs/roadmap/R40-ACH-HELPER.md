@@ -41,7 +41,7 @@ The owner will ask Timberland the open questions himself.
 - [x] Mutation runs (each breaks the code on purpose and the tests must fail): broken anchor, owner check removed, explainer rule removed,
   PAYROLL unpinned, calendar quote altered by one letter. All five were caught.
 - [x] TEST-PLAN and the test manual: T-355..T-358.
-- [ ] Full suite green, PR, CI, merge, production verification (see the log below).
+- [x] Full suite green, PR, CI, merge, production verification (see the log below).
 
 ## Things found while building (honest list)
 
@@ -60,3 +60,11 @@ The owner will ask Timberland the open questions himself.
 - LlamaParse v2: not worth moving now. The v1 endpoint "remains available for the foreseeable future" and new features are v2-only;
   revisit when a v2-only feature is wanted.
 - The sandbox could not open www.greenwaymarijuana.com (TLS refused from here), so the custom domain was not checked from this machine.
+
+## Merge and production verification (2026-10-11)
+- PR #1319 merged by rebase; main tip 2a4fe9ec. CI: build, compliance, migrations all pass.
+- Vercel project greenway_website: deployment of 2a4fe9ec succeeded (https://greenwaywebsite1.vercel.app).
+- /admin/settings/banking/guide, /calendar and /library are served by the route (x-matched-path matches, a made-up /admin path gives 404)
+  and, signed out, redirect to /admin/login (NEXT_REDIRECT 307 in the page body). The sign-in wall works.
+- Vercel project greenway-staging reports "Deployment was blocked" for both 8ed61d85 and 2a4fe9ec. This is a Vercel-side block on that
+  second project, not a build or code failure. It is not the project behind greenwaywebsite1.vercel.app. The owner should open it in Vercel to see why.
