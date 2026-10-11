@@ -71,7 +71,7 @@ function flashFor(sp: Record<string, string | undefined>): Flash {
   if (sp.error) return { tone: "error", text: decodeURIComponent(sp.error) };
   if (sp.added) return { tone: "ok", text: "New section added — scroll down to edit it." };
   if (sp.saved && sp.tab === "typecards")
-    return { tone: "ok", text: "Category tile images published to the homepage." };
+    return { tone: "ok", text: "Type Cards published to the homepage." };
   if (sp.saved) return { tone: "ok", text: "Draft saved. Publish when you're ready." };
   if (sp.published) return { tone: "ok", text: "Published to the live page." };
   if (sp.deleted) return { tone: "ok", text: "Section deleted." };
