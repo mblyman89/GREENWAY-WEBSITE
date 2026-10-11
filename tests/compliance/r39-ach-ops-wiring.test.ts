@@ -143,3 +143,23 @@ describe("Operations page", () => {
     expect(BANK).toContain('href="/admin/settings/banking/operations"');
   });
 });
+
+describe("R39 S7 part 2 mutation evidence is current", () => {
+  for (const [script, log, floor] of [
+    ["scripts/r39/mutate-ach-ops-core.py", "scripts/r39/mutate-ach-ops-core.last.log", 58],
+    ["scripts/r39/mutate-ach-ops-store.py", "scripts/r39/mutate-ach-ops-store.last.log", 64],
+    ["scripts/r39/mutate-ach-ops-wiring.py", "scripts/r39/mutate-ach-ops-wiring.last.log", 26],
+  ] as const) {
+    it(`${log}: every mutant killed, and the log covers the script's full list`, () => {
+      const s = read(script);
+      const l = read(log);
+      const listed = s.slice(s.indexOf("M = ["), s.indexOf("\n]\n")).split("\n").filter((x) => /^\s{4}\(/.test(x)).length;
+      const m = /total (\d+) killed (\d+) survivors \[\]/.exec(l);
+      expect(m, "clean summary line").not.toBeNull();
+      expect(Number(m![1])).toBe(listed);
+      expect(Number(m![2])).toBe(listed);
+      expect(listed).toBeGreaterThanOrEqual(floor);
+      expect(l).not.toMatch(/SURVIVED|ANCHOR MISSING/);
+    });
+  }
+});
