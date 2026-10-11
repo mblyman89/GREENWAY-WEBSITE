@@ -2182,7 +2182,7 @@ __runLiquidVolumeTests();
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 22); // R40: ACH guide journeys, blockers, explainer
   assertRan("banner-design-core", __runBannerDesignCoreTests(), 89); // R41 S1: banner design model, contrast, moves
-  assertRan("design-move-core", __runDesignMoveCoreTests(), 38); // R41 S7: hub preview Move-mode owners + per-owner movers
+  assertRan("design-move-core", __runDesignMoveCoreTests(), 46); // R41 S7: hub preview Move-mode owners + per-owner movers
   assertRan("link-target-core", __runLinkTargetCoreTests(), 58); // R41 S1: button link picker targets
   assertRan("type-cards-core", __runTypeCardsTests(), 42); // R41 S3: home Type Cards
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording

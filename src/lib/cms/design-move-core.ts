@@ -30,6 +30,10 @@ import {
   serializeLoyaltyHeroPresentation,
 } from "@/lib/loyalty/loyalty-hero-core";
 import { normalizeShopHeroPresentation, type ShopHeroPresentation } from "./shop-carousel-core";
+import { PAGE_SECTION_CONFIG } from "./page-sections-types";
+
+/** Public paths of the sections that live on pages retired from the Pages builder. */
+const RETIRED_SECTION_PATHS: Record<string, string> = { specials: "/specials", menu: "/menu", loyalty: "/loyalty" };
 
 export type DesignOwner =
   | { kind: "section"; id: string }
@@ -54,15 +58,32 @@ export function parseDesignOwner(owner: unknown): DesignOwner | null {
 export function editorFor(owner: DesignOwner, pageSlug?: string | null): { href: string; label: string } {
   switch (owner.kind) {
     case "section":
-      return pageSlug
-        ? { href: `/admin/pages/${encodeURIComponent(pageSlug)}`, label: "the page editor" }
-        : { href: "/admin/website-sync", label: "the page editor" };
+      if (pageSlug === "specials") return { href: "/admin/specials", label: "the Specials editor" };
+      if (pageSlug === "home") return { href: "/admin/pages/home?tab=sections", label: "the Home page editor" };
+      if (pageSlug && PAGE_SECTION_CONFIG[pageSlug])
+        return { href: `/admin/pages/${encodeURIComponent(pageSlug)}`, label: `the ${PAGE_SECTION_CONFIG[pageSlug].label} page editor` };
+      return { href: "/admin/website-sync", label: "Website Sync" };
     case "shop-slide":
       return { href: "/admin/content/shop-banner", label: "the Shop banner editor" };
     case "specials":
       return { href: "/admin/specials", label: "the Specials editor" };
     case "loyalty":
       return { href: "/admin/loyalty-page", label: "the Loyalty page editor" };
+  }
+}
+
+/** The public page that shows this banner (for revalidation). */
+export function publicPathFor(owner: DesignOwner, pageSlug?: string | null): string {
+  switch (owner.kind) {
+    case "section":
+      if (pageSlug && PAGE_SECTION_CONFIG[pageSlug]) return PAGE_SECTION_CONFIG[pageSlug].previewPath;
+      return (pageSlug && RETIRED_SECTION_PATHS[pageSlug]) || "/";
+    case "shop-slide":
+      return "/menu";
+    case "specials":
+      return "/specials";
+    case "loyalty":
+      return "/loyalty";
   }
 }
 
@@ -136,6 +157,14 @@ export function __runDesignMoveCoreTests(): { passed: number; failed: number } {
   // editors
   ok(editorFor({ kind: "section", id: U }, "vendors").href === "/admin/pages/vendors", "section editor link");
   ok(editorFor({ kind: "section", id: U }, null).href === "/admin/website-sync", "section fallback link");
+  ok(editorFor({ kind: "section", id: U }, "home").href === "/admin/pages/home?tab=sections", "home sections tab");
+  ok(editorFor({ kind: "section", id: U }, "specials").href === "/admin/specials", "specials extras link");
+  ok(editorFor({ kind: "section", id: U }, "menu").href === "/admin/website-sync", "retired menu link");
+  ok(publicPathFor({ kind: "section", id: U }, "vendors") === "/vendor-delivery", "vendors path");
+  ok(publicPathFor({ kind: "section", id: U }, "menu") === "/menu", "menu extras path");
+  ok(publicPathFor({ kind: "section", id: U }, "specials") === "/specials", "specials extras path");
+  ok(publicPathFor({ kind: "shop-slide", id: U }) === "/menu", "shop path");
+  ok(publicPathFor({ kind: "loyalty" }) === "/loyalty", "loyalty path");
   ok(editorFor({ kind: "shop-slide", id: U }).href === "/admin/content/shop-banner", "shop editor link");
   ok(editorFor({ kind: "specials", which: "hero" }).href === "/admin/specials", "specials editor link");
   ok(editorFor({ kind: "loyalty" }).href === "/admin/loyalty-page", "loyalty editor link");
