@@ -893,6 +893,7 @@ import { __runKeyedHashTests } from "../../src/lib/security/keyed-hash";
 import { __runPdfTextCoreTests } from "../../src/lib/payments/pdf-text-core";
 import { __runAchEsignCoreTests } from "../../src/lib/payments/ach-esign-core";
 import { __runVendorEsignCoreTests } from "../../src/lib/payments/vendor-esign-core";
+import { __runVendorEsignAppCoreTests } from "../../src/lib/payments/vendor-esign-app-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
 import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
@@ -2157,7 +2158,9 @@ __runLiquidVolumeTests();
   assertRan("keyed-hash", __runKeyedHashTests(), 9); // R39 S5: HKDF-separated HMAC keys (RFC 5869 / RFC 4231 vectors)
   assertRan("pdf-text-core", __runPdfTextCoreTests(), 28); // R39 S6: deterministic PDF 1.4 writer (xref offsets, WinAnsi)
   assertRan("ach-esign-core", __runAchEsignCoreTests(), 77); // R39 S6: E-SIGN 7001(c) disclosure, OTP rules, record + certificate
-  assertRan("vendor-esign-core", __runVendorEsignCoreTests(), 79); // R39 S7: vendor e-sign by link (0262 states, form, record, emails)
+  assertRan("vendor-esign-core", __runVendorEsignCoreTests(), 79);
+  assertRan("vendor-esign-app-core", __runVendorEsignAppCoreTests(), 17); // R39 S7: prefill, bulk plan, cookie, link
+  assertRan("vendor-esign-app-core", __runVendorEsignAppCoreTests(), 17); // R39 S7: prefill, bulk plan, cookie, link // R39 S7: vendor e-sign by link (0262 states, form, record, emails)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
