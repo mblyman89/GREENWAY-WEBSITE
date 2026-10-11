@@ -43,11 +43,14 @@ import {
   type TextAlign,
   type TextVAlign,
   type ImageFocus,
+  type SpecialsHeroButton,
   normalizeSpecialsPresentation,
   serializeSpecialsPresentation,
   orderedVisibleWeekdays,
   dayPresentationFor,
 } from "@/lib/specials/specials-presentation-core";
+import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
+import { DesignCard, HeroButtonsCard } from "@/components/admin/specials/SpecialsR41Panels";
 
 export type SpecialsRevisionVM = {
   id: string;
@@ -114,6 +117,16 @@ type Props = {
   cardSpec?: ImageSpec;
   /** SLICE 122 (SET-3): image spec for the TOP hero banner (wide). */
   heroSpec?: ImageSpec;
+  /** R41 S4: buttons the live hero shows today (legacy specials.hero row). */
+  legacyHeroButtons?: SpecialsHeroButton[];
+  /** R41 S4: legacy hero image from the old row (used when no image is set here). */
+  legacyHeroImage?: string;
+  /** R41 S4: current hero wording (for the design studio's bound text boxes). */
+  heroText?: { eyebrow?: string; title?: string; subtitle?: string };
+  /** R41 S4: today's deal wording (for the Today's Deal design studio). */
+  todaysText?: { title: string; subtitle: string };
+  /** R41 S4: published blog posts / newsletters for the link picker. */
+  posts?: PickerPost[];
 };
 
 const BLOCK_KEY = "specials.deals.presentation";
@@ -138,6 +151,10 @@ function safeParse(json: string | null): unknown {
 export function SpecialsPresentationEditor(props: Props) {
   const { engineCopy, revisions, saveDraftAction, publishAction, restoreAction, mediaChoices, spec, cardSpec, heroSpec } =
     props;
+  const legacyHeroButtons = props.legacyHeroButtons ?? [];
+  const posts = props.posts ?? [];
+  const heroText = props.heroText ?? {};
+  const todaysText = props.todaysText ?? { title: "Today's Deals", subtitle: "" };
   const [pres, setPres] = useState<SpecialsPresentation>(() => initialPresentation(props));
   const [showHistory, setShowHistory] = useState(false);
   const [tab, setTab] = useState<TabKey>("hero");
@@ -238,6 +255,7 @@ export function SpecialsPresentationEditor(props: Props) {
 
       {tab === "hero" ? (
         /* ── Top hero tab (page-order tab 1) ─────────────────────────────── */
+        <>
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Controls column */}
           <div className="space-y-5">
@@ -363,6 +381,15 @@ export function SpecialsPresentationEditor(props: Props) {
               </div>
             </div>
 
+            {/* R41 S4: hero buttons (add / edit / remove / reorder / repoint). */}
+            <HeroButtonsCard
+              buttons={pres.heroButtons}
+              isSet={pres.heroButtonsSet}
+              legacyButtons={legacyHeroButtons}
+              posts={posts}
+              onChange={(heroButtons, heroButtonsSet) => setPres((p) => ({ ...p, heroButtons, heroButtonsSet }))}
+            />
+
             {/* Creative Studio nudge for on-brand hero art. */}
             <p className="text-xs text-[var(--admin-text-muted)]">
               Need on-brand artwork? Generate a wide hero in{" "}
@@ -392,6 +419,26 @@ export function SpecialsPresentationEditor(props: Props) {
             </div>
           </div>
         </div>
+        {/* R41 S4: full Banner Studio design for the TOP hero. */}
+        <DesignCard
+          title="Custom design for the top hero"
+          description="Drag the wording anywhere, change fonts, colors and sizes, add text boxes and buttons, and set a separate phone layout. When it's on, it replaces the placement settings above. Turn it off any time to go back to the classic hero."
+          design={pres.heroDesign}
+          onChange={(heroDesign) => setGlobal("heroDesign", heroDesign)}
+          legacy={heroText}
+          imageSrc={pres.heroBannerImage || props.legacyHeroImage || ""}
+          imageAlt=""
+          preset="hero"
+          seed={{
+            ...heroText,
+            textAlign: pres.heroBannerTextAlign,
+            verticalAlign: pres.heroBannerVerticalAlign,
+            imageFocus: pres.heroBannerImageFocus,
+            buttons: pres.heroButtonsSet ? pres.heroButtons : legacyHeroButtons,
+          }}
+          posts={posts}
+        />
+        </>
       ) : tab === "cards" ? (
         <>
           {/* Section toggle + badge style (cards-only controls). */}
@@ -604,6 +651,7 @@ export function SpecialsPresentationEditor(props: Props) {
         </>
       ) : (
         /* ── Today's Deal banner & products tab ─────────────────────────────── */
+        <>
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Controls column */}
           <div className="space-y-5">
@@ -789,6 +837,29 @@ export function SpecialsPresentationEditor(props: Props) {
             </div>
           </div>
         </div>
+        {/* R41 S4: full Banner Studio design for the Today's Deal banner. Text
+            boxes tied to the title/subtitle keep showing the day's deal, so it
+            still changes every day. */}
+        <DesignCard
+          title="Custom design for the Today's Deal banner"
+          description="Drag the wording anywhere, change fonts and colors, add text boxes and buttons, and set a phone layout. Boxes tied to the title and subtitle still show each day's deal automatically. The preview shows today's wording."
+          design={pres.todaysDealsDesign}
+          onChange={(todaysDealsDesign) => setGlobal("todaysDealsDesign", todaysDealsDesign)}
+          legacy={{ eyebrow: "Today's Deal", title: todaysText.title, subtitle: todaysText.subtitle }}
+          imageSrc={pres.todaysDealsBannerImage || "/home/hero-banner.webp"}
+          imageAlt={`${todaysText.title} daily deal products`}
+          preset="section"
+          seed={{
+            eyebrow: "Today's Deal",
+            title: todaysText.title,
+            subtitle: todaysText.subtitle,
+            textAlign: pres.todaysDealsBannerTextAlign,
+            verticalAlign: pres.todaysDealsBannerVerticalAlign,
+            imageFocus: pres.todaysDealsBannerImageFocus,
+          }}
+          posts={posts}
+        />
+        </>
       )}
 
       {/* ── Save / Publish ─────────────────────────────────────────────────── */}
