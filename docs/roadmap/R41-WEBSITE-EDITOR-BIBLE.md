@@ -2142,12 +2142,25 @@ page (hero), or Shop banner (a slide).
 9. A staff login without the "content.edit" permission does not see the Move
    mode button at all.
 
-### S8 (AI assist)
-1. In Banner Studio, click "✨ AI suggest". A dotted ghost layout appears
-   with a short reason.
-2. Apply → boxes and focus move in the editor; nothing is saved until you
-   press Save draft. Dismiss → nothing changes.
-3. If AI isn't configured you see "AI isn't set up yet".
+### S8 (AI assist) — AS BUILT
+1. Open any banner that has **Custom design (optional)** turned on (Pages, Specials,
+   Loyalty page, Shop banner). Make sure it has a picture.
+2. In Banner Studio click **✨ AI suggest (computer)**. After a few seconds a
+   **dotted gold box** (the best area for text) and a **gold ring** (the
+   picture's main subject) appear on the canvas, with one sentence explaining why.
+3. Click **Apply**. The picture focus, the text boxes (stacked in reading order
+   inside the dotted box), the buttons (just under the text), the shade and the
+   text colour (white or near-black) all change in the editor only. The note
+   says "Applied. Not saved yet…". Press **Undo** once to put everything back.
+4. Click **📱 Phone**, then **✨ AI suggest (phone)** → Apply. Only the phone
+   layout changes; switch back to Computer and it is as you left it. (Shade and
+   text colour are shared by both layouts, so the phone suggestion leaves them
+   alone.)
+5. Click **Dismiss** instead of Apply → nothing changes.
+6. Nothing is live until you press **Save draft** and then **Publish** in that
+   editor, as usual.
+7. If AI isn't configured you see "AI isn't set up yet…". With no picture the
+   button is greyed out.
 
 ---
 
@@ -2163,7 +2176,7 @@ page (hero), or Shop banner (a slide).
 | S5 consent | merged | #1325 | d419775f | success |
 | S6 all banners | merged | #1326 | b50b2586 | success |
 | S7 move mode | PR open (branch r41-s7-move-mode) | — | — | — |
-| S8 AI | not started | — | — | — |
+| S8 AI | PR open (branch r41-s8-ai-assist, stacked on S7) | — | — | — |
 | S9 report | not started | — | — | — |
 
 ---
@@ -2366,3 +2379,31 @@ page (hero), or Shop banner (a slide).
   Banner Studio, which already has width sliders and a canvas. This keeps the
   preview layer small and avoids accidental resizes. The Home Hero carousel
   has no Custom design (unchanged; see S9 report).
+- **S8 recon (verified).**
+  - `generateVision(opts)` takes `{system,user,imageUrl,temperature,maxTokens,
+    context}` and throws `AiNotConfiguredError` when `isAiConfigured` is false.
+    It records usage under `context.feature` ("banner.placement").
+  - `publicSiteOrigin(env)` always returns an https origin.
+- **S8 build.**
+  - `banner-ai-core.ts` (pure, 38 self-tests): the strict-JSON prompt; a
+    tolerant parser (code fences / chatter / numeric strings) that returns
+    null on anything invalid (never guesses); the zone is clamped inside the
+    banner with a minimum size of 20×15%; the reason is capped at 200 chars.
+    `absoluteImageUrl` allows only https or site-relative paths (it refuses
+    http, data:, javascript:, `//` and credentials).
+  - `applySuggestion` is per device: desktop writes x/y/w + focusX/Y + shade +
+    text colour; phone writes only mx/my/mw + focusX/YMobile. It keeps ids,
+    text, fonts and sizes, skips hidden boxes, and estimates heights with the
+    existing `estimateBoxHeightPct`.
+  - `suggestBannerPlacementAction` (`src/app/admin/banner-ai-actions.ts`):
+    `content.edit`, AI-off message, `COMPLIANCE_SYSTEM` + `PLACEMENT_SYSTEM`,
+    temperature 0.2, 300 tokens. **No database access at all** (vitest
+    asserts: no upsert/update/insert/delete/save/publish/revalidate/admin
+    client).
+  - The Banner Studio button, ghost overlay (`pointer-events-none`), Apply
+    (through `change()`, so it is one Undo step and stays unsaved) and
+    Dismiss.
+- **S8 note:** the AI provider must be able to fetch the picture. Media
+  Library and `/public` images are public URLs. A Supabase storage URL that
+  is private would fail; the action then shows "The AI couldn't open this
+  picture…" (it never guesses a layout).
