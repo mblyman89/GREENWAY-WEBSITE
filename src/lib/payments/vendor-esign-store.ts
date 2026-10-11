@@ -699,7 +699,7 @@ export async function countersignVendorInvite(input: {
   const b = vb.data as { status: string; released_by: string | null; released_at: string | null; release_mode: string | null; release_callback_note: string | null; bank_routing: string; bank_account_number: string; bank_account_type: string } | null;
   // Same check as 0262, asked first so the message is clear and no PDF is stored for nothing.
   const rd = countersignReadiness(s, b);
-  if (!rd.ready || !b || !b.released_at) return { ok: false, error: rd.ready ? vendorEsignDbErrorMessage("VENDOR_ESIGN_NOT_RELEASED") : rd.message };
+  if (!rd.ready || !b || !b.released_at || !s.signed_at) return { ok: false, error: rd.ready ? vendorEsignDbErrorMessage("VENDOR_ESIGN_NOT_RELEASED") : rd.message };
   const relBy = b.released_by ? await admin.from("staff_profiles").select("full_name, email").eq("id", b.released_by).maybeSingle() : { data: null };
   const rb = (relBy.data as { full_name: string | null; email: string } | null) ?? null;
   const recDoc = s.record_document_id ? await admin.from("ach_authorization_documents").select("sha256").eq("id", s.record_document_id).maybeSingle() : { data: null };
