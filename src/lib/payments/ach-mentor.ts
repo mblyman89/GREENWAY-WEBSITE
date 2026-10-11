@@ -253,6 +253,15 @@ export const ACH_FUNCTION_LESSONS: readonly AchLesson[] = [
     authorities: ["ach-fraud-phase-2-change-controls"],
   },
   {
+    key: "normalizeUsPhone",
+    title: "Phone numbers in any format",
+    plain:
+      "A phone number may be typed any everyday way: 360-555-0100, (360) 555-0100, 360.555.0100, 3605550100 or " +
+      "+1 360 555 0100. It is checked against the North American numbering rules and stored one way, so a callback " +
+      "number on a vendor form can be compared with the number already on file. Short, foreign or lettered numbers are refused.",
+    authorities: ["ach-fraud-phase-2-change-controls"],
+  },
+  {
     key: "soloReleaseRecipients",
     title: "Who hears about a solo release",
     plain: "The other of you two, plus the store line. A change one person entered and released alone never goes unnoticed.",

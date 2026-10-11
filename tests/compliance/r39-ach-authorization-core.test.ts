@@ -190,7 +190,17 @@ describe("owner-supplied facts", () => {
     expect(ACH_NOTIFY_PUBLIC.michael.phone).toBeNull();
     const src = readFileSync(join(__dirname, "..", "..", "src", "lib", "payments", "ach-authorization-core.ts"), "utf8");
     const phones = [...src.matchAll(/\b\d{3}-\d{3}-\d{4}\b/g)].map((m) => m[0]);
-    for (const p of phones) expect(["360-443-6988", "360-555-0100", "360-555-0101"], p).toContain(p);
+    // Allowed: the published store line, or the NANP range reserved for
+    // fiction (555-0100..555-0199), which the phone-format self-tests use,
+    // including deliberately invalid area codes (060-, 160-) that can never
+    // be anyone's number.
+    // An area code or exchange starting 0/1 is impossible under NANP rules.
+    const impossible = (p: string) => /^[01]/.test(p) || /^\d{3}-[01]/.test(p);
+    for (const p of phones) expect(p === "360-443-6988" || /-555-01\d\d$/.test(p) || impossible(p), p).toBe(true);
+    expect(impossible("360-555-0200") || impossible("253-867-5309"), "a real-looking number is NOT impossible").toBe(false);
+    expect(phones.length, "the scan found the fixtures (guard the guard)").toBeGreaterThan(3);
+    expect("360-555-0199").toMatch(/-555-01\d\d$/);
+    expect(/-555-01\d\d$/.test("360-555-0200"), "a real-looking number is NOT allowed").toBe(false);
   });
   it("store contact is the published store line and site address", () => {
     expect(ACH_NOTIFY_PUBLIC.store.phone).toBe("360-443-6988");
