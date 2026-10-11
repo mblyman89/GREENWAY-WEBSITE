@@ -266,6 +266,23 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     ],
   },
   {
+    id: "ach-helper",
+    area: "back-office",
+    title: "ACH helper (guide, calendar, legal library)",
+    tab: "Settings",
+    href: "/admin/settings/banking/guide",
+    facts: [
+      "Admin → Banking has three helper tabs beside the vault tabs: Guide & unblocker, Calendar & reminders, and Legal library. They are owner/admin only.",
+      "Guide & unblocker: four short checklists (setup, employees, vendors, payday) with progress bars and green ticks, a button for the next step, and a list of everything that would stop a payment today with the exact fix. There is a box that explains any payroll or vendor-payment error message in plain words.",
+      "If a direct deposit cannot be fixed before payday, pay that employee by paper check: Washington requires wages on payday. Leave that person's line blank in the payroll run and write a check.",
+      "Calendar & reminders: the monthly bank-statement check, the quarterly Nacha rule check, yearly reviews, the Timberland agreement and the written fraud procedure. 'Mark done' records who and when. Stephen, Michael and the store are emailed when something is due, weekly while overdue. It also lists Nacha rule changes with the exact words and whether the code is already updated.",
+      "Legal library: court cases and Washington laws quoted word for word from official sources, explained in plain English, with seven ways to protect the business. It is education, not legal advice.",
+      "Direct pages: Guide & unblocker is /admin/settings/banking/guide, Calendar & reminders is /admin/settings/banking/calendar, Legal library is /admin/settings/banking/library.",
+      "Payroll files always use the Nacha-required 'PAYROLL' description on wage credits (required since March 20, 2026); vendor files say VENDOR PAY.",
+      "LlamaParse's data protection agreement is a DocuSign form, not something signed in the back office. The link is on the Calendar tab, and it only matters if LlamaParse is turned on.",
+    ],
+  },
+  {
     id: "samples",
     area: "back-office",
     title: "Employee samples",

@@ -86,6 +86,10 @@ const ALL_LINKS: string[] = [
   ...ACH_FRAUD_PROCEDURE.map((p) => p.enforcedBy).filter((x): x is string => Boolean(x)),
   ...ACH_LEGAL_LIBRARY.map((l) => l.appLink),
   ...BANKING_HELP_TABS.map((t) => t.href),
+  // The help FAQ and the concierge send people to these pages too.
+  ...["src/lib/admin/help-content.ts", "src/lib/admin/concierge-kb.ts"].flatMap((f) =>
+    [...readFileSync(join(__dirname, "..", "..", f), "utf8").matchAll(/"(\/admin\/settings\/banking[^"]*)"/g)].map((m) => m[1]),
+  ),
 ];
 
 describe("R40 deep links resolve to real pages and real anchors", () => {
@@ -296,6 +300,22 @@ describe("R40 wiring", () => {
     expect(s).toMatch(/export const PAYROLL_ENTRY_DESCRIPTION = "PAYROLL";/);
     expect(s).toMatch(/companyEntryDescription: PAYROLL_ENTRY_DESCRIPTION/);
     expect(s).not.toMatch(/companyEntryDescription: settings\./);
+  });
+
+  it("the help FAQ and the concierge both teach the three helper tabs and the pay-by-check fallback", () => {
+    for (const f of ["src/lib/admin/help-content.ts", "src/lib/admin/concierge-kb.ts"]) {
+      const s = read(f);
+      for (const t of BANKING_HELP_TABS) expect(s, `${f} -> ${t.href}`).toContain(t.href);
+      expect(s, f).toMatch(/paper check/);
+    }
+    expect(read("src/lib/admin/concierge-kb.ts")).toContain("PAYROLL");
+  });
+
+  it("onboarding offers direct deposit but never makes it a gate (A5)", () => {
+    const s = read("src/lib/staffing/employee-lifecycle-core.ts");
+    const block = s.slice(s.indexOf('key: "direct_deposit"'), s.indexOf('key: "direct_deposit"') + 900);
+    expect(block).toMatch(/phase: "ready"/);
+    expect(block).not.toMatch(/critical: true/);
   });
 
   it("the fraud procedure's enforcement links are all real (C6)", () => {
