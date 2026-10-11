@@ -171,6 +171,17 @@ export const ONBOARDING_TASKS: OnboardingTaskDef[] = [
     help: "Pay rate entered (and direct deposit details if they use it) so the first check is on time. Remember: WA paid sick leave accrues from day 1 (1 hour per 40 worked).",
     phase: "ready",
   },
+  {
+    // R40 (roadmap gap A5). NOT critical on purpose: direct deposit is the
+    // employee's choice (12 CFR 1005.10(e)(2): an employer may not require a
+    // particular bank), so it must never block activation. Paper check is
+    // always a valid way to be paid. The vault enforces the rest (signature,
+    // account check) at pay time.
+    key: "direct_deposit",
+    label: "Direct deposit offered (or paper check chosen)",
+    help: "Offer direct deposit. If they want it, open the 'Direct deposit (ACH)' box on this page: they sign the form in person (or you upload their signed paper form), then the account is checked before the first deposit. If they prefer a paper check, tick this anyway. It is their choice and cannot be required. Washington requires wages on payday, so the first check is on time either way.",
+    phase: "ready",
+  },
 ];
 
 export const ONBOARDING_TASK_KEYS = ONBOARDING_TASKS.map((t) => t.key);
@@ -525,6 +536,18 @@ export function __runEmployeeLifecycleTests(): number {
     activationBlockers(almost).some((l) => l.toLowerCase().includes("badge")),
     "badge is a critical blocker",
   );
+
+  // R40 A5: direct deposit is offered at onboarding but is never a gate.
+  const dd = ONBOARDING_TASKS.find((x) => x.key === "direct_deposit");
+  t(dd !== undefined, "direct_deposit task exists");
+  t(dd?.critical !== true, "direct deposit never blocks activation (employee's choice)");
+  t(dd?.phase === "ready", "direct deposit is in the ready phase");
+  t(
+    ONBOARDING_TASK_KEYS.indexOf("payroll_setup") < ONBOARDING_TASK_KEYS.indexOf("direct_deposit"),
+    "direct deposit comes after payroll setup",
+  );
+  const noDd = { ...allDone, direct_deposit: false };
+  t(activationBlockers(noDd).length === 0, "an employee who skips direct deposit can still be activated");
 
   // Progress math.
   t(onboardingProgress({}) === 0, "progress 0");
