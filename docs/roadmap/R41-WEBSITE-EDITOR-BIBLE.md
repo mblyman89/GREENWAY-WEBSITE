@@ -863,3 +863,272 @@ feature self-testing, so it is allowed and required before each PR. If it is
 too slow for the sandbox, run only the files listed above with
 `npx vitest run <files>`.
 
+---
+
+## PART 5 — ARCHITECTURE: ONE DESIGN MODEL FOR EVERY BANNER
+
+### 5.1 Principles
+
+P-1 ONE pure core (`src/lib/cms/banner-design-core.ts`) defines the design
+document, its defaults, normalization, validation/warnings, contrast math and
+the conversion from today's legacy fields. Every banner editor and every
+banner renderer uses it. No editor invents its own styling vocabulary again
+(today there are three: SectionBanner fixed classes, the loyalty/shop
+`HeroTextBlock`, and the specials hero classes — F-04, F-24, F-15).
+
+P-2 BYTE-IDENTICAL BY DEFAULT. A banner with no design (or `design.enabled ===
+false`) renders through the exact legacy code path. The owner opts a banner
+into "Custom design" in its editor. This protects every pinned test (F-35) and
+the live site.
+
+P-3 NO MIGRATION for design data. Storage per banner family:
+| Banner family | Where the design lives | Draft/publish |
+| --- | --- | --- |
+| page_sections (home.category, home.brand, home extras, vendors.*, extras on specials/menu) | `settings.design` / `draft_settings.design` (jsonb, F-07) | existing section Save draft → Publish |
+| Specials TOP hero | `specials.deals.presentation` JSON → `heroDesign`, `heroButtons` (F-16) | existing Specials Save draft → Publish (+ revisions) |
+| Specials Today's Deal banner | same JSON → `todaysDealsDesign` | same |
+| Loyalty hero / Shop carousel | already rich (F-24); S6 adds optional `design` to their JSON | their existing flows |
+| Home Type Cards (not a banner) | `home.category` settings `typeCards` | publishes immediately like `laneImages` today (F-07 `saveHomeSectionSettings`) |
+Only the loyalty consent VERSION recording needs a migration (0264, S5), and
+the code works before it is applied.
+
+P-4 Positions are PERCENT of the banner frame; sizes are PX at two reference
+widths (desktop 1408 px = the `max-w-[88rem]` container, mobile 390 px = the
+PreviewFrame phone width F-25) and interpolate smoothly between them with CSS
+container units, so a design looks the same at every width without JS.
+
+P-5 Every drag has a keyboard / numeric alternative (WCAG 2.5.7, PART 3.7).
+
+P-6 Warnings, not walls. The only hard blocks: unsafe link schemes
+(`javascript:` etc.), an empty consent text, and out-of-range numbers (which
+are clamped silently by normalization, never rejected).
+
+P-7 AI output = draft suggestions shown beside the editor with Apply / Ignore
+(rule 3). Nothing auto-saves from AI.
+
+### 5.2 The design document (version 1)
+
+TypeScript (authoritative definition lives in the core; this is the contract):
+
+```ts
+export type DesignRole = "eyebrow" | "headline" | "subhead" | "body" | "badge" | "legal";
+export type DesignAlign = "left" | "center" | "right" | "justify";
+export type DesignTransform = "none" | "uppercase" | "lowercase" | "capitalize";
+export type DesignShadow = "none" | "soft" | "strong" | "glow";
+export type DesignBackdrop = "none" | "box" | "blur" | "pill";
+export type DesignWrap = "normal" | "balance" | "nowrap";
+export type DesignBind = "eyebrow" | "title" | "subtitle" | null;
+
+export type DesignTextBox = {
+  id: string;            // stable, [a-z0-9-], ≤ 24 chars
+  role: DesignRole;
+  bind: DesignBind;      // when set, the text comes from the banner's own
+                         // eyebrow/title/subtitle field (keeps legacy fields,
+                         // SEO and content blocks in sync); else `text`
+  text: string;          // ≤ 600 chars; "\n" = hard line break (Q8)
+  x: number; y: number;  // 0–100 % of frame (top-left of the box)
+  w: number;             // 5–100 % of frame width (wrap width, Q7)
+  mx: number | null; my: number | null; mw: number | null; // mobile overrides
+  align: DesignAlign;
+  font: string;          // a FONT_OPTIONS id (F-34)
+  size: number;          // px at desktop reference (8–160)
+  sizeMobile: number;    // px at mobile reference (6–96)
+  weight: number;        // 100–900, step 100
+  italic: boolean; underline: boolean; strike: boolean; // Q14
+  transform: DesignTransform;
+  color: string;         // #rrggbb (Q18)
+  opacity: number;       // 10–100 %
+  letterSpacing: number; // em, -0.1 … 0.5
+  lineHeight: number;    // 0.7 … 3
+  shadow: DesignShadow;
+  outline: boolean;      // 1px text stroke in backdropColor
+  backdrop: DesignBackdrop;
+  backdropColor: string; // #rrggbb
+  backdropOpacity: number; // 0–100 %
+  wrap: DesignWrap;
+  hidden: boolean;
+  hideOnMobile: boolean;
+};
+
+export type DesignButtonSize = "sm" | "md" | "lg";
+export type DesignButtonShape = "pill" | "rounded" | "square";
+export type DesignButtonStyle = "solid" | "outline" | "ghost";
+
+export type DesignButton = {
+  id: string;
+  label: string;         // ≤ 40 chars
+  href: string;          // validated by link-target-core (S1)
+  x: number; y: number;  // 0–100 %
+  mx: number | null; my: number | null;
+  size: DesignButtonSize; shape: DesignButtonShape; style: DesignButtonStyle;
+  bg: string; fg: string; border: string; // #rrggbb
+  font: string; uppercase: boolean;
+  newTab: boolean; enabled: boolean; hideOnMobile: boolean;
+};
+
+export type DesignOverlayKind = "none" | "full" | "gradient" | "floor" | "radial";
+export type DesignOverlay = {
+  kind: DesignOverlayKind;
+  color: string;         // #rrggbb (usually black)
+  opacity: number;       // 0–100 % at the darkest point
+  direction: "left" | "right" | "top" | "bottom"; // gradient: where it is darkest
+};
+
+export type DesignImage = {
+  focusX: number; focusY: number;          // 0–100 (object-position %)
+  focusXMobile: number | null; focusYMobile: number | null;
+  zoom: number;          // 100–250 %
+  brightness: number;    // 50–150 %
+  saturation: number;    // 0–200 %
+  blur: number;          // 0–12 px
+  flip: boolean;         // horizontal mirror
+};
+
+export type DesignFrame = {
+  height: number;        // px at desktop reference (80–720)
+  heightMobile: number;  // px at mobile reference (80–720)
+  radius: number;        // 0–48 px corner radius
+};
+
+export type BannerDesign = {
+  v: 1;
+  enabled: boolean;
+  frame: DesignFrame;
+  image: DesignImage;
+  overlay: DesignOverlay;
+  boxes: DesignTextBox[];     // ≤ 8
+  buttons: DesignButton[];    // ≤ 4
+};
+```
+
+### 5.3 Rendering math (pure, server-safe)
+
+R-1 Frame: a `div` with `container-type: inline-size; container-name: gwb`,
+`position: relative`, height = `clamp(min, interp, max)` between
+`heightMobile` @390 and `height` @1408 (container units `cqw` are relative to
+the frame's own width, so it works inside any page column).
+
+R-2 Interpolation helper (pure):
+```
+interp(m, d) = `clamp(${min(m,d)}px, calc(${m}px + ${(d-m)/1018} * (100cqw - 390px)), ${max(m,d)}px)`
+```
+(1018 = 1408 − 390.) Used for frame height and font size. Rounded to 4
+decimals for stable output.
+
+R-3 Text box: `position: absolute; left: var(--gx); top: var(--gy); width:
+var(--gw)` with mobile overrides via one global CSS rule
+`@container gwb (max-width: 767px) { .gw-dbox { left: var(--gmx, var(--gx)); top: var(--gmy, var(--gy)); width: var(--gmw, var(--gw)); } }`
+and `.gw-hide-sm` hiding below 768. Inline styles can't contain container
+queries, so these few rules go into `src/app/globals.css` (one small block,
+added in S2).
+
+R-4 Text: `white-space: pre-line` (honors "\n", Q8), `overflow-wrap:
+anywhere` for `normal`, `text-wrap: balance` for `balance`, `white-space: pre`
+for `nowrap`. `text-decoration-line` combines underline + line-through (Q14).
+
+R-5 Image: `object-fit: cover; object-position: X% Y%`; zoom via `transform:
+scale(z) ` with `transform-origin: X% Y%` (zooms toward the focal point);
+`filter: brightness() saturate() blur()`; flip via `scaleX(-1)`. Mobile focal
+override via CSS vars + the same container rule.
+
+R-6 Overlay: `full` = solid rgba; `gradient` = linear-gradient from the
+direction side (opacity → 35% of opacity at 50% → 0 at 100%); `floor` =
+gradient from bottom; `radial` = radial-gradient centered at the headline
+box. `none` = nothing.
+
+R-7 Buttons: absolutely positioned like boxes; size map sm/md/lg → height
+32/40/48 px desktop (28/34/40 mobile) and font 11/13/15 px; shapes → radius
+999/10/0; styles: solid bg+fg, outline transparent bg + border, ghost no bg +
+underline on hover.
+
+R-8 Semantics: the first `headline` box renders `h1` when the banner is the
+page's top hero (caller passes `headingLevel`), else `h2`; others `p`; badge
+`span`. Buttons are `next/link` for internal hrefs, `a` with `rel="noopener
+noreferrer"` for external/newTab.
+
+R-9 Preview hooks: in Draft Mode (`editable`), frame gets
+`data-gw-design-frame` + `data-gw-design-owner="<owner>"`; each box
+`data-gw-design-box="<id>"`; each button `data-gw-design-button="<id>"`.
+These are inert attributes outside the hub (no JS on public pages).
+
+### 5.4 Contrast warning algorithm (pure)
+
+C-1 Parse hex → sRGB → relative luminance (PART 3.1).
+C-2 Effective background for a box:
+- backdrop `box`/`pill`/`blur` with opacity ≥ 1: composite backdropColor at
+  backdropOpacity over the overlay-composited worst case (below).
+- else the overlay composited over the WORST-CASE image pixel: for a light
+  text color (L > 0.5) the worst case is white (#ffffff); for dark text, black.
+  Overlay alpha at the box location: `full` = opacity; `gradient`/`floor` =
+  opacity × (1 − distance along the gradient axis from the dark side, using
+  the box CENTER in %); `radial` = opacity × 0.8 (approximation, labeled as
+  such); `none` = 0.
+C-3 Ratio vs threshold: large text (size ≥ 24 px, or ≥ 18.67 px with weight ≥
+700) → 3:1, else 4.5:1 — evaluated at BOTH desktop size and mobile size
+(mobile usually smaller → stricter).
+C-4 Output: `{ boxId, ratio, needed, device, ok }`; the editor shows "Hard to
+read: 2.1 : 1 (needs 4.5 : 1 on phones). Try: darker overlay, a text box
+backdrop, or a different color." This is a worst-case estimate and is labeled
+"estimate" in UI because the real photo is unknown to pure code (S8 can sample
+the real image with AI, optional).
+
+### 5.5 Legacy → design conversion (pure)
+
+`designFromLegacy({ eyebrow, title, subtitle, textAlign, verticalAlign,
+imageFocus, buttons, preset })` builds a design that looks like today's banner:
+- frame 200/160 px (`preset: "section"`), 260/200 (`preset: "hero"`).
+- image focus from `imageFocus` (center 50/50, top 50/0, bottom 50/100, left
+  0/50, right 100/50); when no imageFocus, the legacy opposite-side rule
+  (textAlign left → right 100/50; right → left 0/50; center → 50/50).
+- overlay `gradient` 94% black from the text side (left/right) or `full` 65%
+  for center — matching F-04 `:L95-L100` within rounding.
+- boxes bound to eyebrow/title/subtitle (`bind`), x = 4% (left) / 50% − w/2
+  (center) / 96% − w (right); y stacked from `verticalAlign`; sizes from the
+  legacy classes: eyebrow 12/10 px weight 900 uppercase tracking 0.22em color
+  #7ed957 (`--greenway`); headline 48/24 px weight 900 uppercase line-height 1
+  white; subhead 14/11.5 px weight 600 color #d4d4d8 (zinc-300).
+- buttons from legacy buttons: solid → bg #7ed957 fg #000; outline → bg
+  transparent border #ffffff4d fg #fff; ghost → fg #7ed957; positions in a row
+  under the subhead.
+
+### 5.6 Link target model (pure, `src/lib/cms/link-target-core.ts`)
+
+L-1 Kinds: `page` (public route list F-32), `menu` (filters F-29), `category`
+(`/menu/<category>` F-30), `blog` (`/blog/<slug>` F-31), `special`
+(`/menu?special=<key>`), `external` (`https://…`), `contact` (`tel:` /
+`mailto:`), `anchor` (`#id` on the same page).
+L-2 `buildMenuHref(filters)` → canonical `/menu?…` with a FIXED param order
+(categories, strains, brands, vendors, weights, special, sort, maxPrice,
+maxThc, maxCbd, search), comma-joined lists, dropping empties, URL-encoding
+values (`encodeURIComponent`, but keep commas literal as separators exactly
+like the menu's own `parsePersistedList` expects).
+L-3 `describeHref(href, ctx)` → plain English ("Shop menu · Flower +
+Prerolls · Indica · Price low→high", "Blog post: <title>", "Outside website:
+example.com"). Used under each button in the editor so the owner can see
+where it goes without reading a URL.
+L-4 `checkHref(href)` → `{ ok, level: "ok"|"warn"|"block", message }`: block
+`javascript:`, `data:`, `vbscript:`, protocol-relative `//`, whitespace/control
+chars; warn `http://` (not https), unknown internal path (not in the public
+route list and not `/menu…`/`/blog/…`), unknown menu param or value.
+L-5 `parseMenuHref(href)` → filters object (round-trip with L-2) so the picker
+re-opens with the owner's previous choices.
+
+### 5.7 Hub "Move mode" protocol (S7)
+
+M-1 Parent → iframe: `{ type: "gw-move-mode", on: boolean }` (origin-checked).
+M-2 iframe → parent on drop: `{ type: "gw-design-move", owner, target: "box"
+| "button", id, x, y, device: "desktop" | "mobile" }` where device = iframe
+viewport < 768 px ? "mobile" : "desktop"; x/y are % of the frame rounded to
+0.5.
+M-3 Parent validates with the pure `parseMoveMessage()` (S1), then calls the
+server action `saveDesignMoveAction(owner, …)` which loads the owner's DRAFT
+design, applies `applyMove()` (pure), saves the draft, and returns
+`{ ok, message }`. Parent shows a toast "Moved — saved as a draft. Publish it
+in <editor link>." and reloads the iframe.
+M-4 Owners: `section:<uuid>` (page_sections), `specials:hero`,
+`specials:todays`. Unknown owner → refused with a message.
+M-5 Banners without a custom design are NOT draggable; in Move mode they show
+a small badge "Turn on Custom design in the editor to move text here" with
+the editor link (owner request Q16 is satisfied for every designed banner, and
+the path to enable it is one click away).
+
