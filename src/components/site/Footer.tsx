@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { greenwayBusiness } from "@/content/business";
 import { SiteText } from "@/components/site/SiteText";
+import { ComplianceWarningText } from "@/components/site/ComplianceWarningText";
 import { FooterLinkUnavailable } from "@/components/site/FooterLinkUnavailable";
 import { getContentForRender, getContentValues } from "@/lib/cms/render-content";
 
@@ -226,11 +227,7 @@ async function MobileFooter({ links }: { links: FooterLinks }) {
 
       <div className="mt-7 rounded-[1.25rem] border border-[var(--gold)]/30 bg-[#090909] p-4">
         <p className="text-[0.62rem] font-black uppercase tracking-[0.2em] text-[var(--gold)]">Washington Cannabis Warning</p>
-        <SiteText
-          blockKey="footer.compliance.warning"
-          as="p"
-          className="mt-3 text-[0.72rem] font-semibold leading-5 text-zinc-300"
-        />
+        <ComplianceWarningText className="mt-3 text-[0.72rem] font-semibold leading-5 text-zinc-300" />
       </div>
 
       <div className="mt-7">
@@ -264,11 +261,7 @@ async function DesktopFooter({ links }: { links: FooterLinks }) {
 
         <div className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#090909] p-6 shadow-2xl shadow-black/35">
           <p className="text-center text-xs font-black uppercase tracking-[0.22em] text-[var(--gold)]">Washington Cannabis Warning</p>
-          <SiteText
-            blockKey="footer.compliance.warning"
-            as="p"
-            className="mt-4 text-center text-[0.95rem] font-semibold leading-7 text-zinc-200"
-          />
+          <ComplianceWarningText className="mt-4 text-center text-[0.95rem] font-semibold leading-7 text-zinc-200" />
           <PolicyLinks />
         </div>
 

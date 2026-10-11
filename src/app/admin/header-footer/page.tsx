@@ -16,6 +16,11 @@ import {
 import { listMedia } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/cms/ai-content";
 import {
+  CANONICAL_WARNING_TEXT,
+  validateWarningBlock,
+  WARNING_BLOCK_KEY,
+} from "@/lib/compliance/warning-text-core";
+import {
   seedContentBlocksAction,
   saveContentDraftAction,
   publishContentBlockAction,
@@ -119,6 +124,15 @@ export default async function HeaderFooterPage({
   const notSeeded = allBlocks.length === 0;
   const aiEnabled = isAiConfigured;
 
+  // R42 (owner Q1): the footer is where this age-gated site meets
+  // WAC 314-55-155(7). If the saved copy predates the July 2026 wording, the
+  // public footer already shows the correct text (ComplianceWarningText); tell
+  // the owner and give him the exact text to paste so the saved copy matches.
+  const warningBlock = blocks.find((b) => b.block_key === WARNING_BLOCK_KEY);
+  const warningCheck = warningBlock
+    ? validateWarningBlock(warningBlock.published_value ?? "")
+    : null;
+
   // Published media images for the image-block picker (none needed today, but
   // kept for parity so future header/footer image blocks work out of the box).
   const mediaAssets = await listMedia({ status: "published", limit: 200 });
@@ -209,6 +223,25 @@ export default async function HeaderFooterPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {warningCheck && !warningCheck.ok ? (
+          <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/40 bg-[var(--admin-surface)] px-4 py-3 text-sm">
+            <p className="font-semibold text-[var(--admin-gold)]">
+              Your saved footer warning uses older wording.
+            </p>
+            <p className="mt-1 text-[var(--admin-text-muted)]">
+              Washington&apos;s updated rule (WAC 314-55-155(7), effective July 4, 2026) words the
+              four required warnings differently. Your public footer already shows the correct
+              wording automatically. To make the saved copy match, paste the text below into
+              &ldquo;Footer &mdash; compliance warning&rdquo;, then Save and Publish.
+            </p>
+            <p className="mt-2 text-[var(--admin-text-muted)]">
+              Missing or reworded: {warningCheck.missing.join(" | ")}
+            </p>
+            <pre className="mt-2 whitespace-pre-wrap rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-black/30 p-2 text-xs">
+              {CANONICAL_WARNING_TEXT}
+            </pre>
+          </div>
+        ) : null}
         {warning_error ? (
           <div className="rounded-[var(--admin-radius-sm)] border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800">
             <strong>Blocked:</strong> {warning_error}
