@@ -58,7 +58,7 @@ M = [
     ("log-no-emp-hold", "      elsif a.state in ('signed', 'verifying', 'active') then", "      elsif false then"),
     ("log-no-hold-author", "               hold_entered_by = p_actor, hold_entered_at = now(), updated_by = p_actor", "               hold_entered_by = null, hold_entered_at = now(), updated_by = p_actor"),
     ("log-no-vault-hold", "      elsif vb.status = 'active' then", "      elsif false then"),
-    ("log-vault-same-reason", "                                  then left(trim(p_hold_reason), 500)\n                                  else left(trim(p_hold_reason), 470)", "                                  then left(trim(p_hold_reason), 500)\n                                  else left(trim(p_hold_reason), 500)"),
+    ("log-vault-same-reason", "                                  else left(trim(p_hold_reason), 470) || to_char(now() at time zone 'America/Los_Angeles', ' (YYYY-MM-DD HH24:MI:SS)') end,", "                                  else left(trim(p_hold_reason), 500) end,"),
     ("log-ver-any-payee", "    if p_payee_type <> 'employee' or a.id is null or acct.authorization_id is distinct from a.id then", "    if a.id is null then"),
     ("log-ver-any-status", "    if v.status <> 'sent' then\n      raise exception 'ACH_NOTICE_VERIFICATION", "    if false then\n      raise exception 'ACH_NOTICE_VERIFICATION"),
     ("log-ver-not-failed", "       set status = 'failed', result_code = p_code,", "       set status = 'cancelled', result_code = p_code,"),

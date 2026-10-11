@@ -133,6 +133,7 @@ begin
   perform pg_temp.must_fail(format($q$delete from public.ach_verifications where id = %L$q$, v1), 'ACH_VERIFICATION_KEEP');
   perform pg_temp.must_fail(format($q$update public.ach_verifications set method = 'micro_entry', micro_amount_cents = 5 where id = %L$q$, v1), 'ACH_VERIFICATION_IMMUTABLE');
   perform pg_temp.must_fail(format($q$update public.ach_verifications set micro_amount_cents = 38 where id = %L$q$, v2), 'ACH_VERIFICATION_IMMUTABLE');
+  perform pg_temp.must_fail(format($q$update public.ach_verifications set method = 'voided_check_callback' where id = %L$q$, v1), 'ACH_VERIFICATION_IMMUTABLE');
   perform pg_temp.must_fail(format($q$update public.ach_verifications set eligible_on = %L where id = %L$q$, td, v1), 'ACH_VERIFICATION_IMMUTABLE');
   perform pg_temp.must_fail(format($q$update public.ach_verifications set status = 'passed' where id = %L$q$, v2), 'ACH_VERIFICATION_TRANSITION');
   perform pg_temp.must_fail(format($q$update public.ach_verifications set status = 'sent' where id = %L$q$, v2), 'ach_ver_sent_shape');
@@ -242,7 +243,7 @@ begin
   perform public.ach_notice_resolve(n1, u_s, 'Employee confirmed account; bank error');
   select * into r from public.ach_return_notices where id = n1;
   assert r.resolved_by = u_s and r.resolution_note = 'Employee confirmed account; bank error', 'resolved';
-  perform pg_temp.must_fail(format($q$select public.ach_notice_resolve(%L, %L, 'Second resolution text')$q$, n1, u_m), 'ACH_NOTICE_FINAL');
+  perform pg_temp.must_fail(format($q$select public.ach_notice_resolve(%L, %L, 'Second resolution text')$q$, n1, u_m), 'is already resolved');
   perform pg_temp.must_fail(format($q$update public.ach_return_notices set resolution_note = 'Rewritten afterwards' where id = %L$q$, n1), 'ACH_NOTICE_FINAL');
   select count(*) into n from public.ach_authorization_events where event_kind = 'notice_resolved' and (detail ->> 'notice_id')::uuid = n1;
   assert n = 1, 'notice_resolved event';
@@ -306,6 +307,21 @@ begin
   perform pg_temp.must_fail(format($q$select public.ach_verification_finish(%L, %L, 'passed', null, null)$q$, w2, u_m), 'ACH_VERIFICATION_FINAL');
   -- held authorization: no new check until released
   perform pg_temp.must_fail(format($q$select public.ach_verification_start(%L, %L, 'prenote', null)$q$, b1, u_m), 'ACH_VERIFICATION_STATE');
+  -- released (dual: u_m held it) with a failed account -> verifying; a new prenote is sent
+  t := public.ach_auth_release_hold(auth2, u_s, 'phone', 'Employee gave the same account again', null);
+  assert t = 'dual', 'auth2 dual release';
+  select state into t from public.ach_authorizations where id = auth2;
+  assert t = 'verifying', format('failed account -> verifying, got %s', t);
+  w2 := public.ach_verification_start(b1, u_m, 'prenote', null);
+  perform public.ach_verification_mark_sent(array[w2], u_m, td - 6, td - 5, td - 1, 'prenote-4.ach');
+  -- a payroll return (not this prenote) holds the authorization: the prenote cannot pass while held
+  perform public.ach_notice_log(u_s, 'employee', emp2, 'R01', td, td - 2, 2000, trace, null, null, null, 'Payroll return R01 while checking', null);
+  perform pg_temp.must_fail(format($q$select public.ach_verification_finish(%L, %L, 'passed', null, null)$q$, w2, u_m), 'release the hold before passing');
+  select state into t from public.ach_authorizations where id = auth2;
+  assert t = 'on_hold', 'still held after the refused pass';
+  -- failing it while held is allowed (evidence is kept), account -> failed
+  t := public.ach_verification_finish(w2, u_m, 'failed', null, 'Held; employee will bring a new check');
+  assert t = 'on_hold', format('fail while held keeps the hold, got %s', t);
 
   -- ===== vendor notices hold the vault =======================================
   res := public.ach_notice_log(u_m, 'vendor', ven, 'R02', td, td - 3, 50000, trace, null, null, null, 'Vendor return R02 account closed', null);
