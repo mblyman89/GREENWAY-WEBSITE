@@ -180,6 +180,34 @@ export function inviteLink(siteBase: string, token: string): string | null {
   return null;
 }
 
+/**
+ * Can Greenway countersign this signed invite yet? Mirrors 0262
+ * vendor_esign_countersign exactly (the database is the gate; this only
+ * explains the next step in plain words before anyone presses a button):
+ * the vault row must be active, released AFTER the vendor signed (so the
+ * callback and dual control happened on these numbers), and still hold the
+ * very ciphertext the vendor signed.
+ */
+export type CountersignVault = { status: string; released_at: string | null; bank_routing: string | null; bank_account_number: string | null; bank_account_type: string | null } | null;
+export type CountersignInvite = { state: VendorEsignState; signed_at: string | null; bank_routing_enc: string | null; bank_account_enc: string | null; bank_account_type: string | null };
+export type CountersignReadiness =
+  | { ready: true }
+  | { ready: false; step: "not_signed" | "no_vault" | "vault_changed" | "release_needed"; message: string };
+
+export function countersignReadiness(inv: CountersignInvite, vault: CountersignVault): CountersignReadiness {
+  if (inv.state !== "signed" || !inv.signed_at) return { ready: false, step: "not_signed", message: "Only a signed form waiting for Greenway can be countersigned." };
+  if (!vault) return { ready: false, step: "no_vault", message: "The bank details are not in the vault. Reload; if it persists, reject and send a new link." };
+  if (vault.bank_routing !== inv.bank_routing_enc || vault.bank_account_number !== inv.bank_account_enc || vault.bank_account_type !== inv.bank_account_type) {
+    return { ready: false, step: "vault_changed", message: "The vault no longer holds the numbers this vendor signed (someone edited it). Reject this form and send a new link." };
+  }
+  const signedMs = Date.parse(inv.signed_at);
+  const relMs = vault.released_at ? Date.parse(vault.released_at) : NaN;
+  if (vault.status !== "active" || !Number.isFinite(relMs) || !(relMs > signedMs)) {
+    return { ready: false, step: "release_needed", message: "Next: phone the second contact at a number already on file, then release the hold in Admin > Banking (dual control). Then countersign here." };
+  }
+  return { ready: true };
+}
+
 export function __runVendorEsignAppCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -224,5 +252,18 @@ export function __runVendorEsignAppCoreTests(): { passed: number; failed: number
   ok(inviteLink("https://www.greenwaymarijuana.com/", t) === `https://www.greenwaymarijuana.com/vendor-ach/${t}`, "link https");
   ok(inviteLink("http://localhost:3000", t) !== null && inviteLink("http://evil.com", t) === null && inviteLink("", t) === null, "link http only localhost");
   ok(inviteLink("https://x.com", "short") === null && inviteLink("https://x.com/path", t) === null, "link token/base shape");
+  // countersignReadiness (mirrors 0262)
+  const si: CountersignInvite = { state: "signed", signed_at: "2026-07-01T17:00:00.000Z", bank_routing_enc: "encv1:r", bank_account_enc: "encv1:a", bank_account_type: "checking" };
+  const vOk: CountersignVault = { status: "active", released_at: "2026-07-02T17:00:00.000Z", bank_routing: "encv1:r", bank_account_number: "encv1:a", bank_account_type: "checking" };
+  ok(countersignReadiness(si, vOk).ready, "cs: released after signing, same ciphertext -> ready");
+  const st = (x: CountersignReadiness) => (x.ready ? "ready" : x.step);
+  ok(st(countersignReadiness({ ...si, state: "consented" }, vOk)) === "not_signed" && st(countersignReadiness({ ...si, signed_at: null }, vOk)) === "not_signed", "cs: not signed");
+  ok(st(countersignReadiness(si, null)) === "no_vault", "cs: no vault");
+  ok(st(countersignReadiness(si, { ...vOk, bank_account_number: "encv1:other" })) === "vault_changed" && st(countersignReadiness(si, { ...vOk, bank_account_type: "savings" })) === "vault_changed" && st(countersignReadiness(si, { ...vOk, bank_routing: "encv1:x" })) === "vault_changed", "cs: vault edited");
+  ok(st(countersignReadiness(si, { ...vOk, status: "on_hold" })) === "release_needed", "cs: on hold");
+  ok(st(countersignReadiness(si, { ...vOk, released_at: null })) === "release_needed", "cs: never released");
+  ok(st(countersignReadiness(si, { ...vOk, released_at: si.signed_at })) === "release_needed", "cs: released AT signing is not after (boundary)");
+  ok(countersignReadiness(si, { ...vOk, released_at: "2026-07-01T17:00:00.001Z" }).ready, "cs: 1 ms after -> ready (boundary)");
+  ok(st(countersignReadiness(si, { ...vOk, released_at: "2026-06-30T00:00:00.000Z" })) === "release_needed", "cs: an OLD release (before signing) does not count");
   return { passed, failed };
 }

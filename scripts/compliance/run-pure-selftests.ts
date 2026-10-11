@@ -2161,7 +2161,7 @@ __runLiquidVolumeTests();
   assertRan("pdf-text-core", __runPdfTextCoreTests(), 28); // R39 S6: deterministic PDF 1.4 writer (xref offsets, WinAnsi)
   assertRan("ach-esign-core", __runAchEsignCoreTests(), 77); // R39 S6: E-SIGN 7001(c) disclosure, OTP rules, record + certificate
   assertRan("vendor-esign-core", __runVendorEsignCoreTests(), 79); // R39 S7: vendor e-sign by link (0262 states, form, record, emails)
-  assertRan("vendor-esign-app-core", __runVendorEsignAppCoreTests(), 17); // R39 S7: prefill, bulk plan, cookie, link
+  assertRan("vendor-esign-app-core", __runVendorEsignAppCoreTests(), 26); // R39 S7: prefill, bulk plan, cookie, link
   assertRan("no-track-paths", __runNoTrackPathTests(), 8); // R39 S7: no analytics where the URL holds a token
   assertRan("vendor-proof-shrink", __runVendorProofShrinkTests(), 14); // R39 S7: phone photo -> under Vercel's 4.5 MB body cap
   console.log("ALL PURE SELF-TESTS PASSED");

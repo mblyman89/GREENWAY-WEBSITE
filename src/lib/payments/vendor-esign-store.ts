@@ -73,7 +73,7 @@ import {
   type VendorForm,
   type VendorFormErrors,
 } from "@/lib/payments/vendor-esign-core";
-import { emailOnFile, inviteLink, isCookieShape, vendorPrefill, type VendorPrefill, type VendorRowForPrefill } from "@/lib/payments/vendor-esign-app-core";
+import { countersignReadiness, emailOnFile, inviteLink, isCookieShape, vendorPrefill, type VendorPrefill, type VendorRowForPrefill } from "@/lib/payments/vendor-esign-app-core";
 import type { VendorMailer } from "@/lib/payments/vendor-esign-mail";
 
 const BUCKET = "ach-docs";
@@ -698,9 +698,8 @@ export async function countersignVendorInvite(input: {
   const vb = await admin.from("vendor_bank_details").select("status, released_by, released_at, release_mode, release_callback_note, bank_routing, bank_account_number, bank_account_type").eq("vendor_id", s.vendor_id).maybeSingle();
   const b = vb.data as { status: string; released_by: string | null; released_at: string | null; release_mode: string | null; release_callback_note: string | null; bank_routing: string; bank_account_number: string; bank_account_type: string } | null;
   // Same check as 0262, asked first so the message is clear and no PDF is stored for nothing.
-  if (!b || b.status !== "active" || !b.released_at || !s.signed_at || Date.parse(b.released_at) <= Date.parse(s.signed_at) || b.bank_routing !== s.bank_routing_enc || b.bank_account_number !== s.bank_account_enc || b.bank_account_type !== s.bank_account_type) {
-    return { ok: false, error: vendorEsignDbErrorMessage("VENDOR_ESIGN_NOT_RELEASED") };
-  }
+  const rd = countersignReadiness(s, b);
+  if (!rd.ready || !b || !b.released_at) return { ok: false, error: rd.ready ? vendorEsignDbErrorMessage("VENDOR_ESIGN_NOT_RELEASED") : rd.message };
   const relBy = b.released_by ? await admin.from("staff_profiles").select("full_name, email").eq("id", b.released_by).maybeSingle() : { data: null };
   const rb = (relBy.data as { full_name: string | null; email: string } | null) ?? null;
   const recDoc = s.record_document_id ? await admin.from("ach_authorization_documents").select("sha256").eq("id", s.record_document_id).maybeSingle() : { data: null };
