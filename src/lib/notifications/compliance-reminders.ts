@@ -42,6 +42,10 @@ import { sendPushToAll, isPushConfigured } from "@/lib/notifications/push";
 import { planLargeDraftNotice } from "@/lib/accounting/large-draft-notice-core";
 import { loadUnapprovedDrafts } from "@/lib/accounting/large-draft-notice-store";
 import { publicSiteOrigin } from "@/lib/site/site-domain-core";
+import { evaluateAchCalendar, planAchCalendarReminders } from "@/lib/payments/ach-calendar-core";
+import { getAchDoneMap } from "@/lib/payments/ach-guide-store";
+import { opsPageView } from "@/lib/payments/ach-ops-store";
+import { isLlamaParseConfigured } from "@/lib/inbound-email/llamaparse-provider";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const COMMAND_CENTER_PATH = "/admin/compliance/ccrs";
@@ -340,6 +344,43 @@ export async function runComplianceReminders(): Promise<ReminderRunResult> {
   } catch (e) {
     result.notes.push(
       `Large-entry planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
+    );
+  }
+
+  // 6) R40 - the ACH calendar: monthly statement check, quarterly Nacha rule
+  //    watch, yearly reviews, the one-time Timberland / fraud-procedure /
+  //    LlamaParse tasks, and payee authorization reviews. Pure planning lives
+  //    in ach-calendar-core (self-tested); this block only gathers facts.
+  //    Own try/catch like the five above. Rule 46: an unreadable done-map is
+  //    NOT "nothing done" silently - it fails toward MORE reminders and says so.
+  try {
+    const { map, readError } = await getAchDoneMap();
+    if (readError) {
+      result.notes.push(
+        `ACH calendar could not be read (${readError}), so every ACH task is treated as NOT done and reminders may repeat.`,
+      );
+    }
+    let reviews = { overdue: 0, missingDate: 0 };
+    try {
+      const view = await opsPageView(todayIso);
+      if (view.ready) {
+        reviews = {
+          overdue: view.reviews.filter((x) => x.status === "overdue").length,
+          missingDate: view.reviews.filter((x) => x.status === "missing_date").length,
+        };
+      } else {
+        result.notes.push("ACH authorization reviews were not checked: the ACH tables are not ready yet.");
+      }
+    } catch (e) {
+      result.notes.push(
+        `ACH authorization reviews could not be read, so they were NOT judged - ${e instanceof Error ? e.message : "unknown error"}`,
+      );
+    }
+    const entries = evaluateAchCalendar(todayIso, map, { llamaParseConfigured: isLlamaParseConfigured() });
+    reminders.push(...planAchCalendarReminders(todayIso, entries, reviews));
+  } catch (e) {
+    result.notes.push(
+      `ACH calendar planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
     );
   }
 
