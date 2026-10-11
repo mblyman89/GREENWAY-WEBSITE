@@ -33,10 +33,10 @@ export function opsNoticeLine(o: { emailed: boolean; detail: string; call: reado
   return parts.join(" ");
 }
 
-export function noticeUrgencyLabel(r: OpenNoticeRow, todayIso: string): { text: string; tone: "danger" | "warning" | "neutral" } {
+export function noticeUrgencyLabel(r: OpenNoticeRow, todayIso: string): { text: string; tone: "danger" | "orange" | "neutral" } {
   const u = noticeUrgency(r, todayIso);
   if (u === "overdue") return { text: r.apply_by ? `Apply-by ${r.apply_by} has passed` : "Overdue", tone: "danger" };
-  if (u === "due_soon") return { text: `Apply by ${r.apply_by}`, tone: "warning" };
+  if (u === "due_soon") return { text: `Apply by ${r.apply_by}`, tone: "orange" };
   return { text: r.notice_kind === "noc" ? `Apply by ${r.apply_by ?? "-"}` : "Open", tone: "neutral" };
 }
 
