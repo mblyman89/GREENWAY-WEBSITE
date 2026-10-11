@@ -895,6 +895,7 @@ import { __runKeyedHashTests } from "../../src/lib/security/keyed-hash";
 import { __runPdfTextCoreTests } from "../../src/lib/payments/pdf-text-core";
 import { __runAchEsignCoreTests } from "../../src/lib/payments/ach-esign-core";
 import { __runVendorEsignCoreTests } from "../../src/lib/payments/vendor-esign-core";
+import { __runAchReturnLogCoreTests } from "../../src/lib/payments/ach-return-log-core";
 import { __runVendorEsignAppCoreTests } from "../../src/lib/payments/vendor-esign-app-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
@@ -2164,6 +2165,7 @@ __runLiquidVolumeTests();
   assertRan("vendor-esign-app-core", __runVendorEsignAppCoreTests(), 26); // R39 S7: prefill, bulk plan, cookie, link
   assertRan("no-track-paths", __runNoTrackPathTests(), 8); // R39 S7: no analytics where the URL holds a token
   assertRan("vendor-proof-shrink", __runVendorProofShrinkTests(), 14); // R39 S7: phone photo -> under Vercel's 4.5 MB body cap
+  assertRan("ach-return-log-core", __runAchReturnLogCoreTests(), 37); // R39 S7: returns / NOC log (parse, hold reason, owner email, urgency)
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
