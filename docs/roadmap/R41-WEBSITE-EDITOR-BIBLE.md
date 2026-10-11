@@ -2062,9 +2062,9 @@ These steps are repeated, with final details, in the end-of-round report.
 | --- | --- | --- | --- | --- |
 | S0 bible | done | (in S1 PR) | — | — |
 | S1 cores | merged | #1321 | see git log | ready |
-| S2 studio | merged | #1322 | 2973a447 | deploying at merge time |
-| S3 type cards | PR open (branch r41-s3-type-cards) | — | — | — |
-| S4 specials | not started | — | — | — |
+| S2 studio | merged | #1322 | 2973a447 | success |
+| S3 type cards | merged | #1323 | 5392544d | deploying at merge time |
+| S4 specials | PR open (branch r41-s4-specials) | — | — | — |
 | S5 consent | not started | — | — | — |
 | S6 all banners | not started | — | — | — |
 | S7 move mode | not started | — | — | — |
@@ -2147,3 +2147,23 @@ These steps are repeated, with final details, in the end-of-round report.
     screen reader (WCAG 2.2 SC 2.5.7).
   - Deleting every card (or hiding them all) hides the tile row, but the banner
     stays.
+- **S4 verification of PART 6 S4 assumptions.**
+  - The specials core's test function is `__runSpecialsPresentationCoreTests`.
+    It throws on failure, and the runner requires `passed ≥ 1`. S4 adds 18
+    assertions, for 97 in total.
+  - The hero's legacy buttons are read from `listSections("specials")` →
+    `specials.hero`, using `buttons` (PUBLISHED, which is what customers see).
+- **S4 decision: byte-identical JSON.** `serializeSpecialsPresentation`
+  writes `heroButtonsSet` / `heroButtons` / `heroDesign` / `todaysDealsDesign`
+  only when they're set. An untouched block serializes exactly as before. The
+  existing round-trip tests pin the key order (`heroButtons` sits before
+  `heroButtonsSet` in both default and normalize).
+- **S4 decision: legacy buttons until the first edit.** Before the owner
+  touches the Hero buttons card, it shows the legacy row buttons. The first
+  edit copies them in and sets `heroButtonsSet`, and Publish makes it live.
+  "Go back to the old buttons" clears the flag. A saved empty list means NO
+  buttons.
+- **S4 layout.** Both design studios sit full-width under their tab's
+  two-column grid, since Banner Studio needs the width. The Today's Deal
+  design binds eyebrow/title/subtitle, so the weekday copy still flows in
+  (the studio preview uses TODAY's wording from `dealPresentationFor`).
