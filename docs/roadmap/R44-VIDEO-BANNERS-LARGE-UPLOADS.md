@@ -1,6 +1,9 @@
 # R44 — MP4/video banners + uploads bigger than 4.5 MB
 
 Branch `r44-video-banners-large-uploads`, started from main after R43 (PR #1332, `15c3216c`).
+
+**Status: MERGED** as PR #1333 (rebase). Commits on main: `7fe94c19`, `4f170802`, `1002c944`, `8e79a465`. CI checks (build, compliance, migrations) were green and `Vercel – greenway_website` reported success on `8e79a465`.
+The strategy roadmap that follows on from this round is `R44-EDITOR-STRATEGY-ROADMAP.md`.
 The R41 bible (`R41-WEBSITE-EDITOR-BIBLE.md`) still governs editor conventions.
 
 **Owner request (verbatim, R44):** "now that you mention it, i want to add the mp4/ video banners
