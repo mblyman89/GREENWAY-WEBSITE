@@ -1,0 +1,299 @@
+SOURCE: https://www.nacha.org/rules/risk-management-topics-company-entry-descriptions (Nacha). Fetched 2026-10-11 with curl; HTML tags stripped mechanically (scripts/styles removed, block tags to newlines, entities unescaped). sha256 of fetched HTML: 403c2a74d44fe2793a61bf70bd8781733a87c11f865e7a3bd158e01d8b38fa20
+
+RISK MANAGEMENT TOPICS – Company Entry Descriptions | Nacha
+This version of Internet Explorer (IE9 and below) is not supported. Please consider upgrading your browser or switching to Chrome or Firefox.
+×
+You are using a browser that will not provide the best experience on our website. Please upgrade your browser to Microsoft Edge, or switch over to Google Chrome or Mozilla Firefox.
+Skip to main content
+Utility Navigation
+About
+Store
+Events
+News
+Consulting
+Risk Resources
+Login
+Contact
+Search
+Nacha
+menu
+Main navigation
+ACH
+What is ACH
+What is ACH and how does it affect your life? Here’s what you need to know.
+The ABCs of ACH
+How ACH Payments Work
+How the Rules are Made
+ACH Volume and Value
+ACH Network Fees
+Rules and Compliance
+Ensuring the ACH Network remains a trusted payment system for all participants.
+New Rules
+Proposed Rules
+Rules Archive
+Operations Bulletins
+Compliance
+Banking Conventions and Opt-In Programs
+Nacha Operating Rules Online
+ACH Payments Types
+Modern. Multifaceted. Today’s ACH Network meets today’s payment needs.
+Same Day ACH
+Business-to-Business (B2B)
+Direct Deposit
+International ACH (IAT)
+Healthcare EFT
+Consumer Payments
+Risk Management
+Assessing and managing risk are vital to keeping the ACH Network a secure payment system.
+Risk Management Portal and ACH Contact Registry
+Risk Management Framework
+Risk Management Advisory Group
+Regulatory Guidance
+Nacha Certified
+Credit-Push Fraud Monitoring Resource Center
+Education
+In-person Events
+Payments Institute
+Nacha Risk Retreat
+Smarter Faster Payments
+Virtual Learning
+TPI Home School
+PaymentsIQ Live!
+Payments Legal & Compliance Summit
+Webinars
+Smarter Faster Payments Remote Connect
+Accreditation
+Accredited ACH Professional
+Accredited Faster Payments Professional
+Accredited Payments Risk Professional
+AAP/APRP Exchange
+CEC Center
+Accreditation Course Licensing
+Knowledge Resources
+Nacha Operating Rules & Guidelines products
+ACH Risk Management Handbook
+Third-Party Senders & the ACH Network
+Membership
+Payments Innovation Alliance
+Get Engaged
+Become an Alliance Member
+Meetings
+Project Teams
+Buzzcasts
+Spotlight! Payments Video Challenge
+Leadership
+Nacha Direct Member
+About
+Benefits
+Membership List
+Volunteer Opportunities
+Governance Opportunities
+ACH-Related Opportunities
+Government Relations Opportunities
+Accreditation Opportunities
+Enablement
+Phixius
+What is Phixius
+Details for Payment Information Requesters
+Details for Data Responders
+Hear from Phixius Customers
+Standards & Opt-in Programs
+Nacha Programs Supporting ISO 20022
+Banking Conventions and Opt-in Programs
+Solutions & Services
+Nacha Consulting
+Preferred Partners
+Account Validation Resource Center
+Nacha Operating Rules Products
+Users
+Consumers
+Direct Deposit and Direct Payment Benefits Consumers
+Watch Out! Common Scams That Can Steal Your Money
+Consumer FAQs on ACH Payments
+Corporates
+Corporates and Governmental Organizations
+Healthcare Claim Payments
+Risk Management Resources for Originators/Businesses
+Small/Medium Business
+Businesses: Small
+Nonprofits and Religious Organizations
+Subscription
+Third Parties
+Rules and Compliance
+Certification
+Education and Guidance
+About
+Store
+Events
+News
+Consulting
+Risk Resources
+Login
+Contact
+Search
+Search
+Close
+Breadcrumb
+Home
+Nacha Operating Rules - New Rules
+RISK MANAGEMENT TOPICS – Company Entry Descriptions
+Nacha Operating Rules
+Details
+Technical
+Impact
+FAQs
+Effective Date
+March 20, 2026
+Rule Status
+Rule Status
+New Rule
+RISK MANAGEMENT TOPICS – Company Entry Descriptions
+Rules requiring the use of two additional standardized Company Entry Descriptions became effective on March 20, 2026, as part of a larger Risk Management package intended to reduce the incidence of successful fraud attempts and improve the recovery of funds after frauds have occurred.
+Details
+Details
+Standardized uses of the Company Entry Description can help parties in the ACH Network identify, monitor and count the volume of payments for specific purposes and can help manage risk.
+Included as part of the Risk Management Rule amendments are two additional required Company Entry Descriptions, “PAYROLL” and “PURCHASE.”
+See FAQs below
+Technical
+Technical
+Effective date of March 20, 2026.
+Standard Company Entry Description – "PAYROLL"
+This rule requires Originators to use the standardized Company Entry Description “PAYROLL” for PPD credits for payment of wages, salaries and similar types of compensation.
+RDFIs that monitor inbound ACH credits will have better information regarding new or multiple payroll payments to an account.
+A standard description for payroll payments can help support RDFI logic to provide or suppress early funds availability.
+The amendment is intended to reduce the incidence of fraud involving payroll redirections.
+Standard Company Entry Description – PURCHASE
+This rule requires Originators to use the standardized Company Entry Description “PURCHASE” for consumer e-commerce purchases (as defined below). This descriptor provides RDFIs with additional information about the nature of the underlying transaction – that is, the online purchase of tangible goods, which can sometimes present a different risk profile compared to the online payment for services. Clearer identification of the purpose of certain transactions can help to improve the effectiveness of targeted risk mitigation efforts and tools that may be utilized by RDFIs and other participants.
+Definition of e-commerce purchases:
+For purposes of this rule, an e-commerce purchase is a debit Entry authorized by a consumer Receiver for the online purchase of goods, including recurring purchases first authorized online. An e-commerce purchase uses the WEB debit SEC Code, except as permitted by the rule on Standing Authorization to use the TEL SEC Code.
+The rule includes language disclaiming any obligation on the part of ODFIs to “police” Originators’ correct use:
+The ODFI has no obligation to verify the presence or accuracy of the word “PURCHASE” as a description of purpose.
+See FAQs below
+Impact
+Impact
+Standard Company Entry Descriptions
+Effective date: March 20, 2026
+The requirement for Originators to use the standardized Company Entry Descriptions “PAYROLL” and “PURCHASE” became effective on March 20, 2026.
+Anticipated Benefits
+Improved, targeted risk mitigations and tools may be utilized as participants are able to better identify certain purposes of transactions.
+For payroll, this description can help support RDFI transaction monitoring and logic regarding funds availability.
+For e-commerce purchases, this description enables identification of such transactions for RDFIs and other participants that choose to implement monitoring and risk mitigation efforts for certain higher-risk transactions.
+Standardized use of data can help parties manage risk and improve ACH quality.
+Potential Impacts
+Originators/Third-Party Service Providers/ODFIs of these types of transactions should ensure their systems utilize the required Company Entry Description(s).
+RDFIs may choose to take advantage of intelligence enabled by these descriptors, but they are not required to act as a result of these descriptions.
+FAQs Section
+FAQs Section
+GENERAL INFORMATION
+What is the purpose of the Company Entry Description? Where can I find this information in the ACH record?
+A company sending an ACH payment is required to use the Company Entry Description field (which is in positions 54-63 in the Company/Batch Header Record) to provide the Receiver with a description of the purpose of each payment.
+This description can be a maximum of 10 characters, and, in most cases, the value is determined by the Originator (for example: “Gas bill”, “ins. Prem.”, “Soc. Sec.”, etc.).  However, for certain types of payments, the Nacha Operating Rules require Originators to include a pre-defined description.
+Examples of descriptive statements required by the Rules include, but are not limited to, the new descriptions “PAYROLL” and “PURCHASE,” which Originators will be required to adopt no later than March 20, 2026.
+For a detailed discussion of the Company Entry Description field’s requirements, refer to Subpart 3.2.2 (Glossary of Data Elements) in Appendix Three of the Nacha Operating Rules.
+PAYROLL
+Why is the new “PAYROLL” Company Entry Description required?
+Use of the term “PAYROLL” is intended for descriptive purposes only, to help RDFIs identify compensation payments in their efforts to reduce the incidence of fraud involving payroll redirections.
+By standardizing certain data within ACH payments for payroll and other types of compensation, RDFIs that monitor inbound ACH credits will have better information to identify new or multiple payroll payments to a particular account. A standard description for these types of payments can help support RDFI logic to provide or suppress early funds availability and support other practices intended to reduce the incidence of fraud involving payroll redirections and subsequent losses to Originators.
+Originators and ODFIs transmitting entries with this entry description are required to use this general classification for fraud mitigation purposes only and without regard to how the payee is classified by the employer for legal or tax purposes. By use of the “PAYROLL” descriptor, Originators and ODFIs make no representation or warranty to the RDFI or to the Receiver regarding the Receiver’s employment status.  For questions about the tax implications of classifying a payment as employment-related income, please consult an attorney or tax advisor.
+Who is subject to the requirement to use the mandatory “PAYROLL” Company Entry Description?
+Any Originators initiating credits to consumer accounts for the payment of wages, salaries, or similar types of compensation must use the description “PAYROLL” no later than March 20, 2026.
+(Examples of the types of payments that fall within the “PAYROLL” category are included below.)
+For what payments must Originators use the new “PAYROLL” Company Entry Description?
+Originators must use the new descriptor “PAYROLL” when transmitting credit entries for the payment of any income earned by an individual from employment and payable to his or her consumer account.
+Below are a few examples of when to and when not to use “PAYROLL” in the Company Entry Description. This is not an exhaustive list. Users should keep in mind the ACH fraud risk mitigation intent of the rule when determining whether their situation requires the use of “PAYROLL.”
+When to use “PAYROLL?”
+When paying any income earned from employment to an employee’s consumer account (examples: wages, salaries, tips, bonuses, commissions, etc.).
+When making payroll allotments to an employee’s Health Savings Account, Individual Retirement Account, or other type of consumer account, as these payroll deductions are components of salary.
+When NOT to use “PAYROLL?”
+When paying pension and other retirement payments.
+When making employee reimbursements for travel, mileage, etc.
+When making employee reimbursements from Flexible Spending Accounts.
+When paying royalties, interest, dividends, or similar types of revenue payments.
+When paying tax refunds or refund anticipation loans from tax preparation companies.
+When paying workers’ compensation payments.
+When paying insurance payouts.
+When making payment for business-to-business vendor payments.
+For payroll and other compensation payments, is the Originator permitted to populate the remaining characters in the Company Entry Description field for additional descriptive purposes?
+Yes. Originators initiating payroll and other compensation payments are required to include “PAYROLL” within the leftmost 7 characters of the Company Entry Description field. For the “PAYROLL” description only, the Originator may utilize the remaining 3 characters for additional descriptive purposes, at its discretion.
+Examples:   PAYROLL
+PAYROLL 02
+PAYROLL424
+PAYROLLEMP
+Are RDFIs required to monitor for and act on PPD credits that bear the descriptor “PAYROLL?”
+No. An RDFI may choose to take advantage of intelligence enabled by the use of the PAYROLL descriptor, but the RDFI is not required to act on PPD entries because of this description.
+PURCHASE
+Who is subject to the requirement to use the mandatory “PURCHASE” Company Entry Description?
+Any Originator collecting payments from consumers via ACH debit for the online purchase of tangible goods is required to use the descriptive statement “PURCHASE” in the Company Entry Description field no later than March 20, 2026. An e-commerce purchase typically uses the WEB SEC Code, except as permitted by the rule on Standing Authorization to use the TEL SEC Code.
+(Examples of the types of payments that fall within the “PURCHASE” category are included below.)
+For what payments must Originators use the new “PURCHASE” Company Entry Description?
+Originators must use the descriptive statement “PURCHASE” for ACH debits to consumer accounts for the online purchase of goods, also known as “e-commerce” purchases. This descriptor provides RDFIs with additional information about the nature of the underlying transaction – that is, the online purchase of tangible goods, which can sometimes present a different risk profile compared to the online payment for services. Clearer identification of the purpose of certain transactions can help to improve the effectiveness of targeted risk mitigation efforts and tools that may be utilized by RDFIs and other participants.
+For purposes of this rule, an e-commerce purchase is a debit entry authorized online by a consumer Receiver (i.e., a WEB debit) for the purchase of tangible, hard goods, including recurring purchases of tangible goods first authorized online. (Note: To the extent permitted by the rule on standing authorizations, certain e-commerce payments may also use the TEL Standard Entry Class Code.)
+E-commerce purchases do not include the purchase of services.
+Below are a few examples of when to and when not to use “PURCHASE” in the Company Entry Description. This is not an exhaustive list. Users should keep in mind the definition of e-commerce purchase for purposes of this rule when determining whether their situation requires the use of “PURCHASE.”
+When to use “PURCHASE?”
+When collecting payment from a consumer for the one-time, online purchase of a hard, tangible good, e.g., clothes or jewelry.
+When collecting a monthly, recurring payment from a consumer for the purchase of a tangible product where the membership or subscription sign-up occurred online, e.g., monthly vitamin subscription.
+When the online purchase of a tangible good results in multiple payments to the consumer’s account, e.g., Buy Now Pay Later.
+When NOT to use “PURCHASE?”
+When collecting a one-time payment from a consumer for the online purchase of a service, e.g., a telehealth visit co-pay; mail or shipping fees.
+When collecting a monthly recurring payment from a consumer for a service where the authorization occurred online, e.g. payments for telephone or internet service, utility payments, rent or lease payments, installment loan payments.
+When collecting payment from a consumer for the online purchase of a license, such as a hunting, fishing or business license.
+When collecting monthly payments authorized by a consumer online for the payment of insurance, such as car or life insurance.
+When collecting monthly payments from a consumer for a gym membership.
+When collecting payment for a business-to-business transaction.
+Related Content
+ACH
+ACH Statistics
+Business to Business
+Same Day ACH
+Press Release
+Same Day ACH Gains Lead to First Quarter ACH Network Growth
+April 20, 2026
+Press Release
+Phixius by Nacha and Kinexys by J.P. Morgan Integration Goes Live, Expanding Multi-Responder Account Validation Network
+February 5, 2026
+Blog
+From New Rules to a New Accreditation and More, a Busy 2026 Ahead at Nacha
+January 29, 2026
+Nacha Operating Rules
+Risk Management
+Blog
+Next Steps for the New Nacha Risk Management Rules
+April 3, 2026
+Nacha
+Footer
+About
+Careers
+Code of Conduct
+Contact
+Email Preferences
+Events
+Legal
+Login
+Media Kit
+Nacha Navigator
+News
+Search
+Store
+Search
+Close
+Common Searches
+Account Validation
+Accreditation
+ACH Quick Start Tool
+B2B Payments
+Consulting
+Contact Registry
+Direct Deposit
+Direct Access
+Operating Rules 2026
+Phixius
+Risk Management
+Same Day ACH
+© 2026 Nacha. All Rights Reserved.
+Social Media
+Twitter
+Linkedin
+Facebook
+Podcast
+Youtube

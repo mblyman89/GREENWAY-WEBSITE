@@ -9,6 +9,7 @@
  * Money is CENTS everywhere.
  */
 import "server-only";
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
@@ -31,6 +32,10 @@ import {
   type BankWithdrawal,
   type ReconcileRun,
 } from "@/lib/payroll/payroll-reconcile-core";
+
+
+/** Nacha-mandated description for wage credits (effective March 20, 2026). */
+export const PAYROLL_ENTRY_DESCRIPTION = "PAYROLL";
 
 export type AchCompanySettings = {
   destination_routing: string;
@@ -544,7 +549,11 @@ export async function generatePayrollNacha(
     originator,
     entries: planned.entries,
     secCode: "PPD",
-    companyEntryDescription: settings.entry_description || "PAYROLL",
+    // R40: Nacha has REQUIRED the Company Entry Description "PAYROLL" on PPD
+    // wage credits since March 20, 2026 (docs/authorities/ach/
+    // nacha-company-entry-descriptions.txt). The stored setting is ignored for
+    // payroll so a typo or "WAGES" can never put Greenway out of compliance.
+    companyEntryDescription: PAYROLL_ENTRY_DESCRIPTION,
     effectiveDate,
     createdAt: new Date(),
     fileIdModifier: detail.run.file_id_modifier || "A",
