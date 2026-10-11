@@ -2019,8 +2019,11 @@ Slice-specific extra gates:
   happy that edited wording only applies to new signups.
 - **OQ-3** About / FAQ / Locations / Price Match builder banners don't render
   publicly today. Render them next round (makes pages revalidate every 60s)?
-- **OQ-4** Full Banner Studio on Loyalty hero + Shop carousel (they already
-  have their own styling editors)?
+- **OQ-4** (ANSWERED BY BUILDING, S6) Full Banner Studio on the Loyalty hero
+  and every Shop carousel slide is now an OPTIONAL tick-box ("Custom design")
+  beside their existing styling editors. Ask: is one desktop picture enough
+  for a designed banner? (A designed banner uses the desktop picture on both
+  sizes, with its own phone focus/height; the classic look keeps two pictures.)
 - **OQ-5** Per-banner badges (e.g., "NEW", "TODAY ONLY") as a box role is
   shipped; does he want preset badge styles?
 
@@ -2087,9 +2090,28 @@ section we cited requires it.)
    characters. The staff email says "Consent wording version: <12 chars>".
 7. "Put back the original wording" restores the shipped text → Save → Publish.
 
-### S6 (remaining banners)
-1. Vendors page banners, Specials extra banners: open each in the hub, use
-   Custom design, publish, check the live page.
+### S6 (remaining banners) — as built
+1. **Text align / Image focus now work on every page.** Admin → Pages →
+   Vendors → open "Grow With Greenway" → set Text align to Center and Image
+   focus to Left → Save → Publish → open /vendor-delivery: the words sit in
+   the middle and the picture hugs the left. Do the same on a Specials or Shop
+   extra banner if you have one. (Banners left on "Center" focus keep the
+   exact look they have today.)
+2. **Custom design on Vendors / Specials / Shop extra banners:** open the
+   banner → tick "Use custom design" → drag text → Save → Publish → check
+   the live page.
+3. **Home big carousel, new lines:** Admin → Home carousel → a slide's Title
+   or Description → press Enter between words → Save → Publish → the home
+   page shows two lines.
+4. **Loyalty hero:** Admin → Loyalty page → hero section. The Eyebrow and
+   Subtitle boxes now take Enter for a new line too. Scroll to "Custom design
+   (optional)" → tick "Use custom design" → "Open design studio" → drag the
+   headline, add a button (the link picker can point at a filtered menu or a
+   blog post) → Save draft → Publish → /loyalty shows the designed hero.
+   Untick it → Save → Publish → the classic hero is back exactly as before.
+5. **Shop carousel slides:** Admin → Shop banner → open a slide → same
+   "Custom design (optional)" box. Your two slide buttons are copied in as
+   starting buttons. Save draft → Publish slide → /menu shows it.
 
 ### S7 (Move mode in hub preview)
 1. Hub → preview window → click "Move mode".
@@ -2114,9 +2136,9 @@ section we cited requires it.)
 | S1 cores | merged | #1321 | see git log | ready |
 | S2 studio | merged | #1322 | 2973a447 | success |
 | S3 type cards | merged | #1323 | 5392544d | deploying at merge time |
-| S4 specials | merged | #1324 | 94d64f5a | check at S5 merge |
-| S5 consent | PR open (branch r41-s5-loyalty-consent) | — | — | — |
-| S6 all banners | not started | — | — | — |
+| S4 specials | merged | #1324 | 94d64f5a | success |
+| S5 consent | merged | #1325 | d419775f | success |
+| S6 all banners | PR open (branch r41-s6-banners) | — | — | — |
 | S7 move mode | not started | — | — | — |
 | S8 AI | not started | — | — | — |
 | S9 report | not started | — | — | — |
@@ -2253,4 +2275,31 @@ section we cited requires it.)
   `loyalty-page-editor.test.ts` "consent stays FIXED" became "owner-editable
   with a safe default (R41 S5)". The R41 Q9 reason is in the comment. The
   counts changed 8→9, signup 3→4, and loyalty seeds 11→12.
-
+- **S6 recon (verified, not assumed).**
+  - `BannerData`/`toBannerData` ALREADY carried `textAlign`, `design` and
+    `designOwner` (done in S2). But `imageFocus`/`textAlign` were NOT passed
+    on to `<SectionBanner>` for the Specials extras, Shop extras, or Vendors
+    grow/brands/extras, so the builder's "Text align" and "Image focus" did
+    nothing on those pages. FIXED: a shared `pinnedImageFocus` (moved out of
+    `src/app/page.tsx` into `page-sections-types.ts`) keeps today's look when
+    the focus is "center" (the seed default). All Vendors seeds are text
+    "left" + focus "right", which the classic rule already renders with the
+    picture on the right, so no live banner moves.
+  - The Home `Hero.tsx` carousel collapsed Enter in the title and description
+    (no `whitespace-pre-line`). FIXED. The save action keeps newlines (it only
+    `.trim()`s).
+  - The Loyalty hero and Shop carousel already split hard line breaks
+    (`heroTextLines`), but their Eyebrow and Subtitle editors were single-line
+    `<input>`s, so Enter could not be typed (Q8). FIXED: all three lines are
+    textareas.
+- **S6 decision: optional design on the Loyalty hero and Shop slides.**
+  `design?` is appended LAST in both JSON shapes and ONLY when set, so every
+  existing stored row serializes byte-identically (pinned by self-tests and
+  vitest). Reuses the S4 `DesignCard` and the `preset "hero"`. Headline stays
+  h2: the /loyalty h1 is on the signup card, and /menu has its own h1.
+- **S6 decision: Move-mode owners.** `loyalty:hero` and
+  `shop-slide:<uuid>` were added to `parseMoveMessage`. The Shop slide owner
+  is only emitted in Draft Mode, so public HTML never carries row ids or edit
+  hooks. The S7 save action must handle both owners.
+- **S6 not done (by the bible's own decision):** About/FAQ/Locations/Price
+  Match still do not render builder banners (OQ-3, unchanged).
