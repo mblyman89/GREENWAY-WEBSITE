@@ -2175,9 +2175,9 @@ page (hero), or Shop banner (a slide).
 | S4 specials | merged | #1324 | 94d64f5a | success |
 | S5 consent | merged | #1325 | d419775f | success |
 | S6 all banners | merged | #1326 | b50b2586 | success |
-| S7 move mode | PR open (branch r41-s7-move-mode) | — | — | — |
+| S7 move mode | merged | #1327 | 23c1c648 | see S9 report |
 | S8 AI | PR open (branch r41-s8-ai-assist, stacked on S7) | — | — | — |
-| S9 report | not started | — | — | — |
+| S9 report | done (PART 14, in S8 PR) | — | — | — |
 
 ---
 
@@ -2407,3 +2407,64 @@ page (hero), or Shop banner (a slide).
   Library and `/public` images are public URLs. A Supabase storage URL that
   is private would fail; the action then shows "The AI couldn't open this
   picture…" (it never guesses a layout).
+
+---
+
+## PART 14 — S9 FINAL OWNER REPORT (plain English)
+
+**What you asked for → where it is now.**
+- **Type Cards** (rename / add / delete): Admin → Pages → Home → Type Cards.
+  Up to 12 cards, ▲/▼ to reorder, your own picture and link per card.
+  **Note: Type Cards go live as soon as you press Save** (verified in the code:
+  `saveHomeSectionSettings` writes the live and draft copy together, the same
+  way the other Home settings have always worked). There is no separate
+  Publish step for them.
+- **Text alignment + Enter = new line**: works on every builder banner (Home,
+  Vendors, Specials/Shop extras), the Home big carousel, the Loyalty hero and
+  Shop slides.
+- **Loyalty consent wording**: editable with a 7-point legal checklist (S5).
+  **You must run migration `0264_loyalty_consent_text.sql` once** in Supabase
+  (steps in PART 11 S5). The site works before you do; it just can't record
+  the wording version until then.
+- **Specials banner buttons**: Specials → Hero. Until you first edit them, the
+  editor shows the buttons the site uses today; after your first change your
+  list is used (an empty list = no buttons).
+- **Every banner: move text, fonts, sizes, styles, colours, picture options**
+  via **Custom design (optional)** + Banner Studio. Available on: all Home
+  banners (category, brand, extras), Vendors "Grow With Greenway" + "Brands"
+  + extras, Specials extras, Shop extras, the **Specials hero**, the
+  **Specials Today's Deal** banner, the **Loyalty hero**, and **every Shop
+  carousel slide**. **Not** on the Home big hero carousel: it keeps its own
+  slide editor (with Enter = new line).
+- **Buttons: move, resize (S/M/L), shape, style, colours, link picker**
+  (menu category + filters, blog post, newsletter, outside link).
+- **Drag text in the one preview window**: Website Sync → Preview → **Move
+  mode** (S7). Moves save as drafts.
+- **AI to place things**: Banner Studio → **✨ AI suggest** (S8). Suggestions
+  only. Nothing saves until you press Save.
+
+**Changes you will notice without touching anything.**
+1. Your Home category and brand banners now show the buttons listed in their
+   editor. By default these are "Browse the menu" and "See all brands";
+   before, the page silently dropped them. Untick "Show" on a button to hide
+   it.
+2. Everything else looks exactly as it does today until you turn on Custom
+   design. This was checked banner by banner.
+
+**Questions only you can answer (we did not guess):**
+- **OQ-1** Washington's WAC 314-55-155 warning rules apply to "advertising".
+  Do you treat banners on your own website as advertising? The editor only
+  reminds you; it never adds warnings automatically.
+- **OQ-2** Changed consent wording applies to NEW signups only. Each past
+  signup keeps the wording it agreed to. Is that what you want?
+- **OQ-3** Banners you add in the builder for About / FAQ / Locations / Price
+  Match are saved but not shown on those pages yet. Should we show them next
+  round? (Those pages would then refresh every 60 seconds, like Home.)
+- **OQ-4** A custom-designed banner uses ONE picture for computer and phone,
+  with its own phone focus and height. The classic look keeps two pictures. Is
+  one picture enough, or do you want a separate phone picture in Custom design?
+- **OQ-5** The "Badge" text box (for things like "NEW" or "TODAY ONLY") is
+  available. Do you want a few ready-made badge styles?
+
+**Full click-by-click test steps:** PART 11 (S2 → S8). Do the S5 migration
+first, then S7 and S8 last (they use banners you've already designed).
