@@ -1,6 +1,6 @@
 # R42 — Owner answers to the R41 open questions (bible)
 
-Status: **built on branch `r42-owner-answers`** — see the status table at the end.
+Status: **merged** — PR #1330 → main 6321eca4. See the status table at the end.
 Companion research report: `docs/roadmap/R42-CREATIVE-STUDIO-MOTION-REPORT.md`.
 
 ## PART 1 — The owner's answers (verbatim intent)
@@ -101,6 +101,6 @@ No migration was needed (next free migration is still 0265).
 
 | Item | State |
 |---|---|
-| Q1 / Q3 / Q4 code + tests | done (branch) |
-| PR | see final report |
-| Creative Studio motion report | `R42-CREATIVE-STUDIO-MOTION-REPORT.md` |
+| Q1 / Q3 / Q4 code + tests | merged #1330 (6321eca4); CI build/compliance/migrations green |
+| Creative Studio motion report | `R42-CREATIVE-STUDIO-MOTION-REPORT.md` (recommendation: pilot → Stage A → Stage B only if regular use) |
+| Owner testing | pending (Michael) |
