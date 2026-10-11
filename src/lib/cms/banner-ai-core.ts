@@ -153,6 +153,31 @@ export function promptInputFor(design: BannerDesign, legacy: { eyebrow?: string;
   };
 }
 
+/**
+ * The URL the AI provider fetches. Only https URLs or site-relative paths
+ * ("/home/x.webp" → origin + path) are allowed; anything else (http, data:,
+ * javascript:, protocol-relative "//", blank) → null and the action refuses.
+ */
+export function absoluteImageUrl(src: unknown, origin: string): string | null {
+  if (typeof src !== "string") return null;
+  const v = src.trim();
+  if (!v) return null;
+  if (v.startsWith("/") && !v.startsWith("//")) {
+    try {
+      const u = new URL(v, origin);
+      return u.protocol === "https:" ? u.toString() : null;
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" && !u.username && !u.password ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 const GAP_PCT = 2;
 
 /**
@@ -295,6 +320,14 @@ export function __runBannerAiCoreTests(): { passed: number; failed: number } {
   ok(m.buttons[0].mx === 5 && m.buttons[0].x === 80, "phone button override only");
   const hidden = applySuggestion({ ...design, boxes: design.boxes.map((b) => (b.id === "eyebrow" ? { ...b, hidden: true } : b)) }, p, legacy, "desktop");
   ok(hidden.boxes.find((b) => b.id === "eyebrow")!.x === 50, "hidden boxes untouched");
+  const O = "https://greenwaymarijuana.com";
+  ok(absoluteImageUrl("/home/a.webp", O) === "https://greenwaymarijuana.com/home/a.webp", "relative → origin");
+  ok(absoluteImageUrl("https://cdn.x.co/a.png", O) === "https://cdn.x.co/a.png", "https kept");
+  ok(absoluteImageUrl("http://x.co/a.png", O) === null, "http refused");
+  ok(absoluteImageUrl("//evil.co/a.png", O) === null, "protocol-relative refused");
+  ok(absoluteImageUrl("javascript:alert(1)", O) === null && absoluteImageUrl("data:image/png;base64,AA", O) === null, "js/data refused");
+  ok(absoluteImageUrl("  ", O) === null && absoluteImageUrl(undefined, O) === null, "blank refused");
+  ok(absoluteImageUrl("https://u:p@x.co/a.png", O) === null, "credentials refused");
   const pin = promptInputFor(design, legacy, "desktop");
   ok(pin.boxes[0].role === "eyebrow" && pin.boxes[0].chars === 5 && pin.buttons === 1, "prompt input in reading order with real text lengths");
   return { passed, failed: 0 };
