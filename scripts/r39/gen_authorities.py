@@ -14,6 +14,7 @@ Q = json.load(open(os.path.join(HERE, "quotes.json"), encoding="utf8"))
 
 URL = {
     "ach/nacha-micro-entries-phase-1.txt": "https://www.nacha.org/micro-entries",
+    "ach/nacha-micro-entries-phase-2.txt": "https://www.nacha.org/rules/micro-entries-phase-2",
     "ach/nacha-fraud-monitoring-phase-2.txt": "https://www.nacha.org/rules/risk-management-topics-fraud-monitoring-phase-2",
     "ach/nacha-meaningful-modernization.txt": "https://www.nacha.org/rules/meaningful-modernization",
     "ach/odfi-simmons-ach-origination-guidelines.txt": "https://www.simmonsbank.com/siteassets/pdfs/qrg-ach-origination-guidelines.pdf",
@@ -40,6 +41,7 @@ URL = {
 # without updating the router table in the same commit.
 CITE = {
     "ach/nacha-micro-entries-phase-1.txt": "Nacha, Micro-Entries (Phase 1) rule summary",
+    "ach/nacha-micro-entries-phase-2.txt": "Nacha, Micro-Entries (Phase 2) rule summary",
     "ach/nacha-fraud-monitoring-phase-2.txt": "Nacha, Fraud Monitoring Phase 2 rule summary",
     "ach/nacha-meaningful-modernization.txt": "Nacha, Meaningful Modernization rule summary",
     "ach/odfi-simmons-ach-origination-guidelines.txt": "Simmons Bank, ACH Origination Guidelines (July 2024)",
@@ -71,6 +73,10 @@ META = {
     "micro-entry-no-simultaneous-live": ("industry_guidance", None,
         "The real payment must wait until the payee has confirmed the test amount. The system therefore keeps a payee in Pending Verification until "
         "the confirmed amount is recorded, and refuses to put a live payment in the same file as the test credit, even when that would be convenient."),
+    "micro-entry-monitor-volumes": ("industry_guidance", None,
+        "If Greenway ever sends test credits, it must watch how many go out and how many come back, and notice when that changes. There is no fixed "
+        "number in the rule. The banking page therefore counts test credits sent and returned over the last 30 and 365 days, flags an account number "
+        "used for more than one payee or tested more than twice, and flags any test credit that came back. Nobody has to review each entry by hand."),
     "prenote-vs-micro-formatting": ("industry_guidance", None,
         "Nacha's own explanation of the difference Michael asked about. A prenote is identified by its special transaction code and a zero amount - "
         "no money moves and nothing posts. A test credit is a real deposit and is identified by the word ACCTVERIFY. Two different tools; the system "

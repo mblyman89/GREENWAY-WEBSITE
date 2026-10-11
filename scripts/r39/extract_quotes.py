@@ -21,6 +21,8 @@ SPECS = [
      "In the Company Entry Description field, the Rule requires the use of", "the use of \u201cACCTVERIFY\u201d"),
     ("micro-entry-no-simultaneous-live", "ach/nacha-micro-entries-phase-1.txt",
      "An Originator using Micro-Entries may initiate future Entries", "risk management requirements will be applied to Originators."),
+    ("micro-entry-monitor-volumes", "ach/nacha-micro-entries-phase-2.txt",
+     "However, at a minimum, Originators should understand forward and return volumes", "an important tool in Originator\u2019s fraud monitoring efforts."),
     ("prenote-vs-micro-formatting", "ach/nacha-micro-entries-phase-1.txt",
      "Prenotification Entries can be easily identified by a unique transaction code", "discretion over the content of the company entry description field."),
     ("fraud-phase-2-all-originators", "ach/nacha-fraud-monitoring-phase-2.txt",

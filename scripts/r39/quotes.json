@@ -15,6 +15,10 @@
   "file": "ach/nacha-micro-entries-phase-1.txt",
   "quote": "An Originator using Micro-Entries may initiate future Entries to the Receiver’s account as soon as the Originator’s process for validating the amounts of the Micro-Entries has been completed The Originator is in the best position to know when the validation process is complete A future Entry may not be originated simultaneously with Micro-Entries ODFIs are not required to review or inspect files to enforce this In Phase 2 of the Rule risk management requirements will be applied to Originators."
  },
+ "micro-entry-monitor-volumes": {
+  "file": "ach/nacha-micro-entries-phase-2.txt",
+  "quote": "However, at a minimum, Originators should understand forward and return volumes to establish a baseline of normal Micro-Entry activity. Velocity monitoring, recognizing the number of times an account number is used (in various formats), in addition to the number of transactions, can also be an important tool in Originator’s fraud monitoring efforts."
+ },
  "prenote-vs-micro-formatting": {
   "file": "ach/nacha-micro-entries-phase-1.txt",
   "quote": "Prenotification Entries can be easily identified by a unique transaction code and a dollar amount of zero. For these entries, a specific company entry description is not needed to identify these entries as an account validation tool, and Originators have discretion over the content of the company entry description field."

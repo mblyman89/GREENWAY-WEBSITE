@@ -57,6 +57,7 @@ export type AchAuthorityId =
   | "ach-micro-entry-under-one-dollar"
   | "ach-micro-entry-acctverify"
   | "ach-micro-entry-no-simultaneous-live"
+  | "ach-micro-entry-monitor-volumes"
   | "ach-prenote-vs-micro-formatting"
   | "ach-fraud-phase-2-all-originators"
   | "ach-fraud-phase-2-change-controls"
@@ -97,6 +98,7 @@ export const ALL_ACH_AUTHORITY_IDS: readonly AchAuthorityId[] = [
   "ach-micro-entry-under-one-dollar",
   "ach-micro-entry-acctverify",
   "ach-micro-entry-no-simultaneous-live",
+  "ach-micro-entry-monitor-volumes",
   "ach-prenote-vs-micro-formatting",
   "ach-fraud-phase-2-all-originators",
   "ach-fraud-phase-2-change-controls",
@@ -139,6 +141,7 @@ export const ALL_ACH_AUTHORITY_IDS: readonly AchAuthorityId[] = [
  */
 export const ACH_PUBLICATION_FILES: Readonly<Record<string, string>> = {
   "Nacha, Micro-Entries (Phase 1) rule summary": "ach/nacha-micro-entries-phase-1.txt",
+  "Nacha, Micro-Entries (Phase 2) rule summary": "ach/nacha-micro-entries-phase-2.txt",
   "Nacha, Fraud Monitoring Phase 2 rule summary": "ach/nacha-fraud-monitoring-phase-2.txt",
   "Nacha, Meaningful Modernization rule summary": "ach/nacha-meaningful-modernization.txt",
   "Simmons Bank, ACH Origination Guidelines (July 2024)": "ach/odfi-simmons-ach-origination-guidelines.txt",
@@ -219,6 +222,24 @@ export const ACH_AUTHORITIES: readonly AchAuthority[] = [
     "therefore keeps a payee in Pending Verification until the confirmed amount is recorded, and " +
     "refuses to put a live payment in the same file as the test credit, even when that would be " +
     "convenient.",
+  },
+  {
+    id: "ach-micro-entry-monitor-volumes",
+    kind: "industry_guidance",
+    citation: "Nacha, Micro-Entries (Phase 2) rule summary",
+    sourceFile: "ach/nacha-micro-entries-phase-2.txt",
+    source: "https://www.nacha.org/rules/micro-entries-phase-2",
+    quote:
+    "However, at a minimum, Originators should understand forward and return volumes to establish " +
+    "a baseline of normal Micro-Entry activity. Velocity monitoring, recognizing the number of " +
+    "times an account number is used (in various formats), in addition to the number of " +
+    "transactions, can also be an important tool in Originator’s fraud monitoring efforts.",
+    whatItMeansHere:
+    "If Greenway ever sends test credits, it must watch how many go out and how many come back, " +
+    "and notice when that changes. There is no fixed number in the rule. The banking page " +
+    "therefore counts test credits sent and returned over the last 30 and 365 days, flags an " +
+    "account number used for more than one payee or tested more than twice, and flags any test " +
+    "credit that came back. Nobody has to review each entry by hand.",
   },
   {
     id: "ach-prenote-vs-micro-formatting",

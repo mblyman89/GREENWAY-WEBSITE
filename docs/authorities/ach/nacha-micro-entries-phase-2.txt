@@ -1,0 +1,251 @@
+Micro-Entries (Phase 2) | Nacha
+×
+You are using a browser that will not provide the best experience on our website. Please upgrade your browser to Microsoft Edge, or switch over to Google Chrome or Mozilla Firefox.
+Skip to main content
+Utility Navigation
+About
+Store
+Events
+News
+Consulting
+Risk Resources
+Login
+Contact
+Search
+Nacha
+menu
+Main navigation
+ACH
+What is ACH
+What is ACH and how does it affect your life? Here’s what you need to know.
+The ABCs of ACH
+How ACH Payments Work
+How the Rules are Made
+ACH Volume and Value
+ACH Network Fees
+Rules and Compliance
+Ensuring the ACH Network remains a trusted payment system for all participants.
+New Rules
+Proposed Rules
+Rules Archive
+Operations Bulletins
+Compliance
+Banking Conventions and Opt-In Programs
+Nacha Operating Rules Online
+ACH Payments Types
+Modern. Multifaceted. Today’s ACH Network meets today’s payment needs.
+Same Day ACH
+Business-to-Business (B2B)
+Direct Deposit
+International ACH (IAT)
+Healthcare EFT
+Consumer Payments
+Risk Management
+Assessing and managing risk are vital to keeping the ACH Network a secure payment system.
+Risk Management Portal and ACH Contact Registry
+Risk Management Framework
+Risk Management Advisory Group
+Regulatory Guidance
+Nacha Certified
+Credit-Push Fraud Monitoring Resource Center
+Education
+In-person Events
+Payments Institute
+Nacha Risk Retreat
+Smarter Faster Payments
+Virtual Learning
+TPI Home School
+PaymentsIQ Live!
+Payments Legal & Compliance Summit
+Webinars
+Smarter Faster Payments Remote Connect
+Accreditation
+Accredited ACH Professional
+Accredited Faster Payments Professional
+Accredited Payments Risk Professional
+AAP/APRP Exchange
+CEC Center
+Accreditation Course Licensing
+Knowledge Resources
+Nacha Operating Rules & Guidelines products
+ACH Risk Management Handbook
+Third-Party Senders & the ACH Network
+Membership
+Payments Innovation Alliance
+Get Engaged
+Become an Alliance Member
+Meetings
+Project Teams
+Buzzcasts
+Spotlight! Payments Video Challenge
+Leadership
+Nacha Direct Member
+About
+Benefits
+Membership List
+Volunteer Opportunities
+Governance Opportunities
+ACH-Related Opportunities
+Government Relations Opportunities
+Accreditation Opportunities
+Enablement
+Phixius
+What is Phixius
+Details for Payment Information Requesters
+Details for Data Responders
+Hear from Phixius Customers
+Standards & Opt-in Programs
+Nacha Programs Supporting ISO 20022
+Banking Conventions and Opt-in Programs
+Solutions & Services
+Nacha Consulting
+Preferred Partners
+Account Validation Resource Center
+Nacha Operating Rules Products
+Users
+Consumers
+Direct Deposit and Direct Payment Benefits Consumers
+Watch Out! Common Scams That Can Steal Your Money
+Consumer FAQs on ACH Payments
+Corporates
+Corporates and Governmental Organizations
+Healthcare Claim Payments
+Risk Management Resources for Originators/Businesses
+Small/Medium Business
+Businesses: Small
+Nonprofits and Religious Organizations
+Subscription
+Third Parties
+Rules and Compliance
+Certification
+Education and Guidance
+About
+Store
+Events
+News
+Consulting
+Risk Resources
+Login
+Contact
+Search
+Search
+Close
+Breadcrumb
+Home
+Nacha Operating Rules - New Rules
+Micro-Entries (Phase 2)
+Nacha Operating Rules
+Details
+Technical
+Impact
+FAQs
+Effective Date
+March 17, 2023
+Rule Status
+Rule Status
+Archived Rule Changes
+Micro-Entries (Phase 2)
+This Rule will define and standardize practice and formatting of Micro-Entries, which are used by some ACH Originators as a method of account validation.
+This phase of the Rule requires Originators of Micro-Entries to use commercially reasonable fraud detection, including the monitoring of Micro-Entry forward and return volumes.
+Details
+Details
+Originators of Micro-Entries are required to use commercially reasonable fraud detection, including the monitoring of Micro-Entry forward and return volumes
+This phase of the Rule became effective March 17, 2023.
+Technical
+Technical
+In Phase 2 of the Rule risk management requirements are applied to Originators.
+An Originator of Micro-Entries must conduct commercially reasonable fraud detection on its use of Micro-Entries, including by monitoring of forward and return volumes of Micro-Entries
+The use of commercially reasonable fraud detection is intended to minimize the incidence of fraud schemes that make use of Micro-Entries
+Monitoring forward and return volumes, at a minimum, establishes a baseline of normal activity
+An Originator is not be required to perform an entry-by-entry review
+Impact
+Impact
+Benefits
+For ODFIs and their Originators
+Reduces the potential of originating fraudulently-initiated Micro-Entries
+For the ACH Network as a whole
+Improve the quality of this type of Entry in the ACH Network
+Impacts
+Originators
+Originators will need to conduct commercially reasonable fraud detection for Micro-Entries (Phase 2)
+Monitoring forward and return volumes of Micro-Entries
+Other desired velocity checks or anomaly detection
+FAQs Section
+FAQs Section
+What is expected of Originators, who must apply commercially reasonable fraud detection standards (which includes monitoring of forward and return volumes) to Micro-Entries as of March 16, 2023?
+The rule requires an organization using Micro-Entries to use reasonable methods to recognize and prevent suspicious activity. This requirement is different from the WEB Debit account validation requirement in that the account number for a Micro-Entry does not need to be individually validated, and Originators are not required to perform an entry-by-entry review. However, at a minimum, Originators should understand forward and return volumes to establish a baseline of normal Micro-Entry activity. Velocity monitoring, recognizing the number of times an account number is used (in various formats), in addition to the number of transactions, can also be an important tool in Originator’s fraud monitoring efforts.
+Does the requirement for an Originator to use commercially reasonable fraud detection methods and monitor forward and return entry volumes for Micro-Entries affect existing requirements for return rate monitoring?
+No. The fraud detection requirements for Micro-Entries are in addition to and distinct from the return rate threshold monitoring required under Article Two, Subsection 2.17.2. The new rule does not impose a specific return threshold for Micro-Entries but instead requires Originators to understand and establish a baseline for normal forward and return volumes and to recognize and react to activity outside of those levels.
+To what extent must an ODFI apply its own commercially reasonable fraud detection standards (e.g., forward and return entry monitoring, velocity checks, anomaly detection) to Micro-Entries specifically?
+An ODFI is ultimately responsible for its Originators’ compliance with the Nacha Operating Rules. While the rule imposes the requirement for commercially reasonable Micro-Entry fraud detection directly on the Originator, the ODFI should also follow the current language in Article Two, Subsection 2.2.3 regarding monitoring origination and return activity for Originators and Third-Party Senders. ODFIs may want to have ACH Origination Agreements reviewed by their compliance area along with the Rules language to determine if any additional steps need to be taken.
+Related Content
+Conference
+Payments Legal & Compliance Summit 2027
+December 1–2, 2027
+ACH
+Payments Consulting
+Blog
+Bringing ACH Processing In-House: Managing Risk, Cost, and Compliance
+September 30, 2026
+Alliance Members
+Payments Innovation Alliance Spring Meeting - June 2027
+June 7–8, 2027
+ACH
+Blog
+Technology Optimization: The Missing Link Between ACH Compliance and Scalable Growth
+August 12, 2026
+ACH
+ACH Statistics
+Business to Business
+Same Day ACH
+Press Release
+Same Day ACH Gains Lead to First Quarter ACH Network Growth
+April 20, 2026
+Press Release
+Phixius by Nacha and Kinexys by J.P. Morgan Integration Goes Live, Expanding Multi-Responder Account Validation Network
+February 5, 2026
+Blog
+From New Rules to a New Accreditation and More, a Busy 2026 Ahead at Nacha
+January 29, 2026
+Nacha Operating Rules
+Risk Management
+Blog
+Next Steps for the New Nacha Risk Management Rules
+April 3, 2026
+Nacha
+Footer
+About
+Careers
+Code of Conduct
+Contact
+Email Preferences
+Events
+Legal
+Login
+Media Kit
+Nacha Navigator
+News
+Search
+Store
+Search
+Close
+Common Searches
+Account Validation
+Accreditation
+ACH Quick Start Tool
+B2B Payments
+Consulting
+Contact Registry
+Direct Deposit
+Direct Access
+Operating Rules 2026
+Phixius
+Risk Management
+Same Day ACH
+© 2026 Nacha. All Rights Reserved.
+Social Media
+Twitter
+Linkedin
+Facebook
+Podcast
+Youtube

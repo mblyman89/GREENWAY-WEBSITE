@@ -12,6 +12,7 @@ labelled as one; it is not the rule text.
 | file | source URL | what it supports |
 | --- | --- | --- |
 | nacha-micro-entries-phase-1.txt | https://www.nacha.org/micro-entries | Micro-entry definition (< $1 credit), `ACCTVERIFY` description, fraud monitoring of micro-entries |
+| nacha-micro-entries-phase-2.txt | https://www.nacha.org/rules/micro-entries-phase-2 | Micro-entry Phase 2 (fetched 2026-10-11 for R39 S7): Originators monitor micro-entry forward and return volumes; velocity of account-number reuse; no entry-by-entry review required |
 | nacha-fraud-monitoring-phase-2.txt | https://www.nacha.org/rules/risk-management-topics-fraud-monitoring-phase-2 | June 19 / 22, 2026 fraud monitoring for all non-consumer Originators; "change controls regarding payment information and instructions for vendor and payroll payments"; annual review; False Pretenses |
 | nacha-meaningful-modernization.txt | https://www.nacha.org/rules/meaningful-modernization | "Only consumer debit authorizations require a writing that is signed or similarly authenticated" |
 | odfi-campus-federal-originator-responsibilities-2024.txt | https://www.campusfederal.org/uploads/docs/brochures/CFCU-Originator-Responsibilities-2024.pdf | ODFI summary: prenote wait 3 banking days; authorization kept 2 years from termination/revocation; NOC within 6 banking days |
