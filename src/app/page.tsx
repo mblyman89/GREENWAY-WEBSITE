@@ -147,10 +147,30 @@ export default async function Home() {
           brandTitle: brand?.title || copy["home.brand.title"],
           brandSubtitle: brand?.subtitle || copy["home.brand.subtitle"],
           editable: preview,
+          // R41 S2(a): the editor's alignment / image focus / buttons now reach
+          // the live banners. "center" focus keeps the classic look.
+          categoryTextAlign: category?.textAlign,
+          categoryImageFocus: pinnedFocus(category?.imageFocus),
+          categoryButtons: category?.buttons,
+          brandTextAlign: brand?.textAlign,
+          brandImageFocus: pinnedFocus(brand?.imageFocus),
+          brandButtons: brand?.buttons,
         }}
       />
       <Footer />
       <StaffShortcut />
     </main>
   );
+}
+
+/**
+ * R41 S2(a): only a non-"center" image focus pins the image. "center" is the
+ * seed default, and the home banners have always used the classic rule (image
+ * hugs the side opposite the text) — keep that look until the owner picks a
+ * side, so this fix never shifts a live image by surprise.
+ */
+function pinnedFocus(
+  focus: "center" | "top" | "bottom" | "left" | "right" | undefined,
+): "top" | "bottom" | "left" | "right" | undefined {
+  return focus && focus !== "center" ? focus : undefined;
 }

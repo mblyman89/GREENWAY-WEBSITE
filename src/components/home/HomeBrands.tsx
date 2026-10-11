@@ -70,6 +70,9 @@ export function HomeBrands({
           }
           editable={content?.editable}
           blockKeyPrefix="home.brand"
+          textAlign={content?.brandTextAlign}
+          imageFocus={content?.brandImageFocus}
+          buttons={content?.brandButtons}
         />
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5">

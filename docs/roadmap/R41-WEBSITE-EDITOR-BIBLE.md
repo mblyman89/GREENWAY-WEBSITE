@@ -2070,3 +2070,22 @@ These steps are repeated, with final details, in the end-of-round report.
 | S7 move mode | not started | — | — | — |
 | S8 AI | not started | — | — | — |
 | S9 report | not started | — | — | — |
+
+---
+
+## PART 13 — IMPLEMENTATION LOG (deviations found while building)
+
+- **S1 (PR #1321).** Cores shipped as specified. Self-test floors set to the
+  first green counts: banner-design-core 89, link-target-core 58. Full `tsc`
+  is OOM-killed in the 3 GB sandbox (exit 134/137); new files were typechecked
+  with a scoped tsconfig extending the repo config, and the full typecheck runs
+  in CI (`npm run typecheck`).
+- **S2(a) verification of a PART 6 S2 assumption.** The bible said "verify seed
+  `[]` buttons for home.category". VERIFIED FALSE: `page-sections-seed.ts`
+  seeds `home.category` with "Browse the menu" → /menu and `home.brand` with
+  "See all brands" → /vendor-delivery (both enabled). Those never rendered
+  because page.tsx dropped `buttons`. Decision: pass them, because the editor
+  shows them as live and the owner asked for working buttons (what you see in
+  the editor is what you get). The owner report must say: "Your home banners
+  now show the buttons listed in the editor (by default 'Browse the menu' and
+  'See all brands'). Untick 'Show' on a button to hide it."
