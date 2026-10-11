@@ -71,6 +71,8 @@ export default async function AdminSpecialsPage({
     published?: string;
     restored?: string;
     error?: string;
+    /** R43: deep link from a green ✎ Edit (hero | cards | banner). */
+    tab?: string;
   }>;
 }) {
   await requirePermission("content.edit");
@@ -234,6 +236,7 @@ export default async function AdminSpecialsPage({
             heroText={heroText}
             todaysText={todaysText}
             posts={posts}
+            initialTab={sp.tab === "cards" || sp.tab === "banner" || sp.tab === "hero" ? sp.tab : undefined}
           />
         )}
       </div>

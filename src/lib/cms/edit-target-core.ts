@@ -32,7 +32,9 @@
 import { CONTENT_BLOCK_SEEDS } from "./content-blocks-seed";
 import { CONTENT_EDITORS, ownerForBlock, type ContentEditor } from "./content-reachability-core";
 import { editorFor, parseDesignOwner, type DesignOwner } from "./design-move-core";
-import { overlayEditHref } from "./edit-link-core";
+import { AREA_BUTTON_LABEL, isSafeAdminHref, overlayEditHref, planFocus, bannerCoversBlock } from "./edit-link-core";
+
+export { isSafeAdminHref };
 
 export type EditTarget = {
   /** Same-site admin path to navigate to (always starts with "/admin/"). */
@@ -159,7 +161,7 @@ export function editTargetForBlock(blockKey: string): EditTarget {
     return { href: `${route.href}#loyalty-hero`, label: route.label };
   }
   if (editor === CONTENT_EDITORS.SPECIALS && blockKey === "specials.deals.presentation") {
-    return { href: withQuery(route.href, { tab: "cards" }), label: route.label };
+    return { href: `${withQuery(route.href, { tab: "cards" })}#specials-presentation`, label: route.label };
   }
   return { href: withQuery(route.href, { block: blockKey }), label: route.label };
 }
@@ -172,12 +174,12 @@ export function editTargetForOwner(owner: DesignOwner, pageSlug?: string | null)
   const base = editorFor(owner, pageSlug);
   switch (owner.kind) {
     case "section":
-      if (base.href === "/admin/specials") return { href: withQuery(base.href, { tab: "hero" }), label: base.label };
+      if (base.href === "/admin/specials") return { href: `${base.href}?tab=hero#specials-presentation`, label: base.label };
       return { href: `${base.href}#section-${owner.id}`, label: base.label };
     case "shop-slide":
       return { href: `${base.href}#slide-${owner.id}`, label: base.label };
     case "specials":
-      return { href: withQuery(base.href, { tab: owner.which === "todays" ? "banner" : "hero" }), label: base.label };
+      return { href: `${base.href}?tab=${owner.which === "todays" ? "banner" : "hero"}#specials-presentation`, label: base.label };
     case "loyalty":
       return { href: `${base.href}#loyalty-hero`, label: base.label };
   }
@@ -194,12 +196,11 @@ export function editTargetForOwnerString(owner: unknown, pageSlug?: string | nul
  * with an owner id. Add a new area here + tag the element with
  * data-gw-edit-area="<id>" (only in preview) and the ✎ Edit button appears.
  */
-export const EDIT_AREAS: Readonly<Record<string, EditTarget & { button: string }>> = {
-  "home-carousel": { href: "/admin/pages/home?tab=carousel", label: "the Home carousel editor", button: "✎ Edit slides" },
-  "home-typecards": { href: "/admin/pages/home?tab=typecards", label: "the Home type cards editor", button: "✎ Edit cards" },
-  "specials-cards": { href: "/admin/specials?tab=cards", label: "the Specials editor", button: "✎ Edit deal cards" },
-  "specials-todays": { href: "/admin/specials?tab=banner", label: "the Specials editor", button: "✎ Edit today's deal" },
-  "shop-banner": { href: "/admin/content/shop-banner", label: "the Shop banner editor", button: "✎ Edit banner" },
+export const EDIT_AREAS: Readonly<Record<string, EditTarget>> = {
+  "home-carousel": { href: "/admin/pages/home?tab=carousel", label: "the Home carousel editor" },
+  "home-typecards": { href: "/admin/pages/home?tab=typecards", label: "the Home type cards editor" },
+  "specials-cards": { href: "/admin/specials?tab=cards#specials-presentation", label: "the Specials editor" },
+  "shop-banner": { href: "/admin/content/shop-banner", label: "the Shop banner editor" },
 };
 
 export function editTargetForArea(area: unknown): EditTarget {
@@ -220,10 +221,6 @@ export function withReturn(target: EditTarget, from: unknown, path: unknown): Ed
   return { href: withQuery(target.href, { gwfrom: f, gwpath: p }), label: target.label };
 }
 
-/** True for a same-site admin path (the only thing the parent will navigate to). */
-export function isSafeAdminHref(href: unknown): href is string {
-  return typeof href === "string" && /^\/admin(\/|\?|#|$)/.test(href) && !href.startsWith("//") && !/[\s\\]/.test(href);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure self-tests (throw on failure). Registered in the pure-selftest runner.
@@ -245,7 +242,7 @@ export function __runEditTargetCoreTests(): { passed: number } {
 
   // Specific landings.
   ok(editTargetForBlock("specials.hero.title").href === "/admin/specials?block=specials.hero.title", "specials hero text");
-  ok(editTargetForBlock("specials.deals.presentation").href === "/admin/specials?tab=cards", "specials deal cards");
+  ok(editTargetForBlock("specials.deals.presentation").href === "/admin/specials?tab=cards#specials-presentation", "specials deal cards");
   ok(editTargetForBlock("footer.compliance.warning").href === "/admin/header-footer?block=footer.compliance.warning", "footer warning");
   ok(editTargetForBlock("business.hours.display").href.startsWith("/admin/header-footer?"), "hours override -> header-footer");
   ok(editTargetForBlock("site.font.heading").href.startsWith("/admin/settings/branding?block="), "fonts -> branding");
@@ -278,10 +275,10 @@ export function __runEditTargetCoreTests(): { passed: number } {
     editTargetForOwnerString(`section:${uuid}`, "home").href === `/admin/pages/home?tab=sections#section-${uuid}`,
     "home section keeps tab + anchor",
   );
-  ok(editTargetForOwnerString(`section:${uuid}`, "specials").href === "/admin/specials?tab=hero", "legacy specials section");
+  ok(editTargetForOwnerString(`section:${uuid}`, "specials").href === "/admin/specials?tab=hero#specials-presentation", "legacy specials section");
   ok(editTargetForOwnerString(`shop-slide:${uuid}`).href === `/admin/content/shop-banner#slide-${uuid}`, "shop slide");
-  ok(editTargetForOwnerString("specials:hero").href === "/admin/specials?tab=hero", "specials hero design");
-  ok(editTargetForOwnerString("specials:todays").href === "/admin/specials?tab=banner", "specials todays design");
+  ok(editTargetForOwnerString("specials:hero").href === "/admin/specials?tab=hero#specials-presentation", "specials hero design");
+  ok(editTargetForOwnerString("specials:todays").href === "/admin/specials?tab=banner#specials-presentation", "specials todays design");
   ok(editTargetForOwnerString("loyalty:hero").href === "/admin/loyalty-page#loyalty-hero", "loyalty design");
   ok(editTargetForOwnerString("section:not-a-uuid").href === EDIT_FALLBACK.href, "bad owner -> fallback");
 
@@ -289,6 +286,10 @@ export function __runEditTargetCoreTests(): { passed: number } {
   ok(editTargetForArea("home-carousel").href === "/admin/pages/home?tab=carousel", "carousel area");
   ok(editTargetForArea("toString").href === EDIT_FALLBACK.href, "prototype keys refused");
   for (const k of Object.keys(EDIT_AREAS)) ok(isSafeAdminHref(EDIT_AREAS[k].href), `area ${k} safe`);
+  ok(
+    JSON.stringify(Object.keys(EDIT_AREAS).sort()) === JSON.stringify(Object.keys(AREA_BUTTON_LABEL).sort()),
+    "every area has a button label (edit-link-core) and a destination (here)",
+  );
 
   // Return breadcrumb.
   ok(
@@ -322,6 +323,19 @@ export function __runEditTargetCoreTests(): { passed: number } {
       "/admin/edit?owner=loyalty%3Ahero&from=site&path=%2Floyalty",
     "overlay owner link",
   );
+
+  // Landing focus plan (AdminBlockFocus).
+  const p1 = planFocus("?block=specials.hero.title&gwfrom=hub&gwpath=%2Fspecials", "");
+  ok(p1.blockKey === "specials.hero.title" && p1.anchorId === null, "plan: block");
+  ok(p1.back?.href === "/admin/website-sync?tab=preview&path=%2Fspecials", "plan: hub back link");
+  const p2 = planFocus("?gwfrom=site&gwpath=%2Floyalty", "#loyalty-hero");
+  ok(p2.anchorId === "loyalty-hero" && p2.back?.href === "/api/admin/preview/enable?path=%2Floyalty", "plan: site back link");
+  ok(planFocus("?gwfrom=hub&gwpath=%2F%2Fevil.com", "").back?.href === "/admin/website-sync?tab=preview&path=%2F", "plan: bad path -> /");
+  ok(planFocus("?block=<script>", "#a b").blockKey === null, "plan: junk block refused");
+  ok(planFocus("", "#a b").anchorId === null, "plan: junk anchor refused");
+  ok(planFocus("", "").back === null, "plan: no pill without gwfrom");
+  ok(planFocus("?gwfrom=evil", "").back === null, "plan: unknown from ignored");
+  ok(bannerCoversBlock("home.category.title") && !bannerCoversBlock("specials.hero.title"), "banner covers home blocks");
 
   return { passed };
 }

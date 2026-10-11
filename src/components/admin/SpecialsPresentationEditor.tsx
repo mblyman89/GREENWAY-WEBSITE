@@ -121,6 +121,8 @@ type Props = {
   legacyHeroButtons?: SpecialsHeroButton[];
   /** R41 S4: legacy hero image from the old row (used when no image is set here). */
   legacyHeroImage?: string;
+  /** R43: which tab to open first (from a ✎ Edit deep link). Default "hero". */
+  initialTab?: TabKey;
   /** R41 S4: current hero wording (for the design studio's bound text boxes). */
   heroText?: { eyebrow?: string; title?: string; subtitle?: string };
   /** R41 S4: today's deal wording (for the Today's Deal design studio). */
@@ -157,7 +159,8 @@ export function SpecialsPresentationEditor(props: Props) {
   const todaysText = props.todaysText ?? { title: "Today's Deals", subtitle: "" };
   const [pres, setPres] = useState<SpecialsPresentation>(() => initialPresentation(props));
   const [showHistory, setShowHistory] = useState(false);
-  const [tab, setTab] = useState<TabKey>("hero");
+  // R43: a green ✎ Edit deep link (?tab=cards|banner|hero) opens the right tab.
+  const [tab, setTab] = useState<TabKey>(props.initialTab ?? "hero");
   const formRef = useRef<HTMLFormElement>(null);
 
   const serialized = useMemo(() => serializeSpecialsPresentation(pres), [pres]);
@@ -213,7 +216,7 @@ export function SpecialsPresentationEditor(props: Props) {
   const visibleOrder = useMemo(() => orderedVisibleWeekdays(pres), [pres]);
 
   return (
-    <div className="space-y-6">
+    <div id="specials-presentation" className="scroll-mt-4 space-y-6">
       {/* Caution / boundary banner. */}
       <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
         <strong>This controls how deals are PRESENTED — not the prices.</strong> Turn day cards on or

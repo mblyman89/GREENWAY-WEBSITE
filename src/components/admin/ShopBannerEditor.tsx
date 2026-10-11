@@ -16,7 +16,7 @@
  * constants + helpers used here come from the pure cores.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
@@ -460,8 +460,23 @@ function SlideCard({
 
   const title = pres.title.text.split("\n")[0] || "(untitled slide)";
 
+  // R43: a green ✎ Edit deep link (#slide-<id>) opens this card. AdminBlockFocus
+  // scrolls to it and dispatches gw-expand on the card root.
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const onExpand = () => setOpen(true);
+    el.addEventListener("gw-expand", onExpand);
+    return () => el.removeEventListener("gw-expand", onExpand);
+  }, []);
+
   return (
-    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)]">
+    <div
+      ref={cardRef}
+      id={`slide-${slide.id}`}
+      className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)]"
+    >
       {/* Card header — collapse toggle + status + reorder + delete */}
       <div className="flex flex-wrap items-center gap-3 border-b border-[var(--admin-border)] px-4 py-3">
         <button
