@@ -199,6 +199,67 @@ commit + push after every task, no drift.
       - Full compliance vitest: 832 files, 22,014 tests passed. Pure
         self-tests: ALL PASSED. Typecheck EXIT 0. Lint on all S6 files:
         0 problems.
-- [ ] S7 returns / NOC log + notifications, prenote file, retention / legal
+- [x] S7 returns / NOC log + notifications, prenote file, retention / legal
       hold, annual review reminder
+      - Part 1, vendor e-sign by link (owner answer Q5, "as simple as
+        possible"):
+        - 0262 adds vendor_esign_invites plus the complete, countersign and
+          reject RPCs (service_role only), with a refusing rollback. SQL
+          mutation run 84/84.
+        - The GW-ACH-V terms are generated verbatim from the paper form (93
+          paragraphs, sha-pinned) and checked by an independent verifier.
+        - A public /vendor-ach/[token] page is phone-first. It has no
+          analytics, is exempt from the age gate, and is disallowed in
+          robots.
+        - Admin card plus bulk invite. Tests: core 19, parity 15, store
+          behaviour 35, wiring 26.
+      - Part 2, ACH operations (0263 plus Banking -> ACH operations):
+        - 0263 adds no tables, only columns, guards and eight service_role
+          functions:
+          - ach_notice_log
+          - ach_notice_resolve
+          - ach_auth_release_hold
+          - ach_verification_start / mark_sent / finish
+          - ach_auth_set_legal_hold
+          - ach_auth_review_done
+        - Each function writes the append-only event log in the same
+          transaction. pg-check ends with ACH 0263 CHECK PASSED. The rollback
+          refuses once 0263 has been used. SQL mutation run 80/80; SQL vs core
+          parity 14/14.
+        - Returns and change notices (Q9): the bank's notice is parsed by
+          src/lib/payments/ach-return-log-core.ts. A change notice's corrected
+          number is stored only AES-GCM encrypted (encv1:) with last 4 shown.
+          The payee goes on hold at once: an employee authorization goes
+          on_hold, a vendor's vault goes on_hold. Stephen, Michael and the
+          store are emailed through Resend, with call numbers listed from
+          ACH_NOTIFY_*.
+        - Employee hold release mirrors the 0259 vault release: how the
+          employee confirmed, plus a note. If the person who caused the hold
+          releases it, the release is solo, needs a 20+ character reason, and
+          the other owner is emailed.
+        - Account checks (Q3): prenote ($0, passes from its first live day),
+          test credit (1-99 cents from crypto.randomInt; the amount is never
+          shown, audited or put in a redirect) or voided-check callback.
+          - The check file is built with the existing NACHA builder and
+            downloaded through a GET route that records nothing. The route is
+            settings.manage, no-store, nosniff, CRLF, and needs the page's
+            16-hex fingerprint of the planned ids.
+          - "Confirm sent" is a separate action with a checkbox. It rebuilds
+            the plan, refuses if the list changed, then calls mark_sent once.
+        - Annual review (Nacha 2026 fraud rule) and test-credit monitoring
+          (Nacha Micro-Entries Phase 2: forward/return volumes and
+          account-number velocity, verbatim-cited).
+        - Retention line per record (Q7/Q8): kept while in effect, then 6
+          years after it ends; never deleted automatically. Legal hold on/off
+          with a reason.
+        - Files:
+          - src/lib/payments/ach-ops-core.ts (87 self-tests, mutation 58/58)
+          - ach-ops-store.ts (44 behaviour tests over real postgrest-js plus
+            FakePostgrest, real AES-GCM, real NACHA builder; mutation 64/64)
+          - ach-ops-ui-core.ts (17 self-tests)
+          - src/app/admin/settings/banking/ops-actions.ts (8 actions, each
+            settings.manage first, audited after success)
+          - operations/page.tsx and operations/check-file/route.ts
+        - Wiring test: 20 tests, mutation 26/26. A test fails if any ops
+          mutation log is stale (it is tamper-tested).
 - [ ] S8 docs, test plan, PR, merge, production verification
