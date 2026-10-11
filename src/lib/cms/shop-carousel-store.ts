@@ -126,7 +126,13 @@ function resolveForRender(
     preview && row.draft_presentation != null
       ? row.draft_presentation
       : row.presentation;
-  return { key: row.slide_key, presentation: pres };
+  return {
+    key: row.slide_key,
+    presentation: pres,
+    // R41 S6: lets the hub Move mode save drags to THIS slide's draft. Only
+    // in Draft Mode, so public pages never carry edit hooks or row ids.
+    designOwner: preview && row.id ? `shop-slide:${row.id}` : undefined,
+  };
 }
 
 /**

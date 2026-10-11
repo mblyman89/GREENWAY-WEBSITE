@@ -25,6 +25,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DesignedBanner } from "@/components/site/DesignedBanner";
 import {
   heroFontStack,
   heroColorHex,
@@ -213,10 +214,36 @@ function SlideBody({
 export function SlideView({
   presentation,
   priority = false,
+  designOwner,
 }: {
   presentation: ShopHeroPresentation;
   priority?: boolean;
+  /** R41 S6: "shop-slide:<uuid>" so the hub Move mode can save drags. */
+  designOwner?: string;
 }) {
+  // R41 S6: the owner's Banner Studio design for this slide (classic slide
+  // below is untouched when no design is on). Bound text boxes follow the
+  // three blocks' words (a hidden block shows nothing). The page <h1> lives
+  // elsewhere on /menu, so slide headlines stay h2.
+  if (presentation.design?.enabled) {
+    const words = (b: ShopHeroPresentation["eyebrow"]) => (b.show ? b.text : "");
+    return (
+      <DesignedBanner
+        design={presentation.design}
+        imageSrc={presentation.image || presentation.imageMobile}
+        imageAlt=""
+        legacy={{
+          eyebrow: words(presentation.eyebrow),
+          title: words(presentation.title),
+          subtitle: words(presentation.subtitle),
+        }}
+        headingLevel={2}
+        priority={priority}
+        editable={!!designOwner}
+        owner={designOwner}
+      />
+    );
+  }
   return (
     <>
       {/* MOBILE (own art + focus, ~3:1). */}
@@ -350,7 +377,11 @@ export function ShopBannerCarousel({ slides }: { slides: ShopRenderSlide[] }) {
                 aria-roledescription="slide"
                 aria-label={`${index + 1} of ${count}`}
               >
-                <SlideView presentation={slide.presentation} priority={index === 0} />
+                <SlideView
+                  presentation={slide.presentation}
+                  priority={index === 0}
+                  designOwner={slide.designOwner}
+                />
               </div>
             );
           })}

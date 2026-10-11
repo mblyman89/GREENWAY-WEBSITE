@@ -15,6 +15,7 @@ import { listMedia } from "@/lib/media/store";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { resolveImageSpec } from "@/lib/cms/image-spec-core";
 import { listShopPromotionChoices } from "@/lib/cms/shop-promotion-choices";
+import { listPublishedPostLinks } from "@/lib/cms/blog-store";
 import {
   seedShopBannerAction,
   addShopBannerSlideAction,
@@ -112,6 +113,8 @@ export default async function AdminShopBannerPage({
   // the committed daily-deal seeds when the DB is empty, so the picker is never
   // blank.
   const promotionChoices = await listShopPromotionChoices();
+  // R41 S6: blog posts / newsletters for the slide design's link picker.
+  const posts = await listPublishedPostLinks().catch(() => []);
 
   return (
     <div>
@@ -172,6 +175,7 @@ export default async function AdminShopBannerPage({
           publishAction={publishShopBannerSlideAction}
           deleteAction={deleteShopBannerSlideAction}
           moveAction={moveShopBannerSlideAction}
+          posts={posts}
           seedAction={seedShopBannerAction}
         />
       </div>

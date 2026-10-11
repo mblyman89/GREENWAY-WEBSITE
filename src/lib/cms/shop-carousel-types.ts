@@ -43,6 +43,8 @@ export type ShopCarouselSlideRow = {
 export type ShopRenderSlide = {
   key: string;
   presentation: ShopHeroPresentation;
+  /** R41: design owner id for the hub Move mode ("shop-slide:<uuid>"). */
+  designOwner?: string;
 };
 
 /**

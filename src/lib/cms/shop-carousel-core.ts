@@ -51,6 +51,7 @@ import {
   clampScriptScale,
   SCRIPT_SCALE_DEFAULT,
 } from "@/lib/loyalty/loyalty-hero-core";
+import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
 
 /** Up to ten slides shown publicly + the editor's add cap (owner request). */
 export const MAX_SHOP_CAROUSEL_SLIDES = 10;
@@ -223,6 +224,13 @@ export type ShopHeroPresentation = {
    */
   scheduleStart: string | null;
   scheduleEnd: string | null;
+  /**
+   * R41 S6: optional Banner Studio design for this slide. Only used when
+   * `design.enabled`; otherwise the classic slide renders exactly as before.
+   * ABSENT from the default + stored JSON until the owner turns it on, so every
+   * existing slide serializes byte-identically.
+   */
+  design?: BannerDesign | null;
 };
 
 /**
@@ -277,6 +285,7 @@ export function normalizeShopHeroPresentation(input: unknown): ShopHeroPresentat
   const base = defaultShopHeroPresentation();
   if (!input || typeof input !== "object") return base;
   const obj = input as Record<string, unknown>;
+  const design = normalizeDesign(obj.design);
 
   return {
     image: cleanImage(obj.image, base.image),
@@ -294,6 +303,8 @@ export function normalizeShopHeroPresentation(input: unknown): ShopHeroPresentat
     promotion: normalizeShopSlidePromotion(obj.promotion),
     scheduleStart: cleanSchedule(obj.scheduleStart),
     scheduleEnd: cleanSchedule(obj.scheduleEnd),
+    // R41 S6: only present when a valid design is stored (never a null key).
+    ...(design ? { design } : {}),
   };
 }
 
@@ -318,6 +329,8 @@ export function serializeShopHeroPresentation(p: ShopHeroPresentation): string {
     promotion: n.promotion,
     scheduleStart: n.scheduleStart,
     scheduleEnd: n.scheduleEnd,
+    // R41 S6: appended LAST and only when set, so old slides stay byte-identical.
+    ...(n.design ? { design: n.design } : {}),
   });
 }
 
@@ -605,6 +618,18 @@ export function __runShopCarouselCoreTests(): { passed: number } {
   // Cap at ten even with more linked slides.
   const many = Array.from({ length: 14 }, (_, i) => mk(`p${i}`, true, `F${i}`));
   ok(collectShopSaleFilters(many).length === MAX_SHOP_CAROUSEL_SLIDES, "collect caps at ten filters");
+
+  // R41 S6: optional Banner Studio design per slide.
+  const d0 = defaultShopHeroPresentation();
+  ok(!("design" in d0), "default slide has no design key");
+  ok(!serializeShopHeroPresentation(d0).includes('"design"'), "default slide JSON has no design key");
+  ok(!("design" in normalizeShopHeroPresentation({ design: "junk" })), "junk slide design dropped");
+  const sd = normalizeShopHeroPresentation({ design: { enabled: true, boxes: [] } });
+  ok(!!sd.design && sd.design.enabled, "valid slide design normalized");
+  const sdr = parseShopHeroPresentation(serializeShopHeroPresentation(sd))!;
+  ok(!!sdr.design && sdr.design.enabled, "slide design round-trips");
+  const sdOff = normalizeShopHeroPresentation({ design: { enabled: false, boxes: [] } });
+  ok(!!sdOff.design && !sdOff.design.enabled, "switched-off slide design kept");
 
   return { passed };
 }
