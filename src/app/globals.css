@@ -624,3 +624,24 @@ h1, h2, h3, h4, h5, h6 {
     border-bottom-color: transparent;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * R41 S2: designed banners (bible PART 5.3 R-3). Inline styles can't hold
+ * container queries, so the phone overrides live here. Each box/button sets
+ * --gx/--gy/--gw (desktop) and optionally --gmx/--gmy/--gmw (phone); below
+ * 768px of BANNER width the phone values win. The image swaps to its phone
+ * focal point the same way.
+ * ------------------------------------------------------------------------- */
+@container gwb (max-width: 767px) {
+  .gw-dbox {
+    --gbx: var(--gmx, var(--gx));
+    --gby: var(--gmy, var(--gy));
+    --gbw: var(--gmw, var(--gw));
+  }
+  .gw-dimg {
+    --gip: var(--gip-m);
+  }
+  .gw-hide-sm {
+    display: none !important;
+  }
+}

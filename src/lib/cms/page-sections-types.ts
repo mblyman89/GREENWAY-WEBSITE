@@ -124,6 +124,8 @@ export type PageSectionRow = {
  * draft_* values, otherwise published). All fields non-null with fallbacks.
  */
 export type RenderSection = {
+  /** R41: row id (used as the design owner "section:<id>" for hub Move mode). */
+  id: string;
   key: string;
   kind: SectionKind;
   image: string;

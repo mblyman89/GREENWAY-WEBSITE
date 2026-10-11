@@ -1,5 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import { DesignedBanner } from "@/components/site/DesignedBanner";
+import type { BannerDesign } from "@/lib/cms/banner-design-core";
 
 /** A call-to-action button rendered inside a SectionBanner. */
 export type SectionBannerButton = {
@@ -59,6 +61,9 @@ export function SectionBanner({
   textAlign = "left",
   verticalAlign = "center",
   imageFocus,
+  design,
+  designOwner,
+  headingLevel = 2,
 }: {
   imageSrc: string;
   imageAlt: string;
@@ -84,7 +89,32 @@ export function SectionBanner({
    * a stable image that no longer jumps when the text is re-aligned.
    */
   imageFocus?: "center" | "top" | "bottom" | "left" | "right";
+  /**
+   * R41 S2: the owner's custom design for this banner (Banner Studio). Only
+   * used when `design.enabled`; otherwise the classic layout below renders
+   * exactly as before.
+   */
+  design?: BannerDesign | null;
+  /** R41: who owns the design ("section:<uuid>" …) — for the hub Move mode. */
+  designOwner?: string;
+  /** R41: 1 for a page's top hero, else 2 (designed banners only). */
+  headingLevel?: 1 | 2;
 }) {
+  if (design?.enabled) {
+    return (
+      <DesignedBanner
+        design={design}
+        imageSrc={imageSrc}
+        imageAlt={imageAlt}
+        legacy={{ eyebrow, title, subtitle }}
+        headingLevel={headingLevel}
+        priority={priority}
+        editable={editable}
+        owner={designOwner}
+        blockKeyPrefix={blockKeyPrefix}
+      />
+    );
+  }
   const visibleButtons = (buttons ?? []).filter(
     (b) => b.enabled !== false && b.label?.trim() && b.href?.trim(),
   );
@@ -150,21 +180,21 @@ export function SectionBanner({
       <div className={`relative flex min-h-[5.5rem] flex-col px-5 py-4 md:min-h-[7.5rem] md:px-9 md:py-6 ${textBlockClass}`}>
         {eyebrow ? (
           <p
-            className="text-[0.6rem] font-black uppercase tracking-[0.22em] text-[var(--greenway)] md:text-xs"
+            className="whitespace-pre-line text-[0.6rem] font-black uppercase tracking-[0.22em] text-[var(--greenway)] md:text-xs"
             {...editAttrs("eyebrow")}
           >
             {eyebrow}
           </p>
         ) : null}
         <h2
-          className={`mt-1 text-2xl font-black uppercase leading-none tracking-tight md:text-4xl lg:text-5xl ${titleClassName}`}
+          className={`mt-1 whitespace-pre-line text-2xl font-black uppercase leading-none tracking-tight md:text-4xl lg:text-5xl ${titleClassName}`}
           {...editAttrs("title")}
         >
           {title}
         </h2>
         {subtitle ? (
           <p
-            className="mt-1.5 max-w-md text-[0.72rem] font-semibold leading-5 text-zinc-300 md:mt-2 md:max-w-xl md:text-sm"
+            className="mt-1.5 max-w-md whitespace-pre-line text-[0.72rem] font-semibold leading-5 text-zinc-300 md:mt-2 md:max-w-xl md:text-sm"
             {...editAttrs("subtitle")}
           >
             {subtitle}

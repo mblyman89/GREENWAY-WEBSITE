@@ -27,6 +27,7 @@ import {
   sectionCapFor,
 } from "./page-sections-types";
 import { seedsForPage } from "./page-sections-seed";
+import { readDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
 
 const SELECT = "*";
 
@@ -129,6 +130,7 @@ function resolveForRender(row: PageSectionRow, preview: boolean): RenderSection 
     preview && draft != null ? draft : published;
 
   return {
+    id: row.id,
     key: row.section_key,
     kind: row.kind,
     image: pick(row.draft_image, row.image ?? "") || "",
@@ -222,6 +224,11 @@ export type BannerData = {
   title: string;
   subtitle: string;
   buttons: { label: string; href: string; variant: SectionButtonVariant; enabled: boolean }[];
+  /** R41 S2/S6: text alignment + custom design (optional, additive). */
+  textAlign?: SectionTextAlign;
+  design?: BannerDesign | null;
+  /** R41: design owner id for the hub Move mode ("section:<uuid>"). */
+  designOwner?: string;
 };
 
 /** Map a resolved RenderSection to the client-safe BannerData shape. */
@@ -240,6 +247,9 @@ export function toBannerData(s: RenderSection): BannerData {
       variant: b.variant,
       enabled: b.enabled,
     })),
+    textAlign: s.textAlign,
+    design: readDesign(s.settings),
+    designOwner: s.id ? `section:${s.id}` : undefined,
   };
 }
 
