@@ -904,6 +904,7 @@ import { __runAchGuideCoreTests } from "../../src/lib/payments/ach-guide-core";
 import { __runBannerDesignCoreTests } from "../../src/lib/cms/banner-design-core";
 import { __runLinkTargetCoreTests } from "../../src/lib/cms/link-target-core";
 import { __runTypeCardsTests } from "../../src/lib/cms/type-cards-core";
+import { __runLoyaltyConsentTests } from "../../src/lib/loyalty/loyalty-consent-core";
 import { __runVendorEsignAppCoreTests } from "../../src/lib/payments/vendor-esign-app-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
@@ -2182,6 +2183,7 @@ __runLiquidVolumeTests();
   assertRan("banner-design-core", __runBannerDesignCoreTests(), 89); // R41 S1: banner design model, contrast, moves
   assertRan("link-target-core", __runLinkTargetCoreTests(), 58); // R41 S1: button link picker targets
   assertRan("type-cards-core", __runTypeCardsTests(), 42); // R41 S3: home Type Cards
+  assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
