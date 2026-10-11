@@ -430,6 +430,25 @@ describe("check file: build (GET, records nothing) and confirm sent", () => {
     expect(b.plan.eligible > EFFECTIVE).toBe(true);
   });
 
+  it("a check already sent is never put in a file again (only planned ones are read)", async () => {
+    st.db.tables.get("ach_verifications")!.push({ id: VER2, account_id: ACC1, method: "prenote", status: "sent", micro_amount_cents: null });
+    const r = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    expect(r.ok && r.plan.ids).toEqual([VER1]);
+  });
+
+  it("confirm sent with two checks: both ids reach mark_sent, sorted, and the count must match", async () => {
+    st.db.tables.get("ach_authorizations")!.find((a) => a.id === AUTH2)!.state = "verifying";
+    st.db.tables.get("ach_verifications")!.push({ id: VER2, account_id: ACC2, method: "prenote", status: "planned", micro_amount_cents: null });
+    const b = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
+    if (!b.ok) throw new Error(b.error);
+    expect(b.plan.ids).toEqual([VER1, VER2]);
+    expect(b.plan.filename).toBe("acctcheck_prenote_2026-10-06_2.ach");
+    reply({ ach_verification_mark_sent: 2 });
+    const r = await store.markCheckFileSent({ method: "prenote", effective: EFFECTIVE, fingerprint: b.fingerprint, actorId: MICHAEL, todayIso: TODAY, now: NOW });
+    expect(r.ok && r.count).toBe(2);
+    expect(rpcs("ach_verification_mark_sent")[0].body.p_ids).toEqual([VER1, VER2]);
+  });
+
   it("the list changed after download (a new check planned): refused, nothing marked", async () => {
     const b = await store.buildCheckFile({ method: "prenote", effective: EFFECTIVE, todayIso: TODAY, now: NOW });
     if (!b.ok) throw new Error(b.error);
@@ -477,6 +496,12 @@ describe("legal hold and annual review", () => {
     const r = await store.setLegalHold({ authId: AUTH1, actorId: MICHAEL, on: true, reason: "Letter from L&I dated 2026-10-01" });
     expect(r.ok).toBe(true);
     expect(rpcs("ach_auth_set_legal_hold")[0].body).toEqual({ p_auth_id: AUTH1, p_actor: MICHAEL, p_on: true, p_reason: "Letter from L&I dated 2026-10-01" });
+  });
+  it("legal hold off sends p_on false", async () => {
+    reply({ ach_auth_set_legal_hold: null });
+    const r = await store.setLegalHold({ authId: AUTH1, actorId: MICHAEL, on: false, reason: "Matter closed per letter 2026-10-01" });
+    expect(r.ok).toBe(true);
+    expect(rpcs("ach_auth_set_legal_hold")[0].body.p_on).toBe(false);
   });
   it("review done returns the next due date; a non-date reply is not success; refusals in words", async () => {
     reply({ ach_auth_review_done: "2027-10-05" });
@@ -531,6 +556,21 @@ describe("opsPageView", () => {
     st.db.tables.get("ach_verifications")!.push({ id: VER2, account_id: ACC2, method: "prenote", status: "passed", micro_amount_cents: null, effective_date: "2026-09-20", settlement_date: "2026-09-20", eligible_on: "2026-09-23", result_code: null, created_at: "2026-09-19T18:00:00Z" });
     const v = await store.opsPageView(TODAY);
     expect(v.monitor.flags.some((f) => /more than one person/.test(f))).toBe(true);
+  });
+
+  it("an archived account is not on the checks list", async () => {
+    st.db.tables.get("ach_authorization_accounts")!.find((a) => a.id === ACC2)!.archived_at = "2026-10-01T00:00:00Z";
+    const v = await store.opsPageView(TODAY);
+    expect(v.checks.map((c) => c.accountId)).toEqual([ACC1]);
+  });
+
+  it("an open vendor notice shows the vendor's name; an unknown payee says so", async () => {
+    st.db.tables.set("ach_return_notices", [
+      { id: NID, notice_kind: "noc", code: "C02", received_on: "2026-10-01", apply_by: "2026-10-07", payee_type: "vendor", employee_id: null, vendor_id: VEND, hold_applied: "vault", corrected_last4: "0015", verification_id: null, resolved_at: null },
+      { id: VER2, notice_kind: "return", code: "R02", received_on: "2026-10-01", apply_by: null, payee_type: "employee", employee_id: AUTH1, vendor_id: null, hold_applied: "none", corrected_last4: null, verification_id: null, resolved_at: null },
+    ]);
+    const v = await store.opsPageView(TODAY);
+    expect(v.notices.map((n) => [n.code, n.payee])).toEqual([["C02", "Acme Farms"], ["R02", "(unknown payee)"]]);
   });
 
   it("a verified account with no open check drops off the checks list", async () => {
