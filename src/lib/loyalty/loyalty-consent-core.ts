@@ -234,7 +234,8 @@ export function isMissingConsentColumnError(
 // ---------------------------------------------------------------------------
 // Pure self-tests (run by scripts/compliance/run-pure-selftests.ts).
 // ---------------------------------------------------------------------------
-export function __runLoyaltyConsentTests(): { passed: number } {
+export function __runLoyaltyConsentTests(): { passed: number; failed: number } {
+  // Throws on the first failed assertion, so `failed` is always 0 when it returns.
   let passed = 0;
   const ok = (cond: boolean, msg: string) => {
     if (!cond) throw new Error("loyalty-consent-core: " + msg);
@@ -325,5 +326,5 @@ export function __runLoyaltyConsentTests(): { passed: number } {
   ok(!isMissingConsentColumnError(null), "null error");
 
   ok(LOYALTY_CONSENT_BLOCK === "loyalty.form.consent_text", "block key");
-  return { passed };
+  return { passed, failed: 0 };
 }
