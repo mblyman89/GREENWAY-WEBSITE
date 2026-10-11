@@ -124,6 +124,56 @@ export async function uploadMedia(input: UploadMediaInput): Promise<MediaAsset> 
   return data as MediaAsset;
 }
 
+/**
+ * R44: add the Media Library row for a file the BROWSER uploaded straight to
+ * Storage (bypassing Vercel's 4.5 MB Function body cap). The caller has already
+ * verified the object exists with the declared size + type; this only inserts
+ * the catalogue row, mirroring uploadMedia's columns exactly.
+ */
+export type RegisterUploadedMediaInput = {
+  storageKey: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  width: number | null;
+  height: number | null;
+  altText?: string;
+  title?: string;
+  usageType?: string;
+  tags?: string[];
+  uploadedBy: string | null;
+  status?: "draft" | "published";
+  description?: string;
+};
+
+export async function registerUploadedMedia(input: RegisterUploadedMediaInput): Promise<MediaAsset> {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("media_assets")
+    .insert({
+      storage_key: input.storageKey,
+      public_url: publicUrlForKey(input.storageKey),
+      filename: input.filename,
+      mime_type: input.mimeType,
+      size_bytes: input.sizeBytes,
+      width: input.width,
+      height: input.height,
+      alt_text: input.altText ?? null,
+      title: input.title ?? input.filename,
+      description: input.description ?? null,
+      usage_type: input.usageType ?? null,
+      tags: input.tags ?? [],
+      status: input.status ?? "draft",
+      source: "upload:direct",
+      license_status: null,
+      uploaded_by: input.uploadedBy,
+    })
+    .select("*")
+    .single();
+  if (error || !data) throw new Error(`media_assets insert failed: ${error?.message}`);
+  return data as MediaAsset;
+}
+
 export async function listMedia(opts?: { usageType?: string; status?: string; limit?: number }): Promise<MediaAsset[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
