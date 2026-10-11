@@ -58,14 +58,14 @@ export function Hero({
 
   const dwellFor = useCallback(
     (index: number) => {
-      const slide = safeSlides[index];
+      const slide = slides[index];
       if (!slide) return AUTOPLAY_MS;
       return dwellMs(
         AUTOPLAY_MS,
         wordCount([slide.eyebrow, slide.title, slide.description, ...slide.ctas.map((c) => c.label)]),
       );
     },
-    [safeSlides],
+    [slides],
   );
   const carousel = useCarouselAutoplay(count, dwellFor);
   const { active, next, prev, goTo } = carousel;
@@ -219,9 +219,15 @@ export function Hero({
   );
 }
 
-const HEADING_CLASS =
-  "mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl";
-
+/** R45-S1: slide 1 owns the page's single <h1>; later slides use an identical-looking <h2>. */
 function SlideHeading({ first, children }: { first: boolean; children: React.ReactNode }) {
-  return first ? <h1 className={HEADING_CLASS}>{children}</h1> : <h2 className={HEADING_CLASS}>{children}</h2>;
+  return first ? (
+    <h1 className="mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl">
+      {children}
+    </h1>
+  ) : (
+    <h2 className="mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl">
+      {children}
+    </h2>
+  );
 }
