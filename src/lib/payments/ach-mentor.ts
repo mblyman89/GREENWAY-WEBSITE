@@ -335,6 +335,17 @@ export const ACH_TOPIC_LESSONS: readonly AchLesson[] = [
       "already do. You also mentioned your Plaid plan is the hobby tier.",
     authorities: ["ach-plaid-same-day", "ach-micro-entry-definition"],
   },
+  {
+    key: "test-credit-monitoring",
+    title: "Watching the test credits",
+    plain:
+      "If Greenway sends test credits, Nacha expects it to know how many go out and how many come back, and to " +
+      "notice when that changes. There is no fixed limit; nobody has to review each one. The banking page counts " +
+      "test credits sent and returned over the last 30 days and the last year, and flags anything unusual: a test " +
+      "credit that came back, the same account number tested more than twice, or one account number given by two " +
+      "different people.",
+    authorities: ["ach-micro-entry-monitor-volumes", "ach-micro-entry-no-simultaneous-live"],
+  },
 ];
 
 /**
