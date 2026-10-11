@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
 import type { BannerDesign } from "@/lib/cms/banner-design-core";
+import { isGifSrc } from "@/lib/media/gif-core";
 
 /** A call-to-action button rendered inside a SectionBanner. */
 export type SectionBannerButton = {
@@ -180,6 +181,7 @@ export function SectionBanner({
       <div className="absolute inset-0" {...editAttrs("image")}>
         <Image
           src={imageSrc}
+          unoptimized={isGifSrc(imageSrc)}
           alt={imageAlt}
           fill
           priority={priority}

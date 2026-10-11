@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RenderSlide } from "@/lib/cms/carousel-types";
+import { isGifSrc } from "@/lib/media/gif-core";
 
 const AUTOPLAY_MS = 6000;
 
@@ -114,6 +115,7 @@ export function Hero({
                 {slide.image ? (
                   <Image
                     src={slide.image}
+                    unoptimized={isGifSrc(slide.image)}
                     alt={slide.imageAlt || slide.title || "Greenway"}
                     fill
                     priority={index === 0}

@@ -422,7 +422,7 @@ export default async function VendorEditPage({
                   )}
                 </div>
                 <label className="flex flex-col gap-1">
-                  <span className={label}>Logo (PNG/JPG/WEBP/SVG, max 5MB)</span>
+                  <span className={label}>Logo (PNG/JPG/WEBP/SVG/GIF, max 4 MB)</span>
                   <input name="logo" type="file" accept="image/*" className={`${field} file:mr-2 file:rounded file:border-0 file:bg-[var(--admin-accent)] file:px-2 file:py-1 file:text-xs file:font-bold file:text-black`} />
                 </label>
               </div>

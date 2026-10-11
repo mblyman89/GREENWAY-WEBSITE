@@ -24,8 +24,9 @@ import { researchSocial, startHarvest, isCrawlerConfigured, CrawlerNotConfigured
 import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
 import { validateMergeSelection } from "@/lib/vendors/merge-core";
 import { mergeVendors, type MergeVendorsSummary } from "@/lib/vendors/merge-service";
+import { MEDIA_UPLOAD_MAX_BYTES } from "@/lib/media/gif-core";
 
-const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+const MAX_LOGO_BYTES = MEDIA_UPLOAD_MAX_BYTES; // R43: 4 MB (Vercel Function 4.5 MB request cap)
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"]);
 
 /**
@@ -86,7 +87,7 @@ export async function updateVendor(formData: FormData): Promise<void> {
       redirect(`/admin/vendors/${id}?error=` + encodeURIComponent("Logo must be PNG, JPG, WEBP, SVG, or GIF."));
     }
     if (logo.size > MAX_LOGO_BYTES) {
-      redirect(`/admin/vendors/${id}?error=` + encodeURIComponent("Logo exceeds 5 MB."));
+      redirect(`/admin/vendors/${id}?error=` + encodeURIComponent("Logo exceeds 4 MB (the upload limit)."));
     }
     const buffer = Buffer.from(await logo.arrayBuffer());
     const asset = await uploadMedia({
@@ -197,7 +198,7 @@ export async function updateBrand(formData: FormData): Promise<void> {
       redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Brand logo must be an image."));
     }
     if (logo.size > MAX_LOGO_BYTES) {
-      redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Brand logo exceeds 5 MB."));
+      redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Brand logo exceeds 4 MB (the upload limit)."));
     }
     const buffer = Buffer.from(await logo.arrayBuffer());
     const asset = await uploadMedia({

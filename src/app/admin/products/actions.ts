@@ -44,6 +44,7 @@ import { runMenuKbLinkBackfill } from "@/lib/catalog/menu-kb-link-server";
 import { MENU_KB_LINK_BACKFILL_AUDIT_ACTION } from "@/lib/catalog/menu-kb-link-core";
 import { runMenuSensoryBackfill, MENU_SENSORY_BACKFILL_AUDIT_ACTION } from "@/lib/pos/menu-sensory-backfill-server";
 import { attachKbMatchFacts as attachKbMatchFactsServer, KB_MATCH_AUDIT_ACTION } from "@/lib/enrichment/kb-match-attach";
+import { MEDIA_UPLOAD_MAX_BYTES } from "@/lib/media/gif-core";
 
 const ALLOWED_TAGS = new Set([
   "new-arrival",
@@ -55,7 +56,7 @@ const ALLOWED_TAGS = new Set([
   "value",
   "limited",
 ]);
-const MAX_IMG_BYTES = 5 * 1024 * 1024;
+const MAX_IMG_BYTES = MEDIA_UPLOAD_MAX_BYTES; // R43: 4 MB (Vercel Function 4.5 MB request cap)
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
 function orNull(v: FormDataEntryValue | null): string | null {
@@ -216,7 +217,7 @@ export async function updateProductEnrichment(formData: FormData): Promise<void>
       redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Image must be PNG, JPG, WEBP, or GIF."));
     }
     if (image.size > MAX_IMG_BYTES) {
-      redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Image exceeds 5 MB."));
+      redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Image exceeds 4 MB (the upload limit)."));
     }
     const buffer = Buffer.from(await image.arrayBuffer());
     const asset = await uploadMedia({

@@ -14,6 +14,7 @@ import {
   type DesignTextBox,
 } from "@/lib/cms/banner-design-core";
 import { linkKindOf } from "@/lib/cms/link-target-core";
+import { isGifSrc } from "@/lib/media/gif-core";
 
 /**
  * R41 S2 — renders a banner from its custom design (bible PART 5.3).
@@ -95,6 +96,7 @@ export function DesignedBanner({
               <div className="gw-dimg-d absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
                 <Image
                   src={imageSrc}
+                  unoptimized={isGifSrc(imageSrc)}
                   alt={imageAlt}
                   fill
                   loading="lazy"
@@ -108,6 +110,7 @@ export function DesignedBanner({
             <div className="gw-dimg-m absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
               <Image
                 src={phoneSrc}
+                unoptimized={isGifSrc(phoneSrc)}
                 alt={imageAlt}
                 fill
                 loading="lazy"
@@ -122,6 +125,7 @@ export function DesignedBanner({
           <div className="absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
             <Image
               src={imageSrc}
+              unoptimized={isGifSrc(imageSrc)}
               alt={imageAlt}
               fill
               priority={priority}

@@ -2,101 +2,171 @@
 
 /**
  * PreviewEditOverlay — runs ONLY on the public site while a staff member is
- * previewing (Draft Mode on). It finds every element tagged with
- * `data-gw-block` (rendered by <SiteText>) and overlays a small "✎ Edit"
- * affordance. Clicking it deep-links to the exact field in the admin content
- * editor.
+ * previewing (Draft Mode on). R43 brings back the green "✎ Edit" buttons:
  *
- * NOTE (MIG-7 PR-B): the "✎ Edit" pencils are currently TURNED OFF via the
- * `HOTSPOTS_ENABLED` flag below -- their only jump target (the Site Content
- * page) was retired and there is no per-editor jump-to-field surface yet. The
- * feature is left fully intact (flip the flag to switch it back on). The
- * preview-mode badge / Exit control is unaffected.
+ *   - every `data-gw-block` (a single content field: SiteText, FAQ, hero text…)
+ *   - every banner tagged `data-gw-design-owner` / `data-gw-edit-owner`
+ *     (custom-design banners, classic section banners, shop slides, Specials hero)
+ *   - every named area tagged `data-gw-edit-area` (home carousel, type cards,
+ *     weekly deal cards…)
  *
- * It also renders a slim top banner so the previewer always knows they're in
- * preview mode and can exit back to the published site.
+ * gets a small green pill. Clicking it opens `/admin/edit?block|owner|area=…`
+ * (built by the import-free edit-link-core so the public bundle stays light);
+ * that admin route works out exactly which editor owns the item and lands on
+ * the field / card, with a "← Back to preview" pill.
  *
- * Communicates with a parent admin window (the PreviewFrame) via postMessage so
- * "Edit" can open the editor in the admin shell rather than navigating the
- * iframe.
+ * Inside the Website Hub preview iframe the click is posted to the parent
+ * (PreviewFrame) so the WHOLE admin window navigates, not the iframe. On the
+ * live site in preview mode it navigates the tab directly.
+ *
+ * Pills hide while the hub's "Move mode" is on (so they never block a drag),
+ * and can be hidden/shown from the Preview badge (remembered per browser).
  */
 import { useEffect, useState } from "react";
 import { PreviewDesignDrag } from "./PreviewDesignDrag";
+import {
+  AREA_BUTTON_LABEL,
+  bannerCoversBlock,
+  editSpotLabel,
+  overlayEditHref,
+  type EditSpot,
+} from "@/lib/cms/edit-link-core";
 
 type Hotspot = {
-  key: string;
+  id: string;
+  spot: EditSpot;
+  text: string;
+  label: string;
   top: number;
   left: number;
-  width: number;
 };
 
-const ADMIN_EDIT_BASE = "/admin/content";
+const PILLS_PREF_KEY = "gw-edit-pills";
+const BANNER_SEL = "[data-gw-design-owner],[data-gw-edit-owner]";
 
-/**
- * "Edit this field" jump-to hotspots are TURNED OFF for now (MIG-7 PR-B).
- *
- * The only place these pencils could jump to was the old Site Content page,
- * whose editor list is being retired. There is no per-editor "focus this exact
- * field" surface yet, so the pencils have nowhere meaningful to land. Rather
- * than delete the feature, we gate it behind this flag: the measuring effect,
- * the postMessage plumbing and the `edit()` navigation all stay intact and can
- * be switched back on (set to `true`) when we build the dedicated jump-to-field
- * feature on the individual editors. The Preview-mode badge (below) is NOT
- * affected -- staff still see they are in preview and can exit.
- */
-const HOTSPOTS_ENABLED = false;
+/** Measure every editable thing on the page (document coordinates). */
+function measureSpots(): Hotspot[] {
+  const out: Hotspot[] = [];
+  const seen = new Set<string>();
+  const taken: { top: number; left: number }[] = [];
+  const push = (el: HTMLElement, spot: EditSpot, text: string, inset: boolean) => {
+    const r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return; // hidden variant (e.g. desktop art on phone)
+    let top = r.top + window.scrollY + (inset ? 8 : -12);
+    let left = r.left + window.scrollX + (inset ? 8 : 0);
+    const id = `${spot.block ?? ""}|${spot.owner ?? ""}|${spot.area ?? ""}|${Math.round(top)}|${Math.round(left)}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    // Nudge pills that would sit on top of another pill.
+    for (let i = 0; i < 6 && taken.some((t) => Math.abs(t.top - top) < 22 && Math.abs(t.left - left) < 120); i++) {
+      left += 124;
+    }
+    if (left > window.scrollX + window.innerWidth - 130) {
+      left = Math.max(window.scrollX + 4, r.left + window.scrollX);
+      top += 24;
+    }
+    taken.push({ top, left });
+    out.push({ id, spot, text, label: editSpotLabel(spot), top: Math.max(top, 0), left });
+  };
+
+  document.querySelectorAll<HTMLElement>("[data-gw-edit-area]").forEach((el) => {
+    const area = el.getAttribute("data-gw-edit-area") ?? "";
+    if (AREA_BUTTON_LABEL[area]) push(el, { area }, AREA_BUTTON_LABEL[area], true);
+  });
+  document.querySelectorAll<HTMLElement>(BANNER_SEL).forEach((el) => {
+    const owner = el.getAttribute("data-gw-design-owner") || el.getAttribute("data-gw-edit-owner") || "";
+    if (owner) push(el, { owner }, "✎ Edit banner", true);
+  });
+  document.querySelectorAll<HTMLElement>("[data-gw-block]").forEach((el) => {
+    const block = el.getAttribute("data-gw-block") ?? "";
+    if (!block) return;
+    // A surrounding banner's pill already covers these (avoid duplicate pills).
+    if (bannerCoversBlock(block) && el.closest(BANNER_SEL)) return;
+    push(el, { block }, "✎ Edit", false);
+  });
+  return out;
+}
 
 export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [badgeOpen, setBadgeOpen] = useState(false);
+  const [moveOn, setMoveOn] = useState(false);
+  const [pillsOn, setPillsOn] = useState(true);
 
-  // Measure all editable blocks and (re)compute hotspot positions.
+  // Remembered show/hide preference (read after mount; deferred so the mount
+  // effect never sets state synchronously).
   useEffect(() => {
-    if (!HOTSPOTS_ENABLED) return; // pencils turned off (MIG-7 PR-B)
-    function measure() {
-      const els = Array.from(
-        document.querySelectorAll<HTMLElement>("[data-gw-block]"),
-      );
-      const spots: Hotspot[] = els.map((el) => {
-        const r = el.getBoundingClientRect();
-        return {
-          key: el.getAttribute("data-gw-block") ?? "",
-          top: r.top + window.scrollY,
-          left: r.left + window.scrollX,
-          width: r.width,
-        };
-      });
-      setHotspots(spots);
-    }
+    const id = window.setTimeout(() => {
+      try {
+        if (window.localStorage.getItem(PILLS_PREF_KEY) === "off") setPillsOn(false);
+      } catch {
+        /* storage blocked: keep default (on) */
+      }
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, []);
 
+  // The hub's Move mode (same message PreviewDesignDrag listens to).
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin || e.source !== window.parent) return;
+      const data = e.data as { type?: string; on?: unknown } | null;
+      if (data?.type === "gw-move-mode") setMoveOn(data.on === true);
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  const active = pillsOn && !moveOn;
+
+  // Measure all editable things and (re)compute pill positions.
+  useEffect(() => {
+    if (!active) return;
+    let raf = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setHotspots(measureSpots()));
+    };
     measure();
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, { passive: true });
-    const t = setInterval(measure, 1500); // catch late layout shifts
+    const t = window.setInterval(measure, 1500); // catch late layout shifts / carousels
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure);
-      clearInterval(t);
+      window.clearInterval(t);
     };
-  }, []);
+  }, [active]);
 
-  function edit(blockKey: string) {
-    const target = `${ADMIN_EDIT_BASE}?block=${encodeURIComponent(blockKey)}`;
-    // Read the frame relationship at CLICK time rather than mirroring it into
-    // state from an effect. It is only ever needed inside this handler (never
-    // rendered), so state + an effect would be pure overhead -- and setting
-    // state from an effect is what react-hooks/set-state-in-effect flags.
+  function togglePills() {
+    setPillsOn((v) => {
+      const next = !v;
+      try {
+        window.localStorage.setItem(PILLS_PREF_KEY, next ? "on" : "off");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  function edit(spot: EditSpot) {
+    // Read the frame relationship at CLICK time (never rendered, so no state).
     const inFrame = window.self !== window.top;
+    const target = overlayEditHref(spot, {
+      from: inFrame ? "hub" : "site",
+      path: window.location.pathname || path,
+    });
     if (inFrame && window.parent) {
-      // Ask the admin shell (PreviewFrame parent) to open the editor.
+      // Ask the admin shell (PreviewFrame parent) to open the editor in the
+      // whole admin window rather than inside the preview iframe.
       window.parent.postMessage(
-        { type: "gw-preview-edit", blockKey, target },
+        { type: "gw-preview-edit", blockKey: spot.block, target },
         window.location.origin,
       );
     } else {
-      // .assign() is a method call, not a property mutation, so it does not
-      // trip react-hooks/immutability. Behavior is identical to setting
-      // location.href (same-document navigation, adds a history entry).
+      // .assign() is a method call (no react-hooks/immutability trip).
       window.location.assign(target);
     }
   }
@@ -116,6 +186,18 @@ export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
               You&apos;re seeing unpublished drafts. Changes here are not live
               until you publish them in the admin.
             </p>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={pillsOn}
+              onClick={togglePills}
+              className="mt-3 block w-full rounded-lg border border-[#7ed957]/60 px-3 py-1.5 text-center text-xs font-semibold text-[#7ed957] transition hover:bg-[#7ed957]/10"
+            >
+              ✎ Edit buttons: {pillsOn ? "On" : "Off"}
+            </button>
+            {moveOn ? (
+              <p className="mt-1 text-[10px] text-white/50">Hidden while Move mode is on.</p>
+            ) : null}
             <a
               href={`/api/admin/preview/disable?path=${encodeURIComponent(path)}`}
               className="mt-3 block rounded-lg bg-[#7ed957] px-3 py-1.5 text-center text-xs font-semibold text-black transition hover:bg-[#94e570]"
@@ -145,26 +227,21 @@ export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
         </button>
       </div>
 
-      {/* Edit hotspots -- OFF for now (HOTSPOTS_ENABLED=false, MIG-7 PR-B).
-          Kept intact so the jump-to-field feature can be switched back on. */}
-      {HOTSPOTS_ENABLED &&
-        hotspots.map((spot) => (
-        <button
-          key={spot.key}
-          type="button"
-          onClick={() => edit(spot.key)}
-          aria-label={`Edit ${spot.key}`}
-          style={{
-            position: "absolute",
-            top: spot.top - 12,
-            left: spot.left,
-            zIndex: 9999,
-          }}
-          className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-[#7ed957] bg-black/85 px-2 py-0.5 text-[11px] font-semibold text-[#7ed957] shadow-lg shadow-black/40 transition hover:bg-[#7ed957] hover:text-black"
-        >
-          ✎ Edit
-        </button>
-      ))}
+      {/* R43: green "✎ Edit" pills (hidden in Move mode or when toggled off). */}
+      {active &&
+        hotspots.map((h) => (
+          <button
+            key={h.id}
+            type="button"
+            onClick={() => edit(h.spot)}
+            aria-label={h.label}
+            title={h.label}
+            style={{ position: "absolute", top: h.top, left: h.left, zIndex: 9997 }}
+            className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-[#7ed957] bg-black/85 px-2 py-0.5 text-[11px] font-semibold text-[#7ed957] shadow-lg shadow-black/40 transition hover:bg-[#7ed957] hover:text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#7ed957]"
+          >
+            {h.text}
+          </button>
+        ))}
     </>
   );
 }

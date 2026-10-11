@@ -7,6 +7,7 @@ import {
   isScriptHeroFont,
   heroTextLines,
 } from "@/lib/loyalty/loyalty-hero-core";
+import { isGifSrc } from "@/lib/media/gif-core";
 
 /**
  * LoyaltyHeroBanner (SLICE 123 / LOY-1) — the /loyalty hero, rebuilt as a fully
@@ -168,6 +169,7 @@ function HeroImage({
   return (
     <Image
       src={src}
+      unoptimized={isGifSrc(src)}
       alt="Greenway Loyalty Points banner"
       fill
       priority={priority}

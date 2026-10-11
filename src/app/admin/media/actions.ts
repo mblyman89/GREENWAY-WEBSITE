@@ -31,8 +31,13 @@ import {
 import { persistSuggestion, reviewSuggestion, getSuggestion, listSuggestions } from "@/lib/ai/suggestions";
 import { attachKbProductImage, listKbProducts } from "@/lib/ai/kb/store";
 import type { AiSuggestion } from "@/lib/enrichment/types";
+import { MEDIA_UPLOAD_MAX_BYTES, tooLargeMessage } from "@/lib/media/gif-core";
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB ceiling for the library
+// R43: 4 MB per file. Uploads run through a Server Action = a Vercel Function,
+// whose request body is hard-capped at 4.5 MB by the platform (anything larger
+// is rejected with 413 before this code runs), so the old "10 MB" was never
+// actually reachable in production. See src/lib/media/gif-core.ts.
+const MAX_BYTES = MEDIA_UPLOAD_MAX_BYTES;
 const ALLOWED_MIME = new Set([
   "image/png",
   "image/jpeg",
@@ -78,7 +83,7 @@ export async function uploadMediaAction(formData: FormData): Promise<void> {
       redirect("/admin/media?error=" + encodeURIComponent(`Unsupported type: ${file.type || file.name}. Allowed: PNG, JPG, WEBP, GIF, SVG, PDF.`));
     }
     if (file.size > MAX_BYTES) {
-      redirect("/admin/media?error=" + encodeURIComponent(`${file.name} exceeds 10 MB.`));
+      redirect("/admin/media?error=" + encodeURIComponent(tooLargeMessage(file.name, file.size)));
     }
     const buffer = Buffer.from(await file.arrayBuffer());
     const asset = await uploadMedia({

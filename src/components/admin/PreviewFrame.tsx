@@ -7,13 +7,16 @@
  * The iframe loads the public path through the Draft Mode enable route so it
  * shows unpublished drafts. Inside that page, <PreviewEditOverlay> tags blocks
  * with "✎ Edit"; clicking one posts a `gw-preview-edit` message back here, and
- * we call `onEditBlock(blockKey)` so the editor can scroll to / focus that field.
+ * we call `onEditBlock(blockKey)` so the editor can scroll to / focus that field,
+ * or (R43) `onEditTarget(href)` with the /admin/edit?… link so the host can
+ * open the owning editor.
  *
  * Usage:
  *   <PreviewFrame path="/menu" onEditBlock={(k) => focusField(k)} />
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseMoveMessage, type DesignMove } from "@/lib/cms/banner-design-core";
+import { isSafeAdminHref } from "@/lib/cms/edit-link-core";
 
 type Device = "desktop" | "tablet" | "phone";
 
@@ -27,6 +30,7 @@ export function PreviewFrame({
   path,
   height = 640,
   onEditBlock,
+  onEditTarget,
   moveMode = false,
   onDesignMove,
   onMoveReady,
@@ -35,6 +39,8 @@ export function PreviewFrame({
   path: string;
   height?: number;
   onEditBlock?: (blockKey: string) => void;
+  /** R43: a validated /admin/edit?… link from a ✎ Edit click (used when there is no onEditBlock or no block). */
+  onEditTarget?: (href: string) => void;
   /** R41 S7: when true, the previewed page lets the owner drag designed-banner text/buttons. */
   moveMode?: boolean;
   /** R41 S7: a validated `gw-design-move` from the previewed page (owner dropped an item). */
@@ -82,18 +88,23 @@ export function PreviewFrame({
     return () => window.removeEventListener("message", onMessage);
   }, [onDesignMove, onMoveReady, sendMoveMode]);
 
-  // Listen for "edit this block" messages from the previewed page.
+  // Listen for "✎ Edit" clicks from the previewed page. Only our own iframe and
+  // our own origin. R43: the message also carries `target` (an /admin/edit?…
+  // link); when the host passes onEditTarget it gets that (re-validated as a
+  // same-site /admin path), otherwise a block-aware host gets onEditBlock.
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       if (e.origin !== window.location.origin) return;
-      const data = e.data as { type?: string; blockKey?: string } | null;
-      if (data?.type === "gw-preview-edit" && data.blockKey) {
-        onEditBlock?.(data.blockKey);
-      }
+      if (!frameRef.current || e.source !== frameRef.current.contentWindow) return;
+      const data = e.data as { type?: string; blockKey?: unknown; target?: unknown } | null;
+      if (data?.type !== "gw-preview-edit") return;
+      const blockKey = typeof data.blockKey === "string" && data.blockKey ? data.blockKey : null;
+      if (onEditBlock && blockKey) onEditBlock(blockKey);
+      else if (onEditTarget && isSafeAdminHref(data.target)) onEditTarget(data.target);
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [onEditBlock]);
+  }, [onEditBlock, onEditTarget]);
 
   const width = DEVICE_WIDTH[device];
 
@@ -165,8 +176,8 @@ export function PreviewFrame({
         </p>
       ) : (
         <p className="px-4 pb-3 text-center text-xs text-[var(--admin-text-faint)]">
-          Hover the page and click <span className="text-[var(--admin-accent)]">✎ Edit</span>{" "}
-          on any highlighted text to jump straight to it.
+          Click any green <span className="text-[var(--admin-accent)]">✎ Edit</span> button on the
+          page to jump straight to where that item is edited.
         </p>
       )}
     </div>

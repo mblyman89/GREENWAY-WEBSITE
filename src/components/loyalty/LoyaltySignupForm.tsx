@@ -7,6 +7,7 @@ import { LoyaltyHeroBanner } from "@/components/loyalty/LoyaltyHeroBanner";
 import type { LoyaltyHeroPresentation } from "@/lib/loyalty/loyalty-hero-core";
 
 import { DEFAULT_CONSENT_TEXT } from "@/lib/loyalty/loyalty-consent-core";
+import { isGifSrc } from "@/lib/media/gif-core";
 
 const defaultValues = {
   firstName: "",
@@ -159,6 +160,7 @@ export function LoyaltySignupForm({
             >
               <Image
                 src={content?.heroImageMobile || greenwayBusiness.assets.loyaltyHeroMobile}
+                unoptimized={isGifSrc(content?.heroImageMobile)}
                 alt="Greenway Loyalty Points promotional banner"
                 fill
                 priority
@@ -174,6 +176,7 @@ export function LoyaltySignupForm({
             >
               <Image
                 src={content?.heroImage || greenwayBusiness.assets.loyaltyHero}
+                unoptimized={isGifSrc(content?.heroImage)}
                 alt="Greenway Loyalty Points promotional banner"
                 fill
                 priority
