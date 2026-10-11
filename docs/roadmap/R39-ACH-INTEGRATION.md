@@ -267,3 +267,21 @@ commit + push after every task, no drift.
           ach-ops-core 87, ach-ops-ui-core 17). Typecheck EXIT 0. Lint on all S7
           part 2 files: 0 problems.
 - [ ] S8 docs, test plan, PR, merge, production verification
+      - Docs:
+        - TEST-PLAN T-347..T-354, spliced into the test manual.
+        - MIGRATIONS_TO_RUN points to the ACH operations page.
+        - The roadmap PDF gains Part 12, "As built" (Rev. v1.1), and the
+          package was rebuilt.
+      - PR #1318. The first CI run failed in the migrations job; found and
+        fixed (4377db1d). The 0258 scenario check had two latent problems:
+        - It inserted a second open check on the same account. 0263's
+          one-open-check index rightly refuses that, so the probe now uses a
+          different live account.
+        - It used current_date (the session day, which is UTC on CI and on
+          Supabase) for a constraint that compares against the Pacific day.
+          After 5 pm PDT, "today" was tomorrow in Pacific terms and was
+          refused. The check now uses the Pacific day, the same clock as the
+          constraint.
+      - All 6 checks pass under UTC, America/Los_Angeles, UTC+14 and UTC-11.
+        Removing either guard (payee_contact_not_future,
+        ach_ver_one_open_per_account) still makes its check fail.
