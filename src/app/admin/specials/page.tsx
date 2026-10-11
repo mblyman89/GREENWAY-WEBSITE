@@ -28,6 +28,12 @@ import {
   type SpecialsWeekday,
 } from "@/lib/specials/specials-presentation-core";
 import { HeroTextCard } from "@/components/admin/HeroTextCard";
+import { listSections } from "@/lib/cms/page-sections-store";
+import { getContentValues } from "@/lib/cms/render-content";
+import { listPublishedPostLinks } from "@/lib/cms/blog-store";
+import { dealPresentationFor } from "@/lib/promotions/published-rules-core";
+import { getStoreWeekday } from "@/lib/specials/daily-deals";
+import { normalizeSpecialsHeroButtons } from "@/lib/specials/specials-presentation-core";
 import {
   saveSpecialsDraftAction,
   publishSpecialsAction,
@@ -111,6 +117,25 @@ export default async function AdminSpecialsPage({
     description: s.description ?? "",
     fromDatabase: s.fromDatabase,
   }));
+
+  // R41 S4: what the live hero shows today, so the new Hero buttons card and
+  // the design studio start from the real page. Buttons come from the old
+  // specials.hero row's PUBLISHED buttons (what customers see), same as the
+  // public page (getPageBanners outside preview).
+  const specialsRows = await listSections("specials").catch(() => []);
+  const heroRow = specialsRows.find((r) => r.section_key === "specials.hero");
+  const legacyHeroButtons = normalizeSpecialsHeroButtons(heroRow?.buttons ?? []);
+  const heroCopy = await getContentValues([...SPECIALS_HERO_TEXT_BLOCKS]).catch(
+    () => ({}) as Record<string, string>,
+  );
+  const heroText = {
+    eyebrow: heroRow?.eyebrow || heroCopy["specials.hero.eyebrow"] || "",
+    title: heroRow?.title || heroCopy["specials.hero.title"] || "",
+    subtitle: heroRow?.subtitle || heroCopy["specials.hero.subtitle"] || "",
+  };
+  const today = dealPresentationFor(snapshots, getStoreWeekday());
+  const todaysText = { title: today.title, subtitle: today.subtitle };
+  const posts = await listPublishedPostLinks().catch(() => []);
 
   // Media Library choices for the banner-image picker (same source + shape the
   // Pages builder uses), so staff can pick a catalogued image or paste a URL.
@@ -206,6 +231,11 @@ export default async function AdminSpecialsPage({
             spec={SPECIALS_BANNER_SPEC}
             cardSpec={SPECIALS_CARD_SPEC}
             heroSpec={SPECIALS_HERO_SPEC}
+            legacyHeroButtons={legacyHeroButtons}
+            legacyHeroImage={heroRow?.image ?? ""}
+            heroText={heroText}
+            todaysText={todaysText}
+            posts={posts}
           />
         )}
       </div>
