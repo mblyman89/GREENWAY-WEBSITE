@@ -242,6 +242,7 @@ export default async function BankingVaultPage({
           <Link href="/admin/settings/banking/operations" className={tabCls(false)}>
             ACH operations
           </Link>
+          <BankingHelpTabs />
         </div>
         <p className="mb-6 text-xs text-white/40">
           {tab === "vendors" ? vendorLine : tab === "employees" ? employeeLine : "Your originating bank & company ACH details — shared by Payroll and Accounts Payable."}
