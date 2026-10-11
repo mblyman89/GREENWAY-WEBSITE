@@ -266,7 +266,24 @@ commit + push after every task, no drift.
           as before). Pure self-tests: ALL PASSED (ach-return-log-core 37,
           ach-ops-core 87, ach-ops-ui-core 17). Typecheck EXIT 0. Lint on all S7
           part 2 files: 0 problems.
-- [ ] S8 docs, test plan, PR, merge, production verification
+- [x] S8 docs, test plan, PR, merge, production verification
+      - Merged: PR #1318. GitHub's "Rebase and merge" is limited to 100
+        commits (docs.github.com, Repository limits) and the branch had 149,
+        so main was fast-forwarded to the CI-green head 3a0a0b14 (linear
+        history, every commit kept). GitHub marked #1318 MERGED.
+      - CI on 3a0a0b14: build, compliance and migrations all passed.
+      - Production: Vercel "greenway_website" deployed 3a0a0b14 (success).
+        Checked on the deployment URL:
+        - /admin/settings/banking/operations and the check-file route
+          redirect to /admin/login when signed out.
+        - /vendor-ach/<bad token> shows "This link is not valid" with
+          no-store and noindex headers.
+        - robots.txt has "Disallow: /vendor-ach".
+        The sandbox cannot open www.greenwaymarijuana.com (its TLS handshake
+        is refused from here, curl and browser alike), so the custom domain
+        was not checked from this machine.
+      - "Vercel - greenway-staging" was already failing on the previous main
+        commit 9227ec30, so that failure predates R39.
       - Docs:
         - TEST-PLAN T-347..T-354, spliced into the test manual.
         - MIGRATIONS_TO_RUN points to the ACH operations page.
