@@ -198,10 +198,19 @@ export async function getPageBanners(
   extras: BannerData[];
 }> {
   const sections = await getSectionsForRender(pageSlug);
+  // R41 S7: in Draft Mode (staff preview only) mark banners editable so a
+  // designed banner exposes its Move-mode hooks. Public visitors never get it.
+  let preview = false;
+  try {
+    preview = (await draftMode()).isEnabled;
+  } catch {
+    preview = false;
+  }
   const byKey: Record<string, BannerData | undefined> = {};
   const extras: BannerData[] = [];
   for (const s of sections) {
     const data = toBannerData(s);
+    if (preview) data.editable = true;
     if (primaryKeys.includes(s.key)) byKey[s.key] = data;
     else extras.push(data);
   }
@@ -229,6 +238,8 @@ export type BannerData = {
   design?: BannerDesign | null;
   /** R41: design owner id for the hub Move mode ("section:<uuid>"). */
   designOwner?: string;
+  /** R41 S7: true only in Draft Mode (set by getPageBanners) — exposes Move-mode hooks. */
+  editable?: boolean;
 };
 
 /** Map a resolved RenderSection to the client-safe BannerData shape. */

@@ -12,7 +12,8 @@
  * Usage:
  *   <PreviewFrame path="/menu" onEditBlock={(k) => focusField(k)} />
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { parseMoveMessage, type DesignMove } from "@/lib/cms/banner-design-core";
 
 type Device = "desktop" | "tablet" | "phone";
 
@@ -26,20 +27,60 @@ export function PreviewFrame({
   path,
   height = 640,
   onEditBlock,
+  moveMode = false,
+  onDesignMove,
+  onMoveReady,
+  reloadSignal = 0,
 }: {
   path: string;
   height?: number;
   onEditBlock?: (blockKey: string) => void;
+  /** R41 S7: when true, the previewed page lets the owner drag designed-banner text/buttons. */
+  moveMode?: boolean;
+  /** R41 S7: a validated `gw-design-move` from the previewed page (owner dropped an item). */
+  onDesignMove?: (move: DesignMove & { owner: string }) => void;
+  /** R41 S7: how many movable items the previewed page has while Move mode is on. */
+  onMoveReady?: (count: number) => void;
+  /** R41 S7: bump to reload the preview (e.g. after a move was saved). */
+  reloadSignal?: number;
 }) {
   const [device, setDevice] = useState<Device>("desktop");
   const [nonce, setNonce] = useState(0); // bump to force reload
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const moveRef = useRef(moveMode);
 
   // The iframe goes through the enable route so Draft Mode is on for it.
   const src = useMemo(() => {
     const enable = `/api/admin/preview/enable?path=${encodeURIComponent(path)}`;
-    return `${enable}${enable.includes("?") ? "&" : "?"}_n=${nonce}`;
-  }, [path, nonce]);
+    return `${enable}${enable.includes("?") ? "&" : "?"}_n=${nonce}.${reloadSignal}`;
+  }, [path, nonce, reloadSignal]);
+
+  // R41 S7: tell the previewed page whether Move mode is on (same origin only).
+  const sendMoveMode = useCallback(() => {
+    frameRef.current?.contentWindow?.postMessage({ type: "gw-move-mode", on: moveRef.current }, window.location.origin);
+  }, []);
+  useEffect(() => {
+    moveRef.current = moveMode;
+    sendMoveMode();
+  }, [moveMode, sendMoveMode]);
+
+  // R41 S7: moves + handshake from the previewed page. Only our own iframe,
+  // only our own origin, and the payload is re-validated (and again on the server).
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      if (!frameRef.current || e.source !== frameRef.current.contentWindow) return;
+      const data = e.data as { type?: string; count?: unknown } | null;
+      if (data?.type === "gw-move-hello") sendMoveMode();
+      else if (data?.type === "gw-move-ready") onMoveReady?.(typeof data.count === "number" ? data.count : 0);
+      else if (data?.type === "gw-design-move" && moveRef.current) {
+        const move = parseMoveMessage(data);
+        if (move) onDesignMove?.(move);
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [onDesignMove, onMoveReady, sendMoveMode]);
 
   // Listen for "edit this block" messages from the previewed page.
   useEffect(() => {
@@ -107,6 +148,7 @@ export function PreviewFrame({
           ref={frameRef}
           src={src}
           title={`Preview of ${path}`}
+          onLoad={sendMoveMode}
           style={{
             width: width ? `${width}px` : "100%",
             height,
@@ -116,10 +158,17 @@ export function PreviewFrame({
         />
       </div>
 
-      <p className="px-4 pb-3 text-center text-xs text-[var(--admin-text-faint)]">
-        Hover the page and click <span className="text-[var(--admin-accent)]">✎ Edit</span>{" "}
-        on any highlighted text to jump straight to it.
-      </p>
+      {moveMode ? (
+        <p className="px-4 pb-3 text-center text-xs text-[var(--admin-text-faint)]">
+          Move mode is on: drag any outlined text or button, or click it and use the arrow keys then Enter.
+          Phone size moves the phone layout only.
+        </p>
+      ) : (
+        <p className="px-4 pb-3 text-center text-xs text-[var(--admin-text-faint)]">
+          Hover the page and click <span className="text-[var(--admin-accent)]">✎ Edit</span>{" "}
+          on any highlighted text to jump straight to it.
+        </p>
+      )}
     </div>
   );
 }

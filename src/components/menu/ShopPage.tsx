@@ -125,6 +125,7 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
                 imageFocus={pinnedImageFocus(s.imageFocus)}
                 design={s.design}
                 designOwner={s.designOwner}
+                editable={s.editable}
               />
             ))}
           </div>

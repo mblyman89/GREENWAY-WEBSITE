@@ -627,6 +627,7 @@ export function SpecialsContent({
             verticalAlign={pres.todaysDealsBannerVerticalAlign}
             imageFocus={pres.todaysDealsBannerImageFocus}
             design={pres.todaysDealsDesign}
+            editable={content?.editable}
           />
         ) : null}
 
@@ -646,6 +647,7 @@ export function SpecialsContent({
                 imageFocus={pinnedImageFocus(s.imageFocus)}
                 design={s.design}
                 designOwner={s.designOwner}
+                editable={s.editable}
               />
             ))}
           </div>
