@@ -15,6 +15,7 @@ import type {
   PostStatus,
 } from "./types";
 import { CONTENT_BLOCK_SEEDS } from "./content-blocks-seed";
+import { classifySave, type SaveOutcome } from "./edit-conflict-core";
 
 const SEED_DEFAULTS = new Map(CONTENT_BLOCK_SEEDS.map((s) => [s.block_key, s.defaultValue]));
 
@@ -77,6 +78,37 @@ export async function saveContentDraft(
     .update({ draft_value: draftValue, last_edited_by: actorId })
     .eq("block_key", blockKey);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * R45-S2: save a draft ONLY if nobody else saved since the editor opened it.
+ * One atomic compare-and-swap (`... WHERE block_key = $1 AND updated_at = $2`).
+ * The updated_at trigger (migration 0005) moves the version on every write.
+ * `expectedUpdatedAt` null means a legacy form: plain save, exactly as before.
+ * See src/lib/cms/edit-conflict-core.ts.
+ */
+export async function saveContentDraftChecked(
+  blockKey: string,
+  draftValue: string,
+  actorId: string | null,
+  expectedUpdatedAt: string | null,
+): Promise<SaveOutcome> {
+  if (!expectedUpdatedAt) {
+    await saveContentDraft(blockKey, draftValue, actorId);
+    return "saved";
+  }
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("content_blocks")
+    .update({ draft_value: draftValue, last_edited_by: actorId })
+    .eq("block_key", blockKey)
+    .eq("updated_at", expectedUpdatedAt)
+    .select("block_key");
+  if (error) throw new Error(error.message);
+  const rows = Array.isArray(data) ? data.length : 0;
+  if (rows > 0) return "saved";
+  const still = await getContentBlock(blockKey);
+  return classifySave(0, Boolean(still));
 }
 
 /**
