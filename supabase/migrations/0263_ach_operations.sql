@@ -268,7 +268,12 @@ begin
         held := 'already_on_hold';
       elsif vb.status = 'active' then
         update public.vendor_bank_details
-           set status = 'on_hold', hold_reason = left(trim(p_hold_reason), 500), updated_by = p_actor
+           set status = 'on_hold',
+               -- 0259 needs a NEW reason to go on hold; the same words again get the time added.
+               hold_reason = case when left(trim(p_hold_reason), 500) is distinct from vb.hold_reason
+                                  then left(trim(p_hold_reason), 500)
+                                  else left(trim(p_hold_reason), 470) || to_char(now() at time zone 'America/Los_Angeles', ' (YYYY-MM-DD HH24:MI:SS)') end,
+               updated_by = p_actor
          where id = vb.id;
         held := 'vault';
       end if;
@@ -296,7 +301,7 @@ begin
      where id = v.id;
     update public.ach_authorization_accounts
        set verification_status = 'failed', verification_method = null, verified_at = null, verified_by = null
-     where id = acct.id;
+     where id = acct.id and archived_at is null;
   end if;
 
   insert into public.ach_return_notices
@@ -487,6 +492,11 @@ begin
   if p_ids is null or cardinality(p_ids) = 0 then
     raise exception 'ACH_VERIFICATION_EMPTY: no checks to mark as sent.' using errcode = 'check_violation';
   end if;
+  if p_effective is null or p_settlement is null or p_eligible is null
+     or p_settlement < p_effective or p_eligible <= p_settlement then
+    raise exception 'ACH_VERIFICATION_DATES: give the effective date, the settlement date (same day or later) and the first live day (after settlement).'
+      using errcode = 'check_violation';
+  end if;
   for v in select * from public.ach_verifications where id = any (p_ids) order by id for update loop
     if v.status <> 'planned' or v.method = 'voided_check_callback' then
       raise exception 'ACH_VERIFICATION_STATE: verification % is a % that is %, not a planned file entry.', v.id, v.method, v.status
@@ -501,7 +511,8 @@ begin
     insert into public.ach_authorization_events (authorization_id, payee_type, employee_id, vendor_id, event_kind, actor_id, detail)
     values (a.id, a.payee_type, a.employee_id, a.vendor_id, 'verification_sent', p_actor,
             jsonb_build_object('verification_id', v.id, 'method', v.method, 'effective_date', p_effective,
-                               'settlement_date', p_settlement, 'eligible_on', p_eligible, 'file', left(coalesce(p_filename, ''), 120)));
+                               'settlement_date', p_settlement,
+                               'eligible_on', case when v.method = 'prenote' then p_eligible else p_settlement + 1 end, 'file', left(coalesce(p_filename, ''), 120)));
     n := n + 1;
   end loop;
   if n <> cardinality(p_ids) then
@@ -576,7 +587,7 @@ begin
   else
     update public.ach_authorization_accounts
        set verification_status = case when p_outcome = 'failed' then 'failed' else 'unverified' end
-     where id = acct.id and verification_status = 'pending';
+     where id = acct.id and verification_status = 'pending' and archived_at is null;
     result_state := a.state;
   end if;
   insert into public.ach_authorization_events (authorization_id, payee_type, employee_id, vendor_id, event_kind, actor_id, detail)
