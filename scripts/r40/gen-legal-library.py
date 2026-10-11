@@ -14,7 +14,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTH = ROOT / "docs" / "authorities"
-OUT = ROOT / "src" / "lib" / "payments" / "ach-legal-library.ts"
+import os
+OUT = Path(os.environ["R40_LEGAL_OUT"]) if os.environ.get("R40_LEGAL_OUT") else ROOT / "src" / "lib" / "payments" / "ach-legal-library.ts"
 
 
 def flat(s: str) -> str:
@@ -402,7 +403,7 @@ def main() -> None:
     lines.append("];")
     lines.append("")
     OUT.write_text("\n".join(lines), encoding="utf8")
-    print(f"wrote {OUT.relative_to(ROOT)} with {len(rows)} entries")
+    print(f"wrote {OUT} with {len(rows)} entries")
 
 
 if __name__ == "__main__":
