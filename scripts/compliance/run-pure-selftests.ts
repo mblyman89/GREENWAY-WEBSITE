@@ -99,6 +99,7 @@ import { __runMenuFacetTests } from "../../src/lib/menu/menu-facet-core";
 // an unverified visitor reach the menu (fail-open bootstrap).
 import { __runAgeGateTests } from "../../src/lib/age-gate/age-gate-core";
 import { __runNoTrackPathTests } from "../../src/lib/analytics/no-track-paths";
+import { __runVendorProofShrinkTests } from "../../src/lib/payments/vendor-proof-shrink-core";
 // product-lookup-core imports the server-only compliance module, so its
 // self-test is exercised via vitest (server-only aliased) + the parse core's
 // pure test below, not this server-only-free runner. See
@@ -2162,6 +2163,7 @@ __runLiquidVolumeTests();
   assertRan("vendor-esign-core", __runVendorEsignCoreTests(), 79); // R39 S7: vendor e-sign by link (0262 states, form, record, emails)
   assertRan("vendor-esign-app-core", __runVendorEsignAppCoreTests(), 17); // R39 S7: prefill, bulk plan, cookie, link
   assertRan("no-track-paths", __runNoTrackPathTests(), 8); // R39 S7: no analytics where the URL holds a token
+  assertRan("vendor-proof-shrink", __runVendorProofShrinkTests(), 14); // R39 S7: phone photo -> under Vercel's 4.5 MB body cap
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
