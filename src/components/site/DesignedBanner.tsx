@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import {
@@ -14,7 +13,7 @@ import {
   type DesignTextBox,
 } from "@/lib/cms/banner-design-core";
 import { linkKindOf } from "@/lib/cms/link-target-core";
-import { isGifSrc } from "@/lib/media/gif-core";
+import { BannerMedia } from "./BannerMedia";
 
 /**
  * R41 S2 — renders a banner from its custom design (bible PART 5.3).
@@ -94,11 +93,9 @@ export function DesignedBanner({
                 downloads only the picture it shows. */}
             {imageSrc ? (
               <div className="gw-dimg-d absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
-                <Image
+                <BannerMedia
                   src={imageSrc}
-                  unoptimized={isGifSrc(imageSrc)}
                   alt={imageAlt}
-                  fill
                   loading="lazy"
                   fetchPriority={priority ? "high" : undefined}
                   sizes="1408px"
@@ -108,11 +105,9 @@ export function DesignedBanner({
               </div>
             ) : null}
             <div className="gw-dimg-m absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
-              <Image
+              <BannerMedia
                 src={phoneSrc}
-                unoptimized={isGifSrc(phoneSrc)}
                 alt={imageAlt}
-                fill
                 loading="lazy"
                 fetchPriority={priority ? "high" : undefined}
                 sizes="100vw"
@@ -123,11 +118,9 @@ export function DesignedBanner({
           </>
         ) : imageSrc ? (
           <div className="absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
-            <Image
+            <BannerMedia
               src={imageSrc}
-              unoptimized={isGifSrc(imageSrc)}
               alt={imageAlt}
-              fill
               priority={priority}
               sizes="(max-width: 768px) 100vw, 1408px"
               className="gw-dimg"

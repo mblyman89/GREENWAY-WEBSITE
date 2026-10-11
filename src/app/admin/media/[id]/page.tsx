@@ -113,6 +113,9 @@ export default async function MediaDetailPage({
               {isImage(asset.mime_type) && url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={url} alt={asset.alt_text ?? ""} className="h-full w-full object-contain" />
+              ) : asset.mime_type?.startsWith("video/") && url ? (
+                // R44: full player for staff (controls; never autoplays here).
+                <video src={url} controls muted playsInline preload="metadata" className="h-full w-full object-contain" />
               ) : (
                 <span className="text-6xl">{asset.mime_type === "application/pdf" ? "📄" : "🗂"}</span>
               )}

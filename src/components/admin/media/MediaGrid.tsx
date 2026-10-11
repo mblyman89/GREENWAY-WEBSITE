@@ -25,6 +25,10 @@ function isImage(mime: string | null): boolean {
   return Boolean(mime && mime.startsWith("image/"));
 }
 
+function isVideo(mime: string | null): boolean {
+  return Boolean(mime && mime.startsWith("video/"));
+}
+
 function prettyBytes(n: number | null): string {
   if (!n) return "—";
   if (n < 1024) return `${n} B`;
@@ -141,6 +145,12 @@ export function MediaGrid({
                 {isImage(m.mime_type) && url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={url} alt={m.alt_text ?? ""} className="h-full w-full object-contain" />
+                ) : isVideo(m.mime_type) && url ? (
+                  <>
+                    {/* R44: first-frame thumbnail (#t= seeks; metadata only, no full download). */}
+                    <video src={`${url}#t=0.5`} muted playsInline preload="metadata" className="h-full w-full object-contain" aria-label={m.title ?? m.filename} />
+                    <span className="absolute bottom-1.5 left-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-bold text-white">🎬 VIDEO</span>
+                  </>
                 ) : (
                   <span className="text-4xl">{m.mime_type === "application/pdf" ? "📄" : "🗂"}</span>
                 )}
