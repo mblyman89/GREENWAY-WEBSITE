@@ -120,6 +120,8 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
                 title={s.title}
                 subtitle={s.subtitle}
                 buttons={s.buttons}
+                design={s.design}
+                designOwner={s.designOwner}
               />
             ))}
           </div>
