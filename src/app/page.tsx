@@ -20,6 +20,7 @@ import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getCarouselForRender } from "@/lib/cms/carousel-store";
 import { getSectionsForRender } from "@/lib/cms/page-sections-store";
+import { pinnedImageFocus } from "@/lib/cms/page-sections-types";
 import {
   buildVendorDirectory,
   enrichVendorDirectory,
@@ -171,10 +172,10 @@ export default async function Home() {
           // R41 S2(a): the editor's alignment / image focus / buttons now reach
           // the live banners. "center" focus keeps the classic look.
           categoryTextAlign: category?.textAlign,
-          categoryImageFocus: pinnedFocus(category?.imageFocus),
+          categoryImageFocus: pinnedImageFocus(category?.imageFocus),
           categoryButtons: category?.buttons,
           brandTextAlign: brand?.textAlign,
-          brandImageFocus: pinnedFocus(brand?.imageFocus),
+          brandImageFocus: pinnedImageFocus(brand?.imageFocus),
           brandButtons: brand?.buttons,
           // R41 S2(b): Banner Studio custom designs (opt-in per banner).
           categoryDesign: readDesign(category?.settings),
@@ -197,7 +198,7 @@ export default async function Home() {
                 subtitle={s.subtitle}
                 buttons={s.buttons}
                 textAlign={s.textAlign}
-                imageFocus={pinnedFocus(s.imageFocus)}
+                imageFocus={pinnedImageFocus(s.imageFocus)}
                 design={readDesign(s.settings)}
                 designOwner={`section:${s.id}`}
                 editable={preview}
@@ -210,16 +211,4 @@ export default async function Home() {
       <StaffShortcut />
     </main>
   );
-}
-
-/**
- * R41 S2(a): only a non-"center" image focus pins the image. "center" is the
- * seed default, and the home banners have always used the classic rule (image
- * hugs the side opposite the text) — keep that look until the owner picks a
- * side, so this fix never shifts a live image by surprise.
- */
-function pinnedFocus(
-  focus: "center" | "top" | "bottom" | "left" | "right" | undefined,
-): "top" | "bottom" | "left" | "right" | undefined {
-  return focus && focus !== "center" ? focus : undefined;
 }

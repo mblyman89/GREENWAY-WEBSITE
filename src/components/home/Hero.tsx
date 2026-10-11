@@ -128,12 +128,12 @@ export function Hero({ slides }: { slides: RenderSlide[] }) {
                     </p>
                   ) : null}
                   {slide.title ? (
-                    <h1 className="mt-2 text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl">
+                    <h1 className="mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl">
                       {slide.title}
                     </h1>
                   ) : null}
                   {slide.description ? (
-                    <p className="mt-2 max-w-md text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base">
+                    <p className="mt-2 max-w-md whitespace-pre-line text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base">
                       {slide.description}
                     </p>
                   ) : null}

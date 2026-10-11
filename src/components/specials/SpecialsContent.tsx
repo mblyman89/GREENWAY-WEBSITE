@@ -7,6 +7,7 @@ import {
   type SectionBannerButton,
   type SectionBannerData,
 } from "@/components/home/SectionBanner";
+import { pinnedImageFocus } from "@/lib/cms/page-sections-types";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import type { WeeklyDealSummary } from "@/lib/promotions/published-rules-core";
 import {
@@ -641,6 +642,8 @@ export function SpecialsContent({
                 title={s.title}
                 subtitle={s.subtitle}
                 buttons={s.buttons}
+                textAlign={s.textAlign}
+                imageFocus={pinnedImageFocus(s.imageFocus)}
                 design={s.design}
                 designOwner={s.designOwner}
               />

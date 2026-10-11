@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { SectionBanner, type SectionBannerData } from "@/components/home/SectionBanner";
+import { pinnedImageFocus } from "@/lib/cms/page-sections-types";
 import { glowCardStyle, GLOW_TONES } from "@/lib/ui/glow-card-core";
 import { greenwayBusiness } from "@/content/business";
 import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";
@@ -187,6 +188,8 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
             "We partner with licensed Washington producers and processors who share our commitment to quality, consistency, and craft."
           }
           buttons={content?.grow?.buttons}
+          textAlign={content?.grow?.textAlign}
+          imageFocus={pinnedImageFocus(content?.grow?.imageFocus)}
           design={content?.grow?.design}
           designOwner={content?.grow?.designOwner}
           headingLevel={1}
@@ -269,6 +272,8 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
             "The producers and processors stocking Greenway shelves today."
           }
           buttons={content?.brands?.buttons}
+          textAlign={content?.brands?.textAlign}
+          imageFocus={pinnedImageFocus(content?.brands?.imageFocus)}
           design={content?.brands?.design}
           designOwner={content?.brands?.designOwner}
         />
@@ -309,6 +314,8 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
             title={s.title}
             subtitle={s.subtitle}
             buttons={s.buttons}
+            textAlign={s.textAlign}
+            imageFocus={pinnedImageFocus(s.imageFocus)}
             design={s.design}
             designOwner={s.designOwner}
           />

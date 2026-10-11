@@ -259,7 +259,7 @@ export function CarouselSlideCard({
         </div>
 
         <div>
-          <label className={labelCls}>Description</label>
+          <label className={labelCls}>Description (press Enter to start a new line)</label>
           <textarea
             className={`${inputCls} min-h-[64px] resize-y`}
             name="description"
