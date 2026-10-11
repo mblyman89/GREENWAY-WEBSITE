@@ -1848,3 +1848,142 @@ studio state only) / "Dismiss". Owner still presses Save draft / Publish.
 **Acceptance.** AI off → friendly message; AI on → suggestion appears; Apply
 moves focus/boxes in the editor only; nothing is saved until Save.
 
+---
+
+## PART 7 — FILE INVENTORY (what each slice creates or touches)
+
+Legend: **N** = new file, **M** = modified, **T** = test file. Every M entry
+must be re-read at slice time before editing (never edit from memory).
+
+### S1
+- N `src/lib/cms/banner-design-core.ts` — types, defaults, `normalizeDesign`,
+  `designFromLegacy`, `boxStyleVars`, `buttonStyleVars`, contrast helpers,
+  `__runBannerDesignTests`.
+- N `src/lib/cms/link-target-core.ts` — `LinkTarget`, `buildMenuHref`,
+  `parseMenuHref`, `checkHref`, `describeHref`, `__runLinkTargetTests`.
+- M `scripts/compliance/run-pure-selftests.ts` — two `assertRan` lines after R40.
+- T `tests/compliance/r41-design-cores.test.ts` — drift guard: special keys /
+  sorts copied into link core must match `InteractiveMenuBrowser.tsx`.
+
+### S2
+- M `src/app/page.tsx` — pass `textAlign`, `buttons`, non-center `imageFocus`,
+  `design` through to PromoGrid / HomeBrands; render home extras.
+- M `src/components/home/PromoGrid.tsx` (+ HomeBrands) — accept and forward props.
+- N `src/components/banners/DesignedBanner.tsx` — server-safe renderer.
+- M `src/components/SectionBanner.tsx` — when `design?.enabled`, delegate to
+  DesignedBanner; else legacy path byte-identical.
+- M `src/app/globals.css` — `.gw-banner` container-query rules only.
+- N `src/components/admin/banner-studio/BannerStudio.tsx` (client) — canvas,
+  box list, inspector, buttons panel, device toggle, contrast badges.
+- N `src/components/admin/banner-studio/LinkPicker.tsx` (client).
+- M `src/app/admin/pages/[slug]/SectionCard.tsx` — "Custom design" tab;
+  headline/subhead inputs become textareas (Enter = new line).
+- M `src/app/admin/pages/[slug]/actions.ts` — accept + normalize `design`
+  into `settings.design` / `draft_settings.design`.
+- M `src/lib/cms/page-sections-store.ts` — expose `design` on read models.
+- N `src/app/admin/pages/[slug]/link-options.ts` (server helper) — blog posts,
+  specials, categories for the picker.
+
+### S3
+- M `src/lib/cms/daily-deal-presentation.ts` — `typeCards` list reader with
+  defaults derived from `categoryLanes` and existing `laneImages`.
+- N `src/lib/cms/type-cards-core.ts` + self-test.
+- M `src/components/admin/TypeCardImagesEditor.tsx` → becomes Type Cards
+  editor (name, image, link, add, delete, reorder; max 12).
+- M home category render component (anchor at S3 time).
+
+### S4
+- M `src/lib/cms/specials-presentation-core.ts` — `heroButtons`,
+  `heroButtonsSet`, `heroDesign`, `todaysDealsDesign` + self-test additions.
+- M `src/app/specials/page.tsx`, `src/components/specials/SpecialsContent.tsx`.
+- M `src/app/admin/specials/actions.ts` + specials editor UI.
+- T update `specials-presentation.test.ts` / `specials-editor-upgrade.test.ts`
+  only additively.
+
+### S5
+- N `supabase/migrations/0264_loyalty_consent_text.sql`.
+- N `src/lib/loyalty/loyalty-consent-core.ts` + self-test.
+- M `src/lib/cms/loyalty-content-core.ts` (9th block), `LoyaltyPageEditor.tsx`,
+  `admin/loyalty-page/page.tsx`, `LoyaltySignupForm.tsx`, `signup.ts`,
+  `signups-store.ts`.
+- T `loyalty-page-editor.test.ts` updated (8→9, consent-key rule replaced with
+  "consent block must exist and fall back to the exact legacy text").
+
+### S6
+- M `src/lib/cms/page-sections-store.ts` (`BannerData`), `VendorDirectory.tsx`,
+  `SpecialsContent.tsx` extras, `ShopPage.tsx` extras.
+
+### S7
+- M `src/components/admin/PreviewFrame.tsx`, `WebsiteSyncPreviewPanel.tsx`.
+- N `src/components/banners/MoveModeClient.tsx` (client, only mounted in
+  draft mode).
+- N `src/app/admin/banner-move-actions.ts` ("use server").
+
+### S8
+- N `src/lib/cms/banner-ai-core.ts` + self-test.
+- N `src/app/admin/banner-ai-actions.ts`.
+- M `BannerStudio.tsx` (AI button).
+
+---
+
+## PART 8 — TEST GATES PER SLICE (all must pass before PR merge)
+
+Each slice runs, in this order, and records the result in Part 12:
+
+1. `npx tsc --noEmit` → 0 errors.
+2. `npx eslint <changed files>` → 0 errors (warnings allowed only if
+   pre-existing).
+3. `npx tsx scripts/compliance/run-pure-selftests.ts` → all pass; new
+   `assertRan` floors met.
+4. `npm run test:compliance` → all pass (pinned tests listed in Part 2).
+5. `npx next build` → succeeds (run in background, poll log).
+6. Authorship: `git log --format='%an <%ae>' origin/main..HEAD | sort -u` →
+   only `Greenway Dev <dev@greenwaymarijuana.com>`.
+7. After merge: prod status `success` for the merge sha (Vercel context).
+
+Slice-specific extra gates:
+- S1: self-test floors ≥ 40 (design) and ≥ 30 (links).
+- S2: legacy byte-identity — the vitest snapshot of `SectionBanner` source
+  path for `design` undefined still contains the old JSX branch; manual
+  statement in PR that no default visuals change.
+- S5: `scripts/compliance/check-migrations-execute` (CI) passes on 0264;
+  migration is idempotent (`add column if not exists`).
+- S7: postMessage handler checks `event.origin === window.location.origin`.
+- S8: action returns without saving; vitest asserts no `upsert`/`update` in
+  the action file.
+
+---
+
+## PART 9 — RISK REGISTER
+
+| ID | Risk | Likelihood | Impact | Mitigation |
+| --- | --- | --- | --- | --- |
+| R-1 | Designed banner changes look of existing banners | Low | High | Opt-in `design.enabled`; legacy path untouched |
+| R-2 | Container queries unsupported on old browsers | Low | Low | Fallback `font-size` px from desktop value set before `cqw` rule |
+| R-3 | Pinned compliance tests break on edits | Med | Med | Re-read pinned tests before each slice; edit additively; any test change states its reason in the commit |
+| R-4 | Consent text edited into a non-compliant state | Med | High | Warnings for missing TCPA elements; empty blocks publish; signup stores exact text + SHA-256 as proof |
+| R-5 | Migration 0264 not yet applied when code ships | High | Med | Insert retries without new columns on 42703; owner told to apply |
+| R-6 | Drag in iframe conflicts with links/scroll | Med | Low | Move mode is an explicit toggle; links disabled while on; `touch-action:none` on handles only |
+| R-7 | Cross-origin message spoofing | Low | Med | Origin check both directions; owner id whitelist pattern |
+| R-8 | AI suggests bad placement | Med | Low | Drafts only, ghost preview, Apply/Dismiss, nothing saved |
+| R-9 | Unsafe hrefs from link picker | Low | High | `checkHref` blocks `javascript:`/`data:`/`vbscript:`/`//`; server re-checks |
+| R-10 | Type card defaults differ from today | Med | Med | Defaults derived from `categoryLanes` + carried `laneImages`; unchanged until owner saves |
+| R-11 | Sandbox build timeouts | High | Low | Run build in background, poll; commit before long steps |
+| R-12 | WAC 314-55-155 warnings misread as legal advice | Low | Med | Wording: "reminder, not legal advice"; never blocks |
+
+---
+
+## PART 10 — OPEN QUESTIONS FOR THE OWNER (asked in final report, not guessed)
+
+- **OQ-1** WAC 314-55-155(7) warnings apply to "advertising"; does Michael
+  treat on-site banners as advertising? Editor only reminds; no auto-insert.
+- **OQ-2** (resolved in design) consent stored per signup — confirm he is
+  happy that edited wording only applies to new signups.
+- **OQ-3** About / FAQ / Locations / Price Match builder banners don't render
+  publicly today. Render them next round (makes pages revalidate every 60s)?
+- **OQ-4** Full Banner Studio on Loyalty hero + Shop carousel (they already
+  have their own styling editors)?
+- **OQ-5** Per-banner badges (e.g., "NEW", "TODAY ONLY") as a box role is
+  shipped; does he want preset badge styles?
+
+---
