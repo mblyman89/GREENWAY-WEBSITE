@@ -33,7 +33,6 @@ import {
   type ReconcileRun,
 } from "@/lib/payroll/payroll-reconcile-core";
 
-
 /** Nacha-mandated description for wage credits (effective March 20, 2026). */
 export const PAYROLL_ENTRY_DESCRIPTION = "PAYROLL";
 

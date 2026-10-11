@@ -899,6 +899,7 @@ import { __runAchReturnLogCoreTests } from "../../src/lib/payments/ach-return-lo
 import { __runAchOpsCoreTests } from "../../src/lib/payments/ach-ops-core";
 import { __runAchOpsUiCoreTests } from "../../src/lib/payments/ach-ops-ui-core";
 import { __runSiteDomainCoreTests } from "../../src/lib/site/site-domain-core";
+import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-core";
 import { __runVendorEsignAppCoreTests } from "../../src/lib/payments/vendor-esign-app-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
@@ -2172,6 +2173,7 @@ __runLiquidVolumeTests();
   assertRan("ach-ops-core", __runAchOpsCoreTests(), 87); // R39 S7: account-check files, release/review/legal-hold forms, test-credit monitoring, 0263 errors
   assertRan("ach-ops-ui-core", __runAchOpsUiCoreTests(), 17); // R39 S7: Operations page words (site URL, who was told, urgency, monitor, solo hint)
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
+  assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
