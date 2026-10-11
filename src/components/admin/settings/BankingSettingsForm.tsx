@@ -46,7 +46,7 @@ export function BankingSettingsForm({ settings }: { settings: AchCompanySettings
       <Field label="Originating DFI" help="The first 8 digits of YOUR bank's routing number. Auto-derived, but confirm with your bank.">
         <Input name="originating_dfi" defaultValue={settings.originating_dfi} placeholder="12345678" inputMode="numeric" />
       </Field>
-      <Field label="Statement description" help="Prints on statements, e.g. PAYROLL or VENDOR PAY. 10 chars max.">
+      <Field label="Statement description" help="Payroll files always say PAYROLL (a Nacha rule since March 20, 2026), whatever is typed here. Vendor payment files say VENDOR PAY. 10 chars max.">
         <Input name="entry_description" defaultValue={settings.entry_description} placeholder="PAYROLL" />
       </Field>
 

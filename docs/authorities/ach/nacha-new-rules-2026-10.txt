@@ -1,0 +1,246 @@
+SOURCE: https://www.nacha.org/newrules (Nacha, "New Rules" page 1). Fetched 2026-10-11 with curl; HTML tags stripped mechanically (scripts/styles removed, block tags to newlines, entities unescaped). sha256 of fetched HTML: bb330422d00e7e9d9a41d4d643e7d6b17602744fc4b1906cec7c964aea3c4dff
+
+Nacha Operating Rules - New Rules | Nacha
+This version of Internet Explorer (IE9 and below) is not supported. Please consider upgrading your browser or switching to Chrome or Firefox.
+×
+You are using a browser that will not provide the best experience on our website. Please upgrade your browser to Microsoft Edge, or switch over to Google Chrome or Mozilla Firefox.
+Skip to main content
+Utility Navigation
+About
+Store
+Events
+News
+Consulting
+Risk Resources
+Login
+Contact
+Search
+Nacha
+menu
+Main navigation
+ACH
+What is ACH
+What is ACH and how does it affect your life? Here’s what you need to know.
+The ABCs of ACH
+How ACH Payments Work
+How the Rules are Made
+ACH Volume and Value
+ACH Network Fees
+Rules and Compliance
+Ensuring the ACH Network remains a trusted payment system for all participants.
+New Rules
+Proposed Rules
+Rules Archive
+Operations Bulletins
+Compliance
+Banking Conventions and Opt-In Programs
+Nacha Operating Rules Online
+ACH Payments Types
+Modern. Multifaceted. Today’s ACH Network meets today’s payment needs.
+Same Day ACH
+Business-to-Business (B2B)
+Direct Deposit
+International ACH (IAT)
+Healthcare EFT
+Consumer Payments
+Risk Management
+Assessing and managing risk are vital to keeping the ACH Network a secure payment system.
+Risk Management Portal and ACH Contact Registry
+Risk Management Framework
+Risk Management Advisory Group
+Regulatory Guidance
+Nacha Certified
+Credit-Push Fraud Monitoring Resource Center
+Education
+In-person Events
+Payments Institute
+Nacha Risk Retreat
+Smarter Faster Payments
+Virtual Learning
+TPI Home School
+PaymentsIQ Live!
+Payments Legal & Compliance Summit
+Webinars
+Smarter Faster Payments Remote Connect
+Accreditation
+Accredited ACH Professional
+Accredited Faster Payments Professional
+Accredited Payments Risk Professional
+AAP/APRP Exchange
+CEC Center
+Accreditation Course Licensing
+Knowledge Resources
+Nacha Operating Rules & Guidelines products
+ACH Risk Management Handbook
+Third-Party Senders & the ACH Network
+Membership
+Payments Innovation Alliance
+Get Engaged
+Become an Alliance Member
+Meetings
+Project Teams
+Buzzcasts
+Spotlight! Payments Video Challenge
+Leadership
+Nacha Direct Member
+About
+Benefits
+Membership List
+Volunteer Opportunities
+Governance Opportunities
+ACH-Related Opportunities
+Government Relations Opportunities
+Accreditation Opportunities
+Enablement
+Phixius
+What is Phixius
+Details for Payment Information Requesters
+Details for Data Responders
+Hear from Phixius Customers
+Standards & Opt-in Programs
+Nacha Programs Supporting ISO 20022
+Banking Conventions and Opt-in Programs
+Solutions & Services
+Nacha Consulting
+Preferred Partners
+Account Validation Resource Center
+Nacha Operating Rules Products
+Users
+Consumers
+Direct Deposit and Direct Payment Benefits Consumers
+Watch Out! Common Scams That Can Steal Your Money
+Consumer FAQs on ACH Payments
+Corporates
+Corporates and Governmental Organizations
+Healthcare Claim Payments
+Risk Management Resources for Originators/Businesses
+Small/Medium Business
+Businesses: Small
+Nonprofits and Religious Organizations
+Subscription
+Third Parties
+Rules and Compliance
+Certification
+Education and Guidance
+About
+Store
+Events
+News
+Consulting
+Risk Resources
+Login
+Contact
+Search
+Search
+Close
+Breadcrumb
+Home
+ACH
+Rules and Compliance
+New Rules
+Nacha Operating Rules - New Rules
+The ​Nacha Operating Rules are the foundation for every ACH payment. By defining the roles and responsibilities of financial institutions and establishing clear guidelines for each Network participant, the Rules ensure that millions of payments occur smoothly and easily each day. All Rules are displayed by effective date.
+Access Complimentary Rules Webinar Recordings
+Feb. 5, 2026 Recording    April 19, 2026 Recording
+Click here for a list of approved rule changes and implementation dates
+Increasing the Same Day ACH Dollar Limit to $10 Million
+This rule amendment will raise the per-entry dollar limit for Same Day ACH from $1 million per payment to $10 million per payment. The effective date is September 17, 2027.
+Learn More
+Registration of IAT Contacts in the ACH Contact Registry
+This Rule will require a Participating DFI to register their IAT- handling contact with either:
+The name, title, email address, and phone number for at least one primary and one secondary contact person for the area of responsibility; or
+Department contact information that includes an email address and a working telephone number.
+Learn More
+Rules
+New Rules
+Proposed Rules
+Archived Rules
+Out for Ballot
+March 17, 2028
+New Return Reason Code for Sanctions Compliance Obligations
+This rule will create a new return reason code (R90) to support an RDFI’s decision to return an entry in compliance with sanctions obligations. This rule also expands Article Three, Section 3.8 (RDFI's Right to Transmit Return Entries) to adopt a unique return time frame for returns related to sanctions compliance obligations.
+September 17, 2027
+Increasing the Same Day ACH Dollar Limit to $10 Million
+This rule amendment will raise the per-entry dollar limit for Same Day ACH from $1 million per payment to $10 million per payment. The effective date is September 17, 2027.
+March 19, 2027
+International ACH Transactions (IAT)
+This set of Rules includes two amendments:  Optional Date of Birth Field for IAT Entries and Non-Bank Foreign Financial Agencies in IAT Entries.
+These new Rules align with Nacha’s strategies and objectives for the ACH Network to improve the ACH user experience, increase awareness and understanding of ACH capabilities, and improve data flows for ACH payments.
+January 1, 2027
+Registration of IAT Contacts in the ACH Contact Registry
+This Rule will require a Participating DFI to register their IAT- handling contact with either:
+The name, title, email address, and phone number for at least one primary and one secondary contact person for the area of responsibility; or
+Department contact information that includes an email address and a working telephone number.
+January 1, 2027
+Currently Accepted Characters in the ACH Network
+This rule will document the current set of characters that are accepted by both ACH Operators. Identifying the specific currently accepted characters in the ACH data specifications, rather than referencing standards outside the Nacha Operating Rules, will eliminate uncertainty about the characters that the ACH Operators accept. Industry participants in a technical role have requested this update to rule language for several years, eliminating any definition interpretation and replacing with definitive character values.
+September 18, 2026
+Definition of IAT Entries
+Industry participants have indicated difficulty in understanding the existing definition of IAT.  The intent of this rule is to provide more clarity for users when making IAT determinations.
+September 18, 2026
+Funds Availability Requirements for Non-Same Day Credit Entries
+This rule will eliminate the 5:00 pm local time receipt condition, so that funds availability would be required at 9:00 am (in the RDFI’s local time) on Settlement Date for all non-Same Day ACH credits.
+September 18, 2026
+Minor Topics Rule Change - Funds Availability Exceptions for non-Same Day Credit Entries
+This rule will create an exception to the 9:00 a.m. funds availability requirement for certain non-Same Day Entries to accommodate time zone differences for financial institutions located east of the Atlantic Time Zone and west of the International Date Line.
+July 24, 2026
+Addition of U.S. Treasury to the ACH Contact Registry
+This rule will modify the Nacha Operating Rules to allow the U.S. Treasury’s Bureau of the Fiscal Service (BFS) to participate in the ACH Contact Registry. This will enable financial institutions and BFS to more easily connect with each other regarding ACH payments and exceptions using correct contact information for ACH operations and risk management.  Use cases include communications regarding improper payments or claims of non-receipt of ACH payments, and financial institution questions about ACH payments sent by BFS.
+June 19, 2026
+RISK MANAGEMENT TOPICS – (Fraud Monitoring Phase 2)
+These Rule amendments related to monitoring for fraud become effective on June 19, 2026 and are part of a larger Risk Management package intended to reduce the incidence of successful fraud attempts and improve the recovery of funds after frauds have occurred. NOTE: As June 19 is a federal holiday, the practical effective date for these two rules will be the next banking day – Monday, June 22, 2026. All affected parties are encouraged to become compliant with these rules as soon as possible, but no later than June 22, 2026.
+March 20, 2026
+RISK MANAGEMENT TOPICS – (Fraud Monitoring Phase 1)
+These Rule amendments related to monitoring for fraud are part of a larger Risk Management package intended to reduce the incidence of successful fraud attempts and improve the recovery of funds after frauds have occurred.
+March 20, 2026
+RISK MANAGEMENT TOPICS – Company Entry Descriptions
+Rules requiring the use of two additional standardized Company Entry Descriptions became effective on March 20, 2026, as part of a larger Risk Management package intended to reduce the incidence of successful fraud attempts and improve the recovery of funds after frauds have occurred.
+Pagination
+Current page
+1
+Page
+2
+Next page
+Next Page
+Last page
+Sign up to receive ACH Corporate Insights
+Formerly Rules News & Risk Management Tools.
+Fill out this form to receive timely email updates on Nacha Operating Rules changes and to stay informed, mitigate risk, and optimize ACH processes for secure, cost-effective payments.
+Rules Sign-up form
+Nacha
+Footer
+About
+Careers
+Code of Conduct
+Contact
+Email Preferences
+Events
+Legal
+Login
+Media Kit
+Nacha Navigator
+News
+Search
+Store
+Search
+Close
+Common Searches
+Account Validation
+Accreditation
+ACH Quick Start Tool
+B2B Payments
+Consulting
+Contact Registry
+Direct Deposit
+Direct Access
+Operating Rules 2026
+Phixius
+Risk Management
+Same Day ACH
+© 2026 Nacha. All Rights Reserved.
+Social Media
+Twitter
+Linkedin
+Facebook
+Podcast
+Youtube
