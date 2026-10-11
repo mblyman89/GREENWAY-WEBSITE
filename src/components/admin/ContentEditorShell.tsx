@@ -19,9 +19,8 @@
  *   3. then scroll to + highlight + focus the field.
  *
  * It also honours a `?block=<key>` URL param so deep links land on the right
- * field. (NOTE: the ✎ Edit preview hotspots that generated those links are
- * currently turned OFF -- see PreviewEditOverlay's HOTSPOTS_ENABLED flag, MIG-7
- * PR-B -- so this handler is dormant but kept intact for when they return.)
+ * field. R43: the green ✎ Edit preview hotspots are back ON (PreviewEditOverlay
+ * + edit-target-core), and they deep-link here with ?block=<key>.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -47,6 +46,13 @@ type Props = {
    * Site Content page was retired (MIG-7); each host page passes its own route.
    */
   returnTo?: string;
+  /**
+   * R43: render the big embedded "Live preview" iframe above the block list.
+   * Default true (unchanged for Page wording / Branding / Header & Footer).
+   * HeroTextCard passes false: the Specials editor previews in the Website Hub
+   * like every other dedicated page editor (a compact link replaces it).
+   */
+  showPreview?: boolean;
 };
 
 export function ContentEditorShell({
@@ -57,6 +63,7 @@ export function ContentEditorShell({
   publishAction,
   restoreAction,
   returnTo,
+  showPreview = true,
 }: Props) {
   // Map block_key -> page so we can switch the filter to the right page.
   const pageForBlock = useMemo(() => {
@@ -117,8 +124,8 @@ export function ContentEditorShell({
     return () => window.clearTimeout(id);
   }, [pageFilter, focusBlock]);
 
-  // Honour a deep link like ?block=home.hero.title on first load (dormant while
-  // the preview ✎ Edit hotspots are turned off -- see PreviewEditOverlay).
+  // Honour a deep link like ?block=home.hero.title on first load (R43: produced
+  // by the green ✎ Edit hotspots in the Website Hub preview / live preview).
   // Defer to a microtask so the state update happens after the initial commit
   // (keeps the mount effect free of synchronous setState cascades).
   useEffect(() => {
@@ -139,11 +146,13 @@ export function ContentEditorShell({
 
   return (
     <>
-      <ContentPreviewPanel
-        activePath={previewPath}
-        onSelectPath={handleSelectPreviewPath}
-        onEditBlock={handleEditBlock}
-      />
+      {showPreview ? (
+        <ContentPreviewPanel
+          activePath={previewPath}
+          onSelectPath={handleSelectPreviewPath}
+          onEditBlock={handleEditBlock}
+        />
+      ) : null}
       <ContentBlocksBrowser
         blocks={blocks}
         aiEnabled={aiEnabled}

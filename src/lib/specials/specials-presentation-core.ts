@@ -45,6 +45,29 @@ export const SPECIALS_HERO_TEXT_BLOCKS = [
   "specials.hero.subtitle",
 ] as const;
 
+export interface SpecialsHeroText {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+}
+
+/**
+ * R43: the ONE resolver for the /specials hero wording, shared by the public
+ * page and the admin editor so they can never disagree. The content blocks
+ * (SPECIALS_HERO_TEXT_BLOCKS) are the sole source of truth. The retired
+ * Pages-builder row (page_sections "specials.hero") is deliberately NOT an
+ * input: before R43 it won over the blocks, so published edits never showed.
+ * `copy` is the getContentValues() map (already published/draft/seed aware).
+ */
+export function resolveSpecialsHeroText(copy: Record<string, string | undefined>): SpecialsHeroText {
+  const v = (k: string) => (typeof copy[k] === "string" ? (copy[k] as string) : "");
+  return {
+    eyebrow: v("specials.hero.eyebrow"),
+    title: v("specials.hero.title"),
+    subtitle: v("specials.hero.subtitle"),
+  };
+}
+
 /** The seven store weekdays in natural display order (matches SpecialsContent). */
 export const SPECIALS_WEEKDAYS = [
   "Monday",
@@ -737,6 +760,16 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   ok(withDesign.heroDesign !== null && withDesign.heroDesign.enabled === true, "design normalized");
   const dRound = parseSpecialsPresentation(serializeSpecialsPresentation(withDesign))!;
   ok(dRound.heroDesign !== null && dRound.todaysDealsDesign === null, "round-trip keeps hero design only");
+
+  // R43: hero wording comes only from the content blocks.
+  const ht = resolveSpecialsHeroText({
+    "specials.hero.eyebrow": "E",
+    "specials.hero.title": "T",
+    "specials.hero.subtitle": "S",
+  });
+  ok(ht.eyebrow === "E" && ht.title === "T" && ht.subtitle === "S", "hero text from blocks");
+  const htEmpty = resolveSpecialsHeroText({});
+  ok(htEmpty.eyebrow === "" && htEmpty.title === "" && htEmpty.subtitle === "", "missing blocks -> empty strings");
 
   return { passed };
 }

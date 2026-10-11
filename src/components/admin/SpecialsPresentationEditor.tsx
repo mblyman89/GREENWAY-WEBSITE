@@ -259,32 +259,20 @@ export function SpecialsPresentationEditor(props: Props) {
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Controls column */}
           <div className="space-y-5">
-            {/* Copy note: the words come from Site Content / inline editing. */}
+            {/* R43: the hero words are edited in the "Hero text" card at the top
+                of THIS page (content blocks specials.hero.*), which is now the
+                only source the live /specials hero reads. The old note sent the
+                owner to Website Sync, which was misleading. */}
             <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
               <div className="mb-1 text-sm font-semibold">Hero wording</div>
               <p className="text-xs text-[var(--admin-text-muted)]">
                 The hero&rsquo;s <strong>eyebrow</strong>, <strong>title</strong>, and{" "}
-                <strong>subtitle</strong> are edited in{" "}
-                {/*
-                  DEAD-LINK FIX (books-04). This pointed at /admin/site-content,
-                  which does not exist: the Site Content junk-drawer page was
-                  retired in MIG-7 PR-B and its live preview moved to Website
-                  Sync (see the header comment in
-                  src/app/admin/website-sync/page.tsx). Re-pointed at the
-                  ?tab=preview surface that actually owns this now. Enforced by
-                  tests/compliance/admin-dead-links.test.ts.
-                */}
-                <Link
-                  href="/admin/website-sync?tab=preview"
-                  className="text-[var(--admin-accent)] hover:underline"
-                >
-                  Website Sync
-                </Link>{" "}
-                (or by clicking them directly in{" "}
-                <Link href="/specials?preview=1" className="text-[var(--admin-accent)] hover:underline" target="_blank" rel="noreferrer">
-                  Preview
-                </Link>
-                ). This tab controls the hero <strong>image</strong> and where the text sits over it.
+                <strong>subtitle</strong> are edited in the{" "}
+                <a href="#hero-text" className="text-[var(--admin-accent)] hover:underline">
+                  Hero text
+                </a>{" "}
+                card at the top of this page (save a draft, then Publish). This tab controls the hero{" "}
+                <strong>image</strong>, its buttons, and where the text sits over it.
               </p>
             </div>
 
@@ -407,6 +395,7 @@ export function SpecialsPresentationEditor(props: Props) {
               Hero preview
             </div>
             <HeroPreview
+              text={heroText}
               image={pres.heroBannerImage}
               textAlign={pres.heroBannerTextAlign}
               verticalAlign={pres.heroBannerVerticalAlign}
@@ -999,11 +988,14 @@ function BannerPreview({
  * focus, and vertical justify. Blank image => gradient-only (today's look).
  */
 function HeroPreview({
+  text,
   image,
   textAlign,
   verticalAlign,
   imageFocus,
 }: {
+  /** R43: the real published hero words (same resolver as the live page). */
+  text: { eyebrow?: string; title?: string; subtitle?: string };
   image: string;
   textAlign: TextAlign;
   verticalAlign: TextVAlign;
@@ -1036,17 +1028,21 @@ function HeroPreview({
         <div className={`absolute inset-0 ${gradient}`} />
         <div className={`relative flex max-w-[80%] flex-col px-5 py-4 ${items}`}>
           <p className="inline-flex rounded-full border border-white/20 bg-black/40 px-2 py-0.5 text-[0.55rem] font-black uppercase tracking-[0.2em] text-[var(--greenway)]">
-            (eyebrow from Site Content)
+            {text.eyebrow || "Deals every day"}
           </p>
           <p className="mt-1 text-lg font-black uppercase leading-tight text-white">
-            (title from Site Content)
+            {text.title || "Cannabis Specials"}
           </p>
-          <p className="text-sm text-zinc-300">(subtitle from Site Content)</p>
+          <p className="text-sm text-zinc-300">
+            {text.subtitle ||
+              "Check out our latest deals and save on premium cannabis products. New specials added regularly."}
+          </p>
         </div>
       </div>
       <p className="text-xs text-[var(--admin-text-muted)]">
-        The eyebrow, title & subtitle come from Site Content; this tab sets the image + where the
-        text and picture sit. Blank image keeps the built-in gradient look.
+        The words shown are your current hero text (edit them in the Hero text card above);
+        this tab sets the image + where the text and picture sit. Blank image keeps the
+        built-in gradient look.
       </p>
     </div>
   );

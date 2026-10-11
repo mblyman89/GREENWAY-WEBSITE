@@ -8,7 +8,7 @@ import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
 import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 import { getContentValues, getContentForRender, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
-import { resolveSpecialsPresentation } from "@/lib/specials/specials-presentation-core";
+import { resolveSpecialsHeroText, resolveSpecialsPresentation } from "@/lib/specials/specials-presentation-core";
 import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
@@ -71,9 +71,13 @@ export default async function SpecialsPage() {
     ]);
   const presentation = resolveSpecialsPresentation(presentationJson);
 
-  // Pages-builder hero (specials.hero) is the source of truth when present;
-  // otherwise fall back to the content-block copy (live look unchanged).
+  // R43: the hero WORDING comes ONLY from the specials.hero.* content blocks
+  // (edited in /admin/specials -> "Hero text" card). Before R43 the retired
+  // Pages-builder row (page_sections "specials.hero") won here, so the owner's
+  // published edits never reached customers. The legacy row is now used ONLY
+  // as a fallback for the image / focus / buttons it may still carry.
   const hero = banners.byKey["specials.hero"];
+  const heroText = resolveSpecialsHeroText(copy);
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
@@ -85,9 +89,9 @@ export default async function SpecialsPage() {
         menuItems={menuItems}
         presentation={presentation}
         content={{
-          eyebrow: hero?.eyebrow || copy["specials.hero.eyebrow"],
-          title: hero?.title || copy["specials.hero.title"],
-          subtitle: hero?.subtitle || copy["specials.hero.subtitle"],
+          eyebrow: heroText.eyebrow,
+          title: heroText.title,
+          subtitle: heroText.subtitle,
           // SLICE 122 (SET-3): the TOP hero image now lives in THIS page's own
           // presentation editor (moved out of the retired Pages builder). Prefer
           // it; fall back to the legacy Pages-builder value so anything already
