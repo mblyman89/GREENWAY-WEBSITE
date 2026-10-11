@@ -1,0 +1,145 @@
+/**
+ * R39 S7 part 2 — wiring invariants for ACH operations (server actions, the
+ * check-file route, the Operations page, the Banking link). These read source,
+ * so a careless edit that drops the permission, the audit, the confirm box,
+ * the fingerprint, or leaks a test-credit amount trips a test.
+ */
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+
+const read = (p: string) => readFileSync(p, "utf8");
+const ACTIONS = read("src/app/admin/settings/banking/ops-actions.ts");
+const ROUTE = read("src/app/admin/settings/banking/operations/check-file/route.ts");
+const PAGE = read("src/app/admin/settings/banking/operations/page.tsx");
+const BANK = read("src/app/admin/settings/banking/page.tsx");
+const STORE = read("src/lib/payments/ach-ops-store.ts");
+/** Source with block and line comments removed (so prose can name things code must not). */
+const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const ROUTE_CODE = code(ROUTE);
+
+function fn(src: string, name: string): string {
+  const i = src.indexOf(`export async function ${name}(`);
+  expect(i, `${name} exists`).toBeGreaterThan(-1);
+  const j = src.indexOf("\nexport ", i + 10);
+  return src.slice(i, j === -1 ? undefined : j);
+}
+const firstLine = (body: string) => body.slice(body.indexOf("{") + 1).trim().split("\n")[0];
+
+const NAMES = [
+  "logNoticeAction",
+  "resolveNoticeAction",
+  "releaseEmployeeHoldAction",
+  "startCheckAction",
+  "markCheckFileSentAction",
+  "finishCheckAction",
+  "setLegalHoldAction",
+  "reviewDoneAction",
+];
+
+describe("ops actions: owner/admin only, audited, words back", () => {
+  it("is a server-actions module; every export requires settings.manage FIRST; no extra exports", () => {
+    expect(ACTIONS.trimStart().startsWith('"use server";')).toBe(true);
+    for (const n of NAMES) expect(firstLine(fn(ACTIONS, n)), n).toBe('const session = await requirePermission("settings.manage");');
+    expect([...ACTIONS.matchAll(/export async function /g)].length).toBe(NAMES.length);
+  });
+  it("every action writes an audit row with the signed-in profile AFTER the store succeeded", () => {
+    for (const n of NAMES) {
+      const b = fn(ACTIONS, n);
+      expect(b, n).toMatch(/recordAudit\(\{\s*actorId: session\.profile\.id,\s*actorEmail: session\.email/);
+      const ok = b.indexOf("if (!r.ok) back(");
+      expect(ok, n).toBeGreaterThan(-1);
+      expect(ok, n).toBeLessThan(b.indexOf("recordAudit("));
+      expect(b, n).toContain(".catch(() => {})");
+    }
+  });
+  it("each action calls exactly its own store function", () => {
+    const map: Record<string, string> = {
+      logNoticeAction: "logNotice(",
+      resolveNoticeAction: "resolveNotice(",
+      releaseEmployeeHoldAction: "releaseEmployeeHold(",
+      startCheckAction: "startCheck(",
+      markCheckFileSentAction: "markCheckFileSent(",
+      finishCheckAction: "finishCheck(",
+      setLegalHoldAction: "setLegalHold(",
+      reviewDoneAction: "markReviewDone(",
+    };
+    for (const [n, call] of Object.entries(map)) expect(fn(ACTIONS, n), n).toContain(`await ${call}`);
+  });
+  it("the actor is always the session, never a form field", () => {
+    expect(ACTIONS).not.toMatch(/actorId:\s*str\(fd/);
+    expect(ACTIONS).not.toMatch(/str\(fd, "actor/);
+  });
+  it("confirm-sent needs the checkbox and the fingerprint BEFORE the store is called", () => {
+    const b = fn(ACTIONS, "markCheckFileSentAction");
+    const box = b.indexOf('str(fd, "confirm") !== "yes"');
+    expect(box).toBeGreaterThan(-1);
+    expect(box).toBeLessThan(b.indexOf("markCheckFileSent("));
+    expect(b).toContain('fingerprint: str(fd, "fp")');
+  });
+  it("the test-credit amount is never audited or shown", () => {
+    const b = fn(ACTIONS, "startCheckAction");
+    expect(b).not.toMatch(/micro|cents/i);
+    expect(PAGE).not.toMatch(/micro_amount_cents|microCents/);
+  });
+  it("redirects never echo raw form values", () => {
+    for (const m of ACTIONS.matchAll(/back\((\{[^;]*)\);/g)) expect(m[1]).not.toMatch(/fd\.get|str\(fd/);
+  });
+  it("owner emails go through the Resend mailer and the link uses the vetted site URL", () => {
+    expect(fn(ACTIONS, "logNoticeAction")).toContain("mail: resendOpsMailer()");
+    expect(fn(ACTIONS, "releaseEmployeeHoldAction")).toContain("mail: resendOpsMailer()");
+    expect(fn(ACTIONS, "logNoticeAction")).toContain("opsSiteUrl(process.env)");
+  });
+});
+
+describe("check-file route: GET records nothing, owner/admin only, never cached", () => {
+  it("requires settings.manage before anything else", () => {
+    const body = ROUTE.slice(ROUTE.indexOf("export async function GET("));
+    expect(firstLine(body)).toBe('const session = await requirePermission("settings.manage");');
+  });
+  it("builds only (no mark_sent), and requires the page's fingerprint", () => {
+    expect(ROUTE).toContain("buildCheckFile(");
+    expect(ROUTE_CODE).toContain("buildCheckFile(");
+    expect(ROUTE_CODE).not.toMatch(/markCheckFileSent|mark_sent|\.rpc\(/);
+    expect(ROUTE).toContain("/^[0-9a-f]{16}$/.test(fp)");
+    expect(ROUTE).toContain("expect: fp");
+  });
+  it("CRLF, attachment, no-store, nosniff; refusals are no-store too", () => {
+    expect(ROUTE).toContain('.replace(/\\r?\\n/g, "\\r\\n")');
+    expect(ROUTE).toContain("attachment; filename=");
+    expect([...ROUTE.matchAll(/"Cache-Control": "no-store"/g)].length).toBe(4);
+    expect(ROUTE).toContain('"X-Content-Type-Options": "nosniff"');
+  });
+  it("the download is audited without bank numbers", () => {
+    expect(ROUTE).toContain('action: "ach.verification.file_downloaded"');
+    const audit = ROUTE.slice(ROUTE.indexOf("recordAudit("), ROUTE.indexOf("}).catch"));
+    expect(audit).not.toMatch(/routing|account|\.file\b/i);
+  });
+});
+
+describe("Operations page", () => {
+  it("is owner/admin only and dynamic", () => {
+    expect(PAGE).toContain('await requirePermission("settings.manage")');
+    expect(PAGE).toContain('export const dynamic = "force-dynamic"');
+  });
+  it("wires every action and every section anchor the actions return to", () => {
+    for (const n of NAMES) expect(PAGE, n).toContain(`action={${n}}`);
+    for (const a of ["notices", "holds", "checks", "reviews", "records"]) {
+      expect(PAGE, a).toContain(`id="${a}"`);
+      expect(ACTIONS, a).toContain(`"#${a}"`);
+    }
+  });
+  it("the download link carries the same fingerprint the confirm form posts", () => {
+    expect(PAGE).toContain("const fp = checkListFingerprint(ids);");
+    expect(PAGE).toContain("&fp=${fp}");
+    expect(PAGE).toContain('<input type="hidden" name="fp" value={fp} />');
+    expect(PAGE).toContain('name="confirm" value="yes" required');
+  });
+  it("the field names match what the store reads", () => {
+    for (const f of ["payee", "code", "received_on", "settlement_date", "amount", "trace", "corrected", "verification"]) expect(PAGE, f).toContain(`name="${f}"`);
+    for (const f of ['"payee"', '"code"', '"received_on"', '"settlement_date"', '"amount"', '"trace"', '"corrected"']) expect(read("src/lib/payments/ach-return-log-core.ts")).toContain(`g(${f})`);
+    expect(STORE).toContain('input.get("verification")');
+  });
+  it("is linked from the Banking page", () => {
+    expect(BANK).toContain('href="/admin/settings/banking/operations"');
+  });
+});
