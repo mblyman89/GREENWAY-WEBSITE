@@ -13,6 +13,8 @@ import {
   type DesignDirection,
   type DesignOverlayKind,
 } from "@/lib/cms/banner-design-core";
+import { safeImageSrc } from "@/lib/cms/banner-design-core";
+import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import { ColorField, NumberSlider, Segmented, Toggle } from "./controls";
 
 const OVERLAY_LABEL: Record<DesignOverlayKind, string> = {
@@ -29,11 +31,15 @@ export function ImagePanel({
   device,
   imageSrc,
   onChange,
+  mediaChoices,
 }: {
   design: BannerDesign;
   device: DesignDevice;
+  /** The picture for the CURRENT device (phone picture when set and device = phone). */
   imageSrc: string;
   onChange: (d: BannerDesign) => void;
+  /** R42 Q4: media library choices for the optional phone picture (omit = picker hidden). */
+  mediaChoices?: MediaChoice[];
 }) {
   const im = design.image;
   const mobile = device === "mobile";
@@ -93,6 +99,36 @@ export function ImagePanel({
           </button>
         ) : null}
       </div>
+
+      {mediaChoices ? (
+        <div className="space-y-2 rounded-md border border-white/10 p-2">
+          <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-white/60">Phone picture (optional)</p>
+          <p className="text-[0.7rem] text-white/50">
+            Leave empty to use the same picture on phones (recommended for most banners). Pick a
+            separate one only when the main picture is too wide to read on a phone — for example a
+            tall or close-up version. Phones download only this one; computers only the main one.
+          </p>
+          <ContentImageField
+            value={im.srcMobile ?? ""}
+            onChange={(v) => {
+              const next = { ...im };
+              if (v.trim()) next.srcMobile = v.trim();
+              else delete next.srcMobile;
+              onChange({ ...design, image: next });
+            }}
+            mediaChoices={mediaChoices}
+          />
+          {im.srcMobile && !safeImageSrc(im.srcMobile) ? (
+            <p className="text-[0.7rem] text-amber-300">
+              ⚠️ This address can&apos;t be used on the website. Pick a picture from the Media Library or use a
+              path that starts with &ldquo;/&rdquo;. It won&apos;t be saved as it is.
+            </p>
+          ) : null}
+          {im.srcMobile && device !== "mobile" ? (
+            <p className="text-[0.7rem] text-white/50">Switch the studio to 📱 Phone to see and focus it.</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <NumberSlider label="Zoom" value={im.zoom} min={100} max={250} unit="%" onChange={(zoom) => setImage({ zoom })} />
       <NumberSlider label="Brightness" value={im.brightness} min={50} max={150} unit="%" onChange={(brightness) => setImage({ brightness })} />

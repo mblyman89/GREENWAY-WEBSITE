@@ -56,6 +56,8 @@ export function DesignedBanner({
   owner,
   blockKeyPrefix,
 }: DesignedBannerProps) {
+  // R42 Q4: optional separate phone picture (unset = one picture, as before).
+  const phoneSrc = design.image.srcMobile && design.image.srcMobile !== imageSrc ? design.image.srcMobile : "";
   const headline = design.boxes.find((b) => b.role === "headline" && !b.hidden);
   const overlay = overlayStyle(
     design,
@@ -83,7 +85,40 @@ export function DesignedBanner({
         className="gw-dframe border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30"
         {...(editable && owner ? { "data-gw-design-frame": "true", "data-gw-design-owner": owner } : {})}
       >
-        {imageSrc ? (
+        {phoneSrc ? (
+          <>
+            {/* R42 Q4: separate phone picture. The container rule in globals.css
+                shows exactly one of these (banner < 768px wide = phone). Both are
+                lazy: browsers skip display:none lazy images, so each device
+                downloads only the picture it shows. */}
+            {imageSrc ? (
+              <div className="gw-dimg-d absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
+                <Image
+                  src={imageSrc}
+                  alt={imageAlt}
+                  fill
+                  loading="lazy"
+                  fetchPriority={priority ? "high" : undefined}
+                  sizes="1408px"
+                  className="gw-dimg"
+                  style={css(imageStyle(design))}
+                />
+              </div>
+            ) : null}
+            <div className="gw-dimg-m absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
+              <Image
+                src={phoneSrc}
+                alt={imageAlt}
+                fill
+                loading="lazy"
+                fetchPriority={priority ? "high" : undefined}
+                sizes="100vw"
+                className="gw-dimg"
+                style={css(imageStyle(design))}
+              />
+            </div>
+          </>
+        ) : imageSrc ? (
           <div className="absolute inset-0 overflow-hidden" aria-hidden={imageAlt ? undefined : true}>
             <Image
               src={imageSrc}

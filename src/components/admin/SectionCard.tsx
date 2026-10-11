@@ -574,6 +574,7 @@ export function SectionCard({
                       imageSrc={image}
                       imageAlt={imageAlt}
                       posts={posts}
+                      mediaChoices={mediaChoices}
                     />
                   ) : null}
                   <p className="mt-2 text-[0.7rem] text-white/45">

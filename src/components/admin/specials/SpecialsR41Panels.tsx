@@ -16,6 +16,7 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/admin/ui";
+import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { LinkPicker, type PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import { checkHref, describeHref } from "@/lib/cms/link-target-core";
 import { designFromLegacy, type BannerDesign, type DesignPreset } from "@/lib/cms/banner-design-core";
@@ -231,6 +232,7 @@ export function DesignCard({
   preset,
   seed,
   posts,
+  mediaChoices,
 }: {
   title: string;
   description: string;
@@ -243,6 +245,8 @@ export function DesignCard({
   /** Today's classic look, so turning design on starts from what's live. */
   seed: Parameters<typeof designFromLegacy>[0];
   posts: PickerPost[];
+  /** R42 Q4: media library choices for the optional phone picture. */
+  mediaChoices?: MediaChoice[];
 }) {
   const [open, setOpen] = useState(false);
   const on = !!design?.enabled;
@@ -286,6 +290,7 @@ export function DesignCard({
               imageSrc={imageSrc}
               imageAlt={imageAlt}
               posts={posts}
+              mediaChoices={mediaChoices}
             />
           ) : null}
         </div>
