@@ -1,0 +1,14 @@
+Mirrored from RCW chapter 62A.4A (https://app.leg.wa.gov/RCW/default.aspx?cite=62A.4A&full=true), section 62A.4A-203 only, split mechanically on the section heading. Text unchanged. Retrieved 2026-10-11.
+
+RCW  62A.4A-203
+Unenforceability of certain verified payment orders.
+(a) If an accepted payment order is not, under RCW  62A.4A-202(a), an authorized order of a customer identified as sender, but is effective as an order of the customer pursuant to RCW  62A.4A-202(b), the following rules apply.
+(1) By express agreement evidenced by a record, the receiving bank may limit the extent to which it is entitled to enforce or retain payment of the payment order.
+(2) The receiving bank is not entitled to enforce or retain payment of the payment order if the customer proves that the order was not caused, directly or indirectly, by a person (i) entrusted at any time with duties to act for the customer with respect to payment orders or the security procedure, or (ii) who obtained access to transmitting facilities of the customer or who obtained, from a source controlled by the customer and without authority of the receiving bank, information facilitating breach of the security procedure, regardless of how the information was obtained or whether the customer was at fault. Information includes any access device, computer software, or the like.
+(b) This section applies to amendments of payment orders to the same extent it applies to payment orders.
+[ 2023 c 266 s 504;  2013 c 118 s 7; 1991 sp.s. c 21 s 4A-203.]
+NOTES:
+Construction—
+Effective date—
+2023 c 266:
+See notes following RCW  62A.12-101.

@@ -1,0 +1,45 @@
+Mirrored from https://app.leg.wa.gov/WAC/default.aspx?cite=296-128-035 , HTML tags stripped mechanically. Text unchanged. Retrieved 2026-10-11.
+
+WAC 296-128-035
+Payment interval.
+Agency filings affecting this section
+(1) This rule shall apply to employers and employees subject to chapter  49.46 RCW.
+Note:
+Employers and employees not subject to this regulation may still be subject to the payment interval requirements of WAC  296-126-023 or  296-131-010.
+(2) Definitions:
+(a) "Monthly interval" means a one-month time period between established pay days.
+(b) "Pay day" means a specific day or date established by the employer on which wages are paid for hours worked during a pay period.
+(c) "Payment interval" means the amount of time between established pay days. A payment interval may be daily, weekly, bi-weekly, semi-monthly or monthly.
+(d) "Pay period" means a defined time frame for which an employee will receive a paycheck. A pay period may be daily, weekly, bi-weekly, semi-monthly or monthly.
+(3) An employer shall pay all wages owed to an employee on an established regular pay day at no longer than monthly payment intervals. If federal law provides specific payment interval requirements that are more favorable to an employee than the payment interval requirements provided under this rule, federal law shall apply.
+(4) If an employer pays wages on the basis of a pay period that is less than a month, the employer shall establish a regular pay day no later than ten calendar days after the end of the pay period, unless expressly provided otherwise by law.
+Example 1: Employer establishes a weekly pay period. The workweek is from Sunday January 1 through Saturday January 7. Unless a different payment interval applies by law, the employer must pay wages no later than January 17.
+Example 2: Employer establishes two semi-monthly pay periods (the first pay period covers the 1st day of the month to the 15th day of the month; the second pay period covers the 16th day of the month to the last day of the month). Unless a different payment interval applies by law, the employer must pay wages no later than the 25th day of the current month for the first pay period, and no later than the 10th day of the following month for the second pay period.
+(5) If an employer pays wages on the basis of a monthly pay period, the employer may establish a regular payroll system under which wages for work performed by an employee during the last seven days of the monthly pay period may be withheld and included with the wages paid on the pay day for the next pay period.
+Example: Employer establishes a monthly pay period starting on the 1st day of each month with an established pay day on the last day of the month. In a thirty-one-day month, unless a different payment interval applies by law, the employer must pay wages for work performed between the 1st and 24th days of the month on the established pay day (the last day of the month). The employer may pay wages for work performed between the 25th and 31st days of the current month on the following month's pay day (which means that the employer would pay wages for work performed between the 25th and 31st days of the current month, and the 1st and 24th days of the following month, on the following month's pay day).
+If pay period is:
+And if pay day for regular wages is:
+Then pay day for overtime wages must be no later than:
+1st of the month - 15th day of the month
+25th of the month
+10th of the following month
+16th of the month - 30th or 31st of the month
+10th of the following month
+25th of the following month
+(6) An employer shall pay overtime wages owed to an employee on the regular pay day for the pay period in which the overtime wages were earned. If the correct amount of overtime wages cannot be determined until after such regular pay day, the employer may establish a separate pay day for overtime wages; provided, that the payment of overtime wages may not be delayed for a period longer than that which is reasonably necessary for the employer to compute and arrange for payment of the amount due, and overtime wages must be paid by the regular pay day following the next pay period.
+Example: Employer establishes two semi-monthly pay periods. The first pay period covers work performed from the 1st day of the month to the 15th day of the month with the pay day of the 25th; the second pay period covers the 16th day of the month to the last day of the month with the pay day of the 10th of the following month. An employee works overtime in each of the pay periods. Unless a different payment interval applies by law, the employer must pay the overtime wages no later than the 10th day of the following month for the overtime earned during the first pay period, and no later than the 25th day of the following month for the overtime earned during the second pay period.
+If pay period is:
+And if pay day for regular wages is:
+Then pay day for overtime wages must be no later than:
+1st of the month - 15th day of the month
+25th of the month
+10th of the following month
+16th of the month - 30th or 31st of the month
+10th of the following month
+25th of the following month
+(7) Mailed paychecks shall be postmarked no later than the established pay day. If the established pay day falls on a weekend day or holiday when the business office is not open, mailed paychecks shall be postmarked no later than the next business day. Employers that pay employees by direct deposit or other electronic means shall ensure that such wage payments are made and available to employees on the established pay day.
+(8) These rules may be superseded by a collective bargaining agreement negotiated under the National Labor Relations Act, 29 U.S.C. Sec. 151 et seq., the Public Employees' Bargaining Act, RCW  41.56.010 et seq., or the Personnel System Reform Act, RCW  41.80.001 et seq., if the terms of, or recognized custom and practice under, the collective bargaining agreement prescribe specific payment interval requirements for employees covered by the collective bargaining agreement; provided, that:
+(a) All regular wages (whether paid on an hourly, salary, commission, piece rate, or other basis) shall be paid to employees covered by the collective bargaining agreement ("covered employees") at no longer than monthly intervals;
+(b) All other wages (including overtime, bonus pay, and other categories of specialty pay in addition to regular wages) are paid in accordance with the payment interval requirements applicable to covered employees under the terms of, or recognized custom and practice under, the collective bargaining agreement; and
+(c) The employer pays regular wages to covered employees at no less than the applicable minimum wage rate.
+[Statutory Authority: Chapters  49.12, 49.30, and  49.46 RCW. WSR 07-03-145, § 296-128-035, filed 1/23/07, effective 3/1/07. Statutory Authority: RCW  43.22.270,  49.12.020,  49.12.091,  49.12.050,  49.46.020 and  49.46.070. WSR 89-22-016 (Order 89-16), § 296-128-035, filed 10/24/89, effective 11/24/89.]

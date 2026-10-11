@@ -1,0 +1,683 @@
+Mirrored from https://www.govinfo.gov/content/pkg/USCOURTS-ca6-17-04177/pdf/USCOURTS-ca6-17-04177-0.pdf (official court PDF). Text extracted mechanically with pdftotext (poppler); not retyped. Retrieved 2026-10-11. sha256 of PDF: feff3e4e2f41e7ad
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 1
+
+NOT RECOMMENDED FOR FULL-TEXT PUBLICATION
+File Name: 18a0587n.06
+Case No. 17-4177
+UNITED STATES COURT OF APPEALS
+FOR THE SIXTH CIRCUIT
+
+FILED
+BEAU TOWNSEND FORD LINCOLN,
+INC.,
+Plaintiff-Appellee,
+v.
+DON HINDS FORD, INC.,
+Defendant-Appellant.
+
+)
+)
+)
+)
+)
+)
+)
+)
+)
+)
+
+Nov 27, 2018
+DEBORAH S. HUNT, Clerk
+
+ON APPEAL FROM THE UNITED
+STATES DISTRICT COURT FOR
+THE SOUTHERN DISTRICT OF
+OHIO
+
+BEFORE: SILER and KETHLEDGE, Circuit Judges; OLIVER, District Judge.
+SILER, Circuit Judge. Don Hinds Ford agreed to purchase twenty Ford Explorers from
+Beau Townsend Ford for about $736,225. When it came time to close the deal, Beau Townsend’s
+commercial sales manager asked, via email, that Don Hinds pay via wire transfer to an out-of-state
+bank. Don Hinds agreed, wired the money, and picked up the Explorers.
+Just one problem—a hacker had infiltrated the email account of the Beau Townsend
+manager and sent Don Hinds fraudulent wiring instructions. Although Don Hinds thought it had
+paid Beau Townsend for the Explorers, it had actually wired the $736,225 to the hacker, who
+
+ Hon. Solomon Oliver, Jr., United States District Judge for the Northern District of Ohio,
+
+sitting by designation.
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 2
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+quickly drained the bank account and made off with the money. This case is about who must bear
+that loss.
+The district court granted summary judgment in Beau Townsend’s favor, holding that it
+was entitled to receive payment for the Explorers and that Don Hinds must pay again. That
+decision was erroneous, as the district court failed to adequately analyze this complex issue. We
+therefore REVERSE and REMAND.
+I.
+Beau Townsend Ford Lincoln, Inc., a Ford dealership located in Vandalia, Ohio, offered
+to sell seventy-five excess Ford Explorers to other dealers. Beau Townsend’s commercial sales
+manager, Jeff Columbro, contacted John Colglazier, the commercial account manager at Don
+Hinds Ford, Inc., a dealership in Fishers, Indiana. Columbro and Colglazier were acquainted and
+had previously worked together on dealer trades, as had their dealerships. Past dealer trades
+between Beau Townsend and Don Hinds had been for one or two vehicles at a time, and the
+purchaser had typically paid with a check at the time of delivery.
+This deal, however, was much bigger. On September 25, Colglazier received an email
+from Columbro (jcolumbro@btford.com) asking if Don Hinds would be interested in purchasing
+some of the Explorers. Colglazier (jcolglazier@donhindsford.com) responded that same day, and
+after a flurry of emails, Don Hinds agreed to buy twenty Explorers. Columbro testified that
+Colglazier called him on the afternoon of September 25 to confirm the deal, and during the call
+the two agreed Don Hinds would pay by check. Colglazier, however, testified he did not recall
+ever speaking with Columbro on the phone regarding the Explorer deal, and all their
+correspondence occurred via email. In any event, the parties’ September 25 communications
+concluded with Columbro’s promising to send Colglazier invoices for the Explorers the next day.
+
+-2-
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 3
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+Four days later, Columbro had still not sent the invoices, so Colglazier sent a follow-up
+email. This email (and the remainder of the emails Columbro received from Colglazier) came
+from a different email address (jcolglazier.donhindsford@gmail.com). However, the text of the
+emails Columbro received from Colglazier were authored by Colglazier.
+Columbro responded to Colglazier’s inquiry, saying that he would send the invoices once
+the Explorers moved “from fleet to stock.” After Columbro sent half of the invoices, Colglazier
+replied stating that Don Hinds intended to pay for the vehicles with a check. Aside from the
+disputed telephone call mentioned earlier, this was the first time the parties discussed the method
+of payment. Colglazier received an email in reply, purportedly from Columbro, rejecting Don
+Hinds’s offer to pay by check: “Due to some tax related procedures we will prefer a wire transfer,
+let me know when you need wiring instructions?”
+Later that day, Colglazier received wiring instructions, again purportedly from Columbro,
+instructing Don Hinds to wire the money to a Bank of America in Missouri City, Texas, into the
+account of “K.B. Key Logistics LLC.” The wire instructions stated, “Please follow the Standard
+Settlement Instructions below to remit payment to Beau Townsend Inc. and its subsidiaries,” and
+contained the line “K.B. KEY LOGISTICS LLC d.b.a BEAU TOWNSEND FORD.” Colglazier
+testified that he did not think Columbro’s request for a wire transfer was unusual since this was a
+high-dollar trade involving a large number of vehicles.
+The next day, September 30, Columbro sent Colglazier the remaining ten invoices. This
+allowed the parties to calculate the final sales price of $736,225.40. Colglazier responded that
+Don Hinds would send drivers to start picking up the Explorers on October 5.
+On October 2, Colglazier emailed Columbro, copying Don Hinds’ office manager, Alicia
+Robinson. Colglazier asked if Columbro could review Colglazier’s paperwork to see if everything
+
+-3-
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 4
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+was in order, and asked Robinson to transfer the money on October 5. Colglazier received a reply
+email purportedly from Columbro, stating that Colglazier’s paperwork was in order. That email
+contained another copy of the wiring instructions. Colglazier forwarded the instructions to
+Robinson so she could arrange the payments.
+Beginning on October 5 and continuing the next two days, drivers from Don Hinds picked
+up the Explorers from Beau Townsend. Due to daily transfer limits at Don Hinds’ bank and the
+size of the transaction, Robinson wired the money in three installments, also beginning on October
+5. Each time, Robinson sent a wire transfer confirmation to Columbro, and she received emails
+purportedly from Columbro that Beau Townsend had received the money. By October 7, Beau
+Townsend had wired over $736,000, and it had possession of the twenty Explorers, titles in hand.
+Everything seemed fine.
+Unfortunately, however, some of the emails Colglazier had received from Columbro were
+not actually from Columbro. Rather, they were sent by a hacker who had infiltrated Columbro’s
+email account as early as August 3.1
+Beau Townsend used a third-party email service called FuseMail. FuseMail allows users
+to set up “rules” for how certain messages will be handled. Those rules can, for instance,
+automatically forward emails from a specified sender to a different email address. They can also
+automatically send emails affected by the rule to a different folder, such as the deleted items folder.
+After gaining access to Columbro’s email, the hacker set up rules for how emails from certain
+senders, including Colglazier, would be handled in Columbro’s FuseMail account.
+
+From
+
+September 28 onward, two things automatically happened when Columbro received an email from
+
+1
+
+The parties do not discuss the identity or location of the hacker. However, the district
+court pointed out that Google records indicate the “jcolglazier.donhindsford@gmail.com” account
+was created by a user in Nigeria.
+-4-
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 5
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+someone at Don Hinds: (1) the email was diverted to Columbro’s deleted items folder, and (2) the
+email was forwarded to jcolglazier.donhindsford@gmail.com, a Gmail account the hacker created
+on September 28.
+This setup enabled the hacker to perpetrate the scam. With access to Columbro’s FuseMail
+account, the hacker could send emails to Colglazier from Columbro’s official Beau Townsend
+Ford email address (jcolumbro@btford.com). Those emails appeared to Colglazier as if Columbro
+had sent them.
+
+Any emails from Don Hinds to Columbro were automatically diverted to
+
+Columbro’s deleted items folder, where Columbro was unlikely to see them. But the Don Hinds
+emails were also forwarded to the Gmail account the hacker had created. The hacker then had the
+ability to forward the Don Hinds messages back to Columbro, where they would appear in his
+inbox. Although those messages arrived from a different email address than the first messages
+Columbro
+
+received
+
+from
+
+Colglazier—jcolglazier.donhindsford@gmail.com
+
+rather
+
+than
+
+jcolglazier@donhindsford.com—Columbro never noticed this switch because the messages still
+appeared as if they were sent by “John Colglazier” in Columbro’s Microsoft Outlook email system.
+Thus, the hacker could filter the messages from Don Hinds to Columbro, allowing Columbro to
+see only the messages the hacker wanted him to see.
+The parties’ initial negotiations regarding the Explorer deal were conducted between
+Columbro and Colglazier. Once talk turned to payment, the hacker stepped in. Posing as
+Columbro, the hacker asked Don Hinds to pay via wire transfer and sent Colglazier the wire
+instructions. The hacker filtered out any messages from Don Hinds that would have tipped off
+Beau Townsend to the scheme. And once the wire transfers were complete, the hacker emptied
+the bank account and vanished.
+
+-5-
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 6
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+Around the same time, Bill Estes Ford, located in Indianapolis, agreed to buy six Explorers
+for about $220,000, and received wire instructions purportedly from Columbro on October 9.
+These instructions differed from those received by Beau Townsend. Officials at Bill Estes became
+suspicious and contacted Beau Townsend. Columbro, who was away from the office, said he had
+not sent the wiring instructions. Columbro then called John Wanamaker, Beau Townsend’s IT
+manager. Wanamaker asked Columbro to change his email password. He also contacted FuseMail
+to alert them that one of Beau Townsend’s email accounts might have been compromised.
+On Tuesday, October 13, Columbro received a call from a business contact, asking why he
+had not responded to her emails. Columbro said he had not received any such emails. He then
+called Wanamaker, who discovered that the emails Columbro had not seen were in Columbro’s
+deleted-items folder. This prompted Wanamaker—for the first time—to look at the settings in
+Columbro’s email account. Wanamaker discovered that the aforementioned “rules” had been set
+up to divert some emails into Columbro’s deleted items folder, and to forward those emails to the
+fraudulent Gmail account.
+Later that day, Columbro called Colglazier to ask when Beau Townsend could expect a
+check for the twenty Explorers. Colglazier told Columbro that Don Hinds had already wired the
+funds, in line with the instructions received via email. Beau Townsend requested that Don Hinds
+return the Explorers. Don Hinds refused.
+Beau Townsend sued Don Hinds for (1) breach of contract, (2) conversion, and (3) unjust
+enrichment, constructive trust, and disgorgement. Following discovery, the parties filed crossmotions for summary judgment.
+
+-6-
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 7
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+The district court granted summary judgment in Beau Townsend’s favor. The court
+observed:
+[B]oth parties were negligent in their business practices. . . . Beau Townsend Ford
+should have maintained a more secure email system and taken quicker action upon
+learning that it might have been compromised. Don Hinds should have ascertained
+that an actual agent of Beau Townsend was requesting that it send money by wire
+transfer.
+Nevertheless, the court held that Don Hinds breached the parties’ agreement because “Beau
+Townsend Ford has not received any funds from Don Hinds Ford, or [] the funds wired to Missouri
+City, Texas on behalf of Don Hinds Ford.” The court rejected Don Hinds’ arguments that it was
+a good-faith purchaser for value and that equitable estoppel applied, and awarded Beau Townsend
+the $736,225.40 it requested. This appeal followed.2
+II.
+We review a district court’s grant of summary judgment de novo, “construing the evidence
+and drawing all reasonable inferences in favor of the nonmoving party.” Rocheleau v. Elder Living
+Constr., LLC, 814 F.3d 398, 400 (6th Cir. 2016) (citation omitted). All agree Ohio law governs
+this diversity action, so we apply the substantive law of Ohio, as interpreted by the Supreme Court
+of Ohio. Ramsey v. Penn Mut. Life Ins. Co., 787 F.3d 813, 822 n.5 (6th Cir. 2015).
+III.
+A.
+This case could be evaluated, in our estimation, in at least two distinct ways: under contract
+law or under agency law.
+
+Under contract principles, Ohio’s codification of the Uniform
+
+Commercial Code (UCC) governs this case, as one involving the sale of goods. AirBorn Elecs.,
+The court also held that Beau Townsend’s equitable claims were duplicative of its
+contract claim. Because Beau Townsend prevailed on its contract claim, the district court granted
+summary judgment in Don Hinds’ favor on Beau Townsend’s equitable claims. Only the contract
+claim is at issue in this appeal.
+2
+
+-7-
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 8
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+Inc. v. Magnum Energy Sols., LLC, 82 N.E.3d 504, 509 (Ohio Ct. App. 2017). Additionally, we
+may look to an applicable Restatement (here, the Restatement of Contracts) for guidance “when
+there is no controlling state law on point when the state has indicated . . . that it considers the
+Restatements to be persuasive authority.” Garrison v. Jervis B. Well Co., 583 F.2d 258, 262 n.6
+(6th Cir. 1978); see, e.g., Reilley v. Richards, 632 N.E.2d 507, 509 (Ohio 1994) (relying on
+Restatement of Contracts). Breach of contract in Ohio requires: “(1) a binding contract or
+agreement was formed; (2) the nonbreaching party performed its contractual obligations; (3) the
+other party failed to fulfill its contractual obligations without legal excuse; and (4) the
+nonbreaching party suffered damages as a result of the breach.” Carbone v. Nueva Constr. Grp.,
+L.L.C., 83 N.E.3d 375, 380 (Ohio Ct. App. 2017) (cleaned up).
+The ultimate question here is which party should bear the $736,225 loss attributable to the
+scheme perpetrated by an unidentified third-party fraudster. Beau Townsend sees this case as a
+simple one—it delivered the twenty Explorers, but never received payment from Don Hinds.
+According to Beau Townsend, Don Hinds did not satisfy its obligation to pay for the Explorers by
+wiring the money to the Bank of America account in Texas, because Beau Townsend never
+received that money. Therefore, Beau Townsend says, Don Hinds still owes Beau Townsend
+$736,225.
+Don Hinds, meanwhile, argues that it was only obligated to follow the payment instructions
+it received from Beau Townsend, and not to ensure the payment made it to Beau Townsend.
+Because Don Hinds followed those instructions, and because it reasonably believed those
+instructions came from Beau Townsend, Don Hinds says it fulfilled its duties under the contract.
+
+-8-
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 9
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+On the one hand, this case could turn upon a basic principle of contract law: mutual
+mistake. See Raffles v. Wichelhaus, 2 H. & C. 906, 159 Eng. Rep. 375 (Ex. 1864).3 In the contract
+setting, “[a] mistake is a belief that is not in accord with the facts.” Restatement (Second) of
+Contracts § 151 (1981). Here, both parties held the mistaken belief that they had agreed on a
+method of payment. Colglazier had emailed Columbro saying Don Hinds intended to pay with a
+check, as they had in the past. Due to the hacker’s deception, Columbro never saw any emails that
+would have caused him to second-guess Colglazier’s assertion, and on October 13, he asked
+Colglazier when Beau Townsend could expect a check. Likewise, after the hacker posing as
+Columbro told Colglazier that Beau Townsend would prefer a wire transfer and sent instructions,
+Colglazier complied. Each party thought its own belief regarding payment was correct, and neither
+party knew the other was mistaken.4
+Normally, “[w]here a mistake of both parties . . . as to a basic assumption on which the
+contract was made has a material effect on the agreed exchange of performances, the contract is
+voidable by the adversely affected party unless he bears the risk of the mistake.” Id. § 152(1). “A
+party bears the risk of a mistake when (a) the risk is allocated to him by agreement of the parties,
+
+3
+
+Raffles v. Wichelhaus is the classic English case where two parties contracted for a
+shipment of cotton to be delivered from Bombay aboard a ship called the Peerless. The parties
+did not know, however, that there were in fact two ships called the Peerless, one departing in
+October, and the other in December. The buyers refused to accept or pay for the cotton delivered
+by the December Peerless, saying they had intended to buy cotton from the October Peerless. The
+court found that the existence of the two identically-named ships created a latent ambiguity in the
+contract. Because the buyer meant the October Peerless and the seller the December Peerless, and
+neither party had reason to know the meaning the other had assigned, the court held there was no
+mutual assent, and thus no binding contract.
+4
+
+Columbro claims that Colglazier promised to pay by check during a phone call on
+September 25. However, Colglazier claims that all his deal-making with Columbro (and the
+hacker posing as Columbro) occurred via email. This is a disputed question of fact, and at the
+summary judgment stage, the court must accept Colglazier’s account as true. Crag v. Bridges
+Bros. Trucking, LLC, 823 F.3d 382, 387 (6th Cir. 2016) (citing Anderson, 477 U.S. at 255).
+-9-
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 10
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+or (b) he . . . treats his limited knowledge as sufficient, or (c) . . . it is reasonable in the
+circumstances to [allocate the risk to a party].” Id. § 154.
+Reilley provides a good example. There, a buyer purchased a piece of real estate, upon
+which he planned to build his family home. Reilley, 632 N.E.2d at 509. After signing the contract,
+the buyer discovered the property lay within a floodplain, and a city ordinance prohibited building
+any structure in such an area. Id. Neither the seller nor the buyer knew the property was in a
+floodplain at the time of contracting. Id. The Ohio Supreme Court held that “the lack of
+knowledge that a significant portion of the lot is located in a floodway is a mistake of fact of both
+parties that goes to the character of the property such that it severely frustrates the appellant’s
+ability to build a home on the property.” Id. It allowed the buyer to rescind the contract because
+“a mutual mistake existed as to the character of the property which is material to the subject matter
+of the contract and the appellant was not negligent in failing to discover the mistake.” Id. at 354.
+In this case, however, rescission is impractical at best, impossible at worst, and can never
+make the parties whole. Rescission would presumably involve the return of the Explorers to Beau
+Townsend. In that scenario, Don Hinds would still be out $736,225. Beau Townsend would also
+be worse off than when it started, since the Explorers’ value will have depreciated. Moreover, the
+parties do not say whether Don Hinds resold the Explorers. If so, the buyers of those vehicles are
+likely good-faith purchasers for value, and the court cannot compel the buyers to return the vehicles
+to Beau Townsend. See Ohio Rev. Code § 1302.44(A).
+So if rescission isn’t an option, how should the loss be allocated? As noted earlier, in the
+case of a mutual mistake, the Restatement permits the court to allocate the risk of loss to a party
+when “it is reasonable in the circumstances to do so.” Restatement (Second) of Contracts § 154(c).
+And Reilley suggests that the negligence (or lack thereof) of the parties should play at least some
+
+- 10 -
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 11
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+role in allocating the risk. There, the court pointed out “that appellant, an unsophisticated buyer,
+was not negligent in failing to discover that the lot was in a designated floodplain.” Reilley, 632
+N.E.2d at 509. The property inspection had not revealed this information, and the buyer “could
+not have discovered[] the floodplain by looking at the property.” Id. Presumably, had the buyer
+failed to conduct an inspection or ignored obvious signs that the property was within a floodplain,
+the court would have allocated the risk of loss to the buyer rather than allowing rescission. See
+also Marshall v. Beach, 758 N.E.2d 247, 251 (Ohio Ct. App. 2001) (“[I]t is well established in
+Ohio that relief for a unilateral mistake of material fact will not be provided where such mistake is
+the result of the negligence of the party seeking relief.”).
+The two factually similar cases cited by the parties also support the notion that the loss
+should be borne by the party best able to avoid it. Arrow Truck Sales, Inc. v. Top Quality Truck
+& Equipment, Inc. involved the sale of twelve trucks. No. 8:14-cv-2052-T-30TGW, 2015 WL
+4936272, at *1 (M.D. Fla. Aug. 18, 2015). Joe Gelfo, a salesman for Top Quality, and Nick
+Lombardo, an assistant manager for Arrow, negotiated via email and eventually agreed that Arrow
+would purchase the trucks for $570,000. Id. Gelfo emailed Lombardo several documents,
+including copies of the truck titles and wiring instructions for payment. Id. Gelfo and Lombardo
+had previously done business together, and the wiring instructions were identical to the ones Gelfo
+had provided Lombardo in the past. Id.
+During the parties’ negotiations, third-party fraudsters hacked into the email accounts of
+both Gelfo and Lombardo. Id. at *3. They also created new email accounts that appeared nearly
+identical to Gelfo and Lombardo’s accounts. Id. Eventually, the hacker used Gelfo’s account to
+send Lombardo an email with “updated” wiring instructions, different from the ones he had
+previously received in this transaction and others. Id. The updated instructions specified an out-
+
+- 11 -
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 12
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+of-state bank and a different beneficiary, though Top Quality was still listed on the document. Id.
+Arrow followed the “updated” instructions and unknowingly wired the $570,000 to the hacker. Id.
+at *4. Top Quality never received the money and refused to deliver the trucks to Arrow. Id. Arrow
+filed suit, asserting (as relevant here) that Top Quality breached its contract with Arrow by failing
+to deliver the trucks and, by failing to use reasonable security measures to protect its email
+accounts, negligently caused Arrow to wire $570,000 to the wrong account. Id. at *5.
+Following a bench trial, the district court granted judgment in favor of Top Quality. The
+court held that Arrow, not Top Quality, breached the contract because Arrow never provided
+payment; therefore, Top Quality was not obligated to deliver the trucks. Id. As to negligence, the
+court found that “neither Gelfo nor Lombardo was negligent in the manner that they maintained
+their e-mail accounts. They were both victims of a sophisticated third-party fraudster . . . .” Id. at
+*4. But the court also found that “Lombardo had more opportunity and was in the better position
+to discover the fraudulent behavior based on the timing of the e-mails and the fact that the
+fraudulent wiring instructions involved . . . different account information from all of the previous
+wiring instructions.” Id. “[A]t the very least,” the court said, “the change in wiring instructions
+and conflicting e-mails should have prompted Lombardo to confirm the information with Gelfo
+prior to wiring any funds.” Id. Because Lombardo failed to “exercise[] reasonable care after
+receiving conflicting e-mails containing conflicting wire instructions,” the court held that “Arrow
+should suffer the loss associated with the fraud.” Id. at *6.
+In Bile v. RREMC, LLC, No. 3:15cv051, 2016 WL 4487864 (E.D. Va. Aug. 24, 2016), the
+plaintiff, Amangoua Bile, won a $63,000 settlement in an employment discrimination suit. Id. at
+*1. A few days after reaching the settlement, Bile’s counsel, Uduak Ubom, received an email
+purportedly from Bile, asking that the settlement funds be wired to a Barclay’s account in London.
+
+- 12 -
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 13
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+Id. at *3. Ubom called Bile, who told Ubom that she had not sent the email. Id. Ubom deleted
+the email and did not notify LeClairRyan, P.C., the firm representing the defendants, that someone
+had attempted to divert the settlement. Id.
+Two days later, Ubom and Olaolowaposi Oshinowo, an attorney at LeClairRyan, agreed
+over the phone that LeClairRyan would send Bile a check for the settlement funds to his residence.
+Id. at *4. Ubom emailed Bile’s home address to Oshinowo following their conversation. Id. Later
+that day, however, Oshinowo received another email, purportedly from Ubom, asking that the
+settlement funds be wired to the Barclay’s account. Id. Oshinowo believed this email came from
+Ubom because it was sent from his email address and used syntax consistent with the emails
+Oshinowo had previously received from Ubom. Id. LeClairRyan followed the wire instructions
+and transferred the money to the Barclay’s account. Id. at *5. Eventually, the parties discovered
+that the wire instructions were sent by a hacker who had infiltrated Ubom’s email account. Id.
+LeClairRyan refused to send another payment, and the parties filed cross-motions to enforce the
+settlement agreement.
+Following a bench trial, the district court ruled in the defendants’ favor. Recognizing there
+was “no case law precisely on point,” the court looked to “common law contract principles and . .
+. Article 3 of the U.C.C.” to conclude that the defendants “substantially performed under the
+Settlement Agreement.” Id. at *6. In particular, the court found persuasive the UCC’s rules
+regarding fraud in the transfer of negotiable instruments. Typically, “if a payor issues an
+instrument but fails to deliver the instrument to the payee’s possession, then the payor is still liable
+on the underlying obligation.” Id. at *8 (citing UCC § 3-420 & cmt. 1). However, under UCC §§
+3-404 and 3-406, which address third-party fraud in negotiable instruments, “a party whose failure
+to take ordinary care results in loss must be the party to bear that loss,” and “a blameless party is
+
+- 13 -
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 14
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+entitled to rely on reasonable representations, even when those reasonable representations are
+made by fraudsters.”5 Id. at *8.
+Applying those general principles, the court concluded “Ubom[] failed to use ordinary care
+under the circumstances[, and t]hat failure substantially contributed to the $63,000.00 loss.” Id. at
+*11. “Two days before the fraud was perpetrated on LeClairRyan, both Ubom and Bile were
+aware that an unidentified third party had targeted the settlement funds for diversion to a Barclay’s
+bank account that had nothing to do with Bile”; still, they did not warn LeClairRyan that the
+settlement had been targeted by a third-party fraudster. Id. If LeClairRyan had been aware of this
+suspicious activity, the court found it “self-evident” the firm would not have initiated the wire
+transfer. Id. In contrast, the court found LeClairRyan “exercise[d] ordinary care” in carrying out
+its end of the transaction. Id. at *12. The court held the defendants were entitled to enforce the
+settlement agreement without paying a second settlement because Ubom’s failure to alert opposing
+counsel to the fraud “substantially contributed” to the loss. Id. at *13.
+Arrow and Bile illustrate the principle that losses attributable to fraud should be borne by
+the party in the best position to prevent the fraud. Arrow, 2015 WL 4936272, at *6; Bile, 2016
+WL 4487864, at *13. So too here. The district court erred by taking an overly simplistic view of
+this case. The court observed that, “[i]f there is a policy implicit in the UCC’s rules for the
+
+5
+
+UCC § 3-404 governs cases where an imposter has induced someone to issue a check.
+The section states that, if the imposter “induces the issuer” to issue a check “by impersonating the
+payee,” then “an indorsement of the instrument by any person in the name of the payee is effective
+. . . in favor of a person who, in good faith, pays the instrument[.]” UCC § 3-404(a); Ohio Rev.
+Code § 1303.44(A). The section adds, however, that whoever bears the loss could recover from
+the person paying the check if that person “fail[ed] to exercise ordinary care . . . that substantially
+contributes to [the] loss.” Ohio Rev. Code § 1303.44(D). Likewise, § 3-406 states that, “[a] person
+whose failure to exercise ordinary care substantially contributes to . . . the making of a forged
+signature on an instrument is precluded from asserting [that] forgery against a person who, in good
+faith, pays the instrument[.]” See also Ohio Rev. Code § 1303.49(A).
+- 14 -
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 15
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+allocation of losses due to fraud, it surely is that the loss be placed on the party in the best position
+to prevent it.” Further, the court declared that “both parties were negligent in their business
+practices.” Nevertheless, the court awarded summary judgment to Beau Townsend simply
+“[b]ecause Don Hinds Ford has not conveyed the contractual purchase price to Beau Townsend
+Ford.” In so holding, the court ignored the authority it cited, as well as record evidence suggesting
+Beau Townsend was at least partially responsible for its own losses. Here, if principles taken from
+UCC Article 3 are applied, the court would have to determine whether either Beau Townsend’s or
+Don Hinds’ failure to exercise ordinary care contributed to the hacker’s success, and would then
+have to apportion the loss according to their comparative fault.
+B.
+Agency law also provides useful guideposts here. For questions of agency law, the Ohio
+Supreme Court has consulted the Restatement (Third) of Agency. See, e.g., Auer v. Paliath, 17
+N.E.3d 561, 566 (Ohio 2014); Cincinnati Golf Mgt., Inc. v. Testa, 971 N.E.2d 929, 934-35 (Ohio
+2012). According to the Restatement, if a person “carelessly caused [the] belief” that “an actor
+has authority as an agent,” the person “is subject to liability to a third party who justifiably is
+induced to make a detrimental change in position because the transaction is believed to be on the
+person’s account.” Restatement (Third) of Agency § 2.05. This is true even if the person did not
+make “a manifestation that [the] actor has authority as an agent.” Id. The Restatement explains
+that this doctrine, which it calls “agency by estoppel,” “encompasses definitions of ‘ostensible
+authority’ that hold a principal accountable for an appearance of authority arising solely from the
+principal’s failure to use ordinary care.” Id. cmt. b.
+The Restatement cites an Ohio Court of Appeals case, Luken v. Buckeye Parking Corporation,
+68 N.E.2d 217 (Ohio Ct. App. 1945). Id. reporter’s notes, cmt. d. In Luken, a company operated a
+parking lot in Cincinnati. 68 N.E.2d at 217-18. Although the company typically hired an attendant to
+
+- 15 -
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 16
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+man the lot, it was unable to staff the lot one day. Id. at 218. The company closed the lot for the day
+and blocked the entrance with a log. Id. That same day, a seventeen-year-old boy began posing as the
+attendant. Id. No one at the company knew that the boy was there, let alone pretending to be the lot
+attendant. Id. Soon thereafter, Ms. Luken, who had used the lot for two years, sought to park her car.
+Id. As the court described it, “she found nothing different from [the lot’s] appearance on previous
+occasions.” Id. The lot’s sign was up; the entrance was open; cars were parked there; and a young
+man, “with what appeared to be parking tickets in his hand,” approached Ms. Luken. Id. She thought
+the boy was the parking attendant, so she left her keys with him. Id. After she left the lot, the boy took
+her car for a joyride and crashed it. Id. She sued the company for negligence. See id. at 220.
+
+The Ohio Court of Appeals described the company’s failure to secure the parking lot and
+characterized the boy as “an imposter [who] took advantage of the situation to enter the place and
+transact business as though he were authorized.” Id. at 219. The court determined that the
+company’s omissions estopped it from “deny[ing] that the imposter was its duly authorized agent.”
+Id. at 220. The company could be liable, the court held, if a “customer who was justified in relying
+. . . did rely on the appearance of authority.” Id. The court added, however, that the customer
+could be justified in relying on the appearance of authority only if she did so in good faith and
+exercised reasonable care. Id. Ultimately, the court concluded that “[t]his situation raised issues
+for submission to the jury.” Id.
+Here, the application of the Restatement and Luken suggest that, if Beau Townsend had
+failed to exercise ordinary care in maintaining its email server, thus allowing the hacker to pose as
+Columbro, then Beau Townsend could be liable for Don Hinds’s reasonable reliance on the
+hacker’s emails. In addition, any potential liability would be reduced if Don Hinds also failed to
+exercise reasonable care.
+
+- 16 -
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 17
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+Ohio cases decided after Luken, however, have not consistently applied this doctrine.
+Some cases suggest that a party’s failure to exercise ordinary care is insufficient to establish agency
+by estoppel. These cases instead required that the alleged principal have had knowledge of the
+ostensible agent or have acted to “hold out” the third party as an agent. See, e.g., Comer v. Risko,
+833 N.E.2d 712, 715 (Ohio 2005); Mid-America Tire, Inc. v. PTZ Trading Ltd., 768 N.E.2d 619,
+643 (Ohio 2002). But Luken has never been overruled, and the majority of modern Ohio cases
+applying agency by estoppel have involved hospitals, which present different issues of liability
+compared to general commercial cases. E.g., Comer, 833 N.E.2d at 715; Harris v. Mt. Sinai Med.
+Ctr., 876 N.E.2d 1201, 1208-09 (Ohio 2007); Clark v. Sw. Hosp. & Family Health Ctr., 628 N.E.2d
+46, 48 (Ohio 1994). Thus, it is unclear whether Luken still governs a case like this.
+C.
+Given the amount of business transacted online, the assignment of liability in a case like
+this is important. Indeed, both parties acknowledge that they regularly sell cars by email. The
+district court did not adequately analyze the issue. Instead, the court begged the question,
+concluding (without citing legal authority) that “[i]t was not Beau Townsend that instructed Don
+Hinds to send funds to ‘K.B. KEY LOGISTICS, L.L.C.’ in Missouri City, Texas.”
+The district court aptly observed that “[b]oth parties would each have the Court find that
+the other was in the best position to avoid the misfortune that occurred in this case.” Beau
+Townsend, pointing to the suspicious nature of the wire instructions, says Don Hinds could have
+prevented the loss; Don Hinds, pointing to the fact that Beau Townsend’s email was hacked, says
+the same about Beau Townsend. And both parties support their respective arguments with record
+evidence suggesting the other party was at fault.
+
+- 17 -
+
+Case: 17-4177
+
+Document: 36-2
+
+Filed: 11/27/2018
+
+Page: 18
+
+Case No. 17-4177, Beau Townsend Ford Lincoln Inc. v. Don Hinds Ford Inc.
+No court can resolve these factual disputes at the summary judgment stage. Anderson, 477
+U.S. at 255. Rather, the district court must hold a trial to decide whether and to what degree each
+party is responsible for the $730,000 loss in this case. Indeed, this was the approach taken by the
+courts in Arrow and Bile, both of which were decided after a bench trial. UCC Article 3, upon
+which both the Arrow and Bile courts relied, also suggests this question should be left to a
+factfinder: “No attempt is made to define particular conduct that will constitute ‘failure to exercise
+ordinary care . . . .’ Rather, ‘ordinary care’ is defined . . . in general terms. The question is left to
+the court or the jury for decision in light of the circumstances in the particular case . . . .” UCC
+§ 3-406 cmt. 1.
+Although the district court’s error is understandable given the dearth of authority in this
+area, it is error nonetheless. To decide this case, the factfinder must determine which party “was
+in the best position to prevent the fraud.” Arrow, 2015 WL 4936272, at *6. To answer that
+question, there must necessarily be findings of fact. And to make findings of fact, the district court
+must hold a trial.
+REVERSED and REMANDED.
+
+- 18 -
+
+
