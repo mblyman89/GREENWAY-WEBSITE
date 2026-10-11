@@ -33,7 +33,7 @@ import { getContentValues } from "@/lib/cms/render-content";
 import { listPublishedPostLinks } from "@/lib/cms/blog-store";
 import { dealPresentationFor } from "@/lib/promotions/published-rules-core";
 import { getStoreWeekday } from "@/lib/specials/daily-deals";
-import { normalizeSpecialsHeroButtons } from "@/lib/specials/specials-presentation-core";
+import { normalizeSpecialsHeroButtons, resolveSpecialsHeroText } from "@/lib/specials/specials-presentation-core";
 import {
   saveSpecialsDraftAction,
   publishSpecialsAction,
@@ -128,11 +128,9 @@ export default async function AdminSpecialsPage({
   const heroCopy = await getContentValues([...SPECIALS_HERO_TEXT_BLOCKS]).catch(
     () => ({}) as Record<string, string>,
   );
-  const heroText = {
-    eyebrow: heroRow?.eyebrow || heroCopy["specials.hero.eyebrow"] || "",
-    title: heroRow?.title || heroCopy["specials.hero.title"] || "",
-    subtitle: heroRow?.subtitle || heroCopy["specials.hero.subtitle"] || "",
-  };
+  // R43: same resolver as the public /specials page, so the editor previews
+  // exactly the words customers see (content blocks only, no legacy row).
+  const heroText = resolveSpecialsHeroText(heroCopy);
   const today = dealPresentationFor(snapshots, getStoreWeekday());
   const todaysText = { title: today.title, subtitle: today.subtitle };
   const posts = await listPublishedPostLinks().catch(() => []);

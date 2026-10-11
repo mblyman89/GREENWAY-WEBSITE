@@ -49,6 +49,7 @@ export async function HeroTextCard({
   title = "Hero text",
   description = "The headline words on this page's hero. Edit a draft, preview it, then Publish — every publish is snapshotted so you can roll back.",
   helpId = "hero-text",
+  anchorId = "hero-text",
 }: {
   /** The exact content-block keys this card is allowed to surface. */
   blockKeys: readonly string[];
@@ -66,6 +67,8 @@ export async function HeroTextCard({
   description?: string;
   /** Stable id for the HelpPanel. */
   helpId?: string;
+  /** R43: DOM id of the card so other panels can link to it (#hero-text). */
+  anchorId?: string;
 }) {
   const allow = new Set(blockKeys);
 
@@ -141,7 +144,7 @@ export async function HeroTextCard({
   }));
 
   return (
-    <section className="space-y-5 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5 sm:p-6">
+    <section id={anchorId} className="scroll-mt-4 space-y-5 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5 sm:p-6">
       <div>
         <h2 className="text-base font-semibold text-[var(--admin-text)]">
           {title}
@@ -156,7 +159,7 @@ export async function HeroTextCard({
         title="How hero text works"
         steps={[
           "Pick a field below and edit its draft — nothing goes live yet.",
-          "Use the live preview to see the page exactly as visitors will (click ✎ Edit on a highlighted spot to jump to it).",
+          "Click 'Preview in Website Hub' to see the page exactly as visitors will (hover any spot and click the green ✎ Edit to jump back to its field).",
           "Click Publish on the field (or 'Publish all drafts') to update the public page.",
         ]}
       >
@@ -192,7 +195,22 @@ export async function HeroTextCard({
         returnTo={returnTo}
       />
 
+      {/* R43: compact preview link replaces the old embedded 14-page "Live
+          preview" iframe, matching every other dedicated page editor. */}
+      {publicPath ? (
+        <p className="text-sm text-[var(--admin-text-muted)]">
+          <a
+            href={`/admin/website-sync?tab=preview&path=${encodeURIComponent(publicPath)}`}
+            className="font-medium text-[var(--admin-accent)] underline-offset-2 hover:underline"
+          >
+            Preview in Website Hub ↗
+          </a>{" "}
+          to see your drafts on the real page before you publish.
+        </p>
+      ) : null}
+
       <ContentEditorShell
+        showPreview={false}
         blocks={blockVMs}
         aiEnabled={aiEnabled}
         mediaChoices={mediaChoices}
