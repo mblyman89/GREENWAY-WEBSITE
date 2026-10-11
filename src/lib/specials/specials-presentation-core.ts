@@ -27,6 +27,9 @@
  * editor page can import it — a "use server" file may only export async
  * functions, so the block-key constant cannot live there.
  */
+import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
+import { checkHref } from "@/lib/cms/link-target-core";
+
 export const SPECIALS_PRESENTATION_BLOCK = "specials.deals.presentation";
 
 /**
@@ -189,7 +192,56 @@ export type SpecialsPresentation = {
   todaysDealsCount: number;
   /** Per-weekday settings (always all 7, natural order). */
   days: DayPresentation[];
+  /**
+   * R41 S4: the TOP hero's buttons, owned by THIS editor. While
+   * `heroButtonsSet` is false (never saved here) the page keeps the legacy
+   * `specials.hero` row buttons, so the live page is byte-identical. Once
+   * saved (even as an empty list = "no buttons"), these win.
+   */
+  heroButtons: SpecialsHeroButton[];
+  heroButtonsSet: boolean;
+  /** R41 S4: Banner Studio design for the TOP hero (null = classic hero). */
+  heroDesign: BannerDesign | null;
+  /** R41 S4: Banner Studio design for the "Today's Deal" banner (null = classic). */
+  todaysDealsDesign: BannerDesign | null;
 };
+
+/** R41 S4: one TOP hero button (same shape as page_sections buttons). */
+export type SpecialsHeroButton = {
+  label: string;
+  href: string;
+  variant: "solid" | "outline" | "ghost";
+  enabled: boolean;
+};
+
+export const MAX_SPECIALS_HERO_BUTTONS = 4;
+export const MAX_SPECIALS_HERO_BUTTON_LABEL = 40;
+
+/**
+ * Normalize the hero buttons: at most 4; labels trimmed and clamped; links
+ * that checkHref blocks (javascript:, data:, …) are dropped along with the
+ * button. Blank label or link rows are dropped too, since they could never
+ * render.
+ */
+export function normalizeSpecialsHeroButtons(raw: unknown): SpecialsHeroButton[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SpecialsHeroButton[] = [];
+  for (const item of raw) {
+    if (out.length >= MAX_SPECIALS_HERO_BUTTONS) break;
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const b = item as Record<string, unknown>;
+    const label =
+      typeof b.label === "string"
+        ? b.label.replace(/\s+/g, " ").trim().slice(0, MAX_SPECIALS_HERO_BUTTON_LABEL)
+        : "";
+    const href = typeof b.href === "string" ? b.href.trim() : "";
+    if (!label || !href) continue;
+    if (checkHref(href).level === "block") continue;
+    const variant = b.variant === "outline" || b.variant === "ghost" ? b.variant : "solid";
+    out.push({ label, href, variant, enabled: b.enabled !== false });
+  }
+  return out;
+}
 
 /**
  * The LIVE-LOOK-SAFE default: identical to today's page. Every day visible,
@@ -222,6 +274,11 @@ export function defaultSpecialsPresentation(): SpecialsPresentation {
       visible: true,
       order: i,
     })),
+    // R41 S4: live-look-safe (legacy row buttons + classic hero/banner).
+    heroButtons: [],
+    heroButtonsSet: false,
+    heroDesign: null,
+    todaysDealsDesign: null,
   };
 }
 
@@ -326,12 +383,25 @@ export function normalizeSpecialsPresentation(
     heroBannerImage,
     todaysDealsCount,
     days,
+    heroButtons: obj.heroButtonsSet === true ? normalizeSpecialsHeroButtons(obj.heroButtons) : [],
+    heroButtonsSet: obj.heroButtonsSet === true,
+    heroDesign: normalizeDesign(obj.heroDesign),
+    todaysDealsDesign: normalizeDesign(obj.todaysDealsDesign),
   };
 }
 
 /** Serialize to the stored JSON string (stable key order for clean diffs). */
 export function serializeSpecialsPresentation(p: SpecialsPresentation): string {
   const norm = normalizeSpecialsPresentation(p);
+  // R41 S4: the new keys are written ONLY when set, so an untouched
+  // presentation serializes byte-identically to before this slice.
+  const r41: Record<string, unknown> = {};
+  if (norm.heroButtonsSet) {
+    r41.heroButtonsSet = true;
+    r41.heroButtons = norm.heroButtons;
+  }
+  if (norm.heroDesign) r41.heroDesign = norm.heroDesign;
+  if (norm.todaysDealsDesign) r41.todaysDealsDesign = norm.todaysDealsDesign;
   return JSON.stringify({
     showWeeklyGrid: norm.showWeeklyGrid,
     showTodaysDeals: norm.showTodaysDeals,
@@ -357,6 +427,7 @@ export function serializeSpecialsPresentation(p: SpecialsPresentation): string {
       if (d.image) out.image = d.image;
       return out;
     }),
+    ...r41,
   });
 }
 
@@ -630,6 +701,42 @@ export function __runSpecialsPresentationCoreTests(): { passed: number } {
   ok(heroRound.heroBannerVerticalAlign === "top", "round-trip keeps hero vertical-align");
   ok(heroRound.heroBannerImageFocus === "left", "round-trip keeps hero image-focus");
   ok(heroRound.heroBannerImage === "/media/hero.webp", "round-trip keeps hero image");
+
+  // ── R41 S4: hero buttons + designs ─────────────────────────────────────────
+  ok(def.heroButtonsSet === false && def.heroButtons.length === 0, "default: legacy hero buttons");
+  ok(def.heroDesign === null && def.todaysDealsDesign === null, "default: no designs");
+  const defJson = serializeSpecialsPresentation(def);
+  ok(!defJson.includes("heroButtons") && !defJson.includes("Design"), "default JSON has no R41 keys");
+  const legacyStored = normalizeSpecialsPresentation({ heroButtons: [{ label: "A", href: "/menu" }] });
+  ok(!legacyStored.heroButtonsSet && legacyStored.heroButtons.length === 0, "buttons ignored unless heroButtonsSet");
+  const btn = normalizeSpecialsPresentation({
+    heroButtonsSet: true,
+    heroButtons: [
+      { label: "  Shop   deals ", href: "/menu?specials=today", variant: "outline" },
+      { label: "Bad", href: "javascript:alert(1)" },
+      { label: "", href: "/menu" },
+      { label: "Hidden", href: "/blog/x", enabled: false, variant: "weird" },
+      { label: "C", href: "/c" },
+      { label: "D", href: "/d" },
+      { label: "E", href: "/e" },
+    ],
+  });
+  ok(btn.heroButtonsSet, "heroButtonsSet applied");
+  ok(btn.heroButtons.length === 4, "max 4 buttons, unsafe/blank dropped");
+  ok(btn.heroButtons[0].label === "Shop deals" && btn.heroButtons[0].variant === "outline", "label cleaned, variant kept");
+  ok(btn.heroButtons[1].enabled === false && btn.heroButtons[1].variant === "solid", "hidden kept, bad variant -> solid");
+  ok(!btn.heroButtons.some((b) => b.href.startsWith("javascript")), "javascript href dropped");
+  const none = normalizeSpecialsPresentation({ heroButtonsSet: true, heroButtons: [] });
+  ok(none.heroButtonsSet && none.heroButtons.length === 0, "empty saved list = no buttons");
+  const noneRound = parseSpecialsPresentation(serializeSpecialsPresentation(none))!;
+  ok(noneRound.heroButtonsSet && noneRound.heroButtons.length === 0, "round-trip keeps 'no buttons'");
+  const btnRound = parseSpecialsPresentation(serializeSpecialsPresentation(btn))!;
+  ok(JSON.stringify(btnRound.heroButtons) === JSON.stringify(btn.heroButtons), "round-trip keeps buttons");
+  ok(normalizeSpecialsPresentation({ heroDesign: "junk" }).heroDesign === null, "junk design -> null");
+  const withDesign = normalizeSpecialsPresentation({ heroDesign: { enabled: true, boxes: [] } });
+  ok(withDesign.heroDesign !== null && withDesign.heroDesign.enabled === true, "design normalized");
+  const dRound = parseSpecialsPresentation(serializeSpecialsPresentation(withDesign))!;
+  ok(dRound.heroDesign !== null && dRound.todaysDealsDesign === null, "round-trip keeps hero design only");
 
   return { passed };
 }
