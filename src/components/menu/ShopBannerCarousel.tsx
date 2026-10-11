@@ -22,7 +22,6 @@
  * hidden and it reads like the old single banner.
  */
 
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
@@ -41,7 +40,7 @@ import {
   type ShopHeroPresentation,
 } from "@/lib/cms/shop-carousel-core";
 import type { ShopRenderSlide } from "@/lib/cms/shop-carousel-types";
-import { isGifSrc } from "@/lib/media/gif-core";
+import { BannerMedia } from "@/components/site/BannerMedia";
 
 // ── Presentation helpers (shared by public render + editor preview) ──────────
 
@@ -156,11 +155,9 @@ function SlideBody({
   return (
     <>
       {image && image.trim() ? (
-        <Image
+        <BannerMedia
           src={image}
-          unoptimized={isGifSrc(image)}
           alt={heroTextLines(pres.title.text)[0] || "Greenway Shop banner"}
-          fill
           priority={priority}
           sizes={sizes}
           className={`object-cover ${FOCUS_OBJECT_CLASS[focus]}`}
@@ -382,6 +379,7 @@ export function ShopBannerCarousel({ slides }: { slides: ShopRenderSlide[] }) {
                     : "pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-700"
                 }
                 aria-hidden={!isActive}
+                data-gw-slide={isActive ? "shown" : "hidden"}
                 aria-roledescription="slide"
                 aria-label={`${index + 1} of ${count}`}
               >

@@ -2,6 +2,8 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { SpecialsDailyDeals } from "@/components/specials/SpecialsDailyDeals";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
+import { BannerVideo } from "@/components/site/BannerVideo";
+import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import {
   SectionBanner,
   type SectionBannerButton,
@@ -534,7 +536,14 @@ export function SpecialsContent({
               set it sits BEHIND the dark fade below, so the eyebrow/title/subtitle
               stay readable over any photo. When absent, nothing renders here and
               the hero is byte-identical to the prior gradient-only look. */}
-          {content?.image && content.image.trim() ? (
+          {content?.image && content.image.trim() && isVideoSrc(content.image) ? (
+            // R44: a looping MP4/WebM hero (same position/focus as a photo).
+            <BannerVideo
+              src={content.image.trim()}
+              className={`absolute inset-0 h-full w-full object-cover ${HERO_FOCUS_OBJECT_CLASS[heroImageFocus]}`}
+              priority
+            />
+          ) : content?.image && content.image.trim() ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={content.image.trim()}

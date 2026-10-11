@@ -292,6 +292,7 @@ export function SpecialsPresentationEditor(props: Props) {
                 onChange={(next) => setGlobal("heroBannerImage", next)}
                 mediaChoices={mediaChoices}
                 spec={heroSpec}
+                allowVideo
               />
             </div>
 
@@ -697,6 +698,7 @@ export function SpecialsPresentationEditor(props: Props) {
                 onChange={(next) => setGlobal("todaysDealsBannerImage", next)}
                 mediaChoices={mediaChoices}
                 spec={spec}
+                allowVideo
               />
             </div>
 

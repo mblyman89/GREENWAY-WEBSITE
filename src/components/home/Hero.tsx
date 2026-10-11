@@ -1,10 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RenderSlide } from "@/lib/cms/carousel-types";
-import { isGifSrc } from "@/lib/media/gif-core";
+import { BannerMedia } from "@/components/site/BannerMedia";
 
 const AUTOPLAY_MS = 6000;
 
@@ -109,16 +108,16 @@ export function Hero({
                     : "pointer-events-none absolute inset-0 opacity-0"
                 }`}
                 aria-hidden={!isActive}
+                data-gw-slide={isActive ? "shown" : "hidden"}
                 aria-roledescription="slide"
                 aria-label={`${index + 1} of ${count}: ${slide.title}`}
               >
                 {slide.image ? (
-                  <Image
+                  <BannerMedia
                     src={slide.image}
-                    unoptimized={isGifSrc(slide.image)}
                     alt={slide.imageAlt || slide.title || "Greenway"}
-                    fill
                     priority={index === 0}
+                    active={isActive}
                     sizes="(max-width: 768px) 100vw, 1408px"
                     className={focusClass(slide.imageFocus)}
                   />

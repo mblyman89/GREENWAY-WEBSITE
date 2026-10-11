@@ -564,6 +564,7 @@ function SlideCard({
                 onChange={(next) => setField("image", next)}
                 mediaChoices={mediaChoices}
                 spec={desktopSpec}
+                allowVideo
               />
             </div>
 
@@ -578,6 +579,7 @@ function SlideCard({
                 onChange={(next) => setField("imageMobile", next)}
                 mediaChoices={mediaChoices}
                 spec={mobileSpec}
+                allowVideo
               />
             </div>
 

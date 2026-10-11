@@ -324,6 +324,7 @@ export function LoyaltyHeroEditor(props: Props) {
               onChange={(next) => setField("image", next)}
               mediaChoices={mediaChoices}
               spec={desktopSpec}
+              allowVideo
             />
           </div>
 
@@ -340,6 +341,7 @@ export function LoyaltyHeroEditor(props: Props) {
               onChange={(next) => setField("imageMobile", next)}
               mediaChoices={mediaChoices}
               spec={mobileSpec}
+              allowVideo
             />
           </div>
 

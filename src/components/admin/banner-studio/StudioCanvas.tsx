@@ -37,6 +37,7 @@ import {
   type BannerDesign,
   type DesignDevice,
 } from "@/lib/cms/banner-design-core";
+import { isVideoSrc } from "@/lib/media/upload-policy-core";
 
 export type StudioSelection = { target: "box" | "button"; id: string } | null;
 
@@ -270,14 +271,29 @@ export function StudioCanvas({
             >
               {imageSrc ? (
                 <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- editor preview must show any path/URL, like ContentImageField */}
-                  <img
-                    src={imageSrc}
-                    alt={imageAlt}
-                    className="gw-dimg absolute inset-0 h-full w-full"
-                    style={css(imageStyle(design))}
-                    draggable={false}
-                  />
+                  {isVideoSrc(imageSrc) ? (
+                    // R44: video banners preview live (muted loop), same focus/zoom/filters.
+                    <video
+                      src={imageSrc}
+                      muted
+                      loop
+                      playsInline
+                      autoPlay
+                      preload="metadata"
+                      aria-label={imageAlt || "Banner video"}
+                      className="gw-dimg absolute inset-0 h-full w-full"
+                      style={css(imageStyle(design))}
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element -- editor preview must show any path/URL, like ContentImageField
+                    <img
+                      src={imageSrc}
+                      alt={imageAlt}
+                      className="gw-dimg absolute inset-0 h-full w-full"
+                      style={css(imageStyle(design))}
+                      draggable={false}
+                    />
+                  )}
                 </div>
               ) : null}
               {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}

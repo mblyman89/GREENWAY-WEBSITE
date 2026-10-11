@@ -20,12 +20,15 @@
 import { useMemo, useState } from "react";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
 import { ImageSpecHelper } from "@/components/admin/ImageSpecHelper";
+import { choiceIsVideo, isVideoSrc } from "@/lib/media/upload-policy-core";
 
 export type MediaChoice = {
   id: string;
   url: string;
   title: string;
   usageType: string | null;
+  /** R44: stored mime type ("video/mp4" etc.). Absent = decide by URL. */
+  mimeType?: string | null;
 };
 
 export function ContentImageField({
@@ -33,27 +36,38 @@ export function ContentImageField({
   onChange,
   mediaChoices,
   spec,
+  allowVideo = false,
 }: {
   value: string;
   onChange: (next: string) => void;
   mediaChoices: MediaChoice[];
   /** Optional Canva-ready sizing hint for this slot. */
   spec?: ImageSpec;
+  /**
+   * R44: this slot's public renderer can play a looping MP4/WebM banner.
+   * Off by default: slots drawn with a plain image element never see videos.
+   */
+  allowVideo?: boolean;
 }) {
   const [picking, setPicking] = useState(false);
   const [filter, setFilter] = useState("");
   const [broken, setBroken] = useState(false);
 
+  const offered = useMemo(
+    () => (allowVideo ? mediaChoices : mediaChoices.filter((m) => !choiceIsVideo(m))),
+    [mediaChoices, allowVideo],
+  );
+  const valueIsVideo = isVideoSrc(value);
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return mediaChoices;
-    return mediaChoices.filter(
+    if (!q) return offered;
+    return offered.filter(
       (m) =>
         m.title.toLowerCase().includes(q) ||
         (m.usageType ?? "").toLowerCase().includes(q) ||
         m.url.toLowerCase().includes(q),
     );
-  }, [mediaChoices, filter]);
+  }, [offered, filter]);
 
   function choose(url: string) {
     setBroken(false);
@@ -66,7 +80,19 @@ export function ContentImageField({
       {/* Live thumbnail preview */}
       <div className="flex flex-wrap items-start gap-3">
         <div className="relative h-24 w-44 shrink-0 overflow-hidden rounded-lg border border-white/15 bg-[#050505]">
-          {value && !broken ? (
+          {value && !broken && valueIsVideo ? (
+            <video
+              src={value}
+              muted
+              loop
+              playsInline
+              autoPlay
+              preload="metadata"
+              className="h-full w-full object-cover"
+              onError={() => setBroken(true)}
+              aria-label="Current banner video"
+            />
+          ) : value && !broken ? (
             // Plain <img> (not next/image) so any path/URL renders without
             // remote-domain config; this is the editor preview only.
             // eslint-disable-next-line @next/next/no-img-element
@@ -78,7 +104,7 @@ export function ContentImageField({
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-center text-[0.65rem] text-white/40">
-              {broken ? "Image not found" : "No image set"}
+              {broken ? (valueIsVideo ? "Video not found" : "Image not found") : "No image set"}
             </div>
           )}
         </div>
@@ -103,8 +129,17 @@ export function ContentImageField({
             )}
           </div>
           <label className="block text-[0.65rem] font-semibold uppercase tracking-wide text-white/40">
-            …or paste an image path / URL
+            …or paste an image{allowVideo ? " or MP4 video" : ""} path / URL
           </label>
+          {allowVideo ? (
+            <p className="text-[0.65rem] text-white/40">
+              🎬 This banner can play a silent looping MP4 — upload it in the Media Library (Canva → MP4 Video, 5–15 s, under 8 MB).
+            </p>
+          ) : valueIsVideo ? (
+            <p className="text-[0.65rem] text-amber-300">
+              This spot can only show a still image — a video here won&apos;t play on the website. Pick an image instead.
+            </p>
+          ) : null}
           <input
             type="text"
             value={value}
@@ -112,7 +147,7 @@ export function ContentImageField({
               setBroken(false);
               onChange(e.target.value);
             }}
-            placeholder="/home/hero-banner.webp  or  https://…"
+            placeholder={allowVideo ? "/home/hero-banner.webp  or  https://…/banner.mp4" : "/home/hero-banner.webp  or  https://…"}
             className="w-full rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[var(--admin-accent)]"
           />
         </div>
@@ -129,7 +164,7 @@ export function ContentImageField({
               type="search"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter images…"
+              placeholder={allowVideo ? "Filter images & videos…" : "Filter images…"}
               className="w-full max-w-xs rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[var(--admin-accent)]"
             />
             <a
@@ -152,7 +187,7 @@ export function ContentImageField({
           </div>
           {filtered.length === 0 ? (
             <p className="px-1 py-4 text-center text-xs text-white/40">
-              {mediaChoices.length === 0
+              {offered.length === 0
                 ? "No published images yet. Upload images in the Media Library, then they'll appear here."
                 : "No images match that filter."}
             </p>
@@ -173,13 +208,29 @@ export function ContentImageField({
                     }`}
                   >
                     <div className="relative aspect-[16/10] w-full bg-[#050505]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={m.url}
-                        alt={m.title}
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
+                      {choiceIsVideo(m) ? (
+                        <>
+                          <video
+                            src={`${m.url}#t=0.5`}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="h-full w-full object-cover"
+                            aria-label={m.title}
+                          />
+                          <span className="absolute bottom-1 left-1 rounded bg-black/75 px-1 text-[0.55rem] font-bold text-white">
+                            🎬 VIDEO
+                          </span>
+                        </>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={m.url}
+                          alt={m.title}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      )}
                     </div>
                     <div className="truncate px-1.5 py-1 text-[0.6rem] text-white/60">
                       {m.title}

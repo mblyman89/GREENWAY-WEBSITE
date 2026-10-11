@@ -190,6 +190,7 @@ export function CarouselSlideCard({
             onChange={setImage}
             mediaChoices={mediaChoices}
             spec={CAROUSEL_SLIDE_SPEC}
+            allowVideo
           />
         </div>
 

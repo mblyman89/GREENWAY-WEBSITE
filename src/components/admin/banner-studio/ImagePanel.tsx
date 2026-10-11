@@ -117,6 +117,7 @@ export function ImagePanel({
               onChange({ ...design, image: next });
             }}
             mediaChoices={mediaChoices}
+            allowVideo
           />
           {im.srcMobile && !safeImageSrc(im.srcMobile) ? (
             <p className="text-[0.7rem] text-amber-300">

@@ -33,6 +33,7 @@ import {
   type MediaChoice,
 } from "@/components/admin/ContentImageField";
 import { resolveImageSpec } from "@/lib/cms/image-spec-core";
+import { blockAcceptsVideo } from "@/lib/media/upload-policy-core";
 import { ContentFontField } from "@/components/admin/ContentFontField";
 import { ContentSelectField } from "@/components/admin/ContentSelectField";
 
@@ -279,6 +280,7 @@ export function ContentBlockEditor({
                 onChange={setValue}
                 mediaChoices={mediaChoices}
                 spec={resolveImageSpec(block.block_key)}
+                allowVideo={blockAcceptsVideo(block.block_key)}
               />
             ) : isFont ? (
               <ContentFontField value={value} onChange={setValue} />

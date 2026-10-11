@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
 import {
   type LoyaltyHeroPresentation,
@@ -7,7 +6,7 @@ import {
   isScriptHeroFont,
   heroTextLines,
 } from "@/lib/loyalty/loyalty-hero-core";
-import { isGifSrc } from "@/lib/media/gif-core";
+import { BannerMedia } from "@/components/site/BannerMedia";
 
 /**
  * LoyaltyHeroBanner (SLICE 123 / LOY-1) — the /loyalty hero, rebuilt as a fully
@@ -167,11 +166,9 @@ function HeroImage({
     return <div className="absolute inset-0 bg-zinc-950" aria-hidden="true" />;
   }
   return (
-    <Image
+    <BannerMedia
       src={src}
-      unoptimized={isGifSrc(src)}
       alt="Greenway Loyalty Points banner"
-      fill
       priority={priority}
       sizes={sizes}
       className={`object-cover ${focusClass}`}

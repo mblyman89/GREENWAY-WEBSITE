@@ -277,6 +277,30 @@ export function isPickableBannerMime(mime: unknown, allowVideo: boolean): boolea
   return allowVideo && kind === "video";
 }
 
+/**
+ * Content-block image slots whose PUBLIC renderer can play a video (they all
+ * render through BannerMedia / SectionBanner / the loyalty hero). Every other
+ * image block (locations, price match, footer hours, ...) is drawn by a plain
+ * image element, so its picker must NOT offer videos.
+ */
+export const VIDEO_CAPABLE_BLOCK_KEYS: readonly string[] = [
+  "home.category.image",
+  "home.brand.image",
+  "loyalty.hero.image",
+  "loyalty.hero.image_mobile",
+];
+
+/** True when the editor for `blockKey` may offer videos. */
+export function blockAcceptsVideo(blockKey: unknown): boolean {
+  return typeof blockKey === "string" && VIDEO_CAPABLE_BLOCK_KEYS.includes(blockKey);
+}
+
+/** A picker choice's kind, from its stored mime (preferred) or its URL. */
+export function choiceIsVideo(choice: { mimeType?: string | null; url: string }): boolean {
+  if (choice.mimeType) return kindOfMime(choice.mimeType) === "video";
+  return isVideoSrc(choice.url);
+}
+
 // ── TUS endpoint ───────────────────────────────────────────────────────────
 
 /**
@@ -476,5 +500,15 @@ export function __runUploadPolicyCoreTests(): { passed: number; failed: number }
   for (const kind of ["image", "video", "document"] as const)
     for (const m of UPLOAD_MIME[kind]) ok(UPLOAD_ACCEPT_ATTR.includes(m), `accept has ${m}`);
 
+    // R44 video-capable slots
+  ok(blockAcceptsVideo("home.category.image"), "home category banner takes video");
+  ok(blockAcceptsVideo("loyalty.hero.image_mobile"), "loyalty phone hero takes video");
+  ok(!blockAcceptsVideo("footer.hours.image"), "footer hours image stays image-only");
+  ok(!blockAcceptsVideo("locations.hero.image"), "locations hero stays image-only");
+  ok(!blockAcceptsVideo(undefined), "no key -> no video");
+  ok(choiceIsVideo({ mimeType: "video/mp4", url: "https://x/a.jpg" }), "mime wins over url");
+  ok(!choiceIsVideo({ mimeType: "image/png", url: "https://x/a.mp4" }), "image mime wins");
+  ok(choiceIsVideo({ url: "https://x/a.webm?v=1" }), "url fallback");
+  ok(!choiceIsVideo({ mimeType: null, url: "/a.png" }), "png url not video");
   return { passed, failed };
 }

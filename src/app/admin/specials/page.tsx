@@ -141,12 +141,13 @@ export default async function AdminSpecialsPage({
   // Pages builder uses), so staff can pick a catalogued image or paste a URL.
   const mediaAssets = await listMedia({ status: "published", limit: 200 });
   const mediaChoices: MediaChoice[] = mediaAssets
-    .filter((m) => (m.mime_type ?? "").startsWith("image/") && m.public_url)
+    .filter((m) => /^(image|video)\//.test(m.mime_type ?? "") && m.public_url) // R44: videos too (pickers show them only in video-capable slots)
     .map((m) => ({
       id: m.id,
       url: m.public_url as string,
       title: m.title ?? m.filename ?? "Image",
       usageType: m.usage_type ?? null,
+      mimeType: m.mime_type ?? null,
     }));
 
   return (

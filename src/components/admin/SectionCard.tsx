@@ -340,6 +340,7 @@ export function SectionCard({
                 onChange={setImage}
                 mediaChoices={mediaChoices}
                 spec={imageSpec}
+                allowVideo
               />
             </div>
 
