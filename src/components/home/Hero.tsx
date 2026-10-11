@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import type { RenderSlide } from "@/lib/cms/carousel-types";
 import { BannerMedia } from "@/components/site/BannerMedia";
+import { CarouselRotationButton } from "@/components/site/CarouselRotationButton";
+import { useCarouselAutoplay } from "@/components/site/useCarouselAutoplay";
+import { dwellMs, slideFetchPriority, wordCount } from "@/lib/site/carousel-autoplay-core";
 
+/** Base dwell per slide; text-heavy slides earn more (R45-S1, Baymard 5-10 s). */
 const AUTOPLAY_MS = 6000;
 
 /** Map the slide's image-focus knob to a Tailwind object-position class. */
@@ -31,8 +35,15 @@ function gradientClass(textAlign: RenderSlide["textAlign"]): string {
  * Carousel (Admin → Content → Home Carousel, table home_carousel_slides). The
  * server page resolves them draft-aware via getCarouselForRender() and passes
  * them in. If none are configured it falls back to the seed slides so the hero
- * never renders blank. Each slide auto-rotates; arrows + dots allow manual
- * control; hovering pauses autoplay.
+ * never renders blank.
+ *
+ * R45-S1 (W3C APG carousel pattern + WCAG 2.2.2 + Baymard): a Stop/Start
+ * rotation button comes first in Tab order; keyboard focus entering the
+ * carousel or any manual nav (arrow, dot, swipe, Left/Right key) stops rotation
+ * for good; hover and a hidden browser tab pause it; phones and
+ * "reduce motion" users start with rotation OFF; text-heavy slides stay up
+ * longer; only the first slide's image is fetched at high priority. All rules
+ * live in src/lib/site/carousel-autoplay-core.ts (self-tested).
  */
 export function Hero({
   slides,
@@ -45,39 +56,19 @@ export function Hero({
   const safeSlides = slides.length > 0 ? slides : [];
   const count = safeSlides.length;
 
-  const [activeRaw, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Clamp during render so a shrinking slide count (e.g. in preview) never
-  // points past the end — no setState-in-effect needed.
-  const active = count === 0 ? 0 : Math.min(activeRaw, count - 1);
-
-  const goTo = useCallback(
+  const dwellFor = useCallback(
     (index: number) => {
-      if (count === 0) return;
-      setActive((index + count) % count);
+      const slide = safeSlides[index];
+      if (!slide) return AUTOPLAY_MS;
+      return dwellMs(
+        AUTOPLAY_MS,
+        wordCount([slide.eyebrow, slide.title, slide.description, ...slide.ctas.map((c) => c.label)]),
+      );
     },
-    [count],
+    [safeSlides],
   );
-  const next = useCallback(() => {
-    if (count === 0) return;
-    setActive((current) => (current + 1) % count);
-  }, [count]);
-  const prev = useCallback(() => {
-    if (count === 0) return;
-    setActive((current) => (current - 1 + count) % count);
-  }, [count]);
-
-  useEffect(() => {
-    if (paused || count <= 1) return;
-    timer.current = setInterval(() => {
-      setActive((current) => (current + 1) % count);
-    }, AUTOPLAY_MS);
-    return () => {
-      if (timer.current) clearInterval(timer.current);
-    };
-  }, [paused, count]);
+  const carousel = useCarouselAutoplay(count, dwellFor);
+  const { active, next, prev, goTo } = carousel;
 
   if (count === 0) return null;
 
@@ -93,9 +84,31 @@ export function Hero({
           role="region"
           aria-roledescription="carousel"
           aria-label="Greenway featured highlights"
-          onMouseEnter={() => setPaused(true)}
-          onMouseLeave={() => setPaused(false)}
+          {...carousel.regionProps}
         >
+          {/* APG: the rotation control is the FIRST focusable thing inside, so
+              the control row (rotation + dots) comes first in the DOM; it is
+              positioned at the bottom centre visually. */}
+          {count > 1 ? (
+            <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 md:bottom-3">
+              <CarouselRotationButton {...carousel.rotationButtonProps} rotating={carousel.rotating} />
+              {safeSlides.map((slide, index) => (
+                <button
+                  key={slide.key}
+                  type="button"
+                  onClick={() => goTo(index)}
+                  aria-label={`Go to slide ${index + 1}`}
+                  aria-current={index === active}
+                  className={`h-2 rounded-full transition-all ${
+                    index === active
+                      ? "w-6 bg-[var(--greenway)]"
+                      : "w-2 bg-white/40 hover:bg-white/70"
+                  }`}
+                />
+              ))}
+            </div>
+          ) : null}
+          <div aria-live={carousel.liveMode} aria-atomic="false">
           {safeSlides.map((slide, index) => {
             const isActive = index === active;
             const alignRight = slide.textAlign === "right";
@@ -117,6 +130,7 @@ export function Hero({
                     src={slide.image}
                     alt={slide.imageAlt || slide.title || "Greenway"}
                     priority={index === 0}
+                    fetchPriority={slideFetchPriority(index)}
                     active={isActive}
                     sizes="(max-width: 768px) 100vw, 1408px"
                     className={focusClass(slide.imageFocus)}
@@ -137,9 +151,9 @@ export function Hero({
                     </p>
                   ) : null}
                   {slide.title ? (
-                    <h1 className="mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl">
-                      {slide.title}
-                    </h1>
+                    // R45-S1: one <h1> per page. Slide 1 owns it; the others
+                    // are <h2> with the identical look.
+                    <SlideHeading first={index === 0}>{slide.title}</SlideHeading>
                   ) : null}
                   {slide.description ? (
                     <p className="mt-2 max-w-md whitespace-pre-line text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base">
@@ -171,6 +185,7 @@ export function Hero({
               </div>
             );
           })}
+          </div>
 
           {/* Prev / Next arrows (only when more than one slide) */}
           {count > 1 ? (
@@ -196,27 +211,17 @@ export function Hero({
                 </span>
               </button>
 
-              {/* Dot indicators */}
-              <div className="absolute bottom-2.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 md:bottom-3.5">
-                {safeSlides.map((slide, index) => (
-                  <button
-                    key={slide.key}
-                    type="button"
-                    onClick={() => goTo(index)}
-                    aria-label={`Go to slide ${index + 1}`}
-                    aria-current={index === active}
-                    className={`h-2 rounded-full transition-all ${
-                      index === active
-                        ? "w-6 bg-[var(--greenway)]"
-                        : "w-2 bg-white/40 hover:bg-white/70"
-                    }`}
-                  />
-                ))}
-              </div>
             </>
           ) : null}
         </div>
       </div>
     </section>
   );
+}
+
+const HEADING_CLASS =
+  "mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl";
+
+function SlideHeading({ first, children }: { first: boolean; children: React.ReactNode }) {
+  return first ? <h1 className={HEADING_CLASS}>{children}</h1> : <h2 className={HEADING_CLASS}>{children}</h2>;
 }
