@@ -61,6 +61,7 @@ import {
   setPlaidAccountOwner,
   setPlaidAccountBooks,
 } from "@/lib/plaid/store";
+import { publicSiteOrigin } from "@/lib/site/site-domain-core";
 
 const ROOT = "/admin/plaid";
 
@@ -85,7 +86,7 @@ function back(qs: { tab?: string; msg?: string; error?: string }): never {
 
 /** Public base URL for the webhook (mirror compliance-reminders.ts). */
 function siteBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://greenwaymarijuana.com").replace(/\/$/, "");
+  return publicSiteOrigin(process.env); // R40: one canonical host (www)
 }
 
 /**

@@ -20,6 +20,7 @@ import "server-only";
 import webpush from "web-push";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { publicSiteOrigin } from "@/lib/site/site-domain-core";
 
 export function isPushConfigured(): boolean {
   return Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
@@ -34,7 +35,7 @@ function configure(): boolean {
   const pub = process.env.VAPID_PUBLIC_KEY ?? "";
   const priv = process.env.VAPID_PRIVATE_KEY ?? "";
   if (!pub || !priv) return false;
-  const subject = process.env.VAPID_SUBJECT ?? "https://greenwaymarijuana.com";
+  const subject = process.env.VAPID_SUBJECT ?? publicSiteOrigin(process.env); // R40: canonical host
   webpush.setVapidDetails(subject, pub, priv);
   return true;
 }

@@ -1,7 +1,16 @@
 import type { NextConfig } from "next";
+import { buildSiteRedirects } from "./src/lib/site/site-domain-core";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  // R40 domain go-live: bare greenwaymarijuana.com -> www (308, path and query
+  // kept) plus the old WordPress pages (/about-us/, /contact-us/, /partners/,
+  // /insta/, /facebook/ ...). See src/lib/site/site-domain-core.ts and
+  // docs/DOMAIN_GO_LIVE.md. IMPORTANT: in Vercel make WWW the primary domain;
+  // never set "www redirects to the bare domain" or the two rules would loop.
+  async redirects() {
+    return buildSiteRedirects();
+  },
   typescript: {
     // WHY THE BUILD USES A DIFFERENT TSCONFIG (this is the Vercel fix)
     //

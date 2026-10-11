@@ -6,8 +6,9 @@ import { getPublishedSlugs } from "@/lib/cms/blog-store";
 // source `generateStaticParams` uses, so the routes that are prerendered and
 // the routes that are advertised here cannot disagree.
 import { allCategoryPaths } from "@/lib/menu/menu-facet-core";
+import { CANONICAL_ORIGIN } from "@/lib/site/site-domain-core";
 
-const baseUrl = "https://www.greenwaymarijuana.com";
+const baseUrl = CANONICAL_ORIGIN; // R40: one source of truth
 
 // Public, indexable routes (dev preview routes intentionally excluded; checkout
 // and admin are excluded because they are transactional/internal).

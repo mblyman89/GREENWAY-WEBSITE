@@ -21,7 +21,8 @@ see does not match, the fix is in the table right underneath it.
 ## BEFORE YOU START — the one thing that catches everybody
 
 The back office prints a ready-made install command for you, and it will say
-`--site https://greenwaymarijuana.com`.
+`--site https://www.greenwaymarijuana.com` (the public address once the domain
+is moved to Vercel — see `docs/DOMAIN_GO_LIVE.md`).
 
 **Do not use that address yet.** `greenwaymarijuana.com` is the live shop site
 and it sits behind a security gateway that blocks the Pi. Everything we are

@@ -41,6 +41,7 @@ import { getObligationContext } from "@/lib/compliance/obligation-waiver-store";
 import { sendPushToAll, isPushConfigured } from "@/lib/notifications/push";
 import { planLargeDraftNotice } from "@/lib/accounting/large-draft-notice-core";
 import { loadUnapprovedDrafts } from "@/lib/accounting/large-draft-notice-store";
+import { publicSiteOrigin } from "@/lib/site/site-domain-core";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const COMMAND_CENTER_PATH = "/admin/compliance/ccrs";
@@ -122,7 +123,7 @@ async function sendReminderEmail(r: Reminder): Promise<boolean> {
   const from = process.env.ORDER_EMAIL_FROM ?? "";
   const to = staffEmails();
   if (!apiKey || !from || to.length === 0) return false;
-  const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://greenwaymarijuana.com").replace(/\/$/, "");
+  const site = publicSiteOrigin(process.env); // R40: one canonical host (www)
   try {
     const res = await fetch(RESEND_ENDPOINT, {
       method: "POST",
