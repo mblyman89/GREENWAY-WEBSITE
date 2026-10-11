@@ -484,6 +484,9 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
   ok(checkEffectiveDate("2026-02-30", T).ok === false, "impossible date refused");
   ok(checkEffectiveDate("2026-11-30", T).ok === false, "more than 30 days refused");
   ok(checkEffectiveDate("2026-11-06", T).ok === true, "28 days accepted");
+  // Date.parse rolls 2026-11-31 over to Tue 2026-12-01 (a banking day within 30 days of 11-20).
+  const imp = checkEffectiveDate("2026-11-31", "2026-11-20");
+  ok(!imp.ok && imp.error.startsWith("Pick the date"), "impossible future date refused as a date, not rolled over");
 
   // prenote file
   const p = planCheckFile({ method: "prenote", checks: [chk(), chk({ verificationId: "v2", accountNumber: "555", accountType: "savings" })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at });
@@ -512,11 +515,16 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
     ok(e6[0].slice(1, 3) === "22" && e6[0].slice(29, 39) === "0000000037", "live credit code, 37 cents");
     ok(m.plan.eligible === "2026-10-14", "micro eligible = settlement + 1 (matches 0263)");
   }
-  ok(!planCheckFile({ method: "prenote", checks: [], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "empty refused");
-  ok(!planCheckFile({ method: "prenote", checks: [chk({ method: "micro_entry", microCents: 5 })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "mixed method refused");
-  ok(!planCheckFile({ method: "prenote", checks: [chk({ status: "sent" })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "not planned refused");
-  ok(!planCheckFile({ method: "prenote", checks: [chk(), chk()], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "same check twice refused");
-  ok(!planCheckFile({ method: "prenote", checks: [chk({ routing: "125000025" })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "bad routing refused");
+  // Each refusal is checked by its OWN words: nacha-core would refuse some of these too, with less useful words.
+  const err = (r: ReturnType<typeof planCheckFile>) => (r.ok ? "" : r.error);
+  const base = { originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at };
+  ok(err(planCheckFile({ method: "prenote", checks: [], ...base })) === "No prenotes are waiting to be sent.", "empty refused in words");
+  ok(err(planCheckFile({ method: "micro_entry", checks: [], ...base })) === "No test credits are waiting to be sent.", "empty micro refused in words");
+  ok(err(planCheckFile({ method: "prenote", checks: [chk({ method: "micro_entry", microCents: 5 })], ...base })).includes("a test credit cannot go in a prenote file"), "mixed method refused");
+  ok(err(planCheckFile({ method: "micro_entry", checks: [chk({ method: "prenote" })], ...base })).includes("a prenote cannot go in a test credit file"), "mixed method refused (other way)");
+  ok(err(planCheckFile({ method: "prenote", checks: [chk({ status: "sent" })], ...base })).includes("already sent"), "not planned refused");
+  ok(err(planCheckFile({ method: "prenote", checks: [chk(), chk()], ...base })).endsWith("listed twice."), "same check twice refused");
+  ok(err(planCheckFile({ method: "prenote", checks: [chk({ routing: "125000025" })], ...base })).includes("Fix the account before checking it"), "bad routing refused");
   ok(!planCheckFile({ method: "micro_entry", checks: [chk({ method: "micro_entry", microCents: 100 })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "$1.00 test refused");
   ok(!planCheckFile({ method: "micro_entry", checks: [chk({ method: "micro_entry", microCents: null })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "missing cents refused");
   ok(!planCheckFile({ method: "prenote", checks: [chk({ microCents: 5 })], originator: ORIG, effective: "2026-10-13", todayIso: T, createdAt: at }).ok, "prenote with amount refused");
@@ -546,6 +554,7 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
 
   // confirmed cents
   ok(parseConfirmedCents("0.37") === 37 && parseConfirmedCents("$.37") === 37 && parseConfirmedCents("37") === 37 && parseConfirmedCents("7") === 7, "amount forms");
+  ok(parseConfirmedCents("100") === null && parseConfirmedCents("150") === null, "three digits is not a test amount");
   ok(parseConfirmedCents("1.00") === null && parseConfirmedCents("0.3") === null && parseConfirmedCents("") === null && parseConfirmedCents("abc") === null, "bad amounts");
 
   // finish form
@@ -584,6 +593,9 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
   );
   ok(rv.map((r) => r.id).join() === "e,a,b,f", "review order: missing, overdue, due soon by days; far and not-active skipped");
   ok(rv[1].days === -8 && rv[2].days === 21 && rv[3].days === 30, "days counted (30 is inside the window)");
+  const edge = reviewList([{ id: "y", payee: "Y", state: "active", annual_review_due_on: "2026-10-08" }, { id: "z", payee: "Z", state: "active", annual_review_due_on: "2026-10-09" }], T);
+  ok(edge[0].id === "y" && edge[0].status === "overdue" && edge[0].days === -1, "due yesterday is overdue");
+  ok(edge[1].id === "z" && edge[1].status === "due_soon" && edge[1].days === 0, "due today is due soon, not overdue");
   ok(!checkReviewNote("ok").ok && checkReviewNote("Called on file; unchanged").ok, "review note");
 
   // legal hold, retention
@@ -614,6 +626,9 @@ export function __runAchOpsCoreTests(): { passed: number; failed: number } {
   ok(rep.flags.some((f) => f.includes("came back") && f.includes("R03")), "returned flag names the code");
   ok(rep.flags.some((f) => f.includes("more than 2 test credits")), "velocity flag (k1 tested 3 times in a year)");
   ok(rep.flags.some((f) => f.includes("more than one person")), "shared account flag (k2: employee 2 and 3)");
+  // Window edges: 30 days before 2026-10-09 is 2026-09-09 (out); 09-10 is in.
+  const e30 = microEntryMonitor([mr({ on: "2026-09-09", account_key: "a" }), mr({ on: "2026-09-10", account_key: "b" })], T);
+  ok(e30.sent30 === 1 && e30.sent365 === 2, `30-day window is the last 30 days, not 31 (${e30.sent30})`);
   const quiet = microEntryMonitor([mr({}), mr({ on: "2026-09-01" })], T);
   ok(quiet.flags.length === 0 && quiet.sent365 === 2, "quiet month: no flags");
 
