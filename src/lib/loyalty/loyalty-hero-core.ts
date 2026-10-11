@@ -39,6 +39,7 @@
  */
 
 import { fontStack } from "@/lib/cms/fonts";
+import { normalizeDesign, type BannerDesign } from "@/lib/cms/banner-design-core";
 
 /**
  * The ONE content_blocks row that stores the loyalty-hero presentation. Lives
@@ -214,6 +215,14 @@ export type LoyaltyHeroPresentation = {
   title: HeroTextBlock;
   /** The subtitle (old cursive "Earn Points With Every Purchase"). */
   subtitle: HeroTextBlock;
+  /**
+   * R41 S6: optional Banner Studio design (drag text boxes, buttons, image
+   * zoom/filters, overlay). Only used when `design.enabled`; otherwise the
+   * classic hero above renders exactly as before. ABSENT from the default and
+   * from the stored JSON until the owner turns it on, so every existing row
+   * serializes byte-identically.
+   */
+  design?: BannerDesign | null;
 };
 
 /**
@@ -293,6 +302,7 @@ export function normalizeLoyaltyHeroPresentation(
   const base = defaultLoyaltyHeroPresentation();
   if (!input || typeof input !== "object") return base;
   const obj = input as Record<string, unknown>;
+  const design = normalizeDesign(obj.design);
 
   return {
     image: cleanImage(obj.image, base.image),
@@ -308,6 +318,8 @@ export function normalizeLoyaltyHeroPresentation(
     eyebrow: normalizeBlock(obj.eyebrow, base.eyebrow),
     title: normalizeBlock(obj.title, base.title),
     subtitle: normalizeBlock(obj.subtitle, base.subtitle),
+    // R41 S6: only present when a valid design is stored (never a null key).
+    ...(design ? { design } : {}),
   };
 }
 
@@ -336,6 +348,8 @@ export function serializeLoyaltyHeroPresentation(
     eyebrow: serializeBlock(norm.eyebrow),
     title: serializeBlock(norm.title),
     subtitle: serializeBlock(norm.subtitle),
+    // R41 S6: appended LAST and only when set, so old rows stay byte-identical.
+    ...(norm.design ? { design: norm.design } : {}),
   });
 }
 
@@ -496,6 +510,23 @@ export function __runLoyaltyHeroCoreTests(): { passed: number } {
     JSON.stringify(resolvedRound) === JSON.stringify(def),
     "serialized default resolves back to the default",
   );
+
+  // R41 S6: optional Banner Studio design.
+  ok(!("design" in def), "default has no design key");
+  ok(!serializeLoyaltyHeroPresentation(def).includes("design"), "default JSON has no design key (byte-identical)");
+  ok(!("design" in normalizeLoyaltyHeroPresentation({ design: "junk" })), "junk design dropped");
+  ok(!("design" in normalizeLoyaltyHeroPresentation({ design: null })), "null design dropped");
+  const withDesign = normalizeLoyaltyHeroPresentation({ design: { enabled: true, boxes: [] } });
+  ok(!!withDesign.design && withDesign.design.enabled === true, "valid design normalized");
+  const dRound = parseLoyaltyHeroPresentation(serializeLoyaltyHeroPresentation(withDesign))!;
+  ok(!!dRound.design && dRound.design.enabled === true, "design round-trips");
+  ok(
+    serializeLoyaltyHeroPresentation(withDesign).indexOf('"design"') >
+      serializeLoyaltyHeroPresentation(withDesign).indexOf('"subtitle"'),
+    "design serialized after the classic keys",
+  );
+  const off = normalizeLoyaltyHeroPresentation({ design: { enabled: false, boxes: [] } });
+  ok(!!off.design && off.design.enabled === false, "switched-off design is kept (owner can turn it back on)");
 
   return { passed };
 }

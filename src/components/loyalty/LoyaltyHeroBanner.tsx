@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { DesignedBanner } from "@/components/site/DesignedBanner";
 import {
   type LoyaltyHeroPresentation,
   heroFontStack,
@@ -38,6 +39,29 @@ export function LoyaltyHeroBanner({
   priority?: boolean;
   editable?: boolean;
 }) {
+  // R41 S6: the owner's Banner Studio design. Classic hero below is untouched
+  // when no design is on. Bound text boxes follow the three blocks' words (a
+  // hidden block shows nothing). The design uses the DESKTOP image; its own
+  // phone focus/height controls handle small screens.
+  if (presentation.design?.enabled) {
+    const words = (b: LoyaltyHeroPresentation["eyebrow"]) => (b.show ? b.text : "");
+    return (
+      <DesignedBanner
+        design={presentation.design}
+        imageSrc={presentation.image || presentation.imageMobile}
+        imageAlt=""
+        legacy={{
+          eyebrow: words(presentation.eyebrow),
+          title: words(presentation.title),
+          subtitle: words(presentation.subtitle),
+        }}
+        headingLevel={2}
+        priority={priority}
+        editable={editable}
+        owner="loyalty:hero"
+      />
+    );
+  }
   const {
     image,
     imageMobile,

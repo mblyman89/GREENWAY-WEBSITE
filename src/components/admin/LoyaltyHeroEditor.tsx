@@ -28,6 +28,8 @@ import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
 import { LoyaltyHeroBanner } from "@/components/loyalty/LoyaltyHeroBanner";
+import { DesignCard } from "@/components/admin/specials/SpecialsR41Panels";
+import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import {
   LOYALTY_HERO_PRESENTATION_BLOCK,
   TEXT_ALIGNS,
@@ -65,6 +67,8 @@ type Props = {
   desktopSpec?: ImageSpec;
   /** Image spec for the mobile banner (loyalty.hero.image_mobile). */
   mobileSpec?: ImageSpec;
+  /** R41 S6: published blog posts / newsletters for the design link picker. */
+  posts?: PickerPost[];
 };
 
 const TEXT_ALIGN_LABELS: Record<TextAlign, string> = {
@@ -410,7 +414,7 @@ export function LoyaltyHeroEditor(props: Props) {
             title="Eyebrow (small kicker above the title)"
             hint="A short line above the headline — e.g. “A Smoking Deal!”. It sits above the leaf area."
             block={pres.eyebrow}
-            multiline={false}
+            multiline
             onChange={(patch) => patchBlock("eyebrow", patch)}
           />
           <BlockEditor
@@ -424,8 +428,40 @@ export function LoyaltyHeroEditor(props: Props) {
             title="Subtitle (the flourish line)"
             hint="A supporting line — great with a cursive font, e.g. “Earn Points With Every Purchase”."
             block={pres.subtitle}
-            multiline={false}
+            multiline
             onChange={(patch) => patchBlock("subtitle", patch)}
+          />
+
+          {/* R41 S6: optional Banner Studio design for this hero. */}
+          <DesignCard
+            title="Custom design (optional)"
+            description="Turn this on to drag the text and buttons anywhere, add extra text boxes and buttons, change sizes, and zoom or tint the picture. The three text lines above still supply the words. Turn it off any time to go back to the classic look."
+            design={pres.design ?? null}
+            onChange={(d) =>
+              setPres((p) => {
+                const next = { ...p };
+                if (d) next.design = d;
+                else delete next.design;
+                return next;
+              })
+            }
+            legacy={{
+              eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
+              title: pres.title.show ? pres.title.text : "",
+              subtitle: pres.subtitle.show ? pres.subtitle.text : "",
+            }}
+            imageSrc={pres.image || pres.imageMobile}
+            imageAlt=""
+            preset="hero"
+            seed={{
+              eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
+              title: pres.title.show ? pres.title.text : "",
+              subtitle: pres.subtitle.show ? pres.subtitle.text : "",
+              textAlign: pres.textAlign,
+              verticalAlign: pres.verticalAlign,
+              imageFocus: pres.imageFocus,
+            }}
+            posts={props.posts ?? []}
           />
         </div>
 
