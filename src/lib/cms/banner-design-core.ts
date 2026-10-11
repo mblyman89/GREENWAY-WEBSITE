@@ -249,6 +249,14 @@ export type DesignImage = {
   saturation: number;
   blur: number;
   flip: boolean;
+  /**
+   * R42 (owner Q4): optional separate PHONE picture. Shown instead of the main
+   * picture when the banner is narrower than 768px (the same container rule
+   * as every other phone setting). Absent = the main picture on both sizes
+   * (the R41 behavior). Only written when set, so existing designs stay
+   * byte-identical. Site-relative path or Supabase public-storage URL only.
+   */
+  srcMobile?: string;
 };
 
 export type DesignFrame = {
@@ -532,6 +540,7 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
       saturation: num(im.saturation, 100, 0, 200),
       blur: num(im.blur, 0, 0, 12),
       flip: bool(im.flip, false),
+      ...(safeImageSrc(im.srcMobile) ? { srcMobile: safeImageSrc(im.srcMobile)! } : {}),
     },
     overlay: {
       kind: pick(ov.kind, OVERLAY_KINDS, "none"),
@@ -542,6 +551,33 @@ export function normalizeDesign(raw: unknown): BannerDesign | null {
     boxes,
     buttons,
   };
+}
+
+/**
+ * R42: an image path the public renderer can safely hand to next/image —
+ * a site-relative path ("/brand/x.webp", not "//host") or a Supabase public
+ * storage URL (the only remote host allowed in next.config images). Anything
+ * else (http, data:, javascript:, other hosts) returns null.
+ */
+export function safeImageSrc(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  if (!t || t.length > 2048) return null;
+  if (t.startsWith("/") && !t.startsWith("//") && !t.includes("\\")) return t;
+  try {
+    const u = new URL(t);
+    if (u.protocol !== "https:" || u.username || u.password) return null;
+    if (!/^[a-z0-9-]+\.supabase\.co$/i.test(u.hostname)) return null;
+    if (!u.pathname.startsWith("/storage/v1/object/public/")) return null;
+    return t;
+  } catch {
+    return null;
+  }
+}
+
+/** R42: the phone picture to use (separate one if set, else the main one). */
+export function mobileImageSrc(design: BannerDesign, mainSrc: string): string {
+  return design.image.srcMobile || mainSrc;
 }
 
 /** Read `settings[key]` as a design (disabled designs are still returned so the editor can toggle). */
@@ -1294,6 +1330,33 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
   ok(normalizeDesign({ boxes: [{ text: "a\r\nb" }] })!.boxes[0].text === "a\nb", "CRLF → \\n");
   ok(nextId(defaultDesign(), "headline") === "headline-2", "nextId unique");
   ok(BRAND_SWATCHES.some((s) => s.hex === "#ff7f00") && BRAND_SWATCHES.some((s) => s.hex === "#1a1a1a"), "brand tokens from globals.css");
+
+  // R42 Q4: optional phone picture
+  const plain = defaultDesign("section");
+  ok(!("srcMobile" in normalizeDesign(plain)!.image), "no srcMobile key unless set (byte-identical)");
+  ok(J(normalizeDesign(JSON.parse(J(plain)))) === J(plain), "plain design round trip unchanged");
+  const withPhone = normalizeDesign({ ...plain, image: { ...plain.image, srcMobile: " /brand/phone.webp " } })!;
+  ok(withPhone.image.srcMobile === "/brand/phone.webp", "site-relative phone picture kept (trimmed)");
+  ok(Object.keys(withPhone.image).at(-1) === "srcMobile", "srcMobile appended last");
+  ok(J(normalizeDesign(JSON.parse(J(withPhone)))) === J(withPhone), "phone picture round trip");
+  const sb = "https://abc123.supabase.co/storage/v1/object/public/media/x.png";
+  ok(safeImageSrc(sb) === sb, "supabase public storage ok");
+  ok(
+    [
+      "//evil.co/x.png",
+      "http://abc.supabase.co/storage/v1/object/public/x.png",
+      "https://evil.co/x.png",
+      "https://abc.supabase.co/storage/v1/object/sign/x.png",
+      "https://u:p@abc.supabase.co/storage/v1/object/public/x.png",
+      "javascript:alert(1)",
+      "data:image/png;base64,AA",
+      "",
+      42,
+    ].every((v) => safeImageSrc(v) === null),
+    "unsafe phone pictures refused",
+  );
+  ok(!("srcMobile" in normalizeDesign({ ...plain, image: { ...plain.image, srcMobile: "https://evil.co/x.png" } })!.image), "unsafe phone picture dropped");
+  ok(mobileImageSrc(withPhone, "/main.webp") === "/brand/phone.webp" && mobileImageSrc(plain, "/main.webp") === "/main.webp", "mobileImageSrc fallback");
 
   return { passed, failed };
 }
