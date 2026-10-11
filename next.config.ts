@@ -59,6 +59,15 @@ const nextConfig: NextConfig = {
     ],
   },
   images: {
+    // R45-S2: serve AVIF to browsers that accept it, WebP to the rest, and
+    // the original format to anything else. The Next 16 docs (next/image >
+    // formats) say order matters: first match in the Accept header wins.
+    // AVIF is about 20% smaller than WebP but encodes about 50% slower on the
+    // first request; after that the cached copy is served. Each format is
+    // cached separately, so expect somewhat more Vercel image cache writes.
+    // Animated sources (GIFs) keep their original format, and our GIFs are
+    // already unoptimized (R43).
+    formats: ["image/avif", "image/webp"],
     // Banner/hero images chosen in the Site Content editor can come from the
     // Supabase Storage public bucket (media library). Allow next/image to
     // optimize those remote URLs. Site-relative paths under /public still work
