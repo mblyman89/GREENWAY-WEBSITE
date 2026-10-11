@@ -1,6 +1,12 @@
+import { createHash } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { greenwayBusiness } from "@/content/business";
+import {
+  DEFAULT_CONSENT_TEXT,
+  LOYALTY_CONSENT_BLOCK,
+  publishedConsentFromRow,
+} from "@/lib/loyalty/loyalty-consent-core";
 
 export type LoyaltySignupInput = {
   firstName: string;
@@ -18,6 +24,12 @@ export type LoyaltySignupRecord = Omit<LoyaltySignupInput, "company"> & {
   submittedAt: string;
   source: "greenway-website";
   notificationStatus: "email-not-configured" | "email-sent" | "email-failed";
+  /**
+   * R41 S5: the PUBLISHED consent wording the server resolved at submit time
+   * (never trusted from the browser) and its SHA-256 hex fingerprint.
+   */
+  consentText?: string;
+  consentTextSha256?: string;
 };
 
 export type LoyaltySignupResult =
@@ -103,6 +115,9 @@ function buildNotificationText(record: LoyaltySignupRecord) {
     `Email: ${record.email}`,
     `Signature: ${record.signature}`,
     `Consent Accepted: ${record.consent ? "Yes" : "No"}`,
+    ...(record.consentTextSha256
+      ? [`Consent wording version: ${record.consentTextSha256.slice(0, 12)}`]
+      : []),
   ].join("\n");
 }
 
@@ -135,9 +150,41 @@ async function sendSignupEmail(record: LoyaltySignupRecord): Promise<LoyaltySign
   }
 }
 
+/**
+ * R41 S5: the consent wording a customer agreed to is the PUBLISHED value of
+ * loyalty.form.consent_text (the public page never shows drafts outside staff
+ * preview). Read it here on the server so the browser cannot spoof it. Any
+ * failure falls back to the shipped default wording.
+ */
+async function resolvePublishedConsentText(): Promise<string> {
+  try {
+    const { isSupabaseServiceConfigured } = await import("@/lib/supabase/env");
+    if (!isSupabaseServiceConfigured) return DEFAULT_CONSENT_TEXT;
+    const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
+    const { data } = await createSupabaseAdminClient()
+      .from("content_blocks")
+      .select("published_value, status")
+      .eq("block_key", LOYALTY_CONSENT_BLOCK)
+      .maybeSingle<{ published_value: string | null; status: string | null }>();
+    return publishedConsentFromRow(data);
+  } catch {
+    return DEFAULT_CONSENT_TEXT;
+  }
+}
+
+export function consentTextSha256(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
 export async function storeLoyaltySignup(record: LoyaltySignupRecord) {
-  const notificationStatus = await sendSignupEmail(record);
-  const storedRecord: LoyaltySignupRecord = { ...record, notificationStatus };
+  const consentText = await resolvePublishedConsentText();
+  const withConsent: LoyaltySignupRecord = {
+    ...record,
+    consentText,
+    consentTextSha256: consentTextSha256(consentText),
+  };
+  const notificationStatus = await sendSignupEmail(withConsent);
+  const storedRecord: LoyaltySignupRecord = { ...withConsent, notificationStatus };
 
   // Slice 8: persist to the database loyalty queue when Supabase is configured.
   // The JSONL append remains as a durable local fallback so a DB hiccup never
@@ -156,6 +203,8 @@ export async function storeLoyaltySignup(record: LoyaltySignupRecord) {
       source: storedRecord.source,
       notificationStatus: storedRecord.notificationStatus,
       submittedAt: storedRecord.submittedAt,
+      consentText: storedRecord.consentText ?? null,
+      consentTextSha256: storedRecord.consentTextSha256 ?? null,
     });
   } catch {
     // DB unavailable / not configured — the JSONL fallback below still captures it.
