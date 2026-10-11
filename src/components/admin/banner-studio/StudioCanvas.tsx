@@ -70,6 +70,7 @@ export function StudioCanvas({
   onSelect,
   onChange,
   onRequestDelete,
+  ghost = null,
 }: {
   design: BannerDesign;
   device: DesignDevice;
@@ -80,6 +81,8 @@ export function StudioCanvas({
   onSelect: (s: StudioSelection) => void;
   onChange: (d: BannerDesign) => void;
   onRequestDelete: (s: NonNullable<StudioSelection>) => void;
+  /** R41 S8: an AI suggestion to preview as a dotted "ghost" (zone + focal point). Display only. */
+  ghost?: { zone: { x: number; y: number; w: number; h: number }; focusX: number; focusY: number } | null;
 }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -353,6 +356,39 @@ export function StudioCanvas({
                 );
               })}
 
+              {ghost ? (
+                <>
+                  <div
+                    aria-hidden="true"
+                    data-gw-ai-ghost="zone"
+                    className="pointer-events-none absolute"
+                    style={{
+                      left: `${ghost.zone.x}%`,
+                      top: `${ghost.zone.y}%`,
+                      width: `${ghost.zone.w}%`,
+                      height: `${ghost.zone.h}%`,
+                      border: `${3 / scale}px dotted #ffd700`,
+                      background: "rgba(255,215,0,0.10)",
+                      borderRadius: 8 / scale,
+                    }}
+                  />
+                  <div
+                    aria-hidden="true"
+                    data-gw-ai-ghost="focus"
+                    className="pointer-events-none absolute"
+                    style={{
+                      left: `${ghost.focusX}%`,
+                      top: `${ghost.focusY}%`,
+                      width: 28 / scale,
+                      height: 28 / scale,
+                      transform: "translate(-50%, -50%)",
+                      border: `${3 / scale}px solid #ffd700`,
+                      borderRadius: "999px",
+                      boxShadow: "0 0 0 3px rgba(0,0,0,0.5)",
+                    }}
+                  />
+                </>
+              ) : null}
               {guides.v.map((g) => (
                 <div key={`v${g}`} aria-hidden="true" className="pointer-events-none absolute inset-y-0" style={{ left: `${g}%`, width: 0, borderLeft: `${2 / scale}px dashed #ff7f00` }} />
               ))}

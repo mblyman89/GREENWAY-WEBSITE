@@ -12,7 +12,7 @@
  * history step when they arrive within 600 ms of each other, so a single
  * Ctrl+Z puts a dragged box back where it started.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ConfirmDialog } from "@/components/admin/ux";
 import { checkDesign, type BannerDesign, type DesignDevice } from "@/lib/cms/banner-design-core";
 import { StudioCanvas, type StudioSelection } from "./StudioCanvas";
@@ -21,6 +21,8 @@ import { ButtonPanel } from "./ButtonPanel";
 import { ImagePanel } from "./ImagePanel";
 import { WarningsPanel } from "./WarningsPanel";
 import type { PickerPost } from "./LinkPicker";
+import { applySuggestion, type PlacementSuggestion } from "@/lib/cms/banner-ai-core";
+import { suggestBannerPlacementAction } from "@/app/admin/banner-ai-actions";
 
 type Tab = "text" | "buttons" | "picture" | "checks";
 const HISTORY_MAX = 60;
@@ -51,6 +53,10 @@ export function BannerStudio({
   const [counts, setCounts] = useState({ undo: 0, redo: 0 });
   const sync = useCallback(() => setCounts({ undo: past.current.length, redo: future.current.length }), []);
   const rootRef = useRef<HTMLDivElement>(null);
+  // R41 S8: AI suggestion (drafts only — Apply changes unsaved studio state).
+  const [ai, setAi] = useState<{ s: PlacementSuggestion; device: DesignDevice } | null>(null);
+  const [aiMsg, setAiMsg] = useState<string | null>(null);
+  const [aiBusy, startAi] = useTransition();
 
   const change = useCallback(
     (next: BannerDesign) => {
@@ -121,6 +127,29 @@ export function BannerStudio({
     if (s.target === "box") change({ ...design, boxes: design.boxes.filter((b) => b.id !== s.id) });
     else change({ ...design, buttons: design.buttons.filter((b) => b.id !== s.id) });
     setSelection(null);
+  }
+
+  function askAi() {
+    setAiMsg(null);
+    setAi(null);
+    const forDevice = device;
+    startAi(async () => {
+      try {
+        const res = await suggestBannerPlacementAction({ imageSrc, design, legacy, device: forDevice });
+        if (res.ok) setAi({ s: res.suggestion, device: forDevice });
+        else setAiMsg(res.message);
+      } catch {
+        setAiMsg("Couldn't reach the server. Check your connection and try again.");
+      }
+    });
+  }
+
+  function applyAi() {
+    if (!ai) return;
+    if (ai.device !== device) setDevice(ai.device);
+    change(applySuggestion(design, ai.s, legacy, ai.device));
+    setAi(null);
+    setAiMsg("Applied. Not saved yet — press Save draft when you're happy (Undo puts it back).");
   }
 
   function resetPhone() {
@@ -198,8 +227,40 @@ export function BannerStudio({
         </div>
       ) : null}
 
+      <div className="rounded-md border border-[#ffd700]/30 bg-[#ffd700]/5 px-3 py-2 text-xs text-white/80">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={askAi}
+            disabled={aiBusy || !imageSrc}
+            className="rounded-full bg-[#ffd700] px-3 py-1 text-xs font-bold text-black hover:bg-[#ffe34d] disabled:opacity-40"
+            title={imageSrc ? "AI looks at the picture and suggests where the text and focus should go" : "Pick a picture first"}
+          >
+            {aiBusy ? "✨ Looking at the picture…" : `✨ AI suggest (${device === "mobile" ? "phone" : "computer"})`}
+          </button>
+          <span className="text-white/55">Suggests the picture focus, where the text fits best, the shade and text colour. Nothing is saved until you press Save.</span>
+        </div>
+        {ai ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2" aria-live="polite">
+            <span className="text-[#ffd700]">
+              Suggestion for {ai.device === "mobile" ? "phone" : "computer"} (dotted box = text area, ring = focus):
+            </span>
+            <span className="text-white/80">{ai.s.reason || "No reason given."}</span>
+            <button type="button" onClick={applyAi} className="rounded-full bg-[var(--admin-accent)] px-3 py-1 font-bold text-black">
+              Apply
+            </button>
+            <button type="button" onClick={() => setAi(null)} className="rounded-full bg-white/10 px-3 py-1 text-white/80 hover:bg-white/20">
+              Dismiss
+            </button>
+          </div>
+        ) : aiMsg ? (
+          <p className="mt-2 text-white/75" aria-live="polite">{aiMsg}</p>
+        ) : null}
+      </div>
+
       <div className="rounded-lg bg-black/40 p-2">
         <StudioCanvas
+          ghost={ai && ai.device === device ? { zone: ai.s.textZone, focusX: ai.s.focusX, focusY: ai.s.focusY } : null}
           design={design}
           device={device}
           legacy={legacy}
