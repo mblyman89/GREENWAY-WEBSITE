@@ -2067,13 +2067,25 @@ These steps are repeated, with final details, in the end-of-round report.
 3. Publish; check /specials on desktop and phone.
 
 ### S5 (Loyalty consent)
-1. Apply migration `0264_loyalty_consent_text.sql` in Supabase (SQL editor).
-2. Hub → Loyalty page → "Consent wording". Edit it. Warnings appear if a
-   required element (business name, auto-texts, "not a condition of
-   purchase", STOP/HELP, msg & data rates) is missing — warnings do not block.
-3. Empty text cannot be published.
-4. Publish; open /loyalty — the new wording shows under the form.
-5. Do a test signup; in Supabase the signup row stores the exact wording.
+(Rewritten at build time to match what was built. The draft mentioned a
+HELP check, which was not built because nothing in the (f)(9) text or the CTIA
+section we cited requires it.)
+1. Apply migration `0264_loyalty_consent_text.sql` in the Supabase SQL editor,
+   then run the Check query in docs/MIGRATIONS_TO_RUN.md (expect `2`).
+2. Go to Admin → Website → Loyalty page → "Signup form" → **Marketing consent
+   wording (legal)**. It shows today's wording, the 7-line checklist (all ✓),
+   and a preview.
+3. Delete the sentence `I understand that I may opt-out … replying "STOP".` →
+   only the STOP line turns ⚠, and Publish stays allowed after Save draft.
+4. Clear the box → the first line turns ✕. Save draft → Publish is greyed out.
+   (If forced, the server shows "The consent paragraph is empty …".)
+5. Type your wording with an Enter between two sentences → Save draft →
+   Publish → open /loyalty (wait up to 60 s or refresh) → the new wording shows
+   next to the checkbox, with the line break.
+6. Send a test signup → Supabase `loyalty_signups` newest row has
+   `consent_text` = your wording, and `consent_text_sha256` is 64 hex
+   characters. The staff email says "Consent wording version: <12 chars>".
+7. "Put back the original wording" restores the shipped text → Save → Publish.
 
 ### S6 (remaining banners)
 1. Vendors page banners, Specials extra banners: open each in the hub, use
@@ -2102,8 +2114,8 @@ These steps are repeated, with final details, in the end-of-round report.
 | S1 cores | merged | #1321 | see git log | ready |
 | S2 studio | merged | #1322 | 2973a447 | success |
 | S3 type cards | merged | #1323 | 5392544d | deploying at merge time |
-| S4 specials | PR open (branch r41-s4-specials) | — | — | — |
-| S5 consent | not started | — | — | — |
+| S4 specials | merged | #1324 | 94d64f5a | check at S5 merge |
+| S5 consent | PR open (branch r41-s5-loyalty-consent) | — | — | — |
 | S6 all banners | not started | — | — | — |
 | S7 move mode | not started | — | — | — |
 | S8 AI | not started | — | — | — |
@@ -2205,3 +2217,40 @@ These steps are repeated, with final details, in the end-of-round report.
   two-column grid, since Banner Studio needs the width. The Today's Deal
   design binds eyebrow/title/subtitle, so the weekday copy still flows in
   (the studio preview uses TODAY's wording from `dealPresentationFor`).
+- **S5 research gate done.** (f)(9) was pasted verbatim from Cornell LII
+  (eCFR wasn't fetched). CTIA Messaging Principles (May 2023 PDF) was
+  downloaded and read. §5.1.1 says the Call-to-Action must disclose "any
+  associated fees or charges" and how to opt out. §5.1.3 says "Standardized
+  'STOP' wording should be used for opt-out instructions". The checklist cites
+  these exact sections.
+- **S5 verified facts.**
+  - `getContentValues` honours Draft Mode, so the server CANNOT use it to pick
+    the recorded wording. `signup.ts` reads `content_blocks` directly for
+    `published_value` + `status`, through `publishedConsentFromRow`, which uses
+    the published value only and the default when blank.
+  - `publishContentBlock` promotes `draft ?? published ?? ""`, so the
+    empty-guard checks that same expression.
+  - No pure SHA-256 exists in src/lib. node:crypto `createHash` is used in
+    `signup.ts`, which is imported only by the API route, as
+    `ach-esign-store.ts` does.
+  - Seeds derive from the registry (`field_type: "plain"`). The editor picks a
+    textarea from `MULTILINE_KEYS`, which now includes the consent key, and the
+    consent block uses its own `ConsentBlock` (rows=9).
+  - `loyalty_signups` is already WIPE in factory-reset-core, so adding columns
+    needs no reset change.
+  - The migration tail pin was moved to 0264 with an honest note: no Postgres
+    in the sandbox, and CI's migrations job executes it.
+  - `assertRan` needs `{passed, failed}`. The full-repo tsc in CI would have
+    caught the first version, and the scoped tsc on the runner caught it here.
+- **S5 decision: no client text accepted.** The API route is unchanged, and
+  the browser never sends the wording. The recorded wording is what was
+  PUBLISHED at submit time. If the owner publishes during the 60 s revalidate
+  window, a customer may have seen the previous wording. This is the bible's
+  accepted trade-off, written down here, not hidden.
+- **S5 decision: staff-entered signups** (Admin → Loyalty signups → add) keep
+  `consent_text` NULL. The customer saw no on-screen paragraph.
+- **S5 pinned-test change ON PURPOSE.**
+  `loyalty-page-editor.test.ts` "consent stays FIXED" became "owner-editable
+  with a safe default (R41 S5)". The R41 Q9 reason is in the comment. The
+  counts changed 8→9, signup 3→4, and loyalty seeds 11→12.
+
