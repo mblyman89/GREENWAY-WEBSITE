@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { ProductCard } from "@/components/menu/ProductCard";
 import { SectionBanner } from "@/components/home/SectionBanner";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
+import type { BannerDesign } from "@/lib/cms/banner-design-core";
 import { useShuffleOrder } from "@/lib/home/useShuffleOrder";
 import { DAILY_DEAL_FALLBACK } from "@/lib/specials/daily-deal-presentation";
 import {
@@ -37,6 +38,7 @@ export function SpecialsDailyDeals({
   textAlign = "left",
   verticalAlign = "center",
   imageFocus,
+  design,
 }: {
   items: GreenwayMenuItem[];
   /** Optional banner background image; blank/omitted keeps the built-in art. */
@@ -52,6 +54,12 @@ export function SpecialsDailyDeals({
    * Omitted keeps SectionBanner's legacy text-derived behavior byte-identical.
    */
   imageFocus?: "center" | "top" | "bottom" | "left" | "right";
+  /**
+   * R41 S4: the owner's Banner Studio design for this banner. Its text boxes
+   * bound to eyebrow/title/subtitle still show the day's deal copy, so the
+   * title changes by weekday as before.
+   */
+  design?: BannerDesign | null;
 }) {
   const LIMIT = count && Number.isFinite(count) && count > 0 ? Math.trunc(count) : DEFAULT_LIMIT;
   const bannerSrc = bannerImage && bannerImage.trim() ? bannerImage.trim() : DEFAULT_BANNER_IMAGE;
@@ -109,6 +117,8 @@ export function SpecialsDailyDeals({
         textAlign={textAlign}
         verticalAlign={verticalAlign}
         imageFocus={imageFocus}
+        design={design}
+        designOwner="specials:todays"
       />
       <h2 id="todays-deals-title" className="sr-only">
         {title} products
