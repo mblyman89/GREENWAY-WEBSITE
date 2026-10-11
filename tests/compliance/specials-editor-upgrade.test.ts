@@ -376,7 +376,7 @@ describe("SLICE 122 (SET-3): the ONE editor now has 3 tabs in page order", () =>
   it("declares a three-key TabKey (hero, cards, banner) defaulting to hero", () => {
     expect(src).toContain('type TabKey = "hero" | "cards" | "banner"');
     // First tab is the TOP hero (matches the public page order).
-    expect(src).toContain('useState<TabKey>("hero")');
+    expect(src).toContain('useState<TabKey>(props.initialTab ?? "hero")'); // R43: ?tab= deep link, still defaults to hero
   });
 
   it("the tab bar is in public-page order: Top hero → cards → banner", () => {

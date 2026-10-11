@@ -702,14 +702,14 @@ function census(files: readonly string[], src: (f: string) => string): string[] 
  *   - content/actions.ts: the words `/admin/content` inside a JSDoc comment;
  *   - settings/actions.ts: `/admin/books` in the reset action's revalidatePath
  *     list (revalidating a layout segment; there is no books index page);
- *   - PreviewEditOverlay.tsx: the edit-hotspot base, behind HOTSPOTS_ENABLED = false.
+ *   (R43: the PreviewEditOverlay `/admin/content` hotspot base was removed —
+ *   the ✎ Edit pills now go through the real /admin/edit resolver route.)
  * S31 fixed the rest (chart-of-accounts 404, compliance/excise 404, and the
  * dropped error/csv/pdf/lifecycle/back/denied/lot keys).
  */
 const CENSUS_ALLOWLIST: readonly string[] = [
   "src/app/admin/content/actions.ts | /admin/content | no_page",
   "src/app/admin/settings/actions.ts | /admin/books | no_page",
-  "src/components/site/PreviewEditOverlay.tsx | /admin/content | no_page",
 ];
 
 describe("S31 D — repo-wide census: no dead admin link, no dropped query key", () => {
@@ -725,7 +725,9 @@ describe("S31 D — repo-wide census: no dead admin link, no dropped query key",
   });
 
   it("the allowlisted ones are really not links", () => {
-    expect(read("src/components/site/PreviewEditOverlay.tsx")).toContain("const HOTSPOTS_ENABLED = false;");
+    // R43: the dead hotspot base is gone; pills link via edit-link-core -> /admin/edit.
+    expect(read("src/components/site/PreviewEditOverlay.tsx")).not.toContain("/admin/content");
+    expect(read("src/components/site/PreviewEditOverlay.tsx")).toContain("overlayEditHref(");
     expect(read("src/app/admin/settings/actions.ts")).toMatch(/"\/admin\/books",\s*\]\) \{\s*revalidatePath\(p\);/);
   });
 
