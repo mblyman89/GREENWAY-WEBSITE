@@ -2060,9 +2060,9 @@ These steps are repeated, with final details, in the end-of-round report.
 
 | Slice | Status | PR | Merge sha | Prod |
 | --- | --- | --- | --- | --- |
-| S0 bible | in progress | — | — | — |
-| S1 cores | not started | — | — | — |
-| S2 studio | not started | — | — | — |
+| S0 bible | done | (in S1 PR) | — | — |
+| S1 cores | merged | #1321 | see git log | ready |
+| S2 studio | PR open (branch r41-s2-banner-studio) | — | — | — |
 | S3 type cards | not started | — | — | — |
 | S4 specials | not started | — | — | — |
 | S5 consent | not started | — | — | — |
@@ -2089,3 +2089,36 @@ These steps are repeated, with final details, in the end-of-round report.
   the editor is what you get). The owner report must say: "Your home banners
   now show the buttons listed in the editor (by default 'Browse the menu' and
   'See all brands'). Untick 'Show' on a button to hide it."
+- **S2(b) renderer.** `SectionBanner` renders a `BannerDesign` when
+  `design.enabled` is true, otherwise the legacy markup byte-for-byte.
+  Container queries (`containerStyle()` → cqw units, `@container gwb` rules in
+  globals.css) keep the layout proportional at every width, so what the owner
+  sees in the studio is a scaled copy of the live banner.
+- **S2(c) editor (Banner Studio).** Files: `src/components/admin/banner-studio/`
+  (controls, LinkPicker, StudioCanvas, TextBoxPanel, ButtonPanel, ImagePanel,
+  WarningsPanel, BannerStudio). Loaded with `next/dynamic({ssr:false})` from
+  the client `SectionCard`, so pages that never open it don't pay for it.
+  Choices backed by research:
+  - WCAG 2.2 SC 2.5.7 (dragging movements): every drag has a number box and an
+    arrow-key alternative.
+  - Snapping at 0/50/100 % with orange guides, Alt to turn it off (the common
+    Figma/Canva habit).
+  - Undo/redo keeps 60 steps and groups edits made within 600 ms, so one slider
+    drag is one undo step.
+  - The link picker opens in a portal on document.body, so Enter inside it
+    can't submit the outer page form.
+- **S2(c) deviation: Enter = new line.** Eyebrow/title/subtitle became
+  auto-growing textareas. The server action now turns CRLF into "\n"
+  (`multiline()`), so `white-space: pre-line` shows exactly one break per Enter.
+- **S2(c) deviation: unsafe links dropped on save.** `parseButtons` skips
+  `javascript:`/`data:`/`vbscript:`/backslash hrefs (`isDangerousHref`) as a
+  second guard after the client-side `checkHref`.
+- **S2(c) reach (verified by grep of `<SectionBanner` usages).** Custom design
+  takes effect on: Home category + brand banners, Home extra banners, Vendors
+  "grow" (rendered as h1, the page's only h1) + "brands" banners, and extra
+  banners on Specials, Menu and Vendors. NOT yet: the Specials top hero (its
+  own component → S4), the Loyalty hero (image-led, its own editor → S6) and
+  menu.hero (retired). The toggle shows on every SectionCard; the owner report
+  must list where it applies.
+- **S2 picker data.** `listPublishedPostLinks()` reads only slug/title/kind,
+  with no media lookups, and falls back to the static post list on error.
