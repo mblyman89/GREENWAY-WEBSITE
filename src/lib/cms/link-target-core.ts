@@ -298,7 +298,6 @@ const block = (message: string): HrefCheck => ({ ok: false, level: "block", mess
 /** Validate a button href (bible L-4). "block" must never be saved or rendered. */
 export function checkHref(href: string): HrefCheck {
   const raw = typeof href === "string" ? href : "";
-  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(raw)) return block("This link contains hidden control characters.");
   const h = raw.trim();
   if (!h) return block("Pick where this button goes.");
