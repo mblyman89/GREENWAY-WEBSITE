@@ -903,6 +903,7 @@ import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-c
 import { __runAchGuideCoreTests } from "../../src/lib/payments/ach-guide-core";
 import { __runBannerDesignCoreTests } from "../../src/lib/cms/banner-design-core";
 import { __runLinkTargetCoreTests } from "../../src/lib/cms/link-target-core";
+import { __runTypeCardsTests } from "../../src/lib/cms/type-cards-core";
 import { __runVendorEsignAppCoreTests } from "../../src/lib/payments/vendor-esign-app-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
@@ -2180,6 +2181,7 @@ __runLiquidVolumeTests();
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 22); // R40: ACH guide journeys, blockers, explainer
   assertRan("banner-design-core", __runBannerDesignCoreTests(), 89); // R41 S1: banner design model, contrast, moves
   assertRan("link-target-core", __runLinkTargetCoreTests(), 58); // R41 S1: button link picker targets
+  assertRan("type-cards-core", __runTypeCardsTests(), 42); // R41 S3: home Type Cards
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
