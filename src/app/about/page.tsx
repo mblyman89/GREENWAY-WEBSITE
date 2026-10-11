@@ -1,3 +1,4 @@
+import { PageBuilderBanners } from "@/components/site/PageBuilderBanners";
 import { AboutContent } from "@/components/about/AboutContent";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
@@ -17,6 +18,8 @@ export default function AboutPage() {
       <Header />
       <Breadcrumbs items={[{ label: "About" }]} />
       <AboutContent />
+      {/* R42 Q3: optional banners from Admin → Pages (about); renders nothing when none are published. */}
+      <PageBuilderBanners pageSlug="about" />
       <Footer />
     </main>
   );

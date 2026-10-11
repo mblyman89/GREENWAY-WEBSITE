@@ -65,6 +65,12 @@ import {
 
 export const dynamic = "force-dynamic";
 
+/**
+ * R42 Q3: pages whose builder banners render as an optional strip just above
+ * the footer (<PageBuilderBanners>). Their own designed top stays untouched.
+ */
+const BOTTOM_STRIP_PAGES: ReadonlySet<string> = new Set(["about", "faq", "locations", "price-match"]);
+
 type Flash = { tone: "ok" | "error"; text: string } | null;
 
 function flashFor(sp: Record<string, string | undefined>): Flash {
@@ -407,6 +413,15 @@ async function SectionsTab({
           dailyDealsCount={dailyDealsCount}
           saveAction={saveHomeSettingsAction}
         />
+      ) : null}
+
+      {BOTTOM_STRIP_PAGES.has(slug) ? (
+        <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm text-[var(--admin-text-muted)]">
+          <strong className="text-[var(--admin-text)]">Where these show:</strong> banners you publish
+          here appear near the bottom of the page, just above the footer. The page&apos;s own title
+          area at the top stays exactly as it is (edit its words in &ldquo;Page wording&rdquo; above).
+          With no banners published, the page looks the same as today.
+        </p>
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">

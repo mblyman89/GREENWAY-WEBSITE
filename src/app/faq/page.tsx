@@ -1,3 +1,4 @@
+import { PageBuilderBanners } from "@/components/site/PageBuilderBanners";
 import { FaqContent } from "@/components/faq/FaqContent";
 import { faqItems } from "@/content/faq";
 import { Footer } from "@/components/site/Footer";
@@ -44,6 +45,8 @@ export default async function FaqPage() {
         }}
         items={items}
       />
+      {/* R42 Q3: optional banners from Admin → Pages (faq); renders nothing when none are published. */}
+      <PageBuilderBanners pageSlug="faq" />
       <Footer />
     </main>
   );

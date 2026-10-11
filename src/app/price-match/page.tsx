@@ -1,3 +1,4 @@
+import { PageBuilderBanners } from "@/components/site/PageBuilderBanners";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
@@ -17,6 +18,8 @@ export default function PriceMatchPage() {
       <Header />
       <Breadcrumbs items={[{ label: "Price Match" }]} />
       <PriceMatchContent />
+      {/* R42 Q3: optional banners from Admin → Pages (price-match); renders nothing when none are published. */}
+      <PageBuilderBanners pageSlug="price-match" />
       <Footer />
     </main>
   );

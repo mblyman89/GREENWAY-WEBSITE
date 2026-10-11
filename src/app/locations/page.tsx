@@ -1,3 +1,4 @@
+import { PageBuilderBanners } from "@/components/site/PageBuilderBanners";
 import { LocationsContent } from "@/components/location/LocationsContent";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
@@ -22,6 +23,8 @@ export default function LocationsPage() {
       <Header />
       <Breadcrumbs items={[{ label: "Location", href: "/locations" }]} />
       <LocationsContent />
+      {/* R42 Q3: optional banners from Admin → Pages (locations); renders nothing when none are published. */}
+      <PageBuilderBanners pageSlug="locations" />
       <Footer />
     </main>
   );
