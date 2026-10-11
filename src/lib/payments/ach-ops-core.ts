@@ -25,7 +25,6 @@ import {
   MIN_CALLBACK_NOTE_CHARS,
   MIN_SOLO_REASON_CHARS,
   PAYROLL_DESCRIPTION,
-  addBankingDays,
   addCalendarDays,
   daysBetween,
   isFedAchBankingDay,
