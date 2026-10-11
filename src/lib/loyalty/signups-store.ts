@@ -18,6 +18,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import type { TableColumn, TableRow, WorkbookSpec } from "@/lib/reports/workbook";
+import { isMissingConsentColumnError } from "@/lib/loyalty/loyalty-consent-core";
 
 export type LoyaltyStatus = "new" | "entered" | "duplicate" | "archived";
 
@@ -54,6 +55,10 @@ export type LoyaltySignupRow = {
   staff_note: string | null;
   entered_by: string | null;
   entered_at: string | null;
+  /** R41 S5 (migration 0264): exact consent wording shown at signup. Absent before 0264. */
+  consent_text?: string | null;
+  /** R41 S5 (migration 0264): SHA-256 hex of consent_text. */
+  consent_text_sha256?: string | null;
   submitted_at: string;
   created_at: string;
   updated_at: string;
@@ -71,6 +76,10 @@ export type CreateLoyaltyInput = {
   source?: string;
   notificationStatus?: LoyaltyNotifyStatus;
   submittedAt?: string | null;
+  /** R41 S5: the PUBLISHED consent wording the server resolved at submit time. */
+  consentText?: string | null;
+  /** R41 S5: SHA-256 hex of consentText (computed server-side). */
+  consentTextSha256?: string | null;
 };
 
 function normalizePhone(value: string | null | undefined): string | null {
@@ -119,26 +128,46 @@ export async function createLoyaltySignup(
     if (match) dedupeOf = match.id;
   }
 
-  const { data, error } = await admin
+  const baseRow = {
+    legacy_id: input.legacyId ?? null,
+    status: "new",
+    first_name: input.firstName,
+    last_name: input.lastName,
+    birthday: input.birthday ?? null,
+    mobile_phone: input.mobilePhone ?? null,
+    phone_normalized: phoneNormalized,
+    email,
+    consent: input.consent,
+    signature: input.signature ?? null,
+    source: input.source ?? "greenway-website",
+    notification_status: input.notificationStatus ?? "email-not-configured",
+    dedupe_of: dedupeOf,
+    submitted_at: input.submittedAt ?? new Date().toISOString(),
+  };
+  // R41 S5: record the consent wording when we have it. Migration 0264 adds
+  // the two columns; the owner applies it by hand, so until then the insert
+  // is retried WITHOUT them (never lose a signup).
+  const withConsent = input.consentText
+    ? {
+        ...baseRow,
+        consent_text: input.consentText,
+        consent_text_sha256: input.consentTextSha256 ?? null,
+      }
+    : baseRow;
+
+  let { data, error } = await admin
     .from("loyalty_signups")
-    .insert({
-      legacy_id: input.legacyId ?? null,
-      status: "new",
-      first_name: input.firstName,
-      last_name: input.lastName,
-      birthday: input.birthday ?? null,
-      mobile_phone: input.mobilePhone ?? null,
-      phone_normalized: phoneNormalized,
-      email,
-      consent: input.consent,
-      signature: input.signature ?? null,
-      source: input.source ?? "greenway-website",
-      notification_status: input.notificationStatus ?? "email-not-configured",
-      dedupe_of: dedupeOf,
-      submitted_at: input.submittedAt ?? new Date().toISOString(),
-    })
+    .insert(withConsent)
     .select("id")
     .single<{ id: string }>();
+
+  if (error && withConsent !== baseRow && isMissingConsentColumnError(error)) {
+    ({ data, error } = await admin
+      .from("loyalty_signups")
+      .insert(baseRow)
+      .select("id")
+      .single<{ id: string }>());
+  }
 
   if (error || !data) return null;
   return { id: data.id, isDuplicate: Boolean(dedupeOf) };
