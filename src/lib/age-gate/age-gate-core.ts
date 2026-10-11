@@ -115,8 +115,11 @@ export const AGE_GATE_ELEMENT_ATTRIBUTE = "data-age-gate";
  * Surfaces the gate must NEVER cover. Staff are not customers: the back office
  * is behind authentication, and the register enforces a stronger per-sale ID
  * check of its own. A modal over the register would block a live transaction.
+ * /vendor-ach (R39 S7) is the private signing link emailed to a supplier's
+ * accounts-receivable person: a business signing a payment agreement, not a
+ * shopper, and the page shows no products.
  */
-export const AGE_GATE_EXEMPT_PREFIXES = ["/admin", "/pos"] as const;
+export const AGE_GATE_EXEMPT_PREFIXES = ["/admin", "/pos", "/vendor-ach"] as const;
 
 /**
  * True when `pathname` is a staff surface that must not be gated.
@@ -213,6 +216,9 @@ export function __runAgeGateTests(): { passed: number; failed: number } {
   // merely begins with an exempt prefix must still be gated.
   check("a route that only LOOKS like /pos is still gated", !isAgeGateExemptPath("/posters"));
   check("a route that only LOOKS like /admin is still gated", !isAgeGateExemptPath("/administrivia"));
+  check("the vendor signing link is never gated", isAgeGateExemptPath("/vendor-ach/abc"));
+  check("the vendor directory page IS gated", !isAgeGateExemptPath("/vendor-delivery"));
+  check("a route that only LOOKS like /vendor-ach is still gated", !isAgeGateExemptPath("/vendor-achievements"));
   check("a missing pathname is treated as a customer page", !isAgeGateExemptPath(null));
   check("an empty pathname is treated as a customer page", !isAgeGateExemptPath(""));
   check("undefined pathname is treated as a customer page", !isAgeGateExemptPath(undefined));

@@ -244,13 +244,13 @@ describe("SLICE I — fail-closed posture is not negotiable", () => {
   });
 
   it("never gates staff surfaces", () => {
-    for (const path of ["/admin", "/admin/reports", "/pos", "/pos/register/2"]) {
+    for (const path of ["/admin", "/admin/reports", "/pos", "/pos/register/2", "/vendor-ach", "/vendor-ach/tok/copy"]) {
       expect(isAgeGateExemptPath(path)).toBe(true);
     }
   });
 
   it("gates every customer surface, including look-alike routes", () => {
-    for (const path of ["/", "/menu", "/menu/flower", "/specials", "/posters", "/administrivia"]) {
+    for (const path of ["/", "/menu", "/menu/flower", "/specials", "/posters", "/administrivia", "/vendor-delivery", "/vendor-achievements"]) {
       expect(isAgeGateExemptPath(path)).toBe(false);
     }
   });
