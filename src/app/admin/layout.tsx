@@ -4,7 +4,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { AdminTopNav } from "@/components/admin/AdminTopNav";
 import { AdminSetupNotice } from "@/components/admin/AdminSetupNotice";
-import { ToastProvider, ScrollKeeper, PendingKeeper, AdminBlockFocus } from "@/components/admin/ux";
+import { ToastProvider, ScrollKeeper, PendingKeeper, AdminBlockFocus, EditConflictNotice } from "@/components/admin/ux";
 import { HelpLauncher } from "@/components/admin/HelpLauncher";
 import { CommandPalette } from "@/components/admin/CommandPalette";
 import { ConciergeWidget } from "@/components/admin/ConciergeWidget";
@@ -105,6 +105,8 @@ export default async function AdminLayout({
           <PendingKeeper />
           {/* R43: land on the exact field after a green ✎ Edit click. */}
           <AdminBlockFocus />
+          {/* R45-S2: "someone else saved first" notice (?conflict=<key>). */}
+          <EditConflictNotice />
         </Suspense>
         <ToastProvider>{children}</ToastProvider>
       </main>

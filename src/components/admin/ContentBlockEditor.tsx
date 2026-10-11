@@ -36,6 +36,7 @@ import { resolveImageSpec } from "@/lib/cms/image-spec-core";
 import { blockAcceptsVideo } from "@/lib/media/upload-policy-core";
 import { ContentFontField } from "@/components/admin/ContentFontField";
 import { ContentSelectField } from "@/components/admin/ContentSelectField";
+import { EXPECTED_FIELD } from "@/lib/cms/edit-conflict-core";
 
 export type EditableBlock = {
   block_key: string;
@@ -270,6 +271,11 @@ export function ContentBlockEditor({
           <form action={saveDraftAction} className="space-y-2">
             <input type="hidden" name="block_key" value={block.block_key} />
             <input type="hidden" name="draft_value" value={value} />
+            {/* R45-S2: the version this editor opened, so a save can't wipe
+                out someone else's newer save (edit-conflict-core.ts). */}
+            {block.updated_at ? (
+              <input type="hidden" name={EXPECTED_FIELD} value={block.updated_at} />
+            ) : null}
             {returnTo ? (
               <input type="hidden" name="return_to" value={returnTo} />
             ) : null}

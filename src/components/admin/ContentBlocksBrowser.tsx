@@ -238,6 +238,7 @@ export function ContentBlocksBrowser({
                     seo_impact: b.seo_impact,
                     draft_value: b.draft_value,
                     published_value: b.published_value,
+                    updated_at: b.updated_at,
                   }}
                   aiEnabled={aiEnabled}
                   saveDraftAction={saveDraftAction}

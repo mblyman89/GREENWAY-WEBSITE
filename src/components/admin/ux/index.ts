@@ -27,4 +27,5 @@ export { StickyActionBar } from "./StickyActionBar";
 export { ScrollKeeper } from "./ScrollKeeper";
 export { PendingKeeper } from "./PendingKeeper";
 export { AdminBlockFocus } from "./AdminBlockFocus";
+export { EditConflictNotice } from "./EditConflictNotice";
 export { BackLink } from "./BackLink";
