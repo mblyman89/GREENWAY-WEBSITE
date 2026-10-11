@@ -64,6 +64,9 @@ function parseButtons(formData: FormData): SectionButton[] {
     const label = typeof r.label === "string" ? r.label.trim() : "";
     const href = typeof r.href === "string" ? r.href.trim() : "";
     if (!label) continue;
+    // R41 S2: never store a script / protocol-relative link (narrow on purpose
+    // so existing buttons with unusual-but-safe links keep working).
+    if (isDangerousHref(href)) continue;
     const variant: SectionButtonVariant =
       r.variant === "outline" ? "outline" : r.variant === "ghost" ? "ghost" : "solid";
     out.push({ label, href, variant, enabled: r.enabled === false ? false : true });
@@ -143,6 +146,20 @@ export async function addSectionAction(formData: FormData): Promise<void> {
   redirect(`${routeFor(slug)}?added=1#section-${result.id}`);
 }
 
+/**
+ * R41 S2: eyebrow / title / subtitle / body are textareas now (Enter = new
+ * line). Browsers submit textarea line breaks as CRLF; store plain "\n" so the
+ * public `whitespace-pre-line` renders exactly one break per Enter.
+ */
+function multiline(v: FormDataEntryValue | null): string | null {
+  return String(v ?? "").replace(/\r\n?/g, "\n").trim() || null;
+}
+
+function isDangerousHref(href: string): boolean {
+  const compact = href.replace(/[\s\u0000-\u001f]+/g, "").toLowerCase();
+  return /^(javascript|data|vbscript):/.test(compact) || compact.startsWith("//") || compact.startsWith("\\");
+}
+
 export async function saveSectionAction(formData: FormData): Promise<void> {
   const session = await requirePermission("content.edit");
   const slug = String(formData.get("page_slug") ?? "");
@@ -156,10 +173,10 @@ export async function saveSectionAction(formData: FormData): Promise<void> {
       "center") as SectionImageFocus,
     text_align: (String(formData.get("text_align") ?? "left") ||
       "left") as SectionTextAlign,
-    eyebrow: String(formData.get("eyebrow") ?? "").trim() || null,
-    title: String(formData.get("title") ?? "").trim() || null,
-    subtitle: String(formData.get("subtitle") ?? "").trim() || null,
-    body: String(formData.get("body") ?? "").trim() || null,
+    eyebrow: multiline(formData.get("eyebrow")),
+    title: multiline(formData.get("title")),
+    subtitle: multiline(formData.get("subtitle")),
+    body: multiline(formData.get("body")),
     buttons: parseButtons(formData),
     draft_enabled: formData.get("draft_enabled") === "on",
   };

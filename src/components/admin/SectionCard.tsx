@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/admin/ui";
 import { ConfirmDialog } from "@/components/admin/ux";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
@@ -16,6 +17,33 @@ import type {
   SectionButton,
   SectionButtonVariant,
 } from "@/lib/cms/page-sections-types";
+import {
+  designFromLegacy,
+  readDesign,
+  writeDesign,
+  type BannerDesign,
+} from "@/lib/cms/banner-design-core";
+import { checkHref, describeHref } from "@/lib/cms/link-target-core";
+import { LinkPicker, type PickerPost } from "./banner-studio/LinkPicker";
+
+// R41 S2: the Banner Studio is big and only needed when the owner opens it —
+// load it on demand (client-only; it measures the card width).
+const BannerStudio = dynamic(() => import("./banner-studio/BannerStudio"), {
+  ssr: false,
+  loading: () => <p className="text-xs text-white/50">Loading the design studio…</p>,
+});
+
+/** Textarea that grows with its content (Enter = new line, bible Q8). */
+function AutoTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [props.value]);
+  return <textarea ref={ref} rows={1} {...props} className={`${props.className ?? ""} resize-none overflow-hidden`} />;
+}
 
 /**
  * SectionCard — one editable page section (banner) in the generic per-page
@@ -44,6 +72,7 @@ export function SectionCard({
   publishAction,
   deleteAction,
   moveAction,
+  posts = [],
 }: {
   section: SectionAdminVM;
   pageSlug: string;
@@ -54,6 +83,8 @@ export function SectionCard({
   publishAction: (formData: FormData) => void | Promise<void>;
   deleteAction: (formData: FormData) => void | Promise<void>;
   moveAction: (formData: FormData) => void | Promise<void>;
+  /** R41 S2: published blog posts / newsletters for the link picker. */
+  posts?: PickerPost[];
 }) {
   const locked = section.locked;
 
@@ -100,6 +131,10 @@ export function SectionCard({
   const [enabled, setEnabled] = useState(d.enabled);
   const [buttons, setButtons] = useState<DraftButton[]>(withIds(d.buttons));
   const [cardCount, setCardCount] = useState<number>(initialCardCount);
+  // R41 S2: optional custom design (settings.design). null = never created.
+  const [design, setDesign] = useState<BannerDesign | null>(() => readDesign(d.settings));
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [pickingFor, setPickingFor] = useState<string | null>(null);
   // GW-035: friendly confirm dialog instead of the browser's window.confirm.
   const [confirmDelete, setConfirmDelete] = useState(false);
   const deleteFormRef = useRef<HTMLFormElement>(null);
@@ -114,12 +149,41 @@ export function SectionCard({
 
   // Merge the chosen card count into the existing settings (preserving lanes,
   // titleClassName and any other keys) so saving never drops sibling settings.
+  // R41 S2: the design (when one exists) is merged in with writeDesign so the
+  // other settings keys survive; the server re-normalizes it (parseSettings).
+  const baseSettings = hasBrandGrid
+    ? { ...d.settings, [BRAND_COUNT_KEY]: clampHomeCardCount(cardCount) }
+    : d.settings;
   const settingsJson = JSON.stringify(
-    hasBrandGrid
-      ? { ...d.settings, [BRAND_COUNT_KEY]: clampHomeCardCount(cardCount) }
-      : d.settings,
+    design ? writeDesign(baseSettings, design) : baseSettings,
   );
-  const initialSettingsJson = JSON.stringify(d.settings);
+  const initialDesign = readDesign(d.settings);
+  const initialSettingsJson = JSON.stringify(
+    initialDesign ? writeDesign(d.settings, initialDesign) : d.settings,
+  );
+  const blogTitles = Object.fromEntries(posts.map((p) => [p.slug, p.title]));
+  const designOn = !!design?.enabled;
+
+  function toggleDesign(on: boolean) {
+    if (on) {
+      // First time: start from today's look so nothing jumps.
+      const next = design
+        ? { ...design, enabled: true }
+        : designFromLegacy({
+            eyebrow,
+            title,
+            subtitle,
+            textAlign: textAlign as "left" | "center" | "right",
+            imageFocus: imageFocus as "center" | "top" | "bottom" | "left" | "right",
+            buttons: buttons.map((b) => ({ label: b.label, href: b.href, variant: b.variant, enabled: b.enabled })),
+          });
+      setDesign(next);
+      setStudioOpen(true);
+    } else if (design) {
+      // Keep the design stored but switched off (turning on again restores it).
+      setDesign({ ...design, enabled: false });
+    }
+  }
 
   const unsaved =
     !locked &&
@@ -327,7 +391,7 @@ export function SectionCard({
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className={labelCls}>Eyebrow (small label above title)</label>
-                <input
+                <AutoTextarea
                   className={inputCls}
                   name="eyebrow"
                   value={eyebrow}
@@ -336,8 +400,8 @@ export function SectionCard({
                 />
               </div>
               <div>
-                <label className={labelCls}>Title (the headline)</label>
-                <input
+                <label className={labelCls}>Title (the headline · Enter = new line)</label>
+                <AutoTextarea
                   className={inputCls}
                   name="title"
                   value={title}
@@ -348,14 +412,14 @@ export function SectionCard({
             </div>
 
             <div>
-              <label className={labelCls}>Subtitle</label>
-              <input
-                className={inputCls}
-                name="subtitle"
-                value={subtitle}
-                onChange={(e) => setSubtitle(e.target.value)}
-                placeholder="One supporting sentence."
-              />
+              <label className={labelCls}>Subtitle (press Enter for a new line)</label>
+                <AutoTextarea
+                  className={inputCls}
+                  name="subtitle"
+                  value={subtitle}
+                  onChange={(e) => setSubtitle(e.target.value)}
+                  placeholder="One supporting sentence."
+                />
             </div>
 
             <div>
@@ -399,14 +463,25 @@ export function SectionCard({
                         }
                         placeholder="Label (e.g. Shop the menu)"
                       />
-                      <input
-                        className={inputCls}
-                        value={b.href}
-                        onChange={(e) =>
-                          patchButton(b._id, { href: e.target.value })
-                        }
-                        placeholder="Links to (e.g. /menu)"
-                      />
+                      <div className="flex gap-1">
+                        <input
+                          className={inputCls}
+                          value={b.href}
+                          onChange={(e) =>
+                            patchButton(b._id, { href: e.target.value })
+                          }
+                          placeholder="Links to (e.g. /menu)"
+                          aria-label="Button link"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setPickingFor(b._id)}
+                          className="shrink-0 rounded-[var(--admin-radius-sm)] bg-[var(--admin-orange)] px-2 text-xs font-bold text-black"
+                          title="Pick a link from your menu, blog, newsletters or pages"
+                        >
+                          Pick…
+                        </button>
+                      </div>
                       <select
                         className={inputCls}
                         value={b.variant}
@@ -434,10 +509,78 @@ export function SectionCard({
                       <Button type="button" onClick={() => removeButton(b._id)} aria-label="Remove button" variant="danger" size="sm">
                         ✕
                       </Button>
+                      <p className="text-[0.7rem] text-white/60 sm:col-span-5">
+                        → {describeHref(b.href, { blogTitles })}
+                        {checkHref(b.href).level !== "ok" ? (
+                          <span className={checkHref(b.href).level === "block" ? "ml-2 text-[var(--admin-danger)]" : "ml-2 text-[var(--admin-gold)]"}>
+                            {checkHref(b.href).level === "block" ? "⛔ " : "⚠️ "}
+                            {checkHref(b.href).message}
+                          </span>
+                        ) : null}
+                      </p>
+                      {pickingFor === b._id ? (
+                        <LinkPicker
+                          value={b.href}
+                          posts={posts}
+                          onPick={(href) => patchButton(b._id, { href })}
+                          onClose={() => setPickingFor(null)}
+                        />
+                      ) : null}
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* R41 S2: Custom design (Banner Studio). */}
+            <div className="rounded-lg border border-[var(--admin-accent)]/30 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="text-sm font-semibold text-white">🎨 Custom design (advanced)</span>
+                  <p className="text-xs text-white/50">
+                    Drag text and buttons anywhere, pick fonts, sizes, colors, B/I/U/S, picture focus and shade — separately for computers and phones.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-white/85">
+                  <input
+                    type="checkbox"
+                    checked={designOn}
+                    onChange={(e) => toggleDesign(e.target.checked)}
+                    className="h-4 w-4 accent-[var(--admin-accent)]"
+                  />
+                  Use custom design for this banner
+                </label>
+              </div>
+              {design && !designOn ? (
+                <p className="mt-2 text-xs text-white/50">
+                  Your custom design is saved but switched off — the banner uses the classic look. Tick the box to bring it back.
+                </p>
+              ) : null}
+              {designOn && design ? (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setStudioOpen((v) => !v)}
+                    className="mb-2 text-xs font-semibold text-[var(--admin-accent)] underline"
+                    aria-expanded={studioOpen}
+                  >
+                    {studioOpen ? "▾ Hide the design studio" : "▸ Open the design studio"}
+                  </button>
+                  {studioOpen ? (
+                    <BannerStudio
+                      design={design}
+                      onChange={setDesign}
+                      legacy={{ eyebrow, title, subtitle }}
+                      imageSrc={image}
+                      imageAlt={imageAlt}
+                      posts={posts}
+                    />
+                  ) : null}
+                  <p className="mt-2 text-[0.7rem] text-white/45">
+                    The Eyebrow / Title / Subtitle fields above still fill the boxes linked to them. The classic Buttons list above is not used while the custom design is on — edit buttons in the studio&apos;s Buttons tab.
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             {/* SLICE 112: live-grid card count (Shop by Brand grid). */}

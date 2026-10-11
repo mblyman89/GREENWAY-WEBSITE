@@ -20,6 +20,7 @@ import {
   publishCoreValuesAction,
 } from "../about-values-actions";
 import { listSections } from "@/lib/cms/page-sections-store";
+import { listPublishedPostLinks } from "@/lib/cms/blog-store";
 import { seedsForPage } from "@/lib/cms/page-sections-seed";
 import { HomeDisplaySettingsCard } from "@/components/admin/HomeDisplaySettingsCard";
 import { TypeCardImagesEditor } from "@/components/admin/TypeCardImagesEditor";
@@ -373,6 +374,8 @@ async function SectionsTab({
 }) {
   const allSections = await listSections(slug);
   const isHome = slug === "home";
+  // R41 S2: published posts / newsletters for the button link picker.
+  const posts = await listPublishedPostLinks().catch(() => []);
 
   // SLICE 112: the locked home.settings config row holds homepage DISPLAY
   // settings (e.g. the daily-deal card count). It's not a visible banner, so we
@@ -450,6 +453,7 @@ async function SectionsTab({
               publishAction={publishSectionAction}
               deleteAction={deleteSectionAction}
               moveAction={moveSectionAction}
+              posts={posts}
             />
           ))}
         </div>
