@@ -722,6 +722,26 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: "The Banking page (Admin → Banking) is the vault: vendor bank details, employee direct deposit, and — on the My banking tab — your originating bank and company details for ACH files. Set it once; Payroll and Accounts Payable both use it.",
         href: "/admin/settings/banking",
       },
+      {
+        q: "I'm stuck, or a payment was refused. What do I do?",
+        a: "Open Banking → Guide & unblocker. It shows four short checklists (setup, employees, vendors, payday) with green ticks for what is done and a button for the next step, then a list of everything that would stop a payment today with the exact fix. If payroll or a vendor payment shows an error you don't understand, paste it into 'Explain an error message' at the bottom. If a direct deposit can't be fixed before payday, pay that person by paper check: Washington requires wages on payday.",
+        href: "/admin/settings/banking/guide",
+      },
+      {
+        q: "How do I keep track of ACH record keeping and yearly to-dos?",
+        a: "Banking → Calendar & reminders lists what is due: the monthly bank-statement check, the quarterly Nacha rule check, the yearly reviews, the Timberland agreement and the written fraud procedure. Press 'Mark done' when you finish a task. It is saved with your name and date, and Stephen, Michael and the store are emailed when something is due or overdue. It also lists every Nacha rule change with the exact words and whether our code already handles it.",
+        href: "/admin/settings/banking/calendar",
+      },
+      {
+        q: "Where can I read the court cases and laws about ACH fraud, and how do I protect the business?",
+        a: "Banking → Legal library. Each court case and Washington law is quoted word for word from the court's or legislature's own website, then explained in plain English, with how Greenway already protects you. It opens with seven things to do to protect the business. It is education, not legal advice: ask a Washington business lawyer before a real decision.",
+        href: "/admin/settings/banking/library",
+      },
+      {
+        q: "How do I sign LlamaParse's data protection agreement?",
+        a: "It is not signed inside the back office. LlamaParse (the optional scanner for paper ACH forms) uses a DocuSign form. Open Banking → Calendar & reminders → 'LlamaParse data protection agreement', press the button, fill in Greenway's details and sign, then save the signed copy and mark the task done. You only need it if LlamaParse is turned on.",
+        href: "/admin/settings/banking/calendar#llamaparse",
+      },
     ],
   },
 
