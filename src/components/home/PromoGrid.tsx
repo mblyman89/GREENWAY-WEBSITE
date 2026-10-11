@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { HomeBrands } from "@/components/home/HomeBrands";
-import { SectionBanner } from "@/components/home/SectionBanner";
+import { SectionBanner, type SectionBannerButton } from "@/components/home/SectionBanner";
 import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";
 import { categoryLanes } from "@/lib/specials/daily-deal-presentation";
 import { glowCardStyle, glowToneByIndex } from "@/lib/ui/glow-card-core";
@@ -29,6 +29,18 @@ export type PromoBannerContent = {
   brandTitle?: string;
   brandSubtitle?: string;
   editable?: boolean;
+  /**
+   * R41 S2(a) — the Home editor's alignment / image focus / buttons now reach
+   * the public banners (they were never passed before, so the controls looked
+   * broken). imageFocus is only passed when it is NOT "center": "center" keeps
+   * the classic look (image hugs the side opposite the text).
+   */
+  categoryTextAlign?: "left" | "center" | "right";
+  categoryImageFocus?: "top" | "bottom" | "left" | "right";
+  categoryButtons?: SectionBannerButton[];
+  brandTextAlign?: "left" | "center" | "right";
+  brandImageFocus?: "top" | "bottom" | "left" | "right";
+  brandButtons?: SectionBannerButton[];
 };
 
 export function PromoGrid({
@@ -71,6 +83,9 @@ export function PromoGrid({
             }
             editable={content?.editable}
             blockKeyPrefix="home.category"
+            textAlign={content?.categoryTextAlign}
+            imageFocus={content?.categoryImageFocus}
+            buttons={content?.categoryButtons}
           />
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-6">
