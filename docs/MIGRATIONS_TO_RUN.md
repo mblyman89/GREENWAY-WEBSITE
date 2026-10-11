@@ -2298,8 +2298,9 @@ in Vercel.
 
   Apply it **AFTER 0258, 0259, 0260, 0261 and 0262**. Safe to re-run.
 
-  **Without it:** the returns, account-check, legal-hold and review panels on
-  the Banking page say "One-time setup needed". Nothing else changes.
+  **Without it:** the **Settings -> Banking -> ACH operations** page
+  (/admin/settings/banking/operations) says "One-time setup needed: apply
+  migrations 0258 to 0263". Nothing else changes.
   Employee authorizations cannot become active yet.
 
   **Run it, then:** run the **Check** below.
@@ -2324,3 +2325,19 @@ in Vercel.
   It **refuses** once a notice has been logged, a check has been sent or
   finished, or a hold was recorded, because those are payment records.
   Otherwise it drops the functions, guards and columns.
+
+  **After it is applied**, Settings -> Banking -> **ACH operations** has
+  these sections:
+  - **Notices:** log a return or change notice from Timberland. The payee
+    goes on hold, and Stephen, Michael and the store are emailed.
+  - **Employee holds:** release once the employee has confirmed by phone or
+    in person.
+  - **Account checks:** start a prenote, a test credit or a voided-check
+    callback.
+    - Download the check file.
+    - Upload it to Timberland.
+    - Tick **I uploaded this file** and confirm.
+    - When the bank answers, record the result.
+  - **Annual reviews.**
+  - **Test-credit monitoring.**
+  - **Records**, with a legal hold switch.
