@@ -21,6 +21,8 @@ import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
 import { SlideView } from "@/components/menu/ShopBannerCarousel";
+import { DesignCard } from "@/components/admin/specials/SpecialsR41Panels";
+import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import {
   TEXT_ALIGNS,
   TEXT_VALIGNS,
@@ -73,6 +75,8 @@ type Props = {
   promotionChoices: ShopPromotionChoice[];
   desktopSpec?: ImageSpec;
   mobileSpec?: ImageSpec;
+  /** R41 S6: published blog posts / newsletters for the design link picker. */
+  posts?: PickerPost[];
   createAction: (formData: FormData) => void | Promise<void>;
   saveDraftAction: (formData: FormData) => void | Promise<void>;
   publishAction: (formData: FormData) => void | Promise<void>;
@@ -419,6 +423,7 @@ function SlideCard({
   publishAction,
   deleteAction,
   moveAction,
+  posts,
 }: {
   slide: ShopSlideVM;
   index: number;
@@ -431,6 +436,7 @@ function SlideCard({
   publishAction: Props["publishAction"];
   deleteAction: Props["deleteAction"];
   moveAction: Props["moveAction"];
+  posts: PickerPost[];
 }) {
   const [pres, setPres] = useState<ShopHeroPresentation>(() =>
     normalizeShopHeroPresentation(slide.presentation),
@@ -600,7 +606,7 @@ function SlideCard({
               title="Eyebrow (small kicker)"
               hint="A short line above the headline — e.g. “Weekend Sale”."
               block={pres.eyebrow}
-              multiline={false}
+              multiline
               onChange={(patch) => patchBlock("eyebrow", patch)}
             />
             <BlockEditor
@@ -614,11 +620,48 @@ function SlideCard({
               title="Subtitle (the flourish line)"
               hint="A supporting line — great with a cursive font."
               block={pres.subtitle}
-              multiline={false}
+              multiline
               onChange={(patch) => patchBlock("subtitle", patch)}
             />
 
             <CtaEditor ctas={pres.ctas} onChange={(next) => setField("ctas", next)} />
+
+            {/* R41 S6: optional Banner Studio design for this slide. */}
+            <DesignCard
+              title="Custom design (optional)"
+              description="Turn this on to drag the text and buttons anywhere, add extra text boxes and buttons, change sizes, and zoom or tint the picture. The three text lines above still supply the words. With custom design on, the buttons you add in the studio replace the two buttons above. Turn it off any time to go back to the classic look."
+              design={pres.design ?? null}
+              onChange={(d) =>
+                setPres((p) => {
+                  const next = { ...p };
+                  if (d) next.design = d;
+                  else delete next.design;
+                  return next;
+                })
+              }
+              legacy={{
+                eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
+                title: pres.title.show ? pres.title.text : "",
+                subtitle: pres.subtitle.show ? pres.subtitle.text : "",
+              }}
+              imageSrc={pres.image || pres.imageMobile}
+              imageAlt=""
+              preset="hero"
+              seed={{
+                eyebrow: pres.eyebrow.show ? pres.eyebrow.text : "",
+                title: pres.title.show ? pres.title.text : "",
+                subtitle: pres.subtitle.show ? pres.subtitle.text : "",
+                textAlign: pres.textAlign,
+                verticalAlign: pres.verticalAlign,
+                imageFocus: pres.imageFocus,
+                buttons: pres.ctas.map((c) => ({
+                  label: c.label,
+                  href: c.href,
+                  variant: c.variant === "solid" ? ("solid" as const) : ("outline" as const),
+                })),
+              }}
+              posts={posts}
+            />
 
             <PromotionLinkEditor
               promotion={pres.promotion}
@@ -773,6 +816,7 @@ export function ShopBannerEditor(props: Props) {
               publishAction={publishAction}
               deleteAction={deleteAction}
               moveAction={moveAction}
+              posts={props.posts ?? []}
             />
           ))}
         </div>

@@ -127,3 +127,51 @@ describe("R41 S6 Loyalty hero custom design", () => {
     expect(page).toContain("listPublishedPostLinks");
   });
 });
+
+import {
+  defaultShopHeroPresentation,
+  normalizeShopHeroPresentation,
+  parseShopHeroPresentation,
+  serializeShopHeroPresentation,
+} from "@/lib/cms/shop-carousel-core";
+
+describe("R41 S6 Shop carousel custom design", () => {
+  it("existing slides stay byte-identical (no design key unless set)", () => {
+    const json = serializeShopHeroPresentation(defaultShopHeroPresentation());
+    expect(json).not.toContain('"design"');
+    expect(serializeShopHeroPresentation(parseShopHeroPresentation(json)!)).toBe(json);
+  });
+
+  it("a slide design round-trips; junk is dropped", () => {
+    const p = normalizeShopHeroPresentation({ design: { enabled: true, boxes: [] } });
+    expect(parseShopHeroPresentation(serializeShopHeroPresentation(p))!.design?.enabled).toBe(true);
+    expect("design" in normalizeShopHeroPresentation({ design: [] })).toBe(false);
+  });
+
+  it("slide render uses DesignedBanner only when on; owner only in Draft Mode", () => {
+    const view = read("src/components/menu/ShopBannerCarousel.tsx");
+    expect(view).toContain("if (presentation.design?.enabled)");
+    expect(view).toContain("designOwner={slide.designOwner}");
+    expect(view).toContain("headingLevel={2}");
+    const store = read("src/lib/cms/shop-carousel-store.ts");
+    expect(store).toContain("designOwner: preview && row.id ? `shop-slide:${row.id}` : undefined");
+  });
+
+  it("Move mode accepts shop-slide:<uuid> only", () => {
+    const base = { type: "gw-design-move", target: "box", id: "headline", x: 1, y: 2, device: "desktop" };
+    expect(parseMoveMessage({ ...base, owner: "shop-slide:123e4567-e89b-12d3-a456-426614174000" })).not.toBeNull();
+    expect(parseMoveMessage({ ...base, owner: "shop-slide:abc" })).toBeNull();
+  });
+
+  it("editor offers the design card + posts, and every line takes Enter", () => {
+    const ed = read("src/components/admin/ShopBannerEditor.tsx");
+    expect(ed).toContain("<DesignCard");
+    expect(ed).not.toContain("multiline={false}");
+    expect(read("src/app/admin/content/shop-banner/page.tsx")).toContain("posts={posts}");
+  });
+
+  it("save actions keep the design (they normalize, which now carries it)", () => {
+    const actions = read("src/app/admin/content/shop-banner/actions.ts");
+    expect(actions).toContain("normalizeShopHeroPresentation(parsed)");
+  });
+});
