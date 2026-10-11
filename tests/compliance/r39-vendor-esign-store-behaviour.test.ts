@@ -201,9 +201,9 @@ function emulate0262(fn: string, b: Record<string, unknown>): { status: number; 
       account_last4: bank.account_last4, routing_last4: bank.routing_last4,
       record_document_id: "dddddddd-dddd-4ddd-8ddd-000000000001", certificate_document_id: "dddddddd-dddd-4ddd-8ddd-000000000002", authorization_id: AUTH_ID,
     });
-    // 0262 writes the vault on hold with the same ciphertext.
+    // 0262 writes the vault ON HOLD (0259 status set) with the same ciphertext.
     st.db.tables.set("vendor_bank_details", [
-      { vendor_id: inv.vendor_id, status: "pending_verification", released_by: null, released_at: null, release_mode: null, release_callback_note: null, verified_at: null, bank_routing: bank.routing_enc, bank_account_number: bank.account_enc, bank_account_type: bank.account_type },
+      { vendor_id: inv.vendor_id, status: "on_hold", hold_reason: "Vendor e-signed new banking", released_by: null, released_at: null, release_mode: null, release_callback_note: null, verified_at: null, bank_routing: bank.routing_enc, bank_account_number: bank.account_enc, bank_account_type: bank.account_type },
     ]);
     return { status: 200, body: AUTH_ID };
   }
