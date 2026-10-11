@@ -262,4 +262,8 @@ commit + push after every task, no drift.
           - operations/page.tsx and operations/check-file/route.ts
         - Wiring test: 20 tests, mutation 26/26. A test fails if any ops
           mutation log is stale (it is tamper-tested).
+        - Full compliance vitest: 841 files, 22,262 tests passed (2 skipped,
+          as before). Pure self-tests: ALL PASSED (ach-return-log-core 37,
+          ach-ops-core 87, ach-ops-ui-core 17). Typecheck EXIT 0. Lint on all S7
+          part 2 files: 0 problems.
 - [ ] S8 docs, test plan, PR, merge, production verification
