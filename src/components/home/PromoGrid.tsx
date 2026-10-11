@@ -7,6 +7,7 @@ import { categoryLanes } from "@/lib/specials/daily-deal-presentation";
 import { glowCardStyle, glowToneByIndex } from "@/lib/ui/glow-card-core";
 import type { HomeTypeLaneKey } from "@/lib/cms/home-section-settings-core";
 import type { BannerDesign } from "@/lib/cms/banner-design-core";
+import { typeCardGridClass, type TypeCard } from "@/lib/cms/type-cards-core";
 
 /**
  * Home "Shop by Category" + "Shop by Brand" sections.
@@ -54,6 +55,7 @@ export function PromoGrid({
   vendors = [],
   brandCount,
   laneImages,
+  typeCards,
 }: {
   content?: PromoBannerContent;
   /**
@@ -69,7 +71,23 @@ export function PromoGrid({
    * clean text-only fallback, byte-identical to the card the site shipped with.
    */
   laneImages?: Partial<Record<HomeTypeLaneKey, string>>;
+  /**
+   * R41 S3: the owner's Type Cards (visible ones only, already normalized).
+   * Absent = the six original lanes (classic render). An empty array means the
+   * owner deleted or hid every card, so the tile grid is hidden.
+   */
+  typeCards?: TypeCard[];
 } = {}) {
+  const tiles: TypeCard[] =
+    typeCards ??
+    categoryLanes.map((lane) => ({
+      id: lane.key,
+      label: lane.label,
+      href: lane.href,
+      image: laneImages?.[lane.key as HomeTypeLaneKey] || "",
+      cta: "Shop now →",
+      enabled: true,
+    }));
   return (
     <>
       <section
@@ -96,15 +114,16 @@ export function PromoGrid({
             designOwner={content?.categoryDesignOwner}
           />
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-6">
-            {categoryLanes.map((lane, index) => {
+          {tiles.length > 0 ? (
+          <div className={typeCardGridClass(tiles.length)}>
+            {tiles.map((lane, index) => {
               const tone = glowToneByIndex(index);
-              // Owner-uploaded product photo for this lane, or "" -> clean
+              // Owner-uploaded product photo for this card, or "" -> clean
               // text-only fallback (byte-identical to the card the site shipped).
-              const image = laneImages?.[lane.key as HomeTypeLaneKey] || "";
+              const image = lane.image;
               return (
                 <Link
-                  key={lane.key}
+                  key={lane.id}
                   href={lane.href}
                   className="group relative isolate flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-2xl border shadow-lg shadow-black/30 transition duration-300 hover:-translate-y-0.5 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] lg:aspect-[3/4]"
                   style={glowCardStyle(tone)}
@@ -137,17 +156,22 @@ export function PromoGrid({
                   {/* Text lives in its OWN bottom bar/container so it never sits
                       on top of the product photo. Centered per owner request. */}
                   <div className="relative z-[3] border-t border-white/12 bg-[linear-gradient(180deg,rgba(10,14,11,0.82),rgba(8,10,9,0.96))] px-2 py-2.5 text-center backdrop-blur-[2px]">
-                    <p className="text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-lg lg:text-xl">
+                    <p
+                      className={`text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-lg lg:text-xl${lane.label.includes("\n") ? " whitespace-pre-line" : ""}`}
+                    >
                       {lane.label}
                     </p>
-                    <p className="mt-0.5 text-[0.6rem] font-black uppercase tracking-[0.16em] text-[var(--greenway)] md:text-[0.62rem]">
-                      Shop now →
-                    </p>
+                    {lane.cta ? (
+                      <p className="mt-0.5 text-[0.6rem] font-black uppercase tracking-[0.16em] text-[var(--greenway)] md:text-[0.62rem]">
+                        {lane.cta}
+                      </p>
+                    ) : null}
                   </div>
                 </Link>
               );
             })}
           </div>
+          ) : null}
         </div>
       </section>
 

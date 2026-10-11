@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { Hero } from "@/components/home/Hero";
 import { HomeDailyDeals } from "@/components/home/HomeDailyDeals";
 import { PromoGrid } from "@/components/home/PromoGrid";
+import {
+  hasCustomTypeCards,
+  readTypeCards,
+  visibleTypeCards,
+} from "@/lib/cms/type-cards-core";
 import { SectionBanner } from "@/components/home/SectionBanner";
 import { readDesign } from "@/lib/cms/banner-design-core";
 import { Footer } from "@/components/site/Footer";
@@ -127,6 +132,11 @@ export default async function Home() {
   // Per-lane category-tile images (owner-uploaded via the Home Sections editor).
   // Unset lanes resolve to "" so the tile renders its clean text-only fallback.
   const laneImages = readLaneImages(category?.settings);
+  // R41 S3: owner-edited Type Cards. Only passed once the owner has saved a
+  // custom list; until then PromoGrid renders the six original lanes.
+  const typeCards = hasCustomTypeCards(category?.settings)
+    ? visibleTypeCards(readTypeCards(category?.settings))
+    : undefined;
   // R41 S2: extra banners added in the Home editor. They were saved but never
   // rendered before. Fixed-slot and config sections are excluded.
   const homeExtras = sections.filter(
@@ -146,6 +156,7 @@ export default async function Home() {
         vendors={vendors}
         brandCount={brandCount}
         laneImages={laneImages}
+        typeCards={typeCards}
         content={{
           categoryImage: category?.image || copy["home.category.image"],
           categoryEyebrow: category?.eyebrow || copy["home.category.eyebrow"],
