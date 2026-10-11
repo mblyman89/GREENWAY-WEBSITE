@@ -1987,3 +1987,86 @@ Slice-specific extra gates:
   shipped; does he want preset badge styles?
 
 ---
+
+## PART 11 — OWNER TEST STEPS (plain English, per slice)
+
+These steps are repeated, with final details, in the end-of-round report.
+"Hub" = the back-office Website editor. Always test on a phone too.
+
+### S1 (cores) — nothing visible
+1. Nothing to click. Confirm the website looks exactly as before.
+
+### S2 (Home sections + Banner Studio)
+1. Hub → Pages → Home → open any banner section (e.g. Promo).
+2. Set text alignment to Left, then Center, then Right; Save draft; open the
+   preview. Text must follow the setting. (Before this round it did not.)
+3. In the headline box, press Enter between two words. Preview shows two lines.
+4. Open the "Custom design" tab → turn on "Use custom design". The canvas
+   shows the banner with your current text, unchanged.
+5. Drag the headline box somewhere else. Also try typing X/Y numbers and
+   using arrow keys (Shift+arrow moves faster).
+6. Change font, size, bold, italic, underline, strike-through, color. Watch
+   the contrast badge: green = readable, amber/red = hard to read.
+7. Image: move the focus point, zoom, brightness, overlay (gradient/floor/
+   full/radial). Switch to Phone view and adjust positions just for phone.
+8. Add a text box: pick a role (Eyebrow, Headline, Sub-headline, Body,
+   Badge, Legal). Delete one. Max 8.
+9. Buttons: add, drag, resize (S/M/L), shape, style, colors. Click "Link":
+   choose Menu → pick a category and filter (e.g. On sale, Flower, sort by
+   price) → Save. Also try Blog post and Newsletter, and an outside link.
+10. Save draft → preview shows it. Publish → live site shows it. Turn
+    "Use custom design" off → banner returns to the old look.
+
+### S3 (Type Cards)
+1. Hub → Home → Type Cards. Rename a card, change its image, change its link.
+2. Add a new card; delete one; reorder with the up/down arrows.
+3. Publish; the home page shows the new set. Max 12 cards.
+
+### S4 (Specials)
+1. Hub → Specials → Hero. The banner button now appears in the editor:
+   change its text, repoint it with the link picker, remove it, add a second.
+2. Turn on custom design for the hero and Today's Deals and repeat S2 steps.
+3. Publish; check /specials on desktop and phone.
+
+### S5 (Loyalty consent)
+1. Apply migration `0264_loyalty_consent_text.sql` in Supabase (SQL editor).
+2. Hub → Loyalty page → "Consent wording". Edit it. Warnings appear if a
+   required element (business name, auto-texts, "not a condition of
+   purchase", STOP/HELP, msg & data rates) is missing — warnings do not block.
+3. Empty text cannot be published.
+4. Publish; open /loyalty — the new wording shows under the form.
+5. Do a test signup; in Supabase the signup row stores the exact wording.
+
+### S6 (remaining banners)
+1. Vendors page banners, Specials extra banners: open each in the hub, use
+   Custom design, publish, check the live page.
+
+### S7 (Move mode in hub preview)
+1. Hub → preview window → click "Move mode".
+2. Grab any text box or button on Home or Specials and drag it. Release.
+3. It saves to the draft only. Publish to make it live. Toggle off to
+   click links normally again.
+
+### S8 (AI assist)
+1. In Banner Studio, click "✨ AI suggest". A dotted ghost layout appears
+   with a short reason.
+2. Apply → boxes and focus move in the editor; nothing is saved until you
+   press Save draft. Dismiss → nothing changes.
+3. If AI isn't configured you see "AI isn't set up yet".
+
+---
+
+## PART 12 — STATUS CHECKLIST (updated after every merge)
+
+| Slice | Status | PR | Merge sha | Prod |
+| --- | --- | --- | --- | --- |
+| S0 bible | in progress | — | — | — |
+| S1 cores | not started | — | — | — |
+| S2 studio | not started | — | — | — |
+| S3 type cards | not started | — | — | — |
+| S4 specials | not started | — | — | — |
+| S5 consent | not started | — | — | — |
+| S6 all banners | not started | — | — | — |
+| S7 move mode | not started | — | — | — |
+| S8 AI | not started | — | — | — |
+| S9 report | not started | — | — | — |
