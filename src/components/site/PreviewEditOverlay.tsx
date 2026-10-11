@@ -21,6 +21,7 @@
  * iframe.
  */
 import { useEffect, useState } from "react";
+import { PreviewDesignDrag } from "./PreviewDesignDrag";
 
 type Hotspot = {
   key: string;
@@ -102,6 +103,8 @@ export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
 
   return (
     <>
+      {/* R41 S7: inert until the Website Sync preview turns "Move mode" on. */}
+      <PreviewDesignDrag />
       {/* Preview badge — bottom-right, glowing. Replaces the old full-width top
           banner so it no longer covers the header tabs. Click to expand for the
           Exit control; the glow signals preview mode at a glance. */}

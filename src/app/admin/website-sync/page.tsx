@@ -55,7 +55,7 @@ type WebsiteSyncTab = (typeof WEBSITE_SYNC_TABS)[number]["id"];
 export default async function WebsiteSyncPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; path?: string }>;
 }) {
   const session = await requireStaff();
   const role = session.profile.role;
@@ -143,7 +143,7 @@ export default async function WebsiteSyncPage({
         </div>
 
         {activeTab === "preview" ? (
-          <WebsiteSyncPreviewPanel />
+          <WebsiteSyncPreviewPanel canMove={can(role, "content.edit")} initialPath={typeof sp.path === "string" ? sp.path : undefined} />
         ) : (
           <>
         {/* ------------------------------------------------ published menu */}

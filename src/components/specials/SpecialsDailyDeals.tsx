@@ -39,6 +39,7 @@ export function SpecialsDailyDeals({
   verticalAlign = "center",
   imageFocus,
   design,
+  editable = false,
 }: {
   items: GreenwayMenuItem[];
   /** Optional banner background image; blank/omitted keeps the built-in art. */
@@ -60,6 +61,8 @@ export function SpecialsDailyDeals({
    * title changes by weekday as before.
    */
   design?: BannerDesign | null;
+  /** R41 S7: true only in Draft Mode — exposes the hub Move-mode hooks. */
+  editable?: boolean;
 }) {
   const LIMIT = count && Number.isFinite(count) && count > 0 ? Math.trunc(count) : DEFAULT_LIMIT;
   const bannerSrc = bannerImage && bannerImage.trim() ? bannerImage.trim() : DEFAULT_BANNER_IMAGE;
@@ -119,6 +122,7 @@ export function SpecialsDailyDeals({
         imageFocus={imageFocus}
         design={design}
         designOwner="specials:todays"
+        editable={editable}
       />
       <h2 id="todays-deals-title" className="sr-only">
         {title} products

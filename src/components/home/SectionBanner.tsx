@@ -34,6 +34,8 @@ export type SectionBannerData = {
    */
   textAlign?: "left" | "center" | "right";
   imageFocus?: "center" | "top" | "bottom" | "left" | "right";
+  /** R41 S7: true only in Draft Mode — exposes the hub Move-mode hooks. */
+  editable?: boolean;
 };
 
 /**

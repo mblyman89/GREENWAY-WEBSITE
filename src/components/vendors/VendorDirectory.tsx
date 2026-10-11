@@ -192,6 +192,7 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
           imageFocus={pinnedImageFocus(content?.grow?.imageFocus)}
           design={content?.grow?.design}
           designOwner={content?.grow?.designOwner}
+          editable={content?.editable}
           headingLevel={1}
           priority
         />
@@ -276,6 +277,7 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
           imageFocus={pinnedImageFocus(content?.brands?.imageFocus)}
           design={content?.brands?.design}
           designOwner={content?.brands?.designOwner}
+          editable={content?.editable}
         />
 
         {/* Vendor directory — product-card-style glow tiles, logo forward, tap
@@ -318,6 +320,7 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
             imageFocus={pinnedImageFocus(s.imageFocus)}
             design={s.design}
             designOwner={s.designOwner}
+                editable={s.editable}
           />
         ))}
       </div>
