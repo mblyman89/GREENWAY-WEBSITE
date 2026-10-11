@@ -345,6 +345,18 @@ describe("sendVendorCode", () => {
     expect(row(i.id).otp_sends).toBe(1);
   });
 
+  it("two tabs both in code_sent: only one resend counts (otp_sends compare-and-set)", async () => {
+    const i = await codeSent();
+    const tabA = await fresh(i.id);
+    const tabB = await fresh(i.id);
+    const later = T0 + 1000 + core.OTP_RESEND_COOLDOWN_MS + 1;
+    expect((await store.sendVendorCode({ invite: tabA, nowMs: later, mail: mailer })).ok).toBe(true);
+    const b = await store.sendVendorCode({ invite: tabB, nowMs: later, mail: mailer });
+    expect(b.ok).toBe(false);
+    expect(row(i.id).otp_sends).toBe(2);
+    expect(mails).toHaveLength(3); // invite + 2 codes, not 4
+  });
+
   it("refuses an expired link", async () => {
     const i = await invited();
     const r = await store.sendVendorCode({ invite: await fresh(i.id), nowMs: T0 + core.INVITE_TTL_MS + 1, mail: mailer });
