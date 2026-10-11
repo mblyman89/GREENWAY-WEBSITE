@@ -1648,7 +1648,45 @@ please let me edit it." (Q9).
 cannot be fetched, use the Cornell LII mirror
 (https://www.law.cornell.edu/cfr/text/47/64.1200) and note the source.
 
-**5.0 Verbatim (f)(9):** _(to be pasted at S5 time)_
+**5.0 Verbatim (f)(9)** — fetched at S5 time from the Cornell LII mirror
+(https://www.law.cornell.edu/cfr/text/47/64.1200, current through amendment
+90 FR 42138, Aug. 29, 2025):
+
+> (9) The term prior express written consent means an agreement, in writing,
+> bearing the signature of the person called that clearly authorizes the
+> seller to deliver or cause to be delivered to the person called
+> advertisements or telemarketing messages using an automatic telephone
+> dialing system or an artificial or prerecorded voice, and the telephone
+> number to which the signatory authorizes such advertisements or
+> telemarketing messages to be delivered.
+> (i) The written agreement shall include a clear and conspicuous disclosure
+> informing the person signing that:
+> (A) By executing the agreement, such person authorizes the seller to deliver
+> or cause to be delivered to the signatory telemarketing calls using an
+> automatic telephone dialing system or an artificial or prerecorded voice;
+> and
+> (B) The person is not required to sign the agreement (directly or
+> indirectly), or agree to enter into such an agreement as a condition of
+> purchasing any property, goods, or services.
+> (ii) The term "signature" shall include an electronic or digital form of
+> signature, to the extent that such form of signature is recognized as a
+> valid signature under applicable federal law or state contract law.
+
+Related text from the same section (same fetch):
+- (f)(3): "The term clear and conspicuous means a notice that would be
+  apparent to the reasonable consumer, separate and distinguishable from the
+  advertising copy or other disclosures."
+- (a)(10) (revocation): consent may be revoked by any reasonable method; the
+  words "stop," "quit," "end," "revoke," "opt out," "cancel," or
+  "unsubscribe" sent in reply to a text are per se valid; requests must be
+  honored within 10 business days; a seller may not designate an exclusive
+  means of revocation. → The checker's STOP item therefore says "tell people
+  they can reply STOP" and never implies STOP is the ONLY way to opt out.
+
+Mapping to the checker (S5 core): W-ATDS ← (9) + (i)(A); W-SELLER ← "authorizes
+the seller"; W-NOT-CONDITION ← (i)(B); W-STOP ← (a)(10) + CTIA practice;
+W-RATES ← CTIA practice; W-AGE ← business rule (21+ store); W-EMPTY (blocking)
+← (i) requires a disclosure at all.
 
 **Core.** `src/lib/loyalty/loyalty-consent-core.ts` (pure):
 - `LOYALTY_CONSENT_BLOCK = "loyalty.form.consent_text"`.
