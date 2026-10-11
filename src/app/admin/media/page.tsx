@@ -9,7 +9,7 @@ import type { MediaAsset } from "@/lib/supabase/types";
 import { MediaDropzone } from "@/components/admin/media/MediaDropzone";
 import { MEDIA_PURPOSES } from "@/lib/media/taxonomy";
 import { pickListParams, withListParams } from "@/lib/media/return-state-core";
-import { uploadMediaAction, bulkDeleteMediaAction } from "./actions";
+import { bulkDeleteMediaAction } from "./actions";
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
 import { EmptyState } from "@/components/admin/ux";
@@ -105,7 +105,7 @@ export default async function MediaPage({
         </div>
 
         {/* Upload (drag & drop) */}
-        <MediaDropzone uploadAction={uploadMediaAction} />
+        <MediaDropzone />
 
         {/* Filters */}
         {counts.total > 0 && (
