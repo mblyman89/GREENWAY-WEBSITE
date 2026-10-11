@@ -23,7 +23,7 @@
  * which calls this module (plus one DB lookup to learn a section's page) and
  * redirects. That keeps the public-page bundle light and the logic testable.
  *
- * Every href returned is a same-site `/admin/...` path (asserted in the
+ * Every href returned is a same-site admin path (asserted in the
  * self-tests), so nothing here can ever be turned into an open redirect.
  *
  * NO MIGRATION NEEDED: pure TypeScript; no React, no DB, no server-only import.

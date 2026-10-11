@@ -69,7 +69,7 @@ describe("R41 S4 Specials hero", () => {
     expect(src).toContain('setGlobal("heroDesign", heroDesign)');
     expect(src).toContain('setGlobal("todaysDealsDesign", todaysDealsDesign)');
     expect(src).toContain('type TabKey = "hero" | "cards" | "banner";');
-    expect(src).toContain('useState<TabKey>("hero")');
+    expect(src).toContain('useState<TabKey>(props.initialTab ?? "hero")'); // R43: ?tab= deep link, still defaults to hero
     const panels = read("src/components/admin/specials/SpecialsR41Panels.tsx");
     expect(panels).toContain("<LinkPicker");
     expect(panels).toContain("disabled={list.length >= MAX_SPECIALS_HERO_BUTTONS}");
