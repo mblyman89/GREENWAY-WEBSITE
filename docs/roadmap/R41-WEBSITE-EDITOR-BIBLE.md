@@ -416,3 +416,450 @@ S5 (migration 0264, optional column; code must work before the owner applies it)
   `/home/...` paths, build an absolute URL from the site origin
   (`publicSiteOrigin` in `src/lib/site/site-domain-core.ts:L29`).
 
+---
+
+## PART 4 — RECON FINDINGS (code audit at `eafcbffd`, verbatim where it matters)
+
+Every finding has an ID (F-xx). Slices cite these IDs.
+
+### 4.1 Home page render path
+
+F-01 `src/app/page.tsx` (156 lines) — the home page server component.
+- `:L72-L99` one `Promise.all` loads content, slides, deal items, vendor
+  profiles and `getSectionsForRender("home")` (`:L87`).
+- `:L113-L114` finds the two banner sections by key:
+  ```ts
+  const category = sections.find((s) => s.key === "home.category");
+  const brand = sections.find((s) => s.key === "home.brand");
+  ```
+- `:L119` `const homeSettings = sections.find((s) => s.key === "home.settings");`
+- `:L127` `const laneImages = readLaneImages(category?.settings);`
+- `:L135-L151` renders `<PromoGrid vendors brandCount laneImages content={{ … }} />`
+  where `content` carries ONLY: categoryImage, categoryEyebrow, categoryTitle,
+  categorySubtitle, brandImage, brandEyebrow, brandTitle, brandSubtitle,
+  editable. Verbatim:
+  ```ts
+  content={{
+    categoryImage: category?.image || copy["home.category.image"],
+    categoryEyebrow: category?.eyebrow || copy["home.category.eyebrow"],
+    categoryTitle: category?.title || copy["home.category.title"],
+    categorySubtitle:
+      category?.subtitle || copy["home.category.subtitle"],
+    brandImage: brand?.image || copy["home.brand.image"],
+    brandEyebrow: brand?.eyebrow || copy["home.brand.eyebrow"],
+    brandTitle: brand?.title || copy["home.brand.title"],
+    brandSubtitle: brand?.subtitle || copy["home.brand.subtitle"],
+    editable: preview,
+  }}
+  ```
+- **ROOT CAUSE of Q4 ("Home sections text alignment does not work")**: the
+  section's `textAlign`, `imageFocus` and `buttons` are resolved by the store
+  (`resolveForRender`, F-07) but are NEVER passed to `PromoGrid`, so the owner's
+  alignment / focus / button choices in the editor are silently dropped.
+- Extra home sections (owner-added banners beyond category/brand) are not
+  rendered anywhere on the home page: `page.tsx` only reads the three keys
+  above. (Confirmed: no `extras` usage in `src/app/page.tsx`.) The editor caps
+  home at 5 (`PAGE_SECTION_CONFIG.home.cap`), so an owner can ADD a home banner
+  in the editor that never appears. → S2 renders home extras after the brand
+  section (additive; nothing renders when there are none).
+
+F-02 `src/components/home/PromoGrid.tsx` (138 lines).
+- `:L22-L32` `export type PromoBannerContent` = the 9 fields above. No
+  textAlign / verticalAlign / imageFocus / buttons / design.
+- `:L63-L74` category `<SectionBanner … editable blockKeyPrefix="home.category" />`
+  without textAlign / imageFocus / buttons.
+- `:L77` iterates the fixed `categoryLanes` (F-05) — the six Type Cards.
+- `:L80` `const image = laneImages?.[lane.key as HomeTypeLaneKey] || "";`
+- `:L84` `href={lane.href}`; `:L118` label `{lane.label}`; `:L121` fixed
+  "Shop now →".
+- `:L132-L136` renders `<HomeBrands vendors content count={brandCount} />`.
+- Pinned by `tests/compliance/home-editor-superpowers.test.ts:L133-L136`
+  ("PromoGrid forwards brandCount to HomeBrands": `brandCount`, `count={brandCount}`).
+  Keep both strings.
+
+F-03 `src/components/home/HomeBrands.tsx` (92 lines, client).
+- `:L62-L73` brand `<SectionBanner … blockKeyPrefix="home.brand" />`, same
+  omission as F-02.
+- Vendor cards link `/menu?vendors=<name>` (comment at `:L77-L78`).
+- Pinned by `home-editor-superpowers.test.ts:L124-L130` (`count =
+  HOME_CARD_COUNT_DEFAULT`, `[vendors, shuffle, LIMIT]`, no `const LIMIT = 16`).
+
+F-04 `src/components/home/SectionBanner.tsx` (196 lines) — the shared banner.
+- Props `:L48-L87`: imageSrc, imageAlt, eyebrow, title, titleClassName,
+  subtitle, buttons, priority, editable, blockKeyPrefix, textAlign (default
+  "left"), verticalAlign (default "center"), imageFocus (optional).
+- `:L91-L100` gradient chosen by textAlign (3 hardcoded Tailwind gradients).
+- `:L105-L120` image object-position: explicit `imageFocus` wins, else
+  `legacyObjectClass` (opposite side of text). Comment (SLICE 117) explains this
+  was a bug fix; legacy kept for byte-identical callers.
+- `:L121-L124` text block flex classes from textAlign/verticalAlign.
+- `:L150` text container: `relative flex min-h-[5.5rem] flex-col px-5 py-4
+  md:min-h-[7.5rem] md:px-9 md:py-6 ${textBlockClass}` — the banner HEIGHT is
+  driven by its text (min-height), not by an aspect ratio. Important for S1/S2:
+  absolute-positioned text boxes need the banner to have its own height, so the
+  design mode must set an explicit min-height / aspect ratio (see S1 `frame`).
+- `:L151-L172` eyebrow `p` (0.6rem→xs, green, uppercase, tracking 0.22em),
+  title `h2` (2xl→4xl→5xl, black weight, uppercase, leading-none), subtitle `p`
+  (0.72rem→sm, zinc-300, max-w-md→xl). All FIXED classes; no font / size /
+  style / color control (Q13, Q14, Q18 gap).
+- `:L163` the `{title}` is rendered as plain text inside `h2`; a typed newline
+  in the DB collapses to a space because there is no `whitespace-pre-line`
+  (Q8 gap). Same for eyebrow/subtitle.
+- `:L173-L191` buttons: fixed styles per variant solid/outline/ghost; no size,
+  color, or position control (Q23, Q24 gap).
+- Pinned by `tests/compliance/specials-editor-upgrade.test.ts:L119-L142`: must
+  keep the strings `textAlign = "left"`, `verticalAlign = "center"`, the two
+  union types, `items-end text-right`, `items-center text-center`,
+  `items-start text-left`, `justify-start`, `justify-end`, `object-cover `,
+  `object-right`, `object-left`, `imageFocus`, `legacyObjectClass`.
+  → The design renderer is ADDED alongside; the legacy branch stays verbatim.
+
+F-05 `src/lib/specials/daily-deal-presentation.ts:L100-L127` — the Type Cards
+are a hardcoded constant:
+```ts
+const laneHref = (categories: GreenwayCategory[]) => `/menu?categories=${categories.join(",")}`;
+const laneDefinitions: Omit<CategoryLane, "href">[] = [
+  { key: "flower", label: "Flower", categories: ["flower", "popcorn-bud", "infused-flower"] },
+  { key: "prerolls", label: "Prerolls", categories: ["preroll", "blunt", "preroll-pack", "infused-preroll", "infused-blunt", "infused-preroll-pack"] },
+  { key: "concentrates", label: "Concentrates", categories: ["concentrate", "rso"] },
+  { key: "edibles", label: "Edibles", categories: ["edible-solid"] },
+  { key: "liquids", label: "Liquids", categories: ["edible-liquid", "tincture"] },
+  { key: "topicals", label: "Topicals", categories: ["topical"] },
+];
+export const categoryLanes: CategoryLane[] = laneDefinitions.map(...)
+```
+`categoryLanes` is also used elsewhere (`representativeItemForLane` at `:L130`
+and the specials page). → S3 must NOT change `categoryLanes` (other callers);
+it adds an owner list in `home.category` settings whose DEFAULT is derived from
+`categoryLanes` (same keys, labels, hrefs) so the live page is byte-identical
+until the owner edits.
+
+F-06 `src/lib/cms/home-section-settings-core.ts` (323 lines).
+- `HOME_CARD_COUNTS` `:L23`, `HOME_CARD_COUNT_DEFAULT` `:L26`,
+  `DAILY_DEALS_COUNT_KEY` `:L36`, `BRAND_COUNT_KEY` `:L39`,
+  `clampHomeCardCount` `:L47`.
+- `LANE_IMAGES_KEY = "laneImages"`, `HOME_TYPE_LANE_KEYS` (flower, prerolls,
+  concentrates, edibles, liquids, topicals), `readLaneImages`, `writeLaneImage`.
+- → S3 adds `TYPE_CARDS_KEY = "typeCards"` and keeps reading `laneImages` as a
+  fallback for each default card's image (so existing owner images survive).
+
+### 4.2 Page-sections storage + store
+
+F-07 `src/lib/cms/page-sections-store.ts` (617 lines).
+- `resolveForRender` `:L127-L147` — returns key, kind, image, imageAlt,
+  imageFocus (default "center"), textAlign (default "left"), eyebrow, title,
+  subtitle, body, buttons, settings. Draft values win in preview.
+- `getSectionsForRender` `:L155-L183` — draft-aware visible rows.
+- `getPageBanners` `:L191-L208`; `BannerData` `:L210-L226` has NO textAlign and
+  NO settings; `toBannerData` `:L228-L245` drops textAlign and settings.
+  → S6 adds `textAlign?` and `design?` to BannerData (optional, additive).
+- `saveSectionDraft` `:L413-L438` — patches draft_* incl. `draft_settings`
+  when `input.settings !== undefined`.
+- `publishSection` `:L442-L473` — copies draft → live incl. `settings`.
+- `getHomeSectionByKey` `:L549-L561`.
+- `saveHomeSectionSettings` `:L571-L597` — shallow merge, writes BOTH
+  `settings` and `draft_settings`, publishes immediately.
+- Storage fact (migration `supabase/migrations/0013_*.sql`): `page_sections`
+  has `settings jsonb`, `draft_settings jsonb`, `buttons jsonb`,
+  `image_focus text not null default 'center'` (`:L40`) and
+  `text_align text not null default 'left'` (`:L41`) with NO check constraints
+  on settings → a `design` object can live inside `settings.design` with NO
+  migration.
+
+F-08 `src/lib/cms/page-sections-types.ts` (142 lines).
+- `SectionImageFocus`, `SectionTextAlign`, `SectionButtonVariant`,
+  `SectionButton { label, href, variant, enabled }`.
+- `PAGE_SECTION_CONFIG` `:L34-L68`: home (cap 5), vendors, faq, about,
+  locations, price-match (cap 4). menu, loyalty, specials RETIRED (comments
+  `:L40-L62`).
+- F-08a: about / faq / locations / price-match pages do NOT render
+  page_sections (grep: only `src/app/page.tsx`, `src/app/specials/page.tsx`,
+  `src/app/loyalty/page.tsx`, `src/app/vendor-delivery/page.tsx`,
+  `src/components/menu/ShopPage.tsx` call `getSectionsForRender` /
+  `getPageBanners`). So banners an owner adds to FAQ/About/Locations/Price
+  Match in the builder never appear. → recorded as OQ-3; S6 adds rendering of
+  extras on those four pages ONLY if a safe insertion point exists (verify
+  each page file at S6 time; if not, document and leave for the owner).
+
+F-09 `src/lib/cms/page-sections-seed.ts`: seeds home.settings (locked, kind
+feature, `settings: { dailyDealsCount: 16 }`), home.category
+(`settings: { lanes: "category" }`), home.brand (`settings: { lanes: "brand" }`),
+specials.hero (`:L108-L123`, `image_focus: "right"`, `buttons: []`),
+vendors.grow, vendors.brands, menu.*, loyalty.*.
+
+### 4.3 Home page editor (admin)
+
+F-10 `src/app/admin/pages/[slug]/actions.ts` (310 lines).
+- `revalidateForSlug` `:L41-L47`.
+- `parseButtons` `:L50-L72` (reads `buttons_json`, cap 4).
+- `parseSettings` `:L80-L95` (reads `settings_json`, full object, returns
+  undefined when absent/invalid).
+- `saveSectionAction` `:L138-L178` — builds `SectionDraftInput` from the form
+  incl. `image_focus`, `text_align`, buttons, settings; `requirePermission
+  ("content.edit")`; `recordAudit` action `page_section.draft`.
+- `saveTypeCardImagesAction` `:L261-L290` — loops `HOME_TYPE_LANE_KEYS`,
+  `lane_image_<key>`; `saveHomeSectionSettings("home.category", {laneImages})`;
+  redirects `?tab=typecards&saved=1`.
+
+F-11 `src/components/admin/SectionCard.tsx` (512 lines, client).
+- State `:L92-L104`: image, imageAlt, imageFocus, textAlign, eyebrow, title,
+  subtitle, body, enabled, buttons, cardCount, confirmDelete.
+- Hidden inputs `:L263-L267`: image, image_focus, text_align, buttons_json,
+  settings_json.
+- Focus / align selects `:L293-L324`.
+- Eyebrow / title / subtitle are single-line `<input>`s → pressing Enter
+  submits the form instead of a new line (Q8 root cause on the editor side).
+- Buttons editor `:L373-L441`: label, href free-text input, variant, show,
+  remove; MAX 4. No link picker (Q25/Q26 gap).
+- Settings merge preserves existing keys (`:L115` comment).
+- Pinned by tests: `home-editor-superpowers.test.ts`, `menu-render-cap.test.ts`,
+  `client-bundle-cjs-guard.test.ts` → read those before editing SectionCard.
+
+F-12 `src/app/admin/pages/[slug]/page.tsx` (511 lines): tabs incl.
+`TypeCardsTab` (`:L273`) → `TypeCardImagesEditor`; media choices via
+`listMedia({ status: "published", limit: 200 })` (`:L123-L124`); preview link
+→ `/admin/website-sync?tab=preview` (`:L136` comment).
+
+F-13 `src/components/admin/TypeCardImagesEditor.tsx` (122 lines): hardcoded
+`LANE_LABELS` record for 6 keys; one `ContentImageField` per lane; hidden
+`lane_image_<key>` inputs. No name / link / add / delete (Q1–Q3 gap).
+
+### 4.4 Specials
+
+F-14 `src/app/specials/page.tsx`:
+- `:L60` `getPageBanners("specials", ["specials.hero"])` — specials is RETIRED
+  from the builder, yet the hero still reads the old row.
+- `:L82` `const hero = banners.byKey["specials.hero"];`
+- `:L87-L101` content: eyebrow/title/subtitle from `hero || copy`, `image:
+  presentation.heroBannerImage || hero?.image`, `imageFocus: hero?.imageFocus`,
+  **`buttons: hero?.buttons`**, `extraSections: banners.extras`.
+- **ROOT CAUSE of Q11**: the hero button comes from the retired
+  `specials.hero` page_sections row; since `/admin/pages/specials` → notFound
+  (F-08), the owner has NO screen to edit/remove/add/repoint it.
+
+F-15 `src/components/specials/SpecialsContent.tsx`:
+- Hero `:L456-L572`: placement from `pres.heroBannerTextAlign`,
+  `pres.heroBannerVerticalAlign`, `pres.heroBannerImageFocus`; classes
+  `heroJustifyClass`, `heroColumnItemsClass`, `heroTextItemsClass`,
+  `heroGradientClass` (LEFT case keeps the exact `linear-gradient(100deg,
+  rgba(0,0,0,0.96)…` string — pinned by `specials-editor-upgrade.test.ts:L325`).
+- Image `<img>` with `HERO_FOCUS_OBJECT_CLASS[heroImageFocus]` (pinned `:L322`).
+- Eyebrow pill / `h1` title / subtitle with fixed classes and
+  `data-gw-block="specials.hero.*"` in preview.
+- Buttons `:L550-L570`: `content.buttons` filtered and styled (fixed).
+- Today's Deal banner via `SpecialsDailyDeals` (`:L600-L606` passes
+  bannerImage, count, textAlign, verticalAlign, imageFocus).
+- Extras `:L608-L621` → `<SectionBanner … buttons={s.buttons} />`.
+
+F-16 `src/lib/specials/specials-presentation-core.ts`:
+- `SPECIALS_PRESENTATION_BLOCK = "specials.deals.presentation"`.
+- `SPECIALS_HERO_TEXT_BLOCKS` `:L39-L43` (eyebrow/title/subtitle content
+  blocks, edited on `/admin/specials` via a text panel — `admin/specials/page.tsx:L179-L189`).
+- `SpecialsPresentation` type `:L140-L191`; `defaultSpecialsPresentation`;
+  `normalizeSpecialsPresentation` `:L237-L330`.
+- Storage: ONE content_blocks "richjson" row; draft → publish → revisions via
+  `src/app/admin/specials/actions.ts` (100 lines: `saveSpecialsDraftAction`,
+  `publishSpecialsAction`, `restoreSpecialsRevisionAction`).
+- → S4 adds `heroButtons` (+ `heroButtonsSet` flag so "no buttons" can be
+  distinguished from "never edited → fall back to legacy row buttons") and
+  `heroDesign` / `todaysDealsDesign` to this JSON. No migration.
+
+F-17 `src/components/admin/SpecialsPresentationEditor.tsx` (980 lines): tabs
+`type TabKey = "hero" | "cards" | "banner"` (pinned), hero image
+`setGlobal("heroBannerImage", …)` `:L282-L283`, align `:L305-L330`, focus
+`:L353-L356`, live preview `:L383-L386`, save form `:L795`, restore `:L841`.
+
+F-18 `src/components/specials/SpecialsDailyDeals.tsx:L103-L112` — the Today's
+Deal `<SectionBanner>` with textAlign / verticalAlign / imageFocus (pinned
+strings `imageSrc={bannerSrc}`, `textAlign={textAlign}`,
+`verticalAlign={verticalAlign}`, `imageFocus={imageFocus}`).
+
+### 4.5 Loyalty
+
+F-19 `src/components/loyalty/LoyaltySignupForm.tsx`:
+- `:L9-L10` `const consentText = "By signing up, I consent …";` (verbatim in
+  PART 3.6).
+- `:L54` comment: "marketing-consent disclosure and the form field labels stay
+  FIXED (legal / …)".
+- `:L258-L264` checkbox label renders `{consentText}` + `<FieldError
+  message={errors.consent} />`.
+- Pinned by `tests/compliance/loyalty-page-editor.test.ts:L165-L185`:
+  ```ts
+  it("the marketing-consent disclosure stays FIXED (not an editable block)", () => {
+    expect(form).toContain("const consentText =");
+    expect(form).toContain('replying \\"STOP\\"');
+    expect(form).toContain("Consent is not a condition of purchase");
+    for (const cb of LOYALTY_CONTENT_BLOCKS) {
+      expect(cb.key).not.toContain("consent");
+      …
+  ```
+  This test encodes the OLD decision. The owner has now overruled it in
+  writing ("it's mine to edit, please let me edit it"), so S5 must update this
+  test ON PURPOSE with the reason (owner directive R41 Q9), keeping the
+  default text byte-identical (the form keeps `const consentText =` as the
+  FALLBACK constant, so the first three expectations still hold).
+- F-19a The registry self-test asserts `LOYALTY_CONTENT_BLOCKS.length === 8`
+  (`src/lib/loyalty/loyalty-content-core.ts` self-test) and the vitest mirror
+  asserts `toBe(8)` (`tests/compliance/loyalty-page-editor.test.ts:L48`).
+  S5 changes both to 9 with a comment.
+- F-19b The self-test runner registers loyalty-content with a bespoke line at
+  `scripts/compliance/run-pure-selftests.ts:L1621` (`if (r.passed < 1)`), not
+  `assertRan`. Leave that line as is.
+
+F-20 `src/lib/loyalty/loyalty-content-core.ts`: `LoyaltyContentBlock { key,
+section: "hero"|"signup"|"terms", label, help?, fallback, seoImpact? }`;
+8 blocks; `resolveLoyaltyValue(key, values)` returns fallback for blank;
+`isLoyaltyContentBlock`. Header comment says consent never editable (update).
+
+F-21 `src/lib/cms/content-blocks-seed.ts:L79-L95` `loyaltyCopyBlockSeeds()`
+derives seeds from the registry → adding a block auto-seeds it (lazily by
+`ensureContentBlocksSeeded()`), owner page group "loyalty" → LOYALTY_PAGE
+(`src/lib/cms/content-reachability-core.ts` PAGE_GROUP_DEFAULT_OWNER). Field
+type for long text: check the seed's field_type for loyalty blocks at S5 time
+(the registry has no field_type; the seed function decides).
+
+F-22 Editor locks: `src/components/admin/LoyaltyPageEditor.tsx:L14-L19`
+(header comment), `:L278-L286` (UI paragraph "Two things are locked on
+purpose: the marketing-consent paragraph …"); `src/app/admin/loyalty-page/page.tsx:L45-L55`
+(header comment), `:L75-L80` (signup group description "The consent paragraph
+and the field labels are fixed"), `:L210-L218` (help panel "The consent
+paragraph and the program numbers are locked."). All must be reworded in S5.
+
+F-23 Signup persistence: `src/lib/loyalty/signup.ts` — `LoyaltySignupInput`
+`:L5-L14` (`consent: boolean`, `signature: string`), `parseLoyaltySignup`
+`:L50`, consent required `:L71`, notification text `:L105` ("Consent
+Accepted: Yes/No"), `storeLoyaltySignup` `:L137-L179` → `createLoyaltySignup`
+in `src/lib/loyalty/signups-store.ts:L122-L139` (insert incl. `consent`). Table
+`loyalty_signups` (migration 0008) has `consent boolean` only.
+→ S5 records the consent text version: compute a short SHA-256 hex of the
+exact consent text shown, send it with the form, store it in a NEW nullable
+column `consent_text_sha256` + `consent_text` (migration 0264, idempotent).
+The insert must tolerate the column not existing yet (owner applies manually):
+on a "column does not exist" error, retry the insert without the new fields
+(same pattern rule: never lose a signup). The JSONL fallback also records it.
+
+F-24 Loyalty hero is already a "special" banner with fonts/colors per block:
+`src/lib/loyalty/loyalty-hero-core.ts` (501 lines) — `TEXT_ALIGNS`,
+`TEXT_VALIGNS`, `IMAGE_FOCUSES`, `HERO_FONTS` (9 curated, groups display/sans/
+script), `heroFontStack`, `HERO_COLORS` (white, gold, green, orange, muted),
+`HeroTextBlock { text, font, color, show, scriptScale }`. Rendered by
+`src/components/loyalty/LoyaltyHeroBanner.tsx` (249 lines), edited by
+`src/components/admin/LoyaltyHeroEditor.tsx` (528 lines).
+The Shop carousel reuses the same block type (`src/lib/cms/shop-carousel-core.ts`
+`normalizeBlock` `:L169-L181`, `ShopHeroPresentation` `:L189-L230`).
+→ The new design core (S1) must be a SUPERSET that can represent these blocks
+(font ids are site font ids; color ids map to hex), so S6 can upgrade these
+banners without losing data.
+
+### 4.6 Preview + hub
+
+F-25 `src/components/admin/PreviewFrame.tsx` (125 lines): iframe src
+`/api/admin/preview/enable?path=…&_n=<nonce>` (`:L38-L41`); devices desktop
+(full) / tablet 834 / phone 390 (`:L19-L23`); listens for `gw-preview-edit`
+with origin check (`:L44-L55`); calls `onEditBlock(blockKey)`.
+
+F-26 `src/components/site/PreviewEditOverlay.tsx` (167 lines): rendered inside
+preview pages; `HOTSPOTS_ENABLED = false` (`:L46`); measures
+`[data-gw-block]` elements; `edit()` posts `{ type: "gw-preview-edit",
+blockKey, target }` to the parent with `window.location.origin` (`:L84-L104`).
+Pinned by `tests/compliance/pipeline-fix-links-connected.test.ts` — read before
+editing.
+
+F-27 `src/components/admin/WebsiteSyncPreviewPanel.tsx` (61 lines): the hub's
+"Live preview" (Website Sync → Preview tab), page picker from `PREVIEW_PAGES`
+(`src/components/admin/ContentPreviewPanel.tsx:L20-L35`: Homepage, Shop,
+Specials, About, Location, Price Match, Loyalty, Medical, Vendors, Blog, FAQ,
+Privacy, Terms, Consumer Health Data), `<PreviewFrame path height={820} />`
+with NO onEditBlock (comment `:L14-L21` explains why). Mounted at
+`src/app/admin/website-sync/page.tsx:L146`.
+→ This IS the "one preview window in the hub" (Q15). S7 turns on a "Move
+mode" here.
+
+F-28 `ContentEditorShell.tsx:L142` also mounts `ContentPreviewPanel` (another
+preview). The owner asked for ONE preview window in the hub; S7 keeps other
+small editor previews (they are live in-editor previews, not hub windows) but
+makes every page editor's "Preview" link go to the hub preview with the right
+page pre-selected (`/admin/website-sync?tab=preview&path=/specials`).
+
+### 4.7 Link targets (for the button link picker)
+
+F-29 Menu URL params (client reads them at
+`src/components/menu/InteractiveMenuBrowser.tsx:L630-L655`
+`resolveInitialParams`): `search, category, brand, special, categories,
+strains, terpenes, brands, vendors, weights, maxThc, maxCbd, maxPrice, sort,
+doh, classification`. Lists are comma-separated (`parsePersistedList`
+`:L602-L607`). Sort values (`SORT_OPTION_VALUES` `:L592-L599`):
+`featured-shuffle, best-sellers, price-low, price-high, potency-high,
+category`. Special collections (`previewSpecialCollections` `:L85-L130`):
+`clearance-50, doobie-tuesday, wax-wednesday, top-shelf-thursday,
+super-saturday, ice-cream-sunday` (verify the full key list at S1 time — the
+object may contain more keys after `:L130`). Strain values: `indica, sativa,
+hybrid, indica-hybrid, sativa-hybrid, cbd` (`GreenwayStrainType` in
+`src/lib/leafly/types.ts:L28-L36`; `HIGH_CBD_VALUE = "cbd"` at
+`InteractiveMenuBrowser.tsx:L64`).
+
+F-30 Category routes: `/menu/<category>` via `categoryPath`
+(`src/lib/menu/menu-facet-core.ts:L126-L128`). Website categories from
+`websiteCategoryDefinitions` (`src/lib/pos/category-taxonomy.ts`): flower,
+popcorn-bud, infused-flower, accessories, merch, paraphernalia, preroll,
+blunt, preroll-pack, infused-preroll, infused-blunt, infused-preroll-pack,
+cartridge, disposable-cartridge, concentrate, rso, edible-solid, edible-liquid,
+tincture, topical, trim. (Import the definitions; never retype the list in UI.)
+
+F-31 Blog: `src/lib/cms/blog-store.ts` `getPublicPosts()` `:L290`
+(published posts, static fallback) and `getPublishedSlugs()` `:L320`; route
+`/blog/[slug]`. Newsletters are attached to posts (`post.newsletter = { pdfSrc,
+pages }` around `:L280`); there is NO `/newsletter` public route → "link to a
+newsletter" = link to the blog post that carries it (picker labels posts that
+have a newsletter with "📰").
+
+F-32 Public routes (dirs under `src/app`): about, blog, faq, locations,
+loyalty, medical, menu, price-match, privacy-policy, terms-of-use,
+consumer-health-data, specials, vendor-delivery, plus `/`.
+
+### 4.8 AI
+
+F-33 `src/lib/ai/provider.ts`: `generate`, `generateJSON`, `generateStructured`,
+`generateVision({ system, user, imageUrl, temperature, maxTokens, context })`
+(`:L454`), `isAiConfigured`, `AiNotConfiguredError`. `src/lib/ai/compliance.ts`
+exports `COMPLIANCE_SYSTEM`. Media actions show the call pattern incl.
+`context: { entityType, entityId, actorId, actorEmail, feature }` for usage
+logging.
+
+### 4.9 Fonts
+
+F-34 `src/lib/cms/fonts.ts` (178 lines): `FONT_OPTIONS` ids: system, inter,
+poppins, montserrat, oswald, bebas, anton, playfair, merriweather, roboto-slab,
+jetbrains-mono, great-vibes, dancing-script, pacifico; `resolveFont`,
+`fontStack(id, fallbackId)`. All loaded through `fonts-loader.ts`
+`fontVariablesClassName` on the root layout → any font id is usable on any
+public page without extra loading. Design core stores font ids from this list.
+
+### 4.10 CI gates that will see R41 changes
+
+F-35 `.github/workflows/compliance-tests.yml`: `npm run test:compliance`
+(vitest over `tests/compliance`, `:L51`), the pure self-test runner (`:L53`),
+commit authorship check (`:L83`), verbatim-quote check
+(`scripts/verify-verbatim-quotes.ts`, `:L104`), `npm run typecheck` (`:L144`),
+migrations execute check (`:L242`), `npm run build` (`:L303`).
+→ Source-text tests that pin strings in files R41 edits (must stay green):
+- `specials-editor-upgrade.test.ts` (SectionBanner, SpecialsContent,
+  SpecialsDailyDeals, SpecialsPresentationEditor, specials-presentation-core,
+  specials/page.tsx)
+- `specials-presentation.test.ts`
+- `home-editor-superpowers.test.ts` (PromoGrid, HomeBrands, SectionCard,
+  page-sections-store, pages actions, home-section-settings-core, page.tsx)
+- `loyalty-page-editor.test.ts`, `loyalty-hero-editor.test.ts`
+- `pipeline-fix-links-connected.test.ts` (PreviewEditOverlay)
+- `menu-render-cap.test.ts`, `client-bundle-cjs-guard.test.ts` (SectionCard)
+- `usage-5-public-page-revalidate.test.ts`, `menu-cache-policy.test.ts`,
+  `r33-website-facts.test.ts`, `r23-masters-filter.test.tsx` (specials page,
+  home page)
+- `vendors-page.test.ts`, `vendor-directory-enrichment.test.ts`,
+  `vendor-relations.test.ts` (VendorDirectory)
+- Shop page tests (ShopPage) if S6 touches it.
+Running `npm run test:compliance` locally is a BUILD GATE (CI runs it), not
+feature self-testing, so it is allowed and required before each PR. If it is
+too slow for the sandbox, run only the files listed above with
+`npx vitest run <files>`.
+
