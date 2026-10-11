@@ -225,7 +225,7 @@ export function withReturn(target: EditTarget, from: unknown, path: unknown): Ed
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure self-tests (throw on failure). Registered in the pure-selftest runner.
 // ─────────────────────────────────────────────────────────────────────────────
-export function __runEditTargetCoreTests(): { passed: number } {
+export function __runEditTargetCoreTests(): { passed: number; failed: number } {
   let passed = 0;
   const ok = (cond: boolean, msg: string) => {
     if (!cond) throw new Error(`edit-target-core: ${msg}`);
@@ -337,5 +337,5 @@ export function __runEditTargetCoreTests(): { passed: number } {
   ok(planFocus("?gwfrom=evil", "").back === null, "plan: unknown from ignored");
   ok(bannerCoversBlock("home.category.title") && !bannerCoversBlock("specials.hero.title"), "banner covers home blocks");
 
-  return { passed };
+  return { passed, failed: 0 };
 }

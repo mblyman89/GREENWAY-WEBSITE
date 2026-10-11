@@ -11,8 +11,9 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
 import { MEDIA_PURPOSES, PLACEMENT_SUGGESTIONS } from "@/lib/media/taxonomy";
 import { imageSpecCheatSheet } from "@/lib/cms/image-spec-core";
+import { MEDIA_UPLOAD_MAX_BYTES, MEDIA_UPLOAD_MAX_LABEL, formatMegabytes, tooLargeMessage } from "@/lib/media/gif-core";
 
-type Preview = { name: string; url: string; isImage: boolean };
+type Preview = { name: string; url: string; isImage: boolean; size: number };
 
 export function MediaDropzone({
   uploadAction,
@@ -28,10 +29,18 @@ export function MediaDropzone({
     const next: Preview[] = [];
     for (const f of Array.from(files)) {
       const isImage = f.type.startsWith("image/");
-      next.push({ name: f.name, url: isImage ? URL.createObjectURL(f) : "", isImage });
+      next.push({ name: f.name, url: isImage ? URL.createObjectURL(f) : "", isImage, size: f.size });
     }
     setPreviews(next);
   }
+
+  // R43: the whole upload is one request, and the server can accept at most
+  // ~4.5 MB per request (Vercel limit). Catch it here with a clear message
+  // instead of a confusing "413" error page.
+  const oversize = previews.filter((p) => p.size > MEDIA_UPLOAD_MAX_BYTES);
+  const totalBytes = previews.reduce((n, p) => n + p.size, 0);
+  const batchTooBig = oversize.length === 0 && previews.length > 1 && totalBytes > MEDIA_UPLOAD_MAX_BYTES;
+  const blocked = oversize.length > 0 || batchTooBig;
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -74,7 +83,9 @@ export function MediaDropzone({
         <p className="text-sm font-semibold text-white">
           Drag &amp; drop images here, or <span className="text-[var(--admin-accent)]">click to browse</span>
         </p>
-        <p className="text-xs text-white/40">PNG, JPG, WEBP, GIF, SVG, or PDF · up to 10 MB each</p>
+        <p className="text-xs text-white/40">
+          PNG, JPG, WEBP, GIF (animated OK), SVG, or PDF · up to {MEDIA_UPLOAD_MAX_LABEL} per upload
+        </p>
         <input
           ref={inputRef}
           type="file"
@@ -177,7 +188,21 @@ export function MediaDropzone({
           />
         </label>
       </div>
-      <Button type="submit" variant="confirm">
+      {blocked ? (
+        <div role="alert" className="space-y-1 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-xs text-amber-200">
+          {oversize.map((p) => (
+            <p key={p.name}>{tooLargeMessage(p.name, p.size)}</p>
+          ))}
+          {batchTooBig ? (
+            <p>
+              Together these files are {formatMegabytes(totalBytes)} — one upload can be at most{" "}
+              {MEDIA_UPLOAD_MAX_LABEL}. Upload them in smaller groups (or one at a time).
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <Button type="submit" variant="confirm" disabled={blocked}>
         Upload
       </Button>
 
@@ -189,6 +214,8 @@ export function MediaDropzone({
         <p className="mt-2 text-white/45">
           Create a custom-size canvas in Canva using these dimensions, then export as WebP or
           PNG. Design textless art — headings and buttons are layered on top automatically.
+          Animated banner? Export a GIF at the same size — keep it under {MEDIA_UPLOAD_MAX_LABEL}{" "}
+          (short loop, a few seconds) so it uploads and loads fast.
         </p>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[420px] border-collapse text-left">

@@ -8,6 +8,7 @@ import { glowCardStyle, glowToneByIndex } from "@/lib/ui/glow-card-core";
 import type { HomeTypeLaneKey } from "@/lib/cms/home-section-settings-core";
 import type { BannerDesign } from "@/lib/cms/banner-design-core";
 import { typeCardGridClass, type TypeCard } from "@/lib/cms/type-cards-core";
+import { isGifSrc } from "@/lib/media/gif-core";
 
 /**
  * Home "Shop by Category" + "Shop by Brand" sections.
@@ -136,6 +137,7 @@ export function PromoGrid({
                   {image ? (
                     <Image
                       src={image}
+                      unoptimized={isGifSrc(image)}
                       alt=""
                       fill
                       sizes="(max-width: 768px) 45vw, 16vw"

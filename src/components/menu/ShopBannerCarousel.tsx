@@ -41,6 +41,7 @@ import {
   type ShopHeroPresentation,
 } from "@/lib/cms/shop-carousel-core";
 import type { ShopRenderSlide } from "@/lib/cms/shop-carousel-types";
+import { isGifSrc } from "@/lib/media/gif-core";
 
 // ── Presentation helpers (shared by public render + editor preview) ──────────
 
@@ -157,6 +158,7 @@ function SlideBody({
       {image && image.trim() ? (
         <Image
           src={image}
+          unoptimized={isGifSrc(image)}
           alt={heroTextLines(pres.title.text)[0] || "Greenway Shop banner"}
           fill
           priority={priority}

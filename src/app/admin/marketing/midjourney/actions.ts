@@ -13,6 +13,7 @@ import type { FluxOutputFormat } from "@/lib/marketing/flux-core";
 import { placementById } from "@/lib/marketing/creative-placements-core";
 import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
 import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
+import { MEDIA_UPLOAD_MAX_BYTES, tooLargeMessage } from "@/lib/media/gif-core";
 
 export type BriefAssistResult =
   | { ok: true; suggestion: BriefSuggestion }
@@ -234,7 +235,7 @@ export async function generateFluxAction(input: {
  * Only raster images are accepted here: FLUX.2 references must be fetchable
  * pictures (PNG / JPEG / WEBP / GIF) — SVG/PDF are not valid image references.
  */
-const FLUX_REF_MAX_BYTES = 10 * 1024 * 1024; // match media library ceiling
+const FLUX_REF_MAX_BYTES = MEDIA_UPLOAD_MAX_BYTES; // R43: match media library ceiling (Vercel 4.5 MB body cap)
 const FLUX_REF_ALLOWED_MIME = new Set([
   "image/png",
   "image/jpeg",
@@ -262,7 +263,7 @@ export async function uploadFluxReferenceAction(
     };
   }
   if (file.size > FLUX_REF_MAX_BYTES) {
-    return { ok: false, error: `${file.name} exceeds 10 MB.` };
+    return { ok: false, error: tooLargeMessage(file.name, file.size) };
   }
 
   try {

@@ -456,7 +456,7 @@ export function MidjourneyBuilder({
             {uploadPending ? "Uploading…" : "Upload reference image(s)"}
           </Button>
           <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
-            PNG, JPG, WEBP, or GIF · up to 10 MB each. Uploads are saved to your media library (draft) and selected automatically.
+            PNG, JPG, WEBP, or GIF · up to 4 MB each. Uploads are saved to your media library (draft) and selected automatically.
           </p>
         </div>
 

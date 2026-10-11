@@ -906,6 +906,8 @@ import { __runDesignMoveCoreTests } from "../../src/lib/cms/design-move-core";
 import { __runDesignDragCoreTests } from "../../src/lib/cms/design-drag-core";
 import { __runBannerAiCoreTests } from "../../src/lib/cms/banner-ai-core";
 import { __runLinkTargetCoreTests } from "../../src/lib/cms/link-target-core";
+import { __runEditTargetCoreTests } from "../../src/lib/cms/edit-target-core";
+import { __runGifCoreTests } from "../../src/lib/media/gif-core";
 import { __runTypeCardsTests } from "../../src/lib/cms/type-cards-core";
 import { __runLoyaltyConsentTests } from "../../src/lib/loyalty/loyalty-consent-core";
 import { __runVendorEsignAppCoreTests } from "../../src/lib/payments/vendor-esign-app-core";
@@ -2188,6 +2190,8 @@ __runLiquidVolumeTests();
   assertRan("design-drag-core", __runDesignDragCoreTests(), 16); // R41 S7: preview drag geometry (top-left %, container-query device, nudge)
   assertRan("banner-ai-core", __runBannerAiCoreTests(), 38); // R41 S8: AI placement reply parser + apply (drafts only)
   assertRan("link-target-core", __runLinkTargetCoreTests(), 58); // R41 S1: button link picker targets
+  assertRan("edit-target-core", __runEditTargetCoreTests(), 300); // R43: ✎ Edit button router
+  assertRan("gif-core", __runGifCoreTests(), 21); // R43: GIF banners + honest upload cap
   assertRan("type-cards-core", __runTypeCardsTests(), 42); // R41 S3: home Type Cards
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording
   console.log("ALL PURE SELF-TESTS PASSED");

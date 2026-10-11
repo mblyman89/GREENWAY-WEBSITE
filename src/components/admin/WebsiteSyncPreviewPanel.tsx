@@ -11,14 +11,12 @@
  * that the Site Content editor used, so nothing about what-you-can-preview
  * changes.
  *
- * IMPORTANT — why there is no "✎ Edit → jump to a field" wiring here:
- * On the old Site Content page the preview sat directly above the editable
- * block list, so clicking a ✎ Edit hotspot could scroll/focus the matching
- * field. Website Sync is a read-only harmony dashboard with NO editable block
- * list next to it, so that jump would have nowhere to land. We therefore render
- * the preview WITHOUT an onEditBlock handler (PreviewFrame simply ignores the
- * ✎ Edit messages when none is passed). The preview itself — viewing every
- * public page exactly as visitors will, at any device size — is fully intact.
+ * R43 — the green "✎ Edit" buttons are back. Every pill in the previewed page
+ * posts an /admin/edit?block|owner|area=… link; PreviewFrame re-validates it
+ * (same origin, our iframe, /admin path only) and hands it to onEditTarget,
+ * which navigates THIS admin window there. /admin/edit resolves the owning
+ * editor and lands on the exact field/card with a "← Back to Website Hub
+ * preview" pill that returns here on the same page.
  */
 import { useCallback, useState, useTransition } from "react";
 import { PreviewFrame } from "@/components/admin/PreviewFrame";
@@ -63,6 +61,11 @@ export function WebsiteSyncPreviewPanel({ canMove = false, initialPath }: { canM
     [toast],
   );
 
+  // R43: a ✎ Edit click inside the preview opens the owning editor (top window).
+  const openEditor = useCallback((href: string) => {
+    window.location.assign(href);
+  }, []);
+
   return (
     <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -71,7 +74,9 @@ export function WebsiteSyncPreviewPanel({ canMove = false, initialPath }: { canM
           <p className="text-xs text-[var(--admin-text-muted)]">
             See every public page exactly as visitors will — including any
             unpublished draft changes. Pick a page, switch device sizes, or open
-            it in a new tab.
+            it in a new tab. Click a green{" "}
+            <span className="text-[var(--admin-accent)]">✎ Edit</span> button to jump to where
+            that item is edited.
           </p>
         </div>
         <div className="flex flex-wrap overflow-hidden rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)]">
@@ -140,6 +145,7 @@ export function WebsiteSyncPreviewPanel({ canMove = false, initialPath }: { canM
         onDesignMove={canMove ? onDesignMove : undefined}
         onMoveReady={setMovable}
         reloadSignal={reload}
+        onEditTarget={openEditor}
       />
     </div>
   );

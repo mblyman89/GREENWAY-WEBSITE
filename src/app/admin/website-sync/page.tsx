@@ -3,6 +3,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { EditLinksGuide } from "@/components/admin/EditLinksGuide";
 import { StatCard } from "@/components/admin/StatCard";
 import { Section } from "@/components/admin/ui/Section";
 import { Card, CardHeader } from "@/components/admin/ui/Card";
@@ -143,7 +144,10 @@ export default async function WebsiteSyncPage({
         </div>
 
         {activeTab === "preview" ? (
-          <WebsiteSyncPreviewPanel canMove={can(role, "content.edit")} initialPath={typeof sp.path === "string" ? sp.path : undefined} />
+          <>
+            <EditLinksGuide />
+            <WebsiteSyncPreviewPanel canMove={can(role, "content.edit")} initialPath={typeof sp.path === "string" ? sp.path : undefined} />
+          </>
         ) : (
           <>
         {/* ------------------------------------------------ published menu */}
