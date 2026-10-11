@@ -2062,8 +2062,8 @@ These steps are repeated, with final details, in the end-of-round report.
 | --- | --- | --- | --- | --- |
 | S0 bible | done | (in S1 PR) | — | — |
 | S1 cores | merged | #1321 | see git log | ready |
-| S2 studio | PR open (branch r41-s2-banner-studio) | — | — | — |
-| S3 type cards | not started | — | — | — |
+| S2 studio | merged | #1322 | 2973a447 | deploying at merge time |
+| S3 type cards | PR open (branch r41-s3-type-cards) | — | — | — |
 | S4 specials | not started | — | — | — |
 | S5 consent | not started | — | — | — |
 | S6 all banners | not started | — | — | — |
@@ -2122,3 +2122,28 @@ These steps are repeated, with final details, in the end-of-round report.
   must list where it applies.
 - **S2 picker data.** `listPublishedPostLinks()` reads only slug/title/kind,
   with no media lookups, and falls back to the static post list on error.
+- **S3 verification of PART 6 S3 assumptions.**
+  - `home-section-settings-core` DOES have `__runHomeSectionSettingsTests`, but
+    Type Cards went into a new `type-cards-core.ts`, because it imports
+    `link-target-core` (for checkHref) and the existing core must stay
+    import-free.
+  - `daily-deal-presentation.ts` imports runtime code (`./daily-deals` →
+    promotions seed/brand-match), so the six lanes were COPIED into
+    `DEFAULT_TYPE_LANES`. The vitest drift guard in r41-type-cards.test.ts
+    compares the copy to `categoryLanes`.
+  - `saveHomeSectionSettings` shallow-merges, so the action always writes BOTH
+    `typeCards` and a full `laneImages` mirror (default ids only, `{}` when
+    none). This way, stale lane images can't come back.
+- **S3 decisions.**
+  - Byte-identical default: page.tsx passes `typeCards` only when the
+    `typeCards` key exists. Until then, PromoGrid maps `categoryLanes` exactly
+    as before, and six tiles keep the exact shipped grid class string (pinned
+    by tests).
+  - Grid column classes are a fixed literal lookup (Tailwind v4 can't see
+    dynamic class names). More than 6 cards wrap at 6 per row on computers.
+  - Card images accept only site paths (`/…`, not `//…`) and http(s) URLs
+    without quotes.
+  - Reorder uses ▲/▼ buttons rather than drag, so it works with a keyboard and
+    screen reader (WCAG 2.2 SC 2.5.7).
+  - Deleting every card (or hiding them all) hides the tile row, but the banner
+    stays.
