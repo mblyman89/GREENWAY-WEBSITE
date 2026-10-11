@@ -421,6 +421,7 @@ export function SpecialsPresentationEditor(props: Props) {
         </div>
         {/* R41 S4: full Banner Studio design for the TOP hero. */}
         <DesignCard
+          mediaChoices={mediaChoices}
           title="Custom design for the top hero"
           description="Drag the wording anywhere, change fonts, colors and sizes, add text boxes and buttons, and set a separate phone layout. When it's on, it replaces the placement settings above. Turn it off any time to go back to the classic hero."
           design={pres.heroDesign}
@@ -841,6 +842,7 @@ export function SpecialsPresentationEditor(props: Props) {
             boxes tied to the title/subtitle keep showing the day's deal, so it
             still changes every day. */}
         <DesignCard
+          mediaChoices={mediaChoices}
           title="Custom design for the Today's Deal banner"
           description="Drag the wording anywhere, change fonts and colors, add text boxes and buttons, and set a phone layout. Boxes tied to the title and subtitle still show each day's deal automatically. The preview shows today's wording."
           design={pres.todaysDealsDesign}

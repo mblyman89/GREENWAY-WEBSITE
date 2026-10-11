@@ -434,6 +434,7 @@ export function LoyaltyHeroEditor(props: Props) {
 
           {/* R41 S6: optional Banner Studio design for this hero. */}
           <DesignCard
+            mediaChoices={mediaChoices}
             title="Custom design (optional)"
             description="Turn this on to drag the text and buttons anywhere, add extra text boxes and buttons, change sizes, and zoom or tint the picture. The three text lines above still supply the words. Turn it off any time to go back to the classic look."
             design={pres.design ?? null}

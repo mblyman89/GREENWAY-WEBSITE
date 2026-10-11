@@ -14,7 +14,8 @@
  */
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ConfirmDialog } from "@/components/admin/ux";
-import { checkDesign, type BannerDesign, type DesignDevice } from "@/lib/cms/banner-design-core";
+import { checkDesign, mobileImageSrc, type BannerDesign, type DesignDevice } from "@/lib/cms/banner-design-core";
+import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { StudioCanvas, type StudioSelection } from "./StudioCanvas";
 import { TextBoxPanel } from "./TextBoxPanel";
 import { ButtonPanel } from "./ButtonPanel";
@@ -35,6 +36,7 @@ export function BannerStudio({
   imageSrc,
   imageAlt,
   posts,
+  mediaChoices,
 }: {
   design: BannerDesign;
   onChange: (d: BannerDesign) => void;
@@ -42,8 +44,12 @@ export function BannerStudio({
   imageSrc: string;
   imageAlt: string;
   posts: PickerPost[];
+  /** R42 Q4: media library choices for the optional phone picture. */
+  mediaChoices?: MediaChoice[];
 }) {
   const [device, setDevice] = useState<DesignDevice>("desktop");
+  // R42 Q4: the picture for the device being edited (phone picture when set).
+  const deviceSrc = device === "mobile" ? mobileImageSrc(design, imageSrc) : imageSrc;
   const [tab, setTab] = useState<Tab>("text");
   const [selection, setSelection] = useState<StudioSelection>(null);
   const [pendingDelete, setPendingDelete] = useState<NonNullable<StudioSelection> | null>(null);
@@ -135,7 +141,12 @@ export function BannerStudio({
     const forDevice = device;
     startAi(async () => {
       try {
-        const res = await suggestBannerPlacementAction({ imageSrc, design, legacy, device: forDevice });
+        const res = await suggestBannerPlacementAction({
+          imageSrc: forDevice === "mobile" ? mobileImageSrc(design, imageSrc) : imageSrc,
+          design,
+          legacy,
+          device: forDevice,
+        });
         if (res.ok) setAi({ s: res.suggestion, device: forDevice });
         else setAiMsg(res.message);
       } catch {
@@ -264,7 +275,7 @@ export function BannerStudio({
           design={design}
           device={device}
           legacy={legacy}
-          imageSrc={imageSrc}
+          imageSrc={deviceSrc}
           imageAlt={imageAlt}
           selection={selection}
           onSelect={select}
@@ -288,7 +299,7 @@ export function BannerStudio({
         ) : tab === "buttons" ? (
           <ButtonPanel design={design} device={device} posts={posts} selection={selection} onSelect={select} onChange={change} onRequestDelete={setPendingDelete} />
         ) : tab === "picture" ? (
-          <ImagePanel design={design} device={device} imageSrc={imageSrc} onChange={change} />
+          <ImagePanel design={design} device={device} imageSrc={deviceSrc} onChange={change} mediaChoices={mediaChoices} />
         ) : (
           <WarningsPanel design={design} legacy={legacy} onSelect={select} />
         )}

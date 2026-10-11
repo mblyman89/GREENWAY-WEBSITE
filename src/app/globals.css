@@ -632,6 +632,11 @@ h1, h2, h3, h4, h5, h6 {
  * 768px of BANNER width the phone values win. The image swaps to its phone
  * focal point the same way.
  * ------------------------------------------------------------------------- */
+/* R42 Q4: the separate phone picture is hidden by default; the container rule
+ * below (which must come AFTER this, same specificity) swaps it in. */
+.gw-dimg-m {
+  display: none;
+}
 @container gwb (max-width: 767px) {
   .gw-dbox {
     --gbx: var(--gmx, var(--gx));
@@ -643,5 +648,12 @@ h1, h2, h3, h4, h5, h6 {
   }
   .gw-hide-sm {
     display: none !important;
+  }
+  /* R42 Q4: separate phone picture (only present when the owner set one). */
+  .gw-dimg-d {
+    display: none;
+  }
+  .gw-dimg-m {
+    display: block;
   }
 }
