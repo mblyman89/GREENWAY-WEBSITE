@@ -24,9 +24,9 @@ import { listPublishedPostLinks } from "@/lib/cms/blog-store";
 import { seedsForPage } from "@/lib/cms/page-sections-seed";
 import { HomeDisplaySettingsCard } from "@/components/admin/HomeDisplaySettingsCard";
 import { TypeCardImagesEditor } from "@/components/admin/TypeCardImagesEditor";
+import { hasCustomTypeCards, readTypeCards } from "@/lib/cms/type-cards-core";
 import {
   readHomeCardCount,
-  readLaneImages,
   DAILY_DEALS_COUNT_KEY,
 } from "@/lib/cms/home-section-settings-core";
 import { getHomeSectionByKey } from "@/lib/cms/page-sections-store";
@@ -346,11 +346,16 @@ async function CarouselTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
 
 async function TypeCardsTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
   const categoryRow = await getHomeSectionByKey("home.category");
-  const laneImages = readLaneImages(categoryRow?.settings);
+  // R41 S3: full card list (custom, or the six defaults with legacy images).
+  const cards = readTypeCards(categoryRow?.settings);
+  const isCustom = hasCustomTypeCards(categoryRow?.settings);
+  const posts = await listPublishedPostLinks().catch(() => []);
 
   return (
     <TypeCardImagesEditor
-      laneImages={laneImages}
+      cards={cards}
+      isCustom={isCustom}
+      posts={posts}
       mediaChoices={mediaChoices}
       saveAction={saveTypeCardImagesAction}
     />

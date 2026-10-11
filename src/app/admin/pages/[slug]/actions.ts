@@ -33,6 +33,7 @@ import {
   type SectionTextAlign,
 } from "@/lib/cms/page-sections-types";
 import { normalizeDesign, writeDesign } from "@/lib/cms/banner-design-core";
+import { laneImagesFromCards, normalizeTypeCards, TYPE_CARDS_KEY } from "@/lib/cms/type-cards-core";
 
 function routeFor(slug: string): string {
   return `/admin/pages/${slug}`;
@@ -285,7 +286,45 @@ export async function saveHomeSettingsAction(formData: FormData): Promise<void> 
  */
 export async function saveTypeCardImagesAction(formData: FormData): Promise<void> {
   const session = await requirePermission("content.edit");
-  // Start from the existing settings so we merge rather than replace.
+  // R41 S3: the Type Cards editor posts the whole card list as JSON. It is
+  // re-normalized here (caps, unsafe links → /menu, image URL rules), never
+  // trusted. Legacy laneImages is mirrored for the six default ids so anything
+  // still reading it keeps working. A plain object patch is used because
+  // saveHomeSectionSettings shallow-merges (an empty map clears old images).
+  const rawCards = formData.get("type_cards_json");
+  if (typeof rawCards === "string" && rawCards.trim() !== "") {
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(rawCards);
+    } catch {
+      parsed = null;
+    }
+    if (!Array.isArray(parsed)) {
+      redirect(`${routeFor("home")}?tab=typecards&error=${encodeURIComponent("Those cards could not be read. Please try again.")}`);
+    }
+    const typeCards = normalizeTypeCards(parsed);
+    const laneImagesMirror = laneImagesFromCards(typeCards);
+    const saved = await saveHomeSectionSettings(
+      "home.category",
+      { [TYPE_CARDS_KEY]: typeCards, [LANE_IMAGES_KEY]: laneImagesMirror },
+      session.userId,
+    );
+    if (saved.error) {
+      revalidatePath(routeFor("home"));
+      redirect(`${routeFor("home")}?tab=typecards&error=${encodeURIComponent(saved.error)}`);
+    }
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "page_section.type_cards",
+      entityType: "page_section",
+      entityId: "home.category",
+      after: { typeCards },
+    });
+    revalidateForSlug("home");
+    redirect(`${routeFor("home")}?tab=typecards&saved=1`);
+  }
+  // Legacy form (six lane images only). Start from the existing settings so we merge rather than replace.
   const row = await getHomeSectionByKey("home.category");
   let settings = (row?.settings as Record<string, unknown> | undefined) ?? {};
   for (const lane of HOME_TYPE_LANE_KEYS) {
