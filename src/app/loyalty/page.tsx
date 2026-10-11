@@ -12,6 +12,7 @@ import {
   LOYALTY_CONTENT_KEYS,
   resolveLoyaltyValue,
 } from "@/lib/loyalty/loyalty-content-core";
+import { LOYALTY_CONSENT_BLOCK } from "@/lib/loyalty/loyalty-consent-core";
 import {
   LOYALTY_HERO_PRESENTATION_BLOCK,
   resolveLoyaltyHeroPresentation,
@@ -92,6 +93,9 @@ export default async function LoyaltyPage() {
           birthdayHelp: resolveLoyaltyValue("loyalty.form.birthday_help", copy),
           submitLabel: resolveLoyaltyValue("loyalty.form.submit_label", copy),
           successTitle: resolveLoyaltyValue("loyalty.form.success_title", copy),
+          // R41 S5 — the owner-editable consent paragraph (byte-identical
+          // default until edited + published).
+          consentText: resolveLoyaltyValue(LOYALTY_CONSENT_BLOCK, copy),
         }}
       />
       <LoyaltyProgramTerms

@@ -16,11 +16,13 @@
  *     staff member edits and publishes a block (same live-look-safe contract
  *     as SLICE 105/106/107).
  *
- *   - COMPLIANCE / LEGAL text stays FIXED in the component and is NEVER
+ *   - R41 S5 CHANGE (owner directive R41 Q9, "it's mine to edit, please let
+ *     me edit it"): the marketing-consent disclosure IS now an editable block
+ *     (loyalty.form.consent_text). Its default + checklist live in
+ *     ./loyalty-consent-core.ts; publishing an empty paragraph is blocked and
+ *     every signup records the published wording.
+ *   - Other COMPLIANCE / LEGAL text stays FIXED in the component and is NEVER
  *     editable:
- *       * The marketing-consent disclosure (TCPA: STOP opt-out, ATDS, "Consent
- *         is not a condition of purchase", legal-age affirmation) lives in
- *         LoyaltySignupForm as `consentText`.
  *       * The register-mechanics paragraph on the terms card ("Points accrue on
  *         the pre-tax subtotal after discounts. Discounts never stack …") states
  *         how the register actually pays and must not drift.
@@ -39,6 +41,8 @@
  * CHECK, so the new "plain" blocks need NO migration — the same basis as
  * SLICE 105 "select", 106 "richjson", and 107 "plain".
  */
+
+import { DEFAULT_CONSENT_TEXT, LOYALTY_CONSENT_BLOCK } from "./loyalty-consent-core";
 
 // ---------------------------------------------------------------------------
 // Editable copy registry (each entry is a plain content block).
@@ -119,6 +123,18 @@ export const LOYALTY_CONTENT_BLOCKS: readonly LoyaltyContentBlock[] = [
     help: "Shown once a signup is submitted successfully.",
     fallback: "Thank you — your signup was submitted.",
   },
+  // R41 S5 (owner directive R41 Q9: "it's mine to edit, please let me edit
+  // it"): the marketing-consent paragraph next to the checkbox. The fallback is
+  // the byte-identical shipped wording (loyalty-consent-core). The editor shows
+  // a checklist (checkConsentText) and blocks publishing only an EMPTY
+  // paragraph; each signup records the published wording + its SHA-256.
+  {
+    key: LOYALTY_CONSENT_BLOCK,
+    section: "signup",
+    label: "Marketing consent wording (legal)",
+    help: "The paragraph next to the consent checkbox. You own this wording. Keep the required parts \u2014 the checker below tells you if one is missing.",
+    fallback: DEFAULT_CONSENT_TEXT,
+  },
   // ---- Program terms card (server component) -------------------------------
   {
     key: "loyalty.terms.eyebrow",
@@ -191,7 +207,8 @@ export function __runLoyaltyContentCoreTests(): { passed: number } {
   // ---- Registry shape ------------------------------------------------------
   // MIG-5c: the signup heading (loyalty.hero.title/subtitle) joined the registry
   // (rescued from orphan status), so 6 -> 8.
-  ok(LOYALTY_CONTENT_BLOCKS.length === 8, "8 editable Loyalty copy blocks (MIG-5c added the 2 hero heading blocks)");
+  // R41 S5: the consent wording joined the signup group (owner directive Q9), 8 -> 9.
+  ok(LOYALTY_CONTENT_BLOCKS.length === 9, "9 editable Loyalty copy blocks (MIG-5c +2 hero heading, R41 S5 +1 consent)");
   ok(LOYALTY_CONTENT_KEYS.length === LOYALTY_CONTENT_BLOCKS.length, "keys mirror blocks");
 
   // Keys are unique + well-formed; sections are one of the three known groups.
@@ -208,14 +225,14 @@ export function __runLoyaltyContentCoreTests(): { passed: number } {
     ok(b.fallback.trim().length > 0, `${b.key} has non-empty byte-identical copy`);
   }
 
-  // Section membership is exactly as designed (2 hero + 3 signup + 3 terms).
+  // Section membership is exactly as designed (2 hero + 4 signup + 3 terms).
   ok(
     LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "hero").length === 2,
     "2 signup-heading (hero) copy blocks",
   );
   ok(
-    LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "signup").length === 3,
-    "3 signup-form copy blocks",
+    LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "signup").length === 4,
+    "4 signup-form copy blocks (R41 S5 added the consent wording)",
   );
   ok(
     LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "terms").length === 3,
@@ -253,6 +270,11 @@ export function __runLoyaltyContentCoreTests(): { passed: number } {
     loyaltyContentFallback("loyalty.terms.tiers_heading") === "Member tiers",
     "tiers_heading fallback exact",
   );
+  ok(
+    loyaltyContentFallback("loyalty.form.consent_text") === DEFAULT_CONSENT_TEXT,
+    "consent_text fallback is the byte-identical shipped wording (R41 S5)",
+  );
+  ok(isLoyaltyContentBlock("loyalty.form.consent_text"), "consent_text is a copy block (R41 S5)");
   ok(loyaltyContentFallback("nope") === "", "unknown key fallback = ''");
 
   // ---- isLoyaltyContentBlock ----------------------------------------------

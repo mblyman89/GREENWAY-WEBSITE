@@ -73,9 +73,10 @@ function medicalCopyBlockSeeds(): ContentBlockSeed[] {
 
 // SLICE 108: the editable Loyalty copy blocks are DERIVED from the loyalty
 // content core so each seed defaultValue is byte-identical to the page's live
-// fallback and can never drift from the vetted copy. The LEGAL consent text and
-// the LIVE register numbers/tiers are intentionally NOT seeded here — they stay
-// fixed/live in the components.
+// fallback and can never drift from the vetted copy. R41 S5: the marketing-
+// consent wording (loyalty.form.consent_text) is now one of these derived
+// blocks (owner directive R41 Q9). The LIVE register numbers/tiers are still
+// intentionally NOT seeded — they stay live in the components.
 function loyaltyCopyBlockSeeds(): ContentBlockSeed[] {
   return LOYALTY_CONTENT_BLOCKS.map((b) => ({
     block_key: b.key,
