@@ -2175,9 +2175,9 @@ page (hero), or Shop banner (a slide).
 | S4 specials | merged | #1324 | 94d64f5a | success |
 | S5 consent | merged | #1325 | d419775f | success |
 | S6 all banners | merged | #1326 | b50b2586 | success |
-| S7 move mode | merged | #1327 | 23c1c648 | see S9 report |
-| S8 AI | PR open (branch r41-s8-ai-assist, stacked on S7) | — | — | — |
-| S9 report | done (PART 14, in S8 PR) | — | — | — |
+| S7 move mode | merged | #1327 | 23c1c648 | success |
+| S8 AI | merged | #1328 | 4585e610 | see git log (Vercel checked after this edit) |
+| S9 report | merged (PART 14) | #1328 | 4585e610 | same as S8 |
 
 ---
 
