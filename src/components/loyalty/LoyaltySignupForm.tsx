@@ -6,8 +6,7 @@ import { greenwayBusiness } from "@/content/business";
 import { LoyaltyHeroBanner } from "@/components/loyalty/LoyaltyHeroBanner";
 import type { LoyaltyHeroPresentation } from "@/lib/loyalty/loyalty-hero-core";
 
-const consentText =
-  "By signing up, I consent to enroll in the member list, understanding that I will receive marketing communications, including, but not limited to, advertisements, through text messages, calls either through an automatic telephone dialing system or artificial or prerecorded voice call, emails, or other outreach channels. By doing so, I understand that I am allowing Greenway Marijuana to retain my personal contact details and engagement history for use in personalized marketing communications. I understand that I may opt-out of text messages at any time by replying \"STOP\". Standard messaging and calling rates may apply. I affirm that I am of legal age to receive communications related to the services and products being advertised. Consent is not a condition of purchase.";
+import { DEFAULT_CONSENT_TEXT } from "@/lib/loyalty/loyalty-consent-core";
 
 const defaultValues = {
   firstName: "",
@@ -51,12 +50,18 @@ type LoyaltyContent = {
    * SLICE 108 — editable FRIENDLY copy (loyalty.form.*). Each falls back to the
    * byte-identical shipped string below when the block is unseeded/blank, so
    * the page looks unchanged until a staff member edits and publishes. The
-   * marketing-consent disclosure and the form field labels stay FIXED (legal /
-   * form integrity) and are intentionally NOT props here.
+   * form field labels stay FIXED (form integrity). R41 S5: the consent
+   * paragraph is now editable too (see consentText below).
    */
   birthdayHelp?: string;
   submitLabel?: string;
   successTitle?: string;
+  /**
+   * R41 S5 — the owner-editable marketing-consent paragraph
+   * (loyalty.form.consent_text). Falls back to the byte-identical shipped
+   * wording. Line breaks the owner types are kept (whitespace-pre-line).
+   */
+  consentText?: string;
 };
 
 export function LoyaltySignupForm({
@@ -70,6 +75,9 @@ export function LoyaltySignupForm({
    */
   heroPresentation?: LoyaltyHeroPresentation;
 } = {}) {
+  // R41 S5: the consent paragraph shown next to the checkbox. A blank value
+  // can never render an empty disclosure — it falls back to the shipped text.
+  const consentText = content?.consentText?.trim() ? content.consentText : DEFAULT_CONSENT_TEXT;
   const [values, setValues] = useState<FormValues>(defaultValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -258,7 +266,7 @@ export function LoyaltySignupForm({
             <label className="flex gap-3 rounded-2xl border border-white/10 bg-black/45 p-4 text-sm leading-6 text-zinc-300">
               <input type="checkbox" name="consent" value="true" className="mt-1 h-5 w-5 shrink-0 accent-[var(--orange)]" checked={values.consent} onChange={(event) => updateValue("consent", event.target.checked)} />
               <span>
-                {consentText}
+                <span className="whitespace-pre-line">{consentText}</span>
                 <FieldError message={errors.consent} />
               </span>
             </label>

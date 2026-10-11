@@ -42,11 +42,12 @@ describe("loyalty-content-core pure logic", () => {
     expect(passed).toBeGreaterThan(30);
   });
 
-  it("has 8 editable copy blocks with unique, namespaced keys + non-empty copy", () => {
+  it("has 9 editable copy blocks with unique, namespaced keys + non-empty copy", () => {
     // MIG-5c: the signup heading (loyalty.hero.title/subtitle) joined the
     // registry as its own "hero" section, so 6 -> 8.
-    expect(LOYALTY_CONTENT_BLOCKS.length).toBe(8);
-    expect(LOYALTY_CONTENT_KEYS.length).toBe(8);
+    // R41 S5 (owner directive R41 Q9): the consent wording joined, 8 -> 9.
+    expect(LOYALTY_CONTENT_BLOCKS.length).toBe(9);
+    expect(LOYALTY_CONTENT_KEYS.length).toBe(9);
     const keys = LOYALTY_CONTENT_BLOCKS.map((b) => b.key);
     expect(new Set(keys).size).toBe(keys.length);
     for (const b of LOYALTY_CONTENT_BLOCKS) {
@@ -54,9 +55,9 @@ describe("loyalty-content-core pure logic", () => {
       expect(b.fallback.trim().length).toBeGreaterThan(0);
       expect(["hero", "signup", "terms"]).toContain(b.section);
     }
-    // 2 hero + 3 signup + 3 terms.
+    // 2 hero + 4 signup (R41 S5 +consent) + 3 terms.
     expect(LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "hero").length).toBe(2);
-    expect(LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "signup").length).toBe(3);
+    expect(LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "signup").length).toBe(4);
     expect(LOYALTY_CONTENT_BLOCKS.filter((b) => b.section === "terms").length).toBe(3);
   });
 
@@ -101,7 +102,7 @@ describe("seeds are live-look-safe (byte-identical)", () => {
     }
   });
 
-  it("the seed's loyalty blocks are untouched (11 loyalty blocks total)", () => {
+  it("the seed's loyalty blocks are all present (12 loyalty blocks total)", () => {
     const loyalty = CONTENT_BLOCK_SEEDS.filter((s) => s.block_key.startsWith("loyalty."));
     // SLICE 123 (LOY-1): +1 new block (loyalty.hero.presentation, richjson) for
     // the editable hero banner. Previously 10 -> now 11. MIG-5c did NOT add or
@@ -110,7 +111,9 @@ describe("seeds are live-look-safe (byte-identical)", () => {
     // group in the /admin/loyalty-page editor). So the seed count stays 11:
     // 2 hero-heading copy + 1 hero-image + 1 hero-image-mobile +
     // 1 hero-presentation + 3 signup + 3 terms.
-    expect(loyalty.length).toBe(11);
+    // R41 S5: +1 (loyalty.form.consent_text, derived from the registry) -> 12.
+    expect(loyalty.length).toBe(12);
+    expect(byKey.has("loyalty.form.consent_text")).toBe(true);
     expect(byKey.has("loyalty.hero.title")).toBe(true);
     expect(byKey.has("loyalty.hero.subtitle")).toBe(true);
     expect(byKey.has("loyalty.hero.presentation")).toBe(true);
@@ -166,18 +169,23 @@ describe("compliance guardrail holds", () => {
   const form = read("src/components/loyalty/LoyaltySignupForm.tsx");
   const terms = read("src/components/loyalty/LoyaltyProgramTerms.tsx");
 
-  it("the marketing-consent disclosure stays FIXED (not an editable block)", () => {
-    // The legal consent text is a literal const in the client component.
+  it("the marketing-consent disclosure is owner-editable with a safe default (R41 S5)", () => {
+    // CHANGED ON PURPOSE in R41 S5. The old pin said the consent text must stay
+    // a fixed literal in the form. The owner overruled that in writing (R41
+    // Q9: "it's mine to edit, please let me edit it"). The default wording now
+    // lives byte-identical in loyalty-consent-core, the form keeps
+    // `const consentText =` as the RESOLVED value, and exactly ONE editable
+    // block (loyalty.form.consent_text) targets it. Field labels stay fixed.
+    const consentCore = read("src/lib/loyalty/loyalty-consent-core.ts");
     expect(form).toContain("const consentText =");
-    expect(form).toContain('replying \\"STOP\\"');
-    expect(form).toContain("Consent is not a condition of purchase");
-    // No editable copy block targets the consent disclosure or the form field
-    // labels — the registry only covers the friendly helper/button/thank-you +
-    // terms headings. (The submit-button block legitimately ends in
-    // "submit_label"; what we forbid is a block for the consent text or the
-    // input field labels.)
+    expect(form).toContain("DEFAULT_CONSENT_TEXT");
+    expect(consentCore).toContain('replying \\"STOP\\"');
+    expect(consentCore).toContain("Consent is not a condition of purchase");
+    expect(LOYALTY_CONTENT_BLOCKS.filter((cb) => cb.key.includes("consent")).map((cb) => cb.key)).toEqual([
+      "loyalty.form.consent_text",
+    ]);
+    // No editable block targets the input field labels.
     for (const cb of LOYALTY_CONTENT_BLOCKS) {
-      expect(cb.key).not.toContain("consent");
       expect(cb.key).not.toContain("field_label");
       expect(cb.key).not.toContain("firstName");
       expect(cb.key).not.toContain("email");
