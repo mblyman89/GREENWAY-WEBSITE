@@ -2341,3 +2341,35 @@ in Vercel.
   - **Annual reviews.**
   - **Test-credit monitoring.**
   - **Records**, with a legal hold switch.
+
+## R41 — 0264 — Loyalty consent wording record
+
+- [ ] `0264_loyalty_consent_text.sql` adds **two optional columns** to
+  `loyalty_signups`. It adds no tables and no functions:
+  - `consent_text`: the exact consent paragraph the customer saw.
+  - `consent_text_sha256`: a fingerprint of that paragraph. It must be 64
+    lower-case hex characters or empty.
+
+  **Why:** you can now edit the consent wording yourself (Website → Loyalty
+  page). Each signup should record which wording the customer agreed to. The
+  server reads the **published** wording when the form is sent. It never trusts
+  the browser's copy.
+
+  Apply it **after 0263**. It is safe to re-run.
+
+  **Without it:** signups still work exactly as before. The wording just isn't
+  saved with them. The Loyalty page editor shows "Apply migration 0264 so each
+  signup records the exact wording".
+
+  **Check:**
+
+  ```sql
+  select count(*) as cols from information_schema.columns
+   where table_schema = 'public' and table_name = 'loyalty_signups'
+     and column_name in ('consent_text', 'consent_text_sha256');
+  -- cols
+  -- 2
+  ```
+
+  **Rollback (only if needed):** `supabase/rollbacks/0264_loyalty_consent_text.rollback.sql`.
+  This forgets the saved wording, so export Loyalty signups first.
