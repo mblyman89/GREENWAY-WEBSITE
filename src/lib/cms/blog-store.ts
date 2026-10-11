@@ -327,3 +327,24 @@ export async function getPublishedSlugs(): Promise<string[]> {
   if (slugs.length === 0) return (staticBlogPosts as PublicBlogPost[]).map((p) => p.slug);
   return slugs;
 }
+
+/**
+ * R41 S2 — light list for the editor's link picker: published posts only,
+ * slug + title + whether it's a newsletter. No media lookups (getPublicPosts
+ * resolves every hero/newsletter image, which the picker doesn't need).
+ * Same static fallback as the public blog so the picker matches /blog.
+ */
+export async function listPublishedPostLinks(): Promise<{ slug: string; title: string; newsletter: boolean }[]> {
+  const fromStatic = () =>
+    (staticBlogPosts as PublicBlogPost[]).map((p) => ({ slug: p.slug, title: p.title, newsletter: p.kind === "newsletter" }));
+  if (!isSupabaseServiceConfigured) return fromStatic();
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("blog_posts")
+    .select("slug,title,kind")
+    .eq("status", "published")
+    .order("publish_date", { ascending: false, nullsFirst: false });
+  const rows = (data as { slug: string; title: string; kind: string | null }[] | null) ?? [];
+  if (rows.length === 0) return fromStatic();
+  return rows.map((r) => ({ slug: r.slug, title: r.title, newsletter: r.kind === "newsletter" }));
+}
