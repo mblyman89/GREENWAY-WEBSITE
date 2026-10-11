@@ -2113,11 +2113,34 @@ section we cited requires it.)
    "Custom design (optional)" box. Your two slide buttons are copied in as
    starting buttons. Save draft → Publish slide → /menu shows it.
 
-### S7 (Move mode in hub preview)
-1. Hub → preview window → click "Move mode".
-2. Grab any text box or button on Home or Specials and drag it. Release.
-3. It saves to the draft only. Publish to make it live. Toggle off to
-   click links normally again.
+### S7 (Move mode in hub preview) — AS BUILT
+Before you start: Move mode only moves banners that have **Custom design
+(optional)** turned on. Turn it on (and press Save draft) in that banner's
+editor first: Pages → a page's banner, Specials (hero / Today's Deal), Loyalty
+page (hero), or Shop banner (a slide).
+1. Go to **Admin → Website Sync → Preview** tab. Pick the page (for example
+   **Specials**). You can also open
+   `/admin/website-sync?tab=preview&path=/specials` directly.
+2. Click **✥ Move mode: Off** so it reads **On**. The line next to it says how
+   many items can be moved. Every movable text box and button now has a dashed
+   green outline, and clicking it no longer follows the link.
+3. Drag a box or button with the mouse (or a finger on a tablet) and let go.
+   You'll see a green toast: "Text moved and saved as a draft. Press Publish in
+   the Specials editor when you're happy." The preview reloads with the box
+   where you dropped it.
+4. Keyboard instead: click a box, use the **arrow keys** (hold **Shift** for
+   bigger steps), then press **Enter** to save, or **Escape** to cancel.
+5. Click the **Phone** size and move something. The toast says "(phone
+   layout)". Switch back to **Desktop**: the desktop position hasn't changed.
+6. Click **Publish in … →** (it appears after a save). Publish there and check
+   the public page in a private window.
+7. Check that nothing went live early. Before you publish, open the public page
+   in a private/incognito window: it still shows the old layout.
+8. A page with no Custom-design banners says "Nothing on this page can be
+   moved yet…". Turn Move mode Off and the outlines disappear; links work
+   again.
+9. A staff login without the "content.edit" permission does not see the Move
+   mode button at all.
 
 ### S8 (AI assist)
 1. In Banner Studio, click "✨ AI suggest". A dotted ghost layout appears
@@ -2138,8 +2161,8 @@ section we cited requires it.)
 | S3 type cards | merged | #1323 | 5392544d | deploying at merge time |
 | S4 specials | merged | #1324 | 94d64f5a | success |
 | S5 consent | merged | #1325 | d419775f | success |
-| S6 all banners | PR open (branch r41-s6-banners) | — | — | — |
-| S7 move mode | not started | — | — | — |
+| S6 all banners | merged | #1326 | b50b2586 | success |
+| S7 move mode | PR open (branch r41-s7-move-mode) | — | — | — |
 | S8 AI | not started | — | — | — |
 | S9 report | not started | — | — | — |
 
@@ -2303,3 +2326,43 @@ section we cited requires it.)
   hooks. The S7 save action must handle both owners.
 - **S6 not done (by the bible's own decision):** About/FAQ/Locations/Price
   Match still do not render builder banners (OQ-3, unchanged).
+- **S7 recon (verified, not assumed).**
+  - A box's or button's `x/y` is its TOP-LEFT corner as a % of the banner
+    (`left/top: var(--gbx, var(--gx))`). The phone layout applies when the
+    BANNER (not the window) is under 768px, via `@container gwb (max-width:
+    767px)`. So the drag code works out the device from the banner frame's
+    width, not from `window.innerWidth`. That differs from the earlier M-2
+    draft wording ("iframe viewport < 768"); the container query is the source
+    of truth.
+  - `DesignedBanner` only emits the Move hooks (`data-gw-design-*`) when
+    `editable && owner`. The Specials/Shop/Vendors extras, the Vendors
+    grow/brands banners and the Specials Today's Deal banner were NOT passed
+    `editable`, so Move mode would have found nothing on them. FIXED:
+    `getPageBanners` sets `editable` ONLY in Draft Mode, and every call site
+    passes it through. Public HTML is unchanged.
+  - Sections can live on slugs retired from the Pages builder
+    (specials/menu/loyalty extras). `editorFor`/`publicPathFor` handle them
+    explicitly: Specials extras → /admin/specials; menu/loyalty extras have no
+    builder editor, so → Website Sync.
+- **S7 build.**
+  - `design-move-core.ts` (pure movers per owner, 46 self-tests) and
+    `design-drag-core.ts` (pure geometry, 16 self-tests), both registered in
+    the pure runner.
+  - `saveDesignMoveAction`: `content.edit` first, then re-validate, read the
+    DRAFT (falling back to live), apply, save the DRAFT only, audit
+    `design.move`, revalidate. It refuses locked sections, designs that are
+    turned off and unknown ids.
+  - `PreviewDesignDrag` (in the iframe, Draft Mode only, does nothing outside
+    a frame): Pointer Events + `setPointerCapture`; the item follows via CSS
+    `translate` and stays inside the banner; a 4px threshold separates a click
+    from a drag; link clicks are blocked only while Move mode is on. Keyboard
+    nudge: arrows / Shift / Enter / Escape (WCAG 2.1.1, 2.5.7). Handshake:
+    `gw-move-hello` → parent re-sends `gw-move-mode`; `gw-move-ready{count}`.
+  - Parent side: `PreviewFrame` accepts only its own iframe (`e.source`) and
+    its own origin, re-validates with `parseMoveMessage`, and ignores moves
+    while Move mode is off. The panel shows a toast, reloads the preview and
+    offers a "Publish in …" link. `?path=` deep link.
+- **S7 not done:** dragging to RESIZE boxes in the preview. Width stays in
+  Banner Studio, which already has width sliders and a canvas. This keeps the
+  preview layer small and avoids accidental resizes. The Home Hero carousel
+  has no Custom design (unchanged; see S9 report).
