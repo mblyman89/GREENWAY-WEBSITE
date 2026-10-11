@@ -23,7 +23,7 @@
  */
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
 import {
   heroFontStack,
@@ -41,6 +41,9 @@ import {
 } from "@/lib/cms/shop-carousel-core";
 import type { ShopRenderSlide } from "@/lib/cms/shop-carousel-types";
 import { BannerMedia } from "@/components/site/BannerMedia";
+import { CarouselRotationButton } from "@/components/site/CarouselRotationButton";
+import { useCarouselAutoplay } from "@/components/site/useCarouselAutoplay";
+import { dwellMs, slideFetchPriority, wordCount } from "@/lib/site/carousel-autoplay-core";
 
 // ── Presentation helpers (shared by public render + editor preview) ──────────
 
@@ -144,6 +147,7 @@ function SlideBody({
   priority,
   sizes,
   compact,
+  fetchPriority,
 }: {
   pres: ShopHeroPresentation;
   image: string;
@@ -151,6 +155,7 @@ function SlideBody({
   priority: boolean;
   sizes: string;
   compact: boolean;
+  fetchPriority?: "high" | "low";
 }) {
   return (
     <>
@@ -159,6 +164,7 @@ function SlideBody({
           src={image}
           alt={heroTextLines(pres.title.text)[0] || "Greenway Shop banner"}
           priority={priority}
+          fetchPriority={fetchPriority}
           sizes={sizes}
           className={`object-cover ${FOCUS_OBJECT_CLASS[focus]}`}
         />
@@ -214,9 +220,12 @@ export function SlideView({
   presentation,
   priority = false,
   designOwner,
+  fetchPriority,
 }: {
   presentation: ShopHeroPresentation;
   priority?: boolean;
+  /** R45-S1: "low" for carousel slides that start hidden (web.dev Fetch Priority). */
+  fetchPriority?: "high" | "low";
   /** R41 S6: "shop-slide:<uuid>" so the hub Move mode can save drags. */
   designOwner?: string;
 }) {
@@ -255,6 +264,7 @@ export function SlideView({
           image={presentation.imageMobile || presentation.image}
           focus={presentation.imageFocusMobile}
           priority={priority}
+          fetchPriority={fetchPriority}
           sizes="calc(100vw - 2rem)"
           compact
         />
@@ -269,6 +279,7 @@ export function SlideView({
           image={presentation.image}
           focus={presentation.imageFocus}
           priority={priority}
+          fetchPriority={fetchPriority}
           sizes="(min-width: 1408px) 1408px, calc(100vw - 4rem)"
           compact={false}
         />
@@ -277,79 +288,27 @@ export function SlideView({
   );
 }
 
-// ── The carousel wrapper (Hero.tsx engine + reduce-motion + keyboard/ARIA) ────
+// ── The carousel wrapper (R45-S1: shared APG/WCAG 2.2.2/Baymard engine) ─────
 
-/** Read the current reduced-motion preference (SSR-safe: false on the server). */
-function readReducedMotion(): boolean {
-  if (typeof window === "undefined" || !window.matchMedia) return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-/** Detect the user's reduced-motion preference (SSR-safe). */
-function usePrefersReducedMotion(): boolean {
-  // Lazy initializer reads the real value on the client's first render, so the
-  // effect only needs to SUBSCRIBE for later changes — no synchronous setState
-  // in the effect body (avoids react-hooks/set-state-in-effect cascades).
-  const [reduced, setReduced] = useState<boolean>(readReducedMotion);
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const onChange = () => setReduced(mq.matches);
-    mq.addEventListener?.("change", onChange);
-    return () => mq.removeEventListener?.("change", onChange);
-  }, []);
-  return reduced;
+/** Every readable word on a slide, for the per-slide dwell. */
+function slideWords(pres: ShopHeroPresentation): number {
+  const block = (b: HeroTextBlock) => (b.show ? b.text : "");
+  return wordCount([block(pres.eyebrow), block(pres.title), block(pres.subtitle), ...pres.ctas.map((c) => c.label)]);
 }
 
 export function ShopBannerCarousel({ slides }: { slides: ShopRenderSlide[] }) {
   const count = slides.length;
-  const [activeRaw, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const reducedMotion = usePrefersReducedMotion();
-
-  const active = count === 0 ? 0 : Math.min(activeRaw, count - 1);
-
-  const goTo = useCallback(
+  const dwellFor = useCallback(
     (index: number) => {
-      if (count === 0) return;
-      setActive((index + count) % count);
+      const slide = slides[index];
+      return slide ? dwellMs(SHOP_CAROUSEL_AUTOPLAY_MS, slideWords(slide.presentation)) : SHOP_CAROUSEL_AUTOPLAY_MS;
     },
-    [count],
+    [slides],
   );
-  const next = useCallback(() => {
-    if (count === 0) return;
-    setActive((c) => (c + 1) % count);
-  }, [count]);
-  const prev = useCallback(() => {
-    if (count === 0) return;
-    setActive((c) => (c - 1 + count) % count);
-  }, [count]);
-
-  // Auto-rotate — paused on hover/focus AND fully disabled for reduce-motion.
-  useEffect(() => {
-    if (paused || reducedMotion || count <= 1) return;
-    timer.current = setInterval(() => {
-      setActive((c) => (c + 1) % count);
-    }, SHOP_CAROUSEL_AUTOPLAY_MS);
-    return () => {
-      if (timer.current) clearInterval(timer.current);
-    };
-  }, [paused, reducedMotion, count]);
-
-  const onKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (count <= 1) return;
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        prev();
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        next();
-      }
-    },
-    [count, prev, next],
-  );
+  // Reduced motion, phones, hover, hidden tab, keyboard focus, swipe and
+  // Left/Right keys are all handled by the hook + pure core.
+  const carousel = useCarouselAutoplay(count, dwellFor);
+  const { active, next, prev, goTo } = carousel;
 
   if (count === 0) return null;
 
@@ -361,13 +320,31 @@ export function ShopBannerCarousel({ slides }: { slides: ShopRenderSlide[] }) {
           role="region"
           aria-roledescription="carousel"
           aria-label="Greenway Shop highlights"
-          tabIndex={0}
-          onKeyDown={onKeyDown}
-          onMouseEnter={() => setPaused(true)}
-          onMouseLeave={() => setPaused(false)}
-          onFocus={() => setPaused(true)}
-          onBlur={() => setPaused(false)}
+          tabIndex={count > 1 ? 0 : undefined}
+          {...carousel.regionProps}
         >
+          {/* APG: rotation control first in Tab order (control row is first in
+              the DOM, shown at the bottom centre). */}
+          {count > 1 ? (
+            <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 md:bottom-3">
+              <CarouselRotationButton {...carousel.rotationButtonProps} rotating={carousel.rotating} />
+              {slides.map((slide, index) => (
+                <button
+                  key={slide.key}
+                  type="button"
+                  onClick={() => goTo(index)}
+                  aria-label={`Go to slide ${index + 1}`}
+                  aria-current={index === active}
+                  className={`h-2 rounded-full transition-all ${
+                    index === active
+                      ? "w-6 bg-[var(--greenway)]"
+                      : "w-2 bg-white/40 hover:bg-white/70"
+                  }`}
+                />
+              ))}
+            </div>
+          ) : null}
+          <div aria-live={carousel.liveMode} aria-atomic="false">
           {slides.map((slide, index) => {
             const isActive = index === active;
             return (
@@ -386,11 +363,13 @@ export function ShopBannerCarousel({ slides }: { slides: ShopRenderSlide[] }) {
                 <SlideView
                   presentation={slide.presentation}
                   priority={index === 0}
+                  fetchPriority={slideFetchPriority(index)}
                   designOwner={slide.designOwner}
                 />
               </div>
             );
           })}
+          </div>
 
           {count > 1 ? (
             <>
@@ -415,22 +394,6 @@ export function ShopBannerCarousel({ slides }: { slides: ShopRenderSlide[] }) {
                 </span>
               </button>
 
-              <div className="absolute bottom-2.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 md:bottom-3.5">
-                {slides.map((slide, index) => (
-                  <button
-                    key={slide.key}
-                    type="button"
-                    onClick={() => goTo(index)}
-                    aria-label={`Go to slide ${index + 1}`}
-                    aria-current={index === active}
-                    className={`h-2 rounded-full transition-all ${
-                      index === active
-                        ? "w-6 bg-[var(--greenway)]"
-                        : "w-2 bg-white/40 hover:bg-white/70"
-                    }`}
-                  />
-                ))}
-              </div>
             </>
           ) : null}
         </div>
