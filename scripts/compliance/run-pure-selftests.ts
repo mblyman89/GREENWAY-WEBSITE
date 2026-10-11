@@ -901,6 +901,8 @@ import { __runAchOpsUiCoreTests } from "../../src/lib/payments/ach-ops-ui-core";
 import { __runSiteDomainCoreTests } from "../../src/lib/site/site-domain-core";
 import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-core";
 import { __runAchGuideCoreTests } from "../../src/lib/payments/ach-guide-core";
+import { __runBannerDesignCoreTests } from "../../src/lib/cms/banner-design-core";
+import { __runLinkTargetCoreTests } from "../../src/lib/cms/link-target-core";
 import { __runVendorEsignAppCoreTests } from "../../src/lib/payments/vendor-esign-app-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayeeBankingCoreTests } from "../../src/lib/payments/payee-banking-core";
@@ -2176,6 +2178,8 @@ __runLiquidVolumeTests();
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 22); // R40: ACH guide journeys, blockers, explainer
+  assertRan("banner-design-core", __runBannerDesignCoreTests(), 89); // R41 S1: banner design model, contrast, moves
+  assertRan("link-target-core", __runLinkTargetCoreTests(), 58); // R41 S1: button link picker targets
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
