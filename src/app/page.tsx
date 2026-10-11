@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Hero } from "@/components/home/Hero";
 import { HomeDailyDeals } from "@/components/home/HomeDailyDeals";
 import { PromoGrid } from "@/components/home/PromoGrid";
+import { SectionBanner } from "@/components/home/SectionBanner";
+import { readDesign } from "@/lib/cms/banner-design-core";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { SiteBackground } from "@/components/site/SiteBackground";
@@ -125,6 +127,14 @@ export default async function Home() {
   // Per-lane category-tile images (owner-uploaded via the Home Sections editor).
   // Unset lanes resolve to "" so the tile renders its clean text-only fallback.
   const laneImages = readLaneImages(category?.settings);
+  // R41 S2: extra banners added in the Home editor. They were saved but never
+  // rendered before. Fixed-slot and config sections are excluded.
+  const homeExtras = sections.filter(
+    (s) =>
+      s.kind === "banner" &&
+      !["home.category", "home.brand", "home.settings"].includes(s.key) &&
+      (s.title.trim() || s.image.trim()),
+  );
 
   return (
     <main>
@@ -155,8 +165,36 @@ export default async function Home() {
           brandTextAlign: brand?.textAlign,
           brandImageFocus: pinnedFocus(brand?.imageFocus),
           brandButtons: brand?.buttons,
+          // R41 S2(b): Banner Studio custom designs (opt-in per banner).
+          categoryDesign: readDesign(category?.settings),
+          categoryDesignOwner: category ? `section:${category.id}` : undefined,
+          brandDesign: readDesign(brand?.settings),
+          brandDesignOwner: brand ? `section:${brand.id}` : undefined,
         }}
       />
+      {/* R41 S2: extra banners the owner adds in the Home editor (none = nothing renders). */}
+      {homeExtras.length ? (
+        <section className="px-4 py-6 md:px-8 md:py-8" aria-label="More from Greenway">
+          <div className="mx-auto max-w-[88rem] space-y-4 md:space-y-6">
+            {homeExtras.map((s) => (
+              <SectionBanner
+                key={s.key}
+                imageSrc={s.image || "/home/hero-banner.webp"}
+                imageAlt={s.imageAlt || s.title || "Greenway banner"}
+                eyebrow={s.eyebrow}
+                title={s.title}
+                subtitle={s.subtitle}
+                buttons={s.buttons}
+                textAlign={s.textAlign}
+                imageFocus={pinnedFocus(s.imageFocus)}
+                design={readDesign(s.settings)}
+                designOwner={`section:${s.id}`}
+                editable={preview}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
       <Footer />
       <StaffShortcut />
     </main>

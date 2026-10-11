@@ -19,7 +19,7 @@
  * High Contrast for Text Over Images", WAC 314-55-155, Pointer Events).
  */
 import { checkHref } from "@/lib/cms/link-target-core";
-import { FONT_OPTIONS } from "@/lib/cms/fonts";
+import { FONT_OPTIONS, fontStack } from "@/lib/cms/fonts";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -158,8 +158,22 @@ export const BRAND_SWATCHES: { name: string; hex: string }[] = [
   { name: "Charcoal", hex: "#1a1a1a" },
 ];
 
-const FONT_IDS = new Set(FONT_OPTIONS.map((f) => f.id));
-export const DEFAULT_FONT_ID = "system";
+/**
+ * "site" = inherit the site-wide font the owner picked in Site Content (what
+ * legacy banners do). Any FONT_OPTIONS id forces that font for one box/button.
+ */
+export const DEFAULT_FONT_ID = "site";
+const FONT_IDS = new Set([DEFAULT_FONT_ID, ...FONT_OPTIONS.map((f) => f.id)]);
+export const DESIGN_FONTS: { id: string; label: string; stack: string | null }[] = [
+  { id: DEFAULT_FONT_ID, label: "Site font (default)", stack: null },
+  ...FONT_OPTIONS.map((f) => ({ id: f.id, label: f.label, stack: f.stack })),
+];
+
+/** CSS font-family for a design font id; null = inherit the site font. */
+export function designFontFamily(id: string): string | null {
+  if (!id || id === DEFAULT_FONT_ID || !FONT_IDS.has(id)) return null;
+  return fontStack(id, "system");
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -666,13 +680,20 @@ function rgba(hex: string, opacityPct: number): string {
   return `rgba(${r},${g},${b},${r4(Math.min(100, Math.max(0, opacityPct)) / 100)})`;
 }
 
+/**
+ * The OUTER wrapper is the size container. Container units (cqw) on an element
+ * resolve against its nearest ANCESTOR container, so the frame (which uses
+ * 100cqw for its own height) must sit inside this wrapper, not be it.
+ */
+export function containerStyle(): StyleMap {
+  return { containerType: "inline-size", containerName: "gwb", width: "100%" };
+}
+
 export function frameStyle(design: BannerDesign): StyleMap {
   return {
     position: "relative",
     overflow: "hidden",
     isolation: "isolate",
-    containerType: "inline-size",
-    containerName: "gwb",
     height: interpPx(design.frame.heightMobile, design.frame.height),
     borderRadius: `${design.frame.radius}px`,
   };
@@ -750,6 +771,8 @@ export function boxStyle(box: DesignTextBox): StyleMap {
     whiteSpace: box.wrap === "nowrap" ? "pre" : "pre-line",
     overflowWrap: box.wrap === "nowrap" ? "normal" : "anywhere",
   };
+  const ff = designFontFamily(box.font);
+  if (ff) s.fontFamily = ff;
   if (box.mx !== null) s["--gmx"] = `${box.mx}%`;
   if (box.my !== null) s["--gmy"] = `${box.my}%`;
   if (box.mw !== null) s["--gmw"] = `${box.mw}%`;
@@ -797,6 +820,8 @@ export function buttonStyle(btn: DesignButton): StyleMap {
     color: btn.fg,
     textDecoration: "none",
   };
+  const ff = designFontFamily(btn.font);
+  if (ff) s.fontFamily = ff;
   if (btn.mx !== null) s["--gmx"] = `${btn.mx}%`;
   if (btn.my !== null) s["--gmy"] = `${btn.my}%`;
   if (btn.style === "solid") {
@@ -1239,6 +1264,9 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
   ok(boxStyle(defaultTextBox("headline")).textWrap === "balance", "balance wrap");
   ok(boxStyle(defaultTextBox("body", { mx: 5 }))["--gmx"] === "5%", "mobile var");
   ok(boxStyle(defaultTextBox("body", { italic: true })).fontStyle === "italic", "italic");
+  ok(!("fontFamily" in boxStyle(defaultTextBox("body"))), "site font inherits");
+  ok((boxStyle(defaultTextBox("body", { font: "oswald" })).fontFamily ?? "").includes("--gw-font-oswald"), "picked font applied");
+  ok(normalizeDesign({ boxes: [{ font: "comic-sans" }] })!.boxes[0].font === "site", "unknown font → site");
   // 39 imageStyle
   const is = imageStyle({ ...defaultDesign(), image: { ...defaultDesign().image, focusX: 30, focusY: 70, zoom: 150, flip: true } });
   ok(is["--gip-d"] === "30% 70%" && is.objectPosition.includes("30% 70%") && is.transformOrigin.includes("30% 70%"), "image focus");
@@ -1249,7 +1277,7 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
   ok(overlayStyle({ ...defaultDesign(), overlay: { kind: "none", color: "#000000", opacity: 80, direction: "left" } }) === null, "none → null");
   ok(overlayStyle({ ...defaultDesign(), overlay: { kind: "floor", color: "#000000", opacity: 80, direction: "left" } })!.background.includes("to top"), "floor fade");
   // 41 frame
-  ok(frameStyle(defaultDesign()).containerType === "inline-size", "frame container");
+  ok(containerStyle().containerType === "inline-size" && !("containerType" in frameStyle(defaultDesign())), "container wraps frame (cqw resolves to ancestor)");
   // buttons
   const bst = buttonStyle(defaultButton({ style: "outline", shape: "square" }));
   ok(bst.backgroundColor === "transparent" && bst.borderRadius === "0px", "outline square button");

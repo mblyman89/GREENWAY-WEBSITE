@@ -73,6 +73,8 @@ export function HomeBrands({
           textAlign={content?.brandTextAlign}
           imageFocus={content?.brandImageFocus}
           buttons={content?.brandButtons}
+          design={content?.brandDesign}
+          designOwner={content?.brandDesignOwner}
         />
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5">

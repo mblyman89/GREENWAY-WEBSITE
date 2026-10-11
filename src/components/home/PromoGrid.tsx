@@ -6,6 +6,7 @@ import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";
 import { categoryLanes } from "@/lib/specials/daily-deal-presentation";
 import { glowCardStyle, glowToneByIndex } from "@/lib/ui/glow-card-core";
 import type { HomeTypeLaneKey } from "@/lib/cms/home-section-settings-core";
+import type { BannerDesign } from "@/lib/cms/banner-design-core";
 
 /**
  * Home "Shop by Category" + "Shop by Brand" sections.
@@ -41,6 +42,11 @@ export type PromoBannerContent = {
   brandTextAlign?: "left" | "center" | "right";
   brandImageFocus?: "top" | "bottom" | "left" | "right";
   brandButtons?: SectionBannerButton[];
+  /** R41 S2(b): owner's custom design (Banner Studio); null/disabled = classic look. */
+  categoryDesign?: BannerDesign | null;
+  categoryDesignOwner?: string;
+  brandDesign?: BannerDesign | null;
+  brandDesignOwner?: string;
 };
 
 export function PromoGrid({
@@ -86,6 +92,8 @@ export function PromoGrid({
             textAlign={content?.categoryTextAlign}
             imageFocus={content?.categoryImageFocus}
             buttons={content?.categoryButtons}
+            design={content?.categoryDesign}
+            designOwner={content?.categoryDesignOwner}
           />
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-6">

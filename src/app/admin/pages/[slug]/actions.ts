@@ -32,6 +32,7 @@ import {
   type SectionImageFocus,
   type SectionTextAlign,
 } from "@/lib/cms/page-sections-types";
+import { normalizeDesign, writeDesign } from "@/lib/cms/banner-design-core";
 
 function routeFor(slug: string): string {
   return `/admin/pages/${slug}`;
@@ -91,7 +92,14 @@ function parseSettings(
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return undefined;
   }
-  return parsed as Record<string, unknown>;
+  const obj = parsed as Record<string, unknown>;
+  // R41 S2: never trust the client's Banner Studio JSON — re-normalize it
+  // (clamps, enums, caps, unsafe links dropped) or drop it when invalid.
+  if ("design" in obj) {
+    const design = normalizeDesign(obj.design);
+    return writeDesign(obj, design);
+  }
+  return obj;
 }
 
 export async function seedSectionsAction(formData: FormData): Promise<void> {
