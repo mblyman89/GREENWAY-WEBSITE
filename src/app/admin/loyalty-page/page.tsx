@@ -21,6 +21,8 @@ import {
 } from "@/lib/loyalty/loyalty-content-core";
 import { LOYALTY_HERO_PRESENTATION_BLOCK } from "@/lib/loyalty/loyalty-hero-core";
 import { getConfig, listTiers } from "@/lib/loyalty/loyalty-store";
+import { consentColumnsApplied } from "@/lib/loyalty/signups-store";
+import { LOYALTY_CONSENT_BLOCK } from "@/lib/loyalty/loyalty-consent-core";
 import { loyaltyTermsSummary, tierDisplayRows } from "@/lib/loyalty/program-terms-core";
 import {
   LoyaltyHeroEditor,
@@ -46,9 +48,12 @@ import {
  * draft → publish → revision/restore machinery, so the public page stays
  * byte-identical until a staff member edits and Publishes.
  *
- * COMPLIANCE: the marketing-consent disclosure is legal wording (not editable
- * here) and every program NUMBER stays LIVE from the register's loyalty
- * settings (shown read-only for reference, edited in CRM → Loyalty Program).
+ * COMPLIANCE: R41 S5 (owner directive R41 Q9) — the marketing-consent
+ * disclosure IS editable here, with a wording checklist; an empty paragraph
+ * can't be published, and each signup records the published wording
+ * (migration 0264). Every program NUMBER stays LIVE from the register's
+ * loyalty settings (shown read-only for reference, edited in CRM → Loyalty
+ * Program).
  *
  * NOTE: /admin/loyalty is a DIFFERENT tool (CRM → Loyalty Program) and
  * /admin/loyalty-signups is the signup inbox. This editor is /admin/loyalty-page
@@ -60,6 +65,7 @@ export const dynamic = "force-dynamic";
 const MULTILINE_KEYS = new Set<string>([
   "loyalty.form.birthday_help",
   "loyalty.form.success_title",
+  LOYALTY_CONSENT_BLOCK, // R41 S5 — always a big textarea (ConsentBlock)
 ]);
 
 /** Grouping of the copy blocks into friendly sections for the editor UI. */
@@ -75,7 +81,7 @@ const SECTION_GROUPS: { id: string; heading: string; description?: string; prefi
     id: "signup",
     heading: "Signup form",
     description:
-      "The consent paragraph and the field labels are fixed (legal / form). You can edit these friendly bits.",
+      "Edit the friendly bits and your marketing-consent paragraph. The form field labels stay fixed.",
     prefix: "loyalty.form.",
   },
   {
@@ -177,7 +183,11 @@ export default async function AdminLoyaltyPage({
   const heroMobileSpec = resolveImageSpec("loyalty.hero.image_mobile");
 
   // ---- Live program numbers snapshot (read-only reference) -----------------
-  const [cfg, tiers] = await Promise.all([getConfig(), listTiers()]);
+  const [cfg, tiers, consentRecording] = await Promise.all([
+    getConfig(),
+    listTiers(),
+    consentColumnsApplied(),
+  ]);
   const summary = loyaltyTermsSummary(cfg);
   const liveTerms: LoyaltyLiveTermsVM = {
     lines: [
@@ -198,7 +208,7 @@ export default async function AdminLoyaltyPage({
     <div>
       <AdminPageHeader
         title="Loyalty page"
-        subtitle="Edit the friendly wording on the public Loyalty page — the signup button, the birthday note, the thank-you message, and the Program terms headings."
+        subtitle="Edit the wording on the public Loyalty page — the signup button, the birthday note, the thank-you message, the marketing-consent paragraph, and the Program terms headings."
         breadcrumbs={<Breadcrumbs items={[{ label: "Loyalty page" }]} />}
         help={
           <HelpPanel
@@ -211,9 +221,11 @@ export default async function AdminLoyaltyPage({
             ]}
           >
             <p className="mb-2">
-              <strong>The consent paragraph and the program numbers are locked.</strong> The consent
-              wording is legal, and the numbers stay accurate from the register, so this page can
-              never advertise terms that differ from what customers actually earn.
+              <strong>The consent paragraph is yours to edit.</strong> A checklist under it shows
+              which usual parts are covered (it&apos;s a helper, not legal advice), and an empty
+              paragraph can&apos;t be published. <strong>The program numbers are locked</strong>: they
+              stay accurate from the register, so this page can never advertise terms that differ
+              from what customers actually earn.
             </p>
             <p>
               The <strong>hero banner</strong> (the big image and its wording) is now edited right
@@ -226,6 +238,12 @@ export default async function AdminLoyaltyPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {sp.error === "consent_empty" ? (
+          <div className="rounded-[var(--admin-radius-sm)] border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800">
+            The consent paragraph is empty, so it wasn&apos;t published. Type the wording, Save
+            draft, then Publish.
+          </div>
+        ) : null}
         {sp.error === "restore" ? (
           <div className="rounded-[var(--admin-radius-sm)] border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800">
             Couldn&apos;t restore that version. Please try again.
@@ -277,6 +295,7 @@ export default async function AdminLoyaltyPage({
           saveDraftAction={saveLoyaltyDraftAction}
           publishAction={publishLoyaltyAction}
           restoreAction={restoreLoyaltyRevisionAction}
+          consentRecording={consentRecording}
         />
       </div>
     </div>
