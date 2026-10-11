@@ -1132,3 +1132,719 @@ a small badge "Turn on Custom design in the editor to move text here" with
 the editor link (owner request Q16 is satisfied for every designed banner, and
 the path to enable it is one click away).
 
+---
+
+## PART 6 — SLICE PLAN (binding order)
+
+| Slice | Name | Answers | PR branch |
+| --- | --- | --- | --- |
+| S0 | This bible | Q29, Q30 | `r41-editor-bible` |
+| S1 | Pure cores: banner design + link targets | Q5, Q7, Q8, Q13, Q14, Q18, Q19, Q22–Q26 (logic) | `r41-s1-design-cores` |
+| S2 | Designed banner renderer + Home sections fix + Section editor "Custom design" studio + link picker | Q4–Q8, Q12–Q14, Q17–Q19, Q22–Q26 | `r41-s2-banner-studio` |
+| S3 | Home Type Cards: rename / add / delete / reorder / relink | Q1–Q3 | `r41-s3-type-cards` |
+| S4 | Specials: hero buttons + hero & Today's Deal custom design | Q10–Q12 | `r41-s4-specials` |
+| S5 | Loyalty consent wording editable + TCPA warnings + consent version | Q9 | `r41-s5-loyalty-consent` |
+| S6 | Design on the remaining banners (vendors, extras on specials/menu, BannerData) | Q12 | `r41-s6-all-banners` |
+| S7 | Hub preview "Move mode" (drag text/buttons in the one preview window) | Q6, Q15, Q16 | `r41-s7-hub-move` |
+| S8 | AI focal point + text placement suggestions (drafts only) | Q21 | `r41-s8-ai-assist` |
+| S9 | Final owner test report + bible status | Q28 | (in S8 PR or own) |
+
+Slices may be grouped into fewer PRs if the sandbox is slow, but each slice
+keeps its own commits and its own bible status line.
+
+---
+
+### SLICE S1 — Pure cores (banner design + link targets)
+
+**Goal.** Ship the two pure modules every other slice depends on, with
+embedded self-tests registered in the runner. No UI, no behavior change.
+
+**Files to create.**
+- `src/lib/cms/banner-design-core.ts`
+- `src/lib/cms/link-target-core.ts`
+
+**Files to edit.**
+- `scripts/compliance/run-pure-selftests.ts` — import both
+  `__runBannerDesignCoreTests`, `__runLinkTargetCoreTests`; register with
+  `assertRan("banner-design-core", …, N)` and `assertRan("link-target-core",
+  …, M)` right after the R40 lines (`assertRan("ach-guide-core", …)` near the
+  end of `main()`), comment `// R41 S1: …`. Set N/M to the exact passed count
+  produced by the first green run (floor = actual count, the runner's
+  convention).
+
+**banner-design-core.ts — exports (contract).**
+- Constants: `DESIGN_VERSION = 1`, `MAX_TEXT_BOXES = 8`,
+  `MAX_DESIGN_BUTTONS = 4`, `DESKTOP_REF_PX = 1408`, `MOBILE_REF_PX = 390`,
+  `MOBILE_BREAKPOINT_PX = 768`, `DESIGN_ROLES` (with label, purpose, dos,
+  donts, html, default sizes — PART 3.4 table verbatim in data),
+  `DESIGN_ALIGNS`, `DESIGN_TRANSFORMS`, `DESIGN_SHADOWS`, `DESIGN_BACKDROPS`,
+  `DESIGN_WRAPS`, `BUTTON_SIZES`, `BUTTON_SHAPES`, `BUTTON_STYLES`,
+  `OVERLAY_KINDS`, `BRAND_SWATCHES` (named hex colors: white #ffffff,
+  black #000000, greenway #7ed957, gold #ffd700, orange (read the real token
+  from `src/app/globals.css` — do NOT guess; grep `--orange`), zinc-300
+  #d4d4d8, charcoal (grep `--charcoal`)).
+- Types: everything in PART 5.2.
+- `defaultTextBox(role, overrides?)`, `defaultButton(overrides?)`,
+  `defaultDesign(preset)`.
+- `normalizeDesign(raw: unknown): BannerDesign | null` — returns null when raw
+  is not an object; clamps every number, validates every enum, drops boxes
+  past 8 and buttons past 4, drops buttons whose href fails `checkHref` with
+  level "block", de-duplicates ids, coerces colors to lowercase `#rrggbb`
+  (accepts `#rgb`; anything else → default for that field).
+- `readDesign(settings: unknown, key = "design")` → `BannerDesign | null`
+  (reads `settings.design`; null when absent/invalid/`enabled === false`
+  is still returned as an object so the editor can toggle back on —
+  renderers check `enabled`).
+- `writeDesign(settings, design | null)` → new settings object (never mutates;
+  preserves sibling keys like `lanes`, `cardCount`, `laneImages`,
+  `typeCards`).
+- `designFromLegacy(input)` (PART 5.5).
+- `resolveBoxText(box, legacy: { eyebrow, title, subtitle })` → string.
+- `interpPx(mobilePx, desktopPx)` → CSS clamp string (PART 5.3 R-2).
+- `frameStyle(design)`, `imageStyle(design)`, `overlayStyle(design,
+  headlineCenter)`, `boxStyle(box)`, `buttonStyle(button)` → plain
+  `Record<string, string>` style objects (React-compatible keys, CSS custom
+  properties as `"--gx"` etc.). Pure, deterministic, unit-testable strings.
+- `contrastRatio(hexA, hexB)`, `relativeLuminance(hex)`, `compositeOver(fg,
+  alpha, bg)`, `checkDesignContrast(design)` (PART 5.4).
+- `checkDesign(design, legacy?)` → `DesignWarning[]` with codes:
+  `MULTI_HEADLINE`, `LONG_HEADLINE`, `TOO_MANY_BUTTONS`, `LOW_CONTRAST`,
+  `OUT_OF_FRAME`, `EMPTY_BOX`, `LEGAL_TOO_SMALL` (WAC 314-55-155(7) 10% rule as
+  a warning), `OVERLAP` (two visible boxes' rectangles overlap > 30% of the
+  smaller — estimated using an approximate line count from text length ×
+  size; labeled "might overlap").
+- `applyMove(design, { target, id, x, y, device })` → new design (clamped;
+  device "mobile" writes mx/my; keeps the box inside the frame using its
+  width).
+- `parseMoveMessage(data: unknown)` → validated move or null (PART 5.7 M-2).
+- `snapPercent(v, guides = [0, 50, 100], threshold = 2)`.
+- `nudge(design, target, id, dx, dy, device)` (keyboard alternative).
+- `__runBannerDesignCoreTests(): { passed: number; failed: number }`.
+
+**Self-test list (minimum; each is one `ok()`):**
+1. defaultDesign("section") normalizes to itself (idempotent).
+2. normalizeDesign(null/123/"x"/[]) → null.
+3. Clamp x/y below 0 and above 100.
+4. Clamp w below 5.
+5. size clamps 8–160, sizeMobile 6–96.
+6. weight rounds to nearest 100 and clamps 100–900.
+7. Unknown role → "body"; unknown align → "left".
+8. Color "#ABC" → "#aabbcc"; "red" → field default.
+9. 9 boxes in → 8 out; 5 buttons in → 4 out.
+10. Duplicate ids → second renamed (`-2`).
+11. Button with `javascript:alert(1)` dropped; `/menu?categories=flower` kept.
+12. writeDesign preserves `lanes`, `cardCount`, `laneImages`.
+13. writeDesign does not mutate input.
+14. readDesign on `{}` → null; on `{design: valid}` → design.
+15. designFromLegacy left/center/right box x positions.
+16. designFromLegacy imageFocus mapping (5 values) + legacy opposite rule.
+17. designFromLegacy buttons map variants to colors.
+18. resolveBoxText with bind "title" returns legacy title; with null returns text.
+19. interpPx(10, 20) contains "clamp(10px" and "20px)".
+20. interpPx(20, 10) (mobile larger) still min/max ordered.
+21. relativeLuminance("#ffffff") = 1, ("#000000") = 0.
+22. contrastRatio white/black = 21 (±0.01).
+23. contrastRatio("#777777", "#ffffff") ≈ 4.48 (known WCAG example; ±0.02).
+24. Large-text threshold: 24px → 3:1; 18.67px bold → 3:1; 18px normal → 4.5.
+25. White text, overlay none → LOW_CONTRAST warning (worst case white bg).
+26. White text, overlay full 70% black → passes 4.5 (compute & assert).
+27. White text with box backdrop black 50% → ratio computed over white worst
+    case (REI example direction: 50% passes 3:1 for large text).
+28. MULTI_HEADLINE when two headline boxes visible; hidden one ignored.
+29. LONG_HEADLINE at 61 chars.
+30. TOO_MANY_BUTTONS at 3 enabled.
+31. LEGAL_TOO_SMALL when legal size < 10% of largest size.
+32. OUT_OF_FRAME when x + w > 100 (before clamp) — checkDesign on raw.
+33. applyMove desktop sets x/y; mobile sets mx/my; clamps so x + w ≤ 100.
+34. applyMove unknown id → design unchanged (same JSON).
+35. parseMoveMessage rejects wrong type, NaN, missing id, unknown device.
+36. snapPercent(49, …) → 50; (45) → 45.
+37. nudge with Shift step.
+38. boxStyle includes `white-space: pre-line` for wrap normal (key
+    `whiteSpace`), `textDecorationLine: "underline line-through"` when both.
+39. imageStyle uses `objectPosition: "30% 70%"` and transformOrigin same.
+40. overlayStyle gradient direction left contains "to right" (dark on left).
+41. frameStyle contains containerType "inline-size".
+42. Round-trip: JSON.stringify(normalizeDesign(JSON.parse(JSON.stringify(d))))
+    equals JSON.stringify(d) for a fully-populated design.
+
+**link-target-core.ts — exports (contract).**
+- `PUBLIC_PAGES: { path, label }[]` — from F-32 (verify dirs at S1 time with
+  `ls src/app`; include `/`, `/menu`, `/specials`, `/loyalty`, `/medical`,
+  `/vendor-delivery`, `/blog`, `/about`, `/faq`, `/locations`,
+  `/price-match`, `/privacy-policy`, `/terms-of-use`,
+  `/consumer-health-data`).
+- `MENU_SORTS` (F-29 six values + labels), `MENU_STRAINS` (six + labels),
+  `MENU_SPECIALS` (keys from `previewSpecialCollections`, verify at S1 time;
+  labels from the same object) — NOTE: `InteractiveMenuBrowser.tsx` is a
+  client component; do NOT import it into a pure core (it would drag React +
+  the whole menu into the self-test runner). Copy the key list into the core
+  and add a vitest source-text test (S1) that reads
+  `InteractiveMenuBrowser.tsx` and asserts every key in the core exists in
+  `previewSpecialCollections` and every sort value exists in
+  `SORT_OPTION_VALUES` (drift guard).
+- Categories: import `websiteCategoryDefinitions` from
+  `src/lib/pos/category-taxonomy.ts` IF that module is pure (verify its
+  imports at S1 time: at `eafcbffd` line 1 is `import type { GreenwayCategory }
+  from "@/lib/leafly/types";` — type-only, so it is safe). The runner uses
+  `tsx` with path aliases? VERIFY: other cores registered in the runner import
+  with `@/` aliases (e.g. `loyalty-hero-core` imports `@/lib/cms/fonts`) — if
+  the runner resolves `@/`, use it; else use relative imports.
+- `MenuFilters = { categories: string[]; strains: string[]; brands: string[];
+  vendors: string[]; weights: string[]; special: string | null; sort: string |
+  null; maxPrice: number | null; maxThc: number | null; maxCbd: number | null;
+  search: string }`.
+- `buildMenuHref(f)`, `parseMenuHref(href)`, `buildCategoryHref(cat)`,
+  `buildBlogHref(slug)`, `checkHref(href)`, `describeHref(href, ctx?: {
+  blogTitles?: Record<string,string>; categoryLabels?: Record<string,string> })`,
+  `linkKindOf(href)`.
+- `__runLinkTargetCoreTests()`.
+
+**Self-test list (minimum):**
+1. buildMenuHref({categories:[flower,preroll]}) === "/menu?categories=flower,preroll".
+2. Param order fixed (categories before strains before sort).
+3. Empty filters → "/menu".
+4. search with spaces/ampersand encoded; commas in a brand name encoded as
+   %2C (a brand containing a comma must not split).
+5. parseMenuHref round-trips 1–4.
+6. parseMenuHref ignores unknown params but reports them via checkHref warn.
+7. buildCategoryHref("flower") === "/menu/flower"; unknown category → warn in checkHref.
+8. buildBlogHref("my-post") === "/blog/my-post"; slug sanitized.
+9. checkHref blocks javascript:, JAVASCRIPT:, " javascript:", data:, vbscript:, "//evil.com".
+10. checkHref warns http://; ok https://.
+11. checkHref ok tel:+13605550123, mailto:a@b.co; blocks "tel:" empty.
+12. checkHref ok "#shop-by-category"; warns "#" alone.
+13. checkHref warns unknown internal path "/nope".
+14. describeHref menu summary contains category labels and sort label.
+15. describeHref blog uses provided title; falls back to slug.
+16. describeHref external shows hostname.
+17. linkKindOf for each kind.
+18. maxPrice non-number dropped; negative dropped.
+19. special key unknown → warn.
+20. strains unknown value → warn.
+
+**Vitest added in S1:** `tests/compliance/r41-design-cores.test.ts`
+- mirrors a handful of core assertions (so `npm run test:compliance` covers the
+  core even if the runner line is ever removed — repo convention, e.g. R40);
+- the drift guard for menu special keys / sort values (reads
+  `src/components/menu/InteractiveMenuBrowser.tsx` as text);
+- asserts the runner registers both suites (reads
+  `scripts/compliance/run-pure-selftests.ts` text for
+  `assertRan("banner-design-core"` and `assertRan("link-target-core"`).
+
+**Acceptance.** tsc 0, eslint 0, build ok, runner prints both suites with
+counts, vitest file green.
+
+**Owner test steps (S1).** Nothing visible. The owner can skip S1; it is
+verified by CI ("compliance" job shows `banner-design-core: N assertions` in
+the log).
+
+**Risks.** Over-large core → keep under ~1200 lines; split render-style
+helpers into `banner-design-style-core.ts` if needed (both pure).
+
+**Rollback.** Revert the S1 commits; nothing depends on them until S2.
+
+---
+
+### SLICE S2 — Designed banner renderer + Home fix + Banner Studio editor
+
+**Goal.** (a) Fix home alignment (F-01 root cause) immediately for the simple
+controls the owner already has; (b) add the "Custom design" studio to the
+section editor with drag-to-move, text boxes with roles, fonts, sizes, styles,
+colors, wrapping, Enter for new lines, image focal point/zoom/filters,
+overlays, buttons with position/size/shape/style/colors and the link picker;
+(c) render designed banners on the public site.
+
+**Part (a) — the quick fix (do FIRST, commit alone).**
+- `src/components/home/PromoGrid.tsx`: extend `PromoBannerContent` with
+  optional `categoryTextAlign`, `categoryImageFocus`, `categoryButtons`,
+  `categoryDesign`, `brandTextAlign`, `brandImageFocus`, `brandButtons`,
+  `brandDesign`, `extraSections` (BannerData-like list). Pass `textAlign`,
+  `imageFocus`, `buttons` to the category `SectionBanner`.
+- `src/components/home/HomeBrands.tsx`: same for the brand banner.
+- `src/app/page.tsx`: pass `category?.textAlign`, `category?.imageFocus`,
+  `category?.buttons`, and the brand equivalents.
+- Behavior change note: before this fix, home banners ignored the editor's
+  imageFocus (they used the legacy opposite-side rule). After the fix, the
+  editor's image focus is honored. The seed for home.category/home.brand has
+  `image_focus: "center"` (F-09: verify `page-sections-seed.ts:L58`, `:L74`)
+  — so the LIVE look of the home banner image may shift from "right" (legacy,
+  because textAlign left) to "center". To keep the live look byte-identical
+  until the owner touches it, pass `imageFocus` ONLY when the section's
+  stored `image_focus` differs from the seed default "center" OR when the
+  owner has saved the section since R41 (not knowable) → DECISION: pass
+  imageFocus only when it is not "center"; "center" keeps legacy behavior.
+  Document this in the S2 owner report: "Image focus 'Center' on home
+  banners keeps the classic look (image hugs the side opposite the text);
+  pick Top/Bottom/Left/Right to pin it, or use Custom design for exact
+  control." This is honest and avoids a surprise live change.
+- textAlign: the seed is "left" = legacy default, so passing it is
+  byte-identical for un-edited banners. Buttons: seed `[]` for home.category
+  (verify), so passing is byte-identical.
+
+**Part (b) — renderer.**
+- New `src/components/site/DesignedBanner.tsx` (server-compatible, no
+  "use client"): props `{ design: BannerDesign; imageSrc; imageAlt; legacy:
+  { eyebrow, title, subtitle }; headingLevel?: 1 | 2; priority?; editable?;
+  owner?: string }`. Renders frame/image/overlay/boxes/buttons with the pure
+  style helpers. Uses `next/image` with `fill` + style from `imageStyle`.
+- `SectionBanner.tsx`: add optional prop `design?: BannerDesign | null` and
+  `designOwner?: string`; at the top of the component: `if (design?.enabled)
+  return <DesignedBanner … />;` — everything else unchanged (keeps pinned
+  strings, F-04).
+- `src/app/globals.css`: add the container-query block (PART 5.3 R-3) under a
+  comment `/* R41 S2: designed banners */`.
+- `page.tsx` / PromoGrid / HomeBrands: pass `design={readDesign(section.settings)}`.
+- Home extras: in `page.tsx`, `const homeExtras = sections.filter((s) => s.kind
+  === "banner" && !["home.category","home.brand","home.settings"].includes(s.key))`
+  → render after `PromoGrid` via a small `HomeExtraBanners` list of
+  `SectionBanner` (nothing renders when empty → byte-identical). VERIFY kinds
+  in `page-sections-types.ts` first (`kind` values) and that `getSectionsForRender`
+  already filters disabled rows (it does, F-07 `:L176-L178`).
+
+**Part (c) — the editor ("Banner Studio").**
+- New client component `src/components/admin/banner-studio/BannerStudio.tsx`
+  with sub-components (keep each file < ~500 lines):
+  - `StudioCanvas.tsx` — renders a live `DesignedBanner`-equivalent preview at
+    the chosen device width (Desktop 1408→scaled to fit / Phone 390), with
+    pointer-event drag for boxes and buttons (setPointerCapture), snap guides
+    at 0/50/100 (visual lines while dragging), selection outline, arrow-key
+    nudge on the selected item (1%, Shift 5%), Delete key removes the selected
+    box (with confirm), Escape deselects. Device toggle: editing on "Phone"
+    writes mobile overrides (mx/my/mw/sizeMobile/focus mobile) and shows a
+    "Phone layout (overrides)" badge with "Reset phone layout" button.
+  - `TextBoxPanel.tsx` — list of boxes with role icon + first words; "＋ Add
+    text box" menu listing roles with their PURPOSE line and dos/don'ts
+    (PART 3.4) — this is "create new text boxes, but with purpose" (Q22).
+    Selected box controls: textarea (Enter = new line, Q8) or "Uses the
+    banner's Title/Eyebrow/Subtitle field" toggle for bound boxes; font
+    select (FONT_OPTIONS labels, preview in its own font); size slider +
+    number (desktop and phone); weight select; B / I / U / S toggle buttons
+    (Q14); case transform; alignment L/C/R/Justify (Q5); wrap width slider
+    (Q7) + wrap mode (Normal / Balanced / No wrap); color picker (native
+    `<input type="color">` + brand swatches + hex input) (Q18); opacity;
+    letter spacing; line height; shadow; outline; backdrop (none / box /
+    blur / pill) + color + opacity; X/Y numeric inputs (keyboard alternative
+    for drag, WCAG 2.5.7); hide / hide on phone; move up/down (z-order);
+    duplicate; delete.
+  - `ButtonPanel.tsx` — up to 4 buttons: label, link (LinkPicker), size,
+    shape, style, colors (bg/fg/border with swatches), font, uppercase, open
+    in new tab, X/Y numeric, show/hide, hide on phone, delete, "＋ Add
+    button" (Q23, Q24).
+  - `ImagePanel.tsx` — focal point picker (click on a thumbnail to set
+    focusX/Y; crosshair marker), phone focal override, zoom slider,
+    brightness, saturation, blur, flip, frame height desktop/phone, corner
+    radius (Q19). Overlay: kind (None / Full tint / Side fade / Floor fade /
+    Spotlight), color, strength, direction.
+  - `WarningsPanel.tsx` — live `checkDesign` results with plain-English fixes
+    and the WAC tip (PART 3.5) and NN/g tips (PART 3.2).
+  - `LinkPicker.tsx` — modal/popover with tabs: Menu filter (category chips,
+    strain chips, special select, sort select, max price, search box; live
+    preview of the resulting URL + plain-English description from
+    `describeHref`), Category page, Blog post / newsletter (searchable list of
+    published posts passed from the server; 📰 marks posts with a newsletter),
+    Website page (PUBLIC_PAGES), Phone/Email, Outside link (https only warn),
+    Section on this page (#anchor). Shows `checkHref` result (block disables
+    Save in the picker).
+  - Serialization: the studio writes its design JSON into the parent form's
+    `settings_json` merge (SectionCard already merges settings — F-11) via
+    `writeDesign`. No new server action needed for sections:
+    `saveSectionAction` already accepts `settings_json` (F-10 `parseSettings`).
+    SERVER-SIDE: in `saveSectionAction`, after `parseSettings`, run
+    `normalizeDesign` on `settings.design` if present (never trust the
+    client) and re-write it (or drop it if invalid).
+- `SectionCard.tsx` changes:
+  - Eyebrow / title / subtitle inputs → `<textarea rows={2}>` with
+    auto-grow, so Enter makes a new line (Q8). The public legacy renderer
+    gets `whitespace-pre-line` on eyebrow/title/subtitle so line breaks show
+    — BYTE-IDENTICAL for existing text without "\n" (pre-line collapses
+    spaces exactly like normal). CHECK pinned strings before editing the
+    classes (none of the pinned strings in F-04 include the eyebrow/title/
+    subtitle class lists — verify at S2 time).
+  - Button href input gets a "Pick a link…" button opening `LinkPicker`, and a
+    plain-English description line under it (Q25/Q26) — this helps even
+    without Custom design.
+  - New collapsible "🎨 Custom design (advanced)" section with a toggle
+    "Use custom design for this banner". When turned on the first time, the
+    design is created with `designFromLegacy` from the current fields so the
+    banner starts looking exactly like it does now; then the studio opens.
+    Turning it off keeps the design stored but `enabled: false` (the banner
+    returns to the classic look; turning on again restores the design).
+- Blog posts for the picker: `src/app/admin/pages/[slug]/page.tsx` loads
+  `getPublicPosts()` (F-31) once and passes `{ slug, title, hasNewsletter }[]`
+  down to SectionCard → LinkPicker. Wrap in try/catch → [] on error.
+
+**Acceptance (S2).**
+- tsc/eslint/build green; pinned tests green (F-35 list for home + specials
+  SectionBanner).
+- Home banner with textAlign center in editor → public home banner text
+  centered after publish (Q4 fixed).
+- Custom design on → banner renders from design; off → classic.
+- Enter in title textarea → saved with "\n" → public shows two lines.
+
+**Owner test steps (S2)** — see PART 11 §S2 (written in plain English).
+
+**Risks.**
+- `next/image` with `fill` inside an absolutely positioned frame needs the
+  parent `position: relative` + explicit height — provided by frameStyle.
+- Container query units (`cqw`) need a modern browser (Chrome 105+, Safari
+  16+, Firefox 110+). Fallback: the `clamp()` min value applies if `cqw` is
+  unsupported? NO — an unsupported unit invalidates the whole declaration.
+  Mitigation: emit a plain px declaration FIRST, then the clamp() declaration
+  (React inline styles cannot hold two values for one property) → instead put
+  the size into a CSS custom property and use a class rule in globals.css:
+  `.gw-dbox { font-size: var(--gfs-fallback); font-size: var(--gfs); }` — the
+  browser keeps the fallback when `--gfs` uses an unsupported unit? No: custom
+  properties are validated at computed-value time; an invalid value makes the
+  property "invalid at computed-value time" → falls back to `unset`, not to
+  the previous declaration. FINAL DECISION: container query units are
+  supported by all browsers the site targets (caniuse: container query
+  length units are Baseline since Feb 2023). Accept; document in risks.
+- SectionCard is large (512 lines); keep the studio in its own files and
+  mount it lazily (`next/dynamic` with `ssr: false` is fine in a client
+  component) to keep the admin bundle reasonable. Check
+  `client-bundle-cjs-guard.test.ts` rules before importing anything new into
+  SectionCard.
+
+---
+
+### SLICE S3 — Home Type Cards: rename, add, delete, reorder, relink
+
+**Goal.** The owner can edit card names, add cards, delete cards, reorder,
+choose where each card links (link picker incl. menu filters), keep/choose
+each card's image, and edit the small "Shop now →" line per card.
+
+**Data.** `home.category` `settings.typeCards`:
+```ts
+type TypeCard = {
+  id: string;          // stable; defaults use the lane key (flower, …)
+  label: string;       // ≤ 40 chars; "\n" allowed (2 lines)
+  href: string;        // checkHref must not block
+  image: string;       // "" = text-only tile (legacy)
+  cta: string;         // default "Shop now →"; ≤ 30 chars
+  enabled: boolean;
+};
+// settings.typeCards: TypeCard[] (≤ 12) ; absent = defaults
+```
+Pure core: extend `src/lib/cms/home-section-settings-core.ts` (it already has
+lane helpers and self-tests? VERIFY whether it has `__run…Tests`; if it does,
+add tests there; if not, create `src/lib/cms/type-cards-core.ts` with its own
+tests and register it).
+- `TYPE_CARDS_KEY = "typeCards"`, `MAX_TYPE_CARDS = 12`, `MIN_TYPE_CARDS = 0`.
+- `defaultTypeCards(laneImages)` — from `categoryLanes` (F-05) in order, ids
+  = lane keys, labels/hrefs identical, image from `laneImages[key]`, cta
+  "Shop now →", enabled true. NOTE: `categoryLanes` lives in
+  `src/lib/specials/daily-deal-presentation.ts` — verify that module is pure
+  enough to import into a core (it imports `GreenwayMenuItem` types and maybe
+  runtime helpers). If it imports anything with I/O, copy the six
+  definitions into the core and add a vitest drift guard comparing them.
+- `readTypeCards(settings)` — when `typeCards` is an array → normalized list
+  (may be empty = owner deleted all; the grid then hides); else defaults
+  (with `laneImages` carried in).
+- `normalizeTypeCards(raw)` — clamp lengths, drop blocked hrefs (keep card,
+  blank href → card renders as non-link? DECISION: a card must link; a
+  blocked/blank href falls back to "/menu"), de-dupe ids, cap 12.
+- `writeTypeCards(settings, cards)` — preserves sibling keys.
+- Self-tests: defaults equal categoryLanes; laneImages carried; empty array
+  respected; cap; id de-dupe; javascript: href replaced by /menu; label
+  trimming; "\n" kept; writeTypeCards preserves `lanes` + `laneImages`.
+
+**Render.** `PromoGrid.tsx` takes `typeCards?: TypeCard[]`; when provided it
+maps them instead of `categoryLanes` (same markup, label via
+`whitespace-pre-line`, cta text from card). `page.tsx` passes
+`readTypeCards(category?.settings)`. Grid columns: today `grid-cols-2
+md:grid-cols-3 lg:grid-cols-6`; with N ≠ 6 cards use `lg:grid-cols-${…}`?
+Tailwind v4 cannot see dynamic class names → use a fixed lookup map
+{1..6 → explicit class strings} and for N > 6 keep `lg:grid-cols-6` (wraps
+to a second row). For N = 6 the class string must be EXACTLY the current one
+(byte-identical).
+
+**Editor.** Replace `TypeCardImagesEditor.tsx` content (keep the file name and
+export to avoid churn) with a list editor: each card row = drag handle /
+up-down buttons, name textarea (Enter → 2 lines), "Shop now" line input, link
+(LinkPicker from S2), image (ContentImageField), show/hide toggle, delete
+(confirm). "＋ Add card" (disabled at 12) → new card `{ label: "New card",
+href: "/menu", … }`. "Reset to the original six" button (confirm). Hidden
+input `type_cards_json`.
+**Action.** `saveTypeCardImagesAction` (keep name, F-10) → read
+`type_cards_json` when present: normalize, `saveHomeSectionSettings(
+"home.category", { typeCards, laneImages })` (also mirror images back into
+`laneImages` for the six default ids so nothing that still reads laneImages
+breaks). Audit action `page_section.type_cards`. Fallback: if the form has no
+`type_cards_json` (old form), keep the existing lane-image loop.
+
+**Acceptance (S3).** Rename "Liquids" → "Drinks" and save → home tile shows
+"Drinks"; add a 7th card → appears; delete one → gone; reorder → order
+changes; relink a card to "Flower · Indica · price low→high" → tile link
+matches; untouched site = byte-identical.
+
+**Owner test steps** — PART 11 §S3.
+
+**Risks.** The Type Cards save publishes immediately (like images today) —
+say so in the editor ("Changes go live when you press Save").
+
+---
+
+### SLICE S4 — Specials: hero buttons + full design
+
+**Goal.** Owner can add / edit / remove / repoint the Specials hero buttons
+(Q11) and use Custom design on the Specials hero and on the Today's Deal
+banner (Q10, Q12).
+
+**Data (specials presentation JSON, F-16).** Add:
+- `heroButtons: SectionButton[]` (≤ 4; same shape as page_sections buttons)
+- `heroButtonsSet: boolean` (false until the owner saves buttons once; while
+  false the page keeps using the legacy `specials.hero` row buttons so the
+  live page is byte-identical)
+- `heroDesign: BannerDesign | null`
+- `todaysDealsDesign: BannerDesign | null`
+Normalize in `normalizeSpecialsPresentation` (`:L237-L330`) with
+`normalizeDesign` and a buttons normalizer that runs `checkHref` (block →
+drop). Add self-tests to the specials presentation core's existing test
+function (VERIFY its name: grep `__run` in that file) incl. "absent fields →
+defaults (heroButtonsSet false, designs null)".
+
+**Render.** `src/app/specials/page.tsx`: `buttons: presentation.heroButtonsSet
+? presentation.heroButtons : hero?.buttons` (F-14 `:L99`). Pass
+`heroDesign` and `todaysDealsDesign` through `presentation` (already passed
+whole). `SpecialsContent.tsx`: if `pres.heroDesign?.enabled`, render
+`<DesignedBanner headingLevel={1} legacy={{eyebrow,title,subtitle}} owner=
+"specials:hero" …/>` inside the same outer section wrapper instead of the
+legacy hero block (legacy block stays verbatim in the else-branch — pinned
+strings F-15). `SpecialsDailyDeals.tsx`: accept optional `design` and pass to
+`SectionBanner` (`design={design}`).
+
+**Editor.** `SpecialsPresentationEditor.tsx` hero tab: new "Buttons" card
+(add/edit/remove/reorder up to 4, label, LinkPicker, style, show) — when the
+owner first opens it and `heroButtonsSet` is false, pre-fill with the legacy
+row buttons (passed from `admin/specials/page.tsx` by reading the
+`specials.hero` row through the store — VERIFY a getter exists:
+`getSectionsForRender` is preview-dependent; better read directly with
+`listSections("specials")` from page-sections-store and pick
+`specials.hero`; buttons = draft ?? live). Saving sets `heroButtonsSet:
+true`. Plus "🎨 Custom design" toggle + BannerStudio for the hero (legacy
+text = the specials hero copy blocks) and for the Today's Deal banner
+(legacy text = eyebrow "Today's Deal", title/subtitle = today's deal
+presentation; bind boxes to those so the daily title still changes by day).
+Keep pinned strings (F-17: `type TabKey = "hero" | "cards" | "banner"`,
+`useState<TabKey>("hero")`, `setGlobal("heroBannerImage"`,
+`setGlobal("heroBannerTextAlign"`, etc.).
+
+**Acceptance (S4).** Remove the hero button → gone after publish; add two →
+both show; repoint to a filtered menu → link matches; design on → hero
+renders designed; Today's Deal design binds daily title.
+
+**Owner test steps** — PART 11 §S4.
+
+---
+
+### SLICE S5 — Loyalty consent wording editable
+
+**Goal.** "Loyalty signup page legal wording editing … it's mine to edit,
+please let me edit it." (Q9).
+
+**Step 0 (research gate).** Scrape the eCFR 64.1200 page; paste the verbatim
+(f)(9) definition into this section (5.0 below) before coding. If the page
+cannot be fetched, use the Cornell LII mirror
+(https://www.law.cornell.edu/cfr/text/47/64.1200) and note the source.
+
+**5.0 Verbatim (f)(9):** _(to be pasted at S5 time)_
+
+**Core.** `src/lib/loyalty/loyalty-consent-core.ts` (pure):
+- `LOYALTY_CONSENT_BLOCK = "loyalty.form.consent_text"`.
+- `DEFAULT_CONSENT_TEXT` = byte-identical to F-19 (move the string here; the
+  form imports it — keep `const consentText =` in the form as
+  `const consentText = DEFAULT_CONSENT_TEXT;`? The pinned test expects the
+  literal phrases `replying \"STOP\"` and "Consent is not a condition of
+  purchase" IN THE FORM FILE (F-19). DECISION: update that test on purpose to
+  read the core file for the phrases, with the R41 Q9 reason in a comment;
+  keep `const consentText =` in the form as the resolved value.)
+- `checkConsentText(text)` → `{ blocking: boolean; items: { code, ok, level:
+  "law" | "practice", label, explain, source }[] }` per PART 3.6 (W-ATDS,
+  W-NOT-CONDITION, W-SELLER = law-derived; W-STOP, W-RATES = practice;
+  W-AGE = business; W-EMPTY = blocking). Matching is case-insensitive on
+  normalized whitespace with synonym sets (e.g. ATDS: "automatic telephone
+  dialing system", "autodialer", "automated technology", "artificial or
+  prerecorded voice"; not-condition: "not a condition of purchase", "not
+  required to … as a condition", "not a condition of buying").
+- `consentFingerprint(text)` → sync SHA-256 hex? Pure + sync SHA-256 requires
+  an implementation; the repo has `src/lib/...keyed-hash` (R39) — VERIFY
+  whether a pure SHA-256 exists (grep "sha256" in src/lib). If only
+  node:crypto exists, compute the hash in the SERVER route (not the core) and
+  keep the core free of crypto.
+- Self-tests: default text passes all law+practice checks; removing "STOP"
+  sentence flags W-STOP only; removing "Consent is not a condition of
+  purchase." flags W-NOT-CONDITION; empty → blocking; whitespace-only →
+  blocking; synonyms accepted.
+
+**Registry.** Add to `LOYALTY_CONTENT_BLOCKS` a 9th block `{ key:
+"loyalty.form.consent_text", section: "signup", label: "Marketing consent
+wording (legal)", help: "The paragraph next to the consent checkbox. You own
+this wording. Keep the required parts — the checker below tells you if one is
+missing.", fallback: DEFAULT_CONSENT_TEXT }`. Update self-test counts 8 → 9,
+signup 3 → 4 (F-19a) and the vitest mirror. Seed auto-derives (F-21) — check
+the seed's `field_type` for this long text (prefer "textarea" or whatever the
+editor uses for long text; VERIFY the editor component supports multi-line —
+LoyaltyPageEditor renders fields; check how it chooses input vs textarea).
+
+**Render.** `src/app/loyalty/page.tsx` already fetches LOYALTY_CONTENT_KEYS
+(F-21) → pass `consentText: resolveLoyaltyValue(LOYALTY_CONSENT_BLOCK,
+values)` into the form's content props. `LoyaltySignupForm.tsx` uses
+`content.consentText ?? DEFAULT_CONSENT_TEXT`, renders with
+`whitespace-pre-line`, and posts `consentText` (the exact text shown) with the
+form.
+
+**Record.** API route (`src/app/api/loyalty-signup/route.ts`) → `parseLoyaltySignup`
+accepts optional `consentText` (≤ 4000 chars) → `storeLoyaltySignup` computes
+SHA-256 (node:crypto) → `createLoyaltySignup` inserts `consent_text` +
+`consent_text_sha256`; on Postgres error code `42703` (undefined_column) or a
+message containing "consent_text", retry without the two fields. The
+notification email adds "Consent wording version: <first 12 hex>".
+SECURITY: the server must not trust the posted text blindly — compare it with
+the CURRENT published consent text (server-side resolve) and record a flag
+`consent_text_matches_published` (boolean) in the JSONL + DB? Keep it simple:
+store what the server resolved as published (authoritative) and, if the
+posted text differs, store the posted one too in JSONL only for audit. 
+DECISION: server records the PUBLISHED text it resolves at submit time (the
+customer saw the published text unless the page was cached during a publish;
+revalidate 60 s). Do not accept client text at all → simpler, no spoofing.
+
+**Migration 0264** `supabase/migrations/0264_loyalty_consent_text.sql`:
+```sql
+alter table public.loyalty_signups add column if not exists consent_text text;
+alter table public.loyalty_signups add column if not exists consent_text_sha256 text;
+comment on column public.loyalty_signups.consent_text is 'R41 S5: exact marketing-consent wording shown when the customer signed up';
+```
+Check `scripts/compliance/verify-migrations-execute.ts` expectations (CI runs
+every migration in order against a scratch DB) and any migration index file
+(grep for `0263_ach_operations` across the repo to find registries).
+
+**Editor.** `LoyaltyPageEditor.tsx` + `admin/loyalty-page/page.tsx`: remove
+"locked" wording for consent (F-22), keep the program-numbers lock. Show the
+consent field as a large textarea with the live checklist (`checkConsentText`)
+under it: green ✓ / amber ⚠ per item with "Why" text and source link; publish
+disabled only when blocking. Show "Customers who signed up before you change
+this keep the wording they agreed to (saved with their signup)" — TRUE only
+after migration 0264 is applied; until then say "Apply migration 0264 so each
+signup records the exact wording" (detect via a cheap select of the column
+with `.limit(0)` in the page loader; on error show the notice).
+`isLoyaltyContentBlock` already gates save/publish → the new key works.
+
+**Acceptance (S5).** Edit consent → preview shows new text → publish → live
+form shows it; delete "STOP" sentence → amber warning, still publishable;
+empty → cannot publish; signup after 0264 → row has consent_text.
+
+---
+
+### SLICE S6 — Design on every remaining banner
+
+**Scope (verify each at S6 time).**
+- `BannerData` (+ `toBannerData`): add `textAlign`, `design` (from
+  `settings.design`). Additive.
+- Vendors page: `VendorDirectory.tsx` grow / brands / extras → pass `design`,
+  `textAlign`, `imageFocus` (currently grow/brands pass only text+buttons —
+  F-?? `:L176-L189`, `:L259-L268`). Keep `titleClassName` for grow when no
+  design.
+- Specials extras (`SpecialsContent.tsx:L608-L621`) and Shop extras
+  (`ShopPage.tsx:L113-L124`; menu is retired from the builder so extras are
+  legacy-only — still pass design for completeness).
+- Loyalty hero + Shop carousel: they already have rich per-block styling
+  (F-24). Adding the full studio there is LARGE; S6 adds ONLY: Enter→new
+  line already supported (loyalty hero honors hard breaks per its header);
+  verify Shop carousel too; and records OQ-4 for the owner ("Do you want the
+  full Banner Studio on the Loyalty hero and Shop carousel too?"). If time
+  permits, add `design` to `ShopHeroPresentation` + `LoyaltyHeroPresentation`
+  the same way (optional field, enabled flag, legacy fallback).
+- About / FAQ / Locations / Price Match: builder sections are not rendered
+  (F-08a). These pages are static (no `revalidate`/draftMode). Adding
+  `getPageBanners` makes them dynamic-on-draft and may break
+  `usage-5-public-page-revalidate.test.ts` expectations. DECISION: do NOT add
+  in R41; instead the builder page for those slugs shows an info banner "Banners
+  you add here don't show on the public page yet" — wait, that is a visible
+  defect today. Record OQ-3 and ask the owner in the final report whether he
+  wants them rendered (with revalidate 60) in the next round.
+
+---
+
+### SLICE S7 — Hub preview "Move mode"
+
+**Goal.** In Website Sync → Preview (the one hub preview window, F-27), the
+owner turns on "✋ Move text" and drags any text box or button on any page's
+designed banner; on drop it saves to that banner's DRAFT.
+
+**Iframe side.** New client component `src/components/site/PreviewDesignDrag.tsx`
+mounted by `PreviewEditOverlay` (already rendered in preview mode on public
+pages — VERIFY where PreviewEditOverlay is mounted; grep). It listens for
+`gw-move-mode` from the parent (origin check), and when on: adds a CSS class
+to `<html>` that outlines `[data-gw-design-box]` / `[data-gw-design-button]`
+elements (dashed, 2px, accent), attaches pointer handlers to
+`[data-gw-design-frame]` descendants, moves the element visually during drag
+(CSS transform only, no React state on the server component), computes the
+new x/y % relative to its frame on drop, posts `gw-design-move` (PART 5.7
+M-2). Non-designed banners: overlay badge per `SectionBanner` root? Simpler:
+the parent shows the help text; skip per-banner badges (OQ-5).
+
+**Parent side.** `PreviewFrame.tsx` gains optional props `moveMode?: boolean`
+and `onDesignMove?: (m) => void`; posts `gw-move-mode` to
+`iframe.contentWindow` on load and when moveMode toggles. Validates incoming
+messages with `parseMoveMessage`. `WebsiteSyncPreviewPanel.tsx` gets the
+toggle, calls the server action, toasts, refreshes the frame (bump nonce),
+and supports `?path=` deep link (pre-select page from the URL search param —
+VERIFY how website-sync page passes searchParams to the panel; the panel is
+a client component, so use `useSearchParams()` within a Suspense boundary or
+pass from the server page).
+
+**Server.** New `src/app/admin/website-sync/design-actions.ts` ("use server"):
+`saveDesignMoveAction(input)` → `requirePermission("content.edit")`;
+`parseMoveMessage` again server-side; route by owner:
+- `section:<uuid>` → `getSection(id)`; design = readDesign(draft_settings ??
+  settings); `applyMove`; `saveSectionDraft(id, { settings:
+  writeDesign(draft_settings ?? settings, moved) })`; audit
+  `page_section.design_move`; revalidate the page path.
+- `specials:hero` / `specials:todays` → load the specials presentation DRAFT
+  (content block draft_value ?? published_value), normalize, applyMove on
+  `heroDesign` / `todaysDealsDesign`, `saveContentDraft`; audit.
+Returns `{ ok: true, message }` / `{ ok: false, message }` (no redirect).
+**Important:** the preview iframe shows DRAFTS (Draft Mode), so the moved
+position is visible after reload even before publish. The toast says
+"Saved as a draft — open <editor> and press Publish to make it live."
+
+**Acceptance (S7).** Toggle Move → outlines appear on designed banners; drag
+headline → reload shows new place; Phone device → move saves phone layout
+only; keyboard: the editor (S2) provides the non-drag alternative (state in
+the help text).
+
+---
+
+### SLICE S8 — AI focus + placement assistant (drafts only)
+
+**Goal.** "Maybe add ai to help me focus the image just right and to place the
+text boxes properly." (Q21)
+
+**Core.** `src/lib/cms/banner-ai-core.ts` (pure): `buildPlacementPrompt({
+roles, textLengths, device })` → system/user strings (asks for STRICT JSON:
+`{ "focusX": 0-100, "focusY": 0-100, "textZone": { "x","y","w","h" },
+"overlay": "none|full|gradient|floor|radial", "overlayDirection":
+"left|right|top|bottom", "textColor": "light|dark", "reason": "<=200 chars" }`),
+`parsePlacementReply(raw)` → validated suggestion or null (strip code fences,
+JSON.parse, clamp, enums), `applySuggestion(design, s)` → new design
+(focus + boxes laid out top-down inside textZone with role sizes + overlay +
+color light #ffffff / dark #111111). Self-tests on parser (fences, garbage,
+clamping, enums) and applySuggestion (boxes within zone, unchanged ids).
+
+**Action.** `suggestBannerPlacementAction({ imageSrc, design })` in a "use
+server" file under `src/app/admin/pages/[slug]/` (or a shared
+`src/app/admin/banner-ai-actions.ts`): `requirePermission("content.edit")`;
+if `!isAiConfigured` → `{ ok: false, message: "AI isn't set up yet" }`;
+absolute image URL (relative → `publicSiteOrigin(process.env)` + path,
+F-33/PART 3.9); `generateVision({ system: COMPLIANCE_SYSTEM + placement
+instructions, user, imageUrl, maxTokens: 300, temperature: 0.2, context: {
+feature: "banner.placement", … } })`; parse; return suggestion (NO save).
+
+**UI.** Banner Studio "✨ AI suggest" button → shows the suggestion as a
+ghost overlay on the canvas + reason text, with "Apply" (updates unsaved
+studio state only) / "Dismiss". Owner still presses Save draft / Publish.
+
+**Acceptance.** AI off → friendly message; AI on → suggestion appears; Apply
+moves focus/boxes in the editor only; nothing is saved until Save.
+
