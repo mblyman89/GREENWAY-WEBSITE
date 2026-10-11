@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
+import { CANONICAL_ORIGIN } from "@/lib/site/site-domain-core";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = "https://www.greenwaymarijuana.com";
+  const baseUrl = CANONICAL_ORIGIN; // R40: one source of truth
 
   return {
     rules: [

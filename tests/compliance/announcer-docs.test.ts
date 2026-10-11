@@ -832,7 +832,10 @@ describe("quickstart: it steers around the security gateway on the live domain",
   it("warns that the panel's own copy-paste command uses the wrong address", () => {
     // Pin the fallback that causes it, so that setting NEXT_PUBLIC_SITE_URL
     // (or changing the fallback) forces this warning to be revisited.
-    expect(panel).toContain('process.env.NEXT_PUBLIC_SITE_URL ?? "https://greenwaymarijuana.com"');
+    // R40: the fallback moved into src/lib/site/site-domain-core.ts (www is
+    // canonical). Still pinned, so a change forces this warning to be revisited.
+    expect(panel).toContain("return publicSiteOrigin(process.env);");
+    expect(read("src/lib/site/site-domain-core.ts")).toContain('export const PRIMARY_HOST = "www.greenwaymarijuana.com";');
     expect(quickstart).toContain("greenwaymarijuana.com");
     expect(quickstart).toMatch(/security gateway/i);
   });

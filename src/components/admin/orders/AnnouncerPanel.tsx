@@ -47,6 +47,7 @@ import {
   describeSoundCollision,
   resolveOriginSoundWithLibrary,
 } from "@/lib/leafly/bridge-core";
+import { publicSiteOrigin } from "@/lib/site/site-domain-core";
 
 const DOT: Record<AdminDeviceView["tone"], string> = {
   good: "bg-[var(--admin-accent)]",
@@ -89,7 +90,7 @@ const INPUT_CLS =
  * src/app/admin/plaid/actions.ts so the two never disagree.
  */
 function announcerSiteUrl(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://greenwaymarijuana.com").replace(/\/$/, "");
+  return publicSiteOrigin(process.env); // R40: one canonical host (www); was NEXT_PUBLIC_SITE_URL ?? the bare domain
 }
 
 /**
