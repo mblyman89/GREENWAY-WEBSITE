@@ -262,8 +262,9 @@ export default async function AdminLoyaltyPage({
           </div>
         )}
 
-        {/* SLICE 123 (LOY-1): the hero banner editor (image + overlay text). */}
-        <section className="space-y-3">
+        {/* SLICE 123 (LOY-1): the hero banner editor (image + overlay text).
+            R43: id="loyalty-hero" is the green ✎ Edit landing spot. */}
+        <section id="loyalty-hero" className="scroll-mt-4 space-y-3">
           <div>
             <h2 className="text-lg font-semibold text-[var(--admin-text)]">Hero banner</h2>
             <p className="text-sm text-[var(--admin-text-muted)]">

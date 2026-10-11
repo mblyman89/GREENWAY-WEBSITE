@@ -26,4 +26,5 @@ export { ConfirmDialog } from "./ConfirmDialog";
 export { StickyActionBar } from "./StickyActionBar";
 export { ScrollKeeper } from "./ScrollKeeper";
 export { PendingKeeper } from "./PendingKeeper";
+export { AdminBlockFocus } from "./AdminBlockFocus";
 export { BackLink } from "./BackLink";

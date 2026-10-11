@@ -196,6 +196,7 @@ export default async function LegalPoliciesPage({
                     {HERO_LABELS[key] ?? "Title"}
                   </span>
                   <input
+                    id={`f-${key}`}
                     type="text"
                     name="draft_value"
                     defaultValue={value}
@@ -219,7 +220,9 @@ export default async function LegalPoliciesPage({
           })}
         </div>
 
-        {/* Body document editor */}
+        {/* Body document editor. R43: id = f-<docKey> so a ✎ Edit on the
+            policy body (?block=privacy.body.doc …) scrolls here. */}
+        <div id={`f-${meta.docKey}`} className="scroll-mt-24">
         <PolicyDocEditor
           docKey={meta.docKey}
           label={meta.label}
@@ -232,6 +235,7 @@ export default async function LegalPoliciesPage({
           publishAction={publishLegalAction}
           restoreAction={restoreLegalRevisionAction}
         />
+        </div>
       </div>
     </div>
   );
