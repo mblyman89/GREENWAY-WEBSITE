@@ -24,6 +24,9 @@ export type SectionBannerData = {
   title: string;
   subtitle: string;
   buttons: SectionBannerButton[];
+  /** R41 S2: optional custom design (Banner Studio) + its owner id. */
+  design?: BannerDesign | null;
+  designOwner?: string;
 };
 
 /**

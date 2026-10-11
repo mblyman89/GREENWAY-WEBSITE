@@ -187,6 +187,9 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
             "We partner with licensed Washington producers and processors who share our commitment to quality, consistency, and craft."
           }
           buttons={content?.grow?.buttons}
+          design={content?.grow?.design}
+          designOwner={content?.grow?.designOwner}
+          headingLevel={1}
           priority
         />
 
@@ -266,6 +269,8 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
             "The producers and processors stocking Greenway shelves today."
           }
           buttons={content?.brands?.buttons}
+          design={content?.brands?.design}
+          designOwner={content?.brands?.designOwner}
         />
 
         {/* Vendor directory — product-card-style glow tiles, logo forward, tap
@@ -304,6 +309,8 @@ export function VendorDirectory({ content, vendors = [] }: { content?: VendorCon
             title={s.title}
             subtitle={s.subtitle}
             buttons={s.buttons}
+            design={s.design}
+            designOwner={s.designOwner}
           />
         ))}
       </div>
