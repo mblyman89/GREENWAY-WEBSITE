@@ -80,3 +80,50 @@ describe("R41 S6 all banners", () => {
     }
   });
 });
+
+import {
+  defaultLoyaltyHeroPresentation,
+  normalizeLoyaltyHeroPresentation,
+  parseLoyaltyHeroPresentation,
+  serializeLoyaltyHeroPresentation,
+} from "@/lib/loyalty/loyalty-hero-core";
+import { parseMoveMessage } from "@/lib/cms/banner-design-core";
+
+describe("R41 S6 Loyalty hero custom design", () => {
+  it("existing rows stay byte-identical (no design key unless set)", () => {
+    const def = defaultLoyaltyHeroPresentation();
+    const json = serializeLoyaltyHeroPresentation(def);
+    expect(json).not.toContain("design");
+    expect(serializeLoyaltyHeroPresentation(parseLoyaltyHeroPresentation(json)!)).toBe(json);
+  });
+
+  it("a design round-trips and junk is dropped", () => {
+    const p = normalizeLoyaltyHeroPresentation({ design: { enabled: true, boxes: [] } });
+    expect(p.design?.enabled).toBe(true);
+    expect(parseLoyaltyHeroPresentation(serializeLoyaltyHeroPresentation(p))!.design?.enabled).toBe(true);
+    expect("design" in normalizeLoyaltyHeroPresentation({ design: 42 })).toBe(false);
+  });
+
+  it("public banner renders DesignedBanner only when the design is on", () => {
+    const src = read("src/components/loyalty/LoyaltyHeroBanner.tsx");
+    expect(src).toContain("if (presentation.design?.enabled)");
+    expect(src).toContain('owner="loyalty:hero"');
+    // h1 lives on the signup card below; the hero must stay an h2.
+    expect(src).toContain("headingLevel={2}");
+  });
+
+  it("hub Move mode accepts the loyalty hero owner", () => {
+    const good = { type: "gw-design-move", owner: "loyalty:hero", target: "box", id: "headline", x: 1, y: 2, device: "desktop" };
+    expect(parseMoveMessage(good)).not.toBeNull();
+  });
+
+  it("editor offers the design card + blog posts, and every line takes Enter", () => {
+    const ed = read("src/components/admin/LoyaltyHeroEditor.tsx");
+    expect(ed).toContain("<DesignCard");
+    expect(ed).toContain('preset="hero"');
+    expect(ed).not.toContain("multiline={false}");
+    const page = read("src/app/admin/loyalty-page/page.tsx");
+    expect(page).toContain("posts={heroPosts}");
+    expect(page).toContain("listPublishedPostLinks");
+  });
+});

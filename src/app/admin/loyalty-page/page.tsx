@@ -29,6 +29,7 @@ import {
   type LoyaltyHeroRevisionVM,
 } from "@/components/admin/LoyaltyHeroEditor";
 import { listMedia } from "@/lib/media/store";
+import { listPublishedPostLinks } from "@/lib/cms/blog-store";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { resolveImageSpec } from "@/lib/cms/image-spec-core";
 import {
@@ -162,6 +163,8 @@ export default async function AdminLoyaltyPage({
   // ---- Hero banner (SLICE 123 / LOY-1): ONE richjson presentation block ----
   const heroBlock = await getContentBlock(LOYALTY_HERO_PRESENTATION_BLOCK);
   const heroRevisions = await listContentRevisions(LOYALTY_HERO_PRESENTATION_BLOCK, 15);
+  // R41 S6: blog posts / newsletters for the hero design's link picker.
+  const heroPosts = await listPublishedPostLinks().catch(() => []);
   const heroRevisionVMs: LoyaltyHeroRevisionVM[] = heroRevisions.map((r) => ({
     id: r.id,
     created_at: r.created_at,
@@ -283,6 +286,7 @@ export default async function AdminLoyaltyPage({
               mediaChoices={mediaChoices}
               desktopSpec={heroDesktopSpec}
               mobileSpec={heroMobileSpec}
+              posts={heroPosts}
             />
           )}
         </section>

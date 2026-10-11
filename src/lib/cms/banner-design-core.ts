@@ -1081,7 +1081,7 @@ export function nudge(design: BannerDesign, target: "box" | "button", id: string
 export function parseMoveMessage(data: unknown): (DesignMove & { owner: string }) | null {
   if (!isObj(data) || data.type !== "gw-design-move") return null;
   const owner = typeof data.owner === "string" ? data.owner : "";
-  if (!/^(section:[0-9a-f-]{36}|specials:hero|specials:todays)$/i.test(owner)) return null;
+  if (!/^(section:[0-9a-f-]{36}|specials:hero|specials:todays|loyalty:hero)$/i.test(owner)) return null;
   if (data.target !== "box" && data.target !== "button") return null;
   const id = typeof data.id === "string" ? data.id : "";
   if (!/^[a-z0-9-]{1,24}$/.test(id)) return null;
@@ -1252,6 +1252,7 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
   ok(parseMoveMessage({ ...good, device: "tablet" }) === null, "unknown device");
   ok(parseMoveMessage({ ...good, owner: "evil" }) === null, "unknown owner");
   ok(parseMoveMessage({ ...good, owner: "section:123e4567-e89b-12d3-a456-426614174000" }) !== null, "section owner");
+  ok(parseMoveMessage({ ...good, owner: "loyalty:hero" }) !== null, "loyalty hero owner (R41 S6)");
   // 36-37 snap / nudge
   ok(snapPercent(49) === 50 && snapPercent(45) === 45 && snapPercent(1.5) === 0, "snap");
   const n1 = nudge(mv, "box", "headline", 1, 0, "desktop");
