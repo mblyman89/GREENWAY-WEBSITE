@@ -48,7 +48,7 @@ export function WarningsPanel({
           <li>Put text over a calm part of the picture, or add a shade / box behind it.</li>
           <li>Check the Phone view — text that fits on a computer can cover faces on a phone.</li>
           <li>Never put important words only inside the picture file; screen readers and Google can&apos;t read them.</li>
-          <li>Washington rule reminder (not legal advice): required warnings must be easy to read and at least 10% of the largest text (WAC 314-55-155).</li>
+          <li>The required Washington warnings already show in your site footer on every page, so a banner doesn&apos;t need them. This follows your LCB enforcement officer&apos;s guidance for age-gated sites. If you ever add a small-print box anyway, keep it at least 10% of the largest text (WAC 314-55-155(7)).</li>
         </ul>
       </details>
     </div>

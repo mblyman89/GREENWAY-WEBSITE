@@ -1005,7 +1005,7 @@ export function checkDesign(rawOrDesign: unknown, legacy: { eyebrow?: string; ti
   const largest = Math.max(0, ...visible.map((b) => b.size));
   for (const b of visible.filter((x) => x.role === "legal")) {
     if (b.size < largest * 0.1)
-      w.push({ code: "LEGAL_TOO_SMALL", boxId: b.id, message: "Reminder (not legal advice): WA required warnings must be at least 10% of the largest text (WAC 314-55-155(7))." });
+      w.push({ code: "LEGAL_TOO_SMALL", boxId: b.id, message: "This small-print box is under 10% of your biggest text. You don't need warnings on banners (your age-gated site shows them in the footer on every page), but if you add one here, WAC 314-55-155(7) wants it at least 10% of the largest text." });
   }
   // Overlap (desktop, approximate)
   for (let i = 0; i < visible.length; i += 1) {

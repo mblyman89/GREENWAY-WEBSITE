@@ -497,11 +497,11 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     section: "compliance",
     label: "Footer — compliance warning",
     help_text:
-      "Required WA compliance language. Edit with care — keep all mandated wording.",
+      "Required WA warnings (WAC 314-55-155(7)). Your age-gated site shows them here on every page instead of inside each banner. You can change formatting, but all four statements must stay word-for-word or the save is refused.",
     field_type: "rich",
     seo_impact: false,
     defaultValue:
-      "This product has intoxicating effects and may be habit forming. Marijuana can impair concentration, coordination, and judgment. Do not operate a vehicle or machinery under the influence of this drug. For use only by adults 21 and older. Keep out of the reach of children.",
+      "This product has intoxicating effects and may be habit forming. Cannabis can impair concentration, coordination, and judgment. Do not operate a vehicle or machinery under the influence of this drug. There may be health risks associated with consumption of this product. For use only by adults 21 and older. Keep out of the reach of children.",
   },
   // ---- About page (bespoke hero — editable copy, distinct design kept) ------
   {
