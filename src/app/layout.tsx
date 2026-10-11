@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { draftMode } from "next/headers";
 import { Analytics } from "@/components/analytics/Analytics";
+import { NoTrackGate } from "@/components/analytics/NoTrackGate";
 // Slice C — Vercel Speed Insights. Reports real-visitor Core Web Vitals (LCP,
 // CLS, INP, TTFB) to the Vercel dashboard so menu performance can be measured
 // with field data instead of guessed at. Renders `null`, injects one small
@@ -134,8 +135,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         </PublishedRulesProvider>
         <ScrollToTopButton />
         <AgeGate />
-        <Analytics />
-        <SpeedInsights />
+        {/* R39 S7: no analytics on /vendor-ach (the URL holds a signing token). */}
+        <NoTrackGate>
+          <Analytics />
+          <SpeedInsights />
+        </NoTrackGate>
         {isPreview && <PreviewEditOverlay />}
       </body>
     </html>
