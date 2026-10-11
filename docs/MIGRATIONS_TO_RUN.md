@@ -2257,3 +2257,70 @@ in Vercel.
   **Rollback (only if needed):** `supabase/rollbacks/0262_vendor_ach_esign.rollback.sql`.
   It **refuses** once any invite has been signed, because signed records are
   kept (RCW 1.80.110). Otherwise it drops the table and the three functions.
+
+## R39 — 0263 — ACH operations (returns / change notices, account checks, holds, reviews)
+
+- [ ] `0263_ach_operations.sql` adds **no tables**. It adds columns, guards and
+  **eight functions** so the bank's answers and the account checks are
+  recorded safely:
+  - **Returns and change notices.** When Timberland reports a return (code
+    R..) or a change notice (code C..), you log it once against the employee
+    or vendor. **Payments to that payee stop immediately.** An employee's
+    direct deposit authorization goes **ON HOLD**. A vendor's vault banking
+    goes **ON HOLD** (it is released on the vault page, the same as before).
+    For a change notice, the corrected number is stored **encrypted**, and
+    only its last 4 digits are shown. A notice can never be edited or
+    deleted. Once you write what was done (10+ characters), it is final.
+  - **Releasing an employee hold** works like the vault (0259). You record
+    how the employee confirmed (phone or in person) with a note. If the
+    person who caused the hold releases it, the release is **SOLO** and
+    needs a written reason of 20+ characters.
+  - **Account checks** (owner answer Q3):
+    - **Prenote:** a $0 test entry. It passes only on or after its first
+      live day, 3 banking days after settlement.
+    - **Test credit:** 1 to 99 cents. It passes only when the employee reads
+      back the exact cents.
+    - **Voided-check callback:** passes with a written note of who confirmed
+      and how.
+    - Only one open check per account at a time.
+    - If the bank answers a check with a return or change notice, the check
+      fails.
+    - When every account is checked, the authorization becomes **ACTIVE** and
+      gets its annual review date. This is the step that lets employee
+      direct deposit pay.
+  - **Legal hold** on or off, with a reason (owner answer Q8).
+  - **Annual review done:** the next one is due in a year. Nacha's 2026 fraud
+    rule asks business originators to review their fraud controls each year.
+  - Every step writes the append-only event log **in the same transaction**,
+    so the log can never show something that did not happen.
+  - Only the server can call the functions, using the service role. They are
+    not security definer.
+
+  Apply it **AFTER 0258, 0259, 0260, 0261 and 0262**. Safe to re-run.
+
+  **Without it:** the returns, account-check, legal-hold and review panels on
+  the Banking page say "One-time setup needed". Nothing else changes.
+  Employee authorizations cannot become active yet.
+
+  **Run it, then:** run the **Check** below.
+
+  **Check:**
+
+  ```sql
+  select (select count(*) from pg_proc where proname in
+           ('ach_notice_log', 'ach_notice_resolve', 'ach_auth_release_hold', 'ach_verification_start',
+            'ach_verification_mark_sent', 'ach_verification_finish', 'ach_auth_set_legal_hold',
+            'ach_auth_review_done')) as fns,
+         (select count(*) from information_schema.columns where table_name = 'ach_return_notices'
+           and column_name in ('payee_type', 'employee_id', 'vendor_id', 'verification_id', 'corrected_last4', 'hold_applied')) as cols;
+  -- fns | cols
+  -- 8   | 6
+  ```
+
+  For the full proof, paste `scripts/recon/ach-ops-0263-pg-check.sql`.
+  It rolls itself back and ends with `ACH 0263 CHECK PASSED`.
+
+  **Rollback (only if needed):** `supabase/rollbacks/0263_ach_operations.rollback.sql`.
+  It **refuses** once a notice has been logged, a check has been sent or
+  finished, or a hold was recorded, because those are payment records.
+  Otherwise it drops the functions, guards and columns.
