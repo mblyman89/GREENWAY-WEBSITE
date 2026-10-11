@@ -37,6 +37,8 @@ import {
   UPLOAD_MAX_BYTES,
   formatBytes,
 } from "@/lib/media/upload-policy-core";
+import { checkFileSignature, isJpeg, SIGNATURE_READ_BYTES, SVG_MAX_CHECK_BYTES } from "@/lib/media/file-signature-core";
+import { readObjectHead } from "@/lib/media/read-object-head";
 
 const BUCKET = "media";
 /** Posters are a single captured JPEG frame; anything bigger is not a poster. */
@@ -123,6 +125,12 @@ export async function startDirectUploadAction(input: {
   };
 }
 
+/** The shopper-facing name for messages (their file name, else our key's tail). */
+function filenameForMessage(filename: unknown, key: string): string {
+  const f = typeof filename === "string" ? filename.trim().slice(0, 120) : "";
+  return f || key.split("/").pop() || "That file";
+}
+
 /** Remove a half-registered object so a refused upload leaves no orphan. */
 async function removeQuietly(keys: string[]): Promise<void> {
   try {
@@ -182,6 +190,25 @@ export async function finishDirectUploadAction(input: {
     return { ok: false, error: "The stored file type didn't match its name. It was removed — please upload again." };
   }
 
+  // R45-S2 (OWASP): the type above came from the browser. Now prove it from
+  // the BYTES. Read only the start of the file (SVG is text, so read all of it
+  // to look for script). A mismatch deletes the object so nothing unsafe stays
+  // in public storage.
+  if (storedMime === "image/svg+xml" && storedSize > SVG_MAX_CHECK_BYTES) {
+    await removeQuietly([key]);
+    return { ok: false, error: "That SVG is over 1 MB, which is far bigger than a normal logo. Export it as PNG or WebP instead. It was removed." };
+  }
+  const head = await readObjectHead(BUCKET, key, storedMime === "image/svg+xml" ? SVG_MAX_CHECK_BYTES : SIGNATURE_READ_BYTES);
+  if (!head) {
+    await removeQuietly([key]);
+    return { ok: false, error: "The upload couldn't be safety-checked (Storage didn't answer). It was removed. Please try again." };
+  }
+  const sig = checkFileSignature(storedMime, head, filenameForMessage(input.filename, key));
+  if (!sig.ok) {
+    await removeQuietly([key, ...(posterKeyFor(key) ? [posterKeyFor(key)!] : [])]);
+    return { ok: false, error: sig.error };
+  }
+
   // Poster (optional): only accept the sibling key we would have signed.
   const expectedPoster = posterKeyFor(key);
   if (input.posterKey && expectedPoster && input.posterKey === expectedPoster) {
@@ -190,6 +217,10 @@ export async function finishDirectUploadAction(input: {
     const pMime = String(p.data?.contentType ?? "").toLowerCase();
     if (p.error || !pMime.startsWith("image/jpeg") || !(pSize > 0 && pSize <= POSTER_MAX_BYTES)) {
       await removeQuietly([expectedPoster]); // the video renders without it
+    } else {
+      // R45-S2: the poster must really be a JPEG too.
+      const ph = await readObjectHead(BUCKET, expectedPoster, 16);
+      if (!ph || !isJpeg(ph)) await removeQuietly([expectedPoster]);
     }
   }
 

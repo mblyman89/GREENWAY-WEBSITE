@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { checkFileSignature } from "@/lib/media/file-signature-core";
 import { uploadMedia, updateMediaMeta, setMediaStatus, whereUsed, getMedia, publicUrlForKey, recordUsage } from "@/lib/media/store";
 import { generate, generateVision, isAiConfigured } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, checkCompliance } from "@/lib/ai/compliance";
@@ -86,6 +87,11 @@ export async function uploadMediaAction(formData: FormData): Promise<void> {
       redirect("/admin/media?error=" + encodeURIComponent(tooLargeMessage(file.name, file.size)));
     }
     const buffer = Buffer.from(await file.arrayBuffer());
+    // R45-S2 (OWASP): prove the type from the bytes, not the browser's label.
+    const sig = checkFileSignature(file.type, new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength), file.name);
+    if (!sig.ok) {
+      redirect("/admin/media?error=" + encodeURIComponent(sig.error));
+    }
     const asset = await uploadMedia({
       buffer,
       filename: file.name,
