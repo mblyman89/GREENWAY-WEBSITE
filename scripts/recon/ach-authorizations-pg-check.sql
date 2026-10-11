@@ -178,7 +178,13 @@ begin
     $q$insert into public.ach_verifications (account_id, method, micro_amount_cents) values (%L, 'prenote', 5)$q$, acct1),
     'ach_ver_micro_amount');
   insert into public.ach_verifications (account_id, method, micro_amount_cents) values (acct1, 'micro_entry', 99);
-  insert into public.ach_verifications (account_id, method) values (acct1, 'prenote');
+  -- 0263 allows one open (planned/sent) check per account, so the second
+  -- valid shape goes on another live account (works before and after 0263).
+  insert into public.ach_verifications (account_id, method)
+    select id, 'prenote' from public.ach_authorization_accounts
+     where authorization_id = auth_e and account_key_hmac = h3 and archived_at is null;
+  get diagnostics n = row_count;
+  assert n = 1, format('prenote probe must insert exactly 1 row, inserted %s', n);
 
   -- 4. return notices ---------------------------------------------------
   perform pg_temp.must_fail(format(
@@ -232,6 +238,8 @@ begin
   update public.ach_authorization_documents set intake_status = 'accepted' where id = doc;
 
   -- 7. payee contacts -----------------------------------------------------
+  -- "Today" is the Pacific day (the constraint's own clock). current_date is the
+  -- session day (UTC on CI and Supabase), a day ahead every evening after 5 pm PDT.
   perform pg_temp.must_fail(format(
     $q$insert into public.payee_contacts (payee_type, employee_id, contact_kind, value, on_file_since, source)
        values ('employee', %L, 'phone', '3604436988', '2026-01-01', 'existing_record')$q$, emp), 'payee_contact_phone_shape');
@@ -240,7 +248,7 @@ begin
        values ('employee', %L, 'email', 'not-an-email', '2026-01-01', 'existing_record')$q$, emp), 'payee_contact_email_shape');
   perform pg_temp.must_fail(format(
     $q$insert into public.payee_contacts (payee_type, employee_id, contact_kind, value, on_file_since, source)
-       values ('employee', %L, 'phone', '360-443-6988', current_date + 2, 'existing_record')$q$, emp), 'payee_contact_not_future');
+       values ('employee', %L, 'phone', '360-443-6988', (now() at time zone 'America/Los_Angeles')::date + 2, 'existing_record')$q$, emp), 'payee_contact_not_future');
   insert into public.payee_contacts (payee_type, employee_id, contact_kind, value, on_file_since, source)
     values ('employee', emp, 'phone', '360-443-6988', '2026-01-01', 'existing_record');
   perform pg_temp.must_fail(format(
@@ -250,7 +258,7 @@ begin
   perform pg_temp.must_fail(format($q$delete from public.payee_contacts where employee_id = %L$q$, emp), 'PAYEE_CONTACT_IMMUTABLE');
   update public.payee_contacts set retired_at = now() where employee_id = emp;
   insert into public.payee_contacts (payee_type, employee_id, contact_kind, value, on_file_since, source)
-    values ('employee', emp, 'phone', '360-443-6988', current_date, 'in_person');
+    values ('employee', emp, 'phone', '360-443-6988', (now() at time zone 'America/Los_Angeles')::date, 'in_person');
 
   -- 8. vendor flags --------------------------------------------------------
   perform pg_temp.must_fail(format($q$update public.vendors set ach_opted_out = true where id = %L$q$, ven), 'vendors_ach_opt_out_shape');
