@@ -26,22 +26,22 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, MENU_READ_CONCURRENCY } from "@/lib/supabase/chunked-in";
 import { cardLotKeys } from "@/lib/inventory/vendor-identity-core";
-import type { PickerManifestRow } from "@/lib/catalog/onboarding-list-core";
 import {
   attributeCards,
   type AttributionCard,
   type AttributionLot,
+  type AttributionManifestRow,
   type CardAttribution,
 } from "@/lib/enrichment/enrichment-manifest-core";
 
 export const ATTRIBUTION_LOT_COLUMNS = "id, pos_product_key, manifest_id, vendor_id, created_at, received_on";
 export const ATTRIBUTION_LOT_COLUMNS_PRE_0214 = "id, pos_product_key, manifest_id, vendor_id, created_at";
 export const ATTRIBUTION_MANIFEST_COLUMNS =
-  "id, manifest_number, vendor_id, vendor_label, transfer_date, received_at, accepted_at, status";
+  "id, manifest_number, vendor_id, vendor_label, transfer_date, received_at, accepted_at, status, payload_kind:raw_payload->>kind";
 
 export type EnrichmentAttribution = {
   attrs: Map<string, CardAttribution>;
-  manifests: PickerManifestRow[];
+  manifests: AttributionManifestRow[];
 };
 
 type DbError = { code?: unknown; message?: unknown } | null | undefined;
@@ -127,7 +127,7 @@ export async function readEnrichmentAttribution(
     const manifests =
       manifestIds.length === 0
         ? []
-        : await chunkedIn<string, PickerManifestRow>(
+        : await chunkedIn<string, AttributionManifestRow>(
             manifestIds,
             async (chunk, from, to) => {
               if (manifestError) return [];
@@ -141,7 +141,7 @@ export async function readEnrichmentAttribution(
                 manifestError = error;
                 return [];
               }
-              return (data as unknown as PickerManifestRow[] | null) ?? [];
+              return (data as unknown as AttributionManifestRow[] | null) ?? [];
             },
             { concurrency: MENU_READ_CONCURRENCY },
           );

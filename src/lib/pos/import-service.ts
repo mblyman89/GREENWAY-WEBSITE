@@ -58,6 +58,7 @@ import {
   posDiagnosticToFactReviewDiagnostic,
 } from "@/lib/pos/fact-review-core";
 import { evaluateCommitGate } from "@/lib/pos/import-commit-core";
+import { importManifestIds, readLotsOnManifests } from "@/lib/inventory/import-lineage-store";
 
 const POS_RAW_BUCKET = "pos-raw";
 
@@ -942,8 +943,7 @@ export async function backfillImportLots(
   // 3. Count the lots that already exist under this import's synthetic manifest
   //    BEFORE we act, so we can report a truthful "created" delta even though
   //    createImportLots is idempotent.
-  const manifestNumber = `POS-IMPORT-${importId.slice(0, 8)}`;
-  const before = await countLotsForManifestNumber(admin, manifestNumber);
+  const before = await countImportLots(admin, importId);
 
   // 4. Run the SAME routine the publish path runs. Idempotent: existing
   //    barcodes are skipped; it writes its own import_lots_created /
@@ -951,26 +951,22 @@ export async function backfillImportLots(
   await createImportLots(importId, actorId);
 
   // 5. Recount and report the delta.
-  const after = await countLotsForManifestNumber(admin, manifestNumber);
+  const after = await countImportLots(admin, importId);
   const created = Math.max(0, after - before);
   return { created, alreadyPresent: before, totalNow: after };
 }
 
-/** Count inventory_lots that hang off a synthetic POS-import manifest number. */
-async function countLotsForManifestNumber(
+/**
+ * Count inventory_lots this import owns. R50 S2b: by import id, across its
+ * POS-IMPORT manifest AND any manifest rebuilt from it, so the backfill's
+ * "created" delta stays truthful after lots are re-homed. A failed read
+ * THROWS (a wrong count would report lots as created or missing).
+ */
+async function countImportLots(
   admin: ReturnType<typeof createSupabaseAdminClient>,
-  manifestNumber: string,
+  importId: string,
 ): Promise<number> {
-  const { data: mrow } = await admin
-    .from("inbound_manifests")
-    .select("id")
-    .eq("manifest_number", manifestNumber)
-    .maybeSingle();
-  const manifestId = (mrow as { id: string } | null)?.id ?? null;
-  if (!manifestId) return 0;
-  const { count } = await admin
-    .from("inventory_lots")
-    .select("id", { count: "exact", head: true })
-    .eq("manifest_id", manifestId);
-  return count ?? 0;
+  const manifestIds = await importManifestIds(admin, importId);
+  if (manifestIds.length === 0) return 0;
+  return (await readLotsOnManifests<{ id: string }>(admin, manifestIds, "id")).length;
 }

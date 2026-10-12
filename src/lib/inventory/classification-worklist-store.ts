@@ -42,7 +42,12 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { pagedAllChecked } from "@/lib/supabase/chunked-in";
+import { chunkedIn, pagedAllChecked } from "@/lib/supabase/chunked-in";
+import {
+  LINEAGE_MANIFEST_SELECT,
+  isCultiveraMigrationRow,
+  type LineageManifestRow,
+} from "@/lib/inventory/import-lineage-core";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 import { getMenuClassificationFlags } from "@/lib/inventory/classification-status-store";
 import {
@@ -51,23 +56,19 @@ import {
   type WorklistLotInput,
 } from "@/lib/inventory/classification-worklist-core";
 
-/**
- * The manifest_number prefix the Cultivera migration stamps on its synthetic
- * manifest (import-service.ts:519: `POS-IMPORT-${importId.slice(0, 8)}`).
- *
- * This is the ONLY durable discriminator between the two doors. Both doors
- * write real `inventory_lots` rows with a `manifest_id`, and SLICE 58
- * deliberately gave the migration manifest the same lifecycle fingerprint as a
- * native delivery ("nothing downstream can tell an imported manifest from a
- * native one", import-service.ts:512-514) — so status, timestamps and events
- * cannot tell them apart. The manifest NUMBER can.
+/*
+ * Which manifests are the Cultivera migration (R50 S2b): decided by
+ * import-lineage-core.ts `isCultiveraMigrationRow`, i.e. raw_payload.kind
+ * (pos-import-migration OR cultivera-reconstructed), with the old
+ * `POS-IMPORT-` number prefix kept for rows written before the kind existed.
+ * The number alone stopped being enough once R50 re-homes lots onto rebuilt
+ * manifests that carry the REAL Cultivera transfer number.
  *
  * Used ONLY to power the optional source filter. It never affects whether a
- * product is in scope, and never affects its status. If this prefix ever
- * changed, the worklist would still list every product; only the "From
- * Cultivera import" tab would mis-sort.
+ * product is in scope, and never affects its status. If the read fails, the
+ * worklist still lists every product; only the "From Cultivera import" tab
+ * loses precision.
  */
-const IMPORT_MANIFEST_PREFIX = "POS-IMPORT-";
 
 type LotRow = {
   id: string;
@@ -167,20 +168,29 @@ export async function getClassificationWorklist(): Promise<ClassificationWorklis
   const manifestIds = [...new Set(lotRows.map((l) => l.manifest_id).filter((m): m is string => !!m))];
   const importManifestIds = new Set<string>();
   if (manifestIds.length > 0) {
-    // `.like()` on the prefix keeps the filter in the database rather than
-    // pulling every manifest back to compare in JS.
-    const { data, error } = await admin
-      .from("inbound_manifests")
-      .select("id")
-      .in("id", manifestIds)
-      .like("manifest_number", `${IMPORT_MANIFEST_PREFIX}%`);
-    if (error) {
+    // Chunked (an import can own hundreds of rebuilt manifests) and
+    // classified in code by the shared predicate.
+    let failed: string | null = null;
+    const rows = await chunkedIn<string, LineageManifestRow>(manifestIds, async (chunk, from, to) => {
+      const { data, error } = await admin
+        .from("inbound_manifests")
+        .select(LINEAGE_MANIFEST_SELECT)
+        .in("id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        failed = error.message;
+        return [];
+      }
+      return (data as unknown as LineageManifestRow[] | null) ?? [];
+    });
+    if (failed) {
       // Degrade to "unknown provenance" rather than failing the page. Every
       // product still appears; only the source TAB loses precision, and the
       // default view is source-agnostic anyway.
-      console.error("[classification-worklist] manifest read failed:", error.message);
+      console.error("[classification-worklist] manifest read failed:", failed);
     } else {
-      for (const row of (data as { id: string }[] | null) ?? []) importManifestIds.add(row.id);
+      for (const row of rows) if (isCultiveraMigrationRow(row)) importManifestIds.add(row.id);
     }
   }
 

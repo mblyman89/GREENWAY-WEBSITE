@@ -158,9 +158,35 @@ export type CardAttribution = {
   vendorIds: string[];
 };
 
-export function isImportManifest(m: Pick<PickerManifestRow, "manifest_number"> | null | undefined): boolean {
+/**
+ * A manifest row as the attribution read returns it: the picker columns plus
+ * `payload_kind` (raw_payload->>kind, R50 S2b). Optional so older callers and
+ * fixtures without it keep their exact behaviour.
+ */
+export type AttributionManifestRow = PickerManifestRow & { payload_kind?: string | null };
+
+/** raw_payload.kind of the import's synthetic manifest (import-service.ts). */
+export const POS_IMPORT_KIND = "pos-import-migration";
+/** raw_payload.kind of a manifest R50 rebuilt from the Cultivera export. */
+export const REBUILT_KIND = "cultivera-reconstructed";
+
+/** The import's synthetic manifest: the POS-IMPORT number, or (R50 S2b) its kind. */
+export function isImportManifest(
+  m: (Pick<PickerManifestRow, "manifest_number"> & { payload_kind?: string | null }) | null | undefined,
+): boolean {
   const n = typeof m?.manifest_number === "string" ? m.manifest_number.trim() : "";
-  return n.toUpperCase().startsWith(IMPORT_MANIFEST_PREFIX);
+  if (n.toUpperCase().startsWith(IMPORT_MANIFEST_PREFIX)) return true;
+  return typeof m?.payload_kind === "string" && m.payload_kind.trim() === POS_IMPORT_KIND;
+}
+
+/**
+ * R50 S2b: a manifest rebuilt from the Cultivera export (real transfer number,
+ * real vendor). It IS offered as a delivery (the owner's ask: "the sorting and
+ * filtering logic we built can use those manifests"), but its dates follow
+ * the Cultivera evidence rule, never the import instant (see lotReceivedAt).
+ */
+export function isRebuiltManifest(m: { payload_kind?: string | null } | null | undefined): boolean {
+  return typeof m?.payload_kind === "string" && m.payload_kind.trim() === REBUILT_KIND;
 }
 
 function validInstant(v: unknown): string | null {
@@ -179,8 +205,13 @@ function lowerId(v: unknown): string | null {
  * When one lot was received, per the grounding above. A calendar date is
  * pinned to noon UTC so it sorts on the right day in any US zone.
  */
-export function lotReceivedAt(lot: AttributionLot, manifest: PickerManifestRow | null | undefined): string | null {
+export function lotReceivedAt(lot: AttributionLot, manifest: AttributionManifestRow | null | undefined): string | null {
   if (!manifest || isImportManifest(manifest)) return validInstant(lot.received_on);
+  // R50 S2b: a rebuilt manifest's accepted_at and the lot's created_at can be
+  // the import instant, so neither is a receipt. The lot's own Cultivera
+  // Received date first, then the manifest's received_at (written by the S2c
+  // executor only from the real transfer's acceptance). Unknown stays null.
+  if (isRebuiltManifest(manifest)) return validInstant(lot.received_on) ?? validInstant(manifest.received_at);
   return (
     validInstant(manifest.received_at) ??
     validInstant(manifest.accepted_at) ??
@@ -202,9 +233,9 @@ function newer(a: string | null, b: string | null): boolean {
 export function attributeCards(
   cards: readonly AttributionCard[],
   lots: readonly AttributionLot[],
-  manifests: readonly PickerManifestRow[],
+  manifests: readonly AttributionManifestRow[],
 ): Map<string, CardAttribution> {
-  const manifestById = new Map<string, PickerManifestRow>();
+  const manifestById = new Map<string, AttributionManifestRow>();
   for (const m of manifests) {
     const id = lowerId(m.id);
     if (id) manifestById.set(id, m);
@@ -225,7 +256,7 @@ export function attributeCards(
     const addTo = (arr: string[], v: string | null) => {
       if (v && !arr.includes(v)) arr.push(v);
     };
-    let best: { m: PickerManifestRow; at: string | null } | null = null;
+    let best: { m: AttributionManifestRow; at: string | null } | null = null;
     let lastReceivedAt: string | null = null;
     let importReceived: string | null = null;
     for (const key of cardLotKeys(card)) {
@@ -317,8 +348,10 @@ export function applyManifestFilters<T extends { posKey: string }>(
 
 export type ManifestPickerOption = { value: string; label: string };
 
-function manifestTime(m: PickerManifestRow): number {
-  const t = validInstant(m.received_at) ?? validInstant(m.accepted_at) ?? validInstant(m.transfer_date);
+function manifestTime(m: AttributionManifestRow): number {
+  // R50 S2b: a rebuilt manifest's accepted_at may be the import instant; skip it.
+  const accepted = isRebuiltManifest(m) ? null : validInstant(m.accepted_at);
+  const t = validInstant(m.received_at) ?? accepted ?? validInstant(m.transfer_date);
   return t ? Date.parse(t) : Number.NEGATIVE_INFINITY;
 }
 
@@ -329,7 +362,7 @@ function manifestTime(m: PickerManifestRow): number {
  * focused delivery beyond the cap is still offered so the select can show it.
  */
 export function manifestPickerOptions(
-  manifests: readonly PickerManifestRow[],
+  manifests: readonly AttributionManifestRow[],
   attrs: ReadonlyMap<string, CardAttribution>,
   now: Date,
   focus: ManifestFilter = null,
@@ -474,6 +507,15 @@ export function __runEnrichmentManifestCoreTests(): { passed: number; failed: nu
   ok(lotReceivedAt(lot({ received_on: "2024-11-05" }), imp) === "2024-11-05T12:00:00.000Z", "import lot: received_on only");
   ok(lotReceivedAt(lot({ received_on: "junk", created_at: "2025-01-01T00:00:00Z" }), null) === null, "no manifest: bad date -> unknown");
   ok(isImportManifest({ manifest_number: "POS-IMPORT-1" }) && !isImportManifest({ manifest_number: "0421" }) && !isImportManifest(null), "import discriminator");
+  // R50 S2b: kind-aware discriminators + the rebuilt-manifest date rule
+  ok(isImportManifest({ manifest_number: "X-1", payload_kind: "pos-import-migration" }), "import by kind (number changed)");
+  ok(!isImportManifest({ manifest_number: "0001108", payload_kind: "cultivera-reconstructed" }), "rebuilt is not the import pseudo-manifest");
+  ok(isRebuiltManifest({ payload_kind: " cultivera-reconstructed " }) && !isRebuiltManifest({ payload_kind: "wcia" }) && !isRebuiltManifest(null), "rebuilt discriminator");
+  const rebuilt = { ...man({ id: M2, manifest_number: "0001108", accepted_at: "2026-11-01T13:00:00Z", received_at: "2024-06-03T19:00:00Z" }), payload_kind: "cultivera-reconstructed" };
+  ok(lotReceivedAt(lot({ received_on: "2024-06-02", created_at: "2026-11-01T13:00:00Z" }), rebuilt) === "2024-06-02T12:00:00.000Z", "rebuilt: lot's Cultivera date first");
+  ok(lotReceivedAt(lot({ created_at: "2026-11-01T13:00:00Z" }), rebuilt) === "2024-06-03T19:00:00.000Z", "rebuilt: then the transfer's received_at");
+  const rebuiltNoDate = { ...man({ id: M2, accepted_at: "2026-11-01T13:00:00Z" }), payload_kind: "cultivera-reconstructed" };
+  ok(lotReceivedAt(lot({ created_at: "2026-11-01T13:00:00Z" }), rebuiltNoDate) === null, "rebuilt: accepted_at/created_at (import instant) are NOT receipts");
 
   // attributeCards
   const m2 = man({ id: M2, manifest_number: "0500", vendor_id: V2, vendor_label: "Phat  Panda", received_at: "2025-03-19T17:00:00Z" });

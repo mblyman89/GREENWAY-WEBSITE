@@ -8,7 +8,7 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { importManifestIds, readLotsOnManifests } from "@/lib/inventory/import-lineage-store";
 import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
 import { getVersionItems } from "@/lib/pos/menu-version";
 import {
@@ -18,8 +18,6 @@ import {
   type LegacyRemovalPlan,
 } from "@/lib/pos/legacy-lot-removal-core";
 
-type Admin = ReturnType<typeof createSupabaseAdminClient>;
-
 type LotRow = {
   id: string;
   pos_product_key: string | null;
@@ -28,16 +26,6 @@ type LotRow = {
   product_name: string | null;
   lot_code: string | null;
 };
-
-async function importManifestId(admin: Admin, importId: string): Promise<string | null> {
-  // import-service.ts createImportLots: one synthetic manifest per import.
-  const { data } = await admin
-    .from("inbound_manifests")
-    .select("id")
-    .eq("manifest_number", `POS-IMPORT-${importId.slice(0, 8)}`)
-    .maybeSingle();
-  return (data as { id: string } | null)?.id ?? null;
-}
 
 export async function loadLegacyRemovalPlan(
   importId: string,
@@ -54,22 +42,16 @@ export async function loadLegacyRemovalPlan(
   if (!vid) return { plan: empty, flaggedCards: 0, manifestFound: false };
   const items = await getVersionItems(vid);
   const keys = new Set(items.filter((i) => i.hidden && i.hidden_reason === "no_product_master").map((i) => i.source_item_id));
-  const manifestId = await importManifestId(admin, importId);
-  if (!manifestId || keys.size === 0) return { plan: empty, flaggedCards: keys.size, manifestFound: Boolean(manifestId) };
-  let failed: string | null = null;
-  const lots = await chunkedIn<string, LotRow>([...keys], async (chunk, from, to) => {
-    const { data, error } = await admin
-      .from("inventory_lots")
-      .select("id, pos_product_key, on_hand_qty, status, product_name, lot_code")
-      .eq("manifest_id", manifestId)
-      .in("pos_product_key", chunk)
-      .order("id", { ascending: true })
-      .range(from, to);
-    if (error) { failed = error.message; return []; }
-    return (data ?? []) as LotRow[];
-  });
-  // A partial read would under-count what is removed; refuse instead.
-  if (failed) throw new Error(`Could not read the flagged lots: ${failed}`);
+  // R50 S2b: the import's lots may sit on its POS-IMPORT manifest or on the
+  // manifests rebuilt from it; both are found by import id. A failed read
+  // THROWS (a partial read would under-count what is removed).
+  const manifestIds = await importManifestIds(admin, importId);
+  if (manifestIds.length === 0 || keys.size === 0) {
+    return { plan: empty, flaggedCards: keys.size, manifestFound: manifestIds.length > 0 };
+  }
+  const lots = (
+    await readLotsOnManifests<LotRow>(admin, manifestIds, "id, pos_product_key, on_hand_qty, status, product_name, lot_code")
+  ).filter((l) => l.pos_product_key !== null && keys.has(l.pos_product_key));
   const input: LegacyLotInput[] = lots.map((l) => ({
     id: l.id,
     posProductKey: l.pos_product_key,

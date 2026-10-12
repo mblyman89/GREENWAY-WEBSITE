@@ -4,7 +4,8 @@
  *
  * Reads the lots one Cultivera import created WITHOUT a received date (they
  * hang off the import's synthetic manifest `POS-IMPORT-<id8>`, import-service.ts
- * createImportLots — same lookup as legacy-lot-removal-store.ts), and writes an
+ * createImportLots, or, after R50 S2c, off the manifests rebuilt from it; both
+ * are found by import id through import-lineage-store.ts), and writes an
  * owner-entered date with the same provenance columns the single-lot path uses
  * (store.ts updateLotReceivedDate): received_on_source "owner_entered",
  * received_on_set_by / _set_at. Every update is guarded by
@@ -15,7 +16,8 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { chunkedIn, pagedAllChecked } from "@/lib/supabase/chunked-in";
+import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { importManifestIds, readLotsOnManifests } from "@/lib/inventory/import-lineage-store";
 import type { UndatedLot } from "@/lib/inventory/received-date-bulk-core";
 
 type Admin = ReturnType<typeof createSupabaseAdminClient>;
@@ -30,16 +32,6 @@ type LotRow = {
   received_on: string | null;
 };
 
-async function importManifestId(admin: Admin, importId: string): Promise<string | null> {
-  const { data, error } = await admin
-    .from("inbound_manifests")
-    .select("id")
-    .eq("manifest_number", `POS-IMPORT-${importId.slice(0, 8)}`)
-    .maybeSingle();
-  if (error) throw new Error(`Could not find this import's lots: ${error.message}`);
-  return (data as { id: string } | null)?.id ?? null;
-}
-
 export type UndatedLotsLoad = {
   manifestFound: boolean;
   lots: UndatedLot[];
@@ -50,20 +42,19 @@ export type UndatedLotsLoad = {
 /** Every non-destroyed lot of this import with no received date, plus dated-sibling references. */
 export async function loadUndatedImportLots(importId: string): Promise<UndatedLotsLoad> {
   const admin = createSupabaseAdminClient();
-  const manifestId = await importManifestId(admin, importId);
-  if (!manifestId) return { manifestFound: false, lots: [], datedCount: 0 };
+  // R50 S2b: every manifest holding this import's lots (the POS-IMPORT one and
+  // any rebuilt from it), so dating keeps working after lots are re-homed.
+  const manifestIds = await importManifestIds(admin, importId);
+  if (manifestIds.length === 0) return { manifestFound: false, lots: [], datedCount: 0 };
 
-  const read = await pagedAllChecked<LotRow>(async (from, to) => {
-    const { data, error } = await admin
-      .from("inventory_lots")
-      .select("id, vendor_id, product_name, lot_code, pos_product_key, on_hand_qty, received_on")
-      .eq("manifest_id", manifestId)
-      .neq("status", "destroyed")
-      .order("id", { ascending: true })
-      .range(from, to);
-    return { ok: !error, rows: (data ?? []) as LotRow[] };
-  });
-  if (!read.verdict.complete) throw new Error(`Could not read every lot of this import. ${read.verdict.message}`);
+  const read = {
+    rows: await readLotsOnManifests<LotRow>(
+      admin,
+      manifestIds,
+      "id, vendor_id, product_name, lot_code, pos_product_key, on_hand_qty, received_on",
+      { excludeDestroyed: true },
+    ),
+  };
 
   const undated = read.rows.filter((r) => !r.received_on);
   const siblings = new Map<string, Set<string>>();
@@ -107,7 +98,7 @@ export async function loadUndatedImportLots(importId: string): Promise<UndatedLo
 
 /**
  * Write one owner-entered date to many lots. Only lots of THIS import that are
- * still undated are touched (manifest + `received_on is null` guard).
+ * still undated are touched (this import's manifests + `received_on is null` guard).
  * Returns the ids actually written.
  */
 export async function setImportLotsReceivedDate(
@@ -117,12 +108,19 @@ export async function setImportLotsReceivedDate(
   actorId: string | null,
 ): Promise<string[]> {
   const admin = createSupabaseAdminClient();
-  const manifestId = await importManifestId(admin, importId);
-  if (!manifestId) throw new Error("This import's lots were not found.");
+  const manifestIds = await importManifestIds(admin, importId);
+  if (manifestIds.length === 0) throw new Error("This import's lots were not found.");
+  // Scope guard: only lots that sit on THIS import's manifests. Read first and
+  // intersect (an import can own hundreds of rebuilt manifests after R50 S2c,
+  // too many to put in one URL), then write by lot id with the null guard.
+  const own = new Set(
+    (await readLotsOnManifests<{ id: string }>(admin, manifestIds, "id")).map((r) => r.id),
+  );
+  const scoped = [...new Set(lotIds)].filter((id) => own.has(id));
   const written: string[] = [];
   const at = new Date().toISOString();
-  for (let i = 0; i < lotIds.length; i += 200) {
-    const chunk = lotIds.slice(i, i + 200);
+  for (let i = 0; i < scoped.length; i += 200) {
+    const chunk = scoped.slice(i, i + 200);
     const { data, error } = await admin
       .from("inventory_lots")
       .update({
@@ -133,7 +131,6 @@ export async function setImportLotsReceivedDate(
         updated_by: actorId,
       })
       .in("id", chunk)
-      .eq("manifest_id", manifestId)
       .is("received_on", null)
       .select("id");
     if (error) {
