@@ -19,10 +19,11 @@ The scope source is `R44-EDITOR-STRATEGY-ROADMAP.md`, §6 and §7.
 | R45-S2 | Upload hardening + AVIF + blur previews + edit-conflict protection | done, awaiting owner test (migration 0266 to apply) |
 | R46-S1 | Scheduled publish/unpublish (migration 0267 + 5-min Vercel cron) | done, awaiting owner test (migration 0267 to apply) |
 | R46-S2 | Releases (group several edits, publish together) + SEO Editor wired to public pages and sitemap | done, awaiting owner test |
-| R47-S1 | Publish-time accessibility + WAC 314-55-155 lint | next |
-| R47-S2 | CTA click analytics (first-party + GA4 select_promotion) + Reports > Website tab | planned |
+| R47-S1 | Publish-time accessibility + WAC 314-55-155 lint | deferred by owner (R47) |
+| R47-S2 | CTA click analytics (first-party + GA4 select_promotion) + Reports > Website Clicks + SEO share-picture picker + Google store listing hours | done, awaiting owner test (migration 0268 to apply) |
+| R47-fixes | Shop/loyalty eyebrow visibility fix; home carousel advanced options; category cards advanced + video | done, awaiting owner test (migration 0268 to apply) |
 | R48-S1 | Playwright + axe in CI | planned |
-| R48-S2 | Approvals + holiday hours feeding the LocalBusiness schema | planned |
+| R48-S2 | Approvals (holiday hours pulled forward into R47 and done) | planned |
 
 ## R45-S1: carousel accessibility (done)
 
@@ -137,3 +138,32 @@ docs (Pro: per-minute precision, best-effort delivery, may double-fire).
     switched off.
   - The editor preview shows the real title, and now also covers
     /medical and the three legal pages.
+
+## R47 round: owner request (verbatim)
+
+> Thank you! Let's hold off on slice R47-S1. I want R47-S2 first. Please tell me more about automated page testing before we build that too. I only want google store listing, clicks and reports, the image picker for the seo editor. The other thing I noticed is the shop banner eye brow does not appear when checked visible. Also, I want to upgrade the home page carousel editor to include the fancy new advanced options like all the other banners have, all of the same features please. Also, please allow me to upload all file types and include advanced features for the category cards as well. Follow the standing rules and never guess, never assume. Commit work very frequently, the sandbox environment is very unstable, we must protect the work as best we can. I will do the testing, only do minimal testing to make sure everything checks out and doesn't break anything. Then let me know how to test the new features and I'll get back to you with what doesn't work. Please give me a quality summary report at the end covering everything done and what's left to build. Thank you!
+
+## R47 (done)
+
+- **Eyebrow fix.** `ensureBoundBoxes` (banner-design-core) adds a text box for any
+  line that is switched on but has no box yet. This fixes the Shop banner and
+  Loyalty hero eyebrow not showing when "Visible" was ticked.
+- **Home carousel advanced options.** `home-slide-advanced-core` and migration
+  0268 add the `advanced` and `draft_advanced` columns. The slide card gets an
+  "Advanced options" section with the same features as the other banners. Classic
+  slides render byte-identically.
+- **Category cards.** Each card gets an advanced block (phone picture, focus,
+  zoom, dim, fonts, colours, new tab, schedule). Cards accept mp4/webm video as
+  well as the image types the Media Library takes.
+- **SEO share picture.** Each page's SEO entry can pick its `og_media_id` from
+  the Media Library (PNG, JPEG, WebP, GIF), with a warning when the picture is
+  smaller than 600×315.
+- **Clicks + reports.** Migration 0268 adds `website_click_events`. Clicks go to
+  `/api/clicks` (first-party; skipped when GPC is on, in staff preview and on
+  admin pages) and also fire GA4 `select_promotion`. Reports > Website Clicks
+  covers 7/30/90 days.
+- **Google store listing.** Weekly and holiday hours are stored in
+  `site_settings.google_store_hours` and feed the LocalBusiness
+  `openingHoursSpecification` (holidays use validFrom/validThrough). The editor
+  is at /admin/content/store-listing. Hours are limited to WAC 314-55-147
+  (8 AM to midnight).
