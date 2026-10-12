@@ -578,6 +578,7 @@ import { __runPriceCorrectionCoreTests } from "../../src/lib/inventory/price-cor
 import { __runImportLotCoreTests, __runImportLotFactFillTests } from "../../src/lib/pos/import-lot-core";
 import { __runCultiveraManifestGroupCoreTests } from "../../src/lib/inventory/cultivera-manifest-group-core";
 import { __runCultiveraTransferMatchCoreTests } from "../../src/lib/inventory/cultivera-transfer-match-core";
+import { __runCultiveraFetchCoreTests } from "../../src/lib/pos/cultivera-fetch-core";
 import { __runLotPotencyCoreTests } from "../../src/lib/pos/lot-potency-core";
 import { __runCultiveraStrainFixCoreTests } from "../../src/lib/pos/cultivera-strain-fix-core";
 import { __runLegacyLotRemovalCoreTests } from "../../src/lib/pos/legacy-lot-removal-core";
@@ -2232,6 +2233,7 @@ __runLiquidVolumeTests();
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording
   assertRan("cultivera-manifest-group-core", __runCultiveraManifestGroupCoreTests(), 110); // R50 S1: Cultivera deliveries rebuilt (vendor + Pacific day + gap)
   assertRan("cultivera-transfer-match-core", __runCultiveraTransferMatchCoreTests(), 72); // R50 S1b: lots married to the REAL Cultivera transfers
+  assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 76); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
