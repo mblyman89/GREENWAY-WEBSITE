@@ -8,6 +8,8 @@ import { isAiConfigured } from "@/lib/cms/ai-seo";
 import { SeoEntryEditor } from "@/components/admin/SeoEntryEditor";
 import { saveSeoEntryAction } from "../actions";
 import { backHref } from "@/lib/admin/back-link-core";
+import { listMedia } from "@/lib/media/store";
+import type { SeoImageChoice } from "@/components/admin/SeoEntryEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +49,21 @@ export default async function SeoEditorPage({
     );
   }
 
-  const entries = await listSeoEntries();
+  const [entries, mediaAssets] = await Promise.all([
+    listSeoEntries(),
+    listMedia({ status: "published", limit: 300 }),
+  ]);
+  // R47: share pictures must be still images Facebook/Google/iMessage can
+  // show (PNG, JPEG, WebP, GIF). Videos, SVGs and PDFs are left out.
+  const imageChoices: SeoImageChoice[] = mediaAssets
+    .filter((m) => /^image\/(png|jpe?g|webp|gif)$/i.test(m.mime_type ?? "") && m.public_url)
+    .map((m) => ({
+      id: m.id,
+      url: m.public_url as string,
+      title: m.title ?? m.filename ?? "Image",
+      width: m.width ?? null,
+      height: m.height ?? null,
+    }));
   const byPath = new Map(entries.map((e) => [e.path ?? "", e]));
 
   return (
@@ -125,7 +141,9 @@ export default async function SeoEditorPage({
                 canonical: e?.canonical ?? "",
                 noindex: e?.noindex ?? false,
                 sitemap_include: e?.sitemap_include ?? true,
+                og_media_id: e?.og_media_id ?? null,
               }}
+              imageChoices={imageChoices}
             />
           );
         })}

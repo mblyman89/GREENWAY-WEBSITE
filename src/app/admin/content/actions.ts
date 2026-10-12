@@ -383,6 +383,14 @@ export async function saveSeoEntryAction(formData: FormData): Promise<void> {
     canonical,
     noindex: formData.get("noindex") === "on",
     sitemap_include: formData.get("sitemap_include") === "on",
+    // R47: share picture. Only touched when the editor posted the field; a
+    // value that is not a media id is treated as "no picture".
+    og_media_id: formData.has("og_media_id")
+      ? (() => {
+          const v = String(formData.get("og_media_id") ?? "").trim();
+          return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v : null;
+        })()
+      : undefined,
     updatedBy: session.userId,
   });
   await recordAudit({
