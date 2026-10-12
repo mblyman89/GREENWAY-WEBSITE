@@ -23,6 +23,7 @@ export const REPORT_TABS: ReportTab[] = [
   { href: "/admin/reports/net-income", label: "Net Income", icon: "📈" },
   { href: "/admin/reports/tax", label: "Tax", icon: "🧾" },
   { href: "/admin/reports/online-orders", label: "Online Orders", icon: "🛒" },
+  { href: "/admin/reports/website", label: "Website Clicks", icon: "🌐" },
   { href: "/admin/reports/customers", label: "Customers", icon: "👥" },
   { href: "/admin/reports/loyalty", label: "Loyalty & Discounts", icon: "🎁" },
   { href: "/admin/reports/special-discounts", label: "Special Discounts", icon: "🤝" },

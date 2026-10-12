@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
 import type { BannerDesign } from "@/lib/cms/banner-design-core";
 import { BannerMedia } from "@/components/site/BannerMedia";
+import { clickZoneAttrs } from "@/lib/analytics/click-events-core";
 
 /** A call-to-action button rendered inside a SectionBanner. */
 export type SectionBannerButton = {
@@ -112,9 +113,16 @@ export function SectionBanner({
   /** R41: 1 for a page's top hero, else 2 (designed banners only). */
   headingLevel?: 1 | 2;
 }) {
+  // R47-S2: lets the click tracker name this banner in Reports > Website.
+  const zone = clickZoneAttrs({
+    place: "section",
+    slot: designOwner || blockKeyPrefix || title || null,
+    label: title || eyebrow || null,
+  });
   if (design?.enabled) {
     return (
       <DesignedBanner
+        zone={zone}
         design={design}
         imageSrc={imageSrc}
         imageAlt={imageAlt}
@@ -176,6 +184,7 @@ export function SectionBanner({
     <div
       className="relative isolate overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30"
       {...(editable && designOwner ? { "data-gw-edit-owner": designOwner } : {})}
+      {...zone}
     >
       <div className="absolute inset-0" {...editAttrs("image")}>
         <BannerMedia

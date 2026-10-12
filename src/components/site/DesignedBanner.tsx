@@ -44,6 +44,8 @@ export type DesignedBannerProps = {
   owner?: string;
   /** Legacy editor overlay prefix (e.g. "home.category") for bound boxes. */
   blockKeyPrefix?: string;
+  /** R47-S2: click-analytics zone (clickZoneAttrs) for the banner's buttons. */
+  zone?: Record<string, string>;
 };
 
 const css = (s: Record<string, string>) => s as unknown as CSSProperties;
@@ -58,6 +60,7 @@ export function DesignedBanner({
   editable = false,
   owner,
   blockKeyPrefix,
+  zone,
 }: DesignedBannerProps) {
   // R42 Q4: optional separate phone picture (unset = one picture, as before).
   const phoneSrc = design.image.srcMobile && design.image.srcMobile !== imageSrc ? design.image.srcMobile : "";
@@ -82,7 +85,7 @@ export function DesignedBanner({
     b.bind === "title" ? "title" : b.bind === "eyebrow" ? "eyebrow" : b.bind === "subtitle" ? "subtitle" : null;
 
   return (
-    <div style={css(containerStyle())} className="gw-dcontainer">
+    <div style={css(containerStyle())} className="gw-dcontainer" {...(zone ?? {})}>
       <div
         style={css(frameStyle(design))}
         className="gw-dframe border border-white/10 bg-[var(--charcoal)] shadow-xl shadow-black/30"

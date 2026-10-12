@@ -42,6 +42,7 @@ import {
 import type { ShopRenderSlide } from "@/lib/cms/shop-carousel-types";
 import { BannerMedia } from "@/components/site/BannerMedia";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
+import { clickZoneAttrs } from "@/lib/analytics/click-events-core";
 import { CarouselRotationButton } from "@/components/site/CarouselRotationButton";
 import { useCarouselAutoplay } from "@/components/site/useCarouselAutoplay";
 import { dwellMs, slideFetchPriority, wordCount } from "@/lib/site/carousel-autoplay-core";
@@ -373,6 +374,12 @@ export function ShopBannerCarousel({ slides }: { slides: ShopRenderSlide[] }) {
                 data-gw-slide={isActive ? "shown" : "hidden"}
                 aria-roledescription="slide"
                 aria-label={`${index + 1} of ${count}`}
+                {...clickZoneAttrs({
+                  place: "shop_banner",
+                  slot: slide.key,
+                  label: slide.presentation.title.text || slide.presentation.eyebrow.text || null,
+                  position: index,
+                })}
               >
                 <SlideView
                   presentation={slide.presentation}
