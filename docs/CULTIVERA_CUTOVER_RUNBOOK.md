@@ -184,10 +184,11 @@ times come from rehearsal #2a: the harvest took 478 s and assembling took 3.5 s.
 - *Before Publish (06:00 to 06:25).* Nothing has changed. Stop. The Cultivera
   register and menu keep working, and the manual-upload fallback or a later
   fetch are both still possible.
-- *After Publish, before the first receiving approval.* Clean Slate does not
-  apply because this is a real import. Publish the previous real version from
-  **Admin → Menu Imports**, or re-run the fetch and publish again. Both are
-  allowed, because cutover is not done until a receiving update publishes.
+- *After Publish, before the first receiving approval.* Fetch again, stage
+  and publish the corrected harvest. A real re-import is still allowed here,
+  because `cutoverDone` stays false until a receiving update publishes after
+  the Cultivera menu (`cutover-guard-core.ts`). Clean Slate does not apply,
+  because it only removes test data.
 - *After the point of no return.* Forward-fix only, by re-approving from
   receiving. This is the "forward-fix in the target" posture enterprise
   cutovers adopt past a defined checkpoint.
