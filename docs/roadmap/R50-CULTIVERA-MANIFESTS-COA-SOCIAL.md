@@ -524,3 +524,18 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
   delivery (142 / 144), so S1b's first-receipt rule stays first for those (34 differ) and the link fills the 24
   vendor-name gaps. The live export also stores Received date as a date-only cell, which must be rewritten. Normalising before the join hides about 3,300 cards, so
   the raw exports are transformed and naming comes from the transform.
+* 2026-10-12 — **S9 core shipped (`src/lib/pos/cultivera-fetch-core.ts`, pure, 76 self-tests).** This is the
+  logic the button runs between the harvest and `runImport`. It rebuilds a 32-column inventory row from a
+  list-API lot, so the 23 lots the export drops come back. It rewrites the Received date cells to
+  `YYYY-MM-DD HH:MM:SS.ffffff` Pacific text so the time of day survives. It filters the product export to
+  inventory names, so no stockless cards appear. It checks completeness (missing barcodes, duplicate ids) and
+  prints a 7-check go/no-go.
+  Live oracle (rehearsal #1 data, before the sandbox reset): rebuilding all 3,835 exported rows from list +
+  products differed only where expected: units (32 lines over 2 columns), and 3 Category, 3 InventoryType,
+  1 Brand and 1 Price on names with more than one product match. The date rewrite matched openpyxl on
+  3,687 / 3,687 cells.
+  Testing the tests: 38 / 38 mutants killed. Three earlier survivors (ms floor, UnitsAvailable taken from
+  InStock, completeness ignoring a missing barcode) each got a pin.
+  `tests/compliance/r50-cultivera-fetch-pipeline.test.ts` drives the real `transformWorkbooks` on a 600-row
+  fixture shaped like the live export (20 dropped lots, serial date cells, 300 stockless products). The result
+  is GO with 600 lots, 0 errors and 0 hidden. Removing any one safeguard turns it no-go or breaks a pin.
