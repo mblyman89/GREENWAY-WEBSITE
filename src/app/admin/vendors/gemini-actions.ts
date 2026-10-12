@@ -77,7 +77,7 @@ export async function vendorGeminiResearchAction(formData: FormData): Promise<Ve
   if (!isAiConfigured) {
     return {
       ok: false,
-      error: "AI isn't set up yet. Set AI_MODEL_HEAVY to a Gemini model (for example gemini-2.5-flash) and AI_GEMINI_API_KEY in Vercel, then redeploy.",
+      error: "AI isn't set up yet. In Vercel set AI_API_KEY (or OPENAI_API_KEY); for Google Search grounding also set AI_MODEL_HEAVY to a gemini-… model and AI_GEMINI_API_KEY (it falls back to AI_API_KEY). Then redeploy.",
     };
   }
 
@@ -140,7 +140,7 @@ export async function vendorGeminiResearchAction(formData: FormData): Promise<Ve
   } catch (err) {
     if (err instanceof AiLookupError) return { ok: false, error: err.friendly };
     if (err instanceof AiNotConfiguredError) {
-      return { ok: false, error: "AI isn't set up yet. Set AI_MODEL_HEAVY to a Gemini model and AI_GEMINI_API_KEY in Vercel." };
+      return { ok: false, error: "AI isn't set up yet. In Vercel set AI_API_KEY, plus AI_MODEL_HEAVY=gemini-… and AI_GEMINI_API_KEY for Google Search grounding." };
     }
     if (err instanceof AiBudgetExceededError) {
       return { ok: false, error: `This month's AI budget is used up: ${err.message}` };

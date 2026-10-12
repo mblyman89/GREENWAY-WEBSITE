@@ -123,9 +123,10 @@ export function VendorGeminiResearchCard({ vendorId, vendorName, aiEnabled, gemi
 
       {!aiEnabled ? (
         <p className="mt-2 rounded-lg border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 px-3 py-2 text-[11px] text-[var(--admin-gold)]">
-          Set <code className="rounded bg-black/40 px-1">AI_MODEL_HEAVY</code> to a Gemini model (for example{" "}
-          <code className="rounded bg-black/40 px-1">gemini-2.5-flash</code>) and{" "}
-          <code className="rounded bg-black/40 px-1">AI_GEMINI_API_KEY</code> in Vercel, then redeploy.
+          In Vercel set <code className="rounded bg-black/40 px-1">AI_API_KEY</code>, then for Google Search grounding{" "}
+          <code className="rounded bg-black/40 px-1">AI_MODEL_HEAVY</code> to a{" "}
+          <code className="rounded bg-black/40 px-1">gemini-…</code> model and{" "}
+          <code className="rounded bg-black/40 px-1">AI_GEMINI_API_KEY</code> (falls back to AI_API_KEY). Redeploy after.
         </p>
       ) : (
         <>
