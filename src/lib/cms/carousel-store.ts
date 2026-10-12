@@ -28,6 +28,23 @@ import {
 import { CAROUSEL_SEEDS, CAROUSEL_FALLBACK_SLIDES } from "./carousel-seed";
 import { getBlurMap } from "@/lib/media/blur-server";
 import { blurFor } from "@/lib/media/blur-placeholder-core";
+import {
+  isClassicEquivalent,
+  isHomeSlideLiveAt,
+  normalizeHomeSlideAdvanced,
+  serializeHomeSlideAdvanced,
+} from "./home-slide-advanced-core";
+
+/**
+ * R47: true when a write failed only because migration 0268 (the advanced /
+ * draft_advanced columns) has not been applied yet. The caller then retries
+ * without those keys so the classic fields still save.
+ */
+function isMissingAdvancedColumn(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  const m = (error.message ?? "").toLowerCase();
+  return m.includes("advanced") && (m.includes("column") || m.includes("schema cache") || error.code === "PGRST204" || error.code === "42703");
+}
 
 const SELECT = "*";
 
@@ -82,6 +99,12 @@ function isDirty(row: CarouselSlideRow): boolean {
       return true;
   }
   if (row.draft_enabled !== row.enabled) return true;
+  // R47: advanced options (only when a draft copy exists).
+  if (row.draft_advanced !== undefined && row.draft_advanced !== null) {
+    const d = serializeHomeSlideAdvanced(normalizeHomeSlideAdvanced(row.draft_advanced));
+    const p = serializeHomeSlideAdvanced(normalizeHomeSlideAdvanced(row.advanced ?? null));
+    if (d !== p) return true;
+  }
   return false;
 }
 
@@ -133,6 +156,10 @@ function resolveForRender(row: CarouselSlideRow, preview: boolean): RenderSlide 
     title: pick(row.draft_title, row.title ?? "") || "",
     description: pick(row.draft_description, row.description ?? "") || "",
     ctas: pick(row.draft_ctas, row.ctas ?? []) ?? [],
+    // R47: draft-aware advanced options (null = classic slide).
+    advanced: normalizeHomeSlideAdvanced(
+      preview && row.draft_advanced != null ? row.draft_advanced : (row.advanced ?? null),
+    ),
   };
 }
 
@@ -173,18 +200,30 @@ export async function getCarouselForRender(): Promise<RenderSlide[]> {
       return row.status === "published" && row.enabled;
     });
 
+    const now = Date.now();
     const resolved = visible
       .map((row) => resolveForRender(row, preview))
+      // R47: the optional Start / End window (outside it the slide is hidden;
+      // staff preview shows it anyway so it can be checked before it starts).
+      .filter((s) => preview || isHomeSlideLiveAt(s.advanced, now))
       // A slide with no image AND no text is not worth rendering.
       .filter((s) => s.image || s.title || s.eyebrow || s.description);
 
     if (resolved.length === 0) return CAROUSEL_FALLBACK_SLIDES;
     const shown = resolved.slice(0, MAX_CAROUSEL_SLIDES);
     // R45-S2: attach blur previews (one query; empty map on any problem).
-    const blurs = await getBlurMap(shown.map((s) => s.image));
+    const blurs = await getBlurMap([
+      ...shown.map((s) => s.image),
+      ...shown.map((s) => s.advanced?.imageMobile ?? "").filter(Boolean),
+    ]);
     return shown.map((s) => {
       const imageBlur = blurFor(s.image, blurs);
-      return imageBlur ? { ...s, imageBlur } : s;
+      const imageMobileBlur = s.advanced?.imageMobile ? blurFor(s.advanced.imageMobile, blurs) : undefined;
+      return {
+        ...s,
+        ...(imageBlur ? { imageBlur } : {}),
+        ...(imageMobileBlur ? { imageMobileBlur } : {}),
+      };
     });
   } catch {
     return CAROUSEL_FALLBACK_SLIDES;
@@ -250,6 +289,8 @@ export type SlideDraftInput = {
   description?: string | null;
   ctas?: SlideCta[];
   draft_enabled?: boolean;
+  /** R47: serialized advanced JSON (null clears it = classic slide). */
+  advanced?: string | null;
 };
 
 /** Create a brand-new slide (draft-enabled, status=draft) at the end. */
@@ -319,11 +360,24 @@ export async function saveCarouselDraft(
   if (input.description !== undefined) patch.draft_description = input.description;
   if (input.ctas !== undefined) patch.draft_ctas = input.ctas;
   if (input.draft_enabled !== undefined) patch.draft_enabled = input.draft_enabled;
+  if (input.advanced !== undefined) {
+    patch.draft_advanced = input.advanced ? JSON.parse(input.advanced) : null;
+  }
 
-  const { error } = await admin
+  let { error } = await admin
     .from("home_carousel_slides")
     .update(patch)
     .eq("id", id);
+  if (error && "draft_advanced" in patch && isMissingAdvancedColumn(error)) {
+    // Migration 0268 not applied yet: save the classic fields anyway.
+    delete patch.draft_advanced;
+    ({ error } = await admin.from("home_carousel_slides").update(patch).eq("id", id));
+    if (!error && !isClassicEquivalent(normalizeHomeSlideAdvanced(input.advanced ?? null))) {
+      throw new Error(
+        "Saved the words and pictures, but the advanced options need database update 0268 (ask your developer / apply it in Supabase).",
+      );
+    }
+  }
   if (error) throw new Error(error.message);
 }
 
@@ -336,9 +390,7 @@ export async function publishCarouselSlide(
   const slide = await getCarouselSlide(id);
   if (!slide) throw new Error("That slide no longer exists.");
 
-  const { error } = await admin
-    .from("home_carousel_slides")
-    .update({
+  const update: Record<string, unknown> = {
       status: "published",
       image: slide.draft_image ?? slide.image,
       image_alt: slide.draft_image_alt ?? slide.image_alt,
@@ -351,7 +403,14 @@ export async function publishCarouselSlide(
       enabled: slide.draft_enabled,
       last_published_by: publisherId,
       published_at: new Date().toISOString(),
-    })
+  };
+  // R47: copy the advanced options only when the column exists (0268).
+  if (slide.draft_advanced !== undefined || slide.advanced !== undefined) {
+    update.advanced = slide.draft_advanced ?? slide.advanced ?? null;
+  }
+  const { error } = await admin
+    .from("home_carousel_slides")
+    .update(update)
     .eq("id", id);
   if (error) throw new Error(error.message);
 }
