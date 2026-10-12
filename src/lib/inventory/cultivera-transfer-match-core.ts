@@ -925,7 +925,7 @@ export function __runCultiveraTransferMatchCoreTests(): { passed: number; failed
   ok(t5.acceptedAt === "2026-07-02T17:00:00.5Z" && t5.transferDate === "2026-07-01T15:00:00Z", "adapter: stamps verbatim");
   ok(JSON.stringify(t5.lines) === JSON.stringify([["b1", 1, 1, false], ["b1", 2, 0, true], ["b2", 3, 4, false]]), "adapter: lines trimmed, blank dropped, sorted");
   const tiFlags = transferIndexFromDetails([{ Id: 1, IsManualCreated: 1, IsInternalTransfer: "x", Details: [{ Barcode: "f", IsSample: 1 }] }]).transfers[0];
-  ok(tiFlags.manual && tiFlags.internal && tiFlags.lines[0][3] === true, "adapter: flags truthy like Python bool()");
+  ok(tiFlags.manual === true && tiFlags.internal === true && tiFlags.lines[0][3] === true, "adapter: flags truthy like Python bool()");
   const tiBad = transferIndexFromDetails([{ Id: 1, Details: [{ Barcode: "q", AcceptedQuantity: "abc", Quantity: Infinity }] }]);
   ok(JSON.stringify(tiBad.transfers[0].lines[0]) === JSON.stringify(["q", 0, 0, false]), "adapter: junk quantities → 0 (not a receipt)");
   ok(tiBad.transfers[0].vendor === "" && tiBad.transfers[0].acceptedAt === null, "adapter: missing fields blank/null");
