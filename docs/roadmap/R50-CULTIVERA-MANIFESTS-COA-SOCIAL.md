@@ -136,6 +136,17 @@ one day, correctly split. The result is stable from 60 min upward, so 60 is the 
 `classification-worklist-store.ts` (source filter), `enrichment-manifest-core.ts` (the "Cultivera import"
 pseudo-manifest), and migration 0244 (excludes import manifests from the intake backfill).
 
+**Done in S2b (2026-10-12).** All five TypeScript readers now find an import's lots by **import id**: the
+`POS-IMPORT-<id8>` manifest (and, if the row records an import id, only when it is THIS import) plus every
+migration manifest whose `raw_payload.import_id` is this import (`import-lineage-core.ts` +
+`import-lineage-store.ts`). **Migration 0244 is NOT changed.** It is a one-time backfill (`received_on IS NULL`,
+fill-only) that stamps the Pacific day of `accepted_at`, and it excludes only the POS-IMPORT manifest by number
+and kind. Verified by grep on 2026-10-12: no code in `src` writes a `cultivera-reconstructed` manifest yet (only
+readers and predicates). So 0244 can stamp a rebuilt manifest's lots ONLY if it is applied AFTER S2c runs.
+**S2c precondition:** before Apply, confirm 0244 is already applied in production (Supabase migration history).
+The executor also sets a rebuilt manifest's `accepted_at` only from the real transfer acceptance, never the run
+instant, so even a late 0244 would stamp a true date.
+
 ### 1.4 Who reads ACCEPTED manifests (accounting risk)
 
 `vendor-payables-store.ts` (owed = Σ received_qty × unit_cost), `sage-exports.ts` (purchases export),
@@ -685,3 +696,30 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
       still hold. eslint 0, scoped tsc 0, all pure self-tests pass.
   * Next is **S2b**: the §1.3 readers must follow moved lots by import id, not by the `POS-IMPORT-<id8>`
     number. That has to land before the S2c executor moves any lot.
+
+- **2026-10-12, S2b: every reader follows an import's lots by import id (§1.3).**
+  * New pure `src/lib/inventory/import-lineage-core.ts` (30 self-tests, runner floor 30) and server
+    `import-lineage-store.ts`. ONE manifest read: `.or(manifest_number.eq.POS-IMPORT-<id8>,
+    raw_payload->>import_id.eq.<id>)`, then the core keeps exactly this import's manifests. Lots are read chunked
+    by manifest (150) and fully paged by lot id. Any failed page THROWS, so there is never a short list.
+  * Rewired: received-date bulk page and write, legacy-lot removal, the backfill lot count
+    (`countImportLots`), the classification source tab (`isCultiveraMigrationRow`, kind or legacy prefix) and
+    enrichment attribution. For a rebuilt manifest, the date is the lot's own `received_on`, else the manifest's
+    `received_at`, never `accepted_at` or `created_at`.
+  * **Two latent bugs found on a real database** (PG15, all 269 migrations, PostgREST 12.2.3, shipped TypeScript;
+    `scripts/recon/r50-s2b`):
+    * Two imports whose ids share the first 8 characters: on main the received-date page THREW ("JSON object
+      requested, multiple (or no) rows returned") and the removal plan said "import manifest not found". On the
+      branch each import sees only its own lots.
+    * A lot re-homed to a rebuilt manifest: on main it vanished from both the received-date page and the removal
+      plan. On the branch it is found (A = lots 1 and 3; B = lot 5).
+    * Found while probing the branch: the received-date WRITE could date a destroyed lot that the page never
+      showed. The write is now scoped to the import's own non-destroyed lots (6 ids sent, only lots 1 and 3
+      written).
+  * **Testing the tests:** `tests/compliance/r50-import-lineage.test.ts` (21 tests: the core, the store against a
+    fake PostgREST with 1,200 lots over 151 manifests, a mid-read failure, reader wiring, rebuilt-manifest dates).
+    **22 / 22 mutants killed.** 17 related suites pass (449 tests), eslint 0, scoped tsc 0, all pure self-tests
+    pass. Two pins changed on purpose: the s22 self-test count is now 81, and the worklist source pin now uses the
+    shared predicate.
+  * Migration 0244 is unchanged (see §1.3, which also records the S2c precondition).
+  * Next is **S2c**: the executor that rebuilds manifests and re-homes lots.
