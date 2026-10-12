@@ -576,3 +576,64 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
   null and there is no `IncomingTransferId`. These are legacy and manual lots, 26 of them under "Default
   Vendor". They stay visible, and manifest grouping puts them in the `undated` group. They are never dated
   by guess.
+
+- **2026-10-12, S9 button (PR #1350, merged).** The Fetch It All button, the progress and go/no-go page, the
+  import gate (`importDecision`: verified files, GO, no cutover, harvest no older than 90 min; test mode needs
+  only verified files), the server client with sha/byte verification, the timed 11/01 runbook, and the Railway
+  env docs. 33 self-tests (24/24 mutants killed) and 8 fake-crawler tests (9/9 killed).
+
+- **2026-10-12, S10: link-first manifest plan in code (rule v2, §3b.4), and the §3b.6 "Manifest plan" gate.**
+  * `cultivera-transfer-match-core.ts` rule v2:
+    * **Vendor alias by link.** When a lot's only receipt is on another vendor's transfer, the lot is accepted
+      if Cultivera links it to exactly that transfer. Without a link, or with a link elsewhere, or with
+      several receipts, the refusal stands. The manifest keeps the shipper's vendor.
+    * **alsoOn.** Every other receipt of a re-received barcode is recorded on the group and in lineage
+      (`also_on`, `vendor_by_link`).
+    * **Link agreement.** Each lot is marked agree, differ or none, and the summary counts them.
+    * Without `links`, the v1 answers are unchanged (the S1b real-data pins and the oracle SHA still pass).
+  * New pure adapters:
+    * `transferIndexFromDetails`: the TypeScript twin of `build-transfer-index.py`, **equal on 644 / 644
+      transfers**.
+    * `linksFromListLots`.
+  * `manifestPlanGate` fails on any of these:
+    * a lot that is not placed exactly once;
+    * vendor mixing outside the named aliases;
+    * number collisions;
+    * a single-receipt lot that disagrees with the link;
+    * a linked lot left unplaced;
+    * no links at all.
+    It prints multi-receipt differences without failing.
+  * Wiring:
+    * `assembleFromRun` builds the plan from the transform's own `lotSources` and appends check 9,
+      `manifest_plan`.
+    * `loadRunForImport` fetches and verifies `transfer_details.jsonl`. It **refuses a run whose lots link
+      transfers but has no details**, so the plan can never be skipped silently.
+    * The run page shows the plan (real transfers, rebuilt groups, aliases, alsoOn, link differences, the 10
+      biggest manifests).
+    * The audit row records the plan's counts.
+  * **Re-measured on rehearsal #2a (live, 2026-10-12), GO 9 / 9:**
+    * 3,762 lots: 3,615 on 641 real transfers (3,496 only-receipt, 119 first-after-received), and 147 on 38
+      rebuilt undated groups.
+    * Link agrees on 3,609. The 24 aliases are all brands shipped by a distributor; the largest pairs are
+      DOPE SYNERGY ← R&B GROUP (6), TTL HOLDINGS LLC ← R&B GROUP (5), and HOMETOWN HERBS ← SOUTH BAY MASTER
+      GROWERS (4).
+    * **6 differ**, all one event: GROW OP FARMS transfers 1108 and 1109 were accepted 8 min apart on
+      2026-08-20. The lots were received before both. We file them on 1108 (the first receipt after received);
+      Cultivera points at 1109 (its "latest top-up" link). 1109 is in `alsoOn`, and the earlier receipts 962
+      and 1036 were accepted before the received time.
+    * 0 unmatched-but-linked, 0 collisions, partition 3,762 / 3,762.
+    * Assemble with the plan: 3.8 s, 499 MB RSS.
+  * **Correction to §3b.4 (re-measured, not copied).** The 2026-10-12 morning figures (110 / 144 agree, 34
+    differ) came from the earlier export. On #2a, 119 re-received lots split 113 agree / 6 differ. Rule v2 does
+    not depend on either number.
+  * **Testing the tests:**
+    * 116 self-tests, runner floor 116.
+    * 32 / 32 code mutants killed. The first pass left 5 survivors (alias on multi-receipt, alias with two
+      links, receipt on an unknown transfer, flag truthiness, and the multi-differ filter), and each now has
+      a pin. One equivalent mutant (`lotsAlsoOn` vs multi-receipt count) is documented, not counted.
+    * A real-data vitest, `r50-cultivera-manifest-plan-live.test.ts`, runs on
+      `normalized_cultivera/R2A_MANIFEST_PLAN_FIXTURE.json` (no prices, addresses or people, which the test
+      asserts). It checks per lot against an **independent Python oracle (openpyxl plus Cultivera's raw JSON),
+      SHA-256 equal**, and **6 / 6 data mutants are killed**.
+    * The fake-crawler client test went from 8 to 12 cases: details served, missing details refused, a torn
+      line, a link to a transfer that lacks the barcode (NO-GO), and the old no-link path.
