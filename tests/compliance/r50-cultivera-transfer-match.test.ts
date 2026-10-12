@@ -183,6 +183,20 @@ describe("R50 S1b: real lots married to real Cultivera transfers", () => {
     expect(new Set(plan.transferGroups.map((g) => g.status))).toEqual(new Set(["Accepted", "Partially Accepted"]));
   });
 
+  it("golden snapshot of every manifest a person will see (number, accepted time, vendor, status, lots)", () => {
+    // Not an independent oracle: a snapshot taken 2026-10-12 from the fresh harvest, so that a change in
+    // what the reconstructed manifests SHOW (a manifest number, an accepted time) cannot pass silently.
+    // Added after two data mutants (accepted-time moved, manifest number changed) survived the other pins.
+    const text = [...plan.transferGroups]
+      .sort((a, b) => a.transferId - b.transferId)
+      .map((g) => [g.transferId, g.manifestNumber, g.acceptedAt, g.vendorLabel, g.status, g.barcodes.join(",")].join("\t"))
+      .join("\n");
+    expect(plan.transferGroups.length).toBe(651);
+    expect(crypto.createHash("sha256").update(text).digest("hex")).toBe(
+      "00339dd861e20498708bb0db137a6e5703a4ed5afdd532d22a505f7f6aa77e74",
+    );
+  });
+
   it("lineage keeps the accounting exclusion and a non-colliding dedupe key", () => {
     const g = plan.transferGroups[0];
     const lin = buildTransferLineage({ importId: "imp", sourceManifestId: "m", sourceManifestNumber: "POS-IMPORT-x", group: g });
