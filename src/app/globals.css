@@ -710,3 +710,36 @@ h1, h2, h3, h4, h5, h6 {
   outline: 2px solid #fff;
   outline-offset: 2px;
 }
+
+/* ---------------------------------------------------------------------------
+ * R49 S4 (C3) — SITE-WIDE "NOTHING PAST THE SCREEN EDGE" GUARD.
+ * Owner: "make sure this doesn't and can't happen going forward for any
+ * element on the page." Three layers, each safe on its own:
+ *  1. The page itself can never scroll sideways: overflow-x CLIP on body.
+ *     `clip` (unlike `hidden`) does NOT create a scroll container, so the
+ *     sticky header and position:sticky sidebars keep working.
+ *  2. Embedded media (iframes: maps, videos) can never be wider than its
+ *     container.
+ *  3. Long unbroken strings (URLs, SKUs, vendor names) wrap instead of
+ *     painting past their box (`break-word` never changes layout sizing).
+ * The real fixes stay at the source (PriorityNav header, filter stacking
+ * rule); this block is the backstop for anything added later.
+ * ------------------------------------------------------------------------- */
+body {
+  overflow-x: clip;
+}
+/* (img/video are already capped by Tailwind preflight; svg icons are left
+   alone on purpose so fixed-size icons never shrink.) */
+iframe,
+embed,
+object {
+  max-width: 100%;
+}
+main,
+header,
+footer,
+aside,
+section,
+article {
+  overflow-wrap: break-word;
+}

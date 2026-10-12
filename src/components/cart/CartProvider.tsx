@@ -385,7 +385,7 @@ function FloatingCartButton({ itemCount, subtotalMinorUnits, onOpen }: { itemCou
     <button
       type="button"
       onClick={onOpen}
-      className="fixed bottom-5 right-5 z-40 flex items-center gap-3 rounded-full border border-[var(--orange)] bg-[var(--orange)] px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-black shadow-2xl shadow-orange-950/50 transition hover:-translate-y-1 hover:bg-white"
+      className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1.25rem,env(safe-area-inset-right))] z-40 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-full border border-[var(--orange)] bg-[var(--orange)] px-5 py-4 text-sm font-black uppercase tracking-[0.12em] text-black shadow-2xl shadow-orange-950/50 transition hover:-translate-y-1 hover:bg-white"
       aria-label="Open cart"
     >
       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black text-xs text-white">{itemCount}</span>
@@ -423,8 +423,16 @@ function DrawerHeader({ itemCount, onClose }: { itemCount: number; onClose: () =
 
 function StoreCard() {
   return (
-    <section className="-mx-4 overflow-hidden bg-[#4a2c18] shadow-[0_10px_28px_rgba(0,0,0,0.38)] sm:mx-0" aria-label="Greenway Marijuana store details">
-      <div className="flex h-[5rem] w-[calc(100%+2rem)] items-stretch bg-[#4a2c18] sm:h-[6.25rem] sm:w-full">
+    // R49 S4 (C1) — `shrink-0` is THE fix for "when items are added to the
+    // cart, it covers the brown bar with our logo and business info". This card
+    // sits in the drawer body's flex COLUMN (overflow-y-auto); as a flex item
+    // with overflow-hidden its min-height resolves to 0, so every cart line
+    // added SQUEEZED it (measured live: 100px -> 42px at 1440 wide, 80px -> 51px
+    // at 390) and the first cart line was drawn over the logo, hours and phone.
+    // shrink-0 + min-h keep the full card at every screen size; the body still
+    // scrolls, so long carts simply scroll beneath it.
+    <section className="-mx-4 shrink-0 overflow-hidden bg-[#4a2c18] shadow-[0_10px_28px_rgba(0,0,0,0.38)] sm:mx-0" aria-label="Greenway Marijuana store details">
+      <div className="flex h-[5rem] min-h-[5rem] w-[calc(100%+2rem)] items-stretch bg-[#4a2c18] sm:h-[6.25rem] sm:min-h-[6.25rem] sm:w-full">
         <div className="relative w-[6rem] shrink-0 overflow-hidden bg-transparent sm:w-[7.25rem]">
           <Image
             src={greenwayBusiness.assets.blackGoldLogoTransparent}

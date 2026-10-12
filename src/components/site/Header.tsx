@@ -37,7 +37,11 @@ export async function Header() {
 
         <DesktopMenu hideMedical={medicalHidden} />
 
-        <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-3 md:w-[18rem] lg:w-[20rem] xl:w-[22rem] 2xl:w-[27rem]">
+        {/* R49 S4: the Search / Cart / Menu cluster is shrink-0 at its NATURAL
+            width (the old fixed md:w-[18rem]…2xl:w-[27rem] reserve made the row
+            wider than the screen from 768 to 1600 px and pushed Cart off the
+            right edge — measured). The nav now yields instead (PriorityNav). */}
+        <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-3">
           <SearchModal />
           <HeaderCartButton />
           <MobileNavigation hideMedical={medicalHidden} />
