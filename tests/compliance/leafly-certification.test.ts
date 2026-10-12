@@ -588,6 +588,7 @@ describe("L-4 · the cadence constant cannot drift from vercel.json", () => {
       "/api/cron/leafly-ack-sweep": 720, // every 2 minutes
       "/api/cron/leafly-menu-sync": 96, //  every 15 minutes
       "/api/cron/lookup-jobs": 1440, //    every minute (S13 batch lookup worker)
+      "/api/cron/content-schedule": 288, // every 5 minutes (R46 scheduled publish; editor snaps times to the same grid)
     };
     for (const c of crons) {
       const want = expected[c.path ?? ""] ?? 1;
