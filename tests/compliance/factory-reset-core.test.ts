@@ -1296,7 +1296,10 @@ describe("D-65 — the connections survive the reset", () => {
     //       the owner planned; the content they point at, content_blocks,
     //       page_sections, faq_items and both carousels, is already KEEP, so
     //       wiping the plan while keeping the content would be incoherent)
-    expect(plan.keep.length).toBe(149);
+    //   +1  R47 / 0268: website_click_events (anonymous website banner-click
+    //       analytics; KEEP so the pinned 139-table WIPE list in 0240's
+    //       reset function is not reopened for an analytics log)
+    expect(plan.keep.length).toBe(150);
     expect(plan.wipe.length).toBe(139);
   });
 
