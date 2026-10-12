@@ -7,6 +7,7 @@
  * previewed before going live, exactly like content_blocks.
  */
 import type { PostStatus } from "./types";
+import type { HomeSlideAdvanced } from "./home-slide-advanced-core";
 
 /** Maximum number of slides shown publicly + the editor's add cap. */
 export const MAX_CAROUSEL_SLIDES = 6;
@@ -48,6 +49,13 @@ export type CarouselSlideRow = {
   draft_description: string | null;
   draft_ctas: SlideCta[] | null;
 
+  /**
+   * R47 (migration 0268): optional advanced options JSON (shape:
+   * home-slide-advanced-core.ts). Absent before 0268 is applied; null = classic.
+   */
+  advanced?: unknown;
+  draft_advanced?: unknown;
+
   image_media_id: string | null;
   last_edited_by: string | null;
   last_published_by: string | null;
@@ -73,6 +81,10 @@ export type RenderSlide = {
   ctas: SlideCta[];
   /** R45-S2: tiny blurred preview of `image` (from media_assets.blur_data_url), if known. */
   imageBlur?: string;
+  /** R47: advanced options (null/absent = the classic slide, unchanged). */
+  advanced?: HomeSlideAdvanced | null;
+  /** R47: blur preview for advanced.imageMobile, if known. */
+  imageMobileBlur?: string;
 };
 
 /**

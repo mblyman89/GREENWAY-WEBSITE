@@ -7,6 +7,21 @@ import { BannerMedia } from "@/components/site/BannerMedia";
 import { CarouselRotationButton } from "@/components/site/CarouselRotationButton";
 import { useCarouselAutoplay } from "@/components/site/useCarouselAutoplay";
 import { dwellMs, slideFetchPriority, wordCount } from "@/lib/site/carousel-autoplay-core";
+import { DesignedBanner } from "@/components/site/DesignedBanner";
+import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
+import {
+  effectiveLayout,
+  homeLegacyWords,
+  type HomeLineStyle,
+} from "@/lib/cms/home-slide-advanced-core";
+import {
+  heroColorHex,
+  heroFontStack,
+  isScriptHeroFont,
+  type ImageFocus,
+  type TextAlign,
+  type TextVAlign,
+} from "@/lib/loyalty/loyalty-hero-core";
 
 /** Base dwell per slide; text-heavy slides earn more (R45-S1, Baymard 5-10 s). */
 const AUTOPLAY_MS = 6000;
@@ -111,6 +126,21 @@ export function Hero({
           <div aria-live={carousel.liveMode} aria-atomic="false">
           {safeSlides.map((slide, index) => {
             const isActive = index === active;
+            // R47: a slide with advanced options (Banner Studio design, line
+            // styles, phone picture, 5-way focus, centre / top / bottom text)
+            // renders through AdvancedSlide. advanced === null keeps the
+            // classic markup below exactly as before.
+            if (slide.advanced) {
+              return (
+                <AdvancedSlide
+                  key={slide.key}
+                  slide={slide}
+                  index={index}
+                  count={count}
+                  isActive={isActive}
+                />
+              );
+            }
             const alignRight = slide.textAlign === "right";
             return (
               <div
@@ -221,14 +251,204 @@ export function Hero({
 }
 
 /** R45-S1: slide 1 owns the page's single <h1>; later slides use an identical-looking <h2>. */
-function SlideHeading({ first, children }: { first: boolean; children: React.ReactNode }) {
+function SlideHeading({
+  first,
+  children,
+  style,
+  extraClass,
+}: {
+  first: boolean;
+  children: React.ReactNode;
+  /** R47: advanced line style (absent on classic slides = unchanged markup). */
+  style?: React.CSSProperties;
+  extraClass?: string;
+}) {
+  const cls = `mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl${extraClass ? ` ${extraClass}` : ""}`;
   return first ? (
-    <h1 className="mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl">
+    <h1 className={cls} style={style}>
       {children}
     </h1>
   ) : (
-    <h2 className="mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl">
+    <h2 className={cls} style={style}>
       {children}
     </h2>
+  );
+}
+
+// ── R47: advanced home slides ──────────────────────────────────────────────
+
+const OBJ: Record<ImageFocus, string> = {
+  center: "object-center",
+  top: "object-top",
+  bottom: "object-bottom",
+  left: "object-left",
+  right: "object-right",
+};
+const MD_OBJ: Record<ImageFocus, string> = {
+  center: "md:object-center",
+  top: "md:object-top",
+  bottom: "md:object-bottom",
+  left: "md:object-left",
+  right: "md:object-right",
+};
+
+function advGradient(textAlign: TextAlign): string {
+  if (textAlign === "right")
+    return "bg-[linear-gradient(270deg,rgba(0,0,0,0.95)_0%,rgba(0,0,0,0.82)_42%,rgba(0,0,0,0.34)_72%,rgba(0,0,0,0.08)_100%)]";
+  if (textAlign === "center")
+    return "bg-[linear-gradient(180deg,rgba(0,0,0,0.5)_0%,rgba(0,0,0,0.68)_50%,rgba(0,0,0,0.5)_100%)]";
+  return "bg-[linear-gradient(90deg,rgba(0,0,0,0.95)_0%,rgba(0,0,0,0.82)_42%,rgba(0,0,0,0.34)_72%,rgba(0,0,0,0.08)_100%)]";
+}
+
+/** Inline font / colour / cursive size for one line ("" font/colour = classic). */
+function lineStyle(l: HomeLineStyle): { style: React.CSSProperties; className: string } {
+  const style: React.CSSProperties = {};
+  if (l.font) style.fontFamily = heroFontStack(l.font);
+  if (l.color) style.color = heroColorHex(l.color);
+  const script = l.font ? isScriptHeroFont(l.font) : false;
+  if (script && l.scriptScale > 1) style.fontSize = `${l.scriptScale}em`;
+  return { style, className: script ? "normal-case tracking-normal" : "" };
+}
+
+function AdvancedSlide({
+  slide,
+  index,
+  count,
+  isActive,
+}: {
+  slide: RenderSlide;
+  index: number;
+  count: number;
+  isActive: boolean;
+}) {
+  const adv = slide.advanced!;
+  const layout = effectiveLayout({ imageFocus: slide.imageFocus, textAlign: slide.textAlign }, adv);
+  const words = homeLegacyWords(
+    { eyebrow: slide.eyebrow, title: slide.title, description: slide.description },
+    adv,
+  );
+  const wrapperCls = isActive
+    ? "relative opacity-100 transition-opacity duration-700"
+    : "pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-700";
+  const common = {
+    "aria-hidden": !isActive,
+    "data-gw-slide": isActive ? "shown" : "hidden",
+    "aria-roledescription": "slide",
+    "aria-label": `${index + 1} of ${count}: ${slide.title}`,
+  } as const;
+
+  // Banner Studio design (drag-anywhere text / buttons, tint, zoom…).
+  if (adv.design?.enabled) {
+    return (
+      <div className={`w-full ${wrapperCls}`} {...common}>
+        <DesignedBanner
+          design={ensureBoundBoxes(adv.design, words)}
+          imageSrc={slide.image || adv.imageMobile}
+          imageAlt={slide.imageAlt || slide.title || "Greenway"}
+          legacy={words}
+          headingLevel={index === 0 ? 1 : 2}
+          priority={index === 0}
+        />
+      </div>
+    );
+  }
+
+  const v: TextVAlign = layout.verticalAlign;
+  const rowAlign = v === "top" ? "items-start" : v === "bottom" ? "items-end" : "items-center";
+  const ta = layout.textAlign;
+  const textBox =
+    ta === "right" ? "ml-auto text-right md:pr-14" : ta === "center" ? "mx-auto text-center" : "";
+  const ctaJustify = ta === "right" ? "justify-end" : ta === "center" ? "justify-center" : "";
+  const eb = lineStyle(adv.eyebrow);
+  const ti = lineStyle(adv.title);
+  const de = lineStyle(adv.description);
+  const alt = slide.imageAlt || slide.title || "Greenway";
+  const sizes = "(max-width: 768px) 100vw, 1408px";
+
+  return (
+    <div className={`flex min-h-[8.5rem] md:min-h-[10.5rem] ${rowAlign} ${wrapperCls}`} {...common}>
+      {adv.imageMobile ? (
+        <>
+          <div className="absolute inset-0 md:hidden">
+            <BannerMedia
+              src={adv.imageMobile}
+              alt={alt}
+              priority={index === 0}
+              fetchPriority={slideFetchPriority(index)}
+              active={isActive}
+              blurDataURL={slide.imageMobileBlur}
+              sizes="100vw"
+              className={`object-cover ${OBJ[layout.imageFocusMobile]}`}
+            />
+          </div>
+          {slide.image ? (
+            <div className="absolute inset-0 hidden md:block">
+              <BannerMedia
+                src={slide.image}
+                alt={alt}
+                priority={index === 0}
+                fetchPriority={slideFetchPriority(index)}
+                active={isActive}
+                blurDataURL={slide.imageBlur}
+                sizes={sizes}
+                className={`object-cover ${OBJ[layout.imageFocus]}`}
+              />
+            </div>
+          ) : null}
+        </>
+      ) : slide.image ? (
+        <BannerMedia
+          src={slide.image}
+          alt={alt}
+          priority={index === 0}
+          fetchPriority={slideFetchPriority(index)}
+          active={isActive}
+          blurDataURL={slide.imageBlur}
+          sizes={sizes}
+          className={`object-cover ${OBJ[layout.imageFocusMobile]} ${MD_OBJ[layout.imageFocus]}`}
+        />
+      ) : null}
+      <div className={`absolute inset-0 ${advGradient(ta)}`} aria-hidden="true" />
+      <div className={`relative max-w-[80%] px-5 py-6 md:max-w-[58%] md:px-10 ${textBox}`}>
+        {words.eyebrow ? (
+          <p
+            className={`inline-flex whitespace-pre-line rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-[var(--greenway)] backdrop-blur md:text-xs ${eb.className}`}
+            style={eb.style}
+          >
+            {words.eyebrow}
+          </p>
+        ) : null}
+        {words.title ? (
+          <SlideHeading first={index === 0} style={ti.style} extraClass={ti.className}>
+            {words.title}
+          </SlideHeading>
+        ) : null}
+        {words.subtitle ? (
+          <p
+            className={`mt-2 max-w-md whitespace-pre-line text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base ${ta === "center" ? "mx-auto" : ta === "right" ? "ml-auto" : ""} ${de.className}`}
+            style={de.style}
+          >
+            {words.subtitle}
+          </p>
+        ) : null}
+        {slide.ctas.length > 0 ? (
+          <div className={`mt-4 flex flex-wrap gap-3 md:mt-5 ${ctaJustify}`}>
+            {slide.ctas.map((cta) => (
+              <Link
+                key={cta.href + cta.label}
+                href={cta.href}
+                className={
+                  cta.variant === "solid"
+                    ? "rounded-full bg-white px-5 py-2.5 text-center text-[0.66rem] font-black uppercase tracking-[0.14em] text-black transition hover:bg-[var(--gold)] md:px-7 md:py-3 md:text-sm"
+                    : "rounded-full border border-white/20 bg-black/30 px-5 py-2.5 text-center text-[0.66rem] font-black uppercase tracking-[0.14em] text-white backdrop-blur transition hover:bg-black/55 md:px-7 md:py-3 md:text-sm"
+                }
+              >
+                {cta.label}
+              </Link>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }

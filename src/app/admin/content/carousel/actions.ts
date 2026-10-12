@@ -18,6 +18,10 @@ import type {
   SlideImageFocus,
   SlideTextAlign,
 } from "@/lib/cms/carousel-types";
+import {
+  normalizeHomeSlideAdvanced,
+  serializeHomeSlideAdvanced,
+} from "@/lib/cms/home-slide-advanced-core";
 
 const ROUTE = "/admin/content/carousel";
 
@@ -95,8 +99,21 @@ export async function saveCarouselSlideAction(formData: FormData): Promise<void>
     ctas: parseCtas(formData),
     draft_enabled: formData.get("draft_enabled") === "on",
   };
+  // R47: advanced options (hidden JSON field). Absent field = leave as is;
+  // empty / garbage = classic slide (null).
+  if (formData.has("advanced")) {
+    input.advanced = serializeHomeSlideAdvanced(
+      normalizeHomeSlideAdvanced(String(formData.get("advanced") ?? "")),
+    );
+  }
 
-  await saveCarouselDraft(id, input, session.userId);
+  try {
+    await saveCarouselDraft(id, input, session.userId);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not save the slide.";
+    revalidatePath(ROUTE);
+    redirect(`/admin/pages/home?tab=carousel&error=${encodeURIComponent(msg)}#slide-${id}`);
+  }
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
