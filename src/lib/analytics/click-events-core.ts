@@ -71,7 +71,6 @@ export function deviceFromWidth(width: unknown): ClickDevice {
 function cleanText(v: unknown, max: number): string | null {
   if (typeof v !== "string") return null;
   // Collapse whitespace, drop control characters.
-  // eslint-disable-next-line no-control-regex
   const t = v.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
   if (!t) return null;
   return t.length > max ? t.slice(0, max) : t;
@@ -283,6 +282,11 @@ export function parseClickRange(v: unknown): (typeof CLICK_RANGES)[number] {
   return (CLICK_RANGES as readonly number[]).includes(n) ? (n as (typeof CLICK_RANGES)[number]) : 30;
 }
 
+/** The report window: now and the start of the period (clock read here). */
+export function clickReportWindow(days: number, nowMs: number = Date.now()): { nowMs: number; sinceIso: string } {
+  return { nowMs, sinceIso: new Date(nowMs - days * 86_400_000).toISOString() };
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
@@ -396,6 +400,7 @@ export function __runClickEventsTests(): { passed: number; failed: number } {
 
   // range
   ok(parseClickRange("7") === 7 && parseClickRange("90") === 90, "range parsed");
+  ok(clickReportWindow(7, end).sinceIso === "2026-03-03T20:00:00.000Z", "report window start");
   ok(parseClickRange("5") === 30 && parseClickRange(undefined) === 30, "range default 30");
 
   return { passed, failed };
