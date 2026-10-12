@@ -9,6 +9,8 @@ import { allKnownCategories, categoryLabel, isKnownCategory, setCategoryLabelOve
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 // R49 S1: the strain-NAME facet ("Strains"); the old facet is now "Strain types".
 import { buildStrainNameOptions, matchesStrainNameSelection } from "@/lib/menu/menu-facets-core";
+// R49 S6: the owner's product tags facet ("Tags", ?tags=slug,slug).
+import { buildTagOptions, matchesTagSelection, parseTagParam } from "@/lib/menu/product-tags-core";
 import { activeMgSelection, buildMgBounds, MG_FACET_LABELS, MG_FACET_TYPES, matchesMgSelection, mgRangeLabel, mgSelectionKey, mgUrlParam, formatMgRangeParam, parseMgSelection, type MgBounds, type MgFacetType, type MgRange, type MgSelection } from "@/lib/menu/menu-mg-facet-core";
 import { buildSizeFacetOptions, buildWeightFacetOptions, matchesSizeSelection, matchesWeightSelection, normalizeWeightToken, sizeTokenLabel, weightTokenLabel } from "@/lib/menu/menu-size-facet-core";
 import { FilterMobile, MenuFilterControls } from "./FilterMobile";
@@ -354,6 +356,8 @@ type FilterCriteria = {
   selectedWeights: string[];
   // R49 S2: size facet (beverage fl oz / serving pack).
   selectedSizes: string[];
+  // R49 S6: owner product tags (slugs).
+  selectedTags: string[];
   // R49 S3: per-cannabinoid package-mg ranges (THC/CBD/CBG/CBN/CBC).
   mgSelection: MgSelection;
   maxThc: number;
@@ -509,13 +513,14 @@ function itemMatchesCriteria(item: GreenwayMenuItem, criteria: FilterCriteria, m
   const vendorOk = criteria.selectedVendors.length === 0 || criteria.selectedVendors.includes(item.vendor ?? "");
   const weightOk = matchesWeightSelection(item, criteria.selectedWeights);
   const sizeOk = matchesSizeSelection(item, criteria.selectedSizes);
+  const tagOk = matchesTagSelection(item, criteria.selectedTags);
   const mgOk = matchesMgSelection(item, criteria.mgSelection, bounds.mgBounds);
   const thcOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalThc), criteria.maxThc, bounds.maxAvailableThc);
   const cbdOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalCbd), criteria.maxCbd, bounds.maxAvailableCbd);
   const priceOk = matchesPriceSlider(item.priceMinorUnits, criteria.maxPrice, maxAvailablePrice);
   const searchOk = matchesSearch(item, criteria.query);
 
-  return categoryOk && strainOk && strainNameOk && terpeneOk && brandOk && vendorOk && weightOk && sizeOk && mgOk && thcOk && cbdOk && priceOk && searchOk;
+  return categoryOk && strainOk && strainNameOk && terpeneOk && brandOk && vendorOk && weightOk && sizeOk && tagOk && mgOk && thcOk && cbdOk && priceOk && searchOk;
 }
 
 function countValues(values: string[]) {
@@ -549,6 +554,7 @@ function criteriaWithout(criteria: FilterCriteria, key: keyof FilterCriteria): F
   if (key === "selectedVendors") return { ...criteria, selectedVendors: [] };
   if (key === "selectedWeights") return { ...criteria, selectedWeights: [] };
   if (key === "selectedSizes") return { ...criteria, selectedSizes: [] };
+  if (key === "selectedTags") return { ...criteria, selectedTags: [] };
   if (key === "mgSelection") return { ...criteria, mgSelection: {} };
   if (key === "maxThc") return { ...criteria, maxThc: UNBOUNDED };
   if (key === "maxCbd") return { ...criteria, maxCbd: UNBOUNDED };
@@ -575,6 +581,8 @@ type InitialMenuSearchParams = {
   weights?: string;
   // R49 S2: beverage / serving-pack size facet ("floz:12", "serving:multi").
   sizes?: string;
+  // R49 S6: owner product tags (comma list of tag slugs, e.g. "new,staff-pick").
+  tags?: string;
   // R49 S3: package-mg ranges, "min-max" integers.
   mg_thc?: string;
   mg_cbd?: string;
@@ -653,6 +661,7 @@ function resolveInitialParams(serverParams: InitialMenuSearchParams): InitialMen
     vendors: pick("vendors") ?? undefined,
     weights: pick("weights") ?? undefined,
     sizes: pick("sizes") ?? undefined,
+    tags: pick("tags") ?? undefined,
     mg_thc: pick("mg_thc") ?? undefined,
     mg_cbd: pick("mg_cbd") ?? undefined,
     mg_cbg: pick("mg_cbg") ?? undefined,
@@ -709,6 +718,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   // R49 S2: legacy tokens (e.g. ?weights=1oz) are mapped onto the canonical gram token ("28g").
   const persistedWeights = [...new Set(parsePersistedList(initialParams.weights).map(normalizeWeightToken))];
   const persistedSizes = parsePersistedList(initialParams.sizes);
+  const persistedTags = parseTagParam(initialParams.tags);
   const persistedMg = parseMgSelection((key) => initialParams[key as keyof InitialMenuSearchParams] ?? null);
   const persistedMaxThc = parsePersistedNumber(initialParams.maxThc);
   const persistedMaxCbd = parsePersistedNumber(initialParams.maxCbd);
@@ -732,6 +742,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   const [selectedVendors, setSelectedVendors] = useState<string[]>(persistedVendors);
   const [selectedWeights, setSelectedWeights] = useState<string[]>(persistedWeights);
   const [selectedSizes, setSelectedSizes] = useState<string[]>(persistedSizes);
+  const [selectedTags, setSelectedTags] = useState<string[]>(persistedTags);
   const [mgSelection, setMgSelection] = useState<MgSelection>(persistedMg);
   // Data-derived bounds for sliders (no hardcoded ceilings).
   const maxAvailablePrice = useMemo(
@@ -834,6 +845,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     if (selectedVendors.length) params.set("vendors", selectedVendors.join(","));
     if (selectedWeights.length) params.set("weights", selectedWeights.join(","));
     if (selectedSizes.length) params.set("sizes", selectedSizes.join(","));
+    if (selectedTags.length) params.set("tags", selectedTags.join(","));
     for (const type of MG_FACET_TYPES) {
       const range = activeMg[type];
       if (range) params.set(mgUrlParam(type), formatMgRangeParam(range));
@@ -857,6 +869,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     selectedTerpenes,
     selectedWeights,
     selectedSizes,
+    selectedTags,
     activeMg,
     maxThc,
     maxCbd,
@@ -904,6 +917,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
 
       setSelectedWeights([...new Set(list("weights").map(normalizeWeightToken))]);
       setSelectedSizes(list("sizes"));
+      setSelectedTags(parseTagParam(params.get("tags")));
       setMgSelection(parseMgSelection((key) => params.get(key)));
       setQuery(params.get("search") ?? "");
 
@@ -937,11 +951,12 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     selectedVendors,
     selectedWeights,
     selectedSizes,
+    selectedTags,
     mgSelection,
     maxThc,
     maxCbd,
     maxPrice,
-  }), [maxCbd, maxPrice, maxThc, query, selectedBrands, selectedVendors, selectedCategories, selectedStrains, selectedStrainNames, selectedTerpenes, selectedWeights, selectedSizes, mgSelection]);
+  }), [maxCbd, maxPrice, maxThc, query, selectedBrands, selectedVendors, selectedCategories, selectedStrains, selectedStrainNames, selectedTerpenes, selectedWeights, selectedSizes, selectedTags, mgSelection]);
 
   const filteredItems = useMemo(() => {
     const specialItemIds = initialSpecial?.itemIds;
@@ -1040,6 +1055,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedWeights]);
 
   // R49 S2: Size facet (beverage fl oz + single/multi-serving packs), disjunctive counts.
+  // R49 S6: Tags facet options (only tags present on the narrowed items).
+  const tagOptions = useMemo(() => {
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedTags"), maxAvailablePrice, cannabinoidBounds));
+    const known = new Map<string, string>();
+    for (const item of items) for (const t of item.tags ?? []) if (!known.has(t.slug)) known.set(t.slug, t.label);
+    return buildTagOptions(optionItems, selectedTags, known);
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedTags]);
+  const tagLabelBySlug = useMemo(() => new Map(tagOptions.map((o) => [o.value, o.label])), [tagOptions]);
+
   const sizeOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedSizes"), maxAvailablePrice, cannabinoidBounds));
     return buildSizeFacetOptions(optionItems, selectedSizes);
@@ -1089,6 +1113,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     selectedVendors.length > 0 ||
     selectedWeights.length > 0 ||
     selectedSizes.length > 0 ||
+    selectedTags.length > 0 ||
     activeMgKey !== "" ||
     activeSpecialId !== null ||
     activeDohId !== null ||
@@ -1156,6 +1181,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
         selectedVendors,
         selectedWeights,
         selectedSizes,
+    selectedTags,
         activeMgKey,
         maxThc,
         maxCbd,
@@ -1175,6 +1201,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       selectedVendors,
       selectedWeights,
       selectedSizes,
+    selectedTags,
       activeMgKey,
       maxThc,
       maxCbd,
@@ -1253,6 +1280,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     setSelectedVendors([]);
     setSelectedWeights([]);
     setSelectedSizes([]);
+    setSelectedTags([]);
     setMgSelection({});
     setMaxThc(maxAvailableThc);
     setMaxCbd(maxAvailableCbd);
@@ -1370,6 +1398,12 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       value: sizeTokenLabel(size),
       onRemove: () => setSelectedSizes((current) => current.filter((value) => value !== size)),
     })),
+    ...selectedTags.map((tag) => ({
+      key: `tag-${tag}`,
+      label: "Tag",
+      value: tagLabelBySlug.get(tag) ?? tag,
+      onRemove: () => setSelectedTags((current) => current.filter((value) => value !== tag)),
+    })),
     ...MG_FACET_TYPES.filter((type) => activeMg[type]).map((type) => ({
       key: `mg-${type}`,
       label: `${MG_FACET_LABELS[type]} mg`,
@@ -1424,6 +1458,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       selectedVendors={selectedVendors}
       selectedWeights={selectedWeights}
       selectedSizes={selectedSizes}
+      selectedTags={selectedTags}
       maxThc={maxThc}
       maxCbd={maxCbd}
       maxPrice={maxPrice}
@@ -1437,6 +1472,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       onVendorToggle={(vendor) => setSelectedVendors((current) => toggleValue(current, vendor))}
       onWeightToggle={(weight) => setSelectedWeights((current) => toggleValue(current, weight))}
       onSizeToggle={(size) => setSelectedSizes((current) => toggleValue(current, size))}
+      onTagToggle={(tag) => setSelectedTags((current) => toggleValue(current, tag))}
       mgBounds={visibleMgBounds}
       mgSelection={mgSelection}
       onMgChange={(type: MgFacetType, range: MgRange) => setMgSelection((current) => ({ ...current, [type]: range }))}
@@ -1456,6 +1492,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       vendorOptions={vendorOptions}
       weightOptions={weightOptions}
       sizeOptions={sizeOptions}
+      tagOptions={tagOptions}
       specialFilters={specialFilters}
       activeSpecialId={activeSpecialId}
       onSpecialToggle={toggleSpecial}

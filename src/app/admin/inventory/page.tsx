@@ -398,6 +398,10 @@ export default async function InventoryPage({
             <Button href="/admin/inventory/expiration-rules" variant="neutral" size="sm">
               Expiration rules
             </Button>
+            {/* R49 S5: owner product tags (New / Staff Pick ...) shown on menu cards + the Tags filter. */}
+            <Button href="/admin/inventory/tags" variant="neutral" size="sm" data-testid="inventory-tags-button">
+              Tags
+            </Button>
             {/* R36: the Washington testing labs + the hosts lab certificates are read from. */}
             <Button href="/admin/inventory/labs" variant="neutral" size="sm" data-testid="inventory-testing-labs-button">
               Testing labs

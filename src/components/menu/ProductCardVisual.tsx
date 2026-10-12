@@ -21,6 +21,7 @@ import { dohPillForItem } from "@/lib/menu/menu-doh-badge-core";
 import { CARD_MIN_HEIGHT } from "@/lib/menu/menu-skeleton-core";
 import { classificationPillsForItem } from "@/lib/menu/menu-classification-badge-core";
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
+import { MAX_TAGS_ON_CARD, tagTextColor } from "@/lib/menu/product-tags-core";
 import { glowCardStyle } from "@/lib/ui/glow-card-core";
 
 type CardTone = {
@@ -390,6 +391,23 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
             ) : (
               <ProductImageMockup item={item} tone={tone} />
             )}
+            {/* R49 S5/S6: the owner's product tags ("New", "Staff Pick" ...),
+                top-left over the picture so they never change the card's
+                height or push the price / cart button. Max 3; the owner's
+                order (New first by default). Absent before migration 0269. */}
+            {item.tags && item.tags.length > 0 ? (
+              <span className="pointer-events-none absolute left-1.5 top-1.5 flex max-w-[calc(100%-0.75rem)] flex-wrap gap-1" data-slot="product-tags">
+                {item.tags.slice(0, MAX_TAGS_ON_CARD).map((tag) => (
+                  <span
+                    key={tag.slug}
+                    className="max-w-full truncate rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase leading-tight tracking-[0.06em] shadow-[0_1px_4px_rgba(0,0,0,0.35)]"
+                    style={{ background: tag.color, color: tagTextColor(tag.color) }}
+                  >
+                    {tag.label}
+                  </span>
+                ))}
+              </span>
+            ) : null}
           </div>
         </Link>
 

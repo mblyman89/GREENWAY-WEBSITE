@@ -452,6 +452,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/inventory/expiration-rules",
       },
       {
+        q: "How do I put tags like New or Staff Pick on products?",
+        a: "Inventory \u2192 Tags. Create a tag (name, colour, order), then choose it under Add or remove products, search the live menu, tick products and press Apply. Tags show on the product cards (up to 3 per card) and shoppers can filter the menu by them (Tags in the filter panel, or a link like /menu?tags=staff-pick). The built-in New tag is automatic: a product shows it for 14 days (you can change the number) from the first time it was on a published menu, then it comes off by itself. You can rename, recolour or turn New off, but not delete it. Every change shows on the website on the next page load.",
+        href: "/admin/inventory/tags",
+      },
+      {
         q: "How do I record a return or destroy product lawfully?",
         a: "Returns & Destruction handles customer returns, samples, and lawful destruction with the documentation WA compliance requires.",
         href: "/admin/inventory/disposition",
