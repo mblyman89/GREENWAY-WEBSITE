@@ -579,6 +579,7 @@ import { __runImportLotCoreTests, __runImportLotFactFillTests } from "../../src/
 import { __runCultiveraManifestGroupCoreTests } from "../../src/lib/inventory/cultivera-manifest-group-core";
 import { __runCultiveraTransferMatchCoreTests } from "../../src/lib/inventory/cultivera-transfer-match-core";
 import { __runMigrationStockCoreTests } from "../../src/lib/accounting/migration-stock-core";
+import { __runImportLineageCoreTests } from "../../src/lib/inventory/import-lineage-core";
 import { __runCultiveraFetchCoreTests } from "../../src/lib/pos/cultivera-fetch-core";
 import { __runCultiveraFetchButtonCoreTests } from "../../src/lib/pos/cultivera-fetch-button-core";
 import { __runLotPotencyCoreTests } from "../../src/lib/pos/lot-potency-core";
@@ -2236,6 +2237,7 @@ __runLiquidVolumeTests();
   assertRan("cultivera-manifest-group-core", __runCultiveraManifestGroupCoreTests(), 110); // R50 S1: Cultivera deliveries rebuilt (vendor + Pacific day + gap)
   assertRan("cultivera-transfer-match-core", __runCultiveraTransferMatchCoreTests(), 116); // R50 S1b + S10 rule v2 (link alias, alsoOn, link agreement)
   assertRan("migration-stock-core", __runMigrationStockCoreTests(), 26); // R50 S2a: Cultivera migration stock is never a purchase (payables, Sage, bill, receipt)
+  assertRan("import-lineage-core", __runImportLineageCoreTests(), 30); // R50 S2b: an import's lots are found by import id (POS-IMPORT + rebuilt manifests)
   assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
   assertRan("cultivera-fetch-button-core", __runCultiveraFetchButtonCoreTests(), 33); // R50 S9: the button — run view, sha verify, import gate
   console.log("ALL PURE SELF-TESTS PASSED");
