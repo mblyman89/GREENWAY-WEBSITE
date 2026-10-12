@@ -150,3 +150,65 @@ Receiving has its own path for every one of them.
 
 `INTAKE_CUTOVER_GUARD=off`, then redeploy. No schema was added (S18.3).
 Held updates stay staged and can be published by hand as before.
+
+## Cutover day with the "Fetch It All" button (R50 S9), timed
+
+Since S9, step 2 above is one press instead of two hand uploads. The button
+logs in to Cultivera POS (read-only), harvests everything, cleans it to Greenway
+conventions, checks it, and then **you** stage it. Staging is the same
+`runImport` a manual upload uses, so intake, enrichment, the fact review and
+the publish steps 3 to 8 are unchanged. The manual upload stays on the page,
+folded under *Fallback: upload the two exports by hand*.
+
+**Setup (once, before rehearsal #3).**
+- Railway → crawler service → Variables: `CULTIVERA_POS_USERNAME`,
+  `CULTIVERA_POS_PASSWORD`, and optionally `CULTIVERA_POS_PACE_SECONDS` (0.6)
+  and `CULTIVERA_POS_BUDGET_SECONDS` (1800).
+- The site needs only the existing `CRAWLER_BASE_URL` and `CRAWLER_SHARED_SECRET`.
+- The Cultivera password is never stored on the site, in git or in a log.
+
+**Timeline for Sunday 2026-11-01 (Pacific; the store opens at 08:00).** The
+times come from rehearsal #2a: the harvest took 478 s and assembling took 3.5 s.
+
+| Time | Step | Go / no-go |
+|---|---|---|
+| 06:00 | Last Cultivera sale has rung; register closed for the night. Open **Admin → Menu Imports**. | Live menu still serving (nothing changes yet). |
+| 06:05 | Press **Fetch It All, Fuck Cultivera** (leave *Start fresh* off). The run page refreshes itself. | All 7 stages DONE in about 8 min. A failure or Stop can be resumed: press *Resume this harvest*, and finished stages are skipped. |
+| 06:15 | Read the go/no-go on the run page. | **GO needs all 8 checks:** login, 32 inventory columns, 19 product columns, every list lot imported, 0 transform errors, 0 cards hidden for a missing master, inside the time budget, and **control totals**. Control totals mean units and cost value match the inventory list to the cent, lot by lot. A mismatch means a sale happened mid-harvest, so fetch again. Never accept a mismatch. |
+| 06:20 | Leave Test mode off and press **Stage this harvest for review**. The server downloads the files again, re-checks every file's sha256 and size against the harvest manifest, rebuilds the workbooks and stages them. | Refused unless GO, the harvest is at most 90 min old, and cutover is not already done. The refusal names the reason. |
+| 06:25 | Steps 3 and 4 above: the fact review, then **Publish**. | The counts match the run page: lots, items, variants, units, and value at cost. |
+| 06:40 | **Point of no return:** the first receiving approval after the publish. From then on cutover is done, a real re-import is refused, and fixes go forward through receiving (see *What NOT to do*). | - |
+| 07:30 | Steps 5 to 7: nothing waiting, the public `/menu` checked, register spot checks. | - |
+
+**Rollback, by checkpoint.** This is decided now, so nobody improvises it on the day.
+- *Before Publish (06:00 to 06:25).* Nothing has changed. Stop. The Cultivera
+  register and menu keep working, and the manual-upload fallback or a later
+  fetch are both still possible.
+- *After Publish, before the first receiving approval.* Clean Slate does not
+  apply because this is a real import. Publish the previous real version from
+  **Admin → Menu Imports**, or re-run the fetch and publish again. Both are
+  allowed, because cutover is not done until a receiving update publishes.
+- *After the point of no return.* Forward-fix only, by re-approving from
+  receiving. This is the "forward-fix in the target" posture enterprise
+  cutovers adopt past a defined checkpoint.
+
+**Rehearsals, each timed against this table.**
+- #2a, 2026-10-12: GO 8/8, 478 s, 0 errors.
+- #3, week of 10/26: kill the crawler mid-harvest, then resume. Stage in test
+  mode, then Clean Slate.
+- #4, 10/31: a full dress rehearsal in test mode, then Clean Slate.
+
+**Why this shape (sources).**
+- Cutover plans should be "a sequenced, timed runbook" covering freeze, final
+  load, reconciliation, and opening the target. Mock cutovers should use
+  "production-representative data volume" and measure "actual elapsed time
+  against the downtime budget". Rollback must be "decided before cutover
+  starts, not improvised", with "explicit go/no-go checkpoints with
+  measurable criteria". Source: ERPClimb, *Cutover Architecture, Mock Runs,
+  and Rollback Strategy*,
+  https://erpclimb.com/lessons/arch-migration-architecture-cutover-mock-runs-rollback-strategy
+- Reconciliation gates that match control totals: Syntra, *ETL Migration
+  Cutover Plan*, https://www.syntraetl.com/guides/etl-migration-cutover-plan
+- A tested rollback with a defined point of no return: Software Modernization
+  Services, *Data Migration Rollback Planning*,
+  https://softwaremodernizationservices.com/insights/data-migration-rollback-planning
