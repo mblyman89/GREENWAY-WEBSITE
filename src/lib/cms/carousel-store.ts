@@ -100,7 +100,9 @@ function isDirty(row: CarouselSlideRow): boolean {
   }
   if (row.draft_enabled !== row.enabled) return true;
   // R47: advanced options (only when a draft copy exists).
-  if (row.draft_advanced !== undefined && row.draft_advanced !== null) {
+  // The draft copy is the truth (null = classic slide), so compare whenever
+  // the 0268 columns exist.
+  if (row.draft_advanced !== undefined) {
     const d = serializeHomeSlideAdvanced(normalizeHomeSlideAdvanced(row.draft_advanced));
     const p = serializeHomeSlideAdvanced(normalizeHomeSlideAdvanced(row.advanced ?? null));
     if (d !== p) return true;
@@ -158,7 +160,7 @@ function resolveForRender(row: CarouselSlideRow, preview: boolean): RenderSlide 
     ctas: pick(row.draft_ctas, row.ctas ?? []) ?? [],
     // R47: draft-aware advanced options (null = classic slide).
     advanced: normalizeHomeSlideAdvanced(
-      preview && row.draft_advanced != null ? row.draft_advanced : (row.advanced ?? null),
+      preview && row.draft_advanced !== undefined ? row.draft_advanced : (row.advanced ?? null),
     ),
   };
 }
@@ -406,7 +408,8 @@ export async function publishCarouselSlide(
   };
   // R47: copy the advanced options only when the column exists (0268).
   if (slide.draft_advanced !== undefined || slide.advanced !== undefined) {
-    update.advanced = slide.draft_advanced ?? slide.advanced ?? null;
+    // The draft is the truth: null there means "back to the classic slide".
+    update.advanced = slide.draft_advanced ?? null;
   }
   const { error } = await admin
     .from("home_carousel_slides")
