@@ -375,30 +375,42 @@ Strain type (Indica/Sativa/Hybrid) is blank in Cultivera:
 
 It cannot be fetched. Enrichment fills it, exactly as for native intake.
 
-### 3b.4 Grouping by the original manifest: use Cultivera's own link first
+### 3b.4 Grouping by the original manifest: two real signals, and where they differ
 
 Each live lot in the list API carries `IncomingTransferId`. **3,710 of 3,858 lots** have one, every one of those
 transfers is in the detail harvest, and the lot's barcode is on that transfer's lines in **3,710 / 3,710** cases.
 
-Against that truth, S1b's evidence-only match on the live export:
+**First, a date trap.** The live export writes `Received date` as an Excel date cell formatted `MM/DD/YYYY`. The
+transform reads formatted text, so the time of day is lost: 143 lots came out "ambiguous_no_time". The committed
+export had the full timestamp as text. The button must rewrite date cells to `YYYY-MM-DD HH:MM:SS.ffffff` text
+before the transform. Those values are Pacific local time: on 5 lots spread over 2025–2026 the export reads 7 h
+(PDT) or 8 h (PST) behind the batch record's UTC `ReceivedDate`, which is the zone S1/S1b already assume.
+
+Against Cultivera's link, S1b's evidence-only match on the live export with times restored:
 
 | S1b outcome | Lots |
 |---|---|
-| Assigned to the same transfer as Cultivera's link | **3,459** |
-| Assigned to a different transfer | **0** |
-| Left unmatched although Cultivera knows the transfer: received time absent | 143 |
-| Left unmatched although Cultivera knows the transfer: vendor name differs | 24 |
-| No link, and S1b also unmatched | 147 |
+| Barcode on exactly one transfer: same as Cultivera's link | 3,458 of 3,482 (the other 24 are vendor-name mismatches, unmatched) |
+| Barcode re-received on 2+ transfers: same as the link | 110 of 144 |
+| Barcode re-received on 2+ transfers: different | **34**; S1b picks the first receipt after the lot's received time |
+| No link, and S1b unmatched | 147 |
+
+On the 144 re-received barcodes, Cultivera's link points to the **latest** receipt in 142 cases. Its link means
+"last delivery that topped this lot up", not "the delivery that first brought it". Example: DOGTOWN PIONEERS
+barcode `…072309`, received 08/28 on `DEL20010018642` (12 units) and again 09/07 on `DEL20010018855` (24 units).
+Both are real manifests that carried the barcode.
 
 **Rule (ranked evidence, like the COA rule 7):**
 
-1. Cultivera's `IncomingTransferId`, accepted only when the barcode is on that transfer's lines.
-2. S1b receipt timing.
-3. S1 sessions / undated, for the rest.
+1. A barcode on exactly one transfer goes to that transfer. Both signals agree there except for the 24
+   vendor-name mismatches, which go to Cultivera's link because the barcode is on its lines.
+2. A re-received barcode goes to its FIRST receipt at or after the lot's received time (S1b). That is the
+   original manifest. Every other transfer carrying it is recorded in the lineage as `alsoOn`, so no manifest
+   loses the line. The disagreement count with Cultivera's link is printed in the run report and is not an error.
+3. Everything else goes to S1 sessions / undated.
 
-The S1b ⇔ link agreement (3,459 / 0) is pinned as a cross-validation on every run. A disagreement stops the run
-for review instead of picking a side. The 148 lots without a link are mostly "Default Vendor" (26), MAMA JS (13),
-CANNA ORGANIX (11) and FIRELINE CANNABIS (9); they go to S1's groups.
+The 148 lots without a link are mostly "Default Vendor" (26), MAMA JS (13), CANNA ORGANIX (11) and FIRELINE
+CANNABIS (9).
 
 ### 3b.5 Architecture (one click, no browser waiting)
 
@@ -434,7 +446,7 @@ CANNA ORGANIX (11) and FIRELINE CANNABIS (9); they go to S1's groups.
   / `PRODUCTS_REQUIRED_COLUMNS` (with Description added empty).
 * List lots = imported lots. Each list-only lot is supplemented and named; there are 0 unexplained.
 * Transform: 0 errors. Visible cards = cards with stock. No lot is hidden because of a missing product master.
-* Manifest plan: every lot is on exactly one manifest, vendors are never mixed, and link ⇔ S1b disagreements = 0.
+* Manifest plan: every lot is on exactly one manifest and vendors are never mixed. Every single-receipt barcode agrees with the link, apart from named vendor-name mismatches. Multi-receipt differences are printed.
 * The run fits its time budget (3b.7). Phase B failures never block go.
 * **No-go fallback:** the two upload boxes stay on the page, collapsed under "manual upload". The owner can export
   the two files from Cultivera by hand and upload them as today.
@@ -508,6 +520,7 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
   barcodes is a lot in the committed export, which I checked before accepting it.
 * 2026-10-12 — **§3b written (the cutover button).** Rehearsal #1 measured it, and found two things that change
   the design. (1) Cultivera's own inventory export drops 23 in-stock lots, all from BOTANICAL ARTS, so the list
-  API becomes the inventory of record. (2) Each lot's `IncomingTransferId` agrees with S1b on 3,459 / 3,459
-  lots, so it becomes the first-rank manifest evidence. Normalising before the join hides about 3,300 cards, so
+  API becomes the inventory of record. (2) Each lot's `IncomingTransferId` is real evidence, but on re-received barcodes it names the LATEST
+  delivery (142 / 144), so S1b's first-receipt rule stays first for those (34 differ) and the link fills the 24
+  vendor-name gaps. The live export also stores Received date as a date-only cell, which must be rewritten. Normalising before the join hides about 3,300 cards, so
   the raw exports are transformed and naming comes from the transform.
