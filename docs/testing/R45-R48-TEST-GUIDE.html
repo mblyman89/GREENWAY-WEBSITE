@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Greenway Website Editor - R45 to R48 Test Guide</title>
+<style>
+  @page { size: Letter; margin: 16mm 14mm; }
+  body { font-family: "DejaVu Sans", Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #1b1b1b; line-height: 1.42; }
+  h1 { font-size: 21pt; color: #1f5f2c; margin: 0 0 4px; }
+  h2 { font-size: 14.5pt; color: #fff; background: #2e7d3a; padding: 6px 10px; border-radius: 4px; margin: 22px 0 8px; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; color: #1f5f2c; margin: 14px 0 4px; border-bottom: 1px solid #cfe3d2; padding-bottom: 2px; page-break-after: avoid; }
+  .sub { color: #555; margin: 0 0 12px; }
+  .box { border: 1px solid #d9d9d9; border-radius: 5px; padding: 8px 11px; margin: 8px 0; page-break-inside: avoid; }
+  .owner { background: #fff6e0; border-color: #e9c46a; }
+  .note { background: #eef6ff; border-color: #a9c8ec; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 9.8pt; }
+  th, td { border: 1px solid #cfcfcf; padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: #eef5ef; }
+  ol, ul { margin: 4px 0 6px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  .test { page-break-inside: avoid; margin-bottom: 6px; }
+  .pass { color: #1f5f2c; font-weight: bold; }
+  .chk { display: inline-block; width: 11px; height: 11px; border: 1.3px solid #333; margin-right: 6px; vertical-align: -1px; }
+  code { font-family: "DejaVu Sans Mono", monospace; font-size: 9pt; background: #f2f2f2; padding: 0 3px; border-radius: 3px; }
+  .small { font-size: 9pt; color: #555; }
+  .pb { page-break-before: always; }
+</style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+
+<h1>Website Editor Test Guide: R45 to R48</h1>
+<p class="sub">Greenway Marijuana: one place for every test from the website-editor "top-off" rounds (R45, R46, R47 and the R48 polish round). Tick each box as you go and write down anything that doesn't work.</p>
+
+<div class="box owner">
+<b>Do these 3 setup steps first (once).</b> Open Supabase, then the SQL editor. Paste and run each file below <u>in order</u>. Until a file is run, the features that need it stay switched off safely; nothing breaks.
+<table>
+<tr><th>#</th><th>File (in the repo, folder <code>supabase/migrations/</code>)</th><th>Turns on</th></tr>
+<tr><td>1</td><td><code>0266_media_blur_placeholder.sql</code></td><td>Blurry "loading" previews for pictures (R45)</td></tr>
+<tr><td>2</td><td><code>0267_content_schedule_releases.sql</code></td><td>Scheduled publish / take-down and Releases (R46)</td></tr>
+<tr><td>3</td><td><code>0268_home_slide_advanced_click_events.sql</code></td><td>Home slide advanced options and click tracking (R47)</td></tr>
+</table>
+<span class="small">If one has already been run, Supabase may say it already exists. That is fine; move on to the next.</span>
+</div>
+
+<div class="box note">
+<b>Handy tips for testing</b>
+<ul>
+<li><b>Staff preview vs customer view.</b> When you are logged in and previewing, the site shows drafts and editing tools. To see what a customer sees, use a <b>private / incognito window</b> where you are not logged in.</li>
+<li><b>Phone checks.</b> Use a real phone, or on a computer make the browser window very narrow.</li>
+<li><b>After publishing,</b> allow up to a minute, then refresh the public page.</li>
+</ul>
+</div>
+
+<!-- ================================================================ -->
+<h2>R45: Carousel accessibility, safer uploads, faster pictures, edit protection</h2>
+
+<h3>R45-1. Carousel pause / play button and swiping (home page and Shop page)</h3>
+<div class="test">
+<ol>
+<li>Open the <b>home page</b> on a computer. The top carousel should rotate by itself.</li>
+<li>Find the small <b>pause</b> button (before the slides). Click it. <span class="pass">Expected:</span> rotation stops and the button changes to play. Click again and it starts.</li>
+<li>Hover the mouse over the carousel. <span class="pass">Expected:</span> it pauses while you hover.</li>
+<li>Press <b>Tab</b> until keyboard focus lands inside the carousel. <span class="pass">Expected:</span> rotation stops for good (so keyboard users aren't rushed).</li>
+<li>On a <b>phone</b>: <span class="pass">Expected:</span> the carousel does <u>not</u> auto-rotate. <b>Swipe left/right</b> to change slides; normal up/down page scrolling still works.</li>
+<li>Slides with lots of text should stay up a little longer (6 to 10 seconds).</li>
+<li>Repeat steps 1 to 5 on the <b>Shop page (/menu)</b> banner carousel.</li>
+</ol>
+<span class="chk"></span>Home carousel OK &nbsp;&nbsp; <span class="chk"></span>Shop carousel OK &nbsp;&nbsp; <span class="chk"></span>Phone swipe OK
+</div>
+
+<h3>R45-2. Upload safety check (Media Library)</h3>
+<div class="test">
+<ol>
+<li>Go to <b>Admin, Website, Media Library</b>. Upload a normal PNG or JPEG. <span class="pass">Expected:</span> it uploads as always.</li>
+<li>Upload a normal MP4 video. <span class="pass">Expected:</span> it uploads.</li>
+<li>Rename a text file to <code>fake.jpg</code> and try to upload it. <span class="pass">Expected:</span> it is <b>refused</b>, because the file's real contents aren't a picture.</li>
+<li>(Optional) Try an iPhone <code>.mov</code> (QuickTime). <span class="pass">Expected:</span> refused. Convert it to MP4 first.</li>
+</ol>
+<span class="chk"></span>Good files upload &nbsp;&nbsp; <span class="chk"></span>Fake file refused
+</div>
+
+<h3>R45-3. Faster pictures and blurry "loading" previews <span class="small">(needs migration 0266)</span></h3>
+<div class="test">
+<ol>
+<li>Upload a <b>new</b> photo in the Media Library and use it on a home slide or Shop slide. Publish.</li>
+<li>In an incognito window, open the page on a slow connection (or a phone on cellular). <span class="pass">Expected:</span> a soft blurred version shows for a moment before the sharp picture.</li>
+<li>Pictures uploaded <u>before</u> this change have no blur preview. Re-upload one to get it. That is expected.</li>
+</ol>
+<span class="chk"></span>Blur preview seen on a new upload
+</div>
+
+<h3>R45-4. "Someone else saved first" protection</h3>
+<div class="test">
+<ol>
+<li>Open <b>Admin, Website, Header &amp; Footer</b> in <b>two browser tabs</b>.</li>
+<li>In tab 1, change a piece of wording and save.</li>
+<li>In tab 2 (still showing the old version), change the <u>same</u> wording and save.</li>
+<li><span class="pass">Expected:</span> tab 2 shows an amber box: "Your change wasn't saved, because someone else saved first", with a <b>Reload latest version</b> button. Tab 1's save is <u>not</u> overwritten.</li>
+</ol>
+<span class="chk"></span>Conflict box shown, nothing overwritten
+</div>
+
+<!-- ================================================================ -->
+<h2 class="pb">R46: Scheduling, Releases and SEO</h2>
+
+<h3>R46-1. Schedule a change to go live or come down <span class="small">(needs migration 0267)</span></h3>
+<div class="test">
+<ol>
+<li>Open <b>Admin, Website, Home</b>, carousel tab. Edit a slide and <b>save the draft</b> (don't publish).</li>
+<li>Under that slide find the <b>Schedule</b> strip. Choose <b>"Go live (publish the saved draft)"</b> and a time about 10 minutes from now. Save it.</li>
+<li>Wait until the time passes (it runs every 5 minutes, so allow up to 5 extra minutes). <span class="pass">Expected:</span> the public home page shows the new version.</li>
+<li>Try <b>"Come down (hide it)"</b> on another slide. <span class="pass">Expected:</span> after the time, the slide disappears from the public site.</li>
+<li>The same Schedule strip is also under Shop banner slides, page sections and FAQ questions. Try at least one.</li>
+<li>Open <b>Admin, Website, Schedule &amp; Releases</b>. <span class="pass">Expected:</span> "Coming up" lists what's scheduled, and "Last 14 days" lists what already ran.</li>
+</ol>
+<span class="chk"></span>Go live worked &nbsp;&nbsp; <span class="chk"></span>Come down worked &nbsp;&nbsp; <span class="chk"></span>Schedule page lists both
+</div>
+
+<h3>R46-2. Releases (several changes go live together)</h3>
+<div class="test">
+<ol>
+<li>On <b>Schedule &amp; Releases</b>, type a name in <b>New release name</b> and press <b>Create release</b>.</li>
+<li>Use <b>Add to release</b> to add two or three items (for example two slides set to "Go live").</li>
+<li>Either give the release a time, or press <b>Publish now</b>. <span class="pass">Expected:</span> all items go live together, and the release shows as published.</li>
+<li>Make another release and press <b>Cancel release</b>. <span class="pass">Expected:</span> nothing in it goes live.</li>
+</ol>
+<span class="chk"></span>Release published together &nbsp;&nbsp; <span class="chk"></span>Cancel works
+</div>
+
+<h3>R46-3. SEO Editor really changes Google results</h3>
+<div class="test">
+<ol>
+<li>Open <b>Admin, Website, Website Sync, SEO Editor</b> (or go to <code>/admin/content/seo</code>).</li>
+<li>For <b>/about</b>, change the Title and Description and save.</li>
+<li>In an incognito window open <code>/about</code>. Right-click, choose <b>View page source</b>, and search for <code>&lt;title&gt;</code>. <span class="pass">Expected:</span> your new title. If your title already says "Greenway", the brand isn't added twice.</li>
+<li>Tick <b>No-index</b> for one page and save. <span class="pass">Expected:</span> its page source contains <code>noindex, follow</code>, and that page disappears from <code>/sitemap.xml</code>. <b>Untick it afterwards!</b></li>
+<li>Try a Canonical pointing at another website. <span class="pass">Expected:</span> refused, and nothing saved.</li>
+<li>/medical and the three legal pages now appear in the SEO Editor too.</li>
+</ol>
+<span class="chk"></span>Title shows in page source &nbsp;&nbsp; <span class="chk"></span>No-index and sitemap work (then reverted)
+</div>
+
+<!-- ================================================================ -->
+<h2 class="pb">R47: Banners, category cards, SEO pictures, clicks, Google hours</h2>
+
+<h3>R47-1. Shop banner eyebrow now appears</h3>
+<div class="test">
+<ol>
+<li>Open <b>Admin, Website, Shop Banner</b>. On a slide that uses a <b>Custom design</b>, type an eyebrow (the small line above the title) and tick it visible. Publish.</li>
+<li><span class="pass">Expected:</span> the eyebrow shows on <code>/menu</code>, above the title.</li>
+<li>Do the same on <b>Admin, Website, Loyalty</b> (the hero banner). Check <code>/loyalty</code>.</li>
+</ol>
+<span class="chk"></span>Shop eyebrow shows &nbsp;&nbsp; <span class="chk"></span>Loyalty eyebrow shows
+</div>
+
+<h3>R47-2. Home carousel "Advanced options" <span class="small">(needs migration 0268)</span></h3>
+<div class="test">
+<ol>
+<li>Open <b>Admin, Website, Home</b>, carousel tab. Open a slide and expand <b>Advanced options</b>.</li>
+<li>Try each option: font and colour for the eyebrow, title and description lines; hide a line; a separate <b>Phone picture</b>; picture focus (5 positions); text left / center / right and top / middle / bottom; a Start / End show window.</li>
+<li>Turn on <b>Custom design (optional)</b> to drag text and buttons anywhere, just like the Shop and Loyalty banners.</li>
+<li>Save and Publish. Check the home page on a computer <b>and</b> a phone. <span class="pass">Expected:</span> the changes show. Slides that never used Advanced options look exactly as before.</li>
+<li>Set an End time in the past on a test slide. <span class="pass">Expected:</span> customers don't see it, but your staff preview still does.</li>
+</ol>
+<span class="chk"></span>Line styles &nbsp; <span class="chk"></span>Phone picture &nbsp; <span class="chk"></span>Custom design &nbsp; <span class="chk"></span>Schedule window
+</div>
+
+<h3>R47-3. Category cards: advanced options and video</h3>
+<div class="test">
+<ol>
+<li>Open <b>Admin, Website, Home</b>, type cards tab (category cards).</li>
+<li>On one card, pick a <b>video</b> (MP4 or WebM) from the Media Library. <span class="pass">Expected:</span> the card plays the video on the home page.</li>
+<li>Expand <b>Advanced options</b>: phone picture or video, focus, zoom, darkening, label font and colour, button colour, text style, open in new tab, and a schedule.</li>
+<li>Set a Start time in the future on a test card. <span class="pass">Expected:</span> customers don't see it yet.</li>
+<li>Note: PDFs and documents can't be shown as a card picture, so they aren't offered. All picture types (PNG, JPEG, WebP, GIF, SVG) and MP4/WebM video are.</li>
+</ol>
+<span class="chk"></span>Video card plays &nbsp;&nbsp; <span class="chk"></span>Advanced options work &nbsp;&nbsp; <span class="chk"></span>Schedule hides card
+</div>
+
+<h3>R47-4. SEO share picture (what shows when a link is shared)</h3>
+<div class="test">
+<ol>
+<li>In the <b>SEO Editor</b>, on any page press <b>Choose picture</b>. Search, pick one, and Save.</li>
+<li>A warning appears if the picture is smaller than 600 x 315 (1200 x 630 is best).</li>
+<li>Paste that page's full address into the <b>Facebook Sharing Debugger</b> (developers.facebook.com/tools/debug) and press <b>Scrape Again</b>. <span class="pass">Expected:</span> your picture shows.</li>
+<li>Press <b>Use site default</b> and save. <span class="pass">Expected:</span> it goes back to the normal site picture.</li>
+</ol>
+<span class="chk"></span>Picture shows in debugger &nbsp;&nbsp; <span class="chk"></span>Site default restores
+</div>
+
+<h3>R47-5. Click tracking and Reports, Website Clicks <span class="small">(needs migration 0268)</span></h3>
+<div class="test">
+<ol>
+<li>In an <b>incognito window (not logged in)</b>, click a few banner buttons: home slides, Shop banner, Specials hero, Loyalty hero.</li>
+<li>Back in admin, open <b>Reports</b> and the <b>Website Clicks</b> tab. Try 7, 30 and 90 days.</li>
+<li><span class="pass">Expected:</span> your clicks appear in total clicks, phone / tablet / computer, the daily chart, top slides, top buttons and pages. "Banners nobody pressed" lists live slides with no clicks. The "Page speed" card links to Vercel.</li>
+<li>Clicks you make while <b>logged in and previewing are not counted</b>, on purpose. Visitors with "do not track" (GPC) turned on aren't counted either.</li>
+</ol>
+<span class="chk"></span>Clicks appear in the report
+</div>
+
+<h3>R47-6. Google Store Listing (opening hours for Google)</h3>
+<div class="test">
+<ol>
+<li>Open <b>Admin, Website, Google Store Listing</b> (also linked from the SEO Editor).</li>
+<li>Change a day's hours. Tick <b>Midnight</b> for one day. Tick <b>Closed all day</b> for another (then put it back).</li>
+<li>Try an opening time before 8:00 AM. <span class="pass">Expected:</span> a red note about WAC 314-55-147, and Save is blocked.</li>
+<li>Press <b>+ Add holiday / special hours</b>: for example "Thanksgiving", a date in the future, Closed all day. Save. <span class="pass">Expected:</span> "Store hours saved."</li>
+<li>Go to <b>search.google.com/test/rich-results</b>, enter <code>https://www.greenwaymarijuana.com/locations</code> and run the test. <span class="pass">Expected:</span> a "Local business" result with your weekly hours and the holiday.</li>
+<li>Remember: the hours <u>text</u> customers read in the footer and on /locations is separate wording (Header &amp; Footer). Keep it matching, and also update your <b>Google Business Profile</b> in Google.</li>
+</ol>
+<span class="chk"></span>Hours save &nbsp;&nbsp; <span class="chk"></span>8 AM rule enforced &nbsp;&nbsp; <span class="chk"></span>Google test shows hours
+</div>
+
+<!-- ================================================================ -->
+<h2 class="pb">R48 polish: Move mode for Home slides, code-quality fix</h2>
+
+<h3>R48-1. Drag text on Home slides in the live preview (Move mode) <span class="small">(needs migration 0268)</span></h3>
+<div class="test">
+<ol>
+<li>Make sure a Home slide has <b>Advanced options, Custom design</b> turned on (R47-2) and is saved.</li>
+<li>Open <b>Admin, Website, Website Sync</b>, then the <b>Live preview</b> tab, with the home page (<code>/</code>) showing.</li>
+<li>Turn on <b>Move mode: On</b>. <span class="pass">Expected:</span> the slide's text boxes and buttons get dashed outlines.</li>
+<li>Drag the title somewhere new (or click it, use the arrow keys, then press Enter). <span class="pass">Expected:</span> a message says it moved and was <b>saved as a draft</b>, with a link to the Home carousel editor.</li>
+<li>Make the preview narrow (phone size) and move it again. <span class="pass">Expected:</span> the message says "(phone layout)", and the computer layout isn't changed.</li>
+<li>Open the Home carousel editor and <b>Publish</b> the slide. Check the public home page. <span class="pass">Expected:</span> the new position is live. Nothing goes live until you publish.</li>
+<li>Bonus: on a Shop or Loyalty banner, tick an eyebrow visible (it now shows, see R47-1) and drag it in Move mode. <span class="pass">Expected:</span> it moves and saves. Before this round that eyebrow couldn't be dragged.</li>
+<li>Classic home slides (no Custom design) have nothing to drag. That is expected.</li>
+</ol>
+<span class="chk"></span>Home slide drag saves as draft &nbsp;&nbsp; <span class="chk"></span>Phone layout separate &nbsp;&nbsp; <span class="chk"></span>Publish makes it live
+</div>
+
+<h3>R48-2. Code-quality fix (nothing new to see)</h3>
+<div class="test">
+<p>An old code-quality error in the shared banner component (the piece that picks which banner line becomes the page's main heading) was fixed. <b>Nothing should look different.</b> Quick check: on the home page, the first slide's big title is still the page's main heading. Banners on /menu, /specials, /loyalty and other pages look the same as before.</p>
+<span class="chk"></span>Banners look unchanged
+</div>
+
+<!-- ================================================================ -->
+<h2>Quick reference: where everything lives</h2>
+<table>
+<tr><th>Feature</th><th>Admin location</th><th>Public page to check</th></tr>
+<tr><td>Home carousel and category cards</td><td>Website, Home (carousel and type cards tabs)</td><td>/</td></tr>
+<tr><td>Shop banner</td><td>Website, Shop Banner</td><td>/menu</td></tr>
+<tr><td>Loyalty hero</td><td>Website, Loyalty</td><td>/loyalty</td></tr>
+<tr><td>Schedules and Releases</td><td>Website, Schedule &amp; Releases</td><td>whichever page the item is on</td></tr>
+<tr><td>SEO titles and share pictures</td><td>/admin/content/seo (via Website Sync)</td><td>View page source; Facebook Sharing Debugger</td></tr>
+<tr><td>Google opening hours</td><td>Website, Google Store Listing</td><td>Google Rich Results Test on /locations</td></tr>
+<tr><td>Click report</td><td>Reports, Website Clicks</td><td>(clicks made in incognito)</td></tr>
+<tr><td>Live preview and Move mode</td><td>Website, Website Sync, Live preview</td><td>(inside the preview)</td></tr>
+<tr><td>Upload checks and blur previews</td><td>Website, Media Library</td><td>any page using the picture</td></tr>
+<tr><td>Edit-conflict protection</td><td>Website, Header &amp; Footer (or Branding)</td><td>(two tabs)</td></tr>
+</table>
+
+<div class="box note"><b>Reporting problems:</b> for anything that fails, note the test number (for example "R47-5 step 3"), what you expected and what happened. A screenshot helps a lot.</div>
+
+</body>
+</html>
