@@ -22,6 +22,7 @@ import { ContentImageField, type MediaChoice } from "@/components/admin/ContentI
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
 import { SlideView } from "@/components/menu/ShopBannerCarousel";
 import { DesignCard } from "@/components/admin/specials/SpecialsR41Panels";
+import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
 import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
 import {
   TEXT_ALIGNS,
@@ -460,7 +461,20 @@ function SlideCard({
     setPres((p) => ({ ...p, [key]: value }));
   }
   function patchBlock(which: "eyebrow" | "title" | "subtitle", patch: Partial<HeroTextBlock>) {
-    setPres((p) => ({ ...p, [which]: { ...p[which], ...patch } }));
+    setPres((p) => {
+      const next = { ...p, [which]: { ...p[which], ...patch } };
+      // R47: with a custom design on, ticking "Show" (or typing into a shown
+      // line) makes sure the studio has a box for that line, and un-hides it.
+      if (next.design) {
+        const w = (b: HeroTextBlock) => (b.show ? b.text : "");
+        next.design = ensureBoundBoxes(
+          next.design,
+          { eyebrow: w(next.eyebrow), title: w(next.title), subtitle: w(next.subtitle) },
+          patch.show === true ? which : null,
+        );
+      }
+      return next;
+    });
   }
 
   const title = pres.title.text.split("\n")[0] || "(untitled slide)";

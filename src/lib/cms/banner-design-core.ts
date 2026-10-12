@@ -687,6 +687,55 @@ export function designFromLegacy(input: LegacyBannerInput): BannerDesign {
   return normalizeDesign(d)!;
 }
 
+/**
+ * R47: make sure every banner field that is switched ON and has words has a
+ * text box bound to it. A design made while (say) the eyebrow was hidden has
+ * no eyebrow box, so ticking "Show" later did nothing on a custom design.
+ * Missing boxes are added next to the headline in the legacy style; boxes the
+ * owner already has (even hidden ones) are left alone unless `unhide` names
+ * that field. Returns the SAME object when nothing changes.
+ */
+export function ensureBoundBoxes(
+  design: BannerDesign,
+  legacy: { eyebrow?: string; title?: string; subtitle?: string },
+  unhide: DesignBind = null,
+): BannerDesign {
+  let boxes = design.boxes;
+  let changed = false;
+  if (unhide) {
+    const i = boxes.findIndex((b) => b.bind === unhide && b.hidden);
+    if (i >= 0) {
+      boxes = boxes.map((b, j) => (j === i ? { ...b, hidden: false } : b));
+      changed = true;
+    }
+  }
+  const head = boxes.find((b) => b.bind === "title") ?? boxes.find((b) => b.role === "headline");
+  const x = head ? head.x : 4;
+  const w = head ? head.w : 60;
+  const align: DesignAlign = head ? head.align : "left";
+  const hy = head ? head.y : 30;
+  const used = new Set(boxes.map((b) => b.id));
+  const add: DesignTextBox[] = [];
+  const has = (k: Exclude<DesignBind, null>) => boxes.some((b) => b.bind === k);
+  if (legacy.eyebrow?.trim() && !has("eyebrow") && boxes.length + add.length < MAX_TEXT_BOXES)
+    add.push(
+      defaultTextBox("eyebrow", { id: uniqueId("eyebrow", used), bind: "eyebrow", x, y: r4(Math.max(0, hy - 12)), w, align, size: 12, sizeMobile: 10, weight: 900, color: "#7ed957", letterSpacing: 0.22 }),
+    );
+  if (legacy.title?.trim() && !has("title") && boxes.length + add.length < MAX_TEXT_BOXES)
+    add.push(
+      defaultTextBox("headline", { id: uniqueId("headline", used), bind: "title", x, y: hy, w, align, size: 48, sizeMobile: 24, weight: 900, color: "#ffffff", lineHeight: 1 }),
+    );
+  if (legacy.subtitle?.trim() && !has("subtitle") && boxes.length + add.length < MAX_TEXT_BOXES)
+    add.push(
+      defaultTextBox("subhead", { id: uniqueId("subhead", used), bind: "subtitle", x, y: r4(Math.min(90, hy + 30)), w: Math.min(w, 45), align, size: 14, sizeMobile: 11.5, weight: 600, color: "#d4d4d8" }),
+    );
+  if (add.length) {
+    boxes = [...boxes, ...add];
+    changed = true;
+  }
+  return changed ? { ...design, boxes } : design;
+}
+
 /** The text a box shows (bound boxes follow the banner's own fields). */
 export function resolveBoxText(box: Pick<DesignTextBox, "bind" | "text">, legacy: { eyebrow?: string; title?: string; subtitle?: string }): string {
   if (box.bind === "eyebrow") return legacy.eyebrow ?? "";
@@ -1357,6 +1406,28 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
   );
   ok(!("srcMobile" in normalizeDesign({ ...plain, image: { ...plain.image, srcMobile: "https://evil.co/x.png" } })!.image), "unsafe phone picture dropped");
   ok(mobileImageSrc(withPhone, "/main.webp") === "/brand/phone.webp" && mobileImageSrc(plain, "/main.webp") === "/main.webp", "mobileImageSrc fallback");
+
+  // R47: ensureBoundBoxes — eyebrow ticked on after the design was made.
+  {
+    const noEye = designFromLegacy({ title: "Big Sale", subtitle: "", preset: "hero" });
+    ok(!noEye.boxes.some((b) => b.bind === "eyebrow"), "R47 seed without eyebrow has no eyebrow box");
+    const same = ensureBoundBoxes(noEye, { title: "Big Sale" });
+    ok(same === noEye, "R47 nothing to add returns same object");
+    const fixed = ensureBoundBoxes(noEye, { eyebrow: "Greenway", title: "Big Sale" });
+    const eye = fixed.boxes.find((b) => b.bind === "eyebrow");
+    const head = fixed.boxes.find((b) => b.bind === "title")!;
+    ok(!!eye && eye.role === "eyebrow" && eye.y < head.y && eye.x === head.x, "R47 eyebrow box added above headline");
+    ok(fixed.boxes.length === noEye.boxes.length + 1, "R47 exactly one box added");
+    const sub = ensureBoundBoxes(noEye, { title: "Big Sale", subtitle: "today" });
+    ok(sub.boxes.some((b) => b.bind === "subtitle" && b.y > head.y), "R47 subtitle box added below headline");
+    ok(ensureBoundBoxes(noEye, { eyebrow: "   ", title: "x" }) === noEye, "R47 blank words add nothing");
+    const hid = { ...fixed, boxes: fixed.boxes.map((b) => (b.bind === "eyebrow" ? { ...b, hidden: true } : b)) };
+    ok(ensureBoundBoxes(hid, { eyebrow: "G", title: "x" }) === hid, "R47 hidden box kept hidden without unhide");
+    ok(ensureBoundBoxes(hid, { eyebrow: "G", title: "x" }, "eyebrow").boxes.find((b) => b.bind === "eyebrow")!.hidden === false, "R47 unhide shows the bound box");
+    const full = { ...noEye, boxes: Array.from({ length: MAX_TEXT_BOXES }, (_, i) => defaultTextBox("body", { id: `b${i}` })) };
+    ok(ensureBoundBoxes(full, { eyebrow: "G" }).boxes.length === MAX_TEXT_BOXES, "R47 never exceeds box cap");
+    ok(normalizeDesign(fixed) !== null, "R47 result normalizes");
+  }
 
   return { passed, failed };
 }

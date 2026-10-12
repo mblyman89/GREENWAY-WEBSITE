@@ -7,6 +7,7 @@ import {
   heroTextLines,
 } from "@/lib/loyalty/loyalty-hero-core";
 import { BannerMedia } from "@/components/site/BannerMedia";
+import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
 
 /**
  * LoyaltyHeroBanner (SLICE 123 / LOY-1) — the /loyalty hero, rebuilt as a fully
@@ -45,16 +46,18 @@ export function LoyaltyHeroBanner({
   // phone focus/height controls handle small screens.
   if (presentation.design?.enabled) {
     const words = (b: LoyaltyHeroPresentation["eyebrow"]) => (b.show ? b.text : "");
+    const legacy = {
+      eyebrow: words(presentation.eyebrow),
+      title: words(presentation.title),
+      subtitle: words(presentation.subtitle),
+    };
+    // R47: a line ticked "Show" after the design was made gets a box.
     return (
       <DesignedBanner
-        design={presentation.design}
+        design={ensureBoundBoxes(presentation.design, legacy)}
         imageSrc={presentation.image || presentation.imageMobile}
         imageAlt=""
-        legacy={{
-          eyebrow: words(presentation.eyebrow),
-          title: words(presentation.title),
-          subtitle: words(presentation.subtitle),
-        }}
+        legacy={legacy}
         headingLevel={2}
         priority={priority}
         editable={editable}
