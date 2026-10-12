@@ -88,6 +88,8 @@ export function FilterMobile({ activeCount, resultCount, children }: FilterMobil
 export type MenuFilterControlsProps = {
   selectedCategories: string[];
   selectedStrains: string[];
+  /** R49 S1: selected strain NAMES (the new "Strains" facet). Optional = back-compatible. */
+  selectedStrainNames?: string[];
   selectedTerpenes: string[];
   selectedBrands: string[];
   /** PR 3: additive by-vendor facet (surfaces all brands by a producer). */
@@ -102,6 +104,7 @@ export type MenuFilterControlsProps = {
   maxAvailableCbd?: number;
   onCategoryToggle: (category: string) => void;
   onStrainToggle: (strain: string) => void;
+  onStrainNameToggle?: (name: string) => void;
   onTerpeneToggle: (terpene: string) => void;
   onBrandToggle: (brand: string) => void;
   onVendorToggle: (vendor: string) => void;
@@ -112,6 +115,8 @@ export type MenuFilterControlsProps = {
   onReset: () => void;
   categoryOptions: FilterCheckboxOption[];
   strainOptions: FilterCheckboxOption[];
+  /** R49 S1: every strain name on the menu (cultivars only; edible flavors excluded). */
+  strainNameOptions?: FilterCheckboxOption[];
   terpeneOptions: FilterCheckboxOption[];
   brandOptions: FilterCheckboxOption[];
   /** PR 3: by-vendor options (mirrors brandOptions; derived from item.vendor). */
@@ -149,6 +154,7 @@ export type MenuFilterControlsProps = {
 export function MenuFilterControls({
   selectedCategories,
   selectedStrains,
+  selectedStrainNames = [],
   selectedTerpenes,
   selectedBrands,
   selectedVendors,
@@ -162,6 +168,7 @@ export function MenuFilterControls({
   maxAvailableCbd = 100,
   onCategoryToggle,
   onStrainToggle,
+  onStrainNameToggle,
   onTerpeneToggle,
   onBrandToggle,
   onVendorToggle,
@@ -172,6 +179,7 @@ export function MenuFilterControls({
   onReset,
   categoryOptions,
   strainOptions,
+  strainNameOptions = [],
   terpeneOptions,
   brandOptions,
   vendorOptions,
@@ -207,17 +215,17 @@ export function MenuFilterControls({
               links — same checkbox-row look as Categories / Brands / Strains.
               One-at-a-time selection (mutually exclusive), so the boxes behave
               like radios (clicking the active one clears it). */}
-          <div className="grid gap-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
             {specialFilters.map((f) => {
               const active = activeSpecialId === f.id;
               return (
                 <label
                   key={f.id}
-                  className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                  className={`flex min-h-12 min-w-0 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
                     active ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"
                   }`}
                 >
-                  <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex min-w-0 flex-1 items-center gap-3">
                     <input
                       type="checkbox"
                       name="specials"
@@ -229,7 +237,7 @@ export function MenuFilterControls({
                     <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
                       ✓
                     </span>
-                    <span className="truncate font-bold">{f.name}</span>
+                    <span className="min-w-0 break-words font-bold leading-snug [overflow-wrap:anywhere]">{f.name}</span>
                   </span>
                 </label>
               );
@@ -255,9 +263,18 @@ export function MenuFilterControls({
         <FilterCheckboxGroup name="brands" options={brandOptions} selectedValues={selectedBrands} onToggle={onBrandToggle} searchable searchPlaceholder="Search brands..." />
       </FilterSection>
 
-      <FilterSection title="Strains">
+      {/* R49 S1: owner renamed this section "Strain types" (indica / sativa /
+          hybrid / leaning hybrids / CBD). The ?strains= param is unchanged. */}
+      <FilterSection title="Strain types">
         <FilterCheckboxGroup name="strains" options={strainOptions} selectedValues={selectedStrains} onToggle={onStrainToggle} />
       </FilterSection>
+
+      {/* R49 S1: NEW "Strains" section — every strain name on the menu. */}
+      {onStrainNameToggle && (strainNameOptions.length > 0 || selectedStrainNames.length > 0) ? (
+        <FilterSection title="Strains">
+          <FilterCheckboxGroup name="strainNames" options={strainNameOptions} selectedValues={selectedStrainNames} onToggle={onStrainNameToggle} searchable searchLabel="Search strains" searchPlaceholder="Search strains..." preserveCase />
+        </FilterSection>
+      ) : null}
 
       {dohEnabled ? (
         <FilterSection title="DOH Compliant">
@@ -267,17 +284,17 @@ export function MenuFilterControls({
               checkbox-row look as Specials; one-at-a-time (clicking the active
               one clears it). Only appears when the live menu actually has
               DOH-compliant items — no dead checkbox pre-migration. */}
-          <div className="grid gap-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
             {dohOptions.map((option) => {
               const active = activeDohId === option.id;
               return (
                 <label
                   key={option.id}
-                  className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                  className={`flex min-h-12 min-w-0 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
                     active ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"
                   }`}
                 >
-                  <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex min-w-0 flex-1 items-center gap-3">
                     <input
                       type="checkbox"
                       name="doh"
@@ -289,7 +306,7 @@ export function MenuFilterControls({
                     <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
                       ✓
                     </span>
-                    <span className="truncate font-bold">{option.label}</span>
+                    <span className="min-w-0 break-words font-bold leading-snug [overflow-wrap:anywhere]">{option.label}</span>
                   </span>
                   <span className="shrink-0 text-[0.7rem] font-bold uppercase tracking-[0.1em] text-zinc-500" aria-hidden="true">
                     {option.count}
@@ -310,18 +327,18 @@ export function MenuFilterControls({
               ticked a box". One-at-a-time (the two lanes are different
               statutory buckets, so selecting both would always return nothing).
               Only appears when the live menu actually has qualifying products. */}
-          <div className="grid gap-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
             {classificationOptions.map((option) => {
               const active = activeClassificationId === option.id;
               return (
                 <label
                   key={option.id}
                   title={option.help}
-                  className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                  className={`flex min-h-12 min-w-0 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
                     active ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"
                   }`}
                 >
-                  <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex min-w-0 flex-1 items-center gap-3">
                     <input
                       type="checkbox"
                       name="classification"
@@ -333,7 +350,7 @@ export function MenuFilterControls({
                     <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
                       ✓
                     </span>
-                    <span className="truncate font-bold">{option.label}</span>
+                    <span className="min-w-0 break-words font-bold leading-snug [overflow-wrap:anywhere]">{option.label}</span>
                   </span>
                   <span className="shrink-0 text-[0.7rem] font-bold uppercase tracking-[0.1em] text-zinc-500" aria-hidden="true">
                     {option.count}
