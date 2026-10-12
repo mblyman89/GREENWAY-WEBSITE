@@ -115,6 +115,18 @@ export async function importFetchAction(formData: FormData): Promise<void> {
           ? { units: report.reconcile.unitsRows, costValueCents: report.reconcile.costValueRowsCents }
           : null,
         files: loaded.files,
+        // R50 S10: the manifest plan the S2 step will apply (counts only; the plan is rebuilt from the same run).
+        manifestPlan: report?.manifestPlan
+          ? {
+              lots: report.manifestPlan.summary.lots,
+              matched: report.manifestPlan.summary.matched,
+              transfersUsed: report.manifestPlan.summary.transfersUsed,
+              fallbackGroups: report.manifestPlan.summary.fallbackGroups,
+              vendorByLink: report.manifestPlan.summary.matchedVendorByLink,
+              alsoOn: report.manifestPlan.summary.lotsAlsoOn,
+              link: report.manifestPlan.summary.link,
+            }
+          : null,
         items: result.version.item_count,
         variants: result.version.variant_count,
         errors: result.transform.diagnosticCounts.errors,

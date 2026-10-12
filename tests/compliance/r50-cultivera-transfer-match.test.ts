@@ -62,7 +62,7 @@ const plan = planTransferManifests(rows, transfers, { pacificToday: TODAY });
 
 describe("R50 S1b: real lots married to real Cultivera transfers", () => {
   it("self-tests pass", () => {
-    expect(__runCultiveraTransferMatchCoreTests().passed).toBeGreaterThanOrEqual(111);
+    expect(__runCultiveraTransferMatchCoreTests().passed).toBeGreaterThanOrEqual(116);
   });
 
   it("reads the committed index (guards the test itself)", () => {

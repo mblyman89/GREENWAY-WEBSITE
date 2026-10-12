@@ -153,6 +153,34 @@ export default async function FetchRunPage({
                     </ul>
                   </details>
                 )}
+                {report.manifestPlan && (
+                  <details className="mt-2 text-xs text-white/60">
+                    <summary>
+                      Original manifests: {report.manifestPlan.summary.matched.toLocaleString("en-US")} lots on{" "}
+                      {report.manifestPlan.summary.transfersUsed.toLocaleString("en-US")} real Cultivera transfers ·{" "}
+                      {(report.manifestPlan.summary.lots - report.manifestPlan.summary.matched).toLocaleString("en-US")} on{" "}
+                      {report.manifestPlan.summary.fallbackGroups} rebuilt (no transfer on record)
+                    </summary>
+                    <p className="mt-1">
+                      Filed later by the manifest step (S2); staging the menu does not wait for it. {report.manifestPlan.summary.matchedVendorByLink} lots were
+                      shipped by a distributor under another name and are filed on the distributor&apos;s manifest because Cultivera links them there.{" "}
+                      {report.manifestPlan.summary.lotsAlsoOn} re-received barcodes are filed on their first delivery and remember the others.
+                    </p>
+                    {report.manifestPlan.gate.multiReceiptDiffers.length > 0 && (
+                      <p className="mt-1">
+                        Cultivera points {report.manifestPlan.gate.multiReceiptDiffers.length} re-received lots at their latest top-up; we file them on the first
+                        delivery: {report.manifestPlan.gate.multiReceiptDiffers.slice(0, 10).map((d) => `${d.barcode} → ${d.transferId} (Cultivera ${d.linkIds.join("/")})`).join(", ")}
+                      </p>
+                    )}
+                    <ul className="mt-1 pl-4">
+                      {report.manifestPlan.biggest.map((g) => (
+                        <li key={g.transferId}>
+                          {g.manifestNumber} · {g.vendorLabel} · {g.acceptedAt.slice(0, 10)} · {g.lots} lots
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </>
             )}
             {realDecision && !realDecision.allowed && (
