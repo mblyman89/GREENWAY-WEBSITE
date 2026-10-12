@@ -665,7 +665,7 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
       * Payables listed all five, including $300.00 and $140.00 of migration stock.
       * The Sage export had 4 transactions, including the reconstructed manifest.
       * Bill and receipt returned `OK` for both migration manifests, so they would have been booked twice.
-      * Re-measured after a sandbox reset, with the same result.
+      * Re-measured on a freshly seeded database, with the same result.
     * AFTER (this branch):
       * Payables list only the three real deliveries (WCIA 5000, PDF-77 4800, CV-NOKIND 100). The null and
         odd payloads **stay payable**.
