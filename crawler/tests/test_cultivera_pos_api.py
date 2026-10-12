@@ -183,3 +183,44 @@ def test_secret_not_on_disk_after_api_run(env, tmp_path):
     for f in (tmp_path / "cache").rglob("*"):
         if f.is_file():
             assert PASSWORD.encode() not in f.read_bytes(), f
+
+
+@pytest.mark.parametrize("rid,ok", [
+    ("20261101T130000Z-deadbeef", True), ("20261101T130000Z-deadbee", False), ("abc", False),
+    ("20261101T130000Z-deadbeef/..", False), ("../20261101T130000Z-deadbeef", False), ("", False),
+])
+def test_valid_run_id(rid, ok):
+    assert jobs.valid_run_id(rid) is ok
+    if not ok:
+        with pytest.raises(ValueError):
+            jobs.run_dir(rid)
+
+
+def test_cancel_reaches_a_background_run(env, monkeypatch):
+    _, fake, settings = env
+    gate, entered = threading.Event(), threading.Event()
+    orig = fake.handler
+
+    def slow(req):
+        if str(req.url).endswith("export-inventories-to-excel"):
+            entered.set()
+            gate.wait(10)
+        return orig(req)
+
+    real = jobs_PosClient = jobs.PosClient  # the fixture's factory
+
+    def factory(*a, **k):
+        cl = jobs_PosClient(*a, **k)
+        cl._http._transport = httpx.MockTransport(slow)
+        return cl
+
+    monkeypatch.setattr(jobs, "PosClient", factory)
+    out = REAL_START(background=True, settings=settings)
+    assert entered.wait(10)
+    assert jobs.request_cancel(out["runId"]) is True
+    gate.set()
+    jobs._active["thread"] and jobs._active["thread"].join(10)
+    st = jobs.read_state(out["runId"], settings)["state"]
+    assert st["status"] == "cancelled", st
+    assert "export_products" not in st["stages"]
+    del real
