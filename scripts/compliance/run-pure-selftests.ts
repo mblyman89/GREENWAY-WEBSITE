@@ -2218,7 +2218,7 @@ __runLiquidVolumeTests();
   assertRan("seo-override-core", __runSeoOverrideCoreTests(), 32); // R46-S2: SEO Editor values reach public pages + sitemap
   assertRan("menu-facets-core", __runMenuFacetsCoreTests(), 18); // R49 S1: strain-name facet
   assertRan("menu-size-facet-core", __runMenuSizeFacetCoreTests(), 39); // R49 S2: Weights fix + Size facet
-  assertRan("menu-mg-facet-core", __runMenuMgFacetCoreTests(), 32); // R49 S3: THC/CBD/CBG/CBN/CBC mg range sliders
+  assertRan("menu-mg-facet-core", __runMenuMgFacetCoreTests(), 33); // R49 S3: THC/CBD/CBG/CBN/CBC mg range sliders
   assertRan("blur-placeholder-core", __runBlurPlaceholderCoreTests(), 25); // R45-S2: tiny blur previews for banner images
   assertRan("type-cards-core", __runTypeCardsTests(), 54); // R41 S3: home Type Cards; R47 advanced card options
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording
