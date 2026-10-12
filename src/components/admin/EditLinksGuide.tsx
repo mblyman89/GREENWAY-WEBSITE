@@ -107,7 +107,7 @@ export function EditLinksGuide() {
           <p className="pt-1">The links behind the pills (you can also type or bookmark these):</p>
           <ul>
             <Row code="/admin/edit?block=specials.hero.title" note="one content block, by its key" />
-            <Row code="/admin/edit?owner=specials:hero" note="a banner (also loyalty:hero, specials:todays, section:<id>, shop-slide:<id>)" />
+            <Row code="/admin/edit?owner=specials:hero" note="a banner (also loyalty:hero, specials:todays, section:<id>, shop-slide:<id>, home-slide:<id>)" />
             <Row code="/admin/edit?area=home-typecards" note={`a named area (${Object.keys(AREA_BUTTON_LABEL).join(", ")})`} />
             <Row code="/admin/edit?block=specials.hero.title&from=hub&path=/specials" note="add from=hub|site & path=… to get the Back pill" />
           </ul>
