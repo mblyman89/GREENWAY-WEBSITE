@@ -249,13 +249,17 @@ describe("SLICE 18A — hop 5: no door is invisible to the list", () => {
     expect(store.slice(idx, idx + 600)).toMatch(/\.eq\("status",\s*"active"\)/);
   });
 
-  it("the import prefix is used only to classify the SOURCE, not the scope", () => {
-    // Verified against import-service.ts, which stamps the migration manifest
-    // `POS-IMPORT-${importId.slice(0, 8)}`.
-    expect(store).toContain("POS-IMPORT-");
-    expect(store).toContain("IMPORT_MANIFEST_PREFIX");
+  it("the import provenance is used only to classify the SOURCE, not the scope", () => {
+    // R50 S2b: the source tab is decided by the shared predicate
+    // (import-lineage-core isCultiveraMigrationRow: raw_payload.kind, with the
+    // `POS-IMPORT-` prefix kept for old rows), because lots re-homed onto
+    // rebuilt manifests carry the REAL transfer number, not POS-IMPORT.
+    expect(store).toContain("isCultiveraMigrationRow(row)");
+    expect(store).toContain("LINEAGE_MANIFEST_SELECT");
+    const core = read("src/lib/inventory/import-lineage-core.ts");
+    expect(core).toContain('export const POS_IMPORT_NUMBER_PREFIX = "POS-IMPORT-";');
     const importSvc = read("src/lib/pos/import-service.ts");
-    expect(importSvc).toContain("POS-IMPORT-");
+    expect(importSvc).toContain("manifest_number: `POS-IMPORT-${importId.slice(0, 8)}`,");
   });
 
   it("a manifest read failure degrades the tab, never the list", () => {
