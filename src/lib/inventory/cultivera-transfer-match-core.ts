@@ -485,7 +485,8 @@ const num0 = (v: unknown): number => {
  * the button's run feeds the matcher with no Python step. A record without a
  * positive integer Id is skipped and counted (never invented). Duplicate Ids:
  * the last wins and is counted. Sorted by id; lines sorted like Python's
- * list.sort() on [barcode, accepted, quantity, sample].
+ * list.sort() on [barcode, accepted, quantity, sample]. Flags use truthiness,
+ * exactly like the Python bool() (parity measured: 644/644 transfers equal).
  */
 export function transferIndexFromDetails(details: readonly unknown[]): {
   transfers: TransferIndexEntry[];
@@ -507,7 +508,7 @@ export function transferIndexFromDetails(details: readonly unknown[]): {
       const o = (it && typeof it === "object" ? it : {}) as Record<string, unknown>;
       const bc = str(o.Barcode).trim();
       if (!bc) continue;
-      lines.push([bc, num0(o.AcceptedQuantity), num0(o.Quantity), o.IsSample === true]);
+      lines.push([bc, num0(o.AcceptedQuantity), num0(o.Quantity), Boolean(o.IsSample)]);
     }
     lines.sort((a, b) =>
       a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1] || a[2] - b[2] || Number(a[3]) - Number(b[3]),
@@ -521,8 +522,8 @@ export function transferIndexFromDetails(details: readonly unknown[]): {
       transferDate: typeof d.TransferDate === "string" ? d.TransferDate : null,
       acceptedAt: typeof d.DateAccepted === "string" ? d.DateAccepted : null,
       status: str(d.StatusDisplay),
-      manual: d.IsManualCreated === true,
-      internal: d.IsInternalTransfer === true,
+      manual: Boolean(d.IsManualCreated),
+      internal: Boolean(d.IsInternalTransfer),
       lines,
     });
   }
@@ -850,6 +851,21 @@ export function __runCultiveraTransferMatchCoreTests(): { passed: number; failed
   ok(!vu2("brand2").matched && vu2("brand2").reason === "vendor_mismatch" && vu2("brand2").link === "none", "v2: alias without a link refused");
   ok(!vu2("brand3").matched && vu2("brand3").reason === "vendor_mismatch" && vu2("brand3").link === "differ", "v2: link to another transfer refused");
   ok(!vu2("brand4").matched && vu2("brand4").reason === "vendor_mismatch", "v2: alias only for a single receipt");
+  {
+    // first receipt after received IS the linked transfer, but there are two receipts → still refused
+    const two = planTransferManifests([row("b5", "Dope Synergy", "2026-07-02 09:00:00")], v2T.concat([T(75, "D-75", "R&B GROUP", "2026-07-02T17:00:00Z", [L("b5")]), T(76, "D-76", "R&B GROUP", "2026-07-05T17:00:00Z", [L("b5")])]), {
+      pacificToday: TODAY,
+      links: new Map([["b5", [75]]]),
+    });
+    ok(!two.decisions[0].matched && (two.decisions[0] as { reason: string }).reason === "vendor_mismatch", "v2: alias refused on a multi-receipt pick even when linked");
+    // single receipt, but Cultivera links the lot to TWO transfers → refused (link must be unambiguous)
+    const ml = planTransferManifests([row("brand1", "Dope Synergy", "2026-07-02 09:00:00")], v2T, { pacificToday: TODAY, links: new Map([["brand1", [70, 72]]]) });
+    ok(!ml.decisions[0].matched && ml.decisions[0].link === "differ", "v2: alias refused when Cultivera links two transfers");
+    // a receipt whose transfer is not in byId → vendor_mismatch (fail closed)
+    const lone = buildCultiveraLots([row("ghost", "GROW OP", "2026-07-02 09:00:00")], TODAY).lots[0];
+    const dGhost = decideLotTransfer(lone, [{ transferId: 999, acceptedMs: 0 }], new Map());
+    ok(!dGhost.matched && (dGhost as { reason: string }).reason === "vendor_mismatch", "v2: receipt on an unknown transfer refused");
+  }
   ok(vm2("own").transferId === 72 && !vm2("own").vendorByLink && vm2("own").link === "differ", "v2: first receipt wins over the link");
   ok(JSON.stringify(vm2("own").alsoOn) === "[73]", "v2: alsoOn records the other receipt");
   ok(vm2("mix").transferId === 74 && vm2("mix").link === "agree" && JSON.stringify(vm2("mix").alsoOn) === "[73]", "v2: multi-link agree");
@@ -908,6 +924,8 @@ export function __runCultiveraTransferMatchCoreTests(): { passed: number; failed
   ok(t5.vendor === "GROW OP" && t5.number === "N5" && t5.vendorNo === "601" && t5.manual === true && t5.internal === false, "adapter: header fields");
   ok(t5.acceptedAt === "2026-07-02T17:00:00.5Z" && t5.transferDate === "2026-07-01T15:00:00Z", "adapter: stamps verbatim");
   ok(JSON.stringify(t5.lines) === JSON.stringify([["b1", 1, 1, false], ["b1", 2, 0, true], ["b2", 3, 4, false]]), "adapter: lines trimmed, blank dropped, sorted");
+  const tiFlags = transferIndexFromDetails([{ Id: 1, IsManualCreated: 1, IsInternalTransfer: "x", Details: [{ Barcode: "f", IsSample: 1 }] }]).transfers[0];
+  ok(tiFlags.manual && tiFlags.internal && tiFlags.lines[0][3] === true, "adapter: flags truthy like Python bool()");
   const tiBad = transferIndexFromDetails([{ Id: 1, Details: [{ Barcode: "q", AcceptedQuantity: "abc", Quantity: Infinity }] }]);
   ok(JSON.stringify(tiBad.transfers[0].lines[0]) === JSON.stringify(["q", 0, 0, false]), "adapter: junk quantities → 0 (not a receipt)");
   ok(tiBad.transfers[0].vendor === "" && tiBad.transfers[0].acceptedAt === null, "adapter: missing fields blank/null");
@@ -951,7 +969,9 @@ export function __runCultiveraTransferMatchCoreTests(): { passed: number; failed
   const sdLinks = new Map(cleanLinks);
   sdLinks.set("brand1", [72]);
   const sdPlan = planTransferManifests(cleanRows.filter((r) => r.barcode !== "brand1").concat([row("brand1", "R&B GROUP", "2026-07-02 09:00:00")]), v2T, { pacificToday: TODAY, links: sdLinks });
-  ok(manifestPlanGate(sdPlan, vOf(cleanRows.filter((r) => r.barcode !== "brand1").concat([row("brand1", "R&B GROUP", "2026-07-02 09:00:00")])), sdLinks).problems.some((x) => x.includes("1 single-receipt lots disagree")), "gate: single-receipt link disagreement fails");
+  const sdGate = manifestPlanGate(sdPlan, vOf(cleanRows.filter((r) => r.barcode !== "brand1").concat([row("brand1", "R&B GROUP", "2026-07-02 09:00:00")])), sdLinks);
+  ok(sdGate.problems.some((x) => x.includes("1 single-receipt lots disagree")), "gate: single-receipt link disagreement fails");
+  ok(!sdGate.multiReceiptDiffers.some((d) => d.barcode === "brand1"), "gate: a single-receipt differ is a failure, not a printed multi-receipt note");
   const dupPlan = { ...cleanPlan, transferGroups: [...cleanPlan.transferGroups, cleanPlan.transferGroups[0]] };
   ok(manifestPlanGate(dupPlan, vOf(cleanRows), cleanLinks).problems.some((x) => x.includes("placements")), "gate: double placement fails");
   const colPlan = { ...cleanPlan, numberCollisions: ["X"] };
