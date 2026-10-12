@@ -34,6 +34,8 @@ import {
   type ShopSlideAdminVM,
 } from "./shop-carousel-types";
 import { SHOP_CAROUSEL_SEEDS, SHOP_CAROUSEL_FALLBACK_SLIDES } from "./shop-carousel-seed";
+import { getBlurMap } from "@/lib/media/blur-server";
+import { blurFor } from "@/lib/media/blur-placeholder-core";
 
 const SELECT = "*";
 
@@ -174,7 +176,15 @@ export async function getShopCarouselForRender(): Promise<ShopRenderSlide[]> {
       .filter((s) => slideHasContent(s.presentation));
 
     if (resolved.length === 0) return SHOP_CAROUSEL_FALLBACK_SLIDES;
-    return resolved.slice(0, MAX_SHOP_CAROUSEL_SLIDES);
+    const shown = resolved.slice(0, MAX_SHOP_CAROUSEL_SLIDES);
+    // R45-S2: attach blur previews (one query; empty map on any problem).
+    const blurs = await getBlurMap(shown.flatMap((s) => [s.presentation.image, s.presentation.imageMobile]));
+    if (blurs.size === 0) return shown;
+    return shown.map((s) => ({
+      ...s,
+      imageBlur: blurFor(s.presentation.image, blurs),
+      imageMobileBlur: blurFor(s.presentation.imageMobile, blurs),
+    }));
   } catch {
     return SHOP_CAROUSEL_FALLBACK_SLIDES;
   }

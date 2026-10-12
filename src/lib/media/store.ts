@@ -17,6 +17,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import type { MediaAsset } from "@/lib/supabase/types";
 import { probeImageDimensions } from "./image-dimensions";
+import { makeBlurDataUrl, saveBlurForAsset } from "./blur-server";
 
 /** Public bucket for site imagery (public = true after migration 0012). */
 const MEDIA_BUCKET = "media";
@@ -121,6 +122,10 @@ export async function uploadMedia(input: UploadMediaInput): Promise<MediaAsset> 
     .select("*")
     .single();
   if (error || !data) throw new Error(`media_assets insert failed: ${error?.message}`);
+  // R45-S2: tiny blur preview for banners (best-effort, separate UPDATE so a
+  // database without migration 0266 still accepts the upload unchanged).
+  const blur = await makeBlurDataUrl(input.buffer, input.mimeType);
+  if (blur) await saveBlurForAsset((data as MediaAsset).id, blur);
   return data as MediaAsset;
 }
 

@@ -71,6 +71,8 @@ export type RenderSlide = {
   title: string;
   description: string;
   ctas: SlideCta[];
+  /** R45-S2: tiny blurred preview of `image` (from media_assets.blur_data_url), if known. */
+  imageBlur?: string;
 };
 
 /**

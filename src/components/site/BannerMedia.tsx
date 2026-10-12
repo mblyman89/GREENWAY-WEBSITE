@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { isGifSrc } from "@/lib/media/gif-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import { BannerVideo, type BannerVideoProps } from "./BannerVideo";
+import { cleanBlurDataUrl } from "@/lib/media/blur-placeholder-core";
 
 /**
  * R44 — one switch for every banner background: an MP4/WebM src renders the
@@ -28,6 +29,12 @@ export type BannerMediaProps = {
   hideControl?: boolean;
   /** Carousel slide currently shown (videos on hidden slides stay paused). */
   active?: boolean;
+  /**
+   * R45-S2: tiny base64 preview (≤10px) shown blurred while the photo loads.
+   * Next 16 docs: remote images must supply blurDataURL themselves. Ignored
+   * for video and GIF (animated GIFs are served unoptimized).
+   */
+  blurDataURL?: string;
 };
 
 export function BannerMedia({
@@ -43,6 +50,7 @@ export function BannerMedia({
   controlPosition,
   hideControl,
   active,
+  blurDataURL,
 }: BannerMediaProps) {
   if (isVideoSrc(src)) {
     return (
@@ -57,10 +65,13 @@ export function BannerMedia({
       />
     );
   }
+  const gif = isGifSrc(src);
+  const blur = !gif ? cleanBlurDataUrl(blurDataURL) : null;
   return (
     <Image
       src={src}
-      unoptimized={isGifSrc(src)}
+      unoptimized={gif}
+      {...(blur ? { placeholder: "blur" as const, blurDataURL: blur } : {})}
       alt={alt}
       fill
       priority={priority}

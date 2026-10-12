@@ -45,6 +45,9 @@ export type ShopRenderSlide = {
   presentation: ShopHeroPresentation;
   /** R41: design owner id for the hub Move mode ("shop-slide:<uuid>"). */
   designOwner?: string;
+  /** R45-S2: tiny blurred previews of the desktop/mobile art, if known. */
+  imageBlur?: string;
+  imageMobileBlur?: string;
 };
 
 /**
