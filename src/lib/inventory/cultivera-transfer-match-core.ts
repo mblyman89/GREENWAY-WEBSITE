@@ -34,6 +34,21 @@
  *
  * Rows the rule cannot place go through planCultiveraManifests (S1), so every
  * lot still lands on exactly one manifest. Nothing here reads or writes the DB.
+ *
+ * Rule v2 (R50 S10, bible §3b.4) adds Cultivera's own link (the list API's
+ * IncomingTransferId per lot), passed as `opts.links` (barcode → transfer ids):
+ *   * vendor alias by link: a lot whose ONLY receipt is on another vendor's
+ *     transfer is accepted when Cultivera links the lot to exactly that transfer
+ *     (the barcode is on its lines AND Cultivera says so). Measured 2026-10-12:
+ *     all 24 such lots are a brand ("Dope Synergy") delivered by its distributor
+ *     ("R&B GROUP"). The manifest keeps the transfer's vendor (who shipped it);
+ *     the lot keeps its own. Without a link the refusal stands (never guess).
+ *   * alsoOn: a re-received barcode is filed under its FIRST receipt after the
+ *     received time; every other receipt is recorded, so no manifest loses a line.
+ *   * link agreement: each matched lot is compared with Cultivera's link
+ *     (agree / differ / none). "differ" is expected on re-received barcodes (the
+ *     link points at the LATEST top-up in 142 of 144 cases) and is reported, not an error.
+ * Without `opts.links` the v1 answers are unchanged (pinned by the S1b test).
  */
 import {
   buildCultiveraLots,
@@ -51,7 +66,7 @@ import {
  * ------------------------------------------------------------------ */
 
 /** Version of the transfer-match rule, recorded in lineage. Bump when the rule changes. */
-export const TRANSFER_MATCH_RULE_VERSION = 1;
+export const TRANSFER_MATCH_RULE_VERSION = 2;
 /** A Received stamp may run this far ahead of the acceptance stamp (two clocks on two servers). */
 export const RECEIVED_CLOCK_TOLERANCE_MS = 60_000;
 
@@ -82,9 +97,23 @@ export type UnmatchedReason =
   | "ambiguous_tie"
   | "vendor_mismatch";
 
+/** How a matched lot compares with Cultivera's own link (IncomingTransferId). */
+export type LinkAgreement = "agree" | "differ" | "none";
+
 export type LotTransferDecision =
-  | { barcode: string; matched: true; transferId: number; evidence: TransferEvidence; receipts: number }
-  | { barcode: string; matched: false; reason: UnmatchedReason; receipts: number };
+  | {
+      barcode: string;
+      matched: true;
+      transferId: number;
+      evidence: TransferEvidence;
+      receipts: number;
+      /** Other transfers that also carried this barcode (accepted qty > 0), ascending by acceptance. */
+      alsoOn: number[];
+      /** True when the vendors differ and Cultivera's link to this very transfer settled it (rule v2). */
+      vendorByLink: boolean;
+      link: LinkAgreement;
+    }
+  | { barcode: string; matched: false; reason: UnmatchedReason; receipts: number; link: LinkAgreement };
 
 /* ------------------------------------------------------------------ *
  * Helpers
@@ -136,10 +165,18 @@ export function decideLotTransfer(
   lot: CultiveraLot,
   receipts: readonly Receipt[] | undefined,
   byId: ReadonlyMap<number, TransferIndexEntry>,
+  linkIds?: readonly number[],
 ): LotTransferDecision {
   const list = receipts ?? [];
   const n = list.length;
-  const refuse = (reason: UnmatchedReason): LotTransferDecision => ({ barcode: lot.barcode, matched: false, reason, receipts: n });
+  const links = linkIds ?? [];
+  const refuse = (reason: UnmatchedReason): LotTransferDecision => ({
+    barcode: lot.barcode,
+    matched: false,
+    reason,
+    receipts: n,
+    link: links.length > 0 ? "differ" : "none",
+  });
   if (n === 0) return refuse("no_receipt");
   let pick: Receipt;
   let evidence: TransferEvidence;
@@ -156,8 +193,23 @@ export function decideLotTransfer(
     evidence = "first_receipt_after_received";
   }
   const t = byId.get(pick.transferId);
-  if (!t || cultiveraVendorKey(t.vendor) !== lot.vendorKey) return refuse("vendor_mismatch");
-  return { barcode: lot.barcode, matched: true, transferId: pick.transferId, evidence, receipts: n };
+  if (!t) return refuse("vendor_mismatch");
+  let vendorByLink = false;
+  if (cultiveraVendorKey(t.vendor) !== lot.vendorKey) {
+    // Rule v2: only the single-receipt case, and only when Cultivera links the lot to exactly this transfer.
+    if (evidence !== "only_receipt" || links.length !== 1 || links[0] !== pick.transferId) return refuse("vendor_mismatch");
+    vendorByLink = true;
+  }
+  return {
+    barcode: lot.barcode,
+    matched: true,
+    transferId: pick.transferId,
+    evidence,
+    receipts: n,
+    alsoOn: list.filter((r) => r.transferId !== pick.transferId).map((r) => r.transferId),
+    vendorByLink,
+    link: links.length === 0 ? "none" : links.includes(pick.transferId) ? "agree" : "differ",
+  };
 }
 
 /* ------------------------------------------------------------------ *
@@ -181,6 +233,10 @@ export type TransferGroup = {
   otherLines: number;
   evidence: Record<TransferEvidence, number>;
   sampleProducts: string[];
+  /** barcode → the OTHER transfers that also carried it (only barcodes that have any). */
+  alsoOn: Record<string, number[]>;
+  /** Barcodes accepted by the link-confirmed vendor alias (sorted). */
+  vendorByLink: string[];
 };
 
 export type TransferMatchPlan = {
@@ -198,6 +254,12 @@ export type TransferMatchPlan = {
     transfersInIndex: number;
     fallbackGroups: number;
     largestTransferGroup: number;
+    /** Matched lots accepted through the link-confirmed vendor alias (rule v2). */
+    matchedVendorByLink: number;
+    /** Matched lots whose barcode was also on other transfers. */
+    lotsAlsoOn: number;
+    /** Cultivera's link vs this plan. unmatchedLinked = unmatched lots Cultivera did link (should be 0). */
+    link: { agree: number; differ: number; none: number; unmatchedLinked: number };
   };
   /** Non-empty ⇒ the plan must be refused (two groups would share a number for one vendor). */
   numberCollisions: string[];
@@ -215,7 +277,7 @@ function emptyUnmatched(): Record<UnmatchedReason, number> {
 export function planTransferManifests(
   rows: readonly CultiveraGroupRow[],
   transfers: readonly TransferIndexEntry[],
-  opts: { pacificToday: string; gapMinutes?: number },
+  opts: { pacificToday: string; gapMinutes?: number; links?: ReadonlyMap<string, readonly number[]> },
 ): TransferMatchPlan {
   const { lots } = buildCultiveraLots(rows, opts.pacificToday);
   const byId = new Map<number, TransferIndexEntry>();
@@ -226,7 +288,7 @@ export function planTransferManifests(
   const lotByBarcode = new Map<string, CultiveraLot>();
   for (const lot of lots) {
     lotByBarcode.set(lot.barcode, lot);
-    decisions.push(decideLotTransfer(lot, receipts.get(lot.barcode), byId));
+    decisions.push(decideLotTransfer(lot, receipts.get(lot.barcode), byId, opts.links?.get(lot.barcode)));
   }
 
   const groupsById = new Map<number, TransferGroup>();
@@ -248,14 +310,20 @@ export function planTransferManifests(
         otherLines: 0,
         evidence: { only_receipt: 0, first_receipt_after_received: 0 },
         sampleProducts: [],
+        alsoOn: {},
+        vendorByLink: [],
       };
       groupsById.set(t.id, g);
     }
     g.barcodes.push(d.barcode);
     g.evidence[d.evidence] += 1;
+    if (d.alsoOn.length > 0) g.alsoOn[d.barcode] = [...d.alsoOn];
+    if (d.vendorByLink) g.vendorByLink.push(d.barcode);
   }
   for (const g of groupsById.values()) {
     g.barcodes.sort();
+    g.vendorByLink.sort();
+    g.alsoOn = Object.fromEntries(Object.entries(g.alsoOn).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
     const mine = new Set(g.barcodes);
     const lineBarcodes = new Set((byId.get(g.transferId)!.lines ?? []).map((l) => (l?.[0] ?? "").trim()).filter(Boolean));
     g.otherLines = [...lineBarcodes].filter((b) => !mine.has(b)).length;
@@ -304,6 +372,14 @@ export function planTransferManifests(
       transfersInIndex: transfers.length,
       fallbackGroups: fallback.groups.length,
       largestTransferGroup: transferGroups.reduce((m, g) => Math.max(m, g.barcodes.length), 0),
+      matchedVendorByLink: matched.filter((d) => d.vendorByLink).length,
+      lotsAlsoOn: matched.filter((d) => d.alsoOn.length > 0).length,
+      link: {
+        agree: matched.filter((d) => d.link === "agree").length,
+        differ: matched.filter((d) => d.link === "differ").length,
+        none: matched.filter((d) => d.link === "none").length,
+        unmatchedLinked: decisions.filter((d) => !d.matched && d.link !== "none").length,
+      },
     },
     numberCollisions: [...new Set(collisions)],
   };
@@ -342,6 +418,10 @@ export type TransferLineage = {
   barcodes: string[];
   other_lines: number;
   evidence: Record<TransferEvidence, number>;
+  /** barcode → other transfers that also carried it (rule v2; empty when none). */
+  also_on: Record<string, number[]>;
+  /** Barcodes filed here by the link-confirmed vendor alias (rule v2). */
+  vendor_by_link: string[];
 };
 
 /** raw_payload of a manifest rebuilt from a real transfer. Same `kind` as S1 so every accounting exclusion applies. */
@@ -370,7 +450,105 @@ export function buildTransferLineage(args: {
     barcodes: [...g.barcodes],
     other_lines: g.otherLines,
     evidence: { ...g.evidence },
+    also_on: Object.fromEntries(Object.entries(g.alsoOn).map(([b, ids]) => [b, [...ids]])),
+    vendor_by_link: [...g.vendorByLink],
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Adapters for the Fetch It All run (R50 S10): raw harvest → index + links
+ * ------------------------------------------------------------------ */
+
+/** The fields of GET transfers/incoming/{id}/detail this rule reads (the rest is ignored, never stored). */
+export type RawTransferDetail = {
+  Id?: unknown;
+  TransferNumber?: unknown;
+  FromVendor?: unknown;
+  VendorNo?: unknown;
+  TransferDate?: unknown;
+  DateAccepted?: unknown;
+  StatusDisplay?: unknown;
+  IsManualCreated?: unknown;
+  IsInternalTransfer?: unknown;
+  Details?: unknown;
+};
+
+const str = (v: unknown): string => (typeof v === "string" ? v : "");
+const collapse = (v: unknown): string => str(v).split(/\s+/).filter(Boolean).join(" ");
+const num0 = (v: unknown): number => {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : 0;
+  return Number.isFinite(n) ? n : 0;
+};
+
+/**
+ * Same output as scripts/cultivera/build-transfer-index.py, in TypeScript, so
+ * the button's run feeds the matcher with no Python step. A record without a
+ * positive integer Id is skipped and counted (never invented). Duplicate Ids:
+ * the last wins and is counted. Sorted by id; lines sorted like Python's
+ * list.sort() on [barcode, accepted, quantity, sample].
+ */
+export function transferIndexFromDetails(details: readonly unknown[]): {
+  transfers: TransferIndexEntry[];
+  skipped: number;
+  duplicates: number;
+} {
+  const byId = new Map<number, TransferIndexEntry>();
+  let skipped = 0;
+  let duplicates = 0;
+  for (const raw of details) {
+    const d = (raw && typeof raw === "object" ? raw : {}) as RawTransferDetail;
+    const id = typeof d.Id === "number" ? d.Id : NaN;
+    if (!Number.isInteger(id) || id <= 0) {
+      skipped += 1;
+      continue;
+    }
+    const lines: TransferIndexLine[] = [];
+    for (const it of Array.isArray(d.Details) ? d.Details : []) {
+      const o = (it && typeof it === "object" ? it : {}) as Record<string, unknown>;
+      const bc = str(o.Barcode).trim();
+      if (!bc) continue;
+      lines.push([bc, num0(o.AcceptedQuantity), num0(o.Quantity), o.IsSample === true]);
+    }
+    lines.sort((a, b) =>
+      a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1] || a[2] - b[2] || Number(a[3]) - Number(b[3]),
+    );
+    if (byId.has(id)) duplicates += 1;
+    byId.set(id, {
+      id,
+      number: str(d.TransferNumber),
+      vendor: collapse(d.FromVendor),
+      vendorNo: str(d.VendorNo),
+      transferDate: typeof d.TransferDate === "string" ? d.TransferDate : null,
+      acceptedAt: typeof d.DateAccepted === "string" ? d.DateAccepted : null,
+      status: str(d.StatusDisplay),
+      manual: d.IsManualCreated === true,
+      internal: d.IsInternalTransfer === true,
+      lines,
+    });
+  }
+  return { transfers: [...byId.values()].sort((a, b) => a.id - b.id), skipped, duplicates };
+}
+
+/**
+ * Cultivera's own link, per barcode: the distinct IncomingTransferId of every
+ * list-API lot with that barcode (twin lots of a re-received barcode can link
+ * to different transfers). Ids sorted ascending. Lots without a positive
+ * integer link contribute nothing.
+ */
+export function linksFromListLots(
+  lots: readonly { Barcode?: unknown; IncomingTransferId?: unknown }[],
+): Map<string, number[]> {
+  const out = new Map<string, number[]>();
+  for (const l of lots) {
+    const bc = typeof l?.Barcode === "string" ? l.Barcode.trim() : typeof l?.Barcode === "number" ? String(l.Barcode) : "";
+    const id = l?.IncomingTransferId;
+    if (!bc || typeof id !== "number" || !Number.isInteger(id) || id <= 0) continue;
+    const list = out.get(bc) ?? [];
+    if (!list.includes(id)) list.push(id);
+    out.set(bc, list);
+  }
+  for (const list of out.values()) list.sort((a, b) => a - b);
+  return out;
 }
 
 /* ------------------------------------------------------------------ *
@@ -583,6 +761,114 @@ export function __runCultiveraTransferMatchCoreTests(): { passed: number; failed
   lin.evidence.only_receipt = 99;
   ok(g10.barcodes.length === 3 && g10.evidence.only_receipt === 2, "lineage copies, never aliases");
   ok(lin.rule_version === TRANSFER_MATCH_RULE_VERSION && lin.group_kind === "transfer", "lineage rule version");
+
+  // --- rule v2: Cultivera's link (R50 S10) ---
+  const v2T: TransferIndexEntry[] = [
+    T(70, "D-70", "R&B GROUP", "2026-07-02T17:00:00Z", [L("brand1"), L("brand2"), L("brand3"), L("brand4")]),
+    T(71, "D-71", "R&B GROUP", "2026-07-03T17:00:00Z", [L("brand4")]),
+    T(72, "D-72", "DOPE SYNERGY", "2026-07-02T17:00:00Z", [L("own")]),
+    T(73, "D-73", "DOPE SYNERGY", "2026-07-10T17:00:00Z", [L("own"), L("mix")]),
+    T(74, "D-74", "DOPE SYNERGY", "2026-07-01T17:00:00Z", [L("mix")]),
+  ];
+  const v2Rows = [
+    row("brand1", "Dope Synergy", "2026-07-02 09:00:00"), // only receipt on the distributor's transfer, linked there → accepted
+    row("brand2", "Dope Synergy", "2026-07-02 09:00:00"), // same, but NO link → refused (never guess)
+    row("brand3", "Dope Synergy", "2026-07-02 09:00:00"), // linked to ANOTHER transfer → refused
+    row("brand4", "Dope Synergy", "2026-07-02 09:00:00"), // two receipts, both the distributor's → alias not allowed
+    row("own", "DOPE SYNERGY", "2026-07-02 09:00:00"), // re-received on 73: filed on 72, alsoOn [73]; link says 73 → differ
+    row("mix", "DOPE SYNERGY", "2026-06-30 09:00:00"), // first after received = 74; link 74 + 73 → agree; alsoOn [73]
+    row("solo", "DOPE SYNERGY", "2026-07-02 09:00:00"), // no receipt, but Cultivera linked it → unmatchedLinked
+  ];
+  const v2Links = new Map<string, number[]>([
+    ["brand1", [70]],
+    ["brand3", [72]],
+    ["brand4", [71]],
+    ["own", [73]],
+    ["mix", [73, 74]],
+    ["solo", [72]],
+  ]);
+  const v2 = planTransferManifests(v2Rows, v2T, { pacificToday: TODAY, links: v2Links });
+  const v2d = new Map(v2.decisions.map((d) => [d.barcode, d]));
+  const vm2 = (b: string) => v2d.get(b) as Extract<LotTransferDecision, { matched: true }>;
+  const vu2 = (b: string) => v2d.get(b) as Extract<LotTransferDecision, { matched: false }>;
+  ok(vm2("brand1").matched && vm2("brand1").transferId === 70 && vm2("brand1").vendorByLink && vm2("brand1").link === "agree", "v2: link-confirmed vendor alias");
+  ok(!vu2("brand2").matched && vu2("brand2").reason === "vendor_mismatch" && vu2("brand2").link === "none", "v2: alias without a link refused");
+  ok(!vu2("brand3").matched && vu2("brand3").reason === "vendor_mismatch" && vu2("brand3").link === "differ", "v2: link to another transfer refused");
+  ok(!vu2("brand4").matched && vu2("brand4").reason === "vendor_mismatch", "v2: alias only for a single receipt");
+  ok(vm2("own").transferId === 72 && !vm2("own").vendorByLink && vm2("own").link === "differ", "v2: first receipt wins over the link");
+  ok(JSON.stringify(vm2("own").alsoOn) === "[73]", "v2: alsoOn records the other receipt");
+  ok(vm2("mix").transferId === 74 && vm2("mix").link === "agree" && JSON.stringify(vm2("mix").alsoOn) === "[73]", "v2: multi-link agree");
+  ok(!vu2("solo").matched && vu2("solo").link === "differ", "v2: unmatched but linked is flagged");
+  ok(JSON.stringify(vm2("brand1").alsoOn) === "[]", "v2: single receipt has no alsoOn");
+  ok(v2.summary.matchedVendorByLink === 1 && v2.summary.lotsAlsoOn === 2, "v2: summary alias + alsoOn");
+  ok(JSON.stringify(v2.summary.link) === JSON.stringify({ agree: 2, differ: 1, none: 0, unmatchedLinked: 3 }), "v2: link agreement summary");
+  const g70 = v2.transferGroups.find((g) => g.transferId === 70)!;
+  ok(g70.vendorKey === "R&B GROUP" && JSON.stringify(g70.vendorByLink) === JSON.stringify(["brand1"]), "v2: manifest keeps the shipper's vendor");
+  const g72 = v2.transferGroups.find((g) => g.transferId === 72)!;
+  ok(JSON.stringify(g72.alsoOn) === JSON.stringify({ own: [73] }), "v2: group alsoOn");
+  const lin72 = buildTransferLineage({ importId: "i", sourceManifestId: "s", sourceManifestNumber: "n", group: g72 });
+  ok(JSON.stringify(lin72.also_on) === JSON.stringify({ own: [73] }) && JSON.stringify(lin72.vendor_by_link) === "[]", "v2: lineage also_on");
+  lin72.also_on.own.push(999);
+  ok(g72.alsoOn.own.length === 1, "v2: lineage also_on is a deep copy");
+  const lin70 = buildTransferLineage({ importId: "i", sourceManifestId: "s", sourceManifestNumber: "n", group: g70 });
+  lin70.vendor_by_link.push("x");
+  ok(g70.vendorByLink.length === 1, "v2: lineage vendor_by_link is a copy");
+  const noLinks = planTransferManifests(v2Rows, v2T, { pacificToday: TODAY });
+  ok(noLinks.summary.matchedVendorByLink === 0 && (noLinks.decisions.find((d) => d.barcode === "brand1") as { reason?: string }).reason === "vendor_mismatch", "v2: no links → v1 answers");
+  ok(JSON.stringify(noLinks.summary.link) === JSON.stringify({ agree: 0, differ: 0, none: 2, unmatchedLinked: 0 }), "v2: no links → all none");
+  const v2r = planTransferManifests([...v2Rows].reverse(), [...v2T].reverse(), { pacificToday: TODAY, links: v2Links });
+  ok(JSON.stringify(v2r.transferGroups) === JSON.stringify(v2.transferGroups), "v2: reorder-invariant");
+
+  // --- adapters ---
+  const ti = transferIndexFromDetails([
+    {
+      Id: 5,
+      TransferNumber: "N5",
+      FromVendor: "  GROW   OP ",
+      VendorNo: "601",
+      TransferDate: "2026-07-01T15:00:00Z",
+      DateAccepted: "2026-07-02T17:00:00.5Z",
+      StatusDisplay: "Accepted",
+      IsManualCreated: true,
+      Details: [
+        { Barcode: " b2 ", AcceptedQuantity: 3, Quantity: 4, IsSample: false },
+        { Barcode: "b1", AcceptedQuantity: "2", Quantity: null, IsSample: true },
+        { Barcode: "", AcceptedQuantity: 9 },
+        { Barcode: null, AcceptedQuantity: 9 },
+        { Barcode: "b1", AcceptedQuantity: 1, Quantity: 1 },
+        null,
+      ],
+    },
+    { Id: 3, TransferNumber: null, FromVendor: null, DateAccepted: null, Details: null },
+    { Id: "7" },
+    { Id: 0 },
+    { Id: 2.5 },
+    null,
+    { Id: 3, TransferNumber: "N3b", FromVendor: "X", DateAccepted: null, StatusDisplay: "Pending", Details: [] },
+  ]);
+  ok(ti.skipped === 4 && ti.duplicates === 1, "adapter: bad ids skipped, duplicate counted");
+  ok(ti.transfers.map((t) => t.id).join(",") === "3,5", "adapter: sorted by id");
+  ok(ti.transfers[0].number === "N3b" && ti.transfers[0].status === "Pending" && ti.transfers[0].acceptedAt === null, "adapter: last duplicate wins");
+  const t5 = ti.transfers[1];
+  ok(t5.vendor === "GROW OP" && t5.number === "N5" && t5.vendorNo === "601" && t5.manual === true && t5.internal === false, "adapter: header fields");
+  ok(t5.acceptedAt === "2026-07-02T17:00:00.5Z" && t5.transferDate === "2026-07-01T15:00:00Z", "adapter: stamps verbatim");
+  ok(JSON.stringify(t5.lines) === JSON.stringify([["b1", 1, 1, false], ["b1", 2, 0, true], ["b2", 3, 4, false]]), "adapter: lines trimmed, blank dropped, sorted");
+  const tiBad = transferIndexFromDetails([{ Id: 1, Details: [{ Barcode: "q", AcceptedQuantity: "abc", Quantity: Infinity }] }]);
+  ok(JSON.stringify(tiBad.transfers[0].lines[0]) === JSON.stringify(["q", 0, 0, false]), "adapter: junk quantities → 0 (not a receipt)");
+  ok(tiBad.transfers[0].vendor === "" && tiBad.transfers[0].acceptedAt === null, "adapter: missing fields blank/null");
+
+  const lk = linksFromListLots([
+    { Barcode: "a", IncomingTransferId: 9 },
+    { Barcode: " a ", IncomingTransferId: 4 },
+    { Barcode: "a", IncomingTransferId: 9 },
+    { Barcode: "b", IncomingTransferId: null },
+    { Barcode: "c", IncomingTransferId: 0 },
+    { Barcode: "d", IncomingTransferId: "5" },
+    { Barcode: "", IncomingTransferId: 5 },
+    { Barcode: 123, IncomingTransferId: 6 },
+    { Barcode: "e", IncomingTransferId: 1.5 },
+  ]);
+  ok(JSON.stringify([...lk]) === JSON.stringify([["a", [4, 9]], ["123", [6]]]), "links: distinct, sorted, junk ignored");
 
   return { passed, failed: 0 };
 }
