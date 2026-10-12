@@ -20,8 +20,6 @@ import { chunkedIn } from "@/lib/supabase/chunked-in";
 import { importManifestIds, readLotsOnManifests } from "@/lib/inventory/import-lineage-store";
 import type { UndatedLot } from "@/lib/inventory/received-date-bulk-core";
 
-type Admin = ReturnType<typeof createSupabaseAdminClient>;
-
 type LotRow = {
   id: string;
   vendor_id: string | null;

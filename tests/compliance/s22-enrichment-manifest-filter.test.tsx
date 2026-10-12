@@ -135,7 +135,8 @@ beforeEach(() => {
 // === 1. Cores ====================================================================
 describe("S22 cores", () => {
   it("self-tests pass with exact counts", () => {
-    expect(__runEnrichmentManifestCoreTests()).toEqual({ passed: 75, failed: 0 });
+    // 75 + 6 (R50 S2b: import-by-kind, rebuilt discriminator, rebuilt date rule).
+    expect(__runEnrichmentManifestCoreTests()).toEqual({ passed: 81, failed: 0 });
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     __runEnrichmentMatchCoreTests();
     expect(log).toHaveBeenCalledWith("enrichment-match-core: 83 checks passed");
