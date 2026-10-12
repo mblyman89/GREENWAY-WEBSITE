@@ -1,0 +1,187 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { requirePermission } from "@/lib/auth/session";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs } from "@/components/admin/ux";
+import { Button } from "@/components/admin/ui";
+import { FetchRunAutoRefresh } from "@/components/admin/catalog/FetchRunAutoRefresh";
+import { readCutoverDone } from "@/lib/pos/cutover-guard";
+import { getPosRun, isValidRunId, loadRunForImport, type LoadedRun } from "@/lib/pos/cultivera-fetch-client";
+import { MAX_HARVEST_AGE_MINUTES, importDecision, runView } from "@/lib/pos/cultivera-fetch-button-core";
+import { cancelFetchAction, importFetchAction, startFetchAction } from "../../fetch-actions";
+
+/**
+ * R50 S9 — one "Fetch It All" run: live stage progress while the crawler harvests,
+ * then the go/no-go report computed from the VERIFIED files (the import action
+ * recomputes everything server-side; this page only shows it).
+ */
+export const dynamic = "force-dynamic";
+// The import action (download + verify + assemble + runImport) inherits this.
+export const maxDuration = 300;
+
+const ROW_TONE: Record<string, string> = {
+  done: "text-[var(--admin-accent)]",
+  running: "text-[var(--admin-orange)]",
+  incomplete: "text-red-300",
+  pending: "text-white/40",
+};
+
+export default async function FetchRunPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ runId: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
+  await requirePermission("menu.import");
+  const { runId } = await params;
+  const sp = await searchParams;
+  if (!isValidRunId(runId)) notFound();
+
+  let loadError: string | null = null;
+  let run: Awaited<ReturnType<typeof getPosRun>> = null;
+  try {
+    run = await getPosRun(runId);
+  } catch (e) {
+    loadError = e instanceof Error ? e.message : "Could not reach the crawler.";
+  }
+  if (!run && !loadError) notFound();
+  const view = run ? runView(run) : null;
+
+  let loaded: LoadedRun | null = null;
+  let checkError: string | null = null;
+  if (view?.canImport) {
+    try {
+      loaded = await loadRunForImport(runId);
+    } catch (e) {
+      checkError = e instanceof Error ? e.message : "Could not check the harvest.";
+    }
+  }
+  const report = loaded?.assembled?.report ?? null;
+  const age = loaded ? loaded.ageMinutes : null;
+  const realDecision = loaded
+    ? importDecision({ isTest: false, go: Boolean(report?.go), cutoverDone: await readCutoverDone(), ageMinutes: age, filesVerified: loaded.verified })
+    : null;
+
+  return (
+    <div>
+      <AdminPageHeader title="Fetch It All, Fuck Cultivera" subtitle={`Harvest run ${runId}`} />
+      <div className="space-y-6 px-5 py-6 sm:px-8">
+        <Breadcrumbs items={[{ label: "Menu Imports", href: "/admin/menu-imports" }, { label: "Fetch run" }]} />
+        <FetchRunAutoRefresh active={Boolean(view?.poll)} />
+
+        {(sp.error || loadError || checkError) && (
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {sp.error ? decodeURIComponent(sp.error) : loadError ?? checkError}
+          </div>
+        )}
+
+        {view && (
+          <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-white">
+                Harvest: <span className="uppercase">{view.status}</span> · {view.doneStages} / {view.totalStages} stages ({view.percent}%)
+                {view.seconds !== null && <> · {Math.round(view.seconds)} s</>}
+              </h2>
+              <div className="flex gap-2">
+                {view.canCancel && (
+                  <form action={cancelFetchAction}>
+                    <input type="hidden" name="run_id" value={runId} />
+                    <Button type="submit" variant="neutral">Stop (resumable)</Button>
+                  </form>
+                )}
+                {view.canResume && (
+                  <form action={startFetchAction}>
+                    <Button type="submit" variant="primary">Resume this harvest</Button>
+                  </form>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 h-2 w-full overflow-hidden rounded bg-white/10" role="progressbar" aria-valuenow={view.percent} aria-valuemin={0} aria-valuemax={100}>
+              <div className="h-2 bg-[var(--admin-accent)]" style={{ width: `${view.percent}%` }} />
+            </div>
+            {view.error && <p className="mt-3 text-xs text-red-300">{view.error}</p>}
+            <table className="mt-4 w-full text-left text-xs">
+              <tbody>
+                {view.rows.map((r) => (
+                  <tr key={r.stage} className="border-t border-white/5">
+                    <td className="py-1.5 text-white/80">{r.label}</td>
+                    <td className={`py-1.5 font-semibold uppercase ${ROW_TONE[r.status]}`}>{r.status}</td>
+                    <td className="py-1.5 text-white/50">{r.detail}</td>
+                    <td className="py-1.5 text-right text-white/40">{r.seconds !== null ? `${r.seconds} s` : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-3 text-xs text-white/40">
+              Read-only: the harvester can only log in and read. Nothing in Cultivera changes. The page refreshes itself while the harvest runs.
+            </p>
+          </section>
+        )}
+
+        {loaded && (
+          <section className={`rounded-xl border p-5 ${report?.go ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/5" : "border-red-500/40 bg-red-500/5"}`}>
+            <h2 className="text-sm font-semibold text-white">
+              Go / no-go: {report ? (report.go ? "GO" : "NO-GO") : "NOT CHECKED"}
+            </h2>
+            {loaded.verifyProblems.length > 0 && (
+              <ul className="mt-2 list-disc pl-5 text-xs text-red-300">
+                {loaded.verifyProblems.map((p) => <li key={p}>{p}</li>)}
+              </ul>
+            )}
+            {report && (
+              <>
+                <ul className="mt-3 space-y-1 text-xs">
+                  {report.checks.map((c) => (
+                    <li key={c.id} className={c.pass ? "text-[var(--admin-accent)]" : "text-red-300"}>
+                      {c.pass ? "✓" : "✗"} <strong>{c.id}</strong> — {c.detail}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-xs text-white/60">
+                  {report.counts.listLots.toLocaleString("en-US")} lots · {report.counts.items.toLocaleString("en-US")} menu items ({report.counts.visibleItems.toLocaleString("en-US")} visible) ·{" "}
+                  {report.counts.variants.toLocaleString("en-US")} variants · {report.counts.supplemented} lots restored from the list ·{" "}
+                  {report.reconcile.unitsRows.toLocaleString("en-US")} units · ${(report.reconcile.costValueRowsCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })} at cost
+                </p>
+                {report.reconcile.mismatches.length > 0 && (
+                  <details className="mt-2 text-xs text-white/60">
+                    <summary>{report.reconcile.mismatches.length} lots changed between the export and the list (a sale mid-harvest) — fetch again</summary>
+                    <ul className="mt-1 pl-4">
+                      {report.reconcile.mismatches.slice(0, 50).map((m) => (
+                        <li key={`${m.id}-${m.field}`}>lot {m.id} ({m.barcode}) {m.field}: list {m.list} · export {m.row}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </>
+            )}
+            {realDecision && !realDecision.allowed && (
+              <ul className="mt-3 list-disc pl-5 text-xs text-[var(--admin-gold)]">
+                {realDecision.reasons.map((r) => <li key={r}>{r}</li>)}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-white/40">
+              Harvest finished {age !== null ? `${Math.round(age)} min ago` : "at an unknown time"} (a real import needs ≤ {MAX_HARVEST_AGE_MINUTES} min).
+            </p>
+
+            <form action={importFetchAction} className="mt-4 flex flex-wrap items-center gap-4">
+              <input type="hidden" name="run_id" value={runId} />
+              <label className="flex items-center gap-2 text-xs text-white/70">
+                <input type="checkbox" name="test_mode" defaultChecked={!realDecision?.allowed} />
+                <span><strong>Test mode</strong>: flag it as rehearsal data (Clean Slate removes it)</span>
+              </label>
+              <Button type="submit" variant="confirm">Stage this harvest for review</Button>
+            </form>
+            <p className="mt-2 text-xs text-white/40">
+              Staging runs the same import a manual upload does: intake, enrichment and the review screen. Nothing publishes until you press Publish. No payables are created, because every Cultivera manifest is already paid.
+            </p>
+          </section>
+        )}
+
+        <p className="text-xs text-white/40">
+          <Link href="/admin/menu-imports" className="underline">Back to Menu Imports</Link>
+        </p>
+      </div>
+    </div>
+  );
+}
