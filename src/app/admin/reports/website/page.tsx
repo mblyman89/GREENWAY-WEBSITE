@@ -19,6 +19,7 @@ import { BarList, DayBarChart, REPORT_COLORS } from "@/components/admin/reports/
 import { readClicksSince, CLICK_REPORT_MAX_ROWS } from "@/lib/analytics/click-events-store";
 import {
   CLICK_RANGES,
+  clickReportWindow,
   PLACEMENT_LABELS,
   deadSlots,
   parseClickRange,
@@ -118,8 +119,7 @@ export default async function WebsiteReportPage({
     return <p className="text-sm text-[var(--admin-gold)]">The database isn&apos;t set up yet.</p>;
   }
 
-  const nowMs = Date.now();
-  const sinceIso = new Date(nowMs - days * 86_400_000).toISOString();
+  const { nowMs, sinceIso } = clickReportWindow(days);
   const [clicks, live, schedules] = await Promise.all([
     readClicksSince(sinceIso),
     liveSlots(nowMs),
