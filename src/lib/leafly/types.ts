@@ -78,6 +78,13 @@ export type GreenwayMenuItem = {
    * the website menu terpene filter.
    */
   terpenes?: string[];
+  /**
+   * R49 S5/S6 - the owner's product tags for display + the menu "Tags" facet
+   * (e.g. the automatic "New" tag). Attached server-side at menu-build time by
+   * withProductTags (product-tags-server.ts) from migration 0269. Absent = no
+   * tags (or 0269 not applied). Website display only; never CCRS / register.
+   */
+  tags?: { slug: string; label: string; color: string }[];
   thc: string | null;
   cbd: string | null;
   /**

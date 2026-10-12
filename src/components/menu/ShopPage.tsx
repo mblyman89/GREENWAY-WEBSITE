@@ -17,6 +17,7 @@ import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
 import { withDohCompliance } from "@/lib/menu/menu-doh-server";
 import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
+import { withProductTags } from "@/lib/menu/product-tags-server";
 import { loadCategoryLabelMap } from "@/lib/pos/category-registry";
 import { toMenuGridItems } from "@/lib/menu/menu-grid-projection-core";
 import { ShopBannerSkeleton, ShopBrowserSkeleton } from "@/components/menu/MenuSkeleton";
@@ -80,13 +81,15 @@ async function ShopContent({ initialCategory }: { initialCategory?: string }) {
   // DF-3 / 7b.2 / SLICE D: the enrichment chain, unchanged. Image resolution,
   // curated terpenes, KB display copy, DOH compliance overlay, then the owner's
   // per-product category overrides on the fully-enriched items.
-  const enrichedMenuItems = await withCategoryOverride(
+  // R49 S6: + withProductTags (owner tags + automatic "New") on the outside,
+  // so tags are attached to the item as finally filed.
+  const enrichedMenuItems = await withProductTags(await withCategoryOverride(
     await withDohCompliance(
       await withDisplayKnowledge(
         await withResolvedImages(await withMenuProfile(await loadLiveMenuItemsCached())),
       ),
     ),
-  );
+  ));
   // SLICE E: drop fields the grid never renders before this array is serialized
   // into the response for every shopper.
   const menuItems = toMenuGridItems(enrichedMenuItems);

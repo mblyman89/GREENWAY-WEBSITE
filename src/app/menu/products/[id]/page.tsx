@@ -27,6 +27,7 @@ import { getLiveMenuItemByIdCached, loadLiveMenuItemsCached } from "@/lib/pos/li
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
+import { withProductTags } from "@/lib/menu/product-tags-server";
 import { pdpSizeLine, productSchemaWeight } from "@/lib/menu/pdp-size-core";
 import { withDohCompliance } from "@/lib/menu/menu-doh-server";
 // SLICE 18C: the badge cores. dohPillForItem was previously only consumed by
@@ -291,7 +292,7 @@ async function relatedItemsFor(
   // same-category → price proximity (the add-to-cart enticement order), and
   // reports an honest scope for the heading when it must fall back.
   // R33: the owner's per-product category/type re-file applies here too.
-  const allItems = await withCategoryOverride(await withMenuProfile(await loadLiveMenuItemsCached()));
+  const allItems = await withProductTags(await withCategoryOverride(await withMenuProfile(await loadLiveMenuItemsCached())));
   const selection = selectRelatedItems(item, allItems, 8);
   return { items: selection.items, scope: selection.scope };
 }
@@ -385,7 +386,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // card. Merch is non-cannabis → skip. Degrades to "no DOH" pre-migration.
   const [item] = isMerchItem(baseItem)
     ? [baseItem]
-    : await withCategoryOverride(await withDohCompliance(await withMenuProfile(await withResolvedImages([baseItem]))));
+    : await withProductTags(await withCategoryOverride(await withDohCompliance(await withMenuProfile(await withResolvedImages([baseItem])))));
   // R33: withCategoryOverride - the owner's website Category/Type re-file
   // (lot page) used to reach ONLY the shop grid; the product page kept the
   // onboarding category + type label. Same overlay, same degrade-to-identity.

@@ -13,6 +13,7 @@ import { resolveSpecialsHeroText, resolveSpecialsPresentation } from "@/lib/spec
 import { loadLiveMenuItemsCached } from "@/lib/pos/live-menu";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { withCategoryOverride } from "@/lib/menu/menu-category-override-server";
+import { withProductTags } from "@/lib/menu/product-tags-server";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 
 // USAGE-5 — WHY THIS IS NO LONGER `force-dynamic` (same reasoning as SLICE D
@@ -70,7 +71,7 @@ export default async function SpecialsPage() {
       // R23 item 9: resolve each card's image (its own enrichment photo first)
       // exactly like the shop menu (ShopPage) and the product page do.
       // R33: + withCategoryOverride so a re-filed product reads the same as on /menu.
-      loadLiveMenuItemsCached().then((items) => withMenuProfile(items)).then((items) => withCategoryOverride(items)).then((items) => withResolvedImages(items)),
+      loadLiveMenuItemsCached().then((items) => withMenuProfile(items)).then((items) => withCategoryOverride(items)).then((items) => withProductTags(items)).then((items) => withResolvedImages(items)),
       // SLICE 106: how the weekly-deal grid is PRESENTED (draft-aware). The
       // SEED_DEFAULTS fallback is the live-look-safe default, so pre-seed and
       // pre-migration this is identical to today.

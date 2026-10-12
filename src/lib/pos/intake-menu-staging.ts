@@ -92,6 +92,7 @@ import {
 import { VENDOR_ID_IDENTITY_ENV, vendorIdIdentityEnabled } from "@/lib/inventory/vendor-identity-core";
 import { loadVendorIdInputs } from "@/lib/inventory/restock-preview-server";
 import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { stampFirstSeenForVersion } from "@/lib/menu/product-tags-store";
 // S32: remembered answers for products that matched 2+ live cards.
 import { loadMergeDecisions } from "@/lib/pos/merge-decision-store";
 import { mergeAmbiguousIdentities } from "@/lib/pos/merge-review-core";
@@ -882,6 +883,10 @@ async function autoPublishIntakeVersion(
   // Never throws. After 0236 the RPC has already done it and this writes
   // nothing.
   await archiveSupersededStaged({ id: versionId, created_at: createdAt });
+
+  // R49-S5: first-seen stamp for the automatic "New" tag (best effort, never
+  // throws; the first publish a product appeared in wins forever).
+  await stampFirstSeenForVersion(versionId);
 
   // Audit trail — same action name as the manual Menu Imports publish, with
   // the intake origin recorded (recordAudit never throws).

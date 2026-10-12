@@ -49,6 +49,7 @@ import {
 import { storeNow, pacificToday } from "@/lib/reports/timezone";
 import { resolveOrCreateVendor, resolveBrandId, logManifestEvent } from "@/lib/inventory/intake-store";
 import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { stampFirstSeenForVersion } from "@/lib/menu/product-tags-store";
 import { getImportDiagnostics, getVersionItems, countVersionItems } from "@/lib/pos/menu-version";
 import { listFactReviewsResult, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
 import {
@@ -465,6 +466,10 @@ export async function publishMenuVersion(
     p_actor: actorId,
   });
   if (error) throw new Error(`Publish failed: ${error.message}`);
+  // R49-S5: remember the first time each product was on a published menu
+  // (drives the automatic "New" tag). Best effort, after the swap succeeded:
+  // never throws, never blocks or undoes the publish; first stamp wins.
+  await stampFirstSeenForVersion(versionId);
   return { openReviewsAcknowledged };
 }
 

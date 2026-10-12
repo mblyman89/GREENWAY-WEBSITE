@@ -99,6 +99,8 @@ export type MenuFilterControlsProps = {
   selectedWeights: string[];
   /** R49 S2 — size facet (beverage fl oz / serving packs). Optional for back-compat. */
   selectedSizes?: string[];
+  /** R49 S6: selected owner tag slugs (the "Tags" facet). Optional = back-compatible. */
+  selectedTags?: string[];
   maxThc: number;
   maxCbd: number;
   maxPrice: number;
@@ -114,6 +116,7 @@ export type MenuFilterControlsProps = {
   onVendorToggle: (vendor: string) => void;
   onWeightToggle: (weight: string) => void;
   onSizeToggle?: (size: string) => void;
+  onTagToggle?: (tag: string) => void;
   /** R49 S3 — package-mg range sliders. Bounds include ONLY the cannabinoids to show. */
   mgBounds?: MgBounds;
   mgSelection?: MgSelection;
@@ -132,6 +135,8 @@ export type MenuFilterControlsProps = {
   vendorOptions: FilterCheckboxOption[];
   weightOptions: FilterCheckboxOption[];
   sizeOptions?: FilterCheckboxOption[];
+  /** R49 S6: one option per owner tag on the menu (value = slug, label = tag name). */
+  tagOptions?: FilterCheckboxOption[];
   /**
    * SLICE C (SHOP-3): the Specials section is now FULLY DYNAMIC — a data-driven
    * list of filters (the two built-in lanes + any one-off SALE a carousel slide
@@ -170,6 +175,7 @@ export function MenuFilterControls({
   selectedVendors,
   selectedWeights,
   selectedSizes = [],
+  selectedTags = [],
   maxThc,
   maxCbd,
   maxPrice,
@@ -185,6 +191,7 @@ export function MenuFilterControls({
   onVendorToggle,
   onWeightToggle,
   onSizeToggle,
+  onTagToggle,
   mgBounds = {},
   mgSelection = {},
   onMgChange,
@@ -200,6 +207,7 @@ export function MenuFilterControls({
   vendorOptions,
   weightOptions,
   sizeOptions = [],
+  tagOptions = [],
   specialFilters = [],
   activeSpecialId = null,
   onSpecialToggle,
@@ -265,6 +273,15 @@ export function MenuFilterControls({
       <FilterSection title="Categories">
         <FilterCheckboxGroup name="categories" options={categoryOptions} selectedValues={selectedCategories} onToggle={onCategoryToggle} />
       </FilterSection>
+
+      {/* R49 S6 - Tags: the owner's product tags (New, Staff Pick ...) from
+          Admin > Inventory > Tags. Shown only when products carry tags (or a
+          shared ?tags= link selected one), so menus without tags are unchanged. */}
+      {onTagToggle && (tagOptions.length > 0 || selectedTags.length > 0) ? (
+        <FilterSection title="Tags">
+          <FilterCheckboxGroup name="tags" options={tagOptions} selectedValues={selectedTags} onToggle={onTagToggle} preserveCase />
+        </FilterSection>
+      ) : null}
 
       {/* PR 3: additive by-VENDOR facet, placed directly ABOVE Brands (owner
           directive). Filtering by vendor surfaces all brands by a producer \u2014 the
