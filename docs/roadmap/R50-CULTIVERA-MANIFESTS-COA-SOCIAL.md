@@ -335,3 +335,15 @@ Use a dedicated business account, not a personal one.
   Those pins return in `tests/compliance/r50-cultivera-transfer-match.test.ts` once the index is rebuilt. If the
   re-harvest differs (new deliveries since), the differences will be re-measured and recorded, not forced.
 
+* 2026-10-12 — **Re-harvest done; S1b real-data pins are back (rehearsal #1).** The owner re-sent the login, so I
+  ran a fresh read-only harvest at 18:48 UTC. `normalized_cultivera/TRANSFERS_INDEX.json` was rebuilt with the
+  committed one-command script; its source SHA is `9c9e9978…4a89`. The fresh harvest reproduced the lost one
+  exactly: 1,164 transfers, 26,095 lines, 6 without an accepted time. All 9 parked pins pass unchanged on it,
+  including the per-lot oracle SHA `54b67ffc…a180a3`. The test now lives in
+  `tests/compliance/r50-cultivera-transfer-match.test.ts`.
+  Testing the tests used 8 data mutants on the index. Six were killed straight away. Two survived: moving the
+  accepted time of the transfer with the most lots by a year, and changing its manifest number. Neither changes
+  which lot goes where, only what the reconstructed manifest SHOWS. A 10th test now pins a golden SHA of every
+  manifest's (id, number, accepted time, vendor, status, lots) (`00339dd8…7e74`), and all 8 mutants are killed.
+  A first mutant that dropped the BIGGEST transfer tripped only the guard. That was correct: none of its 104
+  barcodes is a lot in the committed export, which I checked before accepting it.
