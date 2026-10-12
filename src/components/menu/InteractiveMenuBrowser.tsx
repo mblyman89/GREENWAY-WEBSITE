@@ -7,6 +7,8 @@ import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
 // taxonomy, so renames/additions at /admin/settings/types reach shoppers.
 import { allKnownCategories, categoryLabel, isKnownCategory, setCategoryLabelOverrides } from "@/lib/menu/category-labels-client";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
+// R49 S1: the strain-NAME facet ("Strains"); the old facet is now "Strain types".
+import { buildStrainNameOptions, matchesStrainNameSelection } from "@/lib/menu/menu-facets-core";
 import { FilterMobile, MenuFilterControls } from "./FilterMobile";
 import { FilterTags } from "./FilterTags";
 import { ProductCard } from "./ProductCard";
@@ -350,6 +352,8 @@ type FilterCriteria = {
   query: string;
   selectedCategories: GreenwayCategory[];
   selectedStrains: string[];
+  // R49 S1: strain NAMES (cultivars), separate from strain TYPES above.
+  selectedStrainNames: string[];
   selectedTerpenes: string[];
   selectedBrands: string[];
   // PR 3: additive by-vendor facet (mirrors selectedBrands; matches item.vendor).
@@ -503,6 +507,7 @@ function itemMatchesCriteria(item: GreenwayMenuItem, criteria: FilterCriteria, m
   const itemCategories = item.filterCategories?.length ? item.filterCategories : [item.category];
   const categoryOk = criteria.selectedCategories.length === 0 || criteria.selectedCategories.some((category) => itemCategories.includes(category));
   const strainOk = matchesStrainSelection(item, criteria.selectedStrains);
+  const strainNameOk = matchesStrainNameSelection(item, criteria.selectedStrainNames);
   const terpeneOk = matchesTerpeneSelection(item, criteria.selectedTerpenes);
   const brandOk = criteria.selectedBrands.length === 0 || criteria.selectedBrands.includes(item.brand);
   // PR 3: additive by-vendor match. item.vendor is optional (blank on items with
@@ -515,7 +520,7 @@ function itemMatchesCriteria(item: GreenwayMenuItem, criteria: FilterCriteria, m
   const priceOk = matchesPriceSlider(item.priceMinorUnits, criteria.maxPrice, maxAvailablePrice);
   const searchOk = matchesSearch(item, criteria.query);
 
-  return categoryOk && strainOk && terpeneOk && brandOk && vendorOk && weightOk && thcOk && cbdOk && priceOk && searchOk;
+  return categoryOk && strainOk && strainNameOk && terpeneOk && brandOk && vendorOk && weightOk && thcOk && cbdOk && priceOk && searchOk;
 }
 
 function countValues(values: string[]) {
@@ -551,6 +556,7 @@ function criteriaWithout(criteria: FilterCriteria, key: keyof FilterCriteria): F
   if (key === "query") return { ...criteria, query: "" };
   if (key === "selectedCategories") return { ...criteria, selectedCategories: [] };
   if (key === "selectedStrains") return { ...criteria, selectedStrains: [] };
+  if (key === "selectedStrainNames") return { ...criteria, selectedStrainNames: [] };
   if (key === "selectedTerpenes") return { ...criteria, selectedTerpenes: [] };
   if (key === "selectedBrands") return { ...criteria, selectedBrands: [] };
   if (key === "selectedVendors") return { ...criteria, selectedVendors: [] };
@@ -569,6 +575,8 @@ type InitialMenuSearchParams = {
   // Richer persisted filter params (Task G).
   categories?: string;
   strains?: string;
+  // R49 S1: strain-name facet (comma list of cultivar names).
+  strainNames?: string;
   terpenes?: string;
   brands?: string;
   // PR 3: additive by-VENDOR filter (surfaces all brands by a producer). Mirrors
@@ -642,6 +650,7 @@ function resolveInitialParams(serverParams: InitialMenuSearchParams): InitialMen
     special: pick("special") ?? undefined,
     categories: pick("categories") ?? undefined,
     strains: pick("strains") ?? undefined,
+    strainNames: pick("strainNames") ?? undefined,
     terpenes: pick("terpenes") ?? undefined,
     brands: pick("brands") ?? undefined,
     vendors: pick("vendors") ?? undefined,
@@ -689,6 +698,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   // so the menu restores the shopper's exact state on return from a product page.
   const persistedCategories = parsePersistedList(initialParams.categories).filter(isWebsiteCategory) as GreenwayCategory[];
   const persistedStrains = parsePersistedList(initialParams.strains);
+  const persistedStrainNames = parsePersistedList(initialParams.strainNames);
   const persistedTerpenes = parsePersistedList(initialParams.terpenes);
   const persistedBrands = parsePersistedList(initialParams.brands);
   // PR 3: additive by-vendor facet. Home vendor cards deep-link ?vendors=<vendor>.
@@ -707,6 +717,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     persistedCategories.length ? persistedCategories : initialCategory ? [initialCategory] : initialSpecialCategories,
   );
   const [selectedStrains, setSelectedStrains] = useState<string[]>(persistedStrains);
+  const [selectedStrainNames, setSelectedStrainNames] = useState<string[]>(persistedStrainNames);
   const [selectedTerpenes, setSelectedTerpenes] = useState<string[]>(persistedTerpenes);
   const [selectedBrands, setSelectedBrands] = useState<string[]>(
     persistedBrands.length ? persistedBrands : initialBrand ? [initialBrand] : [],
@@ -804,6 +815,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     if (query.trim()) params.set("search", query.trim());
     if (selectedCategories.length) params.set("categories", selectedCategories.join(","));
     if (selectedStrains.length) params.set("strains", selectedStrains.join(","));
+    if (selectedStrainNames.length) params.set("strainNames", selectedStrainNames.join(","));
     if (selectedTerpenes.length) params.set("terpenes", selectedTerpenes.join(","));
     if (selectedBrands.length) params.set("brands", selectedBrands.join(","));
     if (selectedVendors.length) params.set("vendors", selectedVendors.join(","));
@@ -821,6 +833,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     query,
     selectedCategories,
     selectedStrains,
+    selectedStrainNames,
     selectedBrands,
     selectedVendors,
     selectedTerpenes,
@@ -859,6 +872,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       );
 
       setSelectedStrains(list("strains"));
+      setSelectedStrainNames(list("strainNames"));
       setSelectedTerpenes(list("terpenes"));
 
       const nextBrands = list("brands");
@@ -895,6 +909,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     query,
     selectedCategories,
     selectedStrains,
+    selectedStrainNames,
     selectedTerpenes,
     selectedBrands,
     selectedVendors,
@@ -902,7 +917,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     maxThc,
     maxCbd,
     maxPrice,
-  }), [maxCbd, maxPrice, maxThc, query, selectedBrands, selectedVendors, selectedCategories, selectedStrains, selectedTerpenes, selectedWeights]);
+  }), [maxCbd, maxPrice, maxThc, query, selectedBrands, selectedVendors, selectedCategories, selectedStrains, selectedStrainNames, selectedTerpenes, selectedWeights]);
 
   const filteredItems = useMemo(() => {
     const specialItemIds = initialSpecial?.itemIds;
@@ -965,6 +980,12 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     return baseOptions;
   }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedStrains]);
 
+  // R49 S1: every strain NAME on the (otherwise-filtered) menu, A→Z with counts.
+  const strainNameOptions = useMemo(() => {
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedStrainNames"), maxAvailablePrice, cannabinoidBounds));
+    return buildStrainNameOptions(optionItems, selectedStrainNames);
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedStrainNames]);
+
   const terpeneOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedTerpenes"), maxAvailablePrice, cannabinoidBounds));
     return buildOptions(
@@ -1019,6 +1040,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
   const hasOtherFiltersActive =
     query.trim().length > 0 ||
     selectedStrains.length > 0 ||
+    selectedStrainNames.length > 0 ||
     selectedTerpenes.length > 0 ||
     selectedBrands.length > 0 ||
     selectedVendors.length > 0 ||
@@ -1083,6 +1105,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
         query,
         selectedCategories,
         selectedStrains,
+        selectedStrainNames,
         selectedTerpenes,
         selectedBrands,
         selectedVendors,
@@ -1099,6 +1122,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       query,
       selectedCategories,
       selectedStrains,
+      selectedStrainNames,
       selectedTerpenes,
       selectedBrands,
       selectedVendors,
@@ -1174,6 +1198,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     setQuery("");
     setSelectedCategories([]);
     setSelectedStrains([]);
+    setSelectedStrainNames([]);
     setSelectedTerpenes([]);
     setSelectedBrands([]);
     setSelectedVendors([]);
@@ -1266,9 +1291,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     })),
     ...selectedStrains.map((strain) => ({
       key: `strain-${strain}`,
-      label: "Strain",
+      label: "Strain type",
       value: strainTagLabel(strain),
       onRemove: () => setSelectedStrains((current) => current.filter((value) => value !== strain)),
+    })),
+    ...selectedStrainNames.map((name) => ({
+      key: `strain-name-${name}`,
+      label: "Strain",
+      value: name,
+      onRemove: () => setSelectedStrainNames((current) => current.filter((value) => value !== name)),
     })),
     ...selectedTerpenes.map((terpene) => ({
       key: `terpene-${terpene}`,
@@ -1320,6 +1351,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
     <MenuFilterControls
       selectedCategories={selectedCategories}
       selectedStrains={selectedStrains}
+      selectedStrainNames={selectedStrainNames}
       selectedTerpenes={selectedTerpenes}
       selectedBrands={selectedBrands}
       selectedVendors={selectedVendors}
@@ -1331,6 +1363,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
         if (isWebsiteCategory(category)) setSelectedCategories((current) => toggleValue(current, category));
       }}
       onStrainToggle={(strain) => setSelectedStrains((current) => toggleValue(current, strain))}
+      onStrainNameToggle={(name) => setSelectedStrainNames((current) => toggleValue(current, name))}
       onTerpeneToggle={(terpene) => setSelectedTerpenes((current) => toggleValue(current, terpene))}
       onBrandToggle={(brand) => setSelectedBrands((current) => toggleValue(current, brand))}
       onVendorToggle={(vendor) => setSelectedVendors((current) => toggleValue(current, vendor))}
@@ -1345,6 +1378,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
       maxAvailableCbd={maxAvailableCbd}
       categoryOptions={categoryOptions}
       strainOptions={strainOptions}
+      strainNameOptions={strainNameOptions}
       terpeneOptions={terpeneOptions}
       brandOptions={brandOptions}
       vendorOptions={vendorOptions}
@@ -1403,7 +1437,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {}, catego
         </FilterMobile>
       </div>
 
-      <aside className="hidden rounded-3xl border border-white/10 bg-zinc-950 p-5 lg:col-start-1 lg:row-start-2 lg:row-span-2 lg:block lg:self-start">
+      <aside className="hidden min-w-0 max-w-full rounded-3xl border border-white/10 bg-zinc-950 p-5 lg:col-start-1 lg:row-start-2 lg:row-span-2 lg:block lg:self-start">
         {filterControls}
       </aside>
 

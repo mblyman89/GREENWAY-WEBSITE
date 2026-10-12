@@ -918,6 +918,7 @@ import { __runEditConflictCoreTests } from "../../src/lib/cms/edit-conflict-core
 import { __runContentScheduleCoreTests } from "../../src/lib/cms/content-schedule-core";
 import { __runContentReleaseCoreTests } from "../../src/lib/cms/content-release-core";
 import { __runSeoOverrideCoreTests } from "../../src/lib/seo/seo-override-core";
+import { __runMenuFacetsCoreTests } from "../../src/lib/menu/menu-facets-core";
 import { __runBlurPlaceholderCoreTests } from "../../src/lib/media/blur-placeholder-core";
 import { __runTypeCardsTests } from "../../src/lib/cms/type-cards-core";
 import { __runLoyaltyConsentTests } from "../../src/lib/loyalty/loyalty-consent-core";
@@ -2213,6 +2214,7 @@ __runLiquidVolumeTests();
   assertRan("content-schedule-core", __runContentScheduleCoreTests(), 61); // R46-S1: scheduled publish/unpublish (Pacific -> UTC, 5-min grid, due selection)
   assertRan("content-release-core", __runContentReleaseCoreTests(), 30); // R46-S2: releases (bundle of changes that go live together)
   assertRan("seo-override-core", __runSeoOverrideCoreTests(), 32); // R46-S2: SEO Editor values reach public pages + sitemap
+  assertRan("menu-facets-core", __runMenuFacetsCoreTests(), 19); // R49 S1: strain-name facet
   assertRan("blur-placeholder-core", __runBlurPlaceholderCoreTests(), 25); // R45-S2: tiny blur previews for banner images
   assertRan("type-cards-core", __runTypeCardsTests(), 54); // R41 S3: home Type Cards; R47 advanced card options
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording

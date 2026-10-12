@@ -23,6 +23,8 @@ type FilterCheckboxGroupProps = {
   searchLabel?: string;
   emptyMessage?: string;
   initialVisibleCount?: number;
+  /** R49 S1: show labels exactly as written (strain names like "GMO x OZ"); default capitalizes. */
+  preserveCase?: boolean;
 };
 
 export function FilterCheckboxGroup({
@@ -35,6 +37,7 @@ export function FilterCheckboxGroup({
   searchLabel = "Search brands",
   emptyMessage = "No matching filter options.",
   initialVisibleCount = 5,
+  preserveCase = false,
 }: FilterCheckboxGroupProps) {
   const [query, setQuery] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
@@ -49,27 +52,31 @@ export function FilterCheckboxGroup({
   const canToggleMore = searchedOptions.length > initialVisibleCount;
 
   return (
-    <div className="grid gap-3">
+    // R49 S1 — STACKING RULE. Grid/flex items default to min-width:auto, so the
+    // search <input>'s intrinsic width (and any long option label) used to widen
+    // the whole group past the 280px rail (measured live: rows reached 18px into
+    // the product grid). min-w-0 on every track child + wrapping labels stops it.
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
       {searchable ? (
-        <label className="grid gap-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-zinc-400">
+        <label className="grid min-w-0 gap-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-zinc-400">
           {searchLabel}
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full rounded-full border border-white/10 bg-black/35 px-4 py-2.5 text-sm font-bold normal-case tracking-normal text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
+            className="w-full min-w-0 rounded-full border border-white/10 bg-black/35 px-4 py-2.5 text-sm font-bold normal-case tracking-normal text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
           />
         </label>
       ) : null}
 
       {visibleOptions.length ? (
-        <div className="grid gap-2">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
           {visibleOptions.map((option) => {
             const checked = selectedValues.includes(option.value);
 
             return (
-              <label key={option.value} className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${checked ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"}`}>
-                <span className="flex min-w-0 items-center gap-3">
+              <label key={option.value} title={option.label} className={`flex min-h-12 min-w-0 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${checked ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"}`}>
+                <span className="flex min-w-0 flex-1 items-center gap-3">
                   <input
                     type="checkbox"
                     name={name}
@@ -81,7 +88,7 @@ export function FilterCheckboxGroup({
                   <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
                     {checked ? "✓" : ""}
                   </span>
-                  <span className="truncate capitalize">{option.label}</span>
+                  <span className={`min-w-0 break-words leading-snug [overflow-wrap:anywhere] ${preserveCase ? "" : "capitalize"}`}>{option.label}</span>
                 </span>
                 <span className={`shrink-0 rounded-full px-2 py-1 text-[0.65rem] font-black ${checked ? "bg-[var(--greenway)]/15 text-[var(--greenway)]" : "bg-black/35 text-zinc-500"}`}>{option.count}</span>
               </label>
