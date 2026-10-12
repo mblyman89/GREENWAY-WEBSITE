@@ -2210,7 +2210,7 @@ __runLiquidVolumeTests();
   assertRan("content-release-core", __runContentReleaseCoreTests(), 30); // R46-S2: releases (bundle of changes that go live together)
   assertRan("seo-override-core", __runSeoOverrideCoreTests(), 32); // R46-S2: SEO Editor values reach public pages + sitemap
   assertRan("blur-placeholder-core", __runBlurPlaceholderCoreTests(), 25); // R45-S2: tiny blur previews for banner images
-  assertRan("type-cards-core", __runTypeCardsTests(), 42); // R41 S3: home Type Cards
+  assertRan("type-cards-core", __runTypeCardsTests(), 54); // R41 S3: home Type Cards; R47 advanced card options
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording
   console.log("ALL PURE SELF-TESTS PASSED");
 }
