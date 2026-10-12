@@ -95,6 +95,8 @@ export type MenuFilterControlsProps = {
   /** PR 3: additive by-vendor facet (surfaces all brands by a producer). */
   selectedVendors: string[];
   selectedWeights: string[];
+  /** R49 S2 — size facet (beverage fl oz / serving packs). Optional for back-compat. */
+  selectedSizes?: string[];
   maxThc: number;
   maxCbd: number;
   maxPrice: number;
@@ -109,6 +111,7 @@ export type MenuFilterControlsProps = {
   onBrandToggle: (brand: string) => void;
   onVendorToggle: (vendor: string) => void;
   onWeightToggle: (weight: string) => void;
+  onSizeToggle?: (size: string) => void;
   onMaxThcChange: (value: number) => void;
   onMaxCbdChange: (value: number) => void;
   onMaxPriceChange: (price: number) => void;
@@ -122,6 +125,7 @@ export type MenuFilterControlsProps = {
   /** PR 3: by-vendor options (mirrors brandOptions; derived from item.vendor). */
   vendorOptions: FilterCheckboxOption[];
   weightOptions: FilterCheckboxOption[];
+  sizeOptions?: FilterCheckboxOption[];
   /**
    * SLICE C (SHOP-3): the Specials section is now FULLY DYNAMIC — a data-driven
    * list of filters (the two built-in lanes + any one-off SALE a carousel slide
@@ -159,6 +163,7 @@ export function MenuFilterControls({
   selectedBrands,
   selectedVendors,
   selectedWeights,
+  selectedSizes = [],
   maxThc,
   maxCbd,
   maxPrice,
@@ -173,6 +178,7 @@ export function MenuFilterControls({
   onBrandToggle,
   onVendorToggle,
   onWeightToggle,
+  onSizeToggle,
   onMaxThcChange,
   onMaxCbdChange,
   onMaxPriceChange,
@@ -184,6 +190,7 @@ export function MenuFilterControls({
   brandOptions,
   vendorOptions,
   weightOptions,
+  sizeOptions = [],
   specialFilters = [],
   activeSpecialId = null,
   onSpecialToggle,
@@ -369,8 +376,14 @@ export function MenuFilterControls({
       ) : null}
 
       <FilterSection title="Weights" defaultOpen={false}>
-        <FilterCheckboxGroup name="weights" options={weightOptions} selectedValues={selectedWeights} onToggle={onWeightToggle} />
+        <FilterCheckboxGroup name="weights" options={weightOptions} selectedValues={selectedWeights} onToggle={onWeightToggle} preserveCase />
       </FilterSection>
+      {/* R49 S2 — Size: beverage volumes + single / multi-serving packs. Shown only when the menu has them. */}
+      {onSizeToggle && (sizeOptions.length > 0 || selectedSizes.length > 0) ? (
+        <FilterSection title="Size" defaultOpen={false}>
+          <FilterCheckboxGroup name="sizes" options={sizeOptions} selectedValues={selectedSizes} onToggle={onSizeToggle} preserveCase />
+        </FilterSection>
+      ) : null}
 
       <FilterSection title="Price">
         <label className="block">
