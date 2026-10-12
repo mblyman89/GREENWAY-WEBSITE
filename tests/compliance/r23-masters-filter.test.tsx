@@ -240,7 +240,9 @@ describe("R23 fix 9 — home + specials resolve enrichment images like Shop", ()
       expect(s).toContain('import { withResolvedImages } from "@/lib/enrichment/image-resolver";');
       // R33: the owner's category/type re-file (withCategoryOverride) sits
       // between the profile and the image resolve; images still resolve last.
-      expect(s).toMatch(/withMenuProfile\(items\)\)\.then\(\(items\) => withCategoryOverride\(items\)\)\.then\(\(items\) => withResolvedImages\(items\)\)/);
+      // R49 S5: the product-tag overlay (withProductTags) sits between the
+      // category re-file and image resolution -- it only adds `tags`.
+      expect(s).toMatch(/withMenuProfile\(items\)\)\.then\(\(items\) => withCategoryOverride\(items\)\)\.then\(\(items\) => withProductTags\(items\)\)\.then\(\(items\) => withResolvedImages\(items\)\)/);
     });
   }
 });
