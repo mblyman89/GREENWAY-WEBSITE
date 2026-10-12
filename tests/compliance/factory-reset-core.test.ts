@@ -1299,7 +1299,11 @@ describe("D-65 — the connections survive the reset", () => {
     //   +1  R47 / 0268: website_click_events (anonymous website banner-click
     //       analytics; KEEP so the pinned 139-table WIPE list in 0240's
     //       reset function is not reopened for an analytics log)
-    expect(plan.keep.length).toBe(150);
+    //   +3  R49-S5 / 0269: tag_definitions, product_tag_assignments and
+    //       product_first_seen (owner tag configuration and product history,
+    //       keyed by product key with no FK into the wiped menu tables; KEEP
+    //       so the pinned 139-table WIPE list in 0240 is not reopened)
+    expect(plan.keep.length).toBe(153);
     expect(plan.wipe.length).toBe(139);
   });
 
