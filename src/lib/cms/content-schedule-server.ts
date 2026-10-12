@@ -43,7 +43,8 @@ export type ScheduleRow = {
   target_label: string | null;
   action: ScheduleAction;
   run_at: string | null;
-  status: ScheduleStatus;
+  /** 'held' = waiting inside a draft release (R46-S2). */
+  status: ScheduleStatus | "held";
   release_id: string | null;
   attempts: number;
   claimed_at: string | null;
@@ -330,7 +331,8 @@ export async function runContentScheduleTick(nowIso = new Date().toISOString()):
     if (isMissingScheduleSchema(error)) return { ...base, skipped: "no_table" };
     return { ...base, ok: false, error: error.message };
   }
-  const due = selectDue((data as ScheduleRow[] | null) ?? [], nowIso);
+  // The query filtered on run_at <= now, so run_at is never null here.
+  const due = selectDue(((data as ScheduleRow[] | null) ?? []) as (ScheduleRow & { run_at: string })[], nowIso);
   if (due.length === 0) return { ...base, skipped: "nothing_due" };
 
   const touched = new Set<ScheduleTargetKind>();
@@ -404,4 +406,44 @@ export async function settleRelease(releaseId: string): Promise<void> {
       .eq("id", releaseId)
       .eq("status", "scheduled");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Everything that can be scheduled (for the Schedule page's picker)
+// ---------------------------------------------------------------------------
+
+export type ScheduleTargetOption = { kind: ScheduleTargetKind; key: string; label: string; group: string };
+
+/** Every schedulable item, grouped for a <select>. Never throws. */
+export async function listScheduleTargets(): Promise<ScheduleTargetOption[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const out: ScheduleTargetOption[] = [];
+  const first = (s: string | null | undefined) => String(s ?? "").split("\n")[0].trim();
+  try {
+    const [home, shop, sections, faq, blocks] = await Promise.all([
+      admin.from("home_carousel_slides").select("id,draft_title,title,sort_order").order("sort_order").limit(50),
+      admin.from("shop_carousel_slides").select("id,slide_key,draft_presentation,presentation,sort_order").order("sort_order").limit(50),
+      admin.from("page_sections").select("id,page_slug,section_key,draft_title,title,locked,sort_order").order("page_slug").order("sort_order").limit(300),
+      admin.from("faq_items").select("id,draft_question,question,locked,sort_order").order("sort_order").limit(300),
+      admin.from("content_blocks").select("block_key,page,label").order("page").order("block_key").limit(1000),
+    ]);
+    for (const r of (home.data ?? []) as { id: string; draft_title: string | null; title: string | null }[])
+      out.push({ kind: "carousel_slide", key: r.id, label: first(r.draft_title || r.title) || "(untitled slide)", group: "Home carousel" });
+    for (const r of (shop.data ?? []) as { id: string; slide_key: string; draft_presentation: { title?: { text?: string } } | null; presentation: { title?: { text?: string } } | null }[])
+      out.push({ kind: "shop_slide", key: r.id, label: first(r.draft_presentation?.title?.text || r.presentation?.title?.text) || r.slide_key, group: "Shop banner" });
+    for (const r of (sections.data ?? []) as { id: string; page_slug: string; section_key: string; draft_title: string | null; title: string | null; locked: boolean }[]) {
+      if (r.locked || r.section_key === "home.settings") continue;
+      out.push({ kind: "page_section", key: r.id, label: `${r.page_slug}: ${first(r.draft_title || r.title) || r.section_key}`, group: "Page sections" });
+    }
+    for (const r of (faq.data ?? []) as { id: string; draft_question: string | null; question: string | null; locked: boolean }[]) {
+      if (r.locked) continue;
+      out.push({ kind: "faq_item", key: r.id, label: first(r.draft_question || r.question) || "(untitled question)", group: "FAQ questions" });
+    }
+    for (const r of (blocks.data ?? []) as { block_key: string; page: string; label: string }[])
+      out.push({ kind: "content_block", key: r.block_key, label: `${r.page}: ${r.label}`, group: "Page wording (publish only)" });
+  } catch (e) {
+    console.error("[content-schedule] target list failed:", e instanceof Error ? e.message : e);
+  }
+  return out;
 }

@@ -16,7 +16,7 @@
  * constants + helpers used here come from the pure cores.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "@/components/admin/ContentImageField";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
@@ -83,6 +83,11 @@ type Props = {
   deleteAction: (formData: FormData) => void | Promise<void>;
   moveAction: (formData: FormData) => void | Promise<void>;
   seedAction: (formData: FormData) => void | Promise<void>;
+  /**
+   * R46-S1: server-rendered "Schedule" strip per slide id (SchedulePanel is a
+   * server component, so the page renders it and passes it in as a slot).
+   */
+  schedulePanels?: Record<string, ReactNode>;
 };
 
 const TEXT_ALIGN_LABELS: Record<TextAlign, string> = { left: "Left", center: "Center", right: "Right" };
@@ -821,8 +826,8 @@ export function ShopBannerEditor(props: Props) {
       ) : (
         <div className="space-y-4">
           {slides.map((slide, index) => (
+            <div key={slide.id}>
             <SlideCard
-              key={slide.id}
               slide={slide}
               index={index}
               total={slides.length}
@@ -836,6 +841,8 @@ export function ShopBannerEditor(props: Props) {
               moveAction={moveAction}
               posts={props.posts ?? []}
             />
+            {props.schedulePanels?.[slide.id] ?? null}
+            </div>
           ))}
         </div>
       )}

@@ -16,6 +16,8 @@ import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { resolveImageSpec } from "@/lib/cms/image-spec-core";
 import { listShopPromotionChoices } from "@/lib/cms/shop-promotion-choices";
 import { listPublishedPostLinks } from "@/lib/cms/blog-store";
+import { SchedulePanel } from "@/components/admin/SchedulePanel";
+import { openSchedulesByTarget } from "@/lib/cms/content-schedule-server";
 import {
   seedShopBannerAction,
   addShopBannerSlideAction,
@@ -51,6 +53,7 @@ export default async function AdminShopBannerPage({
     moved?: string;
     seeded?: string;
     error?: string;
+    scheduled?: string;
   }>;
 }) {
   await requirePermission("content.edit");
@@ -116,6 +119,23 @@ export default async function AdminShopBannerPage({
   const promotionChoices = await listShopPromotionChoices();
   // R41 S6: blog posts / newsletters for the slide design's link picker.
   const posts = await listPublishedPostLinks().catch(() => []);
+  // R46-S1: "go live / come down at a time" per slide (one query).
+  const sched = await openSchedulesByTarget("shop_slide");
+  const nowIso = new Date().toISOString();
+  const schedulePanels = Object.fromEntries(
+    slides.map((sl) => [
+      sl.id,
+      <SchedulePanel
+        key={sl.id}
+        kind="shop_slide"
+        targetKey={sl.id}
+        returnTo={`/admin/content/shop-banner#slide-${sl.id}`}
+        open={sched.byKey[sl.id] ?? []}
+        ready={sched.ready}
+        nowIso={nowIso}
+      />,
+    ]),
+  );
 
   return (
     <div>
@@ -150,7 +170,12 @@ export default async function AdminShopBannerPage({
             {decodeURIComponent(sp.error)}
           </div>
         ) : null}
-        {(sp.saved || sp.published || sp.added || sp.deleted || sp.moved || sp.seeded) && (
+        {sp.scheduled ? (
+          <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            {decodeURIComponent(sp.scheduled)}
+          </div>
+        ) : null}
+                {(sp.saved || sp.published || sp.added || sp.deleted || sp.moved || sp.seeded) && (
           <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             {sp.published
               ? "Published live. 🎉"
@@ -178,6 +203,7 @@ export default async function AdminShopBannerPage({
           moveAction={moveShopBannerSlideAction}
           posts={posts}
           seedAction={seedShopBannerAction}
+          schedulePanels={schedulePanels}
         />
       </div>
     </div>

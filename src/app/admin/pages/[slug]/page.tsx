@@ -36,6 +36,8 @@ import { listFaqItems } from "@/lib/cms/faq-store";
 import { FaqItemCard } from "@/components/admin/FaqItemCard";
 import { Button } from "@/components/admin/ui";
 import { EmptyState } from "@/components/admin/ux";
+import { SchedulePanel } from "@/components/admin/SchedulePanel";
+import { openSchedulesByTarget } from "@/lib/cms/content-schedule-server";
 import {
   seedSectionsAction,
   addSectionAction,
@@ -75,6 +77,7 @@ type Flash = { tone: "ok" | "error"; text: string } | null;
 
 function flashFor(sp: Record<string, string | undefined>): Flash {
   if (sp.error) return { tone: "error", text: decodeURIComponent(sp.error) };
+  if (sp.scheduled) return { tone: "ok", text: decodeURIComponent(sp.scheduled) };
   if (sp.added) return { tone: "ok", text: "New section added — scroll down to edit it." };
   if (sp.saved && sp.tab === "typecards")
     return { tone: "ok", text: "Type Cards published to the homepage." };
@@ -300,6 +303,9 @@ export default async function PageBuilderPage({
 
 async function CarouselTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
   const slides = await listCarouselSlides();
+  // R46-S1: upcoming scheduled changes per slide (one query).
+  const sched = await openSchedulesByTarget("carousel_slide");
+  const nowIso = new Date().toISOString();
   const atCap = slides.length >= MAX_CAROUSEL_SLIDES;
 
   return (
@@ -329,17 +335,26 @@ async function CarouselTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
       ) : (
         <div className="space-y-5">
           {slides.map((slide, index) => (
-            <CarouselSlideCard
-              key={slide.id}
-              slide={slide}
-              index={index}
-              total={slides.length}
-              mediaChoices={mediaChoices}
-              saveAction={saveCarouselSlideAction}
-              publishAction={publishCarouselSlideAction}
-              deleteAction={deleteCarouselSlideAction}
-              moveAction={moveCarouselSlideAction}
-            />
+            <div key={slide.id}>
+              <CarouselSlideCard
+                slide={slide}
+                index={index}
+                total={slides.length}
+                mediaChoices={mediaChoices}
+                saveAction={saveCarouselSlideAction}
+                publishAction={publishCarouselSlideAction}
+                deleteAction={deleteCarouselSlideAction}
+                moveAction={moveCarouselSlideAction}
+              />
+              <SchedulePanel
+                kind="carousel_slide"
+                targetKey={slide.id}
+                returnTo={`/admin/pages/home?tab=carousel#slide-${slide.id}`}
+                open={sched.byKey[slide.id] ?? []}
+                ready={sched.ready}
+                nowIso={nowIso}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -386,6 +401,9 @@ async function SectionsTab({
 }) {
   const allSections = await listSections(slug);
   const isHome = slug === "home";
+  // R46-S1: upcoming scheduled changes per section (one query).
+  const sched = await openSchedulesByTarget("page_section");
+  const nowIso = new Date().toISOString();
   // R41 S2: published posts / newsletters for the button link picker.
   const posts = await listPublishedPostLinks().catch(() => []);
 
@@ -463,19 +481,29 @@ async function SectionsTab({
       ) : (
         <div className="space-y-5">
           {sections.map((section, index) => (
-            <SectionCard
-              key={section.id}
-              section={section}
-              pageSlug={slug}
-              index={index}
-              total={sections.length}
-              mediaChoices={mediaChoices}
-              saveAction={saveSectionAction}
-              publishAction={publishSectionAction}
-              deleteAction={deleteSectionAction}
-              moveAction={moveSectionAction}
-              posts={posts}
-            />
+            <div key={section.id}>
+              <SectionCard
+                section={section}
+                pageSlug={slug}
+                index={index}
+                total={sections.length}
+                mediaChoices={mediaChoices}
+                saveAction={saveSectionAction}
+                publishAction={publishSectionAction}
+                deleteAction={deleteSectionAction}
+                moveAction={moveSectionAction}
+                posts={posts}
+              />
+              <SchedulePanel
+                kind="page_section"
+                targetKey={section.id}
+                returnTo={`/admin/pages/${slug}?tab=sections#section-${section.id}`}
+                open={sched.byKey[section.id] ?? []}
+                ready={sched.ready}
+                nowIso={nowIso}
+                locked={section.locked}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -489,6 +517,9 @@ async function SectionsTab({
 
 async function QandaTab() {
   const items = await listFaqItems();
+  // R46-S1: upcoming scheduled changes per question (one query).
+  const sched = await openSchedulesByTarget("faq_item");
+  const nowIso = new Date().toISOString();
 
   return (
     <div className="space-y-5">
@@ -518,16 +549,26 @@ async function QandaTab() {
       ) : (
         <div className="space-y-5">
           {items.map((item, index) => (
-            <FaqItemCard
-              key={item.id}
-              item={item}
-              index={index}
-              total={items.length}
-              saveAction={saveFaqAction}
-              publishAction={publishFaqAction}
-              deleteAction={deleteFaqAction}
-              moveAction={moveFaqAction}
-            />
+            <div key={item.id}>
+              <FaqItemCard
+                item={item}
+                index={index}
+                total={items.length}
+                saveAction={saveFaqAction}
+                publishAction={publishFaqAction}
+                deleteAction={deleteFaqAction}
+                moveAction={moveFaqAction}
+              />
+              <SchedulePanel
+                kind="faq_item"
+                targetKey={item.id}
+                returnTo={`/admin/pages/faq?tab=qanda#faq-${item.id}`}
+                open={sched.byKey[item.id] ?? []}
+                ready={sched.ready}
+                nowIso={nowIso}
+                locked={item.locked}
+              />
+            </div>
           ))}
         </div>
       )}
