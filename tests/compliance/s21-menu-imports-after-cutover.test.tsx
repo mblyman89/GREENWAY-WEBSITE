@@ -279,10 +279,18 @@ describe("S21 page wiring", () => {
     const close = page.indexOf("</OneTimeImportTools>");
     expect(open).toBeGreaterThan(-1);
     // The WHOLE section (heading, copy, runbook link, form) is the child - not just part of it.
+    // R50 S9: the first child is the "Fetch It All" section; the hand upload is the fallback inside <details>.
     expect(page).toMatch(
-      /<OneTimeImportTools cutover=\{cutover\} refused=\{uploadRefused\}>\s*<section className="rounded-xl border border-white\/10 bg-\[#0a0a0a\] p-5">\s*<h2 className="text-sm font-semibold text-white">Upload a new POS export<\/h2>/,
+      /<OneTimeImportTools cutover=\{cutover\} refused=\{uploadRefused\}>\s*(\{\/\*[^]*?\*\/\}\s*)?<section className="rounded-xl border border-\[var\(--admin-accent\)\]\/40[^"]*">\s*<h2 className="text-sm font-semibold text-white">Fetch everything from Cultivera POS<\/h2>/,
     );
-    expect(page).toMatch(/<\/form>\s*<\/section>\s*<\/OneTimeImportTools>/);
+    expect(page).toMatch(
+      /<summary[^>]*>Fallback: upload the two exports by hand<\/summary>\s*<section className="mt-4">\s*<h2 className="text-sm font-semibold text-white">Upload a new POS export<\/h2>/,
+    );
+    expect(page).toMatch(/<\/form>\s*<\/section>\s*<\/details>\s*<\/OneTimeImportTools>/);
+    expect(page.indexOf("Fetch It All, Fuck Cultivera")).toBeGreaterThan(open);
+    expect(page.indexOf("Fetch It All, Fuck Cultivera")).toBeLessThan(close);
+    expect(page.indexOf("<form action={startFetchAction}")).toBeGreaterThan(open);
+    expect(page.indexOf("<form action={startFetchAction}")).toBeLessThan(close);
     expect(page.indexOf("Read the Cultivera cutover runbook")).toBeGreaterThan(open);
     expect(page.indexOf("Read the Cultivera cutover runbook")).toBeLessThan(close);
     expect(page.indexOf(">Upload a new POS export</h2>")).toBeGreaterThan(open);
