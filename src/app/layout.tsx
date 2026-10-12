@@ -143,6 +143,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <NoTrackGate>
           <Analytics />
           <SpeedInsights />
+        </NoTrackGate>
+        {/* R47: first-party banner click counts; own gate so the R39 analytics block stays pinned. */}
+        <NoTrackGate>
           <ClickTracker />
         </NoTrackGate>
         {isPreview && <PreviewEditOverlay />}
