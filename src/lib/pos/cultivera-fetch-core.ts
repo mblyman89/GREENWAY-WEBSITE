@@ -397,7 +397,7 @@ export function reconcileControlTotals(listLots: ListLot[], rows: SheetRow[]): R
   const byId = new Map<number, SheetRow>();
   for (const r of rows) {
     const id = Number(r.Id);
-    if (Number.isInteger(id)) byId.set(id, r);
+    if (Number.isInteger(id) && id > 0) byId.set(id, r); // blank Id cells ("" → 0) never pair
   }
   let unitsList = 0, unitsRows = 0, costList = 0, costRows = 0;
   const mismatches: ReconcileReport["mismatches"] = [];
@@ -571,6 +571,7 @@ export function __runCultiveraFetchCoreTests(): { passed: number; failed: number
   // ---- toCents / reconcileControlTotals ----
   ok(toCents("$1,234.50") === 123450 && toCents(1234.5) === 123450 && toCents("") === null && toCents(null) === null, "toCents parses money text and numbers");
   ok(toCents(0.1 + 0.2) === 30 && toCents("4") === 400 && toCents("abc") === null, "toCents rounds float noise, refuses junk");
+  ok(toCents(4.35) === 435 && toCents("4.35") === 435 && toCents(1.15) === 115, "toCents rounds (4.35*100 = 434.999…), never floors");
   {
     const L: ListLot[] = [
       { Id: 1, Barcode: "A", ProductName: "x", UnitsInStock: 3, UnitCost: 4.25 },
@@ -590,6 +591,14 @@ export function __runCultiveraFetchCoreTests(): { passed: number; failed: number
     ok(tw.ok && tw.unitsRows === 140 && tw.costValueRowsCents === 140000 && tw.mismatches.length === 0, "reconcile: shared barcode pairs by lot Id");
     const noId = reconcileControlTotals(twin, [{ Barcode: "074R", "Units In Stock": 139, Cost: 10 }, { Barcode: "074R", "Units In Stock": 1, Cost: 10 }]);
     ok(!noId.ok && noId.unitsRows === 0, "reconcile: rows without a lot Id never pair by barcode");
+    const zero = reconcileControlTotals([{ Id: 0, Barcode: "Z", ProductName: "z", UnitsInStock: 2, UnitCost: 1 }], [{ Id: "", Barcode: "Z", "Units In Stock": 2, Cost: 1 }]);
+    ok(!zero.ok && zero.unitsRows === 0, "reconcile: a blank Id cell never pairs with lot 0");
+    const sameCost: ListLot[] = [{ Id: 1, Barcode: "A", ProductName: "x", UnitsInStock: 3, UnitCost: 2 }, { Id: 2, Barcode: "B", ProductName: "y", UnitsInStock: 10, UnitCost: 2 }];
+    const swap = reconcileControlTotals(sameCost, [{ Id: 1, Barcode: "A", "Units In Stock": 10, Cost: 2 }, { Id: 2, Barcode: "B", "Units In Stock": 3, Cost: 2 }]);
+    ok(!swap.ok && swap.unitsRows === swap.unitsList && swap.costValueRowsCents === swap.costValueListCents && swap.mismatches.length === 2, "reconcile: equal totals with swapped lots is still no-go");
+    ok(swap.mismatches[0].id === 1 && swap.mismatches[1].id === 2, "reconcile: mismatches listed by lot Id ascending");
+    const junk = reconcileControlTotals([{ Id: 7, Barcode: "J", ProductName: "j", UnitsInStock: 0, UnitCost: 1 }], [{ Id: 7, Barcode: "J", "Units In Stock": "n/a", Cost: 1 }]);
+    ok(junk.ok && junk.unitsRows === 0, "reconcile: a junk units cell counts 0 (never 1)");
   }
 
   return { passed, failed: 0 };

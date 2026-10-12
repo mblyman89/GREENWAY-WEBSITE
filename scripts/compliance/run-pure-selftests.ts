@@ -2233,7 +2233,7 @@ __runLiquidVolumeTests();
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording
   assertRan("cultivera-manifest-group-core", __runCultiveraManifestGroupCoreTests(), 110); // R50 S1: Cultivera deliveries rebuilt (vendor + Pacific day + gap)
   assertRan("cultivera-transfer-match-core", __runCultiveraTransferMatchCoreTests(), 72); // R50 S1b: lots married to the REAL Cultivera transfers
-  assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 88); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
+  assertRan("cultivera-fetch-core", __runCultiveraFetchCoreTests(), 93); // R50 S9: Fetch It All — list-of-record supplement, date cells, go/no-go
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

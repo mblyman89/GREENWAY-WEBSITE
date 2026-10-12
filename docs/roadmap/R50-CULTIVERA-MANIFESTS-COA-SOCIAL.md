@@ -539,3 +539,40 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
   `tests/compliance/r50-cultivera-fetch-pipeline.test.ts` drives the real `transformWorkbooks` on a 600-row
   fixture shaped like the live export (20 dropped lots, serial date cells, 300 stockless products). The result
   is GO with 600 lots, 0 errors and 0 hidden. Removing any one safeguard turns it no-go or breaks a pin.
+* 2026-10-12 — **S9 crawler harvester + rehearsal #2a (live, read-only): GO on all 8 checks.**
+  `crawler/app/cultivera_pos.py` runs Phase A as resumable stages: login, both exports, the inventory list,
+  the transfers list, referenced transfer details, and batches for list-only lots. A request guard allows
+  only GET/POST, login is POST only, and data URLs must stay under `data-api/`. The CDN guard runs on every
+  redirect hop. Logs are redacted, and the token lives in memory only. Files are written atomically, and the
+  JSONL writer repairs a torn last line before appending. `crawler/app/cultivera_pos_jobs.py` adds
+  single-flight start/resume and cancel, plus an allow-listed file download, all behind `X-Crawler-Secret`
+  (`/cultivera-pos/runs…`). Tests: 47 harvester pytest (40/40 mutants killed) and 28 API pytest (12/12 killed).
+  Rehearsal #2a timings:
+  - 478 s total, 660 calls, 0 errors.
+  - Login 0.1 s.
+  - Inventory export 647 KB in 9 s.
+  - Product export 1.3 MB in 30 s.
+  - Inventory list: 3,824 lots in 10 s (Count verified).
+  - Transfers list: 1,164 in 2 s.
+  - Referenced transfer details: 644 / 644 in 427 s.
+  - Batches: 0, because today the export carried every list lot. This was checked by Id, not assumed.
+
+  `assembleFromRun` (`src/lib/pos/cultivera-fetch-assemble.ts`) ran the real transform on those bytes in
+  3.7 s at 318 MB RSS. Result:
+  - 3,824 / 3,824 lots and 3,676 date cells rewritten.
+  - 17,266 product rows filtered to 3,285.
+  - 2,898 items, all visible, and 3,249 variants.
+  - 0 errors, and 0 hidden for a missing master.
+  - **Control totals (new check 8):** 25,851 units, and cost value of $174,591.22 matching to the cent.
+
+  **Found by the live run, fixed:** the first assemble was a false NO-GO with 56 "mismatches". The cause was
+  the reconcile join on barcode. Live data has **59 barcodes shared by 121 lots** (re-received batches, and
+  a POS Returns copy of a Sales Floor lot), so a barcode map paired the wrong rows. Reconcile and the batch
+  received-date join now key on **lot Id** (`receivedUtcByLotId`; the Id key beats the barcode key, and an Id
+  with a null date stays blank). Six new self-test pins cover it (93 total). Testing the tests: 17 / 17
+  reconcile and assemble mutants killed. The first pass left 5 survivors (blank-Id pairing, ok ignoring
+  per-lot mismatches when totals net out, cent flooring, junk units → 1, mismatch order), and each now has a pin.
+  **Known, not a defect:** 148 exported lots have no Received date at all. The batch record has every date
+  null and there is no `IncomingTransferId`. These are legacy and manual lots, 26 of them under "Default
+  Vendor". They stay visible, and manifest grouping puts them in the `undated` group. They are never dated
+  by guess.
