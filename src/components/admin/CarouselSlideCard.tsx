@@ -1,11 +1,36 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
 import { ConfirmDialog } from "@/components/admin/ux";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
 import { CAROUSEL_SLIDE_SPEC } from "@/lib/cms/image-spec-core";
 import type { SlideAdminVM, SlideCta } from "@/lib/cms/carousel-types";
+import { DesignCard } from "@/components/admin/specials/SpecialsR41Panels";
+import type { PickerPost } from "@/components/admin/banner-studio/LinkPicker";
+import { ensureBoundBoxes, type BannerDesign } from "@/lib/cms/banner-design-core";
+import {
+  IMAGE_FOCUSES,
+  TEXT_ALIGNS,
+  TEXT_VALIGNS,
+  defaultHomeSlideAdvanced,
+  effectiveLayout,
+  homeLegacyWords,
+  normalizeHomeSlideAdvanced,
+  serializeHomeSlideAdvanced,
+  type HomeLineStyle,
+  type HomeSlideAdvanced,
+} from "@/lib/cms/home-slide-advanced-core";
+import {
+  HERO_COLORS,
+  HERO_FONTS,
+  SCRIPT_SCALE_MAX,
+  SCRIPT_SCALE_MIN,
+  isScriptHeroFont,
+  type ImageFocus,
+  type TextAlign,
+  type TextVAlign,
+} from "@/lib/loyalty/loyalty-hero-core";
 
 /**
  * CarouselSlideCard — one editable home-hero slide in the manager.
@@ -26,6 +51,7 @@ export function CarouselSlideCard({
   publishAction,
   deleteAction,
   moveAction,
+  posts = [],
 }: {
   slide: SlideAdminVM;
   index: number;
@@ -35,6 +61,8 @@ export function CarouselSlideCard({
   publishAction: (formData: FormData) => void | Promise<void>;
   deleteAction: (formData: FormData) => void | Promise<void>;
   moveAction: (formData: FormData) => void | Promise<void>;
+  /** R47: published blog posts / newsletters for the Banner Studio link picker. */
+  posts?: PickerPost[];
 }) {
   // Draft is the source of truth for the editor.
   const d = {
@@ -61,6 +89,41 @@ export function CarouselSlideCard({
   const [description, setDescription] = useState(d.description);
   const [enabled, setEnabled] = useState(d.enabled);
 
+  // R47: advanced options (same as the Shop / Loyalty banners). null = the
+  // classic slide; the first change creates the advanced value.
+  const initialAdv = useMemo(
+    () => normalizeHomeSlideAdvanced(slide.draft_advanced ?? slide.advanced ?? null),
+    [slide.draft_advanced, slide.advanced],
+  );
+  const [adv, setAdv] = useState<HomeSlideAdvanced | null>(initialAdv);
+  const [advOpen, setAdvOpen] = useState<boolean>(!!initialAdv);
+  const advSerialized = serializeHomeSlideAdvanced(adv) ?? "";
+  const advInitialSerialized = serializeHomeSlideAdvanced(initialAdv) ?? "";
+  const words = { eyebrow, title, description };
+  function patchAdv(patch: Partial<HomeSlideAdvanced>) {
+    setAdv((cur) => ({ ...(cur ?? defaultHomeSlideAdvanced()), ...patch }));
+  }
+  function patchLine(which: "eyebrow" | "title" | "description", patch: Partial<HomeLineStyle>) {
+    setAdv((cur) => {
+      const base = cur ?? defaultHomeSlideAdvanced();
+      const next: HomeSlideAdvanced = { ...base, [which]: { ...base[which], ...patch } };
+      // Same fix as the Shop banner eyebrow: ticking Show with a custom
+      // design on makes sure the studio has a box for that line.
+      if (next.design) {
+        next.design = ensureBoundBoxes(
+          next.design,
+          homeLegacyWords(words, next),
+          patch.show === true ? (which === "description" ? "subtitle" : which) : null,
+        );
+      }
+      return next;
+    });
+  }
+  const layout = effectiveLayout(
+    { imageFocus: imageFocus as "left" | "center" | "right", textAlign: textAlign as "left" | "right" },
+    adv,
+  );
+
   const cta0 = d.ctas[0] ?? { label: "", href: "", variant: "solid" as const };
   const cta1 = d.ctas[1] ?? { label: "", href: "", variant: "outline" as const };
   const [cta0Label, setCta0Label] = useState(cta0.label);
@@ -84,7 +147,8 @@ export function CarouselSlideCard({
     cta0Variant !== cta0.variant ||
     cta1Label !== cta1.label ||
     cta1Href !== cta1.href ||
-    cta1Variant !== cta1.variant;
+    cta1Variant !== cta1.variant ||
+    advSerialized !== advInitialSerialized;
 
   useEffect(() => {
     if (!unsaved) return;
@@ -181,6 +245,8 @@ export function CarouselSlideCard({
         <input type="hidden" name="text_align" value={textAlign} />
         <input type="hidden" name="cta0_variant" value={cta0Variant} />
         <input type="hidden" name="cta1_variant" value={cta1Variant} />
+        {/* R47: advanced options JSON ("" = classic slide). */}
+        <input type="hidden" name="advanced" value={advSerialized} />
 
         {/* Background image */}
         <div>
@@ -332,6 +398,170 @@ export function CarouselSlideCard({
           </fieldset>
         </div>
 
+        {/* R47: advanced options — same features as the Shop / Loyalty banners */}
+        <div className="rounded-lg border border-white/10 p-3">
+          <button
+            type="button"
+            onClick={() => setAdvOpen((v) => !v)}
+            className="flex w-full items-center justify-between text-left text-sm font-semibold text-white"
+            aria-expanded={advOpen}
+          >
+            <span>
+              ✨ Advanced options{" "}
+              <span className="font-normal text-white/50">
+                (fonts, colours, phone picture, focus, centring, schedule, custom design)
+              </span>
+            </span>
+            <span className="text-white/50">{advOpen ? "▾" : "▸"}</span>
+          </button>
+          {advOpen ? (
+            <div className="mt-4 space-y-4">
+              <p className="text-xs text-white/50">
+                Everything here is optional. Leave a font or colour on <strong>Classic</strong> to keep
+                today&apos;s look. These settings override the basic Image focus / Text side above.
+              </p>
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                <LineStyleEditor
+                  title="Eyebrow"
+                  line={(adv ?? defaultHomeSlideAdvanced()).eyebrow}
+                  onChange={(p) => patchLine("eyebrow", p)}
+                />
+                <LineStyleEditor
+                  title="Title"
+                  line={(adv ?? defaultHomeSlideAdvanced()).title}
+                  onChange={(p) => patchLine("title", p)}
+                />
+                <LineStyleEditor
+                  title="Description"
+                  line={(adv ?? defaultHomeSlideAdvanced()).description}
+                  onChange={(p) => patchLine("description", p)}
+                />
+              </div>
+
+              <div>
+                <span className={labelCls}>Phone picture (optional — a taller crop for phones)</span>
+                <ContentImageField
+                  value={adv?.imageMobile ?? ""}
+                  onChange={(v) => patchAdv({ imageMobile: v })}
+                  mediaChoices={mediaChoices}
+                  allowVideo
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <span className={labelCls}>Picture focus — computer</span>
+                  <Pills
+                    options={IMAGE_FOCUSES}
+                    labels={FOCUS_LABELS}
+                    value={layout.imageFocus}
+                    onChange={(v) => patchAdv({ imageFocus: v })}
+                  />
+                </div>
+                <div>
+                  <span className={labelCls}>Picture focus — phone</span>
+                  <Pills
+                    options={IMAGE_FOCUSES}
+                    labels={FOCUS_LABELS}
+                    value={layout.imageFocusMobile}
+                    onChange={(v) => patchAdv({ imageFocusMobile: v })}
+                  />
+                </div>
+                <div>
+                  <span className={labelCls}>Text — left / centre / right</span>
+                  <Pills
+                    options={TEXT_ALIGNS}
+                    labels={ALIGN_LABELS}
+                    value={layout.textAlign}
+                    onChange={(v) => patchAdv({ textAlign: v })}
+                  />
+                </div>
+                <div>
+                  <span className={labelCls}>Text — top / middle / bottom</span>
+                  <Pills
+                    options={TEXT_VALIGNS}
+                    labels={VALIGN_LABELS}
+                    value={layout.verticalAlign}
+                    onChange={(v) => patchAdv({ verticalAlign: v })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <span className={labelCls}>Show only between (optional, your local time)</span>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-xs text-white/60">
+                    Start
+                    <input
+                      type="datetime-local"
+                      className={`${inputCls} mt-1`}
+                      value={toLocalInput(adv?.scheduleStart ?? null)}
+                      onChange={(e) => patchAdv({ scheduleStart: fromLocalInput(e.target.value) })}
+                    />
+                  </label>
+                  <label className="text-xs text-white/60">
+                    End
+                    <input
+                      type="datetime-local"
+                      className={`${inputCls} mt-1`}
+                      value={toLocalInput(adv?.scheduleEnd ?? null)}
+                      onChange={(e) => patchAdv({ scheduleEnd: fromLocalInput(e.target.value) })}
+                    />
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-white/40">
+                  Outside these times the slide is hidden from visitors (staff preview still shows it).
+                </p>
+              </div>
+
+              <DesignCard
+                mediaChoices={mediaChoices}
+                title="Custom design (optional)"
+                description="Turn this on to drag the text and buttons anywhere, add extra text boxes and buttons, change sizes, and zoom or tint the picture. The eyebrow, title and description above still supply the words. With custom design on, the buttons you add in the studio replace the two buttons above. Turn it off any time to go back to the classic look."
+                design={adv?.design ?? null}
+                onChange={(dsg: BannerDesign | null) =>
+                  setAdv((cur) => {
+                    const next: HomeSlideAdvanced = { ...(cur ?? defaultHomeSlideAdvanced()) };
+                    if (dsg) next.design = dsg;
+                    else delete next.design;
+                    return next;
+                  })
+                }
+                legacy={homeLegacyWords(words, adv)}
+                imageSrc={image || adv?.imageMobile || ""}
+                imageAlt={imageAlt}
+                preset="hero"
+                seed={{
+                  ...homeLegacyWords(words, adv),
+                  textAlign: layout.textAlign,
+                  verticalAlign: layout.verticalAlign,
+                  imageFocus: layout.imageFocus,
+                  buttons: [
+                    { label: cta0Label, href: cta0Href, variant: cta0Variant === "outline" ? "outline" : "solid" },
+                    { label: cta1Label, href: cta1Href, variant: cta1Variant === "outline" ? "outline" : "solid" },
+                  ].filter((b) => b.label.trim() && b.href.trim()) as {
+                    label: string;
+                    href: string;
+                    variant: "solid" | "outline";
+                  }[],
+                }}
+                posts={posts}
+              />
+
+              {adv ? (
+                <button
+                  type="button"
+                  onClick={() => setAdv(null)}
+                  className="text-xs text-white/50 underline hover:text-white"
+                >
+                  Reset all advanced options (back to the classic slide)
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
         {/* Enable + actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
           <label className="flex items-center gap-2 text-sm text-white/80">
@@ -370,4 +600,154 @@ export function CarouselSlideCard({
       </form>
     </div>
   );
+}
+
+// ── R47 helpers ─────────────────────────────────────────────────────────────
+
+const FOCUS_LABELS: Record<ImageFocus, string> = {
+  center: "Center",
+  top: "Top",
+  bottom: "Bottom",
+  left: "Left",
+  right: "Right",
+};
+const ALIGN_LABELS: Record<TextAlign, string> = { left: "Left", center: "Center", right: "Right" };
+const VALIGN_LABELS: Record<TextVAlign, string> = { top: "Top", center: "Middle", bottom: "Bottom" };
+
+function Pills<T extends string>({
+  options,
+  labels,
+  value,
+  onChange,
+}: {
+  options: readonly T[];
+  labels: Record<T, string>;
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((o) => (
+        <button
+          key={o}
+          type="button"
+          onClick={() => onChange(o)}
+          aria-pressed={value === o}
+          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+            value === o
+              ? "bg-[var(--admin-accent)]/15 text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
+              : "border border-white/15 text-white/60 hover:text-white"
+          }`}
+        >
+          {labels[o]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function LineStyleEditor({
+  title,
+  line,
+  onChange,
+}: {
+  title: string;
+  line: HomeLineStyle;
+  onChange: (patch: Partial<HomeLineStyle>) => void;
+}) {
+  const sel =
+    "w-full rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-white outline-none focus:border-[var(--admin-accent)]/60";
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-white/70">{title}</span>
+        <label className="flex items-center gap-1.5 text-xs text-white/60">
+          <input type="checkbox" checked={line.show} onChange={(e) => onChange({ show: e.target.checked })} />
+          Show
+        </label>
+      </div>
+      <label className="mb-2 block text-[0.65rem] uppercase tracking-wide text-white/50">
+        Font
+        <select className={`${sel} mt-1`} value={line.font} onChange={(e) => onChange({ font: e.target.value })}>
+          <option value="">Classic (site font)</option>
+          <optgroup label="Display (bold headlines)">
+            {HERO_FONTS.filter((f) => f.group === "display").map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Clean sans">
+            {HERO_FONTS.filter((f) => f.group === "sans").map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Script (cursive)">
+            {HERO_FONTS.filter((f) => f.group === "script").map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+      </label>
+      <div className="text-[0.65rem] uppercase tracking-wide text-white/50">Colour</div>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          title="Classic colour"
+          onClick={() => onChange({ color: "" })}
+          className={`h-7 rounded-full border px-2 text-[0.6rem] text-white/70 ${
+            line.color === "" ? "ring-2 ring-[var(--admin-accent)]" : "border-white/20"
+          }`}
+        >
+          Classic
+        </button>
+        {HERO_COLORS.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            title={c.label}
+            aria-label={c.label}
+            onClick={() => onChange({ color: c.id })}
+            className={`h-7 w-7 rounded-full border transition ${
+              line.color === c.id ? "ring-2 ring-[var(--admin-accent)]" : "border-white/20 hover:scale-105"
+            }`}
+            style={{ backgroundColor: c.hex }}
+          />
+        ))}
+      </div>
+      {isScriptHeroFont(line.font) ? (
+        <label className="mt-2 block text-[0.65rem] uppercase tracking-wide text-white/50">
+          Cursive size ({line.scriptScale.toFixed(1)}×)
+          <input
+            type="range"
+            min={SCRIPT_SCALE_MIN}
+            max={SCRIPT_SCALE_MAX}
+            step={0.1}
+            value={line.scriptScale}
+            onChange={(e) => onChange({ scriptScale: Number(e.target.value) })}
+            className="mt-1 w-full accent-[var(--admin-accent)]"
+          />
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
+/** ISO → <input type="datetime-local"> value (browser local time). */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+/** datetime-local value → ISO (null when blank). */
+function fromLocalInput(value: string): string | null {
+  if (!value) return null;
+  const dt = new Date(value);
+  return Number.isNaN(dt.getTime()) ? null : dt.toISOString();
 }

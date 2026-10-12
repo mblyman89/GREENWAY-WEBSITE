@@ -303,6 +303,8 @@ export default async function PageBuilderPage({
 
 async function CarouselTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
   const slides = await listCarouselSlides();
+  // R47: published posts / newsletters for the Banner Studio link picker.
+  const posts = await listPublishedPostLinks().catch(() => []);
   // R46-S1: upcoming scheduled changes per slide (one query).
   const sched = await openSchedulesByTarget("carousel_slide");
   const nowIso = new Date().toISOString();
@@ -345,6 +347,7 @@ async function CarouselTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
                 publishAction={publishCarouselSlideAction}
                 deleteAction={deleteCarouselSlideAction}
                 moveAction={moveCarouselSlideAction}
+                posts={posts}
               />
               <SchedulePanel
                 kind="carousel_slide"

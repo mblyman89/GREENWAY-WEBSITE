@@ -902,6 +902,7 @@ import { __runSiteDomainCoreTests } from "../../src/lib/site/site-domain-core";
 import { __runAchCalendarCoreTests } from "../../src/lib/payments/ach-calendar-core";
 import { __runAchGuideCoreTests } from "../../src/lib/payments/ach-guide-core";
 import { __runBannerDesignCoreTests } from "../../src/lib/cms/banner-design-core";
+import { __runHomeSlideAdvancedCoreTests } from "../../src/lib/cms/home-slide-advanced-core";
 import { __runDesignMoveCoreTests } from "../../src/lib/cms/design-move-core";
 import { __runDesignDragCoreTests } from "../../src/lib/cms/design-drag-core";
 import { __runBannerAiCoreTests } from "../../src/lib/cms/banner-ai-core";
@@ -2193,7 +2194,8 @@ __runLiquidVolumeTests();
   assertRan("site-domain-core", __runSiteDomainCoreTests(), 20); // R40: www canonical, apex->www, legacy WordPress redirects
   assertRan("ach-calendar-core", __runAchCalendarCoreTests(), 32); // R40: ACH calendar, rule watch, reminders
   assertRan("ach-guide-core", __runAchGuideCoreTests(), 22); // R40: ACH guide journeys, blockers, explainer
-  assertRan("banner-design-core", __runBannerDesignCoreTests(), 104); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves
+  assertRan("banner-design-core", __runBannerDesignCoreTests(), 114); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
+  assertRan("home-slide-advanced-core", __runHomeSlideAdvancedCoreTests(), 28); // R47: home carousel advanced options
   assertRan("design-move-core", __runDesignMoveCoreTests(), 46); // R41 S7: hub preview Move-mode owners + per-owner movers
   assertRan("design-drag-core", __runDesignDragCoreTests(), 16); // R41 S7: preview drag geometry (top-left %, container-query device, nudge)
   assertRan("banner-ai-core", __runBannerAiCoreTests(), 38); // R41 S8: AI placement reply parser + apply (drafts only)
