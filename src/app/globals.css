@@ -657,3 +657,56 @@ h1, h2, h3, h4, h5, h6 {
     display: block;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * R49 S3 — dual-thumb range slider (FilterRangeSlider). Two native range
+ * inputs share one track (W3C APG multi-thumb pattern via native inputs).
+ * The inputs ignore pointer events; only their thumbs take them, so BOTH
+ * thumbs stay grabbable even when they overlap. Tracks are transparent — the
+ * visual track + orange fill are drawn by sibling divs.
+ * ------------------------------------------------------------------------- */
+.gw-range-dual input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  margin: 0;
+  height: 100%;
+}
+.gw-range-dual input[type="range"]::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 4px;
+}
+.gw-range-dual input[type="range"]::-moz-range-track {
+  background: transparent;
+  height: 4px;
+}
+.gw-range-dual input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 9999px;
+  background: var(--orange);
+  border: 2px solid #000;
+  cursor: grab;
+}
+.gw-range-dual input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--orange);
+  border: 2px solid #000;
+  cursor: grab;
+}
+.gw-range-dual input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.gw-range-dual input[type="range"]:focus-visible::-moz-range-thumb {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

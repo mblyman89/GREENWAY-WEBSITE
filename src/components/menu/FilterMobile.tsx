@@ -6,6 +6,8 @@ import { FilterSection } from "./FilterSection";
 import type { MenuSpecialFilter } from "@/lib/menu/menu-special-filters-core";
 import type { DohFilterOption } from "@/lib/menu/menu-doh-filter-core";
 import type { ClassificationFilterOption } from "@/lib/menu/menu-classification-filter-core";
+import { FilterRangeSlider } from "./FilterRangeSlider";
+import { MG_FACET_LABELS, MG_FACET_TYPES, type MgBounds, type MgFacetType, type MgRange, type MgSelection } from "@/lib/menu/menu-mg-facet-core";
 
 type FilterMobileProps = {
   activeCount: number;
@@ -112,6 +114,10 @@ export type MenuFilterControlsProps = {
   onVendorToggle: (vendor: string) => void;
   onWeightToggle: (weight: string) => void;
   onSizeToggle?: (size: string) => void;
+  /** R49 S3 — package-mg range sliders. Bounds include ONLY the cannabinoids to show. */
+  mgBounds?: MgBounds;
+  mgSelection?: MgSelection;
+  onMgChange?: (type: MgFacetType, range: MgRange) => void;
   onMaxThcChange: (value: number) => void;
   onMaxCbdChange: (value: number) => void;
   onMaxPriceChange: (price: number) => void;
@@ -179,6 +185,9 @@ export function MenuFilterControls({
   onVendorToggle,
   onWeightToggle,
   onSizeToggle,
+  mgBounds = {},
+  mgSelection = {},
+  onMgChange,
   onMaxThcChange,
   onMaxCbdChange,
   onMaxPriceChange,
@@ -382,6 +391,32 @@ export function MenuFilterControls({
       {onSizeToggle && (sizeOptions.length > 0 || selectedSizes.length > 0) ? (
         <FilterSection title="Size" defaultOpen={false}>
           <FilterCheckboxGroup name="sizes" options={sizeOptions} selectedValues={selectedSizes} onToggle={onSizeToggle} preserveCase />
+        </FilterSection>
+      ) : null}
+
+      {/* R49 S3 — Cannabinoids (mg): one min–max slider per cannabinoid that the
+          current products carry in verified per-package mg (edibles, drinks,
+          tinctures, topicals …). Hidden entirely when no product has mg data. */}
+      {onMgChange && MG_FACET_TYPES.some((type) => mgBounds[type]) ? (
+        <FilterSection title="Cannabinoids (mg)" helper="Total mg per package" defaultOpen={false}>
+          <div className="grid min-w-0 gap-5">
+            {MG_FACET_TYPES.filter((type) => mgBounds[type]).map((type) => {
+              const bounds = mgBounds[type]!;
+              const value = mgSelection[type] ?? bounds;
+              return (
+                <FilterRangeSlider
+                  key={type}
+                  label={MG_FACET_LABELS[type]}
+                  unit="mg"
+                  boundsMin={bounds.min}
+                  boundsMax={bounds.max}
+                  valueMin={value.min}
+                  valueMax={value.max}
+                  onChange={(next) => onMgChange(type, next)}
+                />
+              );
+            })}
+          </div>
         </FilterSection>
       ) : null}
 

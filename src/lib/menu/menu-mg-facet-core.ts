@@ -55,17 +55,22 @@ export function itemMg(item: ProfileInput, type: MgFacetType): number | null {
   return row ? row.mg : null;
 }
 
-/** Integer bounds per cannabinoid present in the pool (floor of min, ceil of max). */
+/**
+ * Integer bounds per cannabinoid present in the pool: ALWAYS anchored at 0,
+ * up to the ceil of the largest package mg. Anchoring at 0 (the common
+ * dispensary-menu convention) means raising the minimum above 0 reads as
+ * "contains at least N mg" and works even when every product has the same
+ * figure (live CBC: all 95 mg) — a min..max-of-data slider could never narrow.
+ */
 export function buildMgBounds(items: ReadonlyArray<ProfileInput>): MgBounds {
   const out: MgBounds = {};
   for (const item of items) {
     for (const row of resolvePackageMg(item)) {
       if (!(MG_FACET_TYPES as readonly string[]).includes(row.type)) continue;
       const t = row.type as MgFacetType;
-      const lo = Math.floor(row.mg);
       const hi = Math.ceil(row.mg);
       const cur = out[t];
-      out[t] = cur ? { min: Math.min(cur.min, lo), max: Math.max(cur.max, hi) } : { min: lo, max: hi };
+      out[t] = { min: 0, max: cur ? Math.max(cur.max, hi) : hi };
     }
   }
   return out;
@@ -180,16 +185,17 @@ export function __runMenuMgFacetCoreTests(): { passed: number; failed: number } 
   ok(itemMg(estimate, "cbn") === null, "'~' estimate is never mg");
 
   const b = buildMgBounds(pool);
-  ok(b.thc?.min === 100 && b.thc?.max === 110, "THC bounds 100–110");
-  ok(b.cbd?.min === 490 && b.cbd?.max === 490, "CBD bounds");
-  ok(b.cbg?.min === 300 && b.cbn?.min === 25, "minor bounds");
+  ok(b.thc?.min === 0 && b.thc?.max === 110, "THC bounds 0–110 (anchored at 0)");
+  ok(b.cbd?.min === 0 && b.cbd?.max === 490, "CBD bounds");
+  ok(b.cbg?.max === 300 && b.cbn?.max === 25, "minor bounds");
   ok(b.cbc === undefined, "absent cannabinoid has no slider");
   ok(Object.keys(buildMgBounds([flower])).length === 0, "flower-only pool → no mg sliders");
   const frac = buildMgBounds([{ category: "edible-solid", packageThcMg: 5.5 }]);
-  ok(frac.thc?.min === 5 && frac.thc?.max === 6, "fractional mg → integer floor/ceil bounds");
+  ok(frac.thc?.min === 0 && frac.thc?.max === 6, "fractional mg → integer ceil bound");
 
   ok(matchesMgSelection(flower, {}, b), "no selection: flower passes");
-  ok(matchesMgSelection(flower, { thc: { min: 100, max: 110 } }, b), "untouched slider is not a filter");
+  ok(matchesMgSelection(flower, { thc: { min: 0, max: 110 } }, b), "untouched slider is not a filter");
+  ok(!matchesMgSelection(flower, { cbn: { min: 1, max: 25 } }, b) && matchesMgSelection(hikuCbn, { cbn: { min: 1, max: 25 } }, b), "min>0 means 'contains': only items with CBN pass");
   ok(!matchesMgSelection(flower, { thc: { min: 100, max: 105 } }, b), "narrowed slider excludes no-mg items");
   ok(matchesMgSelection(hikuCbn, { thc: { min: 100, max: 105 } }, b), "100 in [100,105]");
   ok(!matchesMgSelection(bytesCbg, { thc: { min: 100, max: 105 } }, b), "110 outside [100,105]");
@@ -197,8 +203,8 @@ export function __runMenuMgFacetCoreTests(): { passed: number; failed: number } 
   ok(!matchesMgSelection(bytesCbd, { thc: { min: 100, max: 105 }, cbn: { min: 26, max: 25 + 1 } }, b), "AND across sliders (one fails)");
   ok(!matchesMgSelection(bytesCbd, { cbc: { min: 1, max: 5 } }, b), "selection on an absent cannabinoid excludes all");
 
-  ok(isMgRangeActive({ min: 100, max: 110 }, { min: 100, max: 110 }) === false, "full range inactive");
-  ok(isMgRangeActive({ min: 101, max: 110 }, { min: 100, max: 110 }), "raised min active");
+  ok(isMgRangeActive({ min: 0, max: 110 }, { min: 0, max: 110 }) === false, "full range inactive");
+  ok(isMgRangeActive({ min: 1, max: 110 }, { min: 0, max: 110 }), "raised min active");
 
   const p = parseMgRangeParam("50-150");
   ok(p?.min === 50 && p?.max === 150, "parse 50-150");
@@ -210,8 +216,8 @@ export function __runMenuMgFacetCoreTests(): { passed: number; failed: number } 
   const params = new URLSearchParams("mg_thc=100-105&mg_cbn=x&mg_cbg=0-300");
   const sel = parseMgSelection((k) => params.get(k));
   ok(sel.thc?.max === 105 && sel.cbn === undefined && sel.cbg?.max === 300, "parseMgSelection");
-  // Pool bounds: thc 100–110, cbg 300–300. Full ranges drop; a narrowed one stays.
-  const act = activeMgSelection({ thc: { min: 100, max: 110 }, cbg: { min: 300, max: 300 }, cbd: { min: 1, max: 2 } }, b);
+  // Pool bounds: thc 0–110, cbg 0–300. Full ranges drop; a narrowed one stays.
+  const act = activeMgSelection({ thc: { min: 0, max: 110 }, cbg: { min: 0, max: 300 }, cbd: { min: 1, max: 2 } }, b);
   ok(act.thc === undefined && act.cbg === undefined, "activeMgSelection drops full ranges");
   ok(act.cbd?.min === 1, "activeMgSelection keeps a narrowed range");
   ok(mgSelectionWithout({ thc: { min: 1, max: 2 }, cbd: { min: 1, max: 2 } }, "thc").thc === undefined, "without");
