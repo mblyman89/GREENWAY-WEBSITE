@@ -41,6 +41,7 @@ import {
 } from "@/lib/cms/shop-carousel-core";
 import type { ShopRenderSlide } from "@/lib/cms/shop-carousel-types";
 import { BannerMedia } from "@/components/site/BannerMedia";
+import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
 import { CarouselRotationButton } from "@/components/site/CarouselRotationButton";
 import { useCarouselAutoplay } from "@/components/site/useCarouselAutoplay";
 import { dwellMs, slideFetchPriority, wordCount } from "@/lib/site/carousel-autoplay-core";
@@ -243,16 +244,19 @@ export function SlideView({
   // elsewhere on /menu, so slide headlines stay h2.
   if (presentation.design?.enabled) {
     const words = (b: ShopHeroPresentation["eyebrow"]) => (b.show ? b.text : "");
+    const legacy = {
+      eyebrow: words(presentation.eyebrow),
+      title: words(presentation.title),
+      subtitle: words(presentation.subtitle),
+    };
+    // R47: a line ticked "Show" after the design was made has no box yet —
+    // add one so it actually appears (the owner's eyebrow bug).
     return (
       <DesignedBanner
-        design={presentation.design}
+        design={ensureBoundBoxes(presentation.design, legacy)}
         imageSrc={presentation.image || presentation.imageMobile}
         imageAlt=""
-        legacy={{
-          eyebrow: words(presentation.eyebrow),
-          title: words(presentation.title),
-          subtitle: words(presentation.subtitle),
-        }}
+        legacy={legacy}
         headingLevel={2}
         priority={priority}
         editable={!!designOwner}
