@@ -189,6 +189,17 @@ class Settings(BaseSettings):
     # Where the cached session JSON lives (relative to crawler/). Gitignored.
     cultivera_session_file: str = Field(default=".cache/cultivera_session.json", alias="CULTIVERA_SESSION_FILE")
 
+    # --- R50 S9: Cultivera POS cutover harvest ("Fetch It All, Fuck Cultivera") ---------------
+    # The owner's Cultivera POS back-office login (wa.cultiverapos.com) — NOT the Market buyer login
+    # above. Read-only use: one POST auth/login, then data-api reads only (crawler/app/cultivera_pos.py).
+    # Set these ONLY as Railway env vars; never in a file in the repo. Remove them after cutover.
+    cultivera_pos_username: str = Field(default="", alias="CULTIVERA_POS_USERNAME")
+    cultivera_pos_password: str = Field(default="", alias="CULTIVERA_POS_PASSWORD")
+    # Delay after every request. 0.6 s is the rehearsal-#1 pace (no 429s across ~2,000 calls).
+    cultivera_pos_pace_seconds: float = Field(default=0.6, alias="CULTIVERA_POS_PACE_SECONDS")
+    # Phase A time budget (bible §3b.7: ~10 min measured; 30 min is the go/no-go ceiling).
+    cultivera_pos_budget_seconds: float = Field(default=1800.0, alias="CULTIVERA_POS_BUDGET_SECONDS")
+
     # --- GrowFlow (second wholesale marketplace) ------------------------------
     # The owner is ALSO an authenticated GrowFlow BUYER (Greenway Marijuana,
     # license 413541; their rep approved using the marketplace this way).
@@ -277,6 +288,11 @@ class Settings(BaseSettings):
     def social_enabled(self) -> bool:
         """Sanctioned social features run only when a Meta Graph token is set."""
         return bool(self.meta_graph_token.strip())
+
+    @property
+    def cultivera_pos_enabled(self) -> bool:
+        """The cutover harvest runs only when the owner's POS login is set."""
+        return bool(self.cultivera_pos_username.strip() and self.cultivera_pos_password.strip())
 
     @property
     def cultivera_enabled(self) -> bool:
