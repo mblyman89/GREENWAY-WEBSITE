@@ -145,6 +145,11 @@ reconstructed manifests carried real vendor ids and looked like ordinary deliver
 show money "owed" for stock that was paid for years ago. **R50 rule: reconstructed manifests are excluded from
 payables, the Sage purchases export and vendor bills by one shared predicate.**
 
+**Done in S2a (2026-10-12).** One pure predicate, `migration-stock-core.ts`. It covers BOTH migration kinds
+(`pos-import-migration` and `cultivera-reconstructed`), because lots in the POS-IMPORT manifest were paid for
+before the switch too. It is applied at four doors: payables, the Sage purchases export, the vendor bill **and
+the goods receipt**. A receipt would capitalise the stock a second time on top of the opening balance.
+
 ### 1.5 Onboarding today
 
 `planDraftSeeding` returns `match` (no draft) when the lot's key is already on the published menu. Every
@@ -637,3 +642,46 @@ be a few minutes. **Start at 06:00 PT**, which leaves 2 h of margin. Phase B (CO
       SHA-256 equal**, and **6 / 6 data mutants are killed**.
     * The fake-crawler client test went from 8 to 12 cases: details served, missing details refused, a torn
       line, a link to a transfer that lacks the barcode (NO-GO), and the old no-link path.
+
+- **2026-10-12, S2a: Cultivera migration stock never reaches payables or the books (\u00a71.4).**
+  * `src/lib/accounting/migration-stock-core.ts` (pure, 26 self-tests, runner floor 26) is the one predicate
+    for both migration kinds. It also holds the PostgREST filter string and the plain-English messages.
+  * **Payables** filter on the server and in code. The server filter is the null-safe
+    `.or("raw_payload->>kind.is.null,raw_payload->>kind.not.in.(...)")`. **Trap found on a real PostgREST
+    12.2.3:** the obvious `.not("raw_payload->>kind","in",...)` drops every manifest with no kind
+    (`NULL NOT IN` is NULL in SQL). That would have hidden most native deliveries from payables. The new
+    test forbids that form.
+  * **The Sage purchases export** leaves migration manifests out and prints a warning: "N Cultivera
+    migration manifest(s) left out: ...". The skip is never silent.
+  * **The vendor bill and the goods receipt** refuse with `BILL_MIGRATION_STOCK` / `RECEIPT_MIGRATION_STOCK`.
+    The check runs before any lot is read.
+  * **Intake** treats those refusals as "none needed", not an error banner. They land on the timeline as
+    quiet accounting events (`vendor_bill_migration_stock`, `receipt_migration_stock`; `problem: false`).
+    `manifest_events.event_type` is unconstrained text (migration 0032), so the new events are stored.
+  * **Measured on a real database** (PG15 with all 269 migrations applied, plus PostgREST 12.2.3, running
+    the shipped TypeScript). Five accepted manifests were seeded: native WCIA $50.00, a PDF with a null
+    payload $48.00, `POS-IMPORT` $300.00, reconstructed $140.00, and an odd payload `{"other":1}` $1.00.
+    * BEFORE (main):
+      * Payables listed all five, including $300.00 and $140.00 of migration stock.
+      * The Sage export had 4 transactions, including the reconstructed manifest.
+      * Bill and receipt returned `OK` for both migration manifests, so they would have been booked twice.
+      * Re-measured after a sandbox reset, with the same result.
+    * AFTER (this branch):
+      * Payables list only the three real deliveries (WCIA 5000, PDF-77 4800, CV-NOKIND 100). The null and
+        odd payloads **stay payable**.
+      * The Sage export has 3 transactions and the warning "2 Cultivera migration manifests left out".
+      * Bill and receipt return `*_MIGRATION_STOCK` for both migration manifests. The native manifest still
+        returns `BILL_OK` and `RECEIPT_OK`.
+    * One early BEFORE run printed `BILL_POST_FAILED` for the native bill. Re-running on fresh seed data
+      gave `BILL_OK`, so that result did not reproduce. Its cause was not established and no claim is made.
+    * The local harness scripts were lost in a sandbox reset before they were committed. The numbers above
+      are the printed probe outputs.
+  * **Testing the tests:**
+    * `tests/compliance/r50-migration-stock.test.ts` has 17 tests covering the core, the labels and the
+      source wiring of all four doors plus the intake actions.
+    * **20 / 20 mutants killed** (a dropped filter, a missing select, guards removed, the trap filter form, an
+      inverted filter, a loose match, the label marked as a problem, and the intake banner or event changed).
+    * 25 related suites pass (785 tests). The S29 count pin is now 63 on purpose; the original D-71 regexes
+      still hold. eslint 0, scoped tsc 0, all pure self-tests pass.
+  * Next is **S2b**: the \u00a71.3 readers must follow moved lots by import id, not by the `POS-IMPORT-<id8>`
+    number. That has to land before the S2c executor moves any lot.
