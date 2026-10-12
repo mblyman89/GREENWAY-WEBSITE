@@ -139,6 +139,7 @@ export function Hero({
                   index={index}
                   count={count}
                   isActive={isActive}
+                  designOwner={editable && slide.id ? `home-slide:${slide.id}` : undefined}
                 />
               );
             }
@@ -334,11 +335,14 @@ function AdvancedSlide({
   index,
   count,
   isActive,
+  designOwner,
 }: {
   slide: RenderSlide;
   index: number;
   count: number;
   isActive: boolean;
+  /** R48: "home-slide:<uuid>" in staff preview only, so Move mode can save drags. */
+  designOwner?: string;
 }) {
   const adv = slide.advanced!;
   const layout = effectiveLayout({ imageFocus: slide.imageFocus, textAlign: slide.textAlign }, adv);
@@ -374,6 +378,8 @@ function AdvancedSlide({
           legacy={words}
           headingLevel={index === 0 ? 1 : 2}
           priority={index === 0}
+          editable={!!designOwner}
+          owner={designOwner}
         />
       </div>
     );
