@@ -577,6 +577,7 @@ import { __runPriceVariantMatchCoreTests } from "../../src/lib/inventory/price-v
 import { __runPriceCorrectionCoreTests } from "../../src/lib/inventory/price-correction-core";
 import { __runImportLotCoreTests, __runImportLotFactFillTests } from "../../src/lib/pos/import-lot-core";
 import { __runCultiveraManifestGroupCoreTests } from "../../src/lib/inventory/cultivera-manifest-group-core";
+import { __runCultiveraTransferMatchCoreTests } from "../../src/lib/inventory/cultivera-transfer-match-core";
 import { __runLotPotencyCoreTests } from "../../src/lib/pos/lot-potency-core";
 import { __runCultiveraStrainFixCoreTests } from "../../src/lib/pos/cultivera-strain-fix-core";
 import { __runLegacyLotRemovalCoreTests } from "../../src/lib/pos/legacy-lot-removal-core";
@@ -2230,6 +2231,7 @@ __runLiquidVolumeTests();
   assertRan("type-cards-core", __runTypeCardsTests(), 54); // R41 S3: home Type Cards; R47 advanced card options
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording
   assertRan("cultivera-manifest-group-core", __runCultiveraManifestGroupCoreTests(), 110); // R50 S1: Cultivera deliveries rebuilt (vendor + Pacific day + gap)
+  assertRan("cultivera-transfer-match-core", __runCultiveraTransferMatchCoreTests(), 72); // R50 S1b: lots married to the REAL Cultivera transfers
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -267,7 +267,8 @@ export function reconstructedManifestNumber(
   return `${RECONSTRUCTED_NUMBER_PREFIX}${ymd}-${pad(first.h)}${pad(first.m)}-${h}`;
 }
 
-type Lot = {
+/** One lot (one barcode) as the planners see it. Exported for the transfer matcher (S1b). */
+export type CultiveraLot = {
   barcode: string;
   vendorKey: string;
   vendorLabel: string;
@@ -275,21 +276,27 @@ type Lot = {
   t: ParsedWallTime | null;
   undatedReason: UndatedReason | null;
 };
+type Lot = CultiveraLot;
 
 function emptyReasons(): Record<UndatedReason, number> {
   return { blank: 0, unreadable: 0, out_of_window: 0 };
 }
 
+export type CultiveraLotsResult = {
+  lots: CultiveraLot[];
+  rowsSkippedZeroUnits: number;
+  rowsSkippedNoBarcode: number;
+  /** Up to 20 distinct unreadable cells, verbatim. */
+  unreadable: Set<string>;
+  vendorConflicts: number;
+};
+
 /**
- * Group the export's lots into reconstructed deliveries. PURE and deterministic.
- * Order: rows may arrive in any order EXCEPT that, among rows sharing one
- * barcode, the first is the one whose vendor/product labels the lot (exactly
- * planImportLots' rule, so the lot's vendor_id and its manifest's vendor are
- * the same vendor). Reordering anything else never changes the plan.
+ * Rows → lots (one per barcode; the FIRST row's vendor; the earliest readable
+ * time). PURE. Shared by planCultiveraManifests and the transfer matcher so a
+ * lot means exactly the same thing in both.
  */
-export function planCultiveraManifests(rows: readonly CultiveraGroupRow[], opts: PlanOptions): CultiveraManifestPlan {
-  const gapMinutes = normalizeGapMinutes(opts.gapMinutes ?? DEFAULT_GAP_MINUTES);
-  const gapMs = gapMinutes * 60_000;
+export function buildCultiveraLots(rows: readonly CultiveraGroupRow[], pacificToday: string): CultiveraLotsResult {
   let rowsSkippedZeroUnits = 0;
   let rowsSkippedNoBarcode = 0;
   const unreadable = new Set<string>();
@@ -320,7 +327,7 @@ export function planCultiveraManifests(rows: readonly CultiveraGroupRow[], opts:
       if (!t) {
         acc.reasons.push("unreadable");
         if (unreadable.size < 20) unreadable.add(raw);
-      } else if (t.day < EARLIEST_PLAUSIBLE_DAY || t.day > opts.pacificToday) {
+      } else if (t.day < EARLIEST_PLAUSIBLE_DAY || t.day > pacificToday) {
         acc.reasons.push("out_of_window");
       } else {
         acc.times.push(t);
@@ -359,6 +366,21 @@ export function planCultiveraManifests(rows: readonly CultiveraGroupRow[], opts:
       undatedReason: reason,
     });
   }
+
+  return { lots, rowsSkippedZeroUnits, rowsSkippedNoBarcode, unreadable, vendorConflicts };
+}
+
+/**
+ * Group the export's lots into reconstructed deliveries. PURE and deterministic.
+ * Order: rows may arrive in any order EXCEPT that, among rows sharing one
+ * barcode, the first is the one whose vendor/product labels the lot (exactly
+ * planImportLots' rule, so the lot's vendor_id and its manifest's vendor are
+ * the same vendor). Reordering anything else never changes the plan.
+ */
+export function planCultiveraManifests(rows: readonly CultiveraGroupRow[], opts: PlanOptions): CultiveraManifestPlan {
+  const gapMinutes = normalizeGapMinutes(opts.gapMinutes ?? DEFAULT_GAP_MINUTES);
+  const gapMs = gapMinutes * 60_000;
+  const { lots, rowsSkippedZeroUnits, rowsSkippedNoBarcode, unreadable, vendorConflicts } = buildCultiveraLots(rows, opts.pacificToday);
 
   // 2) Lots → groups, per vendor.
   const byVendor = new Map<string, Lot[]>();

@@ -32,6 +32,40 @@
 > more heavily than the last rounds testing. Test it, test the tests. Go above and beyond for me please.
 > Thank you!
 
+### 0.1 Owner's follow-up #1 (verbatim, 2026-10-12)
+
+> Please continue. I appreciate you going slow to find all the ways this could break anything, think of all
+> the ways this needs to be integrated in a way that makes the import process as simple as possible to move
+> them from Cultivera where they have very dirty data to our system that intakes very clean data. So being
+> able to match our cleanliness with the Cultivera import is very important. And it shouldn't mess up
+> accounting, or vendor pay, or things of that nature. The process of moving them through our intake
+> pipeline is to enrich them and get them into our kb in a way that they can be reused in the future. I
+> don't want to just wait for a year or two to go by hoping that time will fix this issue. The pos import
+> used to make one big manifest essentially, but I want to break it up into there existing manifests when
+> they came in. Since we are building a crawler that will take the coa, maybe we use it to scrape every bit
+> of data and document every single action it took to get them. The record and catalog all the data, so we
+> have everything we need to get them into our pipeline so we can turn them into the beautiful products we
+> create. I am fine with scraping the hell out of Cultivera. They are a terrible company, they refuse to
+> give us our data we own, so let's just take it, and use it intelligently so we can import them into our
+> system properly. Please keep going above and beyond for me as you have been doing for me. Keep researching
+> the internet for enterprise grade solutions to use and implement. Follow the standing rules and never
+> guess, never assume. Test it, test the tests. Add as much additional value in as you can. Think of
+> everything important. Thank you!
+
+### 0.2 Owner's follow-up #2 (verbatim except the credentials, 2026-10-12)
+
+> I know I'm not suppose to give you log in info, but I won't be using Cultivera in a few weeks, so I want
+> you to log in to my portal, and recon the portal, find the products and inventory tables, and then map
+> everything, map and document everything relevant and important to this task. Let's take it all. My user
+> name is, [REDACTED], password, [REDACTED]
+> Please continue. Thank you.
+
+**Credential handling (this repo is PUBLIC):** the username and password are NEVER written to the repo, a
+commit, a doc, a log line or a test. During recon they lived only in a mode-600 file outside the repo, and the
+session token likewise. The action log records URLs, bodies, status and byte counts, but never the token. On
+Railway they go in env vars (§S8). **The owner should change the Cultivera password once the harvest is done**,
+because it was shared in a chat transcript.
+
 ---
 
 ## 1. Measured facts (recon, read-only; every number counted, none inferred)
@@ -141,6 +175,84 @@ Barcodes, but 0 of 35 fixtures equal a current Barcode (they are older batches).
 (Cultivera's own Barcode → COA link) is the authoritative marriage key; the PDF's own Batch ID is a
 cross-check; a name match is only ever a suggestion.**
 
+### 1.8 The live back office, logged in (read-only harvest, 2026-10-12)
+
+The owner's own login (§0.2) was used, at a human pace (≥ 0.6 s between calls), against the **query** host
+only (`https://api-wa.cultiverapos.com/data-api/`). The harvester refuses any other host or method: it never
+calls the write API except for the one `auth/login`. Every call is in an action log (method, URL, body, status,
+bytes, time; never the token). During the harvest it recorded 3,886 actions: 3,858 × 200, 7 × 500 (probes
+of endpoints that need a filter) and 1 × 400.
+
+| Table (endpoint) | Rows (server `Count` = rows saved) | What it gives us |
+|---|---|---|
+| `inventories` | 3,908 | Live lots: `Barcode`, `Alias` (070R… CCRS id), `BatchId`, `ProductId`, `VendorId`, **`IncomingTransferId`** (3,755 of 3,908), units, potency, `QaResultId` |
+| `inventories/depleted-inventories` | 25,231 | Every sold-out barcode with product + potency (product history for the KB) |
+| `inventories/inventory-batch/{BatchId}` | one per batch, 3,875 | `TransferId`, `TransferNumber`, `ReceivedDate`, `AcceptedDate`, `Lab`, `HasCoaDocument`, **`ImagePath` = the COA PDF URL**, `BatchNumber`, harvest / packaged / testing dates |
+| `transfers/incoming` | 1,164 | **The real manifests**: `TransferNumber`, `TransferDate`, `VendorId`, `Status` |
+| `transfers/incoming/{id}/detail` | 1,164 of 1,164 | Header (`FromVendor`, `DateAccepted` UTC, `IsManualCreated`, `JsonFile` = the vendor's WCIA file) + 26,095 lines (`Barcode`, `Quantity`, `AcceptedQuantity`, `AcceptedBarcode`, `ProductName`, `IsSample`) |
+| `products/master-products` | 17,268 | Cultivera's product catalogue: name, brand, variants, image |
+| `vendors` | 1,786 | Licence no., trade name / DBA, addresses, `LastDateAccepted` |
+| `brands` | 436 | Brand → vendor |
+| `products/strains` | 4,792 | Strain names |
+| `products/categories` | 21 | Categories |
+| `reports/inbound-transfers` | 103 | Per-transfer sales / profit report (recent transfers only) |
+| `samples` | 50 of 282 | The server returns the first 50 whatever the paging, sort or filter body (tried 4 paging shapes and 10 sort fields). Recorded as a known gap; employee samples are not needed for manifests. |
+
+**Join keys (measured, not assumed).** The export's `Barcode` equals a transfer line's `Barcode` for 3,987 of
+4,256 lots. `AcceptedBarcode` is a different id family (068R…/070R…) and matches no export Barcode or Alias
+(0 hits), so it is never used. The live `IncomingTransferId` and the batch's `TransferId` never disagree
+(0 conflicts). Vendor labels: the export's `Vendor` equals the transfer's `FromVendor` on every married lot
+(3,987 / 3,987).
+
+**Time zones (measured).** `DateAccepted` is UTC with a `Z`. The export's `Received date` is Pacific wall time.
+Read that way, no single-receipt lot was received after its transfer was accepted (0 of 3,755 rows); the gap
+is 0–197 h, median 1.06 h. Read as Pacific instead, every lot would be received 7–57 h *before*, which is
+impossible. So the UTC reading is correct.
+
+**Kept OUT of the public repo:** prices, totals, addresses, employee names, the WCIA file paths, the
+credentials and the token. The `normalized_cultivera/TRANSFERS_INDEX.json` to be committed (1.2 MB when first built; see the §4 reset entry) keeps only
+id, number, vendor, vendor no., transfer date, accepted instant, status, manual / internal flags and the lines'
+`[barcode, acceptedQuantity, quantity, isSample]`. A test fails if a banned field name appears in it.
+`scripts/cultivera/build-transfer-index.py` rebuilds it from a harvest. The file records its source's SHA-256.
+
+### 1.9 The real manifests, matched (S1b)
+
+A **receipt** of a lot is a transfer line with its barcode and `AcceptedQuantity > 0`, on an accepted
+transfer. 257 export barcodes appear on two or more transfers. That happens because the same CCRS barcode is
+re-delivered (for example, Grow Op Farms' `WA413287.INUN16` is on 8 transfers between April and November 2025).
+
+| Evidence | Lots | Rule |
+|---|---|---|
+| Only one receipt | 3,738 | That transfer |
+| Several receipts | 249 | The first receipt accepted at or after the lot's earliest Received time (−60 s tolerance) |
+| No receipt | 269 | Back to S1. These are exactly the 269 lots with a blank Received date. 152 are live with no transfer id and 117 are depleted. |
+| Ambiguous / vendor mismatch | 0 | Refused and sent to S1 (rule exists; real count 0) |
+
+The result is that **3,987 lots go onto 651 real manifests** (640 Accepted, 11 Partially Accepted), each carrying
+the vendor's real manifest number. The 269 undated lots go to S1's 53 per-vendor "date unknown" manifests.
+Every lot ends up on exactly one manifest.
+
+**Cross-checks:**
+- On the 183 lots where both methods can answer, S1's same-session consensus agreed with the forward rule
+  183 / 183 times.
+- An independent Python implementation (reading Cultivera's raw JSON) and the TS core produce the same
+  per-lot answer, verified with a SHA-256 of `barcode=transferId` (pinned in vitest once the index is rebuilt).
+- 647 of S1's 649 time sessions are exactly one real transfer, and no real transfer is ever split across two
+  sessions. The 2 mixed sessions are two genuine manifests from the same vendor, received seconds apart:
+  EDGEMONT 2026-03-31 (transfers 883 + 884, 13 s apart) and GROW OP FARMS 2025-11-26 (682 + 683, 97 s apart).
+  Time alone cannot separate those; the transfer index can.
+
+**Why the earlier "live IncomingTransferId" is NOT the authority for re-delivered barcodes.** On 37 lots it
+points at a LATER re-delivery, after the export's Received date (e.g. received 2026-07-02, but
+IncomingTransferId = transfer 1109, accepted 2026-08-20). Cultivera overwrites it with the latest receipt.
+The forward rule is the one consistent with the export.
+
+**Number collisions with live intake.** Real numbers are unique across all 1,164 transfers. The rebuilt
+manifest's `dedupe_key` is `<NUMBER>|<VENDOR>|IMPORT-<importId>`, so it can never take the unique slot of a
+live intake key (`<NUMBER>|<VENDOR>`). If someone later re-uploads the same historic WCIA file,
+`findBlockingDuplicate` (which matches on number + vendor + live status) still correctly flags it as already
+received.
+
 ### 1.7 Social
 
 The current connector is Meta Graph Business Discovery (`crawler/app/social.py`), which needs a Page token.
@@ -180,7 +292,8 @@ Use a dedicated business account, not a personal one.
 | Slice | What | Done when |
 |---|---|---|
 | **S1** | `cultivera-manifest-group-core.ts`: timestamp parser (ISO date-time ± fraction, ISO date, US date ± time, Pacific), per-vendor sessions (same Pacific day + gap ≤ G), day-only groups, undated bucket, earliest-row-per-barcode, stable group keys + manifest numbers; `isReconstructedManifest` / `isMigrationManifest` predicates; lineage | self-tests + vitest on the REAL export reproduce the corrected §1.1 numbers (649 / 137 / 71 / 269 lots / 53 vendors) |
-| **S2** | Reconstruct executor (re-read stored workbook → plan → create manifests idempotently → move lots guarded on source manifest → events + audit); Menu Imports panel: preview (counts, biggest, examples, gap choice) + Apply; every `POS-IMPORT` reader follows the lots (§1.3); accounting exclusion (§1.4) | tests; reruns are no-ops |
+| **S1b** | `cultivera-transfer-match-core.ts`: marry lots to the REAL transfers (§1.9) from the committed `TRANSFERS_INDEX.json`; S1 only for what no transfer claims | real-data pins + oracle SHA + mutants |
+| **S2** | Reconstruct executor (re-read stored workbook → **S1b plan (real transfers first, S1 fallback)** → create manifests idempotently → move lots guarded on source manifest → events + audit); Menu Imports panel: preview (counts, biggest, examples, gap choice) + Apply; every `POS-IMPORT` reader follows the lots (§1.3); accounting exclusion (§1.4) | tests; reruns are no-ops |
 | **S3** | Onboarding for reconstructed manifests: seed drafts even when the key is live (`reonboard` mode, flagged "already on the menu"); a "Cultivera manifests" section in the onboarding picker; approval never touches the live card's visibility | planner tests; picker lists them |
 | **S4** | Intake suggestion: on a receiving line, "Looks like Cultivera product X" from the imported history (same vendor via the shared vendor/brand keys, token similarity on the product family + size), shown as a suggestion with evidence, never applied automatically | pure scorer tests incl. real naming variants |
 | **S5** | Crawler: Cultivera POS back-office login (cached token with JWT exp, 401 re-login, human pace), harvester: inventories → batches → COA PDFs into a folder + `harvest.json`/`harvest.csv` (barcode, batch id, batch number, product, vendor, received, transfer #, lab, COA file, sha256), optional upload to the private `coa` bucket; incoming transfers recorded too | pytest (pure + mocked HTTP) |
@@ -200,3 +313,25 @@ Use a dedicated business account, not a personal one.
   deliveries, determinism, and unique numbers and dedupe keys. Testing the tests: 32/32 mutants were killed, and
   reverting the parseUsDate fix makes 3 tests fail. Full vitest: 856 files and 22,522 tests passed. eslint 0,
   scoped tsc 0.
+* 2026-10-12 — **Live recon + harvest (§0.2, §1.8).** I logged in with the owner's account and harvested read-only,
+  query host only, human pace, every action logged. That covered the real manifests (1,164 transfers, 26,095
+  lines), every live lot, 25,231 depleted barcodes, 17,268 catalogue products, vendors, brands, strains and the
+  per-batch COA links. Every number in §1.8 / §1.9 was measured on that harvest.
+* 2026-10-12 — **Sandbox reset; the harvest was lost.** The build machine restarted and rolled its disk back to
+  an earlier snapshot. That wiped the harvest folder, the action log and the out-of-repo credential file. By
+  design, none of them was ever in the repo. Nothing in the repo or in production was affected. The transfer
+  index (`normalized_cultivera/TRANSFERS_INDEX.json`) and its real-data test must be rebuilt from a fresh
+  read-only re-harvest. That needs the owner's login again, and the password should be changed afterwards.
+  `scripts/cultivera/build-transfer-index.py` is committed so the rebuild is one command.
+* 2026-10-12 — **S1b core shipped (real-data pins pending the re-harvest).** `src/lib/inventory/cultivera-transfer-match-core.ts`
+  (pure; 72 self-test assertions, runner floor 72). S1's lot builder is now shared (`buildCultiveraLots`), so a
+  lot means the same thing in both cores; S1's 110 assertions and 15 real-data tests are unchanged.
+  Before the reset, the same core was proven against the real harvest:
+  - 3,987 lots went onto 651 real manifests, and 269 went to S1's 53 undated groups.
+  - The per-lot SHA-256 equalled an independent Python oracle (`54b67ffc…a180a3`).
+  - S1 cross-validation: 647 / 649.
+  - 30 / 30 mutants were killed.
+
+  Those pins return in `tests/compliance/r50-cultivera-transfer-match.test.ts` once the index is rebuilt. If the
+  re-harvest differs (new deliveries since), the differences will be re-measured and recorded, not forced.
+
