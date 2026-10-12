@@ -18,6 +18,7 @@ import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_NAME, SITE_URL, DEFAULT_OG_IMAGE, organizationSchema, websiteSchema, storeSchema } from "@/lib/seo/seo";
 import { getContentValues } from "@/lib/cms/render-content";
+import { getStoreSchemaInput } from "@/lib/seo/store-hours-server";
 import { fontVariablesClassName } from "@/lib/cms/fonts-loader";
 import {
   fontStack,
@@ -97,6 +98,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // product cards, menu deal filter) prices with the SAME rules the register
   // uses. Seed fallback keeps behaviour identical when the DB is empty.
   const publishedRules = await loadPublishedRuleSnapshots();
+  // R47: Google store listing hours (Admin → Google Store Listing).
+  const [storeHours, storeToday] = await getStoreSchemaInput();
   const headingStack = fontStack(
     fonts["site.font.heading"],
     DEFAULT_HEADING_FONT_ID,
@@ -130,7 +133,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <script dangerouslySetInnerHTML={{ __html: ageGateBootstrapScript() }} />
       </head>
       <body>
-        <JsonLd data={[organizationSchema(), websiteSchema(), storeSchema()]} id="site" />
+        <JsonLd data={[organizationSchema(), websiteSchema(), storeSchema(storeHours, storeToday)]} id="site" />
         <PublishedRulesProvider snapshots={publishedRules}>
           <CartProvider>{children}</CartProvider>
         </PublishedRulesProvider>

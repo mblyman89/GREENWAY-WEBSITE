@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { greenwayBusiness } from "@/content/business";
+import { DEFAULT_STORE_HOURS, openingHoursSpecification, type StoreHours } from "@/lib/seo/store-hours-core";
 
 /**
  * Centralized, expert-grade SEO configuration + helpers.
@@ -111,7 +112,12 @@ export function websiteSchema() {
   };
 }
 
-export function storeSchema() {
+/**
+ * R47: `hours` comes from Admin → Google Store Listing (site_settings,
+ * loaded by store-hours-server). Omitted → the built-in 8 AM–11 PM daily,
+ * which renders exactly the JSON-LD this function always produced.
+ */
+export function storeSchema(hours: StoreHours = DEFAULT_STORE_HOURS, todayYmd = "") {
   return {
     "@context": "https://schema.org",
     "@type": ["Store", "LocalBusiness"],
@@ -133,14 +139,7 @@ export function storeSchema() {
     },
     geo: { "@type": "GeoCoordinates", latitude: STORE_GEO.latitude, longitude: STORE_GEO.longitude },
     hasMap: greenwayBusiness.address.directionsUrl,
-    openingHoursSpecification: [
-      {
-        "@type": "OpeningHoursSpecification",
-        dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-        opens: "08:00",
-        closes: "23:00",
-      },
-    ],
+    openingHoursSpecification: openingHoursSpecification(hours, todayYmd),
     sameAs: [
       greenwayBusiness.social.facebook.url,
       greenwayBusiness.social.instagram.url,

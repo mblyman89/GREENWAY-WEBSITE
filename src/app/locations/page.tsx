@@ -7,6 +7,7 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { greenwayBusiness } from "@/content/business";
 import { pageMetadata, storeSchema } from "@/lib/seo/seo";
+import { getStoreSchemaInput } from "@/lib/seo/store-hours-server";
 import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 
 const baseMetadata = pageMetadata({
@@ -22,11 +23,13 @@ export async function generateMetadata() {
   return withSeoOverride(baseMetadata, "/locations");
 }
 
-export default function LocationsPage() {
+export default async function LocationsPage() {
+  // R47: the owner's weekly + holiday hours from Admin → Google Store Listing.
+  const [storeHours, storeToday] = await getStoreSchemaInput();
   return (
     <main id="top" className="min-h-screen text-white">
       <SiteBackground />
-      <JsonLd data={storeSchema()} id="locations" />
+      <JsonLd data={storeSchema(storeHours, storeToday)} id="locations" />
       <Header />
       <Breadcrumbs items={[{ label: "Location", href: "/locations" }]} />
       <LocationsContent />
