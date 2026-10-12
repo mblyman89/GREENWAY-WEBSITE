@@ -9,6 +9,9 @@ import type { HomeTypeLaneKey } from "@/lib/cms/home-section-settings-core";
 import type { BannerDesign } from "@/lib/cms/banner-design-core";
 import { typeCardGridClass, type TypeCard } from "@/lib/cms/type-cards-core";
 import { isGifSrc } from "@/lib/media/gif-core";
+import { isVideoSrc } from "@/lib/media/upload-policy-core";
+import { BannerMedia } from "@/components/site/BannerMedia";
+import { heroColorHex, heroFontStack, isScriptHeroFont } from "@/lib/loyalty/loyalty-hero-core";
 
 /**
  * Home "Shop by Category" + "Shop by Brand" sections.
@@ -125,6 +128,11 @@ export function PromoGrid({
               // Owner-uploaded product photo for this card, or "" -> clean
               // text-only fallback (byte-identical to the card the site shipped).
               const image = lane.image;
+              // R47: a card with advanced options, or a video picture, takes
+              // the advanced path. Everything else is byte-identical to R41.
+              if (lane.adv || isVideoSrc(image)) {
+                return <AdvancedTypeCard key={lane.id} lane={lane} index={index} />;
+              }
               return (
                 <Link
                   key={lane.id}
@@ -186,5 +194,110 @@ export function PromoGrid({
         count={brandCount}
       />
     </>
+  );
+}
+
+// ── R47: advanced Type Card ─────────────────────────────────────────────────
+
+const OBJ_POS: Record<string, string> = {
+  center: "object-center",
+  top: "object-top",
+  bottom: "object-bottom",
+  left: "object-left",
+  right: "object-right",
+};
+const MD_OBJ_POS: Record<string, string> = {
+  center: "md:object-center",
+  top: "md:object-top",
+  bottom: "md:object-bottom",
+  left: "md:object-left",
+  right: "md:object-right",
+};
+
+function AdvancedTypeCard({ lane, index }: { lane: TypeCard; index: number }) {
+  const tone = glowToneByIndex(index);
+  const a = lane.adv ?? {};
+  const desk = a.imageFocus ?? "center";
+  const phone = a.imageFocusMobile ?? desk;
+  const zoom = a.zoom && a.zoom > 100 ? { transform: `scale(${a.zoom / 100})` } : undefined;
+  const textStyle = a.textStyle ?? "bar";
+  const labelStyle: React.CSSProperties = {};
+  if (a.labelFont) labelStyle.fontFamily = heroFontStack(a.labelFont);
+  if (a.labelColor) labelStyle.color = heroColorHex(a.labelColor);
+  const ctaStyle: React.CSSProperties = a.ctaColor ? { color: heroColorHex(a.ctaColor) } : {};
+  const script = a.labelFont ? isScriptHeroFont(a.labelFont) : false;
+  const media = (src: string, cls: string) => (
+    <BannerMedia
+      src={src}
+      alt=""
+      ariaHidden
+      hideControl
+      sizes="(max-width: 768px) 45vw, 16vw"
+      className={`z-0 object-cover ${cls}`}
+      style={zoom}
+    />
+  );
+  return (
+    <Link
+      href={lane.href}
+      {...(a.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      aria-label={textStyle === "hidden" ? lane.label.replace(/\n/g, " ") : undefined}
+      className="group relative isolate flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-2xl border shadow-lg shadow-black/30 transition duration-300 hover:-translate-y-0.5 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] lg:aspect-[3/4]"
+      style={glowCardStyle(tone)}
+    >
+      {a.imageMobile ? (
+        <>
+          <div className="absolute inset-0 z-0 overflow-hidden md:hidden">{media(a.imageMobile, OBJ_POS[phone])}</div>
+          {lane.image ? (
+            <div className="absolute inset-0 z-0 hidden overflow-hidden md:block">{media(lane.image, OBJ_POS[desk])}</div>
+          ) : null}
+        </>
+      ) : lane.image ? (
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          {media(lane.image, `${OBJ_POS[phone]} ${MD_OBJ_POS[desk]}`)}
+        </div>
+      ) : null}
+      {a.dim ? (
+        <span
+          className="pointer-events-none absolute inset-0 z-[1] bg-black"
+          style={{ opacity: a.dim / 100 }}
+          aria-hidden="true"
+        />
+      ) : null}
+      <span
+        className="pointer-events-none absolute -left-px top-[14%] z-[2] h-[42%] w-px opacity-90 blur-[1px]"
+        style={{ background: tone.glowLeft }}
+        aria-hidden="true"
+      />
+      <span
+        className="pointer-events-none absolute -right-px top-[31%] z-[2] h-[46%] w-px opacity-90 blur-[1px]"
+        style={{ background: tone.glowRight }}
+        aria-hidden="true"
+      />
+      {textStyle === "hidden" ? null : (
+        <div
+          className={
+            textStyle === "overlay"
+              ? "relative z-[3] bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,0.7)_100%)] px-2 pb-3 pt-8 text-center"
+              : "relative z-[3] border-t border-white/12 bg-[linear-gradient(180deg,rgba(10,14,11,0.82),rgba(8,10,9,0.96))] px-2 py-2.5 text-center backdrop-blur-[2px]"
+          }
+        >
+          <p
+            className={`text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-lg lg:text-xl${lane.label.includes("\n") ? " whitespace-pre-line" : ""}${script ? " normal-case tracking-normal" : ""}`}
+            style={labelStyle}
+          >
+            {lane.label}
+          </p>
+          {lane.cta ? (
+            <p
+              className="mt-0.5 text-[0.6rem] font-black uppercase tracking-[0.16em] text-[var(--greenway)] md:text-[0.62rem]"
+              style={ctaStyle}
+            >
+              {lane.cta}
+            </p>
+          ) : null}
+        </div>
+      )}
+    </Link>
   );
 }

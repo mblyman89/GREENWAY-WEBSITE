@@ -31,8 +31,13 @@ import {
   defaultTypeCards,
   nextTypeCardId,
   normalizeTypeCards,
+  normalizeTypeCardAdvanced,
+  IMAGE_FOCUSES,
   type TypeCard,
+  type TypeCardAdvanced,
 } from "@/lib/cms/type-cards-core";
+import { HERO_COLORS, HERO_FONTS, heroFontStack, type ImageFocus } from "@/lib/loyalty/loyalty-hero-core";
+import { isVideoSrc } from "@/lib/media/upload-policy-core";
 
 const input =
   "w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[var(--admin-accent)] focus:outline-none";
@@ -69,6 +74,18 @@ export function TypeCardImagesEditor({
 
   const update = (id: string, patch: Partial<TypeCard>) =>
     setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  // R47: advanced options; an all-default block is removed (classic tile).
+  const updateAdv = (id: string, patch: Partial<TypeCardAdvanced>) =>
+    setCards((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const adv = normalizeTypeCardAdvanced({ ...(c.adv ?? {}), ...patch });
+        const next = { ...c };
+        if (adv) next.adv = adv;
+        else delete next.adv;
+        return next;
+      }),
+    );
   const move = (index: number, dir: -1 | 1) =>
     setCards((prev) => {
       const j = index + dir;
@@ -131,20 +148,54 @@ export function TypeCardImagesEditor({
                   key={c.id}
                   className="relative flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-lg border border-white/15 bg-white/5"
                 >
-                  {c.image ? (
+                  {c.image && isVideoSrc(c.image) ? (
+                    <video
+                      src={c.image}
+                      muted
+                      loop
+                      playsInline
+                      autoPlay
+                      className="absolute inset-0 h-full w-full object-cover"
+                      style={{ objectPosition: c.adv?.imageFocus ?? "center" }}
+                    />
+                  ) : c.image ? (
                     // eslint-disable-next-line @next/next/no-img-element -- admin preview of an arbitrary media URL
-                    <img src={c.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                    <img
+                      src={c.image}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      style={{
+                        objectPosition: c.adv?.imageFocus ?? "center",
+                        ...(c.adv?.zoom ? { transform: `scale(${c.adv.zoom / 100})` } : {}),
+                      }}
+                    />
                   ) : null}
-                  <div className="relative bg-black/85 px-1 py-1 text-center">
-                    <p className="whitespace-pre-line text-[0.6rem] font-black uppercase leading-tight text-white">
-                      {c.label || "New card"}
-                    </p>
-                    {c.cta ? (
-                      <p className="text-[0.45rem] font-black uppercase tracking-widest text-[var(--admin-accent)]">
-                        {c.cta}
+                  {c.adv?.dim ? (
+                    <span className="absolute inset-0 bg-black" style={{ opacity: c.adv.dim / 100 }} />
+                  ) : null}
+                  {c.adv?.textStyle === "hidden" ? null : (
+                    <div
+                      className={`relative px-1 py-1 text-center ${c.adv?.textStyle === "overlay" ? "bg-gradient-to-b from-transparent to-black/70" : "bg-black/85"}`}
+                    >
+                      <p
+                        className="whitespace-pre-line text-[0.6rem] font-black uppercase leading-tight text-white"
+                        style={{
+                          ...(c.adv?.labelFont ? { fontFamily: heroFontStack(c.adv.labelFont) } : {}),
+                          ...(c.adv?.labelColor ? { color: HERO_COLORS.find((x) => x.id === c.adv?.labelColor)?.hex } : {}),
+                        }}
+                      >
+                        {c.label || "New card"}
                       </p>
-                    ) : null}
-                  </div>
+                      {c.cta ? (
+                        <p
+                          className="text-[0.45rem] font-black uppercase tracking-widest text-[var(--admin-accent)]"
+                          style={c.adv?.ctaColor ? { color: HERO_COLORS.find((x) => x.id === c.adv?.ctaColor)?.hex } : undefined}
+                        >
+                          {c.cta}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -283,12 +334,30 @@ export function TypeCardImagesEditor({
                         </Button>
                       </div>
                     </div>
-                    <div>
-                      <span className={label}>Photo (optional)</span>
-                      <ContentImageField
-                        value={c.image}
-                        onChange={(next) => update(c.id, { image: next })}
+                    <div className="space-y-3">
+                      <div>
+                        <span className={label}>Photo, GIF or video (optional)</span>
+                        <ContentImageField
+                          value={c.image}
+                          onChange={(next) => update(c.id, { image: next })}
+                          mediaChoices={mediaChoices}
+                          allowVideo
+                        />
+                      </div>
+                      <TypeCardAdvancedEditor
+                        card={c}
                         mediaChoices={mediaChoices}
+                        onChange={(patch) => updateAdv(c.id, patch)}
+                        onReset={() =>
+                          setCards((prev) =>
+                            prev.map((x) => {
+                              if (x.id !== c.id) return x;
+                              const next = { ...x };
+                              delete next.adv;
+                              return next;
+                            }),
+                          )
+                        }
                       />
                     </div>
                   </div>
@@ -356,5 +425,219 @@ export function TypeCardImagesEditor({
         onCancel={() => setPending(null)}
       />
     </form>
+  );
+}
+
+// ── R47: advanced options for one card ──────────────────────────────────────
+
+const FOCUS_LABEL: Record<ImageFocus, string> = {
+  center: "Center",
+  top: "Top",
+  bottom: "Bottom",
+  left: "Left",
+  right: "Right",
+};
+
+function TypeCardAdvancedEditor({
+  card,
+  mediaChoices,
+  onChange,
+  onReset,
+}: {
+  card: TypeCard;
+  mediaChoices: MediaChoice[];
+  onChange: (patch: Partial<TypeCardAdvanced>) => void;
+  onReset: () => void;
+}) {
+  const a = card.adv ?? {};
+  const [open, setOpen] = useState<boolean>(!!card.adv);
+  const pill = (on: boolean) =>
+    `rounded-md px-2.5 py-1 text-xs font-semibold ${
+      on
+        ? "bg-[var(--admin-accent)]/15 text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
+        : "border border-white/15 text-white/60 hover:text-white"
+    }`;
+  const swatches = (value: string | undefined, set: (v: string | undefined) => void) => (
+    <div className="mt-1 flex flex-wrap gap-1.5">
+      <button
+        type="button"
+        onClick={() => set(undefined)}
+        className={`h-7 rounded-full border px-2 text-[0.6rem] text-white/70 ${!value ? "ring-2 ring-[var(--admin-accent)]" : "border-white/20"}`}
+      >
+        Classic
+      </button>
+      {HERO_COLORS.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          title={c.label}
+          aria-label={c.label}
+          onClick={() => set(c.id)}
+          className={`h-7 w-7 rounded-full border ${value === c.id ? "ring-2 ring-[var(--admin-accent)]" : "border-white/20"}`}
+          style={{ backgroundColor: c.hex }}
+        />
+      ))}
+    </div>
+  );
+  const toLocal = (iso?: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const fromLocal = (v: string) => {
+    if (!v) return undefined;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  };
+  return (
+    <div className="rounded-[var(--admin-radius)] border border-white/10 p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between text-left text-xs font-semibold text-white"
+      >
+        <span>✨ Advanced options</span>
+        <span className="text-white/50">{open ? "▾" : "▸"}</span>
+      </button>
+      {open ? (
+        <div className="mt-3 space-y-3">
+          <div>
+            <span className={label}>Phone picture or video (optional)</span>
+            <ContentImageField
+              value={a.imageMobile ?? ""}
+              onChange={(v) => onChange({ imageMobile: v })}
+              mediaChoices={mediaChoices}
+              allowVideo
+            />
+          </div>
+          <div>
+            <span className={label}>Picture focus — computer</span>
+            <div className="flex flex-wrap gap-1.5">
+              {IMAGE_FOCUSES.map((f) => (
+                <button key={f} type="button" className={pill((a.imageFocus ?? "center") === f)} onClick={() => onChange({ imageFocus: f })}>
+                  {FOCUS_LABEL[f]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span className={label}>Picture focus — phone</span>
+            <div className="flex flex-wrap gap-1.5">
+              {IMAGE_FOCUSES.map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  className={pill((a.imageFocusMobile ?? a.imageFocus ?? "center") === f)}
+                  onClick={() => onChange({ imageFocusMobile: f })}
+                >
+                  {FOCUS_LABEL[f]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className={label}>
+              Zoom ({a.zoom ?? 100}%)
+              <input
+                type="range"
+                min={100}
+                max={200}
+                step={5}
+                value={a.zoom ?? 100}
+                onChange={(e) => onChange({ zoom: Number(e.target.value) })}
+                className="mt-1 w-full accent-[var(--admin-accent)]"
+              />
+            </label>
+            <label className={label}>
+              Darken picture ({a.dim ?? 0}%)
+              <input
+                type="range"
+                min={0}
+                max={80}
+                step={5}
+                value={a.dim ?? 0}
+                onChange={(e) => onChange({ dim: Number(e.target.value) })}
+                className="mt-1 w-full accent-[var(--admin-accent)]"
+              />
+            </label>
+          </div>
+          <div>
+            <span className={label}>Name style</span>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  ["bar", "Bar along the bottom (classic)"],
+                  ["overlay", "On the picture"],
+                  ["hidden", "Hide the words (picture only)"],
+                ] as const
+              ).map(([v, l]) => (
+                <button key={v} type="button" className={pill((a.textStyle ?? "bar") === v)} onClick={() => onChange({ textStyle: v })}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className={label}>
+            Name font
+            <select
+              className={`${input} mt-1`}
+              value={a.labelFont ?? ""}
+              onChange={(e) => onChange({ labelFont: e.target.value || undefined })}
+            >
+              <option value="">Classic (site font)</option>
+              {(["display", "sans", "script"] as const).map((g) => (
+                <optgroup key={g} label={g === "display" ? "Display (bold)" : g === "sans" ? "Clean sans" : "Script (cursive)"}>
+                  {HERO_FONTS.filter((f) => f.group === g).map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          <div>
+            <span className={label}>Name colour</span>
+            {swatches(a.labelColor, (v) => onChange({ labelColor: v }))}
+          </div>
+          <div>
+            <span className={label}>Small line colour</span>
+            {swatches(a.ctaColor, (v) => onChange({ ctaColor: v }))}
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-white/80">
+            <input type="checkbox" checked={a.newTab === true} onChange={(e) => onChange({ newTab: e.target.checked })} />
+            Open the link in a new tab
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className={label}>
+              Show from (optional)
+              <input
+                type="datetime-local"
+                className={`${input} mt-1`}
+                value={toLocal(a.scheduleStart)}
+                onChange={(e) => onChange({ scheduleStart: fromLocal(e.target.value) })}
+              />
+            </label>
+            <label className={label}>
+              Show until (optional)
+              <input
+                type="datetime-local"
+                className={`${input} mt-1`}
+                value={toLocal(a.scheduleEnd)}
+                onChange={(e) => onChange({ scheduleEnd: fromLocal(e.target.value) })}
+              />
+            </label>
+          </div>
+          {card.adv ? (
+            <button type="button" onClick={onReset} className="text-xs text-white/50 underline hover:text-white">
+              Reset advanced options (back to the classic card)
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }

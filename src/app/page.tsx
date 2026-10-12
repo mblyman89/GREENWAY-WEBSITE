@@ -142,7 +142,9 @@ export default async function Home() {
   // R41 S3: owner-edited Type Cards. Only passed once the owner has saved a
   // custom list; until then PromoGrid renders the six original lanes.
   const typeCards = hasCustomTypeCards(category?.settings)
-    ? visibleTypeCards(readTypeCards(category?.settings))
+    ? // R47: cards outside their optional show window are hidden from
+      // visitors (staff preview still shows them so they can be checked).
+      visibleTypeCards(readTypeCards(category?.settings), preview ? undefined : Date.now())
     : undefined;
   // R41 S2: extra banners added in the Home editor. They were saved but never
   // rendered before. Fixed-slot and config sections are excluded.
