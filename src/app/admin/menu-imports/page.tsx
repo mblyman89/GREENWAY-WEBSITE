@@ -25,6 +25,9 @@ import { readMenuImportsCutover } from "@/lib/pos/menu-imports-cutover";
 import { readCutoverDone } from "@/lib/pos/cutover-guard";
 import { OneTimeImportTools } from "@/components/admin/catalog/OneTimeImportTools";
 import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
+import { startFetchAction } from "./fetch-actions";
+import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
+import { listPosRuns } from "@/lib/pos/cultivera-fetch-client";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +98,8 @@ export default async function MenuImportsPage({
     readMenuImportsCutover(),
     readCutoverDone(),
   ]);
+  // R50 S9: recent fetch runs (a crawler outage never breaks the page).
+  const recentRuns: string[] = isCrawlerConfigured() ? await listPosRuns().catch(() => []) : [];
 
   return (
     <div>
@@ -110,7 +115,7 @@ export default async function MenuImportsPage({
               "Day to day: receive products and approve each one with a price on Product Onboarding. That approval publishes it to the website and the register automatically — no upload, no Publish click.",
               "Rarely, an update waits instead: a product has a fact that needs a second look, or the automatic publish didn't finish. It shows under 'Menu drafts from receiving' below (and under Admin → Publish Menu) with exactly what to check.",
               "Open a waiting draft, fix what it names, then press Publish there.",
-              "One time only: the PRODUCTS.xlsx + INVENTORIES.xlsx upload below is for your initial Cultivera import; you will not need it after that.",
+              "One time only: the 'Fetch It All' button below does your initial Cultivera import. It harvests Cultivera POS, checks the data, and stages it for review. A manual PRODUCTS + INVENTORIES upload is the fallback. You will not need either after that.",
             ]}
           >
             <p>
@@ -276,7 +281,45 @@ export default async function MenuImportsPage({
 
         {/* Upload (S21: behind "Show one-time import tools" once the import went live) */}
         <OneTimeImportTools cutover={cutover} refused={uploadRefused}>
-        <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+        {/* R50 S9: the one button. Logs in to Cultivera POS (read-only), harvests everything, and checks it before staging. */}
+        <section className="rounded-xl border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/5 p-5">
+          <h2 className="text-sm font-semibold text-white">Fetch everything from Cultivera POS</h2>
+          <p className="mt-1 text-xs text-white/50">
+            One press logs in to Cultivera POS and reads every lot, product, manifest and batch. It only reads, so
+            nothing in Cultivera changes. It cleans the data to Greenway conventions and checks it: every lot
+            present, units and cost matching to the cent, nothing hidden. Then you stage it for review, the same
+            way a manual upload works. Nothing publishes on its own. It takes about 8 minutes.
+          </p>
+          {isCrawlerConfigured() ? (
+            <form action={startFetchAction} className="mt-4 flex flex-wrap items-center gap-4">
+              <Button type="submit" variant="primary">Fetch It All, Fuck Cultivera</Button>
+              <label className="flex items-center gap-2 text-xs text-white/60">
+                <input type="checkbox" name="fresh" />
+                <span>Start fresh. Leave this off to resume an unfinished fetch.</span>
+              </label>
+            </form>
+          ) : (
+            <p className="mt-3 text-xs text-[var(--admin-gold)]">
+              The crawler is not connected. Set CRAWLER_BASE_URL and CRAWLER_SHARED_SECRET on the site, and
+              CULTIVERA_POS_USERNAME and CULTIVERA_POS_PASSWORD on the crawler.
+            </p>
+          )}
+          {recentRuns.length > 0 && (
+            <p className="mt-3 text-xs text-white/40">
+              Recent fetches:{" "}
+              {recentRuns.slice(0, 5).map((r, i) => (
+                <span key={r}>
+                  {i > 0 && " · "}
+                  <Link href={`/admin/menu-imports/fetch/${r}`} className="underline">{r}</Link>
+                </span>
+              ))}
+            </p>
+          )}
+        </section>
+
+        <details className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+          <summary className="cursor-pointer text-sm font-semibold text-white/70">Fallback: upload the two exports by hand</summary>
+        <section className="mt-4">
           <h2 className="text-sm font-semibold text-white">Upload a new POS export</h2>
           <p className="mt-1 text-xs text-white/40">
             Select the two spreadsheets exported from your POS. We&apos;ll transform them into a
@@ -326,6 +369,7 @@ export default async function MenuImportsPage({
             </div>
           </form>
         </section>
+        </details>
         </OneTimeImportTools>
 
         {/* Clean Slate — remove only test data */}
