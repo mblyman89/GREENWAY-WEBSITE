@@ -7,6 +7,7 @@ import {
   hasCustomTypeCards,
   readTypeCards,
   visibleTypeCards,
+  hideOutOfWindowTypeCards,
 } from "@/lib/cms/type-cards-core";
 import { SectionBanner } from "@/components/home/SectionBanner";
 import { readDesign } from "@/lib/cms/banner-design-core";
@@ -144,7 +145,10 @@ export default async function Home() {
   const typeCards = hasCustomTypeCards(category?.settings)
     ? // R47: cards outside their optional show window are hidden from
       // visitors (staff preview still shows them so they can be checked).
-      visibleTypeCards(readTypeCards(category?.settings), preview ? undefined : Date.now())
+      hideOutOfWindowTypeCards(
+        visibleTypeCards(readTypeCards(category?.settings)),
+        preview,
+      )
     : undefined;
   // R41 S2: extra banners added in the Home editor. They were saved but never
   // rendered before. Fixed-slot and config sections are excluded.

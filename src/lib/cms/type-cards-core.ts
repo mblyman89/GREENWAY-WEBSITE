@@ -273,6 +273,19 @@ export function visibleTypeCards(cards: TypeCard[], whenMs?: number): TypeCard[]
 }
 
 /**
+ * R47: drop cards outside their optional show window (visitors only). Staff
+ * preview passes `preview=true` so every enabled card stays visible.
+ * Reads the clock here (not in a component) so render stays pure.
+ */
+export function hideOutOfWindowTypeCards(
+  cards: TypeCard[],
+  preview: boolean,
+  nowMs: number = Date.now(),
+): TypeCard[] {
+  return preview ? cards : cards.filter((c) => isTypeCardLiveAt(c, nowMs));
+}
+
+/**
  * The legacy laneImages map mirrored from a card list (default ids only), so
  * anything still reading settings.laneImages keeps working.
  */
