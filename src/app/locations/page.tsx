@@ -7,13 +7,20 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { greenwayBusiness } from "@/content/business";
 import { pageMetadata, storeSchema } from "@/lib/seo/seo";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 
-export const metadata = pageMetadata({
+const baseMetadata = pageMetadata({
   title: "Location, Hours & Directions — Port Orchard, WA",
   description: `Visit Greenway Marijuana at ${greenwayBusiness.address.full}. Store hours, phone, directions, and map for our Port Orchard cannabis dispensary — open daily 8am-11pm.`,
   path: "/locations",
   image: "/og/locations.png",
 });
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override title, description,
+// canonical, no-index and share image; the values above are the defaults.
+export async function generateMetadata() {
+  return withSeoOverride(baseMetadata, "/locations");
+}
 
 export default function LocationsPage() {
   return (

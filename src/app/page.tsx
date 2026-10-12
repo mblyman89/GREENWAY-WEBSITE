@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 import { Hero } from "@/components/home/Hero";
 import { HomeDailyDeals } from "@/components/home/HomeDailyDeals";
 import { PromoGrid } from "@/components/home/PromoGrid";
@@ -33,7 +34,7 @@ import {
   BRAND_COUNT_KEY,
 } from "@/lib/cms/home-section-settings-core";
 
-export const metadata: Metadata = {
+const baseMetadata: Metadata = {
   // The root layout supplies the default title; we only set the canonical here so
   // the homepage points to the bare domain. We also override the default OG image
   // with the dedicated homepage social-share banner (off-site link previews only).
@@ -41,6 +42,11 @@ export const metadata: Metadata = {
   openGraph: { images: [{ url: "/og/home.png", alt: "Greenway Marijuana" }] },
   twitter: { images: ["/og/home.png"] },
 };
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override the home page too.
+export async function generateMetadata(): Promise<Metadata> {
+  return withSeoOverride(baseMetadata, "/");
+}
 
 // The home page shows live product cards (daily deals + brand grid) sourced from
 // the published DB menu, so it must not be frozen at build time. It is also the

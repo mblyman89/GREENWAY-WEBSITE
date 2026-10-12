@@ -7,6 +7,9 @@ import { getPublishedSlugs } from "@/lib/cms/blog-store";
 // the routes that are advertised here cannot disagree.
 import { allCategoryPaths } from "@/lib/menu/menu-facet-core";
 import { CANONICAL_ORIGIN } from "@/lib/site/site-domain-core";
+// R46-S2: honour the SEO Editor's "No-index" and "Include in sitemap" switches.
+import { getSitemapExclusions } from "@/lib/seo/seo-entries-server";
+import { pathOfUrl } from "@/lib/seo/seo-override-core";
 
 const baseUrl = CANONICAL_ORIGIN; // R40: one source of truth
 
@@ -85,5 +88,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   })) satisfies MetadataRoute.Sitemap;
 
-  return [...staticEntries, ...categoryEntries, ...productEntries, ...blogEntries];
+  // R46-S2: Google asks for canonical, indexable URLs only, so any page the
+  // SEO Editor marked No-index (or switched out of the sitemap) is left out.
+  // getSitemapExclusions() never throws; on any error nothing is excluded.
+  const excluded = await getSitemapExclusions();
+  const all = [...staticEntries, ...categoryEntries, ...productEntries, ...blogEntries];
+  return excluded.size === 0 ? all : all.filter((e) => !excluded.has(pathOfUrl(e.url)));
 }

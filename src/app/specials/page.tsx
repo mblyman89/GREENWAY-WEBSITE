@@ -3,6 +3,7 @@ import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { pageMetadata } from "@/lib/seo/seo";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 import { getThursdayBrands } from "@/lib/promotions/storefront-bridge";
 import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
 import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
@@ -36,13 +37,19 @@ import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 // both layers.
 export const revalidate = 60;
 
-export const metadata = pageMetadata({
+const baseMetadata = pageMetadata({
   title: "Cannabis Specials & Daily Deals — Port Orchard",
   description:
     "See Greenway Marijuana's cannabis specials: daily discounts, top-shelf deals, and 50% off clearance on flower, vapes, edibles, and more in Port Orchard, WA.",
   path: "/specials",
   image: "/og/specials.png",
 });
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override title, description,
+// canonical, no-index and share image; the values above are the defaults.
+export async function generateMetadata() {
+  return withSeoOverride(baseMetadata, "/specials");
+}
 
 export default async function SpecialsPage() {
   // DB-published promotions (back-office) with static seed fallback: the

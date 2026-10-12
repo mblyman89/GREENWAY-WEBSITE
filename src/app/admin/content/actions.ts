@@ -23,6 +23,8 @@ import {
 } from "@/lib/cms/ai-content";
 import { generateSeoMeta } from "@/lib/cms/ai-seo";
 import { WARNING_BLOCK_KEY, validateWarningBlock } from "@/lib/compliance/warning-text-core";
+import { normalizeSeoPath, safeCanonical } from "@/lib/seo/seo-override-core";
+import { CANONICAL_ORIGIN } from "@/lib/site/site-domain-core";
 
 /**
  * Revalidate the public page(s) affected by a content block on a given `page`.
@@ -364,14 +366,21 @@ export async function publishContentBlockAction(formData: FormData): Promise<voi
 
 export async function saveSeoEntryAction(formData: FormData): Promise<void> {
   const session = await requirePermission("content.edit");
-  const path = String(formData.get("path") ?? "").trim();
-  if (!path.startsWith("/")) redirect("/admin/content/seo?error=path");
+  // R46-S2: store the path exactly the way the public pages look it up, and
+  // refuse a canonical the pages would ignore (off-site, typo) instead of
+  // saving something that silently does nothing.
+  const rawPath = String(formData.get("path") ?? "").trim();
+  const path = rawPath.startsWith("/") ? normalizeSeoPath(rawPath) : null;
+  if (!path) redirect("/admin/content/seo?error=path");
+  const rawCanonical = String(formData.get("canonical") ?? "").trim();
+  const canonical = rawCanonical ? safeCanonical(rawCanonical, CANONICAL_ORIGIN) : null;
+  if (rawCanonical && !canonical) redirect("/admin/content/seo?error=canonical");
 
   await upsertSeoEntry({
     path,
     seo_title: String(formData.get("seo_title") ?? "").trim() || null,
     seo_description: String(formData.get("seo_description") ?? "").trim() || null,
-    canonical: String(formData.get("canonical") ?? "").trim() || null,
+    canonical,
     noindex: formData.get("noindex") === "on",
     sitemap_include: formData.get("sitemap_include") === "on",
     updatedBy: session.userId,
@@ -385,6 +394,7 @@ export async function saveSeoEntryAction(formData: FormData): Promise<void> {
   });
   revalidatePath("/admin/content/seo");
   revalidatePath(path);
+  revalidatePath("/sitemap.xml");
   redirect("/admin/content/seo?saved=1");
 }
 

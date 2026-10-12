@@ -7,12 +7,19 @@ import { renderPolicyParagraph } from "@/lib/policies/renderPolicyParagraph";
 import { getPolicyRowsForRender } from "@/lib/cms/render-content";
 import { POLICY_DOCS } from "@/lib/cms/policy-doc-core";
 import { pageMetadata } from "@/lib/seo/seo";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 
-export const metadata = pageMetadata({
+const baseMetadata = pageMetadata({
   title: "Washington Consumer Health Data Privacy Policy",
   description: "Read the Greenway Marijuana Washington Consumer Health Data Privacy Policy as required under the My Health My Data Act.",
   path: "/consumer-health-data",
 });
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override title, description,
+// canonical, no-index and share image; the values above are the defaults.
+export async function generateMetadata() {
+  return withSeoOverride(baseMetadata, "/consumer-health-data");
+}
 
 export default async function ConsumerHealthDataPage() {
   // SLICE 105b: body editable via Website → Legal Policies; hardcoded fallback

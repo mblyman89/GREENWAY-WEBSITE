@@ -6,15 +6,22 @@ import { Header } from "@/components/site/Header";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { faqSchema, pageMetadata } from "@/lib/seo/seo";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getFaqForRender } from "@/lib/cms/faq-store";
 
-export const metadata = pageMetadata({
+const baseMetadata = pageMetadata({
   title: "Frequently Asked Questions — Hours, ID, Payment & Limits",
   description:
     "Answers to common questions about Greenway Marijuana in Port Orchard: store hours, accepted ID, payment, purchase limits, and dispensary policies for adults 21+.",
   path: "/faq",
 });
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override title, description,
+// canonical, no-index and share image; the values above are the defaults.
+export async function generateMetadata() {
+  return withSeoOverride(baseMetadata, "/faq");
+}
 
 export default async function FaqPage() {
   const [copy, preview, dbFaq] = await Promise.all([

@@ -17,6 +17,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import { suggestSeoAction, type AiSeoSuggestResult } from "@/app/admin/content/actions";
+import { finalTitle, titleHasBrand, SEO_TITLE_MAX, SEO_DESC_MAX } from "@/lib/seo/seo-override-core";
 
 export type SeoEntryDraft = {
   path: string;
@@ -34,8 +35,9 @@ type Props = {
   saveAction: (formData: FormData) => void;
 };
 
-const TITLE_MAX = 60;
-const DESC_MAX = 160;
+// R46-S2: one source of truth with the public pages (seo-override-core).
+const TITLE_MAX = SEO_TITLE_MAX;
+const DESC_MAX = SEO_DESC_MAX;
 
 function counterTone(len: number, max: number): string {
   const near = Math.round(max * 0.85);
@@ -189,8 +191,17 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
             name="seo_title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            placeholder="Leave blank to keep the built-in title"
             className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           />
+          {title.trim() ? (
+            <p className="mt-1 text-[0.7rem] text-white/40">
+              {titleHasBrand(title)
+                ? "Your title names Greenway, so it is used exactly as typed."
+                : "\u201c | Greenway Marijuana\u201d is added to the end automatically."}{" "}
+              Google shows about {TITLE_MAX} characters{finalTitle(title).length > TITLE_MAX ? `; the full title is ${finalTitle(title).length}, so the end may be cut off` : ""}.
+            </p>
+          ) : null}
         </div>
         <div>
           <label className="mb-1 flex items-center justify-between text-xs font-semibold text-white/50">
@@ -202,6 +213,7 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
           <textarea
             name="seo_description"
             rows={2}
+            placeholder="Leave blank to keep the built-in description"
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
             className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
@@ -213,12 +225,13 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
             <input
               name="canonical"
               defaultValue={entry.canonical}
+              placeholder="/menu (usually leave blank)"
               className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             />
           </div>
           <label className="flex items-center gap-2 self-end pb-2 text-sm text-white/70">
             <input type="checkbox" name="noindex" defaultChecked={entry.noindex} className="h-4 w-4" />
-            Noindex
+            Hide from Google (noindex)
           </label>
           <label className="flex items-center gap-2 self-end pb-2 text-sm text-white/70">
             <input
@@ -234,7 +247,9 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
         {/* Live Google-style preview */}
         <div className="rounded-lg border border-white/10 bg-black p-3">
           <div className="text-xs text-white/40">Search preview</div>
-          <div className="mt-1 text-sm text-[#8ab4f8]">{title || `Greenway Marijuana · ${path}`}</div>
+          <div className="mt-1 text-sm text-[#8ab4f8]">
+            {title.trim() ? finalTitle(title) : "(the page\u2019s built-in title is used)"}
+          </div>
           <div className="text-xs text-[var(--admin-accent)]/80">
             greenwaymarijuana.com{path === "/" ? "" : path}
           </div>
