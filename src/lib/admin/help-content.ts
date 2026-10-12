@@ -419,7 +419,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I research a vendor with Google Gemini?",
-        a: "Open the vendor and find Research with Google Gemini (step 1). Add an optional hint and press Research. It searches Google and shows the website, social profiles, mission, about and product philosophy it found, plus the pages it used and Google's search suggestions. Nothing is saved unless you press Save as draft on a field, and drafts still need Accept below (with the compliance check). Results disappear when you leave the page (Google's terms). If the website looks right, type it into the profile's Website field and save, then use step 2 (the crawler) to read the whole site. It needs AI_MODEL_HEAVY set to a gemini model and AI_GEMINI_API_KEY in Vercel.",
+        a: "Open the vendor and find Research with Google Gemini (step 1). Add an optional hint and press Research. It searches Google and shows the website, social profiles, mission, about and product philosophy it found, plus the pages it used and Google's search suggestions. Nothing is saved unless you press Save as draft on a field, and drafts still need Accept below (with the compliance check). Results disappear when you leave the page (Google's terms). If the website looks right, type it into the profile's Website field and save, then use step 2 (the crawler) to read the whole site. It needs AI_API_KEY plus AI_MODEL_HEAVY set to a gemini model and AI_GEMINI_API_KEY in Vercel.",
         href: "/admin/vendors",
       },
     ],
