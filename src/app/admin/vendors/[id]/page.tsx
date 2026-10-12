@@ -28,6 +28,8 @@ import { VendorCardPreview } from "@/components/admin/vendors/VendorCardPreview"
 import { listSuggestions, isAiConfigured } from "@/lib/ai/suggestions";
 import type { AiSuggestion } from "@/lib/enrichment/types";
 import { AiDraftCard } from "@/components/admin/ai/AiDraftCard";
+import { aiWebSearchModelId } from "@/lib/ai/provider";
+import { VendorGeminiResearchCard } from "./VendorGeminiResearchCard";
 import {
   updateVendor,
   setVendorStatus,
@@ -273,10 +275,22 @@ export default async function VendorEditPage({
                 </p>
               )}
 
-              {/* Research with the crawler (DF-6): grounded drafts from a real page */}
+              {/* R49 S7: Google Gemini grounded research (step 1). Results are
+                  shown live and never stored; staff save individual fields as
+                  drafts. Grounded links are never handed to the crawler. */}
+              <VendorGeminiResearchCard
+                vendorId={vendor.id}
+                vendorName={vendor.display_name}
+                aiEnabled={isAiConfigured}
+                geminiSelected={/^gemini/i.test(aiWebSearchModelId)}
+                modelId={aiWebSearchModelId}
+              />
+
+              {/* Research with the crawler (DF-6): grounded drafts from a real page.
+                  R49 S7: "step 2" -- prefilled only from the SAVED website field. */}
               <div className="rounded-lg border border-[var(--admin-purple)]/25 bg-[var(--admin-purple)]/[0.04] p-4">
                 <h3 className="flex items-center gap-2 text-xs font-semibold text-[var(--admin-purple)]">
-                  <span>🔎 Research with the crawler</span>
+                  <span>🔎 Research with the crawler (step 2)</span>
                   {!crawlerOn && (
                     <span className="rounded-full border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-gold)]">
                       Not set up
@@ -284,7 +298,7 @@ export default async function VendorEditPage({
                   )}
                 </h3>
                 <p className="mt-1 text-[11px] text-white/50">
-                  Paste this vendor&rsquo;s official site. The crawler walks the <strong>whole site</strong> in
+                  Uses the website saved in this vendor&rsquo;s profile (or paste their official site). The crawler walks the <strong>whole site</strong> in
                   the background (a few minutes), extracts only what it can <strong>verify on the page</strong>,
                   runs the same compliance checks, and adds <strong>drafts</strong> below for your review.
                   You&rsquo;ll be taken to the Harvest Console to watch progress. Nothing is published.
