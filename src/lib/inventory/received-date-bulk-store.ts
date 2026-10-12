@@ -108,11 +108,13 @@ export async function setImportLotsReceivedDate(
   const admin = createSupabaseAdminClient();
   const manifestIds = await importManifestIds(admin, importId);
   if (manifestIds.length === 0) throw new Error("This import's lots were not found.");
-  // Scope guard: only lots that sit on THIS import's manifests. Read first and
+  // Scope guard: only lots the page can list, i.e. THIS import's
+  // non-destroyed lots (the same scope as loadUndatedImportLots; measured on a
+  // real database, a destroyed lot id was otherwise dated). Read first and
   // intersect (an import can own hundreds of rebuilt manifests after R50 S2c,
   // too many to put in one URL), then write by lot id with the null guard.
   const own = new Set(
-    (await readLotsOnManifests<{ id: string }>(admin, manifestIds, "id")).map((r) => r.id),
+    (await readLotsOnManifests<{ id: string }>(admin, manifestIds, "id", { excludeDestroyed: true })).map((r) => r.id),
   );
   const scoped = [...new Set(lotIds)].filter((id) => own.has(id));
   const written: string[] = [];

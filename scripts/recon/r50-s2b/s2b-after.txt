@@ -1,0 +1,7 @@
+IDS A ["b1000000-0000-4000-8000-000000000001","b1000000-0000-4000-8000-000000000003"]
+IDS B ["b1000000-0000-4000-8000-000000000002"]
+UNDATED A {"found":true,"lots":["A on POS undated","A rebuilt undated"],"dated":1}
+UNDATED B {"found":true,"lots":["B on POS undated"],"dated":0}
+SET A ["b0000000-0000-4000-8000-000000000001","b0000000-0000-4000-8000-000000000003"]
+AFTER [["A on POS undated","2024-06-01"],["A on POS dated","2024-05-01"],["A rebuilt undated","2024-06-01"],["A rebuilt destroyed",null],["B on POS undated",null],["Native undated",null]]
+BRANCH REMOVAL A {"found":true,"flagged":3,"rows":["b0000000-0000-4000-8000-000000000001","b0000000-0000-4000-8000-000000000003"]}

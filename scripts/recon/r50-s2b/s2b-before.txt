@@ -1,0 +1,11 @@
+IDS A ["b1000000-0000-4000-8000-000000000001","b1000000-0000-4000-8000-000000000003"]
+IDS B ["b1000000-0000-4000-8000-000000000002"]
+UNDATED A THREW "Could not find this import's lots: JSON object requested, multiple (or no) rows returned"
+UNDATED B THREW "Could not find this import's lots: JSON object requested, multiple (or no) rows returned"
+SET A THREW "Could not find this import's lots: JSON object requested, multiple (or no) rows returned"
+AFTER [["A on POS undated",null],["A on POS dated","2024-05-01"],["A rebuilt undated",null],["A rebuilt destroyed",null],["B on POS undated",null],["Native undated",null]]
+MAIN-noB UNDATED A {"found":true,"lots":["A on POS undated"],"dated":1}
+MAIN-noB SET A ["b0000000-0000-4000-8000-000000000001"]
+MAIN-noB AFTER [["A on POS undated","2024-06-01"],["A on POS dated","2024-05-01"],["A rebuilt undated",null],["A rebuilt destroyed",null],["Native undated",null]]
+MAIN REMOVAL A {"found":false,"flagged":3,"rows":[]}
+MAIN-noB REMOVAL A {"found":true,"flagged":3,"rows":["b0000000-0000-4000-8000-000000000001"]}
