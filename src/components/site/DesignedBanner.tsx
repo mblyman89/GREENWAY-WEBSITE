@@ -69,16 +69,18 @@ export function DesignedBanner({
     design,
     headline ? { x: headline.x + headline.w / 2, y: headline.y + 10 } : undefined,
   );
-  let usedH1 = false;
-  const boxEl = (b: DesignTextBox) => {
+  // R48: decide up front which box becomes the page's single <h1> (the first
+  // visible heading box that has text) instead of mutating a flag mid-render.
+  // Same result as before; satisfies react-hooks/immutability.
+  const h1Index =
+    headingLevel === 1
+      ? design.boxes.findIndex(
+          (b) => !b.hidden && roleInfo(b.role).html === "h2" && resolveBoxText(b, legacy).trim() !== "",
+        )
+      : -1;
+  const boxEl = (b: DesignTextBox, index: number) => {
     const info = roleInfo(b.role);
-    if (info.html === "h2") {
-      if (headingLevel === 1 && !usedH1) {
-        usedH1 = true;
-        return "h1" as const;
-      }
-      return "h2" as const;
-    }
+    if (info.html === "h2") return index === h1Index ? ("h1" as const) : ("h2" as const);
     return info.html;
   };
   const bindSuffix = (b: DesignTextBox) =>
@@ -135,11 +137,11 @@ export function DesignedBanner({
           </div>
         ) : null}
         {overlay ? <div style={css(overlay)} aria-hidden="true" /> : null}
-        {design.boxes.map((b) => {
+        {design.boxes.map((b, i) => {
           if (b.hidden) return null;
           const text = resolveBoxText(b, legacy);
           if (!text.trim()) return null;
-          const Tag = boxEl(b);
+          const Tag = boxEl(b, i);
           const suffix = bindSuffix(b);
           return (
             <Tag
