@@ -1292,7 +1292,11 @@ describe("D-65 — the connections survive the reset", () => {
     //   +1  R39 / 0262: vendor_esign_invites (a signed vendor invite cannot be
     //       deleted, VENDOR_ESIGN_KEEP, and it references the kept documents
     //       with on delete restrict)
-    expect(plan.keep.length).toBe(147);
+    //   +2  R46 / 0267: content_releases, content_schedule (website changes
+    //       the owner planned; the content they point at, content_blocks,
+    //       page_sections, faq_items and both carousels, is already KEEP, so
+    //       wiping the plan while keeping the content would be incoherent)
+    expect(plan.keep.length).toBe(149);
     expect(plan.wipe.length).toBe(139);
   });
 

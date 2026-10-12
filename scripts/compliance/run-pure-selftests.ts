@@ -912,6 +912,7 @@ import { __runUploadPolicyCoreTests } from "../../src/lib/media/upload-policy-co
 import { __runCarouselAutoplayCoreTests } from "../../src/lib/site/carousel-autoplay-core";
 import { __runFileSignatureCoreTests } from "../../src/lib/media/file-signature-core";
 import { __runEditConflictCoreTests } from "../../src/lib/cms/edit-conflict-core";
+import { __runContentScheduleCoreTests } from "../../src/lib/cms/content-schedule-core";
 import { __runBlurPlaceholderCoreTests } from "../../src/lib/media/blur-placeholder-core";
 import { __runTypeCardsTests } from "../../src/lib/cms/type-cards-core";
 import { __runLoyaltyConsentTests } from "../../src/lib/loyalty/loyalty-consent-core";
@@ -2201,6 +2202,7 @@ __runLiquidVolumeTests();
   assertRan("carousel-autoplay-core", __runCarouselAutoplayCoreTests(), 60); // R45-S1: APG carousel + Baymard rotation policy
   assertRan("file-signature-core", __runFileSignatureCoreTests(), 50); // R45-S2: magic-byte + SVG active-content check (WHATWG + OWASP)
   assertRan("edit-conflict-core", __runEditConflictCoreTests(), 28); // R45-S2: optimistic locking on content_blocks.updated_at
+  assertRan("content-schedule-core", __runContentScheduleCoreTests(), 61); // R46-S1: scheduled publish/unpublish (Pacific -> UTC, 5-min grid, due selection)
   assertRan("blur-placeholder-core", __runBlurPlaceholderCoreTests(), 25); // R45-S2: tiny blur previews for banner images
   assertRan("type-cards-core", __runTypeCardsTests(), 42); // R41 S3: home Type Cards
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording

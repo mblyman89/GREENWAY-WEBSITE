@@ -810,6 +810,8 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "media_usages", disposition: "KEEP", because: "Where each image is used." },
   { table: "newsletter_assets", disposition: "KEEP", because: "Artwork you uploaded for customer newsletters." },
   { table: "seo_entries", disposition: "KEEP", because: "Your titles and meta descriptions." },
+  { table: "content_releases", disposition: "KEEP", because: "Named groups of website changes you planned to go live together." },
+  { table: "content_schedule", disposition: "KEEP", because: "Website changes you scheduled to go live or come down." },
   { table: "marketing_ideas", disposition: "KEEP", because: "Marketing ideas you saved." },
   { table: "promotions", disposition: "KEEP", because: "Promotions you authored." },
   { table: "promotion_targets", disposition: "KEEP", because: "What each promotion applies to." },
