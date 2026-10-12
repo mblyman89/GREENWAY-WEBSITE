@@ -102,7 +102,7 @@ export function writeSheet(rows: SheetRow[], columns: readonly string[], sheet: 
   }), { header: [...columns] });
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheet);
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx", compression: true }) as Buffer;
 }
 
 /** Batch ReceivedDate by lot Id (lot.BatchId → batch.Id). Keyed by lot, not barcode:
