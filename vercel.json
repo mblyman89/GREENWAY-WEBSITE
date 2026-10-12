@@ -30,6 +30,10 @@
     {
       "path": "/api/cron/lookup-jobs",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/content-schedule",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
