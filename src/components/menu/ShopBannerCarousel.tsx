@@ -148,6 +148,7 @@ function SlideBody({
   sizes,
   compact,
   fetchPriority,
+  blurDataURL,
 }: {
   pres: ShopHeroPresentation;
   image: string;
@@ -156,6 +157,7 @@ function SlideBody({
   sizes: string;
   compact: boolean;
   fetchPriority?: "high" | "low";
+  blurDataURL?: string;
 }) {
   return (
     <>
@@ -165,6 +167,7 @@ function SlideBody({
           alt={heroTextLines(pres.title.text)[0] || "Greenway Shop banner"}
           priority={priority}
           fetchPriority={fetchPriority}
+          blurDataURL={blurDataURL}
           sizes={sizes}
           className={`object-cover ${FOCUS_OBJECT_CLASS[focus]}`}
         />
@@ -221,11 +224,16 @@ export function SlideView({
   priority = false,
   designOwner,
   fetchPriority,
+  imageBlur,
+  imageMobileBlur,
 }: {
   presentation: ShopHeroPresentation;
   priority?: boolean;
   /** R45-S1: "low" for carousel slides that start hidden (web.dev Fetch Priority). */
   fetchPriority?: "high" | "low";
+  /** R45-S2: blur previews for the desktop / mobile art (server lookup). */
+  imageBlur?: string;
+  imageMobileBlur?: string;
   /** R41 S6: "shop-slide:<uuid>" so the hub Move mode can save drags. */
   designOwner?: string;
 }) {
@@ -265,6 +273,7 @@ export function SlideView({
           focus={presentation.imageFocusMobile}
           priority={priority}
           fetchPriority={fetchPriority}
+          blurDataURL={presentation.imageMobile ? imageMobileBlur : imageBlur}
           sizes="calc(100vw - 2rem)"
           compact
         />
@@ -280,6 +289,7 @@ export function SlideView({
           focus={presentation.imageFocus}
           priority={priority}
           fetchPriority={fetchPriority}
+          blurDataURL={imageBlur}
           sizes="(min-width: 1408px) 1408px, calc(100vw - 4rem)"
           compact={false}
         />
@@ -365,6 +375,8 @@ export function ShopBannerCarousel({ slides }: { slides: ShopRenderSlide[] }) {
                   priority={index === 0}
                   fetchPriority={slideFetchPriority(index)}
                   designOwner={slide.designOwner}
+                  imageBlur={slide.imageBlur}
+                  imageMobileBlur={slide.imageMobileBlur}
                 />
               </div>
             );

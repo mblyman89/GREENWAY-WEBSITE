@@ -132,6 +132,7 @@ export function Hero({
                     priority={index === 0}
                     fetchPriority={slideFetchPriority(index)}
                     active={isActive}
+                    blurDataURL={slide.imageBlur}
                     sizes="(max-width: 768px) 100vw, 1408px"
                     className={focusClass(slide.imageFocus)}
                   />

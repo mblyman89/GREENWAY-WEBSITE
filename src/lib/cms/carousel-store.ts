@@ -26,6 +26,8 @@ import {
   MAX_CAROUSEL_SLIDES,
 } from "./carousel-types";
 import { CAROUSEL_SEEDS, CAROUSEL_FALLBACK_SLIDES } from "./carousel-seed";
+import { getBlurMap } from "@/lib/media/blur-server";
+import { blurFor } from "@/lib/media/blur-placeholder-core";
 
 const SELECT = "*";
 
@@ -177,7 +179,13 @@ export async function getCarouselForRender(): Promise<RenderSlide[]> {
       .filter((s) => s.image || s.title || s.eyebrow || s.description);
 
     if (resolved.length === 0) return CAROUSEL_FALLBACK_SLIDES;
-    return resolved.slice(0, MAX_CAROUSEL_SLIDES);
+    const shown = resolved.slice(0, MAX_CAROUSEL_SLIDES);
+    // R45-S2: attach blur previews (one query; empty map on any problem).
+    const blurs = await getBlurMap(shown.map((s) => s.image));
+    return shown.map((s) => {
+      const imageBlur = blurFor(s.image, blurs);
+      return imageBlur ? { ...s, imageBlur } : s;
+    });
   } catch {
     return CAROUSEL_FALLBACK_SLIDES;
   }

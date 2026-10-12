@@ -39,6 +39,8 @@ import {
 } from "@/lib/media/upload-policy-core";
 import { checkFileSignature, isJpeg, SIGNATURE_READ_BYTES, SVG_MAX_CHECK_BYTES } from "@/lib/media/file-signature-core";
 import { readObjectHead } from "@/lib/media/read-object-head";
+import { BLUR_SOURCE_MAX_BYTES, makeBlurDataUrl, saveBlurForAsset } from "@/lib/media/blur-server";
+import { wantsBlur } from "@/lib/media/blur-placeholder-core";
 
 const BUCKET = "media";
 /** Posters are a single captured JPEG frame; anything bigger is not a poster. */
@@ -245,6 +247,17 @@ export async function finishDirectUploadAction(input: {
       uploadedBy: session.userId,
       status,
     });
+    // R45-S2: tiny blur preview for banner photos (best-effort; photos over
+    // 15 MB skip it so the action stays fast and inside the memory budget).
+    if (wantsBlur(storedMime) && storedSize <= BLUR_SOURCE_MAX_BYTES) {
+      try {
+        const full = await readObjectHead(BUCKET, key, storedSize, 20000);
+        const blur = full && full.length === storedSize ? await makeBlurDataUrl(full, storedMime) : null;
+        if (blur) await saveBlurForAsset(asset.id, blur);
+      } catch {
+        /* preview is optional */
+      }
+    }
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
