@@ -15,5 +15,67 @@ The scope source is `R44-EDITOR-STRATEGY-ROADMAP.md`, §6 and §7.
 
 | Slice | Contents | Status |
 |---|---|---|
-| R45-S1 | Carousel accessibility (WCAG 2.2.2 + Baymard) | in progress |
-| R45-S2 | Upload hardening + AVIF + edit-conflict protection | planned |
+| R45-S1 | Carousel accessibility (WCAG 2.2.2 + Baymard) | done, awaiting owner test |
+| R45-S2 | Upload hardening + AVIF + blur previews + edit-conflict protection | done, awaiting owner test (migration 0266 to apply) |
+| R46-S1 | Scheduled publish/unpublish (migration + Vercel cron) | next |
+| R46-S2 | Releases (group several edits, publish together) | planned |
+| R47-S1 | Publish-time accessibility + WAC 314-55-155 lint | planned |
+| R47-S2 | CTA click analytics | planned |
+| R48-S1 | Playwright + axe in CI | planned |
+| R48-S2 | Approvals + holiday hours feeding the LocalBusiness schema | planned |
+
+## R45-S1: carousel accessibility (done)
+
+Sources: W3C ARIA APG Carousel pattern; WCAG 2.2 SC 2.2.2 (Pause, Stop, Hide);
+Baymard auto-rotating carousel research; web.dev Fetch Priority.
+
+- `src/lib/site/carousel-autoplay-core.ts` holds the pure rules (62 self-tests):
+  - a reducer, plus the rotation-on/off policy;
+  - the button label, and aria-live "off" while rotating, "polite" when stopped;
+  - word-count dwell: base 6 s, longer for text-heavy slides, max 10 s;
+  - swipe classification, keyboard arrows, and fetch priority (slide 1 high,
+    the rest low).
+- `src/components/site/useCarouselAutoplay.ts` is one shared engine for the
+  home hero and the Shop banner carousel:
+  - Rotation pauses on hover and while the tab is hidden.
+  - It stops for good when keyboard focus enters the carousel, or when the
+    visitor presses the pause button.
+  - It is off by default on phones and for visitors with reduced motion on.
+  - Touch/pen swipe left and right (vertical page scrolling still works).
+- `CarouselRotationButton`: a visible 24×24 pause/play control, placed before
+  the slides in reading order, as the APG pattern specifies.
+- The home hero now has exactly one `<h1>`. Slide 1 is the h1; the other
+  slides are h2.
+
+## R45-S2: upload hardening, AVIF, blur previews, edit conflicts (done)
+
+Sources: OWASP File Upload Cheat Sheet; WHATWG MIME Sniffing §6–7; the MP4RA
+brand registry; Next 16 `next/image` docs (`formats`, `placeholder`,
+`blurDataURL`); Vercel image-optimization limits.
+
+- **Magic bytes.** `src/lib/media/file-signature-core.ts` (52 self-tests)
+  checks that a file's real bytes match its declared type: PNG, JPEG, GIF,
+  WebP, PDF, MP4 (ISO-BMFF brands only, QuickTime refused), WebM and SVG.
+  - Both upload paths check it: the small form upload, and the large direct
+    upload, which reads the first 4 KB back from Storage.
+  - Files that fail are deleted.
+  - Video posters must be real JPEGs.
+- **SVG safety.** SVGs containing script, foreignObject, `on…=` handlers,
+  `javascript:` links or ENTITY declarations are refused. So are SVGs over 1 MB.
+- **AVIF.** `next.config.ts` sets `images.formats` to AVIF first, with WebP
+  as the fallback.
+- **Blur previews.** At upload, sharp makes a ≤10px WebP preview (about 100
+  characters).
+  - It is stored on `media_assets.blur_data_url` (migration 0266, with a
+    size/format CHECK).
+  - The home hero and Shop carousel look previews up by URL in one query and
+    pass `placeholder="blur"` to next/image.
+  - Every step is best-effort. Before 0266 is applied, uploads and banners
+    behave exactly as before.
+  - Photos over 15 MB uploaded by the large-file path skip the preview.
+  - Files uploaded before this change have no preview. Re-uploading creates one.
+- **Edit-conflict protection.** Saving a content block is now an atomic
+  compare-and-swap on `content_blocks.updated_at`, so no migration is needed.
+  - If someone else saved first, nothing is overwritten.
+  - An amber banner offers "Reload latest version".
+  - The event is audited as `content.draft_conflict`.
