@@ -921,6 +921,7 @@ import { __runSeoOverrideCoreTests } from "../../src/lib/seo/seo-override-core";
 import { __runMenuFacetsCoreTests } from "../../src/lib/menu/menu-facets-core";
 import { __runMenuSizeFacetCoreTests } from "../../src/lib/menu/menu-size-facet-core";
 import { __runMenuMgFacetCoreTests } from "../../src/lib/menu/menu-mg-facet-core";
+import { __runPriorityNavCoreTests } from "../../src/lib/site/priority-nav-core";
 import { __runBlurPlaceholderCoreTests } from "../../src/lib/media/blur-placeholder-core";
 import { __runTypeCardsTests } from "../../src/lib/cms/type-cards-core";
 import { __runLoyaltyConsentTests } from "../../src/lib/loyalty/loyalty-consent-core";
@@ -2219,6 +2220,7 @@ __runLiquidVolumeTests();
   assertRan("menu-facets-core", __runMenuFacetsCoreTests(), 18); // R49 S1: strain-name facet
   assertRan("menu-size-facet-core", __runMenuSizeFacetCoreTests(), 39); // R49 S2: Weights fix + Size facet
   assertRan("menu-mg-facet-core", __runMenuMgFacetCoreTests(), 33); // R49 S3: THC/CBD/CBG/CBN/CBC mg range sliders
+  assertRan("priority-nav-core", __runPriorityNavCoreTests(), 14); // R49 S4: Priority+ header nav (Cart can never be pushed off-screen)
   assertRan("blur-placeholder-core", __runBlurPlaceholderCoreTests(), 25); // R45-S2: tiny blur previews for banner images
   assertRan("type-cards-core", __runTypeCardsTests(), 54); // R41 S3: home Type Cards; R47 advanced card options
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording
