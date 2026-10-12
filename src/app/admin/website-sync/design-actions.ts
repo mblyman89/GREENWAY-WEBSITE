@@ -17,6 +17,7 @@ import { recordAudit } from "@/lib/auth/audit";
 import { parseMoveMessage, type DesignMove } from "@/lib/cms/banner-design-core";
 import {
   editorFor,
+  moveInHomeAdvanced,
   moveInLoyaltyJson,
   moveInSettings,
   moveInShopPresentation,
@@ -27,6 +28,8 @@ import {
 import { getSection, saveSectionDraft } from "@/lib/cms/page-sections-store";
 import { getContentBlock, saveContentDraft } from "@/lib/cms/content-store";
 import { getShopCarouselSlide, saveShopCarouselDraft } from "@/lib/cms/shop-carousel-store";
+import { getCarouselSlide, saveCarouselDraft } from "@/lib/cms/carousel-store";
+import { serializeHomeSlideAdvanced } from "@/lib/cms/home-slide-advanced-core";
 import { SPECIALS_PRESENTATION_BLOCK } from "@/lib/specials/specials-presentation-core";
 import { LOYALTY_HERO_PRESENTATION_BLOCK } from "@/lib/loyalty/loyalty-hero-core";
 
@@ -79,6 +82,24 @@ export async function saveDesignMoveAction(input: unknown): Promise<DesignMoveRe
         await saveShopCarouselDraft(owner.id, r.value, undefined, session.userId);
         break;
       }
+      case "home-slide": {
+        // R48: Home carousel slide with a Banner Studio design (advanced JSON).
+        const slide = await getCarouselSlide(owner.id);
+        if (!slide) return { ok: false, message: "That Home slide no longer exists. Refresh the preview." };
+        if (slide.draft_advanced === undefined && slide.advanced === undefined)
+          return { ok: false, message: "Moving Home slides needs database update 0268. Apply it in Supabase, then try again." };
+        // Same draft-over-live pick as the preview render (resolveForRender).
+        const words = {
+          eyebrow: slide.draft_eyebrow ?? slide.eyebrow ?? "",
+          title: slide.draft_title ?? slide.title ?? "",
+          description: slide.draft_description ?? slide.description ?? "",
+        };
+        const adv = slide.draft_advanced !== undefined ? slide.draft_advanced : (slide.advanced ?? null);
+        const r = moveInHomeAdvanced(adv, words, move);
+        if (!r.ok) return { ok: false, message: r.message };
+        await saveCarouselDraft(owner.id, { advanced: serializeHomeSlideAdvanced(r.value) }, session.userId);
+        break;
+      }
     }
   } catch (e) {
     return { ok: false, message: `Couldn't save the move: ${e instanceof Error ? e.message : "unknown error"}` };
@@ -88,7 +109,14 @@ export async function saveDesignMoveAction(input: unknown): Promise<DesignMoveRe
     actorId: session.userId,
     actorEmail: session.email,
     action: "design.move",
-    entityType: owner.kind === "section" ? "page_section" : owner.kind === "shop-slide" ? "shop_carousel_slide" : "content_block",
+    entityType:
+      owner.kind === "section"
+        ? "page_section"
+        : owner.kind === "shop-slide"
+          ? "shop_carousel_slide"
+          : owner.kind === "home-slide"
+            ? "home_carousel_slide"
+            : "content_block",
     entityId: msg.owner,
     after: move,
   });

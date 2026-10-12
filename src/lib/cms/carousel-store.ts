@@ -148,6 +148,7 @@ function resolveForRender(row: CarouselSlideRow, preview: boolean): RenderSlide 
 
   return {
     key: row.slide_key,
+    id: row.id,
     image: pick(row.draft_image, row.image ?? "") || "",
     imageAlt: pick(row.draft_image_alt, row.image_alt ?? "") || "",
     imageFocus: (pick(row.draft_image_focus, row.image_focus) ??

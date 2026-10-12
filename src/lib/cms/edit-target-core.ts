@@ -177,6 +177,7 @@ export function editTargetForOwner(owner: DesignOwner, pageSlug?: string | null)
       if (base.href === "/admin/specials") return { href: `${base.href}?tab=hero#specials-presentation`, label: base.label };
       return { href: `${base.href}#section-${owner.id}`, label: base.label };
     case "shop-slide":
+    case "home-slide":
       return { href: `${base.href}#slide-${owner.id}`, label: base.label };
     case "specials":
       return { href: `${base.href}?tab=${owner.which === "todays" ? "banner" : "hero"}#specials-presentation`, label: base.label };
@@ -277,6 +278,7 @@ export function __runEditTargetCoreTests(): { passed: number; failed: number } {
   );
   ok(editTargetForOwnerString(`section:${uuid}`, "specials").href === "/admin/specials?tab=hero#specials-presentation", "legacy specials section");
   ok(editTargetForOwnerString(`shop-slide:${uuid}`).href === `/admin/content/shop-banner#slide-${uuid}`, "shop slide");
+  ok(editTargetForOwnerString(`home-slide:${uuid}`).href === `/admin/pages/home?tab=carousel#slide-${uuid}`, "home slide (R48)");
   ok(editTargetForOwnerString("specials:hero").href === "/admin/specials?tab=hero#specials-presentation", "specials hero design");
   ok(editTargetForOwnerString("specials:todays").href === "/admin/specials?tab=banner#specials-presentation", "specials todays design");
   ok(editTargetForOwnerString("loyalty:hero").href === "/admin/loyalty-page#loyalty-hero", "loyalty design");

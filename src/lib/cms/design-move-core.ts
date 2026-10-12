@@ -12,13 +12,23 @@
  *   • moveInSpecialsJson() — specials presentation (heroDesign/todaysDealsDesign)
  *   • moveInLoyaltyJson()  — loyalty hero presentation (design)
  *   • moveInShopPresentation() — a Shop carousel slide presentation (design)
+ *   • moveInHomeAdvanced()  — R48: a Home carousel slide's advanced JSON (design)
  *
  * Every mover starts from the DRAFT the caller passes in, applies the pure
  * `applyMove` from banner-design-core, and returns a typed result. Nothing
  * here touches the database; the server action does the IO + permission check.
  * A move NEVER publishes: the owner still presses Publish in the editor.
  */
-import { applyMove, normalizeDesign, readDesign, writeDesign, type BannerDesign, type DesignMove } from "./banner-design-core";
+import {
+  applyMove,
+  ensureBoundBoxes,
+  normalizeDesign,
+  readDesign,
+  writeDesign,
+  type BannerDesign,
+  type DesignMove,
+} from "./banner-design-core";
+import { homeLegacyWords, normalizeHomeSlideAdvanced, type HomeSlideAdvanced } from "./home-slide-advanced-core";
 import {
   normalizeSpecialsPresentation,
   parseSpecialsPresentation,
@@ -38,6 +48,7 @@ const RETIRED_SECTION_PATHS: Record<string, string> = { specials: "/specials", m
 export type DesignOwner =
   | { kind: "section"; id: string }
   | { kind: "shop-slide"; id: string }
+  | { kind: "home-slide"; id: string }
   | { kind: "specials"; which: "hero" | "todays" }
   | { kind: "loyalty" };
 
@@ -49,8 +60,8 @@ export function parseDesignOwner(owner: unknown): DesignOwner | null {
   if (owner === "specials:hero") return { kind: "specials", which: "hero" };
   if (owner === "specials:todays") return { kind: "specials", which: "todays" };
   if (owner === "loyalty:hero") return { kind: "loyalty" };
-  const m = /^(section|shop-slide):(.+)$/.exec(owner);
-  if (m && UUID.test(m[2])) return { kind: m[1] as "section" | "shop-slide", id: m[2].toLowerCase() };
+  const m = /^(section|shop-slide|home-slide):(.+)$/.exec(owner);
+  if (m && UUID.test(m[2])) return { kind: m[1] as "section" | "shop-slide" | "home-slide", id: m[2].toLowerCase() };
   return null;
 }
 
@@ -65,6 +76,8 @@ export function editorFor(owner: DesignOwner, pageSlug?: string | null): { href:
       return { href: "/admin/website-sync", label: "Website Sync" };
     case "shop-slide":
       return { href: "/admin/content/shop-banner", label: "the Shop banner editor" };
+    case "home-slide":
+      return { href: "/admin/pages/home?tab=carousel", label: "the Home carousel editor" };
     case "specials":
       return { href: "/admin/specials", label: "the Specials editor" };
     case "loyalty":
@@ -80,6 +93,8 @@ export function publicPathFor(owner: DesignOwner, pageSlug?: string | null): str
       return (pageSlug && RETIRED_SECTION_PATHS[pageSlug]) || "/";
     case "shop-slide":
       return "/menu";
+    case "home-slide":
+      return "/";
     case "specials":
       return "/specials";
     case "loyalty":
@@ -119,7 +134,7 @@ export function moveInSpecialsJson(json: string | null | undefined, which: "hero
 /** Loyalty hero presentation JSON (pass draft_value ?? published_value). */
 export function moveInLoyaltyJson(json: string | null | undefined, move: DesignMove): MoveResult<string> {
   const pres = parseLoyaltyHeroPresentation(json) ?? normalizeLoyaltyHeroPresentation({});
-  const r = moveDesign(pres.design ?? null, move);
+  const r = moveDesign(withLineBoxes(pres.design ?? null, pres), move);
   if (!r.ok) return r;
   return { ok: true, value: serializeLoyaltyHeroPresentation({ ...pres, design: r.value }) };
 }
@@ -127,9 +142,42 @@ export function moveInLoyaltyJson(json: string | null | undefined, move: DesignM
 /** Shop slide presentation (pass draft_presentation ?? presentation). */
 export function moveInShopPresentation(pres: unknown, move: DesignMove): MoveResult<ShopHeroPresentation> {
   const p = normalizeShopHeroPresentation(pres);
-  const r = moveDesign(p.design ?? null, move);
+  const r = moveDesign(withLineBoxes(p.design ?? null, p), move);
   if (!r.ok) return r;
   return { ok: true, value: { ...p, design: r.value } };
+}
+
+/**
+ * R48: the public banner adds a text box for a line that is ticked "Show" but
+ * has no box yet (ensureBoundBoxes, R47 eyebrow fix). Movers apply the SAME
+ * fill-in first, so dragging that line saves it into the draft instead of
+ * failing with "isn't in this banner's draft".
+ */
+type ShownLine = { show: boolean; text: string };
+function withLineBoxes(
+  design: BannerDesign | null,
+  p: { eyebrow: ShownLine; title: ShownLine; subtitle: ShownLine },
+): BannerDesign | null {
+  if (!design || !design.enabled) return design;
+  const w = (l: ShownLine) => (l.show ? l.text : "");
+  return ensureBoundBoxes(design, { eyebrow: w(p.eyebrow), title: w(p.title), subtitle: w(p.subtitle) });
+}
+
+/**
+ * R48 — Home carousel slide: move inside the slide's advanced JSON (pass the
+ * DRAFT advanced value and the slide's DRAFT words). Same fill-in as the
+ * public Hero (ensureBoundBoxes with homeLegacyWords).
+ */
+export function moveInHomeAdvanced(
+  advanced: unknown,
+  words: { eyebrow: string; title: string; description: string },
+  move: DesignMove,
+): MoveResult<HomeSlideAdvanced> {
+  const a = normalizeHomeSlideAdvanced(advanced);
+  const design = a?.design && a.design.enabled ? ensureBoundBoxes(a.design, homeLegacyWords(words, a)) : (a?.design ?? null);
+  const r = moveDesign(design, move);
+  if (!r.ok || !a) return r.ok ? { ok: false, message: OFF } : r;
+  return { ok: true, value: { ...a, design: r.value } };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -219,6 +267,27 @@ export function __runDesignMoveCoreTests(): { passed: number; failed: number } {
   ok(sh.ok && sh.value.design!.boxes[0].x === 20, "shop slide moved");
   ok(sh.ok && sh.value.title.text === "Sale", "shop words untouched");
   ok(!moveInShopPresentation({}, mv).ok, "shop without design refused");
+
+  // R48: shop/loyalty fill in a shown line's missing box, then move it
+  const shE = moveInShopPresentation({ design, eyebrow: { text: "NEW", show: true } }, { target: "box", id: "eyebrow", x: 10, y: 5, device: "desktop" });
+  ok(shE.ok && shE.value.design!.boxes.some((b) => b.bind === "eyebrow" && b.x === 10), "shop: shown eyebrow box saved + moved");
+
+  // R48: home slides
+  ok(parseDesignOwner(`home-slide:${U}`)?.kind === "home-slide", "home slide owner");
+  ok(parseDesignOwner("home-slide:nope") === null, "home slide needs uuid");
+  ok(editorFor({ kind: "home-slide", id: U }).href === "/admin/pages/home?tab=carousel", "home slide editor link");
+  ok(publicPathFor({ kind: "home-slide", id: U }) === "/", "home slide path");
+  const hw = { eyebrow: "", title: "Hi", description: "" };
+  const hm = moveInHomeAdvanced({ design, title: { font: "", color: "", show: true } }, hw, mv);
+  ok(hm.ok && hm.value.design!.boxes[0].x === 20, "home slide moved");
+  ok(hm.ok && hm.value.title.show === true && hm.value.verticalAlign === "center", "home other options kept");
+  ok(!moveInHomeAdvanced(null, hw, mv).ok, "classic home slide refused");
+  ok(!moveInHomeAdvanced({}, hw, mv).ok, "home slide without design refused");
+  ok(!moveInHomeAdvanced({ design: { ...design, enabled: false } }, hw, mv).ok, "home design off refused");
+  const hE = moveInHomeAdvanced({ design }, { eyebrow: "DEAL", title: "Hi", description: "" }, { target: "box", id: "eyebrow", x: 12, y: 6, device: "mobile" });
+  ok(hE.ok && hE.value.design!.boxes.some((b) => b.bind === "eyebrow" && b.mx === 12), "home: shown eyebrow box saved + moved (phone)");
+  const hHidden = moveInHomeAdvanced({ design, eyebrow: { show: false } }, { eyebrow: "DEAL", title: "Hi", description: "" }, { target: "box", id: "eyebrow", x: 12, y: 6, device: "desktop" });
+  ok(!hHidden.ok, "home: hidden eyebrow gets no box");
 
   return { passed, failed: 0 };
 }

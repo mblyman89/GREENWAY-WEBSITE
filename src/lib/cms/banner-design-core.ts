@@ -1166,7 +1166,7 @@ export function nudge(design: BannerDesign, target: "box" | "button", id: string
 export function parseMoveMessage(data: unknown): (DesignMove & { owner: string }) | null {
   if (!isObj(data) || data.type !== "gw-design-move") return null;
   const owner = typeof data.owner === "string" ? data.owner : "";
-  if (!/^((section|shop-slide):[0-9a-f-]{36}|specials:hero|specials:todays|loyalty:hero)$/i.test(owner)) return null;
+  if (!/^((section|shop-slide|home-slide):[0-9a-f-]{36}|specials:hero|specials:todays|loyalty:hero)$/i.test(owner)) return null;
   if (data.target !== "box" && data.target !== "button") return null;
   const id = typeof data.id === "string" ? data.id : "";
   if (!/^[a-z0-9-]{1,24}$/.test(id)) return null;
@@ -1340,6 +1340,8 @@ export function __runBannerDesignCoreTests(): { passed: number; failed: number }
   ok(parseMoveMessage({ ...good, owner: "loyalty:hero" }) !== null, "loyalty hero owner (R41 S6)");
   ok(parseMoveMessage({ ...good, owner: "shop-slide:123e4567-e89b-12d3-a456-426614174000" }) !== null, "shop slide owner (R41 S6)");
   ok(parseMoveMessage({ ...good, owner: "shop-slide:nope" }) === null, "shop slide owner needs a uuid");
+  ok(parseMoveMessage({ ...good, owner: "home-slide:123e4567-e89b-12d3-a456-426614174000" }) !== null, "home slide owner (R48)");
+  ok(parseMoveMessage({ ...good, owner: "home:hero" }) === null, "home:hero is not an owner");
   // 36-37 snap / nudge
   ok(snapPercent(49) === 50 && snapPercent(45) === 45 && snapPercent(1.5) === 0, "snap");
   const n1 = nudge(mv, "box", "headline", 1, 0, "desktop");

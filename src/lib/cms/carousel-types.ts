@@ -71,6 +71,8 @@ export type CarouselSlideRow = {
  */
 export type RenderSlide = {
   key: string;
+  /** R48: the row id (absent on the built-in fallback slides) for Move mode. */
+  id?: string;
   image: string;
   imageAlt: string;
   imageFocus: SlideImageFocus;
