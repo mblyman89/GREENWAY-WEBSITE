@@ -173,8 +173,8 @@ A "Research with Google Gemini" card (step 1) on the vendor detail page; a serve
 ## 6. Slice log
 | Slice | Status | Commit/PR | Notes |
 |---|---|---|---|
-| S1 | in progress | | |
-| S2 | pending | | |
+| S1 | done | branch r49-menu-filters | Stacking rule (min-w-0 / minmax(0,1fr) / overflow-wrap:anywhere, no truncation); "Strain types" rename; new Strains facet (?strainNames=, 32 cultivars on live menu); menu-facets-core 18 selftests |
+| S2 | done | branch r49-menu-filters | Weights fixed via shared parseWeightLabelGrams (live: 1 g ×14, 3.5 g ⅛ oz ×11, 28 g 1 oz ×15); Size facet ?sizes= (live: 1 fl oz beverage ×5, Multi-serving pack ×5); legacy ?weights=1oz→28g; menu-size-facet-core 39 selftests |
 | S3 | pending | | |
 | S4 | pending | | |
 | S5 | pending | | |
