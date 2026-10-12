@@ -18,7 +18,7 @@
  *
  * To regenerate: npx tsx scripts/generate-schema-tables.ts
  *
- * Measured 288 tables across 267 migrations at the time of writing.
+ * Measured 289 tables across 268 migrations at the time of writing.
  */
 
 export const SCHEMA_TABLES: readonly string[] = [
@@ -310,6 +310,7 @@ export const SCHEMA_TABLES: readonly string[] = [
   "webauthn_challenges",
   "webauthn_credentials",
   "website_category_types",
+  "website_click_events",
 ] as const;
 
 /** The tables the migrations create, for `buildResetPlan`. */

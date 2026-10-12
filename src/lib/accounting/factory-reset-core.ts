@@ -812,6 +812,7 @@ export const TABLE_RULES: readonly TableRule[] = [
   { table: "seo_entries", disposition: "KEEP", because: "Your titles and meta descriptions." },
   { table: "content_releases", disposition: "KEEP", because: "Named groups of website changes you planned to go live together." },
   { table: "content_schedule", disposition: "KEEP", because: "Website changes you scheduled to go live or come down." },
+  { table: "website_click_events", disposition: "KEEP", because: "Anonymous counts of which website banner buttons visitors pressed (no cookies, no IPs). Website analytics about the website content you keep, not test trade; the reset function's WIPE list (0240) is pinned and is not reopened for an analytics log. Old rows simply age out of the 7/30/90-day report." },
   { table: "marketing_ideas", disposition: "KEEP", because: "Marketing ideas you saved." },
   { table: "promotions", disposition: "KEEP", because: "Promotions you authored." },
   { table: "promotion_targets", disposition: "KEEP", because: "What each promotion applies to." },
