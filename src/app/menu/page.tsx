@@ -1,5 +1,6 @@
 import { ShopPage } from "@/components/menu/ShopPage";
 import { pageMetadata } from "@/lib/seo/seo";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 import { MENU_ROOT_PATH } from "@/lib/menu/menu-facet-core";
 
 /**
@@ -57,13 +58,19 @@ import { MENU_ROOT_PATH } from "@/lib/menu/menu-facet-core";
  */
 export const revalidate = 60;
 
-export const metadata = pageMetadata({
+const baseMetadata = pageMetadata({
   title: "Shop Cannabis Menu — Flower, Vapes, Edibles & More",
   description:
     "Shop Greenway Marijuana's full Port Orchard cannabis menu: flower, prerolls, cartridges, concentrates, edibles, tinctures, topicals, and accessories with live prices and stock.",
   path: MENU_ROOT_PATH,
   image: "/og/menu.png",
 });
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override title, description,
+// canonical, no-index and share image; the values above are the defaults.
+export async function generateMetadata() {
+  return withSeoOverride(baseMetadata, MENU_ROOT_PATH);
+}
 
 export default function MenuPage() {
   // No `searchParams`, no `await`, no request-time API of any kind — that is

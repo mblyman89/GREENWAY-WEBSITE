@@ -4,6 +4,7 @@ import { Header } from "@/components/site/Header";
 import { SiteBackground } from "@/components/site/SiteBackground";
 import { VendorDirectory } from "@/components/vendors/VendorDirectory";
 import { pageMetadata } from "@/lib/seo/seo";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { buildVendorDirectory, enrichVendorDirectory } from "@/lib/menu/vendor-directory-core";
@@ -16,12 +17,18 @@ import {
   VENDOR_OUTREACH_SUBJECT_KEY,
 } from "@/lib/vendors/vendor-relations-core";
 
-export const metadata = pageMetadata({
+const baseMetadata = pageMetadata({
   title: "Vendors & Partners — Washington Cannabis Brands",
   description:
     "Meet the licensed Washington cannabis producers and processors stocking Greenway Marijuana shelves in Port Orchard — and learn how to become a vendor partner.",
   path: "/vendor-delivery",
 });
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override title, description,
+// canonical, no-index and share image; the values above are the defaults.
+export async function generateMetadata() {
+  return withSeoOverride(baseMetadata, "/vendor-delivery");
+}
 
 export default async function VendorDeliveryPage() {
   const [copy, preview, banners, menuItems, profiles] = await Promise.all([

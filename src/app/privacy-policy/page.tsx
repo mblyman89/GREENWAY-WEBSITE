@@ -7,12 +7,19 @@ import { renderPolicyParagraph } from "@/lib/policies/renderPolicyParagraph";
 import { getPolicyRowsForRender } from "@/lib/cms/render-content";
 import { POLICY_DOCS } from "@/lib/cms/policy-doc-core";
 import { pageMetadata } from "@/lib/seo/seo";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 
-export const metadata = pageMetadata({
+const baseMetadata = pageMetadata({
   title: "Privacy Policy",
   description: "Read the Greenway Marijuana privacy policy covering how we collect, use, and protect customer information.",
   path: "/privacy-policy",
 });
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override title, description,
+// canonical, no-index and share image; the values above are the defaults.
+export async function generateMetadata() {
+  return withSeoOverride(baseMetadata, "/privacy-policy");
+}
 
 export default async function PrivacyPolicyPage() {
   // SLICE 105b: body is now editable via Website → Legal Policies. Rows come

@@ -3,17 +3,24 @@ import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { pageMetadata } from "@/lib/seo/seo";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 import { getPublicPosts } from "@/lib/cms/blog-store";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { BLOG_CONTENT_KEYS } from "@/lib/blog/blog-content-core";
 import type { BlogPost } from "@/lib/blog/posts";
 
-export const metadata = pageMetadata({
+const baseMetadata = pageMetadata({
   title: "Cannabis Blog \u2014 Education, Product Highlights & Culture",
   description:
     "Stories, cannabis education, product highlights, deals, and culture updates from Greenway Marijuana in Port Orchard, WA.",
   path: "/blog",
 });
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override title, description,
+// canonical, no-index and share image; the values above are the defaults.
+export async function generateMetadata() {
+  return withSeoOverride(baseMetadata, "/blog");
+}
 
 // Revalidate periodically so newly published posts appear without a redeploy
 // (publish actions also call revalidatePath('/blog')).

@@ -9,6 +9,7 @@ import {
   isMedicalPageHidden,
 } from "@/lib/medical/medical-content-core";
 import { pageMetadata } from "@/lib/seo/seo";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 
 // SLICE 107: the page reads a CMS visibility flag, so it must not be frozen at
 // build time — otherwise hiding the page wouldn't take effect until a redeploy.
@@ -23,12 +24,18 @@ import { pageMetadata } from "@/lib/seo/seo";
 // path. Draft Mode bypasses the route cache, so staff preview is unaffected.
 export const revalidate = 60;
 
-export const metadata = pageMetadata({
+const baseMetadata = pageMetadata({
   title: "Medical Cannabis Program — Cards, Tax Savings & Limits",
   description:
     "Greenway Marijuana in Port Orchard is a medically endorsed cannabis retailer. Learn how to get your DOH recognition card in store, which taxes are waived on compliant products, and the elevated medical purchase limits.",
   path: "/medical",
 });
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override title, description,
+// canonical, no-index and share image; the values above are the defaults.
+export async function generateMetadata() {
+  return withSeoOverride(baseMetadata, "/medical");
+}
 
 export default async function MedicalPage() {
   // SLICE 107: when staff hide the Medical page, the public route 404s (the

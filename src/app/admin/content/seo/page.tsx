@@ -23,6 +23,11 @@ const KNOWN_PATHS = [
   "/blog",
   "/faq",
   "/vendor-delivery",
+  // R46-S2: every page in the sitemap's static list can now be tuned.
+  "/medical",
+  "/privacy-policy",
+  "/terms-of-use",
+  "/consumer-health-data",
 ];
 
 export default async function SeoEditorPage({
@@ -63,7 +68,7 @@ export default async function SeoEditorPage({
               "Description (~150–160 chars): a friendly, honest summary with a reason to click (daily deals, fast in-store pickup).",
               "Watch the live Google-style preview update as you type — that’s roughly what customers will see.",
               "If AI drafting is on, click it for a starting point, then edit so it sounds like you. Always review before saving.",
-              "Save. Changes apply to the public page right away.",
+              "Save. The public page uses it on the next visit (title, description, canonical and no-index), and the sitemap follows the No-index and In sitemap switches.",
             ]}
           >
             <p className="mb-2">
@@ -91,6 +96,11 @@ export default async function SeoEditorPage({
         {error === "path" && (
           <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-2 text-sm text-[var(--admin-danger)]">
             Path must start with “/”.
+          </div>
+        )}
+        {error === "canonical" && (
+          <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-2 text-sm text-[var(--admin-danger)]">
+            Canonical must be a page on this site, like “/menu” or “https://www.greenwaymarijuana.com/menu”. Usually leave it blank. Nothing was saved.
           </div>
         )}
 

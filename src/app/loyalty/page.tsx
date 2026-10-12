@@ -4,6 +4,7 @@ import { Header } from "@/components/site/Header";
 import { LoyaltySignupForm } from "@/components/loyalty/LoyaltySignupForm";
 import { LoyaltyProgramTerms } from "@/components/loyalty/LoyaltyProgramTerms";
 import { pageMetadata } from "@/lib/seo/seo";
+import { withSeoOverride } from "@/lib/seo/seo-entries-server";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { getConfig, listTiers } from "@/lib/loyalty/loyalty-store";
@@ -18,13 +19,19 @@ import {
   resolveLoyaltyHeroPresentation,
 } from "@/lib/loyalty/loyalty-hero-core";
 
-export const metadata = pageMetadata({
+const baseMetadata = pageMetadata({
   title: "Loyalty Rewards & Sign-Up — Greenway Points",
   description:
     "Join Greenway Marijuana loyalty rewards for exclusive offers, member discounts, birthday deals, and promotional updates. For adults 21+ in Port Orchard, WA.",
   path: "/loyalty",
   image: "/og/loyalty.png",
 });
+
+// R46-S2: the SEO Editor (/admin/content/seo) can override title, description,
+// canonical, no-index and share image; the values above are the defaults.
+export async function generateMetadata() {
+  return withSeoOverride(baseMetadata, "/loyalty");
+}
 
 // SLICE 108: the page surfaces editable content blocks + the LIVE loyalty
 // config/tiers — a published edit or a program-number change must show on the
