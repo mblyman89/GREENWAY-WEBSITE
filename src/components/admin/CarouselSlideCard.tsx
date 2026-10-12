@@ -92,7 +92,10 @@ export function CarouselSlideCard({
   // R47: advanced options (same as the Shop / Loyalty banners). null = the
   // classic slide; the first change creates the advanced value.
   const initialAdv = useMemo(
-    () => normalizeHomeSlideAdvanced(slide.draft_advanced ?? slide.advanced ?? null),
+    () =>
+      normalizeHomeSlideAdvanced(
+        slide.draft_advanced !== undefined ? slide.draft_advanced : (slide.advanced ?? null),
+      ),
     [slide.draft_advanced, slide.advanced],
   );
   const [adv, setAdv] = useState<HomeSlideAdvanced | null>(initialAdv);
