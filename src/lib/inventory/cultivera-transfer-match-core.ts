@@ -552,6 +552,61 @@ export function linksFromListLots(
 }
 
 /* ------------------------------------------------------------------ *
+ * Go / no-go for the plan (bible \u00a73b.6 "Manifest plan")
+ * ------------------------------------------------------------------ */
+
+export type ManifestPlanGate = {
+  pass: boolean;
+  detail: string;
+  /** Each failed condition, in words a manager can act on. Empty when pass. */
+  problems: string[];
+  /** Re-received barcodes filed on a different transfer than Cultivera's link (printed, not an error). */
+  multiReceiptDiffers: { barcode: string; transferId: number; linkIds: number[] }[];
+};
+
+/**
+ * \u00a73b.6: every lot on exactly one manifest; vendors never mixed (except the
+ * named link-confirmed aliases); no number collisions; every single-receipt
+ * lot agrees with Cultivera's link; no lot Cultivera linked is left unmatched.
+ * Multi-receipt differences are listed, never failed. `vendorOf` = each lot's
+ * normalized vendor (cultiveraVendorKey of its first row). `linksPresent`
+ * false (no list links at all) fails: the agreement check would be vacuous.
+ */
+export function manifestPlanGate(
+  plan: TransferMatchPlan,
+  vendorOf: ReadonlyMap<string, string>,
+  links: ReadonlyMap<string, readonly number[]>,
+): ManifestPlanGate {
+  const problems: string[] = [];
+  const all = [...plan.transferGroups.flatMap((g) => g.barcodes), ...plan.fallbackGroups.flatMap((g) => g.barcodes)];
+  const distinct = new Set(all);
+  if (all.length !== plan.summary.lots || distinct.size !== plan.summary.lots)
+    problems.push(`${plan.summary.lots} lots but ${all.length} placements (${distinct.size} distinct)`);
+  let mixed = 0;
+  for (const g of plan.transferGroups) {
+    const alias = new Set(g.vendorByLink);
+    for (const b of g.barcodes) if (!alias.has(b) && vendorOf.get(b) !== g.vendorKey) mixed += 1;
+  }
+  for (const g of plan.fallbackGroups) for (const b of g.barcodes) if (vendorOf.get(b) !== g.vendorKey) mixed += 1;
+  if (mixed > 0) problems.push(`${mixed} lots on another vendor's manifest`);
+  if (plan.numberCollisions.length > 0) problems.push(`manifest number collisions: ${plan.numberCollisions.slice(0, 5).join(", ")}`);
+  const singleDiffer = plan.decisions.filter((d) => d.matched && d.evidence === "only_receipt" && d.link === "differ").length;
+  if (singleDiffer > 0) problems.push(`${singleDiffer} single-receipt lots disagree with Cultivera's link`);
+  if (plan.summary.link.unmatchedLinked > 0) problems.push(`${plan.summary.link.unmatchedLinked} lots Cultivera linked to a transfer were not placed on one`);
+  if (links.size === 0 && plan.summary.lots > 0) problems.push("no Cultivera links were read (IncomingTransferId), so nothing could be cross-checked");
+  const multiReceiptDiffers = plan.decisions
+    .filter((d): d is Extract<LotTransferDecision, { matched: true }> => d.matched && d.evidence === "first_receipt_after_received" && d.link === "differ")
+    .map((d) => ({ barcode: d.barcode, transferId: d.transferId, linkIds: [...(links.get(d.barcode) ?? [])] }))
+    .sort((a, b) => (a.barcode < b.barcode ? -1 : a.barcode > b.barcode ? 1 : 0));
+  const s = plan.summary;
+  const detail =
+    `${s.lots} lots: ${s.matched} on ${s.transfersUsed} real manifests (${s.matchedVendorByLink} by Cultivera's link to the distributor), ` +
+    `${s.lots - s.matched} on ${s.fallbackGroups} rebuilt; link agrees ${s.link.agree}, re-received filed on first receipt ${multiReceiptDiffers.length}` +
+    (problems.length ? `; ${problems.join("; ")}` : "");
+  return { pass: problems.length === 0, detail, problems, multiReceiptDiffers };
+}
+
+/* ------------------------------------------------------------------ *
  * Self-tests
  * ------------------------------------------------------------------ */
 
@@ -869,6 +924,38 @@ export function __runCultiveraTransferMatchCoreTests(): { passed: number; failed
     { Barcode: "e", IncomingTransferId: 1.5 },
   ]);
   ok(JSON.stringify([...lk]) === JSON.stringify([["a", [4, 9]], ["123", [6]]]), "links: distinct, sorted, junk ignored");
+
+  // --- manifestPlanGate ---
+  const vOf = (rs: CultiveraGroupRow[]) => {
+    const m = new Map<string, string>();
+    for (const r of rs) if (!m.has(String(r.barcode).trim())) m.set(String(r.barcode).trim(), cultiveraVendorKey(r.vendor));
+    return m;
+  };
+  const gOk = manifestPlanGate(v2, vOf(v2Rows), v2Links);
+  ok(!gOk.pass && gOk.problems.length === 1 && gOk.problems[0].startsWith("3 lots Cultivera linked"), "gate: unmatched-but-linked fails");
+  ok(JSON.stringify(gOk.multiReceiptDiffers) === JSON.stringify([{ barcode: "own", transferId: 72, linkIds: [73] }]), "gate: multi-receipt differ listed");
+  const cleanLinks = new Map<string, number[]>([["brand1", [70]], ["own", [73]], ["mix", [73, 74]]]);
+  const cleanRows = v2Rows.filter((r) => ["brand1", "own", "mix", "brand2"].includes(String(r.barcode)));
+  const cleanPlan = planTransferManifests(cleanRows, v2T, { pacificToday: TODAY, links: cleanLinks });
+  const gClean = manifestPlanGate(cleanPlan, vOf(cleanRows), cleanLinks);
+  ok(gClean.pass && gClean.problems.length === 0, "gate: clean plan passes (alias + multi differ are not errors)");
+  ok(gClean.detail.includes("1 by Cultivera's link") && gClean.detail.includes("filed on first receipt 1"), "gate: detail names alias + differ");
+  ok(!manifestPlanGate(cleanPlan, vOf(cleanRows), new Map()).pass, "gate: no links at all fails");
+  ok(manifestPlanGate(planTransferManifests([], [], { pacificToday: TODAY }), new Map(), new Map()).pass, "gate: empty plan with no links passes");
+  const badV = new Map(vOf(cleanRows));
+  badV.set("own", "SOMEONE ELSE");
+  ok(manifestPlanGate(cleanPlan, badV, cleanLinks).problems.some((x) => x.includes("1 lots on another vendor")), "gate: vendor mixing fails");
+  const badFbV = new Map(vOf(cleanRows));
+  badFbV.set("brand2", "SOMEONE ELSE");
+  ok(manifestPlanGate(cleanPlan, badFbV, cleanLinks).problems.some((x) => x.includes("another vendor")), "gate: fallback vendor mixing fails");
+  const sdLinks = new Map(cleanLinks);
+  sdLinks.set("brand1", [72]);
+  const sdPlan = planTransferManifests(cleanRows.filter((r) => r.barcode !== "brand1").concat([row("brand1", "R&B GROUP", "2026-07-02 09:00:00")]), v2T, { pacificToday: TODAY, links: sdLinks });
+  ok(manifestPlanGate(sdPlan, vOf(cleanRows.filter((r) => r.barcode !== "brand1").concat([row("brand1", "R&B GROUP", "2026-07-02 09:00:00")])), sdLinks).problems.some((x) => x.includes("1 single-receipt lots disagree")), "gate: single-receipt link disagreement fails");
+  const dupPlan = { ...cleanPlan, transferGroups: [...cleanPlan.transferGroups, cleanPlan.transferGroups[0]] };
+  ok(manifestPlanGate(dupPlan, vOf(cleanRows), cleanLinks).problems.some((x) => x.includes("placements")), "gate: double placement fails");
+  const colPlan = { ...cleanPlan, numberCollisions: ["X"] };
+  ok(manifestPlanGate(colPlan, vOf(cleanRows), cleanLinks).problems.some((x) => x.includes("collisions: X")), "gate: collision fails");
 
   return { passed, failed: 0 };
 }

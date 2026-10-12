@@ -45,7 +45,11 @@ const lot = { Id: 1000, Barcode: "90000000000000000", ProductName: NAME, VendorN
 const sha = (b: Buffer) => crypto.createHash("sha256").update(b).digest("hex");
 
 type Files = Record<string, Buffer>;
-function makeRun(opts: { status?: string; finishedAt?: string; batches?: string; inventories?: string } = {}): Files {
+const TRANSFER_5 = { Id: 5, TransferNumber: "M-5", FromVendor: "ACME LLC", VendorNo: "601", TransferDate: "2026-10-04T15:00:00Z",
+  DateAccepted: "2026-10-05T17:31:00Z", StatusDisplay: "Accepted", Details: [{ Barcode: "90000000000000000", AcceptedQuantity: 4, Quantity: 4, IsSample: false }] };
+const DETAILS = JSON.stringify(TRANSFER_5) + "\n";
+
+function makeRun(opts: { status?: string; finishedAt?: string; batches?: string; inventories?: string; details?: string | null } = {}): Files {
   const status = opts.status ?? "done";
   const finishedAt = opts.finishedAt ?? new Date(Date.now() - 10 * 60000).toISOString().replace(/\.\d+Z$/, "Z");
   const data: Files = {
@@ -54,6 +58,7 @@ function makeRun(opts: { status?: string; finishedAt?: string; batches?: string;
     "inventories.json": Buffer.from(opts.inventories ?? JSON.stringify({ data: [lot], meta: { Count: 1 } })),
   };
   if (opts.batches !== undefined) data["batches.jsonl"] = Buffer.from(opts.batches);
+  if (opts.details !== null) data["transfer_details.jsonl"] = Buffer.from(opts.details ?? DETAILS);
   const state = { status, finishedAt, seconds: 478.3, withinBudget: true, stages: {} };
   const manifest = { kind: "cultivera_pos_phase_a", status, finishedAt,
     files: Object.entries(data).sort().map(([name, b]) => ({ name, bytes: b.length, sha256: sha(b) })) };
@@ -88,7 +93,13 @@ describe("R50 S9: loadRunForImport against a fake crawler", () => {
     expect(r.verified).toBe(true);
     expect(r.assembled?.report.go).toBe(true);
     expect(r.assembled?.report.reconcile.unitsRows).toBe(4);
-    expect(r.files.map((f) => f.name).sort()).toEqual(["export_inventories.xlsx", "export_products.xlsx", "inventories.json"]);
+    expect(r.files.map((f) => f.name).sort()).toEqual(["export_inventories.xlsx", "export_products.xlsx", "inventories.json", "transfer_details.jsonl"]);
+    // R50 S10: the manifest plan ran on the served transfer and joined the go/no-go.
+    const mp = r.assembled?.report.manifestPlan;
+    expect(mp?.summary.matched).toBe(1);
+    expect(mp?.summary.link).toEqual({ agree: 1, differ: 0, none: 0, unmatchedLinked: 0 });
+    expect(mp?.biggest[0]).toMatchObject({ transferId: 5, manifestNumber: "M-5", lots: 1 });
+    expect(r.assembled?.report.checks.find((c) => c.id === "manifest_plan")?.pass).toBe(true);
     expect(r.files.every((f) => f.sha256 === sha(served[f.name]))).toBe(true);
     expect(seen.every((s) => s.secret === "s3cret" && s.url.startsWith("http://crawler.test/cultivera-pos/runs/"))).toBe(true);
     expect(r.ageMinutes).toBeGreaterThan(9);
@@ -144,6 +155,41 @@ describe("R50 S9: loadRunForImport against a fake crawler", () => {
     expect(real.allowed).toBe(false);
     expect(real.reasons.join(" ")).toContain("minutes old");
     expect(importDecision({ isTest: true, go: true, cutoverDone: false, ageMinutes: r.ageMinutes, filesVerified: r.verified }).allowed).toBe(true);
+  });
+
+  it("R50 S10: lots that link transfers but no transfer_details.jsonl → refused with a reason", async () => {
+    served = makeRun({ details: null });
+    const r = await load();
+    expect(r.verified).toBe(false);
+    expect(r.assembled).toBeNull();
+    expect(r.verifyProblems).toEqual(["Lots link to Cultivera transfers but the run has no transfer_details.jsonl."]);
+  });
+
+  it("R50 S10: a torn transfer_details line is reported", async () => {
+    served = makeRun({ details: DETAILS + '{"Id":6,' });
+    const r = await load();
+    expect(r.verifyProblems).toEqual(["transfer_details.jsonl has 1 unreadable lines."]);
+    expect(r.assembled).toBeNull();
+  });
+
+  it("R50 S10: Cultivera links the lot to a transfer that does not carry it → NO-GO on manifest_plan", async () => {
+    const other = { ...TRANSFER_5, Details: [{ Barcode: "OTHER", AcceptedQuantity: 1, Quantity: 1 }] };
+    served = makeRun({ details: JSON.stringify(other) + "\n" });
+    const r = await load();
+    expect(r.verified).toBe(true);
+    const check = r.assembled?.report.checks.find((c) => c.id === "manifest_plan");
+    expect(check?.pass).toBe(false);
+    expect(check?.detail).toContain("1 lots Cultivera linked to a transfer were not placed on one");
+    expect(r.assembled?.report.go).toBe(false);
+  });
+
+  it("R50 S10: lots with no links and no details → no plan, no extra check (the old path still works)", async () => {
+    served = makeRun({ details: null, inventories: JSON.stringify({ data: [{ ...lot, IncomingTransferId: null }] }) });
+    const r = await load();
+    expect(r.verifyProblems).toEqual([]);
+    expect(r.assembled?.report.manifestPlan).toBeNull();
+    expect(r.assembled?.report.checks.some((c) => c.id === "manifest_plan")).toBe(false);
+    expect(r.assembled?.report.go).toBe(true);
   });
 
   it("an invalid run id never reaches the crawler", async () => {

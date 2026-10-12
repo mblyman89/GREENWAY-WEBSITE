@@ -11,6 +11,9 @@
  *   3. filterProductsToInventory — the product export has ~17k catalogue rows; only names
  *                             that are in inventory become product masters (no stockless cards).
  *   4. checkCompleteness + goNoGo — numbers, not vibes (§3b.6).
+ *   5. manifest plan (R50 S10) — when the run has transfer_details.jsonl, the lots are
+ *                             married to Cultivera's real transfers (rule v2, bible §3b.4)
+ *                             and §3b.6 "Manifest plan" joins the go/no-go.
  *
  * The output is just two xlsx buffers + a report; nothing here writes to the database,
  * so a NO-GO never touches the menu. The caller decides (refuse on no-go, or stage as test).
@@ -32,6 +35,16 @@ import {
   type ReconcileReport,
 } from "@/lib/pos/cultivera-fetch-core";
 import { transformWorkbooks } from "@/lib/pos/transform";
+import { cultiveraVendorKey } from "@/lib/inventory/cultivera-manifest-group-core";
+import {
+  planTransferManifests,
+  transferIndexFromDetails,
+  linksFromListLots,
+  manifestPlanGate,
+  type TransferMatchPlan,
+  type ManifestPlanGate,
+} from "@/lib/inventory/cultivera-transfer-match-core";
+import { pacificDayKey } from "@/lib/reports/timezone";
 
 export const ASSEMBLED_INVENTORY_SHEET = "Inventories";
 export const ASSEMBLED_PRODUCT_SHEET = "Sheet1";
@@ -48,6 +61,20 @@ export type AssembleInput = {
   /** Phase A seconds (state.json) — for the time-budget check. */
   harvestSeconds: number;
   budgetSeconds?: number;
+  /** transfer_details.jsonl records. Present ⇒ the manifest plan is built and gated (§3b.6). */
+  transferDetails?: unknown[];
+  /** Pacific day of the harvest (YYYY-MM-DD), for the planner's out-of-window check. Default: today. */
+  pacificToday?: string;
+};
+
+export type ManifestPlanReport = {
+  summary: TransferMatchPlan["summary"];
+  gate: ManifestPlanGate;
+  /** Records in transfer_details.jsonl the index skipped (no positive integer Id) / saw twice. */
+  indexSkipped: number;
+  indexDuplicates: number;
+  /** The 10 biggest real manifests (preview). */
+  biggest: { transferId: number; manifestNumber: string; vendorLabel: string; acceptedAt: string; lots: number }[];
 };
 
 export type AssembleReport = {
@@ -76,6 +103,8 @@ export type AssembleReport = {
   missingBarcodes: string[];
   hiddenReasons: Record<string, number>;
   reconcile: ReconcileReport;
+  /** null when the run had no transfer details (the plan is then built later, at S2). */
+  manifestPlan: ManifestPlanReport | null;
 };
 
 export type AssembleResult = {
@@ -145,6 +174,9 @@ export function assembleFromRun(input: AssembleInput): AssembleResult {
   const hidden = t.diagnostics.filter((d) => d.code === "inventory_without_product_master").length;
   const completeness = checkCompleteness(input.listLots, supp.rows, supp.supplemented.length, supp.exportOnly.length);
   const reconcile = reconcileControlTotals(input.listLots, supp.rows);
+  const manifestPlan = input.transferDetails
+    ? buildManifestPlanReport(t.lotSources, input.listLots, input.transferDetails, input.pacificToday ?? pacificDayKey(new Date()))
+    : null;
   const gate = goNoGo({
     reconcile,
     loginOk: true,
@@ -158,12 +190,15 @@ export function assembleFromRun(input: AssembleInput): AssembleResult {
     budgetMs: Math.round((input.budgetSeconds ?? 1800) * 1000),
   });
 
+  const checks = manifestPlan
+    ? [...gate.checks, { id: "manifest_plan", pass: manifestPlan.gate.pass, detail: manifestPlan.gate.detail }]
+    : gate.checks;
   return {
     productsBuffer,
     inventoriesBuffer,
     report: {
-      go: gate.go,
-      checks: gate.checks,
+      go: checks.every((c) => c.pass),
+      checks,
       counts: {
         exportRows: inv.rows.length,
         listLots: input.listLots.length,
@@ -186,6 +221,43 @@ export function assembleFromRun(input: AssembleInput): AssembleResult {
       missingBarcodes: completeness.missingBarcodes,
       hiddenReasons: t.summary.output.hiddenReasons,
       reconcile,
+      manifestPlan,
     },
   };
+}
+
+/**
+ * Plan the manifests from exactly the lots the transform produced (the same
+ * `lotSources` runImport will create lots from), so the preview and S2 agree.
+ */
+export function buildManifestPlanReport(
+  lotSources: readonly { barcode: string; vendor: string; receivedDateRaw: string | null; units: number; productName: string }[],
+  listLots: readonly ListLot[],
+  transferDetails: readonly unknown[],
+  pacificToday: string,
+): ManifestPlanReport {
+  const rows = lotSources.map((s) => ({
+    barcode: s.barcode,
+    vendor: s.vendor,
+    receivedDateRaw: s.receivedDateRaw,
+    units: s.units,
+    productName: s.productName,
+  }));
+  const idx = transferIndexFromDetails(transferDetails);
+  const links = linksFromListLots(listLots);
+  const plan = planTransferManifests(rows, idx.transfers, { pacificToday, links });
+  const vendorOf = new Map<string, string>();
+  for (const r of rows) {
+    const b = (r.barcode ?? "").trim();
+    if (b && !vendorOf.has(b)) vendorOf.set(b, cultiveraVendorKey(r.vendor));
+  }
+  const gate = manifestPlanGate(plan, vendorOf, links);
+  const problems = [...gate.problems];
+  if (idx.skipped > 0) problems.push(`${idx.skipped} transfer records without an id`);
+  const finalGate = problems.length === gate.problems.length ? gate : { ...gate, pass: false, problems, detail: `${gate.detail}; ${idx.skipped} transfer records without an id` };
+  const biggest = [...plan.transferGroups]
+    .sort((a, b) => b.barcodes.length - a.barcodes.length || a.transferId - b.transferId)
+    .slice(0, 10)
+    .map((g) => ({ transferId: g.transferId, manifestNumber: g.manifestNumber, vendorLabel: g.vendorLabel, acceptedAt: g.acceptedAt, lots: g.barcodes.length }));
+  return { summary: plan.summary, gate: finalGate, indexSkipped: idx.skipped, indexDuplicates: idx.duplicates, biggest };
 }

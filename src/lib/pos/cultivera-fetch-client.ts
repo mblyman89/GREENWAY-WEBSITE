@@ -15,6 +15,7 @@ import crypto from "node:crypto";
 import { crawlerBaseUrl, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
 import { assembleFromRun, type AssembleResult, type BatchRecord } from "@/lib/pos/cultivera-fetch-assemble";
 import type { ListLot } from "@/lib/pos/cultivera-fetch-core";
+import { pacificDayKey } from "@/lib/reports/timezone";
 import {
   REQUIRED_FILES,
   harvestAgeMinutes,
@@ -126,7 +127,7 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
   const files: LoadedRun["files"] = [];
   const bufs: Record<string, Buffer> = {};
 
-  const dataFiles = [...REQUIRED_FILES.filter((n) => n !== "manifest.json" && n !== "state.json"), ...optionalFilesToFetch(manifest).filter((n) => n === "batches.jsonl")];
+  const dataFiles = [...REQUIRED_FILES.filter((n) => n !== "manifest.json" && n !== "state.json"), ...optionalFilesToFetch(manifest).filter((n) => n === "batches.jsonl" || n === "transfer_details.jsonl")];
   for (const name of dataFiles) {
     const b = await getFile(runId, name);
     const h = sha(b);
@@ -152,6 +153,17 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
     batches = pj.records;
   }
 
+  // R50 S10: the real transfers → manifest plan + §3b.6 "Manifest plan" check. A run whose list lots
+  // link transfers but has no transfer_details is refused (the plan would silently be skipped).
+  let transferDetails: unknown[] | undefined;
+  if (bufs["transfer_details.jsonl"]) {
+    const pj = parseJsonl<Record<string, unknown>>(bufs["transfer_details.jsonl"].toString("utf8"));
+    if (pj.bad > 0) problems.push(`transfer_details.jsonl has ${pj.bad} unreadable lines.`);
+    transferDetails = pj.records;
+  } else if (listLots.some((l) => typeof l.IncomingTransferId === "number" && l.IncomingTransferId > 0)) {
+    problems.push("Lots link to Cultivera transfers but the run has no transfer_details.jsonl.");
+  }
+
   let assembled: AssembleResult | null = null;
   if (problems.length === 0) {
     assembled = assembleFromRun({
@@ -160,6 +172,8 @@ export async function loadRunForImport(runId: string): Promise<LoadedRun> {
       listLots,
       batches,
       harvestSeconds: typeof state.seconds === "number" ? state.seconds : Number.POSITIVE_INFINITY,
+      transferDetails,
+      pacificToday: pacificDayKey(state.finishedAt ?? new Date()),
     });
   }
   const ageMinutes = harvestAgeMinutes(state.finishedAt, Date.now());
