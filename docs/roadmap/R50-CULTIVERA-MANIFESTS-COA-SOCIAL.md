@@ -147,6 +147,29 @@ readers and predicates). So 0244 can stamp a rebuilt manifest's lots ONLY if it 
 The executor also sets a rebuilt manifest's `accepted_at` only from the real transfer acceptance, never the run
 instant, so even a late 0244 would stamp a true date.
 
+### 1.3b What ~700 NEW accepted manifests would do to native screens (S2c research, 2026-10-12, by grep + schema)
+
+Measured on PG15 with all 269 migrations: `inbound_manifests` has no CHECK on `status`; the only unique index
+is `dedupe_key` (partial, not null); the only trigger on either table is `set_updated_at`. Moving a lot
+(`inventory_lots.manifest_id`) therefore fires nothing but `updated_at`, and no code in `src` uses a lot's
+`updated_at` as a change signal (grep: the single hit is a React form key on the lot page). The 23 files that
+read `inbound_manifests` were reviewed. The ones a rebuilt manifest would change:
+
+| Reader | What would happen | S2c rule |
+|---|---|---|
+| Receiving list `listManifests` (newest 200 by `created_at`) | ~700 rows created at the run instant push every native delivery off the page on 11/01 | rebuilt manifests are left out of the Receiving work queue (null-safe kind filter); they are history, not work |
+| Stage counts `countManifestsByStatus` | "Accepted" jumps by ~700 | counted separately as "moved from Cultivera" |
+| Dock-to-shelf metric (`received_at` → `accepted_at`, last 90 days) | rebuilt rows would add fake 0-minute dock times | migration kinds excluded |
+| Onboarding picker (accepted in last 30 days) | the recent rebuilt manifests appear | WANTED (S3 enrichment through the native flow); S3 adds the "Cultivera manifests" section |
+| Payables, Sage, bill, receipt | money | already excluded (S2a) |
+| Per-manifest readers (`.eq("id", …)`: PO link, KB bridge, goldminer, brand) | only when someone opens that manifest | unchanged |
+
+**Dates on a rebuilt manifest (never guess):** real transfer → `accepted_at` = `received_at` = Cultivera's
+`DateAccepted` (UTC), `transfer_date` = its `TransferDate` day. S1 session → the first lot's real Received
+instant. S1 day-only → `transfer_date` = the day, instants left null (the time of day is unknown). Undated →
+all null. `vendor_id` is set only when every lot on it carries the same vendor id and no lot came in through
+the vendor-by-link alias; otherwise null (never invent or create a vendor).
+
 ### 1.4 Who reads ACCEPTED manifests (accounting risk)
 
 `vendor-payables-store.ts` (owed = Σ received_qty × unit_cost), `sage-exports.ts` (purchases export),
