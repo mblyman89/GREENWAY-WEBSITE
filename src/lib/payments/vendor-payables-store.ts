@@ -16,6 +16,11 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { classifyLotCost } from "@/lib/accounting/lot-cost-classification-core";
+import {
+  NOT_MIGRATION_OR,
+  PAYLOAD_KIND_SELECT,
+  withoutMigrationManifests,
+} from "@/lib/accounting/migration-stock-core";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   PAYABLE_MANIFEST_STATUSES,
@@ -112,13 +117,16 @@ export async function listVendorPayables(opts?: {
   const statuses = Array.from(PAYABLE_MANIFEST_STATUSES);
   let mq = admin
     .from("inbound_manifests")
-    .select("id, manifest_number, vendor_id, vendor_label, status, accepted_at")
+    .select(`id, manifest_number, vendor_id, vendor_label, status, accepted_at, ${PAYLOAD_KIND_SELECT}`)
     .in("status", statuses)
+    // R50 S2a (§1.4): Cultivera migration stock is never owed (it was paid
+    // before the switch). Null-safe filter verified on a real PostgREST.
+    .or(NOT_MIGRATION_OR)
     .order("accepted_at", { ascending: false, nullsFirst: false })
     .limit(opts?.limit ?? 300);
   if (opts?.vendorId) mq = mq.eq("vendor_id", opts.vendorId);
   const { data: manifests } = await mq;
-  const mrows =
+  const mrowsAll =
     (manifests as
       | {
           id: string;
@@ -127,8 +135,11 @@ export async function listVendorPayables(opts?: {
           vendor_label: string | null;
           status: string;
           accepted_at: string | null;
+          payload_kind?: string | null;
         }[]
       | null) ?? [];
+  // Defence in depth behind the server filter: the same exclusion in code.
+  const mrows = withoutMigrationManifests(mrowsAll);
   if (mrows.length === 0) return [];
 
   const manifestIds = mrows.map((m) => m.id);

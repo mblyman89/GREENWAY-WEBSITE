@@ -17,7 +17,7 @@ import {
 } from "@/lib/inventory/intake-store";
 import { sendSampleCapVendorNotice } from "@/lib/compliance/sample-cap-notify";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
-import { receiptEventFor } from "@/lib/inventory/manifest-event-labels-core";
+import { isMigrationStockResult, receiptEventFor } from "@/lib/inventory/manifest-event-labels-core";
 import { shouldMarkArrivedOnFinalize } from "@/lib/inventory/finalize-label-core";
 import {
   parseCcrsManifestCsv,
@@ -234,7 +234,7 @@ export async function setManifestLifecycleAction(manifestId: string, status: "in
       const p = pacificParts(new Date());
       const receivedDate = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
       const booked = await postManifestReceipt(manifestId, receivedDate);
-      booksNote = booked.ok
+      booksNote = booked.ok || isMigrationStockResult(booked)
         ? `&books=${encodeURIComponent(booked.code)}`
         : `&booksError=${encodeURIComponent(booked.message.slice(0, 300))}`;
       // S29: the answer also lands on the delivery's permanent timeline, so a
@@ -1003,18 +1003,25 @@ export async function finalizeManifestAction(manifestId: string, formData?: Form
       const p = pacificParts(new Date());
       const invoiceDate = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
       const billed = await postManifestVendorBill(manifestId, invoiceDate);
-      booksNote = billed.ok
+      // R50 S2a: migration stock is "none needed", not an error banner.
+      booksNote = billed.ok || isMigrationStockResult(billed)
         ? `&books=${encodeURIComponent(billed.code)}`
         : `&booksError=${encodeURIComponent(billed.message.slice(0, 300))}`;
       // The durable half. `logManifestEvent` is best-effort by construction and
       // never throws, so a timeline write can NEVER cost the operator their
       // acceptance — the goods really did arrive either way.
-      await logManifestEvent(
-        manifestId,
-        billed.ok ? "vendor_bill_posted" : "vendor_bill_refused",
-        `${billed.code}: ${billed.message}`,
-        session.userId,
-      );
+      if (isMigrationStockResult(billed)) {
+        // R50 S2a (§1.4): stock moved from Cultivera was paid before the
+        // switch. Its own quiet event, never an open refusal.
+        await logManifestEvent(manifestId, "vendor_bill_migration_stock", `${billed.code}: ${billed.message}`, session.userId);
+      } else {
+        await logManifestEvent(
+          manifestId,
+          billed.ok ? "vendor_bill_posted" : "vendor_bill_refused",
+          `${billed.code}: ${billed.message}`,
+          session.userId,
+        );
+      }
     } catch (err) {
       const reason = `The delivery was accepted, but the payable could not be recorded: ${
         err instanceof Error ? err.message : String(err)
@@ -1100,7 +1107,7 @@ async function postReceiptOnFinalize(manifestId: string, userId: string | null, 
     const booked = await postManifestReceipt(manifestId, receivedDate);
     const ev = receiptEventFor(booked);
     await logManifestEvent(manifestId, ev.eventType, ev.note, userId);
-    return booked.ok ? "" : `&booksError=${encodeURIComponent(booked.message.slice(0, 300))}`;
+    return booked.ok || isMigrationStockResult(booked) ? "" : `&booksError=${encodeURIComponent(booked.message.slice(0, 300))}`;
   } catch (err) {
     const thrown = err instanceof Error ? err.message : String(err);
     const ev = receiptEventFor({ thrown });

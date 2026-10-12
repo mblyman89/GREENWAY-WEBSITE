@@ -51,6 +51,7 @@ import { submitJournal } from "@/lib/accounting/posting-service";
 import { findReceiptJournal } from "@/lib/accounting/receipt-evidence";
 import { mapReceiptCategory } from "@/lib/accounting/receipt-category-core";
 import { classifyLotCost } from "@/lib/accounting/lot-cost-classification-core";
+import { PAYLOAD_KIND_SELECT, isMigrationKind, migrationStockRefusal } from "@/lib/accounting/migration-stock-core";
 import {
   evaluateVendorBill,
   buildBillJournal,
@@ -102,6 +103,8 @@ export const VENDOR_BILL_SERVICE_CODES = [
   "BILL_READ_FAILED",
   "BILL_BUILD_REFUSED",
   "BILL_POST_FAILED",
+  // R50 S2a (§1.4): Cultivera migration stock was paid before the switch.
+  "BILL_MIGRATION_STOCK",
 ] as const;
 export type VendorBillServiceCode = (typeof VENDOR_BILL_SERVICE_CODES)[number];
 
@@ -340,7 +343,7 @@ export async function postManifestVendorBill(
 
   const { data: manifest, error: mErr } = await admin
     .from("inbound_manifests")
-    .select("id, manifest_number, vendor_id, vendor_label")
+    .select(`id, manifest_number, vendor_id, vendor_label, ${PAYLOAD_KIND_SELECT}`)
     .eq("id", manifestId)
     .maybeSingle();
 
@@ -352,6 +355,12 @@ export async function postManifestVendorBill(
       "BILL_MANIFEST_NOT_FOUND",
       "That delivery could not be found, so no payable was recorded.",
     );
+  }
+  // R50 S2a (§1.4): never a payable for stock moved over from Cultivera. It
+  // was paid before the switch; the opening balance counts it once. Checked
+  // before the lots are read, so nothing about it can reach the ledger.
+  if (isMigrationKind((manifest as { payload_kind?: unknown }).payload_kind)) {
+    return fail("BILL_MIGRATION_STOCK", migrationStockRefusal("bill", manifest.manifest_number));
   }
 
   const { data: lotRows, error: lErr } = await admin

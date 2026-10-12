@@ -23,6 +23,12 @@ import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } 
 import { preTaxLineBaseMinor } from "@/lib/reports/tax-base-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import {
+  PAYLOAD_KIND_SELECT,
+  migrationManifestCount,
+  migrationSkippedWarning,
+  withoutMigrationManifests,
+} from "@/lib/accounting/migration-stock-core";
+import {
   type SageBucket,
   type SageCategoryAccount,
   type SageExportSettings,
@@ -441,11 +447,12 @@ export async function buildSagePurchasesExport(fromISO: string, toISO: string): 
     transfer_date: string | null;
     status: string;
     created_at: string;
+    payload_kind?: string | null;
   };
-  const manifests = await pagedAll<ManifestRow>(async (from, to) => {
+  const manifestsAll = await pagedAll<ManifestRow>(async (from, to) => {
     const { data } = await admin
       .from("inbound_manifests")
-      .select("id, manifest_number, vendor_id, vendor_label, transfer_date, status, created_at")
+      .select(`id, manifest_number, vendor_id, vendor_label, transfer_date, status, created_at, ${PAYLOAD_KIND_SELECT}`)
       .in("status", ["accepted", "partially_accepted"])
       .gte("created_at", fromISO)
       .lte("created_at", toISO)
@@ -454,7 +461,14 @@ export async function buildSagePurchasesExport(fromISO: string, toISO: string): 
       .range(from, to);
     return (data as ManifestRow[] | null) ?? [];
   });
+  // R50 S2a (§1.4): Cultivera migration stock is opening inventory, never a
+  // purchase. Filtered in code (the export is fully paged) so the count of
+  // what was left out can be printed: never a silent skip (rule 48).
+  const migrationSkipped = migrationManifestCount(manifestsAll);
+  const manifests = withoutMigrationManifests(manifestsAll);
+  const migrationNote = migrationSkipped > 0 ? migrationSkippedWarning(migrationSkipped) : null;
   if (manifests.length === 0) {
+    if (migrationNote) empty.warnings.push(migrationNote);
     empty.warnings.push("No accepted or partially-accepted manifests in the selected range.");
     return empty;
   }
@@ -522,6 +536,7 @@ export async function buildSagePurchasesExport(fromISO: string, toISO: string): 
   }
 
   const result = buildPurchasesCsv(invoices, settings);
+  if (migrationNote) result.warnings.push(migrationNote);
   if (missingVendor.size > 0) {
     result.warnings.push(
       `Manifests skipped — vendor has no Sage Vendor ID: ${[...missingVendor].sort().join(", ")}. Set it on the vendor's admin page.`,
