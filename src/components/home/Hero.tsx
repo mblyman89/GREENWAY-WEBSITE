@@ -270,6 +270,18 @@ function SlideHeading({
   style?: React.CSSProperties;
   extraClass?: string;
 }) {
+  if (style === undefined && extraClass === undefined) {
+    // Classic slides: byte-identical markup to before R47.
+    return first ? (
+      <h1 className="mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl">
+        {children}
+      </h1>
+    ) : (
+      <h2 className="mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl">
+        {children}
+      </h2>
+    );
+  }
   const cls = `mt-2 whitespace-pre-line text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl${extraClass ? ` ${extraClass}` : ""}`;
   return first ? (
     <h1 className={cls} style={style}>
