@@ -72,7 +72,7 @@ export default async function SeoEditorPage({
         title="SEO Editor"
         subtitle="Control how each page looks on Google and when shared on social media — title, description, and more — with a live Google-style preview."
         action={
-          <Button href={backHref("/admin/website-sync", back)} variant="neutral">← Website Sync</Button>
+          <div className="flex flex-wrap gap-2"><Button href="/admin/content/store-listing" variant="neutral">📍 Store hours for Google</Button><Button href={backHref("/admin/website-sync", back)} variant="neutral">← Website Sync</Button></div>
         }
         help={
           <HelpPanel
