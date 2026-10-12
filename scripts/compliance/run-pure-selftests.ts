@@ -904,6 +904,7 @@ import { __runAchGuideCoreTests } from "../../src/lib/payments/ach-guide-core";
 import { __runBannerDesignCoreTests } from "../../src/lib/cms/banner-design-core";
 import { __runHomeSlideAdvancedCoreTests } from "../../src/lib/cms/home-slide-advanced-core";
 import { __runClickEventsTests } from "../../src/lib/analytics/click-events-core";
+import { __runStoreHoursCoreTests } from "../../src/lib/seo/store-hours-core";
 import { __runDesignMoveCoreTests } from "../../src/lib/cms/design-move-core";
 import { __runDesignDragCoreTests } from "../../src/lib/cms/design-drag-core";
 import { __runBannerAiCoreTests } from "../../src/lib/cms/banner-ai-core";
@@ -2198,6 +2199,7 @@ __runLiquidVolumeTests();
   assertRan("banner-design-core", __runBannerDesignCoreTests(), 114); // R41 S1 + R42 Q4 phone picture: banner design model, contrast, moves; R47 ensureBoundBoxes (eyebrow fix)
   assertRan("home-slide-advanced-core", __runHomeSlideAdvancedCoreTests(), 28); // R47: home carousel advanced options
   assertRan("click-events-core", __runClickEventsTests(), 57); // R47-S2: banner/button click analytics
+  assertRan("store-hours-core", __runStoreHoursCoreTests(), 40); // R47: Google store listing hours
   assertRan("design-move-core", __runDesignMoveCoreTests(), 46); // R41 S7: hub preview Move-mode owners + per-owner movers
   assertRan("design-drag-core", __runDesignDragCoreTests(), 16); // R41 S7: preview drag geometry (top-left %, container-query device, nudge)
   assertRan("banner-ai-core", __runBannerAiCoreTests(), 38); // R41 S8: AI placement reply parser + apply (drafts only)
