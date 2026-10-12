@@ -9,6 +9,7 @@ import { useCarouselAutoplay } from "@/components/site/useCarouselAutoplay";
 import { dwellMs, slideFetchPriority, wordCount } from "@/lib/site/carousel-autoplay-core";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
+import { clickZoneAttrs } from "@/lib/analytics/click-events-core";
 import {
   effectiveLayout,
   homeLegacyWords,
@@ -154,6 +155,12 @@ export function Hero({
                 data-gw-slide={isActive ? "shown" : "hidden"}
                 aria-roledescription="slide"
                 aria-label={`${index + 1} of ${count}: ${slide.title}`}
+                {...clickZoneAttrs({
+                  place: "home_hero",
+                  slot: slide.key,
+                  label: slide.title || slide.eyebrow || null,
+                  position: index,
+                })}
               >
                 {slide.image ? (
                   <BannerMedia
@@ -335,7 +342,14 @@ function AdvancedSlide({
     "data-gw-slide": isActive ? "shown" : "hidden",
     "aria-roledescription": "slide",
     "aria-label": `${index + 1} of ${count}: ${slide.title}`,
-  } as const;
+    // R47-S2: click analytics zone.
+    ...clickZoneAttrs({
+      place: "home_hero",
+      slot: slide.key,
+      label: words.title || words.eyebrow || slide.title || null,
+      position: index,
+    }),
+  };
 
   // Banner Studio design (drag-anywhere text / buttons, tint, zoom…).
   if (adv.design?.enabled) {

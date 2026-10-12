@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SpecialsDailyDeals } from "@/components/specials/SpecialsDailyDeals";
 import { DesignedBanner } from "@/components/site/DesignedBanner";
 import { BannerVideo } from "@/components/site/BannerVideo";
+import { clickZoneAttrs } from "@/lib/analytics/click-events-core";
 import { isVideoSrc } from "@/lib/media/upload-policy-core";
 import {
   SectionBanner,
@@ -525,12 +526,14 @@ export function SpecialsContent({
             editable={content?.editable}
             owner="specials:hero"
             blockKeyPrefix="specials.hero"
+            zone={clickZoneAttrs({ place: "specials_hero", slot: "specials:hero", label: content?.title || "Cannabis Specials" })}
           />
         ) : (
         /* Top hero — short + wide, matching the home / shop page proportions. */
         <div
           className={`relative isolate flex min-h-[8.5rem] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:min-h-[10.5rem] ${heroJustifyClass} ${heroColumnItemsClass}`}
           {...(content?.editable ? { "data-gw-edit-owner": "specials:hero" } : {})}
+          {...clickZoneAttrs({ place: "specials_hero", slot: "specials:hero", label: content?.title || "Cannabis Specials" })}
         >
           {/* SLICE 118 (P1b): optional editable hero image (Pages builder). When
               set it sits BEHIND the dark fade below, so the eyebrow/title/subtitle

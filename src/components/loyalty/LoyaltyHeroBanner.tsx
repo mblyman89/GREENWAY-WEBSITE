@@ -8,6 +8,7 @@ import {
 } from "@/lib/loyalty/loyalty-hero-core";
 import { BannerMedia } from "@/components/site/BannerMedia";
 import { ensureBoundBoxes } from "@/lib/cms/banner-design-core";
+import { clickZoneAttrs } from "@/lib/analytics/click-events-core";
 
 /**
  * LoyaltyHeroBanner (SLICE 123 / LOY-1) — the /loyalty hero, rebuilt as a fully
@@ -62,6 +63,7 @@ export function LoyaltyHeroBanner({
         priority={priority}
         editable={editable}
         owner="loyalty:hero"
+        zone={clickZoneAttrs({ place: "loyalty_hero", slot: "loyalty:hero", label: legacy.title || "Loyalty banner" })}
       />
     );
   }
