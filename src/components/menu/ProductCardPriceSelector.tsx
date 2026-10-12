@@ -56,10 +56,11 @@ function MedChip() {
 function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits, category }: PriceLineProps) {
   const { regularPrice, displayPrice, hasSalePrice, unitLabel } = priceParts(variant, itemPriceMinorUnits, salePriceMinorUnits, category);
 
-  // No active sale: single centered price + unit.
+  // No active sale: single centered price + unit. R49 S4: flex-wrap lets the
+  // unit drop under the price on narrow 4-up cards (1024–1099px) instead of clipping.
   if (!hasSalePrice) {
     return (
-      <span className="flex min-h-[3.35rem] w-full items-center justify-center gap-1 px-2.5 text-center leading-none md:px-3">
+      <span className="flex min-h-[3.35rem] w-full flex-wrap items-center justify-center gap-x-1 gap-y-0.5 px-2.5 text-center leading-none md:px-3">
         <span className="text-[1.18rem] font-black text-[var(--orange)] md:text-[1.72rem]">{formatMinorCurrency(displayPrice)}</span>
         {unitLabel ? <span className="text-[0.78rem] font-black text-white/95 md:text-base">{unitLabel}</span> : null}
         {variant.medical ? <MedChip /> : null}
@@ -170,7 +171,7 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
       >
         {/* SLICE 40: reserve the chevron strip's width so a long sale row
             ($53.35 $37.34 /7g) can never slide underneath the chevron. */}
-        <span className={`block w-full ${showDropdown ? "pr-[2.35rem]" : ""}`}>
+        <span className={`block w-full min-w-0 ${showDropdown ? "pr-[2.35rem]" : ""}`}>
           <PriceLine variant={selectedVariant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} category={item.category} />
         </span>
         {showDropdown ? (
