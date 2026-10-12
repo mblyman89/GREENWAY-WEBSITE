@@ -39,6 +39,7 @@
  */
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import { resolveLotPotency, hasLotPotency, type LotPotency } from "@/lib/pos/lot-potency-core";
+import { parseCultiveraTimestamp } from "@/lib/inventory/cultivera-manifest-group-core";
 
 export type ImportLotSource = {
   /** menu_items.source_item_id of the card this row rolled into (`pos-…`). */
@@ -173,7 +174,7 @@ export function costToMinorUnits(raw: string | null | undefined): number | null 
   return Math.round(n * 100);
 }
 
-/** "06/17/2026" or "2026-06-17" → "2026-06-17"; null when blank/invalid. */
+/** "06/17/2026", "2026-06-17" or the export's "2026-06-17 09:32:07.787000" → "2026-06-17"; null when blank/invalid. */
 export function parseUsDate(raw: string | null | undefined): string | null {
   if (typeof raw !== "string") return null;
   const s = raw.trim();
@@ -190,7 +191,16 @@ export function parseUsDate(raw: string | null | undefined): string | null {
     m = Number(iso[2]);
     d = Number(iso[3]);
   } else {
-    return null;
+    // R50: the real Cultivera export writes "2026-07-02 09:32:07.787000"
+    // (store wall clock = Pacific), and a stored workbook with real date
+    // cells reads as "7/2/26" or "7/2/26 9:32" depending on the cell's number
+    // format. Before R50 all of these returned null, so no import lot got a
+    // received date. Delegate to the ONE shared parser the manifest grouping
+    // uses, so a lot's received_on and its reconstructed manifest's day can
+    // never disagree. The date part IS the Pacific day.
+    const ts = parseCultiveraTimestamp(s);
+    if (!ts) return null;
+    [y, m, d] = ts.day.split("-").map(Number);
   }
   if (m < 1 || m > 12 || d < 1 || d > 31 || y < 2000 || y > 2100) return null;
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -695,6 +705,14 @@ export function __runImportLotCoreTests(): void {
   ok(parseUsDate("06/17/2026") === "2026-06-17", "US date parses");
   ok(parseUsDate("2026-06-17") === "2026-06-17", "ISO date accepted");
   ok(parseUsDate("") === null && parseUsDate("13/40/2026") === null, "blank/invalid date -> null");
+  // R50: the REAL export's timestamp shapes (4,061 + 15 rows) — null before R50.
+  ok(parseUsDate("2026-07-02 09:32:07.787000") === "2026-07-02", "export timestamp w/ fraction -> Pacific day");
+  ok(parseUsDate("2026-07-01 20:46:18") === "2026-07-01", "export timestamp w/o fraction -> Pacific day");
+  ok(parseUsDate("2026-02-30 10:00:00") === null, "impossible timestamp date -> null");
+  ok(parseUsDate("1999-07-01 10:00:00") === null, "pre-2000 timestamp still rejected by the year window");
+  ok(parseUsDate("7/2/26") === "2026-07-02" && parseUsDate("7/2/26 9:32") === "2026-07-02", "SheetJS date-cell texts (m/d/yy, m/d/yy h:mm)");
+  ok(parseUsDate("Jul 2 2026") === null && parseUsDate("46205.39") === null, "unknown shapes still null");
+  ok(parseUsDate("2026-07-02T09:32") === "2026-07-02", "ISO T date-time accepted");
   ok(coaFlagToBool("Y") && coaFlagToBool("yes") && !coaFlagToBool("N") && !coaFlagToBool(""), "COA flag mapping");
 
   // Basic lot
