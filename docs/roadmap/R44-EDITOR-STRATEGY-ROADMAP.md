@@ -396,6 +396,40 @@ Legend: ✅ have it · 🟡 partial · ❌ missing. Every "Greenway today" cell 
 | Step | Difficulty | Risk | Value | Running cost |
 |---|---|---|---|---|
 | Click analytics | S–M | Low | High (you learn what sells) | $0 |
+
+**Step 1b: a "Website" tab on Reports (owner request, R46 round).** The
+owner asked (verbatim): "if we are going to be tracking customer clicks on
+the website, we should add a tab to the reports page that highlights all the
+stats we are now tracking." Design:
+
+- **Own the numbers.** Clicks are recorded first-party in our own Supabase
+  table, as well as in GA4. GA4 reports need a Google login, run behind on
+  processing, and the Data API has per-property token quotas (Google
+  "Data API limits and quotas"). Our table answers instantly, covers every
+  slide and button by name, and keeps working if GA is not set up.
+- **Privacy.** No cookies and no IP addresses are stored. A row is: when,
+  which page, which banner or slide, which button, the target link, and
+  phone or desktop. `NoTrackGate` and Global Privacy Control are honoured.
+- **Reports > Website tab, last 7/30/90 days:**
+  - total banner and button clicks;
+  - top slides and top buttons;
+  - clicks by page;
+  - phone vs desktop split;
+  - a daily trend;
+  - "dead" banners (shown but never clicked);
+  - which scheduled or released changes went live in the period, from
+    R46's history.
+- **GA4.** The same click also sends GA4's recommended `select_promotion`
+  event, with `creative_name`, `creative_slot`, `promotion_id` and
+  `promotion_name` (verified against the GA4 "Recommended events"
+  reference), so GA4's Promotions report works too.
+- **Later.** Vercel Speed Insights already exists, so the tab links to it
+  with a plain-English card.
+
+| Step | Difficulty | Risk | Value | Running cost |
+|---|---|---|---|---|
+| Reports > Website tab | S–M | Low | High (one place for every site stat) | $0 (one small table) |
+
 | Speed card | S | Low | Med | $0 |
 | A/B testing | M | Med (stats misuse) | Med now, High as traffic grows | Vercel Flags request pricing; see Vercel docs "Limits and Pricing" (not quoted here; check before building) |
 
@@ -429,7 +463,7 @@ Ranked by (customer value + business value) ÷ (difficulty × risk).
 | 2 | Scheduled publish/unpublish and Releases (§4.2) | M–L | Low–Med | **Build next** |
 | 3 | Publish-time quality and WAC lint (§4.4) | M | Low | **Build next** |
 | 4 | Image speed: AVIF, blur placeholders, spend cap (§4.3) | S–M | Low | **Build next** |
-| 5 | CTA/banner click analytics (§4.5) | S–M | Low | **Build next** |
+| 5 | CTA/banner click analytics plus the Reports > Website tab (§4.5, owner request) | S–M | Low | **Build next** |
 | 6 | Magic-byte upload check (§5) | S | Low | **Build next** |
 | 7 | Optimistic locking (§5) | S–M | Low | **Build next** |
 | 8 | Playwright and axe in CI (§5) | M | Low | **Build next** |
@@ -455,7 +489,7 @@ Ranked by (customer value + business value) ÷ (difficulty × risk).
 |---|---|---|
 | **R45** | #1 carousel accessibility, #6 magic-byte check, #4 AVIF and blur placeholders, #7 optimistic locking | All small and low-risk; immediate customer-visible gains and legal-risk reduction |
 | **R46** | #2 scheduled publishing and Releases (migration, cron, UI) | The biggest workflow win; needs a full round |
-| **R47** | #3 publish-time lint (accessibility, WAC, links), #5 click analytics | The guardrails and measurement layer |
+| **R47** | #3 publish-time lint (accessibility, WAC, links), #5 click analytics **plus the Reports > Website tab** (owner request) | The guardrails and measurement layer |
 | **R48** | #8 Playwright and axe in CI, #9 approvals, #12 holiday hours | Hardening and process |
 | Later | #10, #11, #14, #15, #16 as needs arise | |
 
