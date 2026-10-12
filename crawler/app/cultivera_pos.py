@@ -225,8 +225,14 @@ class RunDir:
             return default
 
     def append_jsonl(self, name: str, obj: Any) -> None:
-        with open(self.p(name), "a", encoding="utf-8") as f:
-            f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+        p = self.p(name)
+        torn = False
+        if p.exists() and p.stat().st_size > 0:
+            with open(p, "rb") as r:
+                r.seek(-1, os.SEEK_END)
+                torn = r.read(1) != b"\n"  # a crash mid-write left a partial last line
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(("\n" if torn else "") + json.dumps(obj, ensure_ascii=False) + "\n")
             f.flush()
             os.fsync(f.fileno())
 
