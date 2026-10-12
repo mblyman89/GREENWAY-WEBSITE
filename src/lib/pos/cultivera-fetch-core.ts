@@ -150,6 +150,8 @@ export type SupplementInput = {
   productRows: SheetRow[];
   /** Batch ReceivedDate (UTC ISO) by lot barcode, for list-only lots. */
   receivedUtcByBarcode?: Record<string, string | null | undefined>;
+  /** Batch ReceivedDate (UTC ISO) by lot Id — wins over the barcode key (barcodes are shared by twin lots). */
+  receivedUtcById?: Record<number, string | null | undefined>;
 };
 
 export type SupplementedLot = {
@@ -235,7 +237,8 @@ export function supplementListOnly(input: SupplementInput): SupplementResult {
   const listOnly = input.listLots.filter((l) => !exportIds.has(l.Id)).sort((a, b) => a.Id - b.Id);
   for (const lot of listOnly) {
     const matches = byName.get(comparableName(lot.ProductName)) ?? [];
-    const received = input.receivedUtcByBarcode?.[String(lot.Barcode).trim()] ?? null;
+    const byLot = input.receivedUtcById?.[lot.Id];
+    const received = byLot !== undefined ? byLot ?? null : input.receivedUtcByBarcode?.[String(lot.Barcode).trim()] ?? null;
     const row = rowFromListLot(lot, matches[0] ?? null, received);
     rows.push(row);
     supplemented.push({
@@ -371,14 +374,14 @@ function toUnits(v: CellValue): number {
 }
 
 export type ReconcileReport = {
-  /** Σ UnitsInStock over list lots vs over the final rows (same barcodes). */
+  /** Σ UnitsInStock over list lots vs over the final rows (paired by lot Id). */
   unitsList: number;
   unitsRows: number;
   /** Σ UnitsInStock × UnitCost in cents (inventory value at cost). */
   costValueListCents: number;
   costValueRowsCents: number;
-  /** Barcodes whose units or unit cost differ between list and final row (the export is a snapshot). */
-  mismatches: { barcode: string; field: "units" | "cost"; list: number | null; row: number | null }[];
+  /** Lots whose units or unit cost differ between list and final row (the export is a snapshot). */
+  mismatches: { id: number; barcode: string; field: "units" | "cost"; list: number | null; row: number | null }[];
   ok: boolean;
 };
 
@@ -389,13 +392,18 @@ export type ReconcileReport = {
  * the list call shows up here — the fix is to re-run, never to "accept".
  */
 export function reconcileControlTotals(listLots: ListLot[], rows: SheetRow[]): ReconcileReport {
-  const byBarcode = new Map<string, SheetRow>();
-  for (const r of rows) byBarcode.set(String(r.Barcode ?? "").trim(), r);
+  // Keyed by lot Id, never barcode: live data (rehearsal #2a) has 59 barcodes shared by
+  // 121 lots (re-received batches, POS Returns copies), so a barcode join pairs the wrong rows.
+  const byId = new Map<number, SheetRow>();
+  for (const r of rows) {
+    const id = Number(r.Id);
+    if (Number.isInteger(id)) byId.set(id, r);
+  }
   let unitsList = 0, unitsRows = 0, costList = 0, costRows = 0;
   const mismatches: ReconcileReport["mismatches"] = [];
   for (const l of listLots) {
     const bc = String(l.Barcode ?? "").trim();
-    const r = byBarcode.get(bc);
+    const r = byId.get(Number(l.Id));
     const lu = toUnits(l.UnitsInStock ?? 0);
     const lc = toCents(l.UnitCost ?? null);
     unitsList += lu;
@@ -405,10 +413,10 @@ export function reconcileControlTotals(listLots: ListLot[], rows: SheetRow[]): R
     const rc = toCents(r.Cost);
     unitsRows += ru;
     costRows += Math.round(ru * (rc ?? 0));
-    if (ru !== lu) mismatches.push({ barcode: bc, field: "units", list: lu, row: ru });
-    if ((rc ?? 0) !== (lc ?? 0)) mismatches.push({ barcode: bc, field: "cost", list: lc, row: rc });
+    if (ru !== lu) mismatches.push({ id: Number(l.Id), barcode: bc, field: "units", list: lu, row: ru });
+    if ((rc ?? 0) !== (lc ?? 0)) mismatches.push({ id: Number(l.Id), barcode: bc, field: "cost", list: lc, row: rc });
   }
-  mismatches.sort((a, b) => (a.barcode < b.barcode ? -1 : a.barcode > b.barcode ? 1 : a.field < b.field ? -1 : 1));
+  mismatches.sort((a, b) => (a.id - b.id) || (a.field < b.field ? -1 : a.field > b.field ? 1 : 0));
   return { unitsList, unitsRows, costValueListCents: costList, costValueRowsCents: costRows, mismatches,
     ok: mismatches.length === 0 && unitsList === unitsRows && costList === costRows };
 }
@@ -510,6 +518,10 @@ export function __runCultiveraFetchCoreTests(): { passed: number; failed: number
   ok(sup2.exportOnly.join(",") === "99" && sup2.rows.length === 2, "export-only row kept and named");
   const det = JSON.stringify(supplementListOnly({ exportRows, listLots: [...listLots].reverse(), productRows: prodRows }).rows);
   ok(det === JSON.stringify(supplementListOnly({ exportRows, listLots, productRows: prodRows }).rows), "deterministic regardless of list order");
+  const twinLots: ListLot[] = [{ Id: 501, Barcode: "TW", ProductName: "T" }, { Id: 502, Barcode: "TW", ProductName: "T" }];
+  const tw = supplementListOnly({ exportRows: [], listLots: twinLots, productRows: [], receivedUtcByBarcode: { TW: "2020-01-01T20:00:00Z" }, receivedUtcById: { 501: "2026-07-01T20:00:00Z", 502: null } });
+  ok(tw.rows[0]["Received date"] === "2026-07-01 13:00:00.000000", "lot-Id received date wins over the barcode key");
+  ok(tw.rows[1]["Received date"] === "", "lot-Id null (batch has no date) is blank, never the twin's barcode date");
 
   // --- rewriteDateCells ---
   const rw = rewriteDateCells([{ "Received date": 45658.5, "Expiration date": "" }, { "Received date": "2026-07-02 09:32:07.787000" }]);
@@ -564,14 +576,20 @@ export function __runCultiveraFetchCoreTests(): { passed: number; failed: number
       { Id: 1, Barcode: "A", ProductName: "x", UnitsInStock: 3, UnitCost: 4.25 },
       { Id: 2, Barcode: " B ", ProductName: "y", UnitsInStock: 10, UnitCost: 1 },
     ];
-    const good = reconcileControlTotals(L, [{ Barcode: "A", "Units In Stock": 3, Cost: "$4.25" }, { Barcode: "B", "Units In Stock": "10", Cost: 1 }]);
+    const good = reconcileControlTotals(L, [{ Id: 1, Barcode: "A", "Units In Stock": 3, Cost: "$4.25" }, { Id: 2, Barcode: "B", "Units In Stock": "10", Cost: 1 }]);
     ok(good.ok && good.unitsList === 13 && good.unitsRows === 13 && good.costValueListCents === 2275 && good.costValueRowsCents === 2275, "reconcile: equal → ok with cent totals");
-    const sold = reconcileControlTotals(L, [{ Barcode: "A", "Units In Stock": 2, Cost: 4.25 }, { Barcode: "B", "Units In Stock": 10, Cost: 1 }]);
+    const sold = reconcileControlTotals(L, [{ Id: 1, Barcode: "A", "Units In Stock": 2, Cost: 4.25 }, { Id: 2, Barcode: "B", "Units In Stock": 10, Cost: 1 }]);
     ok(!sold.ok && sold.mismatches.length === 1 && sold.mismatches[0].field === "units" && sold.mismatches[0].list === 3 && sold.mismatches[0].row === 2, "reconcile: a sale between calls is caught");
-    const cost = reconcileControlTotals(L, [{ Barcode: "A", "Units In Stock": 3, Cost: 4.26 }, { Barcode: "B", "Units In Stock": 10, Cost: 1 }]);
+    const cost = reconcileControlTotals(L, [{ Id: 1, Barcode: "A", "Units In Stock": 3, Cost: 4.26 }, { Id: 2, Barcode: "B", "Units In Stock": 10, Cost: 1 }]);
     ok(!cost.ok && cost.mismatches[0].field === "cost" && cost.mismatches[0].list === 425 && cost.mismatches[0].row === 426, "reconcile: one cent of cost is caught");
-    const miss = reconcileControlTotals(L, [{ Barcode: "A", "Units In Stock": 3, Cost: 4.25 }]);
+    const miss = reconcileControlTotals(L, [{ Id: 1, Barcode: "A", "Units In Stock": 3, Cost: 4.25 }]);
     ok(!miss.ok && miss.mismatches.length === 0 && miss.unitsRows === 3, "reconcile: a missing row breaks the totals");
+    // Live shape: one barcode, two lots (Sales Floor 139 + POS Returns 1) — must pair by Id.
+    const twin: ListLot[] = [{ Id: 9627, Barcode: "074R", ProductName: "pipe", UnitsInStock: 139, UnitCost: 10 }, { Id: 29470, Barcode: "074R", ProductName: "pipe", UnitsInStock: 1, UnitCost: 10 }];
+    const tw = reconcileControlTotals(twin, [{ Id: 29470, Barcode: "074R", "Units In Stock": 1, Cost: 10 }, { Id: 9627, Barcode: "074R", "Units In Stock": 139, Cost: 10 }]);
+    ok(tw.ok && tw.unitsRows === 140 && tw.costValueRowsCents === 140000 && tw.mismatches.length === 0, "reconcile: shared barcode pairs by lot Id");
+    const noId = reconcileControlTotals(twin, [{ Barcode: "074R", "Units In Stock": 139, Cost: 10 }, { Barcode: "074R", "Units In Stock": 1, Cost: 10 }]);
+    ok(!noId.ok && noId.unitsRows === 0, "reconcile: rows without a lot Id never pair by barcode");
   }
 
   return { passed, failed: 0 };
