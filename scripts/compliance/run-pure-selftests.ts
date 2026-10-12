@@ -923,6 +923,7 @@ import { __runMenuSizeFacetCoreTests } from "../../src/lib/menu/menu-size-facet-
 import { __runMenuMgFacetCoreTests } from "../../src/lib/menu/menu-mg-facet-core";
 import { __runPriorityNavCoreTests } from "../../src/lib/site/priority-nav-core";
 import { __runProductTagsCoreTests } from "../../src/lib/menu/product-tags-core";
+import { __runVendorGeminiResearchTests } from "../../src/lib/vendors/vendor-gemini-research-core";
 import { __runBlurPlaceholderCoreTests } from "../../src/lib/media/blur-placeholder-core";
 import { __runTypeCardsTests } from "../../src/lib/cms/type-cards-core";
 import { __runLoyaltyConsentTests } from "../../src/lib/loyalty/loyalty-consent-core";
@@ -2223,6 +2224,7 @@ __runLiquidVolumeTests();
   assertRan("menu-mg-facet-core", __runMenuMgFacetCoreTests(), 33); // R49 S3: THC/CBD/CBG/CBN/CBC mg range sliders
   assertRan("priority-nav-core", __runPriorityNavCoreTests(), 14); // R49 S4: Priority+ header nav (Cart can never be pushed off-screen)
   assertRan("product-tags-core", __runProductTagsCoreTests(), 41); // R49 S5/S6: owner tags, automatic New window, Tags facet
+  assertRan("vendor-gemini-research-core", __runVendorGeminiResearchTests(), 58); // R49 S7: grounded vendor research (Gemini step 1)
   assertRan("blur-placeholder-core", __runBlurPlaceholderCoreTests(), 25); // R45-S2: tiny blur previews for banner images
   assertRan("type-cards-core", __runTypeCardsTests(), 54); // R41 S3: home Type Cards; R47 advanced card options
   assertRan("loyalty-consent-core", __runLoyaltyConsentTests(), 46); // R41 S5: editable consent wording
