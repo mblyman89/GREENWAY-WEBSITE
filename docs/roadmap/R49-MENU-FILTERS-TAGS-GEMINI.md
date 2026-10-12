@@ -161,7 +161,7 @@ Migration `0269_product_tags.sql`: `tag_definitions`, `product_tag_assignments`,
 Attach `item.tags` at menu build (`withProductTags`). Add a "Tags" FilterSection, URL `tags`. Cache revalidation on tag change.
 
 ### S7 — Gemini vendor research (G1)
-A "Research with Google Gemini" card (step 1) on the vendor detail page; a server action calling the grounded lookup; suggestions with citations; discovered URLs prefill the crawler/social forms.
+A "Research with Google Gemini" card (step 1) on the vendor detail page; a server action calling the grounded lookup; suggestions with citations. ~~discovered URLs prefill the crawler/social forms~~ **Superseded (2026-10-12):** Google's grounding terms forbid using grounded Links to pick crawl/scrape targets, so the crawler (step 2) is prefilled only from the saved website field — see "Gemini grounding terms -- compliance decision" at the end.
 
 ---
 
